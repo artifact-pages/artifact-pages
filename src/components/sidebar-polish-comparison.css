@@ -154,17 +154,6 @@
   font-weight: 580;
 }
 
-.sidebar-polish-after .browse-tree .tree-artifact.is-active::after {
-  position: absolute;
-  top: 8px;
-  bottom: 8px;
-  left: 2px;
-  width: 2px;
-  border-radius: 2px;
-  background: rgba(55, 70, 80, 0.58);
-  content: "";
-}
-
 .sidebar-polish-after .tree-artifact:not(.is-active):hover {
   color: #343e45;
   background: rgba(20, 31, 39, 0.045);
