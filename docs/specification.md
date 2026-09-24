@@ -1,8 +1,8 @@
 # Git Artifact Pages — Specification
 
-Status: **design baseline / pre-MVP**
+Status: **Phase 1 local product; implementation-aligned, evolving**
 
-This document captures the intended product contract. Some implementation details are deliberately left open until the local reference implementation validates them.
+This document records the current local product contract and identifies decisions intentionally deferred until measurements or a concrete deployment use case justify them.
 
 ## 1. Product definition
 
@@ -117,7 +117,12 @@ The initial projection shape is:
 ├── _indexes/
 │   ├── sre.json
 │   ├── frontend.json
-│   └── platform.json
+│   ├── sre/
+│   │   └── index.json
+│   ├── frontend/
+│   │   └── index.json
+│   └── platform/
+│       └── index.json
 └── _artifacts/
     ├── sre/
     ├── frontend/
@@ -126,23 +131,38 @@ The initial projection shape is:
 
 ### 5.1 Site discovery
 
-The local reference implementation discovers available sites from the directory listing at `/_indexes/`, then loads each per-site index file.
+The local reference implementation discovers site IDs from the directory listing at `/_indexes/` and fetches each site's small `<site>.json` discovery metadata. This metadata contains the display title, artifact count, generated time, and an `artifactIndexUrl` pointer. It does not contain artifact records.
 
-Each `<site>.json` file is the source of that site's display metadata. No separate `sites.json` registry is required for the local product.
+The browser loads a site's full artifact index only when that site becomes active. It does not fetch all artifact indexes during startup. No separate `sites.json` registry is required for the local product; the listing remains the discovery entry point.
 
 The directory listing changes when sites are onboarded, renamed, or removed. It does **not** change for each artifact publication unless the set of site files changes.
 
 An object-storage/CDN adapter may provide an equivalent static listing or a generated catalog. The production representation is intentionally not fixed by the local milestone; the requirement is that root site selection remains serverless.
 
-### 5.2 Per-site index
+### 5.2 Site metadata and artifact index
 
-Each site has one public index:
+Each site currently has two static JSON documents with distinct responsibilities:
 
 ~~~text
-/_indexes/<site>.json
+/_indexes/<site>.json             lightweight discovery metadata
+/_indexes/<site>/index.json       artifact records for that site
 ~~~
 
-Example:
+Example discovery metadata:
+
+~~~json
+{
+  "schemaVersion": 1,
+  "site": { "id": "sre", "title": "SRE" },
+  "generatedAt": "2026-09-22T00:00:00Z",
+  "artifactCount": 1,
+  "artifactIndexUrl": "/_indexes/sre/index.json"
+}
+~~~
+
+The `artifactIndexUrl` pointer keeps the browser from hard-coding the artifact-index location. The current implementation still publishes one complete artifact index per site; sharding or an inverted index is not part of the contract until benchmarks demonstrate a need.
+
+Example artifact index:
 
 ~~~json
 {
@@ -177,9 +197,9 @@ Example:
 }
 ~~~
 
-The important public contract is one index per site. Before the first release, schema version 1
-uses the `format` field (`html` or `markdown`) and the exact source-relative document path as its
-stable identity. No compatibility layer for earlier pre-release shapes is required.
+Before the first release, schema version 1 uses the `format` field (`html` or `markdown`) and the
+exact source-relative document path as each artifact's stable identity. No compatibility layer for
+earlier pre-release shapes is required.
 
 The builder indexes `.html`, `.htm`, and `.md` documents as individual artifacts. `id` and `path`
 are the exact source-relative path, including filename and extension; `artifactUrl` points to the
@@ -241,9 +261,9 @@ Artifact-owned resources should normally use relative URLs that stay within thei
 
 ## 7. Artifact viewer
 
-Artifacts should initially be displayed using an iframe.
+HTML artifacts are displayed in an iframe. Markdown artifacts are rendered by the native reader inside the application workspace.
 
-Reasons:
+The iframe behavior for HTML artifacts:
 
 - preserve normal relative URL behavior
 - isolate artifact CSS from the application shell
@@ -251,7 +271,7 @@ Reasons:
 - allow normal browser HTML and JavaScript behavior for published artifacts
 - keep the SPA focused on navigation and discovery
 
-The iframe intentionally has no `sandbox` attribute. Publishing an artifact is the trust boundary: published HTML is treated as approved executable content and can use normal browser capabilities.
+The iframe intentionally has no `sandbox` attribute. Publishing HTML is the trust boundary: HTML is treated as approved executable content and can use normal browser capabilities. It can access the same-origin application and other same-origin content; the iframe is for rendering and CSS isolation, not hostile-content isolation.
 
 The hosting layer sends an enforced Content Security Policy that allows resources from the current logical site's `/_artifacts/<site>/` path and from HTTPS origins. This lets ordinary browser-rendered HTML load remote CSS, JavaScript, images, fonts, media, and fetch/XHR resources when the browser's normal TLS, CORS, and mixed-content rules permit them. Insecure external HTTP resources remain blocked. Inline scripts, styles, and eval remain allowed because published artifacts are trusted.
 
@@ -259,7 +279,13 @@ The `https:` source is intentionally broad: it matches resources from any HTTPS 
 
 The policy does not confine redirects to an artifact path: an allowed HTTPS resource may redirect to another HTTPS URL. Any future hosting adapter must preserve the HTTPS-resource behavior and the same trusted-publisher assumption. If mutually untrusted publishers or private artifacts need isolation, use a per-site HTTPS-origin allowlist or a separate origin before supporting that use case.
 
-Artifacts are served from the same origin as the SPA under `/_artifacts/*`. The policy does not isolate artifacts: an artifact script can access the parent application and other same-origin resources, and the broad HTTPS source permits same-origin HTTPS requests outside its site prefix. This product trusts published artifacts rather than isolating hostile publishers. If private or authenticated content, or mutually untrusted publishers, become part of the product, artifact hosting must move to a separate origin and the security model must be revisited before that use case is supported.
+Artifacts are served from the same origin as the SPA under `/_artifacts/*`. The policy does not isolate artifacts: an artifact script can access the parent application and other same-origin resources, and the broad HTTPS source permits same-origin HTTPS requests outside its site prefix. This product trusts published HTML rather than isolating hostile publishers. If private or authenticated content, or mutually untrusted HTML publishers, become part of the product, artifact hosting must move to a separate origin and the security model must be revisited before that use case is supported.
+
+### Markdown reader trust boundary
+
+Markdown is rendered in the SPA DOM and is not treated as executable HTML. Raw HTML passes through the sanitizer before it reaches React-rendered content; script-bearing or otherwise disallowed elements and attributes are removed. Mermaid code fences are rendered locally with Mermaid's `securityLevel: "strict"` and without diagram interactions. A render failure leaves the source visible as code.
+
+Relative resources resolve from the Markdown artifact URL and are allowed only inside that site's artifact namespace. Links to same-site `.html`, `.htm`, or `.md` artifacts become application routes; other external links open in a new tab with `noopener`/`noreferrer`. External HTTPS URLs are allowed for links and images. External HTTP resources are blocked; `data:` is allowed only for base64 PNG, JPEG, GIF, WebP, or AVIF images. `mailto:` links are allowed. This is a different trust model from HTML: publishing Markdown does not grant arbitrary script execution.
 
 The right-hand table of contents should use precomputed index metadata rather than requiring the parent application to inspect the iframe DOM.
 
@@ -280,15 +306,15 @@ Target layout:
 
 ### Root route
 
-/ presents site selection using static registry metadata.
+/ presents site selection using discovered lightweight metadata.
 
 ### Site home
 
-/:site discovers and loads /_indexes/<site>.json and initially presents recent artifacts, expected to start with roughly the latest 10 entries.
+/:site uses discovery metadata for the site picker and loads the active site's artifact index from its `artifactIndexUrl`; it initially presents recent artifacts, expected to start with roughly the latest 10 entries.
 
 ### Search
 
-Search is client-side against the site index for the initial implementation.
+Normal page search is client-side and scoped to the active site's artifact index. It must not read other sites' artifact indexes. The `@` prefix searches lightweight site metadata and switches site; `>` searches commands; `#` searches headings in the open artifact. Cross-site artifact search is not implemented. If it becomes a product need, evaluate its cost and UX separately rather than widening ordinary search silently.
 
 Initial searchable fields:
 
@@ -382,7 +408,7 @@ and:
 
 Parent/child overlap is rejected because a publisher using delete/sync semantics could affect another publisher's namespace.
 
-The public projection still presents one /_indexes/sre.json.
+The browser-facing projection has lightweight `/_indexes/sre.json` discovery metadata and a full `/_indexes/sre/index.json` artifact index for the site.
 
 How multiple publisher contributions might be staged and merged into that single index is a future implementation concern. Source-specific manifests are one possible internal mechanism, but are not required by the browser-facing contract or the initial builder.
 
@@ -600,7 +626,7 @@ A site is a logical namespace, not a repository identity.
 
 The initial builder maps one repository source to each site; multi-repository merging is deferred. If it is introduced later, mount paths within a site must not overlap.
 
-The browser consumes per-site indexes discovered through the local `/_indexes/` listing; it does not use browser-side object-storage ListObjects APIs.
+The browser discovers sites through the local `/_indexes/` listing and lightweight per-site metadata, then loads only the active site's artifact index. It does not use browser-side object-storage ListObjects APIs.
 
 Artifacts live under /_artifacts.
 

@@ -26,7 +26,7 @@ There is no application server in the request path. Git is the source of truth; 
 
 ## Status
 
-Phase 1 local product prototype. The SPA now discovers sites from per-site indexes and provides a site picker, recent-artifact home, searchable navigation tree, command palette, and an iframe-based artifact viewer. The interface is being shaped in Storybook against committed fixtures.
+Phase 1 local product. The SPA discovers sites from lightweight metadata, loads only the active site's artifact index, and provides a site picker, recent-artifact home, searchable navigation tree, and command palette. HTML artifacts run in an iframe; Markdown artifacts use a sanitized native reader.
 
 AWS infrastructure and reusable distribution packages come later.
 
@@ -77,7 +77,7 @@ To serve the production build with the local nginx contract:
 npm run serve:local
 ~~~
 
-This serves the SPA on `http://localhost:4173/`, fixture indexes below `/_indexes/`, and fixture artifacts below `/_artifacts/`. Any other route falls back to the SPA shell.
+This serves the SPA on `http://localhost:4173/`, site discovery metadata and artifact indexes below `/_indexes/`, and fixture artifacts below `/_artifacts/`. Any other route falls back to the SPA shell.
 
 On first use, install the Playwright Chromium browser, then run the end-to-end checks against the production build served by nginx:
 
@@ -86,13 +86,13 @@ npx playwright install chromium
 npm run test:e2e
 ~~~
 
-The command builds the SPA first, starts an isolated Compose nginx service on port `4174`, and removes that test service when finished. The regular local service on `4173` is left untouched. Docker Compose and the Playwright Chromium browser are required. Tests cover site discovery, deep-link/reload behavior, relative artifact assets, and the collapsed navigation rail.
+The command builds the SPA first, starts an isolated Compose nginx service on port `4174`, and removes that test service when finished. The regular local service on `4173` is left untouched. Docker Compose and the Playwright Chromium browser are required. Tests cover site discovery, lazy per-site index loading, current-site search scope, deep-link/reload behavior, relative artifact assets, and the collapsed navigation rail.
 
 ## Local index builder prototype
 
-The Go builder creates one site's index from a publishable static content directory inside a Git working tree. Point `--source` at the exact tree that should be served under `/_artifacts/<site>/`, containing ready-to-serve HTML and its local resources—not an unrendered template/source tree. It does not render templates, bundle assets, rewrite URLs, copy artifact files, or publish to a hosting provider.
+The Go builder creates one site's discovery metadata and artifact index from a publishable static content directory inside a Git working tree. Point `--source` at the exact tree that should be served under `/_artifacts/<site>/`, containing ready-to-serve HTML, Markdown, and their local resources—not an unrendered template/source tree. It does not render templates, bundle assets, rewrite URLs, copy artifact files, or publish to a hosting provider.
 
-Every `.html` and `.htm` file below the selected directory becomes an artifact except a root-level `index.html` or `index.htm`, which is treated as site-level content and omitted from the artifact index. Nested index files use their containing directory as the logical route; other filenames become routes without their extension. There are no path-name exclusions: if `_includes` or another partial/template directory is inside the selected tree, its HTML files are indexed too. Choose a publishable root that excludes such source-only files.
+Every `.html`, `.htm`, and `.md` file below the selected directory is an explicit artifact. Artifact routes retain their exact source-relative filename and extension, including root or nested `index.html` and `README.md`; none implicitly aliases a directory or site home. HTML artifacts render in an unsandboxed iframe as trusted published executable content. Markdown renders in the application DOM after sanitization and does not execute embedded scripts or unsanitized raw HTML. Mermaid is rendered in strict mode. Markdown may use same-site relative resources, HTTPS external links/images, and safe base64 raster data images; external HTTP resources and cross-site artifact paths are rejected. There are no path-name exclusions: if `_includes` or another partial/template directory is inside the selected tree, its HTML and Markdown files are indexed too. Choose a publishable root that excludes source-only files.
 
 The source directory must be inside the current Git working tree. Tracked files provide Git-based update metadata. Untracked files, including Git-ignored generated output, can still be indexed, but `updatedAt` then falls back to filesystem modification times and `lastCommitter` is omitted.
 
@@ -106,7 +106,7 @@ go run ./cmd/artifact-pages index build \
   --out .local/storage
 ~~~
 
-This writes `.local/storage/_indexes/sre.json`. The source tree is left untouched, and every indexed page points to its original file under the source-relative artifact path. A later static publish step should copy the selected content tree unchanged so relative CSS, JavaScript, images, and other resources retain their paths. The initial builder expects one repository source per site.
+This writes `.local/storage/_indexes/sre.json` (lightweight site discovery metadata) and `.local/storage/_indexes/sre/index.json` (the artifact index). The source tree is left untouched, and every indexed page points to its original file under the source-relative artifact path. A later static publish step should copy the selected content tree unchanged so relative CSS, JavaScript, images, and other resources retain their paths. The initial builder expects one repository source per site.
 
 Run the Go tests and the benchmarks with generated fixtures in temporary Git repositories. The file-count benchmark uses 1,000, 5,000, and 10,000 source files, corresponding to 100, 500, and 1,000 HTML pages. A second benchmark measures 500 and 1,000 HTML pages with 51 commits in the history:
 
@@ -116,13 +116,23 @@ go test ./internal/indexer -run '^$' -bench=BenchmarkBuildIndexFiles -benchtime=
 go test ./internal/indexer -run '^$' -bench=BenchmarkBuildIndexGitHistoryPages -benchtime=3x -benchmem
 ~~~
 
+The browser palette benchmark creates ignored synthetic data under `.local/palette-load-fixtures/`. It measures single-site index sizes and multi-site discovery separately; the latter downloads every lightweight summary but only the active site's artifact index. It reports payload and loopback-transfer timing, JSON body-read and parse time, browser heap, query time, and input-to-paint latency. These timings compare browser/projection costs locally; they are not a forecast of CDN or public-network latency. For example:
+
+~~~sh
+npm run benchmark:palette -- --sites 20 --artifacts-per-site 1000 --iterations 20 --seed local-scale
+~~~
+
+It also checks that `@` site lookup does not fetch another site's artifact index. Sharding and inverted indexes remain deferred until these measurements show a single-index limit.
+
 ## Core ideas
 
 - Git-managed artifacts remain versioned with the work that produced them.
 - A site is a logical namespace such as sre or frontend.
 - The initial index builder maps one repository source directory to one site; merging multiple repositories into a site is deferred.
 - /_artifacts/* contains published static files.
-- /_indexes/<site>.json contains the searchable/browsable projection for a site.
+- /_indexes/<site>.json contains lightweight site discovery metadata.
+- /_indexes/<site>/index.json contains the searchable/browsable artifact projection for that site.
+- Normal artifact search is scoped to the current site; `@` searches site metadata. Cross-site artifact search is not implemented.
 - The SPA is stable infrastructure; artifact content and site indexes change independently.
 - Search, recent items, tree navigation, and table-of-contents metadata are precomputed at publish time where practical.
 
