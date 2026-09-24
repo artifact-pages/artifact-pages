@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ArtifactIndexEntry, SiteIndex, TocEntry } from '../domain/index'
-import { fuzzyMatch } from '../domain/fuzzy-search'
+import {
+  fuzzyMatch,
+  fuzzyMatchPreparedText,
+  prepareFuzzyQuery,
+  prepareFuzzyText,
+  type FuzzyText,
+} from '../domain/fuzzy-search'
 import type { FuzzyMatch } from '../domain/fuzzy-search'
 import { artifactRouteHref } from '../routing'
 import { Icon } from './Icon'
@@ -30,6 +36,9 @@ type PaletteSection = {
   title: string
   entries: PaletteEntry[]
 }
+
+type PreparedArtifactText = { title: FuzzyText; path: FuzzyText }
+const preparedArtifactText = new WeakMap<ArtifactIndexEntry, PreparedArtifactText>()
 
 export function CommandPalette({
   seed,
@@ -388,18 +397,30 @@ function buildPageSections(
   term: string,
   onNavigate: (href: string) => void,
 ): RankedPaletteSection[] {
+  const query = prepareFuzzyQuery(term)
   return indexes.flatMap((index) => {
-    const entries = index.artifacts.flatMap((artifact) => {
-      const titleMatch = fuzzyMatch(artifact.title, term)
-      const pathMatch = fuzzyMatch(artifact.path, term)
-      if (!titleMatch && !pathMatch) return []
-      return [{
-        entry: artifactEntry(index, artifact, onNavigate, titleMatch, pathMatch),
-        score: (titleMatch?.score ?? 0) * 1.12 + (pathMatch?.score ?? 0),
-      }]
-    })
-      .sort((left, right) => right.score - left.score)
-      .slice(0, 8)
+    const entries: Array<{ entry: PaletteEntry; score: number }> = []
+    for (const artifact of index.artifacts) {
+      let prepared = preparedArtifactText.get(artifact)
+      if (!prepared) {
+        prepared = { title: prepareFuzzyText(artifact.title), path: prepareFuzzyText(artifact.path) }
+        preparedArtifactText.set(artifact, prepared)
+      }
+      const titleMatch = fuzzyMatchPreparedText(prepared.title, query)
+      const pathMatch = fuzzyMatchPreparedText(prepared.path, query)
+      if (!titleMatch && !pathMatch) continue
+
+      const score = (titleMatch?.score ?? 0) * 1.12 + (pathMatch?.score ?? 0)
+      let position = 0
+      while (position < entries.length && entries[position].score >= score) position += 1
+      if (position < 8) {
+        entries.splice(position, 0, {
+          entry: artifactEntry(index, artifact, onNavigate, titleMatch, pathMatch),
+          score,
+        })
+        if (entries.length > 8) entries.pop()
+      }
+    }
     if (!entries.length) return []
     return [{
       siteId: index.site.id,

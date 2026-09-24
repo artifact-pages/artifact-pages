@@ -119,6 +119,7 @@ async function benchmarkDataset(browserInstance, dataset, iterations) {
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   await palette.waitFor({ state: 'visible' })
   const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
+  const typingResult = await benchmarkTyping(search, iterations)
   const queryResults = []
 
   for (const query of queries) {
@@ -156,8 +157,10 @@ async function benchmarkDataset(browserInstance, dataset, iterations) {
       query: query.label,
       value: query.value,
       visibleOptions,
-      jsP50Ms: round(percentile(processingSamples, 0.50)),
-      jsP95Ms: round(percentile(processingSamples, 0.95)),
+      firstSampleJsMs: round(processingSamples[0]),
+      firstSampleInputToPaintMs: round(paintSamples[0]),
+      warmJsP50Ms: round(percentile(processingSamples.slice(1), 0.50)),
+      warmJsP95Ms: round(percentile(processingSamples.slice(1), 0.95)),
       inputToPaintP50Ms: round(percentile(paintSamples, 0.50)),
       inputToPaintP95Ms: round(percentile(paintSamples, 0.95)),
     })
@@ -171,8 +174,56 @@ async function benchmarkDataset(browserInstance, dataset, iterations) {
     generatedMs: round(dataset.generationMs),
     pageReadyMs: round(pageReadyMs),
     indexRequests,
+    typingResult,
     queryResults,
     fixture: dataset.outputPath,
+  }
+}
+
+async function benchmarkTyping(search, iterations) {
+  const result = await search.evaluate(async (input, { iterations, sequence }) => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    if (!setter) throw new Error('Could not access the native input value setter.')
+    const nextPaint = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    const samples = []
+
+    for (let iteration = 0; iteration < iterations; iteration += 1) {
+      setter.call(input, '')
+      input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' }))
+      await nextPaint()
+
+      for (const character of sequence) {
+        const started = performance.now()
+        setter.call(input, input.value + character)
+        input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: character }))
+        const processingMilliseconds = performance.now() - started
+        await nextPaint()
+        samples.push({
+          character,
+          processingMilliseconds,
+          inputToPaintMilliseconds: performance.now() - started,
+          optionCount: document.querySelectorAll('[role="dialog"] [role="option"]').length,
+        })
+      }
+    }
+
+    return { samples, inputValue: input.value }
+  }, { iterations, sequence: 'atlas' })
+
+  if (result.inputValue !== 'atlas') throw new Error('Sequential typing did not leave the expected search query.')
+  const first = result.samples[0]
+  const warm = result.samples.slice(1)
+  return {
+    sequence: 'atlas',
+    iterations,
+    firstCharacter: first.character,
+    firstCharacterResults: first.optionCount,
+    firstCharacterJsMs: round(first.processingMilliseconds),
+    firstCharacterInputToPaintMs: round(first.inputToPaintMilliseconds),
+    warmCharacterJsP50Ms: round(percentile(warm.map((sample) => sample.processingMilliseconds), 0.50)),
+    warmCharacterJsP95Ms: round(percentile(warm.map((sample) => sample.processingMilliseconds), 0.95)),
+    warmCharacterInputToPaintP50Ms: round(percentile(warm.map((sample) => sample.inputToPaintMilliseconds), 0.50)),
+    warmCharacterInputToPaintP95Ms: round(percentile(warm.map((sample) => sample.inputToPaintMilliseconds), 0.95)),
   }
 }
 
