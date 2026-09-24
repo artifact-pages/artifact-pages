@@ -1285,6 +1285,10 @@ mark {
   font-size: 14px;
 }
 
+.site-home .is-virtualized-path-list .tree-path-row {
+  height: 44px;
+}
+
 .site-home .tree-children-branch-guides {
   margin-left: 16px;
 }

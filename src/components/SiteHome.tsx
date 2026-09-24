@@ -16,18 +16,21 @@ export function SiteHome({
   defaultExpandedPaths?: string[]
 }) {
   const [query, setQuery] = useState('')
-  const artifacts = useMemo(
-    () => [...index.artifacts].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
+  const recentArtifacts = useMemo(
+    () => selectMostRecent(index.artifacts, 6),
     [index.artifacts],
   )
   const normalizedQuery = query.trim().toLocaleLowerCase()
-  const matches = normalizedQuery
-    ? artifacts.filter((artifact) =>
+  const matches = useMemo(() => {
+    if (!normalizedQuery) return []
+    return index.artifacts
+      .filter((artifact) => (
         `${artifact.title} ${artifact.path} ${artifact.filename ?? ''}`
           .toLocaleLowerCase()
-          .includes(normalizedQuery),
-      )
-    : []
+          .includes(normalizedQuery)
+      ))
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+  }, [index.artifacts, normalizedQuery])
 
   return (
     <div className="site-home">
@@ -38,7 +41,7 @@ export function SiteHome({
         </div>
         <h1>{index.site.title}</h1>
         <p className="site-home-lede">
-          {artifacts.length} published {artifacts.length === 1 ? 'artifact' : 'artifacts'}.
+          {index.artifacts.length} published {index.artifacts.length === 1 ? 'artifact' : 'artifacts'}.
           {' '}Browse the latest work or find an artifact by title or path.
         </p>
         <label className="site-search">
@@ -69,7 +72,7 @@ export function SiteHome({
           <ArtifactSection
             title="Recently updated"
             icon="clock"
-            artifacts={artifacts.slice(0, 6)}
+            artifacts={recentArtifacts}
             siteId={index.site.id}
             onOpenArtifact={onOpenArtifact}
             emptyMessage="No artifacts have been published to this site yet."
@@ -87,6 +90,7 @@ export function SiteHome({
                 style={treeStyle}
                 defaultExpandedPaths={defaultExpandedPaths}
                 onOpenArtifact={(artifact) => onOpenArtifact(artifactRouteHref(index.site.id, artifact.path))}
+                virtualizePaths
               />
             )}
           </section>
@@ -94,6 +98,23 @@ export function SiteHome({
       )}
     </div>
   )
+}
+
+function selectMostRecent(artifacts: ArtifactIndexEntry[], limit: number) {
+  const recent: ArtifactIndexEntry[] = []
+  for (const artifact of artifacts) {
+    let start = 0
+    let end = recent.length
+    while (start < end) {
+      const middle = Math.floor((start + end) / 2)
+      if (recent[middle].updatedAt >= artifact.updatedAt) start = middle + 1
+      else end = middle
+    }
+    if (start >= limit) continue
+    recent.splice(start, 0, artifact)
+    if (recent.length > limit) recent.pop()
+  }
+  return recent
 }
 
 function ArtifactSection({

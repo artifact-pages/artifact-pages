@@ -38,6 +38,7 @@ const queries = [
   { label: 'fuzzy subsequence', value: 'pltfrm', expectResults: true },
   { label: 'no match', value: 'zzzzzzzzzzzzzzzz', expectResults: false },
 ]
+const sequentialQueries = ['atlas', 'pltfrm', 'zzzz']
 
 const options = parseArguments(process.argv.slice(2))
 let browser
@@ -108,6 +109,7 @@ async function generateDataset(runRoot, scenario, seed) {
   const sites = []
   const metadataPayloads = new Map()
   const currentArtifactPayloads = new Map()
+  let searchRecords = []
   let currentIndexBytes = 0
   let totalIndexBytes = 0
 
@@ -118,6 +120,12 @@ async function generateDataset(runRoot, scenario, seed) {
       ? `Search Load Lab (${scenario.artifactsPerSite})`
       : `Search Lab ${String(ordinal).padStart(4, '0')}`
     const index = generateSiteIndex(scenario.artifactsPerSite, seed, siteId, title)
+    if (offset === 0) {
+      searchRecords = index.artifacts.map(({ title: artifactTitle, path: artifactPath }) => ({
+        title: artifactTitle,
+        path: artifactPath,
+      }))
+    }
     const indexPath = path.join(scenarioRoot, siteId, 'index.json')
     await mkdir(path.dirname(indexPath), { recursive: true })
     let indexBytes = 0
@@ -174,6 +182,7 @@ async function generateDataset(runRoot, scenario, seed) {
     sites,
     metadataPayloads,
     currentArtifactPayloads,
+    searchRecords,
     currentSiteId: sites[0].site.id,
     currentIndexBytes,
     expectedArtifactIndexRequests: currentArtifactPayloads.size,
@@ -267,12 +276,21 @@ async function benchmarkDataset(browserInstance, dataset, iterations, fixtureUrl
   }, dataset.siteCount)
   const discoveryCompleteMs = performance.now() - loadStarted
   const heapAfterSiteLoadBytes = await readJsHeapBytes(cdp)
+  const siteHomeMetrics = await page.evaluate(() => ({
+    artifactRows: document.querySelectorAll('.site-home .tree-artifact').length,
+    directoryRows: document.querySelectorAll('.site-home .tree-directory-button').length,
+    virtualList: Boolean(document.querySelector('.site-home .is-virtualized-path-list')),
+  }))
+  const pageMetrics = await readPerformanceMetrics(cdp)
 
   await page.keyboard.press('Control+k')
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   await palette.waitFor({ state: 'visible' })
   const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
-  const typingResult = await benchmarkTyping(search, iterations)
+  const typingResults = []
+  for (const sequence of sequentialQueries) {
+    typingResults.push(await benchmarkTyping(search, iterations, sequence))
+  }
   const queryResults = []
   const siteQuery = `@${dataset.sites.at(-1).site.id}`
 
@@ -367,6 +385,9 @@ async function benchmarkDataset(browserInstance, dataset, iterations, fixtureUrl
   })
   const heapAfterSearchBytes = await readJsHeapBytes(cdp)
   const siteIndexRequestsAfterLookup = [...artifactIndexRequests]
+  await page.keyboard.press('Escape')
+  const browseVirtualization = await verifyBrowseVirtualization(page, dataset.artifactsPerSite)
+  const indexedSearchExperiment = await benchmarkSearchIndexCandidates(page, cdp, dataset.searchRecords, iterations)
 
   await cdp.detach()
   await page.close()
@@ -385,6 +406,10 @@ async function benchmarkDataset(browserInstance, dataset, iterations, fixtureUrl
     discoveryCompleteMs: round(discoveryCompleteMs),
     discoveryMetadataRequests: metadataRequests.length,
     artifactIndexRequests: artifactIndexRequests.length,
+    siteHomeMetrics,
+    browseVirtualization,
+    pageMetrics,
+    indexedSearchExperiment,
     siteIndexRequestsAfterLookup,
     loadMetrics: {
       ...loadMetrics,
@@ -408,7 +433,7 @@ async function benchmarkDataset(browserInstance, dataset, iterations, fixtureUrl
       },
       resourceTransferMs: round(loadMetrics.resourceTransferMs),
     },
-    typingResult,
+    typingResults,
     queryResults,
     fixture: dataset.outputPath,
   }
@@ -421,7 +446,292 @@ async function readJsHeapBytes(cdp) {
   return value === undefined ? null : Math.round(value)
 }
 
-async function benchmarkTyping(search, iterations) {
+async function readPerformanceMetrics(cdp) {
+  const { metrics } = await cdp.send('Performance.getMetrics')
+  const selectedMetrics = new Set(['Nodes', 'ScriptDuration', 'RecalcStyleDuration', 'LayoutDuration', 'TaskDuration'])
+  return Object.fromEntries(metrics
+    .filter(({ name }) => selectedMetrics.has(name))
+    .map(({ name, value }) => [name, round(value)]))
+}
+
+async function verifyBrowseVirtualization(page, expectedItemCount) {
+  const result = await page.evaluate(async () => {
+    const list = document.querySelector('.site-home .is-virtualized-path-list')
+    const scrollContainer = list?.closest('.site-home')
+    if (!(list instanceof HTMLElement) || !(scrollContainer instanceof HTMLElement)) {
+      return { enabled: false, initialRows: document.querySelectorAll('.site-home .tree-artifact').length }
+    }
+
+    const total = Number(list.querySelector('[aria-setsize]')?.getAttribute('aria-setsize'))
+    const originalScrollTop = scrollContainer.scrollTop
+    const nextPaint = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    const initialRows = list.querySelectorAll('[role="listitem"]').length
+    scrollContainer.scrollTop = scrollContainer.scrollHeight
+    await nextPaint()
+    const lastPosition = Number(list.querySelector('[role="listitem"]:last-child')?.getAttribute('aria-posinset'))
+    scrollContainer.scrollTop = originalScrollTop
+    await nextPaint()
+    return { enabled: true, total, initialRows, lastPosition }
+  })
+
+  if (expectedItemCount > 100 && (!result.enabled || result.total !== expectedItemCount || result.lastPosition !== expectedItemCount)) {
+    throw new Error(`Virtualized Browse did not reveal the final row: ${JSON.stringify(result)}.`)
+  }
+  return result
+}
+
+async function benchmarkSearchIndexCandidates(page, cdp, records, iterations) {
+  const heapBeforeBytes = await readJsHeapBytes(cdp)
+  const built = await page.evaluate((searchRecords) => {
+    const started = performance.now()
+    const normalize = (value) => value.split(/[\s/-]+/u).filter(Boolean).map((word) => word.toLocaleLowerCase()).join('\0')
+    const prepared = searchRecords.map(({ title, path }, id) => ({
+      id,
+      title: normalize(title),
+      path: normalize(path),
+    }))
+    const characters = new Map()
+    const terms = new Map()
+
+    for (const artifact of prepared) {
+      const fields = { title: artifact.title.split('\0'), path: artifact.path.split('\0') }
+      const allCharacters = new Set()
+      for (const [fieldName, words] of Object.entries(fields)) {
+        for (const word of new Set(words)) {
+          if (!word) continue
+          let entry = terms.get(word)
+          if (!entry) {
+            entry = { title: [], path: [] }
+            terms.set(word, entry)
+          }
+          entry[fieldName].push(artifact.id)
+          for (const character of Array.from(word)) allCharacters.add(character)
+        }
+      }
+      for (const character of allCharacters) {
+        let posting = characters.get(character)
+        if (!posting) {
+          posting = []
+          characters.set(character, posting)
+        }
+        posting.push(artifact.id)
+      }
+    }
+
+    const dictionary = [...terms.entries()].sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
+    const characterPayloadBytes = new TextEncoder().encode(JSON.stringify([...characters])).byteLength
+    const sortedTermPayloadBytes = new TextEncoder().encode(JSON.stringify(dictionary)).byteLength
+    const buildMs = performance.now() - started
+    window.__paletteSearchIndexTrial = { prepared, characters, dictionary }
+    return {
+      buildMs: Number(buildMs.toFixed(2)),
+      recordCount: prepared.length,
+      uniqueCharacters: characters.size,
+      uniqueTerms: dictionary.length,
+      characterPayloadBytes,
+      sortedTermPayloadBytes,
+    }
+  }, records)
+  const heapAfterBytes = await readJsHeapBytes(cdp)
+  const queryRuns = await page.evaluate(({ iterations: repeatCount, sequences }) => {
+    const { prepared, characters, dictionary } = window.__paletteSearchIndexTrial
+    const compareTop = (left, right) => left.length === right.length && left.every((id, index) => id === right[index])
+    const parseTerms = (query) => query.toLocaleLowerCase().trim().split(/[\s/-]+/u).filter(Boolean)
+    const lowerBound = (word) => {
+      let low = 0
+      let high = dictionary.length
+      while (low < high) {
+        const middle = (low + high) >>> 1
+        if (dictionary[middle][0] < word) low = middle + 1
+        else high = middle
+      }
+      return low
+    }
+    const candidatesForPrefix = (query) => {
+      const queryTerms = parseTerms(query)
+      const fieldCandidates = []
+      for (const fieldName of ['title', 'path']) {
+        let intersection
+        for (const queryTerm of queryTerms) {
+          const union = new Set()
+          for (let index = lowerBound(queryTerm); index < dictionary.length; index += 1) {
+            const [word, postings] = dictionary[index]
+            if (!word.startsWith(queryTerm)) break
+            for (const id of postings[fieldName]) union.add(id)
+          }
+          intersection = intersection === undefined
+            ? union
+            : new Set([...intersection].filter((id) => union.has(id)))
+          if (intersection.size === 0) break
+        }
+        if (intersection) fieldCandidates.push(intersection)
+      }
+      return [...new Set(fieldCandidates.flatMap((set) => [...set]))].sort((left, right) => left - right)
+    }
+    const candidatesForCharacters = (query) => {
+      const uniqueCharacters = [...new Set(Array.from(parseTerms(query).join('')))]
+      if (uniqueCharacters.length === 0) return []
+      const postings = uniqueCharacters.map((character) => characters.get(character) ?? [])
+      postings.sort((left, right) => left.length - right.length)
+      if (postings[0].length === 0) return []
+      const remaining = postings.slice(1).map((posting) => new Set(posting))
+      return postings[0].filter((id) => remaining.every((posting) => posting.has(id)))
+    }
+    const scoreText = (text, queryTerms) => {
+      if (queryTerms.length === 0) return undefined
+      let total = 0
+      for (const term of queryTerms) {
+        const termCharacters = Array.from(term)
+        let best = Number.NEGATIVE_INFINITY
+        let start = 0
+        while (start < text.length) {
+          const separator = text.indexOf('\0', start)
+          const end = separator < 0 ? text.length : separator
+          const first = text.indexOf(termCharacters[0], start)
+          if (first >= 0 && first < end) {
+            let previous = first
+            let pairs = 0
+            let matched = true
+            for (let character = 1; character < termCharacters.length; character += 1) {
+              const previousCharacterLength = termCharacters[character - 1].length
+              const next = text.indexOf(termCharacters[character], previous + previousCharacterLength)
+              if (next < 0 || next >= end) {
+                matched = false
+                break
+              }
+              if (next === previous + previousCharacterLength) pairs += 1
+              previous = next
+            }
+            if (matched) {
+              const length = end - start
+              const startsWithTerm = term.length <= length && text.startsWith(term, start)
+              const base = startsWithTerm ? (length === term.length ? 100 : 80) : 50
+              const hasAstralCharacter = /[\u{10000}-\u{10FFFF}]/u.test(text.slice(start, end))
+              const lastPosition = hasAstralCharacter
+                ? Array.from(text.slice(start, previous)).length
+                : previous - start
+              best = Math.max(best, base + pairs * 3 - lastPosition * 0.15)
+            }
+          }
+          start = end + 1
+        }
+        if (best === Number.NEGATIVE_INFINITY) return undefined
+        total += best
+      }
+      return total
+    }
+    const searchCandidates = (ids, query) => {
+      const queryTerms = parseTerms(query)
+      const matches = []
+      const matchingIds = []
+      for (const id of ids) {
+        const artifact = prepared[id]
+        const titleScore = scoreText(artifact.title, queryTerms)
+        const pathScore = scoreText(artifact.path, queryTerms)
+        if (titleScore === undefined && pathScore === undefined) continue
+        matchingIds.push(id)
+        const score = (titleScore ?? 0) * 1.12 + (pathScore ?? 0)
+        let position = 0
+        while (position < matches.length && matches[position].score >= score) position += 1
+        if (position < 8) {
+          matches.splice(position, 0, { id, score })
+          if (matches.length > 8) matches.pop()
+        }
+      }
+      return { topIds: matches.map(({ id }) => id), matchingIds }
+    }
+    const scanSequence = (sequence) => {
+      const samples = []
+      const finalQuery = sequence
+      let cache
+      for (let characterIndex = 0; characterIndex < sequence.length; characterIndex += 1) {
+        const query = sequence.slice(0, characterIndex + 1)
+        const ids = cache ?? prepared.map(({ id }) => id)
+        const started = performance.now()
+        const result = searchCandidates(ids, query)
+        const elapsedMs = performance.now() - started
+        cache = result.matchingIds
+        samples.push({ characterIndex, elapsedMs, candidateCount: ids.length, topIds: result.topIds })
+      }
+      return { samples, topIds: searchCandidates(prepared.map(({ id }) => id), finalQuery).topIds }
+    }
+    const indexedSequence = (sequence, strategy) => {
+      const samples = []
+      for (let characterIndex = 0; characterIndex < sequence.length; characterIndex += 1) {
+        const query = sequence.slice(0, characterIndex + 1)
+        const started = performance.now()
+        const candidates = strategy === 'character-postings'
+          ? candidatesForCharacters(query)
+          : candidatesForPrefix(query)
+        const topIds = searchCandidates(candidates, query).topIds
+        samples.push({ characterIndex, elapsedMs: performance.now() - started, candidateCount: candidates.length, topIds })
+      }
+      return { samples }
+    }
+    const percentile = (values, fraction) => {
+      const sorted = [...values].sort((left, right) => left - right)
+      return sorted[Math.min(sorted.length - 1, Math.ceil(fraction * sorted.length) - 1)] ?? 0
+    }
+    const summaries = []
+    for (const sequence of sequences) {
+      const strategySamples = { 'cached-full-scan': [], 'character-postings': [], 'sorted-prefix-dictionary': [] }
+      const finalRun = {}
+      for (let iteration = 0; iteration < repeatCount; iteration += 1) {
+        const scan = scanSequence(sequence)
+        const character = indexedSequence(sequence, 'character-postings')
+        const prefix = indexedSequence(sequence, 'sorted-prefix-dictionary')
+        finalRun.scan = scan
+        finalRun.character = character
+        finalRun.prefix = prefix
+        for (const [key, result] of Object.entries({
+          'cached-full-scan': scan,
+          'character-postings': character,
+          'sorted-prefix-dictionary': prefix,
+        })) {
+          result.samples.forEach((sample) => strategySamples[key].push(sample))
+        }
+      }
+      const referenceIds = new Set(finalRun.scan.topIds)
+      summaries.push({
+        sequence,
+        strategies: Object.fromEntries(Object.entries(strategySamples).map(([name, samples]) => {
+          const finalSamples = samples.filter(({ characterIndex }) => characterIndex === sequence.length - 1)
+          const latest = name === 'cached-full-scan' ? finalRun.scan : name === 'character-postings' ? finalRun.character : finalRun.prefix
+          const candidateFinal = latest.samples.at(-1)?.topIds ?? []
+          return [name, {
+            finalCandidateCount: latest.samples.at(-1)?.candidateCount ?? 0,
+            finalTop8Recall: candidateFinal.filter((id) => referenceIds.has(id)).length,
+            referenceTop8Count: referenceIds.size,
+            finalTop8Identical: compareTop(finalRun.scan.topIds, candidateFinal),
+            jsP50MsPerCharacter: Number(percentile(samples.map(({ elapsedMs }) => elapsedMs), 0.5).toFixed(2)),
+            jsP95MsPerCharacter: Number(percentile(samples.map(({ elapsedMs }) => elapsedMs), 0.95).toFixed(2)),
+            finalCharacterJsP50Ms: Number(percentile(finalSamples.map(({ elapsedMs }) => elapsedMs), 0.5).toFixed(2)),
+            candidateCountsByCharacter: latest.samples.map(({ candidateCount }) => candidateCount),
+          }]
+        })),
+      })
+    }
+    return summaries
+  }, { iterations, sequences: sequentialQueries })
+  for (const query of queryRuns) {
+    if (!query.strategies['character-postings'].finalTop8Identical) {
+      throw new Error(`Character-posting candidate filter changed fuzzy results for ${query.sequence}.`)
+    }
+  }
+  const experimentHeapBytes = await readJsHeapBytes(cdp)
+  await page.evaluate(() => { delete window.__paletteSearchIndexTrial })
+  await readJsHeapBytes(cdp)
+
+  return {
+    scope: 'benchmark-only; current product search remains unchanged',
+    indexing: built,
+    additionalRetainedHeapBytes: heapAfterBytes === null || heapBeforeBytes === null ? null : heapAfterBytes - heapBeforeBytes,
+    retainedHeapAfterBuildBytes: experimentHeapBytes,
+    queries: queryRuns,
+  }
+}
+
+async function benchmarkTyping(search, iterations, sequence) {
   const result = await search.evaluate(async (input, { iterations, sequence }) => {
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
     if (!setter) throw new Error('Could not access the native input value setter.')
@@ -450,12 +760,12 @@ async function benchmarkTyping(search, iterations) {
     }
 
     return { samples, inputValue: input.value }
-  }, { iterations, sequence: 'atlas' })
+  }, { iterations, sequence })
 
-  if (result.inputValue !== 'atlas') throw new Error('Sequential typing did not leave the expected search query.')
+  if (result.inputValue !== sequence) throw new Error(`Sequential typing did not leave the expected search query: ${sequence}.`)
   const first = result.samples[0]
   const warm = result.samples.slice(1)
-  const perCharacter = Array.from('atlas', (character, position) => {
+  const perCharacter = Array.from(sequence, (character, position) => {
     const characterSamples = result.samples.filter((sample) => sample.position === position)
     const jsSamples = characterSamples.map((sample) => sample.processingMilliseconds)
     const paintSamples = characterSamples.map((sample) => sample.inputToPaintMilliseconds)
@@ -469,7 +779,7 @@ async function benchmarkTyping(search, iterations) {
     }
   })
   return {
-    sequence: 'atlas',
+    sequence,
     iterations,
     firstCharacter: first.character,
     firstCharacterResults: first.optionCount,

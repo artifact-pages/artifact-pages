@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ArtifactIndexEntry } from '../domain/index'
 import { buildArtifactTree, countArtifacts, flattenArtifacts, type ArtifactTreeNode } from '../domain/tree'
 import { ArtifactActionsMenu } from './ArtifactActionsMenu'
@@ -6,6 +6,9 @@ import { Icon } from './Icon'
 
 export type TreeStyle = 'quiet' | 'branch-guides' | 'path-list'
 type TreeView = 'tree' | 'recent' | 'paths'
+const VIRTUAL_PATH_ROW_HEIGHT = 44
+const VIRTUAL_PATH_OVERSCAN = 8
+const VIRTUAL_PATH_THRESHOLD = 100
 
 export type ArtifactRowActions = {
   pinned: boolean
@@ -27,6 +30,7 @@ export function ArtifactTree({
   defaultExpandedPaths,
   onOpenArtifact,
   getArtifactActions,
+  virtualizePaths = false,
 }: {
   artifacts: ArtifactIndexEntry[]
   activePath?: string
@@ -38,16 +42,71 @@ export function ArtifactTree({
   defaultExpandedPaths?: string[]
   onOpenArtifact: (artifact: ArtifactIndexEntry) => void
   getArtifactActions?: (artifact: ArtifactIndexEntry) => ArtifactRowActions
+  virtualizePaths?: boolean
 }) {
+  const needsTree = view === 'tree' && style !== 'path-list'
   const [localExpandedPaths, setLocalExpandedPaths] = useState(
-    () => new Set(defaultExpandedPaths ?? rootPaths(artifacts)),
+    () => new Set(defaultExpandedPaths ?? (needsTree ? rootPaths(artifacts) : [])),
   )
   const expanded = expandedPaths ?? localExpandedPaths
   const setExpanded = onExpandedPathsChange ?? setLocalExpandedPaths
   const normalizedQuery = query.trim().toLocaleLowerCase()
-  const tree = useMemo(() => buildArtifactTree(artifacts), [artifacts])
-  const allArtifacts = useMemo(() => flattenArtifacts(tree), [tree])
-  const filteredArtifacts = allArtifacts.filter((artifact) => matches(artifact, normalizedQuery))
+  const tree = useMemo(() => needsTree ? buildArtifactTree(artifacts) : undefined, [artifacts, needsTree])
+  const allArtifacts = useMemo(
+    () => tree ? flattenArtifacts(tree) : artifacts,
+    [artifacts, tree],
+  )
+  const filteredArtifacts = useMemo(
+    () => normalizedQuery ? allArtifacts.filter((artifact) => matches(artifact, normalizedQuery)) : allArtifacts,
+    [allArtifacts, normalizedQuery],
+  )
+  const items = view === 'recent'
+    ? artifacts.filter((artifact) => matches(artifact, normalizedQuery))
+    : filteredArtifacts
+  const isPathListView = view === 'paths' || (view === 'tree' && style === 'path-list')
+  const isVirtualizedPathList = virtualizePaths && isPathListView && items.length > VIRTUAL_PATH_THRESHOLD
+  const pathListRef = useRef<HTMLDivElement>(null)
+  const [pathRange, setPathRange] = useState({ start: 0, end: 80 })
+
+  useLayoutEffect(() => {
+    if (!isVirtualizedPathList) return
+    const list = pathListRef.current
+    const scrollContainer = list?.closest<HTMLElement>('.site-home')
+    if (!list || !scrollContainer) return
+
+    const updateRange = () => {
+      const listTop = list.getBoundingClientRect().top
+        - scrollContainer.getBoundingClientRect().top
+        + scrollContainer.scrollTop
+      const viewportStart = scrollContainer.scrollTop - listTop
+      const viewportEnd = viewportStart + scrollContainer.clientHeight
+      const totalHeight = items.length * VIRTUAL_PATH_ROW_HEIGHT
+      const visibleStart = Math.max(0, Math.floor(Math.max(0, viewportStart) / VIRTUAL_PATH_ROW_HEIGHT))
+      const visibleEnd = Math.min(items.length, Math.ceil(Math.min(totalHeight, viewportEnd) / VIRTUAL_PATH_ROW_HEIGHT))
+      const windowSize = Math.ceil(scrollContainer.clientHeight / VIRTUAL_PATH_ROW_HEIGHT) + VIRTUAL_PATH_OVERSCAN * 2
+      const start = viewportEnd <= 0
+        ? 0
+        : viewportStart >= totalHeight
+          ? Math.max(0, items.length - windowSize)
+          : Math.max(0, visibleStart - VIRTUAL_PATH_OVERSCAN)
+      const end = viewportEnd <= 0
+        ? Math.min(items.length, windowSize)
+        : viewportStart >= totalHeight
+          ? items.length
+          : Math.min(items.length, visibleEnd + VIRTUAL_PATH_OVERSCAN)
+
+      setPathRange((current) => current.start === start && current.end === end ? current : { start, end })
+    }
+
+    updateRange()
+    scrollContainer.addEventListener('scroll', updateRange, { passive: true })
+    const resizeObserver = new ResizeObserver(updateRange)
+    resizeObserver.observe(scrollContainer)
+    return () => {
+      scrollContainer.removeEventListener('scroll', updateRange)
+      resizeObserver.disconnect()
+    }
+  }, [isVirtualizedPathList, items.length])
 
   useEffect(() => {
     const ancestors = folderAncestors(activePath)
@@ -122,15 +181,38 @@ export function ArtifactTree({
     )
   }
 
-  const items = view === 'recent'
-    ? artifacts.filter((artifact) => matches(artifact, normalizedQuery))
-    : filteredArtifacts
+  const visiblePathItems = isVirtualizedPathList ? items.slice(pathRange.start, pathRange.end) : items
+  const topSpacerHeight = isVirtualizedPathList ? pathRange.start * VIRTUAL_PATH_ROW_HEIGHT : 0
+  const bottomSpacerHeight = isVirtualizedPathList
+    ? (items.length - pathRange.end) * VIRTUAL_PATH_ROW_HEIGHT
+    : 0
 
   return (
-    <div className={`artifact-tree tree-view-${view} tree-style-${style}`}>
+    <div
+      ref={pathListRef}
+      className={`artifact-tree tree-view-${view} tree-style-${style}${isVirtualizedPathList ? ' is-virtualized-path-list' : ''}`}
+      role={isVirtualizedPathList ? 'list' : undefined}
+    >
       {view === 'recent' ? items.map((artifact) => renderArtifact(artifact, 0, style)) : null}
-      {view === 'paths' || (view === 'tree' && style === 'path-list') ? items.map((artifact) => renderArtifact(artifact, 0, 'path-list', true)) : null}
-      {view === 'tree' && style !== 'path-list' ? renderNode(tree, 0) : null}
+      {isPathListView ? (
+        <>
+          {topSpacerHeight > 0 ? <div className="tree-virtual-spacer" style={{ height: topSpacerHeight }} aria-hidden="true" /> : null}
+          {isVirtualizedPathList
+            ? visiblePathItems.map((artifact, index) => (
+                <div
+                  key={artifact.id}
+                  role="listitem"
+                  aria-posinset={pathRange.start + index + 1}
+                  aria-setsize={items.length}
+                >
+                  {renderArtifact(artifact, 0, 'path-list', true)}
+                </div>
+              ))
+            : items.map((artifact) => renderArtifact(artifact, 0, 'path-list', true))}
+          {bottomSpacerHeight > 0 ? <div className="tree-virtual-spacer" style={{ height: bottomSpacerHeight }} aria-hidden="true" /> : null}
+        </>
+      ) : null}
+      {view === 'tree' && style !== 'path-list' && tree ? renderNode(tree, 0) : null}
     </div>
   )
 }

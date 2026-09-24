@@ -26,6 +26,14 @@ test('nginx index listing discovers sites and opens a site home', async ({ page 
   await page.getByRole('button', { name: /SRE/ }).click()
   await expect(page).toHaveURL(/\/sre$/)
   await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
+  await expect(page.locator('.artifact-list-row .artifact-row-title')).toHaveText([
+    'Mermaid rendering catalog',
+    'Markdown styles in the reader',
+    'Latency Retrospective',
+    'Checkout latency incident review',
+    'Platform topology',
+    'Service recovery',
+  ])
 })
 
 test('the root command palette searches sites and opens the selected site', async ({ page }) => {
