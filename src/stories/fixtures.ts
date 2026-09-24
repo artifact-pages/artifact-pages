@@ -1,5 +1,5 @@
-import sreIndex from '../../fixtures/storage/_indexes/sre.json'
-import frontendIndex from '../../fixtures/storage/_indexes/frontend.json'
+import sreIndex from '../../fixtures/storage/_indexes/sre/index.json'
+import frontendIndex from '../../fixtures/storage/_indexes/frontend/index.json'
 import type { ArtifactIndexEntry, SiteIndex } from '../domain/index'
 
 const baseIndex = sreIndex as SiteIndex

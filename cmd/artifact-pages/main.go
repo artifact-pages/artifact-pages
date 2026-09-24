@@ -44,7 +44,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	siteID := flags.String("site", "", "site identifier (for example: sre)")
 	siteTitle := flags.String("site-title", "", "display title for the site (defaults to the site identifier)")
 	sourceDir := flags.String("source", "", "publishable static content directory inside the current Git working tree")
-	outputDir := flags.String("out", ".local/storage", "projection output directory; only _indexes/<site>.json is written")
+	outputDir := flags.String("out", ".local/storage", "projection output directory for site metadata and artifact index")
 	repository := flags.String("repository", "", "source repository name, such as owner/repository (inferred from origin when possible)")
 	repositoryURL := flags.String("repository-url", "", "canonical source repository URL (inferred from origin when possible)")
 	ref := flags.String("ref", "", "source Git ref (inferred from the current branch or commit)")
@@ -85,6 +85,13 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	}
 	fmt.Fprintf(stdout, "Indexed %d artifacts from %d files in %s.\n", result.ArtifactsIndexed, result.FilesScanned, result.Elapsed.Round(time.Millisecond))
 	fmt.Fprintf(stdout, "Wrote %s (%d bytes).\n", outputPath, result.OutputBytes)
+	metadataPath := result.MetadataPath
+	if workingDir, err := os.Getwd(); err == nil {
+		if relative, relErr := filepath.Rel(workingDir, metadataPath); relErr == nil {
+			metadataPath = relative
+		}
+	}
+	fmt.Fprintf(stdout, "Wrote %s (%d bytes).\n", metadataPath, result.MetadataBytes)
 	return nil
 }
 
@@ -104,7 +111,7 @@ func writeIndexUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "Usage:")
 	fmt.Fprintln(writer, "  artifact-pages index build [options]")
 	fmt.Fprintln(writer, "")
-	fmt.Fprintln(writer, "Build a site index from ready-to-serve HTML documents in a static content tree.")
+	fmt.Fprintln(writer, "Build site discovery metadata and an artifact index from ready-to-serve HTML and Markdown documents.")
 }
 
 func writeBuildUsage(writer io.Writer) {

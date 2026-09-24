@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from 'react'
 import { ArtifactWorkspace } from './components/ArtifactWorkspace'
 import { SitePicker } from './components/SitePicker'
-import { discoverSiteIndexes, IndexLoadError, loadSiteIndex } from './data/indexes'
-import type { SiteIndex } from './domain/index'
+import { defaultSiteIndexUrl, discoverSites, IndexLoadError, loadSiteIndex } from './data/indexes'
+import type { SiteDiscoveryMetadata, SiteIndex } from './domain/index'
 import { isThemeMode, resolveTheme } from './domain/theme'
 import type { ResolvedTheme, ThemeMode } from './domain/theme'
 import { parseRoute, type AppRoute } from './routing'
@@ -74,16 +74,16 @@ function useTheme() {
 function App() {
   const { route, pathname, hash, navigate } = useLocation()
   const { themeMode, theme, setThemeMode } = useTheme()
-  const [catalog, setCatalog] = useState<LoadingState<SiteIndex[]>>({ status: 'loading' })
+  const [sites, setSites] = useState<LoadingState<SiteDiscoveryMetadata[]>>({ status: 'loading' })
 
   useEffect(() => {
     let cancelled = false
-    discoverSiteIndexes().then(
-      (indexes) => {
-        if (!cancelled) setCatalog({ status: 'success', data: indexes })
+    discoverSites().then(
+      (metadata) => {
+        if (!cancelled) setSites({ status: 'success', data: metadata })
       },
       (error: unknown) => {
-        if (!cancelled) setCatalog({ status: 'error', error: toError(error) })
+        if (!cancelled) setSites({ status: 'error', error: toError(error) })
       },
     )
 
@@ -93,11 +93,11 @@ function App() {
   }, [])
 
   if (route.kind === 'sites') {
-    if (catalog.status === 'loading') return <StatusPage title="Sites" message="Loading sites…" />
-    if (catalog.status === 'error') return <ErrorPage title="Sites" error={catalog.error} />
+    if (sites.status === 'loading') return <StatusPage title="Sites" message="Loading sites…" />
+    if (sites.status === 'error') return <ErrorPage title="Sites" error={sites.error} />
     return (
       <SitePicker
-        indexes={catalog.data}
+        sites={sites.data}
         onNavigate={navigate}
         themeMode={themeMode}
         onSetThemeMode={setThemeMode}
@@ -111,8 +111,8 @@ function App() {
       route={route}
       pathname={pathname}
       hash={hash}
-      catalog={catalog.status === 'success' ? catalog.data : []}
-      catalogLoading={catalog.status === 'loading'}
+      sites={sites.status === 'success' ? sites.data : []}
+      sitesLoading={sites.status === 'loading'}
       navigate={navigate}
       themeMode={themeMode}
       theme={theme}
@@ -123,31 +123,33 @@ function App() {
 
 function SitePage({
   route,
+  sites,
+  sitesLoading,
   pathname,
   hash,
-  catalog,
-  catalogLoading,
   navigate,
   themeMode,
   theme,
   onSetThemeMode,
 }: {
   route: Extract<AppRoute, { kind: 'site' }>
+  sites: SiteDiscoveryMetadata[]
+  sitesLoading: boolean
   pathname: string
   hash: string
-  catalog: SiteIndex[]
-  catalogLoading: boolean
   navigate: (href: string) => void
   themeMode: ThemeMode
   theme: ResolvedTheme
   onSetThemeMode: (mode: ThemeMode) => void
 }) {
   const [indexState, setIndexState] = useState<LoadingState<SiteIndex>>({ status: 'loading' })
+  const artifactIndexUrl = sites.find(({ site }) => site.id === route.siteId)?.artifactIndexUrl
+    ?? defaultSiteIndexUrl(route.siteId)
 
   useEffect(() => {
     let cancelled = false
     setIndexState({ status: 'loading' })
-    loadSiteIndex(route.siteId).then(
+    loadSiteIndex(route.siteId, fetch, artifactIndexUrl).then(
       (index) => {
         if (!cancelled) setIndexState({ status: 'success', data: index })
       },
@@ -159,7 +161,7 @@ function SitePage({
     return () => {
       cancelled = true
     }
-  }, [route.siteId])
+  }, [route.siteId, artifactIndexUrl])
 
   if (indexState.status === 'loading') {
     return <StatusPage title={route.siteId} message="Loading site index…" />
@@ -171,10 +173,10 @@ function SitePage({
   return (
     <ArtifactWorkspace
       route={route}
+      sites={sites}
+      sitesLoading={sitesLoading}
       pathname={pathname}
       hash={hash}
-      catalog={catalog}
-      catalogLoading={catalogLoading}
       navigate={navigate}
       themeMode={themeMode}
       theme={theme}

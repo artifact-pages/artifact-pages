@@ -7,6 +7,13 @@ import { resolveTheme } from '../domain/theme'
 import type { ThemeMode } from '../domain/theme'
 
 const indexes = storyIndexes
+const sites = indexes.map((index) => ({
+  schemaVersion: index.schemaVersion,
+  site: index.site,
+  generatedAt: index.generatedAt,
+  artifactCount: index.artifacts.length,
+  artifactIndexUrl: `/_indexes/${index.site.id}/index.json`,
+}))
 
 type WorkspaceStoryArgs = {
   view: 'site-home' | 'artifact' | 'markdown'
@@ -65,8 +72,8 @@ function WorkspaceStory({ view, theme, initialSidebarOpen }: WorkspaceStoryArgs)
       route={route}
       pathname={pathname}
       hash={hash}
-      catalog={indexes}
-      catalogLoading={false}
+      sites={sites}
+      sitesLoading={false}
       navigate={navigate}
       themeMode={activeThemeMode}
       theme={activeTheme}

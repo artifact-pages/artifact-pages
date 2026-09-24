@@ -1,4 +1,4 @@
-import type { SiteIndex, SiteSummary } from '../domain/index'
+import type { SiteDiscoveryMetadata, SiteIndex } from '../domain/index'
 
 const INDEX_ROOT = '/_indexes'
 const SITE_ID_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/
@@ -40,40 +40,44 @@ function extractSiteIds(directoryListing: string): string[] {
     .map((href) => href.split('/').filter(Boolean).at(-1) ?? '')
     .filter((filename) => filename.endsWith('.json'))
     .map((filename) => decodeURIComponent(filename.slice(0, -'.json'.length)))
-    .filter((siteId) => siteId !== 'sites' && SITE_ID_PATTERN.test(siteId))
+    .filter((siteId) => SITE_ID_PATTERN.test(siteId))
 
   return [...new Set(siteIds)].sort()
 }
 
-function parseSiteIndex(payload: unknown, url: string): SiteIndex {
+function parseSiteDiscoveryMetadata(payload: unknown, url: string, expectedSiteId: string): SiteDiscoveryMetadata {
   if (!payload || typeof payload !== 'object') {
-    throw new IndexLoadError(`Invalid site index data: ${url}.`, url)
+    throw new IndexLoadError(`Invalid site discovery metadata: ${url}.`, url)
   }
 
-  const index = payload as Partial<SiteIndex>
+  const metadata = payload as Partial<SiteDiscoveryMetadata>
   if (
-    typeof index.schemaVersion !== 'number' ||
-    !index.site ||
-    typeof index.site.id !== 'string' ||
-    typeof index.site.title !== 'string' ||
-    typeof index.generatedAt !== 'string' ||
-    !Array.isArray(index.artifacts)
+    typeof metadata.schemaVersion !== 'number' ||
+    !metadata.site ||
+    metadata.site.id !== expectedSiteId ||
+    typeof metadata.site.title !== 'string' ||
+    typeof metadata.generatedAt !== 'string' ||
+    !Number.isSafeInteger(metadata.artifactCount) ||
+    (metadata.artifactCount ?? -1) < 0 ||
+    typeof metadata.artifactIndexUrl !== 'string' ||
+    !isLocalIndexUrl(metadata.artifactIndexUrl)
   ) {
-    throw new IndexLoadError(`Invalid site index data: ${url}.`, url)
+    throw new IndexLoadError(`Invalid site discovery metadata: ${url}.`, url)
   }
 
-  return index as SiteIndex
+  return metadata as SiteDiscoveryMetadata
 }
 
 export async function loadSiteIndex(
   siteId: string,
   fetcher: Fetcher = fetch,
+  indexUrl = defaultSiteIndexUrl(siteId),
 ): Promise<SiteIndex> {
   if (!SITE_ID_PATTERN.test(siteId)) {
-    throw new IndexLoadError(`Invalid site id: ${siteId}.`, `${INDEX_ROOT}/${siteId}.json`)
+    throw new IndexLoadError(`Invalid site id: ${siteId}.`, indexUrl)
   }
 
-  const url = `${INDEX_ROOT}/${encodeURIComponent(siteId)}.json`
+  const url = indexUrl
   let payload: unknown
 
   try {
@@ -89,18 +93,70 @@ export async function loadSiteIndex(
     throw new IndexLoadError(`Could not fetch ${url}.`, url, { cause: error })
   }
 
-  return parseSiteIndex(payload, url)
+  return parseSiteIndex(payload, url, siteId)
 }
 
-export async function discoverSiteIndexes(fetcher: Fetcher = fetch): Promise<SiteIndex[]> {
+function parseSiteIndex(payload: unknown, url: string, expectedSiteId: string): SiteIndex {
+  if (!payload || typeof payload !== 'object') {
+    throw new IndexLoadError(`Invalid site artifact index data: ${url}.`, url)
+  }
+
+  const index = payload as Partial<SiteIndex>
+  if (
+    typeof index.schemaVersion !== 'number' ||
+    !index.site ||
+    index.site.id !== expectedSiteId ||
+    typeof index.site.title !== 'string' ||
+    typeof index.generatedAt !== 'string' ||
+    !Array.isArray(index.artifacts)
+  ) {
+    throw new IndexLoadError(`Invalid site artifact index data: ${url}.`, url)
+  }
+
+  return index as SiteIndex
+}
+
+export function defaultSiteIndexUrl(siteId: string) {
+  return `${INDEX_ROOT}/${encodeURIComponent(siteId)}/index.json`
+}
+
+function isLocalIndexUrl(value: string) {
+  if (!value.startsWith(`${INDEX_ROOT}/`) || value.startsWith('//') || value.includes('\\')) return false
+
+  try {
+    const url = new URL(value, 'https://artifact-pages.invalid')
+    return url.origin === 'https://artifact-pages.invalid'
+      && url.pathname.startsWith(`${INDEX_ROOT}/`)
+      && !url.search
+      && !url.hash
+      && !url.pathname.split('/').some((segment) => segment === '.' || segment === '..')
+  } catch {
+    return false
+  }
+}
+
+export async function discoverSites(fetcher: Fetcher = fetch): Promise<SiteDiscoveryMetadata[]> {
   const directoryListing = await fetchText(`${INDEX_ROOT}/`, fetcher)
   const siteIds = extractSiteIds(directoryListing)
-  return Promise.all(siteIds.map((siteId) => loadSiteIndex(siteId, fetcher)))
+  const metadata = await Promise.all(siteIds.map((siteId) => loadSiteDiscoveryMetadata(siteId, fetcher)))
+  return metadata.sort((left, right) => left.site.title.localeCompare(right.site.title))
 }
 
-export async function discoverSites(fetcher: Fetcher = fetch): Promise<SiteSummary[]> {
-  const indexes = await discoverSiteIndexes(fetcher)
-  return indexes
-    .map(({ site }) => site)
-    .sort((left, right) => left.title.localeCompare(right.title))
+async function loadSiteDiscoveryMetadata(
+  siteId: string,
+  fetcher: Fetcher,
+): Promise<SiteDiscoveryMetadata> {
+  const url = `${INDEX_ROOT}/${encodeURIComponent(siteId)}.json`
+  let payload: unknown
+  try {
+    const response = await fetcher(url)
+    if (!response.ok) {
+      throw new IndexLoadError(`Request failed with status ${response.status}: ${url}.`, url)
+    }
+    payload = await response.json()
+  } catch (error) {
+    if (error instanceof IndexLoadError) throw error
+    throw new IndexLoadError(`Could not fetch ${url}.`, url, { cause: error })
+  }
+  return parseSiteDiscoveryMetadata(payload, url, siteId)
 }

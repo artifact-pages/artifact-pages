@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ArtifactIndexEntry, SiteIndex, TocEntry } from '../domain/index'
+import type { ArtifactIndexEntry, SiteDiscoveryMetadata, SiteIndex, TocEntry } from '../domain/index'
 import {
   fuzzyMatch,
   fuzzyMatchPreparedText,
@@ -42,7 +42,7 @@ const preparedArtifactText = new WeakMap<ArtifactIndexEntry, PreparedArtifactTex
 
 export function CommandPalette({
   seed,
-  indexes,
+  sites,
   context,
   currentIndex,
   currentArtifact,
@@ -53,7 +53,7 @@ export function CommandPalette({
   onJumpToHeading,
 }: {
   seed: string
-  indexes: SiteIndex[]
+  sites: SiteDiscoveryMetadata[]
   context: PaletteContext
   currentIndex?: SiteIndex
   currentArtifact?: ArtifactIndexEntry
@@ -84,9 +84,9 @@ export function CommandPalette({
       : mode === 'heading'
         ? 'This artifact'
         : context === 'sites'
-          ? 'Sites first'
+          ? 'Sites'
           : currentIndex?.site.title
-            ? `${currentIndex.site.title} first`
+            ? `${currentIndex.site.title} only`
             : undefined
   const placeholder = mode === 'site'
     ? 'Search sites...'
@@ -95,12 +95,12 @@ export function CommandPalette({
       : mode === 'heading'
         ? 'Search headings in this artifact...'
         : context === 'sites'
-          ? 'Search sites and pages...'
-          : 'Search pages, sites, headings, and commands...'
+          ? 'Search sites...'
+          : 'Search pages, headings, and commands...'
 
   const sections = useMemo(
-    () => buildSections({ mode, context, term, indexes, currentIndex, currentArtifact, commands, onNavigate, onJumpToHeading }),
-    [mode, context, term, indexes, currentIndex, currentArtifact, commands, onNavigate, onJumpToHeading],
+    () => buildSections({ mode, context, term, sites, currentIndex, currentArtifact, commands, onNavigate, onJumpToHeading }),
+    [mode, context, term, sites, currentIndex, currentArtifact, commands, onNavigate, onJumpToHeading],
   )
   const entries = sections.flatMap((section) => section.entries)
 
@@ -175,7 +175,7 @@ export function CommandPalette({
                 ? 'Open an artifact first to search its headings.'
                 : mode === 'heading' && (currentArtifact?.toc?.length ?? 0) === 0
                   ? 'This artifact has no indexed headings.'
-                  : mode === 'site' && indexes.length === 0
+                  : mode === 'site' && sites.length === 0
                     ? 'No sites are available.'
                 : 'Nothing matches. Try > for commands, @ for sites, or # for headings.'}
             </p>
@@ -217,7 +217,7 @@ export function CommandPalette({
           )}
         </div>
 
-        {loading ? <p className="palette-loading" role="status">Loading other site indexes…</p> : null}
+        {loading ? <p className="palette-loading" role="status">Loading site information…</p> : null}
 
         <footer className="palette-footer">
           <span><kbd>↑</kbd><kbd>↓</kbd> or <kbd>Ctrl+J/K</kbd> navigate</span>
@@ -235,7 +235,7 @@ function buildSections({
   mode,
   context,
   term,
-  indexes,
+  sites,
   currentIndex,
   currentArtifact,
   commands,
@@ -245,7 +245,7 @@ function buildSections({
   mode: 'site' | 'command' | 'heading' | 'search'
   context: PaletteContext
   term: string
-  indexes: SiteIndex[]
+  sites: SiteDiscoveryMetadata[]
   currentIndex?: SiteIndex
   currentArtifact?: ArtifactIndexEntry
   commands: PaletteCommand[]
@@ -253,7 +253,7 @@ function buildSections({
   onJumpToHeading: (headingId: string) => void
 }): PaletteSection[] {
   if (mode === 'site') {
-    const entries = buildSiteEntries(indexes, term, onNavigate)
+    const entries = buildSiteEntries(sites, term, onNavigate)
     return entries.length ? [{ title: 'Sites', entries }] : []
   }
 
@@ -271,7 +271,7 @@ function buildSections({
 
   if (!term.trim()) {
     if (context === 'sites') {
-      const siteEntries = buildSiteEntries(indexes, '', onNavigate)
+      const siteEntries = buildSiteEntries(sites, '', onNavigate)
       const commandEntries = buildCommandEntries(commands, '').slice(0, 3)
       return [
         ...(siteEntries.length ? [{ title: 'Sites', entries: siteEntries }] : []),
@@ -291,9 +291,7 @@ function buildSections({
     ]
   }
 
-  const pageSections = buildPageSections(indexes, currentIndex, term, onNavigate)
-  const siteEntries = buildSiteEntries(indexes, term, onNavigate)
-  const siteSection = siteEntries.length ? [{ title: 'Sites', entries: siteEntries }] : []
+  const pageSections = buildPageSections(currentIndex, term, onNavigate)
   const headingEntries = context === 'artifact'
     ? buildHeadingEntries(currentArtifact, term, onJumpToHeading)
     : []
@@ -304,47 +302,38 @@ function buildSections({
   const commandSection = commandEntries.length ? [{ title: 'Commands', entries: commandEntries }] : []
 
   if (context === 'sites') {
-    return [...siteSection, ...pageSections.map(({ section }) => section), ...commandSection]
+    const siteEntries = buildSiteEntries(sites, term, onNavigate)
+    const siteSection = siteEntries.length ? [{ title: 'Sites', entries: siteEntries }] : []
+    return [...siteSection, ...commandSection]
   }
-
-  const currentSitePages = pageSections
-    .filter(({ siteId }) => siteId === currentIndex?.site.id)
-    .map(({ section }) => section)
-  const otherSitePages = pageSections
-    .filter(({ siteId }) => siteId !== currentIndex?.site.id)
-    .map(({ section }) => section)
 
   return [
     ...headingSection,
-    ...currentSitePages,
-    ...siteSection,
-    ...otherSitePages,
+    ...pageSections,
     ...commandSection,
   ]
 }
 
-type RankedPaletteSection = { siteId: string; score: number; section: PaletteSection }
-
 function buildSiteEntries(
-  indexes: SiteIndex[],
+  sites: SiteDiscoveryMetadata[],
   term: string,
   onNavigate: (href: string) => void,
 ): PaletteEntry[] {
-  return indexes.flatMap((index) => {
-    const titleMatch = fuzzyMatch(index.site.title, term)
-    const idMatch = fuzzyMatch(index.site.id, term)
+  return sites.flatMap((metadata) => {
+    const titleMatch = fuzzyMatch(metadata.site.title, term)
+    const idMatch = fuzzyMatch(metadata.site.id, term)
     if (term.trim() && !titleMatch && !idMatch) return []
-    const subtitle = `/${index.site.id} · ${index.artifacts.length} artifacts`
+    const subtitle = `/${metadata.site.id} · ${metadata.artifactCount} artifacts`
     const subtitleMatch = idMatch ? offsetMatch(idMatch, 1) : undefined
     return [{
       entry: {
-        id: `site:${index.site.id}`,
+        id: `site:${metadata.site.id}`,
         kind: 'site' as const,
-        title: index.site.title,
+        title: metadata.site.title,
         subtitle,
         titleMatch,
         subtitleMatch,
-        onSelect: () => onNavigate(`/${encodeURIComponent(index.site.id)}`),
+        onSelect: () => onNavigate(`/${encodeURIComponent(metadata.site.id)}`),
       },
       score: Math.max(titleMatch?.score ?? 0, idMatch?.score ?? 0),
     }]
@@ -392,47 +381,39 @@ function buildHeadingEntries(
 }
 
 function buildPageSections(
-  indexes: SiteIndex[],
   currentIndex: SiteIndex | undefined,
   term: string,
   onNavigate: (href: string) => void,
-): RankedPaletteSection[] {
+): PaletteSection[] {
+  if (!currentIndex) return []
   const query = prepareFuzzyQuery(term)
-  return indexes.flatMap((index) => {
-    const entries: Array<{ entry: PaletteEntry; score: number }> = []
-    for (const artifact of index.artifacts) {
-      let prepared = preparedArtifactText.get(artifact)
-      if (!prepared) {
-        prepared = { title: prepareFuzzyText(artifact.title), path: prepareFuzzyText(artifact.path) }
-        preparedArtifactText.set(artifact, prepared)
-      }
-      const titleMatch = fuzzyMatchPreparedText(prepared.title, query)
-      const pathMatch = fuzzyMatchPreparedText(prepared.path, query)
-      if (!titleMatch && !pathMatch) continue
-
-      const score = (titleMatch?.score ?? 0) * 1.12 + (pathMatch?.score ?? 0)
-      let position = 0
-      while (position < entries.length && entries[position].score >= score) position += 1
-      if (position < 8) {
-        entries.splice(position, 0, {
-          entry: artifactEntry(index, artifact, onNavigate, titleMatch, pathMatch),
-          score,
-        })
-        if (entries.length > 8) entries.pop()
-      }
+  const entries: Array<{ entry: PaletteEntry; score: number }> = []
+  for (const artifact of currentIndex.artifacts) {
+    let prepared = preparedArtifactText.get(artifact)
+    if (!prepared) {
+      prepared = { title: prepareFuzzyText(artifact.title), path: prepareFuzzyText(artifact.path) }
+      preparedArtifactText.set(artifact, prepared)
     }
-    if (!entries.length) return []
-    return [{
-      siteId: index.site.id,
-      score: entries[0].score,
-      section: { title: `Pages in ${index.site.title}`, entries: entries.map(({ entry }) => entry) },
-    }]
-  })
-    .sort((left, right) => {
-      if (currentIndex && left.siteId === currentIndex.site.id) return -1
-      if (currentIndex && right.siteId === currentIndex.site.id) return 1
-      return right.score - left.score || left.section.title.localeCompare(right.section.title)
-    })
+    const titleMatch = fuzzyMatchPreparedText(prepared.title, query)
+    const pathMatch = fuzzyMatchPreparedText(prepared.path, query)
+    if (!titleMatch && !pathMatch) continue
+
+    const score = (titleMatch?.score ?? 0) * 1.12 + (pathMatch?.score ?? 0)
+    let position = 0
+    while (position < entries.length && entries[position].score >= score) position += 1
+    if (position < 8) {
+      entries.splice(position, 0, {
+        entry: artifactEntry(currentIndex, artifact, onNavigate, titleMatch, pathMatch),
+        score,
+      })
+      if (entries.length > 8) entries.pop()
+    }
+  }
+  if (!entries.length) return []
+  return [{
+    title: `Pages in ${currentIndex.site.title}`,
+    entries: entries.map(({ entry }) => entry),
+  }]
 }
 
 function artifactEntry(

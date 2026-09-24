@@ -136,7 +136,7 @@ export function Sidebar({
             {matchCount === 0 ? (
               <p className="sidebar-empty">
                 Nothing in {index.site.title} matches.<br />
-                <span>Press ⌘ K to search other sites.</span>
+                <span>Press ⌘ K, then @, to find another site.</span>
               </p>
             ) : (
               <ArtifactTree

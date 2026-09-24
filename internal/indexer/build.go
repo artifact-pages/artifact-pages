@@ -48,6 +48,8 @@ type BuildResult struct {
 	ArtifactsIndexed int
 	OutputPath       string
 	OutputBytes      int
+	MetadataPath     string
+	MetadataBytes    int
 	Elapsed          time.Duration
 }
 
@@ -56,6 +58,14 @@ type SiteIndex struct {
 	Site          SiteSummary          `json:"site"`
 	GeneratedAt   string               `json:"generatedAt"`
 	Artifacts     []ArtifactIndexEntry `json:"artifacts"`
+}
+
+type SiteDiscoveryMetadata struct {
+	SchemaVersion    int         `json:"schemaVersion"`
+	Site             SiteSummary `json:"site"`
+	GeneratedAt      string      `json:"generatedAt"`
+	ArtifactCount    int         `json:"artifactCount"`
+	ArtifactIndexURL string      `json:"artifactIndexUrl"`
 }
 
 type SiteSummary struct {
@@ -181,7 +191,7 @@ func Build(ctx context.Context, options BuildOptions) (BuildResult, error) {
 		return BuildResult{}, err
 	}
 	if len(artifacts) == 0 {
-		return BuildResult{}, fmt.Errorf("no HTML artifacts found in %q; a source-root index.html or index.htm is treated as a site page, not an artifact", options.SourceDir)
+		return BuildResult{}, fmt.Errorf("no HTML or Markdown artifacts found in %q", options.SourceDir)
 	}
 
 	relativeSource, err := filepath.Rel(repositoryRoot, sourcePath)
@@ -269,9 +279,25 @@ func Build(ctx context.Context, options BuildOptions) (BuildResult, error) {
 		return BuildResult{}, fmt.Errorf("encode site index: %w", err)
 	}
 	serialized = append(serialized, '\n')
-	indexPath := filepath.Join(outputRoot, "_indexes", options.SiteID+".json")
+	indexPath := filepath.Join(outputRoot, "_indexes", options.SiteID, "index.json")
 	if err := writeAtomically(indexPath, serialized); err != nil {
-		return BuildResult{}, fmt.Errorf("write site index: %w", err)
+		return BuildResult{}, fmt.Errorf("write site artifact index: %w", err)
+	}
+	metadata := SiteDiscoveryMetadata{
+		SchemaVersion:    index.SchemaVersion,
+		Site:             index.Site,
+		GeneratedAt:      index.GeneratedAt,
+		ArtifactCount:    len(index.Artifacts),
+		ArtifactIndexURL: siteIndexURL(options.SiteID),
+	}
+	metadataBytes, err := json.MarshalIndent(metadata, "", "  ")
+	if err != nil {
+		return BuildResult{}, fmt.Errorf("encode site discovery metadata: %w", err)
+	}
+	metadataBytes = append(metadataBytes, '\n')
+	metadataPath := filepath.Join(outputRoot, "_indexes", options.SiteID+".json")
+	if err := writeAtomically(metadataPath, metadataBytes); err != nil {
+		return BuildResult{}, fmt.Errorf("write site discovery metadata: %w", err)
 	}
 
 	return BuildResult{
@@ -279,6 +305,8 @@ func Build(ctx context.Context, options BuildOptions) (BuildResult, error) {
 		ArtifactsIndexed: len(index.Artifacts),
 		OutputPath:       indexPath,
 		OutputBytes:      len(serialized),
+		MetadataPath:     metadataPath,
+		MetadataBytes:    len(metadataBytes),
 		Elapsed:          time.Since(startedAt),
 	}, nil
 }
@@ -750,6 +778,10 @@ func artifactURL(siteID, artifactPath string) string {
 		segments = append(segments, url.PathEscape(segment))
 	}
 	return "/" + strings.Join(segments, "/")
+}
+
+func siteIndexURL(siteID string) string {
+	return "/_indexes/" + url.PathEscape(siteID) + "/index.json"
 }
 
 func humanize(value string) string {

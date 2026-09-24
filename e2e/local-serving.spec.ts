@@ -20,7 +20,7 @@ test('nginx index listing discovers sites and opens a site home', async ({ page 
   await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
 })
 
-test('the root command palette searches sites first and opens the selected site', async ({ page }) => {
+test('the root command palette searches sites and opens the selected site', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Choose a site' })).toBeVisible()
   await page.keyboard.press('Control+k')
@@ -33,14 +33,12 @@ test('the root command palette searches sites first and opens the selected site'
     return Math.abs(bounds.top + bounds.height / 2 - window.innerHeight / 2)
   })
   await expect.poll(paletteCenterOffset).toBeLessThan(1)
-  await expect(search).toHaveAttribute('placeholder', 'Search sites and pages...')
+  await expect(search).toHaveAttribute('placeholder', 'Search sites...')
   await expect(palette.getByRole('option', { name: /SRE/ })).toBeVisible()
   await expect(palette.getByRole('option', { name: /Frontend/ })).toBeVisible()
 
   await search.fill('cloud')
-  await expect(palette.getByRole('option', { name: /Cloud spend review/ })).toBeVisible()
-  await expect(palette.getByRole('option')).toHaveCount(1)
-  await expect(palette.getByText('Pages in HTML Showcase')).toBeVisible()
+  await expect(palette.getByRole('option')).toHaveCount(0)
   await expect.poll(paletteCenterOffset).toBeLessThan(1)
 
   await search.fill('front')
@@ -54,13 +52,35 @@ test('the root command palette searches sites first and opens the selected site'
   await expect(page.getByRole('heading', { name: 'Frontend', exact: true })).toBeVisible()
 })
 
+test('site discovery loads lightweight metadata for all sites but detailed indexes on demand', async ({ page }) => {
+  const indexRequests: string[] = []
+  page.on('request', (request) => {
+    const pathname = new URL(request.url()).pathname
+    if (/^\/_indexes\/[^/]+\/index\.json$/u.test(pathname)) indexRequests.push(pathname)
+  })
+
+  await page.goto('/sre')
+  await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
+  await expect.poll(() => [...indexRequests]).toEqual(['/_indexes/sre/index.json'])
+
+  const paletteButton = page.getByRole('button', { name: 'Open command palette (⌘ K)' })
+  await paletteButton.click()
+  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
+  await search.fill('Button guidelines')
+  await expect(palette.getByRole('option')).toHaveCount(0)
+  await search.fill('@front')
+  await expect(palette.getByRole('option', { name: /Frontend/ })).toBeVisible()
+  await expect.poll(() => [...indexRequests]).toEqual(['/_indexes/sre/index.json'])
+})
+
 test('the command palette supports Ctrl+J/K navigation and opens the selected result', async ({ page }) => {
   await page.goto('/sre')
   await page.getByRole('button', { name: 'Open command palette (⌘ K)' }).click()
 
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
-  await search.fill('incident')
+  await search.fill('latency')
 
   await expect(palette.locator('.palette-footer')).toHaveText(/Ctrl\+J\/K/)
   const options = palette.getByRole('option')
@@ -83,43 +103,38 @@ test('the command palette supports Ctrl+J/K navigation and opens the selected re
   await search.press('Enter')
 
   await expect(palette).toBeHidden()
-  const siteIdsBySection: Record<string, string> = {
-    'Pages in SRE': 'sre',
-    'Pages in HTML Showcase': 'showcase',
-  }
+  const siteIdsBySection: Record<string, string> = { 'Pages in SRE': 'sre' }
   const siteId = siteIdsBySection[resultOpenedByEnter.section]
   expect(siteId).toBeTruthy()
   await expect.poll(() => new URL(page.url()).pathname).toBe(`/${siteId}/${resultOpenedByEnter.path}`)
-  await expect(page.locator('iframe.artifact-frame')).toBeVisible()
+  if (resultOpenedByEnter.path.endsWith('.md')) {
+    await expect(page.locator('.markdown-scroll')).toBeVisible()
+  } else {
+    await expect(page.locator('iframe.artifact-frame')).toBeVisible()
+  }
 })
 
-test('context prioritizes local pages while @ and > explicitly scope results', async ({ page }) => {
+test('normal page search stays on the current site while @ and > select explicit scopes', async ({ page }) => {
   await page.goto('/sre')
   await page.getByRole('button', { name: 'Open command palette (⌘ K)' }).click()
 
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
-  await expect(search).toHaveAttribute('placeholder', 'Search pages, sites, headings, and commands...')
-  await expect(palette.locator('.palette-scope')).toHaveText('SRE first')
+  await expect(search).toHaveAttribute('placeholder', 'Search pages, headings, and commands...')
+  await expect(palette.locator('.palette-scope')).toHaveText('SRE only')
 
   await search.fill('incident')
   await expect(palette.getByRole('option', { name: /Checkout latency incident review/ })).toBeVisible()
-  await expect(palette.getByRole('option', { name: /Incident intake/ })).toBeVisible()
-  await expect(palette.locator('.palette-section-title')).toHaveText([
-    'Pages in SRE',
-    'Pages in HTML Showcase',
-  ])
+  await expect(palette.locator('.palette-section-title')).toHaveText(['Pages in SRE'])
 
   await search.fill('Button guidelines')
-  const remotePage = palette.getByRole('option', { name: /Button guidelines/ })
-  await expect(remotePage).toBeVisible()
-  await expect(palette.getByRole('option')).toHaveCount(1)
-  await expect(palette.getByText('Pages in Frontend')).toBeVisible()
+  await expect(palette.getByRole('option')).toHaveCount(0)
+  await expect(palette.getByText(/Nothing matches/)).toBeVisible()
 
   await search.fill('@front')
   await expect(palette.getByRole('option', { name: /Frontend/ })).toBeVisible()
   await expect(palette.getByRole('option')).toHaveCount(1)
-  await expect(palette.getByText('Pages in Frontend')).toHaveCount(0)
+  await expect(palette.locator('.palette-section-title')).toHaveText(['Sites'])
 
   await search.fill('>theme')
   await expect(palette.locator('.palette-section-title')).toHaveText(['Commands'])
@@ -679,12 +694,15 @@ test('the selected theme is offered in the menu and reaches adaptive artifact if
 
 test('the collapsed rail searches artifacts and switches sites', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'light' })
-  const frontendIndex = page.waitForResponse((response) => {
+  const frontendMetadata = page.waitForResponse((response) => {
     return new URL(response.url()).pathname === '/_indexes/frontend.json'
+  })
+  const sreIndex = page.waitForResponse((response) => {
+    return new URL(response.url()).pathname === '/_indexes/sre/index.json'
   })
 
   await page.goto('/sre/incidents/checkout-latency/index.html')
-  await frontendIndex
+  await Promise.all([frontendMetadata, sreIndex])
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
   await expect.poll(() => page.evaluate(() => localStorage.getItem('git-artifact-pages-theme'))).toBe('system')
 
@@ -754,14 +772,22 @@ test('the collapsed rail searches artifacts and switches sites', async ({ page }
   await page.getByRole('button', { name: 'Switch site. Current site: SRE' }).click()
   const sitePalette = page.getByRole('dialog', { name: 'Command palette' })
   await expect(sitePalette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })).toHaveValue('@')
+  const frontendIndex = page.waitForResponse((response) => {
+    return new URL(response.url()).pathname === '/_indexes/frontend/index.json'
+  })
   await sitePalette.getByRole('option', { name: /Frontend/ }).click()
 
+  await frontendIndex
   await expect(page).toHaveURL(/\/frontend$/)
   await expect(page.getByRole('heading', { name: 'Frontend', exact: true })).toBeVisible()
 
   await page.getByRole('button', { name: 'Switch site. Current site: Frontend' }).click()
   const showcasePalette = page.getByRole('dialog', { name: 'Command palette' })
+  const showcaseIndex = page.waitForResponse((response) => {
+    return new URL(response.url()).pathname === '/_indexes/showcase/index.json'
+  })
   await showcasePalette.getByRole('option', { name: /HTML Showcase/ }).click()
+  await showcaseIndex
   await expect(page).toHaveURL(/\/showcase$/)
   await expect(page.getByRole('heading', { name: 'HTML Showcase', exact: true })).toBeVisible()
 })

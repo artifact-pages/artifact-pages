@@ -62,7 +62,7 @@ export function SiteHome({
           siteId={index.site.id}
           query={normalizedQuery}
           onOpenArtifact={onOpenArtifact}
-          emptyMessage="Nothing in this site matches your search. Use ⌘ K to search all sites."
+          emptyMessage="Nothing in this site matches your search. Use ⌘ K, then @, to find another site."
         />
       ) : (
         <>

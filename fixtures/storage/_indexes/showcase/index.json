@@ -1,0 +1,289 @@
+{
+  "schemaVersion": 1,
+  "site": {
+    "id": "showcase",
+    "title": "HTML Showcase"
+  },
+  "generatedAt": "2026-09-23T00:00:00Z",
+  "artifacts": [
+    {
+      "id": "editorial/field-notes/index.html",
+      "title": "Designing for resilience",
+      "path": "editorial/field-notes/index.html",
+      "format": "html",
+      "filename": "index.html",
+      "artifactUrl": "/_artifacts/showcase/editorial/field-notes/index.html",
+      "updatedAt": "2026-09-23T08:30:00Z",
+      "lastCommitter": {
+        "name": "Studio North"
+      },
+      "source": {
+        "repository": "example/html-showcase",
+        "repositoryUrl": "https://github.com/example/html-showcase",
+        "ref": "main"
+      },
+      "toc": [
+        {
+          "level": 1,
+          "text": "Designing for resilience",
+          "id": "opening"
+        },
+        {
+          "level": 2,
+          "text": "Three useful tensions",
+          "id": "principles"
+        },
+        {
+          "level": 2,
+          "text": "Practice over prediction",
+          "id": "practice"
+        },
+        {
+          "level": 2,
+          "text": "A note to the next team",
+          "id": "reflection"
+        }
+      ]
+    },
+    {
+      "id": "dashboards/edge-observatory/index.html",
+      "title": "Edge latency observatory",
+      "path": "dashboards/edge-observatory/index.html",
+      "format": "html",
+      "filename": "index.html",
+      "artifactUrl": "/_artifacts/showcase/dashboards/edge-observatory/index.html",
+      "updatedAt": "2026-09-22T16:10:00Z",
+      "lastCommitter": {
+        "name": "Reliability Engineering"
+      },
+      "source": {
+        "repository": "example/html-showcase",
+        "repositoryUrl": "https://github.com/example/html-showcase",
+        "ref": "main"
+      },
+      "toc": [
+        {
+          "level": 1,
+          "text": "Edge latency observatory",
+          "id": "overview"
+        },
+        {
+          "level": 2,
+          "text": "Request volume",
+          "id": "traffic"
+        },
+        {
+          "level": 2,
+          "text": "Slowest routes",
+          "id": "routes"
+        },
+        {
+          "level": 2,
+          "text": "Signals to watch",
+          "id": "signals"
+        }
+      ]
+    },
+    {
+      "id": "handbook/inclusive-components/index.html",
+      "title": "Inclusive component handbook",
+      "path": "handbook/inclusive-components/index.html",
+      "format": "html",
+      "filename": "index.html",
+      "artifactUrl": "/_artifacts/showcase/handbook/inclusive-components/index.html",
+      "updatedAt": "2026-09-22T11:45:00Z",
+      "lastCommitter": {
+        "name": "Design Systems"
+      },
+      "source": {
+        "repository": "example/html-showcase",
+        "repositoryUrl": "https://github.com/example/html-showcase",
+        "ref": "main"
+      },
+      "toc": [
+        {
+          "level": 1,
+          "text": "Inclusive component handbook",
+          "id": "orientation"
+        },
+        {
+          "level": 2,
+          "text": "Color is not the only signal",
+          "id": "color"
+        },
+        {
+          "level": 2,
+          "text": "Keyboard before pointer",
+          "id": "keyboard"
+        },
+        {
+          "level": 2,
+          "text": "A resilient alert",
+          "id": "example"
+        }
+      ]
+    },
+    {
+      "id": "reports/cloud-spend-review/index.html",
+      "title": "Cloud spend review · Q3",
+      "path": "reports/cloud-spend-review/index.html",
+      "format": "html",
+      "filename": "index.html",
+      "artifactUrl": "/_artifacts/showcase/reports/cloud-spend-review/index.html",
+      "updatedAt": "2026-09-21T18:00:00Z",
+      "lastCommitter": {
+        "name": "FinOps"
+      },
+      "source": {
+        "repository": "example/html-showcase",
+        "repositoryUrl": "https://github.com/example/html-showcase",
+        "ref": "main"
+      },
+      "toc": [
+        {
+          "level": 1,
+          "text": "Cloud spend review · Q3",
+          "id": "overview"
+        },
+        {
+          "level": 2,
+          "text": "Monthly cost movement",
+          "id": "spend"
+        },
+        {
+          "level": 2,
+          "text": "Commitments and actions",
+          "id": "actions"
+        }
+      ]
+    },
+    {
+      "id": "presentations/resilient-by-design/index.html",
+      "title": "Resilient by design",
+      "path": "presentations/resilient-by-design/index.html",
+      "format": "html",
+      "filename": "index.html",
+      "artifactUrl": "/_artifacts/showcase/presentations/resilient-by-design/index.html",
+      "updatedAt": "2026-09-20T13:20:00Z",
+      "lastCommitter": {
+        "name": "Architecture Guild"
+      },
+      "source": {
+        "repository": "example/html-showcase",
+        "repositoryUrl": "https://github.com/example/html-showcase",
+        "ref": "main"
+      },
+      "toc": [
+        {
+          "level": 1,
+          "text": "Resilient by design",
+          "id": "thesis"
+        },
+        {
+          "level": 2,
+          "text": "Design for the middle",
+          "id": "middle"
+        },
+        {
+          "level": 2,
+          "text": "Make recovery visible",
+          "id": "recovery"
+        },
+        {
+          "level": 2,
+          "text": "What we will change",
+          "id": "next"
+        }
+      ]
+    },
+    {
+      "id": "product/atlas-launch/index.html",
+      "title": "Atlas · a calmer way to plan",
+      "path": "product/atlas-launch/index.html",
+      "format": "html",
+      "filename": "index.html",
+      "artifactUrl": "/_artifacts/showcase/product/atlas-launch/index.html",
+      "updatedAt": "2026-09-19T09:00:00Z",
+      "lastCommitter": {
+        "name": "Product Studio"
+      },
+      "source": {
+        "repository": "example/html-showcase",
+        "repositoryUrl": "https://github.com/example/html-showcase",
+        "ref": "main"
+      },
+      "toc": [
+        {
+          "level": 1,
+          "text": "Make space for the work that matters.",
+          "id": "hero"
+        },
+        {
+          "level": 2,
+          "text": "One clear view",
+          "id": "toolkit"
+        },
+        {
+          "level": 2,
+          "text": "A lighter workflow",
+          "id": "workflow"
+        },
+        {
+          "level": 2,
+          "text": "Find your team's rhythm",
+          "id": "invite"
+        }
+      ]
+    },
+    {
+      "id": "forms/incident-intake/index.html",
+      "title": "Incident intake",
+      "path": "forms/incident-intake/index.html",
+      "format": "html",
+      "filename": "index.html",
+      "artifactUrl": "/_artifacts/showcase/forms/incident-intake/index.html",
+      "updatedAt": "2026-09-18T14:15:00Z",
+      "lastCommitter": {
+        "name": "Response Enablement"
+      },
+      "source": {
+        "repository": "example/html-showcase",
+        "repositoryUrl": "https://github.com/example/html-showcase",
+        "ref": "main"
+      },
+      "toc": [
+        {
+          "level": 1,
+          "text": "Incident intake",
+          "id": "request"
+        },
+        {
+          "level": 2,
+          "text": "What happened?",
+          "id": "details"
+        },
+        {
+          "level": 2,
+          "text": "Impact and response",
+          "id": "impact"
+        }
+      ]
+    },
+    {
+      "id": "tests/color-scheme-response/index.html",
+      "title": "Color scheme response fixture",
+      "path": "tests/color-scheme-response/index.html",
+      "format": "html",
+      "filename": "index.html",
+      "artifactUrl": "/_artifacts/showcase/tests/color-scheme-response/index.html",
+      "updatedAt": "2026-09-23T00:00:00Z",
+      "toc": [
+        {
+          "level": 1,
+          "text": "Color-scheme response",
+          "id": "color-scheme-response"
+        }
+      ]
+    }
+  ]
+}

@@ -6,7 +6,7 @@ import { SiteHome } from './SiteHome'
 import { ThemeSwitcher } from './ThemeSwitcher'
 import { MarkdownArtifact } from './MarkdownArtifact'
 import type { TreeStyle } from './ArtifactTree'
-import type { ArtifactIndexEntry, SiteIndex, SiteSummary } from '../domain/index'
+import type { ArtifactIndexEntry, SiteDiscoveryMetadata, SiteIndex, SiteSummary } from '../domain/index'
 import type { ResolvedTheme, ThemeMode } from '../domain/theme'
 import { artifactRouteHref, type AppRoute } from '../routing'
 
@@ -17,8 +17,8 @@ export function ArtifactWorkspace({
   route,
   pathname,
   hash,
-  catalog,
-  catalogLoading,
+  sites,
+  sitesLoading,
   navigate,
   themeMode,
   theme,
@@ -32,8 +32,8 @@ export function ArtifactWorkspace({
   route: SiteRoute
   pathname: string
   hash: string
-  catalog: SiteIndex[]
-  catalogLoading: boolean
+  sites: SiteDiscoveryMetadata[]
+  sitesLoading: boolean
   navigate: (href: string) => void
   themeMode: ThemeMode
   theme: ResolvedTheme
@@ -166,12 +166,18 @@ export function ArtifactWorkspace({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [paletteSeed, hasContents, activePanel, openPalette, toggleSidebar, togglePanel])
 
-  const sites: SiteSummary[] = catalog.length
-    ? catalog.map(({ site }) => site).sort((left, right) => left.title.localeCompare(right.title))
+  const siteSummaries: SiteSummary[] = sites.length
+    ? sites.map(({ site }) => site).sort((left, right) => left.title.localeCompare(right.title))
     : [index.site]
-  const paletteIndexes = catalog.length
-    ? [index, ...catalog.filter((other) => other.site.id !== index.site.id)]
-    : [index]
+  const paletteSites = sites.some(({ site }) => site.id === index.site.id)
+    ? sites
+    : [{
+        schemaVersion: index.schemaVersion,
+        site: index.site,
+        generatedAt: index.generatedAt,
+        artifactCount: index.artifacts.length,
+        artifactIndexUrl: `/_indexes/${encodeURIComponent(index.site.id)}/index.json`,
+      }, ...sites]
   const commands: PaletteCommand[] = [
     { title: 'Toggle sidebar', shortcut: '⌘ B', onSelect: () => toggleSidebar() },
     {
@@ -247,7 +253,7 @@ export function ArtifactWorkspace({
       <Sidebar
         index={index}
         id="workspace-sidebar"
-        sites={sites}
+        sites={siteSummaries}
         artifactPath={currentArtifact?.path}
         expandedPaths={expandedPaths}
         onExpandedPathsChange={updateExpandedPaths}
@@ -460,11 +466,11 @@ export function ArtifactWorkspace({
         <CommandPalette
           seed={paletteSeed}
           context={route.artifactPath ? 'artifact' : 'site'}
-          indexes={paletteIndexes}
+          sites={paletteSites}
           currentIndex={index}
           currentArtifact={currentArtifact}
           commands={commands}
-          loading={catalogLoading}
+          loading={sitesLoading}
           onClose={closePalette}
           onNavigate={navigate}
           onJumpToHeading={jumpToHeading}

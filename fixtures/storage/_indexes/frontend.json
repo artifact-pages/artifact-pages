@@ -5,40 +5,6 @@
     "title": "Frontend"
   },
   "generatedAt": "2026-09-22T00:00:00Z",
-  "artifacts": [
-    {
-      "id": "design-system/button-guidelines/index.html",
-      "title": "Button guidelines",
-      "path": "design-system/button-guidelines/index.html",
-      "format": "html",
-      "filename": "index.html",
-      "artifactUrl": "/_artifacts/frontend/design-system/button-guidelines/index.html",
-      "updatedAt": "2026-09-20T09:30:00Z",
-      "lastCommitter": {
-        "name": "Frontend Team"
-      },
-      "source": {
-        "repository": "example/frontend",
-        "repositoryUrl": "https://github.com/example/frontend",
-        "ref": "main"
-      },
-      "toc": [
-        {
-          "level": 1,
-          "text": "Buttons",
-          "id": "buttons"
-        },
-        {
-          "level": 2,
-          "text": "Variants",
-          "id": "variants"
-        },
-        {
-          "level": 2,
-          "text": "Usage",
-          "id": "usage"
-        }
-      ]
-    }
-  ]
+  "artifactCount": 1,
+  "artifactIndexUrl": "/_indexes/frontend/index.json"
 }

@@ -1,10 +1,17 @@
 import { useState } from 'react'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { storyIndexes } from '../stories/fixtures'
-import type { ArtifactIndexEntry, SiteIndex } from '../domain/index'
+import type { ArtifactIndexEntry, SiteDiscoveryMetadata, SiteIndex } from '../domain/index'
 import { CommandPalette, type PaletteCommand, type PaletteContext } from './CommandPalette'
 
 const indexes = storyIndexes as SiteIndex[]
+const sites: SiteDiscoveryMetadata[] = indexes.map((index) => ({
+  schemaVersion: index.schemaVersion,
+  site: index.site,
+  generatedAt: index.generatedAt,
+  artifactCount: index.artifacts.length,
+  artifactIndexUrl: `/_indexes/${index.site.id}/index.json`,
+}))
 const currentIndex = indexes[0]
 const currentArtifact = currentIndex.artifacts[0] as ArtifactIndexEntry
 
@@ -25,7 +32,7 @@ function PaletteStory({ seed, context }: PaletteStoryArgs) {
     <CommandPalette
       seed={seed}
       context={context}
-      indexes={indexes}
+      sites={sites}
       currentIndex={currentIndex}
       currentArtifact={currentArtifact}
       commands={commands}

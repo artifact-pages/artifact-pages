@@ -57,11 +57,11 @@ func TestBuildCreatesPerSiteIndexWithoutCopyingSources(t *testing.T) {
 	if result.ArtifactsIndexed != 7 {
 		t.Errorf("ArtifactsIndexed = %d, want 7", result.ArtifactsIndexed)
 	}
-	if result.OutputBytes == 0 || result.Elapsed <= 0 {
+	if result.OutputBytes == 0 || result.MetadataBytes == 0 || result.Elapsed <= 0 {
 		t.Errorf("Build() returned empty metrics: %+v", result)
 	}
 
-	indexBytes, err := os.ReadFile(filepath.Join(repositoryRoot, ".local/storage/_indexes/sre.json"))
+	indexBytes, err := os.ReadFile(filepath.Join(repositoryRoot, ".local/storage/_indexes/sre/index.json"))
 	if err != nil {
 		t.Fatalf("read generated site index: %v", err)
 	}
@@ -74,6 +74,17 @@ func TestBuildCreatesPerSiteIndexWithoutCopyingSources(t *testing.T) {
 	}
 	if index.GeneratedAt != generatedAt.Format(time.RFC3339) {
 		t.Errorf("GeneratedAt = %q, want %q", index.GeneratedAt, generatedAt.Format(time.RFC3339))
+	}
+	metadataBytes, err := os.ReadFile(filepath.Join(repositoryRoot, ".local/storage/_indexes/sre.json"))
+	if err != nil {
+		t.Fatalf("read generated site discovery metadata: %v", err)
+	}
+	var metadata SiteDiscoveryMetadata
+	if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
+		t.Fatalf("decode generated site discovery metadata: %v", err)
+	}
+	if metadata.ArtifactCount != 7 || metadata.ArtifactIndexURL != "/_indexes/sre/index.json" || metadata.Site != index.Site {
+		t.Errorf("site discovery metadata = %+v, want seven artifacts, site summary, and artifact index URL", metadata)
 	}
 	if len(index.Artifacts) != 7 {
 		t.Fatalf("got %d artifacts, want 7", len(index.Artifacts))
@@ -294,7 +305,7 @@ func TestBuildUsesFilesystemMetadataForGitIgnoredStaticOutput(t *testing.T) {
 		t.Fatalf("ArtifactsIndexed = %d, want 1", result.ArtifactsIndexed)
 	}
 
-	indexBytes, err := os.ReadFile(filepath.Join(repositoryRoot, ".local/storage/_indexes/wcag.json"))
+	indexBytes, err := os.ReadFile(filepath.Join(repositoryRoot, ".local/storage/_indexes/wcag/index.json"))
 	if err != nil {
 		t.Fatalf("read generated site index: %v", err)
 	}
@@ -512,7 +523,7 @@ func buildAndReadIndex(t testing.TB, repositoryRoot, siteID string) SiteIndex {
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
 	}
-	contents, err := os.ReadFile(filepath.Join(repositoryRoot, ".local/storage/_indexes", siteID+".json"))
+	contents, err := os.ReadFile(filepath.Join(repositoryRoot, ".local/storage/_indexes", siteID, "index.json"))
 	if err != nil {
 		t.Fatalf("read generated index: %v", err)
 	}

@@ -3,6 +3,14 @@ export type SiteSummary = {
   title: string
 }
 
+export type SiteDiscoveryMetadata = {
+  schemaVersion: number
+  site: SiteSummary
+  generatedAt: string
+  artifactCount: number
+  artifactIndexUrl: string
+}
+
 export type TocEntry = {
   level: number
   text: string

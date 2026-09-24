@@ -1,22 +1,22 @@
 import { useEffect, useState } from 'react'
 import type { ThemeMode } from '../domain/theme'
-import type { SiteIndex } from '../domain/index'
+import type { SiteDiscoveryMetadata } from '../domain/index'
 import { CommandPalette, type PaletteCommand } from './CommandPalette'
 import { Icon } from './Icon'
 
 export function SitePicker({
-  indexes,
+  sites,
   onNavigate,
   themeMode = 'system',
   onSetThemeMode,
 }: {
-  indexes: SiteIndex[]
+  sites: SiteDiscoveryMetadata[]
   onNavigate: (href: string) => void
   themeMode?: ThemeMode
   onSetThemeMode?: (mode: ThemeMode) => void
 }) {
   const [paletteOpen, setPaletteOpen] = useState(false)
-  const sortedIndexes = [...indexes].sort((left, right) => left.site.title.localeCompare(right.site.title))
+  const sortedSites = [...sites].sort((left, right) => left.site.title.localeCompare(right.site.title))
   const commands: PaletteCommand[] = [
     {
       title: 'Use light theme',
@@ -64,11 +64,11 @@ export function SitePicker({
             <span>Search sites...</span>
             <kbd>⌘ K</kbd>
           </button>
-          {sortedIndexes.length === 0 ? (
+          {sortedSites.length === 0 ? (
             <p className="empty-note">No site indexes were found.</p>
           ) : (
             <div className="site-picker-list">
-              {sortedIndexes.map(({ site, artifacts, generatedAt }) => (
+              {sortedSites.map(({ site, artifactCount, generatedAt }) => (
                 <button
                   className="site-picker-row"
                   key={site.id}
@@ -79,7 +79,7 @@ export function SitePicker({
                     <strong>{site.title}</strong>
                     <span className="mono">/{site.id}</span>
                   </span>
-                  <span className="site-picker-count">{artifacts.length} artifacts · updated {formatDate(generatedAt)}</span>
+                  <span className="site-picker-count">{artifactCount} artifacts · updated {formatDate(generatedAt)}</span>
                   <Icon name="arrow" size={16} />
                 </button>
               ))}
@@ -91,7 +91,7 @@ export function SitePicker({
         <CommandPalette
           seed=""
           context="sites"
-          indexes={indexes}
+          sites={sites}
           commands={commands}
           loading={false}
           onClose={() => setPaletteOpen(false)}
