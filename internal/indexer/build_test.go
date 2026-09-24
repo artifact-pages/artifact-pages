@@ -75,7 +75,7 @@ func TestBuildCreatesPerSiteIndexWithoutCopyingSources(t *testing.T) {
 	if index.GeneratedAt != generatedAt.Format(time.RFC3339) {
 		t.Errorf("GeneratedAt = %q, want %q", index.GeneratedAt, generatedAt.Format(time.RFC3339))
 	}
-	metadataBytes, err := os.ReadFile(filepath.Join(repositoryRoot, ".local/storage/_indexes/sre.json"))
+	metadataBytes, err := os.ReadFile(filepath.Join(repositoryRoot, ".local/storage/_indexes/sre/meta.json"))
 	if err != nil {
 		t.Fatalf("read generated site discovery metadata: %v", err)
 	}

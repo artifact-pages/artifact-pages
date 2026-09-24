@@ -75,11 +75,11 @@ function localStorageProjection(): Plugin {
 
             const entries = await fs.readdir(filePath, { withFileTypes: true })
             const links = entries
-              .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
+              .filter((entry) => entry.isDirectory())
               .sort((left, right) => left.name.localeCompare(right.name))
               .map(
                 (entry) =>
-                  `<li><a href="${encodeURIComponent(entry.name)}">${escapeHtml(entry.name)}</a></li>`,
+                  `<li><a href="${encodeURIComponent(entry.name)}/">${escapeHtml(entry.name)}/</a></li>`,
               )
               .join('')
             const body = `<!doctype html><html><body><ul>${links}</ul></body></html>`

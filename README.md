@@ -106,7 +106,7 @@ go run ./cmd/artifact-pages index build \
   --out .local/storage
 ~~~
 
-This writes `.local/storage/_indexes/sre.json` (lightweight site discovery metadata) and `.local/storage/_indexes/sre/index.json` (the artifact index). The source tree is left untouched, and every indexed page points to its original file under the source-relative artifact path. A later static publish step should copy the selected content tree unchanged so relative CSS, JavaScript, images, and other resources retain their paths. The initial builder expects one repository source per site.
+This writes `.local/storage/_indexes/sre/meta.json` (lightweight site discovery metadata) and `.local/storage/_indexes/sre/index.json` (the artifact index). The source tree is left untouched, and every indexed page points to its original file under the source-relative artifact path. A later static publish step should copy the selected content tree unchanged so relative CSS, JavaScript, images, and other resources retain their paths. The initial builder expects one repository source per site.
 
 Run the Go tests and the benchmarks with generated fixtures in temporary Git repositories. The file-count benchmark uses 1,000, 5,000, and 10,000 source files, corresponding to 100, 500, and 1,000 HTML pages. A second benchmark measures 500 and 1,000 HTML pages with 51 commits in the history:
 
@@ -130,7 +130,7 @@ It also checks that `@` site lookup does not fetch another site's artifact index
 - A site is a logical namespace such as sre or frontend.
 - The initial index builder maps one repository source directory to one site; merging multiple repositories into a site is deferred.
 - /_artifacts/* contains published static files.
-- /_indexes/<site>.json contains lightweight site discovery metadata.
+- /_indexes/<site>/meta.json contains lightweight site discovery metadata.
 - /_indexes/<site>/index.json contains the searchable/browsable artifact projection for that site.
 - Normal artifact search is scoped to the current site; `@` searches site metadata. Cross-site artifact search is not implemented.
 - The SPA is stable infrastructure; artifact content and site indexes change independently.

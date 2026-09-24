@@ -126,7 +126,7 @@ async function generateDataset(runRoot, scenario, seed) {
       artifactIndexUrl: `/_indexes/${siteId}/index.json`,
     }
     const metadataPayload = `${JSON.stringify(metadata)}\n`
-    const metadataPath = path.join(scenarioRoot, `${siteId}.json`)
+    const metadataPath = path.join(scenarioRoot, siteId, 'meta.json')
     await writeFile(metadataPath, metadataPayload, { flag: 'wx' })
     metadataPayloads.set(siteId, metadataPayload)
     sites.push(metadata)
@@ -158,7 +158,7 @@ async function benchmarkDataset(browserInstance, dataset, iterations, fixtureUrl
   let pageError
   page.on('request', (request) => {
     const pathname = new URL(request.url()).pathname
-    if (/^\/_indexes\/[^/]+\.json$/u.test(pathname)) metadataRequests.push(pathname)
+    if (/^\/_indexes\/[^/]+\/meta\.json$/u.test(pathname)) metadataRequests.push(pathname)
     if (pathname.endsWith('/index.json')) artifactIndexRequests.push(pathname)
   })
   page.on('pageerror', (error) => { pageError = error.message })
@@ -199,7 +199,7 @@ async function benchmarkDataset(browserInstance, dataset, iterations, fixtureUrl
   const pageReadyMs = performance.now() - loadStarted
   await page.waitForFunction((siteCount) => {
     const metadataLoads = window.__paletteBenchMetrics.jsonLoads.filter(({ pathname }) => (
-      pathname.endsWith('.json') && !pathname.endsWith('/index.json')
+      pathname.endsWith('/meta.json')
     ))
     return metadataLoads.length === siteCount
   }, dataset.siteCount)
@@ -269,7 +269,7 @@ async function benchmarkDataset(browserInstance, dataset, iterations, fixtureUrl
     const metrics = window.__paletteBenchMetrics
     const jsonLoads = metrics.jsonLoads
     const detailed = jsonLoads.filter(({ pathname }) => pathname.endsWith('/index.json'))
-    const metadata = jsonLoads.filter(({ pathname }) => pathname.endsWith('.json') && !pathname.endsWith('/index.json'))
+    const metadata = jsonLoads.filter(({ pathname }) => pathname.endsWith('/meta.json'))
     const resourceTiming = performance.getEntriesByType('resource')
       .filter((entry) => entry.name.includes('/_indexes/'))
     const fetchHeaderDurations = metrics.fetches
@@ -547,12 +547,12 @@ async function startFixtureServer() {
   const server = createServer((incoming, outgoing) => {
     const pathname = new URL(incoming.url ?? '/', 'http://127.0.0.1').pathname
     if (pathname === '/_indexes/') {
-      const body = `<!doctype html>${dataset.sites.map(({ site }) => `<a href="${site.id}.json">${site.id}.json</a>`).join('')}`
+      const body = `<!doctype html>${dataset.sites.map(({ site }) => `<a href="${site.id}/">${site.id}/</a>`).join('')}`
       sendResponse(outgoing, 200, 'text/html; charset=utf-8', body)
       return
     }
 
-    const metadataMatch = pathname.match(/^\/_indexes\/([a-z0-9-]+)\.json$/u)
+    const metadataMatch = pathname.match(/^\/_indexes\/([a-z0-9-]+)\/meta\.json$/u)
     if (metadataMatch) {
       const payload = dataset.metadataPayloads.get(metadataMatch[1])
       sendResponse(outgoing, payload ? 200 : 404, 'application/json; charset=utf-8', payload ?? 'Not found')

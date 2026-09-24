@@ -301,7 +301,7 @@ func Build(ctx context.Context, options BuildOptions) (BuildResult, error) {
 		return BuildResult{}, fmt.Errorf("encode site discovery metadata: %w", err)
 	}
 	metadataBytes = append(metadataBytes, '\n')
-	metadataPath := filepath.Join(outputRoot, "_indexes", options.SiteID+".json")
+	metadataPath := filepath.Join(outputRoot, "_indexes", options.SiteID, "meta.json")
 	if err := writeAtomically(metadataPath, metadataBytes); err != nil {
 		return BuildResult{}, fmt.Errorf("write site discovery metadata: %w", err)
 	}

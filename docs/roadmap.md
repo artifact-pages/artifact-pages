@@ -41,7 +41,7 @@ Build the per-site index from one Git repository source directory:
 ~~~text
 source repository + sourcePath
         ↓
-_indexes/<site>.json             lightweight discovery metadata
+_indexes/<site>/meta.json        lightweight discovery metadata
 _indexes/<site>/index.json       artifact records
 ~~~
 

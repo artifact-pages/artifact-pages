@@ -35,11 +35,19 @@ async function fetchText(url: string, fetcher: Fetcher): Promise<string> {
 function extractSiteIds(directoryListing: string): string[] {
   const document = new DOMParser().parseFromString(directoryListing, 'text/html')
   const siteIds = Array.from(document.querySelectorAll('a[href]'))
-    .map((anchor) => anchor.getAttribute('href') ?? '')
-    .map((href) => href.split(/[?#]/, 1)[0])
-    .map((href) => href.split('/').filter(Boolean).at(-1) ?? '')
-    .filter((filename) => filename.endsWith('.json'))
-    .map((filename) => decodeURIComponent(filename.slice(0, -'.json'.length)))
+    .flatMap((anchor) => {
+      const href = anchor.getAttribute('href')
+      if (!href) return []
+
+      try {
+        const url = new URL(href, `https://artifact-pages.invalid${INDEX_ROOT}/`)
+        if (url.origin !== 'https://artifact-pages.invalid') return []
+        const directory = url.pathname.match(/^\/_indexes\/([^/]+)\/$/u)
+        return directory ? [decodeURIComponent(directory[1])] : []
+      } catch {
+        return []
+      }
+    })
     .filter((siteId) => SITE_ID_PATTERN.test(siteId))
 
   return [...new Set(siteIds)].sort()
@@ -146,7 +154,7 @@ async function loadSiteDiscoveryMetadata(
   siteId: string,
   fetcher: Fetcher,
 ): Promise<SiteDiscoveryMetadata> {
-  const url = `${INDEX_ROOT}/${encodeURIComponent(siteId)}.json`
+  const url = `${INDEX_ROOT}/${encodeURIComponent(siteId)}/meta.json`
   let payload: unknown
   try {
     const response = await fetcher(url)

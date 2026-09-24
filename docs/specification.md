@@ -115,13 +115,14 @@ The initial projection shape is:
 ├── index.html
 ├── assets/
 ├── _indexes/
-│   ├── sre.json
-│   ├── frontend.json
 │   ├── sre/
+│   │   ├── meta.json
 │   │   └── index.json
 │   ├── frontend/
+│   │   ├── meta.json
 │   │   └── index.json
 │   └── platform/
+│       ├── meta.json
 │       └── index.json
 └── _artifacts/
     ├── sre/
@@ -131,20 +132,20 @@ The initial projection shape is:
 
 ### 5.1 Site discovery
 
-The local reference implementation discovers site IDs from the directory listing at `/_indexes/` and fetches each site's small `<site>.json` discovery metadata. This metadata contains the display title, artifact count, generated time, and an `artifactIndexUrl` pointer. It does not contain artifact records.
+The local reference implementation discovers site IDs from the site-directory links in the listing at `/_indexes/` and fetches each site's small `<site>/meta.json` discovery metadata. This metadata contains the display title, artifact count, generated time, and an `artifactIndexUrl` pointer. It does not contain artifact records.
 
 The browser loads a site's full artifact index only when that site becomes active. It does not fetch all artifact indexes during startup. No separate `sites.json` registry is required for the local product; the listing remains the discovery entry point.
 
-The directory listing changes when sites are onboarded, renamed, or removed. It does **not** change for each artifact publication unless the set of site files changes.
+The directory listing changes when sites are onboarded, renamed, or removed. It does **not** change for each artifact publication unless the set of site directories changes.
 
 An object-storage/CDN adapter may provide an equivalent static listing or a generated catalog. The production representation is intentionally not fixed by the local milestone; the requirement is that root site selection remains serverless.
 
 ### 5.2 Site metadata and artifact index
 
-Each site currently has two static JSON documents with distinct responsibilities:
+Each site has two static JSON documents with distinct responsibilities, colocated in its directory:
 
 ~~~text
-/_indexes/<site>.json             lightweight discovery metadata
+/_indexes/<site>/meta.json        lightweight discovery metadata
 /_indexes/<site>/index.json       artifact records for that site
 ~~~
 
@@ -409,7 +410,7 @@ and:
 
 Parent/child overlap is rejected because a publisher using delete/sync semantics could affect another publisher's namespace.
 
-The browser-facing projection has lightweight `/_indexes/sre.json` discovery metadata and a full `/_indexes/sre/index.json` artifact index for the site.
+The browser-facing projection has lightweight `/_indexes/sre/meta.json` discovery metadata and a full `/_indexes/sre/index.json` artifact index for the site.
 
 How multiple publisher contributions might be staged and merged into that single index is a future implementation concern. Source-specific manifests are one possible internal mechanism, but are not required by the browser-facing contract or the initial builder.
 

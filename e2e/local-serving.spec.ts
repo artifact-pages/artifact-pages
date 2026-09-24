@@ -4,9 +4,17 @@ test('nginx index listing discovers sites and opens a site home', async ({ page 
   const listing = await page.request.get('/_indexes/')
   expect(listing.ok()).toBeTruthy()
   const directoryListing = await listing.text()
-  expect(directoryListing).toContain('sre.json')
-  expect(directoryListing).toContain('frontend.json')
-  expect(directoryListing).toContain('showcase.json')
+  expect(directoryListing).toContain('sre/')
+  expect(directoryListing).toContain('frontend/')
+  expect(directoryListing).toContain('showcase/')
+
+  const metadataResponse = await page.request.get('/_indexes/sre/meta.json')
+  expect(metadataResponse.ok()).toBeTruthy()
+  const metadata = await metadataResponse.json()
+  expect(metadata).toMatchObject({
+    site: { id: 'sre', title: 'SRE' },
+    artifactIndexUrl: '/_indexes/sre/index.json',
+  })
 
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Choose a site' })).toBeVisible()
@@ -768,7 +776,7 @@ test('the selected theme is offered in the menu and reaches adaptive artifact if
 test('the collapsed rail searches artifacts and switches sites', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'light' })
   const frontendMetadata = page.waitForResponse((response) => {
-    return new URL(response.url()).pathname === '/_indexes/frontend.json'
+    return new URL(response.url()).pathname === '/_indexes/frontend/meta.json'
   })
   const sreIndex = page.waitForResponse((response) => {
     return new URL(response.url()).pathname === '/_indexes/sre/index.json'
