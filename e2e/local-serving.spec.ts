@@ -823,3 +823,34 @@ test('HTML showcase covers distinct page styles in the artifact iframe', async (
   const dashboard = page.frameLocator('iframe')
   await expect(dashboard.locator('body')).toHaveCSS('background-color', 'rgb(11, 17, 24)')
 })
+
+test('artifact breadcrumbs reveal and scroll the matching sidebar location', async ({ page }) => {
+  await page.goto('/showcase/reports/cloud-spend-review/index.html')
+
+  const breadcrumb = page.getByRole('navigation', { name: 'Artifact path' })
+  const browse = page.locator('.browse-tree')
+  const reports = browse.locator('[data-tree-path="reports"]')
+  const reviewFolder = browse.locator('[data-tree-path="reports/cloud-spend-review"]')
+  const artifact = browse.locator('[data-tree-path="reports/cloud-spend-review/index.html"]')
+
+  await expect(reports).toHaveAttribute('aria-expanded', 'true')
+  await reports.click()
+  await expect(reports).toHaveAttribute('aria-expanded', 'false')
+
+  await breadcrumb.getByRole('button', { name: 'reports', exact: true }).click()
+  await expect(reports).toHaveAttribute('aria-expanded', 'true')
+  await expect(reports).toBeInViewport()
+
+  await reports.click()
+  await expect(reports).toHaveAttribute('aria-expanded', 'false')
+  await breadcrumb.getByRole('button', { name: 'cloud-spend-review', exact: true }).click()
+  await expect(reports).toHaveAttribute('aria-expanded', 'true')
+  await expect(reviewFolder).toHaveAttribute('aria-expanded', 'true')
+
+  await reviewFolder.click()
+  await expect(reviewFolder).toHaveAttribute('aria-expanded', 'false')
+  await breadcrumb.getByRole('button', { name: 'index.html', exact: true }).click()
+  await expect(reviewFolder).toHaveAttribute('aria-expanded', 'true')
+  await expect(artifact).toHaveAttribute('aria-current', 'page')
+  await expect(artifact).toBeInViewport()
+})

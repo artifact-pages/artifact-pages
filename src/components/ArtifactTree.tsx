@@ -73,6 +73,7 @@ export function ArtifactTree({
                 className="tree-directory-button"
                 style={{ paddingInlineStart: style === 'branch-guides' ? '8px' : `${9 + depth * 14}px` }}
                 data-tree-depth={depth}
+                data-tree-path={directory.path}
                 aria-expanded={isExpanded}
                 onClick={() => toggleDirectory(directory.path)}
               >
@@ -159,6 +160,7 @@ function ArtifactRow({
       className={`tree-artifact${active ? ' is-active' : ''}${showPath ? ' tree-path-row' : ''}`}
       style={{ paddingInlineStart: style === 'branch-guides' ? '8px' : `${10 + depth * 14}px` }}
       data-tree-depth={depth}
+      data-tree-path={artifact.path}
       title={artifact.path}
       aria-current={active ? 'page' : undefined}
       onClick={() => onOpenArtifact(artifact)}

@@ -51,6 +51,8 @@ export function ArtifactWorkspace({
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(
     () => new Set([...folderAncestors(route.artifactPath), ...initialExpandedPaths]),
   )
+  const [sidebarReveal, setSidebarReveal] = useState<{ path: string; request: number } | null>(null)
+  const sidebarRevealRequest = useRef(0)
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<number | undefined>(undefined)
   const paletteReturnFocus = useRef<HTMLElement | null>(null)
@@ -229,8 +231,10 @@ export function ArtifactWorkspace({
     if (window.innerWidth <= 860) updateSidebarOpen(false)
   }
 
-  function openFolder(path: string) {
-    setExpandedPaths((current) => new Set([...current, path]))
+  function revealSidebarLocation(path: string, isDirectory: boolean) {
+    const folders = isDirectory ? folderPaths(path) : folderAncestors(path)
+    setExpandedPaths((current) => new Set([...current, ...folders]))
+    setSidebarReveal({ path, request: ++sidebarRevealRequest.current })
     updateSidebarOpen(true)
   }
 
@@ -257,6 +261,7 @@ export function ArtifactWorkspace({
         artifactPath={currentArtifact?.path}
         expandedPaths={expandedPaths}
         onExpandedPathsChange={updateExpandedPaths}
+        revealRequest={sidebarReveal}
         onOpenPalette={openPalette}
         onOpenArtifact={openArtifact}
         themeMode={themeMode}
@@ -326,11 +331,14 @@ export function ArtifactWorkspace({
                 return (
                   <span className="breadcrumb-part" key={`${folderPath}:${segmentIndex}`}>
                     {segmentIndex > 0 ? <span className="breadcrumb-separator" aria-hidden="true">/</span> : null}
-                    {isCurrent ? (
-                      <span className="breadcrumb-current" aria-current="page">{segment}</span>
-                    ) : (
-                      <button onClick={() => openFolder(folderPath)}>{segment}</button>
-                    )}
+                    <button
+                      type="button"
+                      className={isCurrent ? 'breadcrumb-current' : undefined}
+                      aria-current={isCurrent ? 'page' : undefined}
+                      onClick={() => revealSidebarLocation(folderPath, !isCurrent)}
+                    >
+                      {segment}
+                    </button>
                   </span>
                 )
               })}
@@ -541,6 +549,11 @@ function safeHttpsUrl(value?: string) {
 function folderAncestors(path?: string) {
   if (!path) return []
   const segments = path.split('/').filter(Boolean).slice(0, -1)
+  return segments.map((_, index) => segments.slice(0, index + 1).join('/'))
+}
+
+function folderPaths(path: string) {
+  const segments = path.split('/').filter(Boolean)
   return segments.map((_, index) => segments.slice(0, index + 1).join('/'))
 }
 

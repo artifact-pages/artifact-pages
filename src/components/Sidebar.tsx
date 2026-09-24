@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ArtifactIndexEntry, SiteIndex, SiteSummary } from '../domain/index'
 import type { ThemeMode } from '../domain/theme'
 import { ArtifactTree, type TreeStyle } from './ArtifactTree'
@@ -12,6 +12,7 @@ export function Sidebar({
   artifactPath,
   expandedPaths,
   onExpandedPathsChange,
+  revealRequest,
   onOpenPalette,
   onOpenArtifact,
   themeMode,
@@ -25,6 +26,7 @@ export function Sidebar({
   artifactPath?: string
   expandedPaths: Set<string>
   onExpandedPathsChange: (update: (current: Set<string>) => Set<string>) => void
+  revealRequest: { path: string; request: number } | null
   onOpenPalette: (seed: string) => void
   onOpenArtifact: (artifact: ArtifactIndexEntry) => void
   themeMode: ThemeMode
@@ -33,6 +35,8 @@ export function Sidebar({
   treeStyle?: TreeStyle
 }) {
   const [query, setQuery] = useState('')
+  const sidebarRef = useRef<HTMLElement>(null)
+  const lastRevealedRequest = useRef<number | null>(null)
   const normalizedQuery = query.trim().toLocaleLowerCase()
   const recent = useMemo(
     () => [...index.artifacts]
@@ -49,8 +53,24 @@ export function Sidebar({
     }
   }, [artifactPath, onExpandedPathsChange])
 
+  useEffect(() => {
+    if (!revealRequest || lastRevealedRequest.current === revealRequest.request) return
+    if (query) {
+      setQuery('')
+      return
+    }
+
+    const browseTree = sidebarRef.current?.querySelector('.browse-tree')
+    const target = Array.from(browseTree?.querySelectorAll<HTMLElement>('[data-tree-path]') ?? [])
+      .find((element) => element.dataset.treePath === revealRequest.path)
+    if (!target) return
+
+    target.scrollIntoView({ block: 'nearest' })
+    lastRevealedRequest.current = revealRequest.request
+  }, [expandedPaths, query, revealRequest])
+
   return (
-    <aside id={id} className={`sidebar-panel tree-style-${treeStyle}`} aria-label={`${index.site.title} navigation`}>
+    <aside ref={sidebarRef} id={id} className={`sidebar-panel tree-style-${treeStyle}`} aria-label={`${index.site.title} navigation`}>
       <div className="sidebar-top">
         <div className="sidebar-top-row">
           <button
