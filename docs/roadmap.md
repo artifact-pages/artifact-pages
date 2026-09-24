@@ -30,7 +30,7 @@ Target user experience:
 - Site discovery uses lightweight metadata; only the active site's artifact index is loaded.
 - Normal page search stays within the active site; `@` searches site metadata.
 
-Before introducing index sharding or a search service, benchmark both large single-site indexes and many-site layouts. Include at least 20 sites × 1,000 artifacts and record metadata/index payload bytes, loopback transfer timing, JSON parse time, browser heap, query latency, and input-to-paint latency. Local transfer timings compare projection/browser costs but are not a forecast of CDN or public-network latency. Keep sharding and inverted indexes deferred until those measurements show the current single-index model is a user-visible limit.
+The single-site and multi-site palette benchmark is recorded in [palette-search-benchmark.md](./palette-search-benchmark.md). It includes 20 sites × 1,000 artifacts, character-by-character input, browser heap, load/parse/search timings, and an eager-chunk comparison. Eager chunks did not improve ready-to-use time or memory, so keep product-level sharding and inverted indexes deferred until a different loading model demonstrates a user-visible benefit. Local transfer timings compare projection/browser costs but are not a forecast of CDN or public-network latency.
 
 VRT is optional at this stage and should focus on the application shell rather than arbitrary artifact contents.
 

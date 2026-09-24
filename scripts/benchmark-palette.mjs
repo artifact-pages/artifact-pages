@@ -64,6 +64,15 @@ try {
   ]
   const datasets = []
   for (const scenario of scenarios) datasets.push(await generateDataset(runRoot, scenario, options.seed))
+  for (const chunkSize of options.chunkSizes) {
+    for (const scenario of scenarios.filter(({ siteCount }) => siteCount === 1)) {
+      datasets.push(await generateDataset(runRoot, {
+        ...scenario,
+        label: `${scenario.label}-chunks-${chunkSize}`,
+        chunkSize,
+      }, options.seed))
+    }
+  }
 
   console.log(`Generated index-only fixtures: ${path.relative(repositoryRoot, runRoot)}`)
   console.log(`Seed: ${options.seed}`)
@@ -76,8 +85,10 @@ try {
 
     for (const dataset of datasets) {
       fixtureServer.setDataset(dataset)
-      const result = await benchmarkDataset(browser, dataset, options.iterations, fixtureServer.url)
-      console.log(JSON.stringify(result))
+      for (let loadIteration = 0; loadIteration < options.loads; loadIteration += 1) {
+        const result = await benchmarkDataset(browser, dataset, options.iterations, fixtureServer.url)
+        console.log(JSON.stringify({ loadIteration: loadIteration + 1, ...result }))
+      }
     }
 
     console.log(`Iterations per query and scenario: ${options.iterations}`)
@@ -96,7 +107,7 @@ async function generateDataset(runRoot, scenario, seed) {
   const scenarioRoot = path.join(runRoot, scenario.label, 'storage', '_indexes')
   const sites = []
   const metadataPayloads = new Map()
-  let currentIndexPayload
+  const currentArtifactPayloads = new Map()
   let currentIndexBytes = 0
   let totalIndexBytes = 0
 
@@ -107,14 +118,39 @@ async function generateDataset(runRoot, scenario, seed) {
       ? `Search Load Lab (${scenario.artifactsPerSite})`
       : `Search Lab ${String(ordinal).padStart(4, '0')}`
     const index = generateSiteIndex(scenario.artifactsPerSite, seed, siteId, title)
-    const indexPayload = `${JSON.stringify(index)}\n`
     const indexPath = path.join(scenarioRoot, siteId, 'index.json')
     await mkdir(path.dirname(indexPath), { recursive: true })
-    await writeFile(indexPath, indexPayload, { flag: 'wx' })
-    const indexBytes = Buffer.byteLength(indexPayload)
+    let indexBytes = 0
+    if (scenario.chunkSize) {
+      await mkdir(path.join(scenarioRoot, siteId, 'chunks'), { recursive: true })
+      const artifactChunks = []
+      for (let start = 0; start < index.artifacts.length; start += scenario.chunkSize) {
+        const chunkNumber = Math.floor(start / scenario.chunkSize)
+        const chunkName = `part-${String(chunkNumber + 1).padStart(4, '0')}.json`
+        const chunkUrl = `/_indexes/${siteId}/chunks/${chunkName}`
+        const chunkPayload = `${JSON.stringify(index.artifacts.slice(start, start + scenario.chunkSize))}\n`
+        await writeFile(path.join(scenarioRoot, siteId, 'chunks', chunkName), chunkPayload, { flag: 'wx' })
+        artifactChunks.push(chunkUrl)
+        indexBytes += Buffer.byteLength(chunkPayload)
+        if (offset === 0) currentArtifactPayloads.set(chunkUrl, chunkPayload)
+      }
+      const manifestPayload = `${JSON.stringify({
+        schemaVersion: index.schemaVersion,
+        site: index.site,
+        generatedAt: index.generatedAt,
+        artifactChunks,
+      })}\n`
+      await writeFile(indexPath, manifestPayload, { flag: 'wx' })
+      indexBytes += Buffer.byteLength(manifestPayload)
+      if (offset === 0) currentArtifactPayloads.set(`/_indexes/${siteId}/index.json`, manifestPayload)
+    } else {
+      const indexPayload = `${JSON.stringify(index)}\n`
+      await writeFile(indexPath, indexPayload, { flag: 'wx' })
+      indexBytes = Buffer.byteLength(indexPayload)
+      if (offset === 0) currentArtifactPayloads.set(`/_indexes/${siteId}/index.json`, indexPayload)
+    }
     totalIndexBytes += indexBytes
     if (offset === 0) {
-      currentIndexPayload = indexPayload
       currentIndexBytes = indexBytes
     }
 
@@ -132,14 +168,15 @@ async function generateDataset(runRoot, scenario, seed) {
     sites.push(metadata)
   }
 
-  if (currentIndexPayload === undefined) throw new Error('A benchmark scenario must contain at least one site.')
+  if (currentArtifactPayloads.size === 0) throw new Error('A benchmark scenario must contain at least one site.')
   return {
     ...scenario,
     sites,
     metadataPayloads,
-    currentIndexPayload,
+    currentArtifactPayloads,
     currentSiteId: sites[0].site.id,
     currentIndexBytes,
+    expectedArtifactIndexRequests: currentArtifactPayloads.size,
     totalIndexBytes,
     metadataBytes: [...metadataPayloads.values()].reduce((total, payload) => total + Buffer.byteLength(payload), 0),
     generationMs: performance.now() - generationStarted,
@@ -159,10 +196,12 @@ async function benchmarkDataset(browserInstance, dataset, iterations, fixtureUrl
   page.on('request', (request) => {
     const pathname = new URL(request.url()).pathname
     if (/^\/_indexes\/[^/]+\/meta\.json$/u.test(pathname)) metadataRequests.push(pathname)
-    if (pathname.endsWith('/index.json')) artifactIndexRequests.push(pathname)
+    if (pathname.startsWith('/_indexes/') && pathname.endsWith('.json') && !pathname.endsWith('/meta.json')) {
+      artifactIndexRequests.push(pathname)
+    }
   })
   page.on('pageerror', (error) => { pageError = error.message })
-  await page.addInitScript((maxResourceEntries) => {
+  await page.addInitScript(({ maxResourceEntries, chunked }) => {
     performance.setResourceTimingBufferSize(maxResourceEntries)
     const metrics = { jsonLoads: [], fetches: [], initialHeapBytes: performance.memory?.usedJSHeapSize ?? null }
     Object.defineProperty(window, '__paletteBenchMetrics', { value: metrics })
@@ -173,6 +212,26 @@ async function benchmarkDataset(browserInstance, dataset, iterations, fixtureUrl
       const pathname = new URL(response.url).pathname
       if (pathname.startsWith('/_indexes/')) {
         metrics.fetches.push({ pathname, elapsedMs: performance.now() - started })
+      }
+      if (chunked && pathname.endsWith('/index.json')) {
+        // Benchmark-only adapter: measure eager chunk transport while keeping the app's index contract unchanged.
+        const manifest = await response.clone().json()
+        if (Array.isArray(manifest.artifactChunks)) {
+          const chunks = await Promise.all(manifest.artifactChunks.map(async (chunkUrl) => {
+            const chunkResponse = await window.fetch(chunkUrl)
+            if (!chunkResponse.ok) throw new Error(`Chunk request failed: ${chunkUrl}`)
+            return chunkResponse.json()
+          }))
+          const completeIndex = {
+            schemaVersion: manifest.schemaVersion,
+            site: manifest.site,
+            generatedAt: manifest.generatedAt,
+            artifacts: chunks.flat(),
+          }
+          const combinedResponse = new Response(null, { status: 200, headers: response.headers })
+          Object.defineProperty(combinedResponse, 'json', { value: async () => completeIndex })
+          return combinedResponse
+        }
       }
       return response
     }
@@ -191,7 +250,10 @@ async function benchmarkDataset(browserInstance, dataset, iterations, fixtureUrl
       })
       return payload
     }
-  }, Math.max(250, dataset.siteCount + 100))
+  }, {
+    maxResourceEntries: Math.max(250, dataset.siteCount + 100),
+    chunked: Boolean(dataset.chunkSize),
+  })
   const loadStarted = performance.now()
   await page.goto(`${fixtureUrl}/${dataset.currentSiteId}`, { waitUntil: 'domcontentloaded' })
   await page.locator('.site-home h1').waitFor({ state: 'visible', timeout: 60_000 })
@@ -261,15 +323,21 @@ async function benchmarkDataset(browserInstance, dataset, iterations, fixtureUrl
   if (metadataRequests.length !== dataset.siteCount) {
     throw new Error(`Expected ${dataset.siteCount} discovery metadata requests, received ${metadataRequests.length}.`)
   }
-  if (artifactIndexRequests.length !== 1 || artifactIndexRequests[0] !== `/_indexes/${dataset.currentSiteId}/index.json`) {
-    throw new Error(`Expected only the current site's detailed index, received: ${artifactIndexRequests.join(', ') || '(none)'}.`)
+  if (
+    artifactIndexRequests.length !== dataset.expectedArtifactIndexRequests ||
+    !artifactIndexRequests.includes(`/_indexes/${dataset.currentSiteId}/index.json`)
+  ) {
+    throw new Error(`Expected ${dataset.expectedArtifactIndexRequests} detailed index request(s), received: ${artifactIndexRequests.join(', ') || '(none)'}.`)
   }
 
   const loadMetrics = await page.evaluate(() => {
     const metrics = window.__paletteBenchMetrics
     const jsonLoads = metrics.jsonLoads
-    const detailed = jsonLoads.filter(({ pathname }) => pathname.endsWith('/index.json'))
+    const detailed = jsonLoads.filter(({ pathname }) => (
+      pathname.startsWith('/_indexes/') && !pathname.endsWith('/meta.json')
+    ))
     const metadata = jsonLoads.filter(({ pathname }) => pathname.endsWith('/meta.json'))
+    const detailBodyReadDurations = detailed.map(({ bodyReadMs }) => bodyReadMs)
     const resourceTiming = performance.getEntriesByType('resource')
       .filter((entry) => entry.name.includes('/_indexes/'))
     const fetchHeaderDurations = metrics.fetches
@@ -288,6 +356,7 @@ async function benchmarkDataset(browserInstance, dataset, iterations, fixtureUrl
       detailParseMs: detailed.reduce((total, metric) => total + metric.parseMs, 0),
       totalParseMs: jsonLoads.reduce((total, metric) => total + metric.parseMs, 0),
       totalBodyReadMs: jsonLoads.reduce((total, metric) => total + metric.bodyReadMs, 0),
+      maxDetailBodyReadMs: detailBodyReadDurations.reduce((maximum, value) => Math.max(maximum, value), 0),
       fetchHeadersP50Ms: percentile(fetchHeaderDurations, 0.5),
       fetchHeadersP95Ms: percentile(fetchHeaderDurations, 0.95),
       indexResourceCount: resourceTiming.length,
@@ -303,6 +372,8 @@ async function benchmarkDataset(browserInstance, dataset, iterations, fixtureUrl
   await page.close()
   if (pageError) throw new Error(`Browser error in ${dataset.siteCount} sites × ${dataset.artifactsPerSite} artifacts: ${pageError}`)
   return {
+    layout: dataset.chunkSize ? 'eager-chunks' : 'monolithic',
+    chunkSize: dataset.chunkSize ?? null,
     sites: dataset.siteCount,
     artifactsPerSite: dataset.artifactsPerSite,
     totalArtifacts: dataset.siteCount * dataset.artifactsPerSite,
@@ -321,6 +392,7 @@ async function benchmarkDataset(browserInstance, dataset, iterations, fixtureUrl
       detailParseMs: round(loadMetrics.detailParseMs),
       totalParseMs: round(loadMetrics.totalParseMs),
       totalBodyReadMs: round(loadMetrics.totalBodyReadMs),
+      maxDetailBodyReadMs: round(loadMetrics.maxDetailBodyReadMs),
       fetchHeadersP50Ms: round(loadMetrics.fetchHeadersP50Ms),
       fetchHeadersP95Ms: round(loadMetrics.fetchHeadersP95Ms),
       heap: {
@@ -361,13 +433,14 @@ async function benchmarkTyping(search, iterations) {
       input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' }))
       await nextPaint()
 
-      for (const character of sequence) {
+      for (const [position, character] of Array.from(sequence).entries()) {
         const started = performance.now()
         setter.call(input, input.value + character)
         input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: character }))
         const processingMilliseconds = performance.now() - started
         await nextPaint()
         samples.push({
+          position,
           character,
           processingMilliseconds,
           inputToPaintMilliseconds: performance.now() - started,
@@ -382,6 +455,19 @@ async function benchmarkTyping(search, iterations) {
   if (result.inputValue !== 'atlas') throw new Error('Sequential typing did not leave the expected search query.')
   const first = result.samples[0]
   const warm = result.samples.slice(1)
+  const perCharacter = Array.from('atlas', (character, position) => {
+    const characterSamples = result.samples.filter((sample) => sample.position === position)
+    const jsSamples = characterSamples.map((sample) => sample.processingMilliseconds)
+    const paintSamples = characterSamples.map((sample) => sample.inputToPaintMilliseconds)
+    return {
+      position: position + 1,
+      character,
+      jsP50Ms: round(percentile(jsSamples, 0.50)),
+      jsP95Ms: round(percentile(jsSamples, 0.95)),
+      inputToPaintP50Ms: round(percentile(paintSamples, 0.50)),
+      inputToPaintP95Ms: round(percentile(paintSamples, 0.95)),
+    }
+  })
   return {
     sequence: 'atlas',
     iterations,
@@ -393,6 +479,7 @@ async function benchmarkTyping(search, iterations) {
     warmCharacterJsP95Ms: round(percentile(warm.map((sample) => sample.processingMilliseconds), 0.95)),
     warmCharacterInputToPaintP50Ms: round(percentile(warm.map((sample) => sample.inputToPaintMilliseconds), 0.50)),
     warmCharacterInputToPaintP95Ms: round(percentile(warm.map((sample) => sample.inputToPaintMilliseconds), 0.95)),
+    perCharacter,
   }
 }
 
@@ -478,14 +565,16 @@ function parseArguments(args) {
     countsSpecified: false,
     siteCount: undefined,
     artifactsPerSite: undefined,
+    chunkSizes: [],
     iterations: 20,
+    loads: 1,
     seed: '20260924',
     generateOnly: false,
   }
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index]
     if (argument === '--help') {
-      console.log('Usage: npm run benchmark:palette -- [--counts 1000,5000,10000,20000] [--sites 20 --artifacts-per-site 1000] [--iterations 20] [--seed text]')
+      console.log('Usage: npm run benchmark:palette -- [--counts 1000,5000,10000,20000] [--sites 20 --artifacts-per-site 1000] [--chunk-sizes 250,1000,5000] [--iterations 20] [--loads 3] [--seed text]')
       console.log('       npm run fixtures:palette -- [--counts 1000,5000,10000,20000] [--sites 20 --artifacts-per-site 1000] [--seed text]')
       process.exit(0)
     }
@@ -493,16 +582,18 @@ function parseArguments(args) {
       values.generateOnly = true
       continue
     }
-    if (argument === '--counts' || argument === '--sites' || argument === '--artifacts-per-site' || argument === '--iterations' || argument === '--seed') {
+    if (argument === '--counts' || argument === '--sites' || argument === '--artifacts-per-site' || argument === '--chunk-sizes' || argument === '--iterations' || argument === '--loads' || argument === '--seed') {
       const value = args[++index]
       if (!value) throw new Error(`Missing value for ${argument}.`)
       if (argument === '--counts') {
         values.counts = value.split(',').map(Number)
         values.countsSpecified = true
       }
+      else if (argument === '--chunk-sizes') values.chunkSizes = value.split(',').map(Number)
       else if (argument === '--sites') values.siteCount = Number(value)
       else if (argument === '--artifacts-per-site') values.artifactsPerSite = Number(value)
       else if (argument === '--iterations') values.iterations = Number(value)
+      else if (argument === '--loads') values.loads = Number(value)
       else values.seed = value
       continue
     }
@@ -526,10 +617,17 @@ function parseArguments(args) {
   if (values.counts.some((count) => !Number.isSafeInteger(count) || count < 1 || count > 100_000)) {
     throw new Error('Counts must be whole numbers between 1 and 100000.')
   }
+  if (values.chunkSizes.some((size) => !Number.isSafeInteger(size) || size < 1 || size > 100_000)) {
+    throw new Error('Chunk sizes must be whole numbers between 1 and 100000.')
+  }
+  if (new Set(values.chunkSizes).size !== values.chunkSizes.length) throw new Error('Chunk sizes must not contain duplicates.')
   if (new Set(values.counts).size !== values.counts.length) throw new Error('Counts must not contain duplicates.')
   if (values.counts.length === 0 && values.siteCount === undefined) throw new Error('At least one single-site count or multi-site scenario is required.')
   if (!Number.isSafeInteger(values.iterations) || values.iterations < 5 || values.iterations > 100) {
     throw new Error('Iterations must be a whole number between 5 and 100.')
+  }
+  if (!Number.isSafeInteger(values.loads) || values.loads < 1 || values.loads > 10) {
+    throw new Error('Loads must be a whole number between 1 and 10.')
   }
   if (previewPort < 1 || previewPort > 65_535) throw new Error('PALETTE_BENCH_PORT must be a valid TCP port.')
   return values
@@ -559,10 +657,14 @@ async function startFixtureServer() {
       return
     }
 
-    const indexMatch = pathname.match(/^\/_indexes\/([a-z0-9-]+)\/index\.json$/u)
-    if (indexMatch) {
-      const payload = indexMatch[1] === dataset.currentSiteId ? dataset.currentIndexPayload : undefined
-      sendResponse(outgoing, payload ? 200 : 404, 'application/json; charset=utf-8', payload ?? 'Not found')
+    const artifactPayload = dataset.currentArtifactPayloads.get(pathname)
+    if (artifactPayload !== undefined) {
+      sendResponse(outgoing, 200, 'application/json; charset=utf-8', artifactPayload)
+      return
+    }
+
+    if (/^\/_indexes\/[a-z0-9-]+\//u.test(pathname)) {
+      sendResponse(outgoing, 404, 'application/json; charset=utf-8', 'Not found')
       return
     }
 

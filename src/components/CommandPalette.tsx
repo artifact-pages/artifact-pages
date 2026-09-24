@@ -2,10 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ArtifactIndexEntry, SiteDiscoveryMetadata, SiteIndex, TocEntry } from '../domain/index'
 import {
   fuzzyMatch,
-  fuzzyMatchPreparedText,
+  fuzzyScoreNormalizedText,
   prepareFuzzyQuery,
-  prepareFuzzyText,
-  type FuzzyText,
+  prepareFuzzyScoreText,
 } from '../domain/fuzzy-search'
 import type { FuzzyMatch } from '../domain/fuzzy-search'
 import { artifactRouteHref } from '../routing'
@@ -37,8 +36,10 @@ type PaletteSection = {
   entries: PaletteEntry[]
 }
 
-type PreparedArtifactText = { title: FuzzyText; path: FuzzyText }
+type PreparedArtifactText = { title: string; path: string }
+type PageSearchCache = { terms: string[]; candidates: ArtifactIndexEntry[] }
 const preparedArtifactText = new WeakMap<ArtifactIndexEntry, PreparedArtifactText>()
+const pageSearchCache = new WeakMap<SiteIndex, PageSearchCache>()
 
 export function CommandPalette({
   seed,
@@ -387,32 +388,55 @@ function buildPageSections(
 ): PaletteSection[] {
   if (!currentIndex) return []
   const query = prepareFuzzyQuery(term)
-  const entries: Array<{ entry: PaletteEntry; score: number }> = []
-  for (const artifact of currentIndex.artifacts) {
+  const previousSearch = pageSearchCache.get(currentIndex)
+  const isQueryExtension = previousSearch !== undefined
+    && query.terms.length >= previousSearch.terms.length
+    && previousSearch.terms.every((previousTerm, index) => (
+      query.terms[index].normalized.startsWith(previousTerm)
+    ))
+  const artifactsToSearch = isQueryExtension
+    ? previousSearch.candidates
+    : currentIndex.artifacts
+  const entries: Array<{ artifact: ArtifactIndexEntry; score: number }> = []
+  const matchingArtifacts: ArtifactIndexEntry[] = []
+  for (const artifact of artifactsToSearch) {
     let prepared = preparedArtifactText.get(artifact)
     if (!prepared) {
-      prepared = { title: prepareFuzzyText(artifact.title), path: prepareFuzzyText(artifact.path) }
+      prepared = {
+        title: prepareFuzzyScoreText(artifact.title),
+        path: prepareFuzzyScoreText(artifact.path),
+      }
       preparedArtifactText.set(artifact, prepared)
     }
-    const titleMatch = fuzzyMatchPreparedText(prepared.title, query)
-    const pathMatch = fuzzyMatchPreparedText(prepared.path, query)
-    if (!titleMatch && !pathMatch) continue
+    const titleScore = fuzzyScoreNormalizedText(prepared.title, query)
+    const pathScore = fuzzyScoreNormalizedText(prepared.path, query)
+    if (titleScore === undefined && pathScore === undefined) continue
+    matchingArtifacts.push(artifact)
 
-    const score = (titleMatch?.score ?? 0) * 1.12 + (pathMatch?.score ?? 0)
+    const score = (titleScore ?? 0) * 1.12 + (pathScore ?? 0)
     let position = 0
     while (position < entries.length && entries[position].score >= score) position += 1
     if (position < 8) {
-      entries.splice(position, 0, {
-        entry: artifactEntry(currentIndex, artifact, onNavigate, titleMatch, pathMatch),
-        score,
-      })
+      entries.splice(position, 0, { artifact, score })
       if (entries.length > 8) entries.pop()
     }
   }
+  pageSearchCache.set(currentIndex, {
+    terms: query.terms.map(({ normalized }) => normalized),
+    candidates: matchingArtifacts,
+  })
   if (!entries.length) return []
   return [{
     title: `Pages in ${currentIndex.site.title}`,
-    entries: entries.map(({ entry }) => entry),
+    entries: entries.map(({ artifact }) => (
+      artifactEntry(
+        currentIndex,
+        artifact,
+        onNavigate,
+        fuzzyMatch(artifact.title, term),
+        fuzzyMatch(artifact.path, term),
+      )
+    )),
   }]
 }
 

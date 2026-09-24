@@ -227,6 +227,25 @@ test('normal page search stays on the current site while @ and > select explicit
   await expect(palette.getByRole('option')).toHaveCount(3)
 })
 
+test('site search updates correctly for sequential typing, backspace, and a new query', async ({ page }) => {
+  await page.goto('/sre')
+  await page.getByRole('button', { name: 'Open command palette (⌘ K)' }).click()
+
+  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
+  for (const character of 'platform topology') {
+    await search.pressSequentially(character)
+  }
+  await expect(palette.getByRole('option', { name: /Platform topology/ })).toBeVisible()
+
+  await search.press('Backspace')
+  await expect(palette.getByRole('option', { name: /Platform topology/ })).toBeVisible()
+
+  await search.fill('checkout')
+  await expect(palette.getByRole('option', { name: /Checkout latency incident review/ })).toBeVisible()
+  await expect(palette.getByRole('option', { name: /Platform topology/ })).toHaveCount(0)
+})
+
 test('artifact-context # search opens a heading and closes the palette', async ({ page }) => {
   await page.goto('/sre/incidents/checkout-latency/index.html')
   await page.getByRole('button', { name: 'Open command palette (⌘ K)' }).click()
