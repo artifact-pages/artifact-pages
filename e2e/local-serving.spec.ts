@@ -90,6 +90,8 @@ test('artifact actions pin locally without changing selection or Browse, and exp
   const browse = page.locator('.browse-tree')
   const activeArtifact = browse.locator('.tree-artifact[data-tree-path="architecture/platform-topology/index.html"][aria-current="page"]')
   await expect(activeArtifact).toBeVisible()
+  await expect(activeArtifact).toHaveCSS('font-weight', '580')
+  expect(await activeArtifact.evaluate((element) => getComputedStyle(element, '::after').content)).toBe('none')
   const incidentsDirectory = browse.locator('.tree-directory-button[data-tree-path="incidents"]')
   await expect(incidentsDirectory).toHaveAttribute('aria-expanded', 'false')
 

@@ -127,7 +127,7 @@ export function Sidebar({
   }, [expandedPaths, query, revealRequest])
 
   return (
-    <aside ref={sidebarRef} id={id} className={`sidebar-panel tree-style-${treeStyle}`} aria-label={`${index.site.title} navigation`}>
+    <aside ref={sidebarRef} id={id} className={`sidebar-panel sidebar-panel--refined tree-style-${treeStyle}`} aria-label={`${index.site.title} navigation`}>
       <div className="sidebar-top">
         <div className="sidebar-top-row">
           <button

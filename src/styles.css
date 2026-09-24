@@ -614,6 +614,86 @@ kbd {
   min-height: 32px;
 }
 
+.sidebar-panel--refined {
+  --refined-recent-text: #465159;
+  --refined-directory-text: #48535b;
+  --refined-artifact-text: #68727a;
+  --refined-selected-text: #20282e;
+  --refined-selected-bg: rgba(23, 34, 42, 0.075);
+  --refined-selected-hover-bg: rgba(23, 34, 42, 0.095);
+  --refined-hover-text: #343e45;
+  --refined-hover-bg: rgba(20, 31, 39, 0.045);
+  --refined-format-text: #929ba1;
+  --refined-count-text: #858e95;
+  --refined-branch-guide: rgba(22, 34, 42, 0.085);
+}
+
+:root[data-theme="dark"] .sidebar-panel--refined {
+  --refined-recent-text: var(--text-secondary);
+  --refined-directory-text: var(--text);
+  --refined-artifact-text: var(--text-secondary);
+  --refined-selected-text: var(--text);
+  --refined-selected-bg: var(--active);
+  --refined-selected-hover-bg: var(--active);
+  --refined-hover-text: var(--text);
+  --refined-hover-bg: var(--hover);
+  --refined-format-text: var(--text-tertiary);
+  --refined-count-text: var(--text-tertiary);
+  --refined-branch-guide: var(--line-soft);
+}
+
+.sidebar-panel--refined .sidebar-section-title {
+  margin-bottom: 4px;
+}
+
+.sidebar-panel--refined .tree-view-recent .tree-artifact {
+  min-height: 34px;
+  color: var(--refined-recent-text);
+  font-weight: 475;
+}
+
+.sidebar-panel--refined .browse-tree .tree-directory-button {
+  color: var(--refined-directory-text);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.sidebar-panel--refined .browse-tree .tree-artifact {
+  color: var(--refined-artifact-text);
+}
+
+.sidebar-panel--refined .browse-tree .tree-artifact.is-active {
+  color: var(--refined-selected-text);
+  background: var(--refined-selected-bg);
+  font-weight: 580;
+}
+
+.sidebar-panel--refined .tree-artifact:not(.is-active):hover {
+  color: var(--refined-hover-text);
+  background: var(--refined-hover-bg);
+}
+
+.sidebar-panel--refined .browse-tree .tree-artifact.is-active:hover {
+  background: var(--refined-selected-hover-bg);
+}
+
+.sidebar-panel--refined .tree-format-tag {
+  color: var(--refined-format-text);
+  font-size: 8px;
+  font-weight: 450;
+  opacity: 0.82;
+}
+
+.sidebar-panel--refined .tree-count {
+  color: var(--refined-count-text);
+}
+
+.sidebar-panel--refined .tree-children-branch-guides::before,
+.sidebar-panel--refined.tree-style-branch-guides .tree-directory-button[data-tree-depth]:not([data-tree-depth="0"])::before,
+.sidebar-panel--refined.tree-style-branch-guides .tree-artifact[data-tree-depth]:not([data-tree-depth="0"])::before {
+  background: var(--refined-branch-guide);
+}
+
 mark {
   padding: 0;
   color: var(--text);

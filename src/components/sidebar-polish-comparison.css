@@ -128,58 +128,6 @@
   min-height: 0;
 }
 
-.sidebar-polish-after .sidebar-section-title {
-  margin-bottom: 4px;
-}
-
-.sidebar-polish-after .tree-view-recent .tree-artifact {
-  min-height: 34px;
-  color: #465159;
-  font-weight: 475;
-}
-
-.sidebar-polish-after .browse-tree .tree-directory-button {
-  color: #48535b;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.sidebar-polish-after .browse-tree .tree-artifact {
-  color: #68727a;
-}
-
-.sidebar-polish-after .browse-tree .tree-artifact.is-active {
-  color: #20282e;
-  background: rgba(23, 34, 42, 0.075);
-  font-weight: 580;
-}
-
-.sidebar-polish-after .tree-artifact:not(.is-active):hover {
-  color: #343e45;
-  background: rgba(20, 31, 39, 0.045);
-}
-
-.sidebar-polish-after .browse-tree .tree-artifact.is-active:hover {
-  background: rgba(23, 34, 42, 0.095);
-}
-
-.sidebar-polish-after .tree-format-tag {
-  color: #929ba1;
-  font-size: 8px;
-  font-weight: 450;
-  opacity: 0.82;
-}
-
-.sidebar-polish-after .tree-count {
-  color: #858e95;
-}
-
-.sidebar-polish-after .tree-children-branch-guides::before,
-.sidebar-polish-after .tree-style-branch-guides .tree-directory-button[data-tree-depth]:not([data-tree-depth="0"])::before,
-.sidebar-polish-after .tree-style-branch-guides .tree-artifact[data-tree-depth]:not([data-tree-depth="0"])::before {
-  background: rgba(22, 34, 42, 0.085);
-}
-
 .sidebar-polish-after.has-hover-preview .browse-tree .tree-artifact:not(.is-active)[data-tree-path="architecture/platform-topology/decision-record.md"] {
   color: #343e45;
   background: rgba(20, 31, 39, 0.045);

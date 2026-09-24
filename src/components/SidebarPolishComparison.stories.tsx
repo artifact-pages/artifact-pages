@@ -68,7 +68,7 @@ function SidebarPreview({ variant, showHoverPreview }: PreviewProps) {
 
   return (
     <aside
-      className={`sidebar-panel tree-style-branch-guides sidebar-polish-${variant}${showHoverPreview && variant === 'after' ? ' has-hover-preview' : ''}`}
+      className={`sidebar-panel tree-style-branch-guides${variant === 'after' ? ' sidebar-panel--refined' : ''} sidebar-polish-${variant}${showHoverPreview && variant === 'after' ? ' has-hover-preview' : ''}`}
       aria-label={`${variant === 'before' ? 'Current' : 'Refined'} sidebar preview`}
     >
       <div className="sidebar-top">
