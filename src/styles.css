@@ -518,6 +518,45 @@ kbd {
   font-size: 13px;
 }
 
+.tree-artifact-row {
+  position: relative;
+  min-width: 0;
+}
+
+.tree-artifact-row.has-actions:hover > .tree-artifact,
+.tree-artifact-row.has-actions:focus-within > .tree-artifact,
+.tree-artifact-row.has-actions:has(.tree-action-trigger[aria-expanded="true"]) > .tree-artifact {
+  padding-right: 31px;
+}
+
+.tree-action-trigger {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  right: 3px;
+  display: grid;
+  width: 23px;
+  height: 23px;
+  place-items: center;
+  border-radius: 5px;
+  color: var(--text-tertiary);
+  opacity: 0;
+  transform: translateY(-50%);
+  transition: opacity 100ms ease, color 100ms ease, background-color 100ms ease;
+}
+
+.tree-artifact-row.has-actions:hover > .tree-action-trigger,
+.tree-artifact-row.has-actions:focus-within > .tree-action-trigger,
+.tree-action-trigger[aria-expanded="true"] {
+  opacity: 1;
+}
+
+.tree-action-trigger:hover,
+.tree-action-trigger[aria-expanded="true"] {
+  color: var(--text);
+  background: var(--hover);
+}
+
 .tree-artifact.is-active {
   color: var(--text);
   background: var(--active);
@@ -694,6 +733,69 @@ mark {
   color: var(--text-secondary);
   font-size: 11px;
   text-align: center;
+}
+
+.artifact-action-menu {
+  position: fixed;
+  z-index: 100;
+  width: 196px;
+  max-height: min(420px, calc(100vh - 16px));
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--text-secondary);
+  background: var(--surface-raised);
+  box-shadow: var(--pop);
+}
+
+.artifact-action-menu-item {
+  display: flex;
+  width: 100%;
+  min-height: 31px;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 8px;
+  border-radius: 5px;
+  color: var(--text-secondary);
+  text-align: left;
+  font-size: 12px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.artifact-action-menu-item:hover,
+.artifact-action-menu-item:focus-visible {
+  color: var(--text);
+  background: var(--hover);
+  outline: none;
+}
+
+.artifact-action-menu-item > svg {
+  flex: none;
+  color: var(--text-tertiary);
+}
+
+.artifact-action-menu-item > span {
+  min-width: 0;
+  flex: 1;
+}
+
+.artifact-action-menu-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.artifact-action-menu-item kbd {
+  margin-left: auto;
+  color: var(--text-tertiary);
+  font-size: 9px;
+}
+
+.artifact-action-menu-separator {
+  height: 1px;
+  margin: 4px 7px;
+  background: var(--line-soft);
 }
 
 .sidebar-backdrop {

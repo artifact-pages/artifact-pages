@@ -15,6 +15,7 @@ function artifact(path: string, title: string, updatedAt: string): ArtifactIndex
     format: 'html',
     artifactUrl: `/_artifacts/sre/${sourcePath}`,
     updatedAt,
+    source: template.source ? { ...template.source, filePath: sourcePath } : undefined,
   }
 }
 

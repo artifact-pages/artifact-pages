@@ -186,7 +186,8 @@ Example artifact index:
       "source": {
         "repository": "example/sre",
         "repositoryUrl": "https://github.com/example/sre",
-        "ref": "main"
+        "ref": "main",
+        "filePath": "artifacts/incidents/123.html"
       },
       "toc": [
         { "level": 1, "text": "Summary", "id": "summary" },
@@ -326,7 +327,7 @@ Search should feel immediate after the index is loaded.
 
 ### Left sidebar
 
-The left sidebar derives a tree/navigation model from the site index. It may support filtering without additional network calls.
+The left sidebar derives a tree/navigation model from the site index. It may support filtering without additional network calls. Artifact rows may offer Pin/Unpin, Copy link, Open source, View history, and Open raw artifact actions. Pin stores only a site-scoped artifact reference in the current browser's local storage; it does not change the index, artifact bytes, source tree, or Browse hierarchy. The Pinned section is a shortcut list between Recently updated and Browse. Copy link copies the application's artifact route, while raw/source/history actions open their corresponding projections in a new tab. No sidebar action mutates Git content.
 
 ### Main pane
 
@@ -346,7 +347,7 @@ The optional right panel has two views, toggled from the workspace header:
 - **Contents** displays table-of-contents metadata and navigates to heading anchors in the artifact.
 - **Details** displays the last Git committer, last-updated date, and source repository link/ref.
 
-Both views use the same overlay panel so opening metadata does not narrow or reflow the artifact. `updatedAt` describes the artifact's last relevant source update, not the index generation time. `lastCommitter.name` is the committer name recorded in Git for that latest relevant source change; it is not a claim about the artifact's original author or a resolved GitHub account. Commit email addresses are not included in the public index. `source.repositoryUrl` is the canonical clickable repository URL, while `repository` remains its display name.
+Both views use the same overlay panel so opening metadata does not narrow or reflow the artifact. `updatedAt` describes the artifact's last relevant source update, not the index generation time. `lastCommitter.name` is the committer name recorded in Git for that latest relevant source change; it is not a claim about the artifact's original author or a resolved GitHub account. Commit email addresses are not included in the public index. `source.repositoryUrl` is the canonical clickable repository URL, while `repository` remains its display name. `source.filePath` is the exact source file path relative to the Git repository root; unlike the artifact route path, it includes the configured `sourcePath` prefix. It lets the reader open the correct source file or file-specific Git history without guessing that the published source root is the repository root.
 
 ## 9. Initial builder source model
 

@@ -101,7 +101,7 @@ func TestBuildCreatesPerSiteIndexWithoutCopyingSources(t *testing.T) {
 	if architecture.ArtifactURL != "/_artifacts/sre/architecture/platform/index.html" {
 		t.Errorf("architecture artifactUrl = %q", architecture.ArtifactURL)
 	}
-	if architecture.Source == nil || architecture.Source.Repository != "acme/knowledge" || architecture.Source.RepositoryURL != "https://github.com/acme/knowledge" || architecture.Source.Ref != "main" {
+	if architecture.Source == nil || architecture.Source.Repository != "acme/knowledge" || architecture.Source.RepositoryURL != "https://github.com/acme/knowledge" || architecture.Source.Ref != "main" || architecture.Source.FilePath != "artifacts/architecture/platform/index.html" {
 		t.Errorf("architecture source metadata = %+v", architecture.Source)
 	}
 	if architecture.UpdatedAt != commitTime.Format(time.RFC3339) {
@@ -120,6 +120,9 @@ func TestBuildCreatesPerSiteIndexWithoutCopyingSources(t *testing.T) {
 	}
 	if incident.Filename != "index.html" || incident.ArtifactURL != "/_artifacts/sre/incidents/checkout-latency/index.html" {
 		t.Errorf("incident file metadata = filename %q, URL %q", incident.Filename, incident.ArtifactURL)
+	}
+	if incident.Source == nil || incident.Source.FilePath != "artifacts/incidents/checkout-latency/index.html" {
+		t.Errorf("incident source file path = %+v, want a path relative to the Git repository root", incident.Source)
 	}
 	wantTOC := []TOCEntry{
 		{Level: 1, Text: "Summary", ID: "summary"},

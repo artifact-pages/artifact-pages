@@ -20,7 +20,8 @@
       "source": {
         "repository": "example/frontend",
         "repositoryUrl": "https://github.com/example/frontend",
-        "ref": "main"
+        "ref": "main",
+        "filePath": "design-system/button-guidelines/index.html"
       },
       "toc": [
         {

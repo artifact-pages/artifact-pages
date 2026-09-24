@@ -264,6 +264,7 @@ export function ArtifactWorkspace({
         revealRequest={sidebarReveal}
         onOpenPalette={openPalette}
         onOpenArtifact={openArtifact}
+        onToast={showToast}
         themeMode={themeMode}
         onSetThemeMode={onSetThemeMode}
         onCollapse={() => updateSidebarOpen(false, true)}

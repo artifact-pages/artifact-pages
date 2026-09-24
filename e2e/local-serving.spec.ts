@@ -74,6 +74,79 @@ test('site discovery loads lightweight metadata for all sites but detailed index
   await expect.poll(() => [...indexRequests]).toEqual(['/_indexes/sre/index.json'])
 })
 
+test('artifact actions pin locally without changing selection or Browse, and expose source links', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+  await page.goto('/sre/architecture/platform-topology/index.html')
+  const appOrigin = new URL(page.url()).origin
+
+  const browse = page.locator('.browse-tree')
+  const activeArtifact = browse.locator('.tree-artifact[data-tree-path="architecture/platform-topology/index.html"][aria-current="page"]')
+  await expect(activeArtifact).toBeVisible()
+  const incidentsDirectory = browse.locator('.tree-directory-button[data-tree-path="incidents"]')
+  await expect(incidentsDirectory).toHaveAttribute('aria-expanded', 'false')
+
+  const recent = page.locator('.tree-view-recent').first()
+  const recentActions = recent.getByRole('button', { name: 'Actions for Checkout latency incident review' })
+  await recentActions.click()
+  let menu = page.getByRole('menu', { name: 'Checkout latency incident review actions' })
+  await expect(menu.getByRole('menuitem', { name: 'Pin' })).toBeVisible()
+  await expect(menu.getByRole('menuitem', { name: 'Open source' })).toHaveAttribute(
+    'href',
+    'https://github.com/example/payments/blob/main/incidents/checkout-latency/index.html',
+  )
+  await expect(menu.getByRole('menuitem', { name: 'View history' })).toHaveAttribute(
+    'href',
+    'https://github.com/example/payments/commits/main/incidents/checkout-latency/index.html',
+  )
+  await expect(menu.getByRole('menuitem', { name: 'Open raw artifact' })).toHaveAttribute(
+    'href',
+    new URL('/_artifacts/sre/incidents/checkout-latency/index.html', appOrigin).href,
+  )
+  await page.keyboard.press('Escape')
+  await expect(menu).toHaveCount(0)
+  await expect(recentActions).toBeFocused()
+  await recentActions.click()
+  menu = page.getByRole('menu', { name: 'Checkout latency incident review actions' })
+  await page.keyboard.press('ArrowDown')
+  await expect(menu.getByRole('menuitem', { name: 'Copy link' })).toBeFocused()
+  await page.keyboard.press('ArrowUp')
+  await expect(menu.getByRole('menuitem', { name: 'Pin' })).toBeFocused()
+  await page.keyboard.press('p')
+
+  await expect(page).toHaveURL(/\/sre\/architecture\/platform-topology\/index\.html$/)
+  await expect(activeArtifact).toBeVisible()
+  await expect(incidentsDirectory).toHaveAttribute('aria-expanded', 'false')
+  const pinned = page.locator('.pinned-tree')
+  await expect(pinned.getByText('Pinned', { exact: true })).toBeVisible()
+  await expect(pinned.locator('.tree-artifact')).toContainText('Checkout latency incident review')
+  await page.reload()
+  await expect(page.locator('.pinned-tree .tree-artifact')).toContainText('Checkout latency incident review')
+  await expect(browse.locator('.tree-artifact[aria-current="page"]')).toHaveAttribute('data-tree-path', 'architecture/platform-topology/index.html')
+
+  await page.locator('.pinned-tree').getByRole('button', { name: 'Actions for Checkout latency incident review' }).click()
+  menu = page.getByRole('menu', { name: 'Checkout latency incident review actions' })
+  await expect(menu.getByRole('menuitem', { name: 'Unpin' })).toBeVisible()
+  await menu.getByRole('menuitem', { name: 'Unpin' }).click()
+  await expect(page.locator('.pinned-tree')).toHaveCount(0)
+  await expect(incidentsDirectory).toBeFocused()
+  await expect(incidentsDirectory).toHaveAttribute('aria-expanded', 'false')
+  await expect(page).toHaveURL(/\/sre\/architecture\/platform-topology\/index\.html$/)
+
+  await browse.locator('.tree-directory-button[data-tree-path="incidents"]').click()
+  await browse.locator('.tree-directory-button[data-tree-path="incidents/checkout-latency"]').click()
+  const browseArtifact = browse.locator('.tree-artifact[data-tree-path="incidents/checkout-latency/index.html"]')
+  await expect(browseArtifact).toContainText('Checkout latency incident review')
+  await browse.getByRole('button', { name: 'Actions for Checkout latency incident review' }).last().click()
+  menu = page.getByRole('menu', { name: 'Checkout latency incident review actions' })
+  await page.keyboard.press('l')
+
+  await expect(page.getByRole('status')).toHaveText('Link copied to clipboard.')
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(
+    new URL('/sre/incidents/checkout-latency/index.html', appOrigin).href,
+  )
+  await expect(page).toHaveURL(/\/sre\/architecture\/platform-topology\/index\.html$/)
+})
+
 test('the command palette supports Ctrl+J/K navigation and opens the selected result', async ({ page }) => {
   await page.goto('/sre')
   await page.getByRole('button', { name: 'Open command palette (⌘ K)' }).click()

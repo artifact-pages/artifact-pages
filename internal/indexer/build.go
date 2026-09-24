@@ -94,6 +94,7 @@ type ArtifactSource struct {
 	Repository    string `json:"repository"`
 	RepositoryURL string `json:"repositoryUrl,omitempty"`
 	Ref           string `json:"ref"`
+	FilePath      string `json:"filePath"`
 }
 
 type TOCEntry struct {
@@ -262,10 +263,15 @@ func Build(ctx context.Context, options BuildOptions) (BuildResult, error) {
 			entry.LastCommitter = &ArtifactCommitter{Name: gitUpdate.lastCommitter}
 		}
 		if gitInfo.repository != "" {
+			repositoryFilePath := artifact.relative
+			if relativeSource != "." {
+				repositoryFilePath = path.Join(relativeSource, artifact.relative)
+			}
 			entry.Source = &ArtifactSource{
 				Repository:    gitInfo.repository,
 				RepositoryURL: gitInfo.repositoryURL,
 				Ref:           gitInfo.ref,
+				FilePath:      repositoryFilePath,
 			}
 		}
 		index.Artifacts = append(index.Artifacts, entry)

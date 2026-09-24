@@ -25,6 +25,8 @@ export type ArtifactSource = {
   repository: string
   repositoryUrl?: string
   ref: string
+  /** Repository-root-relative path of this source file, when the indexer provides it. */
+  filePath?: string
 }
 
 export type ArtifactFormat = 'html' | 'markdown'

@@ -1,10 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ArtifactIndexEntry } from '../domain/index'
 import { buildArtifactTree, countArtifacts, flattenArtifacts, type ArtifactTreeNode } from '../domain/tree'
+import { ArtifactActionsMenu } from './ArtifactActionsMenu'
 import { Icon } from './Icon'
 
 export type TreeStyle = 'quiet' | 'branch-guides' | 'path-list'
 type TreeView = 'tree' | 'recent' | 'paths'
+
+export type ArtifactRowActions = {
+  pinned: boolean
+  sourceUrl?: string
+  historyUrl?: string
+  rawUrl?: string
+  onTogglePin: () => void
+  onCopyLink: () => void
+}
 
 export function ArtifactTree({
   artifacts,
@@ -16,6 +26,7 @@ export function ArtifactTree({
   onExpandedPathsChange,
   defaultExpandedPaths,
   onOpenArtifact,
+  getArtifactActions,
 }: {
   artifacts: ArtifactIndexEntry[]
   activePath?: string
@@ -26,6 +37,7 @@ export function ArtifactTree({
   onExpandedPathsChange?: (update: (current: Set<string>) => Set<string>) => void
   defaultExpandedPaths?: string[]
   onOpenArtifact: (artifact: ArtifactIndexEntry) => void
+  getArtifactActions?: (artifact: ArtifactIndexEntry) => ArtifactRowActions
 }) {
   const [localExpandedPaths, setLocalExpandedPaths] = useState(
     () => new Set(defaultExpandedPaths ?? rootPaths(artifacts)),
@@ -51,6 +63,22 @@ export function ArtifactTree({
       else next.add(path)
       return next
     })
+  }
+
+  function renderArtifact(artifact: ArtifactIndexEntry, depth: number, rowStyle: TreeStyle, showPath = false) {
+    return (
+      <ArtifactRow
+        key={artifact.id}
+        artifact={artifact}
+        active={artifact.path === activePath}
+        depth={depth}
+        style={rowStyle}
+        query={normalizedQuery}
+        showPath={showPath}
+        onOpenArtifact={onOpenArtifact}
+        actions={getArtifactActions?.(artifact)}
+      />
+    )
   }
 
   function renderNode(node: ArtifactTreeNode, depth: number): React.ReactNode {
@@ -89,17 +117,7 @@ export function ArtifactTree({
             </div>
           )
         })}
-        {files.map((artifact) => (
-          <ArtifactRow
-            key={artifact.id}
-            artifact={artifact}
-            active={artifact.path === activePath}
-            depth={depth}
-            style={style}
-            query={normalizedQuery}
-            onOpenArtifact={onOpenArtifact}
-          />
-        ))}
+        {files.map((artifact) => renderArtifact(artifact, depth, style))}
       </>
     )
   }
@@ -110,29 +128,8 @@ export function ArtifactTree({
 
   return (
     <div className={`artifact-tree tree-view-${view} tree-style-${style}`}>
-      {view === 'recent' ? items.map((artifact) => (
-        <ArtifactRow
-          key={artifact.id}
-          artifact={artifact}
-          active={artifact.path === activePath}
-          depth={0}
-          style={style}
-          query={normalizedQuery}
-          onOpenArtifact={onOpenArtifact}
-        />
-      )) : null}
-      {view === 'paths' || (view === 'tree' && style === 'path-list') ? items.map((artifact) => (
-        <ArtifactRow
-          key={artifact.id}
-          artifact={artifact}
-          active={artifact.path === activePath}
-          depth={0}
-          style="path-list"
-          query={normalizedQuery}
-          showPath
-          onOpenArtifact={onOpenArtifact}
-        />
-      )) : null}
+      {view === 'recent' ? items.map((artifact) => renderArtifact(artifact, 0, style)) : null}
+      {view === 'paths' || (view === 'tree' && style === 'path-list') ? items.map((artifact) => renderArtifact(artifact, 0, 'path-list', true)) : null}
       {view === 'tree' && style !== 'path-list' ? renderNode(tree, 0) : null}
     </div>
   )
@@ -146,6 +143,7 @@ function ArtifactRow({
   query,
   showPath = false,
   onOpenArtifact,
+  actions,
 }: {
   artifact: ArtifactIndexEntry
   active: boolean
@@ -154,25 +152,39 @@ function ArtifactRow({
   query: string
   showPath?: boolean
   onOpenArtifact: (artifact: ArtifactIndexEntry) => void
+  actions?: ArtifactRowActions
 }) {
   return (
-    <button
-      className={`tree-artifact${active ? ' is-active' : ''}${showPath ? ' tree-path-row' : ''}`}
-      style={{ paddingInlineStart: style === 'branch-guides' ? '8px' : `${10 + depth * 14}px` }}
-      data-tree-depth={depth}
-      data-tree-path={artifact.path}
-      title={artifact.path}
-      aria-current={active ? 'page' : undefined}
-      onClick={() => onOpenArtifact(artifact)}
-    >
-      <span className={showPath ? 'tree-path-copy' : 'tree-label'}>
-        <span className="tree-label">{highlight(artifact.title, query)}</span>
-        {showPath ? <span className="tree-path mono">{highlight(artifact.path, query)}</span> : null}
-      </span>
-      {artifact.format === 'markdown' ? (
-        <span className="tree-format-tag" title="Markdown document">MD</span>
+    <div className={`tree-artifact-row${actions ? ' has-actions' : ''}`}>
+      <button
+        className={`tree-artifact${active ? ' is-active' : ''}${showPath ? ' tree-path-row' : ''}`}
+        style={{ paddingInlineStart: style === 'branch-guides' ? '8px' : `${10 + depth * 14}px` }}
+        data-tree-depth={depth}
+        data-tree-path={artifact.path}
+        title={artifact.path}
+        aria-current={active ? 'page' : undefined}
+        onClick={() => onOpenArtifact(artifact)}
+      >
+        <span className={showPath ? 'tree-path-copy' : 'tree-label'}>
+          <span className="tree-label">{highlight(artifact.title, query)}</span>
+          {showPath ? <span className="tree-path mono">{highlight(artifact.path, query)}</span> : null}
+        </span>
+        {artifact.format === 'markdown' ? (
+          <span className="tree-format-tag" title="Markdown document">MD</span>
+        ) : null}
+      </button>
+      {actions ? (
+        <ArtifactActionsMenu
+          artifact={artifact}
+          pinned={actions.pinned}
+          sourceUrl={actions.sourceUrl}
+          historyUrl={actions.historyUrl}
+          rawUrl={actions.rawUrl}
+          onTogglePin={actions.onTogglePin}
+          onCopyLink={actions.onCopyLink}
+        />
       ) : null}
-    </button>
+    </div>
   )
 }
 

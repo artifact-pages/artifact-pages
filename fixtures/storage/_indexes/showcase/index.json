@@ -20,7 +20,8 @@
       "source": {
         "repository": "example/html-showcase",
         "repositoryUrl": "https://github.com/example/html-showcase",
-        "ref": "main"
+        "ref": "main",
+        "filePath": "editorial/field-notes/index.html"
       },
       "toc": [
         {
@@ -59,7 +60,8 @@
       "source": {
         "repository": "example/html-showcase",
         "repositoryUrl": "https://github.com/example/html-showcase",
-        "ref": "main"
+        "ref": "main",
+        "filePath": "dashboards/edge-observatory/index.html"
       },
       "toc": [
         {
@@ -98,7 +100,8 @@
       "source": {
         "repository": "example/html-showcase",
         "repositoryUrl": "https://github.com/example/html-showcase",
-        "ref": "main"
+        "ref": "main",
+        "filePath": "handbook/inclusive-components/index.html"
       },
       "toc": [
         {
@@ -137,7 +140,8 @@
       "source": {
         "repository": "example/html-showcase",
         "repositoryUrl": "https://github.com/example/html-showcase",
-        "ref": "main"
+        "ref": "main",
+        "filePath": "reports/cloud-spend-review/index.html"
       },
       "toc": [
         {
@@ -171,7 +175,8 @@
       "source": {
         "repository": "example/html-showcase",
         "repositoryUrl": "https://github.com/example/html-showcase",
-        "ref": "main"
+        "ref": "main",
+        "filePath": "presentations/resilient-by-design/index.html"
       },
       "toc": [
         {
@@ -210,7 +215,8 @@
       "source": {
         "repository": "example/html-showcase",
         "repositoryUrl": "https://github.com/example/html-showcase",
-        "ref": "main"
+        "ref": "main",
+        "filePath": "product/atlas-launch/index.html"
       },
       "toc": [
         {
@@ -249,7 +255,8 @@
       "source": {
         "repository": "example/html-showcase",
         "repositoryUrl": "https://github.com/example/html-showcase",
-        "ref": "main"
+        "ref": "main",
+        "filePath": "forms/incident-intake/index.html"
       },
       "toc": [
         {

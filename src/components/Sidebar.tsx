@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ArtifactIndexEntry, SiteIndex, SiteSummary } from '../domain/index'
 import type { ThemeMode } from '../domain/theme'
+import { artifactSourceLinks } from '../domain/source-links'
+import { artifactRouteHref } from '../routing'
+import type { ArtifactRowActions } from './ArtifactTree'
 import { ArtifactTree, type TreeStyle } from './ArtifactTree'
 import { Icon } from './Icon'
 import { ThemeSwitcher } from './ThemeSwitcher'
@@ -15,6 +18,7 @@ export function Sidebar({
   revealRequest,
   onOpenPalette,
   onOpenArtifact,
+  onToast,
   themeMode,
   onSetThemeMode,
   onCollapse,
@@ -29,12 +33,14 @@ export function Sidebar({
   revealRequest: { path: string; request: number } | null
   onOpenPalette: (seed: string) => void
   onOpenArtifact: (artifact: ArtifactIndexEntry) => void
+  onToast: (message: string) => void
   themeMode: ThemeMode
   onSetThemeMode: (mode: ThemeMode) => void
   onCollapse: () => void
   treeStyle?: TreeStyle
 }) {
   const [query, setQuery] = useState('')
+  const [pinnedBySite, setPinnedBySite] = useState<Record<string, string[]>>(readPinnedArtifacts)
   const sidebarRef = useRef<HTMLElement>(null)
   const lastRevealedRequest = useRef<number | null>(null)
   const normalizedQuery = query.trim().toLocaleLowerCase()
@@ -44,7 +50,58 @@ export function Sidebar({
       .slice(0, 4),
     [index.artifacts],
   )
+  const pinnedIds = pinnedBySite[index.site.id] ?? []
+  const pinned = useMemo(() => {
+    const artifactsById = new Map(index.artifacts.map((artifact) => [artifact.id, artifact]))
+    return pinnedIds.map((id) => artifactsById.get(id)).filter((artifact): artifact is ArtifactIndexEntry => artifact !== undefined)
+  }, [index.artifacts, pinnedIds])
   const matchCount = index.artifacts.filter((artifact) => matches(artifact, normalizedQuery)).length
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(PINNED_STORAGE_KEY, JSON.stringify(pinnedBySite))
+    } catch {
+      // Pinning remains available for this session if browser storage is disabled.
+    }
+  }, [pinnedBySite])
+
+  function togglePin(artifact: ArtifactIndexEntry) {
+    const willPin = !pinnedIds.includes(artifact.id)
+    setPinnedBySite((current) => {
+      const sitePins = current[index.site.id] ?? []
+      const nextPins = willPin
+        ? [...sitePins, artifact.id]
+        : sitePins.filter((id) => id !== artifact.id)
+      return { ...current, [index.site.id]: nextPins }
+    })
+    onToast(willPin ? `Pinned ${artifact.title}.` : `Unpinned ${artifact.title}.`)
+  }
+
+  async function copyArtifactLink(artifact: ArtifactIndexEntry) {
+    const href = new URL(artifactRouteHref(index.site.id, artifact.path), window.location.origin).href
+    if (!navigator.clipboard?.writeText) {
+      onToast('Clipboard access is unavailable.')
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(href)
+      onToast('Link copied to clipboard.')
+    } catch {
+      onToast('Clipboard access is unavailable.')
+    }
+  }
+
+  function getArtifactActions(artifact: ArtifactIndexEntry): ArtifactRowActions {
+    const sourceLinks = artifactSourceLinks(artifact)
+    return {
+      pinned: pinnedIds.includes(artifact.id),
+      sourceUrl: sourceLinks.sourceUrl,
+      historyUrl: sourceLinks.historyUrl,
+      rawUrl: safeRawArtifactUrl(artifact.artifactUrl),
+      onTogglePin: () => togglePin(artifact),
+      onCopyLink: () => void copyArtifactLink(artifact),
+    }
+  }
 
   useEffect(() => {
     const ancestors = folderAncestors(artifactPath)
@@ -168,6 +225,7 @@ export function Sidebar({
                 expandedPaths={expandedPaths}
                 onExpandedPathsChange={onExpandedPathsChange}
                 onOpenArtifact={onOpenArtifact}
+                getArtifactActions={getArtifactActions}
               />
             )}
           </div>
@@ -187,9 +245,25 @@ export function Sidebar({
                   style={treeStyle}
                   view="recent"
                   onOpenArtifact={onOpenArtifact}
+                  getArtifactActions={getArtifactActions}
                 />
               )}
             </div>
+            {pinned.length > 0 ? (
+              <div className="sidebar-section pinned-tree">
+                <div className="sidebar-section-title">
+                  <span className="sidebar-section-label"><Icon name="pin" size={12} />Pinned</span>
+                </div>
+                <ArtifactTree
+                  artifacts={pinned}
+                  activePath={artifactPath}
+                  style={treeStyle}
+                  view="recent"
+                  onOpenArtifact={onOpenArtifact}
+                  getArtifactActions={getArtifactActions}
+                />
+              </div>
+            ) : null}
             <div className="sidebar-section browse-tree">
               <div className="sidebar-section-title">
                 <span className="sidebar-section-label"><Icon name="tree" size={12} />Browse</span>
@@ -205,6 +279,7 @@ export function Sidebar({
                   expandedPaths={expandedPaths}
                   onExpandedPathsChange={onExpandedPathsChange}
                   onOpenArtifact={onOpenArtifact}
+                  getArtifactActions={getArtifactActions}
                 />
               )}
             </div>
@@ -224,6 +299,33 @@ export function Sidebar({
       </footer>
     </aside>
   )
+}
+
+const PINNED_STORAGE_KEY = 'git-artifact-pages:pinned-artifacts:v1'
+
+function readPinnedArtifacts(): Record<string, string[]> {
+  try {
+    const value = window.localStorage.getItem(PINNED_STORAGE_KEY)
+    if (!value) return {}
+    const parsed: unknown = JSON.parse(value)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    return Object.fromEntries(Object.entries(parsed).flatMap(([siteId, ids]) => {
+      if (!Array.isArray(ids)) return []
+      return [[siteId, ids.filter((id): id is string => typeof id === 'string')]]
+    }))
+  } catch {
+    return {}
+  }
+}
+
+function safeRawArtifactUrl(value: string) {
+  try {
+    const url = new URL(value, window.location.origin)
+    if (url.origin !== window.location.origin || !url.pathname.startsWith('/_artifacts/')) return undefined
+    return url.href
+  } catch {
+    return undefined
+  }
 }
 
 function matches(artifact: ArtifactIndexEntry, query: string) {

@@ -20,7 +20,8 @@
       "source": {
         "repository": "example/payments",
         "repositoryUrl": "https://github.com/example/payments",
-        "ref": "main"
+        "ref": "main",
+        "filePath": "incidents/checkout-latency/index.html"
       },
       "toc": [
         {
@@ -54,7 +55,8 @@
       "source": {
         "repository": "example/platform",
         "repositoryUrl": "https://github.com/example/platform",
-        "ref": "main"
+        "ref": "main",
+        "filePath": "architecture/platform-topology/index.html"
       },
       "toc": [
         {
@@ -83,7 +85,8 @@
       "source": {
         "repository": "example/runbooks",
         "repositoryUrl": "https://github.com/example/runbooks",
-        "ref": "main"
+        "ref": "main",
+        "filePath": "runbooks/service-recovery.md"
       },
       "toc": [
         {
@@ -114,7 +117,8 @@
       "source": {
         "repository": "example/markdown-qa",
         "repositoryUrl": "https://github.com/example/markdown-qa",
-        "ref": "main"
+        "ref": "main",
+        "filePath": "diagrams/mermaid-catalog.md"
       },
       "toc": [
         {
@@ -368,7 +372,8 @@
       "source": {
         "repository": "example/markdown-qa",
         "repositoryUrl": "https://github.com/example/markdown-qa",
-        "ref": "main"
+        "ref": "main",
+        "filePath": "guides/markdown-style-gallery.md"
       },
       "toc": [
         {
@@ -442,7 +447,8 @@
       "source": {
         "repository": "example/markdown-qa",
         "repositoryUrl": "https://github.com/example/markdown-qa",
-        "ref": "main"
+        "ref": "main",
+        "filePath": "reports/latency-retrospective.md"
       },
       "toc": [
         {
