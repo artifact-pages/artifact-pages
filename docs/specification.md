@@ -222,6 +222,10 @@ The builder recursively indexes every `.html`, `.htm`, and `.md` file under that
 
 Local resources referenced by those pages must also be present under `sourcePath`, with their relative directory structure intact. External resources may be referenced over HTTPS under the artifact resource policy described below. The index builder leaves the tree unchanged and emits metadata only. The later publish operation treats the publishable files in `sourcePath` as the desired artifact state: it uploads new and changed files and removes stale objects under that site's artifact prefix, excluding Git metadata such as `.git` and without touching another site, the registry object, or the application plane. It also publishes the generated per-site metadata and index.
 
+For a provider-backed publish, build the desired projection locally, acquire the site's lock, and revalidate the deployed registry before writing. Upload new and changed artifact files first; after those uploads succeed, replace `index.json` and then `meta.json`; delete stale artifact objects last. This ordering reduces broken references but does not make a multi-object site update atomic. A reader may temporarily observe old metadata with new artifact bytes, a new index while stale objects are still being removed, or cached older content. V1 accepts this eventual-consistency window and does not use versioned release directories or an atomic site pointer.
+
+Publish is idempotent desired-state synchronization, not a transaction with rollback. If an operation fails partway through, it reports failure and releases its lock when it can stop safely; a process crash leaves the lock held for explicit recovery. Retrying the same desired source reuploads or verifies needed objects, republishes index and metadata, removes remaining stale objects, and converges the site. A successful origin sync does not guarantee every CDN edge has refreshed; mutable paths therefore use bounded cache freshness and revalidation rather than immutable long-lived caching or a mandatory CDN purge after every publish.
+
 `sourcePath` must be inside the current Git working tree. Tracked source files provide commit-based `updatedAt` and `lastCommitter` metadata. Files without Git history, including ignored or generated output, remain indexable; for them `updatedAt` falls back to filesystem modification times and `lastCommitter` is omitted. Prefer tracked, publishable documents when Git-derived details are required.
 
 The index should eventually contain enough information to support:
@@ -619,10 +623,10 @@ Expected direction:
 
 /_indexes/sites.json    registration/discovery state; revalidate or expire promptly on changes
 /_indexes/<site>/*      short/revalidated
-/_artifacts/*           cache according to publication model
+/_artifacts/*           mutable stable paths; finite freshness lifetime and revalidation
 ~~~
 
-The provider adapter must ensure registration changes become visible through the CDN before browser clients rely on the new registry state. For AWS, the publisher's registry read is directly from the S3 object and therefore does not depend on CloudFront cache freshness; browser visibility still requires timely CDN revalidation or invalidation. On unregister, the affected cache set includes `/_indexes/sites.json`, `/_indexes/<site>/*`, and `/_artifacts/<site>/*`; the adapter may use provider invalidation or an equivalent revalidation/expiry mechanism, but must not report unregister success while stale cached site content may still be served. The mechanism is provider-specific and does not change IAM permissions.
+The provider adapter must ensure registration changes become visible through the CDN before browser clients rely on the new registry state. For AWS, the publisher's registry read is directly from the S3 object and therefore does not depend on CloudFront cache freshness; browser visibility still requires timely CDN revalidation or invalidation. Normal publish relies on the finite freshness lifetime and revalidation of mutable artifact/index paths; it does not require CDN invalidation for every publish. On unregister, the affected cache set includes `/_indexes/sites.json`, `/_indexes/<site>/*`, and `/_artifacts/<site>/*`; the adapter may use provider invalidation or an equivalent revalidation/expiry mechanism, but must not report unregister success while stale cached site content may still be served. The mechanism is provider-specific and does not change IAM permissions.
 
 Artifact paths may later become commit-addressed/immutable, which would allow aggressive CDN caching. That is an optimization, not an MVP requirement.
 
