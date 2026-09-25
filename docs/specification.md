@@ -416,28 +416,29 @@ How multiple publisher contributions might be staged and merged into that single
 
 ## 11. Registry
 
-The eventual platform registry is the authority for:
+The operator/admin repository owns the human-maintained registry as YAML, reviewed and versioned in Git. In the initial one-repository-per-site model, each site entry maps a logical site ID to one source repository and an exact `sourcePath`:
 
-- site identity
-- source repository
-- ref
-- sourcePath
-- mountPath
-- publish authorization
+~~~yaml
+sites:
+  sre:
+    repository: company/sre-monorepo
+    sourcePath: docs/artifacts
+~~~
 
-The registry is intended to be a human-maintained YAML file in the application/operator repository. In the initial one-repository-per-site model, a GitHub source is identified by its human-readable `owner/repo` locator together with the exact `sourcePath`. A numeric GitHub repository ID is not required and is not part of the initial registry contract. If a repository is renamed or transferred, its locator in the registry must be updated; an immutable ID can be reconsidered later if that operational tradeoff proves insufficient.
+For GitHub, source identity is the human-readable `owner/repo` locator together with `sourcePath`; a numeric repository ID is not required. If a repository is renamed or transferred, its locator in the registry must be updated. The site's presentation title remains in its `meta.json`, rather than being duplicated in the registry.
 
-Repository workflows should not be able to arbitrarily choose another source's destination namespace.
+The registry is publicly readable so a satellite publisher can check that its repository/path is registered for the target site before publishing. The supported publish command rejects an unregistered or mismatched source. This is a product/workflow-level eligibility check, not a dynamically managed cloud IAM boundary; registering or unregistering a site does not update provider permissions.
 
-Normalization rules should reject at least:
+Unregistering a site removes its registration and the administrator deletes that site's stored projection, including `/_indexes/<site>/` and `/_artifacts/<site>/`. The registry does not create a separate paused/disabled state.
+
+The exact YAML file location, storage representation, and full validation rules remain open. The initial model has one source per site and no mount-path merging; if multi-repository sites are introduced later, the registry must prevent overlapping mount paths.
+
+Registry validation must reject invalid site IDs and unsafe paths. If mount-path merging is introduced, it must also reject:
 
 - duplicate mount paths
 - ancestor/descendant mount overlap
 - ..
 - reserved platform namespaces
-- invalid site IDs
-
-The exact YAML file location and field layout are not required for the local browser milestone. This decision defines the source identity without freezing the complete registry schema.
 
 ## 12. Publish-time metadata
 
