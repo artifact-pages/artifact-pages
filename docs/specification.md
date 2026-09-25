@@ -136,9 +136,9 @@ The local reference implementation discovers site IDs from the site-directory li
 
 The browser loads a site's full artifact index only when that site becomes active. It does not fetch all artifact indexes during startup. No separate `sites.json` registry is required for the local product; the listing remains the discovery entry point.
 
-The directory listing changes when sites are onboarded, renamed, or removed. It does **not** change for each artifact publication unless the set of site directories changes.
+For the registered deployment model, the admin repository's YAML registry is projected to `/_indexes/sites.json`. This static JSON replaces storage directory listing as the site-discovery and publisher-eligibility source. The browser uses its site IDs to fetch per-site `meta.json`; the publisher uses the source mapping to check whether its repository and source path are registered.
 
-An object-storage/CDN adapter may provide an equivalent static listing or a generated catalog. The production representation is intentionally not fixed by the local milestone; the requirement is that root site selection remains serverless.
+The sites registry changes when sites are registered or unregistered, not on each artifact publication. The per-site metadata and full artifact index remain at `/_indexes/<site>/meta.json` and `/_indexes/<site>/index.json`.
 
 ### 5.2 Site metadata and artifact index
 
@@ -416,7 +416,9 @@ How multiple publisher contributions might be staged and merged into that single
 
 ## 11. Registry
 
-The operator/admin repository owns the human-maintained registry as YAML, reviewed and versioned in Git. In the initial one-repository-per-site model, each site entry maps a logical site ID to one source repository and an exact `sourcePath`:
+The operator/admin repository owns the human-maintained registry as YAML, reviewed and versioned in Git. The YAML is the sole editable source of truth. The admin deployment validates it and generates a public, machine-readable JSON projection at `/_indexes/sites.json`; that generated JSON is never edited independently. The browser and satellite publisher consume the same projection, avoiding separate hand-maintained registries or YAML parsing in the browser.
+
+In the initial one-repository-per-site model, each YAML site entry maps a logical site ID to one source repository and an exact `sourcePath`:
 
 ~~~yaml
 sites:
@@ -427,11 +429,26 @@ sites:
 
 For GitHub, source identity is the human-readable `owner/repo` locator together with `sourcePath`; a numeric repository ID is not required. If a repository is renamed or transferred, its locator in the registry must be updated. The site's presentation title remains in its `meta.json`, rather than being duplicated in the registry.
 
+Generated registry example:
+
+~~~json
+{
+  "schemaVersion": 1,
+  "sites": [
+    {
+      "id": "sre",
+      "repository": "company/sre-monorepo",
+      "sourcePath": "docs/artifacts"
+    }
+  ]
+}
+~~~
+
 The registry is publicly readable so a satellite publisher can check that its repository/path is registered for the target site before publishing. The supported publish command rejects an unregistered or mismatched source. This is a product/workflow-level eligibility check, not a dynamically managed cloud IAM boundary; registering or unregistering a site does not update provider permissions.
 
 Unregistering a site removes its registration and the administrator deletes that site's stored projection, including `/_indexes/<site>/` and `/_artifacts/<site>/`. The registry does not create a separate paused/disabled state.
 
-The exact YAML file location, storage representation, and full validation rules remain open. The initial model has one source per site and no mount-path merging; if multi-repository sites are introduced later, the registry must prevent overlapping mount paths.
+The exact YAML file location and full validation rules remain open. The JSON projection path and its role as the shared runtime representation are fixed for this model. The initial model has one source per site and no mount-path merging; if multi-repository sites are introduced later, the registry must prevent overlapping mount paths.
 
 Registry validation must reject invalid site IDs and unsafe paths. If mount-path merging is introduced, it must also reject:
 
@@ -560,9 +577,12 @@ Expected direction:
 /index.html             short/revalidated
 /assets/<hashed>*       long/immutable
 
-/_indexes/*             short/revalidated
+/_indexes/sites.json    registration/discovery state; revalidate or expire promptly on changes
+/_indexes/<site>/*      short/revalidated
 /_artifacts/*           cache according to publication model
 ~~~
+
+The provider adapter must ensure registration changes become visible through the CDN before clients rely on the new registry state. The invalidation/revalidation mechanism is provider-specific; it does not change IAM permissions.
 
 Artifact paths may later become commit-addressed/immutable, which would allow aggressive CDN caching. That is an optimization, not an MVP requirement.
 
