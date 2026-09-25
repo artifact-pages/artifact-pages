@@ -455,7 +455,7 @@ Generated registry example:
 }
 ~~~
 
-The deployed registry object is publicly readable so a satellite publisher can retrieve it and check that its repository/path is registered for the target site before publishing. The supported publish command rejects an unregistered or mismatched source. This is a product/workflow-level eligibility check, not a dynamically managed cloud IAM boundary; registering or unregistering a site does not update provider permissions.
+The browser reads the registry through the site's distribution endpoint. A satellite publisher reads the deployed object through its provider adapter using its own read-only permission for that object; for AWS this is `s3:GetObject` on `/_indexes/sites.json`, not public access to the S3 bucket. The supported `artifact-pages` publish command rejects an unregistered or mismatched source before writing. This is a product/workflow-level eligibility check, not a dynamically managed cloud IAM boundary; registering or unregistering a site does not update provider permissions.
 
 Unregistering a site removes its registration and the administrator deletes that site's stored projection, including `/_indexes/<site>/` and `/_artifacts/<site>/`. The registry does not create a separate paused/disabled state.
 
@@ -593,15 +593,20 @@ Expected direction:
 /_artifacts/*           cache according to publication model
 ~~~
 
-The provider adapter must ensure registration changes become visible through the CDN before clients rely on the new registry state. The invalidation/revalidation mechanism is provider-specific; it does not change IAM permissions.
+The provider adapter must ensure registration changes become visible through the CDN before browser clients rely on the new registry state. For AWS, the publisher's registry read is directly from the S3 object and therefore does not depend on CloudFront cache freshness; browser visibility still requires timely CDN revalidation or invalidation. The mechanism is provider-specific and does not change IAM permissions.
 
 Artifact paths may later become commit-addressed/immutable, which would allow aggressive CDN caching. That is an optimization, not an MVP requirement.
 
 ## 17. Publishing and AWS credentials
 
-The intended GitHub-to-AWS path uses GitHub Actions OIDC rather than long-lived AWS access keys.
+The user-facing publishing interface is the `artifact-pages` command. Its provider adapter performs the provider API operations; users do not need to invoke raw provider CLIs such as `aws s3` for the product workflow.
 
-Publishers should eventually be scoped to the S3 prefixes they own.
+The intended GitHub-to-AWS path uses GitHub Actions OIDC rather than long-lived AWS access keys. The admin and satellite workflows use separate roles:
+
+- The admin role deploys the application and registry projection, and removes a site's stored prefixes during unregistration.
+- A satellite role can read the deployed registry object and write its site content beneath the site-specific index and artifact prefixes. It cannot modify `/_indexes/sites.json` or the application plane.
+
+The Artifact Pages command performs the registry eligibility check before using the satellite role to publish. Registration changes do not dynamically change IAM policy; this check is not a substitute for provider-level credentials and role separation. The exact S3 API actions required for synchronization depend on the final publish semantics.
 
 The exact IAM model belongs to the AWS/publisher phase.
 
