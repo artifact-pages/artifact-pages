@@ -421,6 +421,7 @@ The operator/admin repository owns the human-maintained registry as YAML, review
 In the initial one-repository-per-site model, each YAML site entry maps a logical site ID to one source repository and an exact `sourcePath`:
 
 ~~~yaml
+schemaVersion: 1
 sites:
   sre:
     repository: company/sre-monorepo
@@ -428,6 +429,10 @@ sites:
 ~~~
 
 For GitHub, source identity is the human-readable `owner/repo` locator together with `sourcePath`; a numeric repository ID is not required. If a repository is renamed or transferred, its locator in the registry must be updated. The site's presentation title remains in its `meta.json`, rather than being duplicated in the registry.
+
+The registry deliberately has no branch/ref field. A site's identity is independent of the publishing branch; the satellite workflow owns the policy for which ref may publish.
+
+Site IDs are machine identifiers used in URL routes and storage paths, not display labels. V1 IDs use lowercase ASCII letters and digits separated by single hyphens (`[a-z0-9]+(?:-[a-z0-9]+)*`). Spaces and other punctuation are invalid even if quoted in YAML. Human-readable titles, including titles with spaces, belong in `meta.json`.
 
 Generated registry example:
 
@@ -450,7 +455,7 @@ Unregistering a site removes its registration and the administrator deletes that
 
 The exact YAML file location and full validation rules remain open. The JSON projection path and its role as the shared runtime representation are fixed for this model. The initial model has one source per site and no mount-path merging; if multi-repository sites are introduced later, the registry must prevent overlapping mount paths.
 
-Registry validation must reject invalid site IDs and unsafe paths. If mount-path merging is introduced, it must also reject:
+Registry validation must reject invalid or reserved site IDs and unsafe source paths. If mount-path merging is introduced, it must also reject:
 
 - duplicate mount paths
 - ancestor/descendant mount overlap
