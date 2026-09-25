@@ -673,6 +673,12 @@ Artifact paths may later become commit-addressed/immutable, which would allow ag
 
 The user-facing publishing interface is the `artifact-pages` command. Its provider adapter performs the provider API operations; users do not need to invoke raw provider CLIs such as `aws s3` for the product workflow.
 
+### Object-prefix reconciliation
+
+Site publish and unregister must enumerate object prefixes completely before treating the result as the site's current stored state. Adapters follow every listing continuation token/page; they must not assume that one response contains every object. Before deleting stale keys, the command must have successfully completed listings for both `/_artifacts/<site>/` and `/_indexes/<site>/`. A failed or incomplete listing aborts reconciliation rather than risking deletion based on a partial view.
+
+Delete operations use batches within the provider's documented limits and inspect per-object failures as well as request-level errors. A partial delete is a failed operation; retrying the same desired publish or unregister repeats the listing and converges idempotently. Site operations may read or delete only their exact artifact and index prefixes. They must never include `/_indexes/sites.json`, `/_indexes/index.html`, the application plane, or `/_control/locks/<site>.json` in site-content cleanup. Provider pagination and batch sizes stay inside the adapter, not in the product data model.
+
 The intended GitHub-to-AWS path uses GitHub Actions OIDC rather than long-lived AWS access keys. The admin and satellite workflows use separate roles:
 
 - The admin role deploys the application and registry projection, coordinates through the per-site lock during unregistration, and removes a site's stored prefixes.
