@@ -459,6 +459,34 @@ The browser reads the registry through the site's distribution endpoint. A satel
 
 Unregistering a site removes its registration and the administrator deletes that site's stored projection, including `/_indexes/<site>/` and `/_artifacts/<site>/`. The registry does not create a separate paused/disabled state.
 
+### Concurrent publish and unregister
+
+Checking the registry and then publishing without coordination has a time-of-check/time-of-use race: an unregister can remove the registration and delete the site's objects after a publisher's check but before that publisher writes. The provider publishing contract therefore uses one cooperative, per-site storage lock shared by satellite publish and admin unregister operations.
+
+The lock is a reserved control object outside the site's index and artifact prefixes, for example `/_control/locks/<site>.json`. It is not part of the registry, browser index, or published site data, and deleting a site's projection must not delete it. The hosting adapter must not expose control objects through the public site distribution. Lock acquisition is an atomic create-if-absent operation using the provider's conditional object-write capability; the lock record contains an opaque operation/run identifier, not credentials or other secrets.
+
+The critical sequences are:
+
+~~~text
+satellite publish:
+  build locally
+  acquire site lock
+  fetch the current deployed registry directly from storage and validate the exact source
+  synchronize that site's index and artifact prefixes
+  release site lock
+
+admin unregister:
+  serialize with other admin registry deployments
+  acquire the same site lock
+  publish the registry without that site
+  delete that site's index and artifact prefixes
+  release site lock
+~~~
+
+The publisher must perform its authoritative registry check **after acquiring the lock**, against the current deployed object rather than a CDN-cached response. If publish acquires the lock first, unregister waits and then deletes the completed projection. If unregister acquires it first, a waiting publisher sees the removed registration and exits without writing. Unrelated sites use different locks and may publish concurrently. Registry JSON updates are whole-object writes, so all admin registry deployments must also be serialized through the single admin deployment path; per-site locks alone do not prevent two admin updates from overwriting each other.
+
+Locks do not expire automatically in v1. This fails closed if a process dies: publishing or unregistering that site remains blocked until an operator confirms no operation is active and removes the stale lock. A time-based lease without fencing is not sufficient, because a paused publisher could resume after its lease expires and write anyway. Lock wait/retry and timeout behavior, and each provider's exact conditional-write implementation, are adapter details to settle during the publishing phase. This is coordination among supported Artifact Pages commands, not an IAM security boundary; callers with direct write credentials can bypass it.
+
 The exact YAML file location and full validation rules remain open. The JSON projection path and its role as the shared runtime representation are fixed for this model. The initial model has one source per site and no mount-path merging; if multi-repository sites are introduced later, the registry must prevent overlapping mount paths.
 
 Registry validation must reject invalid or reserved site IDs, blank names, and unsafe source paths. Source paths are canonical repository-relative POSIX paths: `.` represents the repository root; absolute paths, `..` segments, and backslashes are rejected. The exact `(repository, sourcePath)` pair may be registered only once, while different paths in the same repository may belong to different sites. The publisher also verifies that `sourcePath` exists as a directory inside its checkout. If mount-path merging is introduced, it must also reject:
@@ -603,10 +631,10 @@ The user-facing publishing interface is the `artifact-pages` command. Its provid
 
 The intended GitHub-to-AWS path uses GitHub Actions OIDC rather than long-lived AWS access keys. The admin and satellite workflows use separate roles:
 
-- The admin role deploys the application and registry projection, and removes a site's stored prefixes during unregistration.
-- A satellite role can read `/_indexes/sites.json`, list and synchronize site content beneath `/_indexes/<site>/` and `/_artifacts/<site>/`, but cannot modify the registry object or application plane. Synchronization may require listing output prefixes and deleting stale objects in addition to uploading files.
+- The admin role deploys the application and registry projection, coordinates through the per-site lock during unregistration, and removes a site's stored prefixes.
+- A satellite role can read `/_indexes/sites.json`, coordinate through its site's reserved lock object, and list and synchronize site content beneath `/_indexes/<site>/` and `/_artifacts/<site>/`, but cannot modify the registry object or application plane. Synchronization may require listing output prefixes and deleting stale objects in addition to uploading files.
 
-The Artifact Pages command retrieves and validates the deployed registry before making storage changes, then uses the satellite role to publish. Registration changes do not dynamically change IAM policy; registry enforcement is a command-level workflow guard, not a per-site IAM boundary. Thus the satellite role's writable scope is the content namespaces, excluding the registry object and application plane. In these examples, leading-slash paths are logical URL paths; the corresponding S3 object keys omit the leading slash. For AWS, the conceptual permissions are `s3:GetObject` on `/_indexes/sites.json`, `s3:ListBucket` constrained to the content prefixes, and `s3:PutObject`/`s3:DeleteObject` on content objects. Exact bucket-policy conditions and API operations belong to the AWS adapter design.
+The Artifact Pages command builds locally, acquires the site's lock, retrieves and validates the currently deployed registry, and only then makes storage changes. Registration changes do not dynamically change IAM policy; registry enforcement and the lock protocol are command-level workflow coordination, not a per-site IAM security boundary. Thus the satellite role's writable scope includes its allowed content namespaces and reserved lock object, excluding the registry object and application plane. In these examples, leading-slash paths are logical URL paths; the corresponding S3 object keys omit the leading slash. For AWS, the conceptual permissions include `s3:GetObject` on `/_indexes/sites.json`, `s3:ListBucket` constrained to the content prefixes, conditional `s3:PutObject` plus `s3:GetObject`/`s3:DeleteObject` on the lock object, and `s3:PutObject`/`s3:DeleteObject` on content objects. Exact bucket-policy conditions and API operations belong to the AWS adapter design.
 
 The exact IAM model belongs to the AWS/publisher phase.
 
@@ -666,6 +694,8 @@ The SPA application plane and artifact content plane are independently deployabl
 A site is a logical namespace, not a repository identity.
 
 The initial builder maps one repository source to each site; multi-repository merging is deferred. If it is introduced later, mount paths within a site must not overlap.
+
+Satellite publish and admin unregister for one site serialize through a shared per-site storage lock; admin registry projection updates are serialized through one admin deployment path.
 
 The browser discovers sites through the local `/_indexes/` listing and lightweight per-site metadata, then loads only the active site's artifact index. It does not use browser-side object-storage ListObjects APIs.
 
