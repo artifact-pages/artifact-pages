@@ -76,6 +76,8 @@ Provider-publishing release gate: add deterministic concurrency and recovery tes
 
 The provider smoke test also verifies that uploaded bytes are unchanged and browser-facing `Content-Type` metadata is correct for HTML, Markdown, CSS, JavaScript, JSON, an image, a font, and WASM. Verify that unknown extensions use the documented binary fallback and that uploads do not force attachment disposition or claim an encoding that was not applied. Exercise a page with relative CSS, script, and image references against the deployed origin so incorrect metadata or routing is observable as a browser failure.
 
+Publisher tests also cover symlinked files/directories and unsupported filesystem entries. Publishing must fail clearly without dereferencing a symlink target or exposing data outside the selected source tree.
+
 ## Phase 4 — Reusable distribution
 
 Package the system so another organization can adopt it without copying implementation code.
