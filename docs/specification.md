@@ -655,15 +655,17 @@ The application and content planes have different lifecycles.
 Expected direction:
 
 ~~~text
-/index.html             short/revalidated
-/assets/<hashed>*       long/immutable
-
-/_indexes/sites.json    registration/discovery state; revalidate or expire promptly on changes
-/_indexes/<site>/*      short/revalidated
-/_artifacts/*           mutable stable paths; finite freshness lifetime and revalidation
+/index.html                          no-cache, max-age=0, must-revalidate
+/assets/<content-hash>*              public, max-age=31536000, immutable
+/_indexes/sites.json                 public, max-age=0, s-maxage=60, must-revalidate
+/_indexes/<site>/meta.json           public, max-age=0, s-maxage=60, must-revalidate
+/_indexes/<site>/index.json          public, max-age=0, s-maxage=60, must-revalidate
+/_artifacts/<site>/*                 public, max-age=0, s-maxage=300, must-revalidate
 ~~~
 
-The provider adapter uses bounded freshness and revalidation so registration changes converge through the CDN. For AWS, the publisher's registry read is directly from the S3 object and therefore does not depend on CloudFront cache freshness; browser visibility still requires timely CDN revalidation or invalidation. Normal publish relies on the finite freshness lifetime and revalidation of mutable artifact/index paths; it does not require CDN invalidation for every publish. On unregister, the affected cache set includes `/_indexes/sites.json`, `/_indexes/<site>/*`, and `/_artifacts/<site>/*`; the adapter requests provider invalidation or equivalent revalidation/expiry and reports failure if that request fails. A successful request does not promise instantaneous global cache convergence or revoke content already delivered to clients. The mechanism is provider-specific and does not change IAM permissions.
+These are initial product defaults: browsers must revalidate mutable objects on use, while shared CDN caches may retain site metadata/indexes for up to 60 seconds and stable artifact URLs for up to 300 seconds. Normal publish does not invalidate the CDN; a changed artifact may therefore remain stale at an edge for up to five minutes. The provider adapter must honor these upper bounds or use stricter freshness. Content-hashed application assets may be cached for one year because a content change produces a different URL; unhashed application files must revalidate.
+
+For AWS, the publisher's registry read is directly from the S3 object and therefore does not depend on CloudFront cache freshness; browser visibility still requires timely CDN revalidation or invalidation. On unregister, the affected cache set includes `/_indexes/sites.json`, `/_indexes/<site>/*`, and `/_artifacts/<site>/*`; the adapter requests provider invalidation or equivalent revalidation/expiry and reports failure if that request fails. A successful request does not promise instantaneous global cache convergence or revoke content already delivered to clients. If viewer authentication is enabled, authorization must be enforced before a shared-cache response is served, or the cache key must partition responses by authorization context. Provider implementation details do not change the path sets or freshness contract.
 
 Artifact paths may later become commit-addressed/immutable, which would allow aggressive CDN caching. That is an optimization, not an MVP requirement.
 
