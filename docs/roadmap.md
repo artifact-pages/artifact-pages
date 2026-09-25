@@ -76,6 +76,8 @@ Provider-publishing release gate: add deterministic concurrency and recovery tes
 
 Exercise complete-prefix reconciliation with multiple listing pages and enough stale objects to exceed one provider delete batch. Inject a listing failure before deletion and per-object delete failures; the command must report failure, never infer a complete view from a partial listing, and converge on retry without touching neighboring site or control-plane keys.
 
+Registry tests validate the strict YAML mapping, the empty-registry case, rejection of duplicate/unknown/mistyped fields, and deterministic JSON projection as an ID-sorted array (including an empty array when no sites are registered).
+
 The provider smoke test also verifies that uploaded bytes are unchanged and browser-facing `Content-Type` metadata is correct for HTML, Markdown, CSS, JavaScript, JSON, an image, a font, and WASM. Verify that unknown extensions use the documented binary fallback and that uploads do not force attachment disposition or claim an encoding that was not applied. Exercise a page with relative CSS, script, and image references against the deployed origin so incorrect metadata or routing is observable as a browser failure.
 
 Verify effective browser/CDN cache headers against the cache model: mutable URLs revalidate in browsers, metadata/index responses have at most 60 seconds of shared-cache freshness, artifact responses at most 300 seconds, and content-hashed application assets use the immutable one-year policy. When access control is enabled, confirm authorization runs before shared-cache delivery.
