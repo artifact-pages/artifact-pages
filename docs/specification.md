@@ -416,7 +416,7 @@ How multiple publisher contributions might be staged and merged into that single
 
 ## 11. Registry
 
-The operator/admin repository owns the human-maintained registry as YAML, reviewed and versioned in Git. The YAML is the sole editable source of truth. The admin deployment validates it and generates a public, machine-readable JSON projection at `/_indexes/sites.json`; that generated JSON is never edited independently. The browser and satellite publisher consume the same projection, avoiding separate hand-maintained registries or YAML parsing in the browser.
+The operator/admin repository owns the human-maintained registry as YAML, reviewed and versioned in Git. The YAML is the sole editable source of truth. The admin deployment validates it, generates a public, machine-readable JSON projection, and deploys that object at `/_indexes/sites.json` in the backing storage (for example, S3); the generated JSON is never edited independently. The browser and satellite publisher fetch the deployed projection, avoiding separate hand-maintained registries or YAML parsing in the browser. A satellite publisher does not read the YAML from the admin repository or require a checkout of that repository.
 
 In the initial one-repository-per-site model, each YAML site entry maps a logical site ID to one source repository and an exact `sourcePath`:
 
@@ -433,7 +433,7 @@ The site ID is the stable machine key; `name` is the human-readable display name
 
 For GitHub, source identity is the human-readable `owner/repo` locator together with `sourcePath`; a numeric repository ID is not required. If a repository is renamed or transferred, its locator in the registry must be updated.
 
-The registry's `repository` value is exactly `owner/repo`—not a clone URL, URL with a host, or a value ending in `.git`. Before publishing, the satellite command normalizes the checkout's GitHub remote to `owner/repo` and compares it with the registered value.
+The registry's `repository` value is exactly `owner/repo`—not a clone URL, URL with a host, or a value ending in `.git`. Before publishing, the satellite command retrieves the deployed `/_indexes/sites.json`, identifies the checked-out GitHub repository, normalizes it to `owner/repo`, and compares it with the registered value and `sourcePath`. Registry retrieval and checkout identity detection are separate steps; a Git remote is used only to identify the satellite source, not to locate the registry.
 
 The registry deliberately has no branch/ref field. A site's identity is independent of the publishing branch; the satellite workflow owns the policy for which ref may publish.
 
@@ -455,7 +455,7 @@ Generated registry example:
 }
 ~~~
 
-The registry is publicly readable so a satellite publisher can check that its repository/path is registered for the target site before publishing. The supported publish command rejects an unregistered or mismatched source. This is a product/workflow-level eligibility check, not a dynamically managed cloud IAM boundary; registering or unregistering a site does not update provider permissions.
+The deployed registry object is publicly readable so a satellite publisher can retrieve it and check that its repository/path is registered for the target site before publishing. The supported publish command rejects an unregistered or mismatched source. This is a product/workflow-level eligibility check, not a dynamically managed cloud IAM boundary; registering or unregistering a site does not update provider permissions.
 
 Unregistering a site removes its registration and the administrator deletes that site's stored projection, including `/_indexes/<site>/` and `/_artifacts/<site>/`. The registry does not create a separate paused/disabled state.
 
