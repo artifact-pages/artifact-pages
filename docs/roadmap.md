@@ -71,6 +71,8 @@ Prefer Terraform for the reference infrastructure.
 
 The publishing adapter must coordinate satellite publish and admin unregister with the shared per-site storage-lock contract in the specification. Admin deployments that update the whole sites registry must be serialized. Implement and verify this only when the repository reaches the provider-publishing phase; it is not part of the current local-product implementation.
 
+Provider-publishing release gate: add deterministic concurrency and recovery tests proving both orderings (publish owns the lock first; unregister withdraws the registry first), and verify that the final state is always unregistered with no site objects. Also cover concurrent publishers for different sites, interrupted/partial unregister followed by an idempotent retry, stale-lock recovery losing its ETag compare-and-swap race, and CDN invalidation failure followed by a successful retry. These tests should use provider fakes for repeatability, with a small real-provider smoke test validating each adapter's conditional object-write behavior.
+
 ## Phase 4 — Reusable distribution
 
 Package the system so another organization can adopt it without copying implementation code.
