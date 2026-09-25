@@ -132,11 +132,11 @@ The initial projection shape is:
 
 ### 5.1 Site discovery
 
-The local reference implementation discovers site IDs from the site-directory links in the listing at `/_indexes/` and fetches each site's small `<site>/meta.json` discovery metadata. This metadata contains the display title, artifact count, generated time, and an `artifactIndexUrl` pointer. It does not contain artifact records.
+The local reference implementation discovers site IDs from the site-directory links in the listing at `/_indexes/` and fetches each site's small `<site>/meta.json` discovery metadata. This metadata contains the site's display name, artifact count, generated time, and an `artifactIndexUrl` pointer. It does not contain artifact records.
 
 The browser loads a site's full artifact index only when that site becomes active. It does not fetch all artifact indexes during startup. No separate `sites.json` registry is required for the local product; the listing remains the discovery entry point.
 
-For the registered deployment model, the admin repository's YAML registry is projected to `/_indexes/sites.json`. This static JSON replaces storage directory listing as the site-discovery and publisher-eligibility source. The browser uses its site IDs to fetch per-site `meta.json`; the publisher uses the source mapping to check whether its repository and source path are registered.
+For the registered deployment model, the admin repository's YAML registry is projected to `/_indexes/sites.json`. This static JSON replaces storage directory listing as the site-discovery and publisher-eligibility source. The browser uses its site IDs and names for discovery, then fetches per-site `meta.json`; the publisher uses the source mapping to check whether its repository and source path are registered.
 
 The sites registry changes when sites are registered or unregistered, not on each artifact publication. The per-site metadata and full artifact index remain at `/_indexes/<site>/meta.json` and `/_indexes/<site>/index.json`.
 
@@ -154,7 +154,7 @@ Example discovery metadata:
 ~~~json
 {
   "schemaVersion": 1,
-  "site": { "id": "sre", "title": "SRE" },
+  "site": { "id": "sre", "title": "SRE & Platform" },
   "generatedAt": "2026-09-22T00:00:00Z",
   "artifactCount": 1,
   "artifactIndexUrl": "/_indexes/sre/index.json"
@@ -170,7 +170,7 @@ Example artifact index:
   "schemaVersion": 1,
   "site": {
     "id": "sre",
-    "title": "SRE"
+    "title": "SRE & Platform"
   },
   "generatedAt": "2026-09-22T00:00:00Z",
   "artifacts": [
@@ -424,15 +424,18 @@ In the initial one-repository-per-site model, each YAML site entry maps a logica
 schemaVersion: 1
 sites:
   sre:
+    name: "SRE & Platform"
     repository: company/sre-monorepo
     sourcePath: docs/artifacts
 ~~~
 
-For GitHub, source identity is the human-readable `owner/repo` locator together with `sourcePath`; a numeric repository ID is not required. If a repository is renamed or transferred, its locator in the registry must be updated. The site's presentation title remains in its `meta.json`, rather than being duplicated in the registry.
+The site ID is the stable machine key; `name` is the human-readable display name and may contain spaces or punctuation. `name` is canonical in the registry. Per-site `meta.json` and `index.json` carry it as `site.title` for the browser, generated from the registry rather than edited separately.
+
+For GitHub, source identity is the human-readable `owner/repo` locator together with `sourcePath`; a numeric repository ID is not required. If a repository is renamed or transferred, its locator in the registry must be updated.
 
 The registry deliberately has no branch/ref field. A site's identity is independent of the publishing branch; the satellite workflow owns the policy for which ref may publish.
 
-Site IDs are machine identifiers used in URL routes and storage paths, not display labels. V1 IDs use lowercase ASCII letters and digits separated by single hyphens (`[a-z0-9]+(?:-[a-z0-9]+)*`). Spaces and other punctuation are invalid even if quoted in YAML. Human-readable titles, including titles with spaces, belong in `meta.json`.
+Site IDs are machine identifiers used in URL routes and storage paths, not display labels. V1 IDs use lowercase ASCII letters and digits separated by single hyphens (`[a-z0-9]+(?:-[a-z0-9]+)*`). Spaces and other punctuation are invalid even if quoted in YAML. Human-readable names, including names with spaces, belong in the registry's `name` field.
 
 Generated registry example:
 
@@ -442,6 +445,7 @@ Generated registry example:
   "sites": [
     {
       "id": "sre",
+      "name": "SRE & Platform",
       "repository": "company/sre-monorepo",
       "sourcePath": "docs/artifacts"
     }
@@ -455,7 +459,7 @@ Unregistering a site removes its registration and the administrator deletes that
 
 The exact YAML file location and full validation rules remain open. The JSON projection path and its role as the shared runtime representation are fixed for this model. The initial model has one source per site and no mount-path merging; if multi-repository sites are introduced later, the registry must prevent overlapping mount paths.
 
-Registry validation must reject invalid or reserved site IDs and unsafe source paths. If mount-path merging is introduced, it must also reject:
+Registry validation must reject invalid or reserved site IDs, blank names, and unsafe source paths. Source paths are canonical repository-relative POSIX paths: `.` represents the repository root; absolute paths, `..` segments, and backslashes are rejected. The exact `(repository, sourcePath)` pair may be registered only once, while different paths in the same repository may belong to different sites. The publisher also verifies that `sourcePath` exists as a directory inside its checkout. If mount-path merging is introduced, it must also reject:
 
 - duplicate mount paths
 - ancestor/descendant mount overlap
