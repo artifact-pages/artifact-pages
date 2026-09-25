@@ -73,6 +73,8 @@ The publishing adapter must coordinate satellite publish and admin unregister wi
 
 Provider-publishing release gate: add deterministic concurrency and recovery tests proving both orderings (publish owns the lock first; unregister withdraws the registry first), and verify that the final state is always unregistered with no site objects. Also cover concurrent publishers for different sites, interrupted/partial unregister followed by an idempotent retry, stale-lock recovery losing its ETag compare-and-swap race, and CDN invalidation failure followed by a successful retry. For publish, interrupt after artifact upload, after index/meta replacement, and during stale-object deletion; retrying the same desired source must converge to an index whose artifact references exist, with no stale objects left under the site prefix. Tests should use provider fakes for repeatability, with a small real-provider smoke test validating each adapter's conditional object-write behavior.
 
+The provider smoke test also verifies that uploaded bytes are unchanged and browser-facing `Content-Type` metadata is correct for HTML, Markdown, CSS, JavaScript, JSON, an image, a font, and WASM. Verify that unknown extensions use the documented binary fallback and that uploads do not force attachment disposition or claim an encoding that was not applied. Exercise a page with relative CSS, script, and image references against the deployed origin so incorrect metadata or routing is observable as a browser failure.
+
 ## Phase 4 — Reusable distribution
 
 Package the system so another organization can adopt it without copying implementation code.

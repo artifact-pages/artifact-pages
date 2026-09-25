@@ -265,6 +265,37 @@ Relative resources should work naturally because artifact directory structure is
 
 Artifact-owned resources should normally use relative URLs that stay within their artifact directory. A root-relative URL such as `/assets/report.css` starts at the origin root and does not retain the `/_artifacts/<site>/...` namespace; enough `../` segments can also leave the artifact tree. Sites may contain identical relative paths and filenames; while references stay within their artifact directories, their full URLs remain distinct because each site's tree has its own prefix. Missing artifact resources should return a real 404, not the SPA fallback document.
 
+### HTTP representation metadata
+
+Publishing preserves each source file's bytes and relative path, and sets the stored object's `Content-Type` from a deterministic, case-insensitive extension map. Do not depend on the publishing host's operating-system MIME database for formats the product supports. The required mappings are listed below. The generated `meta.json`, `index.json`, and `sites.json` are `application/json; charset=utf-8`. Unrecognized extensions use `application/octet-stream`; they are still copied and addressable, but the builder does not inspect their contents to guess a type.
+
+The initial required mappings are:
+
+| Extensions | `Content-Type` |
+| --- | --- |
+| `.html`, `.htm` | `text/html; charset=utf-8` |
+| `.md`, `.markdown` | `text/markdown; charset=utf-8` |
+| `.css` | `text/css; charset=utf-8` |
+| `.js`, `.mjs`, `.cjs` | `text/javascript; charset=utf-8` |
+| `.json`, `.map` | `application/json; charset=utf-8` |
+| `.webmanifest` | `application/manifest+json; charset=utf-8` |
+| `.svg` | `image/svg+xml; charset=utf-8` |
+| `.png` | `image/png` |
+| `.jpg`, `.jpeg` | `image/jpeg` |
+| `.gif` | `image/gif` |
+| `.webp` | `image/webp` |
+| `.avif` | `image/avif` |
+| `.ico` | `image/vnd.microsoft.icon` |
+| `.woff` | `font/woff` |
+| `.woff2` | `font/woff2` |
+| `.ttf` | `font/ttf` |
+| `.otf` | `font/otf` |
+| `.pdf` | `application/pdf` |
+| `.wasm` | `application/wasm` |
+| unrecognized extension | `application/octet-stream` |
+
+Do not set `Content-Disposition: attachment` by default; HTML and other browser-native artifacts must remain directly viewable. Do not set `Content-Encoding` unless the stored bytes have actually been encoded that way. Provider/CDN-side transparent compression is allowed, but must preserve normal browser decoding and must not change the source objects or their URLs. Cache policy is defined separately in the caching section; `Content-Type` selection must not alter it.
+
 ## 7. Artifact viewer
 
 HTML artifacts are displayed in an iframe. Markdown artifacts are rendered by the native reader inside the application workspace.
