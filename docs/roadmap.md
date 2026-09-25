@@ -25,6 +25,7 @@ Target user experience:
 - Left sidebar shows a searchable/filterable artifact tree.
 - Main pane renders HTML in an iframe and Markdown in the native reader.
 - Indexed document routes retain their source-relative filename and extension.
+- E2E covers artifact routes and relative resources with spaces, Unicode, and reserved URL characters, including direct load and reload round-trips.
 - An optional right panel switches between indexed contents and artifact details (last committer, update date, and source).
 - Direct navigation and reload restore the same state.
 - Site discovery uses lightweight metadata; only the active site's artifact index is loaded.

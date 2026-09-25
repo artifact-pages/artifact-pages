@@ -210,6 +210,8 @@ explicitly and do not act as implicit directory landing pages. Thus `foo.html` a
 distinct pages and routes. Static resources such as CSS, JavaScript, images, and fonts are available
 to pages but are not independently indexed.
 
+Artifact `id` and `path` values use slash-separated, source-relative UTF-8 names and are not URL-encoded in JSON. When producing `artifactUrl` or a logical `/:site/...` route, percent-encode each path segment independently and retain `/` only as the segment separator. This keeps spaces, `#`, `?`, `%`, and non-ASCII characters from changing URL structure; use URL-path encoding, not form encoding (`+` is a literal plus, not a space), and decode each segment at most once. Do not slugify or otherwise rewrite valid names. Reject filenames that are not valid UTF-8 rather than serializing a lossy replacement into the index. Storage keys preserve the source-relative directory structure and names.
+
 For Markdown, the first H1 supplies the display title, with a readable filename fallback when there
 is no H1. Markdown headings are indexed for Contents, and generated heading IDs match the reader.
 HTML retains its `<title>`-based display title and existing precomputed heading behavior.
