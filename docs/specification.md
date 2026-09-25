@@ -425,6 +425,8 @@ The eventual platform registry is the authority for:
 - mountPath
 - publish authorization
 
+The registry is intended to be a human-maintained YAML file in the application/operator repository. In the initial one-repository-per-site model, a GitHub source is identified by its human-readable `owner/repo` locator together with the exact `sourcePath`. A numeric GitHub repository ID is not required and is not part of the initial registry contract. If a repository is renamed or transferred, its locator in the registry must be updated; an immutable ID can be reconsidered later if that operational tradeoff proves insufficient.
+
 Repository workflows should not be able to arbitrarily choose another source's destination namespace.
 
 Normalization rules should reject at least:
@@ -435,7 +437,7 @@ Normalization rules should reject at least:
 - reserved platform namespaces
 - invalid site IDs
 
-The exact registry format is not required for the local browser milestone.
+The exact YAML file location and field layout are not required for the local browser milestone. This decision defines the source identity without freezing the complete registry schema.
 
 ## 12. Publish-time metadata
 
