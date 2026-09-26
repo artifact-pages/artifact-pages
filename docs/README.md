@@ -9,6 +9,7 @@ Start with the [thesis](thesis.md) for the product's purpose, the [specification
 - [Publishing object map](architecture/publish-object-map.html) — repositories, operations, and stored objects in the proposed deployment.
 - [Publishing object flow](architecture/publish-object-flow.html) — the same proposed deployment as a step-by-step flow.
 - [Preview publishing contract](architecture/preview-publishing-contract.html) — proposed static objects, write order, retention, and verification for post-MVP previews.
+- [Preview decision register](architecture/preview-decisions.md) — accepted behavior, open product choices, and technical verification status.
 
 ## UI studies
 
