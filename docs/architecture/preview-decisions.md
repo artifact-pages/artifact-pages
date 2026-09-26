@@ -18,7 +18,7 @@ This page tracks what remains to decide or prove for pre-publish previews. The [
 
 | ID | Decision | Current recommendation | What changes with the choice |
 | --- | --- | --- | --- |
-| P4 | If a PR closes without a merge and no later production publish occurs, may its preview remain discoverable until provider removal? | Yes for the initial release; adding a workflow solely for retirement is worse for installation UX. The next ordinary production publish reconciles closed PR groups. | A closed-but-still-readable preview can remain on the list until another publish or provider removal. The alternative requires an extra event workflow or browser-side GitHub lookup. |
+| P4 | If a PR closes without a merge and no later main-branch production publish occurs, may its preview remain discoverable until provider removal? | Yes for the initial release; adding a workflow solely for retirement is worse for installation UX. The next ordinary production publish checks every catalog PR group and retires closed ones. | A closed-but-still-readable preview can remain on the list until another publish or provider removal. The alternative requires an extra event workflow or browser-side GitHub lookup. |
 
 P4 is the remaining product-facing preview choice recorded here. It does not block continued technical exploration.
 
@@ -29,7 +29,7 @@ P4 is the remaining product-facing preview choice recorded here. It does not blo
 | P1 | Accepted | Site home provides a quiet link to the dedicated Previews list. It does not display an inline preview list or require a potentially stale count. |
 | P2 | Accepted | The hosting provider exclusively owns preview lifetime. The application stores no expiry timestamp, runs no expiry timer, and does not promise exact-time removal. Catalog candidates are checked against provider manifest availability when read. |
 | P3 | Accepted | Use [B: header context](../ui/ui-preview-identity-concepts.html#b). Keep the document H1 untouched. When PR provenance is unambiguous, its number is a subtle link to that PR; manual previews have no PR link. No app-managed expiry label or persistent reader strip. |
-| P5 | Accepted | Do not require a PR-close or scheduled-cleanup workflow. GitHub-aware production publish identifies merged and already-closed PR groups before mutation, then retires them from discovery after the production projection is committed at origin. Completed revision bytes and fixed URLs remain provider-owned. |
+| P5 | Accepted | Do not require a PR-close or scheduled-cleanup workflow. The GitHub-aware main-branch production workflow identifies PRs merged in the new commits and reconciles every existing catalog group: closed PR or missing provider manifest means removal. Commit one site-scoped catalog update after the production projection is committed at origin. Completed revision bytes and fixed URLs remain provider-owned. |
 
 ## Technical decisions to settle during implementation
 
@@ -42,7 +42,7 @@ P4 is the remaining product-facing preview choice recorded here. It does not blo
 | T5 | Verify | Concurrency, idempotency and crash recovery. | Run both unregister/pre-publish orderings, simultaneous group updates, partial uploads, manifest-before-catalog failure, same-head mismatch and retirement retry. See the [proof matrix](preview-publishing-contract.html#proof). |
 | T6 | Verify | Snapshot-relative resources and document navigation. | Exercise HTML and Markdown with CSS, JS, images, fonts, changed-document links and unchanged-document links; establish the boundary for dynamic/root-relative URLs. |
 | T7 | Verify | Lazy catalog and availability-check cost at multi-site scale. | Confirm opening one site's Previews does not download other sites' catalogs; measure transfer, manifest checks, parse, memory and input-to-paint with many sites. If checking every candidate is too costly, revise the discovery projection without adding app-managed expiry. |
-| T8 | Proposed — technical | Retirement and stale references without another workflow. | The normal production publish resolves merged PRs from newly introduced commits and checks recorded PR group states, then retires exact groups after the production switch under the site lock. Other catalog writes prune missing-manifest references; browser availability checks hide missing candidates between writes. Prove merge/squash/rebase association, closed-unmerged reconciliation, lock/CAS behavior, and the response to GitHub API failure. No app-managed expiry clock or standalone cleanup Action. |
+| T8 | Proposed — technical | Retirement and stale references without another workflow. | The main-branch production publish unions two predicates over its site catalog: groups for newly merged PRs, plus closed PR groups or groups whose provider manifest is missing. Commit one conditional catalog update after the production projection under the site lock; other catalog writes also prune missing-manifest references. Browser availability checks hide missing candidates between writes. Prove merge/squash/rebase association, closed-unmerged reconciliation, manual groups, lock/CAS behavior, and the response to GitHub API failure. No app-managed expiry clock or standalone cleanup Action. |
 
 ## Accepted product contract
 
