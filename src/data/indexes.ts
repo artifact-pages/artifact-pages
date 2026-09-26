@@ -4,14 +4,21 @@ const INDEX_ROOT = '/_indexes'
 const SITE_ID_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/
 
 export class IndexLoadError extends Error {
+  readonly status?: number
+
   constructor(
     message: string,
     readonly url: string,
-    options?: ErrorOptions,
+    options?: ErrorOptions & { status?: number },
   ) {
     super(message, options)
     this.name = 'IndexLoadError'
+    this.status = options?.status
   }
+}
+
+export function isValidSiteId(siteId: string) {
+  return SITE_ID_PATTERN.test(siteId)
 }
 
 type Fetcher = typeof fetch
@@ -26,7 +33,7 @@ async function fetchText(url: string, fetcher: Fetcher): Promise<string> {
   }
 
   if (!response.ok) {
-    throw new IndexLoadError(`Request failed with status ${response.status}: ${url}.`, url)
+    throw new IndexLoadError(`Request failed with status ${response.status}: ${url}.`, url, { status: response.status })
   }
 
   return response.text()
@@ -48,7 +55,7 @@ function extractSiteIds(directoryListing: string): string[] {
         return []
       }
     })
-    .filter((siteId) => SITE_ID_PATTERN.test(siteId))
+    .filter(isValidSiteId)
 
   return [...new Set(siteIds)].sort()
 }
@@ -81,7 +88,7 @@ export async function loadSiteIndex(
   fetcher: Fetcher = fetch,
   indexUrl = defaultSiteIndexUrl(siteId),
 ): Promise<SiteIndex> {
-  if (!SITE_ID_PATTERN.test(siteId)) {
+  if (!isValidSiteId(siteId)) {
     throw new IndexLoadError(`Invalid site id: ${siteId}.`, indexUrl)
   }
 
@@ -91,7 +98,7 @@ export async function loadSiteIndex(
   try {
     const response = await fetcher(url)
     if (!response.ok) {
-      throw new IndexLoadError(`Request failed with status ${response.status}: ${url}.`, url)
+      throw new IndexLoadError(`Request failed with status ${response.status}: ${url}.`, url, { status: response.status })
     }
     payload = await response.json()
   } catch (error) {
@@ -159,7 +166,7 @@ async function loadSiteDiscoveryMetadata(
   try {
     const response = await fetcher(url)
     if (!response.ok) {
-      throw new IndexLoadError(`Request failed with status ${response.status}: ${url}.`, url)
+      throw new IndexLoadError(`Request failed with status ${response.status}: ${url}.`, url, { status: response.status })
     }
     payload = await response.json()
   } catch (error) {

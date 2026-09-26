@@ -1,6 +1,6 @@
 # Unknown-site error exposes an internal storage path
 
-- Status: Open
+- Status: Done
 - Priority: P2
 - Area: Site loading error state
 
@@ -20,6 +20,12 @@ The page explains that the requested site was not found and makes the site list 
 
 ## Acceptance criteria
 
-- [ ] A missing site shows a specific, plain-language not-found state with an “All sites” action.
-- [ ] The primary message does not display `/_indexes/` or another storage path.
-- [ ] A genuine index-loading failure is distinguishable from an unknown-site response.
+- [x] A missing site shows a specific, plain-language not-found state with an “All sites” action.
+- [x] The primary message does not display `/_indexes/` or another storage path.
+- [x] A genuine index-loading failure is distinguishable from an unknown-site response.
+
+## Verification
+
+- `npm run build`
+- Playwright: unknown site, invalid site ID, and HTTP 503 index failure cases
+- In-app browser: verified the not-found state and “All sites” navigation

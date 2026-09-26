@@ -1203,3 +1203,33 @@ test('artifact title and site home navigation stay clear on narrow screens', asy
   await expect(page).toHaveURL(/\/sre\/?$/)
   await expect(page.getByRole('heading', { name: 'SRE' })).toBeVisible()
 })
+
+test('unknown sites show a clear not-found state and safe recovery action', async ({ page }) => {
+  await page.goto('/unknown-site')
+
+  await expect(page.getByRole('heading', { name: 'Site not found' })).toBeVisible()
+  await expect(page.getByRole('alert')).toHaveText('We could not find a site named “unknown-site”.')
+  await expect(page.locator('.status-content')).not.toContainText('/_indexes/')
+
+  await page.getByRole('button', { name: '← All sites' }).click()
+  await expect(page).toHaveURL('/')
+  await expect(page.getByRole('heading', { name: 'Choose a site' })).toBeVisible()
+})
+
+test('invalid site IDs also use the not-found state', async ({ page }) => {
+  await page.goto('/unknown_site')
+
+  await expect(page.getByRole('heading', { name: 'Site not found' })).toBeVisible()
+  await expect(page.getByRole('alert')).toHaveText('We could not find a site named “unknown_site”.')
+  await expect(page.locator('.status-content')).not.toContainText('/_indexes/')
+})
+
+test('a failed known-site index load stays distinct from an unknown site', async ({ page }) => {
+  await page.route('**/_indexes/sre/index.json', (route) => route.fulfill({ status: 503, body: 'temporarily unavailable' }))
+  await page.goto('/sre')
+
+  await expect(page.getByRole('heading', { name: 'Unable to load this site' })).toBeVisible()
+  await expect(page.getByRole('alert')).toHaveText('The site could not be loaded (HTTP 503). Please try again in a moment.')
+  await expect(page.getByRole('heading', { name: 'Site not found' })).toHaveCount(0)
+  await expect(page.locator('.status-content')).not.toContainText('/_indexes/')
+})
