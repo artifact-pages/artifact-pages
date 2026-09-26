@@ -57,11 +57,14 @@ export function SitePicker({
           <button
             type="button"
             className="site-picker-search-trigger"
-            aria-label="Search sites (⌘ K)"
+            aria-label="Search sites"
+            aria-keyshortcuts="Meta+K Control+K"
+            title="Search sites (⌘ K)"
             onClick={() => setPaletteOpen(true)}
           >
             <Icon name="search" size={16} />
-            <span>Search sites...</span>
+            <span className="site-picker-search-desktop-label">Search sites...</span>
+            <span className="site-picker-search-mobile-label">Tap to search sites</span>
             <kbd>⌘ K</kbd>
           </button>
           {sortedSites.length === 0 ? (

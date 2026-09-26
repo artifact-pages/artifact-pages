@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import type { ArtifactIndexEntry, SiteIndex } from '../domain/index'
 import { RECENT_SECTION_MINIMUM_ARTIFACT_COUNT } from '../domain/navigation-sections'
 import { artifactRouteHref } from '../routing'
@@ -69,7 +69,13 @@ export function SiteHome({
           siteId={index.site.id}
           query={normalizedQuery}
           onOpenArtifact={onOpenArtifact}
-          emptyMessage="Nothing in this site matches your search. Use ⌘ K, then @, to find another site."
+          emptyMessage={(
+            <>
+              Nothing in this site matches your search.{' '}
+              <span className="search-help-keyboard">Use ⌘ K, then @, to find another site.</span>
+              <span className="search-help-touch">Use the site switcher to find another site.</span>
+            </>
+          )}
         />
       ) : (
         <>
@@ -138,7 +144,7 @@ function ArtifactSection({
   siteId: string
   query?: string
   onOpenArtifact: (href: string) => void
-  emptyMessage: string
+  emptyMessage: ReactNode
 }) {
   return (
     <section className="artifact-list-section" aria-label={title}>

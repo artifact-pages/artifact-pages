@@ -363,6 +363,15 @@ kbd {
   font-size: 9px;
 }
 
+.mobile-search-hint,
+.site-picker-search-mobile-label {
+  display: none;
+}
+
+.search-help-touch {
+  display: none;
+}
+
 .filter-clear {
   display: grid;
   width: 20px;
@@ -2028,6 +2037,10 @@ mark {
   font-size: 12px;
 }
 
+.site-picker-search-trigger .site-picker-search-mobile-label {
+  display: none;
+}
+
 .site-picker-search-trigger kbd {
   padding: 3px 5px;
   border: 1px solid var(--line);
@@ -2231,6 +2244,38 @@ mark {
 
   .site-picker-count {
     display: none;
+  }
+
+  .site-search kbd,
+  .site-picker-search-trigger kbd,
+  .sidebar-palette-trigger kbd {
+    display: none;
+  }
+
+  .sidebar-palette-trigger {
+    min-width: 66px;
+    height: 28px;
+    padding: 0 5px;
+    color: var(--text-secondary);
+    background: var(--surface);
+    font-size: 10px;
+  }
+
+  .sidebar-palette-trigger .mobile-search-hint,
+  .site-picker-search-trigger .site-picker-search-mobile-label {
+    display: inline;
+  }
+
+  .site-picker-search-trigger .site-picker-search-desktop-label {
+    display: none;
+  }
+
+  .search-help-keyboard {
+    display: none;
+  }
+
+  .search-help-touch {
+    display: inline;
   }
 
   .palette-backdrop {

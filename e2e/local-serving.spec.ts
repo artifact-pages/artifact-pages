@@ -62,7 +62,7 @@ test('nginx index listing discovers sites and opens a site home', async ({ page 
 
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Choose a site' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Search sites (⌘ K)' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Search sites' })).toBeVisible()
   await expect(page.getByRole('button', { name: /SRE/ })).toBeVisible()
   await expect(page.getByRole('button', { name: /Frontend/ })).toBeVisible()
   await expect(page.getByRole('button', { name: /HTML Showcase/ })).toBeVisible()
@@ -79,6 +79,70 @@ test('nginx index listing discovers sites and opens a site home', async ({ page 
     'Markdown styles in the reader',
     'Latency Retrospective',
   ])
+})
+
+test('mobile search affordances describe their scope and open the matching palette', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/')
+
+  const siteSearchTrigger = page.getByRole('button', { name: 'Search sites' })
+  await expect(siteSearchTrigger).toBeVisible()
+  await expect(siteSearchTrigger.getByText('Tap to search sites')).toBeVisible()
+  await expect(siteSearchTrigger.locator('kbd')).toBeHidden()
+  await siteSearchTrigger.click()
+  const sitePalette = page.getByRole('dialog', { name: 'Command palette' })
+  await expect(sitePalette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' }))
+    .toHaveAttribute('placeholder', 'Search sites...')
+  await page.keyboard.press('Escape')
+
+  await page.getByRole('button', { name: /SRE/ }).click()
+  await expect(page).toHaveURL(/\/sre$/)
+  const siteSearch = page.locator('.site-search')
+  await expect(siteSearch.getByRole('searchbox', { name: 'Search artifacts in SRE' })).toBeVisible()
+  await expect(siteSearch.locator('kbd')).toBeHidden()
+  await siteSearch.getByRole('searchbox', { name: 'Search artifacts in SRE' }).fill('no-such-artifact')
+  await expect(page.getByText('Use the site switcher to find another site.')).toBeVisible()
+  await expect(page.getByText('Use ⌘ K, then @, to find another site.')).toBeHidden()
+
+  const collapsedSearch = page.getByRole('button', { name: 'Search pages in SRE' })
+  await expect(collapsedSearch).toBeVisible()
+  await collapsedSearch.click()
+  const pagePalette = page.getByRole('dialog', { name: 'Command palette' })
+  await expect(pagePalette.locator('.palette-scope')).toHaveText('SRE only')
+  await page.keyboard.press('Escape')
+
+  await page.getByRole('button', { name: 'Expand navigation' }).click()
+  const sidebarSearch = page.getByRole('button', { name: 'Search pages in SRE' })
+  await expect(sidebarSearch).toBeVisible()
+  await expect(sidebarSearch.getByText('Search pages')).toBeVisible()
+  await expect(sidebarSearch.locator('kbd')).toBeHidden()
+  await page.getByRole('textbox', { name: 'Filter SRE navigation' }).fill('no-such-artifact')
+  await expect(page.locator('.sidebar-empty .search-help-touch')).toBeVisible()
+  await expect(page.locator('.sidebar-empty .search-help-keyboard')).toBeHidden()
+  await page.getByRole('textbox', { name: 'Filter SRE navigation' }).fill('')
+  await sidebarSearch.click()
+  await expect(page.getByRole('dialog', { name: 'Command palette' }).locator('.palette-scope')).toHaveText('SRE only')
+})
+
+test('desktop search affordances keep keyboard shortcuts visible', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.goto('/')
+
+  const siteSearchTrigger = page.getByRole('button', { name: 'Search sites' })
+  await expect(siteSearchTrigger.locator('kbd')).toBeVisible()
+  await expect(siteSearchTrigger.getByText('Search sites...')).toBeVisible()
+
+  await page.getByRole('button', { name: /SRE/ }).click()
+  await expect(page).toHaveURL(/\/sre$/)
+  const pageSearch = page.getByRole('searchbox', { name: 'Search artifacts in SRE' })
+  await expect(page.locator('.site-search kbd')).toBeVisible()
+  await pageSearch.fill('no-such-artifact')
+  await expect(page.getByText('Use ⌘ K, then @, to find another site.')).toBeVisible()
+  await expect(page.getByText('Use the site switcher to find another site.')).toBeHidden()
+  await pageSearch.fill('')
+  const sidebarSearch = page.getByRole('button', { name: 'Search pages in SRE' })
+  await expect(sidebarSearch.locator('kbd')).toBeVisible()
+  await expect(sidebarSearch).toHaveAttribute('aria-keyshortcuts', 'Meta+K Control+K')
 })
 
 test('the SRE index date is labeled as generation time and follows artifact updates', async ({ page }) => {
@@ -152,7 +216,7 @@ test('site discovery loads lightweight metadata for all sites but detailed index
   await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
   await expect.poll(() => [...indexRequests]).toEqual(['/_indexes/sre/index.json'])
 
-  const paletteButton = page.getByRole('button', { name: 'Open command palette (⌘ K)' })
+  const paletteButton = page.getByRole('button', { name: 'Search pages in SRE' })
   await paletteButton.click()
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
@@ -327,7 +391,7 @@ test('artifact actions pin locally without changing selection or Browse, and exp
 
 test('the command palette supports Ctrl+J/K navigation and opens the selected result', async ({ page }) => {
   await page.goto('/sre')
-  await page.getByRole('button', { name: 'Open command palette (⌘ K)' }).click()
+  await page.getByRole('button', { name: 'Search pages in SRE' }).click()
 
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
@@ -392,7 +456,7 @@ test('large site indexes use their compact palette scoring profile', async ({ pa
 
   await page.goto('/sre/architecture/platform-topology/index.html')
   await expect(page.locator('iframe.artifact-frame')).toBeVisible()
-  await page.getByRole('button', { name: 'Open command palette (⌘ K)' }).click()
+  await page.getByRole('button', { name: 'Search pages in SRE' }).click()
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
   await search.fill('platform')
@@ -404,7 +468,7 @@ test('recent reads persist across reloads and remain scoped while the query is r
   await page.goto('/sre')
 
   const openPalette = async () => {
-    await page.getByRole('button', { name: 'Open command palette (⌘ K)' }).click()
+    await page.getByRole('button', { name: 'Search pages in SRE' }).click()
     return page.getByRole('dialog', { name: 'Command palette' })
   }
 
@@ -444,7 +508,7 @@ test('recent reads persist across reloads and remain scoped while the query is r
 
 test('normal page search stays on the current site while @ and > select explicit scopes', async ({ page }) => {
   await page.goto('/sre')
-  await page.getByRole('button', { name: 'Open command palette (⌘ K)' }).click()
+  await page.getByRole('button', { name: 'Search pages in SRE' }).click()
 
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
@@ -474,7 +538,7 @@ test('normal page search stays on the current site while @ and > select explicit
 
 test('site search updates correctly for sequential typing, backspace, and a new query', async ({ page }) => {
   await page.goto('/sre')
-  await page.getByRole('button', { name: 'Open command palette (⌘ K)' }).click()
+  await page.getByRole('button', { name: 'Search pages in SRE' }).click()
 
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
@@ -493,7 +557,7 @@ test('site search updates correctly for sequential typing, backspace, and a new 
 
 test('artifact-context # search opens a heading and closes the palette', async ({ page }) => {
   await page.goto('/sre/incidents/checkout-latency/index.html')
-  await page.getByRole('button', { name: 'Open command palette (⌘ K)' }).click()
+  await page.getByRole('button', { name: 'Search pages in SRE' }).click()
 
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
@@ -1040,7 +1104,7 @@ test('the command palette shortcut works while the artifact iframe has focus', a
 
 test('command palette fuzzy search shows matched characters in titles and paths', async ({ page }) => {
   await page.goto('/sre/incidents/checkout-latency/index.html')
-  await page.getByRole('button', { name: 'Open command palette (⌘ K)' }).click()
+  await page.getByRole('button', { name: 'Search pages in SRE' }).click()
 
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
@@ -1143,7 +1207,7 @@ test('the collapsed rail searches artifacts and switches sites', async ({ page }
   await page.emulateMedia({ colorScheme: 'dark' })
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
 
-  await page.getByRole('button', { name: 'Search artifacts and pages' }).click()
+  await page.getByRole('button', { name: 'Search pages in SRE' }).click()
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
   await search.fill('>theme')
@@ -1160,7 +1224,7 @@ test('the collapsed rail searches artifacts and switches sites', async ({ page }
   await expect.poll(() => page.evaluate(() => localStorage.getItem('git-artifact-pages-theme'))).toBe('dark')
   await page.getByRole('button', { name: 'Collapse sidebar' }).click()
 
-  await page.getByRole('button', { name: 'Search artifacts and pages' }).click()
+  await page.getByRole('button', { name: 'Search pages in SRE' }).click()
   const systemPalette = page.getByRole('dialog', { name: 'Command palette' })
   const systemSearch = systemPalette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
   await systemSearch.fill('>Use system theme')
@@ -1173,7 +1237,7 @@ test('the collapsed rail searches artifacts and switches sites', async ({ page }
   await page.emulateMedia({ colorScheme: 'light' })
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
 
-  await page.getByRole('button', { name: 'Search artifacts and pages' }).click()
+  await page.getByRole('button', { name: 'Search pages in SRE' }).click()
   const searchPalette = page.getByRole('dialog', { name: 'Command palette' })
   const artifactSearch = searchPalette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
   await artifactSearch.fill('Platform topology')
@@ -1279,7 +1343,7 @@ test('breadcrumb menus close after browser history navigates to another artifact
   await page.goto('/showcase')
 
   const searchForArtifact = async (query: string) => {
-    await page.getByRole('button', { name: 'Open command palette (⌘ K)' }).click()
+    await page.getByRole('button', { name: 'Search pages in HTML Showcase' }).click()
     const palette = page.getByRole('dialog', { name: 'Command palette' })
     const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
     await search.fill(query)

@@ -1,6 +1,6 @@
 # Mobile search advertises a desktop shortcut
 
-- Status: Open
+- Status: Done
 - Priority: P3
 - Area: Search entry points on touch screens
 
@@ -19,6 +19,13 @@ Touch users see a clear search action and scope; keyboard shortcuts remain avail
 
 ## Acceptance criteria
 
-- [ ] Phone-sized layouts favor a touch-oriented label or affordance over a visible desktop shortcut chip.
-- [ ] The collapsed rail's search control has a clear accessible name and opens the expected search surface.
-- [ ] Desktop keyboard shortcuts remain available and discoverable on desktop.
+- [x] Phone-sized layouts favor a touch-oriented label or affordance over a visible desktop shortcut chip.
+- [x] The collapsed rail's search control has a clear accessible name and opens the expected search surface.
+- [x] Desktop keyboard shortcuts remain available and discoverable on desktop.
+
+## Verification
+
+- `npm run build`
+- Playwright: mobile and desktop search affordances, scopes, no-result guidance, and palette opening
+- Full Playwright suite: 37 tests passed
+- Sub-agent review: no remaining actionable findings

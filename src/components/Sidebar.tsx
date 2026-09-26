@@ -208,15 +208,16 @@ export function Sidebar({
           <button
             type="button"
             className="sidebar-palette-trigger"
-            aria-label="Open command palette (⌘ K)"
+            aria-label={`Search pages in ${index.site.title}`}
             aria-keyshortcuts="Meta+K Control+K"
-            title="Open command palette (⌘ K)"
+            title={`Search pages in ${index.site.title} (⌘ K)`}
             onClick={(event) => {
               event.currentTarget.focus()
               onOpenPalette('')
             }}
           >
             <kbd>⌘ K</kbd>
+            <span className="mobile-search-hint">Search pages</span>
           </button>
         </div>
       </div>
@@ -231,7 +232,8 @@ export function Sidebar({
             {matchCount === 0 ? (
               <p className="sidebar-empty">
                 Nothing in {index.site.title} matches.<br />
-                <span>Press ⌘ K, then @, to find another site.</span>
+                <span className="search-help-keyboard">Press ⌘ K, then @, to find another site.</span>
+                <span className="search-help-touch">Use the site switcher to find another site.</span>
               </p>
             ) : (
               <ArtifactTree

@@ -356,8 +356,8 @@ export function ArtifactWorkspace({
             </button>
             <button
               className="collapsed-rail-button"
-              title="Search artifacts and pages (⌘ K)"
-              aria-label="Search artifacts and pages"
+              title={`Search pages in ${index.site.title} (⌘ K)`}
+              aria-label={`Search pages in ${index.site.title}`}
               aria-keyshortcuts="Meta+K Control+K"
               onClick={(event) => {
                 event.currentTarget.focus()
