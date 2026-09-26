@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>サイトを公開して、見つけて、読む</title>
+  <title>利用者の操作から見るサイト公開と閲覧</title>
   <style>
     :root {
       color-scheme: light;
@@ -13,8 +13,10 @@
       --quiet: #89938f;
       --surface: #fafbfa;
       --site: #edf5f1;
+      --reader: #f1f5f7;
       --stroke: #cbd4cf;
       --flow: #678579;
+      --read-flow: #58798a;
     }
 
     * { box-sizing: border-box; }
@@ -22,25 +24,27 @@
       margin: 0;
       background: var(--canvas);
       color: var(--ink);
-      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
-    main { width: 100%; margin: 0 auto; padding: 36px clamp(20px, 4vw, 72px) 48px; }
-    header { max-width: 880px; margin-bottom: 27px; }
-    h1 { margin: 0; font-size: clamp(28px, 3vw, 42px); line-height: 1.16; letter-spacing: -.04em; }
-    .intro { margin: 12px 0 0; color: var(--muted); font-size: 16px; }
-    .diagram-scroll { overflow-x: auto; padding: 4px 0 12px; }
-    svg { display: block; width: 100%; min-width: 1100px; height: auto; }
+    main { width: 100%; margin: 0 auto; padding: 32px clamp(20px, 3vw, 56px) 44px; }
+    header { margin-bottom: 20px; }
+    h1 { margin: 0; font-size: clamp(27px, 2.7vw, 38px); line-height: 1.17; letter-spacing: -.04em; }
+    .intro { max-width: 960px; margin: 10px 0 0; color: var(--muted); font-size: 15px; }
+    .diagram-scroll { overflow-x: auto; padding: 4px 0 10px; }
+    svg { display: block; width: 100%; min-width: 1450px; height: auto; }
     .node rect { fill: var(--surface); stroke: var(--stroke); stroke-width: 1.2; }
     .node.site rect { fill: var(--site); stroke: #b9cec2; }
-    .eyebrow { fill: var(--quiet); font-size: 12px; font-weight: 700; letter-spacing: 1.25px; }
-    .title { fill: var(--ink); font-size: 22px; font-weight: 650; }
-    .copy { fill: var(--muted); font-size: 15px; }
-    .site-copy { fill: var(--ink); font-size: 16px; }
-    .edge { fill: none; stroke: var(--flow); stroke-width: 2; marker-end: url(#arrow); vector-effect: non-scaling-stroke; }
-    .edge-label { fill: var(--muted); font-size: 13px; font-weight: 550; paint-order: stroke; stroke: var(--canvas); stroke-width: 8px; stroke-linejoin: round; }
-    .caption { margin: 6px 0 0; color: var(--quiet); font-size: 13px; }
+    .node.reader rect { fill: var(--reader); stroke: #c6d5dc; }
+    .eyebrow { fill: var(--quiet); font-size: 11px; font-weight: 700; letter-spacing: 1.15px; }
+    .title { fill: var(--ink); font-size: 20px; font-weight: 650; }
+    .copy { fill: var(--muted); font-size: 14px; }
+    .copy-strong { fill: var(--ink); font-size: 14px; font-weight: 550; }
+    .edge { fill: none; stroke: var(--flow); stroke-width: 1.8; marker-end: url(#arrow); vector-effect: non-scaling-stroke; }
+    .edge.read { stroke: var(--read-flow); marker-end: url(#arrow-read); }
+    .edge-label { fill: var(--muted); font-size: 12px; font-weight: 550; paint-order: stroke; stroke: var(--canvas); stroke-width: 7px; stroke-linejoin: round; }
+    .caption { margin: 4px 0 0; color: var(--quiet); font-size: 12px; }
     @media (max-width: 760px) {
-      main { padding-top: 26px; }
+      main { padding-top: 24px; }
       .intro { font-size: 14px; }
     }
   </style>
@@ -48,66 +52,163 @@
 <body>
   <main>
     <header>
-      <h1>サイトを公開して、見つけて、読む</h1>
-      <p class="intro">管理する人、ページを公開する人、読む人。それぞれの行動が、ひとつの公開サイトにつながります。</p>
+      <h1>利用者の操作から見る、サイト公開と閲覧</h1>
+      <p class="intro">誰が何をすると、サイト一覧・ページの探し方・閲覧画面に何が反映されるか。役割ごとの開始点から、利用者に見える流れと機能をつないでいます。</p>
     </header>
 
     <div class="diagram-scroll">
-      <svg viewBox="0 0 1680 820" role="img" aria-labelledby="journey-title journey-desc">
-        <title id="journey-title">サイトを公開して読むまでの利用者の流れ</title>
-        <desc id="journey-desc">サービス管理者がサイトを登録し、サイト担当者がGitでページを更新して公開します。閲覧者はサイトを選び、検索や階層からHTMLやMarkdownのページを見つけて読みます。登録解除されたサイトは一覧から外れます。</desc>
+      <svg viewBox="0 0 2200 1390" role="img" aria-labelledby="journey-title journey-desc">
+        <title id="journey-title">管理者、サイト担当者、閲覧者の操作と画面の関係</title>
+        <desc id="journey-desc">管理者はサイトを登録または登録解除し、閲覧者が選べるサイトを管理します。サイト担当者はGit上のHTMLやMarkdownを更新して公開し、ページ一覧と検索結果に反映します。閲覧者はサイトを選び、最近更新されたページ、Pinned、Browse、フィルター、コマンドパレットからページを探します。HTMLとMarkdownを読み、ContentsやDetailsを開き、ピン留め、URL共有、ソースや履歴の確認ができます。</desc>
         <defs>
-          <marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
-            <path d="M0 0 L9 4.5 L0 9 Z" fill="#678579" />
+          <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+            <path d="M0 0 L8 4 L0 8 Z" fill="#678579" />
+          </marker>
+          <marker id="arrow-read" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+            <path d="M0 0 L8 4 L0 8 Z" fill="#58798a" />
           </marker>
         </defs>
 
         <g aria-hidden="true">
-          <path class="edge" d="M450 205 C530 205 548 315 625 345" />
-          <text class="edge-label" x="485" y="245">サイトを登録する</text>
+          <path class="edge" d="M390 190 H490" />
+          <path class="edge" d="M850 190 H970" />
+          <text class="edge-label" x="875" y="174">サイト一覧に反映</text>
 
-          <path class="edge" d="M450 615 C535 615 550 505 625 475" />
-          <text class="edge-label" x="475" y="570">ページを更新して公開する</text>
+          <path class="edge" d="M390 535 H490" />
+          <path class="edge" d="M850 535 H970" />
+          <text class="edge-label" x="868" y="519">公開ページと情報を更新</text>
+          <path class="edge" d="M1080 680 V755" />
+          <text class="edge-label" x="1095" y="722">一覧・検索・Browseに反映</text>
 
-          <path class="edge" d="M1055 410 H1230" />
-          <text class="edge-label" x="1084" y="390">サイトを選んで利用する</text>
+          <path class="edge read" d="M390 1050 H490" />
+          <path class="edge read" d="M850 1050 C910 1050 905 305 970 305" />
+          <text class="edge-label" x="868" y="1019">サイトを選択（@でサイト検索）</text>
+
+          <path class="edge read" d="M1270 360 V755" />
+          <text class="edge-label" x="1285" y="570">サイトを開く</text>
+          <path class="edge read" d="M1380 930 H1515" />
+          <text class="edge-label" x="1412" y="913">ページを開く</text>
+          <path class="edge read" d="M1810 755 V815" />
+          <text class="edge-label" x="1825" y="790">任意の操作</text>
         </g>
 
         <g class="node">
-          <rect x="70" y="120" width="380" height="170" rx="8" />
-          <text class="eyebrow" x="98" y="158">サイトの管理</text>
-          <text class="title" x="98" y="198">サービス管理者</text>
-          <text class="copy" x="98" y="235">公開するサイトを登録する</text>
-          <text class="copy" x="98" y="261">公開を終えるときは登録解除する</text>
+          <rect x="55" y="105" width="335" height="170" rx="8" />
+          <text class="eyebrow" x="82" y="141">サイトの管理</text>
+          <text class="title" x="82" y="179">サービス管理者</text>
+          <text class="copy" x="82" y="216">公開するサイトを登録する</text>
+          <text class="copy" x="82" y="242">公開終了時に登録解除する</text>
         </g>
 
         <g class="node">
-          <rect x="70" y="530" width="380" height="170" rx="8" />
-          <text class="eyebrow" x="98" y="568">ページの公開</text>
-          <text class="title" x="98" y="608">サイト担当者</text>
-          <text class="copy" x="98" y="645">GitでHTMLやMarkdownを更新する</text>
-          <text class="copy" x="98" y="671">更新したページを公開する</text>
+          <rect x="490" y="95" width="360" height="190" rx="8" />
+          <text class="eyebrow" x="518" y="132">サイト登録の結果</text>
+          <text class="title" x="518" y="170">サイトを公開対象にする</text>
+          <text class="copy" x="518" y="210">登録後、サイト選択に現れる</text>
+          <text class="copy" x="518" y="238">解除後、一覧から外れて閲覧不可</text>
         </g>
 
         <g class="node site">
-          <rect x="625" y="300" width="430" height="220" rx="12" />
-          <text class="eyebrow" x="660" y="346">登録されたサイト</text>
-          <text class="title" x="660" y="391">公開サイト</text>
-          <text class="site-copy" x="660" y="431">登録されたサイトが一覧に現れる</text>
-          <text class="site-copy" x="660" y="464">公開したページが検索・閲覧できる</text>
-          <text class="copy" x="660" y="495">登録解除後は一覧から外れ、閲覧できなくなる</text>
+          <rect x="970" y="85" width="410" height="275" rx="10" />
+          <text class="eyebrow" x="998" y="123">閲覧者に見える一覧</text>
+          <text class="title" x="998" y="162">サイトを選ぶ</text>
+          <text class="copy-strong" x="998" y="202">登録済みサイトだけが表示される</text>
+          <text class="copy" x="998" y="235">サイト名で見分ける</text>
+          <text class="copy" x="998" y="265">サイトのページ数を確認する</text>
+          <text class="copy" x="998" y="317">登録解除されたサイトは選択できない</text>
         </g>
 
         <g class="node">
-          <rect x="1230" y="325" width="380" height="170" rx="8" />
-          <text class="eyebrow" x="1258" y="363">サイトの利用</text>
-          <text class="title" x="1258" y="403">閲覧者</text>
-          <text class="copy" x="1258" y="440">サイトを選び、検索や階層から探す</text>
-          <text class="copy" x="1258" y="466">ページを読み、URLを共有する</text>
+          <rect x="55" y="445" width="335" height="180" rx="8" />
+          <text class="eyebrow" x="82" y="482">ページの管理</text>
+          <text class="title" x="82" y="520">サイト担当者</text>
+          <text class="copy" x="82" y="559">Git上のページを更新する</text>
+          <text class="copy" x="82" y="587">更新内容を公開する</text>
+        </g>
+
+        <g class="node">
+          <rect x="490" y="425" width="360" height="220" rx="8" />
+          <text class="eyebrow" x="518" y="463">公開・更新</text>
+          <text class="title" x="518" y="501">ページを公開・更新する</text>
+          <text class="copy" x="518" y="541">HTMLとMarkdownを対象にする</text>
+          <text class="copy" x="518" y="571">ファイル名・拡張子・階層を保つ</text>
+          <text class="copy" x="518" y="611">Git側で変更し、再公開する</text>
+        </g>
+
+        <g class="node">
+          <rect x="970" y="425" width="410" height="255" rx="10" />
+          <text class="eyebrow" x="998" y="463">公開される情報</text>
+          <text class="title" x="998" y="501">公開されたページ</text>
+          <text class="copy-strong" x="998" y="541">タイトル・ファイル名・パスで識別</text>
+          <text class="copy" x="998" y="573">HTML / Markdown の種別が分かる</text>
+          <text class="copy" x="998" y="605">最終更新日・最終コミッターを確認</text>
+          <text class="copy" x="998" y="649">詳細からソースリポジトリへ移動できる</text>
+        </g>
+
+        <g class="node">
+          <rect x="55" y="955" width="335" height="180" rx="8" />
+          <text class="eyebrow" x="82" y="992">利用する人</text>
+          <text class="title" x="82" y="1030">閲覧者</text>
+          <text class="copy" x="82" y="1069">サイトを探し、ページを読む</text>
+          <text class="copy" x="82" y="1097">必要ならURLを共有する</text>
+        </g>
+
+        <g class="node reader">
+          <rect x="490" y="900" width="360" height="300" rx="8" />
+          <text class="eyebrow" x="518" y="938">FIND A PAGE</text>
+          <text class="title" x="518" y="976">サイトとページを探す</text>
+          <text class="copy-strong" x="518" y="1017">最近更新されたページ</text>
+          <text class="copy" x="518" y="1047">Pinned と階層 Browse</text>
+          <text class="copy" x="518" y="1077">サイドバーのフィルター</text>
+          <text class="copy" x="518" y="1117">⌘K：タイトル・パス・ファイル名で検索</text>
+          <text class="copy" x="518" y="1147">@：サイトを検索</text>
+          <text class="copy" x="518" y="1180">パンくずから階層をたどる</text>
+        </g>
+
+        <g class="node reader">
+          <rect x="970" y="755" width="410" height="350" rx="10" />
+          <text class="eyebrow" x="998" y="793">サイト内のナビゲーション</text>
+          <text class="title" x="998" y="831">サイトのホームとナビゲーション</text>
+          <text class="copy-strong" x="998" y="872">Recently updated</text>
+          <text class="copy" x="998" y="901">すぐ読める最近のページ</text>
+          <text class="copy-strong" x="998" y="943">Pinned / Browse</text>
+          <text class="copy" x="998" y="972">ピン留めしたページと元の階層ツリー</text>
+          <text class="copy-strong" x="998" y="1014">⌘K コマンドパレット</text>
+          <text class="copy" x="998" y="1043">サイト選択中はページ検索を優先する</text>
+          <text class="copy" x="998" y="1073">0件なら次の候補へ。@はサイト検索</text>
+        </g>
+
+        <g class="node reader">
+          <rect x="1515" y="375" width="620" height="380" rx="10" />
+          <text class="eyebrow" x="1545" y="414">ページ表示</text>
+          <text class="title" x="1545" y="453">ページを読む</text>
+          <text class="copy-strong" x="1545" y="494">HTMLはページ表示、Markdownは読みやすい文書表示</text>
+          <text class="copy" x="1545" y="529">Markdown：見出し・コード・画像・Mermaid</text>
+          <text class="copy" x="1545" y="564">Contentsは必要なときに開く</text>
+          <text class="copy" x="1545" y="599">Detailsは必要なときに開く</text>
+          <text class="copy" x="1545" y="646">Details：更新日・最終コミッター・ソースURL</text>
+          <text class="copy" x="1545" y="681">パンくずの階層を押すとサイドバーも移動</text>
+          <text class="copy" x="1545" y="716">ページのURLにはファイル名と拡張子が残る</text>
+        </g>
+
+        <g class="node reader">
+          <rect x="1515" y="815" width="620" height="345" rx="10" />
+          <text class="eyebrow" x="1545" y="854">ページの補助操作</text>
+          <text class="title" x="1545" y="893">ページに対する操作</text>
+          <text class="copy-strong" x="1545" y="934">Pin / Unpin</text>
+          <text class="copy" x="1685" y="934">自分の閲覧用ショートカット</text>
+          <text class="copy-strong" x="1545" y="970">Copy link</text>
+          <text class="copy" x="1685" y="970">このアプリで開けるURLを共有</text>
+          <text class="copy-strong" x="1545" y="1006">Open source / View history</text>
+          <text class="copy" x="1778" y="1006">Git側で内容や履歴を確認</text>
+          <text class="copy-strong" x="1545" y="1042">Open raw artifact</text>
+          <text class="copy" x="1705" y="1042">元のファイルを直接表示</text>
+          <text class="copy" x="1545" y="1094">名前変更・移動・削除など、ページ内容の編集はここでは行わない</text>
+          <text class="copy" x="1545" y="1124">ページ自体を変えるときはGit側で更新して再公開する</text>
         </g>
       </svg>
     </div>
-    <p class="caption">サイトの登録・ページの公開・閲覧は、それぞれの役割で行います。</p>
+    <p class="caption">管理者・サイト担当者・閲覧者から始まる矢印で、画面に現れる情報と操作をたどれます。</p>
   </main>
 </body>
 </html>
