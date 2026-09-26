@@ -136,4 +136,4 @@ It also checks that `@` site lookup does not fetch another site's artifact index
 - The SPA is stable infrastructure; artifact content and site indexes change independently.
 - Search, recent items, tree navigation, and table-of-contents metadata are precomputed at publish time where practical.
 
-See [the thesis](docs/thesis.md), [specification](docs/specification.md), and [roadmap](docs/roadmap.md).
+Browse the [documentation map](docs/README.md), or go directly to the [thesis](docs/thesis.md), [specification](docs/specification.md), and [roadmap](docs/roadmap.md).

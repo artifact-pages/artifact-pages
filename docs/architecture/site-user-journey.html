@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Git Artifact Pages — Site User Journey</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --canvas: #f3f5f3;
+      --ink: #202a27;
+      --muted: #65716d;
+      --quiet: #89938f;
+      --surface: #fafbfa;
+      --site: #edf5f1;
+      --reader: #f1f5f7;
+      --stroke: #cbd4cf;
+      --flow: #678579;
+      --read-flow: #58798a;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--canvas);
+      color: var(--ink);
+      font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main { width: 100%; margin: 0 auto; padding: 32px clamp(20px, 3vw, 56px) 44px; }
+    header { margin-bottom: 20px; }
+    h1 { margin: 0; font-size: clamp(27px, 2.7vw, 38px); line-height: 1.17; letter-spacing: -.04em; }
+    .intro { max-width: 960px; margin: 10px 0 0; color: var(--muted); font-size: 15px; }
+    .diagram-scroll { overflow-x: auto; padding: 4px 0 10px; }
+    svg { display: block; width: 100%; min-width: 1450px; height: auto; }
+    .node rect { fill: var(--surface); stroke: var(--stroke); stroke-width: 1.2; }
+    .node.site rect { fill: var(--site); stroke: #b9cec2; }
+    .node.reader rect { fill: var(--reader); stroke: #c6d5dc; }
+    .eyebrow { fill: var(--quiet); font-size: 11px; font-weight: 700; letter-spacing: 1.15px; }
+    .title { fill: var(--ink); font-size: 20px; font-weight: 650; }
+    .copy { fill: var(--muted); font-size: 14px; }
+    .copy-strong { fill: var(--ink); font-size: 14px; font-weight: 550; }
+    .edge { fill: none; stroke: var(--flow); stroke-width: 1.8; marker-end: url(#arrow); vector-effect: non-scaling-stroke; }
+    .edge.read { stroke: var(--read-flow); marker-end: url(#arrow-read); }
+    .edge-label { fill: var(--muted); font-size: 12px; font-weight: 550; paint-order: stroke; stroke: var(--canvas); stroke-width: 7px; stroke-linejoin: round; }
+    .caption { margin: 4px 0 0; color: var(--quiet); font-size: 12px; }
+    @media (max-width: 760px) {
+      main { padding-top: 24px; }
+      .intro { font-size: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>From site publication to reading</h1>
+      <p class="intro">See how registration and publishing shape the site list, page discovery, and reading experience. The diagram connects each responsibility to the outcomes visible to readers.</p>
+    </header>
+
+    <div class="diagram-scroll">
+      <svg viewBox="0 0 2200 1390" role="img" aria-labelledby="journey-title journey-desc">
+        <title id="journey-title">How registration, publishing, and reading relate</title>
+        <desc id="journey-desc">An authorized operator registers or unregisters sites, controlling which sites readers can select. A publisher updates HTML and Markdown in Git and publishes them to the page list and search results. Readers choose a site, find pages through Recently updated, Pinned, Browse, filters, and the command palette, then read HTML or Markdown and optionally open Contents or Details, pin a page, share its URL, or inspect its source and history.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+            <path d="M0 0 L8 4 L0 8 Z" fill="#678579" />
+          </marker>
+          <marker id="arrow-read" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+            <path d="M0 0 L8 4 L0 8 Z" fill="#58798a" />
+          </marker>
+        </defs>
+
+        <g aria-hidden="true">
+          <path class="edge" d="M390 190 H490" />
+          <path class="edge" d="M850 190 H970" />
+          <text class="edge-label" x="875" y="174">updates the available site list</text>
+
+          <path class="edge" d="M390 535 H490" />
+          <path class="edge" d="M850 535 H970" />
+          <text class="edge-label" x="868" y="519">publishes pages and metadata</text>
+          <path class="edge" d="M1080 680 V755" />
+          <text class="edge-label" x="1095" y="722">updates listing, search, and Browse</text>
+
+          <path class="edge read" d="M390 1050 H490" />
+          <path class="edge read" d="M850 1050 C910 1050 905 305 970 305" />
+          <text class="edge-label" x="868" y="1019">choose a site (@ searches sites)</text>
+
+          <path class="edge read" d="M1270 360 V755" />
+          <text class="edge-label" x="1285" y="570">open a site</text>
+          <path class="edge read" d="M1380 930 H1515" />
+          <text class="edge-label" x="1412" y="913">open a page</text>
+          <path class="edge read" d="M1810 755 V815" />
+          <text class="edge-label" x="1825" y="790">optional actions</text>
+        </g>
+
+        <g class="node">
+          <rect x="55" y="105" width="335" height="170" rx="8" />
+          <text class="eyebrow" x="82" y="141">REGISTRY RESPONSIBILITY</text>
+          <text class="title" x="82" y="179">Authorized operator</text>
+          <text class="copy" x="82" y="216">Register a site for publication</text>
+          <text class="copy" x="82" y="242">Unregister it when publication ends</text>
+        </g>
+
+        <g class="node">
+          <rect x="490" y="95" width="360" height="190" rx="8" />
+          <text class="eyebrow" x="518" y="132">REGISTRATION EFFECT</text>
+          <text class="title" x="518" y="170">Make a site available</text>
+          <text class="copy" x="518" y="210">Registered sites appear in the picker</text>
+          <text class="copy" x="518" y="238">Unregistered sites are withdrawn</text>
+        </g>
+
+        <g class="node site">
+          <rect x="970" y="85" width="410" height="275" rx="10" />
+          <text class="eyebrow" x="998" y="123">VISIBLE TO READERS</text>
+          <text class="title" x="998" y="162">Choose a site</text>
+          <text class="copy-strong" x="998" y="202">Only registered sites appear</text>
+          <text class="copy" x="998" y="235">Recognize sites by display name</text>
+          <text class="copy" x="998" y="265">See each site's page count</text>
+          <text class="copy" x="998" y="317">Withdrawn sites cannot be selected</text>
+        </g>
+
+        <g class="node">
+          <rect x="55" y="445" width="335" height="180" rx="8" />
+          <text class="eyebrow" x="82" y="482">PUBLISH RESPONSIBILITY</text>
+          <text class="title" x="82" y="520">Publisher</text>
+          <text class="copy" x="82" y="559">Update pages in Git</text>
+          <text class="copy" x="82" y="587">Publish the changes</text>
+        </g>
+
+        <g class="node">
+          <rect x="490" y="425" width="360" height="220" rx="8" />
+          <text class="eyebrow" x="518" y="463">PUBLISH OR UPDATE</text>
+          <text class="title" x="518" y="501">Publish pages</text>
+          <text class="copy" x="518" y="541">Include HTML and Markdown</text>
+          <text class="copy" x="518" y="571">Preserve names, extensions, and paths</text>
+          <text class="copy" x="518" y="611">Change in Git, then publish again</text>
+        </g>
+
+        <g class="node">
+          <rect x="970" y="425" width="410" height="255" rx="10" />
+          <text class="eyebrow" x="998" y="463">PUBLISHED METADATA</text>
+          <text class="title" x="998" y="501">Published pages</text>
+          <text class="copy-strong" x="998" y="541">Identified by title, name, and path</text>
+          <text class="copy" x="998" y="573">HTML or Markdown format is visible</text>
+          <text class="copy" x="998" y="605">See update date and last committer</text>
+          <text class="copy" x="998" y="649">Open the source repository from Details</text>
+        </g>
+
+        <g class="node">
+          <rect x="55" y="955" width="335" height="180" rx="8" />
+          <text class="eyebrow" x="82" y="992">READING RESPONSIBILITY</text>
+          <text class="title" x="82" y="1030">Reader</text>
+          <text class="copy" x="82" y="1069">Find a site and read its pages</text>
+          <text class="copy" x="82" y="1097">Share a link when useful</text>
+        </g>
+
+        <g class="node reader">
+          <rect x="490" y="900" width="360" height="300" rx="8" />
+          <text class="eyebrow" x="518" y="938">FIND A PAGE</text>
+          <text class="title" x="518" y="976">Find sites and pages</text>
+          <text class="copy-strong" x="518" y="1017">Recently updated</text>
+          <text class="copy" x="518" y="1047">Pinned and hierarchical Browse</text>
+          <text class="copy" x="518" y="1077">Sidebar filter</text>
+          <text class="copy" x="518" y="1117">⌘K searches titles, paths, and filenames</text>
+          <text class="copy" x="518" y="1147">@ searches sites</text>
+          <text class="copy" x="518" y="1180">Follow the hierarchy with breadcrumbs</text>
+        </g>
+
+        <g class="node reader">
+          <rect x="970" y="755" width="410" height="350" rx="10" />
+          <text class="eyebrow" x="998" y="793">SITE NAVIGATION</text>
+          <text class="title" x="998" y="831">Site home and navigation</text>
+          <text class="copy-strong" x="998" y="872">Recently updated</text>
+          <text class="copy" x="998" y="901">Quick access to recent pages</text>
+          <text class="copy-strong" x="998" y="943">Pinned / Browse</text>
+          <text class="copy" x="998" y="972">Pinned shortcuts and the original tree</text>
+          <text class="copy-strong" x="998" y="1014">⌘K command palette</text>
+          <text class="copy" x="998" y="1043">Prioritizes page search within a site</text>
+          <text class="copy" x="998" y="1073">Falls through on no match; @ scopes to sites</text>
+        </g>
+
+        <g class="node reader">
+          <rect x="1515" y="375" width="620" height="380" rx="10" />
+          <text class="eyebrow" x="1545" y="414">READING VIEW</text>
+          <text class="title" x="1545" y="453">Read a page</text>
+          <text class="copy-strong" x="1545" y="494">HTML renders as a page; Markdown as a document</text>
+          <text class="copy" x="1545" y="529">Markdown supports headings, code, images, Mermaid</text>
+          <text class="copy" x="1545" y="564">Open Contents when needed</text>
+          <text class="copy" x="1545" y="599">Open Details when needed</text>
+          <text class="copy" x="1545" y="646">Details: date, last committer, and source URL</text>
+          <text class="copy" x="1545" y="681">Breadcrumb navigation also expands the sidebar</text>
+          <text class="copy" x="1545" y="716">Artifact URLs retain the filename and extension</text>
+        </g>
+
+        <g class="node reader">
+          <rect x="1515" y="815" width="620" height="345" rx="10" />
+          <text class="eyebrow" x="1545" y="854">OPTIONAL PAGE ACTIONS</text>
+          <text class="title" x="1545" y="893">Actions for a page</text>
+          <text class="copy-strong" x="1545" y="934">Pin / Unpin</text>
+          <text class="copy" x="1685" y="934">A personal reading shortcut</text>
+          <text class="copy-strong" x="1545" y="970">Copy link</text>
+          <text class="copy" x="1685" y="970">Share a URL in this application</text>
+          <text class="copy-strong" x="1545" y="1006">Open source / View history</text>
+          <text class="copy" x="1778" y="1006">Inspect content and history in Git</text>
+          <text class="copy-strong" x="1545" y="1042">Open raw artifact</text>
+          <text class="copy" x="1705" y="1042">Open the source file directly</text>
+          <text class="copy" x="1545" y="1094">Page content is not renamed, moved, or deleted here</text>
+          <text class="copy" x="1545" y="1124">Change the source in Git, then publish again</text>
+        </g>
+      </svg>
+    </div>
+    <p class="caption">Follow the arrows from registry, publishing, and reader responsibilities to the information and actions visible in the product.</p>
+  </main>
+</body>
+</html>

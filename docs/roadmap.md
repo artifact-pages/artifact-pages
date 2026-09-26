@@ -31,7 +31,7 @@ Target user experience:
 - Site discovery uses lightweight metadata; only the active site's artifact index is loaded.
 - Normal page search stays within the active site; `@` searches site metadata.
 
-The single-site and multi-site palette benchmark is recorded in [palette-search-benchmark.md](./palette-search-benchmark.md). It includes 20 sites × 1,000 artifacts, character-by-character input, browser heap, load/parse/search timings, and an eager-chunk comparison. Eager chunks did not improve ready-to-use time or memory, so keep product-level sharding and inverted indexes deferred until a different loading model demonstrates a user-visible benefit. Local transfer timings compare projection/browser costs but are not a forecast of CDN or public-network latency.
+The single-site and multi-site palette benchmark is recorded in [palette-search-benchmark.md](./research/palette-search-benchmark.md). It includes 20 sites × 1,000 artifacts, character-by-character input, browser heap, load/parse/search timings, and an eager-chunk comparison. Eager chunks did not improve ready-to-use time or memory, so keep product-level sharding and inverted indexes deferred until a different loading model demonstrates a user-visible benefit. Local transfer timings compare projection/browser costs but are not a forecast of CDN or public-network latency.
 
 VRT is optional at this stage and should focus on the application shell rather than arbitrary artifact contents.
 

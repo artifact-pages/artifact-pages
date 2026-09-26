@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="ja">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Git Artifact Pages — オブジェクト関係図</title>
+  <title>Git Artifact Pages — Publishing Object Map</title>
   <style>
     :root {
       color-scheme: light;
@@ -82,23 +82,23 @@
   <main>
     <header>
       <div>
-        <h1>repo・処理・objectを一度ずつ置いた関係図</h1>
-        <p class="intro">同じ管理repoや保存objectは一つのノードだけにし、どの処理が読み書きするかを矢印でつないでいます。</p>
+        <h1>One node for each repository, operation, and object</h1>
+        <p class="intro">Each repository and stored object appears once. Arrows show which operations read or write each object.</p>
       </div>
-      <p class="principle"><strong>Gitが正本</strong>ストレージはGitから再生成できる配信projection。CDNはその読み取りcacheです。</p>
+      <p class="principle"><strong>Git is the source of truth</strong>Storage is a delivery projection that can be regenerated from Git. The CDN is a read cache.</p>
     </header>
 
-    <div class="legend" aria-label="関係図の凡例">
-      <span><i class="dot write" aria-hidden="true"></i>作成・更新</span>
-      <span><i class="dot read" aria-hidden="true"></i>読み込み</span>
-      <span><i class="dot delete" aria-hidden="true"></i>削除・無効化要求</span>
-      <span><i class="dot lock" aria-hidden="true"></i>同一siteのlock</span>
+    <div class="legend" aria-label="Diagram legend">
+      <span><i class="dot write" aria-hidden="true"></i>Create or update</span>
+      <span><i class="dot read" aria-hidden="true"></i>Read</span>
+      <span><i class="dot delete" aria-hidden="true"></i>Delete or request invalidation</span>
+      <span><i class="dot lock" aria-hidden="true"></i>Per-site lock</span>
     </div>
 
     <div class="map-scroll">
       <svg viewBox="0 0 1840 1280" role="img" aria-labelledby="map-title map-desc">
-        <title id="map-title">Git Artifact Pagesのrepo、処理、objectの関係図</title>
-        <desc id="map-desc">Git Artifact Pages repo、管理repo、site repoは一つずつ配置されています。管理repoからアプリ配備、registry更新、登録解除へ分岐します。site publishと登録解除は同じsite lockを使い、storageの各objectへ作用します。</desc>
+        <title id="map-title">Relationships between Git Artifact Pages repositories, operations, and objects</title>
+        <desc id="map-desc">The Git Artifact Pages repository, admin repository, and site repository each appear once. The admin repository feeds application deployment, registry updates, and unregister operations. Site publishing and unregistering share a per-site lock and act on stored objects.</desc>
         <defs>
           <marker id="arrow-neutral" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#8d9993" /></marker>
           <marker id="arrow-read" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#39718a" /></marker>
@@ -118,7 +118,7 @@
           <text class="edge-label" x="332" y="145">bundle</text>
 
           <path class="edge" marker-end="url(#arrow-neutral)" d="M300 445 H350 V215 H410" />
-          <text class="edge-label" x="306" y="431">配備設定</text>
+          <text class="edge-label" x="306" y="431">deployment config</text>
 
           <path class="edge" marker-end="url(#arrow-neutral)" d="M300 500 C342 500 367 460 410 460" />
           <text class="edge-label" x="328" y="486">sites.yaml</text>
@@ -127,7 +127,7 @@
           <text class="edge-label" x="327" y="789">sourcePath</text>
 
           <path class="edge" marker-end="url(#arrow-neutral)" d="M300 210 H342 V310 H410" />
-          <text class="edge-label" x="307" y="292">docs/ · local例</text>
+          <text class="edge-label" x="307" y="292">docs/ · local example</text>
 
           <path class="edge write" d="M710 155 H820" />
           <path class="edge write" d="M710 310 H820" />
@@ -135,10 +135,10 @@
           <path class="edge write" d="M710 720 H820" />
 
           <path class="edge delete" d="M700 90 V64 H1240 V445 H1260" />
-          <text class="edge-label delete" x="925" y="58">index.htmlのURLだけ無効化</text>
+          <text class="edge-label delete" x="925" y="58">invalidate the index.html URL only</text>
 
           <path class="edge read" d="M820 510 H770 V675 H710" />
-          <text class="edge-label read" x="718" y="590">publisherが直接読む</text>
+          <text class="edge-label read" x="718" y="590">publisher reads directly</text>
 
           <path class="edge lock" d="M710 785 H755 V1015 H820" />
           <path class="edge lock" d="M710 1115 H790 V1055 H820" />
@@ -154,13 +154,13 @@
 
           <path class="edge delete" d="M710 1060 H780 V790 H820" />
           <path class="edge write" d="M620 1160 V1200 H1210 V515 H1180" />
-          <text class="edge-label write" x="875" y="1190">先にregistryから除外</text>
+          <text class="edge-label write" x="875" y="1190">remove from registry first</text>
 
           <path class="edge delete" d="M700 1160 V1230 H1355 V605" />
-          <text class="edge-label delete" x="925" y="1245">unregister後にinvalidationを要求</text>
+          <text class="edge-label delete" x="925" y="1245">request invalidation after unregister</text>
 
           <path class="edge delete" d="M50 560 H22 V1090 H410" />
-          <text class="edge-label delete" x="29" y="1020" transform="rotate(-90 29 1020)">同じ管理repoから登録解除</text>
+          <text class="edge-label delete" x="29" y="1020" transform="rotate(-90 29 1020)">unregister from the same admin repository</text>
         </g>
 
         <g class="node source">
@@ -168,64 +168,64 @@
           <text class="eyebrow" x="68" y="116">OSS REPOSITORY · 1 NODE</text>
           <text class="title" x="68" y="145">Git Artifact Pages repo</text>
           <text class="copy" x="68" y="174">Vite application source</text>
-          <text class="copy" x="68" y="198">docs/ はlocal siteのsource</text>
+          <text class="copy" x="68" y="198">docs/ is the source for the local site</text>
         </g>
 
         <g class="node source">
           <rect x="50" y="430" width="250" height="160" />
           <text class="eyebrow" x="68" y="456">ADMIN REPOSITORY · 1 NODE</text>
-          <text class="title" x="68" y="488">管理repo</text>
+          <text class="title" x="68" y="488">Admin repository</text>
           <text class="mono" x="68" y="517">sites.yaml</text>
-          <text class="copy" x="68" y="542">site登録の正本</text>
-          <text class="copy" x="68" y="566">アプリ配備設定も管理</text>
+          <text class="copy" x="68" y="542">Source of truth for site membership</text>
+          <text class="copy" x="68" y="566">Also holds application deployment config</text>
         </g>
 
         <g class="node source">
           <rect x="50" y="735" width="250" height="130" />
           <text class="eyebrow" x="68" y="761">SATELLITE REPOSITORIES</text>
-          <text class="title" x="68" y="793">siteごとのrepo</text>
-          <text class="copy" x="68" y="822">登録済みsourcePathの内容</text>
-          <text class="copy" x="68" y="846">（このrepoでは docs/ が例）</text>
+          <text class="title" x="68" y="793">Site repository</text>
+          <text class="copy" x="68" y="822">Contents of the registered sourcePath</text>
+          <text class="copy" x="68" y="846">(docs/ is the example in this repository)</text>
         </g>
 
         <g class="node process">
           <rect x="410" y="90" width="300" height="140" />
           <text class="eyebrow" x="430" y="117">APPLICATION DEPLOY</text>
-          <text class="title" x="430" y="149">アプリ配備</text>
-          <text class="copy" x="430" y="178">assetsを先に配置</text>
-          <text class="copy" x="430" y="202">index.htmlを最後に更新</text>
+          <text class="title" x="430" y="149">Deploy application</text>
+          <text class="copy" x="430" y="178">Upload assets first</text>
+          <text class="copy" x="430" y="202">Update index.html last</text>
         </g>
 
         <g class="node process">
           <rect x="410" y="260" width="300" height="100" />
           <text class="eyebrow" x="430" y="286">LOCAL EXAMPLE</text>
-          <text class="title" x="430" y="317">docs siteを生成</text>
-          <text class="copy" x="430" y="340">index + contentをlocalへ配置</text>
+          <text class="title" x="430" y="317">Build local docs site</text>
+          <text class="copy" x="430" y="340">Write the index and content locally</text>
         </g>
 
         <g class="node process">
           <rect x="410" y="390" width="300" height="140" />
           <text class="eyebrow" x="430" y="417">REGISTRY PROJECTION</text>
-          <text class="title" x="430" y="449">台帳をJSONへ投影</text>
-          <text class="copy" x="430" y="478">検証してID順に生成</text>
-          <text class="copy" x="430" y="502">登録変更時に反映</text>
+          <text class="title" x="430" y="449">Project registry as JSON</text>
+          <text class="copy" x="430" y="478">Validate and sort by ID</text>
+          <text class="copy" x="430" y="502">Apply when registrations change</text>
         </g>
 
         <g class="node process">
           <rect x="410" y="635" width="300" height="175" />
           <text class="eyebrow" x="430" y="662">SITE PUBLISH</text>
-          <text class="title" x="430" y="694">site projectionを同期</text>
-          <text class="copy" x="430" y="723">lock取得後にregistry照合</text>
+          <text class="title" x="430" y="694">Sync site projection</text>
+          <text class="copy" x="430" y="723">Acquire lock, then verify registry</text>
           <text class="copy" x="430" y="747">artifact → index → meta</text>
-          <text class="copy" x="430" y="771">最後にstale objectsを削除</text>
+          <text class="copy" x="430" y="771">Delete stale objects last</text>
         </g>
 
         <g class="node process">
           <rect x="410" y="1010" width="300" height="150" />
           <text class="eyebrow" x="430" y="1037">SITE UNREGISTER</text>
-          <text class="title" x="430" y="1069">登録解除</text>
-          <text class="copy" x="430" y="1098">registryを先に更新</text>
-          <text class="copy" x="430" y="1122">同じlock → site削除 → free保持</text>
+          <text class="title" x="430" y="1069">Unregister site</text>
+          <text class="copy" x="430" y="1098">Update registry first</text>
+          <text class="copy" x="430" y="1122">Shared lock → delete site → retain free record</text>
         </g>
 
         <g class="node object-write">
@@ -233,14 +233,14 @@
           <text class="eyebrow" x="840" y="117">APPLICATION PLANE · WRITE</text>
           <text class="mono" x="840" y="151">/assets/&lt;content-hash&gt;/*</text>
           <text class="mono" x="840" y="179">/index.html</text>
-          <text class="small" x="840" y="205">最後にshellを置換。古いhash assetの掃除は未決。</text>
+          <text class="small" x="840" y="205">Replace shell last. Cleanup of old hashed assets is undecided.</text>
         </g>
 
         <g class="node object-write">
           <rect x="820" y="260" width="360" height="100" />
           <text class="eyebrow" x="840" y="286">LOCAL-ONLY PROJECTION</text>
           <text class="mono" x="840" y="319">.local/docs-site/storage/</text>
-          <text class="small" x="840" y="342">Git管理外。配信registryやAWSは変更しない。</text>
+          <text class="small" x="840" y="342">Untracked; does not change the delivery registry or AWS.</text>
         </g>
 
         <g class="node object-write">
@@ -248,7 +248,7 @@
           <text class="eyebrow" x="840" y="417">REGISTRY OBJECT · SINGLE NODE</text>
           <text class="mono" x="840" y="451">/_indexes/sites.json</text>
           <text class="copy" x="840" y="480">site ID / name / repository / sourcePath</text>
-          <text class="small" x="840" y="504">管理側が更新。browserとpublisherが読む。</text>
+          <text class="small" x="840" y="504">Updated by admin; read by browser and publisher.</text>
         </g>
 
         <g class="node object-write">
@@ -256,15 +256,15 @@
           <text class="eyebrow" x="840" y="662">PER-SITE CONTENT · SINGLE NODE</text>
           <text class="mono" x="840" y="696">/_indexes/&lt;site&gt;/{meta,index}.json</text>
           <text class="mono" x="840" y="724">/_artifacts/&lt;site&gt;/**</text>
-          <text class="copy" x="840" y="753">publishは同期し、stale分を削除。</text>
-          <text class="small" x="840" y="779">unregisterはこのsite prefix全体を削除。</text>
+          <text class="copy" x="840" y="753">Publish reconciles content and deletes stale objects.</text>
+          <text class="small" x="840" y="779">Unregister deletes the entire site prefix.</text>
         </g>
 
         <g class="node object-lock">
           <rect x="820" y="975" width="360" height="115" />
           <text class="eyebrow" x="840" y="1002">SHARED CONTROL OBJECT · NOT SERVED</text>
           <text class="mono" x="840" y="1036">/_control/locks/&lt;site&gt;.json</text>
-          <text class="copy" x="840" y="1065">publisher / unregisterがCAS。解除後もfreeで保持。</text>
+          <text class="copy" x="840" y="1065">Publisher / unregister use CAS; retain free record afterward.</text>
         </g>
 
         <g class="node object-read">
@@ -272,31 +272,31 @@
           <text class="eyebrow" x="1278" y="478">DELIVERY EDGE</text>
           <text class="title" x="1278" y="511">CDN</text>
           <text class="copy" x="1278" y="540">cache / revalidate</text>
-          <text class="small" x="1278" y="565">通常publishはpurgeなし</text>
-          <text class="small" x="1278" y="586">解除時に対象を無効化</text>
+          <text class="small" x="1278" y="565">No purge for routine publish</text>
+          <text class="small" x="1278" y="586">Invalidate target on unregister</text>
         </g>
 
         <g class="node object-read">
           <rect x="1260" y="260" width="190" height="115" />
           <text class="eyebrow" x="1278" y="287">LOCAL DEV SERVER</text>
           <text class="title" x="1278" y="319">Vite</text>
-          <text class="copy" x="1278" y="346">local projectionを配信</text>
+          <text class="copy" x="1278" y="346">Serves the local projection</text>
         </g>
 
         <g class="node object-read">
           <rect x="1535" y="465" width="245" height="155" />
           <text class="eyebrow" x="1555" y="493">ONE READER NODE</text>
-          <text class="title" x="1555" y="528">閲覧者のbrowser</text>
-          <text class="copy" x="1555" y="558">アプリ → site → artifact</text>
-          <text class="small" x="1555" y="585">localでは同じdocs siteを確認</text>
+          <text class="title" x="1555" y="528">Reader's browser</text>
+          <text class="copy" x="1555" y="558">app → site → artifact</text>
+          <text class="small" x="1555" y="585">Locally, inspect this docs site</text>
         </g>
       </svg>
     </div>
 
     <div class="notes">
-      <p>配信時は <code>sites.json → meta.json → index.json → artifact</code>。localは <code>/_indexes/</code> のdirectory listingから発見。</p>
-      <p>CDN TTLはindex最大60秒、artifact最大300秒。解除後のedge反映は結果整合。</p>
-      <p>未決: 初回publish前の空index生成、古いhash付きアプリ資産の掃除時期。</p>
+      <p>Delivery reads <code>sites.json → meta.json → index.json → artifact</code>. Locally, discovery uses the <code>/_indexes/</code> directory listing.</p>
+      <p>CDN TTL: up to 60 seconds for indexes and 300 seconds for artifacts. Edge updates after unregister are eventually consistent.</p>
+      <p>Open questions: whether to create empty indexes before the first publish, and when to clean up old hashed application assets.</p>
     </div>
   </main>
 </body>

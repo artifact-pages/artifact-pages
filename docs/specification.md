@@ -81,6 +81,8 @@ Therefore /sre/incidents/123.html means:
 
 A site is a logical destination, not a repository identity. The initial builder maps one repository source directory to one site. Combining sources from multiple repositories is deferred until a concrete use case requires it.
 
+In the registered deployment model, a [SiteRegistry](architecture/domain-model.html) owns the registered Sites. Registration adds a Site; unregistering removes it and ends access to its published Artifacts. Publishing updates the current Artifacts of an existing registered Site. Registration is an operation, not a separate `SiteRegistration` entity. The local reference implementation uses index-directory discovery instead of this registry.
+
 ## 4. User-facing routing
 
 The browser contract is intentionally small:

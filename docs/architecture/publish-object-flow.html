@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Git Artifact Pages — Publishing Object Flow</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #f3f5f3;
+      --surface: #fff;
+      --ink: #202a27;
+      --muted: #65716d;
+      --quiet: #87918d;
+      --line: #dce2de;
+      --line-strong: #c8d1cc;
+      --read: #326c85;
+      --write: #167352;
+      --delete: #b44e49;
+      --lock: #7462a0;
+      --open: #9a6818;
+      --soft-read: #edf4f7;
+      --soft-write: #edf6f1;
+      --soft-delete: #fbf0ef;
+      --soft-lock: #f2eff8;
+      --soft-open: #fbf5e9;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 34px 24px 52px;
+      background: var(--paper);
+      color: var(--ink);
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    main { max-width: 1480px; margin: 0 auto; }
+
+    header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 28px;
+      margin-bottom: 24px;
+    }
+
+    h1, h2, p { margin: 0; }
+    h1 { font-size: clamp(25px, 3vw, 34px); line-height: 1.2; letter-spacing: -.035em; }
+    .dek { max-width: 700px; margin-top: 9px; color: var(--muted); }
+    .phase-note { margin-top: 10px; color: var(--quiet); font-size: 12px; }
+    .principle {
+      flex: 0 0 300px;
+      padding-left: 16px;
+      border-left: 2px solid var(--write);
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .principle strong { display: block; margin-bottom: 3px; color: var(--ink); font-weight: 650; }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 18px;
+      align-items: center;
+      padding: 12px 0;
+      margin-bottom: 9px;
+      border-top: 1px solid var(--line-strong);
+      border-bottom: 1px solid var(--line-strong);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .legend-item { display: inline-flex; gap: 7px; align-items: center; }
+    .swatch { width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
+    .read { color: var(--read); }
+    .write { color: var(--write); }
+    .delete { color: var(--delete); }
+    .lock { color: var(--lock); }
+    .open { color: var(--open); }
+
+    .flow-head, .flow-row {
+      display: grid;
+      grid-template-columns: minmax(145px, .78fr) minmax(260px, 1.25fr) minmax(390px, 2fr) minmax(210px, 1.05fr);
+      column-gap: 18px;
+    }
+
+    .flow-head {
+      padding: 8px 14px;
+      color: var(--quiet);
+      font-size: 11px;
+      font-weight: 650;
+      letter-spacing: .09em;
+      text-transform: uppercase;
+    }
+
+    .flow-row {
+      position: relative;
+      padding: 18px 14px;
+      border-top: 1px solid var(--line);
+      background: var(--surface);
+    }
+
+    .flow-row:last-of-type { border-bottom: 1px solid var(--line); }
+    .flow-row > section { min-width: 0; }
+
+    .flow-name {
+      display: flex;
+      gap: 9px;
+      align-items: flex-start;
+      color: var(--ink);
+      font-weight: 650;
+      line-height: 1.35;
+    }
+
+    .step-number {
+      display: inline-grid;
+      flex: 0 0 23px;
+      width: 23px;
+      height: 23px;
+      place-items: center;
+      border: 1px solid var(--line-strong);
+      border-radius: 50%;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .node-title { margin-bottom: 4px; font-weight: 650; }
+    .node-sub { color: var(--muted); font-size: 13px; }
+    .node-sub + .node-sub { margin-top: 5px; }
+    .node-sub code, .object code, td code, .note code {
+      color: var(--ink);
+      font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      overflow-wrap: anywhere;
+    }
+
+    .object-list { display: grid; gap: 7px; }
+    .object {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 7px 9px;
+      border-left: 2px solid var(--line-strong);
+      background: #f8f9f8;
+    }
+    .object.write-object { border-left-color: var(--write); background: var(--soft-write); }
+    .object.delete-object { border-left-color: var(--delete); background: var(--soft-delete); }
+    .object.lock-object { border-left-color: var(--lock); background: var(--soft-lock); }
+    .verb {
+      flex: 0 0 46px;
+      padding-top: 1px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    .verb.write { color: var(--write); }
+    .verb.delete { color: var(--delete); }
+    .verb.lock { color: var(--lock); }
+    .object-detail { min-width: 0; }
+    .object-detail code { display: block; }
+    .object-detail small { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; }
+
+    .flow-arrow {
+      display: block;
+      margin: 4px 0;
+      color: var(--line-strong);
+      font-size: 12px;
+    }
+
+    .cache-note {
+      margin-top: 8px;
+      padding-left: 9px;
+      border-left: 2px solid var(--read);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .open-question {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+      padding: 12px 14px;
+      margin-top: 14px;
+      border: 1px dashed #c9ad75;
+      background: var(--soft-open);
+      color: #70531e;
+      font-size: 13px;
+    }
+    .open-question strong { font-weight: 650; }
+    .not-decided {
+      white-space: nowrap;
+      color: var(--open);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .06em;
+    }
+
+    .section-title { margin: 30px 0 5px; font-size: 19px; letter-spacing: -.02em; }
+    .section-copy { margin-bottom: 12px; color: var(--muted); font-size: 13px; }
+
+    .ledger-wrap { overflow-x: auto; background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    table { width: 100%; border-collapse: collapse; text-align: left; }
+    th, td { padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { color: var(--quiet); font-size: 11px; font-weight: 650; letter-spacing: .06em; }
+    td { color: var(--muted); font-size: 12px; }
+    tbody tr:last-child td { border-bottom: 0; }
+    td:first-child { width: 32%; }
+    td:first-child code { color: var(--ink); }
+
+    .roles {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 22px;
+      margin-top: 24px;
+      padding-top: 15px;
+      border-top: 1px solid var(--line-strong);
+    }
+    .role h2 { margin-bottom: 4px; font-size: 14px; }
+    .role p { color: var(--muted); font-size: 12px; }
+    .footer-note { margin-top: 22px; color: var(--quiet); font-size: 11px; }
+
+    @media (max-width: 1140px) {
+      body { padding: 24px 16px 36px; }
+      header { display: block; }
+      .principle { max-width: 580px; margin-top: 16px; }
+      .flow-head { display: none; }
+      .flow-row { grid-template-columns: 1fr 1.3fr; row-gap: 14px; }
+      .flow-row > section:nth-child(3) { grid-column: 2; }
+      .flow-row > section:nth-child(4) { grid-column: 1 / -1; }
+      .flow-row > section:nth-child(1) { grid-row: 1 / span 2; }
+      .flow-arrow { display: none; }
+    }
+
+    @media (max-width: 620px) {
+      .flow-row { grid-template-columns: 1fr; row-gap: 12px; }
+      .flow-row > section:nth-child(n) { grid-column: 1; grid-row: auto; }
+      .open-question { grid-template-columns: 1fr; }
+      .not-decided { white-space: normal; }
+      .roles { grid-template-columns: 1fr; gap: 14px; }
+      th, td { padding: 9px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Which operations change which objects?</h1>
+        <p class="dek">Trace how Git's source of truth is projected into delivery storage across registration, publishing, and unregistering.</p>
+        <p class="phase-note">This is the target deployment model. The local Compose setup currently uses different discovery paths in some areas.</p>
+      </div>
+      <p class="principle"><strong>Git is the source of truth</strong>Storage is a regenerable projection. The CDN is a delivery cache, not a source of truth or history.</p>
+    </header>
+
+    <div class="legend" aria-label="Flow legend">
+      <span class="legend-item"><i class="swatch read" aria-hidden="true"></i>Read</span>
+      <span class="legend-item"><i class="swatch write" aria-hidden="true"></i>Create or update</span>
+      <span class="legend-item"><i class="swatch delete" aria-hidden="true"></i>Delete</span>
+      <span class="legend-item"><i class="swatch lock" aria-hidden="true"></i>Per-site mutual exclusion</span>
+      <span class="legend-item">Operations flow from left to right</span>
+    </div>
+
+    <div class="flow-head" aria-hidden="true">
+      <div>Git inputs</div><div>Operation</div><div>Storage changes</div><div>Reader and delivery result</div>
+    </div>
+
+    <article class="flow-row" aria-label="Application deployment">
+      <section>
+        <div class="flow-name"><span class="step-number">1</span><span>Deploy application</span></div>
+        <p class="node-sub" style="margin-top:9px">Web bundle from the OSS repository<br>+ deployment config from the admin repository</p>
+      </section>
+      <section>
+        <p class="node-title">Update the application plane</p>
+        <p class="node-sub">Upload assets first, then replace the HTML shell.</p>
+        <span class="flow-arrow write">→ After index.html changes, invalidate only that URL</span>
+      </section>
+      <section>
+        <div class="object-list">
+          <div class="object write-object"><span class="verb write">Write</span><div class="object-detail"><code>/assets/&lt;content-hash&gt;/*</code><small>Versioned JS, CSS, and other assets; changed content gets a new URL.</small></div></div>
+          <div class="object write-object"><span class="verb write">Last</span><div class="object-detail"><code>/index.html</code><small>Shell that references the new hashed assets.</small></div></div>
+        </div>
+      </section>
+      <section>
+        <p class="node-title">Reader's browser</p>
+        <p class="node-sub">Logical routes <code>/</code> and <code>/:site/*</code> resolve to the SPA. HTML artifacts load from the content plane.</p>
+        <p class="cache-note">Revalidate the shell. Keep content-hashed assets immutable for one year.</p>
+      </section>
+    </article>
+
+    <article class="flow-row" aria-label="Site registration projection">
+      <section>
+        <div class="flow-name"><span class="step-number">2</span><span>Register or update a site</span></div>
+        <p class="node-sub" style="margin-top:9px">The admin repository's<br><code>sites.yaml</code></p>
+      </section>
+      <section>
+        <p class="node-title">Validate and project to JSON</p>
+        <p class="node-sub">Validate YAML keyed by site ID and emit a JSON array sorted by ID. Name, repository, and sourcePath define the registration.</p>
+        <span class="flow-arrow write">→ Update only when registrations change</span>
+      </section>
+      <section>
+        <div class="object-list">
+          <div class="object write-object"><span class="verb write">Write</span><div class="object-detail"><code>/_indexes/sites.json</code><small>Site list and repository / sourcePath mapping for publish validation.</small></div></div>
+        </div>
+        <p class="node-sub" style="margin-top:7px">Routine site publishing does not modify this registry object.</p>
+      </section>
+      <section>
+        <p class="node-title">Two readers</p>
+        <p class="node-sub"><span class="read">Read</span> The browser displays the site list.</p>
+        <p class="node-sub"><span class="read">Read</span> A site's publisher reads it after acquiring the lock and verifies repository and sourcePath.</p>
+      </section>
+    </article>
+
+    <article class="flow-row" aria-label="Site artifact publishing">
+      <section>
+        <div class="flow-name"><span class="step-number">3</span><span>Publish a site</span></div>
+        <p class="node-sub" style="margin-top:9px">The registered <code>sourcePath</code><br>in the site repository</p>
+      </section>
+      <section>
+        <p class="node-title">Validate and sync one site</p>
+        <p class="node-sub">Project static files as-is and index HTML / Markdown. Different sites can publish concurrently because each has its own lock.</p>
+        <span class="flow-arrow lock">→ free → held (conditional ETag update) → free</span>
+        <p class="node-sub">Verify the registry after acquiring the lock.</p>
+      </section>
+      <section>
+        <div class="object-list">
+          <div class="object lock-object"><span class="verb lock">CAS</span><div class="object-detail"><code>/_control/locks/&lt;site&gt;.json</code><small>Not publicly served. Shared by publish and unregister; retain a free record after release.</small></div></div>
+          <div class="object write-object"><span class="verb write">Write</span><div class="object-detail"><code>/_artifacts/&lt;site&gt;/**</code><small>HTML, Markdown, CSS, JS, images, and more. Preserve source-relative paths and bytes.</small></div></div>
+          <div class="object write-object"><span class="verb write">Write</span><div class="object-detail"><code>/_indexes/&lt;site&gt;/index.json</code> → <code>meta.json</code><small>Index holds artifact records; meta holds lightweight discovery data.</small></div></div>
+          <div class="object delete-object"><span class="verb delete">Stale</span><div class="object-detail">Delete stale objects under <code>/_artifacts/&lt;site&gt;/</code> last. Leave other sites, the registry, and the lock untouched.</div></div>
+        </div>
+      </section>
+      <section>
+        <p class="node-title">Browser reads through the CDN</p>
+        <p class="node-sub"><span class="read">Read</span> sites.json → site meta.json → index.json → selected artifact.</p>
+        <p class="cache-note">No CDN purge for routine publishing. Edge cache: up to 60 seconds for indexes and 300 seconds for artifacts.</p>
+      </section>
+    </article>
+
+    <article class="flow-row" aria-label="Site unregister and data removal">
+      <section>
+        <div class="flow-name"><span class="step-number">4</span><span>Unregister a site</span></div>
+        <p class="node-sub" style="margin-top:9px">Remove the site from the admin repository's<br><code>sites.yaml</code></p>
+      </section>
+      <section>
+        <p class="node-title">Withdraw, then remove site data</p>
+        <p class="node-sub">1. Update sites.json. 2. Acquire the same site lock (wait for active publishing). 3. Delete site data. 4. Retain the lock as free.</p>
+        <span class="flow-arrow delete">→ Remove only this site; keep other sites and the app</span>
+      </section>
+      <section>
+        <div class="object-list">
+          <div class="object write-object"><span class="verb write">First</span><div class="object-detail"><code>/_indexes/sites.json</code><small>Remove the site ID. Later publish attempts fail registry validation.</small></div></div>
+          <div class="object delete-object"><span class="verb delete">Delete</span><div class="object-detail"><code>/_indexes/&lt;site&gt;/**</code> and <code>/_artifacts/&lt;site&gt;/**</code><small>Remove the site's entire projection.</small></div></div>
+          <div class="object lock-object"><span class="verb lock">Keep</span><div class="object-detail"><code>/_control/locks/&lt;site&gt;.json</code><small>Do not delete; retain a free record.</small></div></div>
+        </div>
+      </section>
+      <section>
+        <p class="node-title">Request CDN invalidation</p>
+        <p class="node-sub">Invalidate or revalidate sites.json and the affected site's index and artifact paths.</p>
+        <p class="cache-note">A successful request is the completion condition. Edge changes are eventually consistent; already delivered or browser-cached content cannot be recalled.</p>
+      </section>
+    </article>
+
+    <div class="open-question" role="note">
+      <span><strong>Open question:</strong> Should <code>/_indexes/&lt;site&gt;/meta.json</code> and <code>index.json</code> be created empty at registration, or only on the first publish? Updating the registry does not create per-site indexes.</span>
+      <span class="not-decided">UX / object lifecycle</span>
+    </div>
+
+    <h2 class="section-title">Object ledger</h2>
+    <p class="section-copy">Leading slashes show delivery URLs; omit them from object keys in stores such as S3.</p>
+    <div class="ledger-wrap">
+      <table>
+        <thead><tr><th>Logical object</th><th>Writer</th><th>Reader</th><th>Deletion and retention</th></tr></thead>
+        <tbody>
+          <tr><td><code>/index.html</code></td><td>Application deployment</td><td>Browser</td><td>Replace with the new shell; invalidate this path after deployment.</td></tr>
+          <tr><td><code>/assets/&lt;content-hash&gt;/*</code></td><td>Application deployment</td><td>Browser</td><td>Create new URLs for changed assets. Cleanup policy for old hashed assets is undecided.</td></tr>
+          <tr><td><code>/_indexes/sites.json</code></td><td>Registry projection</td><td>Browser and each site's publisher</td><td>Replace when registrations change. Site publish and removal do not rewrite it.</td></tr>
+          <tr><td><code>/_indexes/&lt;site&gt;/meta.json</code></td><td>Site publisher</td><td>Browser</td><td>Delete on unregister. Empty-file creation at registration is undecided.</td></tr>
+          <tr><td><code>/_indexes/&lt;site&gt;/index.json</code></td><td>Site publisher</td><td>Browser</td><td>Delete on unregister. Empty-file creation at registration is undecided.</td></tr>
+          <tr><td><code>/_artifacts/&lt;site&gt;/**</code></td><td>Site publisher</td><td>Browser</td><td>Delete stale objects during sync; remove the entire site prefix on unregister.</td></tr>
+          <tr><td><code>/_control/locks/&lt;site&gt;.json</code></td><td>Site publisher / admin unregister</td><td>Same operation actors</td><td>CAS updates free / held state. Never serve publicly; retain as free after unregister.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="roles" aria-label="Access boundaries">
+      <section class="role">
+        <h2>Admin-side permissions</h2>
+        <p>Can update the application plane and registry. Unregister acquires the site lock and can delete that site's indexes and artifacts.</p>
+      </section>
+      <section class="role">
+        <h2>Site publisher permissions</h2>
+        <p>Can read the registry, update its own site lock with CAS, and sync or remove stale objects only under its site prefix. It cannot update the application plane or registry.</p>
+      </section>
+    </div>
+
+    <p class="footer-note">A provider adapter maps the same logical object model to storage. Examples: S3 + CloudFront on AWS, or R2 + edge delivery on Cloudflare. Lock objects are never part of the public delivery plane.</p>
+  </main>
+</body>
+</html>
