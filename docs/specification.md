@@ -724,6 +724,8 @@ Do not freeze package/repository boundaries before the local and AWS implementat
 
 ### Post-MVP pre-publish preview contract
 
+The [preview publishing contract](architecture/preview-publishing-contract.html) gives the proposed static object layout, completion order, adapter boundary, and validation matrix for this product contract. It is design documentation, not Phase 1 implementation.
+
 Pre-publish is a separate operation from production publish and dry-run. It creates a temporary, site-scoped review projection only for a registered site's source. A pull-request comment may carry a direct URL, but the browser must also be able to discover active previews from within that site. Previews are not inserted into the production artifact index, Browse tree, Recently updated section, or normal page-search results. The site home may link to a dedicated Previews view; inside a site, the command palette has a separate Previews tab. Opening a preview surface loads only that site's lightweight preview catalog, not catalogs for every site at startup.
 
 The preview catalog, logical routes, raw documents, and bundled resources inherit their site's viewer-access policy. A public site therefore has publicly viewable previews, including pre-merge content; a restricted site applies the same restriction to previews. Enforcement belongs at the serving boundary before shared-cache delivery, not in client-side navigation alone. Preview-only private access is not an initial mode and would require a separate authorization and cache contract.

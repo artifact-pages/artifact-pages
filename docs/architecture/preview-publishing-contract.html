@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Proposed static projection and publication contract for site-scoped artifact previews.">
+  <title>Git Artifact Pages — Preview publishing contract</title>
+  <style>
+    :root { color-scheme: light; --canvas:#f3f5f3; --paper:#fff; --ink:#202a27; --muted:#65716d; --line:#cbd4cf; --green:#237452; --blue:#39718a; --amber:#89642a; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--canvas); color:var(--ink); font:15px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { width:min(1180px,100%); margin:auto; padding:38px clamp(18px,4vw,58px) 72px; }
+    a { color:var(--blue); }
+    .eyebrow { margin:0 0 8px; color:var(--green); font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
+    h1 { margin:0; font-size:clamp(32px,4vw,48px); line-height:1.1; letter-spacing:-.045em; }
+    .lead { max-width:790px; margin:15px 0 0; color:var(--muted); font-size:17px; }
+    .notice { margin:25px 0 36px; padding:14px 17px; border-left:3px solid var(--green); background:var(--paper); color:var(--muted); }
+    .notice strong { color:var(--ink); }
+    section { margin-top:38px; }
+    h2 { margin:0 0 15px; font-size:23px; letter-spacing:-.025em; }
+    h3 { margin:22px 0 8px; font-size:16px; }
+    p { margin:9px 0 14px; }
+    .subtle { color:var(--muted); }
+    .flow { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:12px; margin:20px 0; }
+    .step { position:relative; min-height:106px; padding:13px; border-top:3px solid var(--green); background:var(--paper); }
+    .step:not(:last-child)::after { content:"→"; position:absolute; right:-13px; top:40px; z-index:1; color:var(--blue); font-size:20px; }
+    .step b { display:block; font-size:12px; }
+    .step span { display:block; margin-top:7px; color:var(--muted); font-size:12px; }
+    .table-wrap { overflow-x:auto; }
+    table { width:100%; border-collapse:collapse; background:var(--paper); }
+    th,td { padding:11px 13px; border-bottom:1px solid #e5e9e6; text-align:left; vertical-align:top; }
+    th { color:var(--muted); font-size:11px; letter-spacing:.08em; text-transform:uppercase; }
+    td { font-size:13px; }
+    td:first-child { white-space:nowrap; }
+    code,pre { font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+    code { overflow-wrap:anywhere; }
+    pre { overflow-x:auto; margin:13px 0; padding:17px; border:1px solid var(--line); background:#f9faf9; }
+    .two { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:22px; }
+    .panel { padding:17px 19px; border:1px solid var(--line); background:var(--paper); }
+    .panel h3 { margin-top:0; }
+    ul,ol { padding-left:22px; }
+    li { margin:6px 0; }
+    .warning { padding:14px 17px; border-left:3px solid var(--amber); background:#fbf9f4; }
+    footer { margin-top:43px; padding-top:17px; border-top:1px solid var(--line); color:var(--muted); font-size:12px; }
+    @media (max-width:780px) { .flow,.two { grid-template-columns:1fr; } .step { min-height:0; } .step:not(:last-child)::after { content:"↓"; right:auto; left:50%; top:auto; bottom:-19px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Post-MVP architecture · proposed contract</p>
+    <h1>Preview publishing contract</h1>
+    <p class="lead">A preview is an immutable, head-SHA-addressed document bundle plus a mutable, site-scoped discovery catalog. Neither is part of the production artifact index.</p>
+    <p class="notice"><strong>Design only.</strong> This page translates the <a href="../specification.md">product specification</a> into a candidate static projection and failure model. It does not imply that AWS publishing, a preview CLI, or a GitHub Action has been implemented in the current local-product phase.</p>
+
+    <section aria-labelledby="objects">
+      <h2 id="objects">Objects and reads</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Object</th><th>Proposed storage key</th><th>Reader / lifetime</th></tr></thead>
+        <tbody>
+          <tr><td>Registry</td><td><code>/_indexes/sites.json</code></td><td>Publisher validates from origin after taking the site lock; not the browser's cached copy.</td></tr>
+          <tr><td>Catalog</td><td><code>/_previews/&lt;site&gt;/catalog.json</code></td><td>Browser fetches only on that site's Previews surface. Mutable; absent means no discoverable previews.</td></tr>
+          <tr><td>Revision manifest</td><td><code>/_previews/&lt;site&gt;/revisions/&lt;headSHA&gt;/manifest.json</code></td><td>Browser resolves a direct preview URL through this completion marker, independently of the catalog. Written last within a revision; immutable while retained.</td></tr>
+          <tr><td>Bundle files</td><td><code>/_previews/&lt;site&gt;/revisions/&lt;headSHA&gt;/files/&lt;source-relative path&gt;</code></td><td>Changed documents and their copied local rendering resources. Relative CSS, JS, image and font paths stay relative under <code>files/</code>.</td></tr>
+          <tr><td>Site lock</td><td><code>/_control/locks/&lt;site&gt;.json</code></td><td>Shared by production publish, pre-publish and unregister. Never publicly served.</td></tr>
+        </tbody>
+      </table></div>
+      <p class="subtle">These are storage keys, not the main user navigation. The logical document URL remains <code>/:site/_previews/&lt;headSHA&gt;/&lt;artifactPath&gt;</code>; the application resolves it to a manifest entry and then to the raw bundle file. The serving layer must keep <code>/_previews/*</code> separate from SPA fallback so missing raw files return an actual 404.</p>
+    </section>
+
+    <section aria-labelledby="shape">
+      <h2 id="shape">Minimal versioned records</h2>
+      <div class="two">
+        <div class="panel"><h3>Revision manifest</h3><pre>{
+  "schemaVersion": 1,
+  "site": "sre",
+  "headSha": "&lt;full Git SHA&gt;",
+  "comparisonBaseSha": "&lt;resolved default HEAD&gt;",
+  "createdAt": "&lt;UTC timestamp&gt;",
+  "expiresAt": "&lt;UTC timestamp&gt;",
+  "bundleDigest": "sha256:&lt;digest&gt;",
+  "files": [
+    {
+      "path": "incidents/review.md",
+      "sha256": "&lt;content digest&gt;",
+      "contentType": "text/markdown"
+    }
+  ],
+  "documents": [
+    {
+      "path": "incidents/review.md",
+      "title": "Review",
+      "format": "markdown"
+    }
+  ]
+}</pre><p class="subtle">The digest covers a canonical sorted list of every bundle path and its final published bytes, including rewritten links. The document list is the only set of routable preview pages. Resources are not document routes.</p></div>
+        <div class="panel"><h3>Discovery catalog</h3><pre>{
+  "schemaVersion": 1,
+  "site": "sre",
+  "groups": [
+    {
+      "id": "pr:42",
+      "headSha": "&lt;full Git SHA&gt;",
+      "updatedAt": "&lt;UTC timestamp&gt;",
+      "expiresAt": "&lt;UTC timestamp&gt;",
+      "documents": [
+        {
+          "path": "incidents/review.md",
+          "title": "Review",
+          "format": "markdown"
+        }
+      ]
+    }
+  ]
+}</pre><p class="subtle">One entry per group. PR groups use <code>pr:&lt;id&gt;</code>; manual defaults use <code>head:&lt;SHA&gt;</code>. The group is a discovery identity, not part of the revision URL. A preview view filters expired entries even before a later write prunes them.</p></div>
+      </div>
+      <p>All paths are canonical source-relative POSIX paths with retained file extensions. Reject traversal, backslashes, duplicate normalized paths, symlink escapes and reserved namespaces before uploading. Catalog entries never point to a revision without a completion manifest.</p>
+    </section>
+
+    <section aria-labelledby="publish">
+      <h2 id="publish">Publication order</h2>
+      <div class="flow" aria-label="Five-step preview publication sequence">
+        <div class="step"><b>1 · Prepare</b><span>Resolve head/default SHAs, diff from merge-base, select A/M documents, collect resources and final bytes.</span></div>
+        <div class="step"><b>2 · Lock and validate</b><span>Acquire site lock; read deployed registry directly; verify exact repository and source path.</span></div>
+        <div class="step"><b>3 · Upload bundle</b><span>Write all raw files; verify paths, bytes and content types. Do not advertise yet.</span></div>
+        <div class="step"><b>4 · Complete revision</b><span>Write immutable manifest only after the bundle is complete. Compare existing digest on retry.</span></div>
+        <div class="step"><b>5 · Discover</b><span>Read current catalog at origin; prune expiry; upsert the group; release lock.</span></div>
+      </div>
+      <p>The lock serializes cooperating writers; an atomic conditional write on the mutable catalog is still useful as a defensive check against an out-of-band writer. A catalog update failure is a failed pre-publish, not a successful unlisted preview. Retrying must converge without changing an already completed revision. A partially uploaded revision without a manifest is not readable through logical preview routes and is recovered by retry or retention cleanup.</p>
+      <p><code>no-preview</code> is a successful no-page result for a deletion-only document change. Under the same lock it removes the group's catalog entry if present; it does not delete an earlier completed revision. A non-document-only change is an error and must not mutate discovery. Group retirement follows the same lock/read/write sequence, removes only the named group, and leaves immutable bundle objects for their remaining lifetime.</p>
+    </section>
+
+    <section aria-labelledby="inputs">
+      <h2 id="inputs">CLI and Action boundary</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Operation</th><th>Inputs known to the core</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td>Pre-publish</td><td>Explicit site ID; configured provider destination; source checkout; resolved head and default-branch HEAD; optional namespaced group; optional source-relative non-document resource includes; optional dry-run.</td><td>Typed <code>published</code> with group-list URL and each fixed document URL, or <code>no-preview</code>; noneligible changes/error are failures.</td></tr>
+          <tr><td>Retire group</td><td>Explicit site ID and exact group ID; configured provider destination. PR event interpretation belongs to the caller workflow.</td><td>Idempotent removal from discovery; no revision deletion.</td></tr>
+        </tbody>
+      </table></div>
+      <p class="subtle">The GitHub Action is a thin, separately distributed wrapper: it checks same-repository PR identity before obtaining publisher credentials, passes resolved inputs to the core, returns URLs as outputs, and does not own PR comments or workflow timing. A dry-run computes and reports the document/resource set and intended catalog change without provider writes. Exact flag and Action input spellings are deferred until the CLI surface is implemented; this table fixes meaning, not syntax.</p>
+    </section>
+
+    <section aria-labelledby="expiry">
+      <h2 id="expiry">Retention and serving boundary</h2>
+      <p>The administrator sets one site-wide preview retention rule. The manifest's <code>expiresAt</code> is the product cutoff: derive it conservatively from the earliest uploaded bundle object's lifecycle eligibility, so the logical reader never promises assets beyond their retention window. A retry of the same completed head preserves its original cutoff. The browser hides expired catalog entries and treats an expired direct logical URL as “Preview unavailable”, even if storage has not physically removed every object yet.</p>
+      <p class="warning"><strong>Not an exact-time revocation mechanism.</strong> Provider lifecycle removal is asynchronous, and CDN caches can temporarily retain old responses. Raw preview URLs may remain fetchable after the product cutoff; later, absent raw objects must yield 404, never the SPA shell. If exact-time raw denial becomes a requirement, it needs a separate serving-boundary control, not a claim about lifecycle timing. A catalog under the preview lifecycle prefix also expires after inactivity; every catalog rewrite refreshes that object's lifecycle age.</p>
+      <p>For a restricted site, authorization applies to the catalog, manifest, documents and resources before any shared-cache response. Public pre-merge previews are public for a public site. Neither a client-side hidden tab nor an unguessable SHA is an access control.</p>
+    </section>
+
+    <section aria-labelledby="proof">
+      <h2 id="proof">Proof before implementation is called complete</h2>
+      <div class="two">
+        <div><h3>State and concurrency</h3><ul>
+          <li>Two different PR groups publish concurrently to one site: both remain in the catalog.</li>
+          <li>Same group receives two revisions: latest discoverable, both direct links stable.</li>
+          <li>Unregister wins first and publisher wins first: final state unregistered, no site preview objects.</li>
+          <li>Crash after file upload, after manifest write, and before catalog write: no broken advertised revision; retry converges.</li>
+          <li>Same head with different selected documents or bytes fails without replacing its manifest.</li>
+          <li><code>no-preview</code>, retire, reopen, expiry, and absent catalog all produce their specified empty states.</li>
+        </ul></div>
+        <div><h3>Browser and provider</h3><ul>
+          <li>HTML iframe and Markdown reader load relative CSS, JS, images and fonts from the preview snapshot.</li>
+          <li>Changed-document links remain in the revision; unchanged-document links go to production without nesting the app in an iframe.</li>
+          <li>Missing raw resource is 404; direct logical URL works without a catalog entry until its product cutoff.</li>
+          <li>Same-repo PR accepted, fork PR rejected before credentials; restricted site denies every preview object consistently.</li>
+          <li>Multi-page object listing and cleanup handle more than one provider page/batch without crossing site prefixes.</li>
+          <li>Measure lazy catalog transfer, parse, memory and input-to-paint with many sites; opening one site's Previews must not load other catalogs.</li>
+        </ul></div>
+      </div>
+    </section>
+
+    <footer>Provider notes: <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-writes.html">S3 conditional writes</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/troubleshoot-lifecycle.html">S3 lifecycle timing</a>, and <a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Expiration.html">CloudFront cache expiration</a>. These inform the AWS adapter, not the provider-neutral domain model.</footer>
+  </main>
+</body>
+</html>
