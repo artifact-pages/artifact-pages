@@ -1,6 +1,6 @@
 # Browse sibling artifacts from path breadcrumbs
 
-- Status: Open
+- Status: Done
 - Priority: P2
 - Area: Artifact workspace breadcrumb navigation
 
@@ -20,11 +20,18 @@ A reader can open a path segment, understand its nearby folders and artifacts, a
 
 ## Acceptance criteria
 
-- [ ] A folder breadcrumb provides an anchored menu for navigating the relevant folder's children or nearby artifacts.
-- [ ] The current-file breadcrumb provides a way to choose a sibling artifact and clearly marks the current item.
-- [ ] Selecting an artifact navigates to its logical `/:site/*` URL and closes the menu.
-- [ ] The interaction works with keyboard and touch, including focus, Escape, and long lists on narrow screens.
-- [ ] The existing ability to locate an artifact in the sidebar remains available through a clear route.
+- [x] A folder breadcrumb provides an anchored menu for navigating the relevant folder's children or nearby artifacts.
+- [x] The current-file breadcrumb provides a way to choose a sibling artifact and clearly marks the current item.
+- [x] Selecting an artifact navigates to its logical `/:site/*` URL and closes the menu.
+- [x] The interaction works with keyboard and touch, including focus, Escape, and long lists on narrow screens.
+- [x] The existing ability to locate an artifact in the sidebar remains available through a clear route.
+
+## Verification
+
+- `npm run build`
+- Playwright: folder and sibling menus, route selection and history changes, focus and Escape, sidebar reveal and focus handoff, keyboard and touch selection, and a long mobile list
+- Full Playwright suite: 33 tests passed
+- Browser visual check at desktop and 390 px widths
 
 ## Design references
 

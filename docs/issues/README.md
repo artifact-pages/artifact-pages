@@ -38,4 +38,4 @@ Priority describes user impact, not implementation effort. Issues 001–011 came
 | [009 — Index date appears older than artifact update dates](009-index-date-meaning.md) | Open | P3 |
 | [010 — Mobile search advertises a desktop shortcut](010-mobile-search-hint.md) | Open | P3 |
 | [011 — Wide Markdown tables need an overflow cue](011-markdown-table-overflow.md) | Open | P3 |
-| [012 — Browse sibling artifacts from path breadcrumbs](012-breadcrumb-sibling-navigation.md) | Open | P2 |
+| [012 — Browse sibling artifacts from path breadcrumbs](012-breadcrumb-sibling-navigation.md) | Done | P2 |

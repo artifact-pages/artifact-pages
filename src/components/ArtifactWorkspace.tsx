@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { ArtifactBreadcrumbs } from './ArtifactBreadcrumbs'
 import { CommandPalette, type PaletteCommand } from './CommandPalette'
 import { Icon } from './Icon'
 import { Sidebar } from './Sidebar'
@@ -139,6 +140,19 @@ export function ArtifactWorkspace({
     setActivePanel(null)
     if (window.innerWidth <= 860) updateSidebarOpen(false)
   }, [route.artifactPath, updateSidebarOpen])
+
+  useEffect(() => {
+    if (!sidebarReveal || !sidebarOpen) return
+
+    const frame = window.requestAnimationFrame(() => {
+      const browseTree = document.querySelector('.sidebar-panel .browse-tree')
+      const target = Array.from(browseTree?.querySelectorAll<HTMLElement>('[data-tree-path]') ?? [])
+        .find((element) => element.dataset.treePath === sidebarReveal.path)
+      target?.focus({ preventScroll: true })
+    })
+
+    return () => window.cancelAnimationFrame(frame)
+  }, [sidebarReveal, sidebarOpen])
 
   useEffect(() => {
     if (recentReads !== undefined || !currentArtifact || lastRecordedArtifactId.current === currentArtifact.id) return
@@ -294,9 +308,6 @@ export function ArtifactWorkspace({
   }, [syncHtmlFrameLocation])
 
   const tocEntries = currentArtifact?.toc ?? []
-  const artifactSegments = currentArtifact?.path.split('/').filter(Boolean)
-    ?? route.artifactPath?.split('/').filter(Boolean)
-    ?? []
   return (
     <div className={`app-shell${sidebarOpen ? '' : ' sidebar-collapsed'}`}>
       <Sidebar
@@ -372,27 +383,15 @@ export function ArtifactWorkspace({
       <div className="workspace">
         <div className="workspace-panel">
           <header className="context-bar">
-            <nav className="breadcrumbs" aria-label="Artifact path">
-              {artifactSegments.map((segment, segmentIndex) => {
-                const isCurrent = segmentIndex === artifactSegments.length - 1
-                const folderPath = artifactSegments.slice(0, segmentIndex + 1).join('/')
-                return (
-                  <span className="breadcrumb-part" key={`${folderPath}:${segmentIndex}`}>
-                    {segmentIndex > 0 ? <span className="breadcrumb-separator" aria-hidden="true">/</span> : null}
-                    <button
-                      type="button"
-                      className={isCurrent ? 'breadcrumb-current' : undefined}
-                      aria-current={isCurrent ? 'page' : undefined}
-                      aria-label={isCurrent && currentArtifact ? `${currentArtifact.title}, current artifact` : undefined}
-                      title={isCurrent && currentArtifact ? currentArtifact.path : undefined}
-                      onClick={() => revealSidebarLocation(folderPath, !isCurrent)}
-                    >
-                      {isCurrent && currentArtifact ? currentArtifact.title : segment}
-                    </button>
-                  </span>
-                )
-              })}
-            </nav>
+            {route.artifactPath ? (
+              <ArtifactBreadcrumbs
+                artifactPath={currentArtifact?.path ?? route.artifactPath}
+                artifacts={index.artifacts}
+                currentArtifact={currentArtifact}
+                onOpenArtifact={openArtifact}
+                onRevealInSidebar={revealSidebarLocation}
+              />
+            ) : null}
 
             <div className="context-actions">
               {currentArtifact ? (
