@@ -6,7 +6,7 @@
   --glass: rgba(255, 255, 255, 0.86);
   --text: #111416;
   --text-secondary: #585f66;
-  --text-tertiary: #8b9299;
+  --text-tertiary: #626a72;
   --line: rgba(16, 20, 24, 0.1);
   --line-soft: rgba(16, 20, 24, 0.06);
   --hover: rgba(16, 20, 24, 0.05);
@@ -34,7 +34,7 @@
   --glass: rgba(23, 26, 29, 0.88);
   --text: #eceef0;
   --text-secondary: #9aa1a8;
-  --text-tertiary: #6a7178;
+  --text-tertiary: #7f878f;
   --line: rgba(255, 255, 255, 0.09);
   --line-soft: rgba(255, 255, 255, 0.055);
   --hover: rgba(255, 255, 255, 0.055);
@@ -290,7 +290,7 @@ kbd {
   flex: none;
   place-items: center;
   border-radius: 7px;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   text-decoration: none;
 }
 
@@ -617,14 +617,14 @@ kbd {
 .sidebar-panel--refined {
   --refined-recent-text: #465159;
   --refined-directory-text: #48535b;
-  --refined-artifact-text: #68727a;
+  --refined-artifact-text: var(--text-tertiary);
   --refined-selected-text: #20282e;
   --refined-selected-bg: rgba(23, 34, 42, 0.075);
   --refined-selected-hover-bg: rgba(23, 34, 42, 0.095);
   --refined-hover-text: #343e45;
   --refined-hover-bg: rgba(20, 31, 39, 0.045);
-  --refined-format-text: #929ba1;
-  --refined-count-text: #858e95;
+  --refined-format-text: var(--text-tertiary);
+  --refined-count-text: var(--text-tertiary);
   --refined-branch-guide: rgba(22, 34, 42, 0.085);
 }
 
@@ -679,9 +679,8 @@ kbd {
 
 .sidebar-panel--refined .tree-format-tag {
   color: var(--refined-format-text);
-  font-size: 8px;
-  font-weight: 450;
-  opacity: 0.82;
+  font-size: 9px;
+  font-weight: 500;
 }
 
 .sidebar-panel--refined .tree-count {
@@ -704,13 +703,13 @@ mark {
 .sidebar-empty {
   padding: 10px 8px;
   margin: 0;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   font-size: 11px;
   line-height: 1.55;
 }
 
 .sidebar-empty span {
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
 }
 
 .sidebar-footer {
@@ -1302,7 +1301,7 @@ mark {
 .empty-note {
   padding: 18px 8px;
   margin: 0;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.5;
 }
