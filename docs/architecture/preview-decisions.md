@@ -19,8 +19,9 @@ This page tracks what remains to decide or prove for pre-publish previews. The [
 | ID | Decision | Current recommendation | What changes with the choice |
 | --- | --- | --- | --- |
 | P4 | If a PR closes without a merge and no later main-branch production publish occurs, may its preview remain discoverable until provider removal? | Yes for the initial release; adding a workflow solely for retirement is worse for installation UX. The next ordinary production publish checks every catalog PR group and retires closed ones. | A closed-but-still-readable preview can remain on the list until another publish or provider removal. The alternative requires an extra event workflow or browser-side GitHub lookup. |
+| P6 | If source-host PR status cannot be read during `site publish`, should production publication fail too? | [B: publish with warning](preview-publishing-contract.html#cli-experience). Retain unknown PR groups and report preview reconciliation as incomplete. | A strict preflight blocks production on a source-host outage; best-effort cleanup can leave stale discovery until a later publish. |
 
-P4 is the remaining product-facing preview choice recorded here. It does not block continued technical exploration.
+P4 and P6 are the remaining product-facing preview choices recorded here. Neither blocks continued technical exploration.
 
 ## Recently accepted
 
@@ -42,7 +43,7 @@ P4 is the remaining product-facing preview choice recorded here. It does not blo
 | T5 | Verify | Concurrency, idempotency and crash recovery. | Run both unregister/pre-publish orderings, simultaneous group updates, partial uploads, manifest-before-catalog failure, same-head mismatch and retirement retry. See the [proof matrix](preview-publishing-contract.html#proof). |
 | T6 | Verify | Snapshot-relative resources and document navigation. | Exercise HTML and Markdown with CSS, JS, images, fonts, changed-document links and unchanged-document links; establish the boundary for dynamic/root-relative URLs. |
 | T7 | Verify | Lazy catalog and availability-check cost at multi-site scale. | Confirm opening one site's Previews does not download other sites' catalogs; measure transfer, manifest checks, parse, memory and input-to-paint with many sites. If checking every candidate is too costly, revise the discovery projection without adding app-managed expiry. |
-| T8 | Proposed — technical | Retirement and stale references without another workflow. | The CLI's production publish reconciles its current site catalog using source-host PR state and provider-origin manifest availability. No commit-diff or Actions-event dependency is needed. Commit one conditional catalog update after the production projection under the site lock; other catalog writes also prune missing-manifest references. Browser availability checks hide missing candidates between writes. Prove local/CI parity, merged and closed-unmerged PRs, manual groups, lock/CAS behavior, and the response to source-host lookup failure. No app-managed expiry clock or standalone cleanup Action. |
+| T8 | Proposed — technical | Retirement and stale references without another workflow. | The CLI's production publish reconciles its current site catalog using source-host PR state and provider-origin manifest availability. No commit-diff or Actions-event dependency is needed. Commit one conditional catalog update after the production projection under the site lock; other catalog writes also prune missing-manifest references. Browser availability checks hide missing candidates between writes. Prove local/CI parity, merged and closed-unmerged PRs, manual groups, and lock/CAS behavior. Source-host lookup failure behavior is tracked in P6. No app-managed expiry clock or standalone cleanup Action. |
 
 ## Accepted product contract
 

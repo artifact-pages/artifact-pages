@@ -143,6 +143,26 @@
       <p class="subtle">The GitHub Action is a thin, separately distributed wrapper: for pre-publish it checks same-repository PR identity before obtaining publisher credentials; for production publish it provides checkout and credentials and invokes the same CLI operation available locally. It returns CLI outputs and does not own catalog reconciliation, PR comments, or workflow timing. A dry-run computes and reports the document/resource set and intended catalog change without provider writes. Exact flag and Action input spellings are deferred until the CLI surface is implemented; this table fixes meaning, not syntax.</p>
     </section>
 
+    <section aria-labelledby="cli-experience">
+      <h2 id="cli-experience">Production CLI experience · failure-policy options</h2>
+      <p>The same <code>site publish</code> invocation must work from a local checkout and from CI. Its dry-run should show production changes and preview-catalog removals together. This transcript is illustrative, not a claim that the current CLI already accepts these flags:</p>
+      <pre>$ artifact-pages site publish s3 --site sre --dry-run
+Production: 4 add, 2 update, 1 remove
+Previews:   retire PR #84 (closed), prune head:b274e11 (manifest absent)
+            keep 3 groups
+Writes:     none</pre>
+      <p>When a source-host PR lookup fails, the CLI must not interpret “unknown” as “closed.” Three possible responses are:</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Option</th><th>Behavior</th><th>Tradeoff</th></tr></thead>
+        <tbody>
+          <tr><td>A · Strict preflight</td><td>Stop before production writes until every PR state is known.</td><td>Simple all-or-nothing result, but a source-host outage blocks unrelated artifact publication.</td></tr>
+          <tr><td>B · Publish with warning</td><td>Publish production; keep unresolved PR groups; report preview reconciliation as incomplete for a later retry.</td><td>Production remains available, but a closed PR can remain discoverable until a later publish or provider removal. Recommended starting point.</td></tr>
+          <tr><td>C · Separate repair command</td><td>Publish production and require a second command to repair preview discovery.</td><td>Explicit retry surface, but adds an operation that local users and CI authors can forget.</td></tr>
+        </tbody>
+      </table></div>
+      <p class="subtle">In any option, an unavailable provider read is not evidence of a missing manifest: only a confirmed not-found may prune a group. The CLI should report production and preview-reconciliation outcomes separately rather than implying an incomplete cleanup was fully successful. This failure policy remains a design choice, not an implementation commitment.</p>
+    </section>
+
     <section aria-labelledby="expiry">
       <h2 id="expiry">Provider-owned retention and serving boundary</h2>
       <p>The administrator configures preview retention only in the hosting provider. Neither manifest nor catalog carries an application expiry timestamp, and the browser does not run its own expiry timer. While a completed manifest is available, a direct logical URL may resolve; after provider removal it shows “Preview unavailable”. The Previews list and palette fetch the catalog only when entered and check referenced manifest availability before showing entries. A later catalog update removes missing references. A retry of an existing revision does not overwrite its objects merely to refresh their provider lifecycle age.</p>
