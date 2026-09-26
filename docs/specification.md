@@ -722,6 +722,16 @@ The core product contract should not require AWS. AWS is a reference infrastruct
 
 Do not freeze package/repository boundaries before the local and AWS implementations validate the contracts.
 
+### Post-MVP pre-publish preview contract
+
+Pre-publish is a separate operation from production publish and dry-run. It creates a temporary, site-scoped review projection only for a registered site's source. A pull-request comment may carry a direct URL, but the browser must also be able to discover active previews from within that site. Previews are not inserted into the production artifact index, Browse tree, Recently updated section, or normal page-search results. The site home may link to a dedicated Previews view; inside a site, the command palette has a separate Previews tab. Opening a preview surface loads only that site's lightweight preview catalog, not catalogs for every site at startup.
+
+The preview catalog is a mutable static object containing discoverable preview metadata and links. For a pull request, it shows only the latest completed pre-publish in that PR's group. Older revisions are removed from the catalog but their direct URLs remain usable until the administrator-defined preview retention period ends. A GitHub Action can supply the PR identity; the core preview-group identity is not tied to a particular CI provider. The exact public preview path and catalog schema remain to be specified.
+
+Pre-publish shares the cooperative per-site storage lock with production publish and admin unregister. After acquiring the lock, it revalidates the deployed registry directly from storage. It uploads the new preview bundle and its completion manifest before reading and updating the catalog from storage. Updating the catalog is an idempotent upsert by preview identity, not a blind append. If the catalog update fails, the incomplete publication reports failure and can be retried; unlisted uploaded objects remain subject to preview retention. A different CI run for the same site cannot overwrite that catalog update while the lock is held. Unregister waits for an already-running pre-publish, then removes that site's preview projection along with its production projection.
+
+Pre-publish does not immediately delete an older completed revision when a newer one replaces it in the catalog. Early deletion would break previously shared direct URLs and could leave a cached catalog pointing at missing content. Provider lifecycle policy removes preview bytes after the administrator-defined retention period; the browser hides catalog entries that have passed their expected expiry, and a later catalog update prunes them. The catalog itself must not become an indefinitely retained orphan when a site stops pre-publishing. Mutable catalog responses use bounded cache freshness, so newly published previews may appear after a short cache delay. These preview behaviors are planned after the MVP and are not part of the Phase 1 local product.
+
 ## 20. Non-goals for the MVP
 
 - server-side rendering
