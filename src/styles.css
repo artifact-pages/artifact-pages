@@ -966,7 +966,10 @@ mark {
 
 .breadcrumb-current {
   color: var(--text);
-  font-weight: 500;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .context-button {
@@ -2004,6 +2007,14 @@ mark {
   .breadcrumbs {
     margin-left: 2px;
     font-size: 10px;
+  }
+
+  .breadcrumbs .breadcrumb-part:not(:last-child) {
+    display: none;
+  }
+
+  .breadcrumb-current {
+    font-size: 11px;
   }
 
   .context-button {

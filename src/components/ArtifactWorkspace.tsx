@@ -383,9 +383,11 @@ export function ArtifactWorkspace({
                       type="button"
                       className={isCurrent ? 'breadcrumb-current' : undefined}
                       aria-current={isCurrent ? 'page' : undefined}
+                      aria-label={isCurrent && currentArtifact ? `${currentArtifact.title}, current artifact` : undefined}
+                      title={isCurrent && currentArtifact ? currentArtifact.path : undefined}
                       onClick={() => revealSidebarLocation(folderPath, !isCurrent)}
                     >
-                      {segment}
+                      {isCurrent && currentArtifact ? currentArtifact.title : segment}
                     </button>
                   </span>
                 )
@@ -393,6 +395,18 @@ export function ArtifactWorkspace({
             </nav>
 
             <div className="context-actions">
+              {currentArtifact ? (
+                <button
+                  className="context-button context-home-button"
+                  type="button"
+                  aria-label={`Go to ${index.site.title} home`}
+                  title={`Go to ${index.site.title} home`}
+                  onClick={() => navigateWithinWorkspace(`/${encodeURIComponent(index.site.id)}`)}
+                >
+                  <Icon name="home" size={14} />
+                  <span>{index.site.title} home</span>
+                </button>
+              ) : null}
               <button
                 className={`context-button${tocOpen ? ' is-active' : ''}`}
                 disabled={!currentArtifact || tocEntries.length === 0}

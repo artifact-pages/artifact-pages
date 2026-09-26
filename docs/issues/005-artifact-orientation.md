@@ -1,6 +1,6 @@
 # Artifact title and route to site home are hard to find
 
-- Status: Open
+- Status: Done
 - Priority: P2
 - Area: Artifact workspace header
 
@@ -20,6 +20,12 @@ A reader can recognize the current artifact and return to its site home without 
 
 ## Acceptance criteria
 
-- [ ] The artifact display title is available as a clear current-page label, including when the artifact body has no H1.
-- [ ] The current site has an obvious home navigation control distinct from switching sites.
-- [ ] Narrow layouts preserve a recognizable current-page label and accessible control names.
+- [x] The artifact display title is available as a clear current-page label, including when the artifact body has no H1.
+- [x] The current site has an obvious home navigation control distinct from switching sites.
+- [x] Narrow layouts preserve a recognizable current-page label and accessible control names.
+
+## Verification
+
+- `npm run build`
+- Playwright: “artifact title and site home navigation stay clear on narrow screens”
+- Visual review in the in-app browser at desktop and 390px-wide viewports; the home action navigates to `/sre`.

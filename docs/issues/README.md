@@ -31,7 +31,7 @@ Priority describes user impact, not implementation effort. Issues 001–011 came
 | [002 — HTML heading navigation creates inconsistent back history](002-iframe-heading-history.md) | Done | P1 |
 | [003 — Independent searches leave contradictory result states](003-search-state-confusion.md) | Done | P1 |
 | [004 — Secondary text and controls lack contrast](004-secondary-contrast.md) | Done | P2 |
-| [005 — Artifact title and route to site home are hard to find](005-artifact-orientation.md) | Open | P2 |
+| [005 — Artifact title and route to site home are hard to find](005-artifact-orientation.md) | Done | P2 |
 | [006 — Unknown-site error exposes an internal storage path](006-unknown-site-error.md) | Open | P2 |
 | [007 — Site switcher initially selects another site](007-site-switcher-default.md) | Open | P2 |
 | [008 — Small sites repeat the same artifacts in several lists](008-duplicate-artifact-listing.md) | Open | P3 |

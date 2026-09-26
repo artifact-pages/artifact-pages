@@ -1183,3 +1183,23 @@ test('site home search and navigation filter stay distinct and navigation clears
   await expect(navigationFilter).toHaveValue('')
   await expect(page.locator('.browse-tree .tree-artifact[aria-current="page"]')).toBeVisible()
 })
+
+test('artifact title and site home navigation stay clear on narrow screens', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/sre/reports/latency-retrospective.md')
+
+  const article = page.locator('.markdown-article')
+  await expect(article.locator('h1')).toHaveCount(0)
+
+  const currentArtifact = page.locator('.breadcrumbs .breadcrumb-current')
+  await expect(currentArtifact).toHaveText('Latency Retrospective')
+  await expect(currentArtifact).toHaveAttribute('aria-current', 'page')
+
+  const homeButton = page.getByRole('button', { name: 'Go to SRE home' })
+  await expect(homeButton).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Switch site. Current site: SRE' })).toBeVisible()
+
+  await homeButton.click()
+  await expect(page).toHaveURL(/\/sre\/?$/)
+  await expect(page.getByRole('heading', { name: 'SRE' })).toBeVisible()
+})
