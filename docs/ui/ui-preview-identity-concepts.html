@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Small comparison of preview provenance placement in the existing Git Artifact Pages reader.">
+  <title>Preview identity placement — Git Artifact Pages</title>
+  <style>
+    :root { color-scheme: dark; --page:#111315; --shell:#151719; --sidebar:#101214; --raised:#1c1f22; --line:#2b2e31; --text:#e6e8ea; --secondary:#adb4ba; --quiet:#828b93; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--page); color:var(--text); font:13px/1.55 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { width:min(1280px,calc(100% - 32px)); margin:36px auto 64px; }
+    .eyebrow { margin:0; color:var(--quiet); font-size:11px; letter-spacing:.12em; text-transform:uppercase; }
+    h1 { margin:7px 0 8px; font-size:29px; letter-spacing:-.04em; }
+    .lead { max-width:840px; margin:0; color:var(--secondary); }
+    .notice { margin:20px 0 22px; padding:11px 14px; border-left:2px solid #7b858d; background:var(--raised); color:var(--secondary); }
+    .jump { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:29px; }
+    .jump a { padding:6px 10px; border:1px solid #35393d; border-radius:6px; color:var(--secondary); text-decoration:none; }
+    section { margin:0 0 32px; scroll-margin-top:20px; }
+    .heading { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:6px; }
+    h2 { margin:0; font-size:17px; font-weight:620; letter-spacing:-.025em; }
+    .verdict { color:var(--quiet); font-size:11px; }
+    .explain { margin:0 0 12px; color:var(--secondary); font-size:12px; }
+    .pair { display:grid; grid-template-columns:minmax(0,.94fr) minmax(0,1.06fr); gap:12px; }
+    .panel { min-width:0; }
+    .panel-label { margin:0 0 6px; color:var(--quiet); font-size:10px; letter-spacing:.08em; text-transform:uppercase; }
+    .screen { display:grid; grid-template-columns:132px minmax(0,1fr); height:269px; overflow:hidden; border:1px solid #34383c; border-radius:8px; background:var(--shell); }
+    .sidebar { padding:11px 8px; border-right:1px solid var(--line); background:var(--sidebar); }
+    .site { margin-bottom:17px; color:var(--text); font-size:11px; font-weight:620; }
+    .site-mark { display:inline-grid; width:17px; height:17px; margin-right:5px; place-items:center; border-radius:4px; background:#d9dce0; color:#30343a; font-size:9px; }
+    .search { padding:7px; border:1px solid #25282b; border-radius:5px; background:var(--raised); color:#75808a; font-size:10px; }
+    .section-title { margin:16px 5px 7px; color:var(--quiet); font-size:10px; }
+    .side-row { overflow:hidden; padding:5px 6px; color:var(--secondary); font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
+    .side-row.selected { color:var(--secondary); }
+    .mainpane { min-width:0; }
+    .context { display:flex; align-items:center; justify-content:space-between; min-width:0; height:40px; gap:8px; padding:0 10px; border-bottom:1px solid var(--line); color:var(--quiet); font:10px ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .crumb { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .crumb strong { color:var(--text); font-weight:500; }
+    .context-actions { flex:none; color:#9aa2a9; font:10px Inter,ui-sans-serif,system-ui,sans-serif; white-space:nowrap; }
+    .list-content { padding:17px 18px; }
+    .list-content h3 { margin:0 0 2px; font-size:20px; letter-spacing:-.035em; }
+    .intro { margin:0 0 13px; color:var(--quiet); font-size:10px; }
+    .group { margin-top:13px; }
+    .group-head { color:#9ca5ad; font-size:10px; }
+    .group-head small { margin-left:7px; color:var(--quiet); font:10px ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .doc { margin-top:5px; padding:7px 0; border-bottom:1px solid var(--line); color:#dce0e2; font-size:11px; }
+    .doc span { display:block; color:var(--quiet); font:10px ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .reader { height:229px; overflow:hidden; background:#f9faf9; color:#262e33; }
+    .artifact { max-width:420px; margin:0 auto; padding:28px 28px 20px; }
+    .artifact .brand { margin-bottom:15px; color:#626f73; font-size:9px; font-weight:700; letter-spacing:.11em; text-transform:uppercase; }
+    .artifact h3 { margin:0 0 8px; font-size:23px; line-height:1.15; letter-spacing:-.045em; }
+    .artifact p { margin:0 0 11px; color:#526066; font-size:11px; }
+    .artifact h4 { margin:12px 0 6px; font-size:13px; }
+    .artifact .line { width:88%; height:5px; margin-top:9px; border-radius:3px; background:#dce2e1; }
+    .artifact .line.short { width:60%; }
+    .preview-inline { flex:none; color:#b6bdc2; font:9px ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.01em; white-space:nowrap; }
+    .preview-strip { display:flex; align-items:center; justify-content:space-between; height:30px; padding:0 11px; border-bottom:1px solid #d6dce0; background:#eef1f1; color:#59666d; font-size:10px; }
+    .preview-strip a { color:#59666d; text-decoration:none; }
+    .screen.has-strip .reader { height:199px; }
+    .screen.has-strip .artifact { padding-top:19px; }
+    .tradeoff { margin:10px 0 0; color:var(--quiet); font-size:11px; }
+    @media (max-width:900px) { .pair { grid-template-columns:1fr; } .screen { height:268px; } }
+    @media (max-width:520px) { .screen { grid-template-columns:95px minmax(0,1fr); } .sidebar { padding-inline:5px; } .context-actions { display:none; } .list-content { padding-inline:10px; } .artifact { padding-inline:15px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">UI study · concept only</p>
+    <h1>How visible should preview identity be?</h1>
+    <p class="lead">The artifact title remains its own H1. This compares where the application tells a reader that the same document is a temporary PR preview. No expiry countdown or new artifact controls are proposed.</p>
+    <p class="notice">The list uses a PR number and short head SHA to distinguish revisions. The question is whether a reader opening a direct document URL also needs that context in the application chrome.</p>
+    <nav class="jump" aria-label="Jump to concept"><a href="#a">A · List only</a><a href="#b">B · Header context</a><a href="#c">C · Reader strip</a></nav>
+
+    <section id="a">
+      <div class="heading"><h2>A · List only</h2><span class="verdict">Quietest reader</span></div>
+      <p class="explain">Provenance lives in the Previews list. Opening the document retains today's reader chrome unchanged.</p>
+      <div class="pair"><div class="panel"><p class="panel-label">Previews list</p><div class="screen"><aside class="sidebar"><div class="site"><span class="site-mark">S</span>SRE</div><div class="search">Filter this site</div><div class="section-title">Recently updated</div><div class="side-row">Checkout latency review</div><div class="section-title">Browse</div><div class="side-row">⌄ incidents</div></aside><div class="mainpane"><div class="context"><span class="crumb">sre / previews</span><span class="context-actions">Site home</span></div><div class="list-content"><h3>Previews</h3><p class="intro">Temporary documents from this site</p><div class="group"><div class="group-head">Pull request #84 <small>a13f9c2</small></div><div class="doc">Checkout latency incident review <span>incidents/checkout-latency/index.html</span></div></div><div class="group"><div class="group-head">Manual preview <small>b274e11</small></div><div class="doc">Platform topology <span>architecture/platform-topology.md</span></div></div></div></div></div></div><div class="panel"><p class="panel-label">Opened from a direct link</p><div class="screen"><aside class="sidebar"><div class="site"><span class="site-mark">S</span>SRE</div><div class="search">Filter this site</div><div class="section-title">Browse</div><div class="side-row selected">Checkout latency review</div></aside><div class="mainpane"><div class="context"><span class="crumb">incidents / checkout-latency / <strong>index.html</strong></span><span class="context-actions">Contents &nbsp; Details</span></div><div class="reader"><article class="artifact"><div class="brand">Incident review</div><h3>Checkout latency incident review</h3><p>September review · Platform Engineering</p><h4>Summary</h4><div class="line"></div><div class="line short"></div></article></div></div></div></div></div>
+      <p class="tradeoff">Best when preview visits always begin in the list. A pasted deep link is visually hard to distinguish from production.</p>
+    </section>
+
+    <section id="b">
+      <div class="heading"><h2>B · Header context</h2><span class="verdict">Recommended starting point</span></div>
+      <p class="explain">The list remains the same. A small provenance label stays in the app header, outside the artifact iframe.</p>
+      <div class="pair"><div class="panel"><p class="panel-label">Previews list</p><div class="screen"><aside class="sidebar"><div class="site"><span class="site-mark">S</span>SRE</div><div class="search">Filter this site</div><div class="section-title">Recently updated</div><div class="side-row">Checkout latency review</div><div class="section-title">Browse</div><div class="side-row">⌄ incidents</div></aside><div class="mainpane"><div class="context"><span class="crumb">sre / previews</span><span class="context-actions">Site home</span></div><div class="list-content"><h3>Previews</h3><p class="intro">Temporary documents from this site</p><div class="group"><div class="group-head">Pull request #84 <small>a13f9c2</small></div><div class="doc">Checkout latency incident review <span>incidents/checkout-latency/index.html</span></div></div><div class="group"><div class="group-head">Manual preview <small>b274e11</small></div><div class="doc">Platform topology <span>architecture/platform-topology.md</span></div></div></div></div></div></div><div class="panel"><p class="panel-label">Opened from a direct link</p><div class="screen"><aside class="sidebar"><div class="site"><span class="site-mark">S</span>SRE</div><div class="search">Filter this site</div><div class="section-title">Browse</div><div class="side-row selected">Checkout latency review</div></aside><div class="mainpane"><div class="context"><span class="crumb">incidents / checkout-latency / <strong>index.html</strong></span><span class="preview-inline">Preview · PR #84 · a13f9c2</span><span class="context-actions">Contents &nbsp; Details</span></div><div class="reader"><article class="artifact"><div class="brand">Incident review</div><h3>Checkout latency incident review</h3><p>September review · Platform Engineering</p><h4>Summary</h4><div class="line"></div><div class="line short"></div></article></div></div></div></div></div>
+      <p class="tradeoff">Direct links have context without reducing the artifact viewport. At narrow widths the label may need to abbreviate or move behind Details.</p>
+    </section>
+
+    <section id="c">
+      <div class="heading"><h2>C · Reader strip</h2><span class="verdict">Clearest, but more chrome</span></div>
+      <p class="explain">A quiet strip separates application context from the rendered artifact. It can offer a return link to the list.</p>
+      <div class="pair"><div class="panel"><p class="panel-label">Previews list</p><div class="screen"><aside class="sidebar"><div class="site"><span class="site-mark">S</span>SRE</div><div class="search">Filter this site</div><div class="section-title">Recently updated</div><div class="side-row">Checkout latency review</div><div class="section-title">Browse</div><div class="side-row">⌄ incidents</div></aside><div class="mainpane"><div class="context"><span class="crumb">sre / previews</span><span class="context-actions">Site home</span></div><div class="list-content"><h3>Previews</h3><p class="intro">Temporary documents from this site</p><div class="group"><div class="group-head">Pull request #84 <small>a13f9c2</small></div><div class="doc">Checkout latency incident review <span>incidents/checkout-latency/index.html</span></div></div><div class="group"><div class="group-head">Manual preview <small>b274e11</small></div><div class="doc">Platform topology <span>architecture/platform-topology.md</span></div></div></div></div></div></div><div class="panel"><p class="panel-label">Opened from a direct link</p><div class="screen has-strip"><aside class="sidebar"><div class="site"><span class="site-mark">S</span>SRE</div><div class="search">Filter this site</div><div class="section-title">Browse</div><div class="side-row selected">Checkout latency review</div></aside><div class="mainpane"><div class="context"><span class="crumb">incidents / checkout-latency / <strong>index.html</strong></span><span class="context-actions">Contents &nbsp; Details</span></div><div class="preview-strip"><span>Preview · PR #84 · a13f9c2</span><a href="#c">All previews →</a></div><div class="reader"><article class="artifact"><div class="brand">Incident review</div><h3>Checkout latency incident review</h3><p>September review · Platform Engineering</p><h4>Summary</h4><div class="line"></div><div class="line short"></div></article></div></div></div></div></div>
+      <p class="tradeoff">Best for strong orientation and an obvious return path. It introduces a persistent 30 px bar and slightly shrinks the reader.</p>
+    </section>
+  </main>
+</body>
+</html>

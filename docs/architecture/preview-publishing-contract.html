@@ -125,6 +125,9 @@
       </div>
       <p>The lock serializes cooperating writers; an atomic conditional write on the mutable catalog is still useful as a defensive check against an out-of-band writer. A catalog update failure is a failed pre-publish, not a successful unlisted preview. Retrying must converge without changing an already completed revision. A partially uploaded revision without a manifest is not readable through logical preview routes and is recovered by retry or retention cleanup.</p>
       <p><code>no-preview</code> is a successful no-page result for a deletion-only document change. Under the same lock it removes the group's catalog entry if present; it does not delete an earlier completed revision. A non-document-only change is an error and must not mutate discovery. Group retirement follows the same lock/read/write sequence, removes only the named group, and leaves immutable bundle objects for their remaining lifetime.</p>
+      <h3>Catalog reconciliation</h3>
+      <p>A PR close/merge workflow can invoke group retirement immediately; it removes that group from discovery, not its provider-managed bundle. This does not cover an open PR or manual preview whose objects disappear later. Provide an idempotent, site-scoped catalog-reconciliation operation and a thin cleanup Action for it. The installation owner chooses whether to invoke that Action on a schedule, manually, or alongside other workflows. Under the same site lock, reconciliation reads the current catalog from origin, checks each referenced completion manifest at the provider, removes references whose manifest is absent, and conditionally writes the catalog. Pre-publish performs this reconciliation opportunistically before its own upsert. No step computes a deadline or deletes preview bundles.</p>
+      <p>Between those writes, the browser's Previews list and palette check manifest availability and hide stale candidates. A missed PR close event can leave a still-existing preview discoverable until retirement is retried or its provider objects disappear; a catalog-only cleanup cannot infer GitHub PR state. Manifest checks are intentionally deferred until a reader opens the site-scoped preview surface, and their cost is a release-gate measurement.</p>
     </section>
 
     <section aria-labelledby="inputs">
@@ -156,6 +159,7 @@
           <li>Crash after file upload, after manifest write, and before catalog write: no broken advertised revision; retry converges.</li>
           <li>Same head with different selected documents or bytes fails without replacing its manifest.</li>
           <li><code>no-preview</code>, retire, reopen, provider removal, and absent catalog all produce their specified empty states.</li>
+          <li>Close/merge retires the group; a still-open PR or manual group whose provider manifest disappears is removed by reconciliation without any app-side expiry arithmetic.</li>
         </ul></div>
         <div><h3>Browser and provider</h3><ul>
           <li>HTML iframe and Markdown reader load relative CSS, JS, images and fonts from the preview snapshot.</li>

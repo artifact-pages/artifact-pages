@@ -19,6 +19,7 @@ These are design explorations, not the current application contract.
 - [Collapsed sidebar](ui/ui-collapsed-sidebar-concepts.html)
 - [Command palette](ui/ui-command-palette-concepts.html) and [context-dependent search](ui/ui-command-palette-context-concepts.html)
 - [Artifact details](ui/ui-index-metadata-concepts.html) and [Markdown preview](ui/ui-markdown-preview-concepts.html)
+- [Preview identity placement](ui/ui-preview-identity-concepts.html) — compare list-only, header, and reader-strip treatments before changing the product UI.
 
 ## Research
 

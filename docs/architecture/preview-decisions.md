@@ -18,7 +18,7 @@ This page tracks what remains to decide or prove for pre-publish previews. The [
 
 | ID | Decision | Current recommendation | What changes with the choice |
 | --- | --- | --- | --- |
-| P3 | How should a reader recognize which preview revision a page and list entry belong to? | Keep the document H1 as its title. A small context label could say `Preview · PR #84 · a13f9c2` for a PR or `Preview · a13f9c2` for a manual run; no application-managed expiry label. | Prevents confusion between a preview and its published page. This is about provenance in the UI, not renaming the document. The [UI study](../ui/ui-preview-discovery-concepts.html) is exploratory, not a final reader state. |
+| P3 | How should a reader recognize which preview revision a page and list entry belong to? | Compare [A: list only, B: header context, C: reader strip](../ui/ui-preview-identity-concepts.html). Keep the document H1 as its title and show no application-managed expiry label. | Prevents confusion between a preview and its published page. This is about provenance in the UI, not renaming the document. Await visual review before accepting a placement. |
 
 P3 is the only remaining product-facing preview choice recorded here. It does not block continued technical exploration.
 
@@ -40,6 +40,7 @@ P3 is the only remaining product-facing preview choice recorded here. It does no
 | T5 | Verify | Concurrency, idempotency and crash recovery. | Run both unregister/pre-publish orderings, simultaneous group updates, partial uploads, manifest-before-catalog failure, same-head mismatch and retirement retry. See the [proof matrix](preview-publishing-contract.html#proof). |
 | T6 | Verify | Snapshot-relative resources and document navigation. | Exercise HTML and Markdown with CSS, JS, images, fonts, changed-document links and unchanged-document links; establish the boundary for dynamic/root-relative URLs. |
 | T7 | Verify | Lazy catalog and availability-check cost at multi-site scale. | Confirm opening one site's Previews does not download other sites' catalogs; measure transfer, manifest checks, parse, memory and input-to-paint with many sites. If checking every candidate is too costly, revise the discovery projection without adding app-managed expiry. |
+| T8 | Proposed — technical | Stale catalog references after provider removal. | Retire a PR group on close/merge, reconcile missing-manifest references on every catalog write, and provide a standalone site-scoped cleanup Action for user-scheduled or manual runs. Browser availability checks hide stale links between runs. The caller chooses cleanup timing; the core never computes expiry dates. Verify lock/CAS behavior and catalog cleanup after an open PR or manual preview disappears at the provider. |
 
 ## Accepted product contract
 
