@@ -1,6 +1,6 @@
 # Mobile navigation covers content after reload
 
-- Status: Open
+- Status: Done
 - Priority: P1
 - Area: Mobile workspace navigation
 

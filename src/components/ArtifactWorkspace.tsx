@@ -29,7 +29,7 @@ export function ArtifactWorkspace({
   sidebarTreeStyle = 'branch-guides',
   siteHomeTreeStyle = 'path-list',
   initialExpandedPaths = [],
-  initialSidebarOpen = true,
+  initialSidebarOpen,
 }: {
   route: SiteRoute
   pathname: string
@@ -47,8 +47,8 @@ export function ArtifactWorkspace({
   initialExpandedPaths?: string[]
   initialSidebarOpen?: boolean
 }) {
-  const [sidebarOpen, setSidebarOpen] = useState(initialSidebarOpen)
-  const sidebarOpenRef = useRef(initialSidebarOpen)
+  const [sidebarOpen, setSidebarOpen] = useState(() => initialSidebarOpen ?? window.innerWidth > 860)
+  const sidebarOpenRef = useRef(sidebarOpen)
   const [activePanel, setActivePanel] = useState<WorkspacePanel>(null)
   const [paletteSeed, setPaletteSeed] = useState<string | null>(null)
   const [pinnedArtifactIds, setPinnedArtifactIds] = useState<string[]>([])
@@ -124,12 +124,13 @@ export function ArtifactWorkspace({
   useEffect(() => () => window.clearTimeout(toastTimer.current), [])
 
   useEffect(() => {
-    updateSidebarOpen(initialSidebarOpen)
+    if (initialSidebarOpen !== undefined) updateSidebarOpen(initialSidebarOpen)
   }, [initialSidebarOpen, updateSidebarOpen])
 
   useEffect(() => {
     setActivePanel(null)
-  }, [route.artifactPath])
+    if (window.innerWidth <= 860) updateSidebarOpen(false)
+  }, [route.artifactPath, updateSidebarOpen])
 
   useEffect(() => {
     if (recentReads !== undefined || !currentArtifact || lastRecordedArtifactId.current === currentArtifact.id) return
@@ -243,7 +244,6 @@ export function ArtifactWorkspace({
     navigate(artifactRouteHref(index.site.id, artifact.path))
     setActivePanel(null)
     setPaletteSeed(null)
-    if (window.innerWidth <= 860) updateSidebarOpen(false)
   }
 
   function revealSidebarLocation(path: string, isDirectory: boolean) {

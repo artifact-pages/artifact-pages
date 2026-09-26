@@ -755,6 +755,45 @@ test('Markdown retrospective stays readable on narrow screens and supports theme
   expect(darkHeadingColor).not.toBe(initialHeadingColor)
 })
 
+test('mobile navigation starts closed and closes after opening artifacts or switching sites', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/sre/reports/latency-retrospective.md')
+
+  const sidebar = page.locator('.sidebar-panel')
+  await expect(sidebar).toBeHidden()
+  await expect(page.getByTestId('markdown-document').getByRole('heading', { level: 2, name: 'Outcome at a glance' })).toBeVisible()
+
+  await page.reload()
+  await expect(sidebar).toBeHidden()
+  await expect(page.getByTestId('markdown-document').getByRole('heading', { level: 2, name: 'Outcome at a glance' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Expand navigation' }).click()
+  await expect(sidebar).toBeVisible()
+  await page.getByRole('textbox', { name: 'Filter SRE navigation' }).fill('Service recovery')
+  await page.locator('.sidebar-panel .tree-artifact[data-tree-path="runbooks/service-recovery.md"]').click()
+  await expect(page).toHaveURL(/\/sre\/runbooks\/service-recovery\.md$/)
+  await expect(sidebar).toBeHidden()
+  await expect(page.getByTestId('markdown-document').getByRole('heading', { level: 1, name: 'Service recovery' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Expand navigation' }).click()
+  await page.keyboard.press('Control+k')
+  const homePalette = page.getByRole('dialog', { name: 'Command palette' })
+  await homePalette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' }).fill('Go to site home')
+  await homePalette.getByRole('option', { name: /Go to site home/ }).click()
+  await expect(page).toHaveURL(/\/sre$/)
+  await expect(sidebar).toBeHidden()
+
+  await page.getByRole('button', { name: 'Expand navigation' }).click()
+  await page.getByRole('button', { name: 'Switch site. Current site: SRE' }).click()
+  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
+  await search.fill('@front')
+  await search.press('Enter')
+  await expect(page).toHaveURL(/\/frontend$/)
+  await expect(page.getByRole('heading', { name: 'Frontend', exact: true })).toBeVisible()
+  await expect(page.locator('.sidebar-panel')).toBeHidden()
+})
+
 test('Mermaid catalog renders every fixture type supported by the bundled core and preserves unsupported source', async ({ page }) => {
   test.setTimeout(180_000)
   page.setDefaultTimeout(150_000)

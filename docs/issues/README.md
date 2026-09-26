@@ -27,7 +27,7 @@ Priority describes user impact, not implementation effort. Issues 001–011 came
 
 | Issue | Status | Priority |
 | --- | --- | --- |
-| [001 — Mobile navigation covers content after reload](001-mobile-navigation-on-reload.md) | Open | P1 |
+| [001 — Mobile navigation covers content after reload](001-mobile-navigation-on-reload.md) | Done | P1 |
 | [002 — HTML heading navigation creates inconsistent back history](002-iframe-heading-history.md) | Open | P1 |
 | [003 — Independent searches leave contradictory result states](003-search-state-confusion.md) | Open | P1 |
 | [004 — Secondary text and controls lack contrast](004-secondary-contrast.md) | Open | P2 |
