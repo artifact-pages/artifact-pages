@@ -1,6 +1,6 @@
 # Wide Markdown tables need an overflow cue
 
-- Status: Open
+- Status: Done
 - Priority: P3
 - Area: Markdown reader on narrow screens
 
@@ -21,6 +21,14 @@ Readers can discover that more columns are available and reach them without movi
 
 ## Acceptance criteria
 
-- [ ] A wide table provides a visible overflow cue at narrow widths.
-- [ ] Horizontal scrolling reveals every column while the workspace width remains stable.
-- [ ] The cue recedes or disappears when all columns fit.
+- [x] A wide table provides a visible overflow cue at narrow widths.
+- [x] Horizontal scrolling reveals every column while the workspace width remains stable.
+- [x] The cue recedes or disappears when all columns fit.
+
+## Verification
+
+- `npm run build`
+- Playwright: mobile table overflow, last-column access, stable document width, and cue removal at desktop width
+- Full Playwright suite: 37 tests passed
+- Browser screenshot at 390 px confirms the hint sits below the table without covering cells
+- Sub-agent review: no actionable findings

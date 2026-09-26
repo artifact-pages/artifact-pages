@@ -943,19 +943,41 @@ test('Markdown retrospective stays readable on narrow screens and supports theme
   const reader = page.getByTestId('markdown-document')
   await expect(reader.getByRole('heading', { level: 2, name: 'Outcome at a glance' })).toBeVisible()
   await expect(reader.getByRole('heading', { level: 1 })).toHaveCount(0)
+  const tableScrollport = reader.getByRole('region', { name: 'Scrollable table' }).first()
+  const table = tableScrollport.getByRole('table')
+  const signalHeader = table.getByRole('columnheader', { name: 'Signal' })
+  const recoveredHeader = table.getByRole('columnheader', { name: 'Recovered' })
+  await expect(reader.locator('.markdown-table-hint').first()).toHaveText('Scroll to see more columns →')
   const dimensions = await reader.evaluate((element) => {
-    const table = element.querySelector('table')!
+    const scrollport = element.querySelector<HTMLElement>('.markdown-table-scroll')!
     return {
       viewportWidth: document.documentElement.clientWidth,
       documentWidth: document.documentElement.scrollWidth,
-      tableClientWidth: table.clientWidth,
-      tableScrollWidth: table.scrollWidth,
+      tableClientWidth: scrollport.clientWidth,
+      tableScrollWidth: scrollport.scrollWidth,
       readerClientWidth: element.clientWidth,
     }
   })
   expect(dimensions.documentWidth).toBeLessThanOrEqual(dimensions.viewportWidth)
   expect(dimensions.tableScrollWidth).toBeGreaterThan(dimensions.tableClientWidth)
   expect(dimensions.readerClientWidth).toBeLessThanOrEqual(dimensions.viewportWidth)
+  const headerFitsWithinScrollport = async (header: typeof signalHeader) => {
+    const [headerBox, scrollportBox] = await Promise.all([header.boundingBox(), tableScrollport.boundingBox()])
+    return Boolean(
+      headerBox
+      && scrollportBox
+      && headerBox.x >= scrollportBox.x - 1
+      && headerBox.x + headerBox.width <= scrollportBox.x + scrollportBox.width + 1,
+    )
+  }
+  expect(await headerFitsWithinScrollport(signalHeader)).toBeTruthy()
+  expect(await headerFitsWithinScrollport(recoveredHeader)).toBeFalsy()
+
+  await tableScrollport.evaluate((element) => { element.scrollLeft = element.scrollWidth })
+  await expect(reader.locator('.markdown-table-hint').first()).toHaveText('← Scroll left to see earlier columns')
+  await expect.poll(() => headerFitsWithinScrollport(recoveredHeader)).toBeTruthy()
+  const documentWidthAfterScroll = await page.evaluate(() => document.documentElement.scrollWidth)
+  expect(documentWidthAfterScroll).toBe(dimensions.documentWidth)
 
   const initialHeadingColor = await reader.locator('h2').first().evaluate((element) => getComputedStyle(element).color)
   await page.getByRole('button', { name: /Color theme:/ }).click()
@@ -963,6 +985,9 @@ test('Markdown retrospective stays readable on narrow screens and supports theme
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   const darkHeadingColor = await reader.locator('h2').first().evaluate((element) => getComputedStyle(element).color)
   expect(darkHeadingColor).not.toBe(initialHeadingColor)
+
+  await page.setViewportSize({ width: 1280, height: 844 })
+  await expect(reader.locator('.markdown-table-hint')).toHaveCount(0)
 })
 
 test('mobile navigation starts closed and closes after opening artifacts or switching sites', async ({ page }) => {

@@ -1,4 +1,4 @@
-import { isValidElement, useEffect, useState, type ReactNode } from 'react'
+import { isValidElement, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import Markdown, { defaultUrlTransform, type Options as MarkdownOptions } from 'react-markdown'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
@@ -86,6 +86,11 @@ export function MarkdownArtifact({
           rehypePlugins={markdownRehypePlugins}
           urlTransform={(url, key) => transformMarkdownUrl(url, key, artifact, siteId)}
           components={{
+            table: ({ children, ...props }) => (
+              <MarkdownTableScroll>
+                <table {...props}>{children}</table>
+              </MarkdownTableScroll>
+            ),
             pre: ({ children, ...props }) => {
               const nodes = Array.isArray(children) ? children : [children]
               const mermaidCode = nodes.find((node) => (
@@ -129,6 +134,72 @@ export function MarkdownArtifact({
         </Markdown>
       </article>
     </div>
+  )
+}
+
+function MarkdownTableScroll({ children }: { children: ReactNode }) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const hintId = useId()
+  const [scrollState, setScrollState] = useState({
+    overflows: false,
+    canScrollLeft: false,
+    canScrollRight: false,
+  })
+
+  useEffect(() => {
+    const scrollport = scrollRef.current
+    if (!scrollport) return
+
+    const updateScrollState = () => {
+      const maxScrollLeft = Math.max(0, scrollport.scrollWidth - scrollport.clientWidth)
+      const nextState = {
+        overflows: maxScrollLeft > 1,
+        canScrollLeft: scrollport.scrollLeft > 1,
+        canScrollRight: scrollport.scrollLeft < maxScrollLeft - 1,
+      }
+      setScrollState((currentState) => (
+        currentState.overflows === nextState.overflows
+        && currentState.canScrollLeft === nextState.canScrollLeft
+        && currentState.canScrollRight === nextState.canScrollRight
+          ? currentState
+          : nextState
+      ))
+    }
+
+    const observer = new ResizeObserver(updateScrollState)
+    observer.observe(scrollport)
+    if (scrollport.firstElementChild) observer.observe(scrollport.firstElementChild)
+    scrollport.addEventListener('scroll', updateScrollState, { passive: true })
+    updateScrollState()
+
+    return () => {
+      observer.disconnect()
+      scrollport.removeEventListener('scroll', updateScrollState)
+    }
+  }, [children])
+
+  return (
+    <>
+      <div
+        ref={scrollRef}
+        className="markdown-table-scroll"
+        role={scrollState.overflows ? 'region' : undefined}
+        aria-label={scrollState.overflows ? 'Scrollable table' : undefined}
+        aria-describedby={scrollState.overflows ? hintId : undefined}
+        tabIndex={scrollState.overflows ? 0 : undefined}
+      >
+        {children}
+      </div>
+      {scrollState.overflows ? (
+        <p id={hintId} className="markdown-table-hint">
+          {scrollState.canScrollRight
+            ? 'Scroll to see more columns →'
+            : scrollState.canScrollLeft
+              ? '← Scroll left to see earlier columns'
+              : null}
+        </p>
+      ) : null}
+    </>
   )
 }
 
