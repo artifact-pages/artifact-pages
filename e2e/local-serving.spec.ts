@@ -391,6 +391,36 @@ test('artifact-context # search opens a heading and closes the palette', async (
   await expect(page).toHaveURL(/#root-cause$/)
 })
 
+test('HTML heading navigation keeps the URL and iframe section in sync with one history step', async ({ page }) => {
+  await page.goto('/showcase/editorial/field-notes/index.html')
+
+  const artifact = page.frameLocator('iframe[title="Designing for resilience"]')
+  const practiceHeading = artifact.getByRole('heading', { name: 'Practice over prediction' })
+  await expect(artifact.getByRole('heading', { name: 'Designing for resilience' })).toBeVisible()
+  await page.getByRole('button', { name: 'Contents', exact: true }).click()
+  await page.getByRole('complementary', { name: 'Contents' })
+    .getByRole('button', { name: 'Practice over prediction' }).click()
+
+  await expect(page).toHaveURL(/#practice$/)
+  await expect.poll(() => artifact.locator('body').evaluate((body) => body.ownerDocument.defaultView?.location.hash)).toBe('#practice')
+  await expect(practiceHeading).toBeInViewport()
+
+  await page.goBack()
+  await expect(page).toHaveURL(/\/showcase\/editorial\/field-notes\/index\.html$/)
+  await expect.poll(() => artifact.locator('body').evaluate((body) => body.ownerDocument.defaultView?.location.hash)).toBe('')
+  await expect(artifact.getByRole('heading', { name: 'Designing for resilience' })).toBeInViewport()
+
+  await page.goForward()
+  await expect(page).toHaveURL(/#practice$/)
+  await expect.poll(() => artifact.locator('body').evaluate((body) => body.ownerDocument.defaultView?.location.hash)).toBe('#practice')
+  await expect(practiceHeading).toBeInViewport()
+
+  await page.reload()
+  await expect(page).toHaveURL(/#practice$/)
+  await expect.poll(() => artifact.locator('body').evaluate((body) => body.ownerDocument.defaultView?.location.hash)).toBe('#practice')
+  await expect(practiceHeading).toBeInViewport()
+})
+
 test('multi-file artifacts stay in their site namespace when relative asset paths overlap', async ({ page }) => {
   const artifactResponsePaths: string[] = []
   page.on('response', (response) => {

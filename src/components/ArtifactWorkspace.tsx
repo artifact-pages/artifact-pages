@@ -63,6 +63,7 @@ export function ArtifactWorkspace({
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<number | undefined>(undefined)
   const paletteReturnFocus = useRef<HTMLElement | null>(null)
+  const htmlFrameRef = useRef<HTMLIFrameElement>(null)
   const currentArtifact = route.artifactPath
     ? findArtifact(index, route.artifactPath)
     : undefined
@@ -259,14 +260,36 @@ export function ArtifactWorkspace({
     setActivePanel(null)
   }
 
+  const htmlArtifactUrl = currentArtifact && currentFormat === 'html'
+    ? currentArtifact.artifactUrl
+    : undefined
+  const syncHtmlFrameLocation = useCallback((iframe = htmlFrameRef.current) => {
+    if (!iframe || !htmlArtifactUrl) return
+    const frameWindow = iframe.contentWindow
+    if (!frameWindow) return
+
+    try {
+      const expectedUrl = new URL(htmlArtifactUrl, window.location.href)
+      const frameUrl = new URL(frameWindow.location.href)
+      if (frameUrl.origin !== expectedUrl.origin
+        || frameUrl.pathname !== expectedUrl.pathname
+        || frameUrl.search !== expectedUrl.search
+        || frameUrl.hash === hash) return
+      frameUrl.hash = hash
+      frameWindow.location.replace(frameUrl.href)
+    } catch {
+      // Cross-origin redirects remain isolated; same-origin artifacts receive the logical fragment.
+    }
+  }, [hash, htmlArtifactUrl])
+
+  useEffect(() => {
+    syncHtmlFrameLocation()
+  }, [syncHtmlFrameLocation])
+
   const tocEntries = currentArtifact?.toc ?? []
   const artifactSegments = currentArtifact?.path.split('/').filter(Boolean)
     ?? route.artifactPath?.split('/').filter(Boolean)
     ?? []
-  const iframeSrc = currentArtifact && currentFormat === 'html'
-    ? `${currentArtifact.artifactUrl}${hash}`
-    : undefined
-
   return (
     <div className={`app-shell${sidebarOpen ? '' : ' sidebar-collapsed'}`}>
       <Sidebar
@@ -418,15 +441,17 @@ export function ArtifactWorkspace({
                 hash={hash}
                 navigate={navigate}
               />
-            ) : currentArtifact && iframeSrc ? (
+            ) : currentArtifact && htmlArtifactUrl ? (
               <iframe
                 className="artifact-frame"
+                ref={htmlFrameRef}
                 key={currentArtifact.artifactUrl}
-                src={iframeSrc}
+                src={htmlArtifactUrl}
                 title={currentArtifact.title}
                 style={{ colorScheme: theme }}
                 onLoad={(event) => {
                   event.currentTarget.contentWindow?.addEventListener('keydown', handleArtifactKeyDown, true)
+                  syncHtmlFrameLocation(event.currentTarget)
                 }}
               />
             ) : route.artifactPath ? (

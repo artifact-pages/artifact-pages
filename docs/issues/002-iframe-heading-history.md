@@ -1,6 +1,6 @@
 # HTML heading navigation creates inconsistent back history
 
-- Status: Open
+- Status: Done
 - Priority: P1
 - Area: HTML artifact viewer and browser history
 
