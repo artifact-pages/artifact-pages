@@ -76,7 +76,6 @@
   "headSha": "&lt;full Git SHA&gt;",
   "comparisonBaseSha": "&lt;resolved default HEAD&gt;",
   "createdAt": "&lt;UTC timestamp&gt;",
-  "expiresAt": "&lt;UTC timestamp&gt;",
   "bundleDigest": "sha256:&lt;digest&gt;",
   "files": [
     {
@@ -101,7 +100,6 @@
       "id": "pr:42",
       "headSha": "&lt;full Git SHA&gt;",
       "updatedAt": "&lt;UTC timestamp&gt;",
-      "expiresAt": "&lt;UTC timestamp&gt;",
       "documents": [
         {
           "path": "incidents/review.md",
@@ -111,7 +109,7 @@
       ]
     }
   ]
-}</pre><p class="subtle">One entry per group. PR groups use <code>pr:&lt;id&gt;</code>; manual defaults use <code>head:&lt;SHA&gt;</code>. The group is a discovery identity, not part of the revision URL. A preview view filters expired entries even before a later write prunes them.</p></div>
+}</pre><p class="subtle">One entry per group. PR groups use <code>pr:&lt;id&gt;</code>; manual defaults use <code>head:&lt;SHA&gt;</code>. The group is a discovery identity, not part of the revision URL. Entries are candidates: the reader checks whether their revision manifests still exist at the provider.</p></div>
       </div>
       <p>All paths are canonical source-relative POSIX paths with retained file extensions. Reject traversal, backslashes, duplicate normalized paths, symlink escapes and reserved namespaces before uploading. Catalog entries never point to a revision without a completion manifest.</p>
     </section>
@@ -123,7 +121,7 @@
         <div class="step"><b>2 · Lock and validate</b><span>Acquire site lock; read deployed registry directly; verify exact repository and source path.</span></div>
         <div class="step"><b>3 · Upload bundle</b><span>Write all raw files; verify paths, bytes and content types. Do not advertise yet.</span></div>
         <div class="step"><b>4 · Complete revision</b><span>Write immutable manifest only after the bundle is complete. Compare existing digest on retry.</span></div>
-        <div class="step"><b>5 · Discover</b><span>Read current catalog at origin; prune expiry; upsert the group; release lock.</span></div>
+        <div class="step"><b>5 · Discover</b><span>Read current catalog at origin; prune missing revisions; upsert the group; release lock.</span></div>
       </div>
       <p>The lock serializes cooperating writers; an atomic conditional write on the mutable catalog is still useful as a defensive check against an out-of-band writer. A catalog update failure is a failed pre-publish, not a successful unlisted preview. Retrying must converge without changing an already completed revision. A partially uploaded revision without a manifest is not readable through logical preview routes and is recovered by retry or retention cleanup.</p>
       <p><code>no-preview</code> is a successful no-page result for a deletion-only document change. Under the same lock it removes the group's catalog entry if present; it does not delete an earlier completed revision. A non-document-only change is an error and must not mutate discovery. Group retirement follows the same lock/read/write sequence, removes only the named group, and leaves immutable bundle objects for their remaining lifetime.</p>
@@ -142,9 +140,9 @@
     </section>
 
     <section aria-labelledby="expiry">
-      <h2 id="expiry">Retention and serving boundary</h2>
-      <p>The administrator sets one site-wide preview retention rule. The manifest's <code>expiresAt</code> is the product cutoff: derive it conservatively from the earliest uploaded bundle object's lifecycle eligibility, so the logical reader never promises assets beyond their retention window. A retry of the same completed head preserves its original cutoff. The browser hides expired catalog entries and treats an expired direct logical URL as “Preview unavailable”, even if storage has not physically removed every object yet.</p>
-      <p class="warning"><strong>Not an exact-time revocation mechanism.</strong> Provider lifecycle removal is asynchronous, and CDN caches can temporarily retain old responses. Raw preview URLs may remain fetchable after the product cutoff; later, absent raw objects must yield 404, never the SPA shell. If exact-time raw denial becomes a requirement, it needs a separate serving-boundary control, not a claim about lifecycle timing. A catalog under the preview lifecycle prefix also expires after inactivity; every catalog rewrite refreshes that object's lifecycle age.</p>
+      <h2 id="expiry">Provider-owned retention and serving boundary</h2>
+      <p>The administrator configures preview retention only in the hosting provider. Neither manifest nor catalog carries an application expiry timestamp, and the browser does not run its own expiry timer. While a completed manifest is available, a direct logical URL may resolve; after provider removal it shows “Preview unavailable”. The Previews list and palette fetch the catalog only when entered and check referenced manifest availability before showing entries. A later catalog update removes missing references. A retry of an existing revision does not overwrite its objects merely to refresh their provider lifecycle age.</p>
+      <p class="warning"><strong>Not an exact-time revocation mechanism.</strong> Provider lifecycle removal is asynchronous, and CDN caches can temporarily retain old responses. A catalog entry may therefore outlive its revision or be temporarily cached after an update. Separate bundle objects can also disappear at different times; missing raw documents and resources must return 404, never the SPA shell. A catalog under the preview lifecycle prefix expires after inactivity; each catalog rewrite refreshes only that catalog object's lifecycle age. No application-managed clock reconciles these differences.</p>
       <p>For a restricted site, authorization applies to the catalog, manifest, documents and resources before any shared-cache response. Public pre-merge previews are public for a public site. Neither a client-side hidden tab nor an unguessable SHA is an access control.</p>
     </section>
 
@@ -157,15 +155,15 @@
           <li>Unregister wins first and publisher wins first: final state unregistered, no site preview objects.</li>
           <li>Crash after file upload, after manifest write, and before catalog write: no broken advertised revision; retry converges.</li>
           <li>Same head with different selected documents or bytes fails without replacing its manifest.</li>
-          <li><code>no-preview</code>, retire, reopen, expiry, and absent catalog all produce their specified empty states.</li>
+          <li><code>no-preview</code>, retire, reopen, provider removal, and absent catalog all produce their specified empty states.</li>
         </ul></div>
         <div><h3>Browser and provider</h3><ul>
           <li>HTML iframe and Markdown reader load relative CSS, JS, images and fonts from the preview snapshot.</li>
           <li>Changed-document links remain in the revision; unchanged-document links go to production without nesting the app in an iframe.</li>
-          <li>Missing raw resource is 404; direct logical URL works without a catalog entry until its product cutoff.</li>
+          <li>Missing raw resource is 404; direct logical URL works without a catalog entry while its manifest and document remain available.</li>
           <li>Same-repo PR accepted, fork PR rejected before credentials; restricted site denies every preview object consistently.</li>
           <li>Multi-page object listing and cleanup handle more than one provider page/batch without crossing site prefixes.</li>
-          <li>Measure lazy catalog transfer, parse, memory and input-to-paint with many sites; opening one site's Previews must not load other catalogs.</li>
+          <li>Measure lazy catalog transfer, manifest-availability checks, parse, memory and input-to-paint with many sites; opening one site's Previews must not load other catalogs.</li>
         </ul></div>
       </div>
     </section>

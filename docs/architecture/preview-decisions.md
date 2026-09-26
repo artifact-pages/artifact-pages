@@ -18,30 +18,35 @@ This page tracks what remains to decide or prove for pre-publish previews. The [
 
 | ID | Decision | Current recommendation | What changes with the choice |
 | --- | --- | --- | --- |
-| P1 | Should the site home expose a compact Previews entry, in addition to the dedicated view and palette tab? | Yes: a quiet link/count, without placing previews in the production tree or search. | Discoverability and the amount of preview state shown during normal reading. The [specification](../specification.md#post-mvp-pre-publish-preview-contract) currently says the home *may* link to previews. |
-| P2 | Is expiry a product-level cutoff with eventual raw-object deletion, or must every raw preview URL be denied at the exact cutoff instant? | Product cutoff plus eventual deletion. An exact raw cutoff requires a separate serving-boundary mechanism; storage lifecycle alone cannot promise it. | Access policy, infrastructure complexity, and what the retention setting promises. The [technical contract](preview-publishing-contract.html#expiry) currently proposes the former; it should not be presented as approved policy yet. |
-| P3 | What minimal preview identity should the reader see on a preview page and in the list? | Show `Preview`, PR number or abbreviated head SHA, and expiry; use document H1 as the page title. Avoid a second mutable title field initially. | Reader orientation and whether the catalog needs extra display metadata. The [UI study](../ui/ui-preview-discovery-concepts.html) shows examples, but not a final reader state. |
+| P3 | How should a reader recognize which preview revision a page and list entry belong to? | Keep the document H1 as its title. A small context label could say `Preview · PR #84 · a13f9c2` for a PR or `Preview · a13f9c2` for a manual run; no application-managed expiry label. | Prevents confusion between a preview and its published page. This is about provenance in the UI, not renaming the document. The [UI study](../ui/ui-preview-discovery-concepts.html) is exploratory, not a final reader state. |
 
-These three can be answered together. None blocks continued technical exploration; P2 must be resolved before promising retention or access guarantees to users.
+P3 is the only remaining product-facing preview choice recorded here. It does not block continued technical exploration.
+
+## Recently accepted
+
+| ID | Status | Outcome |
+| --- | --- | --- |
+| P1 | Accepted | Site home provides a quiet link to the dedicated Previews list. It does not display an inline preview list or require a potentially stale count. |
+| P2 | Accepted | The hosting provider exclusively owns preview lifetime. The application stores no expiry timestamp, runs no expiry timer, and does not promise exact-time removal. Catalog candidates are checked against provider manifest availability when read. |
 
 ## Technical decisions to settle during implementation
 
 | ID | Status | Item | Proposed direction / exit condition |
 | --- | --- | --- | --- |
-| T1 | Proposed — technical | Exact catalog and revision-manifest schema and storage keys. | Start from the [candidate projection](preview-publishing-contract.html#objects); freeze only after a local producer/reader round trip, including same-head retry and expired entries. |
+| T1 | Proposed — technical | Exact catalog and revision-manifest schema and storage keys. | Start from the [candidate projection](preview-publishing-contract.html#objects); freeze only after a local producer/reader round trip, including same-head retry and missing provider objects. |
 | T2 | Proposed — technical | CLI flag names, resource-include syntax, Action inputs/outputs and group-retirement invocation. | Keep explicit site selection and the [input/output meanings](preview-publishing-contract.html#inputs); choose spellings with the actual CLI surface. Do not add a reusable workflow contract. |
-| T3 | Proposed — technical | Administrator retention configuration and provider mapping. | One administrator-owned setting; prove its mapping to manifest cutoff, catalog lifecycle and provider object expiration without making it a per-PR publisher option. |
-| T4 | Verify | Serving routes, caches and access control. | Prove raw misses do not get SPA fallback, direct URLs resolve without catalog membership, and restricted sites authorize catalog, manifest and every resource before shared-cache delivery. |
+| T3 | Proposed — technical | Administrator retention configuration and provider mapping. | One provider-owned policy for preview objects; no app cutoff or per-PR duration option. Verify the catalog also disappears after inactivity and no versioned object remains indefinitely. |
+| T4 | Verify | Serving routes, caches and access control. | Prove raw misses do not get SPA fallback, direct URLs resolve without catalog membership, absent manifests are hidden on the list, and restricted sites authorize catalog, manifest and every resource before shared-cache delivery. |
 | T5 | Verify | Concurrency, idempotency and crash recovery. | Run both unregister/pre-publish orderings, simultaneous group updates, partial uploads, manifest-before-catalog failure, same-head mismatch and retirement retry. See the [proof matrix](preview-publishing-contract.html#proof). |
 | T6 | Verify | Snapshot-relative resources and document navigation. | Exercise HTML and Markdown with CSS, JS, images, fonts, changed-document links and unchanged-document links; establish the boundary for dynamic/root-relative URLs. |
-| T7 | Verify | Lazy catalog cost at multi-site scale. | Confirm opening one site's Previews does not download other sites' catalogs; measure transfer, parse, memory and input-to-paint with many sites. |
+| T7 | Verify | Lazy catalog and availability-check cost at multi-site scale. | Confirm opening one site's Previews does not download other sites' catalogs; measure transfer, manifest checks, parse, memory and input-to-paint with many sites. If checking every candidate is too costly, revise the discovery projection without adding app-managed expiry. |
 
 ## Accepted product contract
 
-The following are not open decisions: a preview belongs to a registered site; automatic PR publication accepts same-repository heads but not forks; a revision is identified by full head SHA; only added/modified HTML or Markdown documents are previewed; deletions are not pages; local resources come from the head snapshot; the production index and normal search stay unchanged; discovery is a site-local mutable catalog with one latest revision per group; direct document links remain revision-specific; group retirement removes discovery rather than deleting old bytes; the administrator defines retention; the same per-site lock coordinates pre-publish, production publish and unregister. See the [specification](../specification.md#post-mvp-pre-publish-preview-contract) for precise boundaries and exceptions.
+The following are not open decisions: a preview belongs to a registered site; automatic PR publication accepts same-repository heads but not forks; a revision is identified by full head SHA; only added/modified HTML or Markdown documents are previewed; deletions are not pages; local resources come from the head snapshot; the production index and normal search stay unchanged; discovery is a site-local mutable catalog with one latest revision per group; direct document links remain revision-specific; group retirement removes discovery rather than deleting old bytes; the administrator defines provider retention; the same per-site lock coordinates pre-publish, production publish and unregister. See the [specification](../specification.md#post-mvp-pre-publish-preview-contract) for precise boundaries and exceptions.
 
 ## Deferred
 
 - Fork-origin PR previews need a separate approval and isolation model.
 - Preview-only private access is not part of the initial access model; previews inherit the site's policy.
-- Exact-time revocation, if rejected under P2, would be a separate future capability rather than an accidental lifecycle promise.
+- Exact-time revocation is a separate future capability, not an accidental lifecycle promise.
