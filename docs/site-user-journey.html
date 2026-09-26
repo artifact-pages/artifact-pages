@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>サイトを公開して、見つけて、読む</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --canvas: #f3f5f3;
+      --ink: #202a27;
+      --muted: #65716d;
+      --quiet: #89938f;
+      --surface: #fafbfa;
+      --site: #edf5f1;
+      --stroke: #cbd4cf;
+      --flow: #678579;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--canvas);
+      color: var(--ink);
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main { width: 100%; margin: 0 auto; padding: 36px clamp(20px, 4vw, 72px) 48px; }
+    header { max-width: 880px; margin-bottom: 27px; }
+    h1 { margin: 0; font-size: clamp(28px, 3vw, 42px); line-height: 1.16; letter-spacing: -.04em; }
+    .intro { margin: 12px 0 0; color: var(--muted); font-size: 16px; }
+    .diagram-scroll { overflow-x: auto; padding: 4px 0 12px; }
+    svg { display: block; width: 100%; min-width: 1100px; height: auto; }
+    .node rect { fill: var(--surface); stroke: var(--stroke); stroke-width: 1.2; }
+    .node.site rect { fill: var(--site); stroke: #b9cec2; }
+    .eyebrow { fill: var(--quiet); font-size: 12px; font-weight: 700; letter-spacing: 1.25px; }
+    .title { fill: var(--ink); font-size: 22px; font-weight: 650; }
+    .copy { fill: var(--muted); font-size: 15px; }
+    .site-copy { fill: var(--ink); font-size: 16px; }
+    .edge { fill: none; stroke: var(--flow); stroke-width: 2; marker-end: url(#arrow); vector-effect: non-scaling-stroke; }
+    .edge-label { fill: var(--muted); font-size: 13px; font-weight: 550; paint-order: stroke; stroke: var(--canvas); stroke-width: 8px; stroke-linejoin: round; }
+    .caption { margin: 6px 0 0; color: var(--quiet); font-size: 13px; }
+    @media (max-width: 760px) {
+      main { padding-top: 26px; }
+      .intro { font-size: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>サイトを公開して、見つけて、読む</h1>
+      <p class="intro">管理する人、ページを公開する人、読む人。それぞれの行動が、ひとつの公開サイトにつながります。</p>
+    </header>
+
+    <div class="diagram-scroll">
+      <svg viewBox="0 0 1680 820" role="img" aria-labelledby="journey-title journey-desc">
+        <title id="journey-title">サイトを公開して読むまでの利用者の流れ</title>
+        <desc id="journey-desc">サービス管理者がサイトを登録し、サイト担当者がGitでページを更新して公開します。閲覧者はサイトを選び、検索や階層からHTMLやMarkdownのページを見つけて読みます。登録解除されたサイトは一覧から外れます。</desc>
+        <defs>
+          <marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+            <path d="M0 0 L9 4.5 L0 9 Z" fill="#678579" />
+          </marker>
+        </defs>
+
+        <g aria-hidden="true">
+          <path class="edge" d="M450 205 C530 205 548 315 625 345" />
+          <text class="edge-label" x="485" y="245">サイトを登録する</text>
+
+          <path class="edge" d="M450 615 C535 615 550 505 625 475" />
+          <text class="edge-label" x="475" y="570">ページを更新して公開する</text>
+
+          <path class="edge" d="M1055 410 H1230" />
+          <text class="edge-label" x="1084" y="390">サイトを選んで利用する</text>
+        </g>
+
+        <g class="node">
+          <rect x="70" y="120" width="380" height="170" rx="8" />
+          <text class="eyebrow" x="98" y="158">サイトの管理</text>
+          <text class="title" x="98" y="198">サービス管理者</text>
+          <text class="copy" x="98" y="235">公開するサイトを登録する</text>
+          <text class="copy" x="98" y="261">公開を終えるときは登録解除する</text>
+        </g>
+
+        <g class="node">
+          <rect x="70" y="530" width="380" height="170" rx="8" />
+          <text class="eyebrow" x="98" y="568">ページの公開</text>
+          <text class="title" x="98" y="608">サイト担当者</text>
+          <text class="copy" x="98" y="645">GitでHTMLやMarkdownを更新する</text>
+          <text class="copy" x="98" y="671">更新したページを公開する</text>
+        </g>
+
+        <g class="node site">
+          <rect x="625" y="300" width="430" height="220" rx="12" />
+          <text class="eyebrow" x="660" y="346">登録されたサイト</text>
+          <text class="title" x="660" y="391">公開サイト</text>
+          <text class="site-copy" x="660" y="431">登録されたサイトが一覧に現れる</text>
+          <text class="site-copy" x="660" y="464">公開したページが検索・閲覧できる</text>
+          <text class="copy" x="660" y="495">登録解除後は一覧から外れ、閲覧できなくなる</text>
+        </g>
+
+        <g class="node">
+          <rect x="1230" y="325" width="380" height="170" rx="8" />
+          <text class="eyebrow" x="1258" y="363">サイトの利用</text>
+          <text class="title" x="1258" y="403">閲覧者</text>
+          <text class="copy" x="1258" y="440">サイトを選び、検索や階層から探す</text>
+          <text class="copy" x="1258" y="466">ページを読み、URLを共有する</text>
+        </g>
+      </svg>
+    </div>
+    <p class="caption">サイトの登録・ページの公開・閲覧は、それぞれの役割で行います。</p>
+  </main>
+</body>
+</html>
