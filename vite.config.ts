@@ -4,7 +4,8 @@ import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
 import { defineConfig, type Plugin } from 'vite'
 
-const storageRoot = fileURLToPath(new URL('./fixtures/storage/', import.meta.url))
+const defaultStorageRoot = fileURLToPath(new URL('./fixtures/storage/', import.meta.url))
+const storageRoot = path.resolve(process.env.GAP_LOCAL_STORAGE_ROOT ?? defaultStorageRoot)
 
 function escapeHtml(value: string) {
   return value.replace(
