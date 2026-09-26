@@ -1,6 +1,6 @@
 # Index date appears older than artifact update dates
 
-- Status: Open
+- Status: Done
 - Priority: P3
 - Area: Publication metadata display
 
@@ -21,5 +21,12 @@ The displayed dates have clear meanings and do not imply an unexplained freshnes
 
 ## Acceptance criteria
 
-- [ ] Fixture metadata and artifact dates are internally consistent, or the labels explain why they differ.
-- [ ] A reader can tell whether the footer date is the index generation time, publication time, or another event.
+- [x] Fixture metadata and artifact dates are internally consistent, or the labels explain why they differ.
+- [x] A reader can tell whether the footer date is the index generation time, publication time, or another event.
+
+## Verification
+
+- `npm run build`
+- Playwright: discovery metadata matches index metadata and generation timestamps follow artifact updates across all three fixture sites
+- Full Playwright suite: 35 tests passed
+- In-app browser confirms the SRE footer reads “Index generated Sep 25”

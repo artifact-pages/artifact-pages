@@ -309,7 +309,7 @@ export function Sidebar({
 
       <footer className="sidebar-footer">
         <span className="index-date">
-          Index updated <time dateTime={index.generatedAt}>{formatDate(index.generatedAt)}</time>
+          Index generated <time dateTime={index.generatedAt}>{formatDate(index.generatedAt)}</time>
         </span>
         <ThemeSwitcher
           buttonClassName="icon-button theme-toggle"

@@ -124,7 +124,7 @@ function SidebarPreview({ variant, showHoverPreview }: PreviewProps) {
       </nav>
 
       <footer className="sidebar-footer">
-        <span className="index-date">Index updated <time dateTime={index.generatedAt}>Sep 23</time></span>
+        <span className="index-date">Index generated <time dateTime={index.generatedAt}>Sep 23</time></span>
         <button className="icon-button theme-toggle" type="button" aria-label="Color theme: Light">
           <Icon name="sun" size={15} />
         </button>

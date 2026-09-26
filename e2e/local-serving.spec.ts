@@ -81,6 +81,34 @@ test('nginx index listing discovers sites and opens a site home', async ({ page 
   ])
 })
 
+test('the SRE index date is labeled as generation time and follows artifact updates', async ({ page }) => {
+  for (const siteId of ['sre', 'frontend', 'showcase']) {
+    const [indexResponse, metadataResponse] = await Promise.all([
+      page.request.get(`/_indexes/${siteId}/index.json`),
+      page.request.get(`/_indexes/${siteId}/meta.json`),
+    ])
+    expect(indexResponse.ok()).toBeTruthy()
+    expect(metadataResponse.ok()).toBeTruthy()
+    const index = await indexResponse.json()
+    const metadata = await metadataResponse.json()
+    const latestArtifactUpdate = Math.max(...index.artifacts.map((artifact: { updatedAt: string }) => (
+      Date.parse(artifact.updatedAt)
+    )))
+
+    expect(metadata.generatedAt, `${siteId} discovery metadata`).toBe(index.generatedAt)
+    expect(Date.parse(index.generatedAt), `${siteId} generation timestamp`).toBeGreaterThanOrEqual(latestArtifactUpdate)
+  }
+
+  const sreIndexResponse = await page.request.get('/_indexes/sre/index.json')
+  const sreIndex = await sreIndexResponse.json()
+
+  await page.goto('/sre')
+  const indexDate = page.locator('.sidebar-panel .index-date')
+  await expect(indexDate).toContainText('Index generated')
+  await expect(indexDate.locator('time')).toHaveAttribute('datetime', sreIndex.generatedAt)
+  await expect(indexDate).toHaveText('Index generated Sep 25')
+})
+
 test('the root command palette searches sites and opens the selected site', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Choose a site' })).toBeVisible()

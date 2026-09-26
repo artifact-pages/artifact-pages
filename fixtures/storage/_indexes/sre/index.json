@@ -4,7 +4,7 @@
     "id": "sre",
     "title": "SRE"
   },
-  "generatedAt": "2026-09-22T00:00:00Z",
+  "generatedAt": "2026-09-25T00:00:00Z",
   "artifacts": [
     {
       "id": "incidents/checkout-latency/index.html",
