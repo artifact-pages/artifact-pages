@@ -134,6 +134,71 @@ test('site discovery loads lightweight metadata for all sites but detailed index
   await expect.poll(() => [...indexRequests]).toEqual(['/_indexes/sre/index.json'])
 })
 
+test('site switcher has no default destination, then selects matching sites by query', async ({ page }) => {
+  await page.goto('/sre')
+  await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Switch site. Current site: SRE' }).click()
+  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
+  await expect(palette).toBeVisible()
+  await expect(palette.getByRole('option')).toHaveCount(3)
+  await expect(palette.getByRole('option', { selected: true })).toHaveCount(0)
+
+  await search.press('Enter')
+  await expect(palette).toBeVisible()
+  await expect(page).toHaveURL(/\/sre$/)
+
+  await search.fill('@front')
+  const frontend = palette.getByRole('option', { name: /Frontend/ })
+  await expect(frontend).toHaveAttribute('aria-selected', 'true')
+  await search.press('Enter')
+  await expect(page).toHaveURL(/\/frontend$/)
+  await expect(page.getByRole('heading', { name: 'Frontend', exact: true })).toBeVisible()
+
+  await page.goBack()
+  await expect(page).toHaveURL(/\/sre$/)
+  await page.getByRole('button', { name: 'Switch site. Current site: SRE' }).click()
+  const reopenedPalette = page.getByRole('dialog', { name: 'Command palette' })
+  const reopenedSearch = reopenedPalette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
+  await reopenedSearch.fill('@front')
+  const frontendByClick = reopenedPalette.getByRole('option', { name: /Frontend/ })
+  await expect(frontendByClick).toHaveAttribute('aria-selected', 'true')
+  await frontendByClick.click()
+  await expect(page).toHaveURL(/\/frontend$/)
+  await expect(page.getByRole('heading', { name: 'Frontend', exact: true })).toBeVisible()
+})
+
+test('site discovery cannot change the switcher destination under keyboard selection', async ({ page }) => {
+  let finishDiscovery = () => {}
+  let discoveryStarted = () => {}
+  const discoveryGate = new Promise<void>((resolve) => { finishDiscovery = resolve })
+  const discoveryStartedGate = new Promise<void>((resolve) => { discoveryStarted = resolve })
+  await page.route('**/_indexes/', async (route) => {
+    discoveryStarted()
+    await discoveryGate
+    await route.continue()
+  })
+
+  await page.goto('/sre')
+  await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
+  await discoveryStartedGate
+
+  await page.getByRole('button', { name: 'Switch site. Current site: SRE' }).click()
+  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
+  await expect(palette.getByRole('option')).toHaveCount(1)
+  await search.press('ArrowDown')
+  await expect(palette.getByRole('option', { selected: true })).toHaveCount(1)
+
+  finishDiscovery()
+  await expect(palette.getByRole('option')).toHaveCount(3)
+  await expect(palette.getByRole('option', { selected: true })).toHaveCount(0)
+  await search.press('Enter')
+  await expect(palette).toBeVisible()
+  await expect(page).toHaveURL(/\/sre$/)
+})
+
 test('artifact actions pin locally without changing selection or Browse, and expose source links', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   await page.goto('/sre/architecture/platform-topology/index.html')

@@ -1,6 +1,6 @@
 # Site switcher initially selects another site
 
-- Status: Open
+- Status: Done
 - Priority: P2
 - Area: Site switcher command palette
 
@@ -20,6 +20,11 @@ The initial selection does not make an accidental cross-site change likely.
 
 ## Acceptance criteria
 
-- [ ] Opening the switcher from a site either selects the current site or has no actionable default selection.
-- [ ] Typing a site query selects a matching result predictably.
-- [ ] Keyboard and touch selection lead to the same destination.
+- [x] Opening the switcher from a site either selects the current site or has no actionable default selection.
+- [x] Typing a site query selects a matching result predictably.
+- [x] Keyboard and touch selection lead to the same destination.
+
+## Verification
+
+- `npm run build`
+- Playwright: empty site switcher, query selection by Enter, and the same query selection by click

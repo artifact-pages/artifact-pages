@@ -95,7 +95,7 @@ export function CommandPalette({
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState(seed)
-  const [selectedIndex, setSelectedIndex] = useState(0)
+  const [selectedIndex, setSelectedIndex] = useState(() => defaultSelectionIndex(seed, context, currentIndex))
   const [scope, setScope] = useState<PaletteScope>('all')
   const scoringConfig = paletteScoringExperimentConfig(window.location.search)
   const scopeExperiment = paletteScopeExperimentConfig(window.location.search)
@@ -169,6 +169,7 @@ export function CommandPalette({
     [mode, context, term, sites, currentIndex, currentArtifact, recentReads, pinnedArtifactIds, scope, commands, onNavigate, onJumpToHeading, scoringExperiment, productionScorer, prefilterScopeCandidates],
   )
   const entries = sections.flatMap((section) => section.entries)
+  const entrySequence = mode === 'site' ? JSON.stringify(entries.map(({ id }) => id)) : ''
   const showScopePicker = mode === 'search' && context !== 'sites' && Boolean(currentIndex)
   const memoizedScopeCounts = useMemo(() => {
     if (!memoizeScopeCounts || !currentIndex) return undefined
@@ -207,8 +208,15 @@ export function CommandPalette({
   }, [])
 
   useEffect(() => {
-    setSelectedIndex(0)
-  }, [query, context])
+    setSelectedIndex(defaultSelectionIndex(query, context, currentIndex))
+  }, [query, context, currentIndex])
+
+  const previousEntrySequence = useRef(entrySequence)
+  useEffect(() => {
+    if (previousEntrySequence.current === entrySequence) return
+    previousEntrySequence.current = entrySequence
+    setSelectedIndex(defaultSelectionIndex(query, context, currentIndex))
+  }, [entrySequence, query, context, currentIndex])
 
   useEffect(() => {
     document.querySelector<HTMLElement>('[data-palette-selected="true"]')
@@ -358,6 +366,11 @@ export function CommandPalette({
       </section>
     </div>
   )
+}
+
+function defaultSelectionIndex(query: string, context: PaletteContext, currentIndex?: SiteIndex) {
+  const isEmptySiteSwitch = query.trim() === '@' && context !== 'sites' && currentIndex !== undefined
+  return isEmptySiteSwitch ? -1 : 0
 }
 
 function getEmptyMessage({
