@@ -19,8 +19,9 @@ This page tracks what remains to decide or prove for pre-publish previews. The [
 | ID | Decision | Current recommendation | What changes with the choice |
 | --- | --- | --- | --- |
 | P3 | How should a reader recognize which preview revision a page and list entry belong to? | Compare [A: list only, B: header context, C: reader strip](../ui/ui-preview-identity-concepts.html). Keep the document H1 as its title and show no application-managed expiry label. | Prevents confusion between a preview and its published page. This is about provenance in the UI, not renaming the document. Await visual review before accepting a placement. |
+| P4 | If the caller's PR-close event is missed while the preview bundle still exists, may the PR stay in discovery until the provider removes it? | Yes for the initial release. Recommend the close-event retirement Action and permit retries; do not make the core query GitHub PR state. | Avoids another GitHub-coupled control plane, at the cost of a temporarily stale but still readable preview after a missed event. Provider-missing revisions are a separate case handled by catalog reconciliation. |
 
-P3 is the only remaining product-facing preview choice recorded here. It does not block continued technical exploration.
+P3 and P4 are the remaining product-facing preview choices recorded here. Neither blocks continued technical exploration.
 
 ## Recently accepted
 
