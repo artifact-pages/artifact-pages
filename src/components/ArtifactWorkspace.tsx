@@ -51,6 +51,7 @@ export function ArtifactWorkspace({
   const sidebarOpenRef = useRef(sidebarOpen)
   const [activePanel, setActivePanel] = useState<WorkspacePanel>(null)
   const [paletteSeed, setPaletteSeed] = useState<string | null>(null)
+  const [sidebarFilterResetKey, setSidebarFilterResetKey] = useState(0)
   const [pinnedArtifactIds, setPinnedArtifactIds] = useState<string[]>([])
   const [storedRecentReads, setStoredRecentReads] = useState<RecentArtifactRead[]>(
     () => readRecentArtifactReads(index.site.id),
@@ -95,6 +96,12 @@ export function ArtifactWorkspace({
   const toggleSidebar = useCallback((restoreFocus = false) => {
     updateSidebarOpen(!sidebarOpenRef.current, restoreFocus)
   }, [updateSidebarOpen])
+
+  function navigateWithinWorkspace(href: string) {
+    setSidebarFilterResetKey((key) => key + 1)
+    navigate(href)
+    if (window.innerWidth <= 860) updateSidebarOpen(false)
+  }
 
   const openPalette = useCallback((seed: string) => {
     const activeElement = document.activeElement
@@ -205,7 +212,7 @@ export function ArtifactWorkspace({
       available: hasContents,
       onSelect: () => togglePanel('contents'),
     },
-    { title: 'Go to site home', onSelect: () => navigate(`/${encodeURIComponent(index.site.id)}`) },
+    { title: 'Go to site home', onSelect: () => navigateWithinWorkspace(`/${encodeURIComponent(index.site.id)}`) },
     {
       title: 'Use light theme',
       subtitle: themeMode === 'light' ? 'Current' : undefined,
@@ -242,7 +249,7 @@ export function ArtifactWorkspace({
   }
 
   function openArtifact(artifact: ArtifactIndexEntry) {
-    navigate(artifactRouteHref(index.site.id, artifact.path))
+    navigateWithinWorkspace(artifactRouteHref(index.site.id, artifact.path))
     setActivePanel(null)
     setPaletteSeed(null)
   }
@@ -255,7 +262,7 @@ export function ArtifactWorkspace({
   }
 
   function jumpToHeading(id: string) {
-    navigate(`${pathname}#${encodeURIComponent(id)}`)
+    navigateWithinWorkspace(`${pathname}#${encodeURIComponent(id)}`)
     setPaletteSeed(null)
     setActivePanel(null)
   }
@@ -307,6 +314,7 @@ export function ArtifactWorkspace({
         onSetThemeMode={onSetThemeMode}
         onCollapse={() => updateSidebarOpen(false, true)}
         onPinnedIdsChange={setPinnedArtifactIds}
+        filterResetKey={sidebarFilterResetKey}
         treeStyle={sidebarTreeStyle}
       />
       {sidebarOpen ? <button className="sidebar-backdrop" aria-label="Close navigation" onClick={() => updateSidebarOpen(false, true)} /> : null}
@@ -466,7 +474,7 @@ export function ArtifactWorkspace({
             ) : (
               <SiteHome
                 index={index}
-                onOpenArtifact={navigate}
+                onOpenArtifact={navigateWithinWorkspace}
                 treeStyle={siteHomeTreeStyle}
                 defaultExpandedPaths={initialExpandedPaths}
               />
@@ -524,7 +532,7 @@ export function ArtifactWorkspace({
           commands={commands}
           loading={sitesLoading}
           onClose={closePalette}
-          onNavigate={navigate}
+          onNavigate={navigateWithinWorkspace}
           onJumpToHeading={jumpToHeading}
         />
       ) : null}

@@ -1,6 +1,6 @@
 # Independent searches leave contradictory result states
 
-- Status: Open
+- Status: Done
 - Priority: P1
 - Area: Site search and artifact navigation
 
@@ -10,8 +10,8 @@ The sidebar filter, site-home search, and command palette search maintain separa
 
 ## Evidence and reproduction
 
-1. Open `/sre` and enter `latency` in “Filter this site.” The sidebar shows two matches.
-2. Enter `topology` in the main “Search SRE” field. The main pane shows one match while the sidebar still shows the latency matches.
+1. Open `/sre` and enter `latency` in the sidebar’s “Filter navigation” field. The sidebar shows two matches.
+2. Enter `topology` in the main “Search artifacts in SRE” field. The main pane shows one match while the sidebar still shows the latency matches.
 3. Set the sidebar query to a nonmatching value and open an artifact from the main search or command palette. The artifact opens, but the sidebar remains at zero matches.
 
 ## Expected outcome
@@ -20,6 +20,6 @@ The user can tell which content each search controls and can still locate the cu
 
 ## Acceptance criteria
 
-- [ ] The sidebar filter and broader search controls communicate their distinct scopes, or use one shared query state.
-- [ ] Opening an artifact from any search path does not leave its current location hidden behind a zero-result sidebar state.
-- [ ] Clearing a query restores the expected browse state without affecting unrelated navigation unexpectedly.
+- [x] The sidebar filter and broader search controls communicate their distinct scopes, or use one shared query state.
+- [x] Opening an artifact from any search path does not leave its current location hidden behind a zero-result sidebar state.
+- [x] Clearing a query restores the expected browse state without affecting unrelated navigation unexpectedly.

@@ -48,8 +48,8 @@ export function SiteHome({
           <Icon name="search" size={16} />
           <input
             type="search"
-            aria-label={`Search ${index.site.title}`}
-            placeholder={`Search ${index.site.title}`}
+            aria-label={`Search artifacts in ${index.site.title}`}
+            placeholder={`Search artifacts in ${index.site.title}`}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />

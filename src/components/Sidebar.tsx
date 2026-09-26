@@ -25,6 +25,7 @@ export function Sidebar({
   onSetThemeMode,
   onCollapse,
   onPinnedIdsChange,
+  filterResetKey,
   treeStyle = 'branch-guides',
 }: {
   id?: string
@@ -41,6 +42,7 @@ export function Sidebar({
   onSetThemeMode: (mode: ThemeMode) => void
   onCollapse: () => void
   onPinnedIdsChange?: (ids: string[]) => void
+  filterResetKey?: number
   treeStyle?: TreeStyle
 }) {
   const [query, setQuery] = useState('')
@@ -64,6 +66,10 @@ export function Sidebar({
   useEffect(() => {
     onPinnedIdsChange?.(pinnedIds)
   }, [onPinnedIdsChange, pinnedIds])
+
+  useEffect(() => {
+    setQuery('')
+  }, [artifactPath, filterResetKey])
 
   useEffect(() => {
     try {
@@ -171,8 +177,8 @@ export function Sidebar({
         <div className="sidebar-filter">
           <Icon name="search" size={14} />
           <input
-            aria-label="Filter this site"
-            placeholder="Filter this site"
+            aria-label={`Filter ${index.site.title} navigation`}
+            placeholder="Filter navigation"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {

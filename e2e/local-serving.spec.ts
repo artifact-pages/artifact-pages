@@ -1154,3 +1154,32 @@ test('artifact breadcrumbs reveal and scroll the matching sidebar location', asy
   await expect(artifact).toHaveAttribute('aria-current', 'page')
   await expect(artifact).toBeInViewport()
 })
+
+test('site home search and navigation filter stay distinct and navigation clears after artifact selection', async ({ page }) => {
+  await page.goto('/sre')
+
+  const navigationFilter = page.getByRole('textbox', { name: 'Filter SRE navigation' })
+  const siteSearch = page.getByRole('searchbox', { name: 'Search artifacts in SRE' })
+  await navigationFilter.fill('latency')
+  await expect(page.locator('.sidebar-section-label', { hasText: 'Matches' })).toBeVisible()
+
+  await siteSearch.fill('topology')
+  await expect(page.locator('.site-home .artifact-list-row')).toHaveCount(1)
+  await expect(page.locator('.site-home .artifact-list-row')).toContainText('Platform topology')
+  await expect(navigationFilter).toHaveValue('latency')
+
+  await page.locator('.site-home .artifact-list-row').click()
+  await expect(page).toHaveURL(/\/sre\/architecture\/platform-topology\/index\.html$/)
+  await expect(navigationFilter).toHaveValue('')
+  await expect(page.locator('.browse-tree .tree-artifact[aria-current="page"]')).toBeVisible()
+
+  await navigationFilter.fill('no-such-artifact')
+  await page.keyboard.press('Control+k')
+  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  const paletteSearch = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
+  await paletteSearch.fill('Checkout latency incident review')
+  await paletteSearch.press('Enter')
+  await expect(page).toHaveURL(/\/sre\/incidents\/checkout-latency\/index\.html$/)
+  await expect(navigationFilter).toHaveValue('')
+  await expect(page.locator('.browse-tree .tree-artifact[aria-current="page"]')).toBeVisible()
+})
