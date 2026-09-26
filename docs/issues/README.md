@@ -34,7 +34,7 @@ Priority describes user impact, not implementation effort. Issues 001–011 came
 | [005 — Artifact title and route to site home are hard to find](005-artifact-orientation.md) | Done | P2 |
 | [006 — Unknown-site error exposes an internal storage path](006-unknown-site-error.md) | Done | P2 |
 | [007 — Site switcher initially selects another site](007-site-switcher-default.md) | Done | P2 |
-| [008 — Small sites repeat the same artifacts in several lists](008-duplicate-artifact-listing.md) | Open | P3 |
+| [008 — Small sites repeat the same artifacts in several lists](008-duplicate-artifact-listing.md) | Done | P3 |
 | [009 — Index date appears older than artifact update dates](009-index-date-meaning.md) | Open | P3 |
 | [010 — Mobile search advertises a desktop shortcut](010-mobile-search-hint.md) | Open | P3 |
 | [011 — Wide Markdown tables need an overflow cue](011-markdown-table-overflow.md) | Open | P3 |

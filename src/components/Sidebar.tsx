@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ArtifactIndexEntry, SiteIndex, SiteSummary } from '../domain/index'
+import { RECENT_SECTION_MINIMUM_ARTIFACT_COUNT } from '../domain/navigation-sections'
 import type { ThemeMode } from '../domain/theme'
 import { artifactSourceLinks } from '../domain/source-links'
 import { artifactRouteHref } from '../routing'
@@ -50,11 +51,14 @@ export function Sidebar({
   const sidebarRef = useRef<HTMLElement>(null)
   const lastRevealedRequest = useRef<number | null>(null)
   const normalizedQuery = query.trim().toLocaleLowerCase()
+  const showRecentSection = index.artifacts.length >= RECENT_SECTION_MINIMUM_ARTIFACT_COUNT
   const recent = useMemo(
-    () => [...index.artifacts]
-      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
-      .slice(0, 4),
-    [index.artifacts],
+    () => showRecentSection
+      ? [...index.artifacts]
+        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+        .slice(0, 4)
+      : [],
+    [index.artifacts, showRecentSection],
   )
   const pinnedIds = pinnedBySite[index.site.id] ?? EMPTY_PINNED_IDS
   const pinned = useMemo(() => {
@@ -245,24 +249,26 @@ export function Sidebar({
           </div>
         ) : (
           <>
-            <div className="sidebar-section">
-              <div className="sidebar-section-title">
-                <span className="sidebar-section-label"><Icon name="clock" size={12} />Recently updated</span>
-                <span className="mono">{recent.length}</span>
+            {showRecentSection ? (
+              <div className="sidebar-section">
+                <div className="sidebar-section-title">
+                  <span className="sidebar-section-label"><Icon name="clock" size={12} />Recently updated</span>
+                  <span className="mono">{recent.length}</span>
+                </div>
+                {recent.length === 0 ? (
+                  <p className="sidebar-empty">No artifacts have been published yet.</p>
+                ) : (
+                  <ArtifactTree
+                    artifacts={recent}
+                    activePath={artifactPath}
+                    style={treeStyle}
+                    view="recent"
+                    onOpenArtifact={onOpenArtifact}
+                    getArtifactActions={getArtifactActions}
+                  />
+                )}
               </div>
-              {recent.length === 0 ? (
-                <p className="sidebar-empty">No artifacts have been published yet.</p>
-              ) : (
-                <ArtifactTree
-                  artifacts={recent}
-                  activePath={artifactPath}
-                  style={treeStyle}
-                  view="recent"
-                  onOpenArtifact={onOpenArtifact}
-                  getArtifactActions={getArtifactActions}
-                />
-              )}
-            </div>
+            ) : null}
             {pinned.length > 0 ? (
               <div className="sidebar-section pinned-tree">
                 <div className="sidebar-section-title">

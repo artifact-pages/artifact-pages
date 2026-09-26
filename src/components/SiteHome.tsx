@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { ArtifactIndexEntry, SiteIndex } from '../domain/index'
+import { RECENT_SECTION_MINIMUM_ARTIFACT_COUNT } from '../domain/navigation-sections'
 import { artifactRouteHref } from '../routing'
 import { ArtifactTree, type TreeStyle } from './ArtifactTree'
 import { Icon } from './Icon'
@@ -16,9 +17,10 @@ export function SiteHome({
   defaultExpandedPaths?: string[]
 }) {
   const [query, setQuery] = useState('')
+  const showRecentSection = index.artifacts.length >= RECENT_SECTION_MINIMUM_ARTIFACT_COUNT
   const recentArtifacts = useMemo(
-    () => selectMostRecent(index.artifacts, 6),
-    [index.artifacts],
+    () => showRecentSection ? selectMostRecent(index.artifacts, 6) : [],
+    [index.artifacts, showRecentSection],
   )
   const normalizedQuery = query.trim().toLocaleLowerCase()
   const matches = useMemo(() => {
@@ -42,7 +44,9 @@ export function SiteHome({
         <h1>{index.site.title}</h1>
         <p className="site-home-lede">
           {index.artifacts.length} published {index.artifacts.length === 1 ? 'artifact' : 'artifacts'}.
-          {' '}Browse the latest work or find an artifact by title or path.
+          {' '}{showRecentSection
+            ? 'Browse the latest work or find an artifact by title or path.'
+            : 'Browse artifacts or find one by title or path.'}
         </p>
         <label className="site-search">
           <Icon name="search" size={16} />
@@ -69,14 +73,16 @@ export function SiteHome({
         />
       ) : (
         <>
-          <ArtifactSection
-            title="Recently updated"
-            icon="clock"
-            artifacts={recentArtifacts}
-            siteId={index.site.id}
-            onOpenArtifact={onOpenArtifact}
-            emptyMessage="No artifacts have been published to this site yet."
-          />
+          {showRecentSection ? (
+            <ArtifactSection
+              title="Recently updated"
+              icon="clock"
+              artifacts={recentArtifacts}
+              siteId={index.site.id}
+              onOpenArtifact={onOpenArtifact}
+              emptyMessage="No artifacts have been published to this site yet."
+            />
+          ) : null}
 
           <section className="browse-section" aria-labelledby="browse-heading">
             <h2 className="home-section-title" id="browse-heading">

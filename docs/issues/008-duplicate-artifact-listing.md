@@ -1,6 +1,6 @@
 # Small sites repeat the same artifacts in several lists
 
-- Status: Open
+- Status: Done
 - Priority: P3
 - Area: Site home and sidebar information hierarchy
 
@@ -20,6 +20,13 @@ Each section contributes a clear reason to exist, while a small site's entire in
 
 ## Acceptance criteria
 
-- [ ] Small-site layouts avoid repeating the full inventory in multiple adjacent sections without added context.
-- [ ] Pinned artifacts are easy to find without visually dominating the sidebar through repeated copies.
-- [ ] Larger sites still provide a usable recent-items view and complete browse path.
+- [x] Sites with six or fewer artifacts do not show a Recently updated list that repeats the full inventory.
+- [x] On small sites, Pinned remains available while the redundant Recently updated section is absent.
+- [x] Sites with seven or more artifacts keep a usable Recently updated view and a complete Browse path.
+
+## Verification
+
+- `npm run build`
+- Playwright: small-site home and sidebar, larger-site Recent and Browse, and pinned-versus-Browse copies
+- Full Playwright suite: 34 tests passed
+- Visual check in the in-app browser at `/sre`

@@ -70,13 +70,14 @@ test('nginx index listing discovers sites and opens a site home', async ({ page 
   await page.getByRole('button', { name: /SRE/ }).click()
   await expect(page).toHaveURL(/\/sre$/)
   await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
-  await expect(page.locator('.artifact-list-row .artifact-row-title')).toHaveText([
-    'Mermaid rendering catalog',
-    'Markdown styles in the reader',
-    'Latency Retrospective',
+  await expect(page.locator('.site-home .artifact-list-section[aria-label="Recently updated"]')).toHaveCount(0)
+  await expect(page.locator('.site-home .tree-artifact .tree-label')).toHaveText([
     'Checkout latency incident review',
     'Platform topology',
     'Service recovery',
+    'Mermaid rendering catalog',
+    'Markdown styles in the reader',
+    'Latency Retrospective',
   ])
 })
 
@@ -199,6 +200,22 @@ test('site discovery cannot change the switcher destination under keyboard selec
   await expect(page).toHaveURL(/\/sre$/)
 })
 
+test('small sites avoid redundant recent sections while larger sites keep them', async ({ page }) => {
+  await page.goto('/sre')
+
+  await expect(page.locator('.site-home .artifact-list-section[aria-label="Recently updated"]')).toHaveCount(0)
+  await expect(page.locator('.site-home .browse-section')).toBeVisible()
+  await expect(page.locator('.sidebar-panel .sidebar-section-label', { hasText: 'Recently updated' })).toHaveCount(0)
+  await expect(page.locator('.sidebar-panel .browse-tree')).toBeVisible()
+
+  await page.goto('/showcase')
+
+  await expect(page.locator('.site-home .artifact-list-section[aria-label="Recently updated"]')).toBeVisible()
+  await expect(page.locator('.sidebar-panel .sidebar-section-label', { hasText: 'Recently updated' })).toBeVisible()
+  await expect(page.locator('.site-home .browse-section')).toBeVisible()
+  await expect(page.locator('.sidebar-panel .browse-tree')).toBeVisible()
+})
+
 test('artifact actions pin locally without changing selection or Browse, and expose source links', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   await page.goto('/sre/architecture/platform-topology/index.html')
@@ -212,9 +229,11 @@ test('artifact actions pin locally without changing selection or Browse, and exp
   const incidentsDirectory = browse.locator('.tree-directory-button[data-tree-path="incidents"]')
   await expect(incidentsDirectory).toHaveAttribute('aria-expanded', 'false')
 
-  const recent = page.locator('.tree-view-recent').first()
-  const recentActions = recent.getByRole('button', { name: 'Actions for Checkout latency incident review' })
-  await recentActions.click()
+  await incidentsDirectory.click()
+  const checkoutFolder = browse.locator('.tree-directory-button[data-tree-path="incidents/checkout-latency"]')
+  await checkoutFolder.click()
+  const browseActions = browse.getByRole('button', { name: 'Actions for Checkout latency incident review' })
+  await browseActions.click()
   let menu = page.getByRole('menu', { name: 'Checkout latency incident review actions' })
   await expect(menu.getByRole('menuitem', { name: 'Pin' })).toBeVisible()
   await expect(menu.getByRole('menuitem', { name: 'Open source' })).toHaveAttribute(
@@ -231,8 +250,8 @@ test('artifact actions pin locally without changing selection or Browse, and exp
   )
   await page.keyboard.press('Escape')
   await expect(menu).toHaveCount(0)
-  await expect(recentActions).toBeFocused()
-  await recentActions.click()
+  await expect(browseActions).toBeFocused()
+  await browseActions.click()
   menu = page.getByRole('menu', { name: 'Checkout latency incident review actions' })
   await page.keyboard.press('ArrowDown')
   await expect(menu.getByRole('menuitem', { name: 'Copy link' })).toBeFocused()
@@ -242,10 +261,14 @@ test('artifact actions pin locally without changing selection or Browse, and exp
 
   await expect(page).toHaveURL(/\/sre\/architecture\/platform-topology\/index\.html$/)
   await expect(activeArtifact).toBeVisible()
-  await expect(incidentsDirectory).toHaveAttribute('aria-expanded', 'false')
   const pinned = page.locator('.pinned-tree')
   await expect(pinned.getByText('Pinned', { exact: true })).toBeVisible()
   await expect(pinned.locator('.tree-artifact')).toContainText('Checkout latency incident review')
+  await expect(browse.locator('.tree-artifact[data-tree-path="incidents/checkout-latency/index.html"]')).toHaveCount(1)
+  await expect(page.locator('.sidebar-panel .tree-artifact[data-tree-path="incidents/checkout-latency/index.html"]')).toHaveCount(2)
+  await expect(page.locator('.sidebar-panel .sidebar-section-label', { hasText: 'Recently updated' })).toHaveCount(0)
+  await incidentsDirectory.click()
+  await expect(incidentsDirectory).toHaveAttribute('aria-expanded', 'false')
   await page.reload()
   await expect(page.locator('.pinned-tree .tree-artifact')).toContainText('Checkout latency incident review')
   await expect(browse.locator('.tree-artifact[aria-current="page"]')).toHaveAttribute('data-tree-path', 'architecture/platform-topology/index.html')
@@ -739,7 +762,7 @@ test('Markdown gallery covers typography, assets, links, safety, and fragment na
   await expect(page).toHaveURL(/\/sre\/guides\/markdown-style-gallery\.md$/)
   const reader = page.getByTestId('markdown-document')
   await expect(reader).toBeVisible()
-  await expect(page.locator('.sidebar-panel .tree-artifact.is-active .tree-format-tag')).toHaveText(['MD', 'MD'])
+  await expect(page.locator('.sidebar-panel .tree-artifact.is-active .tree-format-tag')).toHaveText(['MD'])
 
   for (const level of [1, 2, 3, 4, 5, 6]) {
     await expect(reader.getByRole('heading', { level }).first()).toBeVisible()
@@ -883,7 +906,7 @@ test('mobile navigation starts closed and closes after opening artifacts or swit
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
   await search.fill('@front')
-  await search.press('Enter')
+  await palette.getByRole('option', { name: /Frontend/ }).click()
   await expect(page).toHaveURL(/\/frontend$/)
   await expect(page.getByRole('heading', { name: 'Frontend', exact: true })).toBeVisible()
   await expect(page.locator('.sidebar-panel')).toBeHidden()
@@ -906,7 +929,7 @@ test('Mermaid catalog renders every fixture type supported by the bundled core a
   const reader = page.getByTestId('markdown-document')
   await expect(reader.getByRole('heading', { level: 1, name: 'Mermaid rendering catalog' })).toBeVisible()
   await expect(reader.locator('.markdown-diagram-loading')).toHaveCount(0, { timeout: 150_000 })
-  await expect(page.locator('.sidebar-panel .tree-artifact.is-active .tree-format-tag')).toHaveText(['MD', 'MD'])
+  await expect(page.locator('.sidebar-panel .tree-artifact.is-active .tree-format-tag')).toHaveText(['MD'])
 
   for (const type of supportedTypes) {
     const diagram = reader.locator(`figure.markdown-diagram[data-diagram-type="${type}"]`)
@@ -1228,7 +1251,7 @@ test('breadcrumb menus close after browser history navigates to another artifact
   await page.goto('/showcase')
 
   const searchForArtifact = async (query: string) => {
-    await page.keyboard.press('Control+k')
+    await page.getByRole('button', { name: 'Open command palette (⌘ K)' }).click()
     const palette = page.getByRole('dialog', { name: 'Command palette' })
     const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
     await search.fill(query)
