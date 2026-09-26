@@ -54,10 +54,11 @@ type BuildResult struct {
 }
 
 type SiteIndex struct {
-	SchemaVersion int                  `json:"schemaVersion"`
-	Site          SiteSummary          `json:"site"`
-	GeneratedAt   string               `json:"generatedAt"`
-	Artifacts     []ArtifactIndexEntry `json:"artifacts"`
+	SchemaVersion         int                    `json:"schemaVersion"`
+	Site                  SiteSummary            `json:"site"`
+	GeneratedAt           string                 `json:"generatedAt"`
+	Artifacts             []ArtifactIndexEntry   `json:"artifacts"`
+	PaletteScoringProfile *PaletteScoringProfile `json:"paletteScoringProfile,omitempty"`
 }
 
 type SiteDiscoveryMetadata struct {
@@ -279,6 +280,10 @@ func Build(ctx context.Context, options BuildOptions) (BuildResult, error) {
 	sort.Slice(index.Artifacts, func(i, j int) bool {
 		return index.Artifacts[i].ID < index.Artifacts[j].ID
 	})
+	if len(index.Artifacts) >= paletteScoringProfileThreshold {
+		profile := buildPaletteScoringProfile(index.Artifacts)
+		index.PaletteScoringProfile = &profile
+	}
 
 	serialized, err := json.MarshalIndent(index, "", "  ")
 	if err != nil {

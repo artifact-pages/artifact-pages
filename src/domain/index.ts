@@ -49,4 +49,15 @@ export type SiteIndex = {
   site: SiteSummary
   generatedAt: string
   artifacts: ArtifactIndexEntry[]
+  paletteScoringProfile?: PaletteScoringProfile
+}
+
+export type PaletteScoringProfile = {
+  version: 1
+  wordOffsets: number[] | Uint32Array
+  wordIds: number[] | Uint16Array | Uint32Array
+  wordIdWidth: 16 | 32
+  folderOffsets: number[] | Uint32Array
+  folderIds: number[] | Uint16Array | Uint32Array
+  folderIdWidth: 16 | 32
 }

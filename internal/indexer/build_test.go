@@ -7,9 +7,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 func TestBuildCreatesPerSiteIndexWithoutCopyingSources(t *testing.T) {
@@ -71,6 +75,9 @@ func TestBuildCreatesPerSiteIndexWithoutCopyingSources(t *testing.T) {
 	}
 	if index.SchemaVersion != 1 || index.Site != (SiteSummary{ID: "sre", Title: "SRE"}) {
 		t.Errorf("site metadata = (%d, %+v), want schema 1 and SRE", index.SchemaVersion, index.Site)
+	}
+	if index.PaletteScoringProfile != nil {
+		t.Errorf("small index unexpectedly includes palette scoring profile: %+v", index.PaletteScoringProfile)
 	}
 	if index.GeneratedAt != generatedAt.Format(time.RFC3339) {
 		t.Errorf("GeneratedAt = %q, want %q", index.GeneratedAt, generatedAt.Format(time.RFC3339))
@@ -197,6 +204,77 @@ func TestBuildCreatesPerSiteIndexWithoutCopyingSources(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(repositoryRoot, ".local/storage/_artifacts")); !os.IsNotExist(err) {
 		t.Errorf("Build() should write only the index, _artifacts exists or stat failed: %v", err)
+	}
+}
+
+func TestBuildPaletteScoringProfilePacksSharedFeatures(t *testing.T) {
+	artifacts := []ArtifactIndexEntry{
+		{ID: "teams/latency/summary.md", Title: "Latency 日本語 𐐀guide", Path: "Teams/Latency/summary.md"},
+		{ID: "teams/latency/recovery.md", Title: "Latency recovery runbook", Path: "Teams/Latency/recovery.md"},
+	}
+	profile := buildPaletteScoringProfile(artifacts)
+	if profile.Version != 1 || profile.WordIDWidth != 16 || profile.FolderIDWidth != 16 {
+		t.Fatalf("profile header = version %d, word width %d, folder width %d", profile.Version, profile.WordIDWidth, profile.FolderIDWidth)
+	}
+	if got, want := profile.WordOffsets, []uint32{0, 4, 8}; !reflect.DeepEqual(got, want) {
+		t.Errorf("word offsets = %v, want %v", got, want)
+	}
+	wordIDs, ok := profile.WordIDs.([]uint16)
+	if !ok {
+		t.Fatalf("word IDs have type %T, want []uint16", profile.WordIDs)
+	}
+	if got, want := wordIDs, []uint16{0, 1, 2, 3, 0, 4, 5, 2}; !reflect.DeepEqual(got, want) {
+		t.Errorf("word IDs = %v, want %v", got, want)
+	}
+	if got, want := profile.FolderOffsets, []uint32{0, 2, 4}; !reflect.DeepEqual(got, want) {
+		t.Errorf("folder offsets = %v, want %v", got, want)
+	}
+	folderIDs, ok := profile.FolderIDs.([]uint16)
+	if !ok {
+		t.Fatalf("folder IDs have type %T, want []uint16", profile.FolderIDs)
+	}
+	if got, want := folderIDs, []uint16{0, 1, 0, 1}; !reflect.DeepEqual(got, want) {
+		t.Errorf("folder IDs = %v, want %v", got, want)
+	}
+	if got := paletteProfileWords("日本語 𐐀guide Greek ΣΙΣΥΦΟΣ", cases.Lower(language.Und)); !reflect.DeepEqual(got, []string{"𐐨guide", "greek", "σισυφος"}) {
+		t.Errorf("Unicode profile words = %v", got)
+	}
+	encoded, err := json.Marshal(profile)
+	if err != nil {
+		t.Fatalf("encode profile: %v", err)
+	}
+	var decoded struct {
+		Version       int      `json:"version"`
+		WordOffsets   []uint32 `json:"wordOffsets"`
+		WordIDs       []uint16 `json:"wordIds"`
+		WordIDWidth   int      `json:"wordIdWidth"`
+		FolderOffsets []uint32 `json:"folderOffsets"`
+		FolderIDs     []uint16 `json:"folderIds"`
+		FolderIDWidth int      `json:"folderIdWidth"`
+	}
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("decode profile JSON: %v", err)
+	}
+	if decoded.Version != 1 || decoded.WordIDWidth != 16 || decoded.FolderIDWidth != 16 ||
+		!reflect.DeepEqual(decoded.WordOffsets, profile.WordOffsets) ||
+		!reflect.DeepEqual(decoded.WordIDs, wordIDs) ||
+		!reflect.DeepEqual(decoded.FolderOffsets, profile.FolderOffsets) ||
+		!reflect.DeepEqual(decoded.FolderIDs, folderIDs) {
+		t.Errorf("encoded profile = %+v", decoded)
+	}
+}
+
+func TestBuildPaletteScoringProfileUses32BitIDsWhenVocabularyIsLarge(t *testing.T) {
+	var title strings.Builder
+	for index := 0; index < 65_537; index++ {
+		fmt.Fprintf(&title, " feature%05d", index)
+	}
+	profile := buildPaletteScoringProfile([]ArtifactIndexEntry{{Title: title.String(), Path: "summary.html"}})
+	if profile.WordIDWidth != 32 {
+		t.Fatalf("word ID width = %d, want 32", profile.WordIDWidth)
+	}
+	if _, ok := profile.WordIDs.([]uint32); !ok {
+		t.Fatalf("word IDs have type %T, want []uint32", profile.WordIDs)
 	}
 }
 

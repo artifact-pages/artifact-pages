@@ -7,6 +7,7 @@ import { ThemeSwitcher } from './ThemeSwitcher'
 import { MarkdownArtifact } from './MarkdownArtifact'
 import type { TreeStyle } from './ArtifactTree'
 import type { ArtifactIndexEntry, SiteDiscoveryMetadata, SiteIndex, SiteSummary } from '../domain/index'
+import { readRecentArtifactReads, recordRecentArtifactRead, type RecentArtifactRead } from '../domain/recent-reads'
 import type { ResolvedTheme, ThemeMode } from '../domain/theme'
 import { artifactRouteHref, type AppRoute } from '../routing'
 
@@ -24,6 +25,7 @@ export function ArtifactWorkspace({
   theme,
   onSetThemeMode,
   index,
+  recentReads,
   sidebarTreeStyle = 'branch-guides',
   siteHomeTreeStyle = 'path-list',
   initialExpandedPaths = [],
@@ -39,6 +41,7 @@ export function ArtifactWorkspace({
   theme: ResolvedTheme
   onSetThemeMode: (mode: ThemeMode) => void
   index: SiteIndex
+  recentReads?: RecentArtifactRead[]
   sidebarTreeStyle?: TreeStyle
   siteHomeTreeStyle?: TreeStyle
   initialExpandedPaths?: string[]
@@ -48,6 +51,10 @@ export function ArtifactWorkspace({
   const sidebarOpenRef = useRef(initialSidebarOpen)
   const [activePanel, setActivePanel] = useState<WorkspacePanel>(null)
   const [paletteSeed, setPaletteSeed] = useState<string | null>(null)
+  const [pinnedArtifactIds, setPinnedArtifactIds] = useState<string[]>([])
+  const [storedRecentReads, setStoredRecentReads] = useState<RecentArtifactRead[]>(
+    () => readRecentArtifactReads(index.site.id),
+  )
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(
     () => new Set([...folderAncestors(route.artifactPath), ...initialExpandedPaths]),
   )
@@ -59,6 +66,8 @@ export function ArtifactWorkspace({
   const currentArtifact = route.artifactPath
     ? findArtifact(index, route.artifactPath)
     : undefined
+  const effectiveRecentReads = recentReads ?? storedRecentReads
+  const lastRecordedArtifactId = useRef<string | null>(null)
   const currentFormat = currentArtifact?.format
   const hasContents = Boolean(currentArtifact?.toc?.length)
   const tocOpen = activePanel === 'contents'
@@ -121,6 +130,12 @@ export function ArtifactWorkspace({
   useEffect(() => {
     setActivePanel(null)
   }, [route.artifactPath])
+
+  useEffect(() => {
+    if (recentReads !== undefined || !currentArtifact || lastRecordedArtifactId.current === currentArtifact.id) return
+    lastRecordedArtifactId.current = currentArtifact.id
+    setStoredRecentReads(recordRecentArtifactRead(index.site.id, currentArtifact.id, storedRecentReads))
+  }, [currentArtifact?.id, index.site.id, recentReads, storedRecentReads])
 
   useEffect(() => {
     if (paletteSeed === null) return
@@ -268,6 +283,7 @@ export function ArtifactWorkspace({
         themeMode={themeMode}
         onSetThemeMode={onSetThemeMode}
         onCollapse={() => updateSidebarOpen(false, true)}
+        onPinnedIdsChange={setPinnedArtifactIds}
         treeStyle={sidebarTreeStyle}
       />
       {sidebarOpen ? <button className="sidebar-backdrop" aria-label="Close navigation" onClick={() => updateSidebarOpen(false, true)} /> : null}
@@ -478,6 +494,8 @@ export function ArtifactWorkspace({
           sites={paletteSites}
           currentIndex={index}
           currentArtifact={currentArtifact}
+          recentReads={effectiveRecentReads}
+          pinnedArtifactIds={pinnedArtifactIds}
           commands={commands}
           loading={sitesLoading}
           onClose={closePalette}

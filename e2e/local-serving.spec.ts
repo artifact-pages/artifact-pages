@@ -1,5 +1,49 @@
 import { expect, test, type Page } from '@playwright/test'
 
+function buildPaletteScoringProfile(artifacts: Array<{ title: string; path: string }>) {
+  const ignoredWords = new Set([
+    'the', 'and', 'for', 'with', 'from', 'into', 'index', 'html', 'md',
+    'incidents', 'architecture', 'reports', 'guides', 'runbooks', 'diagrams', 'docs',
+  ])
+  const wordDictionary = new Map<string, number>()
+  const folderDictionary = new Map<string, number>()
+  const wordOffsets = [0]
+  const wordIds: number[] = []
+  const folderOffsets = [0]
+  const folderIds: number[] = []
+  const intern = (dictionary: Map<string, number>, value: string) => {
+    let id = dictionary.get(value)
+    if (id === undefined) {
+      id = dictionary.size
+      dictionary.set(value, id)
+    }
+    return id
+  }
+  const words = (value: string) => value.toLowerCase().split(/[^\p{L}\p{N}]+/u)
+    .filter((word) => word.length >= 4 && !ignoredWords.has(word))
+
+  for (const artifact of artifacts) {
+    for (const word of new Set([...words(artifact.title), ...words(artifact.path)])) {
+      wordIds.push(intern(wordDictionary, word))
+    }
+    wordOffsets.push(wordIds.length)
+    for (const folder of artifact.path.split('/').filter(Boolean).slice(0, -1)) {
+      folderIds.push(intern(folderDictionary, folder))
+    }
+    folderOffsets.push(folderIds.length)
+  }
+
+  return {
+    version: 1 as const,
+    wordOffsets,
+    wordIds,
+    wordIdWidth: wordDictionary.size <= 65_536 ? 16 as const : 32 as const,
+    folderOffsets,
+    folderIds,
+    folderIdWidth: folderDictionary.size <= 65_536 ? 16 as const : 32 as const,
+  }
+}
+
 test('nginx index listing discovers sites and opens a site home', async ({ page }) => {
   const listing = await page.request.get('/_indexes/')
   expect(listing.ok()).toBeTruthy()
@@ -44,21 +88,21 @@ test('the root command palette searches sites and opens the selected site', asyn
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   await expect(palette).toBeVisible()
   const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
-  const paletteCenterOffset = async () => palette.evaluate((element) => {
-    const bounds = element.getBoundingClientRect()
-    return Math.abs(bounds.top + bounds.height / 2 - window.innerHeight / 2)
-  })
-  await expect.poll(paletteCenterOffset).toBeLessThan(1)
+  await expect.poll(() => palette.evaluate((element) => (
+    element.getAnimations().every((animation) => animation.playState === 'finished')
+  ))).toBeTruthy()
+  const paletteTop = async () => palette.evaluate((element) => element.getBoundingClientRect().top)
+  const initialPaletteTop = await paletteTop()
   await expect(search).toHaveAttribute('placeholder', 'Search sites...')
   await expect(palette.getByRole('option', { name: /SRE/ })).toBeVisible()
   await expect(palette.getByRole('option', { name: /Frontend/ })).toBeVisible()
 
   await search.fill('cloud')
   await expect(palette.getByRole('option')).toHaveCount(0)
-  await expect.poll(paletteCenterOffset).toBeLessThan(1)
+  await expect.poll(async () => Math.abs((await paletteTop()) - initialPaletteTop)).toBeLessThan(1)
 
   await search.fill('front')
-  await expect.poll(paletteCenterOffset).toBeLessThan(1)
+  await expect.poll(async () => Math.abs((await paletteTop()) - initialPaletteTop)).toBeLessThan(1)
   const frontend = palette.getByRole('option', { name: /Frontend/ })
   await expect(frontend).toBeVisible()
   await search.press('Enter')
@@ -194,7 +238,7 @@ test('the command palette supports Ctrl+J/K navigation and opens the selected re
   await search.press('Enter')
 
   await expect(palette).toBeHidden()
-  const siteIdsBySection: Record<string, string> = { 'Pages in SRE': 'sre' }
+  const siteIdsBySection: Record<string, string> = { Pages: 'sre' }
   const siteId = siteIdsBySection[resultOpenedByEnter.section]
   expect(siteId).toBeTruthy()
   await expect.poll(() => new URL(page.url()).pathname).toBe(`/${siteId}/${resultOpenedByEnter.path}`)
@@ -203,6 +247,83 @@ test('the command palette supports Ctrl+J/K navigation and opens the selected re
   } else {
     await expect(page.locator('iframe.artifact-frame')).toBeVisible()
   }
+})
+
+test('large site indexes use their compact palette scoring profile', async ({ page }) => {
+  await page.route('**/_indexes/sre/index.json', async (route) => {
+    const response = await route.fetch()
+    const index = await response.json()
+    const sourceArtifacts = index.artifacts
+    const artifacts = [...sourceArtifacts]
+    while (artifacts.length < 5_000) {
+      const ordinal = artifacts.length - sourceArtifacts.length
+      const base = sourceArtifacts[ordinal % sourceArtifacts.length]
+      const path = `generated/${String(ordinal).padStart(5, '0')}/${base.id.replaceAll('/', '-')}`
+      artifacts.push({
+        id: path,
+        title: `${base.title} generated ${ordinal}`,
+        path,
+        format: base.format,
+        artifactUrl: `/_artifacts/sre/${path}`,
+        updatedAt: base.updatedAt,
+      })
+    }
+    artifacts.sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0)
+    index.artifacts = artifacts
+    index.paletteScoringProfile = buildPaletteScoringProfile(artifacts)
+    await route.fulfill({ response, json: index })
+  })
+
+  await page.goto('/sre/architecture/platform-topology/index.html')
+  await expect(page.locator('iframe.artifact-frame')).toBeVisible()
+  await page.getByRole('button', { name: 'Open command palette (⌘ K)' }).click()
+  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
+  await search.fill('platform')
+  await expect(palette.getByRole('option').first()).toBeVisible()
+  await expect(palette.getByRole('option', { name: /Platform topology/ }).first()).toBeVisible()
+})
+
+test('recent reads persist across reloads and remain scoped while the query is retained', async ({ page }) => {
+  await page.goto('/sre')
+
+  const openPalette = async () => {
+    await page.getByRole('button', { name: 'Open command palette (⌘ K)' }).click()
+    return page.getByRole('dialog', { name: 'Command palette' })
+  }
+
+  let palette = await openPalette()
+  let search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
+  await search.fill('platform topology')
+  await search.press('Enter')
+  await expect(page).toHaveURL(/\/sre\/architecture\/platform-topology\/index\.html$/)
+
+  palette = await openPalette()
+  search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
+  await search.fill('checkout latency')
+  await search.press('Enter')
+  await expect(page).toHaveURL(/\/sre\/incidents\/checkout-latency\/index\.html$/)
+
+  palette = await openPalette()
+  search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
+  const recentScope = palette.getByRole('button', { name: /Recently read pages/ })
+  await recentScope.click()
+  const platform = palette.getByRole('option', { name: /Platform topology/ })
+  await expect(platform).toBeVisible()
+  await expect(palette.getByRole('option', { name: /Checkout latency incident review/ })).toHaveCount(0)
+
+  await page.keyboard.press('Escape')
+  await page.reload()
+  palette = await openPalette()
+  search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
+  await palette.getByRole('button', { name: /Recently read pages/ }).click()
+  await expect(palette.getByRole('option', { name: /Platform topology/ })).toBeVisible()
+
+  await search.fill('platform')
+  await expect(palette.getByRole('option', { name: /Platform topology/ })).toBeVisible()
+  await palette.getByRole('button', { name: /All pages/ }).click()
+  await expect(search).toHaveValue('platform')
+  await expect(palette.getByRole('option').first()).toContainText('Platform topology')
 })
 
 test('normal page search stays on the current site while @ and > select explicit scopes', async ({ page }) => {
@@ -216,7 +337,7 @@ test('normal page search stays on the current site while @ and > select explicit
 
   await search.fill('incident')
   await expect(palette.getByRole('option', { name: /Checkout latency incident review/ })).toBeVisible()
-  await expect(palette.locator('.palette-section-title')).toHaveText(['Pages in SRE'])
+  await expect(palette.locator('.palette-section-title')).toHaveText(['Pages'])
 
   await search.fill('Button guidelines')
   await expect(palette.getByRole('option')).toHaveCount(0)

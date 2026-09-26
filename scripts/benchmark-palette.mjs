@@ -4,6 +4,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { randomUUID } from 'node:crypto'
+import { gzipSync } from 'node:zlib'
 import { chromium } from '@playwright/test'
 
 const repositoryRoot = path.resolve(import.meta.dirname, '..')
@@ -56,15 +57,17 @@ try {
       label: `single-${artifactsPerSite}`,
       siteCount: 1,
       artifactsPerSite,
+      recentReadsPerSite: options.recentReadsPerSite,
     })),
     ...(options.siteCount === undefined ? [] : [{
       label: `multi-${options.siteCount}-by-${options.artifactsPerSite}`,
       siteCount: options.siteCount,
       artifactsPerSite: options.artifactsPerSite,
+      recentReadsPerSite: options.recentReadsPerSite,
     }]),
   ]
   const datasets = []
-  for (const scenario of scenarios) datasets.push(await generateDataset(runRoot, scenario, options.seed))
+  for (const scenario of scenarios) datasets.push(await generateDataset(runRoot, scenario, options.seed, options.paletteIndexMatrix))
   for (const chunkSize of options.chunkSizes) {
     for (const scenario of scenarios.filter(({ siteCount }) => siteCount === 1)) {
       datasets.push(await generateDataset(runRoot, {
@@ -87,7 +90,9 @@ try {
     for (const dataset of datasets) {
       fixtureServer.setDataset(dataset)
       for (let loadIteration = 0; loadIteration < options.loads; loadIteration += 1) {
-        const result = await benchmarkDataset(browser, dataset, options.iterations, fixtureServer.url)
+        const result = options.paletteScoreMatrix || options.paletteScopeMatrix || options.paletteIndexMatrix || options.paletteBaselineMatrix
+          ? await benchmarkPaletteScoringUiMatrix(browser, dataset, options.iterations, fixtureServer.url, loadIteration + 1, options.paletteScopeMatrix, options.paletteIndexMatrix, options.paletteBaselineMatrix)
+          : await benchmarkDataset(browser, dataset, options.iterations, fixtureServer.url)
         console.log(JSON.stringify({ loadIteration: loadIteration + 1, ...result }))
       }
     }
@@ -103,14 +108,22 @@ try {
   }
 }
 
-async function generateDataset(runRoot, scenario, seed) {
+async function generateDataset(runRoot, scenario, seed, includePaletteScoringProfile = false) {
   const generationStarted = performance.now()
   const scenarioRoot = path.join(runRoot, scenario.label, 'storage', '_indexes')
   const sites = []
   const metadataPayloads = new Map()
   const currentArtifactPayloads = new Map()
+  const recentReadsBySite = Object.create(null)
+  const pinnedArtifactIdsBySite = Object.create(null)
   let searchRecords = []
   let currentIndexBytes = 0
+  let baselineCurrentIndexBytes = 0
+  let currentIndexGzipBytes = 0
+  let profileProjectionBytes = 0
+  let profileProjectionGzipBytes = 0
+  let profileProjectionBuildMs = 0
+  let activeProfileProjectionBuildMs = 0
   let totalIndexBytes = 0
 
   for (let offset = 0; offset < scenario.siteCount; offset += 1) {
@@ -120,10 +133,28 @@ async function generateDataset(runRoot, scenario, seed) {
       ? `Search Load Lab (${scenario.artifactsPerSite})`
       : `Search Lab ${String(ordinal).padStart(4, '0')}`
     const index = generateSiteIndex(scenario.artifactsPerSite, seed, siteId, title)
+    const unprojectedIndexPayload = `${JSON.stringify(index)}\n`
+    if (includePaletteScoringProfile) {
+      const profileStarted = performance.now()
+      index.paletteScoringProfile = generateSerializedPaletteProfiles(index.artifacts)
+      const profileElapsedMs = performance.now() - profileStarted
+      profileProjectionBuildMs += profileElapsedMs
+      if (offset === 0) activeProfileProjectionBuildMs = profileElapsedMs
+    }
+    const recentReads = index.artifacts
+      .slice(0, scenario.recentReadsPerSite)
+      .map((artifact, readIndex) => ({
+        artifactId: artifact.id,
+        viewedAt: Date.now() - readIndex * 60 * 60 * 1_000,
+      }))
+    if (recentReads.length) recentReadsBySite[siteId] = recentReads
+    if (offset === 0) pinnedArtifactIdsBySite[siteId] = index.artifacts.slice(20, 40).map(({ id }) => id)
     if (offset === 0) {
-      searchRecords = index.artifacts.map(({ title: artifactTitle, path: artifactPath }) => ({
+      searchRecords = index.artifacts.map(({ id, title: artifactTitle, path: artifactPath, updatedAt }) => ({
+        id,
         title: artifactTitle,
         path: artifactPath,
+        updatedAt,
       }))
     }
     const indexPath = path.join(scenarioRoot, siteId, 'index.json')
@@ -152,10 +183,20 @@ async function generateDataset(runRoot, scenario, seed) {
       indexBytes += Buffer.byteLength(manifestPayload)
       if (offset === 0) currentArtifactPayloads.set(`/_indexes/${siteId}/index.json`, manifestPayload)
     } else {
-      const indexPayload = `${JSON.stringify(index)}\n`
+      const indexPayload = includePaletteScoringProfile
+        ? `${JSON.stringify(index)}\n`
+        : unprojectedIndexPayload
       await writeFile(indexPath, indexPayload, { flag: 'wx' })
       indexBytes = Buffer.byteLength(indexPayload)
-      if (offset === 0) currentArtifactPayloads.set(`/_indexes/${siteId}/index.json`, indexPayload)
+      if (offset === 0) {
+        currentArtifactPayloads.set(`/_indexes/${siteId}/index.json`, indexPayload)
+        baselineCurrentIndexBytes = Buffer.byteLength(unprojectedIndexPayload)
+        currentIndexGzipBytes = gzipSync(indexPayload).byteLength
+        if (includePaletteScoringProfile) {
+          profileProjectionBytes = indexBytes - baselineCurrentIndexBytes
+          profileProjectionGzipBytes = gzipSync(`${JSON.stringify(index.paletteScoringProfile)}\n`).byteLength
+        }
+      }
     }
     totalIndexBytes += indexBytes
     if (offset === 0) {
@@ -185,7 +226,20 @@ async function generateDataset(runRoot, scenario, seed) {
     searchRecords,
     currentSiteId: sites[0].site.id,
     currentIndexBytes,
+    baselineCurrentIndexBytes,
+    currentIndexGzipBytes,
+    profileProjectionBytes,
+    profileProjectionGzipBytes,
+    profileProjectionBuildMs,
+    activeProfileProjectionBuildMs,
     expectedArtifactIndexRequests: currentArtifactPayloads.size,
+    recentReadsBySite,
+    pinnedArtifactIdsBySite,
+    recentReadCountPerSite: Math.min(scenario.recentReadsPerSite, scenario.artifactsPerSite),
+    recentReadCountTotal: Object.values(recentReadsBySite).reduce((total, reads) => total + reads.length, 0),
+    recentHistoryStorageBytes: Object.keys(recentReadsBySite).length
+      ? Buffer.byteLength(JSON.stringify(recentReadsBySite))
+      : 0,
     totalIndexBytes,
     metadataBytes: [...metadataPayloads.values()].reduce((total, payload) => total + Buffer.byteLength(payload), 0),
     generationMs: performance.now() - generationStarted,
@@ -210,10 +264,48 @@ async function benchmarkDataset(browserInstance, dataset, iterations, fixtureUrl
     }
   })
   page.on('pageerror', (error) => { pageError = error.message })
-  await page.addInitScript(({ maxResourceEntries, chunked }) => {
+  await page.addInitScript(({ maxResourceEntries, chunked, recentReadsBySite }) => {
+    if (window.top !== window) return
+    const recentStorageKey = 'git-artifact-pages:recent-artifacts:v1'
+    if (Object.keys(recentReadsBySite).length) {
+      localStorage.setItem(recentStorageKey, JSON.stringify(recentReadsBySite))
+    } else {
+      localStorage.removeItem(recentStorageKey)
+    }
     performance.setResourceTimingBufferSize(maxResourceEntries)
-    const metrics = { jsonLoads: [], fetches: [], initialHeapBytes: performance.memory?.usedJSHeapSize ?? null }
+    const metrics = {
+      jsonLoads: [],
+      fetches: [],
+      recentStorageOps: { set: [] },
+      initialHeapBytes: performance.memory?.usedJSHeapSize ?? null,
+    }
     Object.defineProperty(window, '__paletteBenchMetrics', { value: metrics })
+    document.addEventListener('click', (event) => {
+      if (event.target instanceof Element && event.target.closest('[role="option"]')) {
+        metrics.recentStorageOps.lastOptionClickAt = performance.now()
+      }
+    }, true)
+    const nativeStorageSet = Storage.prototype.setItem
+    Storage.prototype.setItem = function (key, value) {
+      if (key !== recentStorageKey) return nativeStorageSet.call(this, key, value)
+      const started = performance.now()
+      const result = nativeStorageSet.call(this, key, value)
+      const elapsedMs = performance.now() - started
+      const clickToPersistMs = metrics.recentStorageOps.lastOptionClickAt === undefined
+        ? null
+        : performance.now() - metrics.recentStorageOps.lastOptionClickAt
+      const valueText = String(value)
+      const measurement = {
+        elapsedMs,
+        clickToPersistMs,
+        utf8Bytes: new TextEncoder().encode(valueText).byteLength,
+        immediateReadBackMatches: this.getItem(key) === valueText,
+      }
+      metrics.recentStorageOps.lastOptionClickAt = undefined
+      metrics.recentStorageOps.set.push(measurement)
+      window.dispatchEvent(new CustomEvent('palette-bench:recent-history-write', { detail: measurement }))
+      return result
+    }
     const nativeFetch = window.fetch.bind(window)
     window.fetch = async (...args) => {
       const started = performance.now()
@@ -262,6 +354,7 @@ async function benchmarkDataset(browserInstance, dataset, iterations, fixtureUrl
   }, {
     maxResourceEntries: Math.max(250, dataset.siteCount + 100),
     chunked: Boolean(dataset.chunkSize),
+    recentReadsBySite: dataset.recentReadsBySite,
   })
   const loadStarted = performance.now()
   await page.goto(`${fixtureUrl}/${dataset.currentSiteId}`, { waitUntil: 'domcontentloaded' })
@@ -283,9 +376,12 @@ async function benchmarkDataset(browserInstance, dataset, iterations, fixtureUrl
   }))
   const pageMetrics = await readPerformanceMetrics(cdp)
 
+  const paletteOpenStarted = performance.now()
   await page.keyboard.press('Control+k')
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   await palette.waitFor({ state: 'visible' })
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+  const paletteOpenMs = performance.now() - paletteOpenStarted
   const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
   const typingResults = []
   for (const sequence of sequentialQueries) {
@@ -338,6 +434,15 @@ async function benchmarkDataset(browserInstance, dataset, iterations, fixtureUrl
     })
   }
 
+  await search.fill('')
+  await palette.getByRole('button', { name: /Recently read pages/ }).click()
+  const recentVisibleOptions = await palette.getByRole('option').count()
+  const expectedRecentVisibleOptions = Math.min(8, dataset.recentReadCountPerSite)
+  if (recentVisibleOptions !== expectedRecentVisibleOptions) {
+    throw new Error(`Expected ${expectedRecentVisibleOptions} visible recent results, received ${recentVisibleOptions}.`)
+  }
+  await palette.getByRole('button', { name: /All pages/ }).click()
+
   if (metadataRequests.length !== dataset.siteCount) {
     throw new Error(`Expected ${dataset.siteCount} discovery metadata requests, received ${metadataRequests.length}.`)
   }
@@ -388,6 +493,68 @@ async function benchmarkDataset(browserInstance, dataset, iterations, fixtureUrl
   await page.keyboard.press('Escape')
   const browseVirtualization = await verifyBrowseVirtualization(page, dataset.artifactsPerSite)
   const indexedSearchExperiment = await benchmarkSearchIndexCandidates(page, cdp, dataset.searchRecords, iterations)
+  const contextScoringExperiment = await benchmarkContextScoringIndexesExpanded(
+    page,
+    cdp,
+    dataset.searchRecords,
+    dataset.searchRecords.find(({ path: artifactPath }) => artifactPath.endsWith('.md')) ?? dataset.searchRecords[0],
+    dataset.recentReadsBySite[dataset.currentSiteId] ?? [],
+    iterations,
+  )
+
+  await page.keyboard.press('Control+k')
+  const writePalette = page.getByRole('dialog', { name: 'Command palette' })
+  const writeSearch = writePalette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
+  const targetArtifact = dataset.searchRecords.find(({ path }) => path.endsWith('.md'))
+    ?? dataset.searchRecords[0]
+  await writeSearch.fill(targetArtifact.path)
+  const targetOption = writePalette.getByRole('option').filter({ hasText: targetArtifact.path }).first()
+  await targetOption.waitFor({ state: 'visible' })
+  const recentHistoryWrite = page.evaluate(() => new Promise((resolve) => {
+    window.addEventListener('palette-bench:recent-history-write', (event) => {
+      resolve(event.detail)
+    }, { once: true })
+  }))
+  await targetOption.click()
+  const storageWrite = await recentHistoryWrite
+  const recentHistoryAfterWrite = await page.evaluate(({ artifactId, siteId }) => {
+    const key = 'git-artifact-pages:recent-artifacts:v1'
+    const rawStore = window.localStorage.getItem(key)
+    const store = JSON.parse(rawStore ?? '{}')
+    const reads = store[siteId] ?? []
+    const artifactPath = artifactId.split('/').map((segment) => encodeURIComponent(segment)).join('/')
+    return {
+      recentReadCount: reads.length,
+      openedArtifactIsMostRecent: reads[0]?.artifactId === artifactId,
+      routeMatchesOpenedArtifact: window.location.pathname === `/${encodeURIComponent(siteId)}/${artifactPath}`,
+      storedSiteIds: Object.keys(store),
+      rawLength: rawStore?.length ?? 0,
+      rawPrefix: rawStore?.slice(0, 120) ?? '',
+    }
+  }, { artifactId: targetArtifact.path, siteId: dataset.currentSiteId })
+  const expectedStoredReadCount = Math.max(1, dataset.recentReadCountPerSite)
+  if (
+    !storageWrite.immediateReadBackMatches ||
+    !recentHistoryAfterWrite.openedArtifactIsMostRecent ||
+    !recentHistoryAfterWrite.routeMatchesOpenedArtifact ||
+    recentHistoryAfterWrite.recentReadCount !== expectedStoredReadCount
+  ) {
+    throw new Error(`Opening ${targetArtifact.path} did not navigate and move it to the top of recent reads: ${JSON.stringify({
+      recentHistoryAfterWrite,
+      storageWrite,
+      expectedStoredReadCount,
+      currentPath: await page.evaluate(() => window.location.pathname),
+    })}.`)
+  }
+
+  const artifactPaletteOpenStarted = performance.now()
+  await page.keyboard.press('Control+k')
+  const artifactPalette = page.getByRole('dialog', { name: 'Command palette' })
+  await artifactPalette.waitFor({ state: 'visible' })
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+  const artifactPaletteOpenMs = performance.now() - artifactPaletteOpenStarted
+  const artifactContextSearch = artifactPalette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
+  const artifactContextTyping = await benchmarkTyping(artifactContextSearch, 1, 'atlas')
 
   await cdp.detach()
   await page.close()
@@ -398,6 +565,22 @@ async function benchmarkDataset(browserInstance, dataset, iterations, fixtureUrl
     sites: dataset.siteCount,
     artifactsPerSite: dataset.artifactsPerSite,
     totalArtifacts: dataset.siteCount * dataset.artifactsPerSite,
+    recentReadsPerSite: dataset.recentReadCountPerSite,
+    recentReadsTotal: dataset.recentReadCountTotal,
+    recentHistoryStorageBytes: dataset.recentHistoryStorageBytes,
+    recentVisibleOptions,
+    recentHistoryUpdate: {
+      openedArtifactId: targetArtifact.path,
+      clickToPersistMs: storageWrite.clickToPersistMs === null ? null : roundHundredths(storageWrite.clickToPersistMs),
+      storageWriteMs: roundHundredths(storageWrite.elapsedMs),
+      storageBytesAfterWrite: storageWrite.utf8Bytes,
+      storedReadCount: recentHistoryAfterWrite.recentReadCount,
+      openedArtifactIsMostRecent: recentHistoryAfterWrite.openedArtifactIsMostRecent,
+    },
+    paletteOpenMs: round(paletteOpenMs),
+    artifactPaletteOpenMs: round(artifactPaletteOpenMs),
+    artifactContextFirstCharacterJsMs: artifactContextTyping.firstCharacterJsMs,
+    artifactContextFirstCharacterInputToPaintMs: artifactContextTyping.firstCharacterInputToPaintMs,
     generatedIndexBytesAcrossAllSites: dataset.totalIndexBytes,
     currentSiteIndexBytes: dataset.currentIndexBytes,
     discoveryMetadataBytes: dataset.metadataBytes,
@@ -410,6 +593,7 @@ async function benchmarkDataset(browserInstance, dataset, iterations, fixtureUrl
     browseVirtualization,
     pageMetrics,
     indexedSearchExperiment,
+    contextScoringExperiment,
     siteIndexRequestsAfterLookup,
     loadMetrics: {
       ...loadMetrics,
@@ -444,6 +628,12 @@ async function readJsHeapBytes(cdp) {
   const { metrics } = await cdp.send('Performance.getMetrics')
   const value = metrics.find(({ name }) => name === 'JSHeapUsedSize')?.value
   return value === undefined ? null : Math.round(value)
+}
+
+async function readBackingStorageBytes(cdp) {
+  await cdp.send('HeapProfiler.collectGarbage')
+  const { backingStorageSize } = await cdp.send('Runtime.getHeapUsage')
+  return Math.round(backingStorageSize)
 }
 
 async function readPerformanceMetrics(cdp) {
@@ -731,6 +921,1013 @@ async function benchmarkSearchIndexCandidates(page, cdp, records, iterations) {
   }
 }
 
+async function benchmarkContextScoringIndexesExpanded(page, cdp, records, currentArtifact, recentReads, iterations) {
+  const nowMs = Date.now()
+  const pinnedArtifactIds = records.slice(20, 40).map(({ id }) => id)
+  await page.evaluate((payload) => {
+    const records = payload.records.map((record) => ({
+      ...record,
+      // Freshness dates are changed only in this benchmark copy, never in the served fixture.
+      updatedAt: new Date(payload.nowMs - 30 * 86_400_000).toISOString(),
+    }))
+    const freshIndex = Math.min(records.length - 1, Math.max(payload.recentReads.length + payload.pinnedArtifactIds.length + 1, 50))
+    const weekIndex = Math.min(records.length - 1, freshIndex + 16)
+    records[freshIndex] = { ...records[freshIndex], updatedAt: new Date(payload.nowMs - 6 * 3_600_000).toISOString() }
+    if (weekIndex !== freshIndex) {
+      records[weekIndex] = { ...records[weekIndex], updatedAt: new Date(payload.nowMs - 3 * 86_400_000).toISOString() }
+    }
+    const currentIndex = records.findIndex(({ path }) => path === payload.currentPath)
+    if (currentIndex < 0) throw new Error('Could not find context artifact ' + payload.currentPath + '.')
+    window.__contextScoringTrial = {
+      records,
+      currentIndex,
+      recentReads: payload.recentReads,
+      pinnedArtifactIds: payload.pinnedArtifactIds,
+      freshnessTargets: [
+        { artifactId: records[freshIndex].id, boost: 2 },
+        ...(weekIndex === freshIndex ? [] : [{ artifactId: records[weekIndex].id, boost: 1 }]),
+      ],
+      nowMs: payload.nowMs,
+    }
+  }, { records, currentPath: currentArtifact.path, recentReads, pinnedArtifactIds, nowMs })
+  const heapBeforeIndexBytes = await readJsHeapBytes(cdp)
+  const backingBeforeIndexBytes = await readBackingStorageBytes(cdp)
+
+  const profileIndex = await page.evaluate(async () => {
+    const trial = window.__contextScoringTrial
+    const ignored = new Set([
+      'the', 'and', 'for', 'with', 'from', 'into', 'index', 'html', 'md',
+      'incidents', 'architecture', 'reports', 'guides', 'runbooks', 'diagrams', 'docs',
+    ])
+    const wordDictionary = new Map()
+    const folderDictionary = new Map()
+    const intern = (dictionary, value) => {
+      if (!dictionary.has(value)) dictionary.set(value, dictionary.size)
+      return dictionary.get(value)
+    }
+    const words = (value) => [...new Set(value.toLowerCase()
+      .split(/[^\p{L}\p{N}]+/u)
+      .filter((word) => word.length >= 4 && !ignored.has(word)))]
+    const started = performance.now()
+    const profiles = trial.records.map((artifact) => ({
+      wordIds: [...new Set([...words(artifact.title), ...words(artifact.path)])]
+        .map((word) => intern(wordDictionary, word)),
+      folderIds: artifact.path.split('/').filter(Boolean).slice(0, -1)
+        .map((folder) => intern(folderDictionary, folder)),
+    }))
+    const buildMs = performance.now() - started
+    const profileJson = JSON.stringify(profiles.map(({ wordIds, folderIds }) => [wordIds, folderIds]))
+    const gzip = await new Response(new Blob([profileJson]).stream()
+      .pipeThrough(new CompressionStream('gzip'))).arrayBuffer()
+    trial.profiles = profiles
+    trial.wordVocabularySize = wordDictionary.size
+    trial.folderVocabularySize = folderDictionary.size
+    return {
+      buildMs: Number(buildMs.toFixed(2)),
+      recordCount: profiles.length,
+      wordVocabularySize: wordDictionary.size,
+      folderVocabularySize: folderDictionary.size,
+      currentWordCount: profiles[trial.currentIndex].wordIds.length,
+      currentFolderCount: profiles[trial.currentIndex].folderIds.length,
+      profileJsonBytes: new TextEncoder().encode(profileJson).byteLength,
+      profileGzipBytes: gzip.byteLength,
+    }
+  })
+  const heapAfterProfileBytes = await readJsHeapBytes(cdp)
+  const backingAfterProfileBytes = await readBackingStorageBytes(cdp)
+
+  const postingIndex = await page.evaluate(async () => {
+    const trial = window.__contextScoringTrial
+    const started = performance.now()
+    const wordPostings = new Map()
+    const pathPrefixPostings = [new Map(), new Map(), new Map()]
+    const append = (map, key, id) => {
+      let ids = map.get(key)
+      if (!ids) {
+        ids = []
+        map.set(key, ids)
+      }
+      ids.push(id)
+    }
+    trial.profiles.forEach((profile, id) => {
+      profile.wordIds.forEach((wordId) => append(wordPostings, wordId, id))
+      for (let level = 1; level <= Math.min(3, profile.folderIds.length); level += 1) {
+        append(pathPrefixPostings[level - 1], JSON.stringify(profile.folderIds.slice(0, level)), id)
+      }
+    })
+    const buildMs = performance.now() - started
+    const profilePayload = JSON.stringify(trial.profiles.map(({ wordIds, folderIds }) => [wordIds, folderIds]))
+    const payload = JSON.stringify({
+      profiles: trial.profiles.map(({ wordIds, folderIds }) => [wordIds, folderIds]),
+      wordPostings: [...wordPostings],
+      pathPrefixPostings: pathPrefixPostings.map((map) => [...map]),
+    })
+    const [profileGzip, invertedGzip] = await Promise.all([
+      new Response(new Blob([profilePayload]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer(),
+      new Response(new Blob([payload]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer(),
+    ])
+    trial.wordPostings = wordPostings
+    trial.pathPrefixPostings = pathPrefixPostings
+    return {
+      buildMs: Number(buildMs.toFixed(2)),
+      indexedWordReferences: [...wordPostings.values()].reduce((sum, ids) => sum + ids.length, 0),
+      indexedPathPrefixes: pathPrefixPostings.reduce((sum, map) => sum
+        + [...map.values()].reduce((subtotal, ids) => subtotal + ids.length, 0), 0),
+      profileJsonBytes: new TextEncoder().encode(profilePayload).byteLength,
+      profileGzipBytes: profileGzip.byteLength,
+      invertedJsonBytes: new TextEncoder().encode(payload).byteLength,
+      invertedGzipBytes: invertedGzip.byteLength,
+      invertedAdditionalJsonBytes: new TextEncoder().encode(payload).byteLength
+        - new TextEncoder().encode(profilePayload).byteLength,
+      invertedAdditionalGzipBytes: invertedGzip.byteLength - profileGzip.byteLength,
+    }
+  })
+  const heapAfterPostingBytes = await readJsHeapBytes(cdp)
+  const backingAfterPostingBytes = await readBackingStorageBytes(cdp)
+
+  const queryResults = await page.evaluate(async (repeatCount) => {
+    const trial = window.__contextScoringTrial
+    const { records, profiles, currentIndex, wordPostings, pathPrefixPostings } = trial
+    const current = records[currentIndex]
+    const currentProfile = profiles[currentIndex]
+    const ignored = new Set([
+      'the', 'and', 'for', 'with', 'from', 'into', 'index', 'html', 'md',
+      'incidents', 'architecture', 'reports', 'guides', 'runbooks', 'diagrams', 'docs',
+    ])
+    const words = (value) => value.toLowerCase().split(/[^\p{L}\p{N}]+/u)
+      .filter((word) => word.length >= 4 && !ignored.has(word))
+    const recentReadById = new Map(trial.recentReads.map(({ artifactId, viewedAt }) => [artifactId, viewedAt]))
+    const pinnedIds = new Set(trial.pinnedArtifactIds)
+    const normalizedRecords = records.map(({ title, path }) => ({
+      title: normalizeText(title),
+      path: normalizeText(path),
+    }))
+    const queries = ['', 'a', 'atlas', 'pltfrm', 'zzzz']
+    const contextStarted = performance.now()
+    const indexedContextScores = new Uint8Array(records.length)
+    const wordScores = new Uint8Array(records.length)
+    for (const wordId of currentProfile.wordIds) {
+      for (const id of wordPostings.get(wordId) ?? []) wordScores[id] = Math.min(6, wordScores[id] + 2)
+    }
+    const increments = [6, 2, 2]
+    for (let level = 1; level <= Math.min(3, currentProfile.folderIds.length); level += 1) {
+      const key = JSON.stringify(currentProfile.folderIds.slice(0, level))
+      for (const id of pathPrefixPostings[level - 1].get(key) ?? []) indexedContextScores[id] += increments[level - 1]
+    }
+    for (let id = 0; id < records.length; id += 1) indexedContextScores[id] += wordScores[id]
+    const currentContextBuildMs = performance.now() - contextStarted
+
+    const dynamicSignal = (id, selected = 'all') => {
+      const artifact = records[id]
+      let score = 0
+      if (selected === 'all' || selected === 'recency') {
+        const viewedAt = recentReadById.get(artifact.id)
+        if (viewedAt !== undefined) {
+          const ageHours = Math.max(0, (trial.nowMs - viewedAt) / 3_600_000)
+          score += 24 * Math.pow(0.5, ageHours / 24)
+        }
+      }
+      if ((selected === 'all' || selected === 'pin') && pinnedIds.has(artifact.id)) score += 5
+      if (selected === 'all' || selected === 'freshness') {
+        const timestamp = Date.parse(artifact.updatedAt)
+        if (Number.isFinite(timestamp)) {
+          const ageDays = Math.max(0, (trial.nowMs - timestamp) / 86_400_000)
+          if (ageDays <= 1) score += 2
+          else if (ageDays <= 7) score += 1
+        }
+      }
+      return score
+    }
+    const signalVector = new Float64Array(records.length)
+    const freshnessVector = new Uint8Array(records.length)
+    const signalBuildStarted = performance.now()
+    for (let id = 0; id < records.length; id += 1) {
+      const artifact = records[id]
+      const viewedAt = recentReadById.get(artifact.id)
+      const ageHours = viewedAt === undefined ? Infinity : Math.max(0, (trial.nowMs - viewedAt) / 3_600_000)
+      const recency = viewedAt === undefined ? 0 : 24 * Math.pow(0.5, ageHours / 24)
+      const pin = pinnedIds.has(artifact.id) ? 5 : 0
+      const timestamp = Date.parse(artifact.updatedAt)
+      const ageDays = Number.isFinite(timestamp) ? Math.max(0, (trial.nowMs - timestamp) / 86_400_000) : Infinity
+      const freshness = ageDays <= 1 ? 2 : ageDays <= 7 ? 1 : 0
+      freshnessVector[id] = freshness
+      signalVector[id] = recency + pin + freshness
+    }
+    const signalVectorBuildMs = performance.now() - signalBuildStarted
+
+    const rawContextScore = (id) => {
+      const artifact = records[id]
+      const pathFolders = artifact.path.split('/').filter(Boolean).slice(0, -1)
+      const currentFolders = current.path.split('/').filter(Boolean).slice(0, -1)
+      let sharedFolders = 0
+      while (sharedFolders < pathFolders.length && sharedFolders < currentFolders.length
+        && pathFolders[sharedFolders] === currentFolders[sharedFolders]) sharedFolders += 1
+      const pathScore = sharedFolders === 0 ? 0 : Math.min(10, 4 + sharedFolders * 2)
+      const currentWords = new Set([...words(current.title), ...words(current.path)])
+      const candidateWords = new Set([...words(artifact.title), ...words(artifact.path)])
+      const sharedCount = [...candidateWords].filter((word) => currentWords.has(word)).length
+      return pathScore + Math.min(6, sharedCount * 2)
+    }
+    const currentFolderIds = currentProfile.folderIds
+    const currentWordIds = new Set(currentProfile.wordIds)
+    const profileContextScore = (id) => {
+      const profile = profiles[id]
+      let sharedFolders = 0
+      while (sharedFolders < profile.folderIds.length && sharedFolders < currentFolderIds.length
+        && profile.folderIds[sharedFolders] === currentFolderIds[sharedFolders]) sharedFolders += 1
+      let sharedCount = 0
+      profile.wordIds.forEach((wordId) => { if (currentWordIds.has(wordId)) sharedCount += 1 })
+      return (sharedFolders === 0 ? 0 : Math.min(10, 4 + sharedFolders * 2)) + Math.min(6, sharedCount * 2)
+    }
+
+    const csrBuildStarted = performance.now()
+    const wordOffsets = new Uint32Array(records.length + 1)
+    const folderOffsets = new Uint32Array(records.length + 1)
+    const wordRefCount = profiles.reduce((sum, profile) => sum + profile.wordIds.length, 0)
+    const folderRefCount = profiles.reduce((sum, profile) => sum + profile.folderIds.length, 0)
+    const WordIdArray = trial.wordVocabularySize <= 65_536 ? Uint16Array : Uint32Array
+    const FolderIdArray = trial.folderVocabularySize <= 65_536 ? Uint16Array : Uint32Array
+    const packedWordIds = new WordIdArray(wordRefCount)
+    const packedFolderIds = new FolderIdArray(folderRefCount)
+    let wordOffset = 0
+    let folderOffset = 0
+    profiles.forEach((profile, id) => {
+      wordOffsets[id] = wordOffset
+      folderOffsets[id] = folderOffset
+      packedWordIds.set(profile.wordIds, wordOffset)
+      packedFolderIds.set(profile.folderIds, folderOffset)
+      wordOffset += profile.wordIds.length
+      folderOffset += profile.folderIds.length
+    })
+    wordOffsets[records.length] = wordOffset
+    folderOffsets[records.length] = folderOffset
+    const csrContextScore = (id) => {
+      let sharedFolders = 0
+      let candidateOffset = folderOffsets[id]
+      let currentOffset = folderOffsets[currentIndex]
+      while (candidateOffset < folderOffsets[id + 1] && currentOffset < folderOffsets[currentIndex + 1]
+        && packedFolderIds[candidateOffset] === packedFolderIds[currentOffset]) {
+        sharedFolders += 1
+        candidateOffset += 1
+        currentOffset += 1
+      }
+      let sharedCount = 0
+      for (let offset = wordOffsets[id]; offset < wordOffsets[id + 1]; offset += 1) {
+        if (currentWordIds.has(packedWordIds[offset])) sharedCount += 1
+      }
+      return (sharedFolders === 0 ? 0 : Math.min(10, 4 + sharedFolders * 2)) + Math.min(6, sharedCount * 2)
+    }
+    const typedArrayBytes = wordOffsets.byteLength + packedWordIds.byteLength
+      + folderOffsets.byteLength + packedFolderIds.byteLength
+    const csrBuildMs = performance.now() - csrBuildStarted
+    const projectionStarted = performance.now()
+    const csrProjection = JSON.stringify({
+      wordOffsets: Array.from(wordOffsets),
+      wordIds: Array.from(packedWordIds),
+      folderOffsets: Array.from(folderOffsets),
+      folderIds: Array.from(packedFolderIds),
+    })
+    const csrGzip = await new Response(new Blob([csrProjection]).stream()
+      .pipeThrough(new CompressionStream('gzip'))).arrayBuffer()
+    const binaryParts = [wordOffsets, packedWordIds, folderOffsets, packedFolderIds]
+    const binaryGzip = await new Response(new Blob(binaryParts).stream()
+      .pipeThrough(new CompressionStream('gzip'))).arrayBuffer()
+    const projectionAndCompressionMs = performance.now() - projectionStarted
+    const csr = {
+      wordIdType: packedWordIds.constructor.name,
+      folderIdType: packedFolderIds.constructor.name,
+      wordReferenceCount: wordRefCount,
+      folderReferenceCount: folderRefCount,
+      typedArrayBytes,
+      base64PayloadBytesApprox: Math.ceil(typedArrayBytes / 3) * 4,
+      binaryGzipBytes: binaryGzip.byteLength,
+      expandedJsonBytes: new TextEncoder().encode(csrProjection).byteLength,
+      expandedJsonGzipBytes: csrGzip.byteLength,
+      csrBuildMs: Number(csrBuildMs.toFixed(2)),
+      projectionAndCompressionMs: Number(projectionAndCompressionMs.toFixed(2)),
+    }
+
+    const scoreMismatches = { profile: 0, csr: 0, inverted: 0 }
+    for (let id = 0; id < records.length; id += 1) {
+      const baseline = rawContextScore(id)
+      if (profileContextScore(id) !== baseline) scoreMismatches.profile += 1
+      if (csrContextScore(id) !== baseline) scoreMismatches.csr += 1
+      if (indexedContextScores[id] !== baseline) scoreMismatches.inverted += 1
+    }
+    if (Object.values(scoreMismatches).some((count) => count !== 0)) {
+      throw new Error('Context score mismatch: ' + JSON.stringify(scoreMismatches))
+    }
+    const compareTop = (left, right) => left.length === right.length && left.every((id, index) => id === right[index])
+    const top = (matches, context, signal) => {
+      const entries = []
+      for (const { id, queryScore } of matches) {
+        const score = queryScore + context(id) + signal(id)
+        let position = 0
+        while (position < entries.length && entries[position].score >= score) position += 1
+        if (position < 8) {
+          entries.splice(position, 0, { id, score })
+          if (entries.length > 8) entries.pop()
+        }
+      }
+      return entries.map(({ id }) => id)
+    }
+    const strategies = {
+      raw: [rawContextScore, (id) => dynamicSignal(id)],
+      profile: [profileContextScore, (id) => dynamicSignal(id)],
+      profileWithSignalVector: [profileContextScore, (id) => signalVector[id]],
+      csr: [csrContextScore, (id) => dynamicSignal(id)],
+      inverted: [(id) => indexedContextScores[id], (id) => dynamicSignal(id)],
+      csrWithSignalVector: [csrContextScore, (id) => signalVector[id]],
+      invertedWithSignalVector: [(id) => indexedContextScores[id], (id) => signalVector[id]],
+    }
+    const signalImpact = []
+    const queryResults = []
+    for (const query of queries) {
+      const matches = matchingRecords(normalizedRecords, query, normalizeText(current.path))
+      const queryTimingSamples = Object.fromEntries(Object.keys(strategies).map((name) => [name, []]))
+      const noSignalTop = top(matches, rawContextScore, () => 0)
+      const signalResult = {}
+      for (const signal of ['recency', 'pin', 'freshness', 'all']) {
+        const ids = top(matches, rawContextScore, (id) => dynamicSignal(id, signal))
+        signalResult[signal] = {
+          changedTop8: !compareTop(noSignalTop, ids),
+          boostedCandidateCount: matches.reduce((sum, { id }) => sum
+            + (dynamicSignal(id, signal) > 0 ? 1 : 0), 0),
+        }
+      }
+      signalImpact.push({ query, ...signalResult })
+
+      const lastAll = {}
+      for (let iteration = 0; iteration < repeatCount; iteration += 1) {
+        for (const [name, [context, signal]] of Object.entries(strategies)) {
+          const started = performance.now()
+          lastAll[name] = top(matches, context, signal)
+          queryTimingSamples[name].push(performance.now() - started)
+        }
+      }
+      const queryTimingP50Ms = Object.fromEntries(Object.entries(queryTimingSamples).map(([name, samples]) => {
+        const sorted = [...samples].sort((left, right) => left - right)
+        return [name, Number((sorted[Math.floor(sorted.length / 2)] ?? 0).toFixed(2))]
+      }))
+      const baseline = lastAll.raw
+      const allParity = Object.fromEntries(Object.entries(lastAll)
+        .map(([name, ids]) => [name, compareTop(baseline, ids)]))
+      if (Object.values(allParity).some((same) => !same)) {
+        throw new Error('Full-signal all-scope top-eight mismatch for query ' + query)
+      }
+      const scopeParity = { all: allParity }
+      const scopeCounts = { all: matches.length }
+      for (const scope of ['recent', 'pinned']) {
+        const scoped = matches.filter(({ id }) => scope === 'recent'
+          ? recentReadById.has(records[id].id)
+          : pinnedIds.has(records[id].id))
+        scopeCounts[scope] = scoped.length
+        const scopedTop = Object.fromEntries(Object.entries(strategies)
+          .map(([name, [context, signal]]) => [name, top(scoped, context, signal)]))
+        const scopedBaseline = scopedTop.raw
+        scopeParity[scope] = Object.fromEntries(Object.entries(scopedTop)
+          .map(([name, ids]) => [name, compareTop(scopedBaseline, ids)]))
+        if (Object.values(scopeParity[scope]).some((same) => !same)) {
+          throw new Error('Full-signal ' + scope + '-scope top-eight mismatch for query ' + query)
+        }
+      }
+      queryResults.push({
+        query,
+        matchingCandidates: matches.length,
+        fullSignalRankingP50Ms: queryTimingP50Ms,
+        scopeCandidateCounts: scopeCounts,
+        allScopesTop8Identical: scopeParity,
+      })
+    }
+    const freshnessBranchCounts = { twoPoint: 0, onePoint: 0, zero: 0 }
+    for (const score of freshnessVector) {
+      if (score === 2) freshnessBranchCounts.twoPoint += 1
+      else if (score === 1) freshnessBranchCounts.onePoint += 1
+      else freshnessBranchCounts.zero += 1
+    }
+    const freshnessTargets = trial.freshnessTargets
+    trial.packed = { wordOffsets, wordIds: packedWordIds, folderOffsets, folderIds: packedFolderIds }
+    trial.indexedContextScores = indexedContextScores
+    trial.signalVector = signalVector
+    trial.profiles = null
+    trial.wordPostings = null
+    trial.pathPrefixPostings = null
+    return {
+      currentContextBuildMs: Number(currentContextBuildMs.toFixed(2)),
+      currentContextLookupBytes: indexedContextScores.byteLength,
+      contextScoreMismatches: scoreMismatches,
+      csr,
+      signalVectorBuildMs: Number(signalVectorBuildMs.toFixed(2)),
+      signalVectorBytes: signalVector.byteLength,
+      dynamicSignals: {
+        recentReadCount: trial.recentReads.length,
+        pinnedCount: trial.pinnedArtifactIds.length,
+        freshnessTargets,
+        freshnessBranchCounts,
+      },
+      signalImpact,
+      queries: queryResults,
+    }
+
+    function normalizeText(value) {
+      return value.split(/[\s/-]+/u).filter(Boolean).map((word) => word.toLocaleLowerCase()).join('\0')
+    }
+    function scoreText(text, queryTerms) {
+      if (queryTerms.length === 0) return undefined
+      let score = 0
+      for (const term of queryTerms) {
+        const characters = Array.from(term)
+        let best = Number.NEGATIVE_INFINITY
+        let start = 0
+        while (start < text.length) {
+          const separator = text.indexOf('\0', start)
+          const end = separator < 0 ? text.length : separator
+          const first = text.indexOf(characters[0], start)
+          if (first >= 0 && first < end) {
+            let previous = first
+            let consecutivePairs = 0
+            let matchesTerm = true
+            for (let index = 1; index < characters.length; index += 1) {
+              const position = text.indexOf(characters[index], previous + characters[index - 1].length)
+              if (position < 0 || position >= end) {
+                matchesTerm = false
+                break
+              }
+              if (position === previous + characters[index - 1].length) consecutivePairs += 1
+              previous = position
+            }
+            if (matchesTerm) {
+              const wordLength = end - start
+              const startsWithTerm = term.length <= wordLength && text.startsWith(term, start)
+              const baseScore = startsWithTerm
+                ? wordLength === term.length ? 100 : 80
+                : 50
+              const word = text.slice(start, end)
+              const lastPosition = /[\u{10000}-\u{10FFFF}]/u.test(word)
+                ? Array.from(text.slice(start, previous)).length
+                : previous - start
+              best = Math.max(best, baseScore + consecutivePairs * 3 - lastPosition * 0.15)
+            }
+          }
+          start = end + 1
+        }
+        if (best === Number.NEGATIVE_INFINITY) return undefined
+        score += best
+      }
+      return score
+    }
+    function matchingRecords(prepared, query, currentPath) {
+      const terms = query.toLocaleLowerCase().trim().split(/[\s/-]+/u).filter(Boolean)
+      if (terms.length === 0) {
+        return prepared.flatMap((artifact, id) => artifact.path === currentPath ? [] : [{ id, queryScore: 0 }])
+      }
+      const matches = []
+      for (const [id, artifact] of prepared.entries()) {
+        const titleScore = scoreText(artifact.title, terms)
+        const pathScore = scoreText(artifact.path, terms)
+        if (titleScore === undefined && pathScore === undefined) continue
+        matches.push({ id, queryScore: (titleScore ?? 0) * 1.12 + (pathScore ?? 0) })
+      }
+      return matches
+    }
+  }, iterations)
+  const heapAfterPackedBytes = await readJsHeapBytes(cdp)
+  const backingAfterPackedBytes = await readBackingStorageBytes(cdp)
+  await page.evaluate(() => {
+    delete window.__contextScoringTrial.indexedContextScores
+    delete window.__contextScoringTrial.signalVector
+  })
+  const heapAfterCsrOnlyBytes = await readJsHeapBytes(cdp)
+  const backingAfterCsrOnlyBytes = await readBackingStorageBytes(cdp)
+  const unicodeParity = await page.evaluate(() => {
+    const corpus = [
+      { id: 'u1', title: '検索体験:設計', path: 'docs/検索体験/設計.md', updatedAt: '2026-09-26T06:00:00.000Z' },
+      { id: 'u2', title: '検索体験:東京の地図', path: 'docs/検索体験/東京.md', updatedAt: '2026-09-23T12:00:00.000Z' },
+      { id: 'u3', title: '東京の検索ガイド 𠮷野家', path: 'docs/東京/𠮷野家/検索.md', updatedAt: '2026-09-26T06:00:00.000Z' },
+      { id: 'u4', title: '𠮷野家のガイド', path: 'docs/東京/𠮷野家/guide.md', updatedAt: '2026-08-01T00:00:00.000Z' },
+      { id: 'u5', title: '東京 emoji 😀 の検索メモ', path: 'docs/東京/emoji-😀/search-notes.md', updatedAt: '2026-09-25T12:00:00.000Z' },
+      { id: 'u6', title: '日本語の検索リファレンス', path: 'docs/reference/日本語検索.md', updatedAt: '2026-09-22T12:00:00.000Z' },
+      { id: 'u7', title: 'Guide to search and navigation', path: 'docs/guides/search-navigation.md', updatedAt: '2026-09-20T12:00:00.000Z' },
+      { id: 'u8', title: '😀atlas release note', path: 'docs/emoji-atlas/release.md', updatedAt: '2026-09-24T12:00:00.000Z' },
+      { id: 'u9', title: 'xatlas release note', path: 'docs/legacy/xatlas.md', updatedAt: '2026-09-20T12:00:00.000Z' },
+      { id: 'u10', title: 'Dot folder alpha', path: 'docs/a.b/alpha.md', updatedAt: '2026-09-20T12:00:00.000Z' },
+      { id: 'u11', title: 'Dot folder beta', path: 'docs/a/b.c/beta.md', updatedAt: '2026-09-20T12:00:00.000Z' },
+    ]
+    const ignored = new Set([
+      'the', 'and', 'for', 'with', 'from', 'into', 'index', 'html', 'md',
+      'incidents', 'architecture', 'reports', 'guides', 'runbooks', 'diagrams', 'docs',
+    ])
+    const words = (value) => [...new Set(value.toLowerCase().split(/[^\p{L}\p{N}]+/u)
+      .filter((word) => word.length >= 4 && !ignored.has(word)))]
+    const wordDictionary = new Map()
+    const folderDictionary = new Map()
+    const intern = (dictionary, value) => {
+      if (!dictionary.has(value)) dictionary.set(value, dictionary.size)
+      return dictionary.get(value)
+    }
+    const profiles = corpus.map((artifact) => ({
+      wordIds: [...new Set([...words(artifact.title), ...words(artifact.path)])]
+        .map((word) => intern(wordDictionary, word)),
+      folderIds: artifact.path.split('/').filter(Boolean).slice(0, -1)
+        .map((folder) => intern(folderDictionary, folder)),
+    }))
+    const wordPostings = new Map()
+    const pathPostings = [new Map(), new Map(), new Map()]
+    const append = (map, key, id) => {
+      const ids = map.get(key) ?? []
+      ids.push(id)
+      map.set(key, ids)
+    }
+    profiles.forEach((profile, id) => {
+      profile.wordIds.forEach((wordId) => append(wordPostings, wordId, id))
+      for (let level = 1; level <= Math.min(3, profile.folderIds.length); level += 1) {
+        append(pathPostings[level - 1], JSON.stringify(profile.folderIds.slice(0, level)), id)
+      }
+    })
+    const wordOffsets = new Uint32Array(corpus.length + 1)
+    const folderOffsets = new Uint32Array(corpus.length + 1)
+    const wordIds = new Uint16Array(profiles.reduce((sum, profile) => sum + profile.wordIds.length, 0))
+    const folderIds = new Uint16Array(profiles.reduce((sum, profile) => sum + profile.folderIds.length, 0))
+    let wordOffset = 0
+    let folderOffset = 0
+    profiles.forEach((profile, id) => {
+      wordOffsets[id] = wordOffset
+      folderOffsets[id] = folderOffset
+      wordIds.set(profile.wordIds, wordOffset)
+      folderIds.set(profile.folderIds, folderOffset)
+      wordOffset += profile.wordIds.length
+      folderOffset += profile.folderIds.length
+    })
+    wordOffsets[corpus.length] = wordOffset
+    folderOffsets[corpus.length] = folderOffset
+    const recent = new Map([['u2', Date.parse('2026-09-26T10:00:00.000Z')], ['u5', Date.parse('2026-09-26T11:00:00.000Z')]])
+    const pinned = new Set(['u3', 'u6'])
+    const now = Date.parse('2026-09-26T12:00:00.000Z')
+    const dynamicSignal = (artifact) => {
+      const viewedAt = recent.get(artifact.id)
+      const recency = viewedAt === undefined ? 0 : 24 * Math.pow(0.5, Math.max(0, now - viewedAt) / 3_600_000 / 24)
+      const ageDays = Math.max(0, (now - Date.parse(artifact.updatedAt)) / 86_400_000)
+      return recency + (pinned.has(artifact.id) ? 5 : 0) + (ageDays <= 1 ? 2 : ageDays <= 7 ? 1 : 0)
+    }
+    const equalIds = (left, right) => left.length === right.length && left.every((id, index) => id === right[index])
+    const queries = ['', '検索', '東京', '𠮷', 'guide', 'atl', 'tl', 'alpha']
+    let pairwiseContextScoresCompared = 0
+    let unicodeQueryRankingComparisons = 0
+    let queryScoresEvaluated = 0
+    const fuzzyScore = (value, query) => {
+      const text = value.split(/[\s/-]+/u).filter(Boolean).map((word) => word.toLocaleLowerCase()).join('\0')
+      const terms = query.toLocaleLowerCase().split(/[\s/-]+/u).filter(Boolean)
+        .map((normalized) => ({ normalized, characters: Array.from(normalized) }))
+      if (terms.length === 0) return undefined
+      let score = 0
+      for (const term of terms) {
+        let bestScore = Number.NEGATIVE_INFINITY
+        let start = 0
+        while (start < text.length) {
+          const separator = text.indexOf('\0', start)
+          const end = separator < 0 ? text.length : separator
+          const firstPosition = text.indexOf(term.characters[0], start)
+          if (firstPosition >= 0 && firstPosition < end) {
+            let previousPosition = firstPosition
+            let consecutivePairs = 0
+            let matchesTerm = true
+            for (let index = 1; index < term.characters.length; index += 1) {
+              const position = text.indexOf(
+                term.characters[index],
+                previousPosition + term.characters[index - 1].length,
+              )
+              if (position < 0 || position >= end) {
+                matchesTerm = false
+                break
+              }
+              if (position === previousPosition + term.characters[index - 1].length) consecutivePairs += 1
+              previousPosition = position
+            }
+            if (matchesTerm) {
+              const wordLength = end - start
+              const startsWithTerm = term.normalized.length <= wordLength
+                && text.startsWith(term.normalized, start)
+              const baseScore = startsWithTerm
+                ? wordLength === term.normalized.length ? 100 : 80
+                : 50
+              const word = text.slice(start, end)
+              const lastPosition = /[\u{10000}-\u{10FFFF}]/u.test(word)
+                ? Array.from(text.slice(start, previousPosition)).length
+                : previousPosition - start
+              bestScore = Math.max(bestScore, baseScore + consecutivePairs * 3 - lastPosition * 0.15)
+            }
+          }
+          start = end + 1
+        }
+        if (bestScore === Number.NEGATIVE_INFINITY) return undefined
+        score += bestScore
+      }
+      return score
+    }
+    const astralQueryScore = fuzzyScore('😀atlas', 'atl')
+    if (astralQueryScore !== 55.55) {
+      throw new Error('Astral fuzzy score should use code-point positions; received ' + astralQueryScore)
+    }
+    for (let currentIndex = 0; currentIndex < corpus.length; currentIndex += 1) {
+      const current = corpus[currentIndex]
+      const currentProfile = profiles[currentIndex]
+      const sharedCurrentWords = new Set(currentProfile.wordIds)
+      const rawContext = (id) => {
+        const candidate = corpus[id]
+        const candidateFolders = candidate.path.split('/').filter(Boolean).slice(0, -1)
+        const currentFolders = current.path.split('/').filter(Boolean).slice(0, -1)
+        let sharedFolders = 0
+        while (sharedFolders < candidateFolders.length && sharedFolders < currentFolders.length
+          && candidateFolders[sharedFolders] === currentFolders[sharedFolders]) sharedFolders += 1
+        const currentWords = new Set([...words(current.title), ...words(current.path)])
+        const candidateWords = new Set([...words(candidate.title), ...words(candidate.path)])
+        const sharedCount = [...candidateWords].filter((word) => currentWords.has(word)).length
+        return (sharedFolders === 0 ? 0 : Math.min(10, 4 + sharedFolders * 2)) + Math.min(6, sharedCount * 2)
+      }
+      const profileContext = (id) => {
+        let sharedFolders = 0
+        while (sharedFolders < profiles[id].folderIds.length && sharedFolders < currentProfile.folderIds.length
+          && profiles[id].folderIds[sharedFolders] === currentProfile.folderIds[sharedFolders]) sharedFolders += 1
+        let sharedCount = 0
+        profiles[id].wordIds.forEach((wordId) => { if (sharedCurrentWords.has(wordId)) sharedCount += 1 })
+        return (sharedFolders === 0 ? 0 : Math.min(10, 4 + sharedFolders * 2)) + Math.min(6, sharedCount * 2)
+      }
+      const csrContext = (id) => {
+        let sharedFolders = 0
+        let candidateOffset = folderOffsets[id]
+        let currentOffset = folderOffsets[currentIndex]
+        while (candidateOffset < folderOffsets[id + 1] && currentOffset < folderOffsets[currentIndex + 1]
+          && folderIds[candidateOffset] === folderIds[currentOffset]) {
+          sharedFolders += 1
+          candidateOffset += 1
+          currentOffset += 1
+        }
+        let sharedCount = 0
+        for (let offset = wordOffsets[id]; offset < wordOffsets[id + 1]; offset += 1) {
+          if (sharedCurrentWords.has(wordIds[offset])) sharedCount += 1
+        }
+        return (sharedFolders === 0 ? 0 : Math.min(10, 4 + sharedFolders * 2)) + Math.min(6, sharedCount * 2)
+      }
+      const indexedScores = new Uint8Array(corpus.length)
+      const sharedWordScores = new Uint8Array(corpus.length)
+      currentProfile.wordIds.forEach((wordId) => {
+        ;(wordPostings.get(wordId) ?? []).forEach((id) => { sharedWordScores[id] = Math.min(6, sharedWordScores[id] + 2) })
+      })
+      const increments = [6, 2, 2]
+      for (let level = 1; level <= Math.min(3, currentProfile.folderIds.length); level += 1) {
+        const key = JSON.stringify(currentProfile.folderIds.slice(0, level))
+        ;(pathPostings[level - 1].get(key) ?? []).forEach((id) => { indexedScores[id] += increments[level - 1] })
+      }
+      indexedScores.forEach((value, id) => { indexedScores[id] = value + sharedWordScores[id] })
+      const invertedContext = (id) => indexedScores[id]
+      for (let id = 0; id < corpus.length; id += 1) {
+        pairwiseContextScoresCompared += 1
+        const baseline = rawContext(id)
+        if (profileContext(id) !== baseline || csrContext(id) !== baseline || invertedContext(id) !== baseline) {
+          throw new Error('Unicode score mismatch at current ' + current.id + ', candidate ' + corpus[id].id)
+        }
+      }
+      for (const query of queries) {
+        const matches = corpus.flatMap((artifact, id) => {
+          if (!query && id === currentIndex) return []
+          if (!query) return [{ id, queryScore: 0 }]
+          const titleScore = fuzzyScore(artifact.title, query)
+          const pathScore = fuzzyScore(artifact.path, query)
+          queryScoresEvaluated += 2
+          if (titleScore === undefined && pathScore === undefined) return []
+          return [{ id, queryScore: (titleScore ?? 0) * 1.12 + (pathScore ?? 0) }]
+        })
+        const rank = (context) => {
+          const entries = []
+          matches.forEach(({ id, queryScore }) => {
+            const score = queryScore + context(id) + dynamicSignal(corpus[id])
+            let position = 0
+            while (position < entries.length && entries[position].score >= score) position += 1
+            if (position < 8) {
+              entries.splice(position, 0, { id, score })
+              if (entries.length > 8) entries.pop()
+            }
+          })
+          return entries.map(({ id }) => id)
+        }
+        const baseline = rank(rawContext)
+        for (const context of [profileContext, csrContext, invertedContext]) {
+          unicodeQueryRankingComparisons += 1
+          if (!equalIds(baseline, rank(context))) {
+            throw new Error('Unicode top-eight mismatch at current ' + current.id + ', query ' + query)
+          }
+        }
+      }
+    }
+    return {
+      corpusSize: corpus.length,
+      currentArtifactsChecked: corpus.length,
+      pairwiseContextScoresCompared,
+      unicodeQueryRankingComparisons,
+      queryScoresEvaluated,
+      queries,
+      astralFuzzyQuery: { text: '😀atlas', query: 'atl', score: astralQueryScore },
+      includesJapaneseAndAstralCharacters: true,
+      contextScoresAndTop8Identical: true,
+    }
+  })
+  await page.evaluate(() => { delete window.__contextScoringRecords; delete window.__contextScoringTrial })
+  await readJsHeapBytes(cdp)
+  return {
+    scope: 'benchmark-only; full score includes query fit, context, recency, pin, and freshness',
+    profileIndex: {
+      ...profileIndex,
+      additionalRetainedHeapBytes: heapBeforeIndexBytes === null || heapAfterProfileBytes === null
+        ? null
+        : heapAfterProfileBytes - heapBeforeIndexBytes,
+      additionalBackingStorageBytes: backingAfterProfileBytes - backingBeforeIndexBytes,
+    },
+    invertedIndex: {
+      ...postingIndex,
+      additionalRetainedHeapBytes: heapAfterPostingBytes === null || heapAfterProfileBytes === null
+        ? null
+        : heapAfterPostingBytes - heapAfterProfileBytes,
+      additionalBackingStorageBytes: backingAfterPostingBytes - backingAfterProfileBytes,
+    },
+    packedProfile: {
+      ...queryResults.csr,
+      additionalV8HeapBytes: heapBeforeIndexBytes === null || heapAfterCsrOnlyBytes === null
+        ? null
+        : heapAfterCsrOnlyBytes - heapBeforeIndexBytes,
+      additionalBackingStorageBytes: backingAfterCsrOnlyBytes - backingBeforeIndexBytes,
+      additionalTotalMemoryBytes: (heapAfterCsrOnlyBytes - heapBeforeIndexBytes)
+        + (backingAfterCsrOnlyBytes - backingBeforeIndexBytes),
+      v8HeapBytesAfterPack: heapAfterCsrOnlyBytes,
+      backingStorageAfterPackBytes: backingAfterCsrOnlyBytes,
+      scoringVectorsV8HeapBytes: heapAfterPackedBytes - heapAfterCsrOnlyBytes,
+      scoringVectorsBackingStorageBytes: backingAfterPackedBytes - backingAfterCsrOnlyBytes,
+      scoringVectorsTotalMemoryBytes: (heapAfterPackedBytes - heapAfterCsrOnlyBytes)
+        + (backingAfterPackedBytes - backingAfterCsrOnlyBytes),
+      dynamicSignalVectorBytes: queryResults.signalVectorBytes,
+      signalVectorBuildMs: queryResults.signalVectorBuildMs,
+    },
+    dynamicSignals: queryResults.dynamicSignals,
+    currentContextLookupMs: queryResults.currentContextBuildMs,
+    currentContextLookupBytes: queryResults.currentContextLookupBytes,
+    contextScoreMismatches: queryResults.contextScoreMismatches,
+    fullSignalRankingP50MsByQuery: Object.fromEntries(queryResults.queries
+      .map(({ query, fullSignalRankingP50Ms }) => [query || '(empty)', fullSignalRankingP50Ms])),
+    signalImpactByQuery: queryResults.signalImpact,
+    totalJsHeapAfterExperimentBytes: heapAfterCsrOnlyBytes,
+    queries: queryResults.queries,
+    unicodeParity,
+  }
+}
+
+async function benchmarkPaletteScoringUiMatrix(browserInstance, dataset, iterations, fixtureUrl, loadIteration, scopeMatrix = false, indexMatrix = false, baselineOnly = false) {
+  const contextStrategies = indexMatrix ? ['indexed'] : ['raw', 'profile', 'csr', 'inverted']
+  const signalStrategies = ['dynamic', 'float64', 'float32', 'split', 'sparse', 'lazy']
+  const strategies = baselineOnly
+    ? [{ context: 'baseline', signals: 'dynamic', candidateScope: 'scan', scopeCounts: 'live' }]
+    : scopeMatrix
+    ? [
+      { context: 'baseline', signals: 'dynamic', candidateScope: 'scan', scopeCounts: 'live' },
+      { context: 'baseline', signals: 'dynamic', candidateScope: 'prefilter', scopeCounts: 'live' },
+      { context: 'baseline', signals: 'dynamic', candidateScope: 'scan', scopeCounts: 'memo' },
+      { context: 'baseline', signals: 'dynamic', candidateScope: 'prefilter', scopeCounts: 'memo' },
+    ]
+    : [
+      { context: 'baseline', signals: 'dynamic', candidateScope: 'scan', scopeCounts: 'live' },
+      ...contextStrategies.flatMap((context) => signalStrategies.map((signals) => ({
+        context,
+        signals,
+        candidateScope: 'scan',
+        scopeCounts: 'live',
+      }))),
+    ]
+  const rotation = baselineOnly ? 0 : ((loadIteration - 1) * (scopeMatrix ? 1 : indexMatrix ? 2 : 8) + 3) % strategies.length
+  const orderedStrategies = [...strategies.slice(rotation), ...strategies.slice(0, rotation)]
+  const targetArtifact = dataset.searchRecords.find(({ path: artifactPath }) => artifactPath.endsWith('.md'))
+    ?? dataset.searchRecords[0]
+  const route = `/${encodeURIComponent(dataset.currentSiteId)}/${targetArtifact.path.split('/').map(encodeURIComponent).join('/')}`
+  const rows = []
+
+  for (const {
+    context: contextStrategy,
+    signals: signalStrategy,
+    candidateScope,
+    scopeCounts,
+  } of orderedStrategies) {
+      const page = await browserInstance.newPage({ viewport: { width: 1440, height: 960 } })
+      const cdp = await page.context().newCDPSession(page)
+      await cdp.send('HeapProfiler.enable')
+      await cdp.send('Performance.enable')
+      const heapBeforeBytes = await readJsHeapBytes(cdp)
+      const backingBeforeBytes = await readBackingStorageBytes(cdp)
+      const errors = []
+      page.on('pageerror', (error) => errors.push(error.message))
+      await page.addInitScript(({ recentReadsBySite, pinnedArtifactIdsBySite }) => {
+        localStorage.setItem('git-artifact-pages:recent-artifacts:v1', JSON.stringify(recentReadsBySite))
+        localStorage.setItem('git-artifact-pages:pinned-artifacts:v1', JSON.stringify(pinnedArtifactIdsBySite))
+      }, {
+        recentReadsBySite: dataset.recentReadsBySite,
+        pinnedArtifactIdsBySite: dataset.pinnedArtifactIdsBySite,
+      })
+
+      const loadStarted = performance.now()
+      const candidateQuery = candidateScope === 'prefilter' ? '&paletteCandidateScope=prefilter' : ''
+      const countsQuery = scopeCounts === 'memo' ? '&paletteScopeCounts=memo' : ''
+      const targetUrl = `${fixtureUrl}${route}?paletteContext=${contextStrategy}&paletteSignals=${signalStrategy}${candidateQuery}${countsQuery}`
+      await page.goto(targetUrl, { waitUntil: 'domcontentloaded' })
+      await page.locator('main.stage.has-artifact').waitFor({ state: 'visible', timeout: 60_000 })
+      await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+      const pageReadyMs = performance.now() - loadStarted
+      const heapBeforePaletteBytes = await readJsHeapBytes(cdp)
+      const backingBeforePaletteBytes = await readBackingStorageBytes(cdp)
+
+      const paletteOpenStarted = performance.now()
+      await page.keyboard.press('Control+k')
+      const palette = page.getByRole('dialog', { name: 'Command palette' })
+      await palette.waitFor({ state: 'visible' })
+      await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+      const paletteOpenMs = performance.now() - paletteOpenStarted
+      const metrics = await palette.evaluate((dialog) => ({
+        context: dialog.getAttribute('data-palette-context-strategy'),
+        signals: dialog.getAttribute('data-palette-signal-strategy'),
+        setupMs: Number(dialog.getAttribute('data-palette-scoring-setup-ms')),
+        contextBuildMs: Number(dialog.getAttribute('data-palette-context-build-ms')),
+        signalBuildMs: Number(dialog.getAttribute('data-palette-signal-build-ms')),
+        typedArrayBytes: Number(dialog.getAttribute('data-palette-typed-array-bytes')),
+        contextVectorBytes: Number(dialog.getAttribute('data-palette-context-vector-bytes')),
+        signalVectorBytes: Number(dialog.getAttribute('data-palette-signal-vector-bytes')),
+      }))
+      if (contextStrategy !== 'baseline' && (metrics.context !== contextStrategy || metrics.signals !== signalStrategy)) {
+        throw new Error(`Palette scoring mode was not enabled in a palette-bench build: ${contextStrategy}/${signalStrategy}.`)
+      }
+      const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
+      const firstCharacterSamples = []
+      for (let iteration = 0; iteration < iterations; iteration += 1) {
+        await measurePaletteQuery(search, '')
+        firstCharacterSamples.push(await measurePaletteQuery(search, 'a'))
+      }
+      const queryNames = [
+        { name: '(empty)', value: '' },
+        { name: 'a', value: 'a' },
+        { name: 'atlas', value: 'atlas' },
+        { name: 'pltfrm', value: 'pltfrm' },
+        { name: 'zzzz', value: 'zzzz' },
+      ]
+      const rankingByScope = Object.create(null)
+      const timingByScopeAndQuery = Object.create(null)
+      const scopeSwitchAtA = []
+
+      for (const scope of ['all', 'recent', 'pinned']) {
+        const accessibleName = scope === 'all' ? /^All pages/ : scope === 'recent' ? /^Recently read pages/ : /^Pinned pages/
+        await palette.getByRole('button', { name: accessibleName }).click()
+        rankingByScope[scope] = Object.create(null)
+        timingByScopeAndQuery[scope] = Object.create(null)
+        for (const query of queryNames) {
+          const measurement = await search.evaluate(async (input, value) => {
+            const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+            if (!setter) throw new Error('Could not access the native input value setter.')
+            const started = performance.now()
+            if (input.value !== value) {
+              setter.call(input, value)
+              input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: value }))
+            }
+            const processingMilliseconds = performance.now() - started
+            await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+            return {
+              processingMilliseconds,
+              inputToPaintMilliseconds: performance.now() - started,
+              inputValue: input.value,
+              ids: [...document.querySelectorAll('[role="option"][data-palette-entry-id^="artifact:"]')]
+                .map((entry) => entry.getAttribute('data-palette-entry-id')),
+            }
+          }, query.value)
+          if (measurement.inputValue !== query.value) throw new Error(`Scoring matrix input failed for ${query.name}.`)
+          rankingByScope[scope][query.name] = measurement.ids
+          timingByScopeAndQuery[scope][query.name] = {
+            jsMs: roundHundredths(measurement.processingMilliseconds),
+            inputToPaintMs: roundHundredths(measurement.inputToPaintMilliseconds),
+          }
+        }
+      }
+
+      await palette.getByRole('button', { name: /^All pages/ }).click()
+      await measurePaletteQuery(search, 'a')
+      for (const scope of ['recent', 'pinned', 'all']) {
+        const accessibleName = scope === 'all' ? /^All pages/ : scope === 'recent' ? /^Recently read pages/ : /^Pinned pages/
+        const button = await palette.getByRole('button', { name: accessibleName }).elementHandle()
+        const switchMeasurement = await button.evaluate(async (element) => {
+          const started = performance.now()
+          element.click()
+          const jsMs = performance.now() - started
+          await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+          return {
+            jsMs,
+            inputToPaintMs: performance.now() - started,
+            ids: [...document.querySelectorAll('[role="option"][data-palette-entry-id^="artifact:"]')]
+              .map((entry) => entry.getAttribute('data-palette-entry-id')),
+          }
+        })
+        scopeSwitchAtA.push({ scope, jsMs: roundHundredths(switchMeasurement.jsMs), inputToPaintMs: roundHundredths(switchMeasurement.inputToPaintMs), ids: switchMeasurement.ids })
+      }
+
+      const heapAfterBytes = await readJsHeapBytes(cdp)
+      const backingAfterBytes = await readBackingStorageBytes(cdp)
+      const row = {
+        context: contextStrategy,
+        signals: signalStrategy,
+        candidateScope,
+        scopeCounts,
+        pageReadyMs: round(pageReadyMs),
+        paletteOpenMs: round(paletteOpenMs),
+        firstCharacterJsMs: roundHundredths(percentile(firstCharacterSamples.map(({ jsMs }) => jsMs), 0.5)),
+        firstCharacterJsP95Ms: roundHundredths(percentile(firstCharacterSamples.map(({ jsMs }) => jsMs), 0.95)),
+        firstCharacterInputToPaintMs: roundHundredths(percentile(firstCharacterSamples.map(({ inputToPaintMs }) => inputToPaintMs), 0.5)),
+        firstCharacterInputToPaintP95Ms: roundHundredths(percentile(firstCharacterSamples.map(({ inputToPaintMs }) => inputToPaintMs), 0.95)),
+        setup: metrics,
+        scopeSwitchAtA,
+        heapBeforePaletteBytes,
+        heapAfterPaletteBytes: heapAfterBytes,
+        backingBeforePaletteBytes,
+        backingAfterPaletteBytes: backingAfterBytes,
+        heapDeltaAfterPaletteBytes: heapBeforePaletteBytes === null || heapAfterBytes === null
+          ? null
+          : heapAfterBytes - heapBeforePaletteBytes,
+        backingStorageDeltaAfterPaletteBytes: backingBeforePaletteBytes === null || backingAfterBytes === null
+          ? null
+          : backingAfterBytes - backingBeforePaletteBytes,
+        rankingByScope,
+        timingByScopeAndQuery,
+      }
+      if (errors.length) row.pageErrors = errors
+      rows.push(row)
+      await page.close()
+  }
+
+  const baselineRow = rows.find(({ context, signals, candidateScope, scopeCounts: countStrategy }) => (
+    context === 'baseline' && signals === 'dynamic' && candidateScope === 'scan' && countStrategy === 'live'
+  ))
+  if (!baselineRow) throw new Error('Scoring matrix did not include the current product baseline.')
+  const baselineByKey = flattenRanking(baselineRow.rankingByScope, baselineRow.scopeSwitchAtA)
+  for (const row of rows) {
+    const actualByKey = flattenRanking(row.rankingByScope, row.scopeSwitchAtA)
+    row.parityMismatches = []
+    for (const [key, ids] of Object.entries(baselineByKey)) {
+      if (JSON.stringify(ids) !== JSON.stringify(actualByKey[key])) {
+        row.parityMismatches.push({ key, baseline: ids, actual: actualByKey[key] })
+      }
+    }
+  }
+  const mismatchCount = rows.reduce((total, row) => total + row.parityMismatches.length, 0)
+  return {
+    scenario: `${dataset.siteCount} sites x ${dataset.artifactsPerSite}`,
+    totalArtifacts: dataset.siteCount * dataset.artifactsPerSite,
+    activeArtifacts: dataset.artifactsPerSite,
+    recentReads: dataset.recentReadCountPerSite,
+    pinnedArtifacts: dataset.pinnedArtifactIdsBySite[dataset.currentSiteId]?.length ?? 0,
+    targetArtifactId: targetArtifact.id,
+    loadIteration,
+    strategies: rows,
+    strategyCount: rows.length,
+    parityMismatchCount: mismatchCount,
+    allStrategiesMatchBaseline: mismatchCount === 0,
+    ...(dataset.profileProjectionBytes ? {
+      indexProfileProjection: {
+        addedJsonBytes: dataset.profileProjectionBytes,
+        addedGzipBytes: dataset.profileProjectionGzipBytes,
+        fullIndexJsonBytes: dataset.currentIndexBytes,
+        fullIndexGzipBytes: dataset.currentIndexGzipBytes,
+        activeIndexGenerationMs: roundHundredths(dataset.activeProfileProjectionBuildMs),
+        allIndexesGenerationMs: roundHundredths(dataset.profileProjectionBuildMs),
+      },
+    } : {}),
+  }
+}
+
+async function measurePaletteQuery(search, value) {
+  return search.evaluate(async (input, nextValue) => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    if (!setter) throw new Error('Could not access the native input value setter.')
+    const started = performance.now()
+    if (input.value !== nextValue) {
+      setter.call(input, nextValue)
+      input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: nextValue }))
+    }
+    const jsMs = performance.now() - started
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    const ids = [...document.querySelectorAll('[role="option"][data-palette-entry-id^="artifact:"]')]
+      .map((entry) => entry.getAttribute('data-palette-entry-id'))
+    return { jsMs, inputToPaintMs: performance.now() - started, ids }
+  }, value)
+}
+
+function flattenRanking(rankingByScope, scopeSwitchAtA) {
+  const flattened = Object.create(null)
+  for (const [scope, queries] of Object.entries(rankingByScope)) {
+    for (const [query, ids] of Object.entries(queries)) flattened[`${scope}:${query}`] = ids
+  }
+  for (const { scope, ids } of scopeSwitchAtA) flattened[`switch:${scope}`] = ids
+  return flattened
+}
+
 async function benchmarkTyping(search, iterations, sequence) {
   const result = await search.evaluate(async (input, { iterations, sequence }) => {
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
@@ -816,7 +2013,7 @@ function generateSiteIndex(count, seed, siteId, siteTitle) {
     const title = `${capitalize(adjective)} ${capitalize(topic)} ${capitalize(firstNoun)} ${capitalize(secondNoun)}`
 
     return {
-      id: `document-${ordinal.toString(36).padStart(5, '0')}`,
+      id: artifactPath,
       title,
       path: artifactPath,
       format: extension === 'md' ? 'markdown' : 'html',
@@ -833,6 +2030,48 @@ function generateSiteIndex(count, seed, siteId, siteTitle) {
     site: { id: siteId, title: siteTitle },
     generatedAt: '2026-09-24T12:00:00.000Z',
     artifacts,
+  }
+}
+
+function generateSerializedPaletteProfiles(artifacts) {
+  const ignoredWords = new Set([
+    'the', 'and', 'for', 'with', 'from', 'into', 'index', 'html', 'md',
+    'incidents', 'architecture', 'reports', 'guides', 'runbooks', 'diagrams', 'docs',
+  ])
+  const wordDictionary = new Map()
+  const folderDictionary = new Map()
+  const wordOffsets = [0]
+  const wordIds = []
+  const folderOffsets = [0]
+  const folderIds = []
+  const intern = (dictionary, value) => {
+    let id = dictionary.get(value)
+    if (id === undefined) {
+      id = dictionary.size
+      dictionary.set(value, id)
+    }
+    return id
+  }
+  const words = (value) => value.toLowerCase().split(/[^\p{L}\p{N}]+/u)
+    .filter((word) => word.length >= 4 && !ignoredWords.has(word))
+
+  for (const artifact of artifacts) {
+    const uniqueWords = new Set([...words(artifact.title), ...words(artifact.path)])
+    for (const word of uniqueWords) wordIds.push(intern(wordDictionary, word))
+    wordOffsets.push(wordIds.length)
+    const folders = artifact.path.split('/').filter(Boolean).slice(0, -1)
+    for (const folder of folders) folderIds.push(intern(folderDictionary, folder))
+    folderOffsets.push(folderIds.length)
+  }
+
+  return {
+    version: 1,
+    wordOffsets,
+    wordIds,
+    wordIdWidth: wordDictionary.size <= 65_536 ? 16 : 32,
+    folderOffsets,
+    folderIds,
+    folderIdWidth: folderDictionary.size <= 65_536 ? 16 : 32,
   }
 }
 
@@ -865,6 +2104,10 @@ function round(value) {
   return Number(value.toFixed(1))
 }
 
+function roundHundredths(value) {
+  return Number(value.toFixed(2))
+}
+
 function slugify(value) {
   return value.toLowerCase().replace(/[^a-z0-9-]+/gu, '-')
 }
@@ -878,21 +2121,45 @@ function parseArguments(args) {
     chunkSizes: [],
     iterations: 20,
     loads: 1,
+    recentReadsPerSite: 0,
     seed: '20260924',
     generateOnly: false,
+    paletteScoreMatrix: false,
+    paletteScopeMatrix: false,
+    paletteIndexMatrix: false,
+    paletteBaselineMatrix: false,
   }
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index]
     if (argument === '--help') {
-      console.log('Usage: npm run benchmark:palette -- [--counts 1000,5000,10000,20000] [--sites 20 --artifacts-per-site 1000] [--chunk-sizes 250,1000,5000] [--iterations 20] [--loads 3] [--seed text]')
-      console.log('       npm run fixtures:palette -- [--counts 1000,5000,10000,20000] [--sites 20 --artifacts-per-site 1000] [--seed text]')
+      console.log('Usage: npm run benchmark:palette -- [--counts 1000,5000,10000,20000] [--sites 20 --artifacts-per-site 1000] [--recent-reads 0-20] [--chunk-sizes 250,1000,5000] [--iterations 20] [--loads 3] [--seed text] [--palette-score-matrix]')
+      console.log('       npm run benchmark:palette -- [--counts 20000,100000] [--sites 20 --artifacts-per-site 1000] [--recent-reads 20] [--iterations 5] [--loads 3] [--seed text] [--palette-scope-matrix]')
+      console.log('       npm run benchmark:palette -- [--counts 20000,100000] [--sites 20 --artifacts-per-site 1000] [--recent-reads 20] [--iterations 5] [--loads 3] [--seed text] [--palette-index-matrix]')
+      console.log('       npm run benchmark:palette -- [--counts 100000] [--recent-reads 20] [--iterations 5] [--loads 3] [--seed text] [--palette-baseline-matrix]')
+      console.log('       npm run fixtures:palette -- [--counts 1000,5000,10000,20000] [--sites 20 --artifacts-per-site 1000] [--recent-reads 0-20] [--seed text]')
       process.exit(0)
     }
     if (argument === '--generate-only') {
       values.generateOnly = true
       continue
     }
-    if (argument === '--counts' || argument === '--sites' || argument === '--artifacts-per-site' || argument === '--chunk-sizes' || argument === '--iterations' || argument === '--loads' || argument === '--seed') {
+    if (argument === '--palette-score-matrix') {
+      values.paletteScoreMatrix = true
+      continue
+    }
+    if (argument === '--palette-scope-matrix') {
+      values.paletteScopeMatrix = true
+      continue
+    }
+    if (argument === '--palette-index-matrix') {
+      values.paletteIndexMatrix = true
+      continue
+    }
+    if (argument === '--palette-baseline-matrix') {
+      values.paletteBaselineMatrix = true
+      continue
+    }
+    if (argument === '--counts' || argument === '--sites' || argument === '--artifacts-per-site' || argument === '--recent-reads' || argument === '--chunk-sizes' || argument === '--iterations' || argument === '--loads' || argument === '--seed') {
       const value = args[++index]
       if (!value) throw new Error(`Missing value for ${argument}.`)
       if (argument === '--counts') {
@@ -902,6 +2169,7 @@ function parseArguments(args) {
       else if (argument === '--chunk-sizes') values.chunkSizes = value.split(',').map(Number)
       else if (argument === '--sites') values.siteCount = Number(value)
       else if (argument === '--artifacts-per-site') values.artifactsPerSite = Number(value)
+      else if (argument === '--recent-reads') values.recentReadsPerSite = Number(value)
       else if (argument === '--iterations') values.iterations = Number(value)
       else if (argument === '--loads') values.loads = Number(value)
       else values.seed = value
@@ -909,6 +2177,9 @@ function parseArguments(args) {
     }
     throw new Error(`Unknown argument: ${argument}`)
   }
+
+  const matrixModes = [values.paletteScoreMatrix, values.paletteScopeMatrix, values.paletteIndexMatrix, values.paletteBaselineMatrix]
+  if (matrixModes.filter(Boolean).length > 1) throw new Error('Choose only one palette benchmark matrix mode at a time.')
 
   if (values.siteCount !== undefined && values.artifactsPerSite === undefined
     || values.siteCount === undefined && values.artifactsPerSite !== undefined) {
@@ -919,6 +2190,9 @@ function parseArguments(args) {
   }
   if (values.artifactsPerSite !== undefined && (!Number.isSafeInteger(values.artifactsPerSite) || values.artifactsPerSite < 1 || values.artifactsPerSite > 100_000)) {
     throw new Error('Artifacts per site must be a whole number between 1 and 100000.')
+  }
+  if (!Number.isSafeInteger(values.recentReadsPerSite) || values.recentReadsPerSite < 0 || values.recentReadsPerSite > 20) {
+    throw new Error('Recent reads per site must be a whole number between 0 and 20.')
   }
   if (values.siteCount !== undefined && values.siteCount * values.artifactsPerSite > 1_000_000) {
     throw new Error('A multi-site fixture may contain at most one million artifacts.')

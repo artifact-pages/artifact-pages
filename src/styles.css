@@ -1527,23 +1527,24 @@ mark {
 }
 
 .palette-backdrop {
+  --palette-top-offset: clamp(64px, 12vh, 112px);
   position: fixed;
   z-index: 50;
   inset: 0;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: calc(16px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  padding: calc(var(--palette-top-offset) + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px));
   background: var(--scrim);
 }
 
 .command-palette {
   display: flex;
   width: min(720px, 100%);
-  max-height: min(520px, calc(100vh - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)));
+  max-height: min(520px, calc(100vh - var(--palette-top-offset) - 16px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)));
   flex-direction: column;
   overflow: hidden;
-  align-self: center;
+  align-self: flex-start;
   border: 1px solid var(--line);
   border-radius: 16px;
   background: var(--surface-raised);
@@ -1574,6 +1575,50 @@ mark {
 
 .palette-input-row input::placeholder {
   color: var(--text-tertiary);
+}
+
+.palette-scope-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.palette-scope-tabs button {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border-radius: 7px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.palette-scope-tabs button:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.palette-scope-tabs button[aria-pressed="true"] {
+  color: var(--text);
+  background: var(--active);
+}
+
+.palette-scope-tabs button:focus-visible {
+  outline: 2px solid var(--palette-match);
+  outline-offset: 1px;
+}
+
+.palette-scope-tabs button span {
+  min-width: 16px;
+  padding: 1px 4px;
+  border-radius: 999px;
+  color: var(--text-tertiary);
+  background: var(--surface);
+  font-size: 10px;
+  line-height: 1.3;
+  text-align: center;
 }
 
 .palette-scope {
@@ -1645,6 +1690,13 @@ mark {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 11px;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-entry-badge {
+  flex: none;
+  color: var(--text-tertiary);
+  font-size: 10px;
   white-space: nowrap;
 }
 
@@ -2009,11 +2061,12 @@ mark {
   }
 
   .palette-backdrop {
-    padding: calc(12px + env(safe-area-inset-top, 0px)) 9px calc(12px + env(safe-area-inset-bottom, 0px));
+    --palette-top-offset: clamp(44px, 9vh, 72px);
+    padding: calc(var(--palette-top-offset) + env(safe-area-inset-top, 0px)) 9px calc(12px + env(safe-area-inset-bottom, 0px));
   }
 
   .command-palette {
-    max-height: calc(100vh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    max-height: min(520px, calc(100vh - var(--palette-top-offset) - 12px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)));
   }
 
   .palette-footer {

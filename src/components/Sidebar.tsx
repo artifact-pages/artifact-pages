@@ -8,6 +8,8 @@ import { ArtifactTree, type TreeStyle } from './ArtifactTree'
 import { Icon } from './Icon'
 import { ThemeSwitcher } from './ThemeSwitcher'
 
+const EMPTY_PINNED_IDS: string[] = []
+
 export function Sidebar({
   id,
   index,
@@ -22,6 +24,7 @@ export function Sidebar({
   themeMode,
   onSetThemeMode,
   onCollapse,
+  onPinnedIdsChange,
   treeStyle = 'branch-guides',
 }: {
   id?: string
@@ -37,6 +40,7 @@ export function Sidebar({
   themeMode: ThemeMode
   onSetThemeMode: (mode: ThemeMode) => void
   onCollapse: () => void
+  onPinnedIdsChange?: (ids: string[]) => void
   treeStyle?: TreeStyle
 }) {
   const [query, setQuery] = useState('')
@@ -50,12 +54,16 @@ export function Sidebar({
       .slice(0, 4),
     [index.artifacts],
   )
-  const pinnedIds = pinnedBySite[index.site.id] ?? []
+  const pinnedIds = pinnedBySite[index.site.id] ?? EMPTY_PINNED_IDS
   const pinned = useMemo(() => {
     const artifactsById = new Map(index.artifacts.map((artifact) => [artifact.id, artifact]))
     return pinnedIds.map((id) => artifactsById.get(id)).filter((artifact): artifact is ArtifactIndexEntry => artifact !== undefined)
   }, [index.artifacts, pinnedIds])
   const matchCount = index.artifacts.filter((artifact) => matches(artifact, normalizedQuery)).length
+
+  useEffect(() => {
+    onPinnedIdsChange?.(pinnedIds)
+  }, [onPinnedIdsChange, pinnedIds])
 
   useEffect(() => {
     try {
