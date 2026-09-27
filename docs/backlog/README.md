@@ -4,7 +4,7 @@ This is the entry point for work that is not yet complete. Keep product defects,
 
 | Track | Purpose | Open | In progress | Done |
 | --- | --- | ---: | ---: | ---: |
-| [Issues](issues/README.md) | Independently actionable product problems with evidence and acceptance criteria. | 0 | 0 | 12 |
+| [Issues](issues/README.md) | Independently actionable product problems with evidence and acceptance criteria. | 0 | 0 | 0 |
 | Technical design | Decisions about how to fulfill an accepted contract. | 2 | 1 | 0 |
 | Verification | Tests or measurements needed to prove an accepted contract. | 5 | 0 | 0 |
 

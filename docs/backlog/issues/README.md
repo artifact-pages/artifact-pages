@@ -1,8 +1,8 @@
 # Product issues
 
-[Backlog overview and shared status legend](../README.md). This track is for independently actionable product problems; unresolved design questions and unrun contract proofs have their own backlog tracks. All issues in the current index are Done.
+[Backlog overview and shared status legend](../README.md). This track is for independently actionable product problems; unresolved design questions and unrun contract proofs have their own backlog tracks. Remove completed issue files from this backlog after verifying their acceptance criteria; Git history retains the completed records.
 
-Each file records one independently actionable problem. New issues start as `Open`; update the issue file, this index, and the [parent backlog summary](../README.md) when counts or status change. Use [_template.md](_template.md) for new issues.
+Each issue file records one independently actionable problem. New issues start as `Open`; keep this index and the [parent backlog summary](../README.md) in sync. Use [_template.md](_template.md) for new issues.
 
 ## Status
 
@@ -27,17 +27,4 @@ Priority describes user impact, not implementation effort. Issues 001–011 came
 
 ## Issue index
 
-| Issue | Status | Priority |
-| --- | --- | --- |
-| [001 — Mobile navigation covers content after reload](001-mobile-navigation-on-reload.md) | Done | P1 |
-| [002 — HTML heading navigation creates inconsistent back history](002-iframe-heading-history.md) | Done | P1 |
-| [003 — Independent searches leave contradictory result states](003-search-state-confusion.md) | Done | P1 |
-| [004 — Secondary text and controls lack contrast](004-secondary-contrast.md) | Done | P2 |
-| [005 — Artifact title and route to site home are hard to find](005-artifact-orientation.md) | Done | P2 |
-| [006 — Unknown-site error exposes an internal storage path](006-unknown-site-error.md) | Done | P2 |
-| [007 — Site switcher initially selects another site](007-site-switcher-default.md) | Done | P2 |
-| [008 — Small sites repeat the same artifacts in several lists](008-duplicate-artifact-listing.md) | Done | P3 |
-| [009 — Index date appears older than artifact update dates](009-index-date-meaning.md) | Done | P3 |
-| [010 — Mobile search advertises a desktop shortcut](010-mobile-search-hint.md) | Done | P3 |
-| [011 — Wide Markdown tables need an overflow cue](011-markdown-table-overflow.md) | Done | P3 |
-| [012 — Browse sibling artifacts from path breadcrumbs](012-breadcrumb-sibling-navigation.md) | Done | P2 |
+No active issues are currently tracked.

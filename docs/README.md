@@ -14,7 +14,7 @@ Start with the [thesis](thesis.md) for the product's purpose, the [specification
 ## Backlog
 
 - [Backlog index and status legend](backlog/README.md) — product issues, technical design, and verification in separate tracks.
-- [Product issues](backlog/issues/README.md) — issue-specific priority and acceptance criteria; all 12 recorded issues are currently Done.
+- [Product issues](backlog/issues/README.md) — issue-specific priority, acceptance criteria, and the current active issue index; no issues are currently open.
 
 ## UI studies
 
