@@ -16,4 +16,4 @@ Opening one site's Previews list or palette tab reads only that site's catalog a
 
 ## Evidence
 
-Not yet measured. This is a preview-specific measurement, distinct from the [artifact palette benchmark](../../research/palette-search-benchmark.md).
+Not yet measured. The [artifact palette benchmark](../../research/palette-search-benchmark.md) measures production artifact discovery/search; it does not include preview catalogs or revision-manifest availability checks and is not T7 evidence. The current browser has no preview list/catalog reader, and T1's record schema is still in progress, so transfer, parse, availability-check, memory, and paint costs cannot yet be measured against the contract. Keep T7 separate from the production palette benchmark.

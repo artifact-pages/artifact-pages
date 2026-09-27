@@ -17,4 +17,4 @@ Pre-publish and production publish prune catalog references only when their revi
 
 ## Evidence
 
-Not yet run. See the [catalog cleanup contract](../../architecture/preview-publishing-contract.html#publish).
+Not run. No preview pre-publish or production catalog-cleanup operation is available to test local/CI parity, provider-read-error handling, or retry after a failed catalog write. T1 is still in progress and T2/T3 remain open; do not infer cleanup behavior from PR state or from ordinary artifact reconciliation. See the [catalog cleanup contract](../../architecture/preview-publishing-contract.html#publish).

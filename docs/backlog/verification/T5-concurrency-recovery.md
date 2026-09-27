@@ -16,4 +16,4 @@ The shared site lock and conditional catalog write preserve the registered-site 
 
 ## Evidence
 
-Not yet run. See the [proof matrix](../../architecture/preview-publishing-contract.html#proof).
+Not run. The current product has no preview publication/catalog-update operation to coordinate or fault-inject. T1's record and storage-key contract is still in progress, with T2 and T3 open, so preview-specific lock ownership, conditional catalog writes, same-head retries, and partial-upload recovery cannot yet be exercised. No preview exit criteria are verified. See the [proof matrix](../../architecture/preview-publishing-contract.html#proof).

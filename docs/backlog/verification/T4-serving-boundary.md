@@ -16,4 +16,6 @@ Direct preview URLs work without catalog membership; a missing raw file is a rea
 
 ## Evidence
 
-Not yet run. See the [proof matrix](../../architecture/preview-publishing-contract.html#proof).
+Phase 1 serving analogue checked on 2026-09-27. The existing local E2E verifies that a missing `/_artifacts/...` resource returns 404. A direct `HEAD /_previews/showcase/revisions/<sha>/files/missing.css` against local nginx returned `200 text/html`: [`default.conf`](../../../docker/nginx/default.conf) has explicit locations for `/_indexes/` and `/_artifacts/`, then sends other paths to the SPA shell. This confirms the preview raw-file boundary is not implemented yet.
+
+No preview catalog/manifest resolution, cache behavior, or public/restricted authorization was exercised. All preview exit criteria remain unchecked. See the [proof matrix](../../architecture/preview-publishing-contract.html#proof).
