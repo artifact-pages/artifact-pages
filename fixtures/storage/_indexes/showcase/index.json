@@ -291,6 +291,22 @@
           "id": "color-scheme-response"
         }
       ]
+    },
+    {
+      "id": "guides/url route samples/Δ status #1%+check.html",
+      "title": "URL path round-trip fixture",
+      "path": "guides/url route samples/Δ status #1%+check.html",
+      "format": "html",
+      "filename": "Δ status #1%+check.html",
+      "artifactUrl": "/_artifacts/showcase/guides/url%20route%20samples/%CE%94%20status%20%231%25%2Bcheck.html",
+      "updatedAt": "2026-09-25T00:00:00Z",
+      "toc": [
+        {
+          "level": 1,
+          "text": "URL path round-trip fixture",
+          "id": "url-path-round-trip-fixture"
+        }
+      ]
     }
   ]
 }

@@ -796,6 +796,38 @@ test('multi-file artifacts stay in their site namespace when relative asset path
   await frontendPage.close()
 })
 
+test('logical artifact routes round-trip reserved and Unicode path characters through reload', async ({ page }) => {
+  const siteId = 'showcase'
+  const artifactPath = 'guides/url route samples/Δ status #1%+check.html'
+  const encodedArtifactPath = artifactPath.split('/').map(encodeURIComponent).join('/')
+  const logicalPath = `/${siteId}/${encodedArtifactPath}`
+  const encodedResourceRoot = `/_artifacts/${siteId}/guides/url%20route%20samples/assets/`
+  const encodedResourcePaths = [
+    `${encodedResourceRoot}skin%20%23%3F%25%2B%20%E6%97%A5%E6%9C%AC.css`,
+    `${encodedResourceRoot}loaded%20%23%3F%25%2B%20%E6%97%A5%E6%9C%AC.js`,
+    `${encodedResourceRoot}mark%20%23%3F%25%2B%20%E6%97%A5%E6%9C%AC.svg`,
+  ]
+  const resourceResponses = encodedResourcePaths.map((path) => page.waitForResponse((response) => (
+    new URL(response.url()).pathname === path
+  )))
+
+  await page.goto(logicalPath)
+
+  const iframe = page.frameLocator('iframe[title="URL path round-trip fixture"]')
+  expect(new URL(page.url()).pathname).toBe(logicalPath)
+  await expect(iframe.getByRole('heading', { name: 'URL path round-trip fixture' })).toBeVisible()
+  await expect(iframe.locator('body')).toHaveAttribute('data-route-fixture', 'loaded')
+  await expect(iframe.locator('body')).toHaveCSS('background-color', 'rgb(223, 241, 230)')
+  await expect(iframe.getByRole('img', { name: 'Reserved path marker' })).toBeVisible()
+  expect((await Promise.all(resourceResponses)).map((response) => response.status())).toEqual([200, 200, 200])
+
+  await page.reload()
+
+  expect(new URL(page.url()).pathname).toBe(logicalPath)
+  await expect(iframe.getByRole('heading', { name: 'URL path round-trip fixture' })).toBeVisible()
+  await expect(iframe.locator('body')).toHaveAttribute('data-route-fixture', 'loaded')
+})
+
 test('Markdown pages render safely with GFM, Mermaid, local assets, and extensionful links', async ({ page }) => {
   const imageResponse = page.waitForResponse((response) => {
     return new URL(response.url()).pathname === '/_artifacts/sre/runbooks/assets/request-path.svg'
