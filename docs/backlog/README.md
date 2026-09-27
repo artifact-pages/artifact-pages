@@ -2,13 +2,13 @@
 
 This is the entry point for work that is not yet complete. Keep product defects, unresolved technical designs, and unverified contracts distinct: they have different definitions of `Done`.
 
-| Track | Purpose | Open | Done |
-| --- | --- | ---: | ---: |
-| [Issues](issues/README.md) | Independently actionable product problems with evidence and acceptance criteria. | 0 | 12 |
-| Technical design | Decisions about how to fulfill an accepted contract. | 3 | 0 |
-| Verification | Tests or measurements needed to prove an accepted contract. | 5 | 0 |
+| Track | Purpose | Open | In progress | Done |
+| --- | --- | ---: | ---: | ---: |
+| [Issues](issues/README.md) | Independently actionable product problems with evidence and acceptance criteria. | 0 | 0 | 12 |
+| Technical design | Decisions about how to fulfill an accepted contract. | 2 | 1 | 0 |
+| Verification | Tests or measurements needed to prove an accepted contract. | 5 | 0 | 0 |
 
-The eight open design and verification items below concern the **post-MVP preview feature**. They are not claims that preview publishing exists in the current Phase 1 product. The [specification](../specification.md#post-mvp-pre-publish-preview-contract) owns accepted behavior; the [preview decision register](../architecture/preview-decisions.md) records product decisions; the [publishing contract](../architecture/preview-publishing-contract.html) contains a proposed technical shape. Backlog files track unfinished work and its evidence, not a second specification.
+The eight unfinished design and verification items below concern the **post-MVP preview feature**. They are not claims that preview publishing exists in the current Phase 1 product. The [specification](../specification.md#post-mvp-pre-publish-preview-contract) owns accepted behavior; the [preview decision register](../architecture/preview-decisions.md) records product decisions; the [publishing contract](../architecture/preview-publishing-contract.html) contains a proposed technical shape. Backlog files track unfinished work and its evidence, not a second specification.
 
 ## Status legend
 
@@ -27,7 +27,7 @@ Use an item's own status as the source of truth, and update this index when it c
 
 | Item | Status | Outcome needed |
 | --- | --- | --- |
-| [T1 — Preview catalog and revision-manifest contract](technical-design/T1-preview-record-contract.md) | Open | Settle the schema, object keys, and PR provenance for fixed URLs. |
+| [T1 — Preview catalog and revision-manifest contract](technical-design/T1-preview-record-contract.md) | In progress | Settle the schema, object keys, and PR provenance for fixed URLs. |
 | [T2 — CLI and Action interface](technical-design/T2-cli-action-interface.md) | Open | Settle flag/input/output names and resource-include syntax. |
 | [T3 — Provider-owned retention mapping](technical-design/T3-provider-retention.md) | Open | Map the administrator's retention rule to provider behavior. |
 

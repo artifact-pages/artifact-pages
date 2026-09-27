@@ -109,7 +109,7 @@
       ]
     }
   ]
-}</pre><p class="subtle">One entry per group. PR groups use <code>pr:&lt;id&gt;</code>; manual defaults use <code>head:&lt;SHA&gt;</code>. The group is a discovery identity, not part of the revision URL. Entries are candidates: the reader checks whether their revision manifests still exist at the provider.</p></div>
+}</pre><p class="subtle">One entry per group. Only an explicitly supplied, validated PR number or URL creates a <code>pr:&lt;id&gt;</code> group; otherwise the manual group uses <code>head:&lt;SHA&gt;</code>. Candidate PR group metadata must carry the canonical source PR link. The group is a discovery identity, not part of the revision URL. Entries are candidates: the reader checks whether their revision manifests still exist at the provider.</p></div>
       </div>
       <p>All paths are canonical source-relative POSIX paths with retained file extensions. Reject traversal, backslashes, duplicate normalized paths, symlink escapes and reserved namespaces before uploading. A catalog entry is written only after its completion manifest exists; provider lifecycle may remove that manifest later, leaving a stale discovery reference until the next catalog write.</p>
     </section>
@@ -136,7 +136,7 @@
       <div class="table-wrap"><table>
         <thead><tr><th>Operation</th><th>Inputs known to the core</th><th>Result</th></tr></thead>
         <tbody>
-          <tr><td>Pre-publish</td><td>Explicit site ID; configured provider destination; source checkout; resolved head and default-branch HEAD; optional namespaced group; optional source-relative non-document resource includes; optional dry-run.</td><td>Typed <code>published</code> with group-list URL and each fixed document URL, or <code>no-preview</code>; noneligible changes/error are failures.</td></tr>
+          <tr><td>Pre-publish</td><td>Explicit site ID; configured provider destination; source checkout; resolved head and default-branch HEAD; optional explicit PR number or URL (never inferred); optional source-relative non-document resource includes; optional dry-run.</td><td>Typed <code>published</code> with group-list URL and each fixed document URL, or <code>no-preview</code>; noneligible changes/error are failures.</td></tr>
           <tr><td>Production publish with cleanup</td><td>Explicit site ID; configured provider destination; production projection; provider-origin access to catalog and completion manifests. No PR state, source-history comparison or Actions event payload is required for cleanup.</td><td>After the production projection is committed at origin, idempotently update the catalog if any confirmed missing-manifest references were removed; no revision deletion.</td></tr>
         </tbody>
       </table></div>
