@@ -9,7 +9,12 @@ Start with the [thesis](thesis.md) for the product's purpose, the [specification
 - [Publishing object map](architecture/publish-object-map.html) — repositories, operations, and stored objects in the proposed deployment.
 - [Publishing object flow](architecture/publish-object-flow.html) — the same proposed deployment as a step-by-step flow.
 - [Preview publishing contract](architecture/preview-publishing-contract.html) — proposed static objects, write order, retention, and verification for post-MVP previews.
-- [Preview decision register](architecture/preview-decisions.md) — accepted behavior, open product choices, and technical verification status.
+- [Preview decision register](architecture/preview-decisions.md) — accepted behavior and open product choices.
+
+## Backlog
+
+- [Backlog index and status legend](backlog/README.md) — product issues, technical design, and verification in separate tracks.
+- [Product issues](backlog/issues/README.md) — issue-specific priority and acceptance criteria; all 12 recorded issues are currently Done.
 
 ## UI studies
 

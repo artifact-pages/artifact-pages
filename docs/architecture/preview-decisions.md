@@ -2,15 +2,13 @@
 
 Status: **post-MVP design tracking; no preview implementation is implied**
 
-This page tracks what remains to decide or prove for pre-publish previews. The [specification](../specification.md#post-mvp-pre-publish-preview-contract) is authoritative for accepted product behavior; the [publishing contract](preview-publishing-contract.html) is a technical proposal. Keep this register short: move a resolved decision into the specification, record the outcome here, and do not turn each discussion point into a separate product issue. Use [`docs/issues/`](../issues/README.md) for independently actionable implementation defects.
+This page records product decisions for pre-publish previews. The [specification](../specification.md#post-mvp-pre-publish-preview-contract) is authoritative for accepted behavior; the [publishing contract](preview-publishing-contract.html) is a technical proposal. Track unresolved technical design and unrun verification in the [backlog](../backlog/README.md), separately from [product issues](../backlog/issues/README.md). Keep this register short: move a resolved product decision into the specification and record its outcome here.
 
 ## Status vocabulary
 
 | Status | Meaning |
 | --- | --- |
 | **Open — product** | A data-model, access-policy, or reader-UX choice needs an explicit product decision. |
-| **Proposed — technical** | A concrete implementation direction exists; it can be settled during design/implementation without another product decision unless it changes behavior. |
-| **Verify** | The intended behavior is decided, but tests or provider measurements must establish that the design works. |
 | **Accepted** | Decided and recorded in the specification. Do not reopen merely because the implementation is pending. |
 | **Deferred** | Deliberately outside the initial preview release. |
 
@@ -28,18 +26,9 @@ No open product decisions are recorded for this preview lifecycle.
 | P4 | Accepted | A preview stays discoverable while its catalog entry and manifest exist, even when its PR is merged or closed without merging. Provider removal makes it unavailable to the reader; the next catalog write prunes the stale reference. No PR-close workflow or browser-side PR-state polling. |
 | P5 | Accepted | Do not require a PR-close or scheduled-cleanup workflow. Preview discovery follows provider availability: merged, unmerged, closed and manual previews remain listed while their manifests exist. `artifact-pages site publish` prunes only references whose provider manifests are confirmed missing, in both local and CI runs. If changed, commit the site-scoped catalog after the production projection is committed at origin. GitHub Actions wraps the same CLI operation rather than owning cleanup. Completed revision bytes and fixed URLs remain provider-owned. |
 
-## Technical decisions to settle during implementation
+## Unfinished work
 
-| ID | Status | Item | Proposed direction / exit condition |
-| --- | --- | --- | --- |
-| T1 | Proposed — technical | Exact catalog and revision-manifest schema and storage keys. | Start from the [candidate projection](preview-publishing-contract.html#objects); freeze only after a local producer/reader round trip, including same-head retry and missing provider objects. Preserve PR provenance for a direct fixed URL without assuming one head SHA can belong to only one PR. |
-| T2 | Proposed — technical | CLI flag names, resource-include syntax and Action inputs/outputs. | Keep explicit site selection and the [input/output meanings](preview-publishing-contract.html#inputs); choose spellings with the actual CLI surface. Do not add a reusable workflow contract. |
-| T3 | Proposed — technical | Administrator retention configuration and provider mapping. | One provider-owned policy for preview objects; no app cutoff or per-PR duration option. Verify the catalog also disappears after inactivity and no versioned object remains indefinitely. |
-| T4 | Verify | Serving routes, caches and access control. | Prove raw misses do not get SPA fallback, direct URLs resolve without catalog membership, absent manifests are hidden on the list, and restricted sites authorize catalog, manifest and every resource before shared-cache delivery. |
-| T5 | Verify | Concurrency, idempotency and crash recovery. | Run both unregister/pre-publish orderings, simultaneous group updates, partial uploads, manifest-before-catalog failure, same-head mismatch and retirement retry. See the [proof matrix](preview-publishing-contract.html#proof). |
-| T6 | Verify | Snapshot-relative resources and document navigation. | Exercise HTML and Markdown with CSS, JS, images, fonts, changed-document links and unchanged-document links; establish the boundary for dynamic/root-relative URLs. |
-| T7 | Verify | Lazy catalog and availability-check cost at multi-site scale. | Confirm opening one site's Previews does not download other sites' catalogs; measure transfer, manifest checks, parse, memory and input-to-paint with many sites. If checking every candidate is too costly, revise the discovery projection without adding app-managed expiry. |
-| T8 | Verify | Stale-reference cleanup without another workflow. | Production publish and pre-publish check provider-origin manifest availability and prune only confirmed missing references, regardless of PR or merge state. Production publish writes a changed catalog only after production succeeds and while holding the site lock. Browser availability checks hide missing candidates between writes. Prove local/CI parity, retained merged and closed-unmerged previews, manual groups, provider read errors, and lock/CAS behavior. No PR-state polling, source-history comparison, app-managed expiry clock or standalone cleanup Action. |
+The [backlog](../backlog/README.md) is the status source for the three technical-design items and five verification items associated with this contract. Keep their status and evidence there; this register records only product decisions.
 
 ## Accepted product contract
 

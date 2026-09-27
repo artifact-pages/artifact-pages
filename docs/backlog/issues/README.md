@@ -1,6 +1,8 @@
 # Product issues
 
-Each file records one independently actionable problem. New issues start as `Open`; update the issue file and this index when the status or priority changes. Use [_template.md](_template.md) for new issues.
+[Backlog overview and shared status legend](../README.md). This track is for independently actionable product problems; unresolved design questions and unrun contract proofs have their own backlog tracks. All issues in the current index are Done.
+
+Each file records one independently actionable problem. New issues start as `Open`; update the issue file, this index, and the [parent backlog summary](../README.md) when counts or status change. Use [_template.md](_template.md) for new issues.
 
 ## Status
 
