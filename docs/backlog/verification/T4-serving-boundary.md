@@ -1,7 +1,7 @@
 # T4 — Serving routes, cache, and access control
 
-- Status: Open
-- Phase: Post-MVP preview
+- Status: In progress
+- Phase: Phase 1 local analogue; provider serving remains post-MVP
 
 ## Contract to prove
 
@@ -9,16 +9,19 @@ Direct preview URLs work without catalog membership; a missing raw file is a rea
 
 ## Exit criteria
 
-- [ ] Exercise direct load and reload of a fixed preview URL after its group leaves discovery.
-- [ ] Verify that missing manifests are hidden in the Previews list and missing raw resources return 404.
+- [x] Exercise direct load and reload of a fixed preview URL without catalog membership.
+- [x] Verify that missing manifests are hidden in the Previews list and missing raw resources return 404.
+- [x] Verify that a third-party opaque-origin sandbox cannot read preview objects while the isolated local frame can load preview resources.
 - [ ] Verify browser/CDN cache behavior for mutable catalog responses and removed objects.
 - [ ] Verify public and restricted sites at the serving boundary, including catalog, manifest, HTML/Markdown, and local resources.
 
 ## Evidence
 
-Phase 1 serving analogue checked on 2026-09-27. The existing local E2E verifies that a missing `/_artifacts/...` resource returns 404. A direct `HEAD /_previews/showcase/revisions/<sha>/files/missing.css` against local nginx returned `200 text/html`: [`default.conf`](../../../docker/nginx/default.conf) has explicit locations for `/_indexes/` and `/_artifacts/`, then sends other paths to the SPA shell. This confirms the preview raw-file boundary is not implemented yet.
+On 2026-09-27, the focused Playwright boundary checks passed. An opaque-origin sandbox on a different local host cannot read an HTML preview object, and the isolated local frame loads its relative image and font resources. The updated config removes `Access-Control-Allow-Origin: null`; the app reads catalogs/manifests on its own origin while HTML and local resources are served from `preview.localhost` in a sandboxed iframe. The preview route remains separate from nginx SPA fallback in [`default.conf`](../../../docker/nginx/default.conf).
 
-No preview catalog/manifest resolution, cache behavior, or public/restricted authorization was exercised. All preview exit criteria remain unchecked. See the [proof matrix](../../architecture/preview-publishing-contract.html#proof).
+The local preview origin binds to loopback in Compose. The reader no longer grants any CORS exception to opaque origins. Its HTML frame uses the separate `preview.localhost` origin, which lets same-origin resource loading work while keeping the frame cross-origin from the application. External frame embedding is restricted by the isolated server's `frame-ancestors` policy.
+
+Local serving is only an analogue. CDN freshness/removal, public and restricted-site authorization, and access-before-cache behavior remain unverified. See the [proof matrix](../../architecture/preview-publishing-contract.html#proof).
 
 ## Implementation links
 

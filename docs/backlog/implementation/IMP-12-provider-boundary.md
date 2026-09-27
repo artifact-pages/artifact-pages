@@ -9,6 +9,8 @@
 
 Map the provider-neutral preview storage/lock contract to the AWS reference adapter. Keep provider operations behind the shared interface; do not move preview discovery or expiry decisions into a request-time backend.
 
+Cloudflare has a separate adapter ticket so its credentials, storage API, and locking implementation can evolve independently while preserving the same `PreviewStore` behavior and preview records.
+
 ## Acceptance criteria
 
 - Adapter integration exercises conditional site locking, origin registry revalidation, multi-page listing, manifest availability and storage failures without crossing site prefixes.

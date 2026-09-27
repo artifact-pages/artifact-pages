@@ -2,7 +2,7 @@
 
 - Status: Open
 - Phase: Post-MVP distribution; not Phase 1 implementation authority.
-- Depends on: [IMP-11](IMP-11-cli.md), [IMP-12](IMP-12-provider-boundary.md), [IMP-14](IMP-14-provider-serving.md), [IMP-15](IMP-15-provider-retention.md), and [T2](../technical-design/T2-cli-action-interface.md)
+- Depends on: [IMP-11](IMP-11-cli.md), [IMP-12](IMP-12-provider-boundary.md), [IMP-14](IMP-14-provider-serving.md), [IMP-15](IMP-15-provider-retention.md), [IMP-18](IMP-18-cloudflare-preview-adapter.md), [T2](../technical-design/T2-cli-action-interface.md), and [T9](../technical-design/T9-cloudflare-store-mapping.md)
 - Proves: [T4](../verification/T4-serving-boundary.md), [T8](../verification/T8-stale-reference-cleanup.md)
 
 ## Outcome

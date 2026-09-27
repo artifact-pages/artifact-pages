@@ -1,35 +1,44 @@
 # T1 — Preview catalog and revision-manifest contract
 
-- Status: In progress
-- Phase: Post-MVP preview
+- Status: Done
+- Phase: Phase 1 local preview contract; provider lifecycle remains post-MVP
 
 ## Design question
 
 What are the exact versioned records and storage keys for a site-scoped discovery catalog and an immutable head-SHA revision? The reader must not invent a PR association from a branch name, Git history, or a coincidentally shared head SHA.
 
-## Accepted provenance input
+## Settled v1 contract
 
-Pre-publish may receive an explicit PR number or URL. Only then may the group be PR-scoped and the application display a PR link; without that input, it is a manual head-SHA group and no PR link appears. The CLI/Action must normalize and validate the supplied reference against the registered source repository. The exact option spelling and validation mechanism belong to [T2](T2-cli-action-interface.md).
+The implementation and fixture use these records:
 
-The fixed route `/:site/_previews/<head SHA>/<artifact path>` still renders from its revision manifest without catalog membership. A PR-specific group-list URL and PR-group-contextual revision-specific document URLs are available as CLI outputs for a caller-owned workflow to post in a PR comment; the Action does not post comments itself.
+- Catalog: `{ schemaVersion, site, groups[] }`.
+- Group: `{ id, kind, headSha, prUrl?, updatedAt, documents[] }`; `id` is `pr:<number>` for an explicit same-repository PR or `head:<full SHA>` for a manual preview.
+- Revision manifest: `{ schemaVersion, site, headSha, defaultHeadSha, mergeBaseSha, createdAt, bundleDigest, files[], documents[] }`.
+- File: `{ path, sha256, contentType }`. Document: `{ path, title, format }`.
+- Static keys: `/_previews/<site>/catalog.json`, `/_previews/<site>/revisions/<full SHA>/manifest.json`, and `/_previews/<site>/revisions/<full SHA>/files/<source-relative path>`.
+- Logical document URL: `/:site/_previews/<full SHA>/<document path>`. Optional `?group=pr%3A<number>` is reader context only and does not alter the revision URL or stored bytes.
 
-## Accepted reader-context behavior
+SHA values are full lowercase 40- or 64-character Git object IDs. Paths are canonical source-relative POSIX paths; URL keys percent-encode each path segment. The bundle digest sorts paths and hashes, for each path and its final head-tree bytes, an eight-byte big-endian path length, UTF-8 path bytes, an eight-byte big-endian content length, and content bytes. Documents and resources are stored unchanged; changed/unchanged link routing is resolved by the reader.
 
-Keep PR metadata on the explicitly named catalog group, not on the immutable head-SHA manifest. Every PR-associated preview artifact URL carries that group's view context; changed-document navigation within the revision preserves it. The reader shows its PR link only after confirming that the explicitly PR-associated group currently points to that head SHA. A bare fixed document URL, a manual preview, or one whose group no longer matches still renders but shows no PR link. This avoids falsely attributing one revision to a PR when two explicit PR groups share the same head. The PR link can disappear when a group leaves discovery, while the document remains accessible until provider removal. The exact query encoding and schema remain to be specified and proven.
+The provider boundary is `PreviewStore`: `ReadObject` distinguishes confirmed absence (`ErrObjectNotFound`) from other failures; `CreateImmutableObject` does not replace an existing key with different bytes; `ReplaceMutableObject` updates the catalog; and `WithSiteLock` serializes cooperating operations by site. `DirectoryStore` implements this boundary for preview development and coordinates operations only within the current process. `publisher.ObjectPreviewStore` bridges the contract to deployment backends; real-provider origin, locking, cache, and lifecycle behavior remains under separate verification.
 
-The candidate manifest's `comparisonBaseSha` currently labels a resolved default-branch HEAD, while document selection also uses a merge-base. Proposed field names are `defaultHeadSha` and `mergeBaseSha` for these distinct Git values; verify the same-head retry comparison before freezing them. Keep catalog document summaries only if the Previews list/palette needs them without loading every full manifest; measure that choice in [T7](../verification/T7-discovery-performance.md).
+## Accepted provenance input and reader context
+
+Pre-publish may receive an explicit PR number or URL. Only then may the group be PR-scoped and the application display a PR link; without that input, it is a manual head-SHA group and no PR link appears. The local helper currently accepts a canonical same-repository GitHub URL and validates its repository and head SHA. The eventual CLI/Action spelling remains in [T2](T2-cli-action-interface.md).
+
+Keep PR metadata on the explicitly named catalog group, not on the immutable head-SHA manifest. The reader shows its PR link only after confirming that the explicitly PR-associated group currently points to that head SHA. A bare fixed document URL, a manual preview, or one whose group no longer matches still renders but shows no PR link. This avoids falsely attributing one revision to a PR when two explicit PR groups share the same head.
 
 ## Exit criteria
 
-- [ ] Specify catalog and manifest fields, canonical paths, storage keys, and the relationship between a group and a revision in the [publishing contract](../../architecture/preview-publishing-contract.html#shape).
+- [x] Specify catalog and manifest fields, canonical paths, storage keys, and the relationship between a group and a revision in the [publishing contract](../../architecture/preview-publishing-contract.html#shape).
 - [x] Settle whether a bare fixed URL omits the PR link and whether optional group context is validated against the catalog.
-- [ ] Validate a local producer/reader round trip, including same-head retry and a manifest removed by the provider.
+- [x] Validate a generated local projection in the browser, including same-head retry and a manifest becoming missing at the serving boundary.
 - [x] Update the [specification](../../specification.md#post-mvp-pre-publish-preview-contract) for the accepted browser-facing behavior.
 
 ## Evidence
 
-The [publishing contract](../../architecture/preview-publishing-contract.html#shape) contains candidate JSON examples. Explicit PR input and group-contextual PR return links are accepted product rules; the URL encoding and record schema are not yet frozen or producer/reader-tested.
+`internal/preview/records.go` and `store.go` implement strict v1 validation, canonical keys, same-head checks, and the store contract. Go tests validate shared-head PR/manual fixture records, schema/path rejection, idempotent local writes, and encoded filesystem keys. Playwright covers committed fixtures, direct routes, missing manifests, same-head PR disambiguation, and encoded path reloads. A separate smoke run built a local preview from a temporary Git repository, served it from `.local/previews` through nginx, opened the generated document in the browser, retried the same head, then removed the manifest and confirmed the direct route became unavailable and its catalog candidate was hidden. This closes the local v1 contract; provider adapter behavior remains under T2/T3/T9 and T4/T5/T8.
 
 ## Implementation links
 
-The record decisions feed [IMP-01 records](../implementation/IMP-01-preview-records.md), [IMP-04 provenance](../implementation/IMP-04-pr-provenance.md), [IMP-05 publication](../implementation/IMP-05-publication.md), [IMP-08 reader](../implementation/IMP-08-preview-reader.md), [IMP-09 discovery](../implementation/IMP-09-discovery.md), and [IMP-10 PR return links](../implementation/IMP-10-pr-return-link.md). The [implementation index](../implementation/README.md) maps every dependent slice. A local producer/reader round trip across those slices is required before closing T1.
+The record decisions feed [IMP-01 records](../implementation/IMP-01-preview-records.md), [IMP-04 provenance](../implementation/IMP-04-pr-provenance.md), [IMP-05 publication](../implementation/IMP-05-publication.md), [IMP-08 reader](../implementation/IMP-08-preview-reader.md), [IMP-09 discovery](../implementation/IMP-09-discovery.md), and [IMP-10 PR return links](../implementation/IMP-10-pr-return-link.md). The [implementation index](../implementation/README.md) maps every dependent slice. Provider-specific implementation and lifecycle proofs remain open.

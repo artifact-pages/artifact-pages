@@ -1,6 +1,6 @@
 # IMP-32 — Cloudflare production provider adapter
 
-- Status: Open
+- Status: In progress
 - Phase: Provider-backed deployment
 - Depends on: [T12](../technical-design/T12-cloudflare-production-mapping.md), [IMP-22](IMP-22-site-locks.md), [IMP-25](IMP-25-production-reconciler.md)
 - Proves: provider contract and real-service conditional-write smoke

@@ -1,6 +1,6 @@
 # IMP-31 — Versioned application bundle and deployment path
 
-- Status: Open
+- Status: In progress
 - Phase: Reusable distribution
 - Depends on: [IMP-19](IMP-19-config-resolution.md), [T11](../technical-design/T11-command-surface.md)
 - Proves: clean admin-repository install and upgrade test

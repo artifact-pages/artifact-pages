@@ -1,6 +1,8 @@
 # IMP-30 — AWS reference deployment module
 
-- Status: Open
+- Status: In progress
+
+The initial module source is in [infra/aws](../../../infra/aws/README.md). It provisions the private S3/CloudFront OAC boundary, route function, TTL policies, preview lifecycle, and separate OIDC roles. Account deployment and browser/OIDC smoke evidence remain open.
 - Phase: Provider-backed deployment
 - Depends on: [IMP-29](IMP-29-aws-production-adapter.md), [IMP-31](IMP-31-app-distribution.md)
 - Proves: deployed route/cache/access/OIDC smoke tests

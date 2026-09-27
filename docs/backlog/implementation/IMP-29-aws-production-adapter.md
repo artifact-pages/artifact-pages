@@ -1,6 +1,6 @@
 # IMP-29 — AWS production store and cache adapter
 
-- Status: Open
+- Status: In progress
 - Phase: Provider-backed deployment
 - Depends on: [IMP-22](IMP-22-site-locks.md), [IMP-25](IMP-25-production-reconciler.md)
 - Proves: S3/CloudFront smoke and failure-injection tests

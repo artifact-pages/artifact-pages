@@ -5,11 +5,11 @@ This is the entry point for work that is not yet complete. Keep product defects,
 | Track | Purpose | Open | In progress | Done |
 | --- | --- | ---: | ---: | ---: |
 | [Issues](issues/README.md) | Independently actionable product problems with evidence and acceptance criteria. | 0 | 0 | 0 |
-| Technical design | Decisions about how to fulfill an accepted contract. | 2 | 1 | 0 |
-| [Implementation](implementation/README.md) | Independently reviewable slices that realize the accepted preview contract. | 16 | 0 | 0 |
-| Verification | Tests or measurements needed to prove an accepted contract. | 5 | 0 | 0 |
+| Technical design | Decisions about how to fulfill an accepted contract. | 2 | 1 | 4 |
+| [Implementation](implementation/README.md) | Independently reviewable slices for preview, registry, normal publish, providers, local contract tests and distribution. | 9 | 7 | 20 |
+| Verification | Tests or measurements needed to prove an accepted contract. | 4 | 3 | 2 |
 
-The 24 unfinished design, implementation, and verification items concern the **post-MVP preview feature**. They are not claims that preview publishing exists in the current Phase 1 product or authorization to implement provider infrastructure. The [specification](../specification.md#post-mvp-pre-publish-preview-contract) owns accepted behavior; the [preview decision register](../architecture/preview-decisions.md) records product decisions; the [publishing contract](../architecture/preview-publishing-contract.html) contains a proposed technical shape. Backlog files track unfinished work and its evidence, not a second specification.
+The 26 unfinished design, implementation, and verification items include registry administration, local edge/object-storage contract environments, AWS/Cloudflare, and distribution slices. Provider adapters and reference infrastructure are being implemented, but no linked provider delivery or clean-room verification is claimed complete. The [specification](../specification.md) owns accepted behavior; the [preview decision register](../architecture/preview-decisions.md) records preview decisions; the [publishing contract](../architecture/preview-publishing-contract.html) records its provider-neutral shape and proof boundary. Backlog files track unfinished work and its evidence, not a second specification.
 
 ## Status legend
 
@@ -28,20 +28,28 @@ Use an item's own status as the source of truth, and update this index when it c
 
 | Item | Status | Outcome needed |
 | --- | --- | --- |
-| [T1 — Preview catalog and revision-manifest contract](technical-design/T1-preview-record-contract.md) | In progress | Settle the schema, object keys, and PR provenance for fixed URLs. |
+| [T1 — Preview catalog and revision-manifest contract](technical-design/T1-preview-record-contract.md) | Done | Settle and round-trip the v1 schema and keys locally. |
 | [T2 — CLI and Action interface](technical-design/T2-cli-action-interface.md) | Open | Settle flag/input/output names and resource-include syntax. |
-| [T3 — Provider-owned retention mapping](technical-design/T3-provider-retention.md) | Open | Map the administrator's retention rule to provider behavior. |
+| [T3 — Provider-owned retention mapping](technical-design/T3-provider-retention.md) | Done | Map the administrator's retention rule to provider behavior. |
+| [T9 — Cloudflare store and lock mapping](technical-design/T9-cloudflare-store-mapping.md) | In progress | Select Cloudflare services that implement the shared storage and lock contract. |
+| [T10 — Configuration locator and precedence](technical-design/T10-config-location.md) | Done | Settle local/remote config forms and precedence without coupling satellites to admin YAML. |
+| [T11 — Registry, site and application command surface](technical-design/T11-command-surface.md) | Done | Settle public commands, dry-run outputs and Action boundary. |
+| [T12 — Cloudflare production deployment mapping](technical-design/T12-cloudflare-production-mapping.md) | Open | Select Cloudflare services for production storage, locking, delivery and cache. |
 
 ## Implementation
 
-The [implementation index](implementation/README.md) lists 16 scoped tickets, dependencies, acceptance criteria, and links back to T1–T8. Their `Open` status is planning, not a change to the current Phase 1 implementation boundary.
+The [implementation index](implementation/README.md) lists 36 scoped tickets with dependencies and acceptance criteria. IMP-01–18 cover preview; IMP-19–35 cover the other accepted product surfaces; IMP-36 establishes the local storage/edge contract test foundation. Backlog status does not expand the current Phase 1 boundary by itself.
 
 ## Verification
 
 | Item | Status | Evidence needed |
 | --- | --- | --- |
-| [T4 — Serving routes, cache, and access control](verification/T4-serving-boundary.md) | Open | Browser/provider proof of routing and authorization boundaries. |
-| [T5 — Concurrency and recovery](verification/T5-concurrency-recovery.md) | Open | Deterministic lock, retry, and partial-failure tests. |
-| [T6 — Preview resources and navigation](verification/T6-resources-navigation.md) | Open | HTML/Markdown fixtures and route/resource tests. |
-| [T7 — Preview discovery performance](verification/T7-discovery-performance.md) | Open | Multi-site transfer, availability-check, memory, and paint measurements. |
-| [T8 — Stale-reference cleanup](verification/T8-stale-reference-cleanup.md) | Open | Local/CI parity and provider-availability tests without PR-state checks. |
+| [T4 — Serving routes, cache, and access control](verification/T4-serving-boundary.md) | In progress | Provider cache and public/restricted serving proof. |
+| [T5 — Concurrency and recovery](verification/T5-concurrency-recovery.md) | In progress | Cross-process locks, concurrent updates, and injected-failure tests. |
+| [T6 — Preview resources and navigation](verification/T6-resources-navigation.md) | Done | Local resource and navigation contract verified. |
+| [T7 — Preview discovery performance](verification/T7-discovery-performance.md) | Done | 20-site local browser measurements through 1,000 active-site groups; see the report for scope and limitations. |
+| [T8 — Stale-reference cleanup](verification/T8-stale-reference-cleanup.md) | In progress | CI wrapper parity and AWS/Cloudflare provider-origin cleanup; local ordering and retry are evidenced. |
+| [T13 — Registered admin and satellite flow](verification/T13-registered-flow.md) | Open | Strict registry projection and separate-checkout local workflow. |
+| [T14 — Production reconciliation and race safety](verification/T14-production-reconciliation.md) | Open | Locks, orderings, failure/retry, pagination and source-tree boundaries. |
+| [T15 — AWS and Cloudflare delivery boundaries](verification/T15-provider-delivery.md) | Open | Real-provider routes, cache, access and invalidation. |
+| [T16 — Clean-room distribution and upgrade](verification/T16-external-adoption.md) | Open | External repositories using pinned released components and rollback. |

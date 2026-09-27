@@ -1,6 +1,6 @@
 # IMP-28 — Local admin and satellite reference flow
 
-- Status: Open
+- Status: In progress
 - Phase: Provider-backed deployment
 - Depends on: [IMP-21](IMP-21-registered-discovery.md), [IMP-23](IMP-23-registry-apply.md), [IMP-26](IMP-26-site-publish-command.md), [IMP-27](IMP-27-admin-unregister.md)
 - Proves: two-checkout E2E and local serving contract
@@ -8,6 +8,8 @@
 ## Outcome
 
 Demonstrate the complete registered-site flow with an admin checkout, a separate site checkout and a local provider adapter before cloud deployment.
+
+The shared local path is documented in [Local registered-site development](../../guides/local-registered-sites.md). Compose can serve a generated `.local/storage` projection through the same browser routes as fixture and provider-backed content.
 
 ## Acceptance criteria
 
