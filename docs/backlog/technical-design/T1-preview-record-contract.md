@@ -29,3 +29,7 @@ The candidate manifest's `comparisonBaseSha` currently labels a resolved default
 ## Evidence
 
 The [publishing contract](../../architecture/preview-publishing-contract.html#shape) contains candidate JSON examples. Explicit PR input and group-contextual PR return links are accepted product rules; the URL encoding and record schema are not yet frozen or producer/reader-tested.
+
+## Implementation links
+
+The record decisions feed [IMP-01 records](../implementation/IMP-01-preview-records.md), [IMP-04 provenance](../implementation/IMP-04-pr-provenance.md), [IMP-05 publication](../implementation/IMP-05-publication.md), [IMP-08 reader](../implementation/IMP-08-preview-reader.md), [IMP-09 discovery](../implementation/IMP-09-discovery.md), and [IMP-10 PR return links](../implementation/IMP-10-pr-return-link.md). The [implementation index](../implementation/README.md) maps every dependent slice. A local producer/reader round trip across those slices is required before closing T1.

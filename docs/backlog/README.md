@@ -1,14 +1,15 @@
 # Backlog
 
-This is the entry point for work that is not yet complete. Keep product defects, unresolved technical designs, and unverified contracts distinct: they have different definitions of `Done`.
+This is the entry point for work that is not yet complete. Keep product defects, unresolved technical designs, implementation slices, and unverified contracts distinct: they have different definitions of `Done`.
 
 | Track | Purpose | Open | In progress | Done |
 | --- | --- | ---: | ---: | ---: |
 | [Issues](issues/README.md) | Independently actionable product problems with evidence and acceptance criteria. | 0 | 0 | 0 |
 | Technical design | Decisions about how to fulfill an accepted contract. | 2 | 1 | 0 |
+| [Implementation](implementation/README.md) | Independently reviewable slices that realize the accepted preview contract. | 16 | 0 | 0 |
 | Verification | Tests or measurements needed to prove an accepted contract. | 5 | 0 | 0 |
 
-The eight unfinished design and verification items below concern the **post-MVP preview feature**. They are not claims that preview publishing exists in the current Phase 1 product. The [specification](../specification.md#post-mvp-pre-publish-preview-contract) owns accepted behavior; the [preview decision register](../architecture/preview-decisions.md) records product decisions; the [publishing contract](../architecture/preview-publishing-contract.html) contains a proposed technical shape. Backlog files track unfinished work and its evidence, not a second specification.
+The 24 unfinished design, implementation, and verification items concern the **post-MVP preview feature**. They are not claims that preview publishing exists in the current Phase 1 product or authorization to implement provider infrastructure. The [specification](../specification.md#post-mvp-pre-publish-preview-contract) owns accepted behavior; the [preview decision register](../architecture/preview-decisions.md) records product decisions; the [publishing contract](../architecture/preview-publishing-contract.html) contains a proposed technical shape. Backlog files track unfinished work and its evidence, not a second specification.
 
 ## Status legend
 
@@ -17,11 +18,11 @@ The eight unfinished design and verification items below concern the **post-MVP 
 | `Open` | Not yet started. | — |
 | `In progress` | Actively being worked on. | — |
 | `Blocked` | Cannot proceed without a decision, dependency, or external change. | Record the blocker in the item. |
-| `Done` | Outcome established. | For an issue, verify its acceptance criteria; for technical design, record the settled contract; for verification, link the actual test results or measurements. |
-| `Deferred` | Deliberately postponed. | Design and verification items only; record when to revisit. |
+| `Done` | Outcome established. | For an issue or implementation item, verify its acceptance criteria; for technical design, record the settled contract; for verification, link the actual test results or measurements. |
+| `Deferred` | Deliberately postponed. | Design, implementation and verification items only; record when to revisit. |
 | `Won't fix` | The problem will not be pursued. | Issues only; record why. |
 
-Use an item's own status as the source of truth, and update this index when it changes. `P0`–`P3` priorities apply to [issues](issues/README.md), not automatically to technical design or verification. Keep one independently finishable question or proof per file. A product-level choice belongs in the specification and decision register, not silently in a technical-design item.
+Use an item's own status as the source of truth, and update this index when it changes. `P0`–`P3` priorities apply to [issues](issues/README.md), not automatically to other tracks. Keep one independently finishable question, implementation slice, or proof per file. A product-level choice belongs in the specification and decision register, not silently in a backlog item.
 
 ## Technical design
 
@@ -30,6 +31,10 @@ Use an item's own status as the source of truth, and update this index when it c
 | [T1 — Preview catalog and revision-manifest contract](technical-design/T1-preview-record-contract.md) | In progress | Settle the schema, object keys, and PR provenance for fixed URLs. |
 | [T2 — CLI and Action interface](technical-design/T2-cli-action-interface.md) | Open | Settle flag/input/output names and resource-include syntax. |
 | [T3 — Provider-owned retention mapping](technical-design/T3-provider-retention.md) | Open | Map the administrator's retention rule to provider behavior. |
+
+## Implementation
+
+The [implementation index](implementation/README.md) lists 16 scoped tickets, dependencies, acceptance criteria, and links back to T1–T8. Their `Open` status is planning, not a change to the current Phase 1 implementation boundary.
 
 ## Verification
 

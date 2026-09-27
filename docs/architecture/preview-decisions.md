@@ -2,7 +2,7 @@
 
 Status: **post-MVP design tracking; no preview implementation is implied**
 
-This page records product decisions for pre-publish previews. The [specification](../specification.md#post-mvp-pre-publish-preview-contract) is authoritative for accepted behavior; the [publishing contract](preview-publishing-contract.html) is a technical proposal. Track unresolved technical design and unrun verification in the [backlog](../backlog/README.md), separately from [product issues](../backlog/issues/README.md). Keep this register short: move a resolved product decision into the specification and record its outcome here.
+This page records product decisions for pre-publish previews. The [specification](../specification.md#post-mvp-pre-publish-preview-contract) is authoritative for accepted behavior; the [publishing contract](preview-publishing-contract.html) is a technical proposal. Track unresolved technical design, implementation slices, and unrun verification in the [backlog](../backlog/README.md), separately from [product issues](../backlog/issues/README.md). Keep this register short: move a resolved product decision into the specification and record its outcome here.
 
 ## Status vocabulary
 
@@ -30,7 +30,7 @@ No open product decisions are recorded for this preview lifecycle.
 
 ## Unfinished work
 
-The [backlog](../backlog/README.md) is the status source for the three technical-design items and five verification items associated with this contract. Keep their status and evidence there; this register records only product decisions.
+The [backlog](../backlog/README.md) is the status source for the three technical-design items, sixteen implementation slices, and five verification items associated with this contract. Keep their status and evidence there; this register records only product decisions.
 
 ## Accepted product contract
 

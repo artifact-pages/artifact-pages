@@ -18,3 +18,7 @@ What are the exact CLI flags, resource-include syntax, and Action inputs/outputs
 ## Evidence
 
 Not yet recorded. Names in the current contract are illustrative.
+
+## Implementation links
+
+The public interface decisions feed [IMP-03 resource includes](../implementation/IMP-03-resource-bundle.md), [IMP-04 PR validation](../implementation/IMP-04-pr-provenance.md), [IMP-11 CLI](../implementation/IMP-11-cli.md), and [IMP-13 Action wrapper](../implementation/IMP-13-action.md); see the [implementation index](../implementation/README.md) for dependencies. Keep local and CI behavior aligned; choosing flag names does not complete these tickets.
