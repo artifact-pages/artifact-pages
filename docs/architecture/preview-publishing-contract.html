@@ -64,7 +64,7 @@
           <tr><td>Site lock</td><td><code>/_control/locks/&lt;site&gt;.json</code></td><td>Shared by production publish, pre-publish and unregister. Never publicly served.</td></tr>
         </tbody>
       </table></div>
-      <p class="subtle">These are storage keys, not the main user navigation. The logical document URL remains <code>/:site/_previews/&lt;headSHA&gt;/&lt;artifactPath&gt;</code>; the application resolves it to a manifest entry and then to the raw bundle file. The serving layer must keep <code>/_previews/*</code> separate from SPA fallback so missing raw files return an actual 404.</p>
+      <p class="subtle">These are storage keys, not the main user navigation. The logical document route remains <code>/:site/_previews/&lt;headSHA&gt;/&lt;artifactPath&gt;</code>; an optional PR-group query carries reader view context without changing its revision identity or bytes. The application resolves the route to a manifest entry and then to the raw bundle file. The serving layer must keep <code>/_previews/*</code> separate from SPA fallback so missing raw files return an actual 404.</p>
     </section>
 
     <section aria-labelledby="shape">
@@ -109,7 +109,7 @@
       ]
     }
   ]
-}</pre><p class="subtle">One entry per group. Only an explicitly supplied, validated PR number or URL creates a <code>pr:&lt;id&gt;</code> group; otherwise the manual group uses <code>head:&lt;SHA&gt;</code>. Candidate PR group metadata must carry the canonical source PR link. The group is a discovery identity, not part of the revision URL. Entries are candidates: the reader checks whether their revision manifests still exist at the provider.</p></div>
+}</pre><p class="subtle">One entry per group. Only an explicitly supplied, validated PR number or URL creates a <code>pr:&lt;id&gt;</code> group; otherwise the manual group uses <code>head:&lt;SHA&gt;</code>. Candidate PR group metadata must carry the canonical source PR link. A PR-associated document URL carries its group as optional view context, but the group is not part of the revision identity. Before showing a PR return link in the application header, the reader checks that the named, explicitly PR-associated group currently points to the route's head SHA. If the context is absent, mismatched, or unreadable, the document still renders from its manifest without a PR link. The context is preserved across changed-document navigation in the same revision and dropped when navigating to production. Entries are candidates: the reader checks whether their revision manifests still exist at the provider. Exact query encoding and schema remain to be proven.</p></div>
       </div>
       <p>All paths are canonical source-relative POSIX paths with retained file extensions. Reject traversal, backslashes, duplicate normalized paths, symlink escapes and reserved namespaces before uploading. A catalog entry is written only after its completion manifest exists; provider lifecycle may remove that manifest later, leaving a stale discovery reference until the next catalog write.</p>
     </section>
@@ -136,7 +136,7 @@
       <div class="table-wrap"><table>
         <thead><tr><th>Operation</th><th>Inputs known to the core</th><th>Result</th></tr></thead>
         <tbody>
-          <tr><td>Pre-publish</td><td>Explicit site ID; configured provider destination; source checkout; resolved head and default-branch HEAD; optional explicit PR number or URL (never inferred); optional source-relative non-document resource includes; optional dry-run.</td><td>Typed <code>published</code> with group-list URL and each fixed document URL, or <code>no-preview</code>; noneligible changes/error are failures.</td></tr>
+          <tr><td>Pre-publish</td><td>Explicit site ID; configured provider destination; source checkout; resolved head and default-branch HEAD; optional explicit PR number or URL (never inferred); optional source-relative non-document resource includes; optional dry-run.</td><td>Typed <code>published</code> with group-list URL and each revision-specific document URL carrying PR-group view context when supplied, or <code>no-preview</code>; noneligible changes/error are failures.</td></tr>
           <tr><td>Production publish with cleanup</td><td>Explicit site ID; configured provider destination; production projection; provider-origin access to catalog and completion manifests. No PR state, source-history comparison or Actions event payload is required for cleanup.</td><td>After the production projection is committed at origin, idempotently update the catalog if any confirmed missing-manifest references were removed; no revision deletion.</td></tr>
         </tbody>
       </table></div>
@@ -180,6 +180,7 @@ Writes:     none</pre>
           <li>HTML iframe and Markdown reader load relative CSS, JS, images and fonts from the preview snapshot.</li>
           <li>Changed-document links remain in the revision; unchanged-document links go to production without nesting the app in an iframe.</li>
           <li>Missing raw resource is 404; direct logical URL works without a catalog entry while its manifest and document remain available.</li>
+          <li>A PR-contextual document URL shows a validated PR return link on every changed document, including after same-revision navigation; bare, manual, mismatched, and catalog-unavailable contexts render without that link. A newer revision in the group does not change an older revision's bytes or route.</li>
           <li>Same-repo PR accepted, fork PR rejected before credentials; restricted site denies every preview object consistently.</li>
           <li>Multi-page object listing and cleanup handle more than one provider page/batch without crossing site prefixes.</li>
           <li>Measure lazy catalog transfer, manifest-availability checks, parse, memory and input-to-paint with many sites; opening one site's Previews must not load other catalogs.</li>
