@@ -125,10 +125,10 @@
       </div>
       <p>The lock serializes cooperating writers; an atomic conditional write on the mutable catalog is still useful as a defensive check against an out-of-band writer. A catalog update failure is a failed pre-publish, not a successful unlisted preview. Retrying must converge without changing an already completed revision. A partially uploaded revision without a manifest is not readable through logical preview routes and is recovered by retry or retention cleanup.</p>
       <p><code>no-preview</code> is a successful no-page result for a deletion-only document change. Under the same lock it removes the group's catalog entry if present; it does not delete an earlier completed revision. A non-document-only change is an error and must not mutate discovery. Group retirement follows the same lock/read/write sequence, removes only the named group, and leaves immutable bundle objects for their remaining lifetime.</p>
-      <h3>Catalog reconciliation during normal publication</h3>
-      <p><code>artifact-pages site publish</code> owns catalog reconciliation whether a person runs it locally or GitHub Actions invokes it. It reads this site's current catalog and removes (1) PR groups incorporated in the new production projection and (2) PR or manual groups whose completion manifests are confirmed missing at provider origin. A closed-but-unmerged PR with a live manifest stays listed, as does a manual preview with a live manifest. One set of removals produces one conditional catalog write; no separate PR-close or scheduled-cleanup workflow is required.</p>
-      <p>Read and validate the catalog under the site lock. Identify incorporated PR groups from the newly published source changes; prove the exact history/PR-association method across merge, squash, and rebase before implementation. The storage adapter checks manifest availability. Identify candidates before mutating production. For the reader's sake, write the reduced catalog only after the production projection is committed at origin: if production fails, previews remain discoverable. A retry repeats the same checks and converges. Catalog retirement never deletes completed preview bundles or fixed direct URLs.</p>
-      <p>Pre-publish opportunistically prunes missing-manifest references before its own catalog upsert. Between catalog writes, the browser's Previews list and palette check manifest availability and hide missing candidates. A PR closed without merging remains discoverable while its provider manifest exists; no browser-side GitHub state polling or extra workflow is required. Manifest checks are deferred until a reader opens the site-scoped preview surface, and their cost is a release-gate measurement. An unavailable provider read is not evidence of a missing manifest: only a confirmed not-found may prune a group.</p>
+      <h3>Catalog cleanup during normal publication</h3>
+      <p><code>artifact-pages site publish</code> cleans stale discovery references whether a person runs it locally or GitHub Actions invokes it. It reads this site's catalog and removes only PR or manual groups whose completion manifests are confirmed missing at provider origin. A merged PR, a closed-but-unmerged PR, and a manual preview all stay listed while their manifests exist. No source-history comparison, PR-state polling, PR-close workflow or scheduled-cleanup workflow is required.</p>
+      <p>Read and validate the catalog under the site lock; use the storage adapter to check manifest availability. For the reader's sake, write a reduced catalog only when it changed and only after the production projection is committed at origin: if production fails, previews remain discoverable. A retry repeats the same checks and converges. Catalog cleanup never deletes completed preview bundles or fixed direct URLs.</p>
+      <p>Pre-publish opportunistically prunes missing-manifest references before its own catalog upsert. Between catalog writes, the browser's Previews list and palette check manifest availability and hide missing candidates. A merged or closed-without-merging PR remains discoverable while its provider manifest exists. Manifest checks are deferred until a reader opens the site-scoped preview surface, and their cost is a release-gate measurement. An unavailable provider read is not evidence of a missing manifest: only a confirmed not-found may prune a group.</p>
     </section>
 
     <section aria-labelledby="inputs">
@@ -137,7 +137,7 @@
         <thead><tr><th>Operation</th><th>Inputs known to the core</th><th>Result</th></tr></thead>
         <tbody>
           <tr><td>Pre-publish</td><td>Explicit site ID; configured provider destination; source checkout; resolved head and default-branch HEAD; optional namespaced group; optional source-relative non-document resource includes; optional dry-run.</td><td>Typed <code>published</code> with group-list URL and each fixed document URL, or <code>no-preview</code>; noneligible changes/error are failures.</td></tr>
-          <tr><td>Production publish with reconciliation</td><td>Explicit site ID; configured provider destination; production projection; source history sufficient to identify newly incorporated PR groups; provider-origin access to catalog and completion manifests. No Actions event payload is required.</td><td>After the production projection is committed at origin, idempotently apply one catalog update removing incorporated PR groups and confirmed missing-manifest references; no revision deletion.</td></tr>
+          <tr><td>Production publish with cleanup</td><td>Explicit site ID; configured provider destination; production projection; provider-origin access to catalog and completion manifests. No PR state, source-history comparison or Actions event payload is required for cleanup.</td><td>After the production projection is committed at origin, idempotently update the catalog if any confirmed missing-manifest references were removed; no revision deletion.</td></tr>
         </tbody>
       </table></div>
       <p class="subtle">The GitHub Action is a thin, separately distributed wrapper: for pre-publish it checks same-repository PR identity before obtaining publisher credentials; for production publish it provides checkout and credentials and invokes the same CLI operation available locally. It returns CLI outputs and does not own catalog reconciliation, PR comments, or workflow timing. A dry-run computes and reports the document/resource set and intended catalog change without provider writes. Exact flag and Action input spellings are deferred until the CLI surface is implemented; this table fixes meaning, not syntax.</p>
@@ -145,13 +145,13 @@
 
     <section aria-labelledby="cli-experience">
       <h2 id="cli-experience">Production CLI experience</h2>
-      <p>The same <code>site publish</code> invocation must work from a local checkout and from CI. Its dry-run should show production changes and preview-catalog removals together. This transcript is illustrative, not a claim that the current CLI already accepts these flags:</p>
+      <p>The same <code>site publish</code> invocation must work from a local checkout and from CI. Its dry-run should show production changes and stale preview-catalog references together. This transcript is illustrative, not a claim that the current CLI already accepts these flags:</p>
       <pre>$ artifact-pages site publish s3 --site sre --dry-run
 Production: 4 add, 2 update, 1 remove
-Previews:   retire PR #84 (incorporated), prune head:b274e11 (manifest absent)
-            keep 3 groups, including a live closed-but-unmerged PR
+Previews:   prune head:b274e11 (manifest absent)
+            keep 4 groups, including merged and closed-but-unmerged PRs
 Writes:     none</pre>
-      <p class="subtle">A live preview is not a cleanup problem, even if it was created locally or its PR closed without merging. An unavailable provider read is not evidence of a missing manifest. A failed catalog write after a successful production update must be reported for retry rather than presented as completed reconciliation.</p>
+      <p class="subtle">A live preview is not a cleanup problem, even if it was created locally or its PR was merged or closed without merging. An unavailable provider read is not evidence of a missing manifest. A failed catalog write after a successful production update must be reported for retry rather than presented as completed cleanup.</p>
     </section>
 
     <section aria-labelledby="expiry">
@@ -170,11 +170,11 @@ Writes:     none</pre>
           <li>Unregister wins first and publisher wins first: final state unregistered, no site preview objects.</li>
           <li>Crash after file upload, after manifest write, and before catalog write: no broken advertised revision; retry converges.</li>
           <li>Same head with different selected documents or bytes fails without replacing its manifest.</li>
-          <li><code>no-preview</code>, production retirement, reopen, provider removal, and absent catalog all produce their specified empty states.</li>
-          <li>Merge, squash, and rebase publication retire PR groups actually incorporated in the new production projection even when the preview head differs from the default-branch commit. A closed-unmerged PR with a live manifest remains discoverable. A PR or manual group whose provider manifest disappears is removed without app-side expiry arithmetic.</li>
-          <li>One publish that finds a newly incorporated PR, a closed-unmerged PR with a live manifest, a missing manual-preview manifest, and an open PR removes only the incorporated PR and missing-manifest group with one catalog write.</li>
-          <li>Local and CI invocations with equivalent source history and provider access produce the same reconciliation result without consulting an Actions event payload or polling every PR's current state.</li>
-          <li>A failed production switch leaves its PR previews discoverable; a successful switch followed by a catalog-write failure reports the incomplete retirement for retry without rolling back production.</li>
+          <li><code>no-preview</code>, provider removal, and absent catalog all produce their specified empty states.</li>
+          <li>Merge, squash and rebase publication leave live preview groups discoverable. Merged, closed-unmerged, open and manual groups follow the same manifest-availability rule; no app-side expiry arithmetic.</li>
+          <li>One publish that finds a merged PR with a live manifest, a closed-unmerged PR with a live manifest, a missing manual-preview manifest, and an open PR removes only the missing-manifest group with one catalog write. With no missing manifests, it does not rewrite the catalog.</li>
+          <li>Local and CI invocations with equivalent provider access produce the same cleanup result without consulting an Actions event payload, source-history comparison or PR state.</li>
+          <li>A failed production switch leaves previews discoverable; a successful switch followed by a catalog-write failure reports incomplete cleanup for retry without rolling back production.</li>
         </ul></div>
         <div><h3>Browser and provider</h3><ul>
           <li>HTML iframe and Markdown reader load relative CSS, JS, images and fonts from the preview snapshot.</li>
