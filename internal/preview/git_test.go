@@ -559,6 +559,18 @@ func TestPreviewFixtureRecordsAndStrictValidation(t *testing.T) {
 	if manifest.Site != "sre" || manifest.HeadSHA != headSHA || len(manifest.Documents) != 3 {
 		t.Fatalf("unexpected fixture manifest: %#v", manifest)
 	}
+	files := make(map[string][]byte, len(manifest.Files))
+	filesRoot := filepath.Join(filepath.Dir(manifestPath), "files")
+	for _, file := range manifest.Files {
+		content, err := os.ReadFile(filepath.Join(filesRoot, filepath.FromSlash(file.Path)))
+		if err != nil {
+			t.Fatalf("read preview fixture file %q: %v", file.Path, err)
+		}
+		files[file.Path] = content
+	}
+	if !reflect.DeepEqual(manifest.Files, describeFiles(files)) || manifest.BundleDigest != digestBundle(files) {
+		t.Fatal("preview fixture manifest file records or bundle digest do not match the committed files")
+	}
 	if _, err := DecodeManifest([]byte(strings.Replace(string(manifestBytes), `"schemaVersion": 1`, `"schemaVersion": 2`, 1))); err == nil {
 		t.Fatal("DecodeManifest accepted an unknown schema version")
 	}

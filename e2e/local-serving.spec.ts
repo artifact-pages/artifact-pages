@@ -2268,6 +2268,7 @@ test('preview HTML keeps changed-document navigation in the preview and unchange
     const extraLinks = [
       '<p><a href="preview-guide.md?tab=summary#local-preview-guide">Open the changed Markdown document with query and fragment</a></p>',
       '<p><a href="https://docs.example.test/guide?mode=full#overview">Open external HTTPS documentation</a></p>',
+      '<script type="module" src="./modules/entry.js"></script>',
       '<script>const runtimeName = ["preview", "runtime"].join("-") + ".json"; fetch("./" + runtimeName).then(() => { document.body.dataset.runtimeResource = "loaded"; }).catch(() => { document.body.dataset.runtimeResource = "blocked"; });</script>',
     ].join('')
     await route.fulfill({ response, body: source.replace('</main>', `${extraLinks}</main>`) })
@@ -2281,6 +2282,10 @@ test('preview HTML keeps changed-document navigation in the preview and unchange
     const url = new URL(response.url())
     return url.hostname === 'preview.localhost' && url.pathname.endsWith('/guides/preview.html')
   })
+  const moduleResponses = Promise.all(['entry.js', 'dependency.js'].map((name) => page.waitForResponse((response) => {
+    const url = new URL(response.url())
+    return url.hostname === 'preview.localhost' && url.pathname.endsWith(`/guides/modules/${name}`)
+  })))
   await page.goto(`/sre/_previews/${previewHeadSha}/guides/preview.html?group=pr%3A42`)
   await expect(page.getByRole('heading', { name: 'Local preview HTML' })).toBeVisible()
   const frame = page.frameLocator('iframe[title="Local preview HTML"]')
@@ -2295,6 +2300,8 @@ test('preview HTML keeps changed-document navigation in the preview and unchange
   expect(isolatedCsp).toContain('frame-ancestors http://localhost:* http://127.0.0.1:*')
   await expect(frame.getByRole('heading', { name: 'Local preview HTML' })).toBeVisible()
   await expect.poll(() => frame.locator('body').evaluate(() => window.location.origin)).toBe(new URL(frameSrc!, page.url()).origin)
+  expect((await moduleResponses).map((response) => response.status())).toEqual([200, 200])
+  await expect.poll(() => frame.locator('body').getAttribute('data-static-module')).toBe('loaded')
   await expect(frame.getByRole('img', { name: 'Blue preview mark' })).toBeVisible()
   await expect.poll(() => frame.locator('body').evaluate(async () => {
     await document.fonts.ready

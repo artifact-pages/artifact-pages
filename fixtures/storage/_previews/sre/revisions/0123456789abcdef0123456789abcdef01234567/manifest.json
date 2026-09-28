@@ -5,7 +5,7 @@
   "defaultHeadSha": "1111111111111111111111111111111111111111",
   "mergeBaseSha": "abcdefabcdefabcdefabcdefabcdefabcdefabcd",
   "createdAt": "2026-09-27T00:00:00Z",
-  "bundleDigest": "sha256:2351baad27645e5325fea66e9932d84a55ba5c8cb0c153e59b4f0b65bf626105",
+  "bundleDigest": "sha256:914a613392c5156e6f2a8a602d78599fc16f4eaf1c22cb4993bb981e72699b32",
   "files": [
     {
       "path": "assets/mark.svg",
@@ -26,6 +26,16 @@
       "path": "fonts/preview.woff2",
       "sha256": "c2342cd8b869e01752a9321dc17213fc40d4d04c79688c1d43f2cf316abd7866",
       "contentType": "font/woff2"
+    },
+    {
+      "path": "guides/modules/dependency.js",
+      "sha256": "6b560d7a94695158d4e95cf2ac506d8598d9f08b323719a44715111713b9435f",
+      "contentType": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "guides/modules/entry.js",
+      "sha256": "b6fecdb724313c0afb88abba67e8ff03d51f1341a44005e82306864ba3ede2cf",
+      "contentType": "text/javascript; charset=utf-8"
     },
     {
       "path": "guides/preview-guide.md",

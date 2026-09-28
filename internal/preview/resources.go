@@ -8,8 +8,13 @@ import (
 	"path"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
+	"github.com/tdewolff/parse/v2"
+	jsparser "github.com/tdewolff/parse/v2/js"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
@@ -17,9 +22,12 @@ import (
 )
 
 var (
-	cssURLPattern    = regexp.MustCompile(`(?is)url\(\s*['"]?([^'")]+)['"]?\s*\)`)
-	cssImportPattern = regexp.MustCompile(`(?is)@import\s+['"]([^'"]+)['"]`)
-	jsImportPattern  = regexp.MustCompile(`(?m)\b(import|export)\b[^;\n]*?['"]([^'"\n]+)['"]`)
+	cssURLPattern      = regexp.MustCompile(`(?is)url\(\s*['"]?([^'")]+)['"]?\s*\)`)
+	cssImportPattern   = regexp.MustCompile(`(?is)@import\s+['"]([^'"]+)['"]`)
+	jsMultiPunctuators = []string{
+		"===", "!==", ">>>", "...", "=>", "==", "!=", "<=", ">=", "++", "--", "&&", "||", "??", "?.", "**", "<<", ">>",
+		"+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=",
+	}
 )
 
 func isDocumentPath(value string) bool { return documentFormat(value) != "" }
@@ -131,11 +139,774 @@ func localReferences(from string, content []byte) []string {
 	case ".css":
 		references = append(references, cssReferences(string(content))...)
 	case ".js", ".mjs", ".cjs":
-		for _, match := range jsImportPattern.FindAllSubmatch(content, -1) {
-			references = append(references, string(match[2]))
+		references = append(references, javascriptModuleReferences(content)...)
+	}
+	return uniqueStrings(references)
+}
+
+type jsModuleTokenKind uint8
+
+const (
+	jsIdentifierToken jsModuleTokenKind = iota
+	jsStringToken
+	jsNumberToken
+	jsPunctuatorToken
+	jsOpaqueToken
+)
+
+type jsModuleToken struct {
+	kind            jsModuleTokenKind
+	value           string
+	lineBreakBefore bool
+}
+
+// javascriptModuleReferences recognizes static imports and re-exports from
+// the module AST. Invalid or newer syntax falls back to the tolerant scanner
+// so resource collection does not become a JavaScript syntax validator.
+func javascriptModuleReferences(source []byte) []string {
+	if references, err := parsedJavaScriptModuleReferences(source); err == nil {
+		return uniqueStrings(references)
+	}
+	return lexJavaScriptModuleReferences(source)
+}
+
+func parsedJavaScriptModuleReferences(source []byte) ([]string, error) {
+	module, err := jsparser.Parse(parse.NewInputBytes(source), jsparser.Options{})
+	if err != nil {
+		return nil, err
+	}
+	var references []string
+	for _, statement := range module.BlockStmt.List {
+		switch statement := statement.(type) {
+		case *jsparser.ImportStmt:
+			if reference, ok := decodeJavaScriptStringLiteral(statement.Module); ok {
+				references = append(references, reference)
+			}
+		case *jsparser.ExportStmt:
+			if reference, ok := decodeJavaScriptStringLiteral(statement.Module); ok {
+				references = append(references, reference)
+			}
+		}
+	}
+	return references, nil
+}
+
+func decodeJavaScriptStringLiteral(source []byte) (string, bool) {
+	if len(source) == 0 {
+		return "", false
+	}
+	value, next, ok := scanJSStringLiteral(source, 0)
+	return value, ok && next == len(source)
+}
+
+// lexJavaScriptModuleReferences is a tolerant fallback for syntax that the
+// module parser does not yet accept. It recognizes only static declarations.
+func lexJavaScriptModuleReferences(source []byte) []string {
+	tokens := lexJavaScriptModuleTokens(source)
+	var references []string
+	for index, token := range tokens {
+		if token.kind != jsIdentifierToken {
+			continue
+		}
+		switch token.value {
+		case "import":
+			if reference, ok := parseJSImport(tokens, index+1); ok {
+				references = append(references, reference)
+			}
+		case "export":
+			if reference, ok := parseJSReExport(tokens, index+1); ok {
+				references = append(references, reference)
+			}
 		}
 	}
 	return uniqueStrings(references)
+}
+
+func parseJSImport(tokens []jsModuleToken, index int) (string, bool) {
+	if index >= len(tokens) {
+		return "", false
+	}
+	if tokens[index].kind == jsStringToken {
+		return tokens[index].value, true
+	}
+
+	switch {
+	case tokens[index].kind == jsIdentifierToken:
+		// A leading identifier is the default import binding.
+		index++
+		if !isJSPunctuator(tokens, index, ",") {
+			return parseJSFromClause(tokens, index)
+		}
+		index++
+	case isJSPunctuator(tokens, index, "*"):
+		if !isJSIdentifier(tokens, index+1, "as") || index+2 >= len(tokens) || tokens[index+2].kind != jsIdentifierToken {
+			return "", false
+		}
+		index += 3
+	case isJSPunctuator(tokens, index, "{"):
+		closing, ok := matchingJSBrace(tokens, index)
+		if !ok {
+			return "", false
+		}
+		index = closing + 1
+	default:
+		// import.meta and import() are not static module declarations.
+		return "", false
+	}
+	if isJSPunctuator(tokens, index, "*") {
+		if !isJSIdentifier(tokens, index+1, "as") || index+2 >= len(tokens) || tokens[index+2].kind != jsIdentifierToken {
+			return "", false
+		}
+		index += 3
+	} else if isJSPunctuator(tokens, index, "{") {
+		closing, ok := matchingJSBrace(tokens, index)
+		if !ok {
+			return "", false
+		}
+		index = closing + 1
+	}
+	return parseJSFromClause(tokens, index)
+}
+
+func parseJSReExport(tokens []jsModuleToken, index int) (string, bool) {
+	if isJSPunctuator(tokens, index, "*") {
+		index++
+		if isJSIdentifier(tokens, index, "as") {
+			if index+1 >= len(tokens) || tokens[index+1].kind != jsIdentifierToken {
+				return "", false
+			}
+			index += 2
+		}
+		return parseJSFromClause(tokens, index)
+	}
+	if !isJSPunctuator(tokens, index, "{") {
+		return "", false
+	}
+	closing, ok := matchingJSBrace(tokens, index)
+	if !ok {
+		return "", false
+	}
+	return parseJSFromClause(tokens, closing+1)
+}
+
+func parseJSFromClause(tokens []jsModuleToken, index int) (string, bool) {
+	if !isJSIdentifier(tokens, index, "from") || index+1 >= len(tokens) || tokens[index+1].kind != jsStringToken {
+		return "", false
+	}
+	return tokens[index+1].value, true
+}
+
+func matchingJSBrace(tokens []jsModuleToken, opening int) (int, bool) {
+	depth := 0
+	for index := opening; index < len(tokens); index++ {
+		if isJSPunctuator(tokens, index, "{") {
+			depth++
+		} else if isJSPunctuator(tokens, index, "}") {
+			depth--
+			if depth == 0 {
+				return index, true
+			}
+		}
+	}
+	return 0, false
+}
+
+func isJSIdentifier(tokens []jsModuleToken, index int, value string) bool {
+	return index >= 0 && index < len(tokens) && tokens[index].kind == jsIdentifierToken && tokens[index].value == value
+}
+
+func isJSPunctuator(tokens []jsModuleToken, index int, value string) bool {
+	return index >= 0 && index < len(tokens) && tokens[index].kind == jsPunctuatorToken && tokens[index].value == value
+}
+
+func lexJavaScriptModuleTokens(source []byte) []jsModuleToken {
+	var tokens []jsModuleToken
+	lineBreakBefore := false
+	appendToken := func(token jsModuleToken) {
+		token.lineBreakBefore = lineBreakBefore
+		tokens = append(tokens, token)
+		lineBreakBefore = false
+	}
+	for index := 0; index < len(source); {
+		if index == 0 && len(source) >= 2 && source[0] == '#' && source[1] == '!' {
+			index = skipJSLineComment(source, index)
+			continue
+		}
+		r, size := utf8.DecodeRune(source[index:])
+		if unicode.IsSpace(r) || r == '\uFEFF' {
+			lineBreakBefore = lineBreakBefore || isJSLineTerminator(r)
+			index += size
+			continue
+		}
+		if source[index] == '/' && index+1 < len(source) {
+			switch source[index+1] {
+			case '/':
+				index = skipJSLineComment(source, index)
+				continue
+			case '*':
+				end := skipJSBlockComment(source, index)
+				lineBreakBefore = lineBreakBefore || containsJSLineTerminator(source[index:end])
+				index = end
+				continue
+			}
+			if canStartJSRegex(tokens) {
+				index = skipJSRegexLiteral(source, index)
+				appendToken(jsModuleToken{kind: jsOpaqueToken, value: "regex"})
+				continue
+			}
+		}
+		if source[index] == '\'' || source[index] == '"' {
+			value, next, ok := scanJSStringLiteral(source, index)
+			if ok {
+				appendToken(jsModuleToken{kind: jsStringToken, value: value})
+			}
+			index = max(next, index+1)
+			continue
+		}
+		if source[index] == '`' {
+			index = skipJSTemplateLiteral(source, index)
+			appendToken(jsModuleToken{kind: jsOpaqueToken, value: "template"})
+			continue
+		}
+		if isJSIdentifierStart(r) {
+			start := index
+			index += size
+			for index < len(source) {
+				part, partSize := utf8.DecodeRune(source[index:])
+				if !isJSIdentifierPart(part) {
+					break
+				}
+				index += partSize
+			}
+			appendToken(jsModuleToken{kind: jsIdentifierToken, value: string(source[start:index])})
+			continue
+		}
+		if source[index] >= '0' && source[index] <= '9' {
+			start := index
+			for index < len(source) {
+				c := source[index]
+				if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || c == '.') {
+					break
+				}
+				index++
+			}
+			appendToken(jsModuleToken{kind: jsNumberToken, value: string(source[start:index])})
+			continue
+		}
+		punctuator := readJSPunctuator(source, index)
+		appendToken(jsModuleToken{kind: jsPunctuatorToken, value: punctuator})
+		index += len(punctuator)
+	}
+	return tokens
+}
+
+func isJSIdentifierStart(r rune) bool {
+	return r == '$' || r == '_' || unicode.IsLetter(r) || r == '\u200C' || r == '\u200D'
+}
+
+func isJSIdentifierPart(r rune) bool {
+	return isJSIdentifierStart(r) || unicode.IsDigit(r) || unicode.In(r, unicode.Mn, unicode.Mc, unicode.Pc)
+}
+
+func readJSPunctuator(source []byte, index int) string {
+	for _, punctuator := range jsMultiPunctuators {
+		if bytes.HasPrefix(source[index:], []byte(punctuator)) {
+			return punctuator
+		}
+	}
+	return string(source[index])
+}
+
+func canStartJSRegex(tokens []jsModuleToken) bool {
+	if len(tokens) == 0 {
+		return true
+	}
+	closing := len(tokens) - 1
+	if isJSPunctuator(tokens, closing, ")") && closesJSControlCondition(tokens, closing) {
+		return true
+	}
+	if tokens[closing].kind == jsIdentifierToken && closing > 0 &&
+		(isJSPunctuator(tokens, closing-1, ".") || isJSPunctuator(tokens, closing-1, "?.")) {
+		// IdentifierName is allowed after member access even when its spelling
+		// is normally an operator keyword, as in record.return / 2.
+		return false
+	}
+	if isJSPunctuator(tokens, closing, "}") && closesJSStatementBlock(tokens, closing) {
+		return true
+	}
+	return canStartJSRegexAfter(tokens[len(tokens)-1])
+}
+
+func closesJSStatementBlock(tokens []jsModuleToken, closing int) bool {
+	depth := 0
+	for index := closing; index >= 0; index-- {
+		if isJSPunctuator(tokens, index, "}") {
+			depth++
+		} else if isJSPunctuator(tokens, index, "{") {
+			depth--
+			if depth != 0 {
+				continue
+			}
+			if index == 0 {
+				return true
+			}
+			if isJSPunctuator(tokens, index-1, ";") || isJSPunctuator(tokens, index-1, "{") ||
+				isJSPunctuator(tokens, index-1, "}") {
+				return true
+			}
+			if isJSPunctuator(tokens, index-1, ")") &&
+				(closesJSControlCondition(tokens, index-1) || isJSFunctionDeclarationBody(tokens, index)) {
+				return true
+			}
+			if index > 0 && tokens[index-1].kind == jsIdentifierToken {
+				switch tokens[index-1].value {
+				case "do", "else", "finally", "try":
+					return true
+				}
+			}
+			if isJSClassDeclarationBody(tokens, index) {
+				return true
+			}
+			return false
+		}
+	}
+	return false
+}
+
+func isJSFunctionDeclarationBody(tokens []jsModuleToken, openingBrace int) bool {
+	closingParen := openingBrace - 1
+	if !isJSPunctuator(tokens, closingParen, ")") {
+		return false
+	}
+	depth := 0
+	openingParen := -1
+	for index := closingParen; index >= 0; index-- {
+		if isJSPunctuator(tokens, index, ")") {
+			depth++
+		} else if isJSPunctuator(tokens, index, "(") {
+			depth--
+			if depth == 0 {
+				openingParen = index
+				break
+			}
+		}
+	}
+	if openingParen < 0 {
+		return false
+	}
+	functionIndex := openingParen - 1
+	if functionIndex >= 0 && tokens[functionIndex].kind == jsIdentifierToken && tokens[functionIndex].value != "function" {
+		functionIndex--
+	}
+	if isJSPunctuator(tokens, functionIndex, "*") {
+		functionIndex--
+	}
+	if !isJSIdentifier(tokens, functionIndex, "function") {
+		return false
+	}
+	return isJSStatementStart(tokens, functionIndex)
+}
+
+func isJSClassDeclarationBody(tokens []jsModuleToken, openingBrace int) bool {
+	for index := openingBrace - 1; index >= 0; index-- {
+		if isJSIdentifier(tokens, index, "class") {
+			return isJSStatementStart(tokens, index)
+		}
+		if isJSPunctuator(tokens, index, ";") || isJSPunctuator(tokens, index, "{") ||
+			isJSPunctuator(tokens, index, "}") || isJSPunctuator(tokens, index, "=") {
+			return false
+		}
+	}
+	return false
+}
+
+func isJSStatementStart(tokens []jsModuleToken, index int) bool {
+	if index <= 0 {
+		return true
+	}
+	previous := index - 1
+	if tokens[index].lineBreakBefore && canEndJSStatement(tokens, previous) {
+		return true
+	}
+	if isJSPunctuator(tokens, previous, ";") || isJSPunctuator(tokens, previous, "{") || isJSPunctuator(tokens, previous, "}") {
+		return true
+	}
+	if isJSPunctuator(tokens, previous, ")") && closesJSControlCondition(tokens, previous) {
+		return true
+	}
+	if isJSIdentifier(tokens, previous, "else") || isJSIdentifier(tokens, previous, "async") || isJSIdentifier(tokens, previous, "export") {
+		return isJSStatementStart(tokens, previous)
+	}
+	if isJSIdentifier(tokens, previous, "default") && isJSIdentifier(tokens, previous-1, "export") {
+		return isJSStatementStart(tokens, previous-1)
+	}
+	return false
+}
+
+func canEndJSStatement(tokens []jsModuleToken, index int) bool {
+	token := tokens[index]
+	if token.kind != jsPunctuatorToken {
+		if token.kind == jsIdentifierToken {
+			if isJSPunctuator(tokens, index-1, ".") || isJSPunctuator(tokens, index-1, "?.") {
+				return true
+			}
+			switch token.value {
+			case "await", "case", "delete", "in", "instanceof", "new", "of", "throw", "typeof", "void":
+				return false
+			}
+		}
+		return true
+	}
+	switch token.value {
+	case ")", "]", "}", "++", "--":
+		return true
+	default:
+		return false
+	}
+}
+
+func isJSLineTerminator(r rune) bool {
+	return r == '\n' || r == '\r' || r == '\u2028' || r == '\u2029'
+}
+
+func containsJSLineTerminator(source []byte) bool {
+	for len(source) > 0 {
+		r, size := utf8.DecodeRune(source)
+		if isJSLineTerminator(r) {
+			return true
+		}
+		source = source[size:]
+	}
+	return false
+}
+
+func closesJSControlCondition(tokens []jsModuleToken, closing int) bool {
+	depth := 0
+	for index := closing; index >= 0; index-- {
+		if isJSPunctuator(tokens, index, ")") {
+			depth++
+		} else if isJSPunctuator(tokens, index, "(") {
+			depth--
+			if depth != 0 {
+				continue
+			}
+			if index > 0 && tokens[index-1].kind == jsIdentifierToken {
+				switch tokens[index-1].value {
+				case "catch", "for", "if", "switch", "while", "with":
+					return true
+				case "await":
+					return index > 1 && isJSIdentifier(tokens, index-2, "for")
+				}
+			}
+			return false
+		}
+	}
+	return false
+}
+
+func canStartJSRegexAfter(previous jsModuleToken) bool {
+	if previous.kind == jsIdentifierToken {
+		switch previous.value {
+		case "await", "case", "delete", "do", "else", "in", "instanceof", "new", "of", "return", "throw", "typeof", "void", "yield":
+			return true
+		default:
+			return false
+		}
+	}
+	if previous.kind != jsPunctuatorToken {
+		return false
+	}
+	switch previous.value {
+	case ")", "]", "}", "++", "--", ".", "?.":
+		return false
+	default:
+		return true
+	}
+}
+
+func skipJSLineComment(source []byte, index int) int {
+	for index < len(source) {
+		r, size := utf8.DecodeRune(source[index:])
+		if isJSLineTerminator(r) {
+			break
+		}
+		index += size
+	}
+	return index
+}
+
+func skipJSBlockComment(source []byte, index int) int {
+	if end := bytes.Index(source[index+2:], []byte("*/")); end >= 0 {
+		return index + 2 + end + 2
+	}
+	return len(source)
+}
+
+func skipJSRegexLiteral(source []byte, index int) int {
+	index++
+	inCharacterClass := false
+	for index < len(source) {
+		r, size := utf8.DecodeRune(source[index:])
+		if isJSLineTerminator(r) {
+			return index
+		}
+		switch source[index] {
+		case '\\':
+			index++
+			if index < len(source) {
+				_, escapedSize := utf8.DecodeRune(source[index:])
+				index += escapedSize
+			}
+		case '[':
+			inCharacterClass = true
+			index++
+		case ']':
+			inCharacterClass = false
+			index++
+		case '/':
+			if !inCharacterClass {
+				index++
+				for index < len(source) {
+					r, size := utf8.DecodeRune(source[index:])
+					if !isJSIdentifierPart(r) {
+						break
+					}
+					index += size
+				}
+				return index
+			}
+			index++
+		default:
+			index += size
+		}
+	}
+	return index
+}
+
+func scanJSStringLiteral(source []byte, index int) (string, int, bool) {
+	quote := source[index]
+	index++
+	var value strings.Builder
+	for index < len(source) {
+		c := source[index]
+		if c == quote {
+			return value.String(), index + 1, true
+		}
+		if c == '\n' || c == '\r' {
+			return "", index + 1, false
+		}
+		if c != '\\' {
+			r, size := utf8.DecodeRune(source[index:])
+			value.WriteRune(r)
+			index += size
+			continue
+		}
+		index++
+		if index >= len(source) {
+			break
+		}
+		switch source[index] {
+		case '\n':
+			index++
+		case '\r':
+			index++
+			if index < len(source) && source[index] == '\n' {
+				index++
+			}
+		case 'n':
+			value.WriteByte('\n')
+			index++
+		case 'r':
+			value.WriteByte('\r')
+			index++
+		case 't':
+			value.WriteByte('\t')
+			index++
+		case 'b':
+			value.WriteByte('\b')
+			index++
+		case 'f':
+			value.WriteByte('\f')
+			index++
+		case 'v':
+			value.WriteByte('\v')
+			index++
+		case '0':
+			value.WriteByte(0)
+			index++
+		case 'x':
+			escaped, next, ok := readJSHexEscape(source, index+1, 2)
+			if !ok {
+				return "", next, false
+			}
+			value.WriteRune(rune(escaped))
+			index = next
+		case 'u':
+			escaped, next, ok := readJSUnicodeEscape(source, index+1)
+			if !ok {
+				return "", next, false
+			}
+			value.WriteRune(escaped)
+			index = next
+		default:
+			r, size := utf8.DecodeRune(source[index:])
+			value.WriteRune(r)
+			index += size
+		}
+	}
+	return "", len(source), false
+}
+
+func readJSHexEscape(source []byte, index, digits int) (uint32, int, bool) {
+	if index+digits > len(source) {
+		return 0, len(source), false
+	}
+	value, err := strconv.ParseUint(string(source[index:index+digits]), 16, 32)
+	if err != nil {
+		return 0, index + digits, false
+	}
+	return uint32(value), index + digits, true
+}
+
+func readJSUnicodeEscape(source []byte, index int) (rune, int, bool) {
+	if index < len(source) && source[index] == '{' {
+		end := bytes.IndexByte(source[index+1:], '}')
+		if end < 0 {
+			return 0, len(source), false
+		}
+		end += index + 1
+		value, err := strconv.ParseUint(string(source[index+1:end]), 16, 32)
+		if err != nil || value > utf8.MaxRune || value >= 0xD800 && value <= 0xDFFF {
+			return 0, end + 1, false
+		}
+		return rune(value), end + 1, true
+	}
+	value, next, ok := readJSHexEscape(source, index, 4)
+	if !ok {
+		return 0, next, false
+	}
+	if value >= 0xD800 && value <= 0xDBFF {
+		if next+2 <= len(source) && source[next] == '\\' && source[next+1] == 'u' {
+			low, after, lowOK := readJSHexEscape(source, next+2, 4)
+			if lowOK && low >= 0xDC00 && low <= 0xDFFF {
+				return rune(0x10000 + ((value - 0xD800) << 10) + (low - 0xDC00)), after, true
+			}
+		}
+		return 0, next, false
+	}
+	if value >= 0xDC00 && value <= 0xDFFF {
+		return 0, next, false
+	}
+	return rune(value), next, true
+}
+
+func skipJSTemplateLiteral(source []byte, index int) int {
+	index++
+	for index < len(source) {
+		switch source[index] {
+		case '\\':
+			index = min(index+2, len(source))
+		case '`':
+			return index + 1
+		case '$':
+			if index+1 < len(source) && source[index+1] == '{' {
+				index = skipJSTemplateExpression(source, index+2)
+				continue
+			}
+			index++
+		default:
+			_, size := utf8.DecodeRune(source[index:])
+			index += size
+		}
+	}
+	return index
+}
+
+func skipJSTemplateExpression(source []byte, index int) int {
+	depth := 1
+	var tokens []jsModuleToken
+	lineBreakBefore := false
+	appendToken := func(token jsModuleToken) {
+		token.lineBreakBefore = lineBreakBefore
+		tokens = append(tokens, token)
+		lineBreakBefore = false
+	}
+	for index < len(source) {
+		r, size := utf8.DecodeRune(source[index:])
+		if unicode.IsSpace(r) || r == '\uFEFF' {
+			lineBreakBefore = lineBreakBefore || isJSLineTerminator(r)
+			index += size
+			continue
+		}
+		if source[index] == '/' && index+1 < len(source) {
+			switch source[index+1] {
+			case '/':
+				index = skipJSLineComment(source, index)
+				continue
+			case '*':
+				end := skipJSBlockComment(source, index)
+				lineBreakBefore = lineBreakBefore || containsJSLineTerminator(source[index:end])
+				index = end
+				continue
+			}
+			if canStartJSRegex(tokens) {
+				index = skipJSRegexLiteral(source, index)
+				appendToken(jsModuleToken{kind: jsOpaqueToken, value: "regex"})
+				continue
+			}
+		}
+		if source[index] == '\'' || source[index] == '"' {
+			_, next, _ := scanJSStringLiteral(source, index)
+			index = max(next, index+1)
+			appendToken(jsModuleToken{kind: jsStringToken})
+			continue
+		}
+		if source[index] == '`' {
+			index = skipJSTemplateLiteral(source, index)
+			appendToken(jsModuleToken{kind: jsOpaqueToken, value: "template"})
+			continue
+		}
+		if source[index] == '{' {
+			depth++
+			appendToken(jsModuleToken{kind: jsPunctuatorToken, value: "{"})
+			index++
+			continue
+		}
+		if source[index] == '}' {
+			depth--
+			index++
+			if depth == 0 {
+				return index
+			}
+			appendToken(jsModuleToken{kind: jsPunctuatorToken, value: "}"})
+			continue
+		}
+		if isJSIdentifierStart(r) {
+			start := index
+			index += size
+			for index < len(source) {
+				part, partSize := utf8.DecodeRune(source[index:])
+				if !isJSIdentifierPart(part) {
+					break
+				}
+				index += partSize
+			}
+			appendToken(jsModuleToken{kind: jsIdentifierToken, value: string(source[start:index])})
+			continue
+		}
+		if source[index] >= '0' && source[index] <= '9' {
+			index++
+			for index < len(source) && ((source[index] >= '0' && source[index] <= '9') || (source[index] >= 'a' && source[index] <= 'z') || (source[index] >= 'A' && source[index] <= 'Z') || source[index] == '_' || source[index] == '.') {
+				index++
+			}
+			appendToken(jsModuleToken{kind: jsNumberToken})
+			continue
+		}
+		punctuator := readJSPunctuator(source, index)
+		index += len(punctuator)
+		appendToken(jsModuleToken{kind: jsPunctuatorToken, value: punctuator})
+	}
+	return index
 }
 
 func cssReferences(content string) []string {
