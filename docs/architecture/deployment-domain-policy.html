@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Git Artifact Pages — Public Domain and Provider Delivery</title>
+  <style>
+    :root { color-scheme: light; --canvas: #f3f5f3; --ink: #202a27; --muted: #65716d; --stroke: #cbd4cf; --accent: #237452; --surface: #fff; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--canvas); color: var(--ink); font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    main { max-width: 1120px; margin: 0 auto; padding: 36px clamp(20px, 4vw, 56px) 56px; }
+    nav, .eyebrow, .note { color: var(--muted); font-size: 13px; }
+    nav { display: flex; flex-wrap: wrap; gap: 18px; }
+    a { color: var(--accent); text-underline-offset: 3px; }
+    header { margin: 30px 0; }
+    .eyebrow { text-transform: uppercase; letter-spacing: .08em; }
+    h1 { margin: 8px 0; font-size: clamp(28px, 4vw, 42px); line-height: 1.15; letter-spacing: -.03em; }
+    h2 { margin: 0 0 12px; font-size: 23px; }
+    h3 { margin: 18px 0 6px; font-size: 17px; }
+    p { margin: 10px 0; }
+    section { padding: 24px 0; border-top: 1px solid var(--stroke); }
+    .notice { padding: 12px 16px; background: var(--surface); border-left: 3px solid var(--accent); }
+    .table-scroll { overflow-x: auto; }
+    table { width: 100%; min-width: 760px; border-collapse: collapse; text-align: left; }
+    th, td { padding: 14px 12px; border-bottom: 1px solid var(--stroke); vertical-align: top; }
+    th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+    th:first-child, td:first-child { padding-left: 0; }
+    td:first-child { min-width: 205px; white-space: nowrap; }
+    code { font: .88em/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+    li { margin: 6px 0; }
+    .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+    @media (max-width: 700px) { .columns { grid-template-columns: 1fr; gap: 8px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <nav aria-label="Documentation"><a href="../specification.md">Specification</a><a href="../backlog/README.md">Backlog</a><a href="domain-model.html">Domain model</a></nav>
+    <header>
+      <p class="eyebrow">Owner decision · accepted September 28, 2026</p>
+      <h1>One public domain. Independent provider delivery.</h1>
+      <p>Cloudflare owns registration and authoritative DNS. Each hostname selects its own static delivery adapter; DNS ownership does not select the CDN for every hostname.</p>
+      <p class="notice"><strong>Selected, not yet provisioned.</strong> This records the intended deployment. Domain availability, purchase, account setup, TLS issuance, Terraform apply, and live delivery have not been verified or performed by this decision.</p>
+    </header>
+
+    <section aria-labelledby="domains">
+      <h2 id="domains">Domain and hostname policy</h2>
+      <p>Acquire <code>artifact-pages.dev</code> through Cloudflare Registrar and keep its authoritative zone in Cloudflare DNS. Retain the domain as Git Artifact Pages' ongoing production publication address, not a disposable verification domain.</p>
+      <div class="table-scroll" role="region" aria-label="Deployment hostnames; scroll horizontally on narrow screens" tabindex="0"><table>
+        <thead><tr><th scope="col">Hostname</th><th scope="col">Purpose</th><th scope="col">Browser delivery path</th><th scope="col">TLS</th></tr></thead>
+        <tbody>
+          <tr><td><code>artifact-pages.dev</code></td><td>Production documentation and public demonstration</td><td>Cloudflare Cache/CDN → R2 custom domain</td><td>Cloudflare-managed custom-domain TLS</td></tr>
+          <tr><td><code>aws.artifact-pages.dev</code></td><td>AWS adapter verification</td><td>CloudFront → private S3 through OAC</td><td>ACM in <code>us-east-1</code></td></tr>
+          <tr><td><code>gcp.artifact-pages.dev</code></td><td>Possible future provider verification</td><td>Not provisioned; requires a separate production-adapter decision</td><td>Not selected</td></tr>
+        </tbody>
+      </table></div>
+      <p class="note">Ordinary subdomains are DNS records beneath the purchased domain, not separate domain registrations. This is not a promise that registration, storage, CDN traffic, optional DNS features, or all provider resources are free. Check current plans and the real Terraform plan before approval.</p>
+    </section>
+
+    <section aria-labelledby="delivery">
+      <h2 id="delivery">Delivery, DNS, and certificates</h2>
+      <div class="columns">
+        <div>
+          <h3>Cloudflare production</h3>
+          <p>The apex uses R2 custom-domain delivery with Cloudflare cache and routing/header rules. The CLI deploys the completed web bundle and publishes static registry, metadata, indexes, artifact bytes, and preview bundles to object storage.</p>
+          <p>Do not move the application to the Pages or Workers Static Assets deployment model. There is no new request-time application backend. Preserve SPA routing, real reserved-object 404s, private control-object denial, CSP, and the shared cache contract; prove their effective behavior at the real edge.</p>
+        </div>
+        <div>
+          <h3>AWS verification</h3>
+          <p>Create a Cloudflare <strong>DNS-only</strong> CNAME for <code>aws.artifact-pages.dev</code> pointing to the CloudFront distribution hostname. Do not proxy it through Cloudflare: the browser must exercise CloudFront directly, without a second CDN masking AWS behavior.</p>
+          <p>Issue the viewer certificate in ACM <code>us-east-1</code>, publish its DNS-validation CNAMEs in Cloudflare as DNS-only records, wait for validation, and attach the certificate and matching alias to CloudFront. Keep validation records for renewal. The S3 origin region is independent of the certificate region. Do not create a Route 53 hosted zone.</p>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="modules">
+      <h2 id="modules">Terraform responsibility</h2>
+      <p>The domain registration and authoritative zone are shared, long-lived operator prerequisites. Provider modules consume the existing zone rather than buying the domain or owning duplicate zones. Each module owns only its explicitly selected delivery records and resources; avoid two Terraform states claiming the same DNS record, zone ruleset, or lifecycle policy.</p>
+      <ul>
+        <li><code>terraform-cloudflare-artifact-pages</code>: R2 bucket, custom-domain connection, Cloudflare cache/routing/header rules, and provider retention. Account/zone/hostname remain caller inputs.</li>
+        <li><code>terraform-aws-artifact-pages</code>: private S3, CloudFront/OAC, plus a composed Cloudflare DNS and ACM path for this deployment. Preserve the existing caller-managed DNS/certificate path for other operators; Cloudflare DNS is not a universal AWS prerequisite.</li>
+        <li>DNS and certificate orchestration belong to infrastructure adapters, not <code>sites.yaml</code>, artifact records, or CLI operation semantics. Terraform does not deploy the app, publish the registry, or publish site documents.</li>
+      </ul>
+      <p>The former AWS module accepts aliases and a caller-provided certificate; it does not yet prove the selected composed DNS/certificate path. <a href="../backlog/implementation/IMP-39-aws-cloudflare-dns-acm.md">IMP-39</a> owns that new slice. <a href="../backlog/implementation/IMP-37-cloudflare-entry-module.md">IMP-37</a> owns the Cloudflare entry point; <a href="../backlog/implementation/IMP-38-terraform-registry-publication.md">IMP-38</a> owns independent module distribution.</p>
+    </section>
+
+    <section aria-labelledby="invariants">
+      <h2 id="invariants">Product invariants stay unchanged</h2>
+      <ul>
+        <li>Git is the source of truth; the browser consumes a static projection.</li>
+        <li>Indexes, metadata, and discovery are generated at publish time, without a request-time database or search API.</li>
+        <li>Provider choice does not change Site, Artifact, registry schemas, logical routes, or CLI operation meaning.</li>
+        <li>Production and preview HTML use the trusted same-origin execution model; Markdown remains sanitized and non-executable.</li>
+        <li>Viewer access remains an operator-managed edge/network concern. Public demo content must be reviewed for publication.</li>
+        <li>Future provider hostnames neither implement nor imply supported production adapters.</li>
+      </ul>
+    </section>
+
+    <section aria-labelledby="handoff">
+      <h2 id="handoff">Prepared decision, remaining operational proof</h2>
+      <ol>
+        <li>The owner checks availability and acquisition/renewal cost, purchases the domain, and confirms the Cloudflare zone/account. No purchase or account connection is authorized by this document alone.</li>
+        <li>Complete reviewed local module preparation, then inspect a real plan and explicitly authorize apply. Preserve unrelated DNS records and existing zone rules.</li>
+        <li>Deploy the web app, publish the registry, and publish the approved repository documentation through their existing CLI operations.</li>
+        <li>Record apex Cloudflare DNS/TLS/CDN/storage/browser evidence in <a href="../backlog/verification/T15-provider-delivery.md">T15</a>; repeat independently on the AWS hostname after IMP-39. Actual clean-consumer adoption remains <a href="../backlog/verification/T16-external-adoption.md">T16</a>.</li>
+      </ol>
+      <p class="note">The owner prefers a short, hours-scale retention setting for lifecycle verification, adjustable later. The current CLI/module contract accepts integer days; do not silently use the 30-day example as an accepted test duration or claim hours-scale deletion has been verified. Provider lifecycle deletion is asynchronous; this domain decision does not change retention configuration or add application-managed expiry.</p>
+    </section>
+
+    <section aria-labelledby="references">
+      <h2 id="references">Provider references</h2>
+      <ul>
+        <li><a href="https://developers.cloudflare.com/registrar/get-started/register-domain/">Cloudflare Registrar: registering a domain</a></li>
+        <li><a href="https://developers.cloudflare.com/r2/buckets/public-buckets/">Cloudflare R2: custom-domain delivery and caching</a></li>
+        <li><a href="https://developers.cloudflare.com/dns/proxy-status/use-cases/">Cloudflare DNS: DNS-only use with another CDN</a></li>
+        <li><a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/cnames-and-https-requirements.html">AWS: CloudFront certificate region and hostname requirements</a></li>
+        <li><a href="https://developers.cloudflare.com/r2/buckets/object-lifecycles/">Cloudflare R2: asynchronous lifecycle behavior</a></li>
+      </ul>
+      <p class="note">References were checked on September 28, 2026. They establish provider prerequisites, not live evidence for this deployment or domain availability.</p>
+    </section>
+  </main>
+</body>
+</html>

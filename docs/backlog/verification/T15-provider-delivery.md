@@ -3,8 +3,16 @@
 - Status: Open
 - Phase: Provider-backed deployment
 
+## Selected deployment and owner handoff
+
+The owner accepted the [domain policy](../../architecture/deployment-domain-policy.html) on September 28, 2026. Acquire and retain `artifact-pages.dev` using Cloudflare Registrar/DNS. Production is Cloudflare Cache/CDN + R2 at the apex; independent AWS verification is `aws.artifact-pages.dev` through DNS-only Cloudflare DNS to CloudFront/private S3 with ACM in `us-east-1`, not Route 53. These hostname choices are settled, but acquisition/availability, account/zone identifiers, credentials, approved real plans, DNS/TLS, and live evidence are not established. IMP-37 prepares the Cloudflare entry point; [IMP-39](../implementation/IMP-39-aws-cloudflare-dns-acm.md) prepares the selected AWS composition. Both deployments exercise the same CLI/static projection contract, not copied application source or Pages/Workers Static Assets.
+
+For lifecycle verification, the owner prefers hours rather than the 30-day sample value and may change the policy later. The current `previewRetentionDays`/module input accepts integer days. Resolve the provider-specific test configuration before apply without silently broadening the CLI schema or promising exact deletion at the configured age. Record actual provider expiry/removal timing separately from the requested retention; do not add application-managed expiry or a cleanup workflow merely to make the test finish quickly.
+
 ## Proof needed
 
+- [ ] Confirm domain acquisition and authoritative Cloudflare DNS; request the Cloudflare apex over HTTPS and verify R2 custom-domain delivery without an alternate public `r2.dev` endpoint or Pages/Workers Static Assets deployment.
+- [ ] For AWS, verify the Cloudflare delivery/ACM validation records are DNS-only, the certificate is issued in `us-east-1` and covers the CloudFront alias, and browsers exercise CloudFront without a second Cloudflare CDN. Keep validation records for renewal; confirm no Route 53 hosted zone was created and existing apex/unrelated DNS records were preserved.
 - [ ] For each provider, directly load/reload logical routes and nested relative resources; missing resources return 404 rather than the app shell.
 - [ ] Inspect actual browser/CDN response headers for mutable indexes/artifacts, hashed app assets, content types, and disposition.
 - [ ] Verify projected catalog/site objects are readable through the configured public delivery endpoint, while `/_control/*` stays denied and the private origin cannot be read directly from the public internet.

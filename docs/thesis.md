@@ -56,4 +56,4 @@ If multiple repositories are supported later, each publisher must own a non-over
 
 ### Infrastructure is an adapter
 
-AWS is the first intended production adapter, not the definition of the product. The core contract is the static projection and the browser that consumes it.
+Cloudflare and AWS are delivery adapters, not the definition of the product. The core contract is the static projection and the browser that consumes it. The project's selected public deployment uses Cloudflare, while AWS is verified independently; the [domain and delivery policy](architecture/deployment-domain-policy.html) is an operator choice, not part of the Site or Artifact model.

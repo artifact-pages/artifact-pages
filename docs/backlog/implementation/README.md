@@ -1,6 +1,6 @@
 # Implementation backlog
 
-These are independently reviewable slices for the accepted product contract. IMP-01–18 cover preview; IMP-19–35 cover registered discovery, normal publish, administration, provider deployments and distribution; IMP-36 adds a local edge-to-object-storage contract test foundation; IMP-37–38 add the Cloudflare adoption entry point and Terraform Registry distribution. The current Phase 1 boundary remains in [the roadmap](../../roadmap.md); listing a later-phase ticket does not authorize implementing it now. Product behavior belongs in [the specification](../../specification.md), unresolved mechanics in technical design, and proof in verification. A ticket is `Done` only when its acceptance criteria have evidence; completing it does not automatically close linked verification.
+These are independently reviewable slices for the accepted product contract. IMP-01–18 cover preview; IMP-19–35 cover registered discovery, normal publish, administration, provider deployments and distribution; IMP-36 adds a local edge-to-object-storage contract test foundation; IMP-37–38 add the Cloudflare adoption entry point and Terraform Registry distribution; IMP-39 adds the AWS custom-domain composition with Cloudflare DNS and ACM. The current Phase 1 boundary remains in [the roadmap](../../roadmap.md); listing a later-phase ticket does not authorize implementing it now. Product behavior belongs in [the specification](../../specification.md), unresolved mechanics in technical design, and proof in verification. A ticket is `Done` only when its acceptance criteria have evidence; completing it does not automatically close linked verification.
 
 ## Follow-up defects and readiness
 
@@ -14,6 +14,7 @@ Use the [priority-ordered, one-at-a-time repair queue](../issues/README.md#repai
 | --- | --- | --- | --- | --- |
 | 1 | [IMP-37](IMP-37-cloudflare-entry-module.md) | Open | Agent-led | One Cloudflare entry module creates the bucket and composes delivery/retention; local acceptance hands off real-account proof to T15. |
 | 2 | [IMP-38](IMP-38-terraform-registry-publication.md) | Open | Collaborative | Prepare the package in parallel; owner-approved publication follows Cloudflare proof, then exact-version retrieval feeds T16. |
+| AWS parallel/follow-up | [IMP-39](IMP-39-aws-cloudflare-dns-acm.md) | Open | Agent-led | Compose DNS-only Cloudflare records and ACM in us-east-1 with CloudFront; keep Cloudflare publication independent and hand AWS live evidence to T15. |
 
 Use the [delegation index](../delegation.md) for work modes and owner boundaries. Existing review repairs remain the active repair queue; these new tickets are not an instruction to interrupt it. IMP-33 remains Done for its existing-bucket implementation, not as evidence for the new root module or Registry publication.
 

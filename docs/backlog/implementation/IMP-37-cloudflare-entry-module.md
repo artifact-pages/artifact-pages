@@ -15,6 +15,8 @@ The current delivery and retention modules both require an existing R2 bucket. T
 
 An adopter can use one Cloudflare module declaration to create an R2 bucket and connect the accepted delivery, routing, cache, control-object denial, and preview-retention configuration. The adopter supplies the account, an existing managed DNS zone, hostname, and administrator-selected retention policy. Infrastructure stays an adapter; app deployment and registry/site publication remain separate CLI operations.
 
+For the project's first real deployment, the owner selected `artifact-pages.dev` as the long-lived production hostname with Cloudflare Registrar and authoritative DNS, using Cache/CDN + R2 rather than Pages or Workers Static Assets. Consume the owner-provisioned zone and connect only the selected custom domain; do not purchase the domain or duplicate zone ownership. This is a configurable operator deployment, not a hard-coded module hostname. The [accepted domain policy](../../architecture/deployment-domain-policy.html) separates it from the DNS-only AWS verification hostname; acquisition and live proof remain T15.
+
 ## Scope
 
 - Provide one consumer-facing module entry point at the root of the owner's existing Cloudflare module repository, composing reusable components rather than duplicating their implementation. Keep nested-module paths self-contained; do not require a sibling OSS checkout.

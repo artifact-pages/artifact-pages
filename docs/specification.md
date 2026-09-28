@@ -636,7 +636,7 @@ VRT can be introduced later for the stable application shell. Arbitrary artifact
 
 ## 15. AWS reference architecture
 
-AWS is the first intended production adapter, after the local contract is stable.
+AWS is a reference production adapter, after the local contract is stable. The project's selected public deployment uses Cloudflare; AWS delivery is verified independently against the same static contract.
 
 Expected static architecture:
 
@@ -665,6 +665,12 @@ The first two patterns do not overlap, so their relative order is not semantical
 SPA routes such as `/sre/incidents/123.html` must resolve to the application shell rather than being looked up as literal S3 object keys. The AWS adapter will therefore need an SPA fallback/rewrite mechanism.
 
 The S3 bucket remains private and CloudFront reads it through Origin Access Control.
+
+### 15.1 Project deployment domains
+
+The owner selected the long-lived `artifact-pages.dev` domain, to be acquired through Cloudflare Registrar with authoritative Cloudflare DNS. Production at the apex uses Cloudflare Cache/CDN and R2 custom-domain delivery, not Pages or Workers Static Assets. `aws.artifact-pages.dev` is the independent AWS verification endpoint: a DNS-only Cloudflare CNAME points directly to CloudFront with a private S3 origin; its ACM viewer certificate is issued in `us-east-1`, with DNS-validation records in Cloudflare. No Route 53 hosted zone is used. The existing AWS module's caller-managed DNS/certificate interface needs the new composed path in [IMP-39](backlog/implementation/IMP-39-aws-cloudflare-dns-acm.md).
+
+This is deployment policy, not a hostname requirement for adopters or a change to Site, Artifact, registry schemas, logical routes, or CLI operation meaning. DNS/certificate orchestration belongs in infrastructure modules/adapters. A future `gcp.artifact-pages.dev` hostname may be added, but does not authorize or imply a production GCP adapter. The [domain and delivery policy](architecture/deployment-domain-policy.html) records module ownership, prerequisites, costs, and the remaining handoff. Domain availability, purchase, TLS, apply, and actual provider behavior remain unverified; the decision alone closes none of T15/T16.
 
 ## 16. Cache model
 

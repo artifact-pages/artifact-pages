@@ -20,6 +20,7 @@ Execution mode answers **how work can be delegated**, not its priority or comple
 | [Review repair queue](issues/README.md#repair-order), including ISSUE-026 | Follow its current priority/order one issue at a time. TD3 is settled: implement trusted same-origin preview HTML rather than reopening the origin decision. Reproduce, add a regression, verify, and obtain independent review. | Commit each verified concern; update/remove completed issue records under the issue policy. Do not wait for unrelated cloud access. |
 | [T6 — Resources and navigation](verification/T6-resources-navigation.md) | Run local/profile regressions for the settled reader/resource contract as repairs land, including ISSUE-026's same-origin rendering and intentional parent-access checks. | Record actual local evidence; provider behavior remains T15. TD3 is a completed decision, not a remaining blocker. |
 | [IMP-37 — Cloudflare entry module](implementation/IMP-37-cloudflare-entry-module.md) | When assigned, implement the single entry module, local validation, and caller example. | Local acceptance closes IMP-37; hand a tested config and fresh-plan checklist to T15 for an explicitly authorized real-account run. |
+| [IMP-39 — AWS Cloudflare DNS/ACM composition](implementation/IMP-39-aws-cloudflare-dns-acm.md) | In the Terraform workflow, add the selected custom-domain path after AWS source packaging; preserve the caller-managed DNS/certificate path and test locally. | Independent review/local acceptance may close the implementation; DNS/TLS/direct CloudFront proof stays T15. Do not delay the first Cloudflare release. |
 
 ISSUE-013 is a separate product improvement, not part of the review repair pass. Done items are historical evidence and are not reopened merely to assign an execution mode.
 
@@ -34,6 +35,8 @@ ISSUE-013 is a separate product improvement, not part of the review repair pass.
 | [T16 — External adoption](verification/T16-external-adoption.md) | Prepare clean-consumer scripts, pin checks, and upgrade/rollback tests. | Select/authorize real consumer repositories and released components, plus the required provider runs. Registry publication and app release are separate approvals. |
 
 These groups cover the current unfinished tracks without copying fast-changing issue statuses here. A newly discovered decision moves only the affected slice to collaboration; unrelated agent-led work continues.
+
+The owner selected the [public domain and provider delivery policy](../architecture/deployment-domain-policy.html): acquire and retain `artifact-pages.dev` through Cloudflare Registrar/DNS; use the apex for Cloudflare Cache/CDN + R2 production and `aws.artifact-pages.dev` for direct CloudFront/S3 verification via DNS-only records. Hostname selection is settled, but acquisition, account/zone identifiers, credentials, plan approval, and external actions remain explicit owner handoffs. No Route 53 hosted zone or production GCP implementation follows from this policy.
 
 ## Delegation and handoff protocol
 
