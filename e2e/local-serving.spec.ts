@@ -279,6 +279,143 @@ test('registered discovery honors sites.json, hides unregistered storage, and lo
   expect(indexRequests).not.toContain('/_indexes/orphaned/index.json')
 })
 
+test('a registered site remains discoverable before and after its first publish', async ({ page }) => {
+  let frontendPublished = false
+  const indexRequests: string[] = []
+  page.on('request', (request) => {
+    const pathname = new URL(request.url()).pathname
+    if (/^\/_indexes\/[^/]+\/index\.json$/u.test(pathname)) indexRequests.push(pathname)
+  })
+  await page.route('**/_indexes/sites.json', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      schemaVersion: 1,
+      sites: [
+        { id: 'frontend', name: 'Frontend registered', repository: 'acme/frontend', sourcePath: 'sites/frontend' },
+        { id: 'sre', name: 'SRE registered', repository: 'acme/sre', sourcePath: 'sites/sre' },
+      ],
+    }),
+  }))
+  await page.route('**/_indexes/frontend/meta.json', (route) => frontendPublished
+    ? route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          schemaVersion: 1,
+          site: { id: 'frontend', title: 'Frontend metadata' },
+          generatedAt: '2026-09-28T00:00:00Z',
+          artifactCount: 3,
+          artifactIndexUrl: '/_indexes/frontend/index.json',
+        }),
+      })
+    : route.fulfill({ status: 404, contentType: 'application/json', body: '{}' }))
+  await page.route('**/_indexes/sre/meta.json', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      schemaVersion: 1,
+      site: { id: 'sre', title: 'SRE metadata' },
+      generatedAt: '2026-09-25T00:00:00Z',
+      artifactCount: 6,
+      artifactIndexUrl: '/_indexes/sre/index.json',
+    }),
+  }))
+  await page.route('**/_indexes/frontend/index.json', (route) => frontendPublished
+    ? route.continue()
+    : route.fulfill({ status: 404, contentType: 'application/json', body: '{}' }))
+
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Choose a site' })).toBeVisible()
+  const frontendBeforePublish = page.getByRole('button', { name: /Frontend registered/ })
+  await expect(frontendBeforePublish).toContainText('Registered · not published yet')
+  await expect(frontendBeforePublish).not.toContainText(/\d+ artifacts/u)
+  await expect(page.getByRole('button', { name: /SRE registered/ })).toContainText('6 artifacts')
+  expect(indexRequests).toEqual([])
+
+  await frontendBeforePublish.click()
+  await expect(page.getByRole('heading', { name: 'Site registered, but not published yet' })).toBeVisible()
+  await expect(page.getByRole('status')).toHaveText('This site is registered and will appear here after its first publish.')
+  expect(indexRequests).toEqual(['/_indexes/frontend/index.json'])
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Search sites' }).click()
+  const searchPalette = page.getByRole('dialog', { name: 'Command palette' })
+  const search = searchPalette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
+  await search.fill('SRE registered')
+  await expect(searchPalette.getByRole('option', { name: /SRE registered/ })).toBeVisible()
+  await search.press('Enter')
+  await expect(page).toHaveURL(/\/sre$/u)
+  await expect(page.getByRole('heading', { name: 'SRE registered', exact: true })).toBeVisible()
+  expect(indexRequests).toEqual(['/_indexes/frontend/index.json', '/_indexes/sre/index.json'])
+
+  frontendPublished = true
+  await page.goto('/')
+  const frontendAfterPublish = page.getByRole('button', { name: /Frontend registered/ })
+  await expect(frontendAfterPublish).toContainText('3 artifacts')
+  await expect(frontendAfterPublish).not.toContainText('not published yet')
+  await frontendAfterPublish.click()
+  await expect(page).toHaveURL(/\/frontend$/u)
+  await expect(page.getByRole('heading', { name: 'Frontend registered', exact: true })).toBeVisible()
+  expect(indexRequests).toEqual([
+    '/_indexes/frontend/index.json',
+    '/_indexes/sre/index.json',
+    '/_indexes/frontend/index.json',
+  ])
+})
+
+for (const failure of ['invalid metadata', 'network failure'] as const) {
+  test(`one site's ${failure} does not discard healthy discovery`, async ({ page }) => {
+    const indexRequests: string[] = []
+    page.on('request', (request) => {
+      const pathname = new URL(request.url()).pathname
+      if (/^\/_indexes\/[^/]+\/index\.json$/u.test(pathname)) indexRequests.push(pathname)
+    })
+    await page.route('**/_indexes/sites.json', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        schemaVersion: 1,
+        sites: [
+          { id: 'frontend', name: 'Frontend registered', repository: 'acme/frontend', sourcePath: 'sites/frontend' },
+          { id: 'sre', name: 'SRE registered', repository: 'acme/sre', sourcePath: 'sites/sre' },
+        ],
+      }),
+    }))
+    await page.route('**/_indexes/frontend/meta.json', (route) => failure === 'invalid metadata'
+      ? route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ schemaVersion: 1, site: { id: 'frontend' } }) })
+      : route.abort())
+    await page.route('**/_indexes/sre/meta.json', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        schemaVersion: 1,
+        site: { id: 'sre', title: 'SRE metadata' },
+        generatedAt: '2026-09-25T00:00:00Z',
+        artifactCount: 6,
+        artifactIndexUrl: '/_indexes/sre/index.json',
+      }),
+    }))
+
+    await page.goto('/')
+    await expect(page.getByRole('heading', { name: 'Choose a site' })).toBeVisible()
+    const frontend = page.getByRole('button', { name: /Frontend registered/ })
+    await expect(frontend).toContainText('Registered · details unavailable')
+    await expect(frontend).not.toContainText(/\d+ artifacts/u)
+    await expect(page.getByRole('button', { name: /SRE registered/ })).toContainText('6 artifacts')
+
+    await page.getByRole('button', { name: 'Search sites' }).click()
+    const palette = page.getByRole('dialog', { name: 'Command palette' })
+    const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
+    await search.fill('SRE registered')
+    await expect(palette.getByRole('option', { name: /SRE registered/ })).toBeVisible()
+    await search.press('Enter')
+    await expect(page).toHaveURL(/\/sre$/u)
+    await expect(page.getByRole('heading', { name: 'SRE registered', exact: true })).toBeVisible()
+    expect(indexRequests).toEqual(['/_indexes/sre/index.json'])
+  })
+}
+
 test('registered discovery shows empty and malformed registries and refreshes renamed sites after reload', async ({ page }) => {
   let registryState: 'empty' | 'malformed' | 'first' | 'renamed' = 'empty'
   await page.route('**/_indexes/sites.json', (route) => {
@@ -311,11 +448,12 @@ test('registered discovery shows empty and malformed registries and refreshes re
   }))
 
   await page.goto('/')
-  await expect(page.getByText('No site indexes were found.')).toBeVisible()
+  await expect(page.getByText('No registered sites were found.')).toBeVisible()
 
   registryState = 'malformed'
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'Unable to load this site' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Unable to load sites' })).toBeVisible()
+  await expect(page.getByRole('alert')).toHaveText('We could not load the site catalog. Check your connection and try again.')
 
   registryState = 'first'
   await page.reload()
@@ -1691,6 +1829,11 @@ test('invalid site IDs also use the not-found state', async ({ page }) => {
 })
 
 test('a failed known-site index load stays distinct from an unknown site', async ({ page }) => {
+  const indexRequests: string[] = []
+  page.on('request', (request) => {
+    const pathname = new URL(request.url()).pathname
+    if (/^\/_indexes\/[^/]+\/index\.json$/u.test(pathname)) indexRequests.push(pathname)
+  })
   await page.route('**/_indexes/sre/index.json', (route) => route.fulfill({ status: 503, body: 'temporarily unavailable' }))
   await page.goto('/sre')
 
@@ -1698,6 +1841,11 @@ test('a failed known-site index load stays distinct from an unknown site', async
   await expect(page.getByRole('alert')).toHaveText('The site could not be loaded (HTTP 503). Please try again in a moment.')
   await expect(page.getByRole('heading', { name: 'Site not found' })).toHaveCount(0)
   await expect(page.locator('.status-content')).not.toContainText('/_indexes/')
+  expect(indexRequests).toEqual(['/_indexes/sre/index.json'])
+
+  await page.getByRole('button', { name: '← All sites' }).click()
+  await expect(page).toHaveURL('/')
+  await expect(page.getByRole('heading', { name: 'Choose a site' })).toBeVisible()
 })
 
 const previewHeadSha = '0123456789abcdef0123456789abcdef01234567'

@@ -11,6 +11,14 @@ export type SiteDiscoveryMetadata = {
   artifactIndexUrl: string
 }
 
+export type SiteCatalogEntry =
+  | (SiteDiscoveryMetadata & { status?: 'available' })
+  | { site: SiteSummary; status: 'not-published' | 'metadata-unavailable' }
+
+export function hasSiteDiscoveryMetadata(entry: SiteCatalogEntry): entry is SiteDiscoveryMetadata & { status?: 'available' } {
+  return 'artifactCount' in entry
+}
+
 export type SiteRegistryEntry = {
   id: string
   name: string

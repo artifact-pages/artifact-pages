@@ -1,5 +1,36 @@
 import { expect, test } from '@playwright/test'
 
+test('registered site with no artifact publish remains visible beside a healthy neighbor', async ({ page }) => {
+  test.skip(process.env.PLAYWRIGHT_PREPUBLISH_CHECK !== '1', 'the registered-flow runner enables this check before first publish')
+  const indexRequests: string[] = []
+  page.on('request', (request) => {
+    const pathname = new URL(request.url()).pathname
+    if (/^\/_indexes\/[^/]+\/index\.json$/u.test(pathname)) indexRequests.push(pathname)
+  })
+
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Choose a site' })).toBeVisible()
+  const sreRow = page.getByRole('button', { name: /SRE registered flow/ })
+  await expect(sreRow).toContainText('Registered · not published yet')
+  await expect(sreRow).not.toContainText(/\d+ artifacts/u)
+  await expect(page.getByRole('button', { name: /Neighbor site/ })).toBeVisible()
+  expect(indexRequests).toEqual([])
+
+  await page.getByRole('button', { name: 'Search sites' }).click()
+  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
+  await search.fill('Neighbor site')
+  await expect(palette.getByRole('option', { name: /Neighbor site/ })).toBeVisible()
+  await search.press('Enter')
+  await expect(page).toHaveURL(/\/neighbor$/u)
+  await expect(page.getByRole('heading', { name: 'Neighbor site', exact: true })).toBeVisible()
+  expect(indexRequests).toEqual(['/_indexes/neighbor/index.json'])
+
+  await page.goto('/sre')
+  await expect(page.getByRole('heading', { name: 'Site registered, but not published yet' })).toBeVisible()
+  expect(indexRequests).toEqual(['/_indexes/neighbor/index.json', '/_indexes/sre/index.json'])
+})
+
 test('generated registered projection supports discovery, deep links, relative resources and reload', async ({ page }) => {
   const registryResponse = await page.request.get('/_indexes/sites.json')
   expect(registryResponse.status()).toBe(200)

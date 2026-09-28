@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ArtifactIndexEntry, SiteDiscoveryMetadata, SiteIndex, TocEntry } from '../domain/index'
+import { hasSiteDiscoveryMetadata, type ArtifactIndexEntry, type SiteCatalogEntry, type SiteIndex, type TocEntry } from '../domain/index'
 import type { RecentArtifactRead } from '../domain/recent-reads'
 import type { PreviewCandidate } from '../data/previews'
 import {
@@ -88,7 +88,7 @@ export function CommandPalette({
   onJumpToHeading,
 }: {
   seed: string
-  sites: SiteDiscoveryMetadata[]
+  sites: SiteCatalogEntry[]
   context: PaletteContext
   currentIndex?: SiteIndex
   currentArtifact?: ArtifactIndexEntry
@@ -477,7 +477,7 @@ function buildSections({
   mode: 'site' | 'command' | 'heading' | 'search'
   context: PaletteContext
   term: string
-  sites: SiteDiscoveryMetadata[]
+  sites: SiteCatalogEntry[]
   currentIndex?: SiteIndex
   currentArtifact?: ArtifactIndexEntry
   recentReads: RecentArtifactRead[]
@@ -582,25 +582,30 @@ function buildPreviewSections(
 }
 
 function buildSiteEntries(
-  sites: SiteDiscoveryMetadata[],
+  sites: SiteCatalogEntry[],
   term: string,
   onNavigate: (href: string) => void,
 ): PaletteEntry[] {
-  return sites.flatMap((metadata) => {
-    const titleMatch = fuzzyMatch(metadata.site.title, term)
-    const idMatch = fuzzyMatch(metadata.site.id, term)
+  return sites.flatMap((siteEntry) => {
+    const titleMatch = fuzzyMatch(siteEntry.site.title, term)
+    const idMatch = fuzzyMatch(siteEntry.site.id, term)
     if (term.trim() && !titleMatch && !idMatch) return []
-    const subtitle = `/${metadata.site.id} · ${metadata.artifactCount} artifacts`
+    const statusLabel = hasSiteDiscoveryMetadata(siteEntry)
+      ? `${siteEntry.artifactCount} artifacts`
+      : siteEntry.status === 'not-published'
+        ? 'not published yet'
+        : 'details unavailable'
+    const subtitle = `/${siteEntry.site.id} · ${statusLabel}`
     const subtitleMatch = idMatch ? offsetMatch(idMatch, 1) : undefined
     return [{
       entry: {
-        id: `site:${metadata.site.id}`,
+        id: `site:${siteEntry.site.id}`,
         kind: 'site' as const,
-        title: metadata.site.title,
+        title: siteEntry.site.title,
         subtitle,
         titleMatch,
         subtitleMatch,
-        onSelect: () => onNavigate(`/${encodeURIComponent(metadata.site.id)}`),
+        onSelect: () => onNavigate(`/${encodeURIComponent(siteEntry.site.id)}`),
       },
       score: Math.max(titleMatch?.score ?? 0, idMatch?.score ?? 0),
     }]

@@ -7,7 +7,7 @@ import { SiteHome } from './SiteHome'
 import { ThemeSwitcher } from './ThemeSwitcher'
 import { MarkdownArtifact } from './MarkdownArtifact'
 import type { TreeStyle } from './ArtifactTree'
-import type { ArtifactIndexEntry, SiteDiscoveryMetadata, SiteIndex, SiteSummary } from '../domain/index'
+import type { ArtifactIndexEntry, SiteCatalogEntry, SiteIndex, SiteSummary } from '../domain/index'
 import { readRecentArtifactReads, recordRecentArtifactRead, type RecentArtifactRead } from '../domain/recent-reads'
 import type { ResolvedTheme, ThemeMode } from '../domain/theme'
 import { artifactRouteHref, type AppRoute } from '../routing'
@@ -35,7 +35,7 @@ export function ArtifactWorkspace({
   route: SiteRoute
   pathname: string
   hash: string
-  sites: SiteDiscoveryMetadata[]
+  sites: SiteCatalogEntry[]
   sitesLoading: boolean
   navigate: (href: string) => void
   themeMode: ThemeMode
@@ -209,7 +209,7 @@ export function ArtifactWorkspace({
   const siteSummaries: SiteSummary[] = sites.length
     ? sites.map(({ site }) => site).sort((left, right) => left.title.localeCompare(right.title))
     : [index.site]
-  const paletteSites = sites.some(({ site }) => site.id === index.site.id)
+  const paletteSites: SiteCatalogEntry[] = sites.some(({ site }) => site.id === index.site.id)
     ? sites
     : [{
         schemaVersion: index.schemaVersion,
@@ -217,6 +217,7 @@ export function ArtifactWorkspace({
         generatedAt: index.generatedAt,
         artifactCount: index.artifacts.length,
         artifactIndexUrl: `/_indexes/${encodeURIComponent(index.site.id)}/index.json`,
+        status: 'available',
       }, ...sites]
   const commands: PaletteCommand[] = [
     { title: 'Toggle sidebar', shortcut: '⌘ B', onSelect: () => toggleSidebar() },

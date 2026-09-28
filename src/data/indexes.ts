@@ -1,4 +1,4 @@
-import type { SiteDiscoveryMetadata, SiteIndex, SiteRegistryProjection } from '../domain/index'
+import type { SiteCatalogEntry, SiteDiscoveryMetadata, SiteIndex, SiteRegistryProjection } from '../domain/index'
 
 const INDEX_ROOT = '/_indexes'
 const SITE_ID_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/
@@ -113,7 +113,7 @@ function isLocalIndexUrl(value: string) {
   }
 }
 
-export async function discoverSites(fetcher: Fetcher = fetch): Promise<SiteDiscoveryMetadata[]> {
+export async function discoverSites(fetcher: Fetcher = fetch): Promise<SiteCatalogEntry[]> {
   const registryResponse = await fetchResponse(`${INDEX_ROOT}/sites.json`, fetcher)
   if (!registryResponse.ok) {
     throw new IndexLoadError(`Request failed with status ${registryResponse.status}: ${INDEX_ROOT}/sites.json.`, `${INDEX_ROOT}/sites.json`, { status: registryResponse.status })
@@ -125,8 +125,20 @@ export async function discoverSites(fetcher: Fetcher = fetch): Promise<SiteDisco
     throw new IndexLoadError(`Invalid site registry: ${INDEX_ROOT}/sites.json.`, `${INDEX_ROOT}/sites.json`, { cause: error })
   }
   const registry = parseSiteRegistry(payload)
-  const metadata = await Promise.all(registry.sites.map((site) => loadSiteDiscoveryMetadata(site.id, fetcher, site.name)))
-  return metadata.sort((left, right) => left.site.title.localeCompare(right.site.title))
+  const sites = await Promise.all(registry.sites.map(async (site): Promise<SiteCatalogEntry> => {
+    try {
+      const metadata = await loadSiteDiscoveryMetadata(site.id, fetcher, site.name)
+      return { ...metadata, status: 'available' }
+    } catch (error) {
+      return {
+        site: { id: site.id, title: site.name },
+        status: error instanceof IndexLoadError && error.status === 404
+          ? 'not-published'
+          : 'metadata-unavailable',
+      }
+    }
+  }))
+  return sites.sort((left, right) => left.site.title.localeCompare(right.site.title))
 }
 
 async function fetchResponse(url: string, fetcher: Fetcher): Promise<Response> {

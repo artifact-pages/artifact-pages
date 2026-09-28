@@ -182,19 +182,48 @@ async function main() {
     run(binaryPath, ['registry', 'publish', '--manifest', 'sites.yaml', '--config', '.artifact-pages.yaml', '--format', 'json'], { cwd: adminRoot })
 
     const satelliteConfig = path.relative(satelliteRoot, configPath)
-    for (const [site, source] of [
-      ['neighbor', 'sites/neighbor/content'],
-      ['sre', 'sites/sre/content'],
-    ]) {
-      const result = parseResult(run(binaryPath, [
-        'site', 'publish', '--site', site, '--source', source, '--config', satelliteConfig, '--format', 'json',
-      ], { cwd: satelliteRoot }), `${site} initial publish`)
-      assert(result.outcome === 'published', `${site} initial publish returned ${result.outcome}`)
-    }
+    const neighborPublish = parseResult(run(binaryPath, [
+      'site', 'publish', '--site', 'neighbor', '--source', 'sites/neighbor/content', '--config', satelliteConfig, '--format', 'json',
+    ], { cwd: satelliteRoot }), 'neighbor initial publish')
+    assert(neighborPublish.outcome === 'published', `neighbor initial publish returned ${neighborPublish.outcome}`)
 
     const neighborBefore = await treeSnapshot(path.join(storageRoot, '_artifacts', 'neighbor'))
     const neighborIndexBefore = await treeSnapshot(path.join(storageRoot, '_indexes', 'neighbor'))
     assert(neighborBefore.length > 0 && neighborIndexBefore.length > 0, 'neighbor site did not publish both artifacts and index metadata')
+    assert(!(await fs.stat(path.join(storageRoot, '_indexes', 'sre', 'meta.json')).then(() => true, () => false)), 'SRE unexpectedly has discovery metadata before its first publish')
+
+    port = await freePort()
+    const composeEnv = {
+      ...process.env,
+      COMPOSE_PROJECT_NAME: e2eProject,
+      WEB_PORT: String(port),
+      WEB_ROOT: path.join(projectRoot, 'dist'),
+      STORAGE_ROOT: storageRoot,
+      PREVIEW_ROOT: path.join(storageRoot, '_previews'),
+    }
+    await fs.mkdir(composeEnv.PREVIEW_ROOT, { recursive: true })
+    composeStarted = true
+    run('docker', ['compose', '-p', e2eProject, 'up', '--detach'], { env: composeEnv, stdio: 'inherit' })
+    const baseURL = `http://127.0.0.1:${port}`
+    await waitForServer(baseURL)
+
+    run(process.execPath, [
+      path.join(projectRoot, 'node_modules/@playwright/test/cli.js'),
+      'test', 'e2e/registered-flow.spec.ts', '--grep', 'registered site with no artifact publish',
+    ], {
+      env: {
+        ...composeEnv,
+        PLAYWRIGHT_BASE_URL: baseURL,
+        PLAYWRIGHT_REGISTERED_FLOW: '1',
+        PLAYWRIGHT_PREPUBLISH_CHECK: '1',
+      },
+      stdio: 'inherit',
+    })
+
+    const sreInitialPublish = parseResult(run(binaryPath, [
+      'site', 'publish', '--site', 'sre', '--source', 'sites/sre/content', '--config', satelliteConfig, '--format', 'json',
+    ], { cwd: satelliteRoot }), 'SRE first publish')
+    assert(sreInitialPublish.outcome === 'published', `SRE first publish returned ${sreInitialPublish.outcome}`)
 
     await writeFile(satelliteRoot, 'sites/sre/content/reports/recovery.html', [
       '<!doctype html>',
@@ -235,21 +264,6 @@ async function main() {
     ].join('\n'))
     await writeFile(satelliteRoot, `sites/sre/content/${previewResourcePath}`, 'body { background-color: rgb(33, 72, 99); }\n')
     commit(satelliteRoot, 'add encoded-name preview document and resource')
-
-    port = await freePort()
-    const composeEnv = {
-      ...process.env,
-      COMPOSE_PROJECT_NAME: e2eProject,
-      WEB_PORT: String(port),
-      WEB_ROOT: path.join(projectRoot, 'dist'),
-      STORAGE_ROOT: storageRoot,
-      PREVIEW_ROOT: path.join(storageRoot, '_previews'),
-    }
-    await fs.mkdir(composeEnv.PREVIEW_ROOT, { recursive: true })
-    composeStarted = true
-    run('docker', ['compose', '-p', e2eProject, 'up', '--detach'], { env: composeEnv, stdio: 'inherit' })
-    const baseURL = `http://127.0.0.1:${port}`
-    await waitForServer(baseURL)
 
     const previewResult = parseResult(run(binaryPath, [
       'preview', 'publish', '--site', 'sre', '--source', 'sites/sre/content', '--base-url', baseURL,

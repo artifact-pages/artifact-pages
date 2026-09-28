@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { ThemeMode } from '../domain/theme'
-import type { SiteDiscoveryMetadata } from '../domain/index'
+import { hasSiteDiscoveryMetadata, type SiteCatalogEntry } from '../domain/index'
 import { CommandPalette, type PaletteCommand } from './CommandPalette'
 import { Icon } from './Icon'
 
@@ -10,7 +10,7 @@ export function SitePicker({
   themeMode = 'system',
   onSetThemeMode,
 }: {
-  sites: SiteDiscoveryMetadata[]
+  sites: SiteCatalogEntry[]
   onNavigate: (href: string) => void
   themeMode?: ThemeMode
   onSetThemeMode?: (mode: ThemeMode) => void
@@ -68,21 +68,21 @@ export function SitePicker({
             <kbd>⌘ K</kbd>
           </button>
           {sortedSites.length === 0 ? (
-            <p className="empty-note">No site indexes were found.</p>
+            <p className="empty-note">No registered sites were found.</p>
           ) : (
             <div className="site-picker-list">
-              {sortedSites.map(({ site, artifactCount, generatedAt }) => (
+              {sortedSites.map((entry) => (
                 <button
                   className="site-picker-row"
-                  key={site.id}
-                  onClick={() => onNavigate(`/${encodeURIComponent(site.id)}`)}
+                  key={entry.site.id}
+                  onClick={() => onNavigate(`/${encodeURIComponent(entry.site.id)}`)}
                 >
-                  <span className="site-mark" aria-hidden="true">{site.title.slice(0, 1).toUpperCase()}</span>
+                  <span className="site-mark" aria-hidden="true">{entry.site.title.slice(0, 1).toUpperCase()}</span>
                   <span className="site-picker-main">
-                    <strong>{site.title}</strong>
-                    <span className="mono">/{site.id}</span>
+                    <strong>{entry.site.title}</strong>
+                    <span className="mono">/{entry.site.id}</span>
                   </span>
-                  <span className="site-picker-count">{artifactCount} artifacts · updated {formatDate(generatedAt)}</span>
+                  <span className="site-picker-count">{catalogStatusLabel(entry)}</span>
                   <Icon name="arrow" size={16} />
                 </button>
               ))}
@@ -104,6 +104,14 @@ export function SitePicker({
       ) : null}
     </>
   )
+}
+
+function catalogStatusLabel(entry: SiteCatalogEntry) {
+  if (hasSiteDiscoveryMetadata(entry)) {
+    return `${entry.artifactCount} artifacts · updated ${formatDate(entry.generatedAt)}`
+  }
+  if (entry.status === 'not-published') return 'Registered · not published yet'
+  return 'Registered · details unavailable'
 }
 
 function formatDate(value: string) {

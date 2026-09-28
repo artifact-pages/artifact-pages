@@ -4,7 +4,7 @@ import { PreviewDocumentPage } from './components/PreviewDocumentPage'
 import { PreviewListPage } from './components/PreviewListPage'
 import { SitePicker } from './components/SitePicker'
 import { defaultSiteIndexUrl, discoverSites, IndexLoadError, isValidSiteId, loadSiteIndex } from './data/indexes'
-import type { SiteDiscoveryMetadata, SiteIndex } from './domain/index'
+import { hasSiteDiscoveryMetadata, type SiteCatalogEntry, type SiteIndex } from './domain/index'
 import { isThemeMode, resolveTheme } from './domain/theme'
 import type { ResolvedTheme, ThemeMode } from './domain/theme'
 import { parseRoute, type AppRoute } from './routing'
@@ -77,7 +77,7 @@ function useTheme() {
 function App() {
   const { route, pathname, hash, navigate } = useLocation()
   const { themeMode, theme, setThemeMode } = useTheme()
-  const [sites, setSites] = useState<LoadingState<SiteDiscoveryMetadata[]>>({ status: 'loading' })
+  const [sites, setSites] = useState<LoadingState<SiteCatalogEntry[]>>({ status: 'loading' })
 
   useEffect(() => {
     let cancelled = false
@@ -97,7 +97,7 @@ function App() {
 
   if (route.kind === 'sites') {
     if (sites.status === 'loading') return <StatusPage title="Sites" message="Loading sites…" />
-    if (sites.status === 'error') return <ErrorPage title="Sites" error={sites.error} />
+    if (sites.status === 'error') return <ErrorPage title="Sites" scope="catalog" error={sites.error} />
     return (
       <SitePicker
         sites={sites.data}
@@ -146,9 +146,9 @@ function SitePage({
   onSetThemeMode,
 }: {
   route: Extract<AppRoute, { kind: 'site' }>
-  sites: SiteDiscoveryMetadata[]
+  sites: SiteCatalogEntry[]
   sitesLoading: boolean
-  siteDiscoveryStatus: LoadingState<SiteDiscoveryMetadata[]>['status']
+  siteDiscoveryStatus: LoadingState<SiteCatalogEntry[]>['status']
   pathname: string
   hash: string
   navigate: (href: string) => void
@@ -158,8 +158,9 @@ function SitePage({
 }) {
   const [indexState, setIndexState] = useState<LoadingState<SiteIndex>>({ status: 'loading' })
   const registeredSite = sites.find(({ site }) => site.id === route.siteId)
-  const artifactIndexUrl = registeredSite?.artifactIndexUrl
-    ?? defaultSiteIndexUrl(route.siteId)
+  const artifactIndexUrl = registeredSite && hasSiteDiscoveryMetadata(registeredSite)
+    ? registeredSite.artifactIndexUrl
+    : defaultSiteIndexUrl(route.siteId)
 
   useEffect(() => {
     let cancelled = false
@@ -191,10 +192,26 @@ function SitePage({
       invalidSiteId || (
         missingIndex &&
         siteDiscoveryStatus === 'success' &&
-        !sites.some(({ site }) => site.id === route.siteId)
+        !registeredSite
       )
     ) {
       return <SiteNotFoundPage siteId={route.siteId} onBack={() => navigate('/')} />
+    }
+    if (missingIndex && registeredSite?.status === 'not-published') {
+      return <RegisteredSiteStatusPage
+        title={registeredSite.site.title}
+        heading="Site registered, but not published yet"
+        message="This site is registered and will appear here after its first publish."
+        onBack={() => navigate('/')}
+      />
+    }
+    if (missingIndex && registeredSite?.status === 'metadata-unavailable') {
+      return <RegisteredSiteStatusPage
+        title={registeredSite.site.title}
+        heading="Site registered, but details are unavailable"
+        message="This site's metadata and artifact index could not be loaded. Please try again in a moment."
+        onBack={() => navigate('/')}
+      />
     }
     return <ErrorPage title={route.siteId} error={indexState.error} onBack={() => navigate('/')} />
   }
@@ -233,10 +250,12 @@ function StatusPage({ title, message }: { title: string; message: string }) {
 
 function ErrorPage({
   title,
+  scope = 'site',
   error,
   onBack,
 }: {
   title: string
+  scope?: 'catalog' | 'site'
   error: Error
   onBack?: () => void
 }) {
@@ -245,13 +264,41 @@ function ErrorPage({
       <div className="status-content">
         <p className="brand-label"><span className="brand-mark">G</span> Git Artifact Pages</p>
         <p className="eyebrow">{title}</p>
-        <h1>Unable to load this site</h1>
+        <h1>{scope === 'catalog' ? 'Unable to load sites' : 'Unable to load this site'}</h1>
         <p className="error-message" role="alert">
           {error instanceof IndexLoadError && error.status
-            ? `The site could not be loaded (HTTP ${error.status}). Please try again in a moment.`
-            : 'We could not load this page. Check your connection and try again.'}
+            ? scope === 'catalog'
+              ? `The site catalog could not be loaded (HTTP ${error.status}). Please try again in a moment.`
+              : `The site could not be loaded (HTTP ${error.status}). Please try again in a moment.`
+            : scope === 'catalog'
+              ? 'We could not load the site catalog. Check your connection and try again.'
+              : 'We could not load this page. Check your connection and try again.'}
         </p>
         {onBack ? <button className="text-action" onClick={onBack}>← All sites</button> : null}
+      </div>
+    </main>
+  )
+}
+
+function RegisteredSiteStatusPage({
+  title,
+  heading,
+  message,
+  onBack,
+}: {
+  title: string
+  heading: string
+  message: string
+  onBack: () => void
+}) {
+  return (
+    <main className="status-page">
+      <div className="status-content">
+        <p className="brand-label"><span className="brand-mark">G</span> Git Artifact Pages</p>
+        <p className="eyebrow">{title}</p>
+        <h1>{heading}</h1>
+        <p role="status">{message}</p>
+        <button className="text-action" onClick={onBack}>← All sites</button>
       </div>
     </main>
   )

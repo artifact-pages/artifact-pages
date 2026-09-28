@@ -15,7 +15,9 @@ Use the static `/_indexes/sites.json` catalog as the site-discovery source in bo
 - Unregistered site data left in storage is not discoverable through the root or site chooser.
 - Empty, missing, malformed, and newly changed registry states have explicit tested UI behavior; browser discovery does not fall back to `/_indexes/` directory listing.
 - Multi-site E2E confirms initial requests do not download every site's artifact index.
+- A registered site with a missing, invalid, or unreachable metadata file stays in discovery without a fabricated artifact count; healthy-site search/navigation continues.
+- The registered local flow browses a site before its first publish and again after the publisher creates its metadata and index.
 
 ## Evidence
 
-`npm run test:e2e` passed all 55 browser cases. E2E covers registry-backed names and metadata, hides the stored but unregistered `showcase` site, loads no full indexes on the root chooser and only the active site's index after selection, and exercises empty, malformed, renamed, and missing-registry states. The fixture and registered discovery checks assert that the browser never requests `/_indexes/` as a directory-listing fallback. The `SitePage` applies the registered display name at render time so registry completion does not re-fetch an unchanged active index or unmount an open site-switcher palette.
+`npm run test:e2e` passed all 59 browser cases on 2026-09-28. Coverage includes registry-backed names and metadata, isolated 404/invalid/network metadata failures, the registered-but-unpublished UI with a healthy neighbor, first-publish metadata/count/navigation, current-site versus catalog errors, and lazy full-index loading. It also covers empty, malformed, renamed, and missing-registry states, and confirms that discovery never requests `/_indexes/` as a directory listing. `npm run test:registered-flow` passed on 2026-09-28; its local publisher flow serves the real registry with one healthy published site and one site with no metadata/index, runs the browser before first publish, then publishes that site and verifies the resulting discovery and navigation.
