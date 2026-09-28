@@ -1,4 +1,4 @@
-# TD2 — Component licensing and release compatibility policy
+# TD2 — Component licensing and release version boundaries
 
 - Status: Done
 - Phase: Reusable distribution
@@ -7,7 +7,7 @@
 
 ## Design question
 
-Which OSS license and component release/version compatibility policy govern a public Artifact Pages release?
+Which OSS license applies, and what is the smallest clear version boundary for each independently consumed Artifact Pages deliverable?
 
 ## Current state
 
@@ -21,27 +21,26 @@ Which OSS license and component release/version compatibility policy govern a pu
 
 ## Settled release policy
 
-Use one coordinated Semantic Versioning tag, `vMAJOR.MINOR.PATCH`, for the repository's first-party release set. A release is built from the commit named by that tag; the tag and its GitHub release assets are never moved, replaced, or withdrawn in place. Corrections use a new version. Patch releases contain fixes, minor releases add compatible functionality, and major releases may break public contracts.
+Do not assign one product version to the whole repository. Give a user-facing version only to a deliverable that needs its own versioned release, and use immutable source commits for source consumed directly. This keeps a CLI or infrastructure change from manufacturing a new web-app version.
 
-| Component | Consumer selection | Initial compatibility rule |
+| Deliverable / contract | Consumer selection | Version rule |
 | --- | --- | --- |
-| CLI source | Exact repository tag; Actions build it from their pinned source commit. No standalone prebuilt CLI binary archive is in the first release set. | Use the CLI and other components from one release tag unless a later compatibility matrix explicitly permits a mix. |
-| Composite Actions | Full commit SHA for the commit named by `vMAJOR.MINOR.PATCH`; release notes map the SHA to its tag. | Action inputs/outputs and the CLI it builds come from the same commit. |
-| Web application | `artifact-pages app deploy --version MAJOR.MINOR.PATCH` selects the web archive attached to `vMAJOR.MINOR.PATCH`. | Deploy the web archive from the same release tag as the CLI/Action set. |
-| AWS and Cloudflare Terraform modules | Git module source at the release tag; production callers may pin the exact commit SHA instead. | Module source belongs to the same coordinated release. Terraform state changes still require reviewing a fresh `terraform plan`; reverting source is not an automatic state rollback. |
-| Config, registry, index, preview, and web-release schemas | Their own `schemaVersion`, independent of the repository version. | Schema v1 is the first public contract. A breaking serialized-format change increments the affected schema version and the product major version. Pre-release local labels make no compatibility promise. |
+| CLI source and composite Actions | Pin the Action to a full Git commit SHA. The Action builds the CLI from that same source revision. | No standalone CLI binary or separate CLI SemVer release is part of the initial distribution. Updating the Action/CLI ref does not version or deploy the web application. |
+| Web application bundle | `artifact-pages app deploy --version MAJOR.MINOR.PATCH` selects the archive attached to the matching immutable `vMAJOR.MINOR.PATCH` GitHub release. | These tags version the web bundle only and are created when its packaged contents change. Patch/minor/major follow SemVer for the web bundle's public behavior. Deploy remains an explicit operation; a new tag never deploys automatically. Never move a tag or replace its assets; corrections use a new web version. |
+| AWS and Cloudflare Terraform modules | Pin the Git module source to an exact commit SHA. | Do not create module SemVer tags for the initial distribution. Add provider-specific versions only if modules later become separately released products. Terraform state changes still require reviewing a fresh `terraform plan`; reverting a source ref is not an automatic state rollback. |
+| Config, registry, index, preview, and web-release schemas | Each serialized format carries its own `schemaVersion`, independent of app versions and source commits. | Schema v1 is the first public contract. A breaking change increments the affected `schemaVersion`; update only the producer/consumer deliverables whose contents or behavior changed. Local test labels make no compatibility promise. |
 
-The exact same-tag set is the only supported combination for the first release. Mixing components from different tags is not promised compatible until an explicit matrix and verification evidence are added. Private admin config refs remain independently pinned to the adopter's chosen Git commit; they are not Artifact Pages component versions. A future standalone CLI binary distribution must include its Go dependency notices.
+There is no umbrella release tag or requirement that independently consumed components share a version number. Private admin config refs are pinned independently to the adopter's chosen Git commit. Compatibility is expressed at the actual boundaries—especially schema versions—and verified with producer/consumer contract tests, not by requiring unrelated components to use one tag. If a breaking schema change ever requires a coordinated producer/consumer rollout, record and verify only that affected component pair; do not bump unrelated deliverables. If standalone CLI binaries or separately versioned Terraform modules are introduced later, give each its own version and include Go dependency notices with CLI binaries.
 
-Use the existing web-release manifest and `.sha256` file to verify that the downloaded archive matches its published digest. This detects mismatches but is not a cryptographic signature or build-provenance attestation; the first release adds no separate signing/attestation system. Trust rests on the reviewed source commit and controlled GitHub release publishing. Keep superseded tags and assets available for reproducibility and rollback; the latest release is the only line promised routine fixes, with no LTS commitment. Mark a superseded release clearly and direct adopters to a new immutable version rather than silently changing old assets.
+Use the existing web-release manifest and `.sha256` file to verify that the downloaded archive matches its published digest. This detects mismatches but is not a cryptographic signature or build-provenance attestation; the first release adds no separate signing/attestation system. Trust rests on the reviewed source commit and controlled GitHub release publishing. Keep superseded web-app tags and assets available for reproducibility and rollback; only the latest web-app release is promised routine fixes, with no LTS commitment. Mark a superseded release clearly and direct adopters to a new immutable version rather than silently changing old assets.
 
 ## Exit criteria
 
 - [x] Select the MIT License for the project.
 - [x] Add the root MIT license file with the agreed copyright-holder notice (`tasuku43`).
 - [x] Audit the current web distribution's production dependencies, clarify first-party MIT scope, and include project and third-party notices in the web archive.
-- [x] Record the coordinated version/tag, immutability, correction, and rollback rules without conflating Action commit pins with web bundle release versions.
-- [x] Publish explicit compatibility rules for the CLI, Action, schemas, web bundle, and supported Terraform modules.
+- [x] Define the web bundle as the only initial SemVer release; pin Actions/CLI source and Terraform modules by immutable commit SHA.
+- [x] Record schema compatibility separately from deliverable versions and keep application deployment explicit.
 - [x] Update release and adoption guides to use the selected policy; public release pins remain pending T16.
 - [x] Keep actual released-component adoption and provider behavior as separate evidence in T16 and T15; this design item does not claim those proofs complete.
 
@@ -49,4 +48,4 @@ Use the existing web-release manifest and `.sha256` file to verify that the down
 
 `npm run test:third-party-notices` verifies production dependency traversal, nested dependencies, optional packages, README license-section fallback, missing-license failure, installed-version matching, and project-license copying. `npm run package:web -- --version notices-validation-20260928-02` built the application and generated notices for 235 installed production dependencies; the resulting archive contained `LICENSE` and `THIRD_PARTY_NOTICES.txt`. This is local packaging evidence, not a public release.
 
-The local packaging, `--version` resolution, SHA-256 validation, upgrade, and rollback paths do not establish public release availability or cross-tag compatibility. T15 and T16 remain the evidence gates for real-provider behavior and clean-room adoption of released pins. Do not infer release behavior from local labels or workflow placeholders.
+The local packaging, `--version` resolution, SHA-256 validation, upgrade, and rollback paths do not establish public release availability or released-source adoption. T15 and T16 remain the evidence gates for real-provider behavior and clean-room adoption of immutable refs. Do not infer release behavior from local labels or workflow placeholders.

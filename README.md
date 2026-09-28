@@ -59,7 +59,7 @@ Package the built application plane for a separate installation repository with:
 npm run package:web -- --version local-test-1
 ~~~
 
-This creates a version-labelled `artifact-pages-web-*.tar.gz` archive, a SHA-256 checksum, and a release manifest under `.local/releases/`. The archive contains the deployable SPA output at its root, including the project `LICENSE` and a generated `THIRD_PARTY_NOTICES.txt` for production web dependencies; site indexes, artifacts, and previews remain a separate content plane. Public releases use the coordinated `vMAJOR.MINOR.PATCH` policy; this local label is only for integration testing.
+This creates a version-labelled `artifact-pages-web-*.tar.gz` archive, a SHA-256 checksum, and a release manifest under `.local/releases/`. The archive contains the deployable SPA output at its root, including the project `LICENSE` and a generated `THIRD_PARTY_NOTICES.txt` for production web dependencies; site indexes, artifacts, and previews remain a separate content plane. Public `vMAJOR.MINOR.PATCH` releases version the web application bundle only. This local label is only for integration testing; Actions and Terraform sources are selected by immutable Git commit SHA.
 
 `artifact-pages-example` can install this archive and serve the extracted app bundle through the existing local nginx/E2E setup by setting `WEB_ROOT` to its installation directory.
 
