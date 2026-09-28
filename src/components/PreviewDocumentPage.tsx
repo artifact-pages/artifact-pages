@@ -188,8 +188,11 @@ function PreviewHtmlDocument({
         src={artifactUrl}
         title={title}
         referrerPolicy="strict-origin"
-        onError={() => setLoadState('failed')}
+        onError={() => {
+          if (isCurrentPreviewDocument(iframeRef.current, artifactUrl)) setLoadState('failed')
+        }}
         onLoad={() => {
+          if (!isCurrentPreviewDocument(iframeRef.current, artifactUrl)) return
           loadCheckRef.current?.abort()
           const controller = new AbortController()
           loadCheckRef.current = controller
@@ -212,6 +215,24 @@ function PreviewHtmlDocument({
       />
     </>
   )
+}
+
+function isCurrentPreviewDocument(frame: HTMLIFrameElement | null, artifactUrl: string) {
+  if (!frame?.contentWindow) return false
+  let currentHref: string
+  try {
+    currentHref = frame.contentWindow.location.href
+  } catch {
+    return false
+  }
+  if (currentHref === 'about:blank') return true
+  try {
+    const current = new URL(currentHref)
+    const expected = new URL(artifactUrl, window.location.origin)
+    return current.origin === expected.origin && current.pathname === expected.pathname
+  } catch {
+    return false
+  }
 }
 
 function isPreviewNavigationMessage(value: unknown): value is { type: string; href: string } {

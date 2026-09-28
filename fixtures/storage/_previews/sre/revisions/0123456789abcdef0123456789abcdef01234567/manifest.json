@@ -5,8 +5,13 @@
   "defaultHeadSha": "1111111111111111111111111111111111111111",
   "mergeBaseSha": "abcdefabcdefabcdefabcdefabcdefabcdefabcd",
   "createdAt": "2026-09-27T00:00:00Z",
-  "bundleDigest": "sha256:3402854336adda2f1eff55a0bac5862c6fb9ab397ac20340fa1484b308627d14",
+  "bundleDigest": "sha256:ad1d2710df7baa2555a585a539412aa5612312adf111d8063e95314becdb9f72",
   "files": [
+    {
+      "path": "assets/guide.pdf",
+      "sha256": "7a55c2a9e34b2342d8bb8fda064582c25609f4b5575024804de920953686c361",
+      "contentType": "application/pdf"
+    },
     {
       "path": "assets/mark.svg",
       "sha256": "42b0db0fcb20b16b5c9aca8023b74bea59c8210ffed20871001077b11a9be2cd",
@@ -44,7 +49,7 @@
     },
     {
       "path": "guides/preview.html",
-      "sha256": "2bc5efc71126c3f9da6cd6a2b6186e285e39e0ca0e5888e01b8f12f768afeca6",
+      "sha256": "932a1cd1a1b1d648964424a4bf4de74bbb7c112783a2f0e755980748ee1d5ec1",
       "contentType": "text/html; charset=utf-8"
     },
     {

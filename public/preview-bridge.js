@@ -32,6 +32,13 @@
       return
     }
     if (target.origin !== documentOrigin || !target.pathname.startsWith(filesPrefix)) return
+    let decodedPath
+    try {
+      decodedPath = decodeURIComponent(target.pathname)
+    } catch {
+      return
+    }
+    if (!/\.(?:html?|md)$/iu.test(decodedPath)) return
 
     event.preventDefault()
     parent.postMessage({ type: 'git-artifact-preview-navigation', href: target.href }, parentOrigin)

@@ -34,6 +34,8 @@ aws --endpoint-url "$endpoint" s3 cp /seed/storage "$destination" --recursive \
 aws --endpoint-url "$endpoint" s3 cp /seed/storage "$destination" --recursive \
   --exclude '*' --include '*.svg' --content-type 'image/svg+xml' --only-show-errors
 aws --endpoint-url "$endpoint" s3 cp /seed/storage "$destination" --recursive \
+  --exclude '*' --include '*.pdf' --content-type 'application/pdf' --only-show-errors
+aws --endpoint-url "$endpoint" s3 cp /seed/storage "$destination" --recursive \
   --exclude '*' --include '*.png' --content-type 'image/png' --only-show-errors
 aws --endpoint-url "$endpoint" s3 cp /seed/storage "$destination" --recursive \
   --exclude '*' --include '*.jpg' --include '*.jpeg' --content-type 'image/jpeg' --only-show-errors

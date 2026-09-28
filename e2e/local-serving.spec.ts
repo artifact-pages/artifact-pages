@@ -2422,6 +2422,78 @@ test('preview HTML keeps changed-document navigation in the preview and unchange
   await expect(page.getByRole('button', { name: 'Go to SRE home' })).toBeVisible()
 })
 
+test('preview HTML raw resources use native frame navigation and preserve download, target, and modifier intent', async ({ page }) => {
+  const previewUrl = `/sre/_previews/${previewHeadSha}/guides/preview.html?group=pr%3A42`
+  const filesPrefix = `/_previews/sre/revisions/${previewHeadSha}/files`
+  await page.route(`**${filesPrefix}/guides/preview.html`, async (route) => {
+    const response = await route.fetch()
+    const source = await response.text()
+    await route.fulfill({
+      response,
+      body: source.replace('</main>', '<p><a href="/sre/reports/latency-retrospective.md">Open a logical document outside the preview files</a></p></main>'),
+    })
+  })
+  await page.goto(previewUrl)
+  const frame = page.frameLocator('iframe[title="Local preview HTML"]')
+  const parentUrl = page.url()
+
+  const svgResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url())
+    return response.request().method() === 'GET' && url.pathname === `${filesPrefix}/assets/mark.svg` && url.search === '?view=raw'
+  }, { timeout: 5000 })
+  await frame.getByRole('link', { name: 'Open the preview SVG resource' }).click()
+  const svgResponse = await svgResponsePromise
+  expect(svgResponse.status()).toBe(200)
+  expect(svgResponse.headers()['content-type']).toContain('image/svg+xml')
+  const rawSvgUrl = `${new URL(parentUrl).origin}${filesPrefix}/assets/mark.svg?view=raw#preview-mark`
+  await expect.poll(() => page.frames().some((candidate) => candidate.url() === rawSvgUrl)).toBe(true)
+  expect(page.url()).toBe(parentUrl)
+  await expect(page.frameLocator('iframe[title="Local preview HTML"]').locator('svg')).toBeVisible()
+
+  await page.goto(previewUrl)
+  const pdfResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url())
+    return response.request().method() === 'GET' && url.pathname === `${filesPrefix}/assets/guide.pdf`
+  })
+  await page.frameLocator('iframe[title="Local preview HTML"]').getByRole('link', { name: 'Open the preview PDF resource' }).click()
+  const pdfResponse = await pdfResponsePromise
+  expect(pdfResponse.status()).toBe(200)
+  expect(pdfResponse.headers()['content-type']).toContain('application/pdf')
+  expect(pdfResponse.request().frame().parentFrame()).toBe(page.mainFrame())
+  expect(page.url()).toBe(parentUrl)
+
+  await page.goto(previewUrl)
+  const downloadPromise = page.waitForEvent('download')
+  await page.frameLocator('iframe[title="Local preview HTML"]').getByRole('link', { name: 'Download the preview SVG resource' }).click()
+  const download = await downloadPromise
+  expect(download.suggestedFilename()).toBe('preview-mark.svg')
+  expect(page.url()).toBe(parentUrl)
+  await expect(page.getByRole('heading', { name: 'Local preview HTML' })).toBeVisible()
+
+  await page.goto(previewUrl)
+  const targetPopupPromise = page.waitForEvent('popup')
+  await page.frameLocator('iframe[title="Local preview HTML"]').getByRole('link', { name: 'Open the preview SVG in a new tab' }).click()
+  const targetPopup = await targetPopupPromise
+  await expect(targetPopup).toHaveURL(`${new URL(parentUrl).origin}${filesPrefix}/assets/mark.svg?target=tab`)
+  await expect(targetPopup.locator('svg')).toBeVisible()
+  expect(page.url()).toBe(parentUrl)
+  await targetPopup.close()
+
+  await page.goto(previewUrl)
+  await page.frameLocator('iframe[title="Local preview HTML"]').getByRole('link', { name: 'Open the preview SVG with a modifier' }).click({ modifiers: ['ControlOrMeta'] })
+  const modifiedResourceUrl = `${new URL(parentUrl).origin}${filesPrefix}/assets/mark.svg?modifier=tab`
+  await expect.poll(() => (
+    page.frames().some((candidate) => candidate.url() === modifiedResourceUrl) ||
+    page.context().pages().some((candidate) => candidate !== page && candidate.url() === modifiedResourceUrl)
+  )).toBe(true)
+  expect(page.url()).toBe(parentUrl)
+
+  await page.goto(previewUrl)
+  await page.frameLocator('iframe[title="Local preview HTML"]').getByRole('link', { name: 'Open a logical document outside the preview files' }).click()
+  await expect.poll(() => page.frames().some((candidate) => new URL(candidate.url()).pathname === '/sre/reports/latency-retrospective.md')).toBe(true)
+  expect(page.url()).toBe(parentUrl)
+})
+
 test('preview HTML uses the actual app origin and survives direct reload on a non-loopback-equivalent hostname', async ({ page }) => {
   await page.goto('/sre')
   const appOrigin = new URL(page.url())
@@ -2536,7 +2608,7 @@ test('a preview-manifest read error stays visible as unknown availability', asyn
 
 test('raw preview resources have real 404s, media types, no-store and no CORS access', async ({ page }) => {
   const base = `/_previews/sre/revisions/${previewHeadSha}/files`
-  const [catalog, manifest, missingRoot, missingSlash, missing, malformedHtml, css, script, svg, font, markdown, html, nullOrigin, externalOrigin] = await Promise.all([
+  const [catalog, manifest, missingRoot, missingSlash, missing, malformedHtml, css, script, svg, pdf, font, markdown, html, nullOrigin, externalOrigin] = await Promise.all([
     page.request.get('/_previews/sre/catalog.json'),
     page.request.get(`/_previews/sre/revisions/${previewHeadSha}/manifest.json`),
     page.request.get('/_previews'),
@@ -2546,6 +2618,7 @@ test('raw preview resources have real 404s, media types, no-store and no CORS ac
     page.request.get(`${base}/assets/preview.css`),
     page.request.get(`${base}/assets/preview.js`),
     page.request.get(`${base}/assets/mark.svg`),
+    page.request.get(`${base}/assets/guide.pdf`),
     page.request.get(`${base}/fonts/preview.woff2`),
     page.request.get(`${base}/guides/preview-guide.md`),
     page.request.get(`${base}/guides/preview.html`),
@@ -2568,11 +2641,12 @@ test('raw preview resources have real 404s, media types, no-store and no CORS ac
   expect(css.headers()['content-type']).toContain('text/css')
   expect(script.headers()['content-type']).toContain('javascript')
   expect(svg.headers()['content-type']).toContain('image/svg+xml')
+  expect(pdf.headers()['content-type']).toContain('application/pdf')
   expect(font.headers()['content-type']).toContain('font/woff2')
   expect(markdown.headers()['content-type']).toContain('text/markdown')
   expect(html.headers()['content-type']).toContain('text/html')
   expect(html.headers()['cache-control']).toContain('no-store')
-  for (const response of [catalog, manifest, css, script, svg, font, markdown, html]) {
+  for (const response of [catalog, manifest, css, script, svg, pdf, font, markdown, html]) {
     expect(response.headers()['cache-control']).toContain('no-store')
   }
   const htmlCsp = html.headers()['content-security-policy']
@@ -2582,6 +2656,10 @@ test('raw preview resources have real 404s, media types, no-store and no CORS ac
   expect(htmlCsp).not.toContain("connect-src 'none'")
   expect(htmlCsp).not.toContain('sandbox')
   expect(markdown.headers()['content-security-policy']).toContain("script-src 'none'")
+  for (const response of [svg, pdf]) {
+    expect(response.headers()['content-security-policy']).toContain("script-src 'none'")
+    expect(response.headers()['x-content-type-options']).toBe('nosniff')
+  }
   expect(html.headers()['x-content-type-options']).toBe('nosniff')
   expect(nullOrigin.headers()['access-control-allow-origin']).toBeUndefined()
   expect(nullOrigin.headers()['vary']).toBeUndefined()
