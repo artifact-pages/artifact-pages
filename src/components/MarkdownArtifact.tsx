@@ -162,6 +162,7 @@ export function MarkdownArtifact({
 }) {
   const [source, setSource] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const articleRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -184,11 +185,14 @@ export function MarkdownArtifact({
 
   useEffect(() => {
     if (!hash || source === null) return
-    const id = decodeHash(hash)
+    const target = artifact.format === 'markdown'
+      ? markdownFragmentTarget(hash, articleRef.current)
+      : document.getElementById(decodeHash(hash))
+    if (!target) return
     window.requestAnimationFrame(() => {
-      document.getElementById(id)?.scrollIntoView({ block: 'start' })
+      target.scrollIntoView({ block: 'start' })
     })
-  }, [hash, source])
+  }, [artifact.format, hash, source])
 
   if (error) {
     return (
@@ -205,7 +209,7 @@ export function MarkdownArtifact({
 
   return (
     <div className="markdown-scroll" data-testid="markdown-document">
-      <article className="markdown-article">
+      <article ref={articleRef} className="markdown-article">
         <Markdown
           remarkPlugins={markdownRemarkPlugins}
           rehypePlugins={markdownRehypePlugins}
@@ -346,7 +350,7 @@ function transformMarkdownUrl(
   if (/^data:/i.test(value)) return key === 'src' && safeDataImageUrl.test(value) ? value : ''
   const safeValue = defaultUrlTransform(value)
   if (!safeValue) return ''
-  if (safeValue.startsWith('#')) return safeValue.startsWith('#md-') ? safeValue : `#md-${safeValue.slice(1)}`
+  if (safeValue.startsWith('#')) return prefixMarkdownFragment(safeValue)
 
   let resolved: URL
   try {
@@ -366,6 +370,10 @@ function transformMarkdownUrl(
   if (resolved.protocol !== 'https:' && resolved.protocol !== 'http:') return ''
 
   if (key === 'href') {
+    if (resolved.origin === window.location.origin && isMarkdownDocumentPath(resolved.pathname)) {
+      resolved.hash = prefixMarkdownFragment(resolved.hash)
+    }
+
     const logicalHref = resolveHref?.(resolved)
     if (logicalHref) return logicalHref
   }
@@ -440,4 +448,23 @@ function decodeHash(hash: string) {
   } catch {
     return hash.slice(1)
   }
+}
+
+function prefixMarkdownFragment(hash: string) {
+  if (!hash || hash === '#') return hash
+  return decodeHash(hash).startsWith('md-') ? hash : `#md-${hash.slice(1)}`
+}
+
+function markdownFragmentTarget(hash: string, article: HTMLElement | null) {
+  const id = decodeHash(hash)
+  if (!id || !article) return null
+  const targets = Array.from(article.querySelectorAll<HTMLElement>('[id]'))
+  return targets.find((target) => target.id === id)
+    ?? targets.find((target) => target.id === `md-${id}`)
+    ?? null
+}
+
+function isMarkdownDocumentPath(pathname: string) {
+  const filename = pathname.slice(pathname.lastIndexOf('/') + 1)
+  return decodePathSegment(filename).toLowerCase().endsWith('.md')
 }

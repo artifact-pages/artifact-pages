@@ -1312,6 +1312,201 @@ test('Markdown pages render safely with GFM, Mermaid, local assets, and extensio
   await expect(page.locator('iframe[title="Checkout latency incident review"]')).toBeVisible()
 })
 
+test('Markdown fragments resolve across documents while HTML fragments keep their original IDs', async ({ page }) => {
+  const sourcePath = 'guides/cross-links.md'
+  const targetPath = 'reports/例 #1+summary.md'
+  const targetEncodedPath = 'reports/%E4%BE%8B%20%231%2Bsummary.md'
+  const htmlPath = 'reports/fragment-target.html'
+  const sourceArtifactUrl = `/_artifacts/sre/${sourcePath}`
+  const targetArtifactUrl = `/_artifacts/sre/${targetEncodedPath}`
+  const htmlArtifactUrl = `/_artifacts/sre/${htmlPath}`
+  const sourceRoute = '/sre/guides/cross-links.md'
+  const targetRoute = `/sre/${targetEncodedPath}`
+  const filler = Array.from({ length: 24 }, (_, index) => `Navigation context paragraph ${index + 1}.`).join('\n\n')
+  const sourceMarkdown = [
+    '# Cross-document links',
+    '',
+    '[Same-document heading](#local-steps)',
+    '[Same-document duplicate with an existing prefix](#md-local-steps-1)',
+    '[Same-document heading whose slug starts with the Markdown prefix](#md-local-deployment)',
+    '[Cross-document Markdown heading](../reports/%E4%BE%8B%20%231%2Bsummary.md?view=full&from=reader#review-steps)',
+    '[Cross-document Markdown duplicate](../reports/%E4%BE%8B%20%231%2Bsummary.md?view=full&from=reader#review-steps-1)',
+    '[Cross-document Markdown duplicate with an existing prefix](../reports/%E4%BE%8B%20%231%2Bsummary.md?view=full&from=reader#md-review-steps-1)',
+    '[Cross-document Markdown heading whose slug starts with the Markdown prefix](../reports/%E4%BE%8B%20%231%2Bsummary.md?view=full&from=reader#md-deployment)',
+    '[Cross-document Markdown Unicode heading](../reports/%E4%BE%8B%20%231%2Bsummary.md?view=full&from=reader#%E9%9A%9C%E5%AE%B3%E5%AF%BE%E5%BF%9C-%E6%97%A5%E6%9C%AC%E8%AA%9E)',
+    '[HTML fragment](../reports/fragment-target.html#legacy-id)',
+    '',
+    filler,
+    '',
+    '## Local steps',
+    '',
+    filler,
+    '',
+    '## MD local deployment',
+    '',
+    filler,
+    '',
+    '## Local steps',
+  ].join('\n')
+  const targetMarkdown = [
+    '## Review steps',
+    '',
+    filler,
+    '',
+    '## Review steps',
+    '',
+    filler,
+    '',
+    '## 障害対応 日本語',
+    '',
+    filler,
+    '',
+    '## MD deployment',
+    '',
+    filler,
+    '',
+    '## Site switcher',
+  ].join('\n')
+  const htmlDocument = `<!doctype html><html><head><title>HTML fragment destination</title><style>body{margin:0}.spacer{height:1800px}</style></head><body><div class="spacer"></div><h1 id="legacy-id">Legacy HTML target</h1></body></html>`
+  const artifactResponses = new Map([
+    [sourceArtifactUrl, { contentType: 'text/markdown; charset=utf-8', body: sourceMarkdown }],
+    [targetArtifactUrl, { contentType: 'text/markdown; charset=utf-8', body: targetMarkdown }],
+    [htmlArtifactUrl, { contentType: 'text/html; charset=utf-8', body: htmlDocument }],
+  ])
+  const artifacts = [
+    {
+      id: sourcePath,
+      title: 'Cross-document link source',
+      path: sourcePath,
+      format: 'markdown',
+      filename: 'cross-links.md',
+      artifactUrl: sourceArtifactUrl,
+      updatedAt: '2026-09-29T00:00:00Z',
+      toc: [
+        { level: 2, text: 'Local steps', id: 'md-local-steps' },
+        { level: 2, text: 'Local steps', id: 'md-local-steps-1' },
+        { level: 2, text: 'MD local deployment', id: 'md-md-local-deployment' },
+      ],
+    },
+    {
+      id: targetPath,
+      title: 'Encoded Markdown target',
+      path: targetPath,
+      format: 'markdown',
+      filename: '例 #1+summary.md',
+      artifactUrl: targetArtifactUrl,
+      updatedAt: '2026-09-29T00:00:00Z',
+      toc: [
+        { level: 2, text: 'Review steps', id: 'md-review-steps' },
+        { level: 2, text: 'Review steps', id: 'md-review-steps-1' },
+        { level: 2, text: '障害対応 日本語', id: 'md-障害対応-日本語' },
+        { level: 2, text: 'MD deployment', id: 'md-md-deployment' },
+        { level: 2, text: 'Site switcher', id: 'md-site-switcher' },
+      ],
+    },
+    {
+      id: htmlPath,
+      title: 'HTML fragment destination',
+      path: htmlPath,
+      format: 'html',
+      filename: 'fragment-target.html',
+      artifactUrl: htmlArtifactUrl,
+      updatedAt: '2026-09-29T00:00:00Z',
+      toc: [{ level: 1, text: 'Legacy HTML target', id: 'legacy-id' }],
+    },
+  ]
+
+  await page.route('**/_indexes/sre/index.json', async (route) => {
+    const response = await route.fetch()
+    const index = await response.json() as { artifacts: Array<Record<string, unknown>> }
+    index.artifacts.push(...artifacts)
+    await route.fulfill({ response, body: JSON.stringify(index) })
+  })
+  await page.route('**/_artifacts/sre/**', async (route) => {
+    const artifactResponse = artifactResponses.get(new URL(route.request().url()).pathname)
+    if (!artifactResponse) {
+      await route.continue()
+      return
+    }
+    await route.fulfill({ status: 200, ...artifactResponse })
+  })
+
+  const expectMarkdownHeading = async (id: string) => {
+    const heading = page.locator(`.markdown-article #${id}`)
+    await expect(heading).toBeInViewport()
+    await expect.poll(() => page.locator('.markdown-scroll').evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+  }
+  const expectTargetUrl = async (hash: string) => {
+    await expect.poll(() => page.evaluate(() => window.location.pathname)).toBe(targetRoute)
+    expect(await page.evaluate(() => window.location.search)).toBe('?view=full&from=reader')
+    expect(await page.evaluate(() => window.location.hash)).toBe(hash)
+  }
+
+  await page.setViewportSize({ width: 1280, height: 420 })
+  await page.goto(sourceRoute)
+  const reader = page.getByTestId('markdown-document')
+  await reader.getByRole('link', { name: 'Same-document heading', exact: true }).click()
+  await expect(page).toHaveURL(/#md-local-steps$/)
+  await expectMarkdownHeading('md-local-steps')
+  await reader.getByRole('link', { name: 'Same-document duplicate with an existing prefix' }).click()
+  await expect(page).toHaveURL(/#md-local-steps-1$/)
+  await expectMarkdownHeading('md-local-steps-1')
+  await reader.getByRole('link', { name: 'Same-document heading whose slug starts with the Markdown prefix' }).click()
+  await expect(page).toHaveURL(/#md-local-deployment$/)
+  await expectMarkdownHeading('md-md-local-deployment')
+
+  await reader.getByRole('link', { name: 'Cross-document Markdown heading', exact: true }).click()
+  await expectTargetUrl('#md-review-steps')
+  await expectMarkdownHeading('md-review-steps')
+  await page.goBack()
+  await expect(page).toHaveURL(/\/sre\/guides\/cross-links\.md#md-local-deployment$/)
+  await expectMarkdownHeading('md-md-local-deployment')
+  await page.goForward()
+  await expectTargetUrl('#md-review-steps')
+  await expectMarkdownHeading('md-review-steps')
+
+  await page.goBack()
+  await reader.getByRole('link', { name: 'Cross-document Markdown duplicate', exact: true }).click()
+  await expectTargetUrl('#md-review-steps-1')
+  await expectMarkdownHeading('md-review-steps-1')
+  await page.goBack()
+  await reader.getByRole('link', { name: 'Cross-document Markdown duplicate with an existing prefix' }).click()
+  await expectTargetUrl('#md-review-steps-1')
+  await expectMarkdownHeading('md-review-steps-1')
+
+  await page.goto(sourceRoute)
+  await page.getByTestId('markdown-document').getByRole('link', {
+    name: 'Cross-document Markdown heading whose slug starts with the Markdown prefix',
+  }).click()
+  await expectTargetUrl('#md-deployment')
+  await expectMarkdownHeading('md-md-deployment')
+
+  await page.goto(`${targetRoute}?direct=1#review-steps-1`)
+  await expect(page).toHaveURL(/\?direct=1#review-steps-1$/)
+  await expectMarkdownHeading('md-review-steps-1')
+  await page.reload()
+  await expect(page).toHaveURL(/\?direct=1#review-steps-1$/)
+  await expectMarkdownHeading('md-review-steps-1')
+  await page.goto(`${targetRoute}?direct=2#site-switcher`)
+  await expect(page).toHaveURL(/\?direct=2#site-switcher$/)
+  await expectMarkdownHeading('md-site-switcher')
+
+  await page.goto(sourceRoute)
+  await page.getByTestId('markdown-document').getByRole('link', { name: 'Cross-document Markdown Unicode heading' }).click()
+  await expectTargetUrl('#md-%E9%9A%9C%E5%AE%B3%E5%AF%BE%E5%BF%9C-%E6%97%A5%E6%9C%AC%E8%AA%9E')
+  await expectMarkdownHeading('md-障害対応-日本語')
+
+  await page.goto(sourceRoute)
+  await page.getByTestId('markdown-document').getByRole('link', { name: 'HTML fragment' }).click()
+  await expect(page).toHaveURL(/\/sre\/reports\/fragment-target\.html#legacy-id$/)
+  const htmlFrame = page.locator('iframe[title="HTML fragment destination"]')
+  await expect(htmlFrame).toBeVisible()
+  const htmlTarget = page.frameLocator('iframe[title="HTML fragment destination"]').locator('#legacy-id')
+  await expect(htmlTarget).toHaveText('Legacy HTML target')
+  await expect(htmlTarget).toBeInViewport()
+  await expect.poll(() => htmlFrame.evaluate((frame) => (frame as HTMLIFrameElement).contentWindow?.scrollY ?? 0)).toBeGreaterThan(0)
+})
+
 test('Markdown gallery covers typography, assets, links, safety, and fragment navigation', async ({ page }) => {
   const requestedUrls: string[] = []
   const localAssetPaths = [
