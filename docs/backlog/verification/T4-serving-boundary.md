@@ -13,6 +13,8 @@ Direct preview URLs work without catalog membership; a missing raw file is a rea
 - [x] Verify that missing manifests are hidden in the Previews list and missing raw resources return 404.
 - [x] Verify that a third-party opaque-origin sandbox cannot read preview objects while the isolated local frame can load preview resources.
 - [ ] Verify browser/CDN cache behavior for mutable catalog responses and removed objects.
+- [ ] Verify fixed-name app assets in an already-cached browser during upgrade and rollback, not only origin bytes ([ISSUE-019](../issues/ISSUE-019-unhashed-app-asset-cache.md)).
+- [ ] Inject invalidation-only failure for registry addition and app deployment, then retry and record request/freshness behavior. The review observed retries becoming no-ops; determine whether each mutable-path contract converges. Keep this proof separate from the confirmed unregister defect ([ISSUE-020](../issues/ISSUE-020-unregister-invalidation-retry.md)).
 - [ ] Verify provider route and cache behavior for catalog, manifest, HTML/Markdown, local resources, and removed objects. Do not treat customer-managed viewer-access policy as a product feature or completion criterion.
 
 ## Evidence

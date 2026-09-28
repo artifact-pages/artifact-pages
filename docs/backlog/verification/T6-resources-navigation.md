@@ -1,6 +1,6 @@
 # T6 — Preview resources and navigation
 
-- Status: Done
+- Status: Open
 - Phase: Phase 1 local preview product; broader browser compatibility remains open
 
 ## Contract to prove
@@ -13,6 +13,14 @@ Changed HTML and Markdown documents render from their head snapshot with local d
 - [x] Verify changed-document links, unchanged-document links, and parent-app navigation from an iframe.
 - [x] Exercise explicit non-document resource includes and reject missing or out-of-tree paths.
 - [x] Document and test the unsupported boundary for runtime-built and root-relative URLs.
+- [ ] Round-trip spaces, Unicode and reserved characters through the configured object-backed preview publisher, not only the directory store ([ISSUE-015](../issues/ISSUE-015-preview-raw-object-keys.md)).
+- [ ] Exercise valid export strings, multiline imports, inline HTML modules, and sanitized Markdown raw-HTML images ([ISSUE-023](../issues/ISSUE-023-preview-module-dependency-parsing.md), [ISSUE-024](../issues/ISSUE-024-preview-inline-module-resources.md), [ISSUE-025](../issues/ISSUE-025-preview-markdown-html-resources.md)).
+- [ ] Verify actual raw-resource link navigation and HTML fragment scrolling, including direct reload and cross-document links ([ISSUE-027](../issues/ISSUE-027-preview-resource-link-navigation.md), [ISSUE-028](../issues/ISSUE-028-preview-html-fragment-navigation.md)).
+- [ ] Exercise the settled non-loopback delivery contract with module execution and frame isolation ([TD3](../technical-design/TD3-preview-origin-delivery.md), [ISSUE-026](../issues/ISSUE-026-preview-provider-module-loading.md)).
+
+## Reopened scope
+
+Reopened on 2026-09-28 after the full-codebase review exposed supported-resource and navigation gaps not covered by earlier fixtures. Checked items retain their narrower historical local evidence, not complete fragment or provider-reader compatibility. Port each issue's reproduction into committed regressions before closing this item again. Do not claim live provider evidence from local browser tests.
 
 ## Evidence
 

@@ -10,6 +10,9 @@
 - [ ] Verify projected catalog/site objects are readable through the configured public delivery endpoint, while `/_control/*` stays denied and the private origin cannot be read directly from the public internet.
 - [ ] Assume the configured admin and satellite roles through GitHub OIDC; reject unconfigured subjects and verify a satellite cannot access a neighboring site, write the registry or app plane, or delete retained preview history.
 - [ ] Test provider invalidation/revalidation after unregister and confirm the serving path returns the resulting origin/edge state within the documented bounds.
+- [ ] With the exact reference admin/satellite IAM policies on a fresh AWS bucket, observe absent registry, lock and site reads and verify first-use bootstrap with prefix-conditioned ListBucket permissions. Distinguish confirmed absence from denied reads without widening privileges. The review did not prove whether this setup returns 403 or 404; this is an unverified contract, not a confirmed defect.
+- [ ] Deploy an official bundle including LICENSE and THIRD_PARTY_NOTICES.txt with the reference admin role and request both through the CDN ([ISSUE-016](../issues/ISSUE-016-aws-web-bundle-notice-files.md)).
+- [ ] Observe enforced artifact CSP and non-loopback preview module/resource behavior after the related fixes/design ([ISSUE-037](../issues/ISSUE-037-provider-artifact-csp.md), [TD3](../technical-design/TD3-preview-origin-delivery.md)).
 
 ## Evidence
 

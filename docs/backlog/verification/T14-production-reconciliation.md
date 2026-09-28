@@ -11,13 +11,14 @@
 - [ ] Run concurrent `PublishSite` calls for different sites and prove cross-process/provider conditional-write races do not lose updates.
 - [x] Inject a `meta.json` upload failure before stale deletion and prove a retry converges.
 - [x] Inject a partial stale-artifact deletion and prove a retry converges.
-- [x] Verify registry publish retries removed-site cleanup after post-write/delete/invalidation failures using the local test backend.
+- [ ] Verify registry publish retries removed-site cleanup after post-write/delete/invalidation failures, including the complete catalog invalidation set on an already-converged origin ([ISSUE-020](../issues/ISSUE-020-unregister-invalidation-retry.md)). Earlier local tests omitted this retry-path gap.
 - [x] Inject artifact upload and `index.json` replacement failures.
 - [x] Exercise the forced `UnregisterSite` cleanup/invalidation retry path directly.
 - [x] Complete both site-prefix listings before mutation and abort when either listing fails.
 - [x] Exercise AWS pagination, continuation-token errors, malformed listing responses, continuation-page API failure, 1,000-key delete batches, and per-object delete failures.
 - [x] Verify exact site-prefix isolation, unchanged registry/app/control/other-site objects, `.git` omission, symlink/special-file rejection, source bytes and paths, and MIME/disposition/encoding/cache metadata.
 - [ ] Run real AWS S3 and Cloudflare R2 conditional-write/recovery smoke tests; verify provider cache and invalidation behavior.
+- [ ] Cover overlapping local input/output rejection and zero-document desired-state convergence ([ISSUE-014](../issues/ISSUE-014-local-source-target-overlap.md), [ISSUE-018](../issues/ISSUE-018-empty-site-reconciliation.md)).
 
 ## Evidence
 
