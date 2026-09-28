@@ -27,7 +27,7 @@ Priority describes user impact, not implementation effort. Issues 001–012 are 
 
 Each review issue contains its own reproduction and source pointers. Supplementary captures/scripts remain ignored in `.local/reviews/2026-09-28/`; they are not the only evidence or a dependency of this committed backlog. Local CLI/HTTP/browser reproductions and provider-source inconsistencies are labeled separately from live-provider proof. Existing passing suites did not cover these regressions.
 
-The remaining review queue has 17 Open, 0 In progress, and 0 Blocked issues; with ISSUE-013 this track has 18 Open, 0 In progress, and 0 Blocked. [TD3](../technical-design/TD3-preview-origin-delivery.md) is settled: ISSUE-026 now implements the accepted trusted same-origin HTML contract. The unconfirmed AWS absent-object 403/404 concern belongs to [T15](../verification/T15-provider-delivery.md), not to another confirmed issue.
+The remaining review queue has 16 Open, 0 In progress, and 0 Blocked issues; with ISSUE-013 this track has 17 Open, 0 In progress, and 0 Blocked. [TD3](../technical-design/TD3-preview-origin-delivery.md) is settled: ISSUE-026 now implements the accepted trusted same-origin HTML contract. The unconfirmed AWS absent-object 403/404 concern belongs to [T15](../verification/T15-provider-delivery.md), not to another confirmed issue.
 
 ## Repair order
 
@@ -35,10 +35,9 @@ Work one issue at a time: mark it In progress, reproduce it, add a regression, i
 
 | Order | Items, in order | Outcome |
 | --- | --- | --- |
-| 1 | ISSUE-021 | Bounded lock acquisition. |
-| 2 | ISSUE-022 → 023 → 024 → 025 → 026 → 027 → 028 | Preview identity, rendering closure and navigation. |
-| 3 | ISSUE-029 → 030 → 031 → 032 → 033 → 034 → 035 | Heading/link parity, Unicode/provenance, remote config and local development. |
-| 4 | ISSUE-036 → 037 | Release-file integrity and reference artifact CSP. |
+| 1 | ISSUE-022 → 023 → 024 → 025 → 026 → 027 → 028 | Preview identity, rendering closure and navigation. |
+| 2 | ISSUE-029 → 030 → 031 → 032 → 033 → 034 → 035 | Heading/link parity, Unicode/provenance, remote config and local development. |
+| 3 | ISSUE-036 → 037 | Release-file integrity and reference artifact CSP. |
 | Later product improvement | ISSUE-013 | Site-description schema/UI work is outside this repair pass and is not a current release gate. |
 
 This is the default repair queue, not authorization to operate cloud accounts or release publicly. Complete review defects before claiming readiness, or record an explicit approved deferral with impact. Actual provider and clean-consumer proofs remain separate gates in the [release order](../README.md#first-public-release-order).
@@ -48,7 +47,6 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | Issue | Status | Priority | Area | Summary |
 | --- | --- | --- | --- | --- |
 | [ISSUE-013 — Site descriptions](ISSUE-013-site-description.md) | Open | P2 | Site discovery and site selection | Explain each site's purpose before visitors open it. |
-| [ISSUE-021 — Enforce the lock wait limit during conditional-write conflicts](ISSUE-021-lock-cas-wait-limit.md) | Open | P2 | Publisher coordination / locks | Review 08: Confirmed defect; reproduction and acceptance criteria in the issue. |
 | [ISSUE-022 — Allow same-head preview retries when only the default branch advances](ISSUE-022-preview-default-head-retry.md) | Open | P2 | Preview revision identity / idempotency | Review 09: Confirmed defect; reproduction and acceptance criteria in the issue. |
 | [ISSUE-023 — Recognize static JavaScript module dependencies without matching ordinary strings](ISSUE-023-preview-module-dependency-parsing.md) | Open | P2 | Preview resource closure / JavaScript | Review 10: Confirmed defect; reproduction and acceptance criteria in the issue. |
 | [ISSUE-024 — Include static imports from inline HTML module scripts](ISSUE-024-preview-inline-module-resources.md) | Open | P2 | Preview resource closure / HTML | Review 11: Confirmed defect; reproduction and acceptance criteria in the issue. |

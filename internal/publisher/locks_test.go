@@ -109,6 +109,102 @@ func TestSiteLocksAllowIndependentSitesConcurrently(t *testing.T) {
 	}
 }
 
+func TestLockCASConflictsRespectWaitLimitForSiteAndRegistry(t *testing.T) {
+	const waitLimit = 60 * time.Millisecond
+	const pollPeriod = 10 * time.Millisecond
+
+	for _, test := range []struct {
+		name         string
+		registry     bool
+		seedFreeLock bool
+	}{
+		{name: "site initialization conflict"},
+		{name: "site acquire conflict", seedFreeLock: true},
+		{name: "registry initialization conflict", registry: true},
+		{name: "registry acquire conflict", registry: true, seedFreeLock: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			inner := newLockMemoryBackend()
+			siteID := "sre"
+			lockKey := siteLockKey(siteID)
+			if test.registry {
+				siteID = "registry"
+				lockKey = "_control/locks/registry.json"
+			}
+			if test.seedFreeLock {
+				freeBytes, err := marshalLockRecord(lockRecord{SchemaVersion: 1, Site: siteID, State: "free"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := inner.PutObjectConditional(context.Background(), lockKey, Object{Bytes: freeBytes}, ObjectCondition{IfNoneMatch: true}); err != nil {
+					t.Fatalf("seed free lock: %v", err)
+				}
+			}
+			backend := &alwaysConflictingLockBackend{lockMemoryBackend: inner}
+			manager := SiteLockManager{Backend: backend, WaitLimit: waitLimit, PollPeriod: pollPeriod}
+
+			started := time.Now()
+			var snapshot LockSnapshot
+			var release func() error
+			var err error
+			if test.registry {
+				snapshot, release, err = manager.AcquireRegistry(context.Background())
+			} else {
+				snapshot, release, err = manager.Acquire(context.Background(), siteID)
+			}
+			elapsed := time.Since(started)
+			if release != nil {
+				_ = release()
+			}
+			if err == nil || !strings.Contains(err.Error(), "timed out waiting for site") {
+				t.Fatalf("Acquire() = snapshot %+v, err %v; want bounded lock-wait timeout", snapshot, err)
+			}
+			if elapsed < waitLimit-10*time.Millisecond || elapsed > waitLimit+200*time.Millisecond {
+				t.Fatalf("Acquire() returned after %s; want approximately the %s wait limit", elapsed, waitLimit)
+			}
+			if attempts := backend.writeAttempts(); attempts < 2 || attempts > 8 {
+				t.Fatalf("conditional-write attempts = %d; want bounded retries with %s polling", attempts, pollPeriod)
+			}
+		})
+	}
+}
+
+func TestLockCASConflictHonorsCallerCancellation(t *testing.T) {
+	backend := &alwaysConflictingLockBackend{
+		lockMemoryBackend: newLockMemoryBackend(),
+		firstAttempt:      make(chan struct{}),
+	}
+	manager := SiteLockManager{Backend: backend, WaitLimit: 2 * time.Second, PollPeriod: time.Second}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	result := make(chan error, 1)
+	go func() {
+		_, release, err := manager.Acquire(ctx, "sre")
+		if release != nil {
+			_ = release()
+		}
+		result <- err
+	}()
+
+	select {
+	case <-backend.firstAttempt:
+	case <-time.After(time.Second):
+		t.Fatal("Acquire() did not attempt the conditional lock write")
+	}
+	cancel()
+	select {
+	case err := <-result:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("Acquire() error = %v; want caller cancellation", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Acquire() did not stop promptly after caller cancellation")
+	}
+	if attempts := backend.writeAttempts(); attempts != 1 {
+		t.Fatalf("conditional-write attempts after cancellation = %d; want 1", attempts)
+	}
+}
+
 func TestInterruptedSiteLockWaitsUntilGuardedRecovery(t *testing.T) {
 	backend := newLockMemoryBackend()
 	manager := SiteLockManager{Backend: backend, WaitLimit: time.Second, PollPeriod: time.Millisecond}
@@ -121,11 +217,17 @@ func TestInterruptedSiteLockWaitsUntilGuardedRecovery(t *testing.T) {
 	}
 	// The discarded release function models a process exiting before cleanup.
 
-	waiter := SiteLockManager{Backend: backend, WaitLimit: 20 * time.Millisecond, PollPeriod: time.Millisecond}
+	const waitLimit = 60 * time.Millisecond
+	waiter := SiteLockManager{Backend: backend, WaitLimit: waitLimit, PollPeriod: 10 * time.Millisecond}
+	started := time.Now()
 	snapshot, release, err := waiter.Acquire(context.Background(), "sre")
+	elapsed := time.Since(started)
 	if err == nil {
 		_ = release()
 		t.Fatal("Acquire() stole an interrupted held lock")
+	}
+	if elapsed < waitLimit-10*time.Millisecond || elapsed > waitLimit+200*time.Millisecond {
+		t.Fatalf("Acquire() returned after %s; want approximately the %s wait limit", elapsed, waitLimit)
 	}
 	if snapshot.State != "held" || snapshot.Owner != interrupted.Owner || snapshot.ETag != interrupted.ETag {
 		t.Fatalf("timed-out lock snapshot = %+v, want original held owner", snapshot)
@@ -214,6 +316,32 @@ type lockMemoryBackend struct {
 	onMissingRead func(string)
 	afterRead     func(string)
 	heldRead      chan struct{}
+}
+
+type alwaysConflictingLockBackend struct {
+	*lockMemoryBackend
+	attemptMu    sync.Mutex
+	attempts     int
+	firstAttempt chan struct{}
+}
+
+func (backend *alwaysConflictingLockBackend) PutObjectConditional(ctx context.Context, _ string, _ Object, _ ObjectCondition) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	backend.attemptMu.Lock()
+	backend.attempts++
+	if backend.attempts == 1 && backend.firstAttempt != nil {
+		close(backend.firstAttempt)
+	}
+	backend.attemptMu.Unlock()
+	return "", ErrPreconditionFailed
+}
+
+func (backend *alwaysConflictingLockBackend) writeAttempts() int {
+	backend.attemptMu.Lock()
+	defer backend.attemptMu.Unlock()
+	return backend.attempts
 }
 
 func newLockMemoryBackend() *lockMemoryBackend {

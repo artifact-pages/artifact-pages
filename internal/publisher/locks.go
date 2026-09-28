@@ -112,14 +112,28 @@ func (manager SiteLockManager) acquire(ctx context.Context, siteID, key string) 
 		if err := ctx.Err(); err != nil {
 			return LockSnapshot{}, nil, err
 		}
+		if lockWaitDeadlineReached(deadline.C) {
+			return LockSnapshot{}, nil, fmt.Errorf("timed out waiting for site %q lock", siteID)
+		}
 		object, etag, readErr := manager.Backend.GetObject(ctx, key)
 		if errors.Is(readErr, ErrObjectNotFound) {
 			freeBytes, marshalErr := marshalLockRecord(lockRecord{SchemaVersion: 1, Site: siteID, State: "free"})
 			if marshalErr != nil {
 				return LockSnapshot{}, nil, marshalErr
 			}
+			if lockWaitDeadlineReached(deadline.C) {
+				return LockSnapshot{}, nil, fmt.Errorf("timed out waiting for site %q lock", siteID)
+			}
 			_, putErr := manager.Backend.PutObjectConditional(ctx, key, Object{Bytes: freeBytes, ContentType: "application/json; charset=utf-8"}, ObjectCondition{IfNoneMatch: true})
-			if putErr != nil && !errors.Is(putErr, ErrPreconditionFailed) {
+			if errors.Is(putErr, ErrPreconditionFailed) {
+				timedOut, waitErr := waitForLockRetry(ctx, deadline.C, pollPeriod)
+				if waitErr != nil {
+					return LockSnapshot{}, nil, waitErr
+				}
+				if timedOut {
+					return LockSnapshot{}, nil, fmt.Errorf("timed out waiting for site %q lock", siteID)
+				}
+			} else if putErr != nil {
 				return LockSnapshot{}, nil, fmt.Errorf("initialize site lock: %w", putErr)
 			}
 			continue
@@ -139,8 +153,18 @@ func (manager SiteLockManager) acquire(ctx context.Context, siteID, key string) 
 			if marshalErr != nil {
 				return LockSnapshot{}, nil, marshalErr
 			}
+			if lockWaitDeadlineReached(deadline.C) {
+				return LockSnapshot{}, nil, fmt.Errorf("timed out waiting for site %q lock", siteID)
+			}
 			newETag, putErr := manager.Backend.PutObjectConditional(ctx, key, Object{Bytes: contents, ContentType: "application/json; charset=utf-8"}, ObjectCondition{IfMatchETag: etag})
 			if errors.Is(putErr, ErrPreconditionFailed) {
+				timedOut, waitErr := waitForLockRetry(ctx, deadline.C, pollPeriod)
+				if waitErr != nil {
+					return LockSnapshot{}, nil, waitErr
+				}
+				if timedOut {
+					return LockSnapshot{}, nil, fmt.Errorf("timed out waiting for site %q lock", siteID)
+				}
 				continue
 			}
 			if putErr != nil {
@@ -156,16 +180,48 @@ func (manager SiteLockManager) acquire(ctx context.Context, siteID, key string) 
 		if record.State != "held" {
 			return LockSnapshot{}, nil, fmt.Errorf("site lock %q has invalid state %q", siteID, record.State)
 		}
-		wait := time.NewTimer(pollPeriod)
+		timedOut, waitErr := waitForLockRetry(ctx, deadline.C, pollPeriod)
+		if waitErr != nil {
+			return LockSnapshot{}, nil, waitErr
+		}
+		if timedOut {
+			return snapshotFromRecord(record, etag), nil, fmt.Errorf("timed out waiting for site %q lock held since %s", siteID, record.AcquiredAt.UTC().Format(time.RFC3339))
+		}
+	}
+}
+
+func waitForLockRetry(ctx context.Context, deadline <-chan time.Time, pollPeriod time.Duration) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	wait := time.NewTimer(pollPeriod)
+	defer wait.Stop()
+	select {
+	case <-ctx.Done():
+		return false, ctx.Err()
+	case <-deadline:
+		if err := ctx.Err(); err != nil {
+			return false, err
+		}
+		return true, nil
+	case <-wait.C:
 		select {
 		case <-ctx.Done():
-			wait.Stop()
-			return LockSnapshot{}, nil, ctx.Err()
-		case <-deadline.C:
-			wait.Stop()
-			return snapshotFromRecord(record, etag), nil, fmt.Errorf("timed out waiting for site %q lock held since %s", siteID, record.AcquiredAt.UTC().Format(time.RFC3339))
-		case <-wait.C:
+			return false, ctx.Err()
+		case <-deadline:
+			return true, nil
+		default:
+			return false, nil
 		}
+	}
+}
+
+func lockWaitDeadlineReached(deadline <-chan time.Time) bool {
+	select {
+	case <-deadline:
+		return true
+	default:
+		return false
 	}
 }
 
