@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react'
 import { artifactRouteHref } from '../routing'
 import { defaultSiteIndexUrl, loadSiteIndex } from '../data/indexes'
 import { loadPreviewCatalog, loadPreviewManifest, previewFileUrl, previewRouteHref } from '../data/previews'
@@ -119,6 +119,7 @@ export function PreviewDocumentPage({ route, hash, navigate }: {
           <PreviewHtmlDocument
             key={artifactUrl}
             artifactUrl={artifactUrl}
+            hash={hash}
             title={document.title}
             route={route}
             manifest={manifest}
@@ -134,6 +135,7 @@ export function PreviewDocumentPage({ route, hash, navigate }: {
 
 function PreviewHtmlDocument({
   artifactUrl,
+  hash,
   title,
   route,
   manifest,
@@ -141,6 +143,7 @@ function PreviewHtmlDocument({
   navigate,
 }: {
   artifactUrl: string
+  hash: string
   title: string
   route: PreviewDocumentRoute
   manifest: PreviewManifest
@@ -154,6 +157,24 @@ function PreviewHtmlDocument({
   useEffect(() => {
     return () => loadCheckRef.current?.abort()
   }, [])
+
+  const syncFrameHash = useCallback(() => {
+    const frameWindow = iframeRef.current?.contentWindow
+    if (!frameWindow) return
+    try {
+      const expected = new URL(artifactUrl, window.location.origin)
+      const current = new URL(frameWindow.location.href)
+      if (current.origin !== expected.origin || current.pathname !== expected.pathname || current.search !== expected.search || current.hash === hash) return
+      current.hash = hash
+      frameWindow.location.replace(current.href)
+    } catch {
+      // Cross-origin redirects remain isolated; same-origin preview documents receive the logical fragment.
+    }
+  }, [artifactUrl, hash])
+
+  useEffect(() => {
+    syncFrameHash()
+  }, [syncFrameHash])
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent<unknown>) => {
@@ -193,6 +214,7 @@ function PreviewHtmlDocument({
         }}
         onLoad={() => {
           if (!isCurrentPreviewDocument(iframeRef.current, artifactUrl)) return
+          syncFrameHash()
           loadCheckRef.current?.abort()
           const controller = new AbortController()
           loadCheckRef.current = controller

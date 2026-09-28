@@ -2422,6 +2422,110 @@ test('preview HTML keeps changed-document navigation in the preview and unchange
   await expect(page.getByRole('button', { name: 'Go to SRE home' })).toBeVisible()
 })
 
+test('preview HTML fragments reach the frame on direct load, same-document links, history, and delayed load', async ({ page }) => {
+  const previewUrl = `/sre/_previews/${previewHeadSha}/guides/preview.html?group=pr%3A42`
+  const filesPrefix = `/_previews/sre/revisions/${previewHeadSha}/files`
+  let holdFirstResponse = true
+  let notifyHeldResponse: (() => void) | undefined
+  let releaseHeldResponse: (() => void) | undefined
+  const heldHtmlResponse = new Promise<void>((resolve) => { notifyHeldResponse = resolve })
+  const releaseHtmlResponse = new Promise<void>((resolve) => { releaseHeldResponse = resolve })
+  await page.route(`**/_previews/sre/revisions/${previewHeadSha}/manifest.json`, async (route) => {
+    const response = await route.fetch()
+    const manifest = await response.json() as {
+      files: Array<{ path: string; sha256: string; contentType: string }>
+      documents: Array<{ path: string; title: string; format: string }>
+    }
+    manifest.files.push({
+      path: 'guides/preview-target.html',
+      sha256: 'a'.repeat(64),
+      contentType: 'text/html; charset=utf-8',
+    })
+    manifest.documents.push({ path: 'guides/preview-target.html', title: 'Preview fragment target', format: 'html' })
+    await route.fulfill({ response, body: JSON.stringify(manifest) })
+  })
+  await page.route(`**${filesPrefix}/guides/preview-target.html`, async (route) => {
+    if (route.request().method() === 'HEAD') {
+      await route.fulfill({ status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } })
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/html; charset=utf-8',
+      body: '<!doctype html><html><body><div style="height: 3200px"></div><h1 id="changed-target">Changed HTML target</h1></body></html>',
+    })
+  })
+  await page.route(`**${filesPrefix}/guides/preview.html`, async (route) => {
+    const response = await route.fetch()
+    const source = await response.text()
+    if (holdFirstResponse) {
+      holdFirstResponse = false
+      notifyHeldResponse?.()
+      await releaseHtmlResponse
+    }
+    const fixture = source.replace('</main>', [
+      '<p><a href="#deep-target">Jump to deep target</a></p>',
+      '<p><a href="#missing-target">Jump to missing target</a></p>',
+      '<p><a href="preview-target.html?source=fixture#changed-target">Open a changed HTML document with fragment</a></p>',
+      '<div aria-hidden="true" style="height: 3200px"></div>',
+      '<section id="deep-target"><h2>Deep target</h2></section>',
+      '</main>',
+    ].join(''))
+    await route.fulfill({ response, body: fixture })
+  })
+
+  await page.goto(`${previewUrl}#deep-target`, { waitUntil: 'domcontentloaded' })
+  await heldHtmlResponse
+  await expect(page).toHaveURL(`${previewUrl}#deep-target`)
+  releaseHeldResponse?.()
+
+  const iframe = page.locator('iframe[title="Local preview HTML"]')
+  const frame = page.frameLocator('iframe[title="Local preview HTML"]')
+  const frameHash = () => iframe.evaluate((element) => (element as HTMLIFrameElement).contentWindow?.location.hash ?? null)
+  const deepTarget = frame.getByRole('heading', { name: 'Deep target' })
+  await expect.poll(frameHash).toBe('#deep-target')
+  await expect(deepTarget).toBeInViewport()
+  await expect(page.getByRole('link', { name: 'Return to PR #42 ↗' })).toBeVisible()
+
+  await page.reload()
+  await expect.poll(frameHash).toBe('#deep-target')
+  await expect(deepTarget).toBeInViewport()
+
+  await page.goto(previewUrl)
+  await expect(page.frameLocator('iframe[title="Local preview HTML"]').locator('script[data-preview-reader-bridge]')).toHaveCount(1)
+  await frame.getByRole('link', { name: 'Jump to deep target' }).click()
+  await expect(page).toHaveURL(`${previewUrl}#deep-target`)
+  await expect.poll(frameHash).toBe('#deep-target')
+  await expect(deepTarget).toBeInViewport()
+
+  await page.goBack()
+  await expect(page).toHaveURL(previewUrl)
+  await expect.poll(frameHash).toBe('')
+  await expect(frame.getByRole('heading', { name: 'Local preview HTML' })).toBeInViewport()
+
+  await page.goForward()
+  await expect(page).toHaveURL(`${previewUrl}#deep-target`)
+  await expect.poll(frameHash).toBe('#deep-target')
+  await expect(deepTarget).toBeInViewport()
+
+  await page.goto(previewUrl)
+  await page.frameLocator('iframe[title="Local preview HTML"]').getByRole('link', { name: 'Jump to missing target' }).click()
+  await expect(page).toHaveURL(`${previewUrl}#missing-target`)
+  await expect.poll(frameHash).toBe('#missing-target')
+  await expect(page.getByRole('link', { name: 'Return to PR #42 ↗' })).toBeVisible()
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  await expect(iframe).toBeVisible()
+
+  await page.goto(previewUrl)
+  await page.frameLocator('iframe[title="Local preview HTML"]').getByRole('link', { name: 'Open a changed HTML document with fragment' }).click()
+  const changedPreviewUrl = `/sre/_previews/${previewHeadSha}/guides/preview-target.html?group=pr%3A42&source=fixture#changed-target`
+  await expect(page).toHaveURL(changedPreviewUrl)
+  const changedPreviewFrame = page.locator('iframe[title="Preview fragment target"]')
+  await expect.poll(() => changedPreviewFrame.evaluate((element) => (element as HTMLIFrameElement).contentWindow?.location.hash ?? null)).toBe('#changed-target')
+  await expect(page.frameLocator('iframe[title="Preview fragment target"]').getByRole('heading', { name: 'Changed HTML target' })).toBeInViewport()
+  await expect(page.getByRole('link', { name: 'Return to PR #42 ↗' })).toBeVisible()
+})
+
 test('preview HTML raw resources use native frame navigation and preserve download, target, and modifier intent', async ({ page }) => {
   const previewUrl = `/sre/_previews/${previewHeadSha}/guides/preview.html?group=pr%3A42`
   const filesPrefix = `/_previews/sre/revisions/${previewHeadSha}/files`
