@@ -32,8 +32,8 @@ sites:
 ~~~
 
 ~~~text
-artifact-pages registry publish --manifest sites.yaml --config .artifact-pages.yaml --dry-run
-artifact-pages registry publish --manifest sites.yaml --config .artifact-pages.yaml
+artifact-pages registry register --manifest sites.yaml --config .artifact-pages.yaml --dry-run
+artifact-pages registry register --manifest sites.yaml --config .artifact-pages.yaml
 artifact-pages site publish --config .artifact-pages.yaml --site sre --source docs/artifacts --dry-run
 ~~~
 

@@ -32,7 +32,7 @@ An operator can use the AWS module's documented composition to create and valida
 - Registering the domain, owning the entire DNS zone, buying services, or applying/publishing without owner authorization.
 - Route 53 resources, a second CDN in front of CloudFront, viewer identity features, Pages/Workers Static Assets, or a production GCP adapter.
 - Coupling the module's version to the app bundle or changing CLI operation semantics.
-- Reimplementing app deployment, registry/site publication, or provider retention inside Terraform.
+- Reimplementing app deployment, site registration, site-content publication, or provider retention inside Terraform.
 
 ## Acceptance criteria
 

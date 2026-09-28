@@ -98,7 +98,7 @@
       <div>
         <p class="eyebrow">Conceptual architecture · Phase 1 direction</p>
         <h1>Domain model</h1>
-        <p class="intro">A site is available in an installation because it belongs to the registry. Publishing attaches the current set of readable artifacts to that site; removing the site from the registry withdraws that published set.</p>
+        <p class="intro">A site is available in an installation because it belongs to the registry. Publishing attaches the current set of readable artifacts to that site; unregistering it withdraws that published set.</p>
       </div>
       <p class="phase-note"><strong>Current implementation boundary</strong>The local product discovers sites from index-directory metadata. The registered publishing workflow described here is a domain direction, not an implemented provider integration.</p>
     </header>
@@ -159,7 +159,7 @@
       </section>
       <section>
         <h2>Domain operations</h2>
-        <p class="section-copy">These names establish vocabulary; they do not prescribe CLI spelling, process boundaries, or provider APIs.</p>
+        <p class="section-copy">These names establish vocabulary; they do not prescribe process boundaries or provider APIs. The manifest-driven `registry register` command reconciles the complete registration set and cleans content prefixes for omitted sites.</p>
         <table>
           <thead><tr><th>Operation</th><th>Effect</th></tr></thead>
           <tbody>

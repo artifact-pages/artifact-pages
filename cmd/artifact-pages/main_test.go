@@ -57,16 +57,27 @@ func TestRunRootHelp(t *testing.T) {
 	if !strings.Contains(help, "artifact-pages <command>") {
 		t.Errorf("root help does not show the standalone CLI usage:\n%s", stdout.String())
 	}
-	for _, expected := range []string{"registry publish", "registry unregister", "site publish", "app deploy", "lock inspect|recover"} {
+	for _, expected := range []string{"registry register", "registry unregister", "site publish", "app deploy", "lock inspect|recover"} {
 		if !strings.Contains(help, expected) {
 			t.Errorf("root help is missing %q:\n%s", expected, help)
 		}
+	}
+	if strings.Contains(help, "registry publish") {
+		t.Errorf("root help still describes registry registration as publication:\n%s", help)
 	}
 	if strings.Contains(help, "admin apply") || strings.Contains(help, "admin registry build") {
 		t.Errorf("root help exposes an unconfirmed admin command:\n%s", help)
 	}
 	if err := run(t.Context(), []string{"admin", "apply"}, &stdout, &stderr); err == nil {
 		t.Error("run(admin apply) succeeded; want removed namespace to be rejected")
+	}
+}
+
+func TestRunRegistryPublishCommandNameIsRejected(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	err := run(t.Context(), []string{"registry", "publish"}, &stdout, &stderr)
+	if err == nil || !strings.Contains(err.Error(), `unknown registry command "publish"`) {
+		t.Fatalf("run(registry publish) error = %v, want an unknown-command error", err)
 	}
 }
 
@@ -101,7 +112,27 @@ func TestRunRegistryBuildIsNotAPublicCommand(t *testing.T) {
 	}
 }
 
-func TestRunRegistryPublishReadsManifestAndDryRunDoesNotCreateStorage(t *testing.T) {
+func TestRunRegistryRegisterHelpExplainsManifestReconciliation(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if err := run(t.Context(), []string{"registry", "register", "--help"}, &stdout, &stderr); err != nil {
+		t.Fatalf("run(registry register --help) error = %v", err)
+	}
+	help := stdout.String() + stderr.String()
+	for _, expected := range []string{
+		"artifact-pages registry register",
+		"Validate sites.yaml and reconcile its deterministic registry projection",
+		"sites omitted from the manifest are unregistered and cleaned on apply",
+	} {
+		if !strings.Contains(help, expected) {
+			t.Errorf("registry register help is missing %q:\n%s", expected, help)
+		}
+	}
+	if strings.Contains(help, "registry publish") || strings.Contains(help, "publish that projection") {
+		t.Errorf("registry register help still describes registration as publication:\n%s", help)
+	}
+}
+
+func TestRunRegistryRegisterReadsManifestAndDryRunDoesNotCreateStorage(t *testing.T) {
 	root := t.TempDir()
 	previousDirectory, err := os.Getwd()
 	if err != nil {
@@ -119,10 +150,10 @@ func TestRunRegistryPublishReadsManifestAndDryRunDoesNotCreateStorage(t *testing
 	if err := os.WriteFile("deployment.yaml", []byte(config), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	args := []string{"registry", "publish", "--manifest", "admin-sites.yaml", "--config", "deployment.yaml", "--format", "json"}
+	args := []string{"registry", "register", "--manifest", "admin-sites.yaml", "--config", "deployment.yaml", "--format", "json"}
 	var stdout, stderr bytes.Buffer
 	if err := run(t.Context(), append(args, "--dry-run"), &stdout, &stderr); err != nil {
-		t.Fatalf("registry publish dry-run error = %v; stderr=%s", err, stderr.String())
+		t.Fatalf("registry register dry-run error = %v; stderr=%s", err, stderr.String())
 	}
 	var planned struct {
 		Operation       string             `json:"operation"`
@@ -131,10 +162,10 @@ func TestRunRegistryPublishReadsManifestAndDryRunDoesNotCreateStorage(t *testing
 		RegistryUpdated *bool              `json:"registryUpdated"`
 	}
 	if err := json.Unmarshal(stdout.Bytes(), &planned); err != nil {
-		t.Fatalf("decode registry publish dry-run JSON: %v; output=%s", err, stdout.String())
+		t.Fatalf("decode registry register dry-run JSON: %v; output=%s", err, stdout.String())
 	}
-	if planned.Operation != "registry publish" || planned.Outcome != "planned" || planned.RegistryUpdated == nil || *planned.RegistryUpdated {
-		t.Fatalf("registry publish dry-run result = %+v, want a plan with registryUpdated=false", planned)
+	if planned.Operation != "registry register" || planned.Outcome != "planned" || planned.RegistryUpdated == nil || *planned.RegistryUpdated {
+		t.Fatalf("registry register dry-run result = %+v, want a plan with registryUpdated=false", planned)
 	}
 	wantChanges := []publisher.Change{
 		{Action: "invalidate", Path: "/_indexes/sites.json"},
@@ -142,7 +173,7 @@ func TestRunRegistryPublishReadsManifestAndDryRunDoesNotCreateStorage(t *testing
 		{Action: "create", Path: "_indexes/sites.json#sites/sre"},
 	}
 	if !reflect.DeepEqual(planned.Changes, wantChanges) {
-		t.Fatalf("registry publish dry-run changes = %+v, want %+v", planned.Changes, wantChanges)
+		t.Fatalf("registry register dry-run changes = %+v, want %+v", planned.Changes, wantChanges)
 	}
 	if _, err := os.Stat(filepath.Join(root, ".local", "storage")); !os.IsNotExist(err) {
 		t.Fatalf("dry-run created local storage: stat error = %v", err)
@@ -151,7 +182,7 @@ func TestRunRegistryPublishReadsManifestAndDryRunDoesNotCreateStorage(t *testing
 	stdout.Reset()
 	stderr.Reset()
 	if err := run(t.Context(), args, &stdout, &stderr); err != nil {
-		t.Fatalf("registry publish error = %v; stderr=%s", err, stderr.String())
+		t.Fatalf("registry register error = %v; stderr=%s", err, stderr.String())
 	}
 	var applied struct {
 		Operation       string `json:"operation"`
@@ -159,10 +190,10 @@ func TestRunRegistryPublishReadsManifestAndDryRunDoesNotCreateStorage(t *testing
 		RegistryUpdated *bool  `json:"registryUpdated"`
 	}
 	if err := json.Unmarshal(stdout.Bytes(), &applied); err != nil {
-		t.Fatalf("decode registry publish JSON: %v; output=%s", err, stdout.String())
+		t.Fatalf("decode registry register JSON: %v; output=%s", err, stdout.String())
 	}
-	if applied.Operation != "registry publish" || applied.Outcome != "published" || applied.RegistryUpdated == nil || !*applied.RegistryUpdated {
-		t.Fatalf("registry publish result = %+v, want published and registryUpdated=true", applied)
+	if applied.Operation != "registry register" || applied.Outcome != "registered" || applied.RegistryUpdated == nil || !*applied.RegistryUpdated {
+		t.Fatalf("registry register result = %+v, want registered and registryUpdated=true", applied)
 	}
 	projection, err := os.ReadFile(filepath.Join(root, ".local", "storage", "_indexes", "sites.json"))
 	if err != nil || !strings.Contains(string(projection), `"id": "sre"`) {

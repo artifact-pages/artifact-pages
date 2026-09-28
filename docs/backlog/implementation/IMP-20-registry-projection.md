@@ -11,7 +11,7 @@ Turn the admin-owned root `sites.yaml` into the sole deterministic `/_indexes/si
 
 ## Evidence
 
-`internal/registry` rejects unknown and duplicate YAML keys, multiple YAML documents, wrong scalar types, invalid site IDs, malformed repositories, unsafe source paths, and duplicate source pairs, including pairs whose repository locator differs only by case. JSON decoding applies the same uniqueness check. It emits ID-sorted JSON with `sites: []` for an empty mapping. The public `registry publish` operation validates the manifest and uses this projection as part of the same deployment operation; it does not expose a separate registry-build command. Tests cover valid multi-site and empty registries, deterministic ordering, rejection categories, and the projection boundary. Projection construction itself does not write to a provider.
+`internal/registry` rejects unknown and duplicate YAML keys, multiple YAML documents, wrong scalar types, invalid site IDs, malformed repositories, unsafe source paths, and duplicate source pairs, including pairs whose repository locator differs only by case. JSON decoding applies the same uniqueness check. It emits ID-sorted JSON with `sites: []` for an empty mapping. The public `registry register` operation validates the manifest and uses this projection to reconcile the complete desired registration set as part of the same deployment operation; it also cleans content prefixes for sites omitted from that manifest. It does not expose a separate registry-build command. Tests cover valid multi-site and empty registries, deterministic ordering, rejection categories, and the projection boundary. Projection construction itself does not write to a provider.
 
 ## Acceptance criteria
 

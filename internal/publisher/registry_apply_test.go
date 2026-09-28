@@ -58,7 +58,7 @@ sites:
     sourcePath: artifacts
 `
 
-func TestPublishRegistryDryRunMatchesApplyPlanAndDoesNotWrite(t *testing.T) {
+func TestRegisterSitesDryRunMatchesApplyPlanAndDoesNotWrite(t *testing.T) {
 	backend := newRegistryApplyTestBackend()
 	seedRegistryFromManifest(t, backend, currentAdminManifest)
 	backend.seed("_artifacts/legacy/report.html", []byte("legacy artifact"))
@@ -66,9 +66,9 @@ func TestPublishRegistryDryRunMatchesApplyPlanAndDoesNotWrite(t *testing.T) {
 	backend.seed("_previews/legacy/revision/index.html", []byte("preview"))
 	beforeObjects, beforeETags := backend.snapshot()
 
-	planned, err := PublishRegistry(context.Background(), backend, []byte(desiredAdminManifest), true)
+	planned, err := RegisterSites(context.Background(), backend, []byte(desiredAdminManifest), true)
 	if err != nil {
-		t.Fatalf("PublishRegistry(dry-run) error = %v", err)
+		t.Fatalf("RegisterSites(dry-run) error = %v", err)
 	}
 	expected := []Change{
 		{Action: "invalidate", Path: "/_artifacts/legacy/*"},
@@ -96,15 +96,15 @@ func TestPublishRegistryDryRunMatchesApplyPlanAndDoesNotWrite(t *testing.T) {
 	}
 
 	backend.resetCounters()
-	applied, err := PublishRegistry(context.Background(), backend, []byte(desiredAdminManifest), false)
+	applied, err := RegisterSites(context.Background(), backend, []byte(desiredAdminManifest), false)
 	if err != nil {
-		t.Fatalf("PublishRegistry() error = %v", err)
+		t.Fatalf("RegisterSites() error = %v", err)
 	}
 	if !reflect.DeepEqual(applied.Changes, planned.Changes) {
 		t.Fatalf("apply plan = %+v, dry-run plan = %+v", applied.Changes, planned.Changes)
 	}
-	if applied.Outcome != "published" {
-		t.Fatalf("apply outcome = %q, want published", applied.Outcome)
+	if applied.Outcome != "registered" {
+		t.Fatalf("apply outcome = %q, want registered", applied.Outcome)
 	}
 	assertRegistryUpdatedJSON(t, applied, true, false)
 	if len(backend.invalidations) != 1 || !reflect.DeepEqual(backend.invalidations[0], []string{
@@ -131,14 +131,14 @@ func TestPublishRegistryDryRunMatchesApplyPlanAndDoesNotWrite(t *testing.T) {
 	}
 }
 
-func TestPublishRegistryNoOpReportsExplicitFalseAndEmptyChanges(t *testing.T) {
+func TestRegisterSitesNoOpReportsExplicitFalseAndEmptyChanges(t *testing.T) {
 	backend := newRegistryApplyTestBackend()
 	seedRegistryFromManifest(t, backend, desiredAdminManifest)
 	before, _ := backend.snapshot()
 
-	result, err := PublishRegistry(context.Background(), backend, []byte(desiredAdminManifest), false)
+	result, err := RegisterSites(context.Background(), backend, []byte(desiredAdminManifest), false)
 	if err != nil {
-		t.Fatalf("PublishRegistry(no-op) error = %v", err)
+		t.Fatalf("RegisterSites(no-op) error = %v", err)
 	}
 	if result.Outcome != "no-op" || result.Changes == nil || len(result.Changes) != 0 {
 		t.Fatalf("no-op result = %+v, want outcome no-op and a non-nil empty change list", result)
@@ -153,7 +153,7 @@ func TestPublishRegistryNoOpReportsExplicitFalseAndEmptyChanges(t *testing.T) {
 	}
 }
 
-func TestPublishRegistryRetainsPendingCatalogInvalidationWhenCleanupTargetIsRegistered(t *testing.T) {
+func TestRegisterSitesRetainsPendingCatalogInvalidationWhenCleanupTargetIsRegistered(t *testing.T) {
 	backend := newRegistryApplyTestBackend()
 	seedRegistryFromManifest(t, backend, desiredAdminManifest)
 	cleanupBytes, err := json.Marshal(registryCleanupRecord{SchemaVersion: 1, Sites: []string{"docs"}})
@@ -164,9 +164,9 @@ func TestPublishRegistryRetainsPendingCatalogInvalidationWhenCleanupTargetIsRegi
 	backend.failNextInvalidate = true
 	beforeDryRunObjects, beforeDryRunETags := backend.snapshot()
 
-	planned, err := PublishRegistry(context.Background(), backend, []byte(desiredAdminManifest), true)
+	planned, err := RegisterSites(context.Background(), backend, []byte(desiredAdminManifest), true)
 	if err != nil {
-		t.Fatalf("PublishRegistry(dry-run) error = %v", err)
+		t.Fatalf("RegisterSites(dry-run) error = %v", err)
 	}
 	assertRegistryInvalidationPlan(t, planned, []string{"/_indexes/sites.json"})
 	assertNoRegistryApplyWrites(t, backend)
@@ -174,9 +174,9 @@ func TestPublishRegistryRetainsPendingCatalogInvalidationWhenCleanupTargetIsRegi
 		t.Fatal("dry-run changed deployed objects, ETags, or retry record")
 	}
 
-	first, err := PublishRegistry(context.Background(), backend, []byte(desiredAdminManifest), false)
+	first, err := RegisterSites(context.Background(), backend, []byte(desiredAdminManifest), false)
 	if err == nil || !strings.Contains(err.Error(), "cache revalidation failed") {
-		t.Fatalf("PublishRegistry() = %+v, %v; want invalidation failure", first, err)
+		t.Fatalf("RegisterSites() = %+v, %v; want invalidation failure", first, err)
 	}
 	if _, _, err := backend.GetObject(context.Background(), registryCleanupKey); err != nil {
 		t.Fatalf("pending retry record after failed invalidation = %v; want retained", err)
@@ -186,11 +186,11 @@ func TestPublishRegistryRetainsPendingCatalogInvalidationWhenCleanupTargetIsRegi
 	}
 
 	backend.resetCounters()
-	second, err := PublishRegistry(context.Background(), backend, []byte(desiredAdminManifest), false)
+	second, err := RegisterSites(context.Background(), backend, []byte(desiredAdminManifest), false)
 	if err != nil {
-		t.Fatalf("retry PublishRegistry() error = %v", err)
+		t.Fatalf("retry RegisterSites() error = %v", err)
 	}
-	if second.Outcome != "published" {
+	if second.Outcome != "registered" {
 		t.Fatalf("retry outcome = %q; want catalog invalidation retry", second.Outcome)
 	}
 	assertRegistryUpdatedJSON(t, second, false, false)
@@ -240,7 +240,7 @@ func TestUnregisterSiteRetriesRemovedSiteCleanupAfterPostWriteFailures(t *testin
 			if test.name == "listing" && !strings.Contains(err.Error(), "list site") {
 				t.Fatalf("first UnregisterSite() error = %v; want listing failure", err)
 			}
-			if test.name != "listing" && !strings.Contains(err.Error(), "registry published") {
+			if test.name != "listing" && !strings.Contains(err.Error(), "registry updated") {
 				t.Fatalf("first UnregisterSite() error = %v; want post-registry-write %s failure", err, test.name)
 			}
 			assertRegistryUpdatedJSON(t, first, true, false)
@@ -454,7 +454,7 @@ func seedForcedUnregisterFixture(t *testing.T, backend *registryApplyTestBackend
 	}
 }
 
-func TestPublishRegistrySerializesSeparateProcesses(t *testing.T) {
+func TestRegisterSitesSerializesSeparateProcesses(t *testing.T) {
 	root := t.TempDir()
 	manifestPath := filepath.Join(root, "sites.yaml")
 	if err := os.WriteFile(manifestPath, []byte(desiredAdminManifest), 0o600); err != nil {
@@ -464,7 +464,7 @@ func TestPublishRegistrySerializesSeparateProcesses(t *testing.T) {
 	lockReadyPath := filepath.Join(root, "lock-ready")
 	releaseLockPath := filepath.Join(root, "release-lock")
 	holderOutput := &bytes.Buffer{}
-	holder := exec.Command(os.Args[0], "-test.run=^TestPublishRegistryCrossProcessHelper$")
+	holder := exec.Command(os.Args[0], "-test.run=^TestRegisterSitesCrossProcessHelper$")
 	holder.Env = append(os.Environ(),
 		"ARTIFACT_PAGES_REGISTRY_PROCESS_HELPER=hold",
 		"ARTIFACT_PAGES_REGISTRY_ROOT="+storageRoot,
@@ -502,7 +502,7 @@ func TestPublishRegistrySerializesSeparateProcesses(t *testing.T) {
 	registryReadPath := filepath.Join(root, "waiter-read-registry")
 	waiterStartedPath := filepath.Join(root, "waiter-started")
 	waiterOutput := &bytes.Buffer{}
-	waiter := exec.Command(os.Args[0], "-test.run=^TestPublishRegistryCrossProcessHelper$")
+	waiter := exec.Command(os.Args[0], "-test.run=^TestRegisterSitesCrossProcessHelper$")
 	waiter.Env = append(os.Environ(),
 		"ARTIFACT_PAGES_REGISTRY_PROCESS_HELPER=apply",
 		"ARTIFACT_PAGES_REGISTRY_ROOT="+storageRoot,
@@ -513,7 +513,7 @@ func TestPublishRegistrySerializesSeparateProcesses(t *testing.T) {
 	)
 	waiter.Stdout, waiter.Stderr = waiterOutput, waiterOutput
 	if err := waiter.Start(); err != nil {
-		t.Fatalf("start competing registry publish: %v", err)
+		t.Fatalf("start competing registry register: %v", err)
 	}
 	waiterDone := make(chan error, 1)
 	go func() { waiterDone <- waiter.Wait() }()
@@ -532,7 +532,7 @@ func TestPublishRegistrySerializesSeparateProcesses(t *testing.T) {
 		}
 	}()
 	if err := waitForRegistryProcessSignal(waiterStartedPath, 5*time.Second); err != nil {
-		t.Fatalf("registry publish process did not start: %v", err)
+		t.Fatalf("registry register process did not start: %v", err)
 	}
 	deadline := time.Now().Add(5 * time.Second)
 	for {
@@ -570,7 +570,7 @@ func TestPublishRegistrySerializesSeparateProcesses(t *testing.T) {
 	waiterErr := <-waiterDone
 	waiterFinished = true
 	if err := waiterErr; err != nil {
-		t.Fatalf("competing registry publish failed after lock release: %v\n%s", err, waiterOutput.String())
+		t.Fatalf("competing registry register failed after lock release: %v\n%s", err, waiterOutput.String())
 	}
 
 	backend, err := NewDirectoryBackend(storageRoot)
@@ -591,7 +591,7 @@ func TestPublishRegistrySerializesSeparateProcesses(t *testing.T) {
 	}
 }
 
-func TestPublishRegistryCrossProcessHelper(t *testing.T) {
+func TestRegisterSitesCrossProcessHelper(t *testing.T) {
 	mode := os.Getenv("ARTIFACT_PAGES_REGISTRY_PROCESS_HELPER")
 	if mode == "" {
 		return
@@ -630,7 +630,7 @@ func TestPublishRegistryCrossProcessHelper(t *testing.T) {
 			heldObservedPath: os.Getenv("ARTIFACT_PAGES_REGISTRY_HELD_OBSERVED"),
 			registryReadPath: os.Getenv("ARTIFACT_PAGES_REGISTRY_REGISTRY_READ"),
 		}
-		if _, err := PublishRegistry(context.Background(), observingBackend, manifest, false); err != nil {
+		if _, err := RegisterSites(context.Background(), observingBackend, manifest, false); err != nil {
 			t.Fatal(err)
 		}
 	default:

@@ -288,14 +288,14 @@ async function main() {
     run('go', ['build', '-trimpath', '-o', binaryPath, './cmd/artifact-pages'])
 
     const registryPlan = cli(binaryPath, [
-      'registry', 'publish', '--manifest', 'sites.yaml', '--config', '.artifact-pages.yaml', '--dry-run',
+      'registry', 'register', '--manifest', 'sites.yaml', '--config', '.artifact-pages.yaml', '--dry-run',
     ], adminRoot)
-    assertCLI(registryPlan, 'registry publish', 'planned', 'plan admin registry publish with explicit config')
+    assertCLI(registryPlan, 'registry register', 'planned', 'plan admin registry register with explicit config')
     assert(!(await fs.stat(storageRoot).then(() => true, () => false)), 'registry dry-run created the local object target')
 
     // The apply omits --config on purpose: the committed admin checkout config is discovered.
-    const registryApply = cli(binaryPath, ['registry', 'publish', '--manifest', 'sites.yaml'], adminRoot)
-    assertCLI(registryApply, 'registry publish', 'published', 'publish registry from admin checkout config')
+    const registryApply = cli(binaryPath, ['registry', 'register', '--manifest', 'sites.yaml'], adminRoot)
+    assertCLI(registryApply, 'registry register', 'registered', 'register sites from admin checkout config')
     assert((await fs.readFile(path.join(storageRoot, '_indexes/sites.json'), 'utf8')).includes('acme/sre-docs'), 'registry projection does not contain the satellite repository identity')
 
     const beforeSitePlan = await snapshotTree(storageRoot)

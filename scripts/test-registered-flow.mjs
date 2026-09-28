@@ -175,11 +175,14 @@ async function main() {
     run('go', ['build', '-o', binaryPath, './cmd/artifact-pages'])
 
     const adminDryRun = parseResult(run(binaryPath, [
-      'registry', 'publish', '--manifest', 'sites.yaml', '--config', '.artifact-pages.yaml', '--dry-run', '--format', 'json',
-    ], { cwd: adminRoot }), 'registry publish dry-run')
-    assert(adminDryRun.outcome === 'planned', 'registry publish dry-run did not return a planned outcome')
+      'registry', 'register', '--manifest', 'sites.yaml', '--config', '.artifact-pages.yaml', '--dry-run', '--format', 'json',
+    ], { cwd: adminRoot }), 'registry register dry-run')
+    assert(adminDryRun.operation === 'registry register' && adminDryRun.outcome === 'planned', 'registry register dry-run did not return a planned result')
     assert(!(await fs.stat(storageRoot).then(() => true, () => false)), 'admin dry-run created the local object root')
-    run(binaryPath, ['registry', 'publish', '--manifest', 'sites.yaml', '--config', '.artifact-pages.yaml', '--format', 'json'], { cwd: adminRoot })
+    const adminRegister = parseResult(run(binaryPath, [
+      'registry', 'register', '--manifest', 'sites.yaml', '--config', '.artifact-pages.yaml', '--format', 'json',
+    ], { cwd: adminRoot }), 'registry register')
+    assert(adminRegister.operation === 'registry register' && adminRegister.outcome === 'registered', 'registry register did not return a registered result')
 
     const satelliteConfig = path.relative(satelliteRoot, configPath)
     const neighborPublish = parseResult(run(binaryPath, [

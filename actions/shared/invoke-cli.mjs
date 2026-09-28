@@ -25,11 +25,11 @@ function boolInput(name) {
 
 function buildArguments() {
   const kind = process.env.ARTIFACT_PAGES_ACTION_KIND
-  const operation = input('operation') || (kind === 'site' ? 'publish' : 'registry-publish')
+  const operation = input('operation') || (kind === 'site' ? 'publish' : 'registry-register')
   const args = []
 
-  if (kind === 'admin' && operation === 'registry-publish') {
-    args.push('registry', 'publish')
+  if (kind === 'admin' && operation === 'registry-register') {
+    args.push('registry', 'register')
     flag(args, 'manifest', input('manifest') || 'sites.yaml')
     flag(args, 'config', input('config'))
     if (boolInput('dry-run')) args.push('--dry-run')
@@ -81,7 +81,7 @@ function cliOperationName(kind, operation) {
   if (kind === 'site') return 'site publish'
   if (kind === 'admin' && operation === 'app-deploy') return 'app deploy'
   if (kind === 'admin' && operation === 'registry-unregister') return 'registry unregister'
-  if (kind === 'admin') return 'registry publish'
+  if (kind === 'admin') return 'registry register'
   return 'artifact-pages'
 }
 

@@ -61,7 +61,7 @@
       <div class="columns">
         <div>
           <h3>Cloudflare production</h3>
-          <p>The apex uses R2 custom-domain delivery with Cloudflare cache and routing/header rules. The CLI deploys the completed web bundle and publishes static registry, metadata, indexes, artifact bytes, and preview bundles to object storage.</p>
+          <p>The apex uses R2 custom-domain delivery with Cloudflare cache and routing/header rules. The CLI deploys the completed web bundle, registers sites in the static catalog, and publishes metadata, indexes, artifact bytes, and preview bundles to object storage.</p>
           <p>Do not move the application to the Pages or Workers Static Assets deployment model. There is no new request-time application backend. Preserve SPA routing, real reserved-object 404s, private control-object denial, CSP, and the shared cache contract; prove their effective behavior at the real edge.</p>
         </div>
         <div>
@@ -78,7 +78,7 @@
       <ul>
         <li><code>terraform-cloudflare-artifact-pages</code>: R2 bucket, custom-domain connection, Cloudflare cache/routing/header rules, and provider retention. Account/zone/hostname remain caller inputs.</li>
         <li><code>terraform-aws-artifact-pages</code>: private S3, CloudFront/OAC, plus a composed Cloudflare DNS and ACM path for this deployment. Preserve the existing caller-managed DNS/certificate path for other operators; Cloudflare DNS is not a universal AWS prerequisite.</li>
-        <li>DNS and certificate orchestration belong to infrastructure adapters, not <code>sites.yaml</code>, artifact records, or CLI operation semantics. Terraform does not deploy the app, publish the registry, or publish site documents.</li>
+        <li>DNS and certificate orchestration belong to infrastructure adapters, not <code>sites.yaml</code>, artifact records, or CLI operation semantics. Terraform does not deploy the app, register sites, or publish site documents.</li>
       </ul>
       <p>The former AWS module accepts aliases and a caller-provided certificate; it does not yet prove the selected composed DNS/certificate path. <a href="../backlog/implementation/IMP-39-aws-cloudflare-dns-acm.md">IMP-39</a> owns that new slice. <a href="../backlog/implementation/IMP-37-cloudflare-entry-module.md">IMP-37</a> owns the Cloudflare entry point; <a href="../backlog/implementation/IMP-38-terraform-registry-publication.md">IMP-38</a> owns independent module distribution.</p>
     </section>
@@ -100,7 +100,7 @@
       <ol>
         <li>Domain acquisition is owner-confirmed. Next confirm the Cloudflare account/zone identifiers and authoritative-zone state, with credentials outside Git. Keep renewal management separate from provider delivery; no account connection is authorized by this document alone.</li>
         <li>Complete reviewed local module preparation, then inspect a real plan and explicitly authorize apply. Preserve unrelated DNS records and existing zone rules.</li>
-        <li>Deploy the web app, publish the registry, and publish the approved repository documentation through their existing CLI operations.</li>
+        <li>Deploy the web app, reconcile the desired site registrations, and publish the approved repository documentation through their existing CLI operations.</li>
         <li>Record apex Cloudflare DNS/TLS/CDN/storage/browser evidence in <a href="../backlog/verification/T15-provider-delivery.md">T15</a>; repeat independently on the AWS hostname after IMP-39. Actual clean-consumer adoption remains <a href="../backlog/verification/T16-external-adoption.md">T16</a>.</li>
       </ol>
       <p class="note">The owner prefers a short, hours-scale retention setting for lifecycle verification, adjustable later. The current CLI/module contract accepts integer days; do not silently use the 30-day example as an accepted test duration or claim hours-scale deletion has been verified. Provider lifecycle deletion is asynchronous; this domain decision does not change retention configuration or add application-managed expiry.</p>

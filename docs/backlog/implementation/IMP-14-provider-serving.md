@@ -20,7 +20,7 @@ Configure and locally validate AWS and Cloudflare serving boundaries so logical 
 
 - `npm run test:provider-delivery` checks AWS and Cloudflare preview route behavior, SPA exclusions, cache-policy wiring, and non-cached raw misses.
 - `npm run test:e2e` passed all 55 local nginx browser tests, including logical-route reload, raw preview 404s, and catalog, manifest, Markdown, HTML, CSS, script, image, and font responses.
-- `go test ./internal/publisher -run 'TestPreviewObjectMetadataUsesStableInlineContentAndCachePolicies|TestPublishRegistryRetriesRemovedSiteCleanupAfterPostWriteFailures|TestUnregisterSiteRetriesForcedCleanupWhenRegistrationIsAlreadyAbsent' -count=1` passed.
+- `go test ./internal/publisher -run 'TestPreviewObjectMetadataUsesStableInlineContentAndCachePolicies|TestUnregisterSiteRetriesRemovedSiteCleanupAfterPostWriteFailures|TestUnregisterSiteRetriesForcedCleanupWhenRegistrationIsAlreadyAbsent' -count=1` passed.
 - `node scripts/run-edge-profile.mjs cloudflare` passed against local MinIO and a purge mock, verifying preview manifest availability, unregister cleanup, neighboring-site preservation, and purge paths. This does not prove real Cloudflare edge behavior.
 
 ## Product boundary

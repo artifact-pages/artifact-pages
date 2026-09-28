@@ -86,7 +86,7 @@ STORAGE_ROOT=./.local/storage npm run serve:local
 
 `/_control/` is reserved for private coordination records and nginx returns 404 for it.
 
-For a local registry and separate satellite checkout workflow, see [Local registered-site development](docs/guides/local-registered-sites.md). It uses the same `registry publish`, `site publish`, and `registry unregister` operations used with AWS and Cloudflare.
+For a local registry and separate satellite checkout workflow, see [Local registered-site development](docs/guides/local-registered-sites.md). It uses the same `registry register`, `site publish`, and `registry unregister` operations used with AWS and Cloudflare.
 
 On first use, install the Playwright Chromium browser, then run the end-to-end checks against the production build served by nginx:
 

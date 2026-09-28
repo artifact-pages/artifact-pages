@@ -291,12 +291,12 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 			writeRegistryUsage(stdout)
 			return nil
 		}
-		if args[1] == "publish" {
+		if args[1] == "register" {
 			if len(args) < 3 || args[2] == "--help" || args[2] == "-h" {
-				writeRegistryPublishUsage(stdout)
+				writeRegistryRegisterUsage(stdout)
 				return nil
 			}
-			return runRegistryPublish(ctx, args[2:], stdout, stderr)
+			return runRegistryRegister(ctx, args[2:], stdout, stderr)
 		}
 		if args[1] == "unregister" {
 			if len(args) < 3 || args[2] == "--help" || args[2] == "-h" {
@@ -378,10 +378,10 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	return nil
 }
 
-func runRegistryPublish(ctx context.Context, args []string, stdout, stderr io.Writer) error {
-	flags := flag.NewFlagSet("artifact-pages registry publish", flag.ContinueOnError)
+func runRegistryRegister(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	flags := flag.NewFlagSet("artifact-pages registry register", flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	flags.Usage = func() { writeRegistryPublishUsage(stderr) }
+	flags.Usage = func() { writeRegistryRegisterUsage(stderr) }
 	manifestPath := flags.String("manifest", "sites.yaml", "Git-owned YAML registry manifest")
 	configLocator := flags.String("config", "", "local path or github://OWNER/REPO/FILE?ref=REF deployment config locator")
 	dryRun := flags.Bool("dry-run", false, "show planned changes without writes, deletes, lock recovery, or cache changes")
@@ -413,7 +413,7 @@ func runRegistryPublish(ctx context.Context, args []string, stdout, stderr io.Wr
 	if err != nil {
 		return withResolvedError(err, resolved)
 	}
-	result, err := publisher.PublishRegistry(ctx, backend, manifestBytes, *dryRun)
+	result, err := publisher.RegisterSites(ctx, backend, manifestBytes, *dryRun)
 	if err != nil {
 		return withResolvedResult(err, result, resolved)
 	}
@@ -426,7 +426,7 @@ func runRegistryPublish(ctx context.Context, args []string, stdout, stderr io.Wr
 	case "no-op":
 		fmt.Fprintf(stdout, "Registry is already up to date via %s.\n", resolved.Config.Provider)
 	default:
-		fmt.Fprintf(stdout, "Published registry via %s.\n", resolved.Config.Provider)
+		fmt.Fprintf(stdout, "Registered sites via %s.\n", resolved.Config.Provider)
 	}
 	reportConfigCommit(stdout, resolved)
 	return nil
@@ -797,7 +797,7 @@ func writeRootUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  app deploy    Deploy a versioned SPA bundle to a static hosting origin")
 	fmt.Fprintln(writer, "  site publish  Build and publish one site's artifacts and index")
 	fmt.Fprintln(writer, "  preview publish  Build and publish one explicit site's review preview")
-	fmt.Fprintln(writer, "  registry publish  Validate and publish the Git-owned site registry")
+	fmt.Fprintln(writer, "  registry register  Reconcile the Git-owned site registrations")
 	fmt.Fprintln(writer, "  registry unregister  Remove a site's registration and stored projection")
 	fmt.Fprintln(writer, "  config set-default  Save the user's default deployment config locator")
 	fmt.Fprintln(writer, "  lock inspect|recover  Inspect or guardedly recover a site lock")
@@ -887,17 +887,17 @@ func writeConfigUsage(writer io.Writer) {
 
 func writeRegistryUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "Usage:")
-	fmt.Fprintln(writer, "  artifact-pages registry publish [--manifest sites.yaml] [--config LOCATOR] [--dry-run] [--format text|json]")
+	fmt.Fprintln(writer, "  artifact-pages registry register [--manifest sites.yaml] [--config LOCATOR] [--dry-run] [--format text|json]")
 	fmt.Fprintln(writer, "  artifact-pages registry unregister --site ID [--manifest sites.yaml] [--config LOCATOR] [--dry-run] [--format text|json]")
 	fmt.Fprintln(writer, "")
-	fmt.Fprintln(writer, "Validate, project and publish the Git-owned registry in one operation.")
+	fmt.Fprintln(writer, "Validate and reconcile the complete set of Git-owned site registrations.")
 }
 
-func writeRegistryPublishUsage(writer io.Writer) {
+func writeRegistryRegisterUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "Usage:")
-	fmt.Fprintln(writer, "  artifact-pages registry publish [--manifest sites.yaml] [--config LOCATOR] [--dry-run] [--format text|json]")
+	fmt.Fprintln(writer, "  artifact-pages registry register [--manifest sites.yaml] [--config LOCATOR] [--dry-run] [--format text|json]")
 	fmt.Fprintln(writer, "")
-	fmt.Fprintln(writer, "Validate sites.yaml, build its deterministic JSON projection, and publish that projection.")
+	fmt.Fprintln(writer, "Validate sites.yaml and reconcile its deterministic registry projection; sites omitted from the manifest are unregistered and cleaned on apply.")
 }
 
 func writeRegistryUnregisterUsage(writer io.Writer) {

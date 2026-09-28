@@ -12,15 +12,16 @@ import (
 	"github.com/tasuku43/git-artifact-pages/internal/registry"
 )
 
-// PublishRegistry validates and deploys the Git-owned YAML registry. A real
-// apply holds a registry lock and site locks for changed existing identities;
-// a dry-run is read-only and returns the same sorted plan.
-func PublishRegistry(ctx context.Context, backend DeploymentBackend, manifest []byte, dryRun bool) (Result, error) {
+// RegisterSites validates and reconciles the complete Git-owned registration
+// set. A real apply holds a registry lock and site locks for changed existing
+// identities; sites omitted from the manifest are unregistered and cleaned.
+// A dry-run is read-only and returns the same sorted plan.
+func RegisterSites(ctx context.Context, backend DeploymentBackend, manifest []byte, dryRun bool) (Result, error) {
 	desiredBytes, desired, err := registry.Build(manifest)
 	if err != nil {
 		return Result{}, err
 	}
-	return applyRegistryProjection(ctx, backend, desiredBytes, desired, dryRun, nil, "registry publish")
+	return applyRegistryProjection(ctx, backend, desiredBytes, desired, dryRun, nil, "registry register")
 }
 
 // UnregisterSite requires the selected site to have been removed from the
@@ -172,14 +173,14 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 				Bytes: desiredBytes, ContentType: "application/json; charset=utf-8", ContentDisposition: "inline",
 				Cache: indexCacheControl, Metadata: map[string]string{"artifact-pages-sha256": sha256Hex(desiredBytes)},
 			}, condition); err != nil {
-				return result, fmt.Errorf("publish registry projection: %w", err)
+				return result, fmt.Errorf("write registry projection: %w", err)
 			}
 			*result.RegistryUpdated = true
 		}
 		if len(cleanupIDs) > 0 {
 			cleanupLocks, err := acquireSiteLocks(ctx, manager, cleanupIDs)
 			if err != nil {
-				return result, fmt.Errorf("registry published; acquire removed site locks: %w", err)
+				return result, fmt.Errorf("registry updated; acquire removed site locks: %w", err)
 			}
 			locks = append(locks, cleanupLocks...)
 		}
@@ -188,7 +189,7 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 		}
 		if len(cleanupKeys) > 0 {
 			if err := backend.DeleteObjects(ctx, cleanupKeys); err != nil {
-				return result, fmt.Errorf("registry published; clean removed site data: %w", err)
+				return result, fmt.Errorf("registry updated; clean removed site data: %w", err)
 			}
 		}
 		result.FilesRemoved = len(cleanupKeys)
@@ -200,7 +201,7 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 			paths = append(paths, "/"+siteID, "/"+siteID+"/*", "/_indexes/"+siteID+"/*", "/_artifacts/"+siteID+"/*", "/_previews/"+siteID+"/*")
 		}
 		if _, err := backend.Invalidate(ctx, paths); err != nil {
-			return result, fmt.Errorf("registry published; cache revalidation failed: %w", err)
+			return result, fmt.Errorf("registry updated; cache revalidation failed: %w", err)
 		}
 		if pendingETag != "" || len(cleanupIDs) > 0 {
 			if err := clearRegistryCleanup(ctx, backend); err != nil {
@@ -210,7 +211,7 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 		if operationName == "registry unregister" {
 			result.Outcome = "unregistered"
 		} else {
-			result.Outcome = "published"
+			result.Outcome = "registered"
 		}
 		return result, nil
 	}

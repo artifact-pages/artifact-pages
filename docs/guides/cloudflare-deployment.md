@@ -18,7 +18,7 @@ Copy [the example deployment config](../../examples/cloudflare/deployment.yaml.e
 
 Set `CF_R2_ACCESS_KEY_ID` and `CF_R2_SECRET_ACCESS_KEY` for the satellite's R2 write credential. If Cloudflare issued temporary R2 credentials, set `CF_R2_SESSION_TOKEN`; `sessionTokenEnv` passes it through to the S3-compatible client. Configure `registryReaderAccessKeyIdEnv` and `registryReaderSecretAccessKeyEnv` for the separate read-only registry credential, with `registryReaderSessionTokenEnv` when it is temporary. The CLI does not mint or refresh these credentials.
 
-`site publish` does not purge the public cache and can run with only its R2 credentials. Registry changes, unregister, and app deployment can invalidate public URLs and need `CF_API_TOKEN` as well. Keep the zone purge token and parent R2 credentials in the admin deployment.
+`site publish` does not purge the public cache and can run with only its R2 credentials. `registry register`, `registry unregister`, and app deployment can invalidate public URLs and need `CF_API_TOKEN` as well. Keep the zone purge token and parent R2 credentials in the admin deployment.
 
 R2 temporary credentials support one bucket-level operation scope (`object-read-only` or `object-read-write`) plus exact object and prefix restrictions. The satellite receives two credentials: a read-only credential scoped to the exact `_indexes/sites.json` object, and a read/write credential scoped to `_indexes/<site>/`, `_artifacts/<site>/`, `_previews/<site>/`, and the exact `_control/locks/sites/<site>.json` object. The CLI uses the first only to read the registry and the second for site publication. Do not combine the registry object with the read/write credential, because R2 would then permit the satellite to overwrite it.
 
@@ -58,9 +58,9 @@ artifact-pages site publish \
 
 The deployed registry remains the source of publication eligibility. The remote config locator is deployment input, not an authorization boundary. The object-level reader credential keeps registry reads separate from the satellite's scoped write credential; R2 path restrictions still apply to a single bucket and permission scope per credential.
 
-## 3. Publish the app and registry
+## 3. Deploy the app and register sites
 
-From the admin repository, configure the Terraform provider token for infrastructure changes and then deploy the application bundle and site registry:
+From the admin repository, configure the Terraform provider token for infrastructure changes and then deploy the application bundle and reconcile the complete site registration set:
 
 ```sh
 terraform -chdir=examples/cloudflare/terraform init
@@ -71,11 +71,11 @@ terraform -chdir=examples/cloudflare/terraform apply -var-file=terraform.tfvars
 
 artifact-pages app deploy --version 1.2.3 --config .artifact-pages.yaml --dry-run
 artifact-pages app deploy --version 1.2.3 --config .artifact-pages.yaml
-artifact-pages registry publish --manifest sites.yaml --config .artifact-pages.yaml --dry-run
-artifact-pages registry publish --manifest sites.yaml --config .artifact-pages.yaml
+artifact-pages registry register --manifest sites.yaml --config .artifact-pages.yaml --dry-run
+artifact-pages registry register --manifest sites.yaml --config .artifact-pages.yaml
 ```
 
-The versioned app bundle is verified before deployment. Registry publication writes the deterministic registry projection and can clean up sites removed from the desired manifest. For that cleanup and its public URL invalidations, provide the R2 and Cloudflare zone API credentials.
+The versioned app bundle is verified before deployment. `registry register` writes the deterministic registry projection for the complete desired set and cleans content prefixes for sites omitted from `sites.yaml`. For that cleanup and its public URL invalidations, provide the R2 and Cloudflare zone API credentials.
 
 With the separate read-only registry and read/write site credentials configured, each satellite repository can run the dry-run, inspect its site change plan, and publish one explicit registered site:
 

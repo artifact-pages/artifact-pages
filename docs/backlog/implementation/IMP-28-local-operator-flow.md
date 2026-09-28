@@ -13,7 +13,7 @@ The shared local path is documented in [Local registered-site development](../..
 
 ## Acceptance criteria
 
-- One documented local sequence applies registry, publishes selected source, browses it through the SPA, updates/removes stale files, then unregisters the site.
+- One documented local sequence registers the complete manifest, publishes selected source, browses it through the SPA, updates/removes stale files, then unregisters the site.
 - Satellite uses the deployed registry and shared config target, not a copied `sites.yaml`; a second site remains untouched.
 - Tests include site discovery, relative HTML/Markdown resources, reload/deep-link and failure/retry boundaries; generated state remains ignored under `.local/`.
 

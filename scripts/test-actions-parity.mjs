@@ -90,7 +90,7 @@ async function assertCompositeActionWiring() {
     assert.deepEqual(actualInputs, [...contract.inputs].sort(), `${kind} Action input contract changed`)
     assert.deepEqual(actualOutputs, [...contract.outputs].sort(), `${kind} Action output contract changed`)
     if (kind === 'admin') {
-      assert.equal(sectionProperties(source, 'inputs', 'operation').default, 'registry-publish', 'admin Action must default to registry publish')
+      assert.equal(sectionProperties(source, 'inputs', 'operation').default, 'registry-register', 'admin Action must default to registry register')
     }
 
     const step = parseCliStep(source)
@@ -158,7 +158,7 @@ async function assertWorkflowExamples() {
   const examples = (await fs.readdir(exampleDirectory)).filter((name) => name.endsWith('.yml')).sort()
   assert.deepEqual(examples, [
     'admin-app-deploy.yml',
-    'admin-registry-publish.yml',
+    'admin-registry-register.yml',
     'satellite-preview.yml',
     'satellite-publish.yml',
   ], 'workflow examples must name the public operations they invoke')
@@ -178,9 +178,9 @@ async function assertWorkflowExamples() {
     assert.doesNotMatch(source, /workflow_call|contents:\s+write/, `${name} should not add a reusable workflow or broad GitHub token permissions`)
   }
 
-  const admin = await fs.readFile(path.join(exampleDirectory, 'admin-registry-publish.yml'), 'utf8')
-  assert.match(admin, /ARTIFACT_PAGES_REGISTRY_PUBLISH_ROLE_ARN/, 'registry workflow must use the registry publication role')
-  assert.match(admin, /operation: registry-publish/, 'registry workflow must call the registry operation')
+  const admin = await fs.readFile(path.join(exampleDirectory, 'admin-registry-register.yml'), 'utf8')
+  assert.match(admin, /ARTIFACT_PAGES_REGISTRY_PUBLISH_ROLE_ARN/, 'registry workflow must use the registry admin role')
+  assert.match(admin, /operation: registry-register/, 'registry workflow must call the registry register operation')
   const app = await fs.readFile(path.join(exampleDirectory, 'admin-app-deploy.yml'), 'utf8')
   assert.match(app, /ARTIFACT_PAGES_APP_DEPLOY_ROLE_ARN/, 'application workflow must use the app-plane role')
   const satellite = await fs.readFile(path.join(exampleDirectory, 'satellite-publish.yml'), 'utf8')
@@ -601,31 +601,33 @@ async function main() {
     commit(satelliteRoot, 'Add SRE artifact')
     run('go', ['build', '-o', binaryPath, './cmd/artifact-pages'])
 
-    const registryApplyArgs = ['registry', 'publish', '--manifest', 'sites.yaml', '--config', '.artifact-pages.yaml', '--format', 'json']
-    const initialRegistry = runDirect(binaryPath, adminRoot, registryApplyArgs, 'initial registry publish')
-    assert.equal(initialRegistry.exitCode, 0, `initial registry publish failed: ${JSON.stringify(initialRegistry.result)}`)
-    const actionInitialRegistry = await runAction('admin', 'registry-publish', registryApplyArgs, {
+    const registryApplyArgs = ['registry', 'register', '--manifest', 'sites.yaml', '--config', '.artifact-pages.yaml', '--format', 'json']
+    const initialRegistry = runDirect(binaryPath, adminRoot, registryApplyArgs, 'initial registry register')
+    assert.equal(initialRegistry.exitCode, 0, `initial registry register failed: ${JSON.stringify(initialRegistry.result)}`)
+    assert.equal(initialRegistry.result.operation, 'registry register', 'registry Action must invoke the registry register operation')
+    assert.equal(initialRegistry.result.outcome, 'registered', 'registry register must return the registered outcome')
+    const actionInitialRegistry = await runAction('admin', 'registry-register', registryApplyArgs, {
       manifest: 'sites.yaml', config: '.artifact-pages-action.yaml',
     }, adminRoot, binaryPath, scratchRoot)
-    assertActionParity(initialRegistry, actionInitialRegistry, 'registry publish')
+    assertActionParity(initialRegistry, actionInitialRegistry, 'registry register')
 
-    const registryArgs = ['registry', 'publish', '--manifest', 'sites.yaml', '--config', '.artifact-pages.yaml', '--dry-run', '--format', 'json']
+    const registryArgs = ['registry', 'register', '--manifest', 'sites.yaml', '--config', '.artifact-pages.yaml', '--dry-run', '--format', 'json']
     const registryStorageBeforeDryRun = await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)])
-    const directRegistry = runDirect(binaryPath, adminRoot, registryArgs, 'direct registry publish dry-run')
-    const actionRegistry = await runAction('admin', 'registry-publish', registryArgs, {
+    const directRegistry = runDirect(binaryPath, adminRoot, registryArgs, 'direct registry register dry-run')
+    const actionRegistry = await runAction('admin', 'registry-register', registryArgs, {
       manifest: 'sites.yaml', config: '.artifact-pages-action.yaml', 'dry-run': 'true',
     }, adminRoot, binaryPath, scratchRoot)
-    assertActionParity(directRegistry, actionRegistry, 'registry publish dry-run')
-    assert.deepEqual(await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)]), registryStorageBeforeDryRun, 'registry publish dry-run changed local storage')
+    assertActionParity(directRegistry, actionRegistry, 'registry register dry-run')
+    assert.deepEqual(await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)]), registryStorageBeforeDryRun, 'registry register dry-run changed local storage')
 
-    const invalidRegistryArgs = ['registry', 'publish', '--manifest', 'missing-sites.yaml', '--config', '.artifact-pages.yaml', '--format', 'json']
+    const invalidRegistryArgs = ['registry', 'register', '--manifest', 'missing-sites.yaml', '--config', '.artifact-pages.yaml', '--format', 'json']
     const invalidRegistryStorageBefore = await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)])
-    const directInvalidRegistry = runDirect(binaryPath, adminRoot, invalidRegistryArgs, 'registry publish invalid manifest')
+    const directInvalidRegistry = runDirect(binaryPath, adminRoot, invalidRegistryArgs, 'registry register invalid manifest')
     assert.equal(directInvalidRegistry.exitCode, 2, 'invalid registry manifest should preserve the CLI usage/validation exit class')
-    const actionInvalidRegistry = await runAction('admin', 'registry-publish', invalidRegistryArgs, {
+    const actionInvalidRegistry = await runAction('admin', 'registry-register', invalidRegistryArgs, {
       manifest: 'missing-sites.yaml', config: '.artifact-pages-action.yaml',
     }, adminRoot, binaryPath, scratchRoot)
-    assertActionParity(directInvalidRegistry, actionInvalidRegistry, 'registry publish invalid manifest')
+    assertActionParity(directInvalidRegistry, actionInvalidRegistry, 'registry register invalid manifest')
     assert.deepEqual(await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)]), invalidRegistryStorageBefore, 'invalid registry manifest changed local storage')
 
     const unregisterArgs = ['registry', 'unregister', '--site', 'sre', '--manifest', 'sites-without-sre.yaml', '--config', '.artifact-pages.yaml', '--dry-run', '--format', 'json']
@@ -644,11 +646,11 @@ async function main() {
     }, adminRoot, binaryPath, scratchRoot)
     assertActionParity(directUnregisterApply, actionUnregisterApply, 'registry unregister')
 
-    const republishRegistry = runDirect(binaryPath, adminRoot, registryApplyArgs, 'registry republish')
-    const actionRepublishRegistry = await runAction('admin', 'registry-publish', registryApplyArgs, {
+    const reregisterRegistry = runDirect(binaryPath, adminRoot, registryApplyArgs, 'registry reregister')
+    const actionReregisterRegistry = await runAction('admin', 'registry-register', registryApplyArgs, {
       manifest: 'sites.yaml', config: '.artifact-pages-action.yaml',
     }, adminRoot, binaryPath, scratchRoot)
-    assertActionParity(republishRegistry, actionRepublishRegistry, 'registry republish')
+    assertActionParity(reregisterRegistry, actionReregisterRegistry, 'registry reregister')
 
     const siteArgs = ['site', 'publish', '--site', 'sre', '--source', 'docs/artifacts', '--config', '.artifact-pages.yaml', '--dry-run', '--format', 'json']
     const siteStorageBeforeDryRun = await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)])
@@ -737,7 +739,7 @@ async function main() {
     const actionPreviewCatalog = JSON.parse(await fs.readFile(path.join(actionStorageRoot, '_previews', 'sre', 'catalog.json'), 'utf8'))
     assert.equal(actionPreviewCatalog.groups.length, 1, 'preview Action should publish the expected manual group')
     assert.equal(actionPreviewCatalog.groups[0].headSha, previewHeadSHA, 'preview Action should select the exact requested Git head without checking it out')
-    assert.deepEqual(await fs.readFile(path.join(actionStorageRoot, '_previews', 'sre', 'revisions', previewHeadSHA, 'files', 'extra%20data.json'), 'utf8'), '{"generated":true}\n', 'preview Action should publish explicitly included non-document resources')
+    assert.deepEqual(await fs.readFile(path.join(actionStorageRoot, '_previews', 'sre', 'revisions', previewHeadSHA, 'files', 'extra data.json'), 'utf8'), '{"generated":true}\n', 'preview Action should publish explicitly included non-document resources with its original UTF-8 filename')
     git(satelliteRoot, 'checkout', 'main')
 
     const missingHead = 'ffffffffffffffffffffffffffffffffffffffff'

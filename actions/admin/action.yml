@@ -2,9 +2,9 @@ name: Artifact Pages admin
 description: Optional thin wrapper for admin registry operations and application deployment.
 inputs:
   operation:
-    description: "CLI operation: registry-publish, registry-unregister, or app-deploy."
+    description: "CLI operation: registry-register, registry-unregister, or app-deploy."
     required: false
-    default: registry-publish
+    default: registry-register
   manifest:
     description: Admin-owned sites manifest path, relative to the checked-out repository.
     required: false
@@ -42,7 +42,7 @@ outputs:
     description: CLI operation name.
     value: ${{ steps.cli.outputs.operation }}
   outcome:
-    description: CLI outcome string, such as planned, published, no-op, or failed.
+    description: CLI outcome string, such as planned, registered, unregistered, deployed, no-op, or failed.
     value: ${{ steps.cli.outputs.outcome }}
   site:
     description: Explicit site ID when the selected operation applies to one site.

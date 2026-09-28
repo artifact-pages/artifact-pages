@@ -15,7 +15,7 @@ The runner needs Node.js, Go, Git, and `tar`. It needs no cloud credentials, net
 The run performs these steps in one clean-room scenario:
 
 1. Initializes and commits an `acme/platform-admin` repository and an independent `acme/sre-docs` repository. The admin owns `.artifact-pages.yaml` and `sites.yaml`; the satellite has neither file.
-2. Plans registry publication with an explicit admin config, then publishes from the admin checkout's committed default config.
+2. Plans registration of the complete site manifest with an explicit admin config, then reconciles from the admin checkout's committed default config.
 3. Plans and publishes the `sre` and `neighbor` sites from the satellite checkout with the explicit config path `../platform-admin/.artifact-pages.yaml`. The CLI checks the satellite Git identity and exact source path against the registry.
 4. Runs a site publish dry-run and checks the object target remains byte-for-byte unchanged.
 5. Simulates a process that left the SRE site lock held. It confirms that recovery with an ETag captured before the lock changed fails, then inspects and recovers with the current ETag.
@@ -28,7 +28,7 @@ The two app archives are generated test fixtures, not published Artifact Pages r
 
 ## Roles and trust boundaries
 
-- The **admin repository** owns the desired site registry and the deployment target config. Registry publishing and unregistering can change discovery and clean removed site prefixes. Restrict those workflows to reviewed changes and protected environments.
+- The **admin repository** owns the complete desired site manifest and the deployment target config. `registry register` reconciles the full registration set and cleans content prefixes for sites omitted from the manifest; `registry unregister` performs explicit site cleanup. Restrict those workflows to reviewed changes and protected environments.
 - A **satellite workflow** publishes an explicitly selected site ID and source path. The publisher checks the Git origin identity and the exact registered source path. The site is never inferred from the repository name.
 - The **web app bundle** contains only the stable application plane (`index.html` and assets). Deploying it leaves site indexes, artifacts, and previews alone. Keep app deployment credentials separate from registry and per-site credentials.
 - Published HTML artifacts execute in an unsandboxed iframe. Treat HTML and its referenced JavaScript as trusted executable code and review the source before publication. Markdown is sanitized before it is rendered in the application.

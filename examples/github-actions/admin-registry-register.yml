@@ -1,4 +1,4 @@
-name: Publish Artifact Pages registry
+name: Register Artifact Pages sites
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   id-token: write
 
 jobs:
-  publish-registry:
+  register-sites:
     runs-on: ubuntu-24.04
     environment: artifact-pages-production
     steps:
@@ -26,20 +26,20 @@ jobs:
           aws-region: us-east-1
           role-session-name: artifact-pages-admin-${{ github.run_id }}
 
-      - name: Publish the committed registry
-        id: publish-registry
+      - name: Register the committed sites
+        id: register-sites
         uses: tasuku43/git-artifact-pages/actions/admin@<FULL_REVIEWED_ACTION_COMMIT_SHA>
         with:
-          operation: registry-publish
+          operation: registry-register
           manifest: sites.yaml
           config: .artifact-pages.yaml
 
       - name: Use the typed CLI result
         if: always()
         env:
-          OUTCOME: ${{ steps.publish-registry.outputs.outcome }}
-          EXIT_CODE: ${{ steps.publish-registry.outputs.exit_code }}
-          RESULT_JSON: ${{ steps.publish-registry.outputs.result_json }}
+          OUTCOME: ${{ steps.register-sites.outputs.outcome }}
+          EXIT_CODE: ${{ steps.register-sites.outputs.exit_code }}
+          RESULT_JSON: ${{ steps.register-sites.outputs.result_json }}
         run: |
           printf 'Artifact Pages outcome=%s exit_code=%s\n' "$OUTCOME" "$EXIT_CODE"
           printf '%s\n' "$RESULT_JSON"

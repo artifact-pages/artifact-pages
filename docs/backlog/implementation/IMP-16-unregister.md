@@ -7,7 +7,7 @@
 
 ## Outcome
 
-Under the shared per-site lock, `registry unregister` withdraws the site and removes its preview catalog, manifests and bundle objects together with its production projection. Concurrent publishers must not recreate the removed site after registry withdrawal.
+Under the shared per-site lock, `registry unregister` withdraws the site's registration and removes its preview catalog, manifests and bundle objects together with its production projection. Concurrent publishers must not recreate the removed site after unregister.
 
 ## Acceptance criteria
 

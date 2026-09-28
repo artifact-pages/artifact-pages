@@ -294,19 +294,19 @@
 
     <article class="flow-row" aria-label="Site registration projection">
       <section>
-        <div class="flow-name"><span class="step-number">2</span><span>Register or update a site</span></div>
+        <div class="flow-name"><span class="step-number">2</span><span>Reconcile the registration set</span></div>
         <p class="node-sub" style="margin-top:9px">The admin repository's<br><code>sites.yaml</code></p>
       </section>
       <section>
-        <p class="node-title">Validate and project to JSON</p>
-        <p class="node-sub">Validate YAML keyed by site ID and emit a JSON array sorted by ID. Name, repository, and sourcePath define the registration.</p>
-        <span class="flow-arrow write">→ Update only when registrations change</span>
+        <p class="node-title">Reconcile the complete manifest</p>
+        <p class="node-sub">Validate YAML keyed by site ID and emit an ID-sorted JSON array. Name, repository, and sourcePath define each registration.</p>
+        <span class="flow-arrow write">→ Unregister omitted sites and clean their content prefixes</span>
       </section>
       <section>
         <div class="object-list">
           <div class="object write-object"><span class="verb write">Write</span><div class="object-detail"><code>/_indexes/sites.json</code><small>Site list and repository / sourcePath mapping for publish validation.</small></div></div>
         </div>
-        <p class="node-sub" style="margin-top:7px">Routine site publishing does not modify this registry object.</p>
+        <p class="node-sub" style="margin-top:7px"><code>registry register</code> reconciles membership to the complete manifest. Routine site publishing does not modify this object.</p>
       </section>
       <section>
         <p class="node-title">Two readers</p>

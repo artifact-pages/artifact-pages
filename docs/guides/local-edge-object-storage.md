@@ -18,7 +18,7 @@ node scripts/run-edge-profile.mjs cloudflare
 node scripts/run-edge-profile.mjs gcp
 ```
 
-Each command resets the profile's object projection to committed fixtures, builds the SPA, starts the origin and nginx edge, and waits for origin and edge readiness. It runs `artifact-pages site publish` against the configured adapter, then uses `artifact-pages registry publish` to add a temporary site entry through the same object API. The runner verifies that the edge can read both the changed site index and changed catalog without rebuilding the SPA, runs the object-storage conformance test against the live emulator, restores the committed fixture projection, and runs `e2e/local-serving.spec.ts` against nginx with one worker for repeatability. A successful command leaves the profile running at `http://127.0.0.1:8081`.
+Each command resets the profile's object projection to committed fixtures, builds the SPA, starts the origin and nginx edge, and waits for origin and edge readiness. It runs `artifact-pages site publish` against the configured adapter, then registers a temporary site by reconciling the complete manifest through the same object API, including cleanup of content for any omitted sites. The runner verifies that the edge can read both the changed site index and changed catalog without rebuilding the SPA, runs the object-storage conformance test against the live emulator, restores the committed fixture projection, and runs `e2e/local-serving.spec.ts` against nginx with one worker for repeatability. A successful command leaves the profile running at `http://127.0.0.1:8081`.
 
 To stop a profile:
 

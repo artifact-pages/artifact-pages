@@ -439,20 +439,20 @@ async function main() {
 
     const registryManifestPath = path.join(stateDir, 'registry-probe.yaml')
     await writeRegistryProbeManifest(registryManifestPath)
-    const registryPublish = run('go', [
-      'run', './cmd/artifact-pages', 'registry', 'publish', '--config', configPath,
+    const registryRegister = run('go', [
+      'run', './cmd/artifact-pages', 'registry', 'register', '--config', configPath,
       '--manifest', registryManifestPath, '--format=json',
     ], { env: commandEnv, stdio: 'pipe' })
-    process.stdout.write(registryPublish.stdout)
-    if (registryPublish.stderr) process.stderr.write(registryPublish.stderr)
+    process.stdout.write(registryRegister.stdout)
+    if (registryRegister.stderr) process.stderr.write(registryRegister.stderr)
     let registryResult
     try {
-      registryResult = JSON.parse(registryPublish.stdout)
+      registryResult = JSON.parse(registryRegister.stdout)
     } catch {
-      throw new Error(`registry publish did not return JSON: ${registryPublish.stdout}`)
+      throw new Error(`registry register did not return JSON: ${registryRegister.stdout}`)
     }
-    if (registryResult.outcome !== 'published' || registryResult.registryUpdated !== true) {
-      throw new Error('registry publish did not publish a changed site catalog through the object API.')
+    if (registryResult.operation !== 'registry register' || registryResult.outcome !== 'registered' || registryResult.registryUpdated !== true) {
+      throw new Error('registry register did not register a changed site catalog through the object API.')
     }
 
     const catalogResponse = await fetch(`http://127.0.0.1:${ports.edge}/_indexes/sites.json`)

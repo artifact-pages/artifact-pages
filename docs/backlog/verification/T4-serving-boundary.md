@@ -15,7 +15,7 @@ Direct preview URLs work without catalog membership; a missing raw file is a rea
 - [ ] Verify iframe CSS containment and intentionally allowed parent-DOM/test-key storage access with benign preview fixtures; verify Markdown script sanitization separately. Former parent-isolation and blanket blocked-fetch assertions are not the accepted HTML contract.
 - [ ] Verify browser/CDN cache behavior for mutable catalog responses and removed objects.
 - [ ] Verify fixed-name app assets in an already-cached browser during upgrade and rollback, not only origin bytes ([ISSUE-019](../issues/ISSUE-019-unhashed-app-asset-cache.md)).
-- [ ] Inject invalidation-only failure for registry addition and app deployment, then retry and record request/freshness behavior. The review observed retries becoming no-ops; determine whether each mutable-path contract converges. Keep this proof separate from the resolved unpublish retry defect.
+- [ ] Inject invalidation-only failure for registry registration and app deployment, then retry and record request/freshness behavior. The review observed retries becoming no-ops; determine whether each mutable-path contract converges. Keep this proof separate from the resolved unregister-cleanup retry defect.
 - [ ] Verify provider route and cache behavior for catalog, manifest, HTML/Markdown, local resources, and removed objects. Do not treat customer-managed viewer-access policy as a product feature or completion criterion.
 
 ## Evidence

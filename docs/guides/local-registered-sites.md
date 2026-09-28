@@ -1,6 +1,6 @@
 # Local registered-site development
 
-This workflow exercises registry eligibility and publishing across two Git checkouts without cloud credentials. The local provider writes the same `/_indexes/`, `/_artifacts/`, and `/_previews/` object keys as the remote adapters. `DeploymentBackend` owns the filesystem mapping and cross-process conditional writes; the registry and site reconciliation code does not branch on local, AWS, or Cloudflare.
+This workflow exercises registry registration and site publishing across two Git checkouts without cloud credentials. The local provider writes the same `/_indexes/`, `/_artifacts/`, and `/_previews/` object keys as the remote adapters. `DeploymentBackend` owns the filesystem mapping and cross-process conditional writes; the registry and site reconciliation code does not branch on local, AWS, or Cloudflare.
 
 Build the command from the Git Artifact Pages product checkout and make it available on `PATH` before using it in the admin and satellite repositories:
 
@@ -31,11 +31,11 @@ sites:
     sourcePath: docs/artifacts
 ~~~
 
-Publish the registry from the admin checkout in one operation. Then, from the Git Artifact Pages product checkout, start nginx against the admin checkout's output and leave it running. Publish from the satellite checkout in a second terminal, and browse through `http://localhost:4173/`. The examples assume `platform-admin` and `git-artifact-pages` are sibling directories:
+Register the complete site set from the admin checkout in one operation. `registry register` reconciles the deployed registry to `sites.yaml` and cleans content prefixes for sites omitted from that manifest. Then, from the Git Artifact Pages product checkout, start nginx against the admin checkout's output and leave it running. Publish from the satellite checkout in a second terminal, and browse through `http://localhost:4173/`. The examples assume `platform-admin` and `git-artifact-pages` are sibling directories:
 
 ~~~sh
-artifact-pages registry publish --manifest sites.yaml --config .artifact-pages.yaml --dry-run
-artifact-pages registry publish --manifest sites.yaml --config .artifact-pages.yaml
+artifact-pages registry register --manifest sites.yaml --config .artifact-pages.yaml --dry-run
+artifact-pages registry register --manifest sites.yaml --config .artifact-pages.yaml
 cd /path/to/git-artifact-pages
 STORAGE_ROOT=../platform-admin/.local/storage npm run serve:local
 ~~~
@@ -85,14 +85,14 @@ The dry-run reports creates, updates, and removals without writing. The publish 
 
 ## Unregister
 
-Remove `sre` from `sites.yaml` in the registry checkout, publish the desired registry, and clean the removed site through the explicit unregister operation:
+Remove `sre` from `sites.yaml` in the registry checkout, then run the explicit unregister operation to reconcile the manifest and ensure the selected site's data is cleaned:
 
 ~~~sh
 artifact-pages registry unregister --site sre --manifest sites.yaml --config .artifact-pages.yaml --dry-run
 artifact-pages registry unregister --site sre --manifest sites.yaml --config .artifact-pages.yaml --format json
 ~~~
 
-Unregister requires the checked-out YAML to omit the site. It withdraws the registry entry, deletes only the selected site's artifact, index, and preview prefixes, and revalidates the corresponding routes. If a publish or unregister process exits while holding a retained lock, inspect it with `artifact-pages lock inspect --site sre`; recover only after confirming the owner is stale and supply the exact observed ETag.
+Unregister requires the checked-out YAML to omit the site. It withdraws the registry entry, deletes only the selected site's artifact, index, and preview prefixes, and revalidates the corresponding routes. If a site publish or unregister process exits while holding a retained lock, inspect it with `artifact-pages lock inspect --site sre`; recover only after confirming the owner is stale and supply the exact observed ETag.
 
 ## Limits of the local proof
 
