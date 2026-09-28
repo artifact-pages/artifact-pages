@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -23,6 +24,14 @@ sites:
     name: Legacy
     repository: acme/legacy
     sourcePath: docs
+  sre:
+    name: Old SRE
+    repository: acme/sre
+    sourcePath: docs/artifacts
+`
+
+const manifestWithoutLegacy = `schemaVersion: 1
+sites:
   sre:
     name: Old SRE
     repository: acme/sre
@@ -144,21 +153,95 @@ func TestPublishRegistryNoOpReportsExplicitFalseAndEmptyChanges(t *testing.T) {
 	}
 }
 
-func TestPublishRegistryRetriesRemovedSiteCleanupAfterPostWriteFailures(t *testing.T) {
-	for _, failure := range []string{"delete", "invalidate"} {
-		t.Run(failure, func(t *testing.T) {
+func TestPublishRegistryRetainsPendingCatalogInvalidationWhenCleanupTargetIsRegistered(t *testing.T) {
+	backend := newRegistryApplyTestBackend()
+	seedRegistryFromManifest(t, backend, desiredAdminManifest)
+	cleanupBytes, err := json.Marshal(registryCleanupRecord{SchemaVersion: 1, Sites: []string{"docs"}})
+	if err != nil {
+		t.Fatalf("marshal cleanup retry record: %v", err)
+	}
+	backend.seed(registryCleanupKey, cleanupBytes)
+	backend.failNextInvalidate = true
+	beforeDryRunObjects, beforeDryRunETags := backend.snapshot()
+
+	planned, err := PublishRegistry(context.Background(), backend, []byte(desiredAdminManifest), true)
+	if err != nil {
+		t.Fatalf("PublishRegistry(dry-run) error = %v", err)
+	}
+	assertRegistryInvalidationPlan(t, planned, []string{"/_indexes/sites.json"})
+	assertNoRegistryApplyWrites(t, backend)
+	if afterObjects, afterETags := backend.snapshot(); !reflect.DeepEqual(beforeDryRunObjects, afterObjects) || !reflect.DeepEqual(beforeDryRunETags, afterETags) {
+		t.Fatal("dry-run changed deployed objects, ETags, or retry record")
+	}
+
+	first, err := PublishRegistry(context.Background(), backend, []byte(desiredAdminManifest), false)
+	if err == nil || !strings.Contains(err.Error(), "cache revalidation failed") {
+		t.Fatalf("PublishRegistry() = %+v, %v; want invalidation failure", first, err)
+	}
+	if _, _, err := backend.GetObject(context.Background(), registryCleanupKey); err != nil {
+		t.Fatalf("pending retry record after failed invalidation = %v; want retained", err)
+	}
+	if len(backend.invalidations) != 1 || !reflect.DeepEqual(backend.invalidations[0], []string{"/_indexes/sites.json"}) {
+		t.Fatalf("first invalidation paths = %v; want catalog only", backend.invalidations)
+	}
+
+	backend.resetCounters()
+	second, err := PublishRegistry(context.Background(), backend, []byte(desiredAdminManifest), false)
+	if err != nil {
+		t.Fatalf("retry PublishRegistry() error = %v", err)
+	}
+	if second.Outcome != "published" {
+		t.Fatalf("retry outcome = %q; want catalog invalidation retry", second.Outcome)
+	}
+	assertRegistryUpdatedJSON(t, second, false, false)
+	assertRegistryInvalidationPlan(t, second, []string{"/_indexes/sites.json"})
+	if len(backend.invalidations) != 1 || !reflect.DeepEqual(backend.invalidations[0], []string{"/_indexes/sites.json"}) {
+		t.Fatalf("retry invalidation paths = %v; want catalog only", backend.invalidations)
+	}
+	if _, _, err := backend.GetObject(context.Background(), registryCleanupKey); !errors.Is(err, ErrObjectNotFound) {
+		t.Fatalf("cleanup retry record after successful invalidation = %v; want cleared", err)
+	}
+}
+
+func TestUnregisterSiteRetriesRemovedSiteCleanupAfterPostWriteFailures(t *testing.T) {
+	tests := []struct {
+		name   string
+		inject func(*registryApplyTestBackend)
+	}{
+		{name: "listing", inject: func(backend *registryApplyTestBackend) { backend.failListPrefix = "_artifacts/legacy/" }},
+		{name: "partial delete", inject: func(backend *registryApplyTestBackend) { backend.partialDeleteKey = "_indexes/legacy/meta.json" }},
+		{name: "invalidation", inject: func(backend *registryApplyTestBackend) { backend.failNextInvalidate = true }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
 			backend := newRegistryApplyTestBackend()
 			seedRegistryFromManifest(t, backend, currentAdminManifest)
 			backend.seed("_artifacts/legacy/report.html", []byte("legacy artifact"))
-			if failure == "delete" {
-				backend.failDeleteKey = "_artifacts/legacy/report.html"
-			} else {
-				backend.failNextInvalidate = true
+			backend.seed("_indexes/legacy/meta.json", []byte(`{"site":"legacy"}`))
+			seedForcedUnregisterFixture(t, backend)
+			preservedBefore := make(map[string][]byte)
+			for _, key := range []string{
+				"_artifacts/sre/report.html", "_indexes/sre/meta.json", "_previews/sre/catalog.json",
+				"_previews/sre/revisions/head/report.md", "_artifacts/docs/neighbor.html", "_indexes/docs/meta.json",
+				"_previews/docs/catalog.json", "index.html", "assets/app.js", "_control/private/sentinel",
+			} {
+				object, _, err := backend.GetObject(context.Background(), key)
+				if err != nil {
+					t.Fatalf("read preservation fixture %q: %v", key, err)
+				}
+				preservedBefore[key] = object.Bytes
 			}
+			test.inject(backend)
 
-			first, err := PublishRegistry(context.Background(), backend, []byte(desiredAdminManifest), false)
-			if err == nil || !strings.Contains(err.Error(), "registry published") {
-				t.Fatalf("first PublishRegistry() = %+v, %v; want a post-registry-write failure", first, err)
+			first, err := UnregisterSite(context.Background(), backend, []byte(manifestWithoutLegacy), "legacy", false)
+			if err == nil {
+				t.Fatalf("first UnregisterSite() = %+v; want a post-registry-write %s failure", first, test.name)
+			}
+			if test.name == "listing" && !strings.Contains(err.Error(), "list site") {
+				t.Fatalf("first UnregisterSite() error = %v; want listing failure", err)
+			}
+			if test.name != "listing" && !strings.Contains(err.Error(), "registry published") {
+				t.Fatalf("first UnregisterSite() error = %v; want post-registry-write %s failure", err, test.name)
 			}
 			assertRegistryUpdatedJSON(t, first, true, false)
 			cleanupObject, _, err := backend.GetObject(context.Background(), registryCleanupKey)
@@ -169,29 +252,75 @@ func TestPublishRegistryRetriesRemovedSiteCleanupAfterPostWriteFailures(t *testi
 			if err := json.Unmarshal(cleanupObject.Bytes, &cleanup); err != nil || !reflect.DeepEqual(cleanup.Sites, []string{"legacy"}) {
 				t.Fatalf("cleanup retry record = %+v, err=%v; want legacy target", cleanup, err)
 			}
-			deployedRegistry, _, err := backend.GetObject(context.Background(), "_indexes/sites.json")
+			deployedRegistry, deployedRegistryETag, err := backend.GetObject(context.Background(), "_indexes/sites.json")
 			if err != nil {
 				t.Fatalf("read registry after failure: %v", err)
 			}
-			_, expectedRegistry, _ := registry.Build([]byte(desiredAdminManifest))
+			_, expectedRegistry, _ := registry.Build([]byte(manifestWithoutLegacy))
 			actualRegistry, err := registry.DecodeProjection(deployedRegistry.Bytes)
 			if err != nil || !reflect.DeepEqual(actualRegistry, expectedRegistry) {
 				t.Fatalf("registry after failure = %+v, err=%v; want desired projection %+v", actualRegistry, err, expectedRegistry)
 			}
-
-			second, err := PublishRegistry(context.Background(), backend, []byte(desiredAdminManifest), false)
-			if err != nil {
-				t.Fatalf("retry PublishRegistry() error = %v", err)
+			if test.name == "invalidation" {
+				if len(backend.invalidations) != 1 || !reflect.DeepEqual(backend.invalidations[0], []string{
+					"/_indexes/sites.json", "/legacy", "/legacy/*", "/_indexes/legacy/*", "/_artifacts/legacy/*", "/_previews/legacy/*",
+				}) {
+					t.Fatalf("failed invalidation request = %v; want complete registry and site cache set", backend.invalidations)
+				}
+			} else if len(backend.invalidations) != 0 {
+				t.Fatalf("invalidation requests after %s failure = %v; want none", test.name, backend.invalidations)
 			}
-			if second.Outcome != "published" {
-				t.Fatalf("retry outcome = %q, want published cleanup retry", second.Outcome)
+
+			backend.resetCounters()
+			beforeDryRunObjects, beforeDryRunETags := backend.snapshot()
+			plannedRetry, err := UnregisterSite(context.Background(), backend, []byte(manifestWithoutLegacy), "legacy", true)
+			if err != nil {
+				t.Fatalf("dry-run UnregisterSite() error = %v", err)
+			}
+			if plannedRetry.Outcome != "planned" {
+				t.Fatalf("dry-run retry outcome = %q, want planned", plannedRetry.Outcome)
+			}
+			assertRegistryInvalidationPlan(t, plannedRetry, []string{
+				"/_indexes/sites.json", "/legacy", "/legacy/*", "/_indexes/legacy/*", "/_artifacts/legacy/*", "/_previews/legacy/*",
+			})
+			assertNoRegistryApplyWrites(t, backend)
+			if afterObjects, afterETags := backend.snapshot(); !reflect.DeepEqual(beforeDryRunObjects, afterObjects) || !reflect.DeepEqual(beforeDryRunETags, afterETags) {
+				t.Fatal("dry-run retry changed deployed objects, ETags, or retry record")
+			}
+
+			second, err := UnregisterSite(context.Background(), backend, []byte(manifestWithoutLegacy), "legacy", false)
+			if err != nil {
+				t.Fatalf("retry UnregisterSite() error = %v", err)
+			}
+			if second.Outcome != "unregistered" || second.Site != "legacy" {
+				t.Fatalf("retry unregister result = %+v, want successful cleanup retry", second)
 			}
 			assertRegistryUpdatedJSON(t, second, false, false)
+			assertRegistryInvalidationPlan(t, second, []string{
+				"/_indexes/sites.json", "/legacy", "/legacy/*", "/_indexes/legacy/*", "/_artifacts/legacy/*", "/_previews/legacy/*",
+			})
+			if len(backend.invalidations) != 1 || !reflect.DeepEqual(backend.invalidations[0], []string{
+				"/_indexes/sites.json", "/legacy", "/legacy/*", "/_indexes/legacy/*", "/_artifacts/legacy/*", "/_previews/legacy/*",
+			}) {
+				t.Fatalf("retry provider invalidations = %v, want complete registry and site cache set", backend.invalidations)
+			}
 			if _, _, err := backend.GetObject(context.Background(), registryCleanupKey); !errors.Is(err, ErrObjectNotFound) {
 				t.Fatalf("cleanup record after retry error = %v, want not found", err)
 			}
-			if _, exists := backend.objects["_artifacts/legacy/report.html"]; exists {
-				t.Fatal("removed site artifact remains after successful cleanup retry")
+			for _, key := range []string{"_artifacts/legacy/report.html", "_indexes/legacy/meta.json"} {
+				if _, exists := backend.objects[key]; exists {
+					t.Errorf("removed site object %q remains after successful cleanup retry", key)
+				}
+			}
+			for key, want := range preservedBefore {
+				object, _, err := backend.GetObject(context.Background(), key)
+				if err != nil || !bytes.Equal(object.Bytes, want) {
+					t.Errorf("unrelated object %q changed during unregister: got=%q want=%q err=%v", key, object.Bytes, want, err)
+				}
+			}
+			registryAfterRetry, registryAfterRetryETag, err := backend.GetObject(context.Background(), "_indexes/sites.json")
+			if err != nil || !bytes.Equal(registryAfterRetry.Bytes, deployedRegistry.Bytes) || registryAfterRetryETag != deployedRegistryETag {
+				t.Errorf("registry after retry changed: bytesEqual=%t etag=%q wantETag=%q err=%v", bytes.Equal(registryAfterRetry.Bytes, deployedRegistry.Bytes), registryAfterRetryETag, deployedRegistryETag, err)
 			}
 		})
 	}
@@ -260,9 +389,9 @@ func TestUnregisterSiteRetriesForcedCleanupWhenRegistrationIsAlreadyAbsent(t *te
 				t.Fatalf("registry after forced cleanup retry changed: bytesEqual=%t etag=%q wantETag=%q err=%v", bytes.Equal(registryAfterRetry.Bytes, registryBefore.Bytes), registryETagAfterRetry, registryETagBefore, err)
 			}
 			if len(backend.invalidations) == 0 || !reflect.DeepEqual(backend.invalidations[len(backend.invalidations)-1], []string{
-				"/sre", "/sre/*", "/_indexes/sre/*", "/_artifacts/sre/*", "/_previews/sre/*",
+				"/_indexes/sites.json", "/sre", "/sre/*", "/_indexes/sre/*", "/_artifacts/sre/*", "/_previews/sre/*",
 			}) {
-				t.Fatalf("final invalidation paths = %v; want exact site routes including preview paths", backend.invalidations)
+				t.Fatalf("final invalidation paths = %v; want catalog and exact site routes including preview paths", backend.invalidations)
 			}
 			if test.name == "cache invalidation" && len(backend.invalidations) != 2 {
 				t.Fatalf("cache invalidations after failed request and retry = %v; want the request repeated", backend.invalidations)
@@ -662,6 +791,22 @@ func assertNoRegistryApplyWrites(t *testing.T, backend *registryApplyTestBackend
 	t.Helper()
 	if backend.conditionalWrites != 0 || backend.directWrites != 0 || backend.deleteCalls != 0 || len(backend.invalidations) != 0 {
 		t.Fatalf("dry-run writes: conditional=%d direct=%d deletes=%d invalidations=%v", backend.conditionalWrites, backend.directWrites, backend.deleteCalls, backend.invalidations)
+	}
+}
+
+func assertRegistryInvalidationPlan(t *testing.T, result Result, want []string) {
+	t.Helper()
+	got := make([]string, 0)
+	for _, change := range result.Changes {
+		if change.Action == "invalidate" {
+			got = append(got, change.Path)
+		}
+	}
+	want = append([]string(nil), want...)
+	sort.Strings(got)
+	sort.Strings(want)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("invalidation plan = %v, want complete set %v", got, want)
 	}
 }
 

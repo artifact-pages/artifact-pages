@@ -71,6 +71,7 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 		}
 		plan, removed, changedExisting := diffRegistries(current, desired, currentETag == "")
 		registryChanged := currentETag == "" || !sameRegistryEntries(current.Sites, desired.Sites)
+		catalogInvalidationPending := registryChanged || pendingETag != ""
 		desiredIDs := make(map[string]struct{}, len(desired.Sites))
 		for _, entry := range desired.Sites {
 			desiredIDs[entry.ID] = struct{}{}
@@ -125,7 +126,7 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 					plan = append(plan, Change{Action: "remove", Path: key})
 				}
 			}
-			if registryChanged {
+			if catalogInvalidationPending {
 				plan = append(plan, Change{Action: "invalidate", Path: "/_indexes/sites.json"})
 			}
 			for _, siteID := range cleanupIDs {
@@ -153,12 +154,7 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 			result.Outcome = "planned"
 			return result, nil
 		}
-		if len(plan) == 0 && len(cleanupIDs) == 0 {
-			if pendingETag != "" {
-				if err := clearRegistryCleanup(ctx, backend); err != nil {
-					return result, err
-				}
-			}
+		if len(plan) == 0 && len(cleanupIDs) == 0 && pendingETag == "" {
 			result.Outcome = "no-op"
 			return result, nil
 		}
@@ -197,7 +193,7 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 		}
 		result.FilesRemoved = len(cleanupKeys)
 		paths := make([]string, 0, 1+len(cleanupIDs)*5)
-		if registryChanged {
+		if catalogInvalidationPending {
 			paths = append(paths, "/_indexes/sites.json")
 		}
 		for _, siteID := range cleanupIDs {
