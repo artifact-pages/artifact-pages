@@ -5,19 +5,22 @@
 
 ## Contract to prove
 
-Direct preview URLs work without catalog membership; a missing raw file is a real 404 rather than the SPA shell. Provider cache behavior follows the specified freshness and invalidation boundaries. Viewer authentication and authorization are operator-managed edge concerns, not application behavior.
+Direct preview URLs work without catalog membership; a missing raw file is a real 404 rather than the SPA shell. HTML follows [TD3](../technical-design/TD3-preview-origin-delivery.md): trusted same-origin execution, with iframe CSS/layout containment but no hostile-script isolation. Markdown remains sanitized/non-executable. Provider cache behavior follows the specified freshness and invalidation boundaries. Viewer authentication and authorization are operator-managed edge concerns, not application behavior.
 
 ## Exit criteria
 
 - [x] Exercise direct load and reload of a fixed preview URL without catalog membership.
 - [x] Verify that missing manifests are hidden in the Previews list and missing raw resources return 404.
-- [x] Verify that a third-party opaque-origin sandbox cannot read preview objects while the isolated local frame can load preview resources.
+- [ ] Re-prove that third-party opaque-origin/cross-origin script reads receive no blanket null/wildcard CORS grant while the same-origin preview frame loads local modules and resources under TD3. This is not a privacy guarantee for public static objects.
+- [ ] Verify iframe CSS containment and intentionally allowed parent-DOM/test-key storage access with benign preview fixtures; verify Markdown script sanitization separately. Former parent-isolation and blanket blocked-fetch assertions are not the accepted HTML contract.
 - [ ] Verify browser/CDN cache behavior for mutable catalog responses and removed objects.
 - [ ] Verify fixed-name app assets in an already-cached browser during upgrade and rollback, not only origin bytes ([ISSUE-019](../issues/ISSUE-019-unhashed-app-asset-cache.md)).
 - [ ] Inject invalidation-only failure for registry addition and app deployment, then retry and record request/freshness behavior. The review observed retries becoming no-ops; determine whether each mutable-path contract converges. Keep this proof separate from the resolved unpublish retry defect.
 - [ ] Verify provider route and cache behavior for catalog, manifest, HTML/Markdown, local resources, and removed objects. Do not treat customer-managed viewer-access policy as a product feature or completion criterion.
 
 ## Evidence
+
+The September 27 frame/origin results below are historical evidence for the former sandboxed model. They do not close the unchecked TD3 rendering/resource-policy criteria or establish provider support; re-run the relevant boundary tests after ISSUE-026 changes the reader and profiles.
 
 On 2026-09-27, the focused Playwright boundary checks passed. An opaque-origin sandbox on a different local host cannot read an HTML preview object, and the isolated local frame loads its relative image and font resources. The updated config removes `Access-Control-Allow-Origin: null`; the app reads catalogs/manifests on its own origin while HTML and local resources are served from `preview.localhost` in a sandboxed iframe. The preview route remains separate from nginx SPA fallback in [`default.conf`](../../../docker/nginx/default.conf).
 

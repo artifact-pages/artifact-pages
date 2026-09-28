@@ -1,51 +1,48 @@
-# TD3 — Preview origin and resource delivery
+# TD3 — Trusted same-origin preview rendering
 
-- Status: Open
+- Status: Done
 - Phase: Provider-backed deployment
+- Decision: Owner accepted trusted same-origin preview HTML on 2026-09-28.
 - Related issue: [ISSUE-026](../issues/ISSUE-026-preview-provider-module-loading.md)
 - Related implementation: [IMP-07](../implementation/IMP-07-local-serving.md), [IMP-08](../implementation/IMP-08-preview-reader.md), [IMP-14](../implementation/IMP-14-provider-serving.md)
 - Related verification: [T4](../verification/T4-serving-boundary.md), [T6](../verification/T6-resources-navigation.md), [T15](../verification/T15-provider-delivery.md)
 
-## Question
+## Decision
 
-What delivery/origin contract lets provider-hosted HTML previews load ordinary head-snapshot resources, including ES modules, while retaining the application's frame boundary and the existing third-party opaque-origin read restriction?
+Preview HTML has the same trust model as production HTML: it is trusted published executable content. Pre-publish is a publication approval, not a safe renderer for arbitrary untrusted changes. The operator trusts the people and CI allowed to publish; membership in the registered repository alone is not a security assessment of its content.
 
-This is an unresolved implementation design, not approval to introduce a new public hostname, relax the trust model, or add viewer accounts. Record any resulting product or operator-setup change explicitly before implementation.
+Serve preview HTML and its bundled resources from the application's origin and render the actual raw document URL in an ordinary, unsandboxed iframe. The iframe separates document layout and CSS; it does not isolate hostile scripts. Preview scripts may access the parent application DOM, same-origin content, and origin-scoped browser storage just as production HTML can. No separate preview hostname, DNS/TLS setup, or deployment-config origin field is required.
 
-## Evidence
+Markdown remains different: render it in the native reader after sanitization, with strict non-interactive Mermaid rendering and no arbitrary script execution.
 
-The 2026-09-28 review at `50c327d886c71fc5e0d086a5967b90cd9038e01e` found different local and provider-style reader paths:
+## Delivery and reader contract
 
-- Local HTML uses a separate `preview.localhost` origin with a sandboxed frame. Dependencies load within that origin without granting access to the application DOM.
-- The non-loopback reader falls back to `srcDoc` with an opaque origin. ES module requests send `Origin: null`; reference delivery has no matching CORS response. An independent HTTP/Chromium reproduction recorded failed module execution.
-- Adding `Access-Control-Allow-Origin: null` made the diagnostic fixture execute, but is not an accepted solution: unrelated opaque-origin frames can send the same origin value. T4 intentionally tests that such frames cannot read preview objects.
+- Keep logical URLs at `/:site/_previews/<head SHA>/<artifact path>` and the existing manifest/raw bundle keys. This decision changes no schemas, revision identity, publication order, retention, or discovery behavior.
+- Load the actual same-origin bundle URL, so document-relative resources, CSS URLs, and module imports resolve against their head-snapshot locations. Do not use an opaque-origin `srcDoc` fallback or preserve a loopback-only isolation model as the required product path.
+- Apply the production HTML resource-policy principles to the revision's raw preview namespace: local snapshot resources and external HTTPS resources are allowed subject to ordinary browser TLS/CORS/mixed-content rules. Insecure external HTTP resources stay blocked. Do not retain preview-only sandbox restrictions while claiming production-equivalent execution.
+- Do not introduce blanket `Access-Control-Allow-Origin: null` or wildcard CORS to make modules work. Same-origin module loading requires no such grant. Retain a regression for cross-origin/opaque-origin script reads without broadening the serving policy; it is not a promise that publicly served objects are private or cannot be embedded.
+- Keep changed-document navigation in the revision and unchanged-document navigation in production. Navigation bridge handling still validates the sending frame, origin, message shape, and manifest/index destination. Those checks are routing correctness, not a hostile-preview security boundary.
+- Missing raw resources return real 404s; `/_control/*` stays denied at delivery. Publication eligibility, exact repository/source-path validation, and the no-fork PR gate remain unchanged.
+- Viewer access stays outside Artifact Pages, under the operator's edge/network policy covering logical and raw paths. Same-origin script access remains part of the accepted HTML trust model even behind such a gate.
 
-These are local browser and source observations, not actual AWS/Cloudflare response evidence. ISSUE-026 owns the defect; this item owns the contract choice, not a duplicate fix ticket.
+## Evidence and alternatives
 
-## Constraints to retain
+The 2026-09-28 review at `50c327d886c71fc5e0d086a5967b90cd9038e01e` found that local HTML used a separate `preview.localhost` origin, while the non-loopback reader used an opaque-origin `srcDoc` sandbox. A local HTTP/Chromium reproduction recorded failed ES-module execution because requests sent `Origin: null` and reference delivery supplied no matching CORS response. Adding `Access-Control-Allow-Origin: null` was diagnostic only, not an accepted fix.
 
-- Logical user URLs remain `/:site/_previews/<head SHA>/<artifact path>`; raw storage paths are not primary navigation.
-- Preview bytes and rendering dependencies come from the selected head. Changed-document navigation stays in the revision; unchanged documents open production routes.
-- Support modules, images, CSS, fonts and parent navigation while keeping preview styling/execution outside the SPA DOM under the intended frame boundary.
-- Do not use blanket `Origin: null` CORS as proof of safe isolation. Test the existing unrelated-opaque-origin case against the chosen approach.
-- Viewer access remains operator-managed at the edge/network, including any additional origin. Artifact Pages has no viewer accounts or application authorization model ([TD1](TD1-site-viewer-access.md)).
-- Keep registered-source/no-fork publication gates, provider-owned retention, immutable revision URLs, and real raw 404s.
-- Production HTML remains trusted executable content in its existing unsandboxed iframe; this preview design must not silently change production behavior.
+A separate delivery origin could retain execution isolation but would add origin/DNS/TLS/access-gate setup. An opaque-frame resource mechanism would require additional complexity to preserve module loading without broad read grants. The owner chose production-equivalent trusted execution instead, explicitly accepting parent-DOM/storage access and removing the preview-only isolation requirement. This is a product decision, not evidence that the chosen reader or a live provider already works.
 
-## Candidates to evaluate
+## Design completion
 
-| Candidate | Potential benefit | Question to resolve |
-| --- | --- | --- |
-| A distinct preview delivery origin, retaining the logical app URL | Uses the working local model: dependencies are same-origin within the preview frame, while the app is cross-origin. | Origin selection, embedding, bridge validation, DNS/TLS, and external access-gate setup. A new required hostname needs explicit approval. |
-| An opaque frame with a more constrained resource-delivery mechanism | May avoid a separate hostname. | Demonstrate modules/fonts without granting every opaque-origin requester access or introducing a backend/authentication service; account for complexity and static hosting. |
-| Fully trusted same-origin preview execution | Closer to production HTML's trust model and simpler resource loading. | Relaxes the currently tested preview boundary, requiring an explicit trust-model/product decision; registered publishing alone does not settle it. |
+- [x] Record the owner's choice and its trust/setup consequences.
+- [x] Preserve registration, no-fork publication, immutable revisions, provider retention, and static routing.
+- [x] Define same-origin raw-document loading, resource-policy alignment, and navigation validation without AWS-specific identity.
+- [x] Record the accepted behavior in the specification and preview decision register.
+- [x] Remove the design blocker from ISSUE-026 and replace obsolete isolation criteria with the accepted trust model.
 
-The distinct-origin candidate is an investigation lead because it works locally, not a settled requirement. Prefer the smallest static solution meeting accepted boundaries. Do not implement a proxy service or expand credentials based on this backlog alone.
+## Implementation and verification handoff
 
-## Exit criteria
+ISSUE-026 remains Open until the reader, local serving profiles, supported-provider references, and regressions implement this decision. Existing parent-isolation and blocked-runtime-fetch results are historical evidence for the former model, not requirements or proof of the new one.
 
-- [ ] Compare candidates with non-loopback-equivalent HTTP/browser fixtures: modules, transitive dependencies, fonts, navigation and third-party opaque-origin reads.
-- [ ] Record the chosen contract and limitations; obtain an explicit decision for any required hostname/setup or trust-model change.
-- [ ] Specify origin/config resolution, routes, embedding, bridge messages and provider headers without tying core identity to AWS.
-- [ ] Update the specification and preview architecture/decision register only after settlement; keep external access control outside the product.
-- [ ] Unblock ISSUE-026 with concrete local/profile/source regressions. Real deployed headers and behavior remain T15 proof.
+T4/T6 must verify non-loopback-equivalent same-origin module execution, transitive dependencies, relative images/CSS/fonts, navigation/reload, CSS containment, and the intentional ability of a benign fixture to access parent DOM and test-key localStorage. Verify Markdown sanitization separately and retain the no-CORS-grant/cross-origin read regression. T15 owns actual deployed provider CSP, routes, cache, and resource behavior. None of these proofs is closed by this design record.
+
+Mutually untrusted HTML publishers and fork previews remain unsupported; adding an isolation model for them would require a separate product decision.

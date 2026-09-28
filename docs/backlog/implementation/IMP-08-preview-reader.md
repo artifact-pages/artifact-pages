@@ -13,6 +13,8 @@ Resolve `/:site/_previews/<head SHA>/<artifact path>` through the revision manif
 
 Playwright covers Markdown and HTML readers, direct load/reload without catalog membership, missing manifest state, same-revision changed-document navigation, production navigation, iframe parent isolation, and reserved/Unicode path round trips. The local preview guide describes the trust and resource boundaries.
 
+This is historical evidence for the former isolated preview reader. The owner accepted trusted same-origin HTML execution in [TD3](../technical-design/TD3-preview-origin-delivery.md) on 2026-09-28; parent-script isolation is no longer an HTML requirement. [ISSUE-026](../issues/ISSUE-026-preview-provider-module-loading.md) owns the reader/profile migration and updated regressions. This completed checkpoint does not claim that migration or its new proofs are complete.
+
 ## Acceptance criteria
 
 - Direct load/reload works without catalog membership while manifest and document exist; absent document/manifest shows “Preview unavailable” with a way back to the site.

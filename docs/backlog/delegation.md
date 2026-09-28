@@ -17,8 +17,8 @@ Execution mode answers **how work can be delegated**, not its priority or comple
 
 | Work | Delegation scope | Completion / handoff |
 | --- | --- | --- |
-| [Review repair queue](issues/README.md#repair-order), excluding ISSUE-026 | Follow its current priority/order one issue at a time. Reproduce, add a regression, fix within the accepted contract, verify, and obtain independent review. | Commit each verified concern; update/remove completed issue records under the issue policy. Do not wait for unrelated cloud access. |
-| [T6 — Resources and navigation](verification/T6-resources-navigation.md) | Run local/profile regressions for the settled reader/resource contract as repairs land. | Record actual local evidence; provider behavior remains T15. The ISSUE-026 portion waits for TD3, not the independent tests. |
+| [Review repair queue](issues/README.md#repair-order), including ISSUE-026 | Follow its current priority/order one issue at a time. TD3 is settled: implement trusted same-origin preview HTML rather than reopening the origin decision. Reproduce, add a regression, verify, and obtain independent review. | Commit each verified concern; update/remove completed issue records under the issue policy. Do not wait for unrelated cloud access. |
+| [T6 — Resources and navigation](verification/T6-resources-navigation.md) | Run local/profile regressions for the settled reader/resource contract as repairs land, including ISSUE-026's same-origin rendering and intentional parent-access checks. | Record actual local evidence; provider behavior remains T15. TD3 is a completed decision, not a remaining blocker. |
 | [IMP-37 — Cloudflare entry module](implementation/IMP-37-cloudflare-entry-module.md) | When assigned, implement the single entry module, local validation, and caller example. | Local acceptance closes IMP-37; hand a tested config and fresh-plan checklist to T15 for an explicitly authorized real-account run. |
 
 ISSUE-013 is a separate product improvement, not part of the review repair pass. Done items are historical evidence and are not reopened merely to assign an execution mode.
@@ -27,7 +27,6 @@ ISSUE-013 is a separate product improvement, not part of the review repair pass.
 
 | Work | Agent can prepare now within assigned scope | Owner handoff |
 | --- | --- | --- |
-| [TD3 — Preview origin](technical-design/TD3-preview-origin-delivery.md) → ISSUE-026 | Compare static delivery options with browser fixtures; document isolation, module-loading and setup implications. | Select any changed trust boundary or required hostname/setup before implementation. ISSUE-026 is currently Blocked on this decision. |
 | [ISSUE-013 — Site descriptions](issues/ISSUE-013-site-description.md) | Inspect the existing model; propose schema/UI behavior and a small mock when assigned. | Confirm the data-model/UX choice before implementing the feature. |
 | [T4](verification/T4-serving-boundary.md), [T5](verification/T5-concurrency-recovery.md), [T8](verification/T8-stale-reference-cleanup.md), [T14](verification/T14-production-reconciliation.md) | Prepare deterministic tests, failure fixtures, remaining-proof checklists, and a safe provider smoke procedure. | Authorize and participate in the remaining real-provider/CI runs; local results do not close provider proof. |
 | [T15 — Provider delivery](verification/T15-provider-delivery.md) | Prepare an isolated caller, plan instructions, permissions/cost checklist, and route/cache/storage smoke tests. Start with Cloudflare; keep AWS evidence distinct. | Select account/zone/hostname, arrange credentials, review a real plan, and authorize apply, smoke, and cleanup. Record any provider-plan limitations instead of assuming compatibility. |

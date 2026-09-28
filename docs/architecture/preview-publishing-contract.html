@@ -123,6 +123,13 @@
       <p>The Phase 1 <code>DirectoryStore</code> implements that contract with local files and a local lock. The AWS and Cloudflare adapters map their conditional writes, origin reads, and lock mechanics behind the same interface. They share schemas, routes, digest rules, and reader behavior; provider-specific serving headers, publisher IAM/credential scopes, and lifecycle retention stay in adapters and deployment configuration. Viewer access is configured by the operator at the hosting edge or surrounding network, outside the Artifact Pages product contract. This local contract does not establish live provider behavior.</p>
     </section>
 
+    <section aria-labelledby="rendering-trust">
+      <h2 id="rendering-trust">Rendering trust: publication approves execution</h2>
+      <p>Preview HTML follows production HTML: trusted executable content, served on the application's origin and loaded from its actual raw bundle URL in an unsandboxed iframe. The frame contains layout and CSS, not hostile JavaScript. Preview scripts may access the parent application DOM, same-origin content, and browser storage. The operator trusts the people and CI allowed to publish; registered repository membership alone is not a security assessment. Registered-source validation and the no-fork PR gate remain required.</p>
+      <p>No separate preview hostname is required. Bundled resources resolve within the head snapshot; external HTTPS resources follow the production HTML resource policy and ordinary browser TLS/CORS rules. Insecure external HTTP remains blocked. Do not add a blanket null/wildcard CORS grant or an opaque-origin <code>srcDoc</code> fallback. Navigation bridge checks validate the sending frame, origin, and manifest/index destination for routing correctness. Markdown stays in the sanitized native reader with strict, non-interactive Mermaid and no arbitrary script execution.</p>
+      <p class="warning"><strong>Decision settled; implementation pending.</strong> The owner accepted this model on 2026-09-28 in <a href="../backlog/technical-design/TD3-preview-origin-delivery.md">TD3</a>. <a href="../backlog/issues/ISSUE-026-preview-provider-module-loading.md">ISSUE-026</a> still owns replacing the former isolated-loopback/opaque-frame reader. T4/T6 own local regressions and T15 owns live provider evidence. This decision grants no new viewer-access feature and changes no schemas, raw keys, or revision lifetime.</p>
+    </section>
+
     <section aria-labelledby="publish">
       <h2 id="publish">Publication order</h2>
       <div class="flow" aria-label="Five-step preview publication sequence">
@@ -185,6 +192,7 @@ Preview catalog: 1 stale references to prune, 4 groups retained. No writes.</pre
         </ul></div>
         <div><h3>Browser and provider</h3><ul>
           <li>HTML iframe and Markdown reader load relative CSS, JS, images and fonts from the preview snapshot.</li>
+          <li>On a non-loopback-equivalent origin, preview HTML executes local/transitive modules without an opaque frame or broad CORS grant; CSS remains in the iframe, while a benign fixture confirms intentional parent-DOM/test-key storage access. Markdown remains sanitized and non-executable.</li>
           <li>Changed-document links remain in the revision; unchanged-document links go to production without nesting the app in an iframe.</li>
           <li>Missing raw resource is 404; direct logical URL works without a catalog entry while its manifest and document remain available.</li>
           <li>A PR-contextual document URL shows a validated PR return link on every changed document, including after same-revision navigation; bare, manual, mismatched, and catalog-unavailable contexts render without that link. A newer revision in the group does not change an older revision's bytes or route.</li>

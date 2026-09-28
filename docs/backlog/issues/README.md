@@ -27,7 +27,7 @@ Priority describes user impact, not implementation effort. Issues 001–012 are 
 
 Each review issue contains its own reproduction and source pointers. Supplementary captures/scripts remain ignored in `.local/reviews/2026-09-28/`; they are not the only evidence or a dependency of this committed backlog. Local CLI/HTTP/browser reproductions and provider-source inconsistencies are labeled separately from live-provider proof. Existing passing suites did not cover these regressions.
 
-The remaining review queue has 17 Open issues and one Blocked issue; with ISSUE-013 this track has 18 Open and one Blocked. [TD3](../technical-design/TD3-preview-origin-delivery.md) owns the unresolved preview-origin decision for ISSUE-026. The unconfirmed AWS absent-object 403/404 concern belongs to [T15](../verification/T15-provider-delivery.md), not to another confirmed issue.
+The remaining review queue has 18 Open, 0 In progress, and 0 Blocked issues; with ISSUE-013 this track has 19 Open, 0 In progress, and 0 Blocked. [TD3](../technical-design/TD3-preview-origin-delivery.md) is settled: ISSUE-026 now implements the accepted trusted same-origin HTML contract. The unconfirmed AWS absent-object 403/404 concern belongs to [T15](../verification/T15-provider-delivery.md), not to another confirmed issue.
 
 ## Repair order
 
@@ -36,10 +36,9 @@ Work one issue at a time: mark it In progress, reproduce it, add a regression, i
 | Order | Items, in order | Outcome |
 | --- | --- | --- |
 | 1 | ISSUE-019 → 021 | Browser cache and bounded lock acquisition. |
-| 2 | ISSUE-022 → 023 → 024 → 025 → 027 → 028 | Preview identity, rendering closure and navigation. |
+| 2 | ISSUE-022 → 023 → 024 → 025 → 026 → 027 → 028 | Preview identity, rendering closure and navigation. |
 | 3 | ISSUE-029 → 030 → 031 → 032 → 033 → 034 → 035 | Heading/link parity, Unicode/provenance, remote config and local development. |
 | 4 | ISSUE-036 → 037 | Release-file integrity and reference artifact CSP. |
-| Dependency | TD3 → ISSUE-026 | Settle delivery before fixing the provider-style module failure. Do not block independent repairs or silently relax isolation; resume this issue once the design is accepted. |
 | Later product improvement | ISSUE-013 | Site-description schema/UI work is outside this repair pass and is not a current release gate. |
 
 This is the default repair queue, not authorization to operate cloud accounts or release publicly. Complete review defects before claiming readiness, or record an explicit approved deferral with impact. Actual provider and clean-consumer proofs remain separate gates in the [release order](../README.md#first-public-release-order).
@@ -55,7 +54,7 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-023 — Recognize static JavaScript module dependencies without matching ordinary strings](ISSUE-023-preview-module-dependency-parsing.md) | Open | P2 | Preview resource closure / JavaScript | Review 10: Confirmed defect; reproduction and acceptance criteria in the issue. |
 | [ISSUE-024 — Include static imports from inline HTML module scripts](ISSUE-024-preview-inline-module-resources.md) | Open | P2 | Preview resource closure / HTML | Review 11: Confirmed defect; reproduction and acceptance criteria in the issue. |
 | [ISSUE-025 — Bundle local images rendered from Markdown raw HTML](ISSUE-025-preview-markdown-html-resources.md) | Open | P2 | Preview resource closure / Markdown | Review 12: Confirmed defect; reproduction and acceptance criteria in the issue. |
-| [ISSUE-026 — Load preview modules without weakening the frame boundary](ISSUE-026-preview-provider-module-loading.md) | Blocked | P2 | Preview reader / provider delivery | Review 13: Blocked on TD3's preview-delivery decision. |
+| [ISSUE-026 — Load preview modules under the accepted HTML trust model](ISSUE-026-preview-provider-module-loading.md) | Open | P2 | Preview reader / provider delivery | Review 13: TD3 is settled; implement trusted same-origin rendering and regressions. |
 | [ISSUE-027 — Do not swallow links to raw resources in HTML previews](ISSUE-027-preview-resource-link-navigation.md) | Open | P2 | Preview reader / link navigation | Review 14: Confirmed defect; reproduction and acceptance criteria in the issue. |
 | [ISSUE-028 — Apply HTML preview fragments to the rendered frame](ISSUE-028-preview-html-fragment-navigation.md) | Open | P2 | Preview reader / heading navigation | Review 15: Confirmed defect; reproduction and acceptance criteria in the issue. |
 | [ISSUE-029 — Generate the same Markdown heading IDs in the builder and reader](ISSUE-029-markdown-heading-id-parity.md) | Open | P2 | Markdown index / Contents / heading search | Review 16: Confirmed defect; reproduction and acceptance criteria in the issue. |
