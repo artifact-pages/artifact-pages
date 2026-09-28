@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -93,6 +94,122 @@ func TestBuildFromGitUsesHeadTreeAndCollectsLocalResources(t *testing.T) {
 	}
 	if current, err := os.ReadFile(filepath.Join(repo, "site/docs/report.md")); err != nil || string(current) != "# Working tree content must not be read\n" {
 		t.Fatalf("BuildFromGit changed the working tree: %q, %v", current, err)
+	}
+}
+
+func TestBuildFromGitSameHeadRetryAfterDefaultBranchAdvances(t *testing.T) {
+	repo := newTestRepository(t)
+	writeTestFile(t, repo, "site/docs/report.md", "# Base report\n")
+	gitTest(t, repo, "add", ".")
+	gitTest(t, repo, "commit", "-m", "base")
+	gitTest(t, repo, "branch", "preview")
+
+	gitTest(t, repo, "checkout", "preview")
+	writeTestFile(t, repo, "site/docs/report.md", "# Preview report\n")
+	gitTest(t, repo, "commit", "-am", "update preview report")
+	headSHA := gitTest(t, repo, "rev-parse", "preview")
+
+	options := BuildOptions{
+		RepositoryDir: repo, SiteID: "sre", SourcePath: "site", DefaultRef: "main", HeadRef: "preview",
+		Repository: "acme/project", PullRequestURL: "https://github.com/acme/project/pull/42",
+		PullRequestHeadRepository: "acme/project", PullRequestHeadSHA: headSHA,
+		Now: func() time.Time { return time.Date(2026, 9, 27, 1, 2, 3, 0, time.UTC) },
+	}
+	original, err := BuildFromGit(context.Background(), options)
+	if err != nil {
+		t.Fatalf("BuildFromGit(initial) error = %v", err)
+	}
+	store := newMemoryPreviewStore()
+	if err := Publish(context.Background(), store, original); err != nil {
+		t.Fatalf("Publish(initial) error = %v", err)
+	}
+
+	gitTest(t, repo, "checkout", "main")
+	writeTestFile(t, repo, "notes/default-only.txt", "unrelated default branch change\n")
+	gitTest(t, repo, "add", ".")
+	gitTest(t, repo, "commit", "-m", "advance default branch outside site")
+	gitTest(t, repo, "checkout", "preview")
+	options.Now = func() time.Time { return time.Date(2026, 9, 28, 1, 2, 3, 0, time.UTC) }
+	retry, err := BuildFromGit(context.Background(), options)
+	if err != nil {
+		t.Fatalf("BuildFromGit(retry) error = %v", err)
+	}
+
+	if original.Manifest.DefaultHead == retry.Manifest.DefaultHead {
+		t.Fatal("fixture did not advance the recorded default-branch HEAD")
+	}
+	if original.Manifest.HeadSHA != retry.Manifest.HeadSHA || original.Manifest.MergeBase != retry.Manifest.MergeBase {
+		t.Fatalf("preview identity changed: initial=%+v retry=%+v", original.Manifest, retry.Manifest)
+	}
+	if !reflect.DeepEqual(original.Manifest.Documents, retry.Manifest.Documents) || !reflect.DeepEqual(original.Files, retry.Files) || original.Manifest.BundleDigest != retry.Manifest.BundleDigest {
+		t.Fatal("default-only commit changed the preview document selection or bundle")
+	}
+	if original.Manifest.CreatedAt == retry.Manifest.CreatedAt || original.Group.UpdatedAt == retry.Group.UpdatedAt {
+		t.Fatal("fixture did not distinguish manifest and discovery comparison timestamps")
+	}
+
+	plan, err := PlanPublication(context.Background(), store, retry)
+	if err != nil {
+		t.Fatalf("PlanPublication(retry) error = %v", err)
+	}
+	if len(plan.Objects) != len(retry.Files)+1 || len(plan.CatalogChanges) != 0 {
+		t.Fatalf("retry plan = %+v; want every object retained and no catalog changes", plan)
+	}
+	for _, object := range plan.Objects {
+		if object.Action != "retain" {
+			t.Errorf("retry plan object %q action = %q, want retain", object.Path, object.Action)
+		}
+	}
+
+	manifestKey, _ := ManifestKey("sre", headSHA)
+	manifestBefore, err := store.ReadObject(context.Background(), manifestKey)
+	if err != nil {
+		t.Fatalf("read stored manifest before retry: %v", err)
+	}
+	catalogKey, _ := CatalogKey("sre")
+	catalogBefore, err := store.ReadObject(context.Background(), catalogKey)
+	if err != nil {
+		t.Fatalf("read stored catalog before retry: %v", err)
+	}
+	createCounts := make(map[string]int, len(retry.Files)+1)
+	for filePath := range retry.Files {
+		key, keyErr := FileKey("sre", headSHA, filePath)
+		if keyErr != nil {
+			t.Fatal(keyErr)
+		}
+		createCounts[key] = store.createCallCount(key)
+	}
+	createCounts[manifestKey] = store.createCallCount(manifestKey)
+
+	if err := Publish(context.Background(), store, retry); err != nil {
+		t.Fatalf("Publish(same head after default branch advance) error = %v", err)
+	}
+	manifestAfter, err := store.ReadObject(context.Background(), manifestKey)
+	if err != nil || !bytes.Equal(manifestAfter, manifestBefore) {
+		t.Fatalf("retry rewrote completed manifest: bytesEqual=%t err=%v", bytes.Equal(manifestAfter, manifestBefore), err)
+	}
+	storedManifest, err := DecodeManifest(manifestAfter)
+	if err != nil {
+		t.Fatalf("DecodeManifest(stored retry record) error = %v", err)
+	}
+	if storedManifest.DefaultHead != original.Manifest.DefaultHead || storedManifest.CreatedAt != original.Manifest.CreatedAt {
+		t.Fatalf("retry refreshed immutable provenance: stored=%+v original=%+v", storedManifest, original.Manifest)
+	}
+	catalogAfter, err := store.ReadObject(context.Background(), catalogKey)
+	if err != nil || !bytes.Equal(catalogAfter, catalogBefore) {
+		t.Fatalf("retry changed discovery catalog: bytesEqual=%t err=%v", bytes.Equal(catalogAfter, catalogBefore), err)
+	}
+	storedCatalog, err := DecodeCatalog(catalogAfter)
+	if err != nil {
+		t.Fatalf("DecodeCatalog(stored retry discovery) error = %v", err)
+	}
+	if len(storedCatalog.Groups) != 1 || storedCatalog.Groups[0].UpdatedAt != original.Group.UpdatedAt || storedCatalog.Groups[0].UpdatedAt == retry.Group.UpdatedAt {
+		t.Fatalf("retry refreshed discovery group context: stored=%+v initial=%+v retry=%+v", storedCatalog.Groups, original.Group, retry.Group)
+	}
+	for key, before := range createCounts {
+		if got := store.createCallCount(key); got != before {
+			t.Errorf("retry rewrote immutable object %q: create calls %d -> %d", key, before, got)
+		}
 	}
 }
 

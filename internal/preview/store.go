@@ -556,7 +556,7 @@ func installImmutableRevision(ctx context.Context, store PreviewStore, result Bu
 
 func sameImmutableProjection(left, right RevisionManifest) bool {
 	return left.SchemaVersion == right.SchemaVersion && left.Site == right.Site && left.HeadSHA == right.HeadSHA &&
-		left.DefaultHead == right.DefaultHead && left.MergeBase == right.MergeBase && left.BundleDigest == right.BundleDigest &&
+		left.MergeBase == right.MergeBase && left.BundleDigest == right.BundleDigest &&
 		reflect.DeepEqual(left.Files, right.Files) && reflect.DeepEqual(left.Documents, right.Documents)
 }
 

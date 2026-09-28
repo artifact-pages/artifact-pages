@@ -550,6 +550,12 @@ func TestPublishSameHeadRetryVerifiesImmutableBundleAndDocuments(t *testing.T) {
 				result.Group.Documents = documents
 			},
 		},
+		{
+			name: "changed comparison merge-base",
+			mutate: func(result *BuildResult) {
+				result.Manifest.MergeBase = "2222222222222222222222222222222222222222"
+			},
+		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			store := newMemoryPreviewStore()
