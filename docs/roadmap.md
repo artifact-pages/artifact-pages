@@ -111,7 +111,7 @@ The `gcp-local` profile is an emulator-only contract test. A production GCP adap
 
 ## Before an OSS release
 
-- include the selected MIT license and verify/add any required third-party notices
+- include the selected MIT license and generated third-party notices in web releases; attach dependency notices to any future standalone CLI binary release
 - define compatibility/versioning policy for index and registry schemas
 - document security assumptions for arbitrary HTML/JavaScript artifacts
 - document upgrade and rollback behavior

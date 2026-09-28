@@ -11,7 +11,7 @@ npm run build
 npm run package:web -- --version 1.2.3
 ```
 
-The package command writes an archive, JSON release manifest, and SHA-256 checksum under `.local/releases/`. The archive contains the web build, including `index.html`, hashed files under `assets/`, and any app-owned root runtime files. It does not contain site indexes, artifacts, or previews. The command refuses to replace an existing release label.
+The package command writes an archive, JSON release manifest, and SHA-256 checksum under `.local/releases/`. The archive contains the web build, including `index.html`, hashed files under `assets/`, app-owned root runtime files, the project `LICENSE`, and a generated `THIRD_PARTY_NOTICES.txt` for installed production web dependencies. It does not contain site indexes, artifacts, or previews. The command refuses to replace an existing release label.
 
 Publish those three files as the matching GitHub release assets when preparing a public release. The version label is used in the asset name and release URL; `app deploy --version` downloads and verifies the archive against both the manifest and checksum before writing objects.
 

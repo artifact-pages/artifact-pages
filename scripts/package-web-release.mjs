@@ -90,8 +90,15 @@ async function main() {
   const version = parseVersionLabel(process.argv.slice(2))
   const files = await listFiles(distRoot)
 
-  if (!files.includes('index.html') || !files.some((file) => file.startsWith('assets/'))) {
-    throw new Error('Build the Vite application first; dist must contain index.html and assets/.')
+  if (
+    !files.includes('index.html') ||
+    !files.includes('LICENSE') ||
+    !files.includes('THIRD_PARTY_NOTICES.txt') ||
+    !files.some((file) => file.startsWith('assets/'))
+  ) {
+    throw new Error(
+      'Build the Vite application and generate license notices first; dist must contain index.html, LICENSE, assets/, and THIRD_PARTY_NOTICES.txt.',
+    )
   }
 
   for (const prefix of ['_indexes', '_artifacts', '_previews', '_control']) {
