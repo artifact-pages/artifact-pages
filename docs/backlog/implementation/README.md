@@ -1,12 +1,21 @@
 # Implementation backlog
 
-These are independently reviewable slices for the accepted product contract. IMP-01–18 cover preview; IMP-19–35 cover registered discovery, normal publish, administration, provider deployments and distribution; IMP-36 adds a local edge-to-object-storage contract test foundation. The current Phase 1 boundary remains in [the roadmap](../../roadmap.md); listing a later-phase ticket does not authorize implementing it now. Product behavior belongs in [the specification](../../specification.md), unresolved mechanics in technical design, and proof in verification. A ticket is `Done` only when its acceptance criteria have evidence; completing it does not automatically close linked verification.
+These are independently reviewable slices for the accepted product contract. IMP-01–18 cover preview; IMP-19–35 cover registered discovery, normal publish, administration, provider deployments and distribution; IMP-36 adds a local edge-to-object-storage contract test foundation; IMP-37–38 add the Cloudflare adoption entry point and Terraform Registry distribution. The current Phase 1 boundary remains in [the roadmap](../../roadmap.md); listing a later-phase ticket does not authorize implementing it now. Product behavior belongs in [the specification](../../specification.md), unresolved mechanics in technical design, and proof in verification. A ticket is `Done` only when its acceptance criteria have evidence; completing it does not automatically close linked verification.
 
 ## Follow-up defects and readiness
 
-The 2026-09-28 full-codebase review found 24 confirmed defects after the original local completion checkpoints. ISSUE-014 is verified and removed from the active queue; its committed regression is recorded in [T14](../verification/T14-production-reconciliation.md). [ISSUE-015–037](../issues/README.md#issue-index) track the 23 remaining defects and their regression criteria. Keep the existing IMP records as historical delivery evidence, not a bug-free claim; do not create duplicate implementation tickets for the same independently actionable defect. A larger new slice is appropriate only after an accepted design introduces genuinely new work.
+The 2026-09-28 full-codebase review found 24 confirmed defects after the original local completion checkpoints. The [active issue index](../issues/README.md#issue-index) tracks the remaining defects and their regression criteria as repairs land; verified completed issues are retained in Git history under the issue policy. Keep the existing IMP records as historical delivery evidence, not a bug-free claim; do not create duplicate implementation tickets for the same independently actionable defect. A larger new slice is appropriate only after an accepted design introduces genuinely new work.
 
 Use the [priority-ordered, one-at-a-time repair queue](../issues/README.md#repair-order) before declaring release readiness. [TD3](../technical-design/TD3-preview-origin-delivery.md) owns the provider-style preview-origin decision; ISSUE-026 is blocked on it, but other repairs are not. [T6](../verification/T6-resources-navigation.md) is reopened, and T4/T14/T15 retain broader cache, recovery and live-provider proof. Passing the earlier suites does not close newly demonstrated gaps.
+
+## New adoption and distribution work
+
+| Order | Ticket | Status | Execution | Outcome / handoff |
+| --- | --- | --- | --- | --- |
+| 1 | [IMP-37](IMP-37-cloudflare-entry-module.md) | Open | Agent-led | One Cloudflare entry module creates the bucket and composes delivery/retention; local acceptance hands off real-account proof to T15. |
+| 2 | [IMP-38](IMP-38-terraform-registry-publication.md) | Open | Collaborative | Prepare the package in parallel; owner-approved publication follows Cloudflare proof, then exact-version retrieval feeds T16. |
+
+Use the [delegation index](../delegation.md) for work modes and owner boundaries. Existing review repairs remain the active repair queue; these new tickets are not an instruction to interrupt it. IMP-33 remains Done for its existing-bucket implementation, not as evidence for the new root module or Registry publication.
 
 ## Original implementation checkpoints
 

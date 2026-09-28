@@ -34,6 +34,12 @@ There is no umbrella release tag or requirement that independently consumed comp
 
 Use the existing web-release manifest and `.sha256` file to verify that the downloaded archive matches its published digest. This detects mismatches but is not a cryptographic signature or build-provenance attestation; the first release adds no separate signing/attestation system. Trust rests on the reviewed source commit and controlled GitHub release publishing. Keep superseded web-app tags and assets available for reproducibility and rollback; only the latest web-app release is promised routine fixes, with no LTS commitment. Mark a superseded release clearly and direct adopters to a new immutable version rather than silently changing old assets.
 
+## Registry distribution follow-up
+
+On 2026-09-28 the owner selected public Terraform Registry as the next module-distribution route, starting with Cloudflare. [IMP-37](../implementation/IMP-37-cloudflare-entry-module.md) prepares the single entry module; [IMP-38](../implementation/IMP-38-terraform-registry-publication.md) owns packaging and authorized publication. A Registry release requires its own provider-module SemVer tags and exact-version consumer selection, independent of the OSS repository's web-only tags and Action/CLI SHA.
+
+The table above records the currently available Git-source distribution, not a claim that Registry modules exist. IMP-38 must update that table and the consumer/release guides before declaring Registry adoption complete. The owner has added `terraform-cloudflare-artifact-pages` and `terraform-aws-artifact-pages`; their initial checkouts contain only a license. The release version, Registry account connection, and public publication remain owner handoffs; local preparation must not be mistaken for a published module. This future module version boundary does not create an umbrella product release or trigger app deployment.
+
 ## Exit criteria
 
 - [x] Select the MIT License for the project.
