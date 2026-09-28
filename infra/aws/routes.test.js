@@ -25,7 +25,7 @@ test('CloudFront route function passes application, notice, and data-plane objec
     '/preview-bridge.js',
     '/LICENSE',
     '/THIRD_PARTY_NOTICES.txt',
-    '/assets/app-123.js',
+    '/assets/app-AbC123xY.js',
     '/_indexes/sites.json',
     '/_artifacts/sre/report.html',
     '/_previews/sre/catalog.json',

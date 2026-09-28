@@ -19,7 +19,7 @@ The module does not create DNS records or a WAF policy. A satellite role only ex
 
 Satellite IAM role names include the full site ID when they fit AWS's 64-character limit. Longer IDs use a stable hash suffix; `satellite_role_arns` remains keyed by the full site ID either way.
 
-The CloudFront cache policies bound shared-cache freshness at 60 seconds for `/_indexes/*`, 300 seconds for `/_artifacts/*`, zero for the shell and `/_previews/*`, and one year for `/assets/*`. The publisher supplies the matching object metadata. A private S3 403 or 404 for a missing projection object maps to a 404 response. `/_errors/not-found.html` is a small managed text page used for that response.
+The CloudFront cache policies bound shared-cache freshness at 60 seconds for `/_indexes/*`, 300 seconds for `/_artifacts/*`, zero for the shell and `/_previews/*`, and honor the publisher's per-object `Cache-Control` under `/assets/*` with a one-year maximum. Fixed-name assets revalidate; content-hashed assets can use the one-year immutable policy. A private S3 403 or 404 for a missing projection object maps to a 404 response. `/_errors/not-found.html` is a small managed text page used for that response.
 
 `preview_retention_days` expires current objects and noncurrent versions under `_previews/` through S3 lifecycle management, then removes expired delete markers. S3 versioning is bucket-wide rather than prefix-scoped; this module manages it as `Suspended` to avoid generating new unique versions for preview rewrites. The lifecycle rules also remove existing noncurrent preview versions if the bucket had been versioned before suspension. They do not alter noncurrent versions outside `_previews/`. Incomplete multipart uploads under the prefix are aborted after seven days.
 

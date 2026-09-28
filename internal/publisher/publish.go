@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -155,11 +156,17 @@ func appObjectMatchesBundle(info ObjectInfo, file bundleFile, manifest releaseMa
 }
 
 func appFileCacheControl(relative string) string {
-	if strings.HasPrefix(filepath.ToSlash(relative), "assets/") {
+	assetPath := filepath.ToSlash(relative)
+	if strings.HasPrefix(assetPath, "assets/") && hashedAppAssetName.MatchString(path.Base(assetPath)) {
 		return immutableCache
 	}
 	return appShellCache
 }
+
+// Vite and Rollup use an eight-character [hash] suffix by default. Only these
+// generated asset names can safely use the immutable policy; fixed-name files
+// and unrecognized names must revalidate.
+var hashedAppAssetName = regexp.MustCompile(`^.+-[A-Za-z0-9_-]{8}\.[^/]+$`)
 
 func contentType(relative string) string {
 	if relative == "LICENSE" || relative == "THIRD_PARTY_NOTICES.txt" {

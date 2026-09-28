@@ -124,7 +124,9 @@ test('AWS deployment maps the logical app and content paths to bounded cache pol
   for (const [name, ttl] of [['no_store', 0], ['indexes', 60], ['artifacts', 300], ['immutable_assets', 31536000]]) {
     const cachePolicy = block(main, `resource "aws_cloudfront_cache_policy" "${name}"`)
     for (const field of ['min_ttl', 'default_ttl', 'max_ttl']) {
-      const expected = name === 'no_store' ? 0 : field === 'min_ttl' ? 0 : ttl
+      const expected = name === 'no_store' || (name === 'immutable_assets' && field === 'default_ttl')
+        ? 0
+        : field === 'min_ttl' ? 0 : ttl
       assert.match(cachePolicy, new RegExp(`${field}\\s*=\\s*${expected}(?:\\s|$)`, 'u'), `${name}.${field} must be ${expected}`)
     }
   }

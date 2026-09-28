@@ -63,8 +63,9 @@ func (backend *memoryDeploymentBackend) HeadObject(_ context.Context, key string
 
 func TestDeployAppUsesProviderNeutralBackend(t *testing.T) {
 	archive := createWebBundle(t, map[string][]byte{
-		"index.html":    []byte("<script src=\"/assets/app.js\"></script>"),
-		"assets/app.js": []byte("console.log('ready')"),
+		"index.html":             []byte("<script src=\"/assets/app-AbC123xY.js\"></script><script src=\"/assets/app.js\"></script>"),
+		"assets/app-AbC123xY.js": []byte("console.log('hashed ready')"),
+		"assets/app.js":          []byte("console.log('fixed ready')"),
 	})
 	backend := &memoryDeploymentBackend{objects: make(map[string]Object)}
 
@@ -72,14 +73,17 @@ func TestDeployAppUsesProviderNeutralBackend(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DeployApp() error = %v", err)
 	}
-	if result.FilesPublished != 2 || result.InvalidationID != "memory-revalidation" {
-		t.Fatalf("DeployApp() = %+v, want two files and provider-neutral revalidation result", result)
+	if result.FilesPublished != 3 || result.InvalidationID != "memory-revalidation" {
+		t.Fatalf("DeployApp() = %+v, want three files and provider-neutral revalidation result", result)
 	}
-	if len(backend.puts) != 2 || backend.puts[len(backend.puts)-1] != "index.html" {
+	if len(backend.puts) != 3 || backend.puts[len(backend.puts)-1] != "index.html" {
 		t.Fatalf("upload order = %v, want index.html last", backend.puts)
 	}
-	if got := backend.objects["assets/app.js"].Cache; got != immutableCache {
+	if got := backend.objects["assets/app-AbC123xY.js"].Cache; got != immutableCache {
 		t.Errorf("hashed asset Cache-Control = %q, want %q", got, immutableCache)
+	}
+	if got := backend.objects["assets/app.js"].Cache; got != appShellCache {
+		t.Errorf("fixed-name asset Cache-Control = %q, want %q", got, appShellCache)
 	}
 	if len(backend.invalidations) != 1 || strings.Join(backend.invalidations[0], ",") != "/index.html" {
 		t.Errorf("revalidation paths = %v, want [/index.html]", backend.invalidations)

@@ -106,12 +106,13 @@ func (f *fakeCloudFront) CreateInvalidation(_ context.Context, input *cloudfront
 
 func TestDeployAppVerifiesAndPublishesBundle(t *testing.T) {
 	archive := createWebBundle(t, map[string][]byte{
-		"index.html":              []byte("<!doctype html><script src=\"/assets/app-123.js\"></script>"),
-		"assets/app-123.js":       []byte("console.log('ready')"),
-		"assets/theme-456.css":    []byte("body { color: #123; }"),
-		"LICENSE":                 []byte("Project license text\n"),
-		"THIRD_PARTY_NOTICES.txt": []byte("Third-party notice text\n"),
-		"preview-bridge.js":       []byte("window.previewBridge = true"),
+		"index.html":                []byte("<!doctype html><script src=\"/assets/app-AbC123xY.js\"></script><script src=\"/assets/app.js\"></script>"),
+		"assets/app-AbC123xY.js":    []byte("console.log('hashed ready')"),
+		"assets/app.js":             []byte("console.log('fixed ready')"),
+		"assets/theme-AbC123xY.css": []byte("body { color: #123; }"),
+		"LICENSE":                   []byte("Project license text\n"),
+		"THIRD_PARTY_NOTICES.txt":   []byte("Third-party notice text\n"),
+		"preview-bridge.js":         []byte("window.previewBridge = true"),
 	})
 	s3Client := newFakeS3()
 	cloudFront := &fakeCloudFront{}
@@ -131,12 +132,13 @@ func TestDeployAppVerifiesAndPublishesBundle(t *testing.T) {
 	wantPlan := []Change{
 		{Action: "create", Path: "LICENSE"},
 		{Action: "create", Path: "THIRD_PARTY_NOTICES.txt"},
-		{Action: "create", Path: "assets/app-123.js"},
-		{Action: "create", Path: "assets/theme-456.css"},
+		{Action: "create", Path: "assets/app-AbC123xY.js"},
+		{Action: "create", Path: "assets/app.js"},
+		{Action: "create", Path: "assets/theme-AbC123xY.css"},
 		{Action: "create", Path: "preview-bridge.js"},
 		{Action: "create", Path: "index.html"},
 	}
-	if planned.Outcome != "planned" || planned.FilesPublished != 6 || !reflect.DeepEqual(planned.Changes, wantPlan) {
+	if planned.Outcome != "planned" || planned.FilesPublished != 7 || !reflect.DeepEqual(planned.Changes, wantPlan) {
 		t.Fatalf("DeployApp() dry-run = %+v, want read-only plan %+v", planned, wantPlan)
 	}
 	if len(s3Client.puts) != 0 || len(cloudFront.invalidations) != 0 {
@@ -149,17 +151,20 @@ func TestDeployAppVerifiesAndPublishesBundle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DeployApp() error = %v", err)
 	}
-	if result.Version != "test-1" || result.FilesPublished != 6 {
-		t.Fatalf("DeployApp() = %+v, want version test-1 and all 6 manifest files", result)
+	if result.Version != "test-1" || result.FilesPublished != 7 {
+		t.Fatalf("DeployApp() = %+v, want version test-1 and all 7 manifest files", result)
 	}
-	if got := string(s3Client.objects["index.html"].body); !strings.Contains(got, "app-123.js") {
+	if got := string(s3Client.objects["index.html"].body); !strings.Contains(got, "app-AbC123xY.js") {
 		t.Fatalf("uploaded application shell = %q", got)
 	}
 	if got := s3Client.objects["index.html"].cache; got != appShellCache {
 		t.Errorf("index.html Cache-Control = %q, want %q", got, appShellCache)
 	}
-	if got := s3Client.objects["assets/app-123.js"].cache; got != immutableCache {
+	if got := s3Client.objects["assets/app-AbC123xY.js"].cache; got != immutableCache {
 		t.Errorf("hashed asset Cache-Control = %q, want %q", got, immutableCache)
+	}
+	if got := s3Client.objects["assets/app.js"].cache; got != appShellCache {
+		t.Errorf("fixed-name asset Cache-Control = %q, want %q", got, appShellCache)
 	}
 	for filePath, want := range map[string]string{
 		"LICENSE":                 "Project license text\n",
@@ -192,8 +197,8 @@ func TestDeployAppVerifiesAndPublishesBundle(t *testing.T) {
 
 func TestDeployAppRejectsChecksumMismatchBeforeUpload(t *testing.T) {
 	archive := createWebBundle(t, map[string][]byte{
-		"index.html":        []byte("shell"),
-		"assets/app-123.js": []byte("asset"),
+		"index.html":    []byte("shell"),
+		"assets/app.js": []byte("asset"),
 	})
 	if err := os.WriteFile(archive+".sha256", []byte(strings.Repeat("0", 64)+"  "+filepath.Base(archive)+"\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -238,8 +243,8 @@ func TestDeployAppRejectsMissingBundleBeforeAnyWrite(t *testing.T) {
 
 func TestDeployAppUnchangedBundleIsNoOpAndPreservesSiteContent(t *testing.T) {
 	archive := createWebBundle(t, map[string][]byte{
-		"index.html":        []byte("shell referencing app-123.js"),
-		"assets/app-123.js": []byte("console.log('ready')"),
+		"index.html":        []byte("shell referencing app.js"),
+		"assets/app.js":     []byte("console.log('ready')"),
 		"preview-bridge.js": []byte("window.previewBridge = true"),
 	})
 	backend := &memoryDeploymentBackend{objects: map[string]Object{
@@ -282,6 +287,66 @@ func TestDeployAppUnchangedBundleIsNoOpAndPreservesSiteContent(t *testing.T) {
 		if got := backend.objects[key].Bytes; string(got) != string(want) {
 			t.Errorf("site content object %q changed on no-op app deploy: got %q, want %q", key, got, want)
 		}
+	}
+}
+
+func TestDeployAppRepairsStaleFixedAssetCachePolicy(t *testing.T) {
+	archive := createWebBundle(t, map[string][]byte{
+		"index.html":    []byte("<script src=\"/assets/app.js\"></script>"),
+		"assets/app.js": []byte("console.log('same bytes')"),
+	})
+	s3Client := newFakeS3()
+	cloudFront := &fakeCloudFront{}
+	backend, err := newAWSBackend(awsClients{s3: s3Client, cloudFront: cloudFront}, AWSOptions{
+		Bucket: "example-bucket", DistributionID: "E123TEST",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := DeployApp(context.Background(), backend, AppDeployOptions{ArchivePath: archive}); err != nil {
+		t.Fatalf("initial DeployApp() error = %v", err)
+	}
+
+	fixedAsset := s3Client.objects["assets/app.js"]
+	fixedAsset.cache = immutableCache
+	s3Client.objects["assets/app.js"] = fixedAsset
+	s3Client.puts = nil
+	cloudFront.invalidations = nil
+
+	result, err := DeployApp(context.Background(), backend, AppDeployOptions{ArchivePath: archive})
+	if err != nil {
+		t.Fatalf("DeployApp() after stale cache metadata error = %v", err)
+	}
+	if result.Outcome != "deployed" || result.FilesPublished != 1 || !reflect.DeepEqual(s3Client.puts, []string{"assets/app.js"}) {
+		t.Fatalf("DeployApp() = %+v, puts=%v; want cache-policy-only repair for the fixed asset", result, s3Client.puts)
+	}
+	if got := s3Client.objects["assets/app.js"].cache; got != appShellCache {
+		t.Errorf("repaired fixed asset Cache-Control = %q, want %q", got, appShellCache)
+	}
+	if len(cloudFront.invalidations) != 1 || strings.Join(cloudFront.invalidations[0], ",") != "/index.html" {
+		t.Errorf("Cache-Control repair invalidations = %#v, want only /index.html", cloudFront.invalidations)
+	}
+}
+
+func TestAppFileCacheControl(t *testing.T) {
+	for _, testCase := range []struct {
+		path string
+		want string
+	}{
+		{path: "index.html", want: appShellCache},
+		{path: "preview-bridge.js", want: appShellCache},
+		{path: "assets/app.js", want: appShellCache},
+		{path: "assets/vendor.min.js", want: appShellCache},
+		{path: "assets/chunks/app-AbC123xY.js", want: immutableCache},
+		{path: "assets/app-AbC123xY.min.js", want: immutableCache},
+		{path: "assets/theme-AbC123xY.css", want: immutableCache},
+		{path: "other/app-AbC123xY.js", want: appShellCache},
+	} {
+		t.Run(testCase.path, func(t *testing.T) {
+			if got := appFileCacheControl(testCase.path); got != testCase.want {
+				t.Errorf("appFileCacheControl(%q) = %q, want %q", testCase.path, got, testCase.want)
+			}
+		})
 	}
 }
 

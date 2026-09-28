@@ -5,6 +5,8 @@ locals {
   reserved_path_exclusions = join(" and ", [
     "${local.normalized_path} ne \"/index.html\"",
     "${local.normalized_path} ne \"/preview-bridge.js\"",
+    "${local.normalized_path} ne \"/license\"",
+    "${local.normalized_path} ne \"/third_party_notices.txt\"",
     "${local.normalized_path} ne \"/assets\"",
     "not starts_with(${local.normalized_path}, \"/assets/\")",
     "${local.normalized_path} ne \"/_indexes\"",
@@ -35,6 +37,8 @@ locals {
   projection_cache_paths = join(" or ", [
     "${local.normalized_path} eq \"/index.html\"",
     "${local.normalized_path} eq \"/preview-bridge.js\"",
+    "${local.normalized_path} eq \"/license\"",
+    "${local.normalized_path} eq \"/third_party_notices.txt\"",
     "${local.normalized_path} eq \"/assets\"",
     "starts_with(${local.normalized_path}, \"/assets/\")",
     "${local.normalized_path} eq \"/_indexes\"",

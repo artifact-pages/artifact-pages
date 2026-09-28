@@ -680,14 +680,18 @@ Expected direction:
 
 ~~~text
 /index.html                          no-cache, max-age=0, must-revalidate
-/assets/<content-hash>*              public, max-age=31536000, immutable
+/preview-bridge.js                  no-cache, max-age=0, must-revalidate
+/LICENSE                            no-cache, max-age=0, must-revalidate
+/THIRD_PARTY_NOTICES.txt            no-cache, max-age=0, must-revalidate
+/assets/<fixed-or-unrecognized-name>.* no-cache, max-age=0, must-revalidate
+/assets/<name>-<8-character-hash>.*  public, max-age=31536000, immutable
 /_indexes/sites.json                 public, max-age=0, s-maxage=60, must-revalidate
 /_indexes/<site>/meta.json           public, max-age=0, s-maxage=60, must-revalidate
 /_indexes/<site>/index.json          public, max-age=0, s-maxage=60, must-revalidate
 /_artifacts/<site>/*                 public, max-age=0, s-maxage=300, must-revalidate
 ~~~
 
-These are initial product defaults: browsers must revalidate mutable objects on use, while shared CDN caches may retain site metadata/indexes for up to 60 seconds and stable artifact URLs for up to 300 seconds. Normal publish does not invalidate the CDN; a changed artifact may therefore remain stale at an edge for up to five minutes. The provider adapter must honor these upper bounds or use stricter freshness. Content-hashed application assets may be cached for one year because a content change produces a different URL; unhashed application files must revalidate.
+These are initial product defaults: browsers must revalidate mutable objects on use, while shared CDN caches may retain site metadata/indexes for up to 60 seconds and stable artifact URLs for up to 300 seconds. Normal publish does not invalidate the CDN; a changed artifact may therefore remain stale at an edge for up to five minutes. The provider adapter must honor these upper bounds or use stricter freshness. Vite/Rollup application assets with the default eight-character `-[hash]` filename suffix may be cached for one year because a content change produces a different URL; fixed-name and unrecognized application files must revalidate.
 
 For AWS, the publisher's registry read is directly from the S3 object and therefore does not depend on CloudFront cache freshness; browser visibility still requires timely CDN revalidation or invalidation. During unpublish, the affected cache set includes `/_indexes/sites.json`, `/<site>`, `/<site>/*`, `/_indexes/<site>/*`, `/_artifacts/<site>/*`, and `/_previews/<site>/*`; the adapter requests provider invalidation or equivalent revalidation/expiry and reports failure if that request fails. A successful request does not promise instantaneous global cache convergence or revoke content already delivered to clients. If an operator configures an external access gate at the serving edge, it must cover the desired routes and run before protected bytes are returned from an origin or shared cache. That gate and its verification are deployment concerns; Artifact Pages does not implement identity-aware cache partitioning. Provider implementation details do not change the path sets or freshness contract.
 

@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -794,8 +795,9 @@ func TestRunAppDeployReportsNoOpForUnchangedBundleAndPreservesSiteContent(t *tes
 		t.Fatal(err)
 	}
 	archivePath := createAppBundleForTest(t, filepath.Join(root, "artifact-pages-web-vtest-1.tar.gz"), "test-1", map[string][]byte{
-		"index.html":        []byte("<script src=\"/assets/app-123.js\"></script>"),
-		"assets/app-123.js": []byte("console.log('ready')"),
+		"index.html":             []byte("<script src=\"/assets/app-AbC123xY.js\"></script><script src=\"/assets/app.js\"></script>"),
+		"assets/app-AbC123xY.js": []byte("console.log('hashed ready')"),
+		"assets/app.js":          []byte("console.log('fixed ready')"),
 	})
 	backend, err := publisher.NewDirectoryBackend(storageRoot)
 	if err != nil {
@@ -824,8 +826,12 @@ func TestRunAppDeployReportsNoOpForUnchangedBundleAndPreservesSiteContent(t *tes
 	if err := json.Unmarshal(stdout.Bytes(), &planned); err != nil {
 		t.Fatalf("decode app deploy dry-run JSON: %v; output=%s", err, stdout.String())
 	}
-	wantPlan := []publisher.Change{{Action: "create", Path: "assets/app-123.js"}, {Action: "create", Path: "index.html"}}
-	if planned.Operation != "app deploy" || planned.Outcome != "planned" || planned.FilesPublished != 2 || !reflect.DeepEqual(planned.Changes, wantPlan) {
+	wantPlan := []publisher.Change{
+		{Action: "create", Path: "assets/app-AbC123xY.js"},
+		{Action: "create", Path: "assets/app.js"},
+		{Action: "create", Path: "index.html"},
+	}
+	if planned.Operation != "app deploy" || planned.Outcome != "planned" || planned.FilesPublished != 3 || !reflect.DeepEqual(planned.Changes, wantPlan) {
 		t.Fatalf("app deploy dry-run = %+v, want read-only plan %+v", planned, wantPlan)
 	}
 	if afterDryRun := snapshotFiles(t, storageRoot); !reflect.DeepEqual(afterDryRun, beforeDryRun) {
@@ -840,8 +846,8 @@ func TestRunAppDeployReportsNoOpForUnchangedBundleAndPreservesSiteContent(t *tes
 	if err := json.Unmarshal(stdout.Bytes(), &first); err != nil {
 		t.Fatalf("decode first app deploy JSON: %v; output=%s", err, stdout.String())
 	}
-	if first.Operation != "app deploy" || first.Outcome != "deployed" || first.FilesPublished != 2 {
-		t.Fatalf("first app deploy = %+v, want two-file deployment", first)
+	if first.Operation != "app deploy" || first.Outcome != "deployed" || first.FilesPublished != 3 {
+		t.Fatalf("first app deploy = %+v, want three-file deployment", first)
 	}
 
 	stdout.Reset()
@@ -874,7 +880,7 @@ func TestRunAppDeployReportsNoOpForUnchangedBundleAndPreservesSiteContent(t *tes
 		}
 	}
 	appShell, _, err := backend.GetObject(t.Context(), "index.html")
-	if err != nil || !bytes.Contains(appShell.Bytes, []byte("app-123.js")) {
+	if err != nil || !bytes.Contains(appShell.Bytes, []byte("app-AbC123xY.js")) {
 		t.Errorf("deployed app shell = %q, err=%v", appShell.Bytes, err)
 	}
 }
@@ -887,7 +893,11 @@ func createAppBundleForTest(t *testing.T, archivePath, version string, files map
 	}
 	gzipWriter := gzip.NewWriter(archiveFile)
 	tarWriter := tar.NewWriter(gzipWriter)
-	paths := []string{"index.html", "assets/app-123.js"}
+	paths := make([]string, 0, len(files))
+	for path := range files {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
 	for _, path := range paths {
 		contents := files[path]
 		if err := tarWriter.WriteHeader(&tar.Header{Name: "./" + path, Mode: 0o644, Size: int64(len(contents)), Typeflag: tar.TypeReg}); err != nil {

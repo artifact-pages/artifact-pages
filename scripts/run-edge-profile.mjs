@@ -271,6 +271,33 @@ function assertEdgeHasNoDynamicStorageMount(profile, env, service) {
   }
 }
 
+async function assertEdgeAppAssetCacheHeaders(profile, edgePort) {
+  const assetRoot = path.join(projectRoot, 'dist', 'assets')
+  const stem = `app_cache_profile_probe_${profile}_${process.pid}`
+  const fixedName = `${stem}.js`
+  const hashedName = `${stem}-AbC123xY.js`
+  await fs.mkdir(assetRoot, { recursive: true })
+  await fs.writeFile(path.join(assetRoot, fixedName), 'window.fixedCacheProbe = true;\n')
+  await fs.writeFile(path.join(assetRoot, hashedName), 'window.hashedCacheProbe = true;\n')
+  try {
+    for (const [name, expected] of [
+      [fixedName, 'no-cache, max-age=0, must-revalidate'],
+      [hashedName, 'public, max-age=31536000, immutable'],
+    ]) {
+      const response = await fetch(`http://127.0.0.1:${edgePort}/assets/${name}`)
+      const cacheControl = response.headers.get('cache-control')
+      if (response.status !== 200 || cacheControl !== expected) {
+        throw new Error(`${profile} edge asset /assets/${name} returned HTTP ${response.status} with Cache-Control ${cacheControl ?? '<missing>'}; want ${expected}.`)
+      }
+    }
+  } finally {
+    await Promise.all([
+      fs.rm(path.join(assetRoot, fixedName), { force: true }),
+      fs.rm(path.join(assetRoot, hashedName), { force: true }),
+    ])
+  }
+}
+
 async function startProfile(profile, env, edgeService) {
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
@@ -380,6 +407,7 @@ async function main() {
       await waitFor(`http://127.0.0.1:${ports.cloudflareAPI}/health`, 204, 'Cloudflare API mock')
     }
     await waitFor(`http://127.0.0.1:${ports.edge}/health`, 204, `${profile} nginx edge`)
+    await assertEdgeAppAssetCacheHeaders(profile, ports.edge)
 
     const commandEnv = localProfileEnv(profile, ports)
     let frontendProbeKey = ''
@@ -443,6 +471,9 @@ async function main() {
     }
 
     run('go', ['test', './internal/publisher', '-run', '^TestLocalEdgeConformance$', '-count=1'], {
+      env: commandEnv,
+    })
+    run('go', ['test', './cmd/artifact-pages', '-run', '^TestLocalAppDeployCacheConformance$', '-count=1'], {
       env: commandEnv,
     })
 

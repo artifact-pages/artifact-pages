@@ -309,9 +309,9 @@ resource "aws_cloudfront_cache_policy" "artifacts" {
 
 resource "aws_cloudfront_cache_policy" "immutable_assets" {
   name        = "${var.name_prefix}-immutable-assets"
-  comment     = "Hashed application assets are immutable for one year."
+  comment     = "Honor application asset Cache-Control; allow hashed assets up to one year."
   min_ttl     = 0
-  default_ttl = 31536000
+  default_ttl = 0
   max_ttl     = 31536000
 
   parameters_in_cache_key_and_forwarded_to_origin {

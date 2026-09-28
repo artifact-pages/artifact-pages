@@ -60,7 +60,7 @@ test('logical rewrites preserve every reserved object plane and block decoded co
   assert.match(source, /normalized_path\s*=\s*"lower\(url_decode\(http\.request\.uri\.path, \\"r\\"\)\)"/u)
 
   const exclusions = localBlock('reserved_path_exclusions', 'logical_route_rule')
-  for (const path of ['/index.html', '/preview-bridge.js', '/assets', '/_indexes', '/_artifacts', '/_previews', '/_control']) {
+  for (const path of ['/index.html', '/preview-bridge.js', '/license', '/third_party_notices.txt', '/assets', '/_indexes', '/_artifacts', '/_previews', '/_control']) {
     assert.ok(exclusions.includes(`\\"${path}\\"`), `logical routes must reserve ${path}`)
   }
   for (const prefix of ['/assets/', '/_indexes/', '/_artifacts/', '/_previews/', '/_control/']) {
@@ -79,7 +79,7 @@ test('logical rewrites preserve every reserved object plane and block decoded co
 
 test('origin cache rule covers only public projection paths and respects both origin TTLs', () => {
   const cachePaths = localBlock('projection_cache_paths', 'control_block_rule')
-  for (const path of ['/index.html', '/preview-bridge.js', '/assets/', '/_indexes/', '/_artifacts/', '/_previews/']) {
+  for (const path of ['/index.html', '/preview-bridge.js', '/license', '/third_party_notices.txt', '/assets/', '/_indexes/', '/_artifacts/', '/_previews/']) {
     assert.ok(cachePaths.includes(`\\"${path}\\"`), `public projection cache rule must include ${path}`)
   }
   assert.equal(cachePaths.includes('/_control'), false, 'private control objects must never be cache-eligible')

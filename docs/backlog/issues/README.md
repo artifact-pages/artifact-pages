@@ -23,11 +23,11 @@ Each issue file records one independently actionable problem. New issues start a
 | `P2` | A meaningful correctness, reliability, navigation, or usability problem outside P1's impact. |
 | `P3` | Localized polish or a lower-impact improvement. |
 
-Priority describes user impact, not implementation effort. Issues 001–012 are completed historical browser/interaction work. ISSUE-013 is a proposed site-description improvement. ISSUE-014–037 recorded the 24 confirmed findings from the full-codebase review on 2026-09-28 at `50c327d886c71fc5e0d086a5967b90cd9038e01e` (4 P1, 20 P2). ISSUE-014 through ISSUE-018 have verified acceptance criteria and were removed from the active backlog under the completion policy; their regression and verification records remain in T14, T6, T15, IMP-21, IMP-25, T13, and Git history.
+Priority describes user impact, not implementation effort. Issues 001–012 are completed historical browser/interaction work. ISSUE-013 is a proposed site-description improvement. ISSUE-014–037 recorded the 24 confirmed findings from the full-codebase review on 2026-09-28 at `50c327d886c71fc5e0d086a5967b90cd9038e01e` (4 P1, 20 P2). ISSUE-014 through ISSUE-020 have verified acceptance criteria and were removed from the active backlog under the completion policy; their regression and verification records remain in T14, T6, T15, IMP-21, IMP-25, T13, and Git history.
 
 Each review issue contains its own reproduction and source pointers. Supplementary captures/scripts remain ignored in `.local/reviews/2026-09-28/`; they are not the only evidence or a dependency of this committed backlog. Local CLI/HTTP/browser reproductions and provider-source inconsistencies are labeled separately from live-provider proof. Existing passing suites did not cover these regressions.
 
-The remaining review queue has 18 Open, 0 In progress, and 0 Blocked issues; with ISSUE-013 this track has 19 Open, 0 In progress, and 0 Blocked. [TD3](../technical-design/TD3-preview-origin-delivery.md) is settled: ISSUE-026 now implements the accepted trusted same-origin HTML contract. The unconfirmed AWS absent-object 403/404 concern belongs to [T15](../verification/T15-provider-delivery.md), not to another confirmed issue.
+The remaining review queue has 17 Open, 0 In progress, and 0 Blocked issues; with ISSUE-013 this track has 18 Open, 0 In progress, and 0 Blocked. [TD3](../technical-design/TD3-preview-origin-delivery.md) is settled: ISSUE-026 now implements the accepted trusted same-origin HTML contract. The unconfirmed AWS absent-object 403/404 concern belongs to [T15](../verification/T15-provider-delivery.md), not to another confirmed issue.
 
 ## Repair order
 
@@ -35,7 +35,7 @@ Work one issue at a time: mark it In progress, reproduce it, add a regression, i
 
 | Order | Items, in order | Outcome |
 | --- | --- | --- |
-| 1 | ISSUE-019 → 021 | Browser cache and bounded lock acquisition. |
+| 1 | ISSUE-021 | Bounded lock acquisition. |
 | 2 | ISSUE-022 → 023 → 024 → 025 → 026 → 027 → 028 | Preview identity, rendering closure and navigation. |
 | 3 | ISSUE-029 → 030 → 031 → 032 → 033 → 034 → 035 | Heading/link parity, Unicode/provenance, remote config and local development. |
 | 4 | ISSUE-036 → 037 | Release-file integrity and reference artifact CSP. |
@@ -48,7 +48,6 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | Issue | Status | Priority | Area | Summary |
 | --- | --- | --- | --- | --- |
 | [ISSUE-013 — Site descriptions](ISSUE-013-site-description.md) | Open | P2 | Site discovery and site selection | Explain each site's purpose before visitors open it. |
-| [ISSUE-019 — Revalidate fixed-name application assets on upgrade and rollback](ISSUE-019-unhashed-app-asset-cache.md) | Open | P2 | App deploy / browser and edge cache | Review 06: Confirmed defect; reproduction and acceptance criteria in the issue. |
 | [ISSUE-021 — Enforce the lock wait limit during conditional-write conflicts](ISSUE-021-lock-cas-wait-limit.md) | Open | P2 | Publisher coordination / locks | Review 08: Confirmed defect; reproduction and acceptance criteria in the issue. |
 | [ISSUE-022 — Allow same-head preview retries when only the default branch advances](ISSUE-022-preview-default-head-retry.md) | Open | P2 | Preview revision identity / idempotency | Review 09: Confirmed defect; reproduction and acceptance criteria in the issue. |
 | [ISSUE-023 — Recognize static JavaScript module dependencies without matching ordinary strings](ISSUE-023-preview-module-dependency-parsing.md) | Open | P2 | Preview resource closure / JavaScript | Review 10: Confirmed defect; reproduction and acceptance criteria in the issue. |
