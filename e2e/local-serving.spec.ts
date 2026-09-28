@@ -2268,7 +2268,7 @@ test('preview HTML keeps changed-document navigation in the preview and unchange
     const extraLinks = [
       '<p><a href="preview-guide.md?tab=summary#local-preview-guide">Open the changed Markdown document with query and fragment</a></p>',
       '<p><a href="https://docs.example.test/guide?mode=full#overview">Open external HTTPS documentation</a></p>',
-      '<script type="module" src="./modules/entry.js"></script>',
+      '<script type="module">import "./modules/entry.js";</script>',
       '<script>const runtimeName = ["preview", "runtime"].join("-") + ".json"; fetch("./" + runtimeName).then(() => { document.body.dataset.runtimeResource = "loaded"; }).catch(() => { document.body.dataset.runtimeResource = "blocked"; });</script>',
     ].join('')
     await route.fulfill({ response, body: source.replace('</main>', `${extraLinks}</main>`) })

@@ -7,6 +7,25 @@ import (
 	"testing"
 )
 
+func TestIsHTMLModuleScriptType(t *testing.T) {
+	for _, testCase := range []struct {
+		value string
+		want  bool
+	}{
+		{value: "module", want: true},
+		{value: "MODULE", want: true},
+		{value: " \tMoDuLe\n", want: true},
+		{value: "\u00a0module\u00a0", want: false},
+		{value: "application/json", want: false},
+	} {
+		t.Run(testCase.value, func(t *testing.T) {
+			if got := isHTMLModuleScriptType(testCase.value); got != testCase.want {
+				t.Fatalf("isHTMLModuleScriptType(%q) = %t, want %t", testCase.value, got, testCase.want)
+			}
+		})
+	}
+}
+
 func TestJavaScriptModuleReferences(t *testing.T) {
 	source := strings.Join([]string{
 		`import "./side-effect.js";`,
@@ -189,6 +208,73 @@ export const effect = true;
 	}
 }
 
+func TestBuildFromGitCollectsInlineModuleDependencies(t *testing.T) {
+	repo := newTestRepository(t)
+	writeTestFile(t, repo, "site/docs/guide.html", `<title>Guide</title>`)
+	gitTest(t, repo, "add", ".")
+	gitTest(t, repo, "commit", "-m", "base guide")
+	gitTest(t, repo, "branch", "preview")
+
+	gitTest(t, repo, "checkout", "preview")
+	writeTestFile(t, repo, "site/docs/guide.html", `<title>Preview Guide</title>
+<script type="module">
+import "./inline-app.js";
+export { label } from "./inline-export.js";
+import "https://cdn.example.test/remote.js";
+const decoy = "import './string-decoy.js'";
+</script>
+<script>import "./ordinary-script-decoy.js";</script>
+<script type="application/json">{"code":"import './data-script-decoy.js'"}</script>
+<script type=" module ">import "./unicode-type-decoy.js";</script>
+<script type="module" src="../assets/external-entry.js">import "./external-inline-decoy.js";</script>`)
+	writeTestFile(t, repo, "site/docs/inline-app.js", `import "./modules/dependency.js";
+export const loaded = true;
+`)
+	writeTestFile(t, repo, "site/docs/modules/dependency.js", `export const dependency = true;
+`)
+	writeTestFile(t, repo, "site/docs/inline-export.js", `export const label = "inline";
+`)
+	writeTestFile(t, repo, "site/assets/external-entry.js", `export const externalEntry = true;
+`)
+	gitTest(t, repo, "add", ".")
+	gitTest(t, repo, "commit", "-m", "preview guide with inline module imports")
+
+	result, err := BuildFromGit(context.Background(), BuildOptions{
+		RepositoryDir: repo, SiteID: "sre", SourcePath: "site", DefaultRef: "main", HeadRef: "preview",
+	})
+	if err != nil {
+		t.Fatalf("BuildFromGit() error = %v", err)
+	}
+	want := []string{
+		"assets/external-entry.js", "docs/guide.html", "docs/inline-app.js", "docs/inline-export.js", "docs/modules/dependency.js",
+	}
+	if len(result.Files) != len(want) {
+		t.Fatalf("collected %d files, want %d: %#v", len(result.Files), len(want), result.Files)
+	}
+	manifestPaths := make(map[string]bool, len(result.Manifest.Files))
+	for _, file := range result.Manifest.Files {
+		manifestPaths[file.Path] = true
+	}
+	if len(manifestPaths) != len(want) {
+		t.Fatalf("manifest lists %d files, want %d: %#v", len(manifestPaths), len(want), result.Manifest.Files)
+	}
+	for _, filePath := range want {
+		if _, ok := result.Files[filePath]; !ok {
+			t.Errorf("inline module dependency %q was not collected", filePath)
+		}
+		if !manifestPaths[filePath] {
+			t.Errorf("inline module dependency %q is missing from the manifest", filePath)
+		}
+	}
+	for _, decoy := range []string{
+		"docs/string-decoy.js", "docs/ordinary-script-decoy.js", "docs/data-script-decoy.js", "docs/unicode-type-decoy.js", "docs/external-inline-decoy.js",
+	} {
+		if _, ok := result.Files[decoy]; ok {
+			t.Errorf("non-module script content %q was incorrectly collected", decoy)
+		}
+	}
+}
+
 func TestBuildFromGitRejectsMissingAndOutOfTreeStaticModules(t *testing.T) {
 	for _, testCase := range []struct {
 		name      string
@@ -209,6 +295,36 @@ func TestBuildFromGitRejectsMissingAndOutOfTreeStaticModules(t *testing.T) {
 			writeTestFile(t, repo, "site/assets/app.js", `import "`+testCase.specifier+`";`)
 			gitTest(t, repo, "add", ".")
 			gitTest(t, repo, "commit", "-m", "preview guide with invalid module")
+
+			_, err := BuildFromGit(context.Background(), BuildOptions{
+				RepositoryDir: repo, SiteID: "sre", SourcePath: "site", DefaultRef: "main", HeadRef: "preview",
+			})
+			if err == nil || !strings.Contains(err.Error(), testCase.wantError) {
+				t.Fatalf("BuildFromGit() error = %v, want %q", err, testCase.wantError)
+			}
+		})
+	}
+}
+
+func TestBuildFromGitRejectsMissingAndOutOfTreeInlineModuleDependencies(t *testing.T) {
+	for _, testCase := range []struct {
+		name      string
+		specifier string
+		wantError string
+	}{
+		{name: "missing module", specifier: "./missing.js", wantError: `preview resource "docs/missing.js" is missing from the source head tree`},
+		{name: "out-of-tree module", specifier: "../../../outside.js", wantError: "escapes the source tree"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			repo := newTestRepository(t)
+			writeTestFile(t, repo, "site/docs/guide.html", `<title>Guide</title>`)
+			gitTest(t, repo, "add", ".")
+			gitTest(t, repo, "commit", "-m", "base guide")
+			gitTest(t, repo, "branch", "preview")
+			gitTest(t, repo, "checkout", "preview")
+			writeTestFile(t, repo, "site/docs/guide.html", `<title>Preview Guide</title><script type="module">import "`+testCase.specifier+`";</script>`)
+			gitTest(t, repo, "add", ".")
+			gitTest(t, repo, "commit", "-m", "preview guide with invalid inline module")
 
 			_, err := BuildFromGit(context.Background(), BuildOptions{
 				RepositoryDir: repo, SiteID: "sre", SourcePath: "site", DefaultRef: "main", HeadRef: "preview",

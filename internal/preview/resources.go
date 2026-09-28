@@ -102,6 +102,11 @@ func localReferences(from string, content []byte) []string {
 		var visit func(*html.Node)
 		visit = func(node *html.Node) {
 			if node.Type == html.ElementNode {
+				if strings.EqualFold(node.Data, "script") &&
+					isHTMLModuleScriptType(attributeValue(node.Attr, "type")) &&
+					!hasHTMLAttribute(node.Attr, "src") {
+					references = append(references, javascriptModuleReferences([]byte(textContent(node)))...)
+				}
 				for _, attribute := range node.Attr {
 					name, value := strings.ToLower(attribute.Key), strings.TrimSpace(attribute.Val)
 					if name == "style" {
@@ -976,6 +981,32 @@ func attributeValue(attributes []html.Attribute, name string) string {
 		}
 	}
 	return ""
+}
+
+func hasHTMLAttribute(attributes []html.Attribute, name string) bool {
+	for _, attribute := range attributes {
+		if strings.EqualFold(attribute.Key, name) {
+			return true
+		}
+	}
+	return false
+}
+
+func isHTMLModuleScriptType(value string) bool {
+	value = strings.Trim(value, "\t\n\f\r ")
+	if len(value) != len("module") {
+		return false
+	}
+	for index := range value {
+		character := value[index]
+		if character >= 'A' && character <= 'Z' {
+			character += 'a' - 'A'
+		}
+		if character != "module"[index] {
+			return false
+		}
+	}
+	return true
 }
 
 func textContent(node *html.Node) string {
