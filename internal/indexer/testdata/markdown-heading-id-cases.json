@@ -1,0 +1,137 @@
+{
+  "markdown": "Footnote[^1].\n\n[^1]: note <span id=\"citation-1\">citation HTML anchor</span>\n\n# Foo &amp; Bar\n\n## **Bold** and *italic* and `code`\n\n### Inline <em>HTML</em> &amp; text\n\n### before ![alt text](images/example.svg) after\n\n### Café 日本語 𐐀\n\n### Ꟑ\n\n### Ⓐ\n\n######\n\n### !!!\n\n<h2 id=\"collision-1\">Explicit collision anchor</h2>\n\n## Collision\n\n## Collision\n\n<div id=\"widget-1\">Widget element anchor</div>\n\n## Widget\n\n## Widget\n\n## Repeated heading\n\n## Repeated heading\n\n## User content fn 1\n\n## Citation\n\n## Citation\n",
+  "headings": [
+    {
+      "case": "entity-text",
+      "level": 1,
+      "renderedText": "Foo & Bar",
+      "tocText": "Foo & Bar",
+      "id": "md-foo--bar"
+    },
+    {
+      "case": "inline-markdown-formatting",
+      "level": 2,
+      "renderedText": "Bold and italic and code",
+      "tocText": "Bold and italic and code",
+      "id": "md-bold-and-italic-and-code"
+    },
+    {
+      "case": "inline-html-and-entity",
+      "level": 3,
+      "renderedText": "Inline HTML & text",
+      "tocText": "Inline HTML & text",
+      "id": "md-inline-html--text"
+    },
+    {
+      "case": "image-alt-is-not-heading-text",
+      "level": 3,
+      "renderedText": "before  after",
+      "tocText": "before after",
+      "id": "md-before--after"
+    },
+    {
+      "case": "unicode-lowercasing",
+      "level": 3,
+      "renderedText": "Café 日本語 𐐀",
+      "tocText": "Café 日本語 𐐀",
+      "id": "md-café-日本語-𐐨"
+    },
+    {
+      "case": "unicode-letter-excluded-by-locked-github-slugger",
+      "level": 3,
+      "renderedText": "Ꟑ",
+      "tocText": "Ꟑ",
+      "id": "md-"
+    },
+    {
+      "case": "unicode-character-allowed-by-locked-github-slugger",
+      "level": 3,
+      "renderedText": "Ⓐ",
+      "tocText": "Ⓐ",
+      "id": "md-ⓐ"
+    },
+    {
+      "case": "empty-heading",
+      "level": 6,
+      "renderedText": "",
+      "id": "md--1"
+    },
+    {
+      "case": "empty-slug-duplicate",
+      "level": 3,
+      "renderedText": "!!!",
+      "tocText": "!!!",
+      "id": "md--2"
+    },
+    {
+      "case": "explicit-id-reserves-a-generated-suffix",
+      "level": 2,
+      "renderedText": "Explicit collision anchor",
+      "tocText": "Explicit collision anchor",
+      "id": "md-collision-1"
+    },
+    {
+      "case": "generated-heading-before-explicit-id-collision",
+      "level": 2,
+      "renderedText": "Collision",
+      "tocText": "Collision",
+      "id": "md-collision"
+    },
+    {
+      "case": "generated-heading-skips-explicit-id-collision",
+      "level": 2,
+      "renderedText": "Collision",
+      "tocText": "Collision",
+      "id": "md-collision-2"
+    },
+    {
+      "case": "generated-heading-before-explicit-element-id-collision",
+      "level": 2,
+      "renderedText": "Widget",
+      "tocText": "Widget",
+      "id": "md-widget"
+    },
+    {
+      "case": "generated-heading-skips-explicit-element-id-collision",
+      "level": 2,
+      "renderedText": "Widget",
+      "tocText": "Widget",
+      "id": "md-widget-2"
+    },
+    {
+      "case": "duplicate-heading-first",
+      "level": 2,
+      "renderedText": "Repeated heading",
+      "tocText": "Repeated heading",
+      "id": "md-repeated-heading"
+    },
+    {
+      "case": "duplicate-heading-second",
+      "level": 2,
+      "renderedText": "Repeated heading",
+      "tocText": "Repeated heading",
+      "id": "md-repeated-heading-1"
+    },
+    {
+      "case": "gfm-footnote-generated-id-does-not-change-builder-heading-slug",
+      "level": 2,
+      "renderedText": "User content fn 1",
+      "tocText": "User content fn 1",
+      "id": "md-user-content-fn-1"
+    },
+    {
+      "case": "authored-html-id-in-footnote-reserves-heading-duplicate-suffix-first",
+      "level": 2,
+      "renderedText": "Citation",
+      "tocText": "Citation",
+      "id": "md-citation"
+    },
+    {
+      "case": "authored-html-id-in-footnote-reserves-heading-duplicate-suffix-second",
+      "level": 2,
+      "renderedText": "Citation",
+      "tocText": "Citation",
+      "id": "md-citation-2"
+    }
+  ]
+}

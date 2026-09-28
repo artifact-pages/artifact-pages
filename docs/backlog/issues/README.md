@@ -23,11 +23,11 @@ Each issue file records one independently actionable problem. New issues start a
 | `P2` | A meaningful correctness, reliability, navigation, or usability problem outside P1's impact. |
 | `P3` | Localized polish or a lower-impact improvement. |
 
-Priority describes user impact, not implementation effort. Issues 001–012 are completed historical browser/interaction work. ISSUE-013 is a proposed site-description improvement. ISSUE-014–037 recorded the 24 confirmed findings from the full-codebase review on 2026-09-28 at `50c327d886c71fc5e0d086a5967b90cd9038e01e` (4 P1, 20 P2). ISSUE-014 through ISSUE-028 have verified acceptance criteria and were removed from the active backlog under the completion policy; their regression and verification records remain in T4, T6, T14, T15, IMP-21, IMP-25, T13, and Git history.
+Priority describes user impact, not implementation effort. Issues 001–012 are completed historical browser/interaction work. ISSUE-013 is a proposed site-description improvement. ISSUE-014–037 recorded the 24 confirmed findings from the full-codebase review on 2026-09-28 at `50c327d886c71fc5e0d086a5967b90cd9038e01e` (4 P1, 20 P2). ISSUE-014 through ISSUE-029 have verified acceptance criteria and were removed from the active backlog under the completion policy; their regression and verification records remain in T4, T6, T14, T15, IMP-21, IMP-25, T13, and Git history.
 
 Each review issue contains its own reproduction and source pointers. Supplementary captures/scripts remain ignored in `.local/reviews/2026-09-28/`; they are not the only evidence or a dependency of this committed backlog. Local CLI/HTTP/browser reproductions and provider-source inconsistencies are labeled separately from live-provider proof. Existing passing suites did not cover these regressions.
 
-The remaining review queue has nine Open issues; with ISSUE-013 this track has 10 Open, 0 In progress, and 0 Blocked. [TD3](../technical-design/TD3-preview-origin-delivery.md) is settled, and ISSUE-026's local same-origin HTML implementation and emulator regressions are complete. ISSUE-027's raw-resource navigation and ISSUE-028's HTML fragment synchronization passed the local stack and all three emulator profiles. The unconfirmed AWS absent-object 403/404 concern belongs to [T15](../verification/T15-provider-delivery.md), not to another confirmed issue.
+The eight remaining review issues are Open; with ISSUE-013 this track has nine Open, zero In progress, and zero Blocked. ISSUE-029 Markdown heading ID parity passed the Go indexer and 62/62 local Playwright suite. [TD3](../technical-design/TD3-preview-origin-delivery.md) is settled, and ISSUE-026's local same-origin HTML implementation and emulator regressions are complete. ISSUE-027's raw-resource navigation and ISSUE-028's HTML fragment synchronization passed the local stack and all three emulator profiles. The unconfirmed AWS absent-object 403/404 concern belongs to [T15](../verification/T15-provider-delivery.md), not to another confirmed issue.
 
 ## Repair order
 
@@ -35,7 +35,7 @@ Work one issue at a time: mark it In progress, reproduce it, add a regression, i
 
 | Order | Items, in order | Outcome |
 | --- | --- | --- |
-| 1 | ISSUE-029 → 030 → 031 → 032 → 033 → 034 → 035 | Heading/link parity, Unicode/provenance, remote config and local development. |
+| 1 | ISSUE-030 → 031 → 032 → 033 → 034 → 035 | Cross-document fragments, Unicode/provenance, remote config and local development. |
 | 2 | ISSUE-036 → 037 | Release-file integrity and reference artifact CSP. |
 | Later product improvement | ISSUE-013 | Site-description schema/UI work is outside this repair pass and is not a current release gate. |
 
@@ -46,7 +46,6 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | Issue | Status | Priority | Area | Summary |
 | --- | --- | --- | --- | --- |
 | [ISSUE-013 — Site descriptions](ISSUE-013-site-description.md) | Open | P2 | Site discovery and site selection | Explain each site's purpose before visitors open it. |
-| [ISSUE-029 — Generate the same Markdown heading IDs in the builder and reader](ISSUE-029-markdown-heading-id-parity.md) | Open | P2 | Markdown index / Contents / heading search | Review 16: Confirmed defect; reproduction and acceptance criteria in the issue. |
 | [ISSUE-030 — Resolve fragments when linking to another Markdown document](ISSUE-030-markdown-cross-document-fragments.md) | Open | P2 | Markdown reader / document navigation | Review 17: Confirmed defect; reproduction and acceptance criteria in the issue. |
 | [ISSUE-031 — Keep Unicode filenames readable in fallback artifact titles](ISSUE-031-unicode-filename-title.md) | Open | P2 | Indexer / artifact display title | Review 18: Confirmed defect; reproduction and acceptance criteria in the issue. |
 | [ISSUE-032 — Do not assign a resource committer to a document without Git history](ISSUE-032-untracked-document-committer.md) | Open | P2 | Indexer / Git provenance | Review 19: Confirmed defect; reproduction and acceptance criteria in the issue. |

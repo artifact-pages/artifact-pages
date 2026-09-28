@@ -1,4 +1,18 @@
 import { expect, test, type Page } from '@playwright/test'
+import { readFileSync } from 'node:fs'
+
+const markdownHeadingConformanceFixture = JSON.parse(
+  readFileSync('internal/indexer/testdata/markdown-heading-id-cases.json', 'utf8'),
+) as {
+  markdown: string
+  headings: Array<{
+    case: string
+    level: number
+    renderedText: string
+    tocText?: string
+    id: string
+  }>
+}
 
 function buildPaletteScoringProfile(artifacts: Array<{ title: string; path: string }>) {
   const ignoredWords = new Set([
@@ -899,6 +913,111 @@ test('artifact-context # search opens a heading and closes the palette', async (
 
   await expect(palette).toBeHidden()
   await expect(page).toHaveURL(/#root-cause$/)
+})
+
+test('Markdown heading IDs match the shared fixture and Contents and palette reach rendered headings', async ({ page }) => {
+  const fixture = markdownHeadingConformanceFixture
+  const artifactPath = 'guides/heading-id-conformance.md'
+  const toc = fixture.headings.flatMap((heading) => (
+    heading.level <= 3 && heading.tocText !== undefined
+      ? [{ level: heading.level, text: heading.tocText, id: heading.id }]
+      : []
+  ))
+
+  await page.route('**/_indexes/sre/index.json', async (route) => {
+    const response = await route.fetch()
+    const index = await response.json() as { artifacts: Array<Record<string, unknown>> }
+    index.artifacts.push({
+      id: artifactPath,
+      title: 'Markdown heading ID conformance',
+      path: artifactPath,
+      format: 'markdown',
+      filename: 'heading-id-conformance.md',
+      artifactUrl: `/_artifacts/sre/${artifactPath}`,
+      updatedAt: '2026-09-29T00:00:00Z',
+      toc,
+    })
+    await route.fulfill({ response, body: JSON.stringify(index) })
+  })
+  await page.route(`**/_artifacts/sre/${artifactPath}`, (route) => route.fulfill({
+    status: 200,
+    contentType: 'text/markdown; charset=utf-8',
+    body: fixture.markdown,
+  }))
+
+  await page.setViewportSize({ width: 1280, height: 420 })
+  await page.goto(`/sre/${artifactPath}`)
+  const reader = page.locator('.markdown-article')
+  const scrollport = page.locator('.markdown-scroll')
+  await expect(reader).toBeVisible()
+  const actualHeadings = await reader.locator('h1, h2, h3, h4, h5, h6').evaluateAll((nodes) => nodes
+    .filter((node) => !(node.classList.contains('sr-only') && node.textContent === 'Footnotes'))
+    .map((node) => ({
+      level: Number(node.tagName.slice(1)),
+      renderedText: node.textContent ?? '',
+      id: node.id,
+    })))
+  expect(actualHeadings).toEqual(fixture.headings.map(({ level, renderedText, id }) => ({ level, renderedText, id })))
+  await expect(reader.locator('#md-widget-1')).toHaveText('Widget element anchor')
+
+  await page.getByRole('button', { name: 'Contents', exact: true }).click()
+  const contents = page.getByRole('complementary', { name: 'Contents' })
+  await contents.getByRole('button', { name: 'User content fn 1', exact: true }).click()
+  const footnoteSlugHeading = reader.locator('h2#md-user-content-fn-1')
+  await expect(page).toHaveURL(/#md-user-content-fn-1$/)
+  await expect(footnoteSlugHeading).toBeInViewport()
+  await expect(reader.locator('[id="md-user-content-fn-1"]')).toHaveCount(1)
+  expect(await reader.evaluate((element) => (
+    element.ownerDocument.getElementById('md-user-content-fn-1')
+      === element.querySelector('h2#md-user-content-fn-1')
+  ))).toBe(true)
+  await expect(reader.locator('[data-footnote-ref]')).toHaveAttribute('href', '#md-footnote-user-content-fn-1')
+  await expect(reader.locator('[data-footnote-backref]')).toHaveAttribute('href', '#md-footnote-user-content-fnref-1')
+  await expect(reader.locator('[id="md-citation-1"]')).toHaveText('citation HTML anchor')
+
+  await page.getByRole('button', { name: 'Contents', exact: true }).click()
+  const citationHeadings = contents.getByRole('button', { name: 'Citation', exact: true })
+  await expect(citationHeadings).toHaveCount(2)
+  await citationHeadings.last().click()
+  await expect(page).toHaveURL(/#md-citation-2$/)
+  await expect(reader.locator('h2#md-citation-2')).toBeInViewport()
+
+  await page.getByRole('button', { name: 'Contents', exact: true }).click()
+  const collisionHeadings = contents.getByRole('button', { name: 'Collision', exact: true })
+  await expect(collisionHeadings).toHaveCount(2)
+  await collisionHeadings.last().click()
+  const secondCollisionHeading = reader.locator('#md-collision-2')
+  await expect(page).toHaveURL(/#md-collision-2$/)
+  await expect(secondCollisionHeading).toBeInViewport()
+  await expect.poll(() => scrollport.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+
+  await page.getByRole('button', { name: 'Contents', exact: true }).click()
+  const widgetHeadings = contents.getByRole('button', { name: 'Widget', exact: true })
+  await expect(widgetHeadings).toHaveCount(2)
+  await widgetHeadings.last().click()
+  const secondWidgetHeading = reader.locator('#md-widget-2')
+  await expect(page).toHaveURL(/#md-widget-2$/)
+  await expect(secondWidgetHeading).toBeInViewport()
+
+  await page.getByRole('button', { name: 'Contents', exact: true }).click()
+  await contents.getByRole('button', { name: 'before after', exact: true }).click()
+  const imageHeading = reader.locator('#md-before--after')
+  await expect(page).toHaveURL(/#md-before--after$/)
+  await expect(imageHeading).toBeInViewport()
+  await expect.poll(() => scrollport.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+
+  await page.getByRole('button', { name: 'Search pages in SRE' }).click()
+  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
+  await search.fill('#repeated heading')
+  const duplicateOptions = palette.getByRole('option', { name: /Repeated heading/ })
+  await expect(duplicateOptions).toHaveCount(2)
+  await duplicateOptions.last().click()
+  const duplicateHeading = reader.locator('#md-repeated-heading-1')
+  await expect(palette).toBeHidden()
+  await expect(page).toHaveURL(/#md-repeated-heading-1$/)
+  await expect(duplicateHeading).toBeInViewport()
+  await expect.poll(() => scrollport.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
 })
 
 test('HTML heading navigation keeps the URL and iframe section in sync with one history step', async ({ page }) => {

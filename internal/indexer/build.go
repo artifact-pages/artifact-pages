@@ -18,17 +18,14 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/yuin/goldmark"
-	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
-	"github.com/yuin/goldmark/parser"
 	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
-	"github.com/yuin/goldmark/text"
-	"github.com/yuin/goldmark/util"
 	"golang.org/x/net/html"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 var siteIDPattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
@@ -569,65 +566,30 @@ func readArtifactMetadata(filename, basename string) (artifactHTMLMetadata, erro
 	if err != nil {
 		return artifactHTMLMetadata{}, err
 	}
-	markdown := goldmark.New(
-		goldmark.WithExtensions(extension.GFM),
-		goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
-		goldmark.WithParserOptions(
-			parser.WithAutoHeadingID(),
-			parser.WithASTTransformers(util.Prioritized(&githubHeadingIDTransformer{}, 100)),
-		),
-	)
-	var rendered bytes.Buffer
-	if err := markdown.Convert(source, &rendered); err != nil {
-		return artifactHTMLMetadata{}, err
-	}
-	metadata, err := readArtifactHTMLDocument(&rendered)
+	document, err := renderMarkdownHTMLDocument(source)
 	if err != nil {
 		return artifactHTMLMetadata{}, err
 	}
+	metadata := readArtifactHTMLDocumentNode(document)
 	metadata.title = metadata.firstH1
-	for index := range metadata.toc {
-		metadata.toc[index].ID = "md-" + metadata.toc[index].ID
-	}
 	return metadata, nil
 }
 
-type githubHeadingIDTransformer struct{}
-
-func (*githubHeadingIDTransformer) Transform(document *ast.Document, reader text.Reader, _ parser.Context) {
-	used := make(map[string]struct{})
-	var visit func(ast.Node)
-	visit = func(node ast.Node) {
-		if heading, ok := node.(*ast.Heading); ok {
-			base := githubHeadingSlug(string(heading.Text(reader.Source())))
-			id := base
-			for suffix := 1; ; suffix++ {
-				if _, exists := used[id]; !exists {
-					break
-				}
-				id = base + "-" + strconv.Itoa(suffix)
-			}
-			used[id] = struct{}{}
-			heading.SetAttributeString("id", id)
-		}
-		for child := node.FirstChild(); child != nil; child = child.NextSibling() {
-			visit(child)
-		}
+func renderMarkdownHTMLDocument(source []byte) (*html.Node, error) {
+	markdown := goldmark.New(
+		goldmark.WithExtensions(extension.GFM),
+		goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
+	)
+	var rendered bytes.Buffer
+	if err := markdown.Convert(source, &rendered); err != nil {
+		return nil, err
 	}
-	visit(document)
-}
-
-func githubHeadingSlug(value string) string {
-	var slug strings.Builder
-	for _, character := range strings.ToLower(value) {
-		switch {
-		case character == ' ':
-			slug.WriteByte('-')
-		case character == '-' || character == '_' || unicode.IsLetter(character) || unicode.IsNumber(character) || unicode.IsMark(character):
-			slug.WriteRune(character)
-		}
+	document, err := html.Parse(&rendered)
+	if err != nil {
+		return nil, err
 	}
-	return slug.String()
+	assignMarkdownHeadingIDs(document)
+	return document, nil
 }
 
 func readArtifactHTMLDocument(source io.Reader) (artifactHTMLMetadata, error) {
@@ -635,26 +597,125 @@ func readArtifactHTMLDocument(source io.Reader) (artifactHTMLMetadata, error) {
 	if err != nil {
 		return artifactHTMLMetadata{}, err
 	}
+	return readArtifactHTMLDocumentNode(document), nil
+}
+
+func assignMarkdownHeadingIDs(document *html.Node) {
+	occurrences := make(map[string]int)
+	// Reserve raw HTML IDs on every element before generating heading slugs.
+	var reserveExplicitIDs func(*html.Node)
+	reserveExplicitIDs = func(node *html.Node) {
+		if node.Type == html.ElementNode {
+			if id := htmlAttribute(node, "id"); id != "" {
+				occurrences[id] = 0
+			}
+		}
+		for child := node.FirstChild; child != nil; child = child.NextSibling {
+			reserveExplicitIDs(child)
+		}
+	}
+	reserveExplicitIDs(document)
+
+	var visit func(*html.Node)
+	visit = func(node *html.Node) {
+		if markdownHeadingRank(node) > 0 {
+			id := htmlAttribute(node, "id")
+			if id == "" {
+				base := githubHeadingSlug(markdownHeadingText(node))
+				id = base
+				if count, exists := occurrences[base]; exists {
+					count++
+					occurrences[base] = count
+					id = base + "-" + strconv.Itoa(count)
+					for {
+						if _, exists := occurrences[id]; !exists {
+							break
+						}
+						count++
+						occurrences[base] = count
+						id = base + "-" + strconv.Itoa(count)
+					}
+				}
+				occurrences[id] = 0
+			}
+			setHTMLAttribute(node, "id", "md-"+id)
+		}
+		for child := node.FirstChild; child != nil; child = child.NextSibling {
+			visit(child)
+		}
+	}
+	visit(document)
+}
+
+func markdownHeadingRank(node *html.Node) int {
+	if node.Type != html.ElementNode || len(node.Data) != 2 || node.Data[0] != 'h' || node.Data[1] < '1' || node.Data[1] > '6' {
+		return 0
+	}
+	return int(node.Data[1] - '0')
+}
+
+func htmlAttribute(node *html.Node, name string) string {
+	for _, attribute := range node.Attr {
+		if attribute.Key == name {
+			return attribute.Val
+		}
+	}
+	return ""
+}
+
+func setHTMLAttribute(node *html.Node, name, value string) {
+	for index := range node.Attr {
+		if node.Attr[index].Key == name {
+			node.Attr[index].Val = value
+			return
+		}
+	}
+	node.Attr = append(node.Attr, html.Attribute{Key: name, Val: value})
+}
+
+func markdownHeadingText(node *html.Node) string {
+	var text strings.Builder
+	var visit func(*html.Node)
+	visit = func(current *html.Node) {
+		if current.Type == html.TextNode {
+			text.WriteString(current.Data)
+			return
+		}
+		for child := current.FirstChild; child != nil; child = child.NextSibling {
+			visit(child)
+		}
+	}
+	visit(node)
+	return text.String()
+}
+
+func githubHeadingSlug(value string) string {
+	var slug strings.Builder
+	for _, character := range cases.Lower(language.Und).String(value) {
+		if character == ' ' {
+			slug.WriteByte('-')
+		} else if githubSluggerCharacterAllowed(character) {
+			slug.WriteRune(character)
+		}
+	}
+	return slug.String()
+}
+
+func readArtifactHTMLDocumentNode(document *html.Node) artifactHTMLMetadata {
 	metadata := artifactHTMLMetadata{toc: make([]TOCEntry, 0)}
 	var visit func(*html.Node)
 	visit = func(node *html.Node) {
 		if node.Type == html.ElementNode && node.Data == "title" && metadata.title == "" {
 			metadata.title = normalizedText(node)
 		}
-		if node.Type == html.ElementNode && len(node.Data) == 2 && node.Data[0] == 'h' && node.Data[1] >= '1' && node.Data[1] <= '3' {
-			id := ""
-			for _, attribute := range node.Attr {
-				if attribute.Key == "id" {
-					id = strings.TrimSpace(attribute.Val)
-					break
-				}
-			}
+		if level := markdownHeadingRank(node); level >= 1 && level <= 3 {
+			id := strings.TrimSpace(htmlAttribute(node, "id"))
 			text := normalizedText(node)
-			if node.Data == "h1" && metadata.firstH1 == "" {
+			if level == 1 && metadata.firstH1 == "" {
 				metadata.firstH1 = text
 			}
 			if id != "" && text != "" {
-				metadata.toc = append(metadata.toc, TOCEntry{Level: int(node.Data[1] - '0'), Text: text, ID: id})
+				metadata.toc = append(metadata.toc, TOCEntry{Level: level, Text: text, ID: id})
 			}
 		}
 		for child := node.FirstChild; child != nil; child = child.NextSibling {
@@ -662,7 +723,7 @@ func readArtifactHTMLDocument(source io.Reader) (artifactHTMLMetadata, error) {
 		}
 	}
 	visit(document)
-	return metadata, nil
+	return metadata
 }
 
 func normalizedText(node *html.Node) string {

@@ -1,8 +1,8 @@
 import { isValidElement, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import Markdown, { defaultUrlTransform, type Options as MarkdownOptions } from 'react-markdown'
+import GithubSlugger from 'github-slugger'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
-import rehypeSlug from 'rehype-slug'
 import remarkGfm from 'remark-gfm'
 import { artifactRouteHref } from '../routing'
 import type { ArtifactIndexEntry } from '../domain/index'
@@ -20,9 +20,132 @@ const safeDataImageUrl = /^data:image\/(?:png|jpe?g|gif|webp|avif);base64,/i
 const markdownRemarkPlugins: NonNullable<MarkdownOptions['remarkPlugins']> = [remarkGfm]
 const markdownRehypePlugins: NonNullable<MarkdownOptions['rehypePlugins']> = [
   rehypeRaw,
-  [rehypeSlug, { prefix: '' }],
+  rehypeMarkdownHeadingIDs,
   [rehypeSanitize, markdownSanitizeSchema],
 ]
+
+type MarkdownRehypeNode = {
+  type: string
+  tagName?: string
+  value?: string
+  position?: unknown
+  properties?: {
+    id?: unknown
+    href?: unknown
+    ariaDescribedBy?: unknown
+    dataFootnoteRef?: unknown
+    dataFootnotes?: unknown
+  }
+  children?: MarkdownRehypeNode[]
+}
+
+function rehypeMarkdownHeadingIDs() {
+  return (tree: MarkdownRehypeNode) => {
+    const slugger = new GithubSlugger()
+    const headings: MarkdownRehypeNode[] = []
+    const explicitIDs = new Set<string>()
+    const generatedFootnoteIDs = new Set<string>()
+    const generatedFootnoteIDNodes = new WeakSet<MarkdownRehypeNode>()
+    const collectHeadings = (
+      node: MarkdownRehypeNode,
+      insideGeneratedFootnotes = false,
+      insideGeneratedFootnoteList = false,
+    ) => {
+      const generatedFootnotes = node.type === 'element'
+        && node.tagName === 'section'
+        && node.position === undefined
+        && node.properties?.dataFootnotes !== undefined
+      const insideFootnotes = insideGeneratedFootnotes || generatedFootnotes
+      const generatedFootnoteList = insideFootnotes
+        && node.tagName === 'ol'
+        && node.position === undefined
+      const generatedFootnoteNode = node.properties?.dataFootnoteRef !== undefined
+        || (
+          insideFootnotes
+          && node.tagName === 'h2'
+          && node.position === undefined
+          && node.properties?.id === 'footnote-label'
+        )
+        || (
+          insideGeneratedFootnoteList
+          && node.tagName === 'li'
+          && Boolean(node.properties?.id)
+        )
+      // Reserve raw HTML IDs on every element before generating heading slugs.
+      if (node.type === 'element' && node.properties?.id) {
+        const id = String(node.properties.id)
+        if (generatedFootnoteNode) {
+          generatedFootnoteIDNodes.add(node)
+          generatedFootnoteIDs.add(id)
+        } else {
+          explicitIDs.add(id)
+          slugger.occurrences[id] = 0
+        }
+      }
+      if (/^h[1-6]$/.test(node.tagName ?? '')) headings.push(node)
+      for (const child of node.children ?? []) {
+        collectHeadings(child, insideFootnotes, generatedFootnoteList)
+      }
+    }
+    collectHeadings(tree)
+
+    const outputIDs = new Set([...explicitIDs].map((id) => `md-${id}`))
+    for (const heading of headings) {
+      if (heading.properties?.id) continue
+      heading.properties ??= {}
+      const id = slugger.slug(markdownRehypeText(heading))
+      heading.properties.id = id
+      outputIDs.add(`md-${id}`)
+    }
+
+    // GFM footnotes have their own IDs. Move those into a separate namespace so
+    // they cannot shadow a builder-compatible heading ID after sanitization.
+    const footnoteIDMap = new Map<string, string>()
+    for (const id of generatedFootnoteIDs) {
+      let renamedID = `footnote-${id}`
+      let suffix = 0
+      while (outputIDs.has(`md-${renamedID}`)) {
+        suffix += 1
+        renamedID = `footnote-${id}-${suffix}`
+      }
+      footnoteIDMap.set(id, renamedID)
+      outputIDs.add(`md-${renamedID}`)
+    }
+
+    const renameFootnoteReferences = (node: MarkdownRehypeNode) => {
+      if (node.type === 'element' && node.properties) {
+        const id = node.properties.id
+        if (generatedFootnoteIDNodes.has(node) && id && footnoteIDMap.has(String(id))) {
+          node.properties.id = footnoteIDMap.get(String(id))
+        }
+
+        const href = node.properties.href
+        if (typeof href === 'string' && href.startsWith('#')) {
+          const renamedTarget = footnoteIDMap.get(href.slice(1))
+          if (renamedTarget) node.properties.href = `#${renamedTarget}`
+        }
+
+        const describedBy = node.properties.ariaDescribedBy
+        if (Array.isArray(describedBy)) {
+          node.properties.ariaDescribedBy = describedBy.map((value) => (
+            footnoteIDMap.get(String(value)) ?? value
+          ))
+        } else if (typeof describedBy === 'string') {
+          node.properties.ariaDescribedBy = describedBy.split(/\s+/).map((value) => (
+            footnoteIDMap.get(value) ?? value
+          )).join(' ')
+        }
+      }
+      for (const child of node.children ?? []) renameFootnoteReferences(child)
+    }
+    renameFootnoteReferences(tree)
+  }
+}
+
+function markdownRehypeText(node: MarkdownRehypeNode): string {
+  if (node.type === 'text') return node.value ?? ''
+  return (node.children ?? []).map(markdownRehypeText).join('')
+}
 
 export function MarkdownArtifact({
   artifact,

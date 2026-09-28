@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/html"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
@@ -522,6 +523,92 @@ func TestReadMarkdownMetadataUsesGitHubCompatibleHeadingIDs(t *testing.T) {
 		if metadata.toc[index] != want[index] {
 			t.Errorf("TOC[%d] = %+v, want %+v", index, metadata.toc[index], want[index])
 		}
+	}
+}
+
+func TestMarkdownHeadingIDsMatchSharedConformanceFixture(t *testing.T) {
+	fixtureBytes, err := os.ReadFile(filepath.Join("testdata", "markdown-heading-id-cases.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		Markdown string `json:"markdown"`
+		Headings []struct {
+			Case         string `json:"case"`
+			Level        int    `json:"level"`
+			RenderedText string `json:"renderedText"`
+			TocText      string `json:"tocText"`
+			ID           string `json:"id"`
+		} `json:"headings"`
+	}
+	if err := json.Unmarshal(fixtureBytes, &fixture); err != nil {
+		t.Fatal(err)
+	}
+
+	document, err := renderMarkdownHTMLDocument([]byte(fixture.Markdown))
+	if err != nil {
+		t.Fatalf("renderMarkdownHTMLDocument() error = %v", err)
+	}
+	type headingOutput struct {
+		Level int
+		Text  string
+		ID    string
+	}
+	var gotHeadings []headingOutput
+	var collect func(*html.Node)
+	collect = func(node *html.Node) {
+		if level := markdownHeadingRank(node); level > 0 {
+			gotHeadings = append(gotHeadings, headingOutput{
+				Level: level,
+				Text:  markdownHeadingText(node),
+				ID:    htmlAttribute(node, "id"),
+			})
+		}
+		for child := node.FirstChild; child != nil; child = child.NextSibling {
+			collect(child)
+		}
+	}
+	collect(document)
+	wantHeadings := make([]headingOutput, 0, len(fixture.Headings))
+	for _, heading := range fixture.Headings {
+		wantHeadings = append(wantHeadings, headingOutput{Level: heading.Level, Text: heading.RenderedText, ID: heading.ID})
+	}
+	if !reflect.DeepEqual(gotHeadings, wantHeadings) {
+		t.Fatalf("rendered Markdown headings = %#v, want %#v", gotHeadings, wantHeadings)
+	}
+
+	filename := filepath.Join(t.TempDir(), "conformance.md")
+	if err := os.WriteFile(filename, []byte(fixture.Markdown), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	metadata, err := readArtifactMetadata(filename, filepath.Base(filename))
+	if err != nil {
+		t.Fatalf("readArtifactMetadata() error = %v", err)
+	}
+	wantTOC := make([]TOCEntry, 0)
+	for _, heading := range fixture.Headings {
+		if heading.Level >= 1 && heading.Level <= 3 && heading.TocText != "" {
+			wantTOC = append(wantTOC, TOCEntry{Level: heading.Level, Text: heading.TocText, ID: heading.ID})
+		}
+	}
+	if !reflect.DeepEqual(metadata.toc, wantTOC) {
+		t.Errorf("Markdown TOC = %+v, want %+v", metadata.toc, wantTOC)
+	}
+}
+
+func TestReadHTMLMetadataLeavesHeadingIDsUnchanged(t *testing.T) {
+	filename := filepath.Join(t.TempDir(), "report.html")
+	if err := os.WriteFile(filename, []byte(`<html><body><h2 id="html-anchor">Keep this ID</h2></body></html>`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	metadata, err := readArtifactMetadata(filename, filepath.Base(filename))
+	if err != nil {
+		t.Fatalf("readArtifactMetadata() error = %v", err)
+	}
+	want := []TOCEntry{{Level: 2, Text: "Keep this ID", ID: "html-anchor"}}
+	if !reflect.DeepEqual(metadata.toc, want) {
+		t.Fatalf("HTML TOC = %+v, want %+v", metadata.toc, want)
 	}
 }
 
