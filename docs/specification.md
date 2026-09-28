@@ -244,7 +244,7 @@ For a provider-backed publish, build the desired projection locally, acquire the
 
 Publish is idempotent desired-state synchronization, not a transaction with rollback. If an operation fails partway through, it reports failure and releases its lock when it can stop safely; a process crash leaves the lock held for explicit recovery. Retrying the same desired source reuploads or verifies needed objects, republishes index and metadata, removes remaining stale objects, and converges the site. A successful origin sync does not guarantee every CDN edge has refreshed; mutable paths therefore use bounded cache freshness and revalidation rather than immutable long-lived caching or a mandatory CDN purge after every publish.
 
-`sourcePath` must be inside the current Git working tree. Tracked source files provide commit-based `updatedAt` and `lastCommitter` metadata. Files without Git history, including ignored or generated output, remain indexable; for them `updatedAt` falls back to filesystem modification times and `lastCommitter` is omitted. Prefer tracked, publishable documents when Git-derived details are required.
+`sourcePath` must be inside the current Git working tree. Documents with Git history provide commit-based `updatedAt` and `lastCommitter` metadata; a shared-resource commit contributes Git metadata only to documents that themselves have Git history. Files without Git history, including ignored or generated output, remain indexable; for them `updatedAt` falls back to filesystem modification times and `lastCommitter` is omitted. Prefer tracked, publishable documents when Git-derived details are required.
 
 The index should eventually contain enough information to support:
 

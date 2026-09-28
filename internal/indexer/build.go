@@ -758,6 +758,7 @@ func artifactGitUpdates(ctx context.Context, repositoryRoot, sourcePath string, 
 	}
 
 	latestByArtifact := make(map[string]artifactGitUpdate, len(artifacts))
+	documentHistory := make(map[string]struct{}, len(artifactFiles))
 	parts := bytes.Split(output, []byte{0})
 	var currentCommitTime time.Time
 	var currentCommitter string
@@ -786,6 +787,9 @@ func artifactGitUpdates(ctx context.Context, repositoryRoot, sourcePath string, 
 			}
 			relativeFile = strings.TrimPrefix(relativeFile, prefix)
 		}
+		if artifactPath, isArtifactFile := artifactFiles[relativeFile]; isArtifactFile {
+			documentHistory[artifactPath] = struct{}{}
+		}
 		for _, artifactPath := range artifactPathsForFile(relativeFile, artifactDirectories, artifactFiles) {
 			update := latestByArtifact[artifactPath]
 			if currentCommitTime.After(update.updatedAt) {
@@ -793,6 +797,11 @@ func artifactGitUpdates(ctx context.Context, repositoryRoot, sourcePath string, 
 				update.lastCommitter = currentCommitter
 				latestByArtifact[artifactPath] = update
 			}
+		}
+	}
+	for _, artifact := range artifacts {
+		if _, hasDocumentHistory := documentHistory[artifact.relative]; !hasDocumentHistory {
+			delete(latestByArtifact, artifact.relative)
 		}
 	}
 	return latestByArtifact, nil

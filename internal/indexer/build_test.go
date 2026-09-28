@@ -465,6 +465,87 @@ func TestBuildUpdatedAtTracksUncommittedAndCommittedAssetChanges(t *testing.T) {
 	}
 }
 
+func TestBuildGitMetadataRequiresDocumentHistory(t *testing.T) {
+	repositoryRoot := initializeGitRepository(t)
+	restoreWorkingDirectory := chdirForTest(t, repositoryRoot)
+	defer restoreWorkingDirectory()
+
+	writeFixtureFile(t, repositoryRoot, ".gitignore", "/artifacts/reports/generated.html\n")
+	writeFixtureFile(t, repositoryRoot, "artifacts/reports/existing.md", "# Existing report\n")
+	writeFixtureFile(t, repositoryRoot, "artifacts/reports/assets/logo.svg", "<svg></svg>\n")
+	baseTime := time.Date(2026, 2, 1, 9, 0, 0, 0, time.UTC)
+	for _, filename := range []string{
+		"artifacts/reports/existing.md",
+		"artifacts/reports/assets/logo.svg",
+	} {
+		filePath := filepath.Join(repositoryRoot, filename)
+		if err := os.Chtimes(filePath, baseTime, baseTime); err != nil {
+			t.Fatalf("set fixture modification time for %q: %v", filename, err)
+		}
+	}
+	resourceCommitTime := time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC)
+	commitFixtureWithIdentities(t, repositoryRoot, "add tracked report and shared resource", resourceCommitTime,
+		"Resource Author", "resource-author@example.invalid",
+		"Resource Committer", "resource-committer@example.invalid",
+	)
+
+	writeFixtureFile(t, repositoryRoot, "artifacts/reports/new.md", "# New untracked report\n")
+	writeFixtureFile(t, repositoryRoot, "artifacts/reports/staged.md", "# New staged report\n")
+	writeFixtureFile(t, repositoryRoot, "artifacts/reports/generated.html", "<title>Generated report</title>")
+	newDocumentTime := time.Date(2026, 3, 2, 10, 0, 0, 0, time.UTC)
+	stagedDocumentTime := time.Date(2026, 3, 3, 10, 0, 0, 0, time.UTC)
+	generatedDocumentTime := time.Date(2026, 3, 4, 10, 0, 0, 0, time.UTC)
+	for filename, modifiedAt := range map[string]time.Time{
+		"artifacts/reports/new.md":         newDocumentTime,
+		"artifacts/reports/staged.md":      stagedDocumentTime,
+		"artifacts/reports/generated.html": generatedDocumentTime,
+	} {
+		filePath := filepath.Join(repositoryRoot, filename)
+		if err := os.Chtimes(filePath, modifiedAt, modifiedAt); err != nil {
+			t.Fatalf("set fixture modification time for %q: %v", filename, err)
+		}
+	}
+	runGit(t, repositoryRoot, "add", "artifacts/reports/staged.md")
+
+	index := buildAndReadIndex(t, repositoryRoot, "sre")
+	if len(index.Artifacts) != 4 {
+		t.Fatalf("indexed %d artifacts, want all 4 tracked, untracked, staged, and generated documents", len(index.Artifacts))
+	}
+	byPath := make(map[string]ArtifactIndexEntry, len(index.Artifacts))
+	for _, artifact := range index.Artifacts {
+		byPath[artifact.Path] = artifact
+	}
+
+	wants := []struct {
+		path          string
+		updatedAt     time.Time
+		committer     string
+		wantCommitter bool
+	}{
+		{path: "reports/existing.md", updatedAt: resourceCommitTime, committer: "Resource Committer", wantCommitter: true},
+		{path: "reports/new.md", updatedAt: newDocumentTime},
+		{path: "reports/staged.md", updatedAt: stagedDocumentTime},
+		{path: "reports/generated.html", updatedAt: generatedDocumentTime},
+	}
+	for _, want := range wants {
+		artifact, found := byPath[want.path]
+		if !found {
+			t.Errorf("artifact %q is missing from the index", want.path)
+			continue
+		}
+		if artifact.UpdatedAt != want.updatedAt.Format(time.RFC3339) {
+			t.Errorf("artifact %q updatedAt = %q, want %q", want.path, artifact.UpdatedAt, want.updatedAt.Format(time.RFC3339))
+		}
+		if want.wantCommitter {
+			if artifact.LastCommitter == nil || artifact.LastCommitter.Name != want.committer {
+				t.Errorf("tracked artifact %q lastCommitter = %+v, want %q from its shared resource history", want.path, artifact.LastCommitter, want.committer)
+			}
+		} else if artifact.LastCommitter != nil {
+			t.Errorf("artifact without document history %q lastCommitter = %+v, want omitted", want.path, artifact.LastCommitter)
+		}
+	}
+}
+
 func TestBuildUsesFilesystemMetadataForGitIgnoredStaticOutput(t *testing.T) {
 	repositoryRoot := initializeGitRepository(t)
 	restoreWorkingDirectory := chdirForTest(t, repositoryRoot)
