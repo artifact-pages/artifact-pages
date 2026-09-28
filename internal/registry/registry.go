@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/tasuku43/git-artifact-pages/internal/githubrepo"
 	"go.yaml.in/yaml/v4"
 )
 
@@ -218,7 +219,11 @@ func ValidateSiteID(id string) error {
 }
 
 func validRepository(repository string) bool {
-	return repositoryPattern.MatchString(repository) && !strings.HasSuffix(repository, ".git")
+	if !repositoryPattern.MatchString(repository) {
+		return false
+	}
+	parts := strings.SplitN(repository, "/", 2)
+	return githubrepo.ValidRepositoryName(parts[1])
 }
 
 func sourcePairKey(repository, sourcePath string) string {

@@ -109,6 +109,128 @@ func TestResolvePrecedence(t *testing.T) {
 	assertRoot("saved", "", ".saved")
 }
 
+func TestParseRemoteLocatorAcceptsGitHubRepositoryNames(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want remoteLocator
+	}{
+		{
+			name: "leading dot and preserved spelling",
+			raw:  "github://AcmeCorp/.github/config.yaml?ref=release%2Fv1",
+			want: remoteLocator{Owner: "AcmeCorp", Repo: ".github", File: "config.yaml", Ref: "release/v1"},
+		},
+		{
+			name: "dot in repository name",
+			raw:  "github://AcmeCorp/platform.config",
+			want: remoteLocator{Owner: "AcmeCorp", Repo: "platform.config"},
+		},
+		{
+			name: "digit-leading repository name",
+			raw:  "github://AcmeCorp/123project",
+			want: remoteLocator{Owner: "AcmeCorp", Repo: "123project"},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := parseRemoteLocator(test.raw)
+			if err != nil {
+				t.Fatalf("parseRemoteLocator() error = %v", err)
+			}
+			if got != test.want {
+				t.Errorf("parseRemoteLocator() = %+v, want %+v", got, test.want)
+			}
+		})
+	}
+}
+
+func TestResolveRemoteConfigRejectsUnsafeLocatorsBeforeRequest(t *testing.T) {
+	tooLongRepository := strings.Repeat("a", 101)
+	locators := []string{
+		"github://acme",
+		"github://acme//repo",
+		"github://acme/repo/",
+		"github://acme/repo//config.yaml",
+		"github://acme/%2e%2e",
+		"github://acme/repo/%2e%2e/config.yaml",
+		"github://acme/repo/config%2Funsafe.yaml",
+		"github://acme/repo/config%5Cunsafe.yaml",
+		"github://acme/repo!",
+		"github://acme/.",
+		"github://acme/..",
+		"github://acme/repo.git",
+		"github://acme/" + tooLongRepository,
+		"github://acme/repo?ref=",
+		"github://acme/repo?ref=one&ref=two",
+		"github://acme/repo?ref=%ZZ",
+		"github://acme/repo?branch=main",
+		"github://acme/repo#fragment",
+	}
+	var requests int
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		requests++
+		writer.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+	resolver := Resolver{GitHubAPIBaseURL: server.URL}
+	for _, locator := range locators {
+		t.Run(locator, func(t *testing.T) {
+			if _, err := resolver.Resolve(t.Context(), locator); err == nil {
+				t.Fatalf("Resolve(%q) succeeded, want locator validation error", locator)
+			}
+		})
+	}
+	if requests != 0 {
+		t.Errorf("GitHub API requests = %d, want no requests for invalid locators", requests)
+	}
+}
+
+func TestResolveRemoteConfigSupportsValidRepositoryNamesAndExplicitPrecedence(t *testing.T) {
+	const sha = "0123456789abcdef0123456789abcdef01234567"
+	configBytes := []byte("schemaVersion: 1\nprovider: local\nlocal:\n  root: .local/storage\n")
+	for _, repository := range []string{".github", "platform.config", "123project"} {
+		t.Run(repository, func(t *testing.T) {
+			var requests []string
+			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				requests = append(requests, request.URL.EscapedPath()+"?"+request.URL.RawQuery)
+				wantPath := "/repos/AcmeCorp/" + repository + "/contents/.artifact-pages.yaml"
+				if request.URL.Path != wantPath {
+					t.Errorf("GitHub API path = %q, want %q", request.URL.Path, wantPath)
+				}
+				if request.URL.Query().Get("ref") != sha {
+					t.Errorf("GitHub API ref = %q, want %q", request.URL.Query().Get("ref"), sha)
+				}
+				_ = json.NewEncoder(writer).Encode(githubContent{
+					Type: "file", Encoding: "base64", Content: base64.StdEncoding.EncodeToString(configBytes), SHA: "file-sha",
+				})
+			}))
+			defer server.Close()
+
+			resolver := Resolver{
+				GitHubAPIBaseURL: server.URL,
+				Getenv: func(name string) string {
+					if name == ConfigEnvironment {
+						return "github://IgnoredOrg/ignored?ref=" + sha
+					}
+					return ""
+				},
+			}
+			locator := "github://AcmeCorp/" + repository + "/.artifact-pages.yaml?ref=" + sha
+			resolved, err := resolver.Resolve(t.Context(), locator)
+			if err != nil {
+				t.Fatalf("Resolve(%q) error = %v", locator, err)
+			}
+			wantLocator := "github://AcmeCorp/" + repository + "/.artifact-pages.yaml?ref=" + sha
+			if resolved.Locator != wantLocator || resolved.CommitSHA != sha || resolved.Config.Provider != "local" {
+				t.Fatalf("Resolve() = %+v, want explicit repository locator and pinned config", resolved)
+			}
+			if len(requests) != 1 {
+				t.Fatalf("GitHub API requests = %v, want one request using the explicit locator", requests)
+			}
+		})
+	}
+}
+
 func TestSetDefaultStoresOnlyAbsoluteLocatorWithPrivateMode(t *testing.T) {
 	root := t.TempDir()
 	configDir := filepath.Join(root, "user-config")

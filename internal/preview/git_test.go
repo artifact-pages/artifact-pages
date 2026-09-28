@@ -13,6 +13,25 @@ import (
 	"time"
 )
 
+func TestNormalizeRepositoryValidatesRepositoryNameComponent(t *testing.T) {
+	for _, name := range []string{".github", "platform.config", "123project"} {
+		got, err := normalizeRepository("Acme/" + name)
+		if err != nil {
+			t.Errorf("normalizeRepository(%q) error = %v", name, err)
+			continue
+		}
+		if got != "Acme/"+name {
+			t.Errorf("normalizeRepository(%q) = %q, want original spelling", name, got)
+		}
+	}
+
+	for _, name := range []string{strings.Repeat("a", 101), "..", "repo/child", "repo?name", "repo.git", "repo.GIT"} {
+		if got, err := normalizeRepository("Acme/" + name); err == nil {
+			t.Errorf("normalizeRepository(%q) = %q, want invalid repository name rejected", name, got)
+		}
+	}
+}
+
 func TestBuildFromGitUsesHeadTreeAndCollectsLocalResources(t *testing.T) {
 	repo := newTestRepository(t)
 	writeTestFile(t, repo, "site/docs/old.md", "# Old\n")

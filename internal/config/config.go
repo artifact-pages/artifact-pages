@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"go.yaml.in/yaml/v4"
+
+	"github.com/tasuku43/git-artifact-pages/internal/githubrepo"
 )
 
 const (
@@ -586,7 +588,8 @@ func parseRemoteLocator(raw string) (remoteLocator, error) {
 	if !providerNamePattern.MatchString(strings.ToLower(owner)) || strings.Contains(owner, ".") || strings.Contains(owner, "_") {
 		return remoteLocator{}, errors.New("remote config locator has an invalid GitHub owner")
 	}
-	parts := strings.Split(strings.Trim(parsed.EscapedPath(), "/"), "/")
+	escapedPath := strings.TrimPrefix(parsed.EscapedPath(), "/")
+	parts := strings.Split(escapedPath, "/")
 	if len(parts) == 0 || parts[0] == "" {
 		return remoteLocator{}, errors.New("remote config locator must include a repository")
 	}
@@ -599,10 +602,13 @@ func parseRemoteLocator(raw string) (remoteLocator, error) {
 		decodedParts[index] = decoded
 	}
 	repository := decodedParts[0]
-	if !providerNamePattern.MatchString(strings.ToLower(repository)) || strings.HasSuffix(strings.ToLower(repository), ".git") {
+	if !githubrepo.ValidRepositoryName(repository) {
 		return remoteLocator{}, errors.New("remote config locator has an invalid repository")
 	}
-	query := parsed.Query()
+	query, err := url.ParseQuery(parsed.RawQuery)
+	if err != nil {
+		return remoteLocator{}, errors.New("remote config locator has a malformed query")
+	}
 	for key, values := range query {
 		if key != "ref" || len(values) != 1 || values[0] == "" {
 			return remoteLocator{}, errors.New("remote config locator supports only one non-empty ref query")

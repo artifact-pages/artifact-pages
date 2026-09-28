@@ -9,9 +9,24 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 )
+
+func TestValidReleaseRepositoryValidatesRepositoryNameComponent(t *testing.T) {
+	for _, name := range []string{".github", "platform.config", "123project"} {
+		if !validReleaseRepository("Acme/" + name) {
+			t.Errorf("validReleaseRepository(%q) = false, want true", name)
+		}
+	}
+
+	for _, name := range []string{strings.Repeat("a", 101), "..", "repo/child", "repo?name", "repo.git", "repo.GIT"} {
+		if validReleaseRepository("Acme/" + name) {
+			t.Errorf("validReleaseRepository(%q) = true, want false", name)
+		}
+	}
+}
 
 func TestDeployAppDownloadsPublishedVersionOverHTTPS(t *testing.T) {
 	archivePath := createWebBundle(t, map[string][]byte{

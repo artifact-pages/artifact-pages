@@ -27,7 +27,7 @@ Priority describes user impact, not implementation effort. Issues 001–012 are 
 
 Each review issue contains its own reproduction and source pointers. Supplementary captures/scripts remain ignored in `.local/reviews/2026-09-28/`; they are not the only evidence or a dependency of this committed backlog. Local CLI/HTTP/browser reproductions and provider-source inconsistencies are labeled separately from live-provider proof. Existing passing suites did not cover these regressions.
 
-ISSUE-030's Markdown cross-document fragments passed the 63/63 local Playwright suite with one worker and was removed after verification. ISSUE-031's Unicode filename fallback passed the Go indexer tests and the 64/64 local Playwright suite with one worker, then was removed after verification. ISSUE-032's Git provenance fix passed `go test ./...` and was removed after verification. ISSUE-033's working-directory fix passed the indexer and full Go suites, then was removed after verification. Four review issues remain Open; with ISSUE-013 this track has five Open, zero In progress, and zero Blocked. ISSUE-029 Markdown heading ID parity passed the Go indexer and local browser suite. [TD3](../technical-design/TD3-preview-origin-delivery.md) is settled, and ISSUE-026's local same-origin HTML implementation and emulator regressions are complete. ISSUE-027's raw-resource navigation and ISSUE-028's HTML fragment synchronization passed the local stack and all three emulator profiles. The unconfirmed AWS absent-object 403/404 concern belongs to [T15](../verification/T15-provider-delivery.md), not to another confirmed issue.
+ISSUE-030's Markdown cross-document fragments passed the 63/63 local Playwright suite with one worker and was removed after verification. ISSUE-031's Unicode filename fallback passed the Go indexer tests and the 64/64 local Playwright suite with one worker, then was removed after verification. ISSUE-032's Git provenance fix passed `go test ./...` and was removed after verification. ISSUE-033's working-directory fix passed the indexer and full Go suites, then was removed after verification. ISSUE-034's remote locator fix passed the full Go suite and was removed after verification. Three review issues remain Open; with ISSUE-013 this track has four Open, zero In progress, and zero Blocked. ISSUE-029 Markdown heading ID parity passed the Go indexer and local browser suite. [TD3](../technical-design/TD3-preview-origin-delivery.md) is settled, and ISSUE-026's local same-origin HTML implementation and emulator regressions are complete. ISSUE-027's raw-resource navigation and ISSUE-028's HTML fragment synchronization passed the local stack and all three emulator profiles. The unconfirmed AWS absent-object 403/404 concern belongs to [T15](../verification/T15-provider-delivery.md), not to another confirmed issue.
 
 ## Repair order
 
@@ -35,8 +35,8 @@ Work one issue at a time: mark it In progress, reproduce it, add a regression, i
 
 | Order | Items, in order | Outcome |
 | --- | --- | --- |
-| 1 | ISSUE-034 → 035 | Remote config and local development. |
-| 2 | ISSUE-036 → 037 | Release-file integrity and reference artifact CSP. |
+| 1 | ISSUE-035 → 036 | Local serving and release packaging. |
+| 2 | ISSUE-037 | Reference delivery headers. |
 | Later product improvement | ISSUE-013 | Site-description schema/UI work is outside this repair pass and is not a current release gate. |
 
 This is the default repair queue, not authorization to operate cloud accounts or release publicly. Complete review defects before claiming readiness, or record an explicit approved deferral with impact. Actual provider and clean-consumer proofs remain separate gates in the [release order](../README.md#first-public-release-order).
@@ -46,7 +46,6 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | Issue | Status | Priority | Area | Summary |
 | --- | --- | --- | --- | --- |
 | [ISSUE-013 — Site descriptions](ISSUE-013-site-description.md) | Open | P2 | Site discovery and site selection | Explain each site's purpose before visitors open it. |
-| [ISSUE-034 — Accept valid GitHub repository names in remote config locators](ISSUE-034-remote-config-repository-names.md) | Open | P2 | CLI / remote configuration | Review 21: Confirmed defect; reproduction and acceptance criteria in the issue. |
 | [ISSUE-035 — Return a client error instead of crashing Vite on malformed URLs](ISSUE-035-vite-malformed-url.md) | Open | P2 | Local development / artifact middleware | Review 22: Confirmed defect; reproduction and acceptance criteria in the issue. |
 | [ISSUE-036 — Keep concurrent packaging of one web version from mixing release files](ISSUE-036-concurrent-web-packaging.md) | Open | P2 | Web release / package publication | Review 23: Confirmed defect; reproduction and acceptance criteria in the issue. |
 | [ISSUE-037 — Send the specified artifact CSP from reference provider delivery](ISSUE-037-provider-artifact-csp.md) | Open | P2 | HTML artifact / AWS and Cloudflare delivery | Review 24: Confirmed defect; reproduction and acceptance criteria in the issue. |

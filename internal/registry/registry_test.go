@@ -59,6 +59,21 @@ func TestBuildAllowsEmptyMapping(t *testing.T) {
 	}
 }
 
+func TestParseYAMLAcceptsGitHubRepositoryNameCharacters(t *testing.T) {
+	for _, name := range []string{".github", "platform.config", "123project"} {
+		t.Run(name, func(t *testing.T) {
+			contents := []byte("schemaVersion: 1\nsites:\n  docs:\n    name: Site\n    repository: Acme/" + name + "\n    sourcePath: docs\n")
+			projection, err := ParseYAML(contents)
+			if err != nil {
+				t.Fatalf("ParseYAML() error = %v, want repository name %q accepted", err, name)
+			}
+			if got := projection.Sites[0].Repository; got != "Acme/"+name {
+				t.Fatalf("repository = %q, want original owner/repository spelling", got)
+			}
+		})
+	}
+}
+
 func TestParseYAMLRejectsInvalidManifest(t *testing.T) {
 	validSite := "    name: Site\n    repository: acme/repo\n    sourcePath: docs\n"
 	tests := []struct {
@@ -85,6 +100,11 @@ func TestParseYAMLRejectsInvalidManifest(t *testing.T) {
 		{"blank site name", "schemaVersion: 1\nsites:\n  sre:\n    name: '  '\n    repository: acme/repo\n    sourcePath: docs\n", "name must not be blank"},
 		{"repository URL", "schemaVersion: 1\nsites:\n  sre:\n    name: Site\n    repository: https://github.com/acme/repo\n    sourcePath: docs\n", "owner/repository"},
 		{"repository clone URL", "schemaVersion: 1\nsites:\n  sre:\n    name: Site\n    repository: acme/repo.git\n    sourcePath: docs\n", "owner/repository"},
+		{"repository clone suffix is case insensitive", "schemaVersion: 1\nsites:\n  sre:\n    name: Site\n    repository: acme/repo.GIT\n    sourcePath: docs\n", "owner/repository"},
+		{"repository component too long", "schemaVersion: 1\nsites:\n  sre:\n    name: Site\n    repository: acme/" + strings.Repeat("a", 101) + "\n    sourcePath: docs\n", "owner/repository"},
+		{"repository component traversal", "schemaVersion: 1\nsites:\n  sre:\n    name: Site\n    repository: acme/..\n    sourcePath: docs\n", "owner/repository"},
+		{"repository component contains slash", "schemaVersion: 1\nsites:\n  sre:\n    name: Site\n    repository: acme/repo/child\n    sourcePath: docs\n", "owner/repository"},
+		{"repository component contains unsafe character", "schemaVersion: 1\nsites:\n  sre:\n    name: Site\n    repository: acme/repo?name\n    sourcePath: docs\n", "owner/repository"},
 		{"source path blank", "schemaVersion: 1\nsites:\n  sre:\n    name: Site\n    repository: acme/repo\n    sourcePath: '  '\n", "sourcePath"},
 		{"source path absolute", "schemaVersion: 1\nsites:\n  sre:\n    name: Site\n    repository: acme/repo\n    sourcePath: /docs\n", "repository-relative"},
 		{"source path backslash", "schemaVersion: 1\nsites:\n  sre:\n    name: Site\n    repository: acme/repo\n    sourcePath: docs\\reports\n", "repository-relative"},

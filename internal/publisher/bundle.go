@@ -19,6 +19,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/tasuku43/git-artifact-pages/internal/githubrepo"
 )
 
 const (
@@ -30,6 +32,7 @@ const (
 )
 
 var versionLabel = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$`)
+var releaseRepositoryOwnerPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 
 type releaseManifest struct {
 	SchemaVersion int      `json:"schemaVersion"`
@@ -192,7 +195,7 @@ func resolveAppArchive(ctx context.Context, options AppDeployOptions) (string, f
 	if repository == "" {
 		repository = "tasuku43/git-artifact-pages"
 	}
-	if !regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`).MatchString(repository) {
+	if !validReleaseRepository(repository) {
 		return "", nil, errors.New("release repository must use owner/repository format")
 	}
 
@@ -223,6 +226,11 @@ func resolveAppArchive(ctx context.Context, options AppDeployOptions) (string, f
 		}
 	}
 	return archivePath, cleanup, nil
+}
+
+func validReleaseRepository(repository string) bool {
+	parts := strings.Split(repository, "/")
+	return len(parts) == 2 && releaseRepositoryOwnerPattern.MatchString(parts[0]) && githubrepo.ValidRepositoryName(parts[1])
 }
 
 func downloadReleaseAsset(ctx context.Context, assetURL string, maxBytes int64) ([]byte, error) {

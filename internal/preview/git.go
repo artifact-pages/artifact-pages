@@ -15,6 +15,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/tasuku43/git-artifact-pages/internal/githubrepo"
 )
 
 type Outcome string
@@ -503,11 +505,12 @@ func describeFiles(files map[string][]byte) []PreviewFile {
 	return result
 }
 
-var canonicalRepositoryPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
+var canonicalRepositoryOwnerPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 
 func normalizeRepository(value string) (string, error) {
 	value = strings.TrimSpace(value)
-	if !canonicalRepositoryPattern.MatchString(value) || strings.HasSuffix(value, ".git") {
+	parts := strings.Split(value, "/")
+	if len(parts) != 2 || !canonicalRepositoryOwnerPattern.MatchString(parts[0]) || !githubrepo.ValidRepositoryName(parts[1]) {
 		return "", fmt.Errorf("repository %q must be owner/repository", value)
 	}
 	return value, nil
