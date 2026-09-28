@@ -37,12 +37,54 @@ test('Cloudflare preview responses remain cache-eligible only under origin fresh
   assert.match(cachePaths, /normalized_path\} eq \\"\/_previews\\"/u)
   assert.match(cachePaths, /starts_with\(\$\{local\.normalized_path\}, \\"\/_previews\/\\"\)/u)
 
-  const cacheRule = source.slice(source.indexOf('  origin_cache_rule = {'), source.indexOf('\n  }\n}', source.indexOf('  origin_cache_rule = {')))
+  const cacheRule = localBlock('origin_cache_rule', 'artifact_csp_expression')
   assert.match(cacheRule, /\$\{local\.projection_cache_paths\}/u)
   assert.match(cacheRule, /action\s*=\s*"set_cache_settings"/u)
   assert.match(cacheRule, /cache\s*=\s*true/u)
   assert.match(cacheRule, /edge_ttl\s*=\s*\{\s*mode\s*=\s*"respect_origin"/u)
   assert.match(cacheRule, /browser_ttl\s*=\s*\{\s*mode\s*=\s*"respect_origin"/u)
+})
+
+test('Cloudflare dynamically enforces the trusted artifact CSP only on artifact responses', () => {
+  const cspStart = source.indexOf('  artifact_csp_expression =')
+  const cspEnd = source.indexOf('\n  artifact_csp_rule =', cspStart)
+  assert.notEqual(cspStart, -1, 'dynamic artifact CSP expression must exist')
+  assert.notEqual(cspEnd, -1, 'artifact CSP rule must follow its expression')
+  const cspExpression = source.slice(cspStart, cspEnd)
+  assert.match(cspExpression, /split\(http\.request\.full_uri, ":", 2\)\[0\]/u, 'the path source must follow the incoming HTTP or HTTPS scheme')
+  assert.match(cspExpression, /lower\(http\.host\)/u, 'the path source must follow the current public host')
+  assert.match(cspExpression, /split\(http\.request\.uri\.path, "\/", 4\)\[2\]/u, 'the path source must use only the current site segment')
+  for (const source of [
+    'default-src ',
+    ' https: data: blob:; script-src ',
+    "'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' data: blob:; style-src ",
+    "'unsafe-inline' data: blob:",
+  ]) {
+    assert.ok(cspExpression.includes(source), `the trusted artifact CSP must preserve ${source}`)
+  }
+  assert.doesNotMatch(cspExpression, /'self'|http:/u, 'the CSP must not broaden same-origin or insecure external access')
+
+  const ruleStart = source.indexOf('  artifact_csp_rule =')
+  const ruleEnd = source.indexOf('\n}\n\nresource ', ruleStart)
+  assert.notEqual(ruleStart, -1, 'artifact CSP rule must exist')
+  assert.notEqual(ruleEnd, -1, 'artifact CSP rule must be closed')
+  const rule = source.slice(ruleStart, ruleEnd)
+  const ruleExpression = rule.match(/expression\s*=\s*"(.+)"/u)?.[1]
+  assert.ok(ruleExpression, 'artifact response matching expression must exist')
+  const escapedQuote = '\\' + '"'
+  const unescapedRuleExpression = ruleExpression.replaceAll(escapedQuote, '"')
+  assert.ok(unescapedRuleExpression.includes('${local.host_match} and starts_with(http.request.uri.path, "/_artifacts/")'), 'the response transform must be scoped to the configured public host')
+  assert.ok(unescapedRuleExpression.includes('starts_with(http.request.uri.path, "/_artifacts/")'), 'the rule must be scoped to artifacts')
+  assert.ok(unescapedRuleExpression.includes('split(http.request.uri.path, "/", 4)[2] ne ""'), 'namespace roots without a site segment must not get a site CSP')
+  assert.ok(unescapedRuleExpression.includes('starts_with(http.request.uri.path, concat("/_artifacts/", split(http.request.uri.path, "/", 4)[2], "/"))'), 'paths without a slash after the site ID are not artifact responses')
+  assert.match(rule, /"content-security-policy"\s*=\s*\{\s*operation\s*=\s*"set"\s*expression\s*=\s*trimspace\(local\.artifact_csp_expression\)/u)
+
+  const rulesetStart = source.indexOf('resource "cloudflare_ruleset" "artifact_response_policy"')
+  assert.notEqual(rulesetStart, -1, 'artifact response policy ruleset must exist')
+  const ruleset = source.slice(rulesetStart)
+  assert.match(ruleset, /phase\s*=\s*"http_response_headers_transform"/u)
+  assert.match(ruleset, /rules\s*=\s*concat\(var\.existing_response_header_rules, \[local\.artifact_csp_rule\]\)/u)
+  assert.match(variables, /variable\s+"existing_response_header_rules"[\s\S]*?type\s*=\s*list\(any\)[\s\S]*?default\s*=\s*\[\]/u)
 })
 
 test('Cloudflare custom domain is explicit and the alternate r2.dev route is disabled', () => {
@@ -84,7 +126,7 @@ test('origin cache rule covers only public projection paths and respects both or
   }
   assert.equal(cachePaths.includes('/_control'), false, 'private control objects must never be cache-eligible')
 
-  const cacheRule = source.slice(source.indexOf('  origin_cache_rule = {'), source.indexOf('\n  }\n}', source.indexOf('  origin_cache_rule = {')))
+  const cacheRule = localBlock('origin_cache_rule', 'artifact_csp_expression')
   assert.match(cacheRule, /action\s*=\s*"set_cache_settings"/u)
   assert.match(cacheRule, /cache\s*=\s*true/u)
   assert.match(cacheRule, /edge_ttl\s*=\s*\{\s*mode\s*=\s*"respect_origin"/u)
@@ -96,7 +138,8 @@ test('zone phase root rulesets retain caller-supplied existing rules in safe ord
   assert.match(source, /rules\s*=\s*concat\(var\.existing_transform_rules, \[local\.logical_route_rule\]\)/u)
   assert.match(source, /rules\s*=\s*concat\(\[local\.control_block_rule\], var\.existing_firewall_rules\)/u)
   assert.match(source, /rules\s*=\s*concat\(var\.existing_cache_rules, \[local\.origin_cache_rule\]\)/u)
-  for (const name of ['existing_transform_rules', 'existing_firewall_rules', 'existing_cache_rules']) {
+  assert.match(source, /rules\s*=\s*concat\(var\.existing_response_header_rules, \[local\.artifact_csp_rule\]\)/u)
+  for (const name of ['existing_transform_rules', 'existing_firewall_rules', 'existing_cache_rules', 'existing_response_header_rules']) {
     assert.match(variables, new RegExp(`variable\\s+"${name}"`, 'u'))
   }
 })

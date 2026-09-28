@@ -75,3 +75,9 @@ variable "existing_cache_rules" {
   type        = list(any)
   default     = []
 }
+
+variable "existing_response_header_rules" {
+  description = "Complete existing http_response_headers_transform root ruleset rules, in execution order, to preserve when this module owns that phase."
+  type        = list(any)
+  default     = []
+}

@@ -73,6 +73,30 @@ locals {
       }
     }
   }
+
+  artifact_csp_expression = <<-EXPRESSION
+    concat(
+      "default-src ", split(http.request.full_uri, ":", 2)[0], "://", lower(http.host), "/_artifacts/", split(http.request.uri.path, "/", 4)[2], "/ https: data: blob:; script-src ",
+      split(http.request.full_uri, ":", 2)[0], "://", lower(http.host), "/_artifacts/", split(http.request.uri.path, "/", 4)[2], "/ https: 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' data: blob:; style-src ",
+      split(http.request.full_uri, ":", 2)[0], "://", lower(http.host), "/_artifacts/", split(http.request.uri.path, "/", 4)[2], "/ https: 'unsafe-inline' data: blob:"
+    )
+  EXPRESSION
+
+  artifact_csp_rule = {
+    ref         = "artifact-pages-trusted-artifact-csp"
+    description = "Enforce the trusted published-artifact resource policy."
+    expression  = "(${local.host_match} and starts_with(http.request.uri.path, \"/_artifacts/\") and split(http.request.uri.path, \"/\", 4)[2] ne \"\" and starts_with(http.request.uri.path, concat(\"/_artifacts/\", split(http.request.uri.path, \"/\", 4)[2], \"/\")))"
+    action      = "rewrite"
+    enabled     = true
+    action_parameters = {
+      headers = {
+        "content-security-policy" = {
+          operation  = "set"
+          expression = trimspace(local.artifact_csp_expression)
+        }
+      }
+    }
+  }
 }
 
 resource "cloudflare_r2_custom_domain" "public" {
@@ -119,4 +143,14 @@ resource "cloudflare_ruleset" "origin_cache_policy" {
   phase       = "http_request_cache_settings"
 
   rules = concat(var.existing_cache_rules, [local.origin_cache_rule])
+}
+
+resource "cloudflare_ruleset" "artifact_response_policy" {
+  zone_id     = var.zone_id
+  name        = "Artifact Pages trusted artifact response policy"
+  description = "Enforce the trusted-publisher CSP on raw artifact responses."
+  kind        = "zone"
+  phase       = "http_response_headers_transform"
+
+  rules = concat(var.existing_response_header_rules, [local.artifact_csp_rule])
 }

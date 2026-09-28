@@ -238,6 +238,22 @@ resource "aws_cloudfront_function" "routes" {
   code    = file("${path.module}/routes.js")
 }
 
+resource "aws_cloudfront_response_headers_policy" "artifact_csp" {
+  name    = "${var.name_prefix}-artifact-csp"
+  comment = "Enforce the trusted-HTML resource policy on artifact responses."
+
+  security_headers_config {
+    content_security_policy {
+      content_security_policy = join("; ", [
+        "default-src https: data: blob:",
+        "script-src https: 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' data: blob:",
+        "style-src https: 'unsafe-inline' data: blob:",
+      ])
+      override = true
+    }
+  }
+}
+
 resource "aws_cloudfront_cache_policy" "no_store" {
   name        = "${var.name_prefix}-no-store"
   comment     = "No shared-cache freshness for the SPA shell and local preview bytes."
@@ -368,13 +384,14 @@ resource "aws_cloudfront_distribution" "site" {
     for_each = local.cache_behaviors
 
     content {
-      path_pattern           = ordered_cache_behavior.value.path_pattern
-      target_origin_id       = local.origin_id
-      viewer_protocol_policy = "redirect-to-https"
-      allowed_methods        = ordered_cache_behavior.value.allowed_methods
-      cached_methods         = ordered_cache_behavior.value.cached_methods
-      cache_policy_id        = ordered_cache_behavior.value.cache_policy_id
-      compress               = true
+      path_pattern               = ordered_cache_behavior.value.path_pattern
+      target_origin_id           = local.origin_id
+      viewer_protocol_policy     = "redirect-to-https"
+      allowed_methods            = ordered_cache_behavior.value.allowed_methods
+      cached_methods             = ordered_cache_behavior.value.cached_methods
+      cache_policy_id            = ordered_cache_behavior.value.cache_policy_id
+      compress                   = true
+      response_headers_policy_id = contains(["artifacts", "errors"], ordered_cache_behavior.key) ? aws_cloudfront_response_headers_policy.artifact_csp.id : null
 
       function_association {
         event_type   = "viewer-request"

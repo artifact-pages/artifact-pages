@@ -3111,3 +3111,149 @@ test('raw preview resources have real 404s, media types, no-store and no CORS ac
   expect(externalOrigin.headers()['access-control-allow-origin']).toBeUndefined()
   expect(externalOrigin.headers()['vary']).toBeUndefined()
 })
+
+test('artifact CSP uses the HTTPS site prefix and keeps insecure external resources blocked', async ({ page }) => {
+  const browser = page.context().browser()
+  expect(browser).not.toBeNull()
+  const context = await browser!.newContext({ ignoreHTTPSErrors: true })
+  const httpsPage = await context.newPage()
+  const artifactURL = 'https://csp-artifact.test/_artifacts/sre/index.html'
+  const sitePrefix = new URL('.', artifactURL).toString()
+  const csp = [
+    `default-src ${sitePrefix} https: data: blob:`,
+    `script-src ${sitePrefix} https: 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' data: blob:`,
+    `style-src ${sitePrefix} https: 'unsafe-inline' data: blob:`,
+  ].join('; ')
+  const siteAssetPaths: string[] = []
+  const externalHttpsPaths: string[] = []
+  let insecureRequestReachedRoute = false
+
+  await httpsPage.route('https://csp-artifact.test/**', async (route) => {
+    const pathname = new URL(route.request().url()).pathname
+    siteAssetPaths.push(pathname)
+    if (pathname === '/_artifacts/sre/index.html') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        headers: { 'content-security-policy': csp },
+        body: `<!doctype html><html><head><link rel="stylesheet" href="./relative.css"></head><body>
+          <script>document.body.dataset.inlineScript = 'loaded'</script>
+          <script src="./relative.js"></script>
+          <script src="https://external-artifact.test/probe.js"></script>
+          <script>
+            fetch('https://external-artifact.test/data.json').then((response) => response.json())
+              .then((data) => { document.body.dataset.httpsFetch = data.result })
+              .catch(() => { document.body.dataset.httpsFetch = 'failed' });
+            fetch('http://insecure-artifact.test/data.json').then(() => {
+              document.body.dataset.httpFetch = 'loaded'
+            }).catch(() => { document.body.dataset.httpFetch = 'blocked' });
+          </script>
+        </body></html>`,
+      })
+    } else if (pathname === '/_artifacts/sre/relative.css') {
+      await route.fulfill({ status: 200, contentType: 'text/css', body: 'body { --relative-site-css: loaded; }' })
+    } else if (pathname === '/_artifacts/sre/relative.js') {
+      await route.fulfill({ status: 200, contentType: 'application/javascript', body: "document.body.dataset.relativeScript = 'loaded';" })
+    } else {
+      await route.fulfill({ status: 404 })
+    }
+  })
+  await httpsPage.route('https://external-artifact.test/**', async (route) => {
+    const pathname = new URL(route.request().url()).pathname
+    externalHttpsPaths.push(pathname)
+    if (pathname === '/probe.js') {
+      await route.fulfill({ status: 200, contentType: 'application/javascript', body: "document.body.dataset.externalScript = 'loaded';" })
+    } else if (pathname === '/data.json') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify({ result: 'allowed' }),
+      })
+    } else {
+      await route.fulfill({ status: 404 })
+    }
+  })
+  await httpsPage.route('http://insecure-artifact.test/**', async (route) => {
+    insecureRequestReachedRoute = true
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
+  })
+
+  try {
+    const response = await httpsPage.goto(artifactURL)
+    expect(response?.status()).toBe(200)
+    expect(response?.headers()['content-security-policy']).toBe(csp)
+    await expect(httpsPage.locator('body')).toHaveAttribute('data-inline-script', 'loaded')
+    await expect(httpsPage.locator('body')).toHaveAttribute('data-relative-script', 'loaded')
+    await expect(httpsPage.locator('body')).toHaveAttribute('data-external-script', 'loaded')
+    await expect.poll(() => httpsPage.locator('body').getAttribute('data-https-fetch')).toBe('allowed')
+    await expect.poll(() => httpsPage.locator('body').getAttribute('data-http-fetch')).toBe('blocked')
+    expect(await httpsPage.locator('body').evaluate((body) => getComputedStyle(body).getPropertyValue('--relative-site-css').trim())).toBe('loaded')
+    expect(siteAssetPaths).toContain('/_artifacts/sre/relative.css')
+    expect(siteAssetPaths).toContain('/_artifacts/sre/relative.js')
+    expect(siteAssetPaths.every((pathname) => pathname.startsWith('/_artifacts/sre/'))).toBeTruthy()
+    expect(externalHttpsPaths.sort()).toEqual(['/data.json', '/probe.js'])
+    expect(insecureRequestReachedRoute).toBeFalsy()
+  } finally {
+    await context.close()
+  }
+})
+
+test('artifact CSP blocks off-site HTTP requests when an artifact is served over HTTP', async ({ page }) => {
+  const browser = page.context().browser()
+  expect(browser).not.toBeNull()
+  const context = await browser!.newContext()
+  const httpPage = await context.newPage()
+  const artifactURL = 'http://csp-artifact.test/_artifacts/sre/index.html'
+  const sitePrefix = new URL('.', artifactURL).toString()
+  const csp = [
+    `default-src ${sitePrefix} https: data: blob:`,
+    `script-src ${sitePrefix} https: 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' data: blob:`,
+    `style-src ${sitePrefix} https: 'unsafe-inline' data: blob:`,
+  ].join('; ')
+  let insecureRequestReachedRoute = false
+
+  await httpPage.route('http://csp-artifact.test/**', async (route) => {
+    const pathname = new URL(route.request().url()).pathname
+    if (pathname === '/_artifacts/sre/index.html') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        headers: { 'content-security-policy': csp },
+        body: `<!doctype html><html><body>
+          <script src="./relative.js"></script>
+          <script>
+            fetch('http://insecure-artifact.test/data.json').then(() => {
+              document.body.dataset.httpFetch = 'loaded'
+            }).catch(() => { document.body.dataset.httpFetch = 'blocked' });
+          </script>
+        </body></html>`,
+      })
+    } else if (pathname === '/_artifacts/sre/relative.js') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/javascript',
+        body: "document.body.dataset.relativeScript = 'loaded';",
+      })
+    } else {
+      await route.fulfill({ status: 404 })
+    }
+  })
+  await httpPage.route('http://insecure-artifact.test/**', async (route) => {
+    insecureRequestReachedRoute = true
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
+  })
+
+  try {
+    const response = await httpPage.goto(artifactURL)
+    expect(response?.status()).toBe(200)
+    expect(response?.headers()['content-security-policy']).toBe(csp)
+    expect(csp).toContain(`default-src ${sitePrefix} https:`)
+    expect(csp).not.toContain('http://insecure-artifact.test')
+    await expect(httpPage.locator('body')).toHaveAttribute('data-relative-script', 'loaded')
+    await expect.poll(() => httpPage.locator('body').getAttribute('data-http-fetch')).toBe('blocked')
+    expect(insecureRequestReachedRoute).toBeFalsy()
+  } finally {
+    await context.close()
+  }
+})
