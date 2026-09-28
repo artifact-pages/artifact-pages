@@ -11,15 +11,15 @@ Which OSS license and component release/version compatibility policy govern a pu
 
 ## Current state
 
-- The project owner selected MIT on 2026-09-28.
-- No repository-root license file is present. The exact copyright-holder notice and audit of redistributed third-party code/assets remain to be completed.
+- The project owner selected MIT on 2026-09-28. The root `LICENSE` uses `Copyright (c) 2026 tasuku43`.
+- An audit of redistributed third-party code/assets for required notices and clarification of the repository license scope remain outstanding.
 - Composite Actions are consumed by immutable Git commit SHA in the examples. The Action source builds the CLI from that same revision.
 - The web archive is separately selected by an exact release version. The CLI resolves archive, JSON manifest, and SHA-256 asset from the matching `v<version>` GitHub release and validates their contents before deployment.
 - Deployment config and web release manifest currently use schema version 1. Local adoption evidence covers a matched source revision and those schemas; it does not establish cross-revision compatibility or a public support window.
 
 ## Decisions required
 
-- Add the selected MIT license with the agreed copyright-holder notice; audit redistributed code and assets for required third-party notices and clarify the scope of the repository license.
+- Audit redistributed code and assets for required third-party notices and clarify the scope of the repository license.
 - Define which components receive releases, their immutable identifiers and version/tag format, and how a released component is superseded or withdrawn.
 - Define compatibility expectations across CLI, composite Actions, deployment-config schema, web release manifest and bundle, and the supported Terraform modules. State how adopters select a compatible set and what rollback support means for each component.
 - Identify any additional integrity or provenance requirements beyond the current archive manifest and SHA-256 checksums.
@@ -27,7 +27,8 @@ Which OSS license and component release/version compatibility policy govern a pu
 ## Exit criteria
 
 - [x] Select the MIT License for the project.
-- [ ] Add the root license file with the copyright-holder notice and include any required third-party notices/attributions.
+- [x] Add the root MIT license file with the agreed copyright-holder notice (`tasuku43`).
+- [ ] Audit redistributed code and assets for required third-party notices/attributions and clarify the scope of the repository license.
 - [ ] Record the component versioning, tag, immutability, and retirement rules without conflating Action commit pins with web bundle release versions.
 - [ ] Publish a compatibility matrix or explicit compatibility rules for the CLI, Action, config schema, web manifest/bundle, and supported Terraform modules.
 - [ ] Update release and adoption guides with the selected policy and review the examples against it.
