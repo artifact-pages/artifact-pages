@@ -39,12 +39,12 @@
       <p class="eyebrow">Owner decision · accepted September 28, 2026</p>
       <h1>One public domain. Independent provider delivery.</h1>
       <p>Cloudflare owns registration and authoritative DNS. Each hostname selects its own static delivery adapter; DNS ownership does not select the CDN for every hostname.</p>
-      <p class="notice"><strong>Selected, not yet provisioned.</strong> This records the intended deployment. Domain availability, purchase, account setup, TLS issuance, Terraform apply, and live delivery have not been verified or performed by this decision.</p>
+      <p class="notice"><strong>Domain acquired; delivery not yet verified.</strong> The owner reported purchasing <code>artifact-pages.dev</code> on September 28, 2026. This is owner-confirmed acquisition, not an independent registrar/DNS observation. Account/zone setup, authoritative DNS, TLS issuance, Terraform apply, and live delivery remain unverified.</p>
     </header>
 
     <section aria-labelledby="domains">
       <h2 id="domains">Domain and hostname policy</h2>
-      <p>Acquire <code>artifact-pages.dev</code> through Cloudflare Registrar and keep its authoritative zone in Cloudflare DNS. Retain the domain as Git Artifact Pages' ongoing production publication address, not a disposable verification domain.</p>
+      <p>The owner has acquired <code>artifact-pages.dev</code>. The selected policy uses Cloudflare Registrar and authoritative Cloudflare DNS. Retain the domain as Git Artifact Pages' ongoing production publication address, not a disposable verification domain; verify the account and active zone before provisioning delivery.</p>
       <div class="table-scroll" role="region" aria-label="Deployment hostnames; scroll horizontally on narrow screens" tabindex="0"><table>
         <thead><tr><th scope="col">Hostname</th><th scope="col">Purpose</th><th scope="col">Browser delivery path</th><th scope="col">TLS</th></tr></thead>
         <tbody>
@@ -98,7 +98,7 @@
     <section aria-labelledby="handoff">
       <h2 id="handoff">Prepared decision, remaining operational proof</h2>
       <ol>
-        <li>The owner checks availability and acquisition/renewal cost, purchases the domain, and confirms the Cloudflare zone/account. No purchase or account connection is authorized by this document alone.</li>
+        <li>Domain acquisition is owner-confirmed. Next confirm the Cloudflare account/zone identifiers and authoritative-zone state, with credentials outside Git. Keep renewal management separate from provider delivery; no account connection is authorized by this document alone.</li>
         <li>Complete reviewed local module preparation, then inspect a real plan and explicitly authorize apply. Preserve unrelated DNS records and existing zone rules.</li>
         <li>Deploy the web app, publish the registry, and publish the approved repository documentation through their existing CLI operations.</li>
         <li>Record apex Cloudflare DNS/TLS/CDN/storage/browser evidence in <a href="../backlog/verification/T15-provider-delivery.md">T15</a>; repeat independently on the AWS hostname after IMP-39. Actual clean-consumer adoption remains <a href="../backlog/verification/T16-external-adoption.md">T16</a>.</li>
@@ -115,7 +115,7 @@
         <li><a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/cnames-and-https-requirements.html">AWS: CloudFront certificate region and hostname requirements</a></li>
         <li><a href="https://developers.cloudflare.com/r2/buckets/object-lifecycles/">Cloudflare R2: asynchronous lifecycle behavior</a></li>
       </ul>
-      <p class="note">References were checked on September 28, 2026. They establish provider prerequisites, not live evidence for this deployment or domain availability.</p>
+      <p class="note">References were checked on September 28, 2026. They establish provider prerequisites, not live evidence for this deployment. Domain acquisition is recorded from the owner's report, not these references.</p>
     </section>
   </main>
 </body>
