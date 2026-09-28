@@ -21,6 +21,8 @@ func TestContentTypeUsesDeterministicArtifactExtensionMap(t *testing.T) {
 		path string
 		want string
 	}{
+		{"LICENSE", "text/plain; charset=utf-8"},
+		{"THIRD_PARTY_NOTICES.txt", "text/plain; charset=utf-8"},
 		{"report.HTML", "text/html; charset=utf-8"},
 		{"report.htm", "text/html; charset=utf-8"},
 		{"report.MD", "text/markdown; charset=utf-8"},

@@ -11,7 +11,7 @@ npm run build
 npm run package:web -- --version 1.2.3
 ```
 
-The package command writes an archive, JSON release manifest, and SHA-256 checksum under `.local/releases/`. The archive contains the web build, including `index.html`, hashed files under `assets/`, app-owned root runtime files, the project `LICENSE`, and a generated `THIRD_PARTY_NOTICES.txt` for installed production web dependencies. It does not contain site indexes, artifacts, or previews. The command refuses to replace an existing release label.
+The package command writes an archive, JSON release manifest, and SHA-256 checksum under `.local/releases/`. The archive contains `index.html`, `preview-bridge.js`, files under `assets/`, the project `LICENSE`, and a generated `THIRD_PARTY_NOTICES.txt` for installed production web dependencies. Its complete file list is checked against the deployed application path contract before packaging; adding a root file requires updating the route and deployment policy first. It does not contain site indexes, artifacts, or previews. The command refuses to replace an existing release label.
 
 Publish those three files as assets on the matching immutable GitHub release tag (for example, `v1.2.3`). The `vMAJOR.MINOR.PATCH` tag versions this web bundle only; it is not a version for the whole repository. `app deploy --version 1.2.3` downloads and verifies the archive against both the manifest and checksum before writing objects. Do not replace assets or move an existing release tag; publish a new web version to correct a release. A CLI or Action source change alone does not require a new app archive or app deployment.
 

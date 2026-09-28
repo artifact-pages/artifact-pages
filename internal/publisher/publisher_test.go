@@ -106,9 +106,12 @@ func (f *fakeCloudFront) CreateInvalidation(_ context.Context, input *cloudfront
 
 func TestDeployAppVerifiesAndPublishesBundle(t *testing.T) {
 	archive := createWebBundle(t, map[string][]byte{
-		"index.html":           []byte("<!doctype html><script src=\"/assets/app-123.js\"></script>"),
-		"assets/app-123.js":    []byte("console.log('ready')"),
-		"assets/theme-456.css": []byte("body { color: #123; }"),
+		"index.html":              []byte("<!doctype html><script src=\"/assets/app-123.js\"></script>"),
+		"assets/app-123.js":       []byte("console.log('ready')"),
+		"assets/theme-456.css":    []byte("body { color: #123; }"),
+		"LICENSE":                 []byte("Project license text\n"),
+		"THIRD_PARTY_NOTICES.txt": []byte("Third-party notice text\n"),
+		"preview-bridge.js":       []byte("window.previewBridge = true"),
 	})
 	s3Client := newFakeS3()
 	cloudFront := &fakeCloudFront{}
@@ -126,11 +129,14 @@ func TestDeployAppVerifiesAndPublishesBundle(t *testing.T) {
 		t.Fatalf("DeployApp() dry-run error = %v", err)
 	}
 	wantPlan := []Change{
+		{Action: "create", Path: "LICENSE"},
+		{Action: "create", Path: "THIRD_PARTY_NOTICES.txt"},
 		{Action: "create", Path: "assets/app-123.js"},
 		{Action: "create", Path: "assets/theme-456.css"},
+		{Action: "create", Path: "preview-bridge.js"},
 		{Action: "create", Path: "index.html"},
 	}
-	if planned.Outcome != "planned" || planned.FilesPublished != 3 || !reflect.DeepEqual(planned.Changes, wantPlan) {
+	if planned.Outcome != "planned" || planned.FilesPublished != 6 || !reflect.DeepEqual(planned.Changes, wantPlan) {
 		t.Fatalf("DeployApp() dry-run = %+v, want read-only plan %+v", planned, wantPlan)
 	}
 	if len(s3Client.puts) != 0 || len(cloudFront.invalidations) != 0 {
@@ -143,8 +149,8 @@ func TestDeployAppVerifiesAndPublishesBundle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DeployApp() error = %v", err)
 	}
-	if result.Version != "test-1" || result.FilesPublished != 3 {
-		t.Fatalf("DeployApp() = %+v, want version test-1 and 3 files", result)
+	if result.Version != "test-1" || result.FilesPublished != 6 {
+		t.Fatalf("DeployApp() = %+v, want version test-1 and all 6 manifest files", result)
 	}
 	if got := string(s3Client.objects["index.html"].body); !strings.Contains(got, "app-123.js") {
 		t.Fatalf("uploaded application shell = %q", got)
@@ -154,6 +160,15 @@ func TestDeployAppVerifiesAndPublishesBundle(t *testing.T) {
 	}
 	if got := s3Client.objects["assets/app-123.js"].cache; got != immutableCache {
 		t.Errorf("hashed asset Cache-Control = %q, want %q", got, immutableCache)
+	}
+	for filePath, want := range map[string]string{
+		"LICENSE":                 "Project license text\n",
+		"THIRD_PARTY_NOTICES.txt": "Third-party notice text\n",
+	} {
+		object := s3Client.objects[filePath]
+		if string(object.body) != want || object.contentType != "text/plain; charset=utf-8" || object.cache != appShellCache {
+			t.Errorf("notice object %q = body %q, type %q, cache %q; want its manifest bytes, text/plain, and revalidation", filePath, object.body, object.contentType, object.cache)
+		}
 	}
 	if got := s3Client.objects["index.html"].metadata["artifact-pages-version"]; got != "test-1" {
 		t.Errorf("application version metadata = %q, want test-1", got)

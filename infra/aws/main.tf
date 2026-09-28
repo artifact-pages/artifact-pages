@@ -61,6 +61,8 @@ locals {
           "s3:prefix" = [
             "index.html",
             "preview-bridge.js",
+            "LICENSE",
+            "THIRD_PARTY_NOTICES.txt",
             "assets/*",
             "_artifacts/*",
             "_indexes/*",
@@ -81,6 +83,8 @@ locals {
         "${local.bucket_arn}/_control/registry-cleanup.json",
         "${local.bucket_arn}/index.html",
         "${local.bucket_arn}/preview-bridge.js",
+        "${local.bucket_arn}/LICENSE",
+        "${local.bucket_arn}/THIRD_PARTY_NOTICES.txt",
         "${local.bucket_arn}/assets/*",
       ]
     },
@@ -91,6 +95,8 @@ locals {
       Resource = [
         "${local.bucket_arn}/index.html",
         "${local.bucket_arn}/preview-bridge.js",
+        "${local.bucket_arn}/LICENSE",
+        "${local.bucket_arn}/THIRD_PARTY_NOTICES.txt",
         "${local.bucket_arn}/assets/*",
         "${local.bucket_arn}/_indexes/sites.json",
         "${local.bucket_arn}/_control/locks/*",

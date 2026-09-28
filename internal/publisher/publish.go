@@ -162,6 +162,9 @@ func appFileCacheControl(relative string) string {
 }
 
 func contentType(relative string) string {
+	if relative == "LICENSE" || relative == "THIRD_PARTY_NOTICES.txt" {
+		return "text/plain; charset=utf-8"
+	}
 	extension := strings.ToLower(path.Ext(relative))
 	switch extension {
 	case ".html", ".htm":

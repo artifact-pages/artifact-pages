@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { assertWebBundlePathsMatchDeploymentContract } from './web-bundle-paths.mjs'
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const distRoot = path.join(projectRoot, 'dist')
@@ -92,12 +93,13 @@ async function main() {
 
   if (
     !files.includes('index.html') ||
+    !files.includes('preview-bridge.js') ||
     !files.includes('LICENSE') ||
     !files.includes('THIRD_PARTY_NOTICES.txt') ||
     !files.some((file) => file.startsWith('assets/'))
   ) {
     throw new Error(
-      'Build the Vite application and generate license notices first; dist must contain index.html, LICENSE, assets/, and THIRD_PARTY_NOTICES.txt.',
+      'Build the Vite application and generate license notices first; dist must contain index.html, preview-bridge.js, LICENSE, assets/, and THIRD_PARTY_NOTICES.txt.',
     )
   }
 
@@ -106,6 +108,8 @@ async function main() {
       throw new Error(`The web distribution must not include ${prefix} storage.`)
     }
   }
+
+  assertWebBundlePathsMatchDeploymentContract(files)
 
   const commit = gitOutput(['rev-parse', 'HEAD'])
   const sourceDirty = gitOutput(['status', '--porcelain', '--untracked-files=all']) !== ''

@@ -13,6 +13,8 @@ function handler(event) {
   if (
     uri === "/index.html" ||
     uri === "/preview-bridge.js" ||
+    uri === "/LICENSE" ||
+    uri === "/THIRD_PARTY_NOTICES.txt" ||
     uri.indexOf("/assets/") === 0 ||
     uri === "/_indexes" ||
     uri.indexOf("/_indexes/") === 0 ||

@@ -19,10 +19,12 @@ test('CloudFront route function blocks control paths with no-store responses', (
   }
 })
 
-test('CloudFront route function passes application and data-plane objects through', () => {
+test('CloudFront route function passes application, notice, and data-plane objects through', () => {
   const paths = [
     '/index.html',
     '/preview-bridge.js',
+    '/LICENSE',
+    '/THIRD_PARTY_NOTICES.txt',
     '/assets/app-123.js',
     '/_indexes/sites.json',
     '/_artifacts/sre/report.html',
@@ -42,6 +44,24 @@ test('CloudFront route function passes application and data-plane objects throug
 
     assert.equal(result, request, `${uri} should be passed through unchanged`)
     assert.equal(result.uri, uri)
+  }
+})
+
+test('missing notice files stay on the origin path and return the configured non-cached 404', () => {
+  for (const uri of ['/LICENSE', '/THIRD_PARTY_NOTICES.txt']) {
+    const request = { uri, method: 'GET' }
+    const result = handler({ request })
+
+    assert.equal(result, request, `${uri} must reach S3 so a missing object does not become the SPA shell`)
+    assert.equal(result.uri, uri)
+  }
+
+  for (const errorCode of [403, 404]) {
+    assert.match(
+      distributionSource,
+      new RegExp(`error_code\\s*=\\s*${errorCode}\\s+response_code\\s*=\\s*404[\\s\\S]*?response_page_path\\s*=\\s*"/_errors/not-found\\.html"[\\s\\S]*?error_caching_min_ttl\\s*=\\s*0`, 'u'),
+      `a private-origin ${errorCode} miss must become a non-cached 404`,
+    )
   }
 })
 

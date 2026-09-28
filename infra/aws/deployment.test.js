@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
+import { assertWebBundlePathsMatchDeploymentContract } from '../../scripts/web-bundle-paths.mjs'
 
 const main = await readFile(new URL('./main.tf', import.meta.url), 'utf8')
 const variables = await readFile(new URL('./variables.tf', import.meta.url), 'utf8')
 const outputs = await readFile(new URL('./outputs.tf', import.meta.url), 'utf8')
+const packageReleaseSource = await readFile(new URL('../../scripts/package-web-release.mjs', import.meta.url), 'utf8')
 
 function block(source, header) {
   const start = source.indexOf(header)
@@ -69,6 +71,14 @@ function actionLists(source) {
   return [...source.matchAll(/Action\s*=\s*\[([^\]]*)\]/gu)].map(([, actions]) =>
     [...actions.matchAll(/"([^"]+)"/gu)].map(([, action]) => action),
   )
+}
+
+function localStatement(source, sid) {
+  const match = new RegExp(`Sid\\s*=\\s*"${escapeRegExp(sid)}"`, 'u').exec(source)
+  assert.ok(match, `Terraform statement is missing: ${sid}`)
+  const end = source.indexOf('\n    },', match.index)
+  assert.notEqual(end, -1, `Terraform statement is not closed: ${sid}`)
+  return source.slice(match.index, end)
 }
 
 test('AWS deployment keeps the S3 origin private behind signed CloudFront OAC', () => {
@@ -196,6 +206,43 @@ test('admin and satellite OIDC roles have separate exact-subject trust and scope
   assert.doesNotMatch(satelliteDelete, /_indexes|_previews|_control/u)
   assert.match(variables, /satellite_github_subjects"[\s\S]*?type\s*=\s*map\(list\(string\)\)/u)
   assert.match(outputs, /satellite_role_arns/u)
+})
+
+test('official web-bundle manifest paths fit the exact AWS admin list, read, and write scopes', () => {
+  assert.match(packageReleaseSource, /const files = await listFiles\(distRoot\)/u)
+  assert.match(packageReleaseSource, /assertWebBundlePathsMatchDeploymentContract\(files\)/u)
+  assert.match(packageReleaseSource, /!files\.includes\('preview-bridge\.js'\)/u)
+  assert.match(packageReleaseSource, /!files\.includes\('LICENSE'\)/u)
+  assert.match(packageReleaseSource, /!files\.includes\('THIRD_PARTY_NOTICES\.txt'\)/u)
+  assert.match(packageReleaseSource, /const manifest = \{[\s\S]*?files,/u)
+  assert.doesNotThrow(() => assertWebBundlePathsMatchDeploymentContract([
+    'index.html',
+    'preview-bridge.js',
+    'LICENSE',
+    'THIRD_PARTY_NOTICES.txt',
+    'assets/app.js',
+    'assets/nested/chunk.js',
+  ]))
+  assert.throws(
+    () => assertWebBundlePathsMatchDeploymentContract(['arbitrary-root.txt']),
+    /outside the deployed application scope/u,
+  )
+
+  const adminStatements = block(main, 'locals {')
+  const list = localStatement(adminStatements, 'ListProjectionPrefixes')
+  const read = localStatement(adminStatements, 'ReadRegistryAppAndControlState')
+  const write = localStatement(adminStatements, 'WriteApplicationRegistryAndControlState')
+  const appRootPaths = ['index.html', 'preview-bridge.js', 'LICENSE', 'THIRD_PARTY_NOTICES.txt']
+
+  for (const filePath of appRootPaths) {
+    assert.match(list, new RegExp(`"${escapeRegExp(filePath)}"`, 'u'), `ListBucket must cover ${filePath}`)
+    assert.ok(read.includes(`/${filePath}"`), `GetObject must cover ${filePath}`)
+    assert.ok(write.includes(`/${filePath}"`), `PutObject must cover ${filePath}`)
+  }
+  assert.match(list, /"assets\/\*"/u, 'ListBucket must cover every generated asset')
+  assert.ok(read.includes('/assets/*'), 'GetObject must cover every generated asset')
+  assert.ok(write.includes('/assets/*'), 'PutObject must cover every generated asset')
+  assert.doesNotMatch(write, /"\$\{local\.bucket_arn\}\/\*"/u, 'app writes must not include arbitrary root keys')
 })
 
 test('deployment output remains compatible with the CLI AWS target contract', () => {

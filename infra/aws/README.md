@@ -2,7 +2,7 @@
 
 This module provisions a private S3 origin and CloudFront distribution for the provider-neutral Artifact Pages projection. CloudFront reads the bucket through Origin Access Control; the bucket blocks public access. The CloudFront viewer-request function keeps `/_control` private, passes storage and asset paths to S3, and rewrites logical browser routes to `/index.html`.
 
-The module also creates one admin GitHub OIDC role and one optional satellite role per site ID. The admin role can apply the registry, publish the application plane (`index.html`, `preview-bridge.js`, and `assets/*`), clean removed site prefixes, update registry control records, and request CloudFront invalidations. Each satellite role reads the deployed registry and its site's current indexes, artifacts, and preview records, and can write only its site's artifacts, indexes, previews, and retained site lock. GitHub OIDC subjects are exact inputs so a caller can restrict each role to selected branches or environments.
+The module also creates one admin GitHub OIDC role and one optional satellite role per site ID. The admin role can apply the registry, publish the application plane (`index.html`, `preview-bridge.js`, `LICENSE`, `THIRD_PARTY_NOTICES.txt`, and `assets/*`), clean removed site prefixes, update registry control records, and request CloudFront invalidations. Each satellite role reads the deployed registry and its site's current indexes, artifacts, and preview records, and can write only its site's artifacts, indexes, previews, and retained site lock. GitHub OIDC subjects are exact inputs so a caller can restrict each role to selected branches or environments.
 
 ## Inputs
 
