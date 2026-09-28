@@ -207,6 +207,60 @@ func TestBuildCreatesPerSiteIndexWithoutCopyingSources(t *testing.T) {
 	}
 }
 
+func TestBuildCreatesZeroDocumentIndexForResourceOnlySite(t *testing.T) {
+	repositoryRoot := initializeGitRepository(t)
+	restoreWorkingDirectory := chdirForTest(t, repositoryRoot)
+	defer restoreWorkingDirectory()
+
+	writeFixtureFile(t, repositoryRoot, "artifacts/assets/theme.css", "body { color: navy; }\n")
+	commitFixture(t, repositoryRoot, "add site resources", time.Date(2026, 2, 3, 4, 5, 6, 0, time.UTC))
+
+	result, err := Build(context.Background(), BuildOptions{
+		SiteID:    "empty",
+		SiteTitle: "Empty site",
+		SourceDir: "artifacts",
+		OutputDir: ".local/storage",
+	})
+	if err != nil {
+		t.Fatalf("Build() error = %v, want a valid empty artifact index", err)
+	}
+	if result.FilesScanned != 1 || result.ArtifactsIndexed != 0 {
+		t.Fatalf("Build() = %+v, want one scanned resource and zero indexed documents", result)
+	}
+
+	indexBytes, err := os.ReadFile(filepath.Join(repositoryRoot, ".local/storage/_indexes/empty/index.json"))
+	if err != nil {
+		t.Fatalf("read generated site index: %v", err)
+	}
+	var index struct {
+		Artifacts json.RawMessage `json:"artifacts"`
+	}
+	if err := json.Unmarshal(indexBytes, &index); err != nil {
+		t.Fatalf("decode generated site index: %v", err)
+	}
+	if string(index.Artifacts) != "[]" {
+		t.Errorf("empty site artifacts = %s, want []", index.Artifacts)
+	}
+
+	metadataBytes, err := os.ReadFile(filepath.Join(repositoryRoot, ".local/storage/_indexes/empty/meta.json"))
+	if err != nil {
+		t.Fatalf("read generated discovery metadata: %v", err)
+	}
+	var metadata SiteDiscoveryMetadata
+	if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
+		t.Fatalf("decode generated discovery metadata: %v", err)
+	}
+	if metadata.ArtifactCount != 0 || metadata.Site != (SiteSummary{ID: "empty", Title: "Empty site"}) {
+		t.Errorf("empty site discovery metadata = %+v, want site title and count zero", metadata)
+	}
+	if _, err := os.Stat(filepath.Join(repositoryRoot, "artifacts/assets/theme.css")); err != nil {
+		t.Errorf("Build() changed or removed the source resource: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(repositoryRoot, ".local/storage/_artifacts")); !os.IsNotExist(err) {
+		t.Errorf("Build() should write only index metadata, _artifacts exists or stat failed: %v", err)
+	}
+}
+
 func TestBuildPaletteScoringProfilePacksSharedFeatures(t *testing.T) {
 	artifacts := []ArtifactIndexEntry{
 		{ID: "teams/latency/summary.md", Title: "Latency 日本語 𐐀guide", Path: "Teams/Latency/summary.md"},

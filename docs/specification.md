@@ -172,6 +172,8 @@ Example discovery metadata:
 
 The `artifactIndexUrl` pointer keeps the browser from hard-coding the artifact-index location. The current implementation still publishes one complete artifact index per site; sharding or an inverted index is not part of the contract until benchmarks demonstrate a need.
 
+A registered site may have no HTML or Markdown documents. Its index uses `"artifacts": []`, and its discovery metadata reports `"artifactCount": 0`. This is a published empty site, distinct from an unpublished site: `/:site` remains the site home and shows an empty state, while an explicit document route such as `/:site/index.html` is not inferred. Static resources still follow normal publish rules, and stale document objects are removed during reconciliation without unregistering the site.
+
 Example artifact index:
 
 ~~~json

@@ -19,7 +19,7 @@
 - [x] Verify exact site-prefix isolation, unchanged registry/app/control/other-site objects, `.git` omission, symlink/special-file rejection, source bytes and paths, and MIME/disposition/encoding/cache metadata.
 - [x] Reject equal local source/target roots and either containment direction before lock creation; also cover symlinked target parents and ignored generated files when the target is separate (completed ISSUE-014).
 - [ ] Run real AWS S3 and Cloudflare R2 conditional-write/recovery smoke tests; verify provider cache and invalidation behavior.
-- [ ] Cover zero-document desired-state convergence ([ISSUE-018](../issues/ISSUE-018-empty-site-reconciliation.md)).
+- [x] Cover zero-document desired-state convergence (completed ISSUE-018): publish `artifacts: []` with `artifactCount: 0`, retain source resources and live previews, preserve registry/app/control/neighbor boundaries, and retry after partial stale deletion.
 
 ## Evidence
 
@@ -40,6 +40,10 @@ The local source/output boundary gate was completed as ISSUE-014. `TestPublishSi
 `TestUnregisterSiteRetriesForcedCleanupWhenRegistrationIsAlreadyAbsent` directly exercises forced `UnregisterSite` listing, partial-delete, and invalidation failures followed by retry, and verifies preview cleanup plus registry, neighboring-site, app, control, and lock preservation. These local and fake-provider checks do not prove live provider conditional writes, cross-process recovery, delivery headers, CDN freshness, or invalidation. Keep T14 open until those remaining gates are verified.
 
 The fresh Cloudflare MinIO + purge-mock profile (`EDGE_PROFILE_STATE_ROOT=.local/edge-profiles-cloudflare-head-fallback EDGE_PORT=8195 MINIO_PORT=19025 CF_API_PORT=18805 node scripts/run-edge-profile.mjs cloudflare`) published new SRE and frontend artifacts, unregistered SRE, verified that all 28 SRE artifact/index/preview objects were removed while the frontend probe and index remained, and checked the mock's exact unregister purge paths. `TestLocalEdgeConformance` and E2E passed (55/55); the profile was stopped with the matching `down cloudflare` command. This strengthens local provider-adapter evidence only; it does not close the real AWS S3/R2 race and invalidation gate above.
+
+`internal/indexer/build_test.go` verifies a resource-only source produces `artifacts: []` and `artifactCount: 0`. `internal/publisher/site_empty_publish_test.go` publishes two documents, removes both, injects a partial stale deletion, and verifies retry leaves only the CSS resource and zero-document index/meta. The same test confirms the registry, application plane, private control object, neighboring site, and a live preview remain intact. `e2e/local-serving.spec.ts` verifies the empty registered site home, explicit `index.html` not-found route, and unaffected neighbor navigation.
+
+The ISSUE-018 verification run passed `go test -race -count=1 ./internal/publisher ./internal/indexer` and `npm run test:e2e` (production build plus 60 Playwright tests through local nginx).
 
 ## Implementation links
 

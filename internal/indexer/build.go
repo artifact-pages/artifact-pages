@@ -211,9 +211,6 @@ func Build(ctx context.Context, options BuildOptions) (BuildResult, error) {
 	if err != nil {
 		return BuildResult{}, err
 	}
-	if len(artifacts) == 0 {
-		return BuildResult{}, fmt.Errorf("no HTML or Markdown artifacts found in %q", options.SourceDir)
-	}
 
 	relativeSource, err := filepath.Rel(repositoryRoot, sourcePath)
 	if err != nil {

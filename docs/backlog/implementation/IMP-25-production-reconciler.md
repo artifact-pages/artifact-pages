@@ -19,6 +19,7 @@ Synchronize the selected source tree and generated index/meta into only that sit
 ## Verification
 
 - `go test -race -count=1 ./internal/publisher ./internal/indexer` — passed.
+- Empty source-document sets publish an `artifacts: []` index and zero-count metadata while preserving resources; publisher retry coverage injects partial stale-document deletion and verifies boundary objects and live-preview retention.
 - `go test -race -count=1 ./internal/publisher` — passed after adding the `PublishSite` lock-loss regression.
 - `go test -race -count=10 ./internal/publisher -run 'Test(PublishFirstThenUnregisterWithdrawsAndCleansSite|UnregisterFirstBlocksPublishBeforeContentWrites)'` — passed.
 - `go test -race -count=1 ./internal/publisher -run '^TestS3ConditionalWritesMapSharedLockConditionsForAWSAndR2$'` — passed.

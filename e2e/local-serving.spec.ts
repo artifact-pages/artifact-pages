@@ -279,6 +279,95 @@ test('registered discovery honors sites.json, hides unregistered storage, and lo
   expect(indexRequests).not.toContain('/_indexes/orphaned/index.json')
 })
 
+test('an empty registered site stays on its home route and does not affect a neighboring site', async ({ page }) => {
+  const artifactRequests: string[] = []
+  await page.route('**/_indexes/sites.json', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      schemaVersion: 1,
+      sites: [
+        { id: 'empty', name: 'Empty registered', repository: 'acme/empty', sourcePath: 'sites/empty' },
+        { id: 'neighbor', name: 'Neighbor', repository: 'acme/neighbor', sourcePath: 'sites/neighbor' },
+      ],
+    }),
+  }))
+  await page.route('**/_indexes/empty/meta.json', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      schemaVersion: 1,
+      site: { id: 'empty', title: 'Empty registered' },
+      generatedAt: '2026-09-28T00:00:00Z',
+      artifactCount: 0,
+      artifactIndexUrl: '/_indexes/empty/index.json',
+    }),
+  }))
+  await page.route('**/_indexes/neighbor/meta.json', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      schemaVersion: 1,
+      site: { id: 'neighbor', title: 'Neighbor' },
+      generatedAt: '2026-09-28T00:00:00Z',
+      artifactCount: 1,
+      artifactIndexUrl: '/_indexes/neighbor/index.json',
+    }),
+  }))
+  await page.route('**/_indexes/empty/index.json', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      schemaVersion: 1,
+      site: { id: 'empty', title: 'Empty registered' },
+      generatedAt: '2026-09-28T00:00:00Z',
+      artifacts: [],
+    }),
+  }))
+  await page.route('**/_indexes/neighbor/index.json', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      schemaVersion: 1,
+      site: { id: 'neighbor', title: 'Neighbor' },
+      generatedAt: '2026-09-28T00:00:00Z',
+      artifacts: [{
+        id: 'report.html',
+        title: 'Neighbor report',
+        path: 'report.html',
+        format: 'html',
+        artifactUrl: '/_artifacts/neighbor/report.html',
+        updatedAt: '2026-09-28T00:00:00Z',
+      }],
+    }),
+  }))
+  page.on('request', (request) => {
+    const pathname = new URL(request.url()).pathname
+    if (pathname.startsWith('/_artifacts/empty/')) artifactRequests.push(pathname)
+  })
+
+  await page.goto('/')
+  const emptySite = page.getByRole('button', { name: /Empty registered/ })
+  await expect(emptySite).toContainText('0 artifacts')
+  await emptySite.click()
+  await expect(page).toHaveURL(/\/empty$/u)
+  await expect(page.getByRole('heading', { name: 'Empty registered', exact: true })).toBeVisible()
+  await expect(page.locator('.site-home .site-home-lede')).toContainText('0 published artifacts.')
+  await expect(page.getByText('There are no artifact groups to browse yet.')).toBeVisible()
+  await expect(page.locator('.site-home .tree-artifact')).toHaveCount(0)
+  await expect(page.locator('.artifact-frame')).toHaveCount(0)
+
+  await page.goto('/empty/index.html')
+  await expect(page).toHaveURL(/\/empty\/index\.html$/u)
+  await expect(page.getByRole('heading', { name: 'Artifact not found' })).toBeVisible()
+  expect(artifactRequests).toEqual([])
+
+  await page.goto('/neighbor')
+  await expect(page.getByRole('heading', { name: 'Neighbor', exact: true })).toBeVisible()
+  await expect(page.locator('.site-home .tree-artifact .tree-label')).toHaveText('Neighbor report')
+  expect(artifactRequests).toEqual([])
+})
+
 test('a registered site remains discoverable before and after its first publish', async ({ page }) => {
   let frontendPublished = false
   const indexRequests: string[] = []
