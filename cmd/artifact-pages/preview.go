@@ -222,20 +222,15 @@ func previewGroupURL(publicOrigin, site, groupID string) (string, error) {
 }
 
 func previewDocumentRoute(publicOrigin, site, headSHA, documentPath, groupID string, includeGroup bool) (string, error) {
-	if err := registry.ValidateSiteID(site); err != nil {
+	readerGroup := ""
+	if includeGroup {
+		readerGroup = groupID
+	}
+	route, err := preview.DocumentRouteHref(site, headSHA, documentPath, readerGroup)
+	if err != nil {
 		return "", err
 	}
-	segments := strings.Split(documentPath, "/")
-	for index, segment := range segments {
-		segments[index] = url.PathEscape(segment)
-	}
-	result := publicOrigin + "/" + site + "/_previews/" + headSHA + "/" + strings.Join(segments, "/")
-	if includeGroup {
-		values := url.Values{}
-		values.Set("group", groupID)
-		result += "?" + values.Encode()
-	}
-	return result, nil
+	return publicOrigin + route, nil
 }
 
 func printPreviewPublishOutput(writer io.Writer, output previewPublishOutput) {

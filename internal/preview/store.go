@@ -18,9 +18,12 @@ var (
 
 // PreviewStore is the provider boundary for preview projection writes. Keys are
 // the canonical /_previews/... paths returned by CatalogKey, ManifestKey, and
-// FileKey. Implementations provide origin reads, create-once immutable objects,
-// mutable catalog replacement, and the cooperative per-site lock used by
-// preview publication, production reconciliation, and unregister.
+// FileKey, with file path segments percent-encoded once. Implementations
+// validate and decode those segments exactly once when mapping them to raw
+// provider keys or local filenames. Implementations provide origin reads,
+// create-once immutable objects, mutable catalog replacement, and the
+// cooperative per-site lock used by preview publication, production
+// reconciliation, and unregister.
 //
 // ReadObject must return ErrObjectNotFound only for confirmed absence. A
 // provider's network or authorization errors must remain ordinary errors so

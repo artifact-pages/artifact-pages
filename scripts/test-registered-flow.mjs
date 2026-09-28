@@ -120,7 +120,6 @@ async function main() {
   const adminRoot = path.join(scratchRoot, 'admin')
   const satelliteRoot = path.join(scratchRoot, 'satellite')
   const storageRoot = path.join(scratchRoot, 'storage')
-  const emptyPreviewRoot = path.join(scratchRoot, 'previews')
   const binaryPath = path.join(scratchRoot, 'artifact-pages')
   const configPath = path.join(adminRoot, '.artifact-pages.yaml')
   let composeStarted = false
@@ -131,7 +130,6 @@ async function main() {
     await Promise.all([
       fs.mkdir(adminRoot, { recursive: true }),
       fs.mkdir(satelliteRoot, { recursive: true }),
-      fs.mkdir(emptyPreviewRoot, { recursive: true }),
     ])
     await initRepository(adminRoot, 'https://github.com/example/registered-admin.git')
     await initRepository(satelliteRoot, 'https://github.com/example/registered-satellite.git')
@@ -225,6 +223,19 @@ async function main() {
     assert(JSON.stringify(await treeSnapshot(path.join(storageRoot, '_artifacts/neighbor'))) === JSON.stringify(neighborBefore), 'updating SRE changed neighbor artifact objects')
     assert(JSON.stringify(await treeSnapshot(path.join(storageRoot, '_indexes/neighbor'))) === JSON.stringify(neighborIndexBefore), 'updating SRE changed neighbor index objects')
 
+    const previewDocumentPath = 'guides/review résumé #%2F +?.html'
+    const previewResourcePath = 'guides/assets/theme #%2F +? 日本.css'
+    git(satelliteRoot, ['checkout', '-b', 'encoded-preview'])
+    await writeFile(satelliteRoot, `sites/sre/content/${previewDocumentPath}`, [
+      '<!doctype html>',
+      '<html lang="en"><head><meta charset="utf-8"><title>Encoded local preview</title>',
+      '<link rel="stylesheet" href="assets/theme%20%23%252F%20%2B%3F%20%E6%97%A5%E6%9C%AC.css"></head>',
+      '<body><main><h1>Encoded preview document</h1></main></body></html>',
+      '',
+    ].join('\n'))
+    await writeFile(satelliteRoot, `sites/sre/content/${previewResourcePath}`, 'body { background-color: rgb(33, 72, 99); }\n')
+    commit(satelliteRoot, 'add encoded-name preview document and resource')
+
     port = await freePort()
     const composeEnv = {
       ...process.env,
@@ -232,18 +243,46 @@ async function main() {
       WEB_PORT: String(port),
       WEB_ROOT: path.join(projectRoot, 'dist'),
       STORAGE_ROOT: storageRoot,
-      PREVIEW_ROOT: emptyPreviewRoot,
+      PREVIEW_ROOT: path.join(storageRoot, '_previews'),
     }
+    await fs.mkdir(composeEnv.PREVIEW_ROOT, { recursive: true })
     composeStarted = true
     run('docker', ['compose', '-p', e2eProject, 'up', '--detach'], { env: composeEnv, stdio: 'inherit' })
     const baseURL = `http://127.0.0.1:${port}`
     await waitForServer(baseURL)
 
+    const previewResult = parseResult(run(binaryPath, [
+      'preview', 'publish', '--site', 'sre', '--source', 'sites/sre/content', '--base-url', baseURL,
+      '--head', 'HEAD', '--default-ref', 'main', '--config', satelliteConfig, '--format', 'json',
+    ], { cwd: satelliteRoot }), 'encoded-name preview publish')
+    assert(previewResult.outcome === 'published', `encoded-name preview publish returned ${previewResult.outcome}`)
+    assert(previewResult.documents.length === 1 && previewResult.documents[0].path === previewDocumentPath, 'preview publish did not return the raw source-relative document path')
+    const previewHeadSHA = git(satelliteRoot, ['rev-parse', 'HEAD'])
+    const encodedPreviewPath = previewDocumentPath.split('/').map(encodeURIComponent).join('/')
+    const expectedPreviewURL = `${baseURL}/sre/_previews/${previewHeadSHA}/${encodedPreviewPath}`
+    assert(previewResult.documents[0].url === expectedPreviewURL, `preview publish URL was ${previewResult.documents[0].url}, want ${expectedPreviewURL}`)
+
+    const encodedStoragePath = (sourcePath) => sourcePath.split('/').map(encodeURIComponent).join('/')
+    for (const [sourcePath, expectedContents] of [
+      [previewDocumentPath, 'Encoded preview document'],
+      [previewResourcePath, 'rgb(33, 72, 99)'],
+    ]) {
+      const rawObjectURL = `${baseURL}/_previews/sre/revisions/${previewHeadSHA}/files/${encodedStoragePath(sourcePath)}`
+      const response = await fetch(rawObjectURL)
+      const body = await response.text()
+      assert(response.status === 200 && body.includes(expectedContents), `edge request ${rawObjectURL} returned ${response.status} with unexpected bytes`)
+    }
+
     run(process.execPath, [
       path.join(projectRoot, 'node_modules/@playwright/test/cli.js'),
       'test', 'e2e/registered-flow.spec.ts',
     ], {
-      env: { ...composeEnv, PLAYWRIGHT_BASE_URL: baseURL, PLAYWRIGHT_REGISTERED_FLOW: '1' },
+      env: {
+        ...composeEnv,
+        PLAYWRIGHT_BASE_URL: baseURL,
+        PLAYWRIGHT_REGISTERED_FLOW: '1',
+        PLAYWRIGHT_PREVIEW_URL: previewResult.documents[0].url,
+      },
       stdio: 'inherit',
     })
 
@@ -290,7 +329,7 @@ async function main() {
     assert((await treeSnapshot(path.join(storageRoot, '_previews/sre'))).length === 0, 'unregister left SRE preview objects')
 
     success = true
-    console.log('Registered local flow passed: separate admin/satellite repositories, dry-run, two-site publish, update/removal, browser routes/resources/reload, retry tests, and scoped artifact/index/preview unregister.')
+    console.log('Registered local flow passed: separate admin/satellite repositories, dry-run, two-site publish, update/removal, encoded-name preview publish and edge/browser loads, retry tests, and scoped artifact/index/preview unregister.')
   } finally {
     if (composeStarted) {
       try {

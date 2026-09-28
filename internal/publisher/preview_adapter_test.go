@@ -8,6 +8,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
@@ -181,7 +186,7 @@ func TestObjectPreviewStoreDistinguishesMissingFromOriginFailures(t *testing.T) 
 		{name: "transport", err: errors.New("origin connection reset")},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			backend.failGet(providerObjectKey(key), test.err)
+			backend.failGet(mustProviderObjectKey(t, key), test.err)
 			_, got := store.ReadObject(context.Background(), key)
 			if !errors.Is(got, test.err) {
 				t.Fatalf("ReadObject(%s) error = %v, want original failure %v", test.name, got, test.err)
@@ -189,7 +194,7 @@ func TestObjectPreviewStoreDistinguishesMissingFromOriginFailures(t *testing.T) 
 			if errors.Is(got, preview.ErrObjectNotFound) {
 				t.Fatalf("ReadObject(%s) misclassified an origin failure as absence: %v", test.name, got)
 			}
-			backend.failGet(providerObjectKey(key), nil)
+			backend.failGet(mustProviderObjectKey(t, key), nil)
 		})
 	}
 }
@@ -208,7 +213,7 @@ func TestObjectPreviewStoreCreatesImmutableObjectsOnce(t *testing.T) {
 	if err := store.CreateImmutableObject(context.Background(), key, firstBytes); err != nil {
 		t.Fatalf("first CreateImmutableObject() error = %v", err)
 	}
-	_, originalETag, err := backend.lockMemoryBackend.GetObject(context.Background(), providerObjectKey(key))
+	_, originalETag, err := backend.lockMemoryBackend.GetObject(context.Background(), mustProviderObjectKey(t, key))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +223,7 @@ func TestObjectPreviewStoreCreatesImmutableObjectsOnce(t *testing.T) {
 	if err := store.CreateImmutableObject(context.Background(), key, []byte("# Changed\n")); !errors.Is(err, preview.ErrImmutableObjectConflict) {
 		t.Fatalf("changed-byte CreateImmutableObject() error = %v, want immutable conflict", err)
 	}
-	actual, actualETag, err := backend.lockMemoryBackend.GetObject(context.Background(), providerObjectKey(key))
+	actual, actualETag, err := backend.lockMemoryBackend.GetObject(context.Background(), mustProviderObjectKey(t, key))
 	if err != nil || actualETag != originalETag || !bytes.Equal(actual.Bytes, firstBytes) {
 		t.Fatalf("immutable object after retries = %q, ETag %q, err=%v; want original bytes and ETag %q", actual.Bytes, actualETag, err, originalETag)
 	}
@@ -226,7 +231,7 @@ func TestObjectPreviewStoreCreatesImmutableObjectsOnce(t *testing.T) {
 	_, conditions := backend.snapshotWrites()
 	var fileWrites []ObjectCondition
 	for _, write := range conditions {
-		if write.key == providerObjectKey(key) {
+		if write.key == mustProviderObjectKey(t, key) {
 			fileWrites = append(fileWrites, write.condition)
 		}
 	}
@@ -237,6 +242,155 @@ func TestObjectPreviewStoreCreatesImmutableObjectsOnce(t *testing.T) {
 		if !condition.IfNoneMatch || condition.IfMatchETag != "" {
 			t.Errorf("immutable write %d condition = %+v, want If-None-Match only", index+1, condition)
 		}
+	}
+}
+
+func TestPreviewStoresPublishRawUTF8KeysAndServeNormallyEncodedURLs(t *testing.T) {
+	const headSHA = "0123456789abcdef0123456789abcdef01234567"
+	documentPath := "guides/review résumé #%2F +?.html"
+	resourcePath := "guides/assets/theme #%2F +? 日本.css"
+	files := map[string][]byte{
+		documentPath: []byte("<!doctype html><title>Encoded preview</title>\n"),
+		resourcePath: []byte("body { color: rebeccapurple; }\n"),
+	}
+	documents := []preview.Document{{Path: documentPath, Title: "Encoded preview", Format: "html"}}
+	result := previewAdapterBuildResultWithFiles(
+		previewAdapterBuildResult("sre", "pr:42", "https://github.com/acme/sre/pull/42", headSHA),
+		files, documents,
+	)
+
+	for _, adapter := range []struct {
+		name                  string
+		storagePrefix         string
+		stripPreviewURLPrefix bool
+		store                 func(string) (preview.PreviewStore, error)
+	}{
+		{
+			name:                  "directory preview store",
+			stripPreviewURLPrefix: true,
+			store: func(root string) (preview.PreviewStore, error) {
+				return preview.NewDirectoryStore(root)
+			},
+		},
+		{
+			name:          "object-backed configured local target",
+			storagePrefix: "_previews",
+			store: func(root string) (preview.PreviewStore, error) {
+				backend, err := NewDirectoryBackend(root)
+				if err != nil {
+					return nil, err
+				}
+				return NewObjectPreviewStore(backend)
+			},
+		},
+	} {
+		t.Run(adapter.name, func(t *testing.T) {
+			root := t.TempDir()
+			store, err := adapter.store(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := preview.Publish(context.Background(), store, result); err != nil {
+				t.Fatalf("Publish() error = %v", err)
+			}
+
+			manifestKey, err := preview.ManifestKey("sre", headSHA)
+			if err != nil {
+				t.Fatal(err)
+			}
+			manifestBytes, err := store.ReadObject(context.Background(), manifestKey)
+			if err != nil {
+				t.Fatalf("ReadObject(manifest) error = %v", err)
+			}
+			manifest, err := preview.DecodeManifest(manifestBytes)
+			if err != nil {
+				t.Fatalf("DecodeManifest() error = %v", err)
+			}
+			if len(manifest.Documents) != 1 || manifest.Documents[0].Path != documentPath {
+				t.Fatalf("published manifest documents = %+v, want raw source path %q", manifest.Documents, documentPath)
+			}
+			if len(manifest.Files) != len(files) {
+				t.Fatalf("published manifest files = %+v, want %d source paths", manifest.Files, len(files))
+			}
+			manifestPaths := make(map[string]bool, len(manifest.Files))
+			for _, file := range manifest.Files {
+				manifestPaths[file.Path] = true
+			}
+			for sourcePath := range files {
+				if !manifestPaths[sourcePath] {
+					t.Errorf("published manifest omitted raw source path %q: %+v", sourcePath, manifest.Files)
+				}
+			}
+
+			for sourcePath, want := range files {
+				key, err := preview.FileKey("sre", headSHA, sourcePath)
+				if err != nil {
+					t.Fatalf("FileKey(%q) error = %v", sourcePath, err)
+				}
+				storageKey := "_previews/sre/revisions/" + headSHA + "/files/" + sourcePath
+				if rawKey, rawErr := preview.RawObjectKey(key); rawErr != nil || rawKey != storageKey {
+					t.Fatalf("RawObjectKey(%q) = %q, %v; want exactly-once decoded key %q", key, rawKey, rawErr, storageKey)
+				}
+				if sourcePath == documentPath {
+					wantKey := "/_previews/sre/revisions/" + headSHA + "/files/guides/review%20r%C3%A9sum%C3%A9%20%23%252F%20%2B%3F.html"
+					if key != wantKey {
+						t.Fatalf("FileKey() = %q, want one-encoded-segment URL %q", key, wantKey)
+					}
+				}
+				relativeStorageKey := storageKey
+				if adapter.storagePrefix == "" {
+					relativeStorageKey = strings.TrimPrefix(storageKey, "_previews/")
+				}
+				storedBytes, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(relativeStorageKey)))
+				if err != nil {
+					t.Fatalf("read raw storage key %q: %v", storageKey, err)
+				}
+				if !bytes.Equal(storedBytes, want) {
+					t.Errorf("raw storage key %q contains %q, want %q", storageKey, storedBytes, want)
+				}
+
+				var handler http.Handler = http.FileServer(http.Dir(root))
+				if adapter.stripPreviewURLPrefix {
+					handler = http.StripPrefix("/_previews/", handler)
+				}
+				server := httptest.NewServer(handler)
+				response, err := http.Get(server.URL + key)
+				if err != nil {
+					server.Close()
+					t.Fatalf("GET normally encoded URL %q: %v", key, err)
+				}
+				responseBytes, readErr := io.ReadAll(response.Body)
+				closeErr := response.Body.Close()
+				server.Close()
+				if readErr != nil || closeErr != nil {
+					t.Fatalf("read GET %q response: read=%v close=%v", key, readErr, closeErr)
+				}
+				if response.StatusCode != http.StatusOK || !bytes.Equal(responseBytes, want) {
+					t.Errorf("GET %q = status %d body %q; want 200 and %q", key, response.StatusCode, responseBytes, want)
+				}
+			}
+
+			route, err := preview.DocumentRouteHref("sre", headSHA, documentPath, "pr:42")
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantRoute := "/sre/_previews/" + headSHA + "/guides/review%20r%C3%A9sum%C3%A9%20%23%252F%20%2B%3F.html?group=pr%3A42"
+			if route != wantRoute {
+				t.Errorf("DocumentRouteHref() = %q, want %q", route, wantRoute)
+			}
+
+			for _, invalidKey := range []string{
+				"/_previews/sre/revisions/" + headSHA + "/files/%2E%2E/escape.html",
+				"/_previews/sre/revisions/" + headSHA + "/files/guides%2Fescape.html",
+			} {
+				if _, err := preview.RawObjectKey(invalidKey); err == nil {
+					t.Errorf("RawObjectKey(%q) accepted traversal or an encoded path separator", invalidKey)
+				}
+				if err := store.CreateImmutableObject(context.Background(), invalidKey, []byte("must not be written")); err == nil {
+					t.Errorf("CreateImmutableObject(%q) accepted traversal or an encoded path separator", invalidKey)
+				}
+			}
+		})
 	}
 }
 
@@ -284,7 +438,7 @@ func TestObjectPreviewStoreRequiresLockContextForCatalogReplacement(t *testing.T
 	if err == nil || !strings.Contains(err.Error(), `preview catalog for site "sre" requires an active site lock`) {
 		t.Fatalf("ReplaceMutableObject() without a lock context error = %v, want a missing-lock rejection", err)
 	}
-	if _, _, err := backend.lockMemoryBackend.GetObject(context.Background(), providerObjectKey(catalogKey)); !errors.Is(err, ErrObjectNotFound) {
+	if _, _, err := backend.lockMemoryBackend.GetObject(context.Background(), mustProviderObjectKey(t, catalogKey)); !errors.Is(err, ErrObjectNotFound) {
 		t.Fatalf("catalog after rejected replacement = %v, want no catalog object", err)
 	}
 }
@@ -297,7 +451,7 @@ func TestObjectPreviewStorePublishRetriesMutableCatalogReplacement(t *testing.T)
 	}
 	result := previewAdapterBuildResult("sre", "pr:42", "https://github.com/acme/sre/pull/42", "0123456789abcdef0123456789abcdef01234567")
 	catalogKey, _ := preview.CatalogKey("sre")
-	backend.failNextPut(providerObjectKey(catalogKey), errors.New("injected catalog replacement failure"))
+	backend.failNextPut(mustProviderObjectKey(t, catalogKey), errors.New("injected catalog replacement failure"))
 
 	if err := preview.Publish(context.Background(), store, result); err == nil || !strings.Contains(err.Error(), "injected catalog replacement failure") {
 		t.Fatalf("first Publish() error = %v, want injected catalog failure", err)
@@ -337,7 +491,7 @@ func TestObjectPreviewStorePublishRetriesMutableCatalogReplacement(t *testing.T)
 		t.Fatalf("immutable create attempts after catalog retry = %d, want unchanged count %d", got, want)
 	}
 
-	object, _, err := backend.lockMemoryBackend.GetObject(context.Background(), providerObjectKey(catalogKey))
+	object, _, err := backend.lockMemoryBackend.GetObject(context.Background(), mustProviderObjectKey(t, catalogKey))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -421,7 +575,7 @@ func TestObjectPreviewStoreConcurrentGroupsKeepBothCatalogAndIsolateOtherSites(t
 		t.Fatalf("second publisher completed while the first held the site lock: %v", err)
 	default:
 	}
-	if _, _, err := backend.lockMemoryBackend.GetObject(ctx, providerObjectKey(secondFileKey)); !errors.Is(err, ErrObjectNotFound) {
+	if _, _, err := backend.lockMemoryBackend.GetObject(ctx, mustProviderObjectKey(t, secondFileKey)); !errors.Is(err, ErrObjectNotFound) {
 		t.Fatalf("second group's immutable file before lock release = %v, want no upload", err)
 	}
 
@@ -504,7 +658,7 @@ func TestObjectPreviewStoreStopsCatalogWriteAfterLockLossAndCanRetry(t *testing.
 	var lockMutationErr error
 	backend.mu.Lock()
 	backend.afterConditional = func(key string, _ ObjectCondition) {
-		if key != providerObjectKey(manifestKey) || lockWasReplaced {
+		if key != mustProviderObjectKey(t, manifestKey) || lockWasReplaced {
 			return
 		}
 		lockObject, lockETag, getErr := backend.lockMemoryBackend.GetObject(context.Background(), lockKey)
@@ -548,7 +702,7 @@ func TestObjectPreviewStoreStopsCatalogWriteAfterLockLossAndCanRetry(t *testing.
 	}
 	puts, _ := backend.snapshotWrites()
 	for _, key := range puts {
-		if key == providerObjectKey(catalogKey) {
+		if key == mustProviderObjectKey(t, catalogKey) {
 			t.Fatal("catalog replacement reached the backend after the site lock was lost")
 		}
 	}
@@ -690,7 +844,8 @@ func TestObjectPreviewStoreDoesNotDeleteAfterPartialSiteListing(t *testing.T) {
 			t.Errorf("neighbor object %q = %q, err=%v; want %q", key, object.Bytes, readErr, want)
 		}
 	}
-	if _, err := store.ReadObject(context.Background(), "_previews/docs/catalog.json"); err != nil {
+	neighborCatalogKey, _ := preview.CatalogKey("docs")
+	if _, err := store.ReadObject(context.Background(), neighborCatalogKey); err != nil {
 		t.Fatalf("neighbor preview through shared adapter after unregister retry = %v", err)
 	}
 }
@@ -726,6 +881,19 @@ func objectKeysFromSnapshot(snapshot map[string]previewAdapterObjectSnapshot) []
 	return keys
 }
 
+func mustProviderObjectKey(t *testing.T, key string) string {
+	t.Helper()
+	return providerObjectKey(key)
+}
+
+func providerObjectKey(key string) string {
+	objectKey, err := preview.RawObjectKey(key)
+	if err != nil {
+		panic(err)
+	}
+	return objectKey
+}
+
 func previewAdapterBuildResult(site, groupID, prURL, headSHA string) preview.BuildResult {
 	files := map[string][]byte{"docs/review.md": []byte("# Review\n")}
 	documents := []preview.Document{{Path: "docs/review.md", Title: "Review", Format: "markdown"}}
@@ -744,6 +912,30 @@ func previewAdapterBuildResult(site, groupID, prURL, headSHA string) preview.Bui
 		Documents: documents,
 	}
 	return preview.BuildResult{Site: site, Outcome: preview.OutcomePublished, Group: group, Manifest: manifest, Files: files}
+}
+
+func previewAdapterBuildResultWithFiles(result preview.BuildResult, files map[string][]byte, documents []preview.Document) preview.BuildResult {
+	result.Files = files
+	result.Group.Documents = append([]preview.Document(nil), documents...)
+	result.Manifest.Documents = append([]preview.Document(nil), documents...)
+	result.Manifest.Files = make([]preview.PreviewFile, 0, len(files))
+	for _, sourcePath := range sortedPreviewAdapterFilePaths(files) {
+		digest := sha256.Sum256(files[sourcePath])
+		result.Manifest.Files = append(result.Manifest.Files, preview.PreviewFile{
+			Path: sourcePath, SHA256: hex.EncodeToString(digest[:]), ContentType: contentType(sourcePath),
+		})
+	}
+	result.Manifest.BundleDigest = previewAdapterBundleDigest(files)
+	return result
+}
+
+func sortedPreviewAdapterFilePaths(files map[string][]byte) []string {
+	paths := make([]string, 0, len(files))
+	for sourcePath := range files {
+		paths = append(paths, sourcePath)
+	}
+	sort.Strings(paths)
+	return paths
 }
 
 func previewAdapterBundleDigest(files map[string][]byte) string {

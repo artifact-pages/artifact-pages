@@ -5,12 +5,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
-	"unicode/utf8"
 )
 
 // DirectoryStore writes the canonical preview object keys beneath a local
@@ -158,37 +156,12 @@ func (store *DirectoryStore) ReplaceMutableObject(ctx context.Context, key strin
 }
 
 func (store *DirectoryStore) objectPath(key string) (string, error) {
-	const prefix = "/_previews/"
-	if !strings.HasPrefix(key, prefix) {
-		return "", fmt.Errorf("preview object key %q is outside the preview namespace", key)
+	rawKey, err := RawObjectKey(key)
+	if err != nil {
+		return "", err
 	}
-	encodedParts := strings.Split(strings.TrimPrefix(key, prefix), "/")
-	parts := make([]string, len(encodedParts))
-	for index, encoded := range encodedParts {
-		decoded, err := url.PathUnescape(encoded)
-		if err != nil || decoded == "" || !utf8.ValidString(decoded) || strings.ContainsAny(decoded, "/\\\x00") || decoded == "." || decoded == ".." {
-			return "", fmt.Errorf("invalid preview object key %q", key)
-		}
-		parts[index] = decoded
-	}
-	if len(parts) < 2 || !validSiteID(parts[0]) {
-		return "", fmt.Errorf("invalid preview object key %q", key)
-	}
-	var canonical string
-	switch {
-	case len(parts) == 2 && parts[1] == "catalog.json":
-		canonical, _ = CatalogKey(parts[0])
-	case len(parts) == 4 && parts[1] == "revisions" && parts[3] == "manifest.json":
-		canonical, _ = ManifestKey(parts[0], parts[2])
-	case len(parts) >= 5 && parts[1] == "revisions" && parts[3] == "files":
-		canonical, _ = FileKey(parts[0], parts[2], strings.Join(parts[4:], "/"))
-	default:
-		return "", fmt.Errorf("invalid preview object key %q", key)
-	}
-	if canonical == "" || canonical != key {
-		return "", fmt.Errorf("non-canonical preview object key %q", key)
-	}
-	return filepath.Join(store.root, filepath.FromSlash(strings.Join(parts, "/"))), nil
+	const prefix = "_previews/"
+	return filepath.Join(store.root, filepath.FromSlash(strings.TrimPrefix(rawKey, prefix))), nil
 }
 
 func rejectSymlinkPath(root, target string) error {

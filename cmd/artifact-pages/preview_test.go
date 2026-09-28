@@ -109,10 +109,15 @@ func TestPreviewURLHelpersEncodePathAndGroupContext(t *testing.T) {
 	if err != nil || groupURL != "https://pages.example.test/sre/_previews?group=pr%3A42" {
 		t.Fatalf("previewGroupURL() = %q, %v", groupURL, err)
 	}
-	documentURL, err := previewDocumentRoute("https://pages.example.test", "sre", headSHA, "docs/安全 #1.md", "pr:42", true)
-	want := "https://pages.example.test/sre/_previews/" + headSHA + "/docs/%E5%AE%89%E5%85%A8%20%231.md?group=pr%3A42"
+	documentPath := "docs/安全 #1%2F +?.md"
+	documentURL, err := previewDocumentRoute("https://pages.example.test", "sre", headSHA, documentPath, "pr:42", true)
+	want := "https://pages.example.test/sre/_previews/" + headSHA + "/docs/%E5%AE%89%E5%85%A8%20%231%252F%20%2B%3F.md?group=pr%3A42"
 	if err != nil || documentURL != want {
 		t.Fatalf("previewDocumentRoute() = %q, %v; want %q", documentURL, err, want)
+	}
+	sharedRoute, err := preview.DocumentRouteHref("sre", headSHA, documentPath, "pr:42")
+	if err != nil || documentURL != "https://pages.example.test"+sharedRoute {
+		t.Fatalf("CLI preview URL %q differs from shared reader route %q: %v", documentURL, sharedRoute, err)
 	}
 	manualURL, err := previewDocumentRoute("https://pages.example.test", "sre", headSHA, "docs/report.md", "head:"+headSHA, false)
 	if err != nil || strings.Contains(manualURL, "group=") {

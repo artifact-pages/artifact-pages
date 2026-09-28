@@ -91,6 +91,43 @@ func FileKey(siteID, headSHA, sourcePath string) (string, error) {
 	return strings.TrimSuffix(manifest, "/manifest.json") + "/files/" + encodePath(sourcePath), nil
 }
 
+// RawObjectKey validates a canonical PreviewStore key and returns its storage
+// key with each URL-encoded path segment decoded exactly once. Provider object
+// keys and local files preserve the original UTF-8 source names; this value is
+// not a URL and must not be URL-decoded again.
+func RawObjectKey(key string) (string, error) {
+	const prefix = "/_previews/"
+	if !strings.HasPrefix(key, prefix) {
+		return "", fmt.Errorf("preview object key %q is outside the preview namespace", key)
+	}
+
+	encodedParts := strings.Split(strings.TrimPrefix(key, prefix), "/")
+	parts := make([]string, len(encodedParts))
+	for index, encoded := range encodedParts {
+		decoded, err := url.PathUnescape(encoded)
+		if err != nil || decoded == "" || !utf8.ValidString(decoded) || strings.ContainsAny(decoded, "/\\\x00") || decoded == "." || decoded == ".." {
+			return "", fmt.Errorf("invalid preview object key %q", key)
+		}
+		parts[index] = decoded
+	}
+
+	var canonical string
+	switch {
+	case len(parts) == 2 && parts[1] == "catalog.json":
+		canonical, _ = CatalogKey(parts[0])
+	case len(parts) == 4 && parts[1] == "revisions" && parts[3] == "manifest.json":
+		canonical, _ = ManifestKey(parts[0], parts[2])
+	case len(parts) >= 5 && parts[1] == "revisions" && parts[3] == "files":
+		canonical, _ = FileKey(parts[0], parts[2], strings.Join(parts[4:], "/"))
+	default:
+		return "", fmt.Errorf("invalid preview object key %q", key)
+	}
+	if canonical == "" || canonical != key {
+		return "", fmt.Errorf("non-canonical preview object key %q", key)
+	}
+	return "_previews/" + strings.Join(parts, "/"), nil
+}
+
 func DocumentRouteHref(siteID, headSHA, sourcePath, groupID string) (string, error) {
 	if _, err := ManifestKey(siteID, headSHA); err != nil {
 		return "", err

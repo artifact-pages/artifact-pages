@@ -66,7 +66,11 @@ func (store *ObjectPreviewStore) WithSiteLock(ctx context.Context, site string, 
 }
 
 func (store *ObjectPreviewStore) ReadObject(ctx context.Context, key string) ([]byte, error) {
-	object, _, err := store.backend.GetObject(ctx, providerObjectKey(key))
+	objectKey, err := preview.RawObjectKey(key)
+	if err != nil {
+		return nil, err
+	}
+	object, _, err := store.backend.GetObject(ctx, objectKey)
 	if errors.Is(err, ErrObjectNotFound) {
 		return nil, preview.ErrObjectNotFound
 	}
@@ -80,8 +84,11 @@ func (store *ObjectPreviewStore) CreateImmutableObject(ctx context.Context, key 
 	if err := store.verifyPreviewWriteScope(ctx, key); err != nil {
 		return err
 	}
-	objectKey := providerObjectKey(key)
-	_, err := store.backend.PutObjectConditional(ctx, objectKey, previewObject(key, contents, previewImmutableCache), ObjectCondition{IfNoneMatch: true})
+	objectKey, err := preview.RawObjectKey(key)
+	if err != nil {
+		return err
+	}
+	_, err = store.backend.PutObjectConditional(ctx, objectKey, previewObject(objectKey, contents, previewImmutableCache), ObjectCondition{IfNoneMatch: true})
 	if err == nil {
 		return nil
 	}
@@ -102,7 +109,11 @@ func (store *ObjectPreviewStore) ReplaceMutableObject(ctx context.Context, key s
 	if err := store.verifyPreviewWriteScope(ctx, key); err != nil {
 		return err
 	}
-	if site, isCatalog := previewCatalogSite(key); isCatalog {
+	objectKey, err := preview.RawObjectKey(key)
+	if err != nil {
+		return err
+	}
+	if site, isCatalog := previewCatalogSite(objectKey); isCatalog {
 		lock, ok := ctx.Value(previewSiteLockContextKey{}).(previewSiteLock)
 		if !ok {
 			return fmt.Errorf("preview catalog for site %q requires an active site lock", site)
@@ -115,11 +126,15 @@ func (store *ObjectPreviewStore) ReplaceMutableObject(ctx context.Context, key s
 	if strings.HasSuffix(key, "/catalog.json") {
 		cache = previewCatalogCache
 	}
-	return store.backend.PutObject(ctx, providerObjectKey(key), previewObject(key, contents, cache))
+	return store.backend.PutObject(ctx, objectKey, previewObject(objectKey, contents, cache))
 }
 
 func (store *ObjectPreviewStore) verifyPreviewWriteScope(ctx context.Context, key string) error {
-	site, isPreviewObject := previewObjectSite(key)
+	objectKey, err := preview.RawObjectKey(key)
+	if err != nil {
+		return err
+	}
+	site, isPreviewObject := previewObjectSite(objectKey)
 	if !isPreviewObject {
 		return nil
 	}
@@ -152,7 +167,7 @@ func (store *ObjectPreviewStore) verifySiteLock(ctx context.Context, site string
 }
 
 func previewCatalogSite(key string) (string, bool) {
-	parts := strings.Split(providerObjectKey(key), "/")
+	parts := strings.Split(key, "/")
 	if len(parts) != 3 || parts[0] != "_previews" || parts[2] != "catalog.json" || validateLockSite(parts[1]) != nil {
 		return "", false
 	}
@@ -160,7 +175,7 @@ func previewCatalogSite(key string) (string, bool) {
 }
 
 func previewObjectSite(key string) (string, bool) {
-	parts := strings.Split(providerObjectKey(key), "/")
+	parts := strings.Split(key, "/")
 	if len(parts) < 3 || parts[0] != "_previews" || validateLockSite(parts[1]) != nil {
 		return "", false
 	}
@@ -172,8 +187,4 @@ func previewObject(key string, contents []byte, cache string) Object {
 		Bytes: contents, ContentType: contentType(key), ContentDisposition: "inline", Cache: cache,
 		Metadata: map[string]string{"artifact-pages-preview": "true"},
 	}
-}
-
-func providerObjectKey(key string) string {
-	return strings.TrimPrefix(key, "/")
 }

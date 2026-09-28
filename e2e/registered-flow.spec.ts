@@ -40,3 +40,22 @@ test('generated registered projection supports discovery, deep links, relative r
   await page.reload()
   await expect(page.getByTestId('markdown-document').getByRole('heading', { level: 1, name: 'Updated runbook' })).toBeVisible()
 })
+
+test('configured object-backed preview round-trips encoded document and resource names through nginx', async ({ page }) => {
+  const previewURL = process.env.PLAYWRIGHT_PREVIEW_URL
+  test.skip(!previewURL, 'the registered-flow runner provides the returned preview URL')
+  if (!previewURL) return
+
+  const documentURL = new URL(previewURL)
+  expect(documentURL.pathname).toContain('/guides/review%20r%C3%A9sum%C3%A9%20%23%252F%20%2B%3F.html')
+  await page.goto(previewURL)
+  await expect(page).toHaveURL(previewURL)
+  await expect(page.locator('.preview-reader-header h1')).toHaveText('Encoded local preview')
+
+  const previewFrame = page.frameLocator('iframe[title="Encoded local preview"]')
+  await expect(previewFrame.getByRole('heading', { name: 'Encoded preview document' })).toBeVisible()
+  await expect(previewFrame.locator('body')).toHaveCSS('background-color', 'rgb(33, 72, 99)')
+  await page.reload()
+  await expect(previewFrame.getByRole('heading', { name: 'Encoded preview document' })).toBeVisible()
+  await expect(previewFrame.locator('body')).toHaveCSS('background-color', 'rgb(33, 72, 99)')
+})
