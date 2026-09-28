@@ -111,7 +111,7 @@ The `gcp-local` profile is an emulator-only contract test. A production GCP adap
 
 ## Before an OSS release
 
-- include the selected MIT license and generated third-party notices in web releases; attach dependency notices to any future standalone CLI binary release
-- define compatibility/versioning policy for index and registry schemas
-- document security assumptions for arbitrary HTML/JavaScript artifacts
-- document upgrade and rollback behavior
+- [x] Include the selected MIT license and generated third-party notices in web releases; attach dependency notices to any future standalone CLI binary release.
+- [x] Define the coordinated release/versioning policy and schema compatibility boundary in [TD2](backlog/technical-design/TD2-component-release-policy.md).
+- [ ] Document security assumptions for arbitrary HTML/JavaScript artifacts.
+- [ ] Document upgrade and rollback behavior for each released component.
