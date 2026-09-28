@@ -3,28 +3,12 @@
   let documentOrigin = ''
   let documentPath = ''
   try {
-    const baseUrl = new URL(document.baseURI)
-    const sandboxedSrcDoc = window.location.origin === 'null'
-    if (sandboxedSrcDoc) {
-      const configuredOrigin = window.__gitArtifactPreviewParentOrigin
-      if (typeof configuredOrigin === 'string') {
-        const configuredUrl = new URL(configuredOrigin)
-        if (configuredUrl.origin === configuredOrigin && configuredUrl.protocol === baseUrl.protocol) {
-          parentOrigin = configuredOrigin
-        }
-      }
-    } else {
-      const parentUrl = new URL(document.referrer)
-      if (
-        parentUrl.protocol === baseUrl.protocol &&
-        ['localhost', '127.0.0.1', '[::1]'].includes(parentUrl.hostname) &&
-        parentUrl.port === window.location.port
-      ) {
-        parentOrigin = parentUrl.origin
-      }
-    }
-    documentOrigin = baseUrl.origin
-    documentPath = baseUrl.pathname
+    const documentUrl = new URL(window.location.href)
+    const parentUrl = new URL(document.referrer)
+    if (window.parent === window || parentUrl.origin !== documentUrl.origin) return
+    parentOrigin = parentUrl.origin
+    documentOrigin = documentUrl.origin
+    documentPath = documentUrl.pathname
   } catch {
     return
   }

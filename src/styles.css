@@ -2149,6 +2149,16 @@ mark {
   background: white;
 }
 
+.preview-frame-state {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  pointer-events: none;
+}
+
 .preview-site-link {
   position: absolute;
   right: 17px;

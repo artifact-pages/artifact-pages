@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { artifactRouteHref } from '../routing'
 import { defaultSiteIndexUrl, loadSiteIndex } from '../data/indexes'
-import { loadPreviewCatalog, loadPreviewManifest, previewFileUrl, previewFrameFileUrl, previewFrameOrigin, previewRouteHref } from '../data/previews'
+import { loadPreviewCatalog, loadPreviewManifest, previewFileUrl, previewRouteHref } from '../data/previews'
 import type { PreviewGroup, PreviewManifest } from '../domain/preview'
 import type { ArtifactIndexEntry, SiteIndex } from '../domain/index'
 import { MarkdownArtifact } from './MarkdownArtifact'
@@ -117,6 +117,7 @@ export function PreviewDocumentPage({ route, hash, navigate }: {
           />
         ) : (
           <PreviewHtmlDocument
+            key={artifactUrl}
             artifactUrl={artifactUrl}
             title={document.title}
             route={route}
@@ -147,40 +148,19 @@ function PreviewHtmlDocument({
   navigate: (href: string) => void
 }) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
-  const [loaded, setLoaded] = useState(false)
-  const [failed, setFailed] = useState(false)
-  const [srcDoc, setSrcDoc] = useState<string>()
-  const frameUrl = previewFrameFileUrl(route.siteId, route.headSha, route.artifactPath)
-  const isolatedOrigin = new URL(frameUrl).origin !== window.location.origin
+  const loadCheckRef = useRef<AbortController | null>(null)
+  const [loadState, setLoadState] = useState<'checking' | 'loaded' | 'failed'>('checking')
 
   useEffect(() => {
-    const controller = new AbortController()
-    setLoaded(false)
-    setFailed(false)
-    setSrcDoc(undefined)
-    fetch(artifactUrl, { signal: controller.signal }).then(async (response) => {
-      if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
-      if (isolatedOrigin) return undefined
-      return response.text()
-    }).then(
-      (html) => {
-        if (!controller.signal.aborted) {
-          if (typeof html === 'string') setSrcDoc(createSandboxedPreviewDocument(html, artifactUrl))
-          setLoaded(true)
-        }
-      },
-      () => { if (!controller.signal.aborted) setFailed(true) },
-    )
-    return () => controller.abort()
-  }, [artifactUrl, isolatedOrigin])
+    return () => loadCheckRef.current?.abort()
+  }, [])
 
   useEffect(() => {
-    if (!loaded) return
-    const frame = iframeRef.current
-    if (!frame) return
     const handleMessage = (event: MessageEvent<unknown>) => {
-      const expectedFrameOrigin = isolatedOrigin ? previewFrameOrigin(route.siteId, route.headSha) : 'null'
-      const expectedDocumentOrigin = isolatedOrigin ? expectedFrameOrigin : new URL(artifactUrl, window.location.origin).origin
+      const frame = iframeRef.current
+      if (!frame) return
+      const expectedDocumentOrigin = new URL(artifactUrl, window.location.origin).origin
+      const expectedFrameOrigin = window.location.origin
       if (event.source !== frame.contentWindow || event.origin !== expectedFrameOrigin || !isPreviewNavigationMessage(event.data)) return
       let frameDestination: URL
       try {
@@ -195,47 +175,43 @@ function PreviewHtmlDocument({
     }
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [artifactUrl, isolatedOrigin, loaded, manifest, navigate, productionIndex, route])
+  }, [artifactUrl, manifest, navigate, productionIndex, route])
 
-  if (failed) return <div className="preview-frame-state" role="alert">This HTML preview document could not be loaded.</div>
-  if (!loaded) return <div className="preview-frame-state" role="status">Loading HTML preview…</div>
+  if (loadState === 'failed') return <div className="preview-frame-state" role="alert">This HTML preview document could not be loaded.</div>
+
   return (
-    <iframe
-      ref={iframeRef}
-      className="artifact-frame preview-html-frame"
-      {...(isolatedOrigin ? { src: frameUrl } : { srcDoc })}
-      title={title}
-      referrerPolicy="strict-origin"
-      sandbox={isolatedOrigin ? 'allow-scripts allow-same-origin' : 'allow-scripts'}
-    />
+    <>
+      {loadState !== 'loaded' ? <div className="preview-frame-state" role="status">Loading HTML preview…</div> : null}
+      <iframe
+        ref={iframeRef}
+        className="artifact-frame preview-html-frame"
+        src={artifactUrl}
+        title={title}
+        referrerPolicy="strict-origin"
+        onError={() => setLoadState('failed')}
+        onLoad={() => {
+          loadCheckRef.current?.abort()
+          const controller = new AbortController()
+          loadCheckRef.current = controller
+          setLoadState('checking')
+          fetch(artifactUrl, { method: 'HEAD', signal: controller.signal }).then((response) => {
+            if (!response.ok) throw new Error(`Preview request failed with status ${response.status}`)
+            if (controller.signal.aborted) return
+            setLoadState('loaded')
+            const frameDocument = iframeRef.current?.contentDocument
+            if (!frameDocument || frameDocument.querySelector('script[data-preview-reader-bridge]')) return
+            const bridge = frameDocument.createElement('script')
+            bridge.src = new URL('/preview-bridge.js', window.location.origin).href
+            bridge.dataset.previewReaderBridge = 'true'
+            bridge.referrerPolicy = 'strict-origin'
+            frameDocument.body?.append(bridge)
+          }).catch(() => {
+            if (!controller.signal.aborted) setLoadState('failed')
+          })
+        }}
+      />
+    </>
   )
-}
-
-function createSandboxedPreviewDocument(html: string, artifactUrl: string) {
-  const origin = new URL(artifactUrl, window.location.origin).origin
-  const policy = [
-    `default-src ${origin} data: blob:`,
-    `script-src ${origin} 'unsafe-inline' 'unsafe-eval' blob:`,
-    `style-src ${origin} 'unsafe-inline' data:`,
-    `img-src ${origin} data: blob:`,
-    `font-src ${origin} data:`,
-    `media-src ${origin} data: blob:`,
-    "connect-src 'none'",
-    "object-src 'none'",
-    `base-uri ${origin}`,
-    "form-action 'none'",
-    "frame-src 'none'",
-  ].join('; ')
-  const bridgeParentOrigin = JSON.stringify(window.location.origin)
-  const headContent = `<meta http-equiv="Content-Security-Policy" content="${escapeAttribute(policy)}"><base href="${escapeAttribute(new URL(artifactUrl, window.location.origin).href)}"><script>window.__gitArtifactPreviewParentOrigin=${bridgeParentOrigin}</script><script src="${escapeAttribute(new URL('/preview-bridge.js', window.location.origin).href)}" defer></script>`
-  // Establish the enforced policy before parsing any preview-controlled bytes.
-  // Inserting this into a matched <head> is unsafe: malformed HTML can cause
-  // the parser to implicitly create the body first and ignore that later head.
-  return `<!doctype html><html><head>${headContent}</head><body>${html}</body></html>`
-}
-
-function escapeAttribute(value: string) {
-  return value.replace(/&/gu, '&amp;').replace(/"/gu, '&quot;').replace(/</gu, '&lt;').replace(/>/gu, '&gt;')
 }
 
 function isPreviewNavigationMessage(value: unknown): value is { type: string; href: string } {

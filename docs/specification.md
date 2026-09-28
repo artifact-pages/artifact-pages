@@ -770,7 +770,7 @@ Use the production HTML resource-policy principles with the preview revision's r
 
 Preview Markdown retains the native reader's sanitized, non-executable trust model and strict, non-interactive Mermaid rendering. Publishing Markdown does not approve arbitrary script execution. Private control-object denial and real raw-resource 404s remain unchanged for both formats.
 
-The owner accepted this contract on 2026-09-28 in [TD3](backlog/technical-design/TD3-preview-origin-delivery.md). The existing isolated-loopback/opaque-frame reader is a prior implementation model; its replacement and regressions remain [ISSUE-026](backlog/issues/ISSUE-026-preview-provider-module-loading.md), with local proof in T4/T6 and live provider proof in T15. This decision is not a claim that those changes or tests are complete.
+The owner accepted this contract on 2026-09-28 in [TD3](backlog/technical-design/TD3-preview-origin-delivery.md). The existing isolated-loopback/opaque-frame reader is a prior implementation model; its replacement and regressions are complete with local proof recorded in T4/T6. Live provider proof remains in T15.
 
 PR provenance is an explicit pre-publish input: the caller may provide a PR number or URL, which is checked against the site's registered source repository. Neither the CLI nor its Action wrapper infers a PR association from a branch, commit, or CI event when the input is absent. Without an explicit PR reference, pre-publish creates a manual preview and the reader shows no PR link.
 

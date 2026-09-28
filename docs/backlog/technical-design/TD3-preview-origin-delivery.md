@@ -3,7 +3,6 @@
 - Status: Done
 - Phase: Provider-backed deployment
 - Decision: Owner accepted trusted same-origin preview HTML on 2026-09-28.
-- Related issue: [ISSUE-026](../issues/ISSUE-026-preview-provider-module-loading.md)
 - Related implementation: [IMP-07](../implementation/IMP-07-local-serving.md), [IMP-08](../implementation/IMP-08-preview-reader.md), [IMP-14](../implementation/IMP-14-provider-serving.md)
 - Related verification: [T4](../verification/T4-serving-boundary.md), [T6](../verification/T6-resources-navigation.md), [T15](../verification/T15-provider-delivery.md)
 
@@ -41,8 +40,8 @@ A separate delivery origin could retain execution isolation but would add origin
 
 ## Implementation and verification handoff
 
-ISSUE-026 remains Open until the reader, local serving profiles, supported-provider references, and regressions implement this decision. Existing parent-isolation and blocked-runtime-fetch results are historical evidence for the former model, not requirements or proof of the new one.
+ISSUE-026 completed the reader, local serving profiles, supported-provider references, and regressions on 2026-09-29. Existing parent-isolation and blocked-runtime-fetch results are historical evidence for the former model, not requirements or proof of the accepted contract.
 
-T4/T6 must verify non-loopback-equivalent same-origin module execution, transitive dependencies, relative images/CSS/fonts, navigation/reload, CSS containment, and the intentional ability of a benign fixture to access parent DOM and test-key localStorage. Verify Markdown sanitization separately and retain the no-CORS-grant/cross-origin read regression. T15 owns actual deployed provider CSP, routes, cache, and resource behavior. None of these proofs is closed by this design record.
+T4/T6 record local verification of non-loopback-equivalent same-origin module execution, transitive dependencies, relative images/CSS/fonts, navigation/reload, CSS containment, intentional parent-DOM/test-key localStorage access, Markdown sanitization, and no-CORS cross-origin read behavior. T15 still owns actual deployed provider CSP, routes, cache, and resource behavior; local emulator evidence does not close that proof.
 
 Mutually untrusted HTML publishers and fork previews remain unsupported; adding an isolation model for them would require a separate product decision.
