@@ -179,7 +179,7 @@ async function assertWorkflowExamples() {
   }
 
   const admin = await fs.readFile(path.join(exampleDirectory, 'admin-registry-register.yml'), 'utf8')
-  assert.match(admin, /ARTIFACT_PAGES_REGISTRY_PUBLISH_ROLE_ARN/, 'registry workflow must use the registry admin role')
+  assert.match(admin, /ARTIFACT_PAGES_REGISTRY_ADMIN_ROLE_ARN/, 'registry workflow must use the registry admin role')
   assert.match(admin, /operation: registry-register/, 'registry workflow must call the registry register operation')
   const app = await fs.readFile(path.join(exampleDirectory, 'admin-app-deploy.yml'), 'utf8')
   assert.match(app, /ARTIFACT_PAGES_APP_DEPLOY_ROLE_ARN/, 'application workflow must use the app-plane role')

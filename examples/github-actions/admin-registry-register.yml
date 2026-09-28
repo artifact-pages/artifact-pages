@@ -22,7 +22,7 @@ jobs:
       - name: Assume the registry-only deployment role
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
-          role-to-assume: ${{ vars.ARTIFACT_PAGES_REGISTRY_PUBLISH_ROLE_ARN }}
+          role-to-assume: ${{ vars.ARTIFACT_PAGES_REGISTRY_ADMIN_ROLE_ARN }}
           aws-region: us-east-1
           role-session-name: artifact-pages-admin-${{ github.run_id }}
 
