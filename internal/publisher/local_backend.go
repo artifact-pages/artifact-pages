@@ -22,6 +22,12 @@ type DirectoryBackend struct {
 	root string
 }
 
+// localStorageRoot identifies the local projection boundary for validation
+// before a publish lock is created inside the deployment root.
+func (backend *DirectoryBackend) localStorageRoot() string {
+	return backend.root
+}
+
 func NewDirectoryBackend(root string) (*DirectoryBackend, error) {
 	if strings.TrimSpace(root) == "" {
 		return nil, errors.New("local deployment root is required")

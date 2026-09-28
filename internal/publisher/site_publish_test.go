@@ -132,6 +132,136 @@ func TestPublishSiteRequiresExactRegisteredCheckoutBeforeContentWrites(t *testin
 	}
 }
 
+func TestPublishSiteRejectsOverlappingLocalSourceAndTargetBeforeLock(t *testing.T) {
+	tests := []struct {
+		name       string
+		sourcePath string
+		sourceDir  string
+		storage    string
+		dryRun     bool
+	}{
+		{name: "target nested under source", sourcePath: ".", sourceDir: ".", storage: ".local/storage"},
+		{name: "target nested under default source", sourcePath: ".", storage: ".local/storage"},
+		{name: "source nested under target", sourcePath: "docs/artifacts", sourceDir: "docs/artifacts", storage: "."},
+		{name: "same source and target", sourcePath: "docs/artifacts", sourceDir: "docs/artifacts", storage: "docs/artifacts"},
+		{name: "dry run target nested under source", sourcePath: ".", sourceDir: ".", storage: ".local/storage", dryRun: true},
+		{name: "dry run source nested under target", sourcePath: "docs/artifacts", sourceDir: "docs/artifacts", storage: ".", dryRun: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root := createPublisherCheckout(t, "git@github.com:acme/sre.git")
+			backend, err := NewDirectoryBackend(filepath.Join(root, filepath.FromSlash(test.storage)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			manifest := fmt.Sprintf("schemaVersion: 1\nsites:\n  sre:\n    name: SRE\n    repository: acme/sre\n    sourcePath: %s\n", test.sourcePath)
+			seedDirectoryRegistry(t, backend, manifest)
+			seededObjects := map[string][]byte{
+				"_artifacts/neighbor/probe.bin":  []byte("neighbor remains untouched"),
+				"_artifacts/sre/previous.html":   []byte("earlier site projection"),
+				"_indexes/sre/index.json":        []byte(`{"site":"sre","previous":true}`),
+				"_control/registry-cleanup.json": []byte(`{"private":"admin control"}`),
+			}
+			for key, value := range seededObjects {
+				if err := backend.PutObject(t.Context(), key, Object{Bytes: value}); err != nil {
+					t.Fatalf("seed existing object %s: %v", key, err)
+				}
+			}
+
+			_, err = PublishSite(t.Context(), backend, SitePublishOptions{
+				SiteID: "sre", SourceDir: test.sourceDir, DryRun: test.dryRun,
+			})
+			if err == nil || !strings.Contains(err.Error(), "overlaps site source") {
+				t.Fatalf("PublishSite() error = %v, want a clear source/target overlap error", err)
+			}
+			if _, _, err := backend.GetObject(t.Context(), siteLockKey("sre")); err == nil {
+				t.Fatal("overlapping source/target created a site lock")
+			} else if err != ErrObjectNotFound {
+				t.Fatalf("read site lock: %v", err)
+			}
+			if keys, err := backend.ListKeys(t.Context(), "_artifacts/sre/"); err != nil || len(keys) != 1 || keys[0] != "_artifacts/sre/previous.html" {
+				t.Fatalf("site artifacts after rejected publish = %v, err=%v; want only the preserved prior object", keys, err)
+			}
+			for key, expected := range seededObjects {
+				object, _, err := backend.GetObject(t.Context(), key)
+				if err != nil || string(object.Bytes) != string(expected) {
+					t.Errorf("existing object %q after rejected publish = %q, err=%v", key, object.Bytes, err)
+				}
+			}
+		})
+	}
+}
+
+func TestPublishSiteIncludesIgnoredRegularFilesWhenLocalTargetIsSeparate(t *testing.T) {
+	root := createPublisherCheckout(t, "git@github.com:acme/sre.git")
+	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte("/docs/artifacts/generated/\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	generatedHTML := []byte("<title>Generated report</title><h1>Generated report</h1>")
+	generatedData := []byte("generated payload")
+	generatedDir := filepath.Join(root, "docs", "artifacts", "generated")
+	if err := os.MkdirAll(generatedDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(generatedDir, "summary.html"), generatedHTML, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(generatedDir, "payload.bin"), generatedData, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := runPublisherGitAt(root, "check-ignore", "--quiet", "docs/artifacts/generated/summary.html"); err != nil {
+		t.Fatalf("generated HTML fixture is not ignored by Git: %v", err)
+	}
+	backend, err := NewDirectoryBackend(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	seedDirectoryRegistry(t, backend, registeredSREManifest)
+	result, err := PublishSite(t.Context(), backend, SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts"})
+	if err != nil {
+		t.Fatalf("PublishSite() error = %v", err)
+	}
+	if result.Outcome != "published" {
+		t.Fatalf("PublishSite() outcome = %q, want published", result.Outcome)
+	}
+	for key, expected := range map[string][]byte{
+		"_artifacts/sre/generated/summary.html": generatedHTML,
+		"_artifacts/sre/generated/payload.bin":  generatedData,
+	} {
+		object, _, err := backend.GetObject(t.Context(), key)
+		if err != nil || string(object.Bytes) != string(expected) {
+			t.Errorf("published ignored file %q = %q, err=%v", key, object.Bytes, err)
+		}
+	}
+}
+
+func TestRejectOverlappingLocalSourceResolvesSymlinkedTargetParent(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "docs", "artifacts")
+	if err := os.MkdirAll(source, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(root, ".local")
+	if err := os.Symlink(source, alias); err != nil {
+		t.Fatal(err)
+	}
+	err := rejectOverlappingLocalSource(filepath.Join(alias, "storage"), source)
+	if err == nil || !strings.Contains(err.Error(), "overlaps site source") {
+		t.Fatalf("rejectOverlappingLocalSource() error = %v, want symlink-resolved overlap", err)
+	}
+}
+
+func seedDirectoryRegistry(t *testing.T, backend *DirectoryBackend, manifest string) {
+	t.Helper()
+	data, _, err := registry.Build([]byte(manifest))
+	if err != nil {
+		t.Fatalf("build registry fixture: %v", err)
+	}
+	if err := backend.PutObject(t.Context(), "_indexes/sites.json", Object{Bytes: data}); err != nil {
+		t.Fatalf("seed registry fixture: %v", err)
+	}
+}
+
 func TestPublishSiteDryRunChecksRegistrationWithoutMutatingStorage(t *testing.T) {
 	createPublisherCheckout(t, "git@github.com:acme/sre.git")
 	backend := newSiteUnregisterRaceBackend()

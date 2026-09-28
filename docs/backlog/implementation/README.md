@@ -4,7 +4,7 @@ These are independently reviewable slices for the accepted product contract. IMP
 
 ## Follow-up defects and readiness
 
-The 2026-09-28 full-codebase review found 24 confirmed defects after the original local completion checkpoints. [ISSUE-014–037](../issues/README.md#issue-index) own those repairs and their committed regression criteria. Keep the existing IMP records as historical delivery evidence, not a bug-free claim; do not create duplicate implementation tickets for the same independently actionable defect. A larger new slice is appropriate only after an accepted design introduces genuinely new work.
+The 2026-09-28 full-codebase review found 24 confirmed defects after the original local completion checkpoints. ISSUE-014 is verified and removed from the active queue; its committed regression is recorded in [T14](../verification/T14-production-reconciliation.md). [ISSUE-015–037](../issues/README.md#issue-index) track the 23 remaining defects and their regression criteria. Keep the existing IMP records as historical delivery evidence, not a bug-free claim; do not create duplicate implementation tickets for the same independently actionable defect. A larger new slice is appropriate only after an accepted design introduces genuinely new work.
 
 Use the [priority-ordered, one-at-a-time repair queue](../issues/README.md#repair-order) before declaring release readiness. [TD3](../technical-design/TD3-preview-origin-delivery.md) owns the provider-style preview-origin decision; ISSUE-026 is blocked on it, but other repairs are not. [T6](../verification/T6-resources-navigation.md) is reopened, and T4/T14/T15 retain broader cache, recovery and live-provider proof. Passing the earlier suites does not close newly demonstrated gaps.
 

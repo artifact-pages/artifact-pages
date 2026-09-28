@@ -23,11 +23,11 @@ Each issue file records one independently actionable problem. New issues start a
 | `P2` | A meaningful correctness, reliability, navigation, or usability problem outside P1's impact. |
 | `P3` | Localized polish or a lower-impact improvement. |
 
-Priority describes user impact, not implementation effort. Issues 001–012 are completed historical browser/interaction work. ISSUE-013 is a proposed site-description improvement. ISSUE-014–037 record the 24 confirmed findings from the full-codebase review on 2026-09-28 at `50c327d886c71fc5e0d086a5967b90cd9038e01e` (4 P1, 20 P2).
+Priority describes user impact, not implementation effort. Issues 001–012 are completed historical browser/interaction work. ISSUE-013 is a proposed site-description improvement. ISSUE-014–037 recorded the 24 confirmed findings from the full-codebase review on 2026-09-28 at `50c327d886c71fc5e0d086a5967b90cd9038e01e` (4 P1, 20 P2). ISSUE-014's acceptance criteria are now verified and its file was removed from the active backlog under the completion policy; its regression and verification record remain in T14 and Git history.
 
 Each review issue contains its own reproduction and source pointers. Supplementary captures/scripts remain ignored in `.local/reviews/2026-09-28/`; they are not the only evidence or a dependency of this committed backlog. Local CLI/HTTP/browser reproductions and provider-source inconsistencies are labeled separately from live-provider proof. Existing passing suites did not cover these regressions.
 
-The review adds 23 Open issues and one Blocked issue; with ISSUE-013 this track has 24 Open and 1 Blocked. [TD3](../technical-design/TD3-preview-origin-delivery.md) owns the unresolved preview-origin decision for ISSUE-026. The unconfirmed AWS absent-object 403/404 concern belongs to [T15](../verification/T15-provider-delivery.md), not to another confirmed issue.
+The remaining review queue has 22 Open issues and one Blocked issue; with ISSUE-013 this track has 23 Open and 1 Blocked. [TD3](../technical-design/TD3-preview-origin-delivery.md) owns the unresolved preview-origin decision for ISSUE-026. The unconfirmed AWS absent-object 403/404 concern belongs to [T15](../verification/T15-provider-delivery.md), not to another confirmed issue.
 
 ## Repair order
 
@@ -35,7 +35,7 @@ Work one issue at a time: mark it In progress, reproduce it, add a regression, i
 
 | Order | Items, in order | Outcome |
 | --- | --- | --- |
-| 1 | ISSUE-014 → 015 → 016 → 017 | Close all four P1 exposure, key, deployment and discovery failures first. |
+| 1 | ISSUE-015 → 016 → 017 | Close the three remaining P1 key, deployment and discovery failures first. |
 | 2 | ISSUE-018 → 020 → 019 → 021 | Empty-state convergence, unregister recovery, browser cache and bounded lock acquisition. |
 | 3 | ISSUE-022 → 023 → 024 → 025 → 027 → 028 | Preview identity, rendering closure and navigation. |
 | 4 | ISSUE-029 → 030 → 031 → 032 → 033 → 034 → 035 | Heading/link parity, Unicode/provenance, remote config and local development. |
@@ -50,7 +50,6 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | Issue | Status | Priority | Area | Summary |
 | --- | --- | --- | --- | --- |
 | [ISSUE-013 — Site descriptions](ISSUE-013-site-description.md) | Open | P2 | Site discovery and site selection | Explain each site's purpose before visitors open it. |
-| [ISSUE-014 — Reject overlapping local source and publish output](ISSUE-014-local-source-target-overlap.md) | Open | P1 | Site publish / local storage | Review 01: Confirmed defect; reproduction and acceptance criteria in the issue. |
 | [ISSUE-015 — Preserve raw filenames in preview object keys](ISSUE-015-preview-raw-object-keys.md) | Open | P1 | Preview publish / storage codec | Review 02: Confirmed defect; reproduction and acceptance criteria in the issue. |
 | [ISSUE-016 — Allow and serve the official web bundle's notice files on AWS](ISSUE-016-aws-web-bundle-notice-files.md) | Open | P1 | App deploy / AWS reference delivery | Review 03: Confirmed defect; reproduction and acceptance criteria in the issue. |
 | [ISSUE-017 — Keep site discovery usable when one site's metadata is unavailable](ISSUE-017-site-discovery-failure-isolation.md) | Open | P1 | Site discovery / registered-site onboarding | Review 04: Confirmed defect; reproduction and acceptance criteria in the issue. |

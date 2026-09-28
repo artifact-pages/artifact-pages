@@ -57,6 +57,9 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 	if err != nil {
 		return Result{}, err
 	}
+	if err := preflightLocalSourceBoundary(ctx, conditional, options.SiteID, root, options.SourceDir); err != nil {
+		return Result{}, err
+	}
 	operationCtx := ctx
 	var release func() error
 	if !options.DryRun {
@@ -88,6 +91,9 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 		}
 		if !strings.EqualFold(identity.Repository, entry.Repository) || identity.SourcePath != entry.SourcePath {
 			return Result{}, fmt.Errorf("site %q is registered to %s:%s; selected checkout is %s:%s", options.SiteID, entry.Repository, entry.SourcePath, identity.Repository, identity.SourcePath)
+		}
+		if err := rejectLocalSourceOverlap(conditional, sourceDir); err != nil {
+			return Result{}, err
 		}
 		plan, stale, desired, err := buildSitePlan(operationCtx, conditional, options.SiteID, entry.Name, sourceDir, identity)
 		if err != nil {
@@ -145,6 +151,14 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 		return result, operationErr
 	}
 	return result, nil
+}
+
+func rejectLocalSourceOverlap(backend ConditionalObjectBackend, sourceDir string) error {
+	localBackend, ok := backend.(localStorageRoot)
+	if !ok {
+		return nil
+	}
+	return rejectOverlappingLocalSource(localBackend.localStorageRoot(), sourceDir)
 }
 
 func countPreviewChanges(changes *[]preview.CatalogReconciliationChange, action string) int {
