@@ -40,7 +40,15 @@ function localStorageProjection(): Plugin {
     name: 'local-storage-projection',
     configureServer(server) {
       server.middlewares.use(async (request, response, next) => {
-        const requestUrl = new URL(request.url ?? '/', 'http://localhost')
+        let requestUrl: URL
+        try {
+          requestUrl = new URL(request.url ?? '/', 'http://localhost')
+        } catch {
+          response.statusCode = 400
+          response.setHeader('Content-Type', 'text/plain; charset=utf-8')
+          response.end('Bad Request')
+          return
+        }
         const match = requestUrl.pathname.match(/^\/(\_indexes|\_artifacts)(\/.*)?$/)
 
         if (!match) {
@@ -50,7 +58,16 @@ function localStorageProjection(): Plugin {
 
         const area = match[1]
         const areaRoot = path.join(storageRoot, area)
-        const relativePath = decodeURIComponent(match[2] ?? '').replace(/^\/+/, '')
+        let decodedPath: string
+        try {
+          decodedPath = decodeURIComponent(match[2] ?? '')
+        } catch {
+          response.statusCode = 400
+          response.setHeader('Content-Type', 'text/plain; charset=utf-8')
+          response.end('Bad Request')
+          return
+        }
+        const relativePath = decodedPath.replace(/^\/+/, '')
         const filePath = path.resolve(areaRoot, relativePath)
 
         if (filePath !== areaRoot && !filePath.startsWith(`${areaRoot}${path.sep}`)) {

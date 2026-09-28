@@ -9,6 +9,7 @@
     "build-storybook": "storybook build",
     "build": "tsc -b && vite build",
     "test:third-party-notices": "node --test scripts/generate-third-party-notices.test.mjs",
+    "test:vite-malformed-url": "node --test scripts/vite-malformed-url.test.mjs",
     "fixtures:palette": "node scripts/benchmark-palette.mjs --generate-only",
     "benchmark:palette": "npm run build && node scripts/benchmark-palette.mjs",
     "benchmark:preview-discovery": "npm run build && node scripts/benchmark-preview-discovery.mjs",
