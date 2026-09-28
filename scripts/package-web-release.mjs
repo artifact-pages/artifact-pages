@@ -74,6 +74,9 @@ async function sha256(filePath) {
 function runTar(archivePath, payloadRoot) {
   const result = spawnSync('tar', ['-czf', archivePath, '-C', payloadRoot, '.'], {
     cwd: projectRoot,
+    // macOS bsdtar otherwise includes AppleDouble `._*` resource-fork files.
+    // They are not in the release manifest and must not become deployed objects.
+    env: { ...process.env, COPYFILE_DISABLE: '1' },
     encoding: 'utf8',
   })
 
@@ -91,12 +94,10 @@ async function main() {
     throw new Error('Build the Vite application first; dist must contain index.html and assets/.')
   }
 
-  if (files.some((file) => file === '_indexes' || file.startsWith('_indexes/'))) {
-    throw new Error('The web distribution must not include site indexes.')
-  }
-
-  if (files.some((file) => file === '_artifacts' || file.startsWith('_artifacts/'))) {
-    throw new Error('The web distribution must not include site artifacts.')
+  for (const prefix of ['_indexes', '_artifacts', '_previews', '_control']) {
+    if (files.some((file) => file === prefix || file.startsWith(`${prefix}/`))) {
+      throw new Error(`The web distribution must not include ${prefix} storage.`)
+    }
   }
 
   const commit = gitOutput(['rev-parse', 'HEAD'])

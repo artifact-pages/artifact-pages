@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "sites": [
+    {
+      "id": "frontend",
+      "name": "Frontend",
+      "repository": "tasuku43/git-artifact-pages",
+      "sourcePath": "fixtures/storage/_artifacts/frontend"
+    },
+    {
+      "id": "showcase",
+      "name": "HTML Showcase",
+      "repository": "tasuku43/git-artifact-pages",
+      "sourcePath": "fixtures/storage/_artifacts/showcase"
+    },
+    {
+      "id": "sre",
+      "name": "SRE",
+      "repository": "tasuku43/git-artifact-pages",
+      "sourcePath": "fixtures/storage/_artifacts/sre"
+    }
+  ]
+}

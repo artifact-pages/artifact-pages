@@ -1,8 +1,10 @@
 # Preview decision register
 
-Status: **post-MVP design tracking; no preview implementation is implied**
+Status: **Phase 1 local preview slice exists; provider publishing remains post-MVP**
 
 This page records product decisions for pre-publish previews. The [specification](../specification.md#post-mvp-pre-publish-preview-contract) is authoritative for accepted behavior; the [publishing contract](preview-publishing-contract.html) is a technical proposal. Track unresolved technical design, implementation slices, and unrun verification in the [backlog](../backlog/README.md), separately from [product issues](../backlog/issues/README.md). Keep this register short: move a resolved product decision into the specification and record its outcome here.
+
+Phase 1 has a local preview-development path using `cmd/preview-local`, a directory-backed `PreviewStore`, static nginx serving, and the browser preview reader. Separately, the registered-site `site publish` path uses the provider-neutral deployment backend and reconciles confirmed-missing preview catalog entries after production writes. Its configured local target (for example `.local/storage`) is separate from the preview-development output at `.local/previews`. This establishes the local reconciliation flow only; CI wrapper parity and AWS/Cloudflare origin, cache, and lifecycle behavior remain separate implementation or verification work. Provider-specific read/write/lock mechanics belong behind the storage interfaces; shared record keys, publication ordering, and browser routes stay provider-neutral.
 
 ## Status vocabulary
 
@@ -30,7 +32,7 @@ No open product decisions are recorded for this preview lifecycle.
 
 ## Unfinished work
 
-The [backlog](../backlog/README.md) is the status source for the three technical-design items, sixteen implementation slices, and five verification items associated with this contract. Keep their status and evidence there; this register records only product decisions.
+The [backlog](../backlog/README.md) is the status source for the three technical-design items, implementation slices, and five verification items associated with this contract. Keep their status and evidence there; this register records only product decisions.
 
 ## Accepted product contract
 
@@ -39,5 +41,5 @@ The following are not open decisions: a preview belongs to a registered site; au
 ## Deferred
 
 - Fork-origin PR previews need a separate approval and isolation model.
-- Preview-only private access is not part of the initial access model; previews inherit the site's policy.
+- Preview-only viewer access is not modeled. Previews use the same operator-managed edge or network boundary configured for the distribution; catalog membership, PR state, and an unguessable SHA do not make preview content private. See [Specification §18](../specification.md#18-viewer-access-and-identity).
 - Exact-time revocation is a separate future capability, not an accidental lifecycle promise.

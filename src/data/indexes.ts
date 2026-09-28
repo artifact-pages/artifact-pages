@@ -1,4 +1,4 @@
-import type { SiteDiscoveryMetadata, SiteIndex } from '../domain/index'
+import type { SiteDiscoveryMetadata, SiteIndex, SiteRegistryProjection } from '../domain/index'
 
 const INDEX_ROOT = '/_indexes'
 const SITE_ID_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/
@@ -18,47 +18,10 @@ export class IndexLoadError extends Error {
 }
 
 export function isValidSiteId(siteId: string) {
-  return SITE_ID_PATTERN.test(siteId)
+  return SITE_ID_PATTERN.test(siteId) && siteId !== 'assets'
 }
 
 type Fetcher = typeof fetch
-
-async function fetchText(url: string, fetcher: Fetcher): Promise<string> {
-  let response: Response
-
-  try {
-    response = await fetcher(url)
-  } catch (error) {
-    throw new IndexLoadError(`Could not fetch ${url}.`, url, { cause: error })
-  }
-
-  if (!response.ok) {
-    throw new IndexLoadError(`Request failed with status ${response.status}: ${url}.`, url, { status: response.status })
-  }
-
-  return response.text()
-}
-
-function extractSiteIds(directoryListing: string): string[] {
-  const document = new DOMParser().parseFromString(directoryListing, 'text/html')
-  const siteIds = Array.from(document.querySelectorAll('a[href]'))
-    .flatMap((anchor) => {
-      const href = anchor.getAttribute('href')
-      if (!href) return []
-
-      try {
-        const url = new URL(href, `https://artifact-pages.invalid${INDEX_ROOT}/`)
-        if (url.origin !== 'https://artifact-pages.invalid') return []
-        const directory = url.pathname.match(/^\/_indexes\/([^/]+)\/$/u)
-        return directory ? [decodeURIComponent(directory[1])] : []
-      } catch {
-        return []
-      }
-    })
-    .filter(isValidSiteId)
-
-  return [...new Set(siteIds)].sort()
-}
 
 function parseSiteDiscoveryMetadata(payload: unknown, url: string, expectedSiteId: string): SiteDiscoveryMetadata {
   if (!payload || typeof payload !== 'object') {
@@ -151,15 +114,80 @@ function isLocalIndexUrl(value: string) {
 }
 
 export async function discoverSites(fetcher: Fetcher = fetch): Promise<SiteDiscoveryMetadata[]> {
-  const directoryListing = await fetchText(`${INDEX_ROOT}/`, fetcher)
-  const siteIds = extractSiteIds(directoryListing)
-  const metadata = await Promise.all(siteIds.map((siteId) => loadSiteDiscoveryMetadata(siteId, fetcher)))
+  const registryResponse = await fetchResponse(`${INDEX_ROOT}/sites.json`, fetcher)
+  if (!registryResponse.ok) {
+    throw new IndexLoadError(`Request failed with status ${registryResponse.status}: ${INDEX_ROOT}/sites.json.`, `${INDEX_ROOT}/sites.json`, { status: registryResponse.status })
+  }
+  let payload: unknown
+  try {
+    payload = await registryResponse.json()
+  } catch (error) {
+    throw new IndexLoadError(`Invalid site registry: ${INDEX_ROOT}/sites.json.`, `${INDEX_ROOT}/sites.json`, { cause: error })
+  }
+  const registry = parseSiteRegistry(payload)
+  const metadata = await Promise.all(registry.sites.map((site) => loadSiteDiscoveryMetadata(site.id, fetcher, site.name)))
   return metadata.sort((left, right) => left.site.title.localeCompare(right.site.title))
+}
+
+async function fetchResponse(url: string, fetcher: Fetcher): Promise<Response> {
+  try {
+    return await fetcher(url)
+  } catch (error) {
+    throw new IndexLoadError(`Could not fetch ${url}.`, url, { cause: error })
+  }
+}
+
+function parseSiteRegistry(payload: unknown): SiteRegistryProjection {
+  if (!payload || typeof payload !== 'object') {
+    throw new IndexLoadError(`Invalid site registry: ${INDEX_ROOT}/sites.json.`, `${INDEX_ROOT}/sites.json`)
+  }
+  const registry = payload as Partial<SiteRegistryProjection>
+  if (registry.schemaVersion !== 1 || !Array.isArray(registry.sites)) {
+    throw new IndexLoadError(`Invalid site registry: ${INDEX_ROOT}/sites.json.`, `${INDEX_ROOT}/sites.json`)
+  }
+  const seenIDs = new Set<string>()
+  const seenSources = new Set<string>()
+  let previousID = ''
+  for (const rawEntry of registry.sites) {
+    if (!rawEntry || typeof rawEntry !== 'object') {
+      throw new IndexLoadError(`Invalid site registry: ${INDEX_ROOT}/sites.json.`, `${INDEX_ROOT}/sites.json`)
+    }
+    const entry = rawEntry as Partial<SiteRegistryProjection['sites'][number]>
+    if (
+      typeof entry.id !== 'string' || !isValidSiteId(entry.id) || entry.id <= previousID
+      || typeof entry.name !== 'string' || !entry.name.trim()
+      || typeof entry.repository !== 'string' || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(entry.repository) || entry.repository.endsWith('.git')
+      || typeof entry.sourcePath !== 'string' || !isCanonicalSourcePath(entry.sourcePath)
+      || seenIDs.has(entry.id) || seenSources.has(`${entry.repository.toLowerCase()}\0${entry.sourcePath}`)
+    ) {
+      throw new IndexLoadError(`Invalid site registry: ${INDEX_ROOT}/sites.json.`, `${INDEX_ROOT}/sites.json`)
+    }
+    const allowed = new Set(['id', 'name', 'repository', 'sourcePath'])
+    if (Object.keys(rawEntry).some((key) => !allowed.has(key)) || Object.keys(rawEntry).length !== allowed.size) {
+      throw new IndexLoadError(`Invalid site registry: ${INDEX_ROOT}/sites.json.`, `${INDEX_ROOT}/sites.json`)
+    }
+    previousID = entry.id
+    seenIDs.add(entry.id)
+    seenSources.add(`${entry.repository.toLowerCase()}\0${entry.sourcePath}`)
+  }
+  const rootKeys = Object.keys(payload)
+  if (rootKeys.length !== 2 || rootKeys.some((key) => key !== 'schemaVersion' && key !== 'sites')) {
+    throw new IndexLoadError(`Invalid site registry: ${INDEX_ROOT}/sites.json.`, `${INDEX_ROOT}/sites.json`)
+  }
+  return registry as SiteRegistryProjection
+}
+
+function isCanonicalSourcePath(sourcePath: string) {
+  if (!sourcePath || sourcePath !== sourcePath.trim() || sourcePath.includes('\\') || sourcePath.startsWith('/')) return false
+  if (sourcePath === '.') return true
+  const segments = sourcePath.split('/')
+  return segments.every((segment) => segment !== '' && segment !== '.' && segment !== '..')
 }
 
 async function loadSiteDiscoveryMetadata(
   siteId: string,
   fetcher: Fetcher,
+  registeredTitle?: string,
 ): Promise<SiteDiscoveryMetadata> {
   const url = `${INDEX_ROOT}/${encodeURIComponent(siteId)}/meta.json`
   let payload: unknown
@@ -173,5 +201,6 @@ async function loadSiteDiscoveryMetadata(
     if (error instanceof IndexLoadError) throw error
     throw new IndexLoadError(`Could not fetch ${url}.`, url, { cause: error })
   }
-  return parseSiteDiscoveryMetadata(payload, url, siteId)
+  const metadata = parseSiteDiscoveryMetadata(payload, url, siteId)
+  return registeredTitle ? { ...metadata, site: { ...metadata.site, title: registeredTitle } } : metadata
 }

@@ -1,0 +1,15 @@
+schemaVersion: 1
+provider: cloudflare
+previewRetentionDays: 30
+cloudflare:
+  accountId: "00000000000000000000000000000000"
+  bucket: artifact-pages-production
+  zoneId: "11111111111111111111111111111111"
+  publicBaseURL: https://artifacts.example.com
+  accessKeyIdEnv: CF_R2_ACCESS_KEY_ID
+  secretAccessKeyEnv: CF_R2_SECRET_ACCESS_KEY
+  sessionTokenEnv: CF_R2_SESSION_TOKEN
+  registryReaderAccessKeyIdEnv: CF_R2_REGISTRY_READER_ACCESS_KEY_ID
+  registryReaderSecretAccessKeyEnv: CF_R2_REGISTRY_READER_SECRET_ACCESS_KEY
+  registryReaderSessionTokenEnv: CF_R2_REGISTRY_READER_SESSION_TOKEN
+  apiTokenEnv: CF_API_TOKEN

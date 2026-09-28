@@ -8,6 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/cloudfront v1.73.1
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.113.4
 	github.com/yuin/goldmark v1.7.13
+	go.yaml.in/yaml/v4 v4.0.0-rc.6
 	golang.org/x/net v0.59.0
 	golang.org/x/text v0.42.0
 )

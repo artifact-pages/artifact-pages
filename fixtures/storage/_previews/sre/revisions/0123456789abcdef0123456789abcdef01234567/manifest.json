@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "site": "sre",
+  "headSha": "0123456789abcdef0123456789abcdef01234567",
+  "defaultHeadSha": "1111111111111111111111111111111111111111",
+  "mergeBaseSha": "abcdefabcdefabcdefabcdefabcdefabcdefabcd",
+  "createdAt": "2026-09-27T00:00:00Z",
+  "bundleDigest": "sha256:2351baad27645e5325fea66e9932d84a55ba5c8cb0c153e59b4f0b65bf626105",
+  "files": [
+    {
+      "path": "assets/mark.svg",
+      "sha256": "42b0db0fcb20b16b5c9aca8023b74bea59c8210ffed20871001077b11a9be2cd",
+      "contentType": "image/svg+xml"
+    },
+    {
+      "path": "assets/preview.css",
+      "sha256": "28ea44d8a9be827bfcf56307c564a0b2eeb67d1d226e36342f7906c8095d5078",
+      "contentType": "text/css; charset=utf-8"
+    },
+    {
+      "path": "assets/preview.js",
+      "sha256": "3c64563a4b8189f132f308b1721a22bf02d54937e92ccd251cc37dbdf8cfb02b",
+      "contentType": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "fonts/preview.woff2",
+      "sha256": "c2342cd8b869e01752a9321dc17213fc40d4d04c79688c1d43f2cf316abd7866",
+      "contentType": "font/woff2"
+    },
+    {
+      "path": "guides/preview-guide.md",
+      "sha256": "f40c0faeebae93faee90d2adc2a1e031a861c54b6fc70eb1d9e71539bf95cde6",
+      "contentType": "text/markdown; charset=utf-8"
+    },
+    {
+      "path": "guides/preview.html",
+      "sha256": "2bc5efc71126c3f9da6cd6a2b6186e285e39e0ca0e5888e01b8f12f768afeca6",
+      "contentType": "text/html; charset=utf-8"
+    },
+    {
+      "path": "guides/review r\u00e9sum\u00e9 #% +?.md",
+      "sha256": "7476e5c8f459b779afcb3473f80f15f6161a4b2c162d4d6bafc8813113061a14",
+      "contentType": "text/markdown; charset=utf-8"
+    }
+  ],
+  "documents": [
+    {
+      "path": "guides/preview-guide.md",
+      "title": "Local preview guide",
+      "format": "markdown"
+    },
+    {
+      "path": "guides/preview.html",
+      "title": "Local preview HTML",
+      "format": "html"
+    },
+    {
+      "path": "guides/review r\u00e9sum\u00e9 #% +?.md",
+      "title": "Encoded preview route",
+      "format": "markdown"
+    }
+  ]
+}

@@ -47,10 +47,10 @@
 </head>
 <body>
   <main>
-    <p class="eyebrow">Post-MVP architecture · proposed contract</p>
+    <p class="eyebrow">Phase 1 local proof · provider-neutral contract</p>
     <h1>Preview publishing contract</h1>
     <p class="lead">A preview is an immutable, head-SHA-addressed document bundle plus a mutable, site-scoped discovery catalog. Neither is part of the production artifact index.</p>
-    <p class="notice"><strong>Design only.</strong> This page translates the <a href="../specification.md">product specification</a> into a candidate static projection and failure model. It does not imply that AWS publishing, a preview CLI, or a GitHub Action has been implemented in the current local-product phase.</p>
+    <p class="notice"><strong>Local slice implemented.</strong> The focused <code>cmd/preview-local</code>, directory-backed store, nginx route and browser reader exercise preview development. The registered-site <code>artifact-pages site publish</code> path also reconciles confirmed-missing preview references after the local production projection succeeds. Preview development output at <code>.local/previews</code> is separate from the configured production target, commonly <code>.local/storage</code>. CI wrapper parity and AWS/Cloudflare provider-origin, cache, and retention proof remain open. Viewer access is configured by the operator outside Artifact Pages.</p>
 
     <section aria-labelledby="objects">
       <h2 id="objects">Objects and reads</h2>
@@ -74,7 +74,8 @@
   "schemaVersion": 1,
   "site": "sre",
   "headSha": "&lt;full Git SHA&gt;",
-  "comparisonBaseSha": "&lt;resolved default HEAD&gt;",
+  "defaultHeadSha": "&lt;resolved default HEAD&gt;",
+  "mergeBaseSha": "&lt;merge-base of default HEAD and head&gt;",
   "createdAt": "&lt;UTC timestamp&gt;",
   "bundleDigest": "sha256:&lt;digest&gt;",
   "files": [
@@ -91,14 +92,16 @@
       "format": "markdown"
     }
   ]
-}</pre><p class="subtle">The digest covers a canonical sorted list of every bundle path and its final published bytes, including rewritten links. The document list is the only set of routable preview pages. Resources are not document routes.</p></div>
+}</pre><p class="subtle">The v1 bundle digest sorts paths and hashes an eight-byte big-endian path length, UTF-8 path bytes, an eight-byte big-endian content length, and the head-tree content bytes for each file. The source bundle is kept unchanged; link mapping happens in the reader. The document list is the only set of routable preview pages. Resources are not document routes.</p></div>
         <div class="panel"><h3>Discovery catalog</h3><pre>{
   "schemaVersion": 1,
   "site": "sre",
   "groups": [
     {
       "id": "pr:42",
+      "kind": "pull-request",
       "headSha": "&lt;full Git SHA&gt;",
+      "prUrl": "https://github.com/acme/project/pull/42",
       "updatedAt": "&lt;UTC timestamp&gt;",
       "documents": [
         {
@@ -109,9 +112,15 @@
       ]
     }
   ]
-}</pre><p class="subtle">One entry per group. Only an explicitly supplied, validated PR number or URL creates a <code>pr:&lt;id&gt;</code> group; otherwise the manual group uses <code>head:&lt;SHA&gt;</code>. Candidate PR group metadata must carry the canonical source PR link. A PR-associated document URL carries its group as optional view context, but the group is not part of the revision identity. Before showing a PR return link in the application header, the reader checks that the named, explicitly PR-associated group currently points to the route's head SHA. If the context is absent, mismatched, or unreadable, the document still renders from its manifest without a PR link. The context is preserved across changed-document navigation in the same revision and dropped when navigating to production. Entries are candidates: the reader checks whether their revision manifests still exist at the provider. Exact query encoding and schema remain to be proven.</p></div>
+}</pre><p class="subtle">One entry per group. Only an explicitly supplied, validated PR number or URL creates a <code>pr:&lt;id&gt;</code> group; otherwise the manual group uses <code>head:&lt;SHA&gt;</code>. Two explicit PR groups can point to the same head SHA. Before showing a PR return link, the reader confirms that the named group is PR-associated and points to the route's head. If context is absent, mismatched, or unreadable, the document still renders from its manifest without a PR link. The context is preserved across changed-document navigation and dropped when navigating to production. The local reader checks static manifests; provider-origin availability checks remain unimplemented.</p></div>
       </div>
-      <p>All paths are canonical source-relative POSIX paths with retained file extensions. Reject traversal, backslashes, duplicate normalized paths, symlink escapes and reserved namespaces before uploading. A catalog entry is written only after its completion manifest exists; provider lifecycle may remove that manifest later, leaving a stale discovery reference until the next catalog write.</p>
+      <p>All paths are canonical source-relative POSIX paths with retained file extensions and URL-encoded segments in storage keys. Reject traversal, backslashes, duplicate normalized paths, symlink escapes and reserved namespaces before writing. A catalog entry is written only after its completion manifest exists; a provider lifecycle may remove that manifest later, leaving a stale discovery reference until the next catalog write.</p>
+    </section>
+
+    <section aria-labelledby="adapter">
+      <h2 id="adapter">Provider adapter boundary</h2>
+      <p>The core publication flow uses a small <code>PreviewStore</code> contract: origin reads distinguish confirmed absence from other failures; immutable object creation never replaces different bytes; mutable catalog replacement updates one canonical key; and a cooperative per-site lock serializes preview publication with production reconciliation and unregister.</p>
+      <p>The Phase 1 <code>DirectoryStore</code> implements that contract with local files and a local lock. The AWS and Cloudflare adapters map their conditional writes, origin reads, and lock mechanics behind the same interface. They share schemas, routes, digest rules, and reader behavior; provider-specific serving headers, publisher IAM/credential scopes, and lifecycle retention stay in adapters and deployment configuration. Viewer access is configured by the operator at the hosting edge or surrounding network, outside the Artifact Pages product contract. This local contract does not establish live provider behavior.</p>
     </section>
 
     <section aria-labelledby="publish">
@@ -123,10 +132,10 @@
         <div class="step"><b>4 · Complete revision</b><span>Write immutable manifest only after the bundle is complete. Compare existing digest on retry.</span></div>
         <div class="step"><b>5 · Discover</b><span>Read current catalog at origin; prune missing revisions; upsert the group; release lock.</span></div>
       </div>
-      <p>The lock serializes cooperating writers; an atomic conditional write on the mutable catalog is still useful as a defensive check against an out-of-band writer. A catalog update failure is a failed pre-publish, not a successful unlisted preview. Retrying must converge without changing an already completed revision. A partially uploaded revision without a manifest is not readable through logical preview routes and is recovered by retry or retention cleanup.</p>
+      <p>The per-site lock serializes cooperating writers. The current adapter replaces the mutable catalog with a normal object write after revalidating the lock; this is not an atomic compare-and-swap on the catalog and does not fence an out-of-band writer. A lost lock stops the catalog write when detected. A catalog update failure is a failed pre-publish, not a successful unlisted preview. Retrying must converge without changing an already completed revision. A partially uploaded revision without a manifest is not readable through logical preview routes and is recovered by retry or retention cleanup.</p>
       <p><code>no-preview</code> is a successful no-page result for a deletion-only document change. Under the same lock it removes the group's catalog entry if present; it does not delete an earlier completed revision. A non-document-only change is an error and must not mutate discovery. Group retirement follows the same lock/read/write sequence, removes only the named group, and leaves immutable bundle objects for their remaining lifetime.</p>
       <h3>Catalog cleanup during normal publication</h3>
-      <p><code>artifact-pages site publish</code> cleans stale discovery references whether a person runs it locally or GitHub Actions invokes it. It reads this site's catalog and removes only PR or manual groups whose completion manifests are confirmed missing at provider origin. A merged PR, a closed-but-unmerged PR, and a manual preview all stay listed while their manifests exist. No source-history comparison, PR-state polling, PR-close workflow or scheduled-cleanup workflow is required.</p>
+      <p>The local <code>artifact-pages site publish</code> command cleans stale discovery references in its configured target. A future optional GitHub Action is expected to call the same command; wrapper parity is tracked separately. The command reads this site's catalog and removes only PR or manual groups whose completion manifests are confirmed missing at the selected origin. A merged PR, a closed-but-unmerged PR, an open PR, and a manual preview all stay listed while their manifests exist. No source-history comparison, PR-state polling, PR-close workflow or scheduled-cleanup workflow is required.</p>
       <p>Read and validate the catalog under the site lock; use the storage adapter to check manifest availability. For the reader's sake, write a reduced catalog only when it changed and only after the production projection is committed at origin: if production fails, previews remain discoverable. A retry repeats the same checks and converges. Catalog cleanup never deletes completed preview bundles or fixed direct URLs.</p>
       <p>Pre-publish opportunistically prunes missing-manifest references before its own catalog upsert. Between catalog writes, the browser's Previews list and palette check manifest availability and hide missing candidates. A merged or closed-without-merging PR remains discoverable while its provider manifest exists. Manifest checks are deferred until a reader opens the site-scoped preview surface, and their cost is a release-gate measurement. An unavailable provider read is not evidence of a missing manifest: only a confirmed not-found may prune a group.</p>
     </section>
@@ -136,21 +145,19 @@
       <div class="table-wrap"><table>
         <thead><tr><th>Operation</th><th>Inputs known to the core</th><th>Result</th></tr></thead>
         <tbody>
-          <tr><td>Pre-publish</td><td>Explicit site ID; configured provider destination; source checkout; resolved head and default-branch HEAD; optional explicit PR number or URL (never inferred); optional source-relative non-document resource includes; optional dry-run.</td><td>Typed <code>published</code> with group-list URL and each revision-specific document URL carrying PR-group view context when supplied, or <code>no-preview</code>; noneligible changes/error are failures.</td></tr>
-          <tr><td>Production publish with cleanup</td><td>Explicit site ID; configured provider destination; production projection; provider-origin access to catalog and completion manifests. No PR state, source-history comparison or Actions event payload is required for cleanup.</td><td>After the production projection is committed at origin, idempotently update the catalog if any confirmed missing-manifest references were removed; no revision deletion.</td></tr>
+          <tr><td>Pre-publish</td><td><code>artifact-pages preview publish --site ID --source DIR --base-url ORIGIN</code>; optional <code>--head REF</code> (default <code>HEAD</code>), <code>--default-ref REF</code> (default <code>origin/HEAD</code>), <code>--pull-request REF</code> (positive number or canonical GitHub PR URL), repeatable <code>--include PATH</code> (exact source path or <code>path.Match</code> pattern), <code>--config</code>, <code>--dry-run</code>, and <code>--format text|json</code>. PR provenance is explicit; includes select additional source-relative non-document resources.</td><td>JSON has <code>operation</code>, <code>outcome</code>, <code>site</code>, <code>groupId</code>, <code>headSha</code>, optional <code>pullRequestUrl</code>, <code>groupListUrl</code>, sorted <code>documents</code>, <code>objects</code>, <code>catalogChanges</code>, optional <code>configCommitSha</code> and <code>error</code>. Outcomes: <code>planned</code>, <code>published</code>, <code>no-op</code>, <code>no-preview</code>, <code>failed</code>. The optional thin Action maps the same CLI inputs, expands newline-separated <code>include</code> paths, and returns <code>outcome</code>, <code>group-list-url</code>, and JSON <code>documents</code>.</td></tr>
+          <tr><td>Production publish with cleanup</td><td><code>artifact-pages site publish --site ID</code> with the T11 options; configured provider destination; production projection; provider-origin access to catalog and completion manifests. No PR state, source-history comparison or Actions event payload is required for cleanup.</td><td>After the production projection is committed at origin, idempotently update the catalog if any confirmed missing-manifest references were removed; no revision deletion. Dry-run reports production and catalog changes without provider writes.</td></tr>
         </tbody>
       </table></div>
-      <p class="subtle">The GitHub Action is a thin, separately distributed wrapper: for pre-publish it checks same-repository PR identity before obtaining publisher credentials; for production publish it provides checkout and credentials and invokes the same CLI operation available locally. It returns CLI outputs and does not own catalog reconciliation, PR comments, or workflow timing. A dry-run computes and reports the document/resource set and intended catalog change without provider writes. Exact flag and Action input spellings are deferred until the CLI surface is implemented; this table fixes meaning, not syntax.</p>
+      <p class="subtle">The optional preview Action is specified as a thin wrapper tracked by IMP-13; it maps inputs to the pre-publish CLI and does not infer PR provenance, choose workflow timing, or post comments. Production registry/site Actions follow T11 and are tracked by IMP-34. Actions provide checkout and credentials and invoke the locally available CLI contract. A dry-run computes and reports the document/resource set and intended catalog change without provider writes.</p>
     </section>
 
     <section aria-labelledby="cli-experience">
       <h2 id="cli-experience">Production CLI experience</h2>
-      <p>The same <code>site publish</code> invocation must work from a local checkout and from CI. Its dry-run should show production changes and stale preview-catalog references together. This transcript is illustrative, not a claim that the current CLI already accepts these flags:</p>
-      <pre>$ artifact-pages site publish s3 --site sre --dry-run
-Production: 4 add, 2 update, 1 remove
-Previews:   prune head:b274e11 (manifest absent)
-            keep 4 groups, including merged and closed-but-unmerged PRs
-Writes:     none</pre>
+      <p>The local <code>site publish</code> command accepts the syntax below and its dry-run shows production changes and stale preview-catalog references together. A future CI Action tracked by IMP-34 will invoke the same operation:</p>
+      <pre>$ artifact-pages site publish --site sre --dry-run
+Plan for site sre via local: 4 creates, 2 updates, 1 removals.
+Preview catalog: 1 stale references to prune, 4 groups retained. No writes.</pre>
       <p class="subtle">A live preview is not a cleanup problem, even if it was created locally or its PR was merged or closed without merging. An unavailable provider read is not evidence of a missing manifest. A failed catalog write after a successful production update must be reported for retry rather than presented as completed cleanup.</p>
     </section>
 
@@ -158,7 +165,7 @@ Writes:     none</pre>
       <h2 id="expiry">Provider-owned retention and serving boundary</h2>
       <p>The administrator configures preview retention only in the hosting provider. Neither manifest nor catalog carries an application expiry timestamp, and the browser does not run its own expiry timer. While a completed manifest is available, a direct logical URL may resolve; after provider removal it shows “Preview unavailable”. The Previews list and palette fetch the catalog only when entered and check referenced manifest availability before showing entries. A later catalog update removes missing references. A retry of an existing revision does not overwrite its objects merely to refresh their provider lifecycle age.</p>
       <p class="warning"><strong>Not an exact-time revocation mechanism.</strong> Provider lifecycle removal is asynchronous, and CDN caches can temporarily retain old responses. A catalog entry may therefore outlive its revision or be temporarily cached after an update. Separate bundle objects can also disappear at different times; missing raw documents and resources must return 404, never the SPA shell. A catalog under the preview lifecycle prefix expires after inactivity; each catalog rewrite refreshes only that catalog object's lifecycle age. No application-managed clock reconciles these differences.</p>
-      <p>For a restricted site, authorization applies to the catalog, manifest, documents and resources before any shared-cache response. Public pre-merge previews are public for a public site. Neither a client-side hidden tab nor an unguessable SHA is an access control.</p>
+      <p>Artifact Pages does not define public/restricted sites or viewer identities. Preview catalogs, manifests, documents and resources are static objects; any access restriction is configured and owned by the operator at the hosting edge or surrounding network. If previews should not be available to everyone admitted to the distribution, the operator's edge policy must cover their logical and raw paths. A hidden tab or unguessable SHA is not access control.</p>
     </section>
 
     <section aria-labelledby="proof">
@@ -181,7 +188,7 @@ Writes:     none</pre>
           <li>Changed-document links remain in the revision; unchanged-document links go to production without nesting the app in an iframe.</li>
           <li>Missing raw resource is 404; direct logical URL works without a catalog entry while its manifest and document remain available.</li>
           <li>A PR-contextual document URL shows a validated PR return link on every changed document, including after same-revision navigation; bare, manual, mismatched, and catalog-unavailable contexts render without that link. A newer revision in the group does not change an older revision's bytes or route.</li>
-          <li>Same-repo PR accepted, fork PR rejected before credentials; restricted site denies every preview object consistently.</li>
+          <li>Same-repo PR accepted, fork PR rejected before credentials; preview objects follow the same operator-managed edge boundary as the rest of the distribution.</li>
           <li>Multi-page object listing and cleanup handle more than one provider page/batch without crossing site prefixes.</li>
           <li>Measure lazy catalog transfer, manifest-availability checks, parse, memory and input-to-paint with many sites; opening one site's Previews must not load other catalogs.</li>
         </ul></div>

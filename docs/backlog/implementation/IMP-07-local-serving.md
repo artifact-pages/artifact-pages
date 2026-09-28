@@ -11,11 +11,11 @@ Extend the local static-serving analogue so logical preview routes reach the SPA
 
 ## Evidence
 
-Playwright verifies direct load/reload, missing manifest and raw-file 404 behavior, MIME types, no-store, nosniff, and the local HTML CSP. Encoded route segments are exercised through the logical preview reader. These results prove nginx behavior only; CDN policy and restricted-site authorization remain in T4.
+Playwright verifies direct load/reload, missing manifest and raw-file 404 behavior, MIME types, no-store, nosniff, and the local HTML CSP. Encoded route segments are exercised through the logical preview reader. These results prove nginx behavior only; provider CDN route/cache behavior remains in T4/T15. Operator-managed viewer access is outside the product verification scope.
 
 ## Acceptance criteria
 
 - A direct logical preview document route loads and reloads using fixture data; absent document/manifest shows the app's neutral unavailable state.
 - A missing raw `/_previews/.../files/*` request returns 404, not a 200 SPA shell (the current baseline fails this).
 - Correct content types and relative-resource paths are exercised for HTML, Markdown, CSS, JavaScript, images and fonts, including encoded path segments.
-- Local response/caching behavior is documented as an analogue, not claimed to prove CDN policy or restricted-site authorization.
+- Local response/caching behavior is documented as an analogue and does not prove provider CDN behavior. Operator-managed viewer access is outside the product verification scope.

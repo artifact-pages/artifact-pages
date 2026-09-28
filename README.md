@@ -4,31 +4,30 @@
 
 Teams keep HTML reports, design documents, diagrams, generated explanations, and other static artifacts in Git. Git Artifact Pages publishes them into a stable web namespace and provides a lightweight SPA for discovery, search, navigation, and viewing.
 
-The intended production shape is deliberately static:
+The deployment contract is deliberately static and provider-neutral:
 
 ~~~text
 Git repositories
       ↓
-publish pipeline
+artifact-pages publisher
       ↓
-S3
-├── _indexes/
-├── _artifacts/
-├── index.html
-└── assets/
+DeploymentBackend
+├── local directory (development)
+├── S3 + CloudFront (AWS)
+└── R2 + Cloudflare cache (Cloudflare)
       ↓
-CloudFront
+static application and content planes
       ↓
 Browser
 ~~~
 
-There is no application server in the request path. Git is the source of truth; object storage is a serving projection.
+There is no application server in the request path. Git is the source of truth; a static directory or object store is a serving projection. The publisher and registry workflows share one provider-neutral backend contract; only object operations, credentials, and cache revalidation differ by provider.
 
 ## Status
 
 Phase 1 local product. The SPA discovers sites from lightweight metadata, loads only the active site's artifact index, and provides a site picker, recent-artifact home, searchable navigation tree, and command palette. HTML artifacts run in an iframe; Markdown artifacts use a sanitized native reader.
 
-AWS infrastructure and reusable distribution packages come later.
+AWS infrastructure and published reusable distribution packages come later. The optional, unreleased GitHub Action entry points for admin and satellite workflows are documented in the [GitHub Actions guide](docs/guides/github-actions.md); replace the documented Action SHA placeholder with a reviewed commit before using its templates.
 
 ## Local development
 
@@ -60,9 +59,11 @@ Package the built application plane for a separate installation repository with:
 npm run package:web -- --version local-test-1
 ~~~
 
-This creates a version-labelled `artifact-pages-web-*.tar.gz` archive, a SHA-256 checksum, and a release manifest under `.local/releases/`. The archive contains only the deployable SPA files (`index.html` and `assets/`) at its root; site indexes and artifact files remain a separate content plane. The version is an explicit label for local integration testing; a public release/versioning policy has not been set yet.
+This creates a version-labelled `artifact-pages-web-*.tar.gz` archive, a SHA-256 checksum, and a release manifest under `.local/releases/`. The archive contains the deployable SPA output at its root; site indexes, artifacts, and previews remain a separate content plane. The version is an explicit label for local integration testing; a public release/versioning policy has not been set yet.
 
 `artifact-pages-example` can install this archive and serve the extracted app bundle through the existing local nginx/E2E setup by setting `WEB_ROOT` to its installation directory.
+
+To deploy a packaged or pinned GitHub release from an admin checkout, use the provider-neutral `artifact-pages app deploy` command. The [application bundle deployment guide](docs/guides/app-bundle-deployment.md) covers packaging, target configuration, unchanged deployments, upgrades, and rollback.
 
 Build both the application and the Storybook catalog with:
 
@@ -77,7 +78,15 @@ To serve the production build with the local nginx contract:
 npm run serve:local
 ~~~
 
-This serves the SPA on `http://localhost:4173/`, site discovery metadata and artifact indexes below `/_indexes/`, and fixture artifacts below `/_artifacts/`. Any other route falls back to the SPA shell.
+This serves the SPA on `http://localhost:4173/`, site discovery metadata and artifact indexes below `/_indexes/`, and fixture artifacts below `/_artifacts/`. Any other route falls back to the SPA shell. To serve a generated local deployment instead, set `STORAGE_ROOT` to its storage directory:
+
+~~~sh
+STORAGE_ROOT=./.local/storage npm run serve:local
+~~~
+
+`/_control/` is reserved for private coordination records and nginx returns 404 for it.
+
+For a local registry and separate satellite checkout workflow, see [Local registered-site development](docs/guides/local-registered-sites.md). It uses the same `registry publish`, `site publish`, and `registry unregister` operations used with AWS and Cloudflare.
 
 On first use, install the Playwright Chromium browser, then run the end-to-end checks against the production build served by nginx:
 
@@ -116,7 +125,7 @@ go test ./internal/indexer -run '^$' -bench=BenchmarkBuildIndexFiles -benchtime=
 go test ./internal/indexer -run '^$' -bench=BenchmarkBuildIndexGitHistoryPages -benchtime=3x -benchmem
 ~~~
 
-The browser palette benchmark creates ignored synthetic data under `.local/palette-load-fixtures/`. It measures single-site index sizes and multi-site discovery separately; the latter downloads every lightweight summary but only the active site's artifact index. It reports payload and loopback-transfer timing, JSON body-read and parse time, browser heap, query time, and input-to-paint latency. These timings compare browser/projection costs locally; they are not a forecast of CDN or public-network latency. For example:
+The browser palette benchmark creates ignored synthetic indexes under `.local/palette-load-fixtures/`. It measures single-site index sizes and multi-site discovery separately; the latter downloads every lightweight summary but only the active site's artifact index. It reports payload and loopback-transfer timing, JSON body-read and parse time, browser heap, query time, palette-open time, and input-to-paint latency. `--recent-reads 0-20` seeds per-site recent history, checks visible results, opens a page to verify persistence, and measures search with and without an open document. Its benchmark-only contextual-scoring experiment compares runtime scoring, object profiles, packed CSR typed arrays, and inverted affinity vectors with query, recent-read, pin, and freshness signals. It checks top-eight parity in All/Recent/Pinned scopes and Japanese/astral Unicode scoring and rankings. `--palette-score-matrix` evaluates every context/signal pairing, `--palette-scope-matrix` measures Recent/Pinned candidate filtering and cached counts, and `--palette-index-matrix` measures CSR features prebuilt into the site index. No experimental scorer is wired into the product; see the [palette search benchmark report](docs/research/palette-search-benchmark.md) for the methodology and results. These timings compare browser/projection costs locally; they are not a forecast of CDN or public-network latency. For example:
 
 ~~~sh
 npm run benchmark:palette -- --sites 20 --artifacts-per-site 1000 --iterations 20 --seed local-scale

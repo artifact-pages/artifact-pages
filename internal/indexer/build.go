@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
@@ -31,6 +32,15 @@ import (
 )
 
 var siteIDPattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
+
+// ValidateUTF8RelativePath rejects source paths that cannot be represented
+// faithfully in the site's JSON index and storage projection.
+func ValidateUTF8RelativePath(relative string) error {
+	if !utf8.ValidString(relative) {
+		return fmt.Errorf("path %q is not valid UTF-8", relative)
+	}
+	return nil
+}
 
 type BuildOptions struct {
 	SiteID        string
@@ -51,6 +61,15 @@ type BuildResult struct {
 	MetadataPath     string
 	MetadataBytes    int
 	Elapsed          time.Duration
+}
+
+// GitSourceIdentity describes the GitHub repository and repository-relative
+// source directory used by registered-site publisher eligibility checks.
+type GitSourceIdentity struct {
+	Repository    string
+	RepositoryURL string
+	SourcePath    string
+	Root          string
 }
 
 type SiteIndex struct {
@@ -322,6 +341,119 @@ func Build(ctx context.Context, options BuildOptions) (BuildResult, error) {
 	}, nil
 }
 
+// ResolveGitSourceIdentity validates that sourceDir is inside the current Git
+// working tree and resolves its canonical owner/repository identity from the
+// origin remote. Branch names are intentionally not part of site identity.
+func ResolveGitSourceIdentity(ctx context.Context, sourceDir string) (GitSourceIdentity, error) {
+	if sourceDir == "" {
+		return GitSourceIdentity{}, errors.New("source directory is required")
+	}
+	repository, repositoryURL, root, err := ResolveGitRepositoryIdentity(ctx)
+	if err != nil {
+		return GitSourceIdentity{}, err
+	}
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return GitSourceIdentity{}, fmt.Errorf("get current directory: %w", err)
+	}
+	resolvedSource := sourceDir
+	if !filepath.IsAbs(resolvedSource) {
+		resolvedSource = filepath.Join(workingDir, resolvedSource)
+	}
+	resolvedSource, err = filepath.Abs(resolvedSource)
+	if err != nil {
+		return GitSourceIdentity{}, fmt.Errorf("resolve source directory: %w", err)
+	}
+	resolvedSource, err = filepath.EvalSymlinks(resolvedSource)
+	if err != nil {
+		return GitSourceIdentity{}, fmt.Errorf("resolve source directory: %w", err)
+	}
+	if err := ensureWithin(root, resolvedSource); err != nil {
+		return GitSourceIdentity{}, fmt.Errorf("source directory must be inside the Git working tree: %w", err)
+	}
+	info, err := os.Stat(resolvedSource)
+	if err != nil {
+		return GitSourceIdentity{}, fmt.Errorf("read source directory: %w", err)
+	}
+	if !info.IsDir() {
+		return GitSourceIdentity{}, errors.New("source path is not a directory")
+	}
+	relative, err := filepath.Rel(root, resolvedSource)
+	if err != nil {
+		return GitSourceIdentity{}, fmt.Errorf("resolve source path relative to Git working tree: %w", err)
+	}
+	sourcePath := filepath.ToSlash(relative)
+	if sourcePath == "" {
+		sourcePath = "."
+	}
+	return GitSourceIdentity{Repository: repository, RepositoryURL: repositoryURL, SourcePath: sourcePath, Root: root}, nil
+}
+
+// ResolveGitRepositoryIdentity resolves the current checkout's canonical
+// GitHub origin and working-tree root without selecting a content directory.
+func ResolveGitRepositoryIdentity(ctx context.Context) (repository, repositoryURL, root string, err error) {
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return "", "", "", fmt.Errorf("get current directory: %w", err)
+	}
+	root, err = gitOutput(ctx, workingDir, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return "", "", "", fmt.Errorf("source identity requires a Git working tree: %w", err)
+	}
+	root, err = filepath.EvalSymlinks(strings.TrimSpace(root))
+	if err != nil {
+		return "", "", "", fmt.Errorf("resolve Git working tree: %w", err)
+	}
+	remote, err := gitOutput(ctx, root, "config", "--get", "remote.origin.url")
+	if err != nil {
+		return "", "", "", errors.New("source Git repository must have a GitHub origin remote")
+	}
+	repository, repositoryURL = parseGitHubRepositoryRemote(strings.TrimSpace(remote))
+	if repository == "" {
+		return "", "", "", errors.New("source Git origin must identify a GitHub owner/repository")
+	}
+	return repository, repositoryURL, root, nil
+}
+
+func parseGitHubRepositoryRemote(remote string) (string, string) {
+	remote = strings.TrimSpace(remote)
+	if remote == "" {
+		return "", ""
+	}
+
+	var host, repositoryPath string
+	if strings.Contains(remote, "://") {
+		parsed, err := url.Parse(remote)
+		if err != nil || parsed.Hostname() == "" || parsed.RawQuery != "" || parsed.Fragment != "" {
+			return "", ""
+		}
+		host = parsed.Hostname()
+		repositoryPath = parsed.Path
+	} else {
+		separator := strings.Index(remote, ":")
+		if separator < 0 {
+			return "", ""
+		}
+		host = remote[:separator]
+		if at := strings.LastIndex(host, "@"); at >= 0 {
+			host = host[at+1:]
+		}
+		repositoryPath = remote[separator+1:]
+	}
+	if !strings.EqualFold(host, "github.com") {
+		return "", ""
+	}
+
+	repositoryPath = strings.Trim(strings.TrimPrefix(repositoryPath, "/"), "/")
+	repositoryPath = strings.TrimSuffix(repositoryPath, ".git")
+	parts := strings.Split(repositoryPath, "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", ""
+	}
+	repository := parts[0] + "/" + parts[1]
+	return repository, "https://github.com/" + repository
+}
+
 func discoverArtifacts(sourcePath, outputRoot string) ([]discoveredArtifact, int, error) {
 	artifacts := make([]discoveredArtifact, 0)
 	routes := make(map[string]string)
@@ -355,6 +487,9 @@ func discoverArtifacts(sourcePath, outputRoot string) ([]discoveredArtifact, int
 			return fmt.Errorf("resolve artifact file path %q: %w", currentPath, err)
 		}
 		fileRelative = filepath.ToSlash(fileRelative)
+		if err := ValidateUTF8RelativePath(fileRelative); err != nil {
+			return fmt.Errorf("artifact %w", err)
+		}
 		directory := filepath.Dir(currentPath)
 		filename := entry.Name()
 		directoryRelative, err := filepath.Rel(sourcePath, directory)

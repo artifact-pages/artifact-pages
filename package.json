@@ -10,11 +10,16 @@
     "build": "tsc -b && vite build",
     "fixtures:palette": "node scripts/benchmark-palette.mjs --generate-only",
     "benchmark:palette": "npm run build && node scripts/benchmark-palette.mjs",
+    "benchmark:preview-discovery": "npm run build && node scripts/benchmark-preview-discovery.mjs",
     "package:web": "npm run build && node scripts/package-web-release.mjs",
     "preview": "vite preview",
     "serve:local": "npm run build && docker compose up",
+    "test:aws-routes": "node --test infra/aws/routes.test.js",
+    "test:aws-deployment": "node --test infra/aws/routes.test.js infra/aws/deployment.test.js",
+    "test:provider-delivery": "node --test infra/aws/routes.test.js infra/aws/deployment.test.js infra/cloudflare/delivery/main.test.js",
     "pretest:e2e": "npm run build",
-    "test:e2e": "node scripts/run-e2e.mjs"
+    "test:e2e": "node scripts/run-e2e.mjs",
+    "test:registered-flow": "npm run build && node scripts/test-registered-flow.mjs"
   },
   "dependencies": {
     "mermaid": "^11.17.2",

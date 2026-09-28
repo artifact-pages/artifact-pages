@@ -1,0 +1,20 @@
+name: Artifact Pages preview trust preflight
+description: Reject fork pull requests and verify explicit same-repository preview PR provenance before provider credentials are requested.
+inputs:
+  pull-request:
+    description: Optional explicit positive PR number or canonical GitHub pull URL; omitted remains manual.
+    required: false
+    default: ""
+  github-token:
+    description: Optional token with pull-requests:read for explicit PR verification.
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: Verify same-repository preview trust
+      shell: bash
+      env:
+        ARTIFACT_PAGES_INPUT_PULL_REQUEST: ${{ inputs.pull-request }}
+        GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
+      run: node "$GITHUB_ACTION_PATH/../shared/verify-preview-pr.mjs"

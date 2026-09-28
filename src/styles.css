@@ -1332,6 +1332,17 @@ mark {
   line-height: 1.5;
 }
 
+.site-home-preview-link {
+  margin: -18px 0 22px;
+  padding: 0;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.site-home-preview-link:hover {
+  color: var(--text);
+}
+
 .site-search {
   display: flex;
   width: min(100%, 580px);
@@ -1957,6 +1968,226 @@ mark {
   background:
     radial-gradient(circle at 50% 0, rgba(128, 146, 164, 0.09), transparent 38rem),
     var(--shell);
+}
+
+.preview-page {
+  width: min(100%, 920px);
+  height: 100%;
+  margin: 0 auto;
+  padding: 44px 38px 56px;
+  overflow: auto;
+  color: var(--text);
+  background: var(--surface);
+}
+
+.preview-page-header {
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.preview-back-link {
+  display: inline-block;
+  margin-bottom: 28px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.preview-back-link:hover,
+.preview-external-link:hover,
+.preview-site-link:hover {
+  color: var(--text);
+}
+
+.preview-page .eyebrow,
+.preview-reader .eyebrow {
+  margin: 0 0 7px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.preview-page h1,
+.preview-reader-header h1 {
+  margin: 0 0 8px;
+  font-size: clamp(27px, 4vw, 38px);
+  font-weight: 620;
+  letter-spacing: -0.04em;
+  line-height: 1.12;
+}
+
+.preview-page-lede,
+.preview-empty {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.preview-groups {
+  display: grid;
+  gap: 14px;
+  padding-top: 22px;
+}
+
+.preview-group {
+  padding: 18px 20px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: var(--surface-raised);
+}
+
+.preview-group-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.preview-group-heading h2 {
+  margin: 0 0 3px;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.preview-group-meta,
+.preview-reader-path {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+.preview-external-link {
+  flex: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.preview-availability {
+  margin: 12px 0 0;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.preview-document-list {
+  display: grid;
+  gap: 2px;
+  margin: 15px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.preview-document-list a {
+  display: grid;
+  gap: 2px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.preview-document-list a:hover {
+  background: var(--hover);
+}
+
+.preview-document-list code {
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.preview-reader {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  background: var(--shell);
+}
+
+.preview-reader-header {
+  flex: none;
+  padding: 14px 24px 13px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface);
+}
+
+.preview-reader-context {
+  display: flex;
+  min-height: 22px;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 8px;
+}
+
+.preview-reader-context .preview-back-link {
+  margin: 0;
+}
+
+.preview-reader-revision {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+.preview-reader-header h1 {
+  overflow: hidden;
+  margin: 0 0 2px;
+  font-size: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-reader-stage {
+  position: relative;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.preview-html-frame {
+  background: white;
+}
+
+.preview-site-link {
+  position: absolute;
+  right: 17px;
+  bottom: 12px;
+  z-index: 2;
+  padding: 5px 9px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  color: var(--text-secondary);
+  background: var(--surface);
+  font-size: 11px;
+  text-decoration: none;
+}
+
+.preview-unavailable {
+  padding-top: 35px;
+}
+
+.preview-unavailable h1 {
+  margin-top: 16px;
+}
+
+@media (max-width: 620px) {
+  .preview-page {
+    padding: 28px 18px 42px;
+  }
+
+  .preview-group {
+    padding: 15px 14px;
+  }
+
+  .preview-reader-header {
+    padding: 12px 16px 10px;
+  }
+
+  .preview-reader-context {
+    flex-wrap: wrap;
+    gap: 8px 12px;
+  }
 }
 
 .site-picker-content,

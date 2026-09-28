@@ -1,0 +1,107 @@
+name: Artifact Pages preview publish
+description: Optional thin wrapper for one site's pre-merge preview. Gate PR jobs as same-repository only and run preview-preflight before caller-owned provider credential steps.
+inputs:
+  site:
+    description: Explicit registered site ID; never inferred from repository identity.
+    required: true
+  source:
+    description: Registered source directory inside the checked-out Git repository.
+    required: true
+  head:
+    description: Git ref whose committed tree forms the preview; defaults to HEAD.
+    required: false
+    default: HEAD
+  default-ref:
+    description: Default-branch ref used for merge-base selection; defaults to origin/HEAD.
+    required: false
+    default: origin/HEAD
+  pull-request:
+    description: Explicit positive PR number or canonical GitHub pull URL; omitted means manual preview.
+    required: false
+    default: ""
+  include:
+    description: Newline-separated source-relative paths or path.Match patterns for extra non-document resources.
+    required: false
+    default: ""
+  base-url:
+    description: Public application origin used to build review URLs.
+    required: true
+  config:
+    description: Optional deployment config path or github:// config locator.
+    required: false
+    default: ""
+  github-token:
+    description: Optional token with pull-requests:read for explicit PR verification and read-only private config access.
+    required: false
+    default: ""
+  dry-run:
+    description: Calculate changes without provider writes, lock acquisition, deletes, or cache changes.
+    required: false
+    default: "false"
+outputs:
+  operation:
+    description: CLI operation name.
+    value: ${{ steps.cli.outputs.operation || steps.preflight.outputs.operation }}
+  outcome:
+    description: CLI outcome string, such as planned, published, no-op, no-preview, or failed.
+    value: ${{ steps.cli.outputs.outcome || steps.preflight.outputs.outcome }}
+  site:
+    description: Explicit site ID selected for this operation.
+    value: ${{ steps.cli.outputs.site || steps.preflight.outputs.site }}
+  group-list-url:
+    description: Mutable site preview-list URL filtered to the published group.
+    value: ${{ steps.cli.outputs['group-list-url'] || steps.preflight.outputs['group-list-url'] }}
+  documents:
+    description: JSON string containing source-relative document paths, titles, and fixed revision URLs.
+    value: ${{ steps.cli.outputs.documents || steps.preflight.outputs.documents }}
+  result:
+    description: Complete typed CLI result or trust-preflight failure envelope.
+    value: ${{ steps.cli.outputs.result || steps.preflight.outputs.result }}
+  exit_code:
+    description: CLI or trust-preflight exit code as an integer string.
+    value: ${{ steps.cli.outputs.exit_code || steps.preflight.outputs.exit_code }}
+  error:
+    description: CLI error text when the operation failed.
+    value: ${{ steps.cli.outputs.error || steps.preflight.outputs.error }}
+runs:
+  using: composite
+  steps:
+    - name: Verify preview pull-request trust before CLI or provider access
+      id: preflight
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        ARTIFACT_PAGES_ACTION_KIND: preview
+        ARTIFACT_PAGES_INPUT_SITE: ${{ inputs.site }}
+        ARTIFACT_PAGES_INPUT_PULL_REQUEST: ${{ inputs.pull-request }}
+        ARTIFACT_PAGES_INPUT_HEAD: ${{ inputs.head }}
+        GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
+      run: node "$GITHUB_ACTION_PATH/../shared/verify-preview-pr.mjs"
+    - name: Set up Go from the pinned component source
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version-file: ${{ github.action_path }}/../../go.mod
+        cache: false
+    - name: Build the shared artifact-pages CLI
+      shell: bash
+      working-directory: ${{ github.action_path }}/../..
+      run: go build -trimpath -o "$RUNNER_TEMP/artifact-pages" ./cmd/artifact-pages
+    - name: Run the preview CLI operation
+      id: cli
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        ARTIFACT_PAGES_CLI: ${{ runner.temp }}/artifact-pages
+        ARTIFACT_PAGES_ACTION_KIND: preview
+        ARTIFACT_PAGES_INPUT_OPERATION: publish
+        ARTIFACT_PAGES_INPUT_SITE: ${{ inputs.site }}
+        ARTIFACT_PAGES_INPUT_SOURCE: ${{ inputs.source }}
+        ARTIFACT_PAGES_INPUT_HEAD: ${{ inputs.head }}
+        ARTIFACT_PAGES_INPUT_DEFAULT_REF: ${{ inputs.default-ref }}
+        ARTIFACT_PAGES_INPUT_PULL_REQUEST: ${{ inputs.pull-request }}
+        ARTIFACT_PAGES_INPUT_INCLUDE: ${{ inputs.include }}
+        ARTIFACT_PAGES_INPUT_BASE_URL: ${{ inputs.base-url }}
+        ARTIFACT_PAGES_INPUT_CONFIG: ${{ inputs.config }}
+        ARTIFACT_PAGES_INPUT_DRY_RUN: ${{ inputs.dry-run }}
+        GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
+      run: node "$GITHUB_ACTION_PATH/../shared/invoke-cli.mjs"

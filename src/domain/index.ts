@@ -11,6 +11,18 @@ export type SiteDiscoveryMetadata = {
   artifactIndexUrl: string
 }
 
+export type SiteRegistryEntry = {
+  id: string
+  name: string
+  repository: string
+  sourcePath: string
+}
+
+export type SiteRegistryProjection = {
+  schemaVersion: number
+  sites: SiteRegistryEntry[]
+}
+
 export type TocEntry = {
   level: number
   text: string

@@ -5,8 +5,8 @@
 
 ## Proof needed
 
-- [ ] From clean external admin and satellite repositories, use pinned OSS components rather than copying the OSS app source.
-- [ ] Verify application bundle integrity, install/deploy, registry dry-run/apply, site dry-run/publish, and optional Action parity.
+- [ ] From clean external admin and satellite repositories, use immutable refs for the released CLI, web bundle, optional Action, and selected provider module rather than copying OSS application or infrastructure source.
+- [ ] Verify application bundle integrity, install/deploy, registry dry-run/publish, site dry-run/publish, and optional Action parity.
 - [ ] Upgrade and roll back one app version without changing site objects; record configuration and schema compatibility expectations.
 - [ ] Repeat the supported reference workflow locally and on AWS; Cloudflare adoption evidence is tracked by IMP-33/T15.
 

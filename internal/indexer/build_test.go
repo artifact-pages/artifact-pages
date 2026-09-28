@@ -500,6 +500,31 @@ func TestParseRepositoryRemote(t *testing.T) {
 	}
 }
 
+func TestParseGitHubRepositoryRemoteRequiresCanonicalGitHubOwnerRepo(t *testing.T) {
+	tests := []struct {
+		name       string
+		remote     string
+		repository string
+		url        string
+	}{
+		{name: "https", remote: "https://github.com/acme/reports.git", repository: "acme/reports", url: "https://github.com/acme/reports"},
+		{name: "scp ssh", remote: "git@github.com:acme/reports.git", repository: "acme/reports", url: "https://github.com/acme/reports"},
+		{name: "ssh url", remote: "ssh://git@github.com/acme/reports.git", repository: "acme/reports", url: "https://github.com/acme/reports"},
+		{name: "non GitHub host", remote: "git@gitlab.com:acme/reports.git"},
+		{name: "nested path", remote: "https://github.com/acme/platform/reports.git"},
+		{name: "missing repository", remote: "https://github.com/acme"},
+		{name: "invalid", remote: "not a remote"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			gotRepository, gotURL := parseGitHubRepositoryRemote(test.remote)
+			if gotRepository != test.repository || gotURL != test.url {
+				t.Errorf("parseGitHubRepositoryRemote(%q) = (%q, %q), want (%q, %q)", test.remote, gotRepository, gotURL, test.repository, test.url)
+			}
+		})
+	}
+}
+
 func BenchmarkBuildIndexFiles(b *testing.B) {
 	for _, fileCount := range []int{1_000, 5_000, 10_000} {
 		b.Run(fmt.Sprintf("%d-files", fileCount), func(b *testing.B) {
@@ -691,5 +716,27 @@ func runGit(t testing.TB, directory string, args ...string) {
 	command.Dir = directory
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, output)
+	}
+}
+
+func TestDiscoverArtifactsRejectsInvalidUTF8Path(t *testing.T) {
+	sourceDir := t.TempDir()
+	filename := filepath.Join(sourceDir, string([]byte{'b', 'a', 'd', '-', 0xff})+".html")
+	if err := os.WriteFile(filename, []byte("<h1>Bad path</h1>"), 0o600); err != nil {
+		t.Skipf("filesystem does not support invalid UTF-8 names: %v", err)
+	}
+
+	if _, _, err := discoverArtifacts(sourceDir, filepath.Join(t.TempDir(), "output")); err == nil || !strings.Contains(err.Error(), "not valid UTF-8") {
+		t.Fatalf("discoverArtifacts() error = %v, want invalid UTF-8 path rejection", err)
+	}
+}
+
+func TestValidateUTF8RelativePathRejectsInvalidUTF8(t *testing.T) {
+	relative := string([]byte{'b', 'a', 'd', '-', 0xff, '.', 'h', 't', 'm', 'l'})
+	if err := ValidateUTF8RelativePath(relative); err == nil || !strings.Contains(err.Error(), "not valid UTF-8") {
+		t.Fatalf("ValidateUTF8RelativePath() error = %v, want invalid UTF-8 rejection", err)
+	}
+	if err := ValidateUTF8RelativePath("reports/日本語 #1.html"); err != nil {
+		t.Fatalf("ValidateUTF8RelativePath() rejected a valid UTF-8 path: %v", err)
 	}
 }

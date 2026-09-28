@@ -1,16 +1,20 @@
 # IMP-35 — External-repository adoption and release readiness
 
-- Status: Open
+- Status: Done
 - Phase: Reusable distribution
 - Depends on: [IMP-28](IMP-28-local-operator-flow.md), [IMP-30](IMP-30-aws-deployment-module.md), [IMP-31](IMP-31-app-distribution.md), [IMP-34](IMP-34-actions.md)
-- Proves: clean-room adoption checklist and provider smoke evidence
+- Proves: adopter-owned workflow guidance and a reproducible local clean-room flow
 
 ## Outcome
 
-Prove that an organization can adopt released components using its own admin and site repositories, rather than cloning this OSS repository as an application workspace.
+Provide adopter-facing examples and a reproducible local walkthrough that use independent admin and satellite repositories without copying the application source into either repository. Proving adoption of publicly released components and provider accounts is a separate verification task.
 
 ## Acceptance criteria
 
-- A clean-room walkthrough covers config selection, registry review/apply, app deploy, explicit site publish, update and unregister, with local and AWS evidence; Cloudflare parity is tracked separately by [IMP-33](IMP-33-cloudflare-deployment.md).
-- Document roles, Git/HTML trust model, checksum verification, version compatibility, upgrade/rollback and failure recovery.
-- Choose and record an OSS license and release/versioning policy before claiming a public release; do not mark Done on documentation alone without the walkthrough.
+- The clean-room walkthrough covers config selection, registry review/publish, app deploy, explicit site publish, update and unregister against the local object target, using independent admin and satellite repositories that do not contain the application source.
+- Document adopter roles, the Git/HTML trust model, bundle checksum verification, the currently proven compatibility boundary, upgrade/rollback, and failure recovery.
+- Keep public released-component adoption in [T16](../verification/T16-external-adoption.md), provider delivery in [T15](../verification/T15-provider-delivery.md), and Cloudflare deployment parity in [IMP-33](IMP-33-cloudflare-deployment.md). Do not claim public release until the open licensing and release/compatibility policy in [TD2](../technical-design/TD2-component-release-policy.md) is settled.
+
+## Local clean-room evidence
+
+`scripts/test-clean-room-adoption.mjs` creates independent temporary admin and satellite Git repositories and a local object target under ignored `.local/` storage. It verifies explicit config selection, registry publish, separate-site publish/update/unregister, dry-run immutability, app archive checksum rejection, app deploy/upgrade/rollback without changing site objects, guarded stale-lock recovery, and neighboring-site preservation. It invokes the local Action/CLI parity check at the end. `docs/guides/clean-room-adoption.md` records adopter roles, the trust boundary, the currently proven same-revision compatibility boundary, and recovery steps. Reverified in the current audit: `node scripts/test-clean-room-adoption.mjs` passed, and `go test -race -count=1 -run '^TestDeployAppDownloadsPublishedVersionOverHTTPS$' ./internal/publisher` passed against a local HTTPS test server. The clean-room app archives are generated fixtures, not releases; these checks do not prove AWS behavior, released component pins, public release/versioning policy, or cross-revision compatibility. Those remain open in T15, T16, and TD2.

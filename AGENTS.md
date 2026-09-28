@@ -12,6 +12,14 @@ The repository is in **Phase 1: local product**.
 
 Do not implement AWS infrastructure, Terraform, GitHub Actions publishing, or a general-purpose CLI unless explicitly requested. First prove the browser product and local serving contract.
 
+## Issue tracking
+
+Project issues live as Markdown files in `docs/backlog/issues/`. Read `docs/backlog/README.md` for the backlog tracks and status legend, then `docs/backlog/issues/README.md` for the issue index and priority definitions; use `docs/backlog/issues/_template.md` when creating an issue. Keep technical design and verification in their separate backlog tracks rather than turning them into issues.
+
+- Record one independently actionable problem per issue, with evidence, an expected outcome, and acceptance criteria.
+- Set a status and priority on every issue, and keep the README index in sync when either changes.
+- Mark an issue `Done` only after its acceptance criteria have been verified.
+
 ## Current implementation direction
 
 - Vite + React + TypeScript

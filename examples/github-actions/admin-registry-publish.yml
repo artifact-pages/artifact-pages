@@ -1,0 +1,45 @@
+name: Publish Artifact Pages registry
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish-registry:
+    runs-on: ubuntu-24.04
+    environment: artifact-pages-production
+    steps:
+      - name: Check out the admin repository
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Assume the registry-only deployment role
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.ARTIFACT_PAGES_REGISTRY_PUBLISH_ROLE_ARN }}
+          aws-region: us-east-1
+          role-session-name: artifact-pages-admin-${{ github.run_id }}
+
+      - name: Publish the committed registry
+        id: publish-registry
+        uses: tasuku43/git-artifact-pages/actions/admin@<FULL_REVIEWED_ACTION_COMMIT_SHA>
+        with:
+          operation: registry-publish
+          manifest: sites.yaml
+          config: .artifact-pages.yaml
+
+      - name: Use the typed CLI result
+        if: always()
+        env:
+          OUTCOME: ${{ steps.publish-registry.outputs.outcome }}
+          EXIT_CODE: ${{ steps.publish-registry.outputs.exit_code }}
+          RESULT_JSON: ${{ steps.publish-registry.outputs.result_json }}
+        run: |
+          printf 'Artifact Pages outcome=%s exit_code=%s\n' "$OUTCOME" "$EXIT_CODE"
+          printf '%s\n' "$RESULT_JSON"

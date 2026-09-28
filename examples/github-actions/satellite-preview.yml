@@ -1,0 +1,71 @@
+name: Publish the registered SRE review preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  preview-preflight:
+    # Fork jobs are skipped before any Action or shell step can run.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Verify the pull request before requesting publisher credentials
+        uses: tasuku43/git-artifact-pages/actions/preview-preflight@<FULL_REVIEWED_ACTION_COMMIT_SHA>
+        with:
+          pull-request: ${{ github.event.pull_request.number }}
+
+  publish-preview:
+    needs: preview-preflight
+    if: needs.preview-preflight.result == 'success' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    environment: artifact-pages-preview
+    permissions:
+      contents: read
+      pull-requests: read
+      id-token: write
+    steps:
+      - name: Check out the registered repository without checking out the pull-request head
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Assume the SRE preview publisher role
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.ARTIFACT_PAGES_SRE_PREVIEW_ROLE_ARN }}
+          aws-region: us-east-1
+          role-session-name: artifact-pages-preview-${{ github.run_id }}
+
+      - name: Publish the explicitly selected pull-request preview
+        id: publish-preview
+        uses: tasuku43/git-artifact-pages/actions/preview-publish@<FULL_REVIEWED_ACTION_COMMIT_SHA>
+        with:
+          site: sre
+          source: docs/artifacts
+          head: ${{ github.event.pull_request.head.sha }}
+          default-ref: origin/${{ github.event.pull_request.base.ref }}
+          pull-request: ${{ github.event.pull_request.number }}
+          base-url: ${{ vars.ARTIFACT_PAGES_BASE_URL }}
+          config: github://example/platform-admin/.artifact-pages.yaml?ref=<FULL_ADMIN_CONFIG_COMMIT_SHA>
+          # Additional non-document resources may be listed one per line:
+          # include: |
+          #   review-data.json
+          #   assets/generated-chart.svg
+
+      - name: Use the typed preview URLs
+        if: always()
+        env:
+          OUTCOME: ${{ steps.publish-preview.outputs.outcome }}
+          GROUP_LIST_URL: ${{ steps.publish-preview.outputs['group-list-url'] }}
+          DOCUMENTS_JSON: ${{ steps.publish-preview.outputs.documents }}
+          RESULT_JSON: ${{ steps.publish-preview.outputs.result }}
+          EXIT_CODE: ${{ steps.publish-preview.outputs.exit_code }}
+        run: |
+          printf 'outcome=%s exit_code=%s\n' "$OUTCOME" "$EXIT_CODE"
+          printf 'preview_list=%s\ndocuments=%s\n' "$GROUP_LIST_URL" "$DOCUMENTS_JSON"

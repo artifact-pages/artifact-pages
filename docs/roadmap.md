@@ -28,14 +28,17 @@ Target user experience:
 - E2E covers artifact routes and relative resources with spaces, Unicode, and reserved URL characters, including direct load and reload round-trips.
 - An optional right panel switches between indexed contents and artifact details (last committer, update date, and source).
 - Direct navigation and reload restore the same state.
-- Site discovery uses lightweight metadata; only the active site's artifact index is loaded.
+- Fixture and registered-site discovery use the static `/_indexes/sites.json` catalog plus lightweight per-site metadata; only the active site's artifact index is loaded. Discovery does not depend on nginx autoindex or object-store listing.
+- Local conformance profiles send fixture seeding and `artifact-pages site publish` through object APIs, then serve `/_indexes/*` and `/_artifacts/*` through nginx to the emulator origin. MinIO covers the shared S3 API shape used by AWS and Cloudflare adapter tests; fake-gcs-server covers `gcp-local` JSON API behavior only. These profiles do not claim real-provider equivalence, and GCP remains local-only.
+- A focused `preview-local` developer command projects changed Git documents under ignored `.local/previews`; nginx and the SPA use the same static preview record and logical-route contract.
+- Preview projection writes go through a small provider-neutral store interface. The local directory is the Phase 1 adapter; AWS and Cloudflare storage, locking, serving policy, and retention stay in their provider phase.
 - Normal page search stays within the active site; `@` searches site metadata.
 
 The single-site and multi-site palette benchmark is recorded in [palette-search-benchmark.md](./research/palette-search-benchmark.md). It includes 20 sites × 1,000 artifacts, character-by-character input, browser heap, load/parse/search timings, and an eager-chunk comparison. Eager chunks did not improve ready-to-use time or memory, so keep product-level sharding and inverted indexes deferred until a different loading model demonstrates a user-visible benefit. Local transfer timings compare projection/browser costs but are not a forecast of CDN or public-network latency.
 
 VRT is optional at this stage and should focus on the application shell rather than arbitrary artifact contents.
 
-## Phase 2 — Local projection builder
+## Phase 2 — Local production projection builder
 
 Build the per-site index from one Git repository source directory:
 
@@ -56,21 +59,27 @@ Use one repository source per site for this milestone. Registry enforcement, mou
 
 The public contract should remain simple even if internal merge/staging mechanics evolve.
 
-## Phase 3 — AWS reference deployment
+The Phase 1 preview developer helper remains a separate focused command; it does not promote preview publishing into the general-purpose `artifact-pages` CLI contract.
 
-Provide a reference AWS deployment:
+## Phase 3 — Provider-backed deployments
+
+Provide the AWS reference deployment and a Cloudflare adapter against the same provider-neutral publisher/storage contract. Choose Cloudflare's concrete storage and lock services in the linked design work before implementing its adapter.
+
+The AWS reference deployment includes:
 
 - private S3 origin
 - CloudFront
 - Origin Access Control
 - SPA fallback/rewrite
 - cache policies appropriate to application, indexes, and artifacts
-- optional access controls
+- optional customer-managed edge access controls (outside the Artifact Pages identity and site model)
 - GitHub Actions OIDC for publishing
 
 Prefer Terraform for the reference infrastructure.
 
-The publishing adapter must coordinate satellite publish and admin unregister with the shared per-site storage-lock contract in the specification. Admin deployments that update the whole sites registry must be serialized. Implement and verify this only when the repository reaches the provider-publishing phase; it is not part of the current local-product implementation.
+The Cloudflare adapter must preserve the same catalog, manifest, object-key, immutability, publication-order, and per-site lock semantics. Provider-specific credentials, storage APIs, locking, cache, and lifecycle configuration stay within each adapter/deployment boundary. Viewer access remains an operator-managed edge/network policy and is not represented in the site's product or registry model.
+
+The publishing adapter must coordinate satellite publish and `registry unregister` with the shared per-site storage-lock contract in the specification. Registry publications that update the whole sites registry must be serialized. Implement and verify this only when the repository reaches the provider-publishing phase; it is not part of the current local-product implementation.
 
 Provider-publishing release gate: add deterministic concurrency and recovery tests proving both orderings (publish owns the lock first; unregister withdraws the registry first), and verify that the final state is always unregistered with no site objects. Also cover concurrent publishers for different sites, interrupted/partial unregister followed by an idempotent retry, stale-lock recovery losing its ETag compare-and-swap race, and CDN invalidation failure followed by a successful retry. For publish, interrupt after artifact upload, after index/meta replacement, and during stale-object deletion; retrying the same desired source must converge to an index whose artifact references exist, with no stale objects left under the site prefix. Tests should use provider fakes for repeatability, with a small real-provider smoke test validating each adapter's conditional object-write behavior.
 
@@ -80,7 +89,7 @@ Registry tests validate the strict YAML mapping, the empty-registry case, reject
 
 The provider smoke test also verifies that uploaded bytes are unchanged and browser-facing `Content-Type` metadata is correct for HTML, Markdown, CSS, JavaScript, JSON, an image, a font, and WASM. Verify that unknown extensions use the documented binary fallback and that uploads do not force attachment disposition or claim an encoding that was not applied. Exercise a page with relative CSS, script, and image references against the deployed origin so incorrect metadata or routing is observable as a browser failure.
 
-Verify effective browser/CDN cache headers against the cache model: mutable URLs revalidate in browsers, metadata/index responses have at most 60 seconds of shared-cache freshness, artifact responses at most 300 seconds, and content-hashed application assets use the immutable one-year policy. When access control is enabled, confirm authorization runs before shared-cache delivery.
+Verify effective browser/CDN cache headers against the cache model: mutable URLs revalidate in browsers, metadata/index responses have at most 60 seconds of shared-cache freshness, artifact responses at most 300 seconds, and content-hashed application assets use the immutable one-year policy. Any customer-configured edge access gate is outside the product contract; its operator must verify that it covers the intended routes before protected bytes are served.
 
 Publisher tests also cover symlinked files/directories and unsupported filesystem entries. Publishing must fail clearly without dereferencing a symlink target or exposing data outside the selected source tree.
 
@@ -92,15 +101,17 @@ Expected distribution surfaces:
 
 - CLI / core package
 - bundled SPA
-- Terraform AWS module
-- GitHub Action
-- reusable workflow examples
+- Terraform reference modules for the supported providers (initially AWS and Cloudflare)
+- optional thin composite GitHub Actions that invoke the CLI
+- caller-owned workflow examples showing how to invoke those Actions
 
-Do not lock these package boundaries until Phases 1–3 make the contracts clear.
+Reusable workflows are not part of the distribution contract: adopters own event triggers, approvals, and credential policy. Do not lock further package boundaries until Phases 1–3 make the contracts clear.
+
+The `gcp-local` profile is an emulator-only contract test. A production GCP adapter or Terraform module is not currently in scope and requires a separate decision based on an adoption need.
 
 ## Before an OSS release
 
-- choose an OSS license
+- include the selected MIT license and any required third-party notices
 - define compatibility/versioning policy for index and registry schemas
 - document security assumptions for arbitrary HTML/JavaScript artifacts
 - document upgrade and rollback behavior

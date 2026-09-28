@@ -1,0 +1,689 @@
+package publisher
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/tasuku43/git-artifact-pages/internal/registry"
+)
+
+const currentAdminManifest = `schemaVersion: 1
+sites:
+  legacy:
+    name: Legacy
+    repository: acme/legacy
+    sourcePath: docs
+  sre:
+    name: Old SRE
+    repository: acme/sre
+    sourcePath: docs/artifacts
+`
+
+const desiredAdminManifest = `schemaVersion: 1
+sites:
+  docs:
+    name: Documentation
+    repository: acme/docs
+    sourcePath: artifacts
+  sre:
+    name: SRE & Platform
+    repository: acme/sre
+    sourcePath: docs/artifacts
+`
+
+const manifestWithoutSRE = `schemaVersion: 1
+sites:
+  docs:
+    name: Documentation
+    repository: acme/docs
+    sourcePath: artifacts
+`
+
+func TestPublishRegistryDryRunMatchesApplyPlanAndDoesNotWrite(t *testing.T) {
+	backend := newRegistryApplyTestBackend()
+	seedRegistryFromManifest(t, backend, currentAdminManifest)
+	backend.seed("_artifacts/legacy/report.html", []byte("legacy artifact"))
+	backend.seed("_indexes/legacy/meta.json", []byte("{}"))
+	backend.seed("_previews/legacy/revision/index.html", []byte("preview"))
+	beforeObjects, beforeETags := backend.snapshot()
+
+	planned, err := PublishRegistry(context.Background(), backend, []byte(desiredAdminManifest), true)
+	if err != nil {
+		t.Fatalf("PublishRegistry(dry-run) error = %v", err)
+	}
+	expected := []Change{
+		{Action: "invalidate", Path: "/_artifacts/legacy/*"},
+		{Action: "invalidate", Path: "/_indexes/legacy/*"},
+		{Action: "invalidate", Path: "/_indexes/sites.json"},
+		{Action: "invalidate", Path: "/_previews/legacy/*"},
+		{Action: "invalidate", Path: "/legacy"},
+		{Action: "invalidate", Path: "/legacy/*"},
+		{Action: "remove", Path: "/legacy/*"},
+		{Action: "remove", Path: "_artifacts/legacy/report.html"},
+		{Action: "remove", Path: "_indexes/legacy/meta.json"},
+		{Action: "update", Path: "_indexes/sites.json"},
+		{Action: "create", Path: "_indexes/sites.json#sites/docs"},
+		{Action: "remove", Path: "_indexes/sites.json#sites/legacy"},
+		{Action: "update", Path: "_indexes/sites.json#sites/sre"},
+		{Action: "remove", Path: "_previews/legacy/revision/index.html"},
+	}
+	if planned.Outcome != "planned" || !reflect.DeepEqual(planned.Changes, expected) {
+		t.Fatalf("dry-run result = %+v, want exact plan %+v", planned, expected)
+	}
+	assertRegistryUpdatedJSON(t, planned, false, false)
+	assertNoRegistryApplyWrites(t, backend)
+	if afterObjects, afterETags := backend.snapshot(); !reflect.DeepEqual(beforeObjects, afterObjects) || !reflect.DeepEqual(beforeETags, afterETags) {
+		t.Fatal("dry-run changed deployed objects or ETags")
+	}
+
+	backend.resetCounters()
+	applied, err := PublishRegistry(context.Background(), backend, []byte(desiredAdminManifest), false)
+	if err != nil {
+		t.Fatalf("PublishRegistry() error = %v", err)
+	}
+	if !reflect.DeepEqual(applied.Changes, planned.Changes) {
+		t.Fatalf("apply plan = %+v, dry-run plan = %+v", applied.Changes, planned.Changes)
+	}
+	if applied.Outcome != "published" {
+		t.Fatalf("apply outcome = %q, want published", applied.Outcome)
+	}
+	assertRegistryUpdatedJSON(t, applied, true, false)
+	if len(backend.invalidations) != 1 || !reflect.DeepEqual(backend.invalidations[0], []string{
+		"/_indexes/sites.json", "/legacy", "/legacy/*", "/_indexes/legacy/*", "/_artifacts/legacy/*", "/_previews/legacy/*",
+	}) {
+		t.Fatalf("provider invalidations = %v, want registry and removed-site routes", backend.invalidations)
+	}
+	for _, key := range []string{"_artifacts/legacy/report.html", "_indexes/legacy/meta.json", "_previews/legacy/revision/index.html"} {
+		if _, exists := backend.objects[key]; exists {
+			t.Errorf("removed site object %q remains after apply", key)
+		}
+	}
+	registryObject, _, err := backend.GetObject(context.Background(), "_indexes/sites.json")
+	if err != nil {
+		t.Fatalf("read applied registry: %v", err)
+	}
+	_, expectedProjection, err := registry.Build([]byte(desiredAdminManifest))
+	if err != nil {
+		t.Fatal(err)
+	}
+	actualProjection, err := registry.DecodeProjection(registryObject.Bytes)
+	if err != nil || !reflect.DeepEqual(actualProjection, expectedProjection) {
+		t.Fatalf("applied projection = %+v, err=%v; want %+v", actualProjection, err, expectedProjection)
+	}
+}
+
+func TestPublishRegistryNoOpReportsExplicitFalseAndEmptyChanges(t *testing.T) {
+	backend := newRegistryApplyTestBackend()
+	seedRegistryFromManifest(t, backend, desiredAdminManifest)
+	before, _ := backend.snapshot()
+
+	result, err := PublishRegistry(context.Background(), backend, []byte(desiredAdminManifest), false)
+	if err != nil {
+		t.Fatalf("PublishRegistry(no-op) error = %v", err)
+	}
+	if result.Outcome != "no-op" || result.Changes == nil || len(result.Changes) != 0 {
+		t.Fatalf("no-op result = %+v, want outcome no-op and a non-nil empty change list", result)
+	}
+	assertRegistryUpdatedJSON(t, result, false, true)
+	if len(backend.invalidations) != 0 || backend.deleteCalls != 0 {
+		t.Fatalf("no-op provider side effects: deletes=%d invalidations=%v", backend.deleteCalls, backend.invalidations)
+	}
+	after, _ := backend.snapshot()
+	if !reflect.DeepEqual(before["_indexes/sites.json"], after["_indexes/sites.json"]) {
+		t.Fatal("no-op changed the deployed registry object")
+	}
+}
+
+func TestPublishRegistryRetriesRemovedSiteCleanupAfterPostWriteFailures(t *testing.T) {
+	for _, failure := range []string{"delete", "invalidate"} {
+		t.Run(failure, func(t *testing.T) {
+			backend := newRegistryApplyTestBackend()
+			seedRegistryFromManifest(t, backend, currentAdminManifest)
+			backend.seed("_artifacts/legacy/report.html", []byte("legacy artifact"))
+			if failure == "delete" {
+				backend.failDeleteKey = "_artifacts/legacy/report.html"
+			} else {
+				backend.failNextInvalidate = true
+			}
+
+			first, err := PublishRegistry(context.Background(), backend, []byte(desiredAdminManifest), false)
+			if err == nil || !strings.Contains(err.Error(), "registry published") {
+				t.Fatalf("first PublishRegistry() = %+v, %v; want a post-registry-write failure", first, err)
+			}
+			assertRegistryUpdatedJSON(t, first, true, false)
+			cleanupObject, _, err := backend.GetObject(context.Background(), registryCleanupKey)
+			if err != nil {
+				t.Fatalf("read retained cleanup retry record: %v", err)
+			}
+			var cleanup registryCleanupRecord
+			if err := json.Unmarshal(cleanupObject.Bytes, &cleanup); err != nil || !reflect.DeepEqual(cleanup.Sites, []string{"legacy"}) {
+				t.Fatalf("cleanup retry record = %+v, err=%v; want legacy target", cleanup, err)
+			}
+			deployedRegistry, _, err := backend.GetObject(context.Background(), "_indexes/sites.json")
+			if err != nil {
+				t.Fatalf("read registry after failure: %v", err)
+			}
+			_, expectedRegistry, _ := registry.Build([]byte(desiredAdminManifest))
+			actualRegistry, err := registry.DecodeProjection(deployedRegistry.Bytes)
+			if err != nil || !reflect.DeepEqual(actualRegistry, expectedRegistry) {
+				t.Fatalf("registry after failure = %+v, err=%v; want desired projection %+v", actualRegistry, err, expectedRegistry)
+			}
+
+			second, err := PublishRegistry(context.Background(), backend, []byte(desiredAdminManifest), false)
+			if err != nil {
+				t.Fatalf("retry PublishRegistry() error = %v", err)
+			}
+			if second.Outcome != "published" {
+				t.Fatalf("retry outcome = %q, want published cleanup retry", second.Outcome)
+			}
+			assertRegistryUpdatedJSON(t, second, false, false)
+			if _, _, err := backend.GetObject(context.Background(), registryCleanupKey); !errors.Is(err, ErrObjectNotFound) {
+				t.Fatalf("cleanup record after retry error = %v, want not found", err)
+			}
+			if _, exists := backend.objects["_artifacts/legacy/report.html"]; exists {
+				t.Fatal("removed site artifact remains after successful cleanup retry")
+			}
+		})
+	}
+}
+
+func TestUnregisterSiteRetriesForcedCleanupWhenRegistrationIsAlreadyAbsent(t *testing.T) {
+	tests := []struct {
+		name string
+		fail func(*registryApplyTestBackend)
+	}{
+		{name: "listing failure", fail: func(backend *registryApplyTestBackend) { backend.failListPrefix = "_indexes/sre/" }},
+		{name: "partial deletion", fail: func(backend *registryApplyTestBackend) { backend.partialDeleteKey = "_indexes/sre/meta.json" }},
+		{name: "cache invalidation", fail: func(backend *registryApplyTestBackend) { backend.failNextInvalidate = true }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			backend := newRegistryApplyTestBackend()
+			seedRegistryFromManifest(t, backend, manifestWithoutSRE)
+			seedForcedUnregisterFixture(t, backend)
+			registryBefore, registryETagBefore, err := backend.GetObject(context.Background(), "_indexes/sites.json")
+			if err != nil {
+				t.Fatalf("read registry before forced cleanup: %v", err)
+			}
+			preservedBefore := make(map[string][]byte)
+			for _, key := range []string{
+				"_artifacts/docs/neighbor.html", "_indexes/docs/meta.json", "_previews/docs/catalog.json",
+				"index.html", "assets/app.js", "_control/private/sentinel", "_control/locks/sites/docs.json",
+			} {
+				object, _, err := backend.GetObject(context.Background(), key)
+				if err != nil {
+					t.Fatalf("read preservation fixture %q: %v", key, err)
+				}
+				preservedBefore[key] = object.Bytes
+			}
+			test.fail(backend)
+
+			first, err := UnregisterSite(context.Background(), backend, []byte(manifestWithoutSRE), "sre", false)
+			if err == nil {
+				t.Fatalf("first UnregisterSite() = %+v; want injected %s failure", first, test.name)
+			}
+			if first.Operation != "registry unregister" || first.Site != "sre" || first.RegistryUpdated == nil || *first.RegistryUpdated {
+				t.Fatalf("first unregister result = %+v; want site identity and unchanged registry", first)
+			}
+			registryAfterFailure, registryETagAfterFailure, err := backend.GetObject(context.Background(), "_indexes/sites.json")
+			if err != nil || !bytes.Equal(registryAfterFailure.Bytes, registryBefore.Bytes) || registryETagAfterFailure != registryETagBefore {
+				t.Fatalf("registry after forced cleanup failure changed: bytesEqual=%t etag=%q wantETag=%q err=%v", bytes.Equal(registryAfterFailure.Bytes, registryBefore.Bytes), registryETagAfterFailure, registryETagBefore, err)
+			}
+			cleanupObject, _, err := backend.GetObject(context.Background(), registryCleanupKey)
+			if err != nil {
+				t.Fatalf("read retained cleanup record after %s failure: %v", test.name, err)
+			}
+			var cleanup registryCleanupRecord
+			if err := json.Unmarshal(cleanupObject.Bytes, &cleanup); err != nil || !reflect.DeepEqual(cleanup.Sites, []string{"sre"}) {
+				t.Fatalf("cleanup record after %s failure = %+v, err=%v; want explicit sre retry target", test.name, cleanup, err)
+			}
+
+			retry, err := UnregisterSite(context.Background(), backend, []byte(manifestWithoutSRE), "sre", false)
+			if err != nil {
+				t.Fatalf("retry UnregisterSite() error = %v", err)
+			}
+			if retry.Outcome != "unregistered" || retry.Site != "sre" || retry.RegistryUpdated == nil || *retry.RegistryUpdated {
+				t.Fatalf("retry unregister result = %+v; want successful forced cleanup without registry rewrite", retry)
+			}
+			registryAfterRetry, registryETagAfterRetry, err := backend.GetObject(context.Background(), "_indexes/sites.json")
+			if err != nil || !bytes.Equal(registryAfterRetry.Bytes, registryBefore.Bytes) || registryETagAfterRetry != registryETagBefore {
+				t.Fatalf("registry after forced cleanup retry changed: bytesEqual=%t etag=%q wantETag=%q err=%v", bytes.Equal(registryAfterRetry.Bytes, registryBefore.Bytes), registryETagAfterRetry, registryETagBefore, err)
+			}
+			if len(backend.invalidations) == 0 || !reflect.DeepEqual(backend.invalidations[len(backend.invalidations)-1], []string{
+				"/sre", "/sre/*", "/_indexes/sre/*", "/_artifacts/sre/*", "/_previews/sre/*",
+			}) {
+				t.Fatalf("final invalidation paths = %v; want exact site routes including preview paths", backend.invalidations)
+			}
+			if test.name == "cache invalidation" && len(backend.invalidations) != 2 {
+				t.Fatalf("cache invalidations after failed request and retry = %v; want the request repeated", backend.invalidations)
+			}
+			if test.name != "cache invalidation" && len(backend.invalidations) != 1 {
+				t.Fatalf("cache invalidations after %s failure and retry = %v; want one successful request", test.name, backend.invalidations)
+			}
+			for _, prefix := range []string{"_artifacts/sre/", "_indexes/sre/", "_previews/sre/"} {
+				keys, err := backend.ListKeys(context.Background(), prefix)
+				if err != nil || len(keys) != 0 {
+					t.Fatalf("keys after retry under %q = %v, err=%v; want empty", prefix, keys, err)
+				}
+			}
+			for key, want := range preservedBefore {
+				object, _, err := backend.GetObject(context.Background(), key)
+				if err != nil || !bytes.Equal(object.Bytes, want) {
+					t.Errorf("unrelated object %q changed during unregister: got=%q want=%q err=%v", key, object.Bytes, want, err)
+				}
+			}
+			for _, key := range []string{siteLockKey("sre"), "_control/locks/registry.json"} {
+				object, _, err := backend.GetObject(context.Background(), key)
+				if err != nil {
+					t.Errorf("retained control lock %q was removed: %v", key, err)
+					continue
+				}
+				var record lockRecord
+				if err := json.Unmarshal(object.Bytes, &record); err != nil || record.State != "free" {
+					t.Errorf("control lock %q = %+v, err=%v; want retained free lock", key, record, err)
+				}
+			}
+			if _, _, err := backend.GetObject(context.Background(), registryCleanupKey); !errors.Is(err, ErrObjectNotFound) {
+				t.Errorf("cleanup record after retry error = %v; want cleared", err)
+			}
+		})
+	}
+}
+
+func seedForcedUnregisterFixture(t *testing.T, backend *registryApplyTestBackend) {
+	t.Helper()
+	for key, contents := range map[string][]byte{
+		"_artifacts/sre/report.html":             []byte("site artifact"),
+		"_indexes/sre/meta.json":                 []byte(`{"site":"sre"}`),
+		"_previews/sre/catalog.json":             []byte(`{"site":"sre"}`),
+		"_previews/sre/revisions/head/report.md": []byte("preview document"),
+		"_artifacts/docs/neighbor.html":          []byte("neighbor artifact"),
+		"_indexes/docs/meta.json":                []byte(`{"site":"docs"}`),
+		"_previews/docs/catalog.json":            []byte(`{"site":"docs"}`),
+		"index.html":                             []byte("application shell"),
+		"assets/app.js":                          []byte("application asset"),
+		"_control/private/sentinel":              []byte("private control object"),
+	} {
+		backend.seed(key, contents)
+	}
+	for _, siteID := range []string{"sre", "docs"} {
+		contents, err := marshalLockRecord(lockRecord{SchemaVersion: 1, Site: siteID, State: "free"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		backend.seed(siteLockKey(siteID), contents)
+	}
+}
+
+func TestPublishRegistrySerializesSeparateProcesses(t *testing.T) {
+	root := t.TempDir()
+	manifestPath := filepath.Join(root, "sites.yaml")
+	if err := os.WriteFile(manifestPath, []byte(desiredAdminManifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	storageRoot := filepath.Join(root, "storage")
+	lockReadyPath := filepath.Join(root, "lock-ready")
+	releaseLockPath := filepath.Join(root, "release-lock")
+	holderOutput := &bytes.Buffer{}
+	holder := exec.Command(os.Args[0], "-test.run=^TestPublishRegistryCrossProcessHelper$")
+	holder.Env = append(os.Environ(),
+		"ARTIFACT_PAGES_REGISTRY_PROCESS_HELPER=hold",
+		"ARTIFACT_PAGES_REGISTRY_ROOT="+storageRoot,
+		"ARTIFACT_PAGES_REGISTRY_LOCK_READY="+lockReadyPath,
+		"ARTIFACT_PAGES_REGISTRY_RELEASE_LOCK="+releaseLockPath,
+	)
+	holder.Stdout, holder.Stderr = holderOutput, holderOutput
+	if err := holder.Start(); err != nil {
+		t.Fatalf("start registry lock holder: %v", err)
+	}
+	holderDone := make(chan error, 1)
+	go func() { holderDone <- holder.Wait() }()
+	holderFinished := false
+	var holderWaitErr error
+	releaseHolder := func() {
+		_ = os.WriteFile(releaseLockPath, []byte("release"), 0o600)
+		if holderFinished {
+			return
+		}
+		select {
+		case holderWaitErr = <-holderDone:
+			holderFinished = true
+		case <-time.After(5 * time.Second):
+			_ = holder.Process.Kill()
+			holderWaitErr = <-holderDone
+			holderFinished = true
+		}
+	}
+	defer releaseHolder()
+	if err := waitForRegistryProcessSignal(lockReadyPath, 5*time.Second); err != nil {
+		t.Fatalf("registry lock holder did not become ready: %v", err)
+	}
+
+	observedHeldPath := filepath.Join(root, "waiter-observed-held-lock")
+	registryReadPath := filepath.Join(root, "waiter-read-registry")
+	waiterStartedPath := filepath.Join(root, "waiter-started")
+	waiterOutput := &bytes.Buffer{}
+	waiter := exec.Command(os.Args[0], "-test.run=^TestPublishRegistryCrossProcessHelper$")
+	waiter.Env = append(os.Environ(),
+		"ARTIFACT_PAGES_REGISTRY_PROCESS_HELPER=apply",
+		"ARTIFACT_PAGES_REGISTRY_ROOT="+storageRoot,
+		"ARTIFACT_PAGES_REGISTRY_MANIFEST="+manifestPath,
+		"ARTIFACT_PAGES_REGISTRY_STARTED="+waiterStartedPath,
+		"ARTIFACT_PAGES_REGISTRY_HELD_OBSERVED="+observedHeldPath,
+		"ARTIFACT_PAGES_REGISTRY_REGISTRY_READ="+registryReadPath,
+	)
+	waiter.Stdout, waiter.Stderr = waiterOutput, waiterOutput
+	if err := waiter.Start(); err != nil {
+		t.Fatalf("start competing registry publish: %v", err)
+	}
+	waiterDone := make(chan error, 1)
+	go func() { waiterDone <- waiter.Wait() }()
+	waiterFinished := false
+	defer func() {
+		releaseHolder()
+		if !waiterFinished {
+			select {
+			case <-waiterDone:
+				waiterFinished = true
+			case <-time.After(5 * time.Second):
+				_ = waiter.Process.Kill()
+				<-waiterDone
+				waiterFinished = true
+			}
+		}
+	}()
+	if err := waitForRegistryProcessSignal(waiterStartedPath, 5*time.Second); err != nil {
+		t.Fatalf("registry publish process did not start: %v", err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, err := os.Stat(observedHeldPath); err == nil {
+			break
+		}
+		if _, err := os.Stat(registryReadPath); err == nil {
+			t.Fatal("competing apply read the deployed registry while another process held the registry lock")
+		}
+		select {
+		case err := <-waiterDone:
+			waiterFinished = true
+			t.Fatalf("competing apply exited before observing the held registry lock: %v\n%s", err, waiterOutput.String())
+		default:
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("competing apply did not observe the held registry lock\n%s", waiterOutput.String())
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	select {
+	case err := <-waiterDone:
+		waiterFinished = true
+		t.Fatalf("competing apply completed while the registry lock was held: %v\n%s", err, waiterOutput.String())
+	case <-time.After(150 * time.Millisecond):
+	}
+	if _, err := os.Stat(registryReadPath); err == nil {
+		t.Fatal("competing apply read the registry before the holder released its lock")
+	}
+
+	releaseHolder()
+	if holderWaitErr != nil {
+		t.Fatalf("registry lock holder failed: %v\n%s", holderWaitErr, holderOutput.String())
+	}
+	waiterErr := <-waiterDone
+	waiterFinished = true
+	if err := waiterErr; err != nil {
+		t.Fatalf("competing registry publish failed after lock release: %v\n%s", err, waiterOutput.String())
+	}
+
+	backend, err := NewDirectoryBackend(storageRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	object, _, err := backend.GetObject(context.Background(), "_indexes/sites.json")
+	if err != nil {
+		t.Fatalf("read cross-process result registry: %v", err)
+	}
+	_, want, err := registry.Build([]byte(desiredAdminManifest))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := registry.DecodeProjection(object.Bytes)
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("cross-process registry = %+v, err=%v; want %+v", got, err, want)
+	}
+}
+
+func TestPublishRegistryCrossProcessHelper(t *testing.T) {
+	mode := os.Getenv("ARTIFACT_PAGES_REGISTRY_PROCESS_HELPER")
+	if mode == "" {
+		return
+	}
+	root := os.Getenv("ARTIFACT_PAGES_REGISTRY_ROOT")
+	backend, err := NewDirectoryBackend(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	switch mode {
+	case "hold":
+		_, release, err := (SiteLockManager{Backend: backend}).AcquireRegistry(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		readyPath := os.Getenv("ARTIFACT_PAGES_REGISTRY_LOCK_READY")
+		if err := os.WriteFile(readyPath, []byte("ready"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := waitForRegistryProcessSignal(os.Getenv("ARTIFACT_PAGES_REGISTRY_RELEASE_LOCK"), 10*time.Second); err != nil {
+			t.Fatal(err)
+		}
+		if err := release(); err != nil {
+			t.Fatal(err)
+		}
+	case "apply":
+		if err := os.WriteFile(os.Getenv("ARTIFACT_PAGES_REGISTRY_STARTED"), []byte("started"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		manifest, err := os.ReadFile(os.Getenv("ARTIFACT_PAGES_REGISTRY_MANIFEST"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		observingBackend := &registryProcessObserveBackend{
+			DirectoryBackend: backend,
+			heldObservedPath: os.Getenv("ARTIFACT_PAGES_REGISTRY_HELD_OBSERVED"),
+			registryReadPath: os.Getenv("ARTIFACT_PAGES_REGISTRY_REGISTRY_READ"),
+		}
+		if _, err := PublishRegistry(context.Background(), observingBackend, manifest, false); err != nil {
+			t.Fatal(err)
+		}
+	default:
+		t.Fatalf("unknown registry process helper mode %q", mode)
+	}
+}
+
+type registryProcessObserveBackend struct {
+	*DirectoryBackend
+	heldObservedPath string
+	registryReadPath string
+	heldReads        int
+}
+
+func (backend *registryProcessObserveBackend) GetObject(ctx context.Context, key string) (Object, string, error) {
+	object, etag, err := backend.DirectoryBackend.GetObject(ctx, key)
+	if key == "_control/locks/registry.json" && err == nil {
+		var record lockRecord
+		if json.Unmarshal(object.Bytes, &record) == nil && record.State == "held" {
+			backend.heldReads++
+			if backend.heldReads >= 2 {
+				if signalErr := os.WriteFile(backend.heldObservedPath, []byte("held"), 0o600); signalErr != nil {
+					return Object{}, "", signalErr
+				}
+			}
+		}
+	}
+	if key == "_indexes/sites.json" {
+		if signalErr := os.WriteFile(backend.registryReadPath, []byte("read"), 0o600); signalErr != nil {
+			return Object{}, "", signalErr
+		}
+	}
+	return object, etag, err
+}
+
+func waitForRegistryProcessSignal(path string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for {
+		if _, err := os.Stat(path); err == nil {
+			return nil
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("timed out waiting for %s", path)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+type registryApplyTestBackend struct {
+	*lockMemoryBackend
+	conditionalWrites  int
+	directWrites       int
+	deleteCalls        int
+	invalidations      [][]string
+	failDeleteKey      string
+	failListPrefix     string
+	partialDeleteKey   string
+	failNextInvalidate bool
+}
+
+func newRegistryApplyTestBackend() *registryApplyTestBackend {
+	return &registryApplyTestBackend{lockMemoryBackend: newLockMemoryBackend()}
+}
+
+func (backend *registryApplyTestBackend) seed(key string, contents []byte) {
+	backend.mu.Lock()
+	defer backend.mu.Unlock()
+	backend.objects[key] = Object{Bytes: append([]byte(nil), contents...)}
+	backend.etags[key] = "\"seed-" + key + "\""
+}
+
+func (backend *registryApplyTestBackend) snapshot() (map[string]Object, map[string]string) {
+	backend.mu.Lock()
+	defer backend.mu.Unlock()
+	objects := make(map[string]Object, len(backend.objects))
+	for key, object := range backend.objects {
+		objects[key] = Object{Bytes: append([]byte(nil), object.Bytes...), ContentType: object.ContentType, ContentDisposition: object.ContentDisposition, ContentEncoding: object.ContentEncoding, Cache: object.Cache}
+	}
+	etags := make(map[string]string, len(backend.etags))
+	for key, etag := range backend.etags {
+		etags[key] = etag
+	}
+	return objects, etags
+}
+
+func (backend *registryApplyTestBackend) resetCounters() {
+	backend.conditionalWrites = 0
+	backend.directWrites = 0
+	backend.deleteCalls = 0
+	backend.invalidations = nil
+}
+
+func (backend *registryApplyTestBackend) PutObject(ctx context.Context, key string, object Object) error {
+	backend.directWrites++
+	return backend.memoryDeploymentBackend.PutObject(ctx, key, object)
+}
+
+func (backend *registryApplyTestBackend) PutObjectConditional(ctx context.Context, key string, object Object, condition ObjectCondition) (string, error) {
+	backend.conditionalWrites++
+	return backend.lockMemoryBackend.PutObjectConditional(ctx, key, object, condition)
+}
+
+func (backend *registryApplyTestBackend) DeleteObjects(ctx context.Context, keys []string) error {
+	backend.deleteCalls++
+	if backend.partialDeleteKey != "" {
+		for index, key := range keys {
+			if key == backend.partialDeleteKey {
+				if index > 0 {
+					if err := backend.memoryDeploymentBackend.DeleteObjects(ctx, keys[:index]); err != nil {
+						return err
+					}
+				}
+				backend.partialDeleteKey = ""
+				return fmt.Errorf("injected partial delete failure for %s", key)
+			}
+		}
+	}
+	if backend.failDeleteKey != "" {
+		for _, key := range keys {
+			if key == backend.failDeleteKey {
+				backend.failDeleteKey = ""
+				return fmt.Errorf("injected delete failure for %s", key)
+			}
+		}
+	}
+	return backend.memoryDeploymentBackend.DeleteObjects(ctx, keys)
+}
+
+func (backend *registryApplyTestBackend) ListKeys(ctx context.Context, prefix string) ([]string, error) {
+	if backend.failListPrefix == prefix {
+		backend.failListPrefix = ""
+		return nil, fmt.Errorf("injected listing failure for %s", prefix)
+	}
+	return backend.lockMemoryBackend.ListKeys(ctx, prefix)
+}
+
+func (backend *registryApplyTestBackend) Invalidate(_ context.Context, paths []string) (string, error) {
+	backend.invalidations = append(backend.invalidations, append([]string(nil), paths...))
+	if backend.failNextInvalidate {
+		backend.failNextInvalidate = false
+		return "", errors.New("injected invalidation failure")
+	}
+	return "registry-test-invalidation", nil
+}
+
+func seedRegistryFromManifest(t *testing.T, backend *registryApplyTestBackend, manifest string) {
+	t.Helper()
+	contents, _, err := registry.Build([]byte(manifest))
+	if err != nil {
+		t.Fatalf("build registry fixture: %v", err)
+	}
+	backend.seed("_indexes/sites.json", contents)
+}
+
+func assertNoRegistryApplyWrites(t *testing.T, backend *registryApplyTestBackend) {
+	t.Helper()
+	if backend.conditionalWrites != 0 || backend.directWrites != 0 || backend.deleteCalls != 0 || len(backend.invalidations) != 0 {
+		t.Fatalf("dry-run writes: conditional=%d direct=%d deletes=%d invalidations=%v", backend.conditionalWrites, backend.directWrites, backend.deleteCalls, backend.invalidations)
+	}
+}
+
+func assertRegistryUpdatedJSON(t *testing.T, result Result, wantUpdated bool, wantEmptyChanges bool) {
+	t.Helper()
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal deployment result: %v", err)
+	}
+	var value map[string]json.RawMessage
+	if err := json.Unmarshal(encoded, &value); err != nil {
+		t.Fatalf("decode deployment result: %v", err)
+	}
+	var updated bool
+	if raw, exists := value["registryUpdated"]; !exists {
+		t.Fatalf("result JSON %s omits registryUpdated", encoded)
+	} else if err := json.Unmarshal(raw, &updated); err != nil || updated != wantUpdated {
+		t.Fatalf("registryUpdated JSON = %s, err=%v; want %t", raw, err, wantUpdated)
+	}
+	if wantEmptyChanges {
+		if raw, exists := value["changes"]; !exists || string(raw) != "[]" {
+			t.Fatalf("empty changes JSON = %s (present=%t); want []", raw, exists)
+		}
+	}
+}

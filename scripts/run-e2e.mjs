@@ -48,6 +48,7 @@ try {
     COMPOSE_PROJECT_NAME: projectName,
     WEB_PORT: port,
     WEB_ROOT: process.env.WEB_ROOT ?? './dist',
+    PREVIEW_ROOT: process.env.PREVIEW_ROOT ?? './fixtures/storage/_previews',
   }
   const startStatus = run('docker', ['compose', '-p', projectName, 'up', '--detach'], env)
 

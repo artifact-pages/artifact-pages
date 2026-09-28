@@ -27,4 +27,6 @@ Priority describes user impact, not implementation effort. Issues 001–011 came
 
 ## Issue index
 
-No active issues are currently tracked.
+| Issue | Status | Priority | Area | Summary |
+| --- | --- | --- | --- | --- |
+| [ISSUE-013 — Site descriptions](ISSUE-013-site-description.md) | Open | P2 | Site discovery and site selection | Explain each site's purpose before visitors open it. |

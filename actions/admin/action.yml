@@ -1,0 +1,96 @@
+name: Artifact Pages admin
+description: Optional thin wrapper for admin registry operations and application deployment.
+inputs:
+  operation:
+    description: "CLI operation: registry-publish, registry-unregister, or app-deploy."
+    required: false
+    default: registry-publish
+  manifest:
+    description: Admin-owned sites manifest path, relative to the checked-out repository.
+    required: false
+    default: sites.yaml
+  config:
+    description: Optional deployment config path or github:// config locator.
+    required: false
+    default: ""
+  github-token:
+    description: Optional token with read-only access to a separate private admin config repository; otherwise uses this workflow's GITHUB_TOKEN.
+    required: false
+    default: ""
+  site:
+    description: Explicit site ID, required for registry-unregister.
+    required: false
+    default: ""
+  archive:
+    description: Local app release archive; app-deploy requires this or version.
+    required: false
+    default: ""
+  version:
+    description: Pinned published app release version; app-deploy requires this or archive.
+    required: false
+    default: ""
+  repository:
+    description: Owner/repository containing a pinned published app release.
+    required: false
+    default: tasuku43/git-artifact-pages
+  dry-run:
+    description: Plan changes without provider object writes or cache changes.
+    required: false
+    default: "false"
+outputs:
+  operation:
+    description: CLI operation name.
+    value: ${{ steps.cli.outputs.operation }}
+  outcome:
+    description: CLI outcome string, such as planned, published, no-op, or failed.
+    value: ${{ steps.cli.outputs.outcome }}
+  site:
+    description: Explicit site ID when the selected operation applies to one site.
+    value: ${{ steps.cli.outputs.site }}
+  registry_updated:
+    description: JSON boolean rendered as true or false when present.
+    value: ${{ steps.cli.outputs.registry_updated }}
+  changes_json:
+    description: JSON array of per-path changes.
+    value: ${{ steps.cli.outputs.changes_json }}
+  preview_changes_json:
+    description: JSON array of preview catalog dispositions, when present.
+    value: ${{ steps.cli.outputs.preview_changes_json }}
+  result_json:
+    description: Complete CLI JSON result object.
+    value: ${{ steps.cli.outputs.result_json }}
+  exit_code:
+    description: Original artifact-pages CLI exit code as an integer string.
+    value: ${{ steps.cli.outputs.exit_code }}
+  error:
+    description: CLI error text when the operation failed.
+    value: ${{ steps.cli.outputs.error }}
+runs:
+  using: composite
+  steps:
+    - name: Set up Go from the pinned component source
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version-file: ${{ github.action_path }}/../../go.mod
+        cache: false
+    - name: Build the shared artifact-pages CLI
+      shell: bash
+      working-directory: ${{ github.action_path }}/../..
+      run: go build -trimpath -o "$RUNNER_TEMP/artifact-pages" ./cmd/artifact-pages
+    - name: Run the selected registry or app CLI operation
+      id: cli
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        ARTIFACT_PAGES_CLI: ${{ runner.temp }}/artifact-pages
+        ARTIFACT_PAGES_ACTION_KIND: admin
+        ARTIFACT_PAGES_INPUT_OPERATION: ${{ inputs.operation }}
+        ARTIFACT_PAGES_INPUT_MANIFEST: ${{ inputs.manifest }}
+        ARTIFACT_PAGES_INPUT_CONFIG: ${{ inputs.config }}
+        ARTIFACT_PAGES_INPUT_SITE: ${{ inputs.site }}
+        ARTIFACT_PAGES_INPUT_ARCHIVE: ${{ inputs.archive }}
+        ARTIFACT_PAGES_INPUT_VERSION: ${{ inputs.version }}
+        ARTIFACT_PAGES_INPUT_REPOSITORY: ${{ inputs.repository }}
+        ARTIFACT_PAGES_INPUT_DRY_RUN: ${{ inputs.dry-run }}
+        GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
+      run: node "$GITHUB_ACTION_PATH/../shared/invoke-cli.mjs"

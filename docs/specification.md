@@ -58,9 +58,13 @@ The content plane changes as artifacts are published.
 ~~~text
 /_indexes/*
 /_artifacts/*
+/_previews/*
 ~~~
 
 It is independently deployable from the application plane.
+`/_previews/*` is the local-development projection. Provider-backed preview publication and lifecycle behavior remain a later phase.
+
+The reserved `/_control/*` keyspace stores private coordination state such as retained publish locks and retry records. It is not part of the application or content serving planes. Every local or provider delivery configuration must deny public reads from this prefix.
 
 ## 3. Site
 
@@ -81,7 +85,7 @@ Therefore /sre/incidents/123.html means:
 
 A site is a logical destination, not a repository identity. The initial builder maps one repository source directory to one site. Combining sources from multiple repositories is deferred until a concrete use case requires it.
 
-In the registered deployment model, a [SiteRegistry](architecture/domain-model.html) owns the registered Sites. Registration adds a Site; unregistering removes it and ends access to its published Artifacts. Publishing updates the current Artifacts of an existing registered Site. Registration is an operation, not a separate `SiteRegistration` entity. The local reference implementation uses index-directory discovery instead of this registry.
+In the registered deployment model, a [SiteRegistry](architecture/domain-model.html) owns the registered Sites. Registration adds a Site; unregistering removes it from discovery and initiates removal of its published projection. This is not a per-viewer access-control decision. Publishing updates the current Artifacts of an existing registered Site. Registration is an operation, not a separate `SiteRegistration` entity. Fixture and registered modes both discover sites from the static `/_indexes/sites.json` projection; fixture data commits the catalog while the local registered-site workflow publishes it from the admin registry.
 
 ## 4. User-facing routing
 
@@ -117,6 +121,7 @@ The initial projection shape is:
 ├── index.html
 ├── assets/
 ├── _indexes/
+│   ├── sites.json
 │   ├── sre/
 │   │   ├── meta.json
 │   │   └── index.json
@@ -134,9 +139,9 @@ The initial projection shape is:
 
 ### 5.1 Site discovery
 
-The local reference implementation discovers site IDs from the site-directory links in the listing at `/_indexes/` and fetches each site's small `<site>/meta.json` discovery metadata. This metadata contains the site's display name, artifact count, generated time, and an `artifactIndexUrl` pointer. It does not contain artifact records.
+Fixture and registered modes read the static `/_indexes/sites.json` catalog and fetch each listed site's small `<site>/meta.json` discovery metadata. This metadata contains the site's display name, artifact count, generated time, and an `artifactIndexUrl` pointer. It does not contain artifact records. The catalog is a committed projection in fixture mode and is built from the admin-owned YAML registry for registered deployments. This contract does not depend on nginx autoindex or an object-storage list API at browser request time.
 
-The browser loads a site's full artifact index only when that site becomes active. It does not fetch all artifact indexes during startup. No separate `sites.json` registry is required for the local product; the listing remains the discovery entry point.
+The browser loads a site's full artifact index only when that site becomes active. It does not fetch all artifact indexes during startup. An empty catalog is represented by `{"schemaVersion":1,"sites":[]}`; catalog entries are sorted by site ID and identify the logical site name and source mapping.
 
 For the registered deployment model, the admin repository's YAML registry is projected to `/_indexes/sites.json`. This static JSON replaces storage directory listing as the site-discovery and publisher-eligibility source. The browser uses its site IDs and names for discovery, then fetches per-site `meta.json`; the publisher uses the source mapping to check whether its repository and source path are registered.
 
@@ -504,11 +509,13 @@ The browser reads the registry through the site's distribution endpoint. A satel
 
 Unregistering a site removes its registration and the administrator deletes that site's stored projection, including `/_indexes/<site>/` and `/_artifacts/<site>/`. The registry does not create a separate paused/disabled state.
 
+When `registry publish` has site data to remove, it writes a private `/_control/registry-cleanup.json` retry record before publishing the new registry. It retains that record until the origin prefixes are deleted and cache revalidation succeeds. A retry reads the record and repeats any incomplete cleanup even when the registry projection already matches the desired YAML. If a later desired registry re-adds a recorded site, registry publish leaves that site's content intact and clears its obsolete cleanup entry after reconciling the registry.
+
 ### Concurrent publish and unregister
 
-Checking the registry and then publishing without coordination has a time-of-check/time-of-use race: an unregister can remove the registration and delete the site's objects after a publisher's check but before that publisher writes. The provider publishing contract therefore uses one cooperative, per-site storage lock shared by satellite publish and admin unregister operations.
+Checking the registry and then publishing without coordination has a time-of-check/time-of-use race: an unregister can remove the registration and delete the site's objects after a publisher's check but before that publisher writes. The provider publishing contract therefore uses one cooperative, per-site storage lock shared by satellite publish and `registry unregister` operations.
 
-The lock is a reserved control object outside the site's index and artifact prefixes, for example `/_control/locks/<site>.json`. It is not part of the registry, browser index, or published site data, and deleting a site's projection must not delete it. The hosting adapter must not expose control objects through the public site distribution. Keep one small lock record per site with `free` or `held` state and an opaque operation/run identifier while held; retain the free record after unregister rather than relying on conditional object deletion. For first use, create it atomically only if absent. For later acquisitions, releases, and recovery, compare-and-swap the record with a conditional `PutObject` using the current ETag (`If-Match`). This lets a recovery operation detect that the lock changed after inspection rather than clearing a newer owner's lock.
+The lock is a reserved control object outside the site's index and artifact prefixes, for example `/_control/locks/<site>.json`. It is not part of the registry, browser index, or published site data, and deleting a site's projection must not delete it. The hosting adapter must not expose control objects through the public site distribution. Keep one small lock record per site with `free` or `held` state and an opaque operation/run identifier while held; retain the free record after `registry unregister` rather than relying on conditional object deletion. For first use, create it atomically only if absent. For later acquisitions, releases, and recovery, compare-and-swap the record with a conditional `PutObject` using the current ETag (`If-Match`). This lets a recovery operation detect that the lock changed after inspection rather than clearing a newer owner's lock.
 
 The critical sequences are:
 
@@ -520,7 +527,7 @@ satellite publish:
   synchronize that site's index and artifact prefixes
   release site lock
 
-admin unregister:
+registry unregister:
   serialize with other admin registry deployments
   publish the registry without that site
   acquire the same site lock
@@ -535,7 +542,7 @@ Locks do not expire automatically in v1. This fails closed if a process dies: pu
 
 The YAML source accepts only the schema shown above: `schemaVersion` must be the integer `1`, `sites` must be a mapping (an empty mapping is valid), and each site entry must contain exactly `name`, `repository`, and `sourcePath`. Reject duplicate YAML keys, unknown fields, missing fields, and values of the wrong type rather than silently ignoring or overwriting them. The deployed JSON projection uses the separate array shape shown above. Its path and role as the shared runtime representation are fixed for this model. The initial model has one source per site and no mount-path merging; if multi-repository sites are introduced later, the registry must prevent overlapping mount paths.
 
-Registry validation must reject invalid or reserved site IDs, blank names, and unsafe source paths. Site IDs use lowercase ASCII letters and digits separated by single hyphens (`[a-z0-9]+(?:-[a-z0-9]+)*`). Reserve `assets`, which conflicts with the SPA's `/assets/*` application plane; `_indexes` and `_artifacts` are already excluded by the site-ID syntax. Names must be non-empty after trimming; duplicate display names are allowed because the site ID remains the unique key. A GitHub repository locator must be exactly two non-empty `owner/repo` components, not a URL, clone URL, or value ending in `.git`. Source paths are canonical repository-relative POSIX paths: `.` represents the repository root; absolute paths, `..` segments, backslashes, and leading/trailing whitespace are rejected. The exact `(repository, sourcePath)` pair may be registered only once, while different paths in the same repository may belong to different sites. The publisher also verifies that `sourcePath` exists as a directory inside its checkout. If mount-path merging is introduced, it must also reject:
+Registry validation must reject invalid or reserved site IDs, blank names, and unsafe source paths. Site IDs use lowercase ASCII letters and digits separated by single hyphens (`[a-z0-9]+(?:-[a-z0-9]+)*`). Reserve `assets`, which conflicts with the SPA's `/assets/*` application plane; `_indexes` and `_artifacts` are already excluded by the site-ID syntax. Names must be non-empty after trimming; duplicate display names are allowed because the site ID remains the unique key. A GitHub repository locator must be exactly two non-empty `owner/repo` components, not a URL, clone URL, or value ending in `.git`. Repository identity is compared case-insensitively, matching satellite checkout eligibility checks; source paths are compared exactly. Source paths are canonical repository-relative POSIX paths: `.` represents the repository root; absolute paths, `..` segments, backslashes, and leading/trailing whitespace are rejected. A `(repository, sourcePath)` pair may be registered only once under those comparison rules, while different paths in the same repository may belong to different sites. The publisher also verifies that `sourcePath` exists as a directory inside its checkout. If mount-path merging is introduced, it must also reject:
 
 - duplicate mount paths
 - ancestor/descendant mount overlap
@@ -574,12 +581,13 @@ Local development should reproduce the production routing contract without AWS.
 Target:
 
 ~~~text
-Browser
-   ↓
-nginx (Docker Compose)
-   ├── /_indexes/*   → fixture/generated static files
-   ├── /_artifacts/* → fixture/generated static files
-   └── everything else → Vite SPA index.html
+artifact-pages site publish / fixture seeder
+                 ↓ JSON API writes
+        local object-storage emulator
+                 ↑ origin reads
+Browser → nginx edge (Docker Compose)
+              ├── /_indexes/*, /_artifacts/* → object API origin
+              └── app routes and /assets/* → SPA application plane
 ~~~
 
 Committed fixture data lives separately from generated local state.
@@ -592,6 +600,8 @@ fixtures/storage/   committed representative projection
 ~~~
 
 The local product should be usable before any AWS code exists.
+
+The ordinary filesystem-backed Compose workflow remains useful for fast UI iteration. Separate conformance profiles exercise the publisher's configured object API and have nginx proxy dynamic content requests to that origin; nginx does not mount the dynamic object tree. MinIO supplies the local S3 API shape used for AWS and Cloudflare adapter tests, and fake-gcs-server supplies the emulator-only `gcp-local` JSON API profile. These profiles prove local adapter and HTTP contracts, not equivalence with CloudFront, Cloudflare, Cloud CDN, or live provider services. GCP remains local-only until a separate production-adapter decision and verification exist. Run commands, readiness behavior, and emulator limits are in the [local edge and object-storage guide](guides/local-edge-object-storage.md).
 
 ## 14. Testing direction
 
@@ -669,7 +679,7 @@ Expected direction:
 
 These are initial product defaults: browsers must revalidate mutable objects on use, while shared CDN caches may retain site metadata/indexes for up to 60 seconds and stable artifact URLs for up to 300 seconds. Normal publish does not invalidate the CDN; a changed artifact may therefore remain stale at an edge for up to five minutes. The provider adapter must honor these upper bounds or use stricter freshness. Content-hashed application assets may be cached for one year because a content change produces a different URL; unhashed application files must revalidate.
 
-For AWS, the publisher's registry read is directly from the S3 object and therefore does not depend on CloudFront cache freshness; browser visibility still requires timely CDN revalidation or invalidation. On unregister, the affected cache set includes `/_indexes/sites.json`, `/_indexes/<site>/*`, and `/_artifacts/<site>/*`; the adapter requests provider invalidation or equivalent revalidation/expiry and reports failure if that request fails. A successful request does not promise instantaneous global cache convergence or revoke content already delivered to clients. If viewer authentication is enabled, authorization must be enforced before a shared-cache response is served, or the cache key must partition responses by authorization context. Provider implementation details do not change the path sets or freshness contract.
+For AWS, the publisher's registry read is directly from the S3 object and therefore does not depend on CloudFront cache freshness; browser visibility still requires timely CDN revalidation or invalidation. On unregister, the affected cache set includes `/_indexes/sites.json`, `/_indexes/<site>/*`, and `/_artifacts/<site>/*`; the adapter requests provider invalidation or equivalent revalidation/expiry and reports failure if that request fails. A successful request does not promise instantaneous global cache convergence or revoke content already delivered to clients. If an operator configures an external access gate at the serving edge, it must cover the desired routes and run before protected bytes are returned from an origin or shared cache. That gate and its verification are deployment concerns; Artifact Pages does not implement identity-aware cache partitioning. Provider implementation details do not change the path sets or freshness contract.
 
 Artifact paths may later become commit-addressed/immutable, which would allow aggressive CDN caching. That is an optimization, not an MVP requirement.
 
@@ -692,17 +702,13 @@ The Artifact Pages command builds locally, acquires the site's lock, retrieves a
 
 The exact IAM model belongs to the AWS/publisher phase.
 
-## 18. Access control
+## 18. Viewer access and identity
 
-Repository read permission and website viewer permission are separate concerns.
+Artifact Pages is a static publishing and reading product. It has no viewer accounts, login/session model, roles, or per-site access policy. It does not decide which people may view a site.
 
-The first AWS reference implementation may support simple deployment-level controls such as:
+The operator chooses and configures any viewer-access control at the hosting edge or surrounding network—for example, VPN or IP restrictions, Basic Authentication, an identity provider with CloudFront signed cookies, Cloudflare Access, or an equivalent provider-specific mechanism. The control may protect a hostname, selected paths, or a broader network boundary; that scope belongs to the operator's infrastructure, not to `sites.yaml`, the public site catalog, the CLI, or the browser application. Reference infrastructure may accept customer-managed edge configuration as an input, but does not define an Artifact Pages identity or authorization policy.
 
-- network/IP restrictions
-- Basic Authentication
-- an existing organizational identity layer
-
-Mirroring GitHub repository ACLs for each viewer is not an initial goal.
+Once a request is allowed through that boundary, the product serves the same static application and content. The site registry and catalog describe registered sites and publication eligibility; they are not viewer permissions. Hiding a site from navigation or removing it from the catalog is not access control. If access must be restricted, the operator's edge configuration must cover the logical routes and the corresponding raw index, artifact, and preview paths before protected bytes can be returned from an origin or shared cache.
 
 ## 19. Distribution model
 
@@ -727,13 +733,15 @@ Do not freeze package/repository boundaries before the local and AWS implementat
 The [preview publishing contract](architecture/preview-publishing-contract.html) gives the proposed static object layout, completion order, adapter boundary, and validation matrix for this product contract. It is design documentation, not Phase 1 implementation.
 The [preview decision register](architecture/preview-decisions.md) records product choices; the [backlog](backlog/README.md) tracks remaining technical design, implementation slices, and verification separately.
 
+Phase 1 includes a focused local developer mode: `cmd/preview-local` builds changed documents from Git into ignored `.local/previews`, and nginx serves them through the same `/_previews/*` object layout and logical browser routes used by the preview reader. This development output is separate from the configured target used by registered-site `artifact-pages site publish` (for example, `.local/storage`). The preview domain depends on a small `PreviewStore` interface for origin reads, immutable object creation, mutable catalog replacement, and a per-site lock; `publisher.ObjectPreviewStore` bridges that contract to the shared deployment backend. Local registered-site publish now reconciles missing preview references after committing the production projection. This does not reconcile the separate `.local/previews` directory unless it is the selected deployment target, and it does not establish AWS/Cloudflare origin, cache, provider IAM, retention, or CI-wrapper behavior; those remain separate implementation and verification work. Viewer access remains an operator-managed edge/network concern as described in §18.
+
 Pre-publish is a separate operation from production publish and dry-run. It creates a temporary, site-scoped review projection only for a registered site's source. A pull-request comment may carry a direct URL, but the browser must also be able to discover available previews from within that site. Previews are not inserted into the production artifact index, Browse tree, Recently updated section, or normal page-search results. The site home has a quiet link to the dedicated Previews list, not an inline list of preview entries. Inside a site, the command palette has a separate Previews tab. Opening a preview surface loads only that site's lightweight preview catalog, not catalogs for every site at startup.
 
-The preview catalog, logical routes, raw documents, and bundled resources inherit their site's viewer-access policy. A public site therefore has publicly viewable previews, including pre-merge content; a restricted site applies the same restriction to previews. Enforcement belongs at the serving boundary before shared-cache delivery, not in client-side navigation alone. Preview-only private access is not an initial mode and would require a separate authorization and cache contract.
+Preview catalogs, logical routes, raw documents, and bundled resources are static objects served through the configured distribution. They receive no per-site authorization from Artifact Pages; they are reachable to the same extent as other objects covered by the operator's edge/network policy. This applies to pre-merge content as well: a hidden palette entry or an unguessable SHA is not an access control. Operators who do not want preview content available to everyone admitted by the distribution must configure their own edge boundary to cover preview routes and raw preview objects. Preview-only accounts or private-site permissions are not product features.
 
 GitHub pull-request-associated pre-publish initially accepts only a head branch in the site's registered source repository. A pull request targeting that repository but originating from a fork does not inherit its trust: its head content is excluded from pre-publish even if the target site is registered. The Action must verify the head repository identity before any provider-backed publication; the provider's CI identity policy must also constrain which workflows may obtain the publisher role. Do not use a privileged `pull_request_target` workflow to check out and execute untrusted fork content. Supporting fork previews later requires an explicit approval and isolation model, because preview HTML is executable content served in the application's trust boundary. This restriction is separate from the registry's source-path eligibility check.
 
-PR provenance is an explicit pre-publish input: the caller may provide a PR number or URL, which is checked against the site's registered source repository. Neither the CLI nor its Action wrapper infers a PR association from a branch, commit, or CI event when the input is absent. Without an explicit PR reference, pre-publish creates a manual preview and the reader shows no PR link. The precise CLI/Action input spelling and validation mechanics remain technical design work.
+PR provenance is an explicit pre-publish input: the caller may provide a PR number or URL, which is checked against the site's registered source repository. Neither the CLI nor its Action wrapper infers a PR association from a branch, commit, or CI event when the input is absent. Without an explicit PR reference, pre-publish creates a manual preview and the reader shows no PR link.
 
 Each preview revision is identified within its site by the resolved source head SHA. The preview renders a snapshot of that head's source tree, not a temporary merge with the default branch and not a guarantee of the eventual post-merge result. The default branch's resolved HEAD at pre-publish time is recorded as comparison provenance and helps select the documents to preview, but is not part of the public revision identity. Its advance alone does not change an existing preview URL. The planned logical document route is `/:site/_previews/<head SHA>/<artifact path>`; `_previews` is reserved within the site namespace.
 
@@ -741,27 +749,50 @@ Select changed documents under the registered source path by comparing the merge
 
 Keep navigation links distinct from rendering dependencies. For statically resolvable links in previewed HTML or Markdown, a link to another changed document opens that document in the same preview revision; a link to an unchanged document opens its production logical route. HTML links must transition the parent application rather than nesting an application route inside the artifact iframe. Copy the local CSS, JavaScript, images, fonts, and other resources needed to render a changed document from the head tree into the preview bundle, preserving relative relationships where possible. This does not require recursively copying every document reachable by navigation links. External HTTPS links remain external.
 
-Automatically collect statically resolvable local rendering resources. Pre-publish also accepts explicit source-relative paths or patterns for additional non-document resources whose names are constructed dynamically; reject missing paths, paths outside the registered source tree, and attempts to include unchanged HTML/Markdown as a shortcut around the changed-document rule. Such an include makes relative dynamic resource URLs work when their resolved preview locations match the copied layout. It cannot generically redirect JavaScript-built root-relative URLs or rewrite arbitrary runtime navigation, so those behaviors are outside the automatic preview guarantee. The exact CLI or Action input syntax for these includes remains to be defined.
+Automatically collect statically resolvable local rendering resources. Pre-publish also accepts explicit source-relative paths or patterns for additional non-document resources whose names are constructed dynamically; reject missing paths, paths outside the registered source tree, and attempts to include unchanged HTML/Markdown as a shortcut around the changed-document rule. Such an include makes relative dynamic resource URLs work when their resolved preview locations match the copied layout. It cannot generically redirect JavaScript-built root-relative URLs or rewrite arbitrary runtime navigation, so those behaviors are outside the automatic preview guarantee.
+
+#### CLI and Action interface
+
+Provider-backed pre-publish is exposed as a separate command from local development preview and production site publish:
+
+~~~sh
+artifact-pages preview publish --site ID --source DIR --base-url ORIGIN \
+  [--head REF] [--default-ref REF] [--pull-request REF] [--include PATH] \
+  [--config LOCATOR] [--dry-run] [--format text|json]
+~~~
+
+`--site`, `--source`, and `--base-url` are required. `--source` is relative to the current Git checkout and must exactly match the registered source path. `--head` selects the preview tree and defaults to `HEAD`; `--default-ref` selects the current default-branch reference used for merge-base comparison and defaults to `origin/HEAD`. Only committed Git trees at those refs are read. `--base-url` is an HTTP(S) origin without a path, query, or fragment; it is used to construct the returned group and document URLs. `--config` uses the deployment-config locator described in §22 and defaults through T10's locator precedence.
+
+`--pull-request REF` accepts either a positive PR number or a canonical `https://github.com/OWNER/REPO/pull/NUMBER` URL. The repository is identified from the checkout's Git origin. The CLI reads the PR through GitHub's REST API and verifies its base repository, same-repository head, and head SHA against the selected source head and the registered source repository. A read token, when needed for a private repository, is taken from `GITHUB_TOKEN` or `GH_TOKEN`. Omitting this flag always creates a manual group, even in a PR-triggered workflow.
+
+`--include PATH` is repeatable and accepts an exact source-relative path or a Go `path.Match` pattern evaluated over slash-separated source paths. Wildcards do not cross `/`. Each match must be a non-document resource beneath the registered source path. Missing matches, out-of-tree paths, and unchanged HTML/Markdown matches are errors. Automatic resource discovery remains enabled independently of these additional includes.
+
+`--dry-run` reads the Git source, deployment config, deployed registry, and the preview objects/catalog needed to make a plan, but it acquires no publication lock and performs no provider writes, deletes, or cache changes. It reports `planned` when the plan would change state and `no-op` when the current projection already matches. A deletion-only document change returns `no-preview`; a change containing only non-document files is an error.
+
+JSON output has `operation`, `outcome`, `site`, `groupId`, `headSha`, optional `pullRequestUrl`, `groupListUrl`, `documents`, `objects`, `catalogChanges`, optional `configCommitSha`, and optional `error`. Each document contains its source-relative `path`, `title`, and fixed revision URL. PR document URLs include the group's query context; manual URLs do not. `objects` sort by path with the manifest last. `catalogChanges` sort by group ID, head SHA, action, then reason. A publication failure after source selection retains the known group and document URLs in the typed failure result; earlier failures without a resolved preview identity return empty arrays. Outcomes are `planned`, `published`, `no-op`, `no-preview`, or `failed`. Successful outcomes exit zero; invalid command/config input exits two, while GitHub lookup, provider, and publication failures exit one and return the typed failure envelope when JSON was requested.
+
+The optional thin preview Action maps its `site`, `source`, `head`, `default-ref`, `pull-request`, `base-url`, `config`, and `dry-run` inputs to this same command; its `include` input is a newline-separated list expanded to repeated `--include` flags. It exposes `outcome`, `group-list-url`, and `documents` (the CLI document array serialized as JSON), and may expose the full CLI JSON result as `result`. It does not infer PR provenance, select event timing, or post comments. The separate production admin/site Actions use the T11 contract.
 
 While a completed revision remains at the provider, its URL must not change content: retrying the same head verifies the existing projection and does not rewrite its objects merely to extend provider retention. A changed projection or document set for the same head is an error, including if an unusual default-branch history change produces a different merge-base. Direct preview URLs resolve through their own completed revision manifest, not the mutable discovery catalog.
 
-The preview catalog is a mutable static object containing discoverable preview metadata and links. When the caller explicitly supplies a PR reference, it shows only the latest completed pre-publish in that PR's group. Older revisions are removed from the catalog but their direct URLs remain usable while their provider objects remain available. The core preview-group identity is not tied to a particular CI provider. Pre-publish without a PR reference is manual and uses its head SHA as its discovery group. PR and head-derived groups occupy distinct namespaces so they cannot collide. Group identity determines which revision appears in discovery; it is not the revision's URL identity. The exact catalog schema remains to be specified.
+The preview catalog is a mutable static object containing discoverable preview metadata and links. When the caller explicitly supplies a PR reference, it shows only the latest completed pre-publish in that PR's group. Older revisions are removed from the catalog but their direct URLs remain usable while their provider objects remain available. The core preview-group identity is not tied to a particular CI provider. Pre-publish without a PR reference is manual and uses its head SHA as its discovery group. PR and head-derived groups occupy distinct namespaces so they cannot collide. Group identity determines which revision appears in discovery; it is not the revision's URL identity. The v1 catalog and manifest fields, keys, and digest are settled in the [T1 record contract](backlog/technical-design/T1-preview-record-contract.md).
 
 The site's `/:site/_previews` view lists available groups. An optional URL-encoded `group` query parameter filters that view to one group and always resolves through the current catalog, so it is a mutable latest-preview link suitable for a pull-request comment. It is not a fixed revision URL: if the group has no current preview or its revision is no longer available from the provider, the view shows an empty state rather than an obsolete revision. The Action exposes this group-list URL and the individual revision-specific document URLs as outputs; when a PR reference was explicitly supplied, each document URL carries that PR group's view context so a reviewer can return from the artifact to the PR. Caller-owned workflows decide whether and how to post the URLs to a PR. A separate per-revision summary page is not required.
 
-The selected reader treatment is a quiet preview provenance label in the application header, not inside the artifact. It distinguishes the short head SHA from production without changing the document H1 or adding a reader strip. Every PR-associated preview document opened with its PR-group context shows a subtle PR-number link back to the validated source PR. The reader checks the site catalog to confirm that the named group is explicitly PR-associated and currently points to the URL's head SHA; it never infers a PR from the SHA alone. Preview-to-preview document navigation within the same revision preserves this view context; navigation to a production document does not. A manual preview, a bare revision URL without group context, or a missing, mismatched, or unreadable group still renders the document when its own completion manifest is available, but shows no PR link. Group context affects only reader chrome, not revision identity or artifact bytes. Direct revision URLs remain usable as previews after their groups leave discovery, while provider objects remain available, even though their PR link may then disappear. The document H1 remains untouched and no reader strip is added. The exact URL encoding and record schema remain technical design work.
+The selected reader treatment is a quiet preview provenance label in the application header, not inside the artifact. It distinguishes the short head SHA from production without changing the document H1 or adding a reader strip. Every PR-associated preview document opened with its PR-group context shows a subtle PR-number link back to the validated source PR. The reader checks the site catalog to confirm that the named group is explicitly PR-associated and currently points to the URL's head SHA; it never infers a PR from the SHA alone. Preview-to-preview document navigation within the same revision preserves this view context; navigation to a production document does not. A manual preview, a bare revision URL without group context, or a missing, mismatched, or unreadable group still renders the document when its own completion manifest is available, but shows no PR link. Group context affects only reader chrome, not revision identity or artifact bytes. Direct revision URLs remain usable as previews after their groups leave discovery, while provider objects remain available, even though their PR link may then disappear. The document H1 remains untouched and no reader strip is added. T1 records the v1 route-key and query encoding.
 
 Preview discovery follows provider availability, not Git or PR state. A preview remains discoverable while its completion manifest exists, including after its PR is merged or closed without merging. The ordinary `artifact-pages site publish` operation reads the site-scoped catalog and, through the configured storage adapter, prunes references whose completion manifests are confirmed missing at provider origin. Pre-publish does the same before its own catalog upsert. Neither operation compares production commits with PRs or polls PR state for cleanup. GitHub Actions is an optional wrapper for checkout, credentials, invocation, and presentation of the result; it does not implement a separate cleanup algorithm.
 
 For production publish, read the current catalog at provider origin under the site lock and check its referenced manifests, but write a reduced catalog only after the production projection has been committed at origin. Write only when confirmed missing references were removed; a failed production publish must not hide its previews. Catalog cleanup removes references, not completed preview bytes or fixed direct URLs; those remain usable while the provider retains them. Between catalog writes, the reader checks manifest availability and hides missing candidates. A provider read error is not a confirmed absence and must not trigger pruning. An absent logical preview document shows a neutral "Preview unavailable" state with a way back to its site; missing raw preview resources return a real not-found response rather than the SPA document.
 
-Pre-publish shares the cooperative per-site storage lock with production publish and admin unregister. After acquiring the lock, it revalidates the deployed registry directly from storage. It uploads the new preview bundle and its completion manifest before reading and updating the catalog from storage. Updating the catalog is an idempotent upsert by preview identity, not a blind append. If the catalog update fails, the incomplete publication reports failure and can be retried; unlisted uploaded objects remain subject to preview retention. A different CI run for the same site cannot overwrite that catalog update while the lock is held. Unregister waits for an already-running pre-publish, then removes that site's preview projection along with its production projection.
+Pre-publish shares the cooperative per-site storage lock with production publish and `registry unregister`. After acquiring the lock, it revalidates the deployed registry directly from storage. It uploads the new preview bundle and its completion manifest before reading and updating the catalog from storage. Updating the catalog is an idempotent upsert by preview identity, not a blind append. If the catalog update fails, the incomplete publication reports failure and can be retried; unlisted uploaded objects remain subject to preview retention. A different CI run for the same site cannot overwrite that catalog update while the lock is held. Unregister waits for an already-running pre-publish, then removes that site's preview projection along with its production projection.
 
-Pre-publish does not immediately delete an older completed revision when a newer one replaces it in the catalog. Early deletion would break previously shared direct URLs and could leave a cached catalog pointing at missing content. Preview lifetime is delegated entirely to the provider's administrator-defined lifecycle policy: the application does not compute, store, display, or enforce its own expiry timestamp. Catalog entries are discovery candidates, not proof that their manifests still exist. The Previews list and palette validate availability against the provider's revision manifests when opened, and later catalog writes prune references to missing manifests; this validation cost must be measured. The catalog itself must not become an indefinitely retained orphan when a site stops pre-publishing. Mutable catalog responses use bounded cache freshness, so newly published or removed previews may appear after a short cache delay. Provider removal of separate bundle objects is not atomic; the reader must handle a missing document or resource without substituting the SPA. These preview behaviors are planned after the MVP and are not part of the Phase 1 local product.
+Pre-publish does not immediately delete an older completed revision when a newer one replaces it in the catalog. Early deletion would break previously shared direct URLs and could leave a cached catalog pointing at missing content. Preview lifetime is delegated entirely to the provider's administrator-defined lifecycle policy: the application does not compute, store, display, or enforce its own expiry timestamp. Catalog entries are discovery candidates, not proof that their manifests still exist. The local Previews list checks fixture or local manifests when opened; registered-site production publish also removes confirmed-missing references from the `_previews` prefix in its configured target after a successful production projection. That core reconciliation is exercised with the local backend. Real provider-origin behavior, provider-backed availability checks, lifecycle and shared-cache behavior remain separate verification work. Any viewer access gate is independently configured and verified by the operator at the edge.
 
 ## 20. Non-goals for the MVP
 
 - server-side rendering
+- viewer accounts, login/session handling, roles, and per-site authorization; configure access at the customer-managed edge/network boundary instead
 - database
 - request-time search API
 - browser-side S3 ListObjects
@@ -786,9 +817,9 @@ A site is a logical namespace, not a repository identity.
 
 The initial builder maps one repository source to each site; multi-repository merging is deferred. If it is introduced later, mount paths within a site must not overlap.
 
-Satellite publish and admin unregister for one site serialize through a shared per-site storage lock; admin registry projection updates are serialized through one admin deployment path.
+Satellite publish and `registry unregister` for one site serialize through a shared per-site storage lock; registry publication updates are serialized through one registry deployment path.
 
-The browser discovers sites through the local `/_indexes/` listing and lightweight per-site metadata, then loads only the active site's artifact index. It does not use browser-side object-storage ListObjects APIs.
+Fixture and registered modes read `/_indexes/sites.json` and lightweight per-site metadata; both modes load only the active site's artifact index. The browser does not use nginx autoindex or object-storage ListObjects APIs.
 
 Artifacts live under /_artifacts.
 
@@ -798,3 +829,66 @@ Logical user routes do not expose the storage projection as the main UX.
 
 Prefer publish-time computation over request-time services.
 ~~~
+
+## 22. Deployment configuration and command interface
+
+Deployment targets are described by a strict version-1 YAML file, separate from the admin-owned `sites.yaml` registry. The file selects exactly one provider and its settings. The local target stores `root`; AWS stores `region`, `bucket`, and optional `distributionId`; Cloudflare stores R2 `accountId` and `bucket`, `zoneId`, `publicBaseURL`, and environment-variable names for its R2 access key, secret key, and cache-purge API token. Cloudflare may optionally name `sessionTokenEnv` for an externally issued short-lived R2 credential; the CLI passes that session token to the S3 client but does not mint or renew temporary credentials. Cloudflare may also configure a separate registry-reader identity with `registryReaderAccessKeyIdEnv`, `registryReaderSecretAccessKeyEnv`, and optional `registryReaderSessionTokenEnv`. When configured, only `GetObject("_indexes/sites.json")` uses that identity; all object writes and other object operations use the primary R2 identity. If reader credential environment names are configured but their key or secret values are missing, the CLI fails before making provider requests instead of falling back to the primary identity. A satellite deployment should scope its reader credential to read the exact registry object, and scope its primary credential to that site's index, artifact, and preview prefixes plus its site lock; the primary credential must not include the registry object. An admin deployment that publishes the registry can omit the reader identity and use its primary credential. The R2 and cache API credential values may be absent from invocations that do not use them: `site publish` needs R2 access, while operations that invalidate public cache also need the zone API token. AWS and Cloudflare targets also set one positive `previewRetentionDays` value for provider-managed `_previews/` lifecycle rules. Local development may omit that policy. Configuration contains no credential values. AWS credentials use the standard AWS credential chain. For local conformance only, Cloudflare may also set loopback-only `r2Endpoint` and `apiBaseURL` overrides; these are rejected for non-loopback hosts. The `gcp-local` provider accepts only an HTTP loopback endpoint and bucket for fake-gcs-server and is an emulator test profile, not a production GCP adapter.
+
+A config locator is a local path or `github://OWNER/REPO/FILE?ref=REF`. When a GitHub file is omitted, resolve `.artifact-pages.yaml`, then `artifact-pages.yaml`, and fall back only on a confirmed 404. When `ref` is omitted, resolve the repository's default branch to a commit SHA, then fetch the selected file at that SHA for the whole invocation. A caller may pin a commit directly. Every invocation re-fetches remote configuration; a remote URL is deployment input, not a trust boundary. Private config reads may use `GITHUB_TOKEN` or `GH_TOKEN`; redirects to another host, oversized responses, and credentials in diagnostics are rejected.
+
+For a remote config, command output reports the resolved config commit: text output prints `Deployment config commit: SHA`, and JSON result and failure envelopes include `configCommitSha`. Local config results omit this field.
+
+Config locator precedence is `--config`, `ARTIFACT_PAGES_CONFIG`, repository-local `.artifact-pages.yaml`, then the user's saved locator. `artifact-pages config set-default LOCATOR` updates only that locator in the user's config directory. A satellite repository resolves its deployment target without cloning the admin repository; publishing eligibility still comes from the deployed `/_indexes/sites.json` registry.
+
+For local development, a repository may commit a non-secret target file and admin-owned registry:
+
+~~~yaml
+# .artifact-pages.yaml
+schemaVersion: 1
+provider: local
+local:
+  root: .local/storage
+~~~
+
+~~~yaml
+# sites.yaml
+schemaVersion: 1
+sites:
+  sre:
+    name: SRE & Platform
+    repository: acme/platform
+    sourcePath: docs/artifacts
+~~~
+
+`registry publish` validates the Git-owned YAML, builds its JSON projection, and deploys that registry in one operation. The operator can review the plan and publish one explicit site with:
+
+~~~text
+artifact-pages registry publish --manifest sites.yaml --config .artifact-pages.yaml --dry-run
+artifact-pages registry publish --manifest sites.yaml --config .artifact-pages.yaml
+artifact-pages site publish --config .artifact-pages.yaml --site sre --source docs/artifacts --dry-run
+~~~
+
+In a separate admin/satellite layout, the satellite can select a pinned remote target config while still using the deployed registry for eligibility:
+
+~~~text
+artifact-pages site publish --config 'github://acme/platform-admin/.artifact-pages.yaml?ref=0123456789abcdef0123456789abcdef01234567' --site sre --source docs/artifacts --dry-run
+~~~
+
+The operation-oriented command surface is provider-neutral:
+
+~~~text
+artifact-pages registry publish [--manifest sites.yaml] [--config LOCATOR] [--dry-run] [--format text|json]
+artifact-pages registry unregister --site ID [--manifest sites.yaml] [--config LOCATOR] [--dry-run] [--format text|json]
+artifact-pages site publish --site ID [--source DIR] [--config LOCATOR] [--dry-run] [--format text|json]
+artifact-pages app deploy (--version VERSION | --archive FILE) [--repository OWNER/REPO] [--config LOCATOR] [--dry-run] [--format text|json]
+artifact-pages lock inspect (--site ID | --scope registry) [--format text|json]
+artifact-pages lock recover (--site ID | --scope registry) --observed-etag ETAG [--format text|json]
+~~~
+
+`registry publish` validates the selected YAML manifest, creates the registry projection, and reconciles it to the configured target as one operation. It serializes whole-registry updates, reports `registryUpdated` as a boolean on planned, published, and no-op outcomes, and includes an empty `changes` array when the registry is already current. `registry unregister --site ID` expects the checked-out manifest to already omit that site; it publishes that desired registry and cleans the selected site's exact prefixes, including when retrying after a previous registry withdrawal. Every site operation selects one explicit site ID. `--config LOCATOR` is an optional deployment-target selector and follows the locator precedence above. `site publish` builds the index and static source projection as one operation; `index build` remains a local utility and is not required for publishing.
+
+`--dry-run` is the common read-only planning option for registry publish/unregister, site publish, and app deploy. It may read the config and deployed objects needed to calculate the plan, but does not write or delete objects, recover locks, or request cache changes. `app deploy` accepts exactly one of `--version` or `--archive`. `--version` selects and verifies a published release; it downloads the bundle in a temporary location that is removed after the command. `--archive` accepts a caller-provided packaged archive with its adjacent manifest and checksum. For site publish, JSON `changes` is the full per-path production change list, sorted by path and action; JSON `previewChanges` is the full per-group preview disposition list, sorted by group ID and head SHA. Each `previewChanges` entry contains `groupId`, `headSha`, `action` (`remove` or `keep`), and `reason` (`manifest-missing`, `manifest-present`, or `manifest-unavailable`). Remove a catalog reference only when its completion manifest is confirmed missing; keep live and unavailable groups. A provider read error is not evidence that a manifest is missing. Text output summarizes production create, update, removal, preview prune, and retain counts. The same plan and classifications apply to real publish; a preview-only catalog prune is a published change, and the operation is a no-op only when neither production objects nor preview references need changes. JSON results use stable operation/outcome/change/result fields, with `site` and `previewChanges` for site publish and `registryUpdated` for registry operations. Plans, success, and no-op outcomes exit 0; invalid command, config, or manifest exits 2; provider and reconciliation failures exit 1. Optional GitHub Actions invoke the same CLI operations and relay their results without implementing separate publish or cleanup logic.
+
+The application orchestration consumes provider-neutral storage and cache interfaces. AWS/S3/CloudFront and Cloudflare/R2/cache APIs stay in adapter and deployment packages; they do not define the site registry, content keys, browser routes, or publication order.
+
+`registry unregister --site ID` expects the checked-out admin manifest to already omit that site, keeping YAML as the sole editable source of truth. It withdraws the current deployed registration, then cleans the selected site's exact content and preview prefixes while holding the site lock. It remains safe to retry after registry withdrawal. Lock commands support `--scope registry` for the whole-registry serialization lock and `--site ID` for a per-site lock.

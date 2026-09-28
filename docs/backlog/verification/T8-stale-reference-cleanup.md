@@ -1,7 +1,7 @@
 # T8 — Stale-reference cleanup
 
 - Status: In progress
-- Phase: Phase 1 local proof; provider-origin and CI wrapper proof remain open
+- Phase: Phase 1 local proof; provider-origin proof remains open
 
 ## Contract to prove
 
@@ -14,12 +14,12 @@ Pre-publish and production publish prune catalog references only when their revi
 - [x] Show that a provider read error is not interpreted as a missing manifest.
 - [x] Verify the local CLI calls the shared reconciliation operation and a failed production switch leaves catalog entries unchanged.
 - [x] Verify a successful production switch followed by catalog-write failure reports incomplete cleanup and converges on retry; no separate cleanup workflow or PR-state query is required.
-- [ ] After [IMP-34](../implementation/IMP-34-actions.md) adds a CI wrapper, verify it calls the same operation and produces the same result as the local CLI.
+- [x] After [IMP-34](../implementation/IMP-34-actions.md) adds a CI wrapper, verify it calls the same operation and produces the same result as the local CLI.
 - [ ] Verify cleanup against the configured AWS/Cloudflare provider origin and its deployed failure behavior.
 
 ## Evidence
 
-The local reader hides a catalog candidate when its manifest is confirmed missing and keeps a candidate visible with an unknown-availability message after a 503. `internal/preview/store_test.go` covers unavailable-manifest retention, idempotence, and site isolation. `internal/publisher/site_publish_preview_test.go` verifies production-before-catalog ordering, lifecycle-agnostic retention of live PR/manual groups, catalog stability after production-write failure, and retry convergence after catalog-write failure. `cmd/artifact-pages/main_test.go` exercises the local CLI process and JSON for a provider registry-read failure. CI wrapper parity and actual AWS/Cloudflare origin behavior remain open. The local preview development command writes to `.local/previews`; normal registered-site publishing uses the configured target (for example `.local/storage`) and reconciles that target's `_previews` prefix. See the [catalog cleanup contract](../../architecture/preview-publishing-contract.html#publish).
+The local reader hides a catalog candidate when its manifest is confirmed missing and keeps a candidate visible with an unknown-availability message after a 503. `internal/preview/store_test.go` covers unavailable-manifest retention, idempotence, and site isolation. `internal/publisher/site_publish_preview_test.go` verifies production-before-catalog ordering, lifecycle-agnostic retention of live PR/manual groups, catalog stability after production-write failure, and retry convergence after catalog-write failure. `cmd/artifact-pages/main_test.go` exercises the local CLI process and JSON for a provider registry-read failure. The Actions parity smoke starts direct CLI and shared Action site-publish calls from equivalent local projections containing a catalog entry with a confirmed-missing manifest; both return the same JSON and exit status with `remove`/`manifest-missing`, and both prune the reference. `node scripts/test-actions-parity.mjs` passes. Actual AWS/Cloudflare origin behavior remains open. The local preview development command writes to `.local/previews`; normal registered-site publishing uses the configured target (for example `.local/storage`) and reconciles that target's `_previews` prefix. See the [catalog cleanup contract](../../architecture/preview-publishing-contract.html#publish).
 
 ## Implementation links
 

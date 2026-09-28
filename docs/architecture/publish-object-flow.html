@@ -382,7 +382,7 @@
           <tr><td><code>/_indexes/&lt;site&gt;/meta.json</code></td><td>Site publisher</td><td>Browser</td><td>Delete on unregister. Empty-file creation at registration is undecided.</td></tr>
           <tr><td><code>/_indexes/&lt;site&gt;/index.json</code></td><td>Site publisher</td><td>Browser</td><td>Delete on unregister. Empty-file creation at registration is undecided.</td></tr>
           <tr><td><code>/_artifacts/&lt;site&gt;/**</code></td><td>Site publisher</td><td>Browser</td><td>Delete stale objects during sync; remove the entire site prefix on unregister.</td></tr>
-          <tr><td><code>/_control/locks/&lt;site&gt;.json</code></td><td>Site publisher / admin unregister</td><td>Same operation actors</td><td>CAS updates free / held state. Never serve publicly; retain as free after unregister.</td></tr>
+          <tr><td><code>/_control/locks/&lt;site&gt;.json</code></td><td>Site publisher / registry unregister</td><td>Same operation actors</td><td>CAS updates free / held state. Never serve publicly; retain as free after unregister.</td></tr>
         </tbody>
       </table>
     </div>

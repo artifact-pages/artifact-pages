@@ -1,15 +1,15 @@
 # T13 — Registered admin and satellite flow
 
-- Status: Open
+- Status: Done
 - Phase: Provider-backed deployment
 
 ## Proof needed
 
-- [ ] Validate strict YAML → sorted registry JSON, including malformed and empty registries.
-- [ ] In separate admin and satellite checkouts, apply, publish, browse, update, and unregister one site while another stays intact.
-- [ ] Confirm the satellite reads provider-origin registration after acquiring its site lock; no admin YAML checkout is needed.
-- [ ] Exercise dry-run with zero provider writes, plus registration mismatch and direct-link/reload behavior.
+- [x] Validate strict YAML → sorted registry JSON, including malformed and empty registries.
+- [x] In separate admin and satellite checkouts, apply, publish, browse, update, and unregister one site while another stays intact.
+- [x] Confirm the satellite reads the configured backend registry after acquiring its site lock; no admin YAML checkout is needed.
+- [x] Exercise dry-run with zero backend writes, plus registration mismatch and direct-link/reload behavior.
 
 ## Evidence
 
-Not yet recorded. A local proof does not establish cloud-provider behavior.
+`internal/registry/registry_test.go` verifies sorted deterministic JSON, an empty projection, and malformed/duplicate YAML and JSON. `TestPublishSiteUsesOriginRegistryAfterSiteLockAndIgnoresBranch` verifies the publisher acquires the site lock before reading the configured registry; CLI tests cover an unregistered site and prove no artifact/index writes occur. `npm run test:registered-flow` passed on 2026-09-27: it created separate admin and satellite Git checkouts, verified read-only dry-runs, published two sites, updated and removed stale content, served deep links and relative HTML/Markdown assets through nginx, then unregistered one site while preserving the neighbor's artifacts, indexes, and preview revisions. The dedicated browser case passed 1/1. `go test -race -count=1 ./...` passed. These results prove the local configured-backend flow; real AWS/Cloudflare provider behavior remains tracked separately in [T14](T14-production-reconciliation.md) and [T15](T15-provider-delivery.md).

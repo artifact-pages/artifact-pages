@@ -1,0 +1,16 @@
+@font-face {
+  font-family: PreviewFixture;
+  src: url("../fonts/preview.woff2") format("woff2");
+  font-display: swap;
+}
+
+body {
+  margin: 32px;
+  color: #202936;
+  font-family: PreviewFixture, sans-serif;
+}
+
+img {
+  width: 64px;
+  height: 64px;
+}

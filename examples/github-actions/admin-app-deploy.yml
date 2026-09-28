@@ -1,0 +1,38 @@
+name: Deploy Artifact Pages application
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact published Artifact Pages web release version.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy-application:
+    runs-on: ubuntu-24.04
+    environment: artifact-pages-production
+    steps:
+      - name: Check out the admin repository
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Assume the app-plane deployment role
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.ARTIFACT_PAGES_APP_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+          role-session-name: artifact-pages-app-${{ github.run_id }}
+
+      - name: Deploy the selected application release
+        uses: tasuku43/git-artifact-pages/actions/admin@<FULL_REVIEWED_ACTION_COMMIT_SHA>
+        with:
+          operation: app-deploy
+          version: ${{ inputs.version }}
+          repository: tasuku43/git-artifact-pages
+          config: .artifact-pages.yaml

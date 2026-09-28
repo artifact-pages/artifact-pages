@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "site": "sre",
+  "groups": [
+    {
+      "id": "pr:42",
+      "kind": "pull-request",
+      "headSha": "0123456789abcdef0123456789abcdef01234567",
+      "prUrl": "https://github.com/acme/sre-docs/pull/42",
+      "updatedAt": "2026-09-27T00:00:00Z",
+      "documents": [
+        {
+          "path": "guides/preview-guide.md",
+          "title": "Local preview guide",
+          "format": "markdown"
+        },
+        {
+          "path": "guides/preview.html",
+          "title": "Local preview HTML",
+          "format": "html"
+        },
+        {
+          "path": "guides/review r\u00e9sum\u00e9 #% +?.md",
+          "title": "Encoded preview route",
+          "format": "markdown"
+        }
+      ]
+    },
+    {
+      "id": "head:0123456789abcdef0123456789abcdef01234567",
+      "kind": "manual",
+      "headSha": "0123456789abcdef0123456789abcdef01234567",
+      "updatedAt": "2026-09-26T23:55:00Z",
+      "documents": [
+        {
+          "path": "guides/preview-guide.md",
+          "title": "Local preview guide",
+          "format": "markdown"
+        },
+        {
+          "path": "guides/preview.html",
+          "title": "Local preview HTML",
+          "format": "html"
+        },
+        {
+          "path": "guides/review r\u00e9sum\u00e9 #% +?.md",
+          "title": "Encoded preview route",
+          "format": "markdown"
+        }
+      ]
+    },
+    {
+      "id": "pr:99",
+      "kind": "pull-request",
+      "headSha": "ffffffffffffffffffffffffffffffffffffffff",
+      "prUrl": "https://github.com/acme/sre-docs/pull/99",
+      "updatedAt": "2026-09-26T23:50:00Z",
+      "documents": [
+        {
+          "path": "guides/stale.md",
+          "title": "Stale preview",
+          "format": "markdown"
+        }
+      ]
+    },
+    {
+      "id": "pr:43",
+      "kind": "pull-request",
+      "headSha": "0123456789abcdef0123456789abcdef01234567",
+      "prUrl": "https://github.com/acme/sre-docs/pull/43",
+      "updatedAt": "2026-09-26T23:45:00Z",
+      "documents": [
+        {
+          "path": "guides/preview-guide.md",
+          "title": "Local preview guide",
+          "format": "markdown"
+        },
+        {
+          "path": "guides/preview.html",
+          "title": "Local preview HTML",
+          "format": "html"
+        },
+        {
+          "path": "guides/review r\u00e9sum\u00e9 #% +?.md",
+          "title": "Encoded preview route",
+          "format": "markdown"
+        }
+      ]
+    }
+  ]
+}

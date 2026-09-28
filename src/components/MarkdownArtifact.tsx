@@ -29,11 +29,13 @@ export function MarkdownArtifact({
   siteId,
   hash,
   navigate,
+  resolveHref,
 }: {
   artifact: ArtifactIndexEntry
   siteId: string
   hash: string
   navigate: (href: string) => void
+  resolveHref?: (url: URL) => string | undefined
 }) {
   const [source, setSource] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -84,7 +86,7 @@ export function MarkdownArtifact({
         <Markdown
           remarkPlugins={markdownRemarkPlugins}
           rehypePlugins={markdownRehypePlugins}
-          urlTransform={(url, key) => transformMarkdownUrl(url, key, artifact, siteId)}
+          urlTransform={(url, key) => transformMarkdownUrl(url, key, artifact, siteId, resolveHref)}
           components={{
             table: ({ children, ...props }) => (
               <MarkdownTableScroll>
@@ -208,6 +210,7 @@ function transformMarkdownUrl(
   key: string,
   artifact: ArtifactIndexEntry,
   siteId: string,
+  resolveHref?: (url: URL) => string | undefined,
 ) {
   if (value.startsWith('data:')) return key === 'src' && safeDataImageUrl.test(value) ? value : ''
   const safeValue = defaultUrlTransform(value)
@@ -230,6 +233,11 @@ function transformMarkdownUrl(
   ) return ''
   if (resolved.protocol !== 'https:' && resolved.origin !== window.location.origin) return ''
   if (resolved.protocol !== 'https:' && resolved.protocol !== 'http:') return ''
+
+  if (key === 'href') {
+    const logicalHref = resolveHref?.(resolved)
+    if (logicalHref) return logicalHref
+  }
 
   const artifactPrefix = `/_artifacts/${encodeURIComponent(siteId)}/`
   if (key === 'href' && resolved.origin === window.location.origin && resolved.pathname.startsWith(artifactPrefix)) {

@@ -11,6 +11,14 @@ Start with the [thesis](thesis.md) for the product's purpose, the [specification
 - [Preview publishing contract](architecture/preview-publishing-contract.html) — proposed static objects, write order, retention, and verification for post-MVP previews.
 - [Preview decision register](architecture/preview-decisions.md) — accepted behavior and open product choices.
 
+## Guides
+
+- [Application bundle deployment](guides/app-bundle-deployment.md) — package, deploy, upgrade, and roll back the static application plane.
+- [Clean-room adoption and recovery](guides/clean-room-adoption.md) — exercise separate adopter repositories, local deployment, app rollback, and guarded lock recovery.
+- [Cloudflare deployment](guides/cloudflare-deployment.md) — connect an R2 bucket and Cloudflare edge policy, then deploy the app and registered content.
+- [Local registered-site development](guides/local-registered-sites.md) — work across an admin checkout and a satellite checkout locally.
+- [Optional GitHub Actions](guides/github-actions.md) — thin admin and explicit-site entry points, outputs, credential boundaries, and workflow templates.
+
 ## Backlog
 
 - [Backlog index and status legend](backlog/README.md) — product issues, technical design, and verification in separate tracks.

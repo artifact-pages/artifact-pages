@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from 'react'
 import { ArtifactWorkspace } from './components/ArtifactWorkspace'
+import { PreviewDocumentPage } from './components/PreviewDocumentPage'
+import { PreviewListPage } from './components/PreviewListPage'
 import { SitePicker } from './components/SitePicker'
 import { defaultSiteIndexUrl, discoverSites, IndexLoadError, isValidSiteId, loadSiteIndex } from './data/indexes'
 import type { SiteDiscoveryMetadata, SiteIndex } from './domain/index'
@@ -15,11 +17,12 @@ type LoadingState<T> =
 function useLocation() {
   const [url, setUrl] = useState(() => ({
     pathname: window.location.pathname,
+    search: window.location.search,
     hash: window.location.hash,
   }))
 
   useEffect(() => {
-    const sync = () => setUrl({ pathname: window.location.pathname, hash: window.location.hash })
+    const sync = () => setUrl({ pathname: window.location.pathname, search: window.location.search, hash: window.location.hash })
     window.addEventListener('popstate', sync)
     window.addEventListener('hashchange', sync)
     return () => {
@@ -30,10 +33,10 @@ function useLocation() {
 
   const navigate = useCallback((href: string) => {
     window.history.pushState({}, '', href)
-    setUrl({ pathname: window.location.pathname, hash: window.location.hash })
+    setUrl({ pathname: window.location.pathname, search: window.location.search, hash: window.location.hash })
   }, [])
 
-  return { ...url, route: parseRoute(url.pathname), navigate }
+  return { ...url, route: parseRoute(url.pathname, url.search), navigate }
 }
 
 function useTheme() {
@@ -105,6 +108,14 @@ function App() {
     )
   }
 
+  if (route.kind === 'preview-list') {
+    return <PreviewListPage route={route} navigate={navigate} />
+  }
+
+  if (route.kind === 'preview-document') {
+    return <PreviewDocumentPage route={route} hash={hash} navigate={navigate} />
+  }
+
   return (
     <SitePage
       key={route.siteId}
@@ -146,7 +157,8 @@ function SitePage({
   onSetThemeMode: (mode: ThemeMode) => void
 }) {
   const [indexState, setIndexState] = useState<LoadingState<SiteIndex>>({ status: 'loading' })
-  const artifactIndexUrl = sites.find(({ site }) => site.id === route.siteId)?.artifactIndexUrl
+  const registeredSite = sites.find(({ site }) => site.id === route.siteId)
+  const artifactIndexUrl = registeredSite?.artifactIndexUrl
     ?? defaultSiteIndexUrl(route.siteId)
 
   useEffect(() => {
@@ -187,6 +199,10 @@ function SitePage({
     return <ErrorPage title={route.siteId} error={indexState.error} onBack={() => navigate('/')} />
   }
 
+  const index = registeredSite
+    ? { ...indexState.data, site: { ...indexState.data.site, title: registeredSite.site.title } }
+    : indexState.data
+
   return (
     <ArtifactWorkspace
       route={route}
@@ -198,7 +214,7 @@ function SitePage({
       themeMode={themeMode}
       theme={theme}
       onSetThemeMode={onSetThemeMode}
-      index={indexState.data}
+      index={index}
     />
   )
 }

@@ -1,0 +1,49 @@
+name: Publish the registered SRE site
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish-sre:
+    runs-on: ubuntu-24.04
+    environment: artifact-pages-production
+    steps:
+      - name: Check out the satellite repository
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Assume the SRE site publisher role
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.ARTIFACT_PAGES_SRE_PUBLISH_ROLE_ARN }}
+          aws-region: us-east-1
+          role-session-name: artifact-pages-sre-${{ github.run_id }}
+
+      - name: Publish the explicitly selected site
+        id: publish-sre
+        uses: tasuku43/git-artifact-pages/actions/site-publish@<FULL_REVIEWED_ACTION_COMMIT_SHA>
+        with:
+          site: sre
+          source: docs/artifacts
+          config: github://example/platform-admin/.artifact-pages.yaml?ref=<FULL_ADMIN_CONFIG_COMMIT_SHA>
+          # For a private admin config repo, pass a read-only config token:
+          # github-token: ${{ secrets.ARTIFACT_PAGES_CONFIG_READ_TOKEN }}
+
+      - name: Use the typed CLI result
+        if: always()
+        env:
+          SITE: ${{ steps.publish-sre.outputs.site }}
+          OUTCOME: ${{ steps.publish-sre.outputs.outcome }}
+          EXIT_CODE: ${{ steps.publish-sre.outputs.exit_code }}
+          CHANGES_JSON: ${{ steps.publish-sre.outputs.changes_json }}
+          PREVIEW_CHANGES_JSON: ${{ steps.publish-sre.outputs.preview_changes_json }}
+        run: |
+          printf 'site=%s outcome=%s exit_code=%s\n' "$SITE" "$OUTCOME" "$EXIT_CODE"
+          printf 'changes=%s\npreview_changes=%s\n' "$CHANGES_JSON" "$PREVIEW_CHANGES_JSON"

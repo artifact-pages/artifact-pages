@@ -8,11 +8,13 @@ import { Icon } from './Icon'
 export function SiteHome({
   index,
   onOpenArtifact,
+  onOpenPreviews,
   treeStyle = 'path-list',
   defaultExpandedPaths,
 }: {
   index: SiteIndex
   onOpenArtifact: (href: string) => void
+  onOpenPreviews?: () => void
   treeStyle?: TreeStyle
   defaultExpandedPaths?: string[]
 }) {
@@ -48,6 +50,9 @@ export function SiteHome({
             ? 'Browse the latest work or find an artifact by title or path.'
             : 'Browse artifacts or find one by title or path.'}
         </p>
+        {onOpenPreviews ? (
+          <button className="site-home-preview-link" onClick={onOpenPreviews}>View previews <span aria-hidden="true">→</span></button>
+        ) : null}
         <label className="site-search">
           <Icon name="search" size={16} />
           <input

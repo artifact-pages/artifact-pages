@@ -7,15 +7,15 @@
 
 ## Outcome
 
-Use `/_indexes/sites.json` as the registered deployment's site-discovery source without regressing the Phase 1 directory-listing reference path.
+Use the static `/_indexes/sites.json` catalog as the site-discovery source in both fixture and registered modes. Browser discovery does not depend on nginx directory listing or object-storage listing, as specified in [§5.1](../../specification.md#51-site-discovery).
 
 ## Acceptance criteria
 
 - Registered mode loads IDs and names from the JSON registry, then per-site `meta.json`; it fetches a site's full `index.json` only when that site becomes active.
 - Unregistered site data left in storage is not discoverable through the root or site chooser.
-- Empty, missing, malformed, and newly changed registry states have explicit tested UI behavior; local directory-listing mode still works.
+- Empty, missing, malformed, and newly changed registry states have explicit tested UI behavior; browser discovery does not fall back to `/_indexes/` directory listing.
 - Multi-site E2E confirms initial requests do not download every site's artifact index.
 
 ## Evidence
 
-On 2026-09-27, `npm run build` and `npm run test:e2e` passed; all 50 browser cases passed. E2E covers registry-backed names and metadata, hides the stored but unregistered `showcase` site, loads no full indexes on the root chooser and only the active site's index after selection, and exercises empty, malformed, renamed, and missing-registry states. The Phase 1 nginx directory-listing fallback remains covered. The `SitePage` applies the registered display name at render time so registry completion does not re-fetch an unchanged active index or unmount an open site-switcher palette.
+`npm run test:e2e` passed all 55 browser cases. E2E covers registry-backed names and metadata, hides the stored but unregistered `showcase` site, loads no full indexes on the root chooser and only the active site's index after selection, and exercises empty, malformed, renamed, and missing-registry states. The fixture and registered discovery checks assert that the browser never requests `/_indexes/` as a directory-listing fallback. The `SitePage` applies the registered display name at render time so registry completion does not re-fetch an unchanged active index or unmount an open site-switcher palette.

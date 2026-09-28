@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ArtifactIndexEntry, SiteDiscoveryMetadata, SiteIndex, TocEntry } from '../domain/index'
 import type { RecentArtifactRead } from '../domain/recent-reads'
+import type { PreviewCandidate } from '../data/previews'
 import {
   createPaletteProductionScorer,
   getPaletteFreshnessBoost,
@@ -23,6 +24,7 @@ import {
   prepareFuzzyScoreText,
 } from '../domain/fuzzy-search'
 import type { FuzzyMatch } from '../domain/fuzzy-search'
+import { loadPreviewCandidates, PreviewLoadError, previewRouteHref } from '../data/previews'
 import { artifactRouteHref } from '../routing'
 import { Icon } from './Icon'
 
@@ -35,7 +37,7 @@ export type PaletteCommand = {
 }
 
 export type PaletteContext = 'sites' | 'site' | 'artifact'
-type PaletteScope = 'all' | 'recent' | 'pinned'
+type PaletteScope = 'all' | 'recent' | 'pinned' | 'previews'
 export type { RecentArtifactRead } from '../domain/recent-reads'
 
 type PaletteEntry = {
@@ -62,6 +64,11 @@ type PageSearchCache = {
   scope: PaletteScope
   recentReads: RecentArtifactRead[]
   pinnedArtifactIds: string[]
+}
+type PreviewPaletteState = {
+  siteId: string
+  status: 'idle' | 'loading' | 'success' | 'error'
+  candidates: PreviewCandidate[]
 }
 const preparedArtifactText = new WeakMap<ArtifactIndexEntry, PreparedArtifactText>()
 const pageSearchCache = new WeakMap<SiteIndex, PageSearchCache>()
@@ -97,6 +104,8 @@ export function CommandPalette({
   const [query, setQuery] = useState(seed)
   const [selectedIndex, setSelectedIndex] = useState(() => defaultSelectionIndex(seed, context, currentIndex))
   const [scope, setScope] = useState<PaletteScope>('all')
+  const [previewState, setPreviewState] = useState<PreviewPaletteState>({ siteId: '', status: 'idle', candidates: [] })
+  const currentSiteId = currentIndex?.site.id
   const scoringConfig = paletteScoringExperimentConfig(window.location.search)
   const scopeExperiment = paletteScopeExperimentConfig(window.location.search)
   const recentArtifactIds = useMemo(() => new Set(recentReads.map(({ artifactId }) => artifactId)), [recentReads])
@@ -147,7 +156,9 @@ export function CommandPalette({
         ? 'This artifact'
         : context === 'sites'
           ? 'Sites'
-          : currentIndex?.site.title
+          : scope === 'previews'
+            ? 'Previews'
+            : currentIndex?.site.title
             ? `${currentIndex.site.title} only`
             : undefined
   const placeholder = mode === 'site'
@@ -158,15 +169,21 @@ export function CommandPalette({
         ? 'Search headings in this artifact...'
         : context === 'sites'
           ? 'Search sites...'
+          : scope === 'previews'
+            ? 'Search preview documents...'
           : scope === 'recent'
             ? 'Search recently read pages...'
             : scope === 'pinned'
               ? 'Search pinned pages...'
               : 'Search pages, headings, and commands...'
 
+  const availablePreviewCandidates = previewState.siteId === currentSiteId
+    ? previewState.candidates.filter(({ availability }) => availability === 'available' || availability === 'unknown')
+    : []
+  const previewDocumentCount = availablePreviewCandidates.reduce((count, { group }) => count + group.documents.length, 0)
   const sections = useMemo(
-    () => buildSections({ mode, context, term, sites, currentIndex, currentArtifact, recentReads, pinnedArtifactIds, scope, commands, onNavigate, onJumpToHeading, scoringExperiment, productionScorer, prefilterScopeCandidates }),
-    [mode, context, term, sites, currentIndex, currentArtifact, recentReads, pinnedArtifactIds, scope, commands, onNavigate, onJumpToHeading, scoringExperiment, productionScorer, prefilterScopeCandidates],
+    () => buildSections({ mode, context, term, sites, currentIndex, currentArtifact, recentReads, pinnedArtifactIds, scope, commands, onNavigate, onJumpToHeading, scoringExperiment, productionScorer, prefilterScopeCandidates, previewCandidates: availablePreviewCandidates }),
+    [mode, context, term, sites, currentIndex, currentArtifact, recentReads, pinnedArtifactIds, scope, commands, onNavigate, onJumpToHeading, scoringExperiment, productionScorer, prefilterScopeCandidates, availablePreviewCandidates],
   )
   const entries = sections.flatMap((section) => section.entries)
   const entrySequence = mode === 'site' ? JSON.stringify(entries.map(({ id }) => id)) : ''
@@ -187,13 +204,13 @@ export function CommandPalette({
     ?? currentIndex?.artifacts.filter(({ id }) => pinnedArtifactIdSet.has(id)).length ?? 0
   const scopedCount = scope === 'all'
     ? memoizedScopeCounts?.all ?? currentIndex?.artifacts.length ?? 0
-    : scope === 'recent' ? recentCount : pinnedCount
+    : scope === 'recent' ? recentCount : scope === 'pinned' ? pinnedCount : previewDocumentCount
   const currentArtifactInScope = currentArtifact !== undefined && (
     scope === 'all'
     || (scope === 'recent' && recentArtifactIds.has(currentArtifact.id))
     || (scope === 'pinned' && pinnedArtifactIdSet.has(currentArtifact.id))
   )
-  const availableScopeCount = memoizedScopeCounts
+  const availableScopeCount = scope === 'previews' ? previewDocumentCount : memoizedScopeCounts
     ? scopedCount - (!term.trim() && currentArtifactInScope ? 1 : 0)
     : currentIndex?.artifacts.filter((artifact) => (
       (scope === 'all'
@@ -202,6 +219,23 @@ export function CommandPalette({
       && (term.trim() || artifact.id !== currentArtifact?.id)
     )).length ?? 0
   const emptyMessage = getEmptyMessage({ mode, scope, currentArtifact, siteCount: sites.length, availableScopeCount })
+
+  useEffect(() => {
+    if (scope !== 'previews' || !currentSiteId) return
+    let cancelled = false
+    setPreviewState({ siteId: currentSiteId, status: 'loading', candidates: [] })
+    loadPreviewCandidates(currentSiteId).then((candidates) => {
+      if (!cancelled) setPreviewState({ siteId: currentSiteId, status: 'success', candidates })
+    }).catch((error: unknown) => {
+      if (cancelled) return
+      if (error instanceof PreviewLoadError && error.status === 404) {
+        setPreviewState({ siteId: currentSiteId, status: 'success', candidates: [] })
+      } else {
+        setPreviewState({ siteId: currentSiteId, status: 'error', candidates: [] })
+      }
+    })
+    return () => { cancelled = true }
+  }, [scope, currentSiteId])
 
   useEffect(() => {
     inputRef.current?.focus()
@@ -288,29 +322,34 @@ export function CommandPalette({
         </div>
 
         {showScopePicker ? (
-          <div className="palette-scope-tabs" role="group" aria-label="Filter artifact results">
-            {(['all', 'recent', 'pinned'] as const).map((value) => (
+          <div className="palette-scope-tabs" role="group" aria-label="Filter site results">
+            {(['all', 'recent', 'pinned', 'previews'] as const).map((value) => (
               <button
                 key={value}
                 type="button"
                 aria-pressed={scope === value}
-                aria-label={`${value === 'all' ? 'All pages' : value === 'recent' ? 'Recently read pages' : 'Pinned pages'}${value === scope ? ', selected' : ''}`}
+                aria-label={`${value === 'all' ? 'All pages' : value === 'recent' ? 'Recently read pages' : value === 'pinned' ? 'Pinned pages' : 'Previews'}${value === scope ? ', selected' : ''}`}
                 onClick={() => {
                   setScope(value)
                   setSelectedIndex(0)
                   inputRef.current?.focus()
                 }}
               >
-                {value === 'all' ? 'All' : value === 'recent' ? 'Recent' : 'Pinned'}
+                {value === 'all' ? 'All' : value === 'recent' ? 'Recent' : value === 'pinned' ? 'Pinned' : 'Previews'}
                 {value === 'recent' ? <span aria-hidden="true">{recentCount}</span> : null}
                 {value === 'pinned' ? <span aria-hidden="true">{pinnedCount}</span> : null}
+                {value === 'previews' && previewState.status === 'success' && previewState.siteId === currentSiteId ? <span aria-hidden="true">{previewDocumentCount}</span> : null}
               </button>
             ))}
           </div>
         ) : null}
 
         <div className="palette-results" role="listbox" aria-label="Search results">
-          {sections.length === 0 ? (
+          {scope === 'previews' && previewState.siteId === currentSiteId && previewState.status === 'loading' ? (
+            <p className="palette-empty" role="status">Loading previews…</p>
+          ) : scope === 'previews' && previewState.siteId === currentSiteId && previewState.status === 'error' ? (
+            <p className="palette-empty" role="alert">The preview list could not be loaded.</p>
+          ) : sections.length === 0 ? (
             <p className="palette-empty">
               {emptyMessage}
             </p>
@@ -355,6 +394,9 @@ export function CommandPalette({
         </div>
 
         {loading ? <p className="palette-loading" role="status">Loading site information…</p> : null}
+        {scope === 'previews' && previewState.status === 'success' && previewState.candidates.some(({ availability }) => availability === 'invalid') ? (
+          <p className="palette-loading" role="status">Some preview records did not match their revision manifests.</p>
+        ) : null}
 
         <footer className="palette-footer">
           <span><kbd>↑</kbd><kbd>↓</kbd> or <kbd>Ctrl+J/K</kbd> navigate</span>
@@ -405,6 +447,12 @@ function getEmptyMessage({
       : 'No matches in Pinned. Clear the query or switch scopes.'
   }
 
+  if (mode === 'search' && scope === 'previews') {
+    return availableScopeCount === 0
+      ? 'There are no available previews for this site.'
+      : 'No matches in Previews. Clear the query to see all preview documents.'
+  }
+
   return 'Nothing matches. Try > for commands, @ for sites, or # for headings.'
 }
 
@@ -424,6 +472,7 @@ function buildSections({
   scoringExperiment,
   productionScorer,
   prefilterScopeCandidates,
+  previewCandidates,
 }: {
   mode: 'site' | 'command' | 'heading' | 'search'
   context: PaletteContext
@@ -440,6 +489,7 @@ function buildSections({
   scoringExperiment?: PaletteScoringExperiment
   productionScorer?: PaletteProductionScorer
   prefilterScopeCandidates: boolean
+  previewCandidates: PreviewCandidate[]
 }): PaletteSection[] {
   if (mode === 'site') {
     const entries = buildSiteEntries(sites, term, onNavigate)
@@ -467,6 +517,9 @@ function buildSections({
   }
 
   if (!currentIndex) return []
+  if (scope === 'previews') {
+    return buildPreviewSections(currentIndex.site.id, previewCandidates, term, onNavigate)
+  }
   const pageSections = buildPageSections(
     currentIndex,
     term,
@@ -495,6 +548,37 @@ function buildSections({
     ...pageSections,
     ...commandSection,
   ]
+}
+
+function buildPreviewSections(
+  siteId: string,
+  candidates: PreviewCandidate[],
+  term: string,
+  onNavigate: (href: string) => void,
+): PaletteSection[] {
+  return candidates.flatMap(({ group, availability }) => {
+    if (availability !== 'available' && availability !== 'unknown') return []
+    const entries = group.documents.flatMap((document) => {
+      const titleMatch = fuzzyMatch(document.title, term)
+      const pathMatch = fuzzyMatch(document.path, term)
+      if (term.trim() && !titleMatch && !pathMatch) return []
+      return [{
+        id: `preview:${siteId}:${group.id}:${document.path}`,
+        kind: 'artifact' as const,
+        title: document.title,
+        subtitle: document.path,
+        badge: availability === 'unknown' ? 'Availability unknown' : undefined,
+        titleMatch,
+        subtitleMatch: pathMatch,
+        onSelect: () => onNavigate(previewRouteHref(siteId, group.headSha, document.path, group.id)),
+      }]
+    }).sort((left, right) => (right.titleMatch?.score ?? right.subtitleMatch?.score ?? 0) - (left.titleMatch?.score ?? left.subtitleMatch?.score ?? 0))
+    if (entries.length === 0) return []
+    const title = group.kind === 'pull-request'
+      ? `PR #${group.id.slice(3)}`
+      : `Manual preview · ${group.headSha.slice(0, 8)}`
+    return [{ title, entries }]
+  })
 }
 
 function buildSiteEntries(
