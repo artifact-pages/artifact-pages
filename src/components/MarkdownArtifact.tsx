@@ -104,6 +104,14 @@ export function MarkdownArtifact({
               }
               return <pre {...props}>{children}</pre>
             },
+            source: ({ srcSet, ...props }) => (
+              <source
+                {...props}
+                srcSet={typeof srcSet === 'string'
+                  ? transformMarkdownSrcSet(srcSet, artifact, siteId, resolveHref)
+                  : srcSet}
+              />
+            ),
             a: ({ href, children, ...props }) => {
               const isAppRoute = Boolean(href?.startsWith(`/${encodeURIComponent(siteId)}/`))
               const isSamePage = Boolean(href?.startsWith('#'))
@@ -212,7 +220,7 @@ function transformMarkdownUrl(
   siteId: string,
   resolveHref?: (url: URL) => string | undefined,
 ) {
-  if (value.startsWith('data:')) return key === 'src' && safeDataImageUrl.test(value) ? value : ''
+  if (/^data:/i.test(value)) return key === 'src' && safeDataImageUrl.test(value) ? value : ''
   const safeValue = defaultUrlTransform(value)
   if (!safeValue) return ''
   if (safeValue.startsWith('#')) return safeValue.startsWith('#md-') ? safeValue : `#md-${safeValue.slice(1)}`
@@ -250,6 +258,49 @@ function transformMarkdownUrl(
   }
 
   return resolved.href
+}
+
+function transformMarkdownSrcSet(
+  value: string,
+  artifact: ArtifactIndexEntry,
+  siteId: string,
+  resolveHref?: (url: URL) => string | undefined,
+) {
+  return parseMarkdownSrcSet(value).flatMap(({ url, descriptor }) => {
+    const transformed = transformMarkdownUrl(url, 'src', artifact, siteId, resolveHref)
+    return transformed ? [`${transformed}${descriptor ? ` ${descriptor}` : ''}`] : []
+  }).join(', ')
+}
+
+function parseMarkdownSrcSet(value: string) {
+  const candidates: Array<{ url: string; descriptor: string }> = []
+  let index = 0
+  while (index < value.length) {
+    while (index < value.length && (isMarkdownHtmlSpace(value[index]) || value[index] === ',')) index++
+    if (index >= value.length) break
+
+    const start = index
+    while (index < value.length && !isMarkdownHtmlSpace(value[index])) index++
+    const token = value.slice(start, index)
+    const url = token.replace(/,+$/, '')
+    if (!url) continue
+    if (url !== token) {
+      candidates.push({ url, descriptor: '' })
+      continue
+    }
+
+    while (index < value.length && isMarkdownHtmlSpace(value[index])) index++
+    const descriptorStart = index
+    while (index < value.length && value[index] !== ',') index++
+    const descriptor = value.slice(descriptorStart, index).trim()
+    candidates.push({ url, descriptor })
+    if (index < value.length) index++
+  }
+  return candidates
+}
+
+function isMarkdownHtmlSpace(value: string) {
+  return value === '\t' || value === '\n' || value === '\f' || value === '\r' || value === ' '
 }
 
 function decodePathSegment(segment: string) {

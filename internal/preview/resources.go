@@ -85,6 +85,8 @@ func localReferences(from string, content []byte) []string {
 	switch strings.ToLower(path.Ext(from)) {
 	case ".md":
 		doc := goldmark.DefaultParser().Parse(text.NewReader(content))
+		rawHTMLByBlock := make(map[ast.Node][]byte)
+		var rawHTMLBlocks []ast.Node
 		_ = ast.Walk(doc, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
 			if !entering {
 				return ast.WalkContinue, nil
@@ -92,8 +94,26 @@ func localReferences(from string, content []byte) []string {
 			if image, ok := node.(*ast.Image); ok {
 				references = append(references, string(image.Destination))
 			}
+			switch node := node.(type) {
+			case *ast.RawHTML:
+				block := markdownInlineBlock(node)
+				if block == nil {
+					references = append(references, markdownHTMLImageReferences(node.Text(content))...)
+					break
+				}
+				if _, exists := rawHTMLByBlock[block]; !exists {
+					rawHTMLBlocks = append(rawHTMLBlocks, block)
+				}
+				rawHTMLByBlock[block] = append(rawHTMLByBlock[block], ' ')
+				rawHTMLByBlock[block] = append(rawHTMLByBlock[block], node.Text(content)...)
+			case *ast.HTMLBlock:
+				references = append(references, markdownHTMLImageReferences(node.Text(content))...)
+			}
 			return ast.WalkContinue, nil
 		})
+		for _, block := range rawHTMLBlocks {
+			references = append(references, markdownHTMLImageReferences(rawHTMLByBlock[block])...)
+		}
 	case ".html", ".htm", ".xhtml", ".svg":
 		root, err := html.Parse(bytes.NewReader(content))
 		if err != nil {
@@ -147,6 +167,101 @@ func localReferences(from string, content []byte) []string {
 		references = append(references, javascriptModuleReferences(content)...)
 	}
 	return uniqueStrings(references)
+}
+
+func markdownInlineBlock(node ast.Node) ast.Node {
+	for parent := node.Parent(); parent != nil; parent = parent.Parent() {
+		switch parent.(type) {
+		case *ast.Paragraph, *ast.Heading:
+			return parent
+		}
+	}
+	return nil
+}
+
+// markdownHTMLImageReferences follows the rendered image subset allowed by
+// the Markdown sanitizer: img[src] and picture-contained source[srcset]. Other
+// HTML resource attributes are intentionally excluded from the bundle.
+func markdownHTMLImageReferences(source []byte) []string {
+	root, err := html.Parse(bytes.NewReader(source))
+	if err != nil {
+		return nil
+	}
+	var references []string
+	var visit func(*html.Node, bool)
+	visit = func(node *html.Node, insidePicture bool) {
+		insidePicture = insidePicture || node.Type == html.ElementNode && strings.EqualFold(node.Data, "picture")
+		if node.Type == html.ElementNode {
+			switch strings.ToLower(node.Data) {
+			case "img":
+				if value := attributeValue(node.Attr, "src"); value != "" {
+					references = append(references, value)
+				}
+			case "source":
+				if !insidePicture {
+					break
+				}
+				for _, attribute := range node.Attr {
+					if strings.EqualFold(attribute.Key, "srcset") {
+						references = append(references, sourceSetReferences(attribute.Val)...)
+					}
+				}
+			}
+		}
+		for child := node.FirstChild; child != nil; child = child.NextSibling {
+			visit(child, insidePicture)
+		}
+	}
+	visit(root, false)
+	return references
+}
+
+// sourceSetReferences reads candidate URLs without splitting commas inside
+// data URLs. HTML requires whitespace before descriptors; a trailing comma
+// on a URL token ends a descriptor-free candidate.
+func sourceSetReferences(value string) []string {
+	var references []string
+	for index := 0; index < len(value); {
+		for index < len(value) && (isHTMLSpace(value[index]) || value[index] == ',') {
+			index++
+		}
+		if index >= len(value) {
+			break
+		}
+
+		start := index
+		for index < len(value) && !isHTMLSpace(value[index]) {
+			index++
+		}
+		candidate := value[start:index]
+		trimmed := strings.TrimRight(candidate, ",")
+		if trimmed != candidate {
+			if trimmed != "" {
+				references = append(references, trimmed)
+			}
+			continue
+		}
+		if candidate != "" {
+			references = append(references, candidate)
+		}
+
+		for index < len(value) && value[index] != ',' {
+			index++
+		}
+		if index < len(value) {
+			index++
+		}
+	}
+	return references
+}
+
+func isHTMLSpace(value byte) bool {
+	switch value {
+	case '\t', '\n', '\f', '\r', ' ':
+		return true
+	default:
+		return false
+	}
 }
 
 type jsModuleTokenKind uint8

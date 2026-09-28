@@ -5,7 +5,7 @@
   "defaultHeadSha": "1111111111111111111111111111111111111111",
   "mergeBaseSha": "abcdefabcdefabcdefabcdefabcdefabcdefabcd",
   "createdAt": "2026-09-27T00:00:00Z",
-  "bundleDigest": "sha256:914a613392c5156e6f2a8a602d78599fc16f4eaf1c22cb4993bb981e72699b32",
+  "bundleDigest": "sha256:3402854336adda2f1eff55a0bac5862c6fb9ab397ac20340fa1484b308627d14",
   "files": [
     {
       "path": "assets/mark.svg",
@@ -39,7 +39,7 @@
     },
     {
       "path": "guides/preview-guide.md",
-      "sha256": "f40c0faeebae93faee90d2adc2a1e031a861c54b6fc70eb1d9e71539bf95cde6",
+      "sha256": "4cc6cd756fe51f45b91f4f83e732fc53e35942d91673a9bba5b97c89343a814c",
       "contentType": "text/markdown; charset=utf-8"
     },
     {

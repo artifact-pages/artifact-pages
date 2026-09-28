@@ -275,6 +275,75 @@ export const loaded = true;
 	}
 }
 
+func TestBuildFromGitCollectsSanitizedMarkdownHTMLImagesFromHead(t *testing.T) {
+	repo := newTestRepository(t)
+	writeTestFile(t, repo, "site/docs/guide.md", "# Base guide\n")
+	gitTest(t, repo, "add", ".")
+	gitTest(t, repo, "commit", "-m", "base guide")
+	gitTest(t, repo, "branch", "preview")
+
+	gitTest(t, repo, "checkout", "preview")
+	writeTestFile(t, repo, "site/docs/guide.md", `# Preview guide
+
+The inline preview includes <img src="../assets/diagram%20map.svg?theme=dark#plot" alt="Diagram map">.
+
+It also includes <picture><source srcset="../assets/nested/inline%20map.svg?size=large 2x"><img src="../assets/nested/inline fallback.svg" alt="Inline map"></picture>.
+
+<picture>
+  <source srcset="../assets/nested/retina%20map.svg?density=2 2x, https://cdn.example.test/remote.svg 3x, data:image/svg+xml;base64,PHN2Zz4= 4x">
+  <img src="../assets/fallback.svg" srcset="../assets/ignored-img-srcset.svg 2x" alt="Fallback map">
+</picture>
+
+<script src="../assets/removed-script.js"><img src="../assets/script-child.svg"></script>
+<style>.map { background-image: url("../assets/removed-style.svg"); }</style>
+<source srcset="../assets/standalone-source-decoy.svg 1x">
+<video><source srcset="../assets/video-source-decoy.svg 1x"></video>
+
+~~~html
+<img src="../assets/code-fence-decoy.svg" alt="Not rendered HTML">
+~~~
+
+![Markdown image](../assets/markdown.svg)
+`)
+	writeTestFile(t, repo, "site/assets/diagram map.svg", `<svg xmlns="http://www.w3.org/2000/svg"/>`)
+	writeTestFile(t, repo, "site/assets/nested/inline map.svg", `<svg xmlns="http://www.w3.org/2000/svg"/>`)
+	writeTestFile(t, repo, "site/assets/nested/inline fallback.svg", `<svg xmlns="http://www.w3.org/2000/svg"/>`)
+	writeTestFile(t, repo, "site/assets/nested/retina map.svg", `<svg xmlns="http://www.w3.org/2000/svg"/>`)
+	writeTestFile(t, repo, "site/assets/fallback.svg", `<svg xmlns="http://www.w3.org/2000/svg"/>`)
+	writeTestFile(t, repo, "site/assets/markdown.svg", `<svg xmlns="http://www.w3.org/2000/svg"/>`)
+	gitTest(t, repo, "add", ".")
+	gitTest(t, repo, "commit", "-m", "preview guide with raw HTML images")
+
+	result, err := BuildFromGit(context.Background(), BuildOptions{
+		RepositoryDir: repo, SiteID: "sre", SourcePath: "site", DefaultRef: "main", HeadRef: "preview",
+	})
+	if err != nil {
+		t.Fatalf("BuildFromGit() error = %v", err)
+	}
+	want := []string{
+		"assets/diagram map.svg", "assets/fallback.svg", "assets/markdown.svg", "assets/nested/inline fallback.svg", "assets/nested/inline map.svg",
+		"assets/nested/retina map.svg", "docs/guide.md",
+	}
+	if len(result.Files) != len(want) {
+		t.Fatalf("collected %d files, want %d: %#v", len(result.Files), len(want), result.Files)
+	}
+	manifestPaths := make(map[string]bool, len(result.Manifest.Files))
+	for _, file := range result.Manifest.Files {
+		manifestPaths[file.Path] = true
+	}
+	if len(manifestPaths) != len(want) {
+		t.Fatalf("manifest lists %d files, want %d: %#v", len(manifestPaths), len(want), result.Manifest.Files)
+	}
+	for _, filePath := range want {
+		if _, ok := result.Files[filePath]; !ok {
+			t.Errorf("Markdown image dependency %q was not collected from the head tree", filePath)
+		}
+		if !manifestPaths[filePath] {
+			t.Errorf("Markdown image dependency %q is missing from the manifest", filePath)
+		}
+	}
+}
+
 func TestBuildFromGitRejectsMissingAndOutOfTreeStaticModules(t *testing.T) {
 	for _, testCase := range []struct {
 		name      string

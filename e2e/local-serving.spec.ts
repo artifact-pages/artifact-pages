@@ -2175,11 +2175,25 @@ test('site previews filter missing revisions and keep PR and manual groups disti
 
   const markdownLink = page.getByRole('link', { name: /Local preview guide/ }).first()
   await expect(markdownLink).toHaveAttribute('href', new RegExp(`/sre/_previews/${previewHeadSha}/guides/preview-guide\\.md\\?group=pr%3A42$`))
+  const previewImageResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url())
+    return url.pathname === `/_previews/sre/revisions/${previewHeadSha}/files/assets/mark.svg`
+      && url.search === '?theme=dark'
+      && response.status() === 200
+  })
   await markdownLink.click()
   await expect(page).toHaveURL(new RegExp(`/sre/_previews/${previewHeadSha}/guides/preview-guide\\.md\\?group=pr%3A42$`))
   await expect(page.getByRole('link', { name: 'Return to PR #42 ↗' })).toHaveAttribute('href', 'https://github.com/acme/sre-docs/pull/42')
   await expect(page.locator('.preview-reader-header h1')).toHaveText('Local preview guide')
-  await expect(page.getByRole('img', { name: 'Preview mark' })).toBeVisible()
+  const previewMark = page.getByRole('img', { name: 'Preview mark' })
+  await expect(previewMark).toBeVisible()
+  await previewImageResponse
+  await expect.poll(() => previewMark.evaluate((node) => {
+    const image = node as HTMLImageElement
+    return image.complete && image.naturalWidth > 0
+  })).toBe(true)
+  const previewMarkCurrentSrc = await previewMark.evaluate((node) => (node as HTMLImageElement).currentSrc)
+  expect(new URL(previewMarkCurrentSrc).pathname).toBe(`/_previews/sre/revisions/${previewHeadSha}/files/assets/mark.svg`)
   await expect(page.getByRole('link', { name: 'Open the published latency retrospective' })).toHaveAttribute('href', '/sre/reports/latency-retrospective.md')
 
   await page.goto('/sre/_previews')
