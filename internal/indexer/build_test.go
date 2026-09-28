@@ -262,6 +262,68 @@ func TestBuildCreatesZeroDocumentIndexForResourceOnlySite(t *testing.T) {
 	}
 }
 
+func TestBuildFallbackTitlesPreserveUnicodeFilenames(t *testing.T) {
+	repositoryRoot := initializeGitRepository(t)
+	restoreWorkingDirectory := chdirForTest(t, repositoryRoot)
+	defer restoreWorkingDirectory()
+
+	files := []struct {
+		path     string
+		contents string
+	}{
+		{path: "artifacts/reports/設計.md", contents: "本文のみ\n"},
+		{path: "artifacts/reports/éclair.md", contents: "No heading\n"},
+		{path: "artifacts/reports/𐐨guide.md", contents: "No heading\n"},
+		{path: "artifacts/reports/🧭 guide.md", contents: "No heading\n"},
+		{path: "artifacts/reports/api_notes-v2.md", contents: "No heading\n"},
+		{path: "artifacts/reports/設計-note.html", contents: "<main>Missing title</main>"},
+		{path: "artifacts/reports/mIXed_explicit.md", contents: "# mIXed Explicit title\n"},
+		{path: "artifacts/reports/existing_title.html", contents: "<html><head><title>eXPLICIT HTML title</title></head></html>"},
+	}
+	for _, file := range files {
+		writeFixtureFile(t, repositoryRoot, file.path, file.contents)
+	}
+	commitFixture(t, repositoryRoot, "add Unicode title fallback fixtures", time.Date(2026, 3, 5, 6, 7, 8, 0, time.UTC))
+
+	index := buildAndReadIndex(t, repositoryRoot, "sre")
+	artifactsByPath := make(map[string]ArtifactIndexEntry, len(index.Artifacts))
+	for _, artifact := range index.Artifacts {
+		artifactsByPath[artifact.Path] = artifact
+	}
+
+	wants := []struct {
+		path        string
+		title       string
+		filename    string
+		artifactURL string
+	}{
+		{path: "reports/設計.md", title: "設計", filename: "設計.md", artifactURL: "/_artifacts/sre/reports/%E8%A8%AD%E8%A8%88.md"},
+		{path: "reports/éclair.md", title: "Éclair", filename: "éclair.md", artifactURL: "/_artifacts/sre/reports/%C3%A9clair.md"},
+		{path: "reports/𐐨guide.md", title: "𐐀guide", filename: "𐐨guide.md", artifactURL: "/_artifacts/sre/reports/%F0%90%90%A8guide.md"},
+		{path: "reports/🧭 guide.md", title: "🧭 Guide", filename: "🧭 guide.md", artifactURL: "/_artifacts/sre/reports/%F0%9F%A7%AD%20guide.md"},
+		{path: "reports/api_notes-v2.md", title: "Api Notes V2", filename: "api_notes-v2.md", artifactURL: "/_artifacts/sre/reports/api_notes-v2.md"},
+		{path: "reports/設計-note.html", title: "設計 Note", filename: "設計-note.html", artifactURL: "/_artifacts/sre/reports/%E8%A8%AD%E8%A8%88-note.html"},
+		{path: "reports/mIXed_explicit.md", title: "mIXed Explicit title", filename: "mIXed_explicit.md", artifactURL: "/_artifacts/sre/reports/mIXed_explicit.md"},
+		{path: "reports/existing_title.html", title: "eXPLICIT HTML title", filename: "existing_title.html", artifactURL: "/_artifacts/sre/reports/existing_title.html"},
+	}
+	if len(index.Artifacts) != len(wants) {
+		t.Fatalf("indexed %d artifacts, want %d", len(index.Artifacts), len(wants))
+	}
+	for _, want := range wants {
+		artifact, found := artifactsByPath[want.path]
+		if !found {
+			t.Errorf("artifact %q is missing from the index", want.path)
+			continue
+		}
+		if artifact.Title != want.title || strings.ContainsRune(artifact.Title, '\uFFFD') {
+			t.Errorf("artifact %q title = %q, want readable %q", want.path, artifact.Title, want.title)
+		}
+		if artifact.ID != want.path || artifact.Path != want.path || artifact.Filename != want.filename || artifact.ArtifactURL != want.artifactURL {
+			t.Errorf("artifact identity for %q = id %q, path %q, filename %q, url %q", want.path, artifact.ID, artifact.Path, artifact.Filename, artifact.ArtifactURL)
+		}
+	}
+}
+
 func TestBuildPaletteScoringProfilePacksSharedFeatures(t *testing.T) {
 	artifacts := []ArtifactIndexEntry{
 		{ID: "teams/latency/summary.md", Title: "Latency 日本語 𐐀guide", Path: "Teams/Latency/summary.md"},

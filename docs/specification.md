@@ -224,8 +224,11 @@ to pages but are not independently indexed.
 Artifact `id` and `path` values use slash-separated, source-relative UTF-8 names and are not URL-encoded in JSON. When producing `artifactUrl` or a logical `/:site/...` route, percent-encode each path segment independently and retain `/` only as the segment separator. This keeps spaces, `#`, `?`, `%`, and non-ASCII characters from changing URL structure; use URL-path encoding, not form encoding (`+` is a literal plus, not a space), and decode each segment at most once. Do not slugify or otherwise rewrite valid names. Reject filenames that are not valid UTF-8 rather than serializing a lossy replacement into the index. Storage keys preserve the source-relative directory structure and names.
 
 For Markdown, the first H1 supplies the display title, with a readable filename fallback when there
-is no H1. Markdown headings are indexed for Contents, and generated heading IDs match the reader.
-HTML retains its `<title>`-based display title and existing precomputed heading behavior.
+is no H1. HTML uses its `<title>` when present and falls back to the readable filename when absent.
+Filename-derived titles remove the extension, turn hyphens and underscores into spaces, and uppercase
+the first Unicode character of each word without changing the remaining characters. Explicit titles
+retain their original text. Markdown headings are indexed for Contents, and generated heading IDs
+match the reader. HTML retains its existing precomputed heading behavior.
 
 ### Publishable source directory
 

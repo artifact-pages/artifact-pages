@@ -27,7 +27,7 @@ Priority describes user impact, not implementation effort. Issues 001–012 are 
 
 Each review issue contains its own reproduction and source pointers. Supplementary captures/scripts remain ignored in `.local/reviews/2026-09-28/`; they are not the only evidence or a dependency of this committed backlog. Local CLI/HTTP/browser reproductions and provider-source inconsistencies are labeled separately from live-provider proof. Existing passing suites did not cover these regressions.
 
-ISSUE-030's Markdown cross-document fragments passed the 63/63 local Playwright suite with one worker and was removed after verification. Seven review issues remain Open; with ISSUE-013, this track has eight Open, zero In progress, and zero Blocked. ISSUE-029 Markdown heading ID parity passed the Go indexer and local browser suite. [TD3](../technical-design/TD3-preview-origin-delivery.md) is settled, and ISSUE-026's local same-origin HTML implementation and emulator regressions are complete. ISSUE-027's raw-resource navigation and ISSUE-028's HTML fragment synchronization passed the local stack and all three emulator profiles. The unconfirmed AWS absent-object 403/404 concern belongs to [T15](../verification/T15-provider-delivery.md), not to another confirmed issue.
+ISSUE-030's Markdown cross-document fragments passed the 63/63 local Playwright suite with one worker and was removed after verification. ISSUE-031's Unicode filename fallback passed the Go indexer tests and the 64/64 local Playwright suite with one worker, then was removed after verification. Six review issues remain Open; with ISSUE-013 this track has seven Open, zero In progress, and zero Blocked. ISSUE-029 Markdown heading ID parity passed the Go indexer and local browser suite. [TD3](../technical-design/TD3-preview-origin-delivery.md) is settled, and ISSUE-026's local same-origin HTML implementation and emulator regressions are complete. ISSUE-027's raw-resource navigation and ISSUE-028's HTML fragment synchronization passed the local stack and all three emulator profiles. The unconfirmed AWS absent-object 403/404 concern belongs to [T15](../verification/T15-provider-delivery.md), not to another confirmed issue.
 
 ## Repair order
 
@@ -35,7 +35,7 @@ Work one issue at a time: mark it In progress, reproduce it, add a regression, i
 
 | Order | Items, in order | Outcome |
 | --- | --- | --- |
-| 1 | ISSUE-031 → 032 → 033 → 034 → 035 | Unicode/provenance, remote config and local development. |
+| 1 | ISSUE-032 → 033 → 034 → 035 | Git provenance, remote config and local development. |
 | 2 | ISSUE-036 → 037 | Release-file integrity and reference artifact CSP. |
 | Later product improvement | ISSUE-013 | Site-description schema/UI work is outside this repair pass and is not a current release gate. |
 
@@ -46,7 +46,6 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | Issue | Status | Priority | Area | Summary |
 | --- | --- | --- | --- | --- |
 | [ISSUE-013 — Site descriptions](ISSUE-013-site-description.md) | Open | P2 | Site discovery and site selection | Explain each site's purpose before visitors open it. |
-| [ISSUE-031 — Keep Unicode filenames readable in fallback artifact titles](ISSUE-031-unicode-filename-title.md) | Open | P2 | Indexer / artifact display title | Review 18: Confirmed defect; reproduction and acceptance criteria in the issue. |
 | [ISSUE-032 — Do not assign a resource committer to a document without Git history](ISSUE-032-untracked-document-committer.md) | Open | P2 | Indexer / Git provenance | Review 19: Confirmed defect; reproduction and acceptance criteria in the issue. |
 | [ISSUE-033 — Keep Git metadata stable when building from a repository subdirectory](ISSUE-033-nested-cwd-git-metadata.md) | Open | P2 | Indexer / working-directory resolution | Review 20: Confirmed defect; reproduction and acceptance criteria in the issue. |
 | [ISSUE-034 — Accept valid GitHub repository names in remote config locators](ISSUE-034-remote-config-repository-names.md) | Open | P2 | CLI / remote configuration | Review 21: Confirmed defect; reproduction and acceptance criteria in the issue. |

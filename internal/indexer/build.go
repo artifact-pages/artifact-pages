@@ -993,8 +993,9 @@ func humanize(value string) string {
 	value = strings.ReplaceAll(value, "_", " ")
 	words := strings.Fields(value)
 	for index, word := range words {
-		if len(word) > 0 {
-			words[index] = strings.ToUpper(word[:1]) + word[1:]
+		firstRune, size := utf8.DecodeRuneInString(word)
+		if size > 0 {
+			words[index] = strings.ToUpper(string(firstRune)) + word[size:]
 		}
 	}
 	return strings.Join(words, " ")

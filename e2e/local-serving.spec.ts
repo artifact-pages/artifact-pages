@@ -1280,6 +1280,33 @@ test('logical artifact routes round-trip reserved and Unicode path characters th
   await expect(iframe.locator('body')).toHaveAttribute('data-route-fixture', 'loaded')
 })
 
+test('Unicode artifact titles remain readable in navigation and search', async ({ page }) => {
+  const artifact = {
+    id: 'guides/設計-note.md',
+    title: '設計 Note',
+    path: 'guides/設計-note.md',
+    format: 'markdown',
+    filename: '設計-note.md',
+    artifactUrl: '/_artifacts/sre/guides/%E8%A8%AD%E8%A8%88-note.md',
+    updatedAt: '2026-09-29T00:00:00Z',
+  }
+  await page.route('**/_indexes/sre/index.json', async (route) => {
+    const response = await route.fetch()
+    const index = await response.json() as { artifacts: Array<Record<string, unknown>> }
+    index.artifacts.push(artifact)
+    await route.fulfill({ response, body: JSON.stringify(index) })
+  })
+
+  await page.goto('/sre')
+  await page.getByRole('textbox', { name: 'Filter SRE navigation' }).fill('設計')
+  await expect(page.locator('.sidebar-body .tree-artifact[data-tree-path="guides/設計-note.md"] .tree-label').first()).toHaveText('設計 Note')
+
+  await page.getByRole('button', { name: 'Search pages in SRE' }).click()
+  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  await palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' }).fill('設計')
+  await expect(palette.getByRole('option', { name: /設計 Note/ })).toBeVisible()
+})
+
 test('Markdown pages render safely with GFM, Mermaid, local assets, and extensionful links', async ({ page }) => {
   const imageResponse = page.waitForResponse((response) => {
     return new URL(response.url()).pathname === '/_artifacts/sre/runbooks/assets/request-path.svg'
