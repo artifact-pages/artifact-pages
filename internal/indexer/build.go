@@ -752,7 +752,9 @@ func artifactGitUpdates(ctx context.Context, repositoryRoot, sourcePath string, 
 	if pathspec == "" {
 		pathspec = "."
 	}
-	output, err := exec.CommandContext(ctx, "git", "log", "-z", "--format=%ct%x1f%cn", "--name-only", "--no-renames", "--", filepath.FromSlash(pathspec)).CombinedOutput()
+	command := exec.CommandContext(ctx, "git", "log", "-z", "--format=%ct%x1f%cn", "--name-only", "--no-renames", "--", filepath.FromSlash(pathspec))
+	command.Dir = repositoryRoot
+	output, err := command.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("read Git history for source directory: %w: %s", err, strings.TrimSpace(string(output)))
 	}
@@ -810,7 +812,9 @@ func artifactGitUpdates(ctx context.Context, repositoryRoot, sourcePath string, 
 func artifactWorkingTreeUpdates(ctx context.Context, repositoryRoot, sourcePath string, artifacts []discoveredArtifact, deletedAt time.Time) (map[string]time.Time, error) {
 	artifactDirectories, artifactFiles := artifactPathLookup(artifacts)
 
-	output, err := exec.CommandContext(ctx, "git", "status", "--porcelain=v1", "-z", "--untracked-files=all", "--no-renames", "--", filepath.FromSlash(sourcePath)).CombinedOutput()
+	command := exec.CommandContext(ctx, "git", "status", "--porcelain=v1", "-z", "--untracked-files=all", "--no-renames", "--", filepath.FromSlash(sourcePath))
+	command.Dir = repositoryRoot
+	output, err := command.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("read Git working-tree changes for source directory: %w: %s", err, strings.TrimSpace(string(output)))
 	}

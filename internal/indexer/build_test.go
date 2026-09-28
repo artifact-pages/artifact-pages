@@ -546,6 +546,134 @@ func TestBuildGitMetadataRequiresDocumentHistory(t *testing.T) {
 	}
 }
 
+func TestBuildGitMetadataIsIndependentOfWorkingDirectory(t *testing.T) {
+	repositoryRoot := initializeGitRepository(t)
+	restoreWorkingDirectory := chdirForTest(t, repositoryRoot)
+	defer restoreWorkingDirectory()
+
+	trackedFiles := []string{
+		"docs/artifacts/reports/index.md",
+		"docs/artifacts/reports/appendix.html",
+		"docs/artifacts/reports/assets/staged.css",
+		"docs/artifacts/reports/assets/unstaged.css",
+	}
+	writeFixtureFile(t, repositoryRoot, trackedFiles[0], "# Main report\n")
+	writeFixtureFile(t, repositoryRoot, trackedFiles[1], "<title>Appendix</title>")
+	writeFixtureFile(t, repositoryRoot, trackedFiles[2], "body { color: black; }\n")
+	writeFixtureFile(t, repositoryRoot, trackedFiles[3], "body { background: white; }\n")
+	baseTime := time.Date(2026, 1, 1, 9, 0, 0, 0, time.UTC)
+	for _, filename := range trackedFiles {
+		filePath := filepath.Join(repositoryRoot, filename)
+		if err := os.Chtimes(filePath, baseTime, baseTime); err != nil {
+			t.Fatalf("set fixture modification time for %q: %v", filename, err)
+		}
+	}
+	commitTime := time.Date(2026, 2, 1, 9, 0, 0, 0, time.UTC)
+	commitFixtureWithIdentities(t, repositoryRoot, "add nested-source documents and resources", commitTime,
+		"Artifact Author", "artifact-author@example.invalid",
+		"Nested Source Committer", "nested-source-committer@example.invalid",
+	)
+	runGit(t, repositoryRoot, "remote", "add", "origin", "git@github.com:acme/knowledge.git")
+
+	nestedWorkingDirectory := filepath.Join(repositoryRoot, "docs")
+	absoluteSource := filepath.Join(repositoryRoot, "docs", "artifacts")
+	generatedAt := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	runBuild := func(workingDirectory, sourceDirectory, outputName string) SiteIndex {
+		restore := chdirForTest(t, workingDirectory)
+		defer restore()
+
+		outputDirectory := filepath.Join(repositoryRoot, ".local", outputName)
+		if _, err := Build(context.Background(), BuildOptions{
+			SiteID:    "sre",
+			SourceDir: sourceDirectory,
+			OutputDir: outputDirectory,
+			Now:       func() time.Time { return generatedAt },
+		}); err != nil {
+			t.Fatalf("Build() from %q with source %q: %v", workingDirectory, sourceDirectory, err)
+		}
+		contents, err := os.ReadFile(filepath.Join(outputDirectory, "_indexes", "sre", "index.json"))
+		if err != nil {
+			t.Fatalf("read index built from %q: %v", workingDirectory, err)
+		}
+		var index SiteIndex
+		if err := json.Unmarshal(contents, &index); err != nil {
+			t.Fatalf("decode index built from %q: %v", workingDirectory, err)
+		}
+		return index
+	}
+	assertBuilds := func(change string, wantUpdatedAt time.Time) {
+		t.Helper()
+		rootIndex := runBuild(repositoryRoot, "docs/artifacts", "git-metadata-root")
+		nestedRelativeIndex := runBuild(nestedWorkingDirectory, "artifacts", "git-metadata-nested-relative")
+		nestedAbsoluteIndex := runBuild(nestedWorkingDirectory, absoluteSource, "git-metadata-nested-absolute")
+		for name, index := range map[string]SiteIndex{
+			"nested relative": nestedRelativeIndex,
+			"nested absolute": nestedAbsoluteIndex,
+		} {
+			if !reflect.DeepEqual(rootIndex, index) {
+				t.Errorf("%s build after %s differs from root build:\nroot:   %+v\nactual: %+v", name, change, rootIndex, index)
+			}
+		}
+		if len(rootIndex.Artifacts) != 2 {
+			t.Fatalf("root build after %s indexed %d documents, want 2", change, len(rootIndex.Artifacts))
+		}
+		for _, artifact := range rootIndex.Artifacts {
+			if artifact.UpdatedAt != wantUpdatedAt.Format(time.RFC3339) {
+				t.Errorf("artifact %q updatedAt after %s = %q, want %q", artifact.ID, change, artifact.UpdatedAt, wantUpdatedAt.Format(time.RFC3339))
+			}
+			if artifact.LastCommitter == nil || artifact.LastCommitter.Name != "Nested Source Committer" {
+				t.Errorf("artifact %q lastCommitter after %s = %+v, want the committed Git identity", artifact.ID, change, artifact.LastCommitter)
+			}
+			if artifact.Source == nil || artifact.Source.FilePath != "docs/artifacts/"+artifact.Path {
+				t.Errorf("artifact %q source after %s = %+v, want repository-relative file path %q", artifact.ID, change, artifact.Source, "docs/artifacts/"+artifact.Path)
+			}
+		}
+	}
+
+	assertBuilds("clean build", commitTime)
+
+	stagedAssetPath := filepath.Join(repositoryRoot, trackedFiles[2])
+	if err := os.WriteFile(stagedAssetPath, []byte("body { color: purple; }\n"), 0o644); err != nil {
+		t.Fatalf("modify staged shared resource: %v", err)
+	}
+	stagedTime := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
+	if err := os.Chtimes(stagedAssetPath, stagedTime, stagedTime); err != nil {
+		t.Fatalf("set staged shared resource modification time: %v", err)
+	}
+	runGit(t, repositoryRoot, "add", trackedFiles[2])
+	assertBuilds("staged resource change", stagedTime)
+
+	unstagedAssetPath := filepath.Join(repositoryRoot, trackedFiles[3])
+	if err := os.WriteFile(unstagedAssetPath, []byte("body { background: yellow; }\n"), 0o644); err != nil {
+		t.Fatalf("modify unstaged shared resource: %v", err)
+	}
+	unstagedTime := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
+	if err := os.Chtimes(unstagedAssetPath, unstagedTime, unstagedTime); err != nil {
+		t.Fatalf("set unstaged shared resource modification time: %v", err)
+	}
+	assertBuilds("staged and unstaged resource changes", unstagedTime)
+}
+
+func TestBuildRejectsSourceOutsideRepositoryFromNestedWorkingDirectory(t *testing.T) {
+	repositoryRoot := initializeGitRepository(t)
+	if err := os.Mkdir(filepath.Join(repositoryRoot, "docs"), 0o755); err != nil {
+		t.Fatalf("create nested working directory: %v", err)
+	}
+	outsideSource := t.TempDir()
+	writeFixtureFile(t, outsideSource, "index.html", "<title>Outside source</title>")
+
+	restoreWorkingDirectory := chdirForTest(t, filepath.Join(repositoryRoot, "docs"))
+	defer restoreWorkingDirectory()
+	_, err := Build(context.Background(), BuildOptions{
+		SiteID:    "outside",
+		SourceDir: outsideSource,
+		OutputDir: filepath.Join(repositoryRoot, ".local", "outside-source"),
+	})
+	if err == nil || !strings.Contains(err.Error(), "source directory must be inside the Git working tree") {
+		t.Fatalf("Build() error = %v, want rejection of source outside the repository", err)
+	}
+}
+
 func TestBuildUsesFilesystemMetadataForGitIgnoredStaticOutput(t *testing.T) {
 	repositoryRoot := initializeGitRepository(t)
 	restoreWorkingDirectory := chdirForTest(t, repositoryRoot)
