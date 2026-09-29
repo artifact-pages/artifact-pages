@@ -5,13 +5,9 @@ cloudflare:
   bucket: artifact-pages-production
   zoneId: "YOUR_CLOUDFLARE_ZONE_ID"
   publicBaseURL: https://artifacts.example.com
-  accessKeyIdEnv: CF_R2_ACCESS_KEY_ID
-  secretAccessKeyEnv: CF_R2_SECRET_ACCESS_KEY
-  sessionTokenEnv: CF_R2_SESSION_TOKEN
-  registryReaderAccessKeyIdEnv: CF_R2_REGISTRY_READER_ACCESS_KEY_ID
-  registryReaderSecretAccessKeyEnv: CF_R2_REGISTRY_READER_SECRET_ACCESS_KEY
-  registryReaderSessionTokenEnv: CF_R2_REGISTRY_READER_SESSION_TOKEN
-  apiTokenEnv: CF_API_TOKEN
+  # The CLI defaults to CF_R2_ACCESS_KEY_ID, CF_R2_SECRET_ACCESS_KEY, and CF_API_TOKEN.
+  # Add registryReaderAccessKeyIdEnv and registryReaderSecretAccessKeyEnv only for
+  # a delegated site/preview publisher with a separately scoped registry reader.
 sites:
   sre:
     name: SRE & Platform

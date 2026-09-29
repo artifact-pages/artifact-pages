@@ -10,19 +10,43 @@ Use [the Cloudflare delivery Terraform reference](../../infra/cloudflare/deliver
 
 The reference Terraform root composes the delivery and [Cloudflare R2 retention module](../../infra/cloudflare/retention/README.md) against the same existing bucket. Set `preview_retention_days` in `terraform.tfvars`; preview retention belongs to provider infrastructure and is not a CLI YAML setting. The retention resource owns the complete bucket lifecycle rule set. Inspect existing rules and merge every rule that must remain before applying it; lifecycle deletion is asynchronous and is not an immediate revocation mechanism.
 
-The delivery module owns the complete zone root rulesets for the transform, custom firewall, and cache phases. Review existing rules and import/merge them before applying; see its README for the exact resource addresses and preservation inputs. Set `CLOUDFLARE_API_TOKEN` through the environment or a secret manager for Terraform, with only the R2 custom/managed domain, R2 lifecycle, and zone Rulesets permissions needed by these modules. The runtime purge token (`CF_API_TOKEN`) is a separate zone-scoped credential with cache purge permission. R2 S3 credentials form a third, separate credential set; none of these credential values belong in Terraform variables, YAML, or the repository.
+The delivery module owns the complete zone root rulesets for the transform, custom firewall, and cache phases. Review existing rules and import/merge them before applying; see its README for the exact resource addresses and preservation inputs. A Terraform apply uses `CLOUDFLARE_API_TOKEN` through the environment or a secret manager, with only the R2 custom/managed domain, R2 lifecycle, and zone Rulesets permissions needed by these modules. This infrastructure credential is separate from runtime CLI credentials. A normal CLI publisher starts with only the primary R2 access key and secret; `CF_API_TOKEN` is an optional runtime zone-scoped credential with cache purge permission for app or registry operations that actually invalidate public URLs. None of these credential values belong in Terraform variables, YAML, or the repository.
 
 ## 2. Configure the CLI
 
 Copy the [minimal config template](../../examples/cloudflare/artifact-pages.cloudflare.yaml.example) or the [full deployment example](../../examples/cloudflare/deployment.yaml.example) to `.artifact-pages.yaml` and replace the placeholder account, zone, and public URL values. The Cloudflare bucket defaults to `artifact-pages`; set `bucket` only when using another R2 bucket. You can instead keep the ignored local file `artifact-pages.cloudflare.yaml` and pass it with `--config artifact-pages.cloudflare.yaml`; `.artifact-pages.yaml` remains the implicit local default. Add the admin's `sites` mapping before running `registry register` or `registry unregister`; an omitted `sites` field is an input error, not an empty registry. The same YAML file contains the provider target and the registry mapping rather than using a second manifest file. The deployment config contains environment-variable names only, never credential values.
 
-Set `CF_R2_ACCESS_KEY_ID` and `CF_R2_SECRET_ACCESS_KEY` for the satellite's R2 write credential; these are the CLI defaults for `accessKeyIdEnv` and `secretAccessKeyEnv`. The default cache token name is `CF_API_TOKEN`; each name can be changed in the YAML when using a different environment variable. If Cloudflare issued temporary R2 credentials, set `CF_R2_SESSION_TOKEN`; `sessionTokenEnv` passes it through to the S3-compatible client. Configure `registryReaderAccessKeyIdEnv` and `registryReaderSecretAccessKeyEnv` for the separate read-only registry credential, with `registryReaderSessionTokenEnv` when it is temporary. The CLI does not mint or refresh these credentials.
+For the normal setup, provide only the two primary R2 secrets:
 
-`site publish` does not purge the public cache and can run with only its R2 credentials. `registry register`, `registry unregister`, and app deployment can invalidate public URLs and need `CF_API_TOKEN` as well. Keep the zone purge token and parent R2 credentials in the admin deployment.
+```sh
+export CF_R2_ACCESS_KEY_ID=...
+export CF_R2_SECRET_ACCESS_KEY=...
+```
 
-R2 temporary credentials support one bucket-level operation scope (`object-read-only` or `object-read-write`) plus exact object and prefix restrictions. The satellite receives two credentials: a read-only credential scoped to the exact `_indexes/sites.json` object, and a read/write credential scoped to `_indexes/<site>/`, `_artifacts/<site>/`, `_previews/<site>/`, and the exact `_control/locks/sites/<site>.json` object. The CLI uses the first only to read the registry and the second for site publication. Do not combine the registry object with the read/write credential, because R2 would then permit the satellite to overwrite it.
+The CLI defaults to those names, so the deployment YAML and Terraform output omit them. The default cache token name is `CF_API_TOKEN`, also omitted from generated YAML. Its value is needed only for a real operation that requests cache invalidation; dry-runs and no-op deployments do not need it. If using temporary primary R2 credentials, set `CF_R2_SESSION_TOKEN` and add `sessionTokenEnv` to the config.
 
-Have a trusted operator or credential broker mint both short-lived credentials from a bucket-scoped parent token. Do not put the parent R2 secret or the API token used to mint temporary credentials in the satellite repository or workflow. Set the read/write credential's session token through `CF_R2_SESSION_TOKEN` and the read-only registry credential's session token through `CF_R2_REGISTRY_READER_SESSION_TOKEN`; the CLI does not mint or renew temporary credentials.
+| CLI operation | Primary R2 credential | Registry-reader credential | `CF_API_TOKEN` |
+| --- | --- | --- | --- |
+| `index build`, `config set-default` | Not needed | Not needed | Not needed |
+| `site publish`, `preview publish` | Required | Optional; used only when reader env names are configured | Not needed |
+| `app deploy` | Required | Not used | Required only when a real deploy requests invalidation |
+| `registry register`, `registry unregister` | Required | Not used | Required only when a real operation requests invalidation |
+| `lock inspect`, `lock recover` | Required | Not used | Not needed |
+
+If registry-reader env names are present, `site publish` and `preview publish` require the corresponding access key and secret values before making provider requests, and use that identity only for `GetObject("_indexes/sites.json")`. Without those names, these commands read the registry with the primary credential. Other commands ignore configured reader env values. Registry and app mutations check that the API token is configured before changing registry or application objects.
+
+### Optional delegated publisher
+
+Use this when a satellite publisher should not be able to read or write the whole registry. Add the following fields to that publisher's deployment config only; do not add them to the ordinary admin config:
+
+```yaml
+cloudflare:
+  registryReaderAccessKeyIdEnv: CF_R2_REGISTRY_READER_ACCESS_KEY_ID
+  registryReaderSecretAccessKeyEnv: CF_R2_REGISTRY_READER_SECRET_ACCESS_KEY
+  registryReaderSessionTokenEnv: CF_R2_REGISTRY_READER_SESSION_TOKEN # only for temporary reader credentials
+```
+
+R2 temporary credentials support one bucket-level operation scope (`object-read-only` or `object-read-write`) plus exact object and prefix restrictions. Give the delegated publisher a read-only credential scoped to the exact `_indexes/sites.json` object and a read/write credential scoped to `_indexes/<site>/`, `_artifacts/<site>/`, `_previews/<site>/`, and the exact `_control/locks/sites/<site>.json` object. The CLI uses the reader only for the registry read and the primary credential for site writes. Do not put the parent R2 secret or the API token used to mint temporary credentials in the satellite repository or workflow. Set the primary credential's session token through `CF_R2_SESSION_TOKEN`; set the reader credential's session token through `CF_R2_REGISTRY_READER_SESSION_TOKEN`. The CLI does not mint or refresh either credential.
 
 Make two separate R2 temporary-credential requests. Substitute a registered site ID and use a short TTL appropriate for the publish job:
 
@@ -75,7 +99,7 @@ artifact-pages registry register --config .artifact-pages.yaml --dry-run
 artifact-pages registry register --config .artifact-pages.yaml
 ```
 
-The versioned app bundle is verified before deployment. `registry register` writes the deterministic registry projection for the complete desired set in `.artifact-pages.yaml` and cleans content prefixes for sites omitted from its `sites` mapping. Registry commands require `sites`; omitting it is an input error, while `sites: {}` explicitly means the empty desired registry and registering it removes all current registrations. For cleanup and public URL invalidations, provide the R2 and Cloudflare zone API credentials.
+The versioned app bundle is verified before deployment. `registry register` writes the deterministic registry projection for the complete desired set in `.artifact-pages.yaml` and cleans content prefixes for sites omitted from its `sites` mapping. Registry commands require `sites`; omitting it is an input error, while `sites: {}` explicitly means the empty desired registry and registering it removes all current registrations. Provide the R2 credentials for registry operations, and provide the Cloudflare zone API token when the operation will invalidate public URLs; dry-runs and no-op operations do not need the API token.
 
 With the separate read-only registry and read/write site credentials configured, each satellite repository can run the dry-run, inspect its site change plan, and publish one explicit registered site:
 
