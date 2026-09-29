@@ -13,7 +13,7 @@ const actionRunner = path.join(projectRoot, 'actions', 'shared', 'invoke-cli.mjs
 const expectedActionContracts = {
   admin: {
     directory: path.join(projectRoot, 'actions', 'admin'),
-    inputs: ['operation', 'manifest', 'config', 'github-token', 'site', 'archive', 'version', 'repository', 'dry-run'],
+    inputs: ['operation', 'config', 'github-token', 'site', 'archive', 'version', 'repository', 'dry-run'],
     outputs: ['operation', 'outcome', 'site', 'registry_updated', 'changes_json', 'preview_changes_json', 'result_json', 'exit_code', 'error'],
   },
   site: {
@@ -562,93 +562,100 @@ async function main() {
       initRepository(satelliteRoot, 'https://github.com/example/satellite.git'),
     ])
 
-    const deploymentConfig = [
-      'schemaVersion: 1',
-      'provider: local',
-      'local:',
-      `  root: ${JSON.stringify(storageRoot)}`,
-      '',
-    ].join('\n')
-    await writeFile(adminRoot, '.artifact-pages.yaml', deploymentConfig)
-    await writeFile(adminRoot, 'sites.yaml', [
-      'schemaVersion: 1',
+    const registeredSites = [
       'sites:',
       '  sre:',
       '    name: SRE',
       '    repository: example/satellite',
       '    sourcePath: docs/artifacts',
-      '',
-    ].join('\n'))
-    await writeFile(adminRoot, 'sites-without-sre.yaml', 'schemaVersion: 1\nsites: {}\n')
-    await writeFile(adminRoot, '.artifact-pages-action.yaml', [
+    ].join('\n')
+    const emptySites = 'sites: {}'
+    const deploymentConfig = (root, sites = registeredSites) => [
       'schemaVersion: 1',
       'provider: local',
       'local:',
-      `  root: ${JSON.stringify(actionStorageRoot)}`,
+      `  root: ${JSON.stringify(root)}`,
+      sites,
       '',
-    ].join('\n'))
+    ].join('\n')
+    const deploymentConfigWithoutSites = (root) => [
+      'schemaVersion: 1',
+      'provider: local',
+      'local:',
+      `  root: ${JSON.stringify(root)}`,
+      '',
+    ].join('\n')
+    await writeFile(adminRoot, '.artifact-pages.yaml', deploymentConfig(storageRoot))
+    await writeFile(adminRoot, '.artifact-pages-action.yaml', deploymentConfig(actionStorageRoot))
+    await writeFile(adminRoot, '.artifact-pages-unregister.yaml', deploymentConfig(storageRoot, emptySites))
+    await writeFile(adminRoot, '.artifact-pages-action-unregister.yaml', deploymentConfig(actionStorageRoot, emptySites))
+    await writeFile(adminRoot, '.artifact-pages-no-sites.yaml', deploymentConfigWithoutSites(storageRoot))
+    await writeFile(adminRoot, '.artifact-pages-action-no-sites.yaml', deploymentConfigWithoutSites(actionStorageRoot))
     commit(adminRoot, 'Add admin registry and local target')
 
-    await writeFile(satelliteRoot, '.artifact-pages.yaml', deploymentConfig)
-    await writeFile(satelliteRoot, '.artifact-pages-action.yaml', [
-      'schemaVersion: 1',
-      'provider: local',
-      'local:',
-      `  root: ${JSON.stringify(actionStorageRoot)}`,
-      '',
-    ].join('\n'))
+    await writeFile(satelliteRoot, '.artifact-pages.yaml', deploymentConfig(storageRoot))
+    await writeFile(satelliteRoot, '.artifact-pages-action.yaml', deploymentConfig(actionStorageRoot))
     await writeFile(satelliteRoot, 'docs/artifacts/overview.html', '<!doctype html><title>Overview</title><h1>SRE overview</h1>\n')
     commit(satelliteRoot, 'Add SRE artifact')
     run('go', ['build', '-o', binaryPath, './cmd/artifact-pages'])
 
-    const registryApplyArgs = ['registry', 'register', '--manifest', 'sites.yaml', '--config', '.artifact-pages.yaml', '--format', 'json']
+    const registryApplyArgs = ['registry', 'register', '--config', '.artifact-pages.yaml', '--format', 'json']
     const initialRegistry = runDirect(binaryPath, adminRoot, registryApplyArgs, 'initial registry register')
     assert.equal(initialRegistry.exitCode, 0, `initial registry register failed: ${JSON.stringify(initialRegistry.result)}`)
     assert.equal(initialRegistry.result.operation, 'registry register', 'registry Action must invoke the registry register operation')
     assert.equal(initialRegistry.result.outcome, 'registered', 'registry register must return the registered outcome')
     const actionInitialRegistry = await runAction('admin', 'registry-register', registryApplyArgs, {
-      manifest: 'sites.yaml', config: '.artifact-pages-action.yaml',
+      config: '.artifact-pages-action.yaml',
     }, adminRoot, binaryPath, scratchRoot)
     assertActionParity(initialRegistry, actionInitialRegistry, 'registry register')
 
-    const registryArgs = ['registry', 'register', '--manifest', 'sites.yaml', '--config', '.artifact-pages.yaml', '--dry-run', '--format', 'json']
+    const registryArgs = ['registry', 'register', '--config', '.artifact-pages.yaml', '--dry-run', '--format', 'json']
     const registryStorageBeforeDryRun = await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)])
     const directRegistry = runDirect(binaryPath, adminRoot, registryArgs, 'direct registry register dry-run')
     const actionRegistry = await runAction('admin', 'registry-register', registryArgs, {
-      manifest: 'sites.yaml', config: '.artifact-pages-action.yaml', 'dry-run': 'true',
+      config: '.artifact-pages-action.yaml', 'dry-run': 'true',
     }, adminRoot, binaryPath, scratchRoot)
     assertActionParity(directRegistry, actionRegistry, 'registry register dry-run')
     assert.deepEqual(await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)]), registryStorageBeforeDryRun, 'registry register dry-run changed local storage')
 
-    const invalidRegistryArgs = ['registry', 'register', '--manifest', 'missing-sites.yaml', '--config', '.artifact-pages.yaml', '--format', 'json']
+    const invalidRegistryArgs = ['registry', 'register', '--config', '.artifact-pages-no-sites.yaml', '--format', 'json']
     const invalidRegistryStorageBefore = await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)])
-    const directInvalidRegistry = runDirect(binaryPath, adminRoot, invalidRegistryArgs, 'registry register invalid manifest')
-    assert.equal(directInvalidRegistry.exitCode, 2, 'invalid registry manifest should preserve the CLI usage/validation exit class')
+    const directInvalidRegistry = runDirect(binaryPath, adminRoot, invalidRegistryArgs, 'registry register config without sites')
+    assert.equal(directInvalidRegistry.exitCode, 2, 'registry register without sites in config should preserve the CLI usage/validation exit class')
     const actionInvalidRegistry = await runAction('admin', 'registry-register', invalidRegistryArgs, {
-      manifest: 'missing-sites.yaml', config: '.artifact-pages-action.yaml',
+      config: '.artifact-pages-action-no-sites.yaml',
     }, adminRoot, binaryPath, scratchRoot)
-    assertActionParity(directInvalidRegistry, actionInvalidRegistry, 'registry register invalid manifest')
-    assert.deepEqual(await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)]), invalidRegistryStorageBefore, 'invalid registry manifest changed local storage')
+    assertActionParity(directInvalidRegistry, actionInvalidRegistry, 'registry register config without sites')
+    assert.deepEqual(await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)]), invalidRegistryStorageBefore, 'registry register config validation changed local storage')
 
-    const unregisterArgs = ['registry', 'unregister', '--site', 'sre', '--manifest', 'sites-without-sre.yaml', '--config', '.artifact-pages.yaml', '--dry-run', '--format', 'json']
+    const invalidUnregisterArgs = ['registry', 'unregister', '--site', 'sre', '--config', '.artifact-pages-no-sites.yaml', '--format', 'json']
+    const directInvalidUnregister = runDirect(binaryPath, adminRoot, invalidUnregisterArgs, 'registry unregister config without sites')
+    assert.equal(directInvalidUnregister.exitCode, 2, 'registry unregister without sites in config should preserve the CLI usage/validation exit class')
+    const actionInvalidUnregister = await runAction('admin', 'registry-unregister', invalidUnregisterArgs, {
+      site: 'sre', config: '.artifact-pages-action-no-sites.yaml',
+    }, adminRoot, binaryPath, scratchRoot)
+    assertActionParity(directInvalidUnregister, actionInvalidUnregister, 'registry unregister config without sites')
+    assert.deepEqual(await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)]), invalidRegistryStorageBefore, 'registry unregister config validation changed local storage')
+
+    const unregisterArgs = ['registry', 'unregister', '--site', 'sre', '--config', '.artifact-pages-unregister.yaml', '--dry-run', '--format', 'json']
     const unregisterStorageBeforeDryRun = await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)])
     const directUnregister = runDirect(binaryPath, adminRoot, unregisterArgs, 'direct registry unregister dry-run')
     const actionUnregister = await runAction('admin', 'registry-unregister', unregisterArgs, {
-      site: 'sre', manifest: 'sites-without-sre.yaml', config: '.artifact-pages-action.yaml', 'dry-run': 'true',
+      site: 'sre', config: '.artifact-pages-action-unregister.yaml', 'dry-run': 'true',
     }, adminRoot, binaryPath, scratchRoot)
     assertActionParity(directUnregister, actionUnregister, 'registry unregister dry-run')
     assert.deepEqual(await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)]), unregisterStorageBeforeDryRun, 'registry unregister dry-run changed local storage')
 
-    const unregisterApplyArgs = ['registry', 'unregister', '--site', 'sre', '--manifest', 'sites-without-sre.yaml', '--config', '.artifact-pages.yaml', '--format', 'json']
+    const unregisterApplyArgs = ['registry', 'unregister', '--site', 'sre', '--config', '.artifact-pages-unregister.yaml', '--format', 'json']
     const directUnregisterApply = runDirect(binaryPath, adminRoot, unregisterApplyArgs, 'registry unregister')
     const actionUnregisterApply = await runAction('admin', 'registry-unregister', unregisterApplyArgs, {
-      site: 'sre', manifest: 'sites-without-sre.yaml', config: '.artifact-pages-action.yaml',
+      site: 'sre', config: '.artifact-pages-action-unregister.yaml',
     }, adminRoot, binaryPath, scratchRoot)
     assertActionParity(directUnregisterApply, actionUnregisterApply, 'registry unregister')
 
     const reregisterRegistry = runDirect(binaryPath, adminRoot, registryApplyArgs, 'registry reregister')
     const actionReregisterRegistry = await runAction('admin', 'registry-register', registryApplyArgs, {
-      manifest: 'sites.yaml', config: '.artifact-pages-action.yaml',
+      config: '.artifact-pages-action.yaml',
     }, adminRoot, binaryPath, scratchRoot)
     assertActionParity(reregisterRegistry, actionReregisterRegistry, 'registry reregister')
 

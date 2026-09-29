@@ -78,7 +78,7 @@
       <ul>
         <li><code>terraform-cloudflare-artifact-pages</code>: R2 bucket, custom-domain connection, Cloudflare cache/routing/header rules, and provider retention. Account/zone/hostname remain caller inputs.</li>
         <li><code>terraform-aws-artifact-pages</code>: private S3, CloudFront/OAC, plus a composed Cloudflare DNS and ACM path for this deployment. Preserve the existing caller-managed DNS/certificate path for other operators; Cloudflare DNS is not a universal AWS prerequisite.</li>
-        <li>DNS and certificate orchestration belong to infrastructure adapters, not <code>sites.yaml</code>, artifact records, or CLI operation semantics. Terraform does not deploy the app, register sites, or publish site documents.</li>
+        <li>DNS and certificate orchestration belong to infrastructure adapters, not the deployment config's <code>sites</code> mapping, artifact records, or CLI operation semantics. Terraform does not deploy the app, register sites, or publish site documents.</li>
       </ul>
       <p>The former AWS module accepts aliases and a caller-provided certificate; it does not yet prove the selected composed DNS/certificate path. <a href="../backlog/implementation/IMP-39-aws-cloudflare-dns-acm.md">IMP-39</a> owns that new slice. <a href="../backlog/implementation/IMP-37-cloudflare-entry-module.md">IMP-37</a> owns the Cloudflare entry point; <a href="../backlog/implementation/IMP-38-terraform-registry-publication.md">IMP-38</a> owns independent module distribution.</p>
     </section>

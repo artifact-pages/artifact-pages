@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/tasuku43/git-artifact-pages/internal/githubrepo"
-	"go.yaml.in/yaml/v4"
 )
 
 const SchemaVersion = 1
@@ -24,9 +23,10 @@ var (
 
 // Site is the sole human-maintained record for one registered source tree.
 type Site struct {
-	Name       string `yaml:"name" json:"name"`
-	Repository string `yaml:"repository" json:"repository"`
-	SourcePath string `yaml:"sourcePath" json:"sourcePath"`
+	Name        string `yaml:"name" json:"name"`
+	Description string `yaml:"description,omitempty" json:"description,omitempty"`
+	Repository  string `yaml:"repository" json:"repository"`
+	SourcePath  string `yaml:"sourcePath" json:"sourcePath"`
 }
 
 // Projection is the deterministic runtime form consumed by browsers and
@@ -38,44 +38,22 @@ type Projection struct {
 
 // Entry is one site in the deployed array representation.
 type Entry struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	Repository string `json:"repository"`
-	SourcePath string `json:"sourcePath"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Repository  string `json:"repository"`
+	SourcePath  string `json:"sourcePath"`
 }
 
-type manifest struct {
-	SchemaVersion int             `yaml:"schemaVersion"`
-	Sites         map[string]Site `yaml:"sites"`
-}
-
-// ParseYAML validates the complete root sites.yaml schema, including unknown
-// fields and duplicate mapping keys, then returns entries in stable ID order.
-func ParseYAML(contents []byte) (Projection, error) {
-	var syntaxDocuments []yaml.Node
-	if err := yaml.Load(contents, &syntaxDocuments, yaml.WithAllDocuments()); err != nil {
-		return Projection{}, fmt.Errorf("decode sites.yaml: %w", err)
-	}
-	if len(syntaxDocuments) != 1 {
-		return Projection{}, errors.New("sites.yaml must contain exactly one YAML document")
-	}
-	if err := validateManifestNode(&syntaxDocuments[0]); err != nil {
-		return Projection{}, err
-	}
-	var documents []manifest
-	if err := yaml.Load(contents, &documents, yaml.WithKnownFields(), yaml.WithUniqueKeys(), yaml.WithAllDocuments()); err != nil {
-		return Projection{}, fmt.Errorf("decode sites.yaml: %w", err)
-	}
-	source := documents[0]
-	if source.SchemaVersion != SchemaVersion {
-		return Projection{}, fmt.Errorf("schemaVersion must be %d", SchemaVersion)
-	}
-	if source.Sites == nil {
+// ProjectSites turns the site records from a validated unified deployment
+// config into the sorted runtime representation. A nil map means the config
+// omitted sites; an empty non-nil map is an explicit empty desired registry.
+func ProjectSites(sites map[string]Site) (Projection, error) {
+	if sites == nil {
 		return Projection{}, errors.New("sites must be a mapping (use sites: {} for an empty registry)")
 	}
-
-	ids := make([]string, 0, len(source.Sites))
-	for id := range source.Sites {
+	ids := make([]string, 0, len(sites))
+	for id := range sites {
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)
@@ -83,7 +61,7 @@ func ParseYAML(contents []byte) (Projection, error) {
 	projection := Projection{SchemaVersion: SchemaVersion, Sites: make([]Entry, 0, len(ids))}
 	seenSource := make(map[string]string, len(ids))
 	for _, id := range ids {
-		site := source.Sites[id]
+		site := sites[id]
 		if err := validateSiteID(id); err != nil {
 			return Projection{}, err
 		}
@@ -101,65 +79,15 @@ func ParseYAML(contents []byte) (Projection, error) {
 			return Projection{}, fmt.Errorf("sites %q and %q use the same repository and sourcePath", previous, id)
 		}
 		seenSource[pair] = id
+		description := site.Description
+		if strings.TrimSpace(description) == "" {
+			description = ""
+		}
 		projection.Sites = append(projection.Sites, Entry{
-			ID: id, Name: site.Name, Repository: site.Repository, SourcePath: site.SourcePath,
+			ID: id, Name: site.Name, Description: description, Repository: site.Repository, SourcePath: site.SourcePath,
 		})
 	}
 	return projection, nil
-}
-
-func validateManifestNode(document *yaml.Node) error {
-	root := document
-	if root.Kind == yaml.DocumentNode {
-		if len(root.Content) != 1 {
-			return errors.New("sites.yaml must contain one mapping document")
-		}
-		root = root.Content[0]
-	}
-	if root.Kind != yaml.MappingNode {
-		return errors.New("sites.yaml root must be a mapping")
-	}
-	for index := 0; index < len(root.Content); index += 2 {
-		if root.Content[index].Kind != yaml.ScalarNode || root.Content[index].ShortTag() != "!!str" {
-			return errors.New("sites.yaml root keys must be strings")
-		}
-	}
-	version := mappingValue(root, "schemaVersion")
-	if version == nil || version.Kind != yaml.ScalarNode || version.ShortTag() != "!!int" {
-		return errors.New("schemaVersion must be an integer")
-	}
-	sites := mappingValue(root, "sites")
-	if sites == nil || sites.Kind != yaml.MappingNode {
-		return errors.New("sites must be a mapping (use sites: {} for an empty registry)")
-	}
-	for index := 0; index < len(sites.Content); index += 2 {
-		idNode, siteNode := sites.Content[index], sites.Content[index+1]
-		if idNode.Kind != yaml.ScalarNode || idNode.ShortTag() != "!!str" {
-			return errors.New("site IDs must be strings")
-		}
-		if siteNode.Kind != yaml.MappingNode {
-			return fmt.Errorf("site %q must be a mapping", idNode.Value)
-		}
-		for fieldIndex := 0; fieldIndex < len(siteNode.Content); fieldIndex += 2 {
-			keyNode, valueNode := siteNode.Content[fieldIndex], siteNode.Content[fieldIndex+1]
-			if keyNode.Kind != yaml.ScalarNode || keyNode.ShortTag() != "!!str" {
-				return fmt.Errorf("site %q field names must be strings", idNode.Value)
-			}
-			if valueNode.Kind != yaml.ScalarNode || valueNode.ShortTag() != "!!str" {
-				return fmt.Errorf("site %q field %q must be a string", idNode.Value, keyNode.Value)
-			}
-		}
-	}
-	return nil
-}
-
-func mappingValue(mapping *yaml.Node, key string) *yaml.Node {
-	for index := 0; index+1 < len(mapping.Content); index += 2 {
-		if mapping.Content[index].Value == key {
-			return mapping.Content[index+1]
-		}
-	}
-	return nil
 }
 
 // Encode emits byte-stable indented JSON, independent of YAML mapping order.
@@ -186,19 +114,6 @@ func Encode(projection Projection) ([]byte, error) {
 		return nil, fmt.Errorf("encode sites.json: %w", err)
 	}
 	return buffer.Bytes(), nil
-}
-
-// Build parses sites.yaml and returns the canonical sites.json bytes.
-func Build(contents []byte) ([]byte, Projection, error) {
-	projection, err := ParseYAML(contents)
-	if err != nil {
-		return nil, Projection{}, err
-	}
-	encoded, err := Encode(projection)
-	if err != nil {
-		return nil, Projection{}, err
-	}
-	return encoded, projection, nil
 }
 
 func validateSiteID(id string) error {

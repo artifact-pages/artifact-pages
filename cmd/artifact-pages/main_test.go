@@ -29,6 +29,9 @@ const (
 )
 
 const localUnregisterManifest = `schemaVersion: 1
+provider: local
+local:
+  root: .local/storage
 sites:
   docs:
     name: Documentation
@@ -37,6 +40,9 @@ sites:
 `
 
 const localRegistryBeforeUnregister = `schemaVersion: 1
+provider: local
+local:
+  root: .local/storage
 sites:
   docs:
     name: Documentation
@@ -112,7 +118,7 @@ func TestRunRegistryBuildIsNotAPublicCommand(t *testing.T) {
 	}
 }
 
-func TestRunRegistryRegisterHelpExplainsManifestReconciliation(t *testing.T) {
+func TestRunRegistryRegisterHelpExplainsConfigReconciliation(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	if err := run(t.Context(), []string{"registry", "register", "--help"}, &stdout, &stderr); err != nil {
 		t.Fatalf("run(registry register --help) error = %v", err)
@@ -120,8 +126,8 @@ func TestRunRegistryRegisterHelpExplainsManifestReconciliation(t *testing.T) {
 	help := stdout.String() + stderr.String()
 	for _, expected := range []string{
 		"artifact-pages registry register",
-		"Validate sites.yaml and reconcile its deterministic registry projection",
-		"sites omitted from the manifest are unregistered and cleaned on apply",
+		"Reconcile the sites mapping in the selected config",
+		"sites omitted from it are unregistered and cleaned on apply",
 	} {
 		if !strings.Contains(help, expected) {
 			t.Errorf("registry register help is missing %q:\n%s", expected, help)
@@ -132,7 +138,7 @@ func TestRunRegistryRegisterHelpExplainsManifestReconciliation(t *testing.T) {
 	}
 }
 
-func TestRunRegistryRegisterReadsManifestAndDryRunDoesNotCreateStorage(t *testing.T) {
+func TestRunRegistryRegisterReadsSelectedConfigAndDryRunDoesNotCreateStorage(t *testing.T) {
 	root := t.TempDir()
 	previousDirectory, err := os.Getwd()
 	if err != nil {
@@ -142,15 +148,11 @@ func TestRunRegistryRegisterReadsManifestAndDryRunDoesNotCreateStorage(t *testin
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Chdir(previousDirectory) })
-	manifest := "schemaVersion: 1\nsites:\n  sre:\n    name: SRE & Platform\n    repository: acme/sre\n    sourcePath: docs/artifacts\n"
-	if err := os.WriteFile("admin-sites.yaml", []byte(manifest), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	config := "schemaVersion: 1\nprovider: local\nlocal:\n  root: .local/storage\n"
+	config := "schemaVersion: 1\nprovider: local\nlocal:\n  root: .local/storage\nsites:\n  sre:\n    name: SRE & Platform\n    repository: acme/sre\n    sourcePath: docs/artifacts\n"
 	if err := os.WriteFile("deployment.yaml", []byte(config), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	args := []string{"registry", "register", "--manifest", "admin-sites.yaml", "--config", "deployment.yaml", "--format", "json"}
+	args := []string{"registry", "register", "--config", "deployment.yaml", "--format", "json"}
 	var stdout, stderr bytes.Buffer
 	if err := run(t.Context(), append(args, "--dry-run"), &stdout, &stderr); err != nil {
 		t.Fatalf("registry register dry-run error = %v; stderr=%s", err, stderr.String())
@@ -197,7 +199,48 @@ func TestRunRegistryRegisterReadsManifestAndDryRunDoesNotCreateStorage(t *testin
 	}
 	projection, err := os.ReadFile(filepath.Join(root, ".local", "storage", "_indexes", "sites.json"))
 	if err != nil || !strings.Contains(string(projection), `"id": "sre"`) {
-		t.Fatalf("registry manifest was not projected to local storage: contents=%s err=%v", projection, err)
+		t.Fatalf("config sites were not projected to local storage: contents=%s err=%v", projection, err)
+	}
+}
+
+func TestRegistryCommandsRequireSitesMapping(t *testing.T) {
+	root := t.TempDir()
+	configPath := filepath.Join(root, "deployment.yaml")
+	targetOnly := "schemaVersion: 1\nprovider: local\nlocal:\n  root: .local/storage\n"
+	if err := os.WriteFile(configPath, []byte(targetOnly), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"registry", "register", "--config", "deployment.yaml", "--format", "json"},
+		{"registry", "unregister", "--site", "sre", "--config", "deployment.yaml", "--format", "json"},
+	} {
+		stdout, stderr, exitCode := runCLIProcess(t, root, args)
+		var failure struct {
+			Outcome string `json:"outcome"`
+			Error   string `json:"error"`
+		}
+		if err := json.Unmarshal([]byte(stdout), &failure); err != nil {
+			t.Fatalf("decode missing-sites failure for %v: %v; stdout=%s", args, err, stdout)
+		}
+		if exitCode != 2 || failure.Outcome != "failed" || !strings.Contains(failure.Error, "must include a sites mapping") {
+			t.Fatalf("registry command %v without sites = exit %d; stdout=%s stderr=%s, want a config input error", args, exitCode, stdout, stderr)
+		}
+		if _, err := os.Stat(filepath.Join(root, ".local", "storage")); !os.IsNotExist(err) {
+			t.Fatalf("registry command %v created storage without sites: stat error = %v", args, err)
+		}
+	}
+
+	emptyConfig := "schemaVersion: 1\nprovider: local\nlocal:\n  root: .local/storage\nsites: {}\n"
+	if err := os.WriteFile(configPath, []byte(emptyConfig), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr, exitCode := runCLIProcess(t, root, []string{"registry", "register", "--config", "deployment.yaml", "--dry-run", "--format", "json"})
+	var emptyResult publisher.Result
+	if err := json.Unmarshal([]byte(stdout), &emptyResult); err != nil {
+		t.Fatalf("decode empty-sites dry-run: %v; stdout=%s", err, stdout)
+	}
+	if exitCode != 0 || emptyResult.Outcome != "planned" {
+		t.Fatalf("registry register with explicit empty sites = exit %d; stdout=%s stderr=%s, want a valid dry-run", exitCode, stdout, stderr)
 	}
 }
 
@@ -383,7 +426,7 @@ func TestRegistryUnregisterLocalCLIIsScopedRetryableAndMachineReadable(t *testin
 			t.Fatalf("run(registry unregister --help) error = %v", err)
 		}
 		help := stdout.String() + stderr.String()
-		for _, expected := range []string{"registry unregister --site ID", "--manifest sites.yaml", "--config LOCATOR", "--dry-run", "--format text|json"} {
+		for _, expected := range []string{"registry unregister --site ID", "--config LOCATOR", "--dry-run", "--format text|json"} {
 			if !strings.Contains(help, expected) {
 				t.Errorf("registry unregister help is missing %q:\n%s", expected, help)
 			}
@@ -394,7 +437,7 @@ func TestRegistryUnregisterLocalCLIIsScopedRetryableAndMachineReadable(t *testin
 		root := createLocalUnregisterCheckout(t)
 		storageRoot := filepath.Join(root, ".local", "storage")
 		before := snapshotFiles(t, storageRoot)
-		args := []string{"registry", "unregister", "--site", "sre", "--manifest", "sites.yaml", "--config", ".artifact-pages.yaml", "--dry-run", "--format", "json"}
+		args := []string{"registry", "unregister", "--site", "sre", "--config", ".artifact-pages.yaml", "--dry-run", "--format", "json"}
 		stdout, stderr, exitCode := runCLIProcess(t, root, args)
 		if exitCode != 0 {
 			t.Fatalf("registry unregister dry-run exit code = %d, want 0; stdout=%s stderr=%s", exitCode, stdout, stderr)
@@ -417,7 +460,7 @@ func TestRegistryUnregisterLocalCLIIsScopedRetryableAndMachineReadable(t *testin
 			t.Fatalf("dry-run changed local storage: before=%v after=%v", before, after)
 		}
 
-		args = []string{"registry", "unregister", "--site", "sre", "--manifest", "sites.yaml", "--config", ".artifact-pages.yaml", "--format", "json"}
+		args = []string{"registry", "unregister", "--site", "sre", "--config", ".artifact-pages.yaml", "--format", "json"}
 		stdout, stderr, exitCode = runCLIProcess(t, root, args)
 		if exitCode != 0 {
 			t.Fatalf("registry unregister exit code = %d, want 0; stdout=%s stderr=%s", exitCode, stdout, stderr)
@@ -460,7 +503,7 @@ func TestRegistryUnregisterLocalCLIIsScopedRetryableAndMachineReadable(t *testin
 		if err := os.WriteFile(artifactPrefix, []byte("block the listing directory"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		args := []string{"registry", "unregister", "--site", "sre", "--manifest", "sites.yaml", "--format", "json"}
+		args := []string{"registry", "unregister", "--site", "sre", "--format", "json"}
 		stdout, stderr, exitCode := runCLIProcess(t, root, args)
 		if exitCode != 1 {
 			t.Fatalf("registry unregister listing failure exit code = %d, want 1; stdout=%s stderr=%s", exitCode, stdout, stderr)
@@ -501,24 +544,24 @@ func TestRegistryUnregisterLocalCLIIsScopedRetryableAndMachineReadable(t *testin
 		assertLocalUnregisterResult(t, storageRoot, "sre")
 	})
 
-	t.Run("invalid site ID and manifest entry are argument errors", func(t *testing.T) {
+	t.Run("invalid site ID and config entry are argument errors", func(t *testing.T) {
 		root := createLocalUnregisterCheckout(t)
 		for _, test := range []struct {
 			name     string
 			siteID   string
-			manifest string
+			config   string
 			wantText string
 		}{
-			{name: "invalid site ID", siteID: "../sre", manifest: localUnregisterManifest, wantText: "invalid site ID"},
-			{name: "site still registered in manifest", siteID: "sre", manifest: localRegistryBeforeUnregister, wantText: "still present in the registry manifest"},
+			{name: "invalid site ID", siteID: "../sre", config: localUnregisterManifest, wantText: "invalid site ID"},
+			{name: "site still registered in config", siteID: "sre", config: localRegistryBeforeUnregister, wantText: "still present in config sites"},
 		} {
 			t.Run(test.name, func(t *testing.T) {
-				manifestPath := filepath.Join(root, "sites.yaml")
-				if err := os.WriteFile(manifestPath, []byte(test.manifest), 0o600); err != nil {
+				configPath := filepath.Join(root, ".artifact-pages.yaml")
+				if err := os.WriteFile(configPath, []byte(test.config), 0o600); err != nil {
 					t.Fatal(err)
 				}
 				before := snapshotFiles(t, filepath.Join(root, ".local", "storage"))
-				args := []string{"registry", "unregister", "--site", test.siteID, "--manifest", "sites.yaml", "--format", "json"}
+				args := []string{"registry", "unregister", "--site", test.siteID, "--config", ".artifact-pages.yaml", "--format", "json"}
 				stdout, stderr, exitCode := runCLIProcess(t, root, args)
 				if exitCode != 2 {
 					t.Fatalf("registry unregister argument error exit code = %d, want 2; stdout=%s stderr=%s", exitCode, stdout, stderr)
@@ -546,14 +589,11 @@ func TestRegistryUnregisterLocalCLIIsScopedRetryableAndMachineReadable(t *testin
 
 func createLocalUnregisterCheckout(t *testing.T) string {
 	t.Helper()
-	root := createLocalSitePublishCheckout(t, localUnregisterManifest)
-	if err := os.WriteFile(filepath.Join(root, "sites.yaml"), []byte(localUnregisterManifest), 0o600); err != nil {
+	root := createLocalSitePublishCheckout(t, localRegistryBeforeUnregister)
+	if err := os.WriteFile(filepath.Join(root, ".artifact-pages.yaml"), []byte(localUnregisterManifest), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	projection, _, err := registry.Build([]byte(localRegistryBeforeUnregister))
-	if err != nil {
-		t.Fatal(err)
-	}
+	projection := testRegistryBytes(t, localRegistryBeforeUnregister)
 	storageRoot := filepath.Join(root, ".local", "storage")
 	for key, contents := range map[string][]byte{
 		"_indexes/sites.json":                          projection,
@@ -667,7 +707,7 @@ func TestSitePublishFailureJSONAndExitCodes(t *testing.T) {
 	})
 
 	t.Run("unregistered site", func(t *testing.T) {
-		const unrelatedSiteManifest = "schemaVersion: 1\nsites:\n  frontend:\n    name: Frontend\n    repository: acme/frontend\n    sourcePath: docs/artifacts\n"
+		const unrelatedSiteManifest = "schemaVersion: 1\nprovider: local\nlocal:\n  root: .local/storage\nsites:\n  frontend:\n    name: Frontend\n    repository: acme/frontend\n    sourcePath: docs/artifacts\n"
 		root := createLocalSitePublishCheckout(t, unrelatedSiteManifest)
 		stdout, stderr, exitCode := runCLIProcess(t, root, []string{"site", "publish", "--site", "sre", "--source", "docs/artifacts", "--config", ".artifact-pages.yaml", "--format", "json"})
 		if exitCode != 1 {
@@ -1040,7 +1080,7 @@ func runGitCommand(workingDirectory string, args ...string) error {
 	return nil
 }
 
-const registeredLocalSiteManifest = "schemaVersion: 1\nsites:\n  sre:\n    name: SRE & Platform\n    repository: acme/sre\n    sourcePath: docs/artifacts\n"
+const registeredLocalSiteManifest = "schemaVersion: 1\nprovider: local\nlocal:\n  root: .local/storage\nsites:\n  sre:\n    name: SRE & Platform\n    repository: acme/sre\n    sourcePath: docs/artifacts\n"
 
 func createLocalSitePublishCheckout(t *testing.T, siteManifest string) string {
 	t.Helper()
@@ -1070,7 +1110,7 @@ func createLocalSitePublishCheckout(t *testing.T, siteManifest string) string {
 	if err := os.WriteFile(filepath.Join(root, "docs", "artifacts", "overview.html"), []byte("<title>Overview</title><h1>Overview</h1>"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, ".artifact-pages.yaml"), []byte("schemaVersion: 1\nprovider: local\nlocal:\n  root: .local/storage\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(root, ".artifact-pages.yaml"), []byte(siteManifest), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := runGitCommand(root, "add", "docs/artifacts/overview.html", ".artifact-pages.yaml"); err != nil {
@@ -1080,10 +1120,7 @@ func createLocalSitePublishCheckout(t *testing.T, siteManifest string) string {
 		t.Fatal(err)
 	}
 
-	projection, _, err := registry.Build([]byte(siteManifest))
-	if err != nil {
-		t.Fatalf("build local publisher registry fixture: %v", err)
-	}
+	projection := testRegistryBytes(t, siteManifest)
 	registryPath := filepath.Join(root, ".local", "storage", "_indexes", "sites.json")
 	if err := os.MkdirAll(filepath.Dir(registryPath), 0o755); err != nil {
 		t.Fatal(err)
@@ -1092,6 +1129,23 @@ func createLocalSitePublishCheckout(t *testing.T, siteManifest string) string {
 		t.Fatal(err)
 	}
 	return root
+}
+
+func testRegistryBytes(t *testing.T, selectedConfig string) []byte {
+	t.Helper()
+	parsed, err := deploymentconfig.Parse([]byte(selectedConfig))
+	if err != nil {
+		t.Fatalf("parse unified config fixture: %v", err)
+	}
+	projection, err := registry.ProjectSites(parsed.Sites)
+	if err != nil {
+		t.Fatalf("project unified config fixture: %v", err)
+	}
+	contents, err := registry.Encode(projection)
+	if err != nil {
+		t.Fatalf("encode unified config fixture: %v", err)
+	}
+	return contents
 }
 
 func snapshotFiles(t *testing.T, root string) map[string][]byte {

@@ -274,7 +274,7 @@ func runPreviewPublicationFlowSmoke(t *testing.T, backend DeploymentBackend, sit
 
 func TestPreviewPublicationFlowSmokeUsesAndRemovesOnlyItsNamespace(t *testing.T) {
 	backend := newLockMemoryBackend()
-	projection, _, err := registry.Build([]byte(registeredSREAndDocsManifest))
+	projection, _, err := testRegistryBuild(t, []byte(registeredSREAndDocsManifest))
 	if err != nil {
 		t.Fatalf("build registered-site fixture: %v", err)
 	}

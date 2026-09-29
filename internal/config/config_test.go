@@ -36,6 +36,62 @@ func TestParseProviderTargets(t *testing.T) {
 	}
 }
 
+func TestParseUnifiedConfigSitesAreOptionalForTargetsAndExplicitWhenEmpty(t *testing.T) {
+	targetOnly, err := Parse([]byte("schemaVersion: 1\nprovider: local\nlocal:\n  root: .local/storage\n"))
+	if err != nil || targetOnly.Sites != nil {
+		t.Fatalf("target-only config = %+v, err=%v; want valid config with sites omitted", targetOnly, err)
+	}
+
+	withSites, err := Parse([]byte(`schemaVersion: 1
+provider: local
+local:
+  root: .local/storage
+sites:
+  sre:
+    name: SRE & Platform
+    description: Incident reviews and operational guidance
+    repository: acme/platform
+    sourcePath: docs/artifacts
+`))
+	if err != nil {
+		t.Fatalf("Parse(unified config) error = %v", err)
+	}
+	if got := withSites.Sites["sre"]; got.Name != "SRE & Platform" || got.Description != "Incident reviews and operational guidance" || got.Repository != "acme/platform" {
+		t.Fatalf("unified site record = %+v, want name, description, and source mapping from one config", got)
+	}
+
+	empty, err := Parse([]byte("schemaVersion: 1\nprovider: local\nlocal:\n  root: .local/storage\nsites: {}\n"))
+	if err != nil || empty.Sites == nil || len(empty.Sites) != 0 {
+		t.Fatalf("Parse(explicit empty sites) = %+v, err=%v; want non-nil empty map", empty, err)
+	}
+}
+
+func TestParseRejectsInvalidUnifiedSites(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want string
+	}{
+		{"sites null", "sites: null\n", "sites must be a mapping"},
+		{"sites sequence", "sites: []\n", "sites must be a mapping"},
+		{"site sequence", "sites:\n  sre: []\n", `site "sre" must be a mapping`},
+		{"description scalar type", "sites:\n  sre:\n    name: SRE\n    description: 42\n    repository: acme/platform\n    sourcePath: docs\n", `site "sre" field "description" must be a string`},
+		{"unknown site field", "sites:\n  sre:\n    name: SRE\n    repository: acme/platform\n    sourcePath: docs\n    unknown: unsupported\n", "field unknown not found"},
+		{"duplicate site field", "sites:\n  sre:\n    name: First\n    name: Second\n    repository: acme/platform\n    sourcePath: docs\n", "already defined"},
+		{"invalid site id", "sites:\n  SRE:\n    name: SRE\n    repository: acme/platform\n    sourcePath: docs\n", "invalid site ID"},
+		{"duplicate source mapping", "sites:\n  sre:\n    name: SRE\n    repository: acme/platform\n    sourcePath: docs\n  docs:\n    name: Docs\n    repository: ACME/platform\n    sourcePath: docs\n", "same repository and sourcePath"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			body := "schemaVersion: 1\nprovider: local\nlocal:\n  root: .local/storage\n" + test.body
+			_, err := Parse([]byte(body))
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("Parse() error = %v, want substring %q", err, test.want)
+			}
+		})
+	}
+}
+
 func TestParseRejectsInvalidConfig(t *testing.T) {
 	tests := []struct {
 		name string
@@ -255,9 +311,9 @@ func TestSetDefaultStoresOnlyAbsoluteLocatorWithPrivateMode(t *testing.T) {
 	}
 }
 
-func TestResolveRemoteConfigPinsCommitAndFallsBackOnlyOnNotFound(t *testing.T) {
+func TestResolveRemoteConfigPinsOneUnifiedConfigCommitWithoutLegacyFallback(t *testing.T) {
 	const sha = "0123456789abcdef0123456789abcdef01234567"
-	configBytes := []byte("schemaVersion: 1\nprovider: aws\npreviewRetentionDays: 30\naws:\n  region: us-west-2\n  bucket: pages-prod\n  distributionId: E123\n")
+	configBytes := []byte("schemaVersion: 1\nprovider: aws\npreviewRetentionDays: 30\naws:\n  region: us-west-2\n  bucket: pages-prod\n  distributionId: E123\nsites:\n  sre:\n    name: SRE\n    description: Operations\n    repository: acme/platform\n    sourcePath: docs/artifacts\n")
 	satellite := t.TempDir()
 	localConfigPath := filepath.Join(satellite, "deployment.yaml")
 	if err := os.WriteFile(localConfigPath, configBytes, 0o600); err != nil {
@@ -284,6 +340,10 @@ func TestResolveRemoteConfigPinsCommitAndFallsBackOnlyOnNotFound(t *testing.T) {
 			_ = json.NewEncoder(writer).Encode(githubContent{
 				Type: "file", Encoding: "base64", Content: base64.StdEncoding.EncodeToString(configBytes), SHA: "file-sha",
 			})
+		case request.URL.Path == "/repos/acme/admin/contents/artifact-pages.cloudflare.yaml":
+			_ = json.NewEncoder(writer).Encode(githubContent{
+				Type: "file", Encoding: "base64", Content: base64.StdEncoding.EncodeToString(configBytes), SHA: "file-sha",
+			})
 		default:
 			writer.WriteHeader(http.StatusNotFound)
 		}
@@ -299,21 +359,27 @@ func TestResolveRemoteConfigPinsCommitAndFallsBackOnlyOnNotFound(t *testing.T) {
 			return ""
 		},
 	}
-	resolved, err := resolver.Resolve(t.Context(), "github://acme/admin")
+	_, err = resolver.Resolve(t.Context(), "github://acme/admin")
+	if err == nil || !strings.Contains(err.Error(), "GitHub config fetch failed for .artifact-pages.yaml (HTTP 404)") {
+		t.Fatalf("Resolve(remote default) error = %v, want the default file's 404 without legacy fallback", err)
+	}
+	if len(requests) != 3 || requests[2] != "/repos/acme/admin/contents/.artifact-pages.yaml?ref="+sha {
+		t.Fatalf("GitHub requests = %v, want metadata, commit, and one pinned default-file request", requests)
+	}
+
+	requests = nil
+	remote, err := resolver.Resolve(t.Context(), "github://acme/admin/artifact-pages.cloudflare.yaml?ref="+sha)
 	if err != nil {
-		t.Fatalf("Resolve(remote) error = %v", err)
+		t.Fatalf("Resolve(arbitrary remote config) error = %v", err)
 	}
-	if resolved.CommitSHA != sha || resolved.Config.Provider != "aws" || !strings.Contains(resolved.Locator, "ref="+sha) {
-		t.Fatalf("resolved config = %+v, want pinned commit and AWS target", resolved)
+	if remote.CommitSHA != sha || remote.Config.Provider != "aws" || remote.Config.Sites["sre"].Description != "Operations" || !strings.Contains(remote.Locator, "artifact-pages.cloudflare.yaml") {
+		t.Fatalf("resolved config = %+v, want one pinned config with provider and sites", remote)
 	}
-	if !reflect.DeepEqual(resolved.Config, localResolved.Config) {
-		t.Fatalf("local and remote config differ:\nlocal:  %+v\nremote: %+v", localResolved.Config, resolved.Config)
+	if !reflect.DeepEqual(remote.Config, localResolved.Config) {
+		t.Fatalf("local and remote config differ:\nlocal:  %+v\nremote: %+v", localResolved.Config, remote.Config)
 	}
-	if _, err := os.Stat(filepath.Join(satellite, "sites.yaml")); !os.IsNotExist(err) {
-		t.Fatalf("satellite test unexpectedly has admin manifest: stat error = %v", err)
-	}
-	if len(requests) != 4 || !strings.Contains(requests[3], "ref="+sha) {
-		t.Fatalf("GitHub requests = %v, want metadata, commit, default-file 404 and fallback pinned to %s", requests, sha)
+	if len(requests) != 1 || !strings.Contains(requests[0], "ref="+sha) {
+		t.Fatalf("arbitrary config fetches = %v, want a single file read at pinned commit", requests)
 	}
 }
 

@@ -14,21 +14,21 @@ The runner needs Node.js, Go, Git, and `tar`. It needs no cloud credentials, net
 
 The run performs these steps in one clean-room scenario:
 
-1. Initializes and commits an `acme/platform-admin` repository and an independent `acme/sre-docs` repository. The admin owns `.artifact-pages.yaml` and `sites.yaml`; the satellite has neither file.
-2. Plans registration of the complete site manifest with an explicit admin config, then reconciles from the admin checkout's committed default config.
+1. Initializes and commits an `acme/platform-admin` repository and an independent `acme/sre-docs` repository. The admin owns one `.artifact-pages.yaml` containing provider settings and its `sites` mapping; the satellite has no admin registry config.
+2. Plans registration of the complete `sites` mapping with an explicit admin config, then reconciles from the admin checkout's committed default config.
 3. Plans and publishes the `sre` and `neighbor` sites from the satellite checkout with the explicit config path `../platform-admin/.artifact-pages.yaml`. The CLI checks the satellite Git identity and exact source path against the registry.
 4. Runs a site publish dry-run and checks the object target remains byte-for-byte unchanged.
 5. Simulates a process that left the SRE site lock held. It confirms that recovery with an ETag captured before the lock changed fails, then inspects and recovers with the current ETag.
 6. Creates two local test app archives with different bytes. It checks the app dry-run is read-only, verifies that a tampered archive is rejected before writes, deploys version one, upgrades to version two, and rolls back to version one. It compares `/_indexes/`, `/_artifacts/`, and `/_previews/` byte-for-byte after each app deployment.
 7. Changes the SRE source and removes a stale file, plans the update, and publishes it. It checks that the neighbor site's index and artifacts are unchanged.
-8. Removes SRE from the admin manifest, plans and applies `registry unregister --site sre`, then verifies SRE discovery and content prefixes are removed while the neighbor's indexes, artifacts, and previews remain unchanged.
+8. Removes SRE from the admin config's `sites` mapping, plans and applies `registry unregister --site sre`, then verifies SRE discovery and content prefixes are removed while the neighbor's indexes, artifacts, and previews remain unchanged.
 9. Runs `scripts/test-actions-parity.mjs` in its own temporary repositories. This checks CLI and shared Action-invoker results and static workflow wiring; it does not run GitHub's hosted composite runner.
 
 The two app archives are generated test fixtures, not published Artifact Pages releases. They exercise the archive manifest and SHA-256 checks that `app deploy --archive` performs. The run does not verify a public release download, an OSS license, a release/versioning policy, or a provider account.
 
 ## Roles and trust boundaries
 
-- The **admin repository** owns the complete desired site manifest and the deployment target config. `registry register` reconciles the full registration set and cleans content prefixes for sites omitted from the manifest; `registry unregister` performs explicit site cleanup. Restrict those workflows to reviewed changes and protected environments.
+- The **admin repository** owns one deployment config containing the target and the complete desired `sites` mapping. `registry register` reconciles that full set and cleans content prefixes for omitted sites; an absent `sites` field is an input error, while `sites: {}` explicitly requests an empty registry. `registry unregister` requires the config to omit the selected site before performing its cleanup. Restrict those workflows to reviewed changes and protected environments.
 - A **satellite workflow** publishes an explicitly selected site ID and source path. The publisher checks the Git origin identity and the exact registered source path. The site is never inferred from the repository name.
 - The **web app bundle** contains only the stable application plane (`index.html` and assets). Deploying it leaves site indexes, artifacts, and previews alone. Keep app deployment credentials separate from registry and per-site credentials.
 - Published HTML artifacts execute in an unsandboxed iframe. Treat HTML and its referenced JavaScript as trusted executable code and review the source before publication. Markdown is sanitized before it is rendered in the application.

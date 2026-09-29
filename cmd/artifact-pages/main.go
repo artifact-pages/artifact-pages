@@ -382,7 +382,6 @@ func runRegistryRegister(ctx context.Context, args []string, stdout, stderr io.W
 	flags := flag.NewFlagSet("artifact-pages registry register", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.Usage = func() { writeRegistryRegisterUsage(stderr) }
-	manifestPath := flags.String("manifest", "sites.yaml", "Git-owned YAML registry manifest")
 	configLocator := flags.String("config", "", "local path or github://OWNER/REPO/FILE?ref=REF deployment config locator")
 	dryRun := flags.Bool("dry-run", false, "show planned changes without writes, deletes, lock recovery, or cache changes")
 	format := flags.String("format", "text", "result format: text or json")
@@ -398,14 +397,14 @@ func runRegistryRegister(ctx context.Context, args []string, stdout, stderr io.W
 	if *format != "text" && *format != "json" {
 		return withExitCode(errors.New("--format must be text or json"), 2)
 	}
-	manifestBytes, err := os.ReadFile(*manifestPath)
+	resolved, err := (deploymentconfig.Resolver{}).Resolve(ctx, *configLocator)
 	if err != nil {
-		return withExitCode(fmt.Errorf("read registry manifest: %w", err), 2)
-	}
-	if _, _, err := registry.Build(manifestBytes); err != nil {
 		return withExitCode(err, 2)
 	}
-	resolved, err := (deploymentconfig.Resolver{}).Resolve(ctx, *configLocator)
+	if resolved.Config.Sites == nil {
+		return withExitCode(errors.New("deployment config must include a sites mapping for registry operations (use sites: {} for an empty registry)"), 2)
+	}
+	desired, err := registry.ProjectSites(resolved.Config.Sites)
 	if err != nil {
 		return withExitCode(err, 2)
 	}
@@ -413,7 +412,7 @@ func runRegistryRegister(ctx context.Context, args []string, stdout, stderr io.W
 	if err != nil {
 		return withResolvedError(err, resolved)
 	}
-	result, err := publisher.RegisterSites(ctx, backend, manifestBytes, *dryRun)
+	result, err := publisher.RegisterSites(ctx, backend, desired, *dryRun)
 	if err != nil {
 		return withResolvedResult(err, result, resolved)
 	}
@@ -437,7 +436,6 @@ func runRegistryUnregister(ctx context.Context, args []string, stdout, stderr io
 	flags.SetOutput(stderr)
 	flags.Usage = func() { writeRegistryUnregisterUsage(stderr) }
 	siteID := flags.String("site", "", "site identifier to unregister")
-	manifestPath := flags.String("manifest", "sites.yaml", "Git-owned YAML registry manifest after removing the site")
 	configLocator := flags.String("config", "", "local path or github://OWNER/REPO/FILE?ref=REF deployment config locator")
 	dryRun := flags.Bool("dry-run", false, "show planned changes without writes, deletes, lock recovery, or cache changes")
 	format := flags.String("format", "text", "result format: text or json")
@@ -459,28 +457,27 @@ func runRegistryUnregister(ctx context.Context, args []string, stdout, stderr io
 	if *format != "text" && *format != "json" {
 		return withExitCode(errors.New("--format must be text or json"), 2)
 	}
-	manifestBytes, err := os.ReadFile(*manifestPath)
-	if err != nil {
-		return withExitCode(fmt.Errorf("read registry manifest: %w", err), 2)
-	}
-	_, projection, err := registry.Build(manifestBytes)
-	if err != nil {
-		return withExitCode(err, 2)
-	}
-	for _, entry := range projection.Sites {
-		if entry.ID == *siteID {
-			return withExitCode(fmt.Errorf("site %q is still present in the registry manifest; remove it before unregistering", *siteID), 2)
-		}
-	}
 	resolved, err := (deploymentconfig.Resolver{}).Resolve(ctx, *configLocator)
 	if err != nil {
 		return withExitCode(err, 2)
+	}
+	if resolved.Config.Sites == nil {
+		return withExitCode(errors.New("deployment config must include a sites mapping for registry operations (use sites: {} for an empty registry)"), 2)
+	}
+	desired, err := registry.ProjectSites(resolved.Config.Sites)
+	if err != nil {
+		return withExitCode(err, 2)
+	}
+	for _, entry := range desired.Sites {
+		if entry.ID == *siteID {
+			return withExitCode(fmt.Errorf("site %q is still present in config sites; remove it before unregistering", *siteID), 2)
+		}
 	}
 	backend, err := newDeploymentBackend(ctx, resolved.Config)
 	if err != nil {
 		return withResolvedError(err, resolved)
 	}
-	result, err := publisher.UnregisterSite(ctx, backend, manifestBytes, *siteID, *dryRun)
+	result, err := publisher.UnregisterSite(ctx, backend, desired, *siteID, *dryRun)
 	if err != nil {
 		return withResolvedResult(err, result, resolved)
 	}
@@ -887,22 +884,22 @@ func writeConfigUsage(writer io.Writer) {
 
 func writeRegistryUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "Usage:")
-	fmt.Fprintln(writer, "  artifact-pages registry register [--manifest sites.yaml] [--config LOCATOR] [--dry-run] [--format text|json]")
-	fmt.Fprintln(writer, "  artifact-pages registry unregister --site ID [--manifest sites.yaml] [--config LOCATOR] [--dry-run] [--format text|json]")
+	fmt.Fprintln(writer, "  artifact-pages registry register [--config LOCATOR] [--dry-run] [--format text|json]")
+	fmt.Fprintln(writer, "  artifact-pages registry unregister --site ID [--config LOCATOR] [--dry-run] [--format text|json]")
 	fmt.Fprintln(writer, "")
-	fmt.Fprintln(writer, "Validate and reconcile the complete set of Git-owned site registrations.")
+	fmt.Fprintln(writer, "Reconcile the complete site set declared in the selected deployment config.")
 }
 
 func writeRegistryRegisterUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "Usage:")
-	fmt.Fprintln(writer, "  artifact-pages registry register [--manifest sites.yaml] [--config LOCATOR] [--dry-run] [--format text|json]")
+	fmt.Fprintln(writer, "  artifact-pages registry register [--config LOCATOR] [--dry-run] [--format text|json]")
 	fmt.Fprintln(writer, "")
-	fmt.Fprintln(writer, "Validate sites.yaml and reconcile its deterministic registry projection; sites omitted from the manifest are unregistered and cleaned on apply.")
+	fmt.Fprintln(writer, "Reconcile the sites mapping in the selected config; sites omitted from it are unregistered and cleaned on apply.")
 }
 
 func writeRegistryUnregisterUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "Usage:")
-	fmt.Fprintln(writer, "  artifact-pages registry unregister --site ID [--manifest sites.yaml] [--config LOCATOR] [--dry-run] [--format text|json]")
+	fmt.Fprintln(writer, "  artifact-pages registry unregister --site ID [--config LOCATOR] [--dry-run] [--format text|json]")
 	fmt.Fprintln(writer, "")
-	fmt.Fprintln(writer, "Remove a site already deleted from sites.yaml, then clean its deployed prefixes and cache paths.")
+	fmt.Fprintln(writer, "Remove the site from the selected config's sites mapping, then clean its deployed prefixes and cache paths.")
 }

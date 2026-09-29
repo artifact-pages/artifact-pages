@@ -12,12 +12,16 @@ import (
 	"github.com/tasuku43/git-artifact-pages/internal/registry"
 )
 
-// RegisterSites validates and reconciles the complete Git-owned registration
+// RegisterSites reconciles the complete desired registration set from the
 // set. A real apply holds a registry lock and site locks for changed existing
-// identities; sites omitted from the manifest are unregistered and cleaned.
+// identities; sites omitted from the selected config are unregistered and cleaned.
 // A dry-run is read-only and returns the same sorted plan.
-func RegisterSites(ctx context.Context, backend DeploymentBackend, manifest []byte, dryRun bool) (Result, error) {
-	desiredBytes, desired, err := registry.Build(manifest)
+func RegisterSites(ctx context.Context, backend DeploymentBackend, desired registry.Projection, dryRun bool) (Result, error) {
+	desiredBytes, err := registry.Encode(desired)
+	if err != nil {
+		return Result{}, err
+	}
+	desired, err = registry.DecodeProjection(desiredBytes)
 	if err != nil {
 		return Result{}, err
 	}
@@ -25,19 +29,23 @@ func RegisterSites(ctx context.Context, backend DeploymentBackend, manifest []by
 }
 
 // UnregisterSite requires the selected site to have been removed from the
-// Git-owned manifest, then withdraws the registry projection and cleans the
+// selected config, then withdraws the registry projection and cleans the
 // site's deployed content even when an earlier attempt already removed it.
-func UnregisterSite(ctx context.Context, backend DeploymentBackend, manifest []byte, siteID string, dryRun bool) (Result, error) {
+func UnregisterSite(ctx context.Context, backend DeploymentBackend, desired registry.Projection, siteID string, dryRun bool) (Result, error) {
 	result := Result{Operation: "registry unregister", Site: siteID}
 	if err := validateLockSite(siteID); err != nil {
 		return result, err
 	}
-	desiredBytes, desired, err := registry.Build(manifest)
+	desiredBytes, err := registry.Encode(desired)
+	if err != nil {
+		return result, err
+	}
+	desired, err = registry.DecodeProjection(desiredBytes)
 	if err != nil {
 		return result, err
 	}
 	if _, exists := registrySite(desired, siteID); exists {
-		return result, fmt.Errorf("site %q is still present in the registry manifest; remove it before unregistering", siteID)
+		return result, fmt.Errorf("site %q is still present in config sites; remove it before unregistering", siteID)
 	}
 	result, err = applyRegistryProjection(ctx, backend, desiredBytes, desired, dryRun, []string{siteID}, "registry unregister")
 	result.Site = siteID

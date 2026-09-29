@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/tasuku43/git-artifact-pages/internal/preview"
-	"github.com/tasuku43/git-artifact-pages/internal/registry"
 )
 
 func TestCloudflarePreviewIntegrationRetriesInterruptedWriteIdempotentlyAndIsolatesSites(t *testing.T) {
@@ -344,7 +343,7 @@ func newCloudflarePreviewIntegrationBackend(t *testing.T) (*cloudflareBackend, *
 
 func seedCloudflarePreviewRegistry(t *testing.T, endpoint *cloudflarePreviewS3Endpoint) {
 	t.Helper()
-	contents, _, err := registry.Build([]byte(registeredSREAndDocsManifest))
+	contents, _, err := testRegistryBuild(t, []byte(registeredSREAndDocsManifest))
 	if err != nil {
 		t.Fatalf("registry.Build() = %v", err)
 	}

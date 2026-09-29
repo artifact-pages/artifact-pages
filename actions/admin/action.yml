@@ -5,10 +5,6 @@ inputs:
     description: "CLI operation: registry-register, registry-unregister, or app-deploy."
     required: false
     default: registry-register
-  manifest:
-    description: Admin-owned sites manifest path, relative to the checked-out repository.
-    required: false
-    default: sites.yaml
   config:
     description: Optional deployment config path or github:// config locator.
     required: false
@@ -85,7 +81,6 @@ runs:
         ARTIFACT_PAGES_CLI: ${{ runner.temp }}/artifact-pages
         ARTIFACT_PAGES_ACTION_KIND: admin
         ARTIFACT_PAGES_INPUT_OPERATION: ${{ inputs.operation }}
-        ARTIFACT_PAGES_INPUT_MANIFEST: ${{ inputs.manifest }}
         ARTIFACT_PAGES_INPUT_CONFIG: ${{ inputs.config }}
         ARTIFACT_PAGES_INPUT_SITE: ${{ inputs.site }}
         ARTIFACT_PAGES_INPUT_ARCHIVE: ${{ inputs.archive }}

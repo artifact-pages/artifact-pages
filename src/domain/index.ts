@@ -1,6 +1,7 @@
 export type SiteSummary = {
   id: string
   title: string
+  description?: string
 }
 
 export type SiteDiscoveryMetadata = {
@@ -22,6 +23,7 @@ export function hasSiteDiscoveryMetadata(entry: SiteCatalogEntry): entry is Site
 export type SiteRegistryEntry = {
   id: string
   name: string
+  description?: string
   repository: string
   sourcePath: string
 }

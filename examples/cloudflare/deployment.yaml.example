@@ -13,3 +13,9 @@ cloudflare:
   registryReaderSecretAccessKeyEnv: CF_R2_REGISTRY_READER_SECRET_ACCESS_KEY
   registryReaderSessionTokenEnv: CF_R2_REGISTRY_READER_SESSION_TOKEN
   apiTokenEnv: CF_API_TOKEN
+sites:
+  sre:
+    name: SRE & Platform
+    description: Runbooks and reliability documentation.
+    repository: acme/sre-docs
+    sourcePath: docs/artifacts

@@ -31,7 +31,6 @@ jobs:
         uses: tasuku43/git-artifact-pages/actions/admin@<FULL_REVIEWED_ACTION_COMMIT_SHA>
         with:
           operation: registry-register
-          manifest: sites.yaml
           config: .artifact-pages.yaml
 
       - name: Use the typed CLI result

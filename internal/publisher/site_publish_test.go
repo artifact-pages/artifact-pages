@@ -21,6 +21,7 @@ const registeredSREManifest = `schemaVersion: 1
 sites:
   sre:
     name: SRE & Platform
+    description: Operational reviews and incident reports
     repository: acme/sre
     sourcePath: docs/artifacts
 `
@@ -253,7 +254,7 @@ func TestRejectOverlappingLocalSourceResolvesSymlinkedTargetParent(t *testing.T)
 
 func seedDirectoryRegistry(t *testing.T, backend *DirectoryBackend, manifest string) {
 	t.Helper()
-	data, _, err := registry.Build([]byte(manifest))
+	data, _, err := testRegistryBuild(t, []byte(manifest))
 	if err != nil {
 		t.Fatalf("build registry fixture: %v", err)
 	}
@@ -320,6 +321,14 @@ func TestPublishSiteUsesOriginRegistryAfterSiteLockAndIgnoresBranch(t *testing.T
 			t.Errorf("published object %q is missing", key)
 		}
 	}
+	var discovery struct {
+		Site struct {
+			Description string `json:"description"`
+		} `json:"site"`
+	}
+	if err := json.Unmarshal(backend.lockMemoryBackend.objects["_indexes/sre/meta.json"].Bytes, &discovery); err != nil || discovery.Site.Description != "Operational reviews and incident reports" {
+		t.Errorf("published discovery metadata description = %q, err=%v; want the deployed registry description", discovery.Site.Description, err)
+	}
 }
 
 func TestPublishFirstThenUnregisterWithdrawsAndCleansSite(t *testing.T) {
@@ -364,7 +373,7 @@ func TestPublishFirstThenUnregisterWithdrawsAndCleansSite(t *testing.T) {
 	unregisterPending = true
 	go func() {
 		defer close(unregisterStopped)
-		result, err := UnregisterSite(context.Background(), backend, []byte(docsOnlyManifest), "sre", false)
+		result, err := UnregisterSite(context.Background(), backend, testRegistryProjection(t, docsOnlyManifest), "sre", false)
 		unregisterDone <- unregisterOutcome{result: result, err: err}
 	}()
 	awaitSiteSignal(t, backend.registryWriteReached, "registry withdrawal while publisher holds its site lock")
@@ -443,7 +452,7 @@ func TestUnregisterFirstBlocksPublishBeforeContentWrites(t *testing.T) {
 	}()
 	go func() {
 		defer close(unregisterStopped)
-		result, err := UnregisterSite(context.Background(), backend, []byte(docsOnlyManifest), "sre", false)
+		result, err := UnregisterSite(context.Background(), backend, testRegistryProjection(t, docsOnlyManifest), "sre", false)
 		unregisterDone <- unregisterOutcome{result: result, err: err}
 	}()
 	awaitSiteSignal(t, backend.registryWriteReached, "registry withdrawal")
@@ -659,7 +668,7 @@ func runPublisherGitAt(directory string, args ...string) error {
 
 func seedPublisherRegistry(t *testing.T, backend *lockMemoryBackend, manifest string) {
 	t.Helper()
-	contents, _, err := registry.Build([]byte(manifest))
+	contents, _, err := testRegistryBuild(t, []byte(manifest))
 	if err != nil {
 		t.Fatalf("build test registry: %v", err)
 	}

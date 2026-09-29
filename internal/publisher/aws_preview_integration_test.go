@@ -21,7 +21,6 @@ import (
 	"github.com/aws/smithy-go"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
 	"github.com/tasuku43/git-artifact-pages/internal/preview"
-	"github.com/tasuku43/git-artifact-pages/internal/registry"
 )
 
 // These tests compose awsBackend and ObjectPreviewStore over a deterministic
@@ -687,7 +686,7 @@ func (client *awsPreviewIntegrationS3) putSnapshot() []awsPreviewIntegrationPut 
 
 func awsPreviewIntegrationSeedRegistry(t *testing.T, client *awsPreviewIntegrationS3, manifest string) {
 	t.Helper()
-	contents, _, err := registry.Build([]byte(manifest))
+	contents, _, err := testRegistryBuild(t, []byte(manifest))
 	if err != nil {
 		t.Fatalf("build AWS preview registry fixture: %v", err)
 	}

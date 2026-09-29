@@ -7,6 +7,32 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 const composeFile = path.join(projectRoot, 'docker-compose.edge.yml')
 const profileRoot = path.resolve(projectRoot, process.env.EDGE_PROFILE_STATE_ROOT ?? '.local/edge-profiles')
 const validProfiles = new Set(['aws', 'cloudflare', 'gcp'])
+const registryProbeSites = [
+  {
+    id: 'frontend',
+    name: 'Frontend',
+    repository: 'tasuku43/git-artifact-pages',
+    sourcePath: 'fixtures/storage/_artifacts/frontend',
+  },
+  {
+    id: 'showcase',
+    name: 'HTML Showcase',
+    repository: 'tasuku43/git-artifact-pages',
+    sourcePath: 'fixtures/storage/_artifacts/showcase',
+  },
+  {
+    id: 'sre',
+    name: 'SRE',
+    repository: 'tasuku43/git-artifact-pages',
+    sourcePath: 'fixtures/storage/_artifacts/sre',
+  },
+  {
+    id: 'edge-probe',
+    name: 'Edge Probe',
+    repository: 'tasuku43/git-artifact-pages',
+    sourcePath: 'fixtures/storage/_artifacts/sre/edge-probe',
+  },
+]
 
 function run(command, args, { env = process.env, stdio = 'inherit' } = {}) {
   const result = spawnSync(command, args, { cwd: projectRoot, env, encoding: 'utf8', stdio })
@@ -50,77 +76,45 @@ async function waitFor(url, expectedStatus, label) {
   throw new Error(`${label} did not become ready at ${url} (last result: ${lastStatus}).`)
 }
 
-async function writeDeploymentConfig(profile, configPath, ports) {
-  let contents
+function sitesYAML(sites) {
+  const lines = ['sites:']
+  for (const site of sites) {
+    lines.push(
+      `  ${site.id}:`,
+      `    name: ${site.name}`,
+      `    repository: ${site.repository}`,
+      `    sourcePath: ${site.sourcePath}`,
+    )
+  }
+  return lines.join('\n')
+}
+
+async function writeDeploymentConfig(profile, configPath, ports, sites = registryProbeSites) {
+  let targetSettings
   if (profile === 'aws') {
-    contents = [
+    targetSettings = [
       'schemaVersion: 1', 'provider: aws', 'previewRetentionDays: 30', 'aws:',
-      '  region: us-east-1', '  bucket: artifact-pages', '',
+      '  region: us-east-1', '  bucket: artifact-pages',
     ].join('\n')
   } else if (profile === 'cloudflare') {
-    contents = [
+    targetSettings = [
       'schemaVersion: 1', 'provider: cloudflare', 'previewRetentionDays: 30', 'cloudflare:',
       '  accountId: 0123456789abcdef0123456789abcdef', '  bucket: artifact-pages',
       '  zoneId: abcdef0123456789abcdef0123456789', '  publicBaseURL: https://pages.example.test',
       `  r2Endpoint: http://127.0.0.1:${ports.minio}`,
       `  apiBaseURL: http://127.0.0.1:${ports.cloudflareAPI}/client/v4`,
       '  accessKeyIdEnv: CF_R2_ACCESS_KEY_ID', '  secretAccessKeyEnv: CF_R2_SECRET_ACCESS_KEY',
-      '  sessionTokenEnv: CF_R2_SESSION_TOKEN', '  apiTokenEnv: CF_API_TOKEN', '',
+      '  sessionTokenEnv: CF_R2_SESSION_TOKEN', '  apiTokenEnv: CF_API_TOKEN',
     ].join('\n')
   } else {
-    contents = [
+    targetSettings = [
       'schemaVersion: 1', 'provider: gcp-local', 'previewRetentionDays: 30', 'gcpLocal:',
-      `  endpoint: http://127.0.0.1:${ports.gcs}`, '  bucket: artifact-pages', '',
+      `  endpoint: http://127.0.0.1:${ports.gcs}`, '  bucket: artifact-pages',
     ].join('\n')
   }
+  const contents = `${targetSettings}\n${sitesYAML(sites)}\n`
   await fs.mkdir(path.dirname(configPath), { recursive: true })
   await fs.writeFile(configPath, contents, { mode: 0o600 })
-}
-
-async function writeRegistryProbeManifest(manifestPath) {
-  const contents = [
-    'schemaVersion: 1',
-    'sites:',
-    '  frontend:',
-    '    name: Frontend',
-    '    repository: tasuku43/git-artifact-pages',
-    '    sourcePath: fixtures/storage/_artifacts/frontend',
-    '  showcase:',
-    '    name: HTML Showcase',
-    '    repository: tasuku43/git-artifact-pages',
-    '    sourcePath: fixtures/storage/_artifacts/showcase',
-    '  sre:',
-    '    name: SRE',
-    '    repository: tasuku43/git-artifact-pages',
-    '    sourcePath: fixtures/storage/_artifacts/sre',
-    '  edge-probe:',
-    '    name: Edge Probe',
-    '    repository: tasuku43/git-artifact-pages',
-    '    sourcePath: fixtures/storage/_artifacts/sre/edge-probe',
-    '',
-  ].join('\n')
-  await fs.writeFile(manifestPath, contents, { mode: 0o600 })
-}
-
-async function writeRegistryUnregisterManifest(manifestPath) {
-  const contents = [
-    'schemaVersion: 1',
-    'sites:',
-    '  frontend:',
-    '    name: Frontend',
-    '    repository: tasuku43/git-artifact-pages',
-    '    sourcePath: fixtures/storage/_artifacts/frontend',
-    '  showcase:',
-    '    name: HTML Showcase',
-    '    repository: tasuku43/git-artifact-pages',
-    '    sourcePath: fixtures/storage/_artifacts/showcase',
-    '  edge-probe:',
-    '    name: Edge Probe',
-    '    repository: tasuku43/git-artifact-pages',
-    '    sourcePath: fixtures/storage/_artifacts/sre/edge-probe',
-    '',
-  ].join('\n')
-  await fs.writeFile(manifestPath, contents, { mode: 0o600 })
 }
 
 async function publishUnregisterProbe(configPath, commandEnv, siteID, sourceDir, probeName, marker) {
@@ -437,11 +431,9 @@ async function main() {
       }
     }
 
-    const registryManifestPath = path.join(stateDir, 'registry-probe.yaml')
-    await writeRegistryProbeManifest(registryManifestPath)
     const registryRegister = run('go', [
       'run', './cmd/artifact-pages', 'registry', 'register', '--config', configPath,
-      '--manifest', registryManifestPath, '--format=json',
+      '--format=json',
     ], { env: commandEnv, stdio: 'pipe' })
     process.stdout.write(registryRegister.stdout)
     if (registryRegister.stderr) process.stderr.write(registryRegister.stderr)
@@ -513,11 +505,10 @@ async function main() {
       await runCloudflareUnregisterObjectAssertions(profile, env, 'before', sreProbeKey)
       await resetCloudflarePurgeRequests(profile, env, ports.cloudflareAPI)
 
-      const unregisterManifestPath = path.join(stateDir, 'registry-unregister-probe.yaml')
-      await writeRegistryUnregisterManifest(unregisterManifestPath)
+      await writeDeploymentConfig(profile, configPath, ports, registryProbeSites.filter(({ id }) => id !== 'sre'))
       const unregister = run('go', [
         'run', './cmd/artifact-pages', 'registry', 'unregister', '--config', configPath,
-        '--manifest', unregisterManifestPath, '--site', 'sre', '--format=json',
+        '--site', 'sre', '--format=json',
       ], { env: commandEnv, stdio: 'pipe' })
       process.stdout.write(unregister.stdout)
       if (unregister.stderr) process.stderr.write(unregister.stderr)

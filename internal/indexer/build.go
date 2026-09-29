@@ -40,14 +40,15 @@ func ValidateUTF8RelativePath(relative string) error {
 }
 
 type BuildOptions struct {
-	SiteID        string
-	SiteTitle     string
-	SourceDir     string
-	OutputDir     string
-	Repository    string
-	RepositoryURL string
-	Ref           string
-	Now           func() time.Time
+	SiteID          string
+	SiteTitle       string
+	SiteDescription string
+	SourceDir       string
+	OutputDir       string
+	Repository      string
+	RepositoryURL   string
+	Ref             string
+	Now             func() time.Time
 }
 
 type BuildResult struct {
@@ -86,8 +87,9 @@ type SiteDiscoveryMetadata struct {
 }
 
 type SiteSummary struct {
-	ID    string `json:"id"`
-	Title string `json:"title"`
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	Description string `json:"description,omitempty"`
 }
 
 type ArtifactIndexEntry struct {
@@ -229,9 +231,13 @@ func Build(ctx context.Context, options BuildOptions) (BuildResult, error) {
 		title = humanize(path.Base(options.SiteID))
 	}
 
+	description := options.SiteDescription
+	if strings.TrimSpace(description) == "" {
+		description = ""
+	}
 	index := SiteIndex{
 		SchemaVersion: 1,
-		Site:          SiteSummary{ID: options.SiteID, Title: title},
+		Site:          SiteSummary{ID: options.SiteID, Title: title, Description: description},
 		GeneratedAt:   indexTime.UTC().Format(time.RFC3339),
 		Artifacts:     make([]ArtifactIndexEntry, 0, len(artifacts)),
 	}

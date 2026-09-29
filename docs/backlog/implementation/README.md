@@ -1,6 +1,6 @@
 # Implementation backlog
 
-These are independently reviewable slices for the accepted product contract. IMP-01–18 cover preview; IMP-19–35 cover registered discovery, normal publish, administration, provider deployments and distribution; IMP-36 adds a local edge-to-object-storage contract test foundation; IMP-37–38 add the Cloudflare adoption entry point and Terraform Registry distribution; IMP-39 adds the AWS custom-domain composition with Cloudflare DNS and ACM. The current Phase 1 boundary remains in [the roadmap](../../roadmap.md); listing a later-phase ticket does not authorize implementing it now. Product behavior belongs in [the specification](../../specification.md), unresolved mechanics in technical design, and proof in verification. A ticket is `Done` only when its acceptance criteria have evidence; completing it does not automatically close linked verification.
+These are independently reviewable slices for the accepted product contract. IMP-01–18 cover preview; IMP-19–35 cover registered discovery, normal publish, administration, provider deployments and distribution; IMP-36 adds a local edge-to-object-storage contract test foundation; IMP-37–38 add the Cloudflare adoption entry point and Terraform Registry distribution; IMP-39 adds the AWS custom-domain composition with Cloudflare DNS and ACM; IMP-40 records the completed Phase 1 unified deployment config and optional site-description data flow. IMP-40 explicitly excludes IMP-037/038/039 infrastructure and distribution work. The current Phase 1 boundary remains in [the roadmap](../../roadmap.md); listing a later-phase ticket does not authorize implementing it now. Product behavior belongs in [the specification](../../specification.md), unresolved mechanics in technical design, and proof in verification. A ticket is `Done` only when its acceptance criteria have evidence; completing it does not automatically close linked verification.
 
 ## Follow-up defects and readiness
 
@@ -17,6 +17,14 @@ Use the [priority-ordered, one-at-a-time repair queue](../issues/README.md#repai
 | AWS parallel/follow-up | [IMP-39](IMP-39-aws-cloudflare-dns-acm.md) | Open | Agent-led | Compose DNS-only Cloudflare records and ACM in us-east-1 with CloudFront; keep Cloudflare publication independent and hand AWS live evidence to T15. |
 
 Use the [delegation index](../delegation.md) for work modes and owner boundaries. Existing review repairs remain the active repair queue; these new tickets are not an instruction to interrupt it. IMP-33 remains Done for its existing-bucket implementation, not as evidence for the new root module or Registry publication.
+
+## Current Phase 1 work
+
+| Ticket | Status | Slice | Depends on | Design | Verification |
+| --- | --- | --- | --- | --- | --- |
+| [IMP-40](IMP-40-unified-deployment-config.md) | Done | Unified deployment config, registry register/unregister, and optional site-description metadata | T10, T11, IMP-20, IMP-23, IMP-27 | [T10](../technical-design/T10-config-location.md), [T11](../technical-design/T11-command-surface.md) | Config, registry, publisher, Action parity, registered-flow, clean-room and local browser checks |
+
+Production UI placement for site descriptions remains under review in [ISSUE-013](../issues/ISSUE-013-site-description.md); this slice uses Storybook examples only. IMP-037/038/039 and all provider-infrastructure work remain outside this Phase 1 slice.
 
 ## Original implementation checkpoints
 

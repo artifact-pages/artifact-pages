@@ -118,10 +118,10 @@
           <text class="edge-label" x="332" y="145">bundle</text>
 
           <path class="edge" marker-end="url(#arrow-neutral)" d="M300 445 H350 V215 H410" />
-          <text class="edge-label" x="306" y="431">deployment config</text>
+          <text class="edge-label" x="306" y="431">provider settings</text>
 
           <path class="edge" marker-end="url(#arrow-neutral)" d="M300 500 C342 500 367 460 410 460" />
-          <text class="edge-label" x="328" y="486">sites.yaml</text>
+          <text class="edge-label" x="328" y="486">sites mapping</text>
 
           <path class="edge" marker-end="url(#arrow-neutral)" d="M300 800 H410" />
           <text class="edge-label" x="327" y="789">sourcePath</text>
@@ -175,9 +175,9 @@
           <rect x="50" y="430" width="250" height="160" />
           <text class="eyebrow" x="68" y="456">ADMIN REPOSITORY · 1 NODE</text>
           <text class="title" x="68" y="488">Admin repository</text>
-          <text class="mono" x="68" y="517">sites.yaml</text>
-          <text class="copy" x="68" y="542">Source of truth for site membership</text>
-          <text class="copy" x="68" y="566">Also holds application deployment config</text>
+          <text class="mono" x="68" y="517">.artifact-pages.yaml</text>
+          <text class="copy" x="68" y="542">Target + optional sites mapping</text>
+          <text class="copy" x="68" y="566">One YAML for deploy and registry</text>
         </g>
 
         <g class="node source">
@@ -206,8 +206,8 @@
         <g class="node process">
           <rect x="410" y="390" width="300" height="155" />
           <text class="eyebrow" x="430" y="417">REGISTRY PROJECTION</text>
-          <text class="title" x="430" y="449">Register complete site set</text>
-          <text class="copy" x="430" y="478">Validate and sort manifest by ID</text>
+          <text class="title" x="430" y="449">Register configured site set</text>
+          <text class="copy" x="430" y="478">Validate config's sites map and sort by ID</text>
           <text class="copy" x="430" y="502">Reconcile all registrations</text>
           <text class="copy" x="430" y="526">Clean content for omitted sites</text>
         </g>

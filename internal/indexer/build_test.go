@@ -47,11 +47,12 @@ func TestBuildCreatesPerSiteIndexWithoutCopyingSources(t *testing.T) {
 
 	generatedAt := time.Date(2026, 2, 3, 4, 5, 6, 0, time.UTC)
 	result, err := Build(context.Background(), BuildOptions{
-		SiteID:    "sre",
-		SiteTitle: "SRE",
-		SourceDir: "artifacts",
-		OutputDir: ".local/storage",
-		Now:       func() time.Time { return generatedAt },
+		SiteID:          "sre",
+		SiteTitle:       "SRE",
+		SiteDescription: "Operational reviews and incident reports",
+		SourceDir:       "artifacts",
+		OutputDir:       ".local/storage",
+		Now:             func() time.Time { return generatedAt },
 	})
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
@@ -74,7 +75,7 @@ func TestBuildCreatesPerSiteIndexWithoutCopyingSources(t *testing.T) {
 	if err := json.Unmarshal(indexBytes, &index); err != nil {
 		t.Fatalf("decode generated site index: %v", err)
 	}
-	if index.SchemaVersion != 1 || index.Site != (SiteSummary{ID: "sre", Title: "SRE"}) {
+	if index.SchemaVersion != 1 || index.Site != (SiteSummary{ID: "sre", Title: "SRE", Description: "Operational reviews and incident reports"}) {
 		t.Errorf("site metadata = (%d, %+v), want schema 1 and SRE", index.SchemaVersion, index.Site)
 	}
 	if index.PaletteScoringProfile != nil {

@@ -19,9 +19,9 @@ import (
 	"strings"
 	"time"
 
-	"go.yaml.in/yaml/v4"
-
 	"github.com/tasuku43/git-artifact-pages/internal/githubrepo"
+	"github.com/tasuku43/git-artifact-pages/internal/registry"
+	"go.yaml.in/yaml/v4"
 )
 
 const (
@@ -75,13 +75,14 @@ type GCSLocalTarget struct {
 }
 
 type DeploymentConfig struct {
-	SchemaVersion        int               `yaml:"schemaVersion"`
-	Provider             string            `yaml:"provider"`
-	PreviewRetentionDays int               `yaml:"previewRetentionDays,omitempty"`
-	Local                *LocalTarget      `yaml:"local"`
-	AWS                  *AWSTarget        `yaml:"aws"`
-	Cloudflare           *CloudflareTarget `yaml:"cloudflare"`
-	GCSLocal             *GCSLocalTarget   `yaml:"gcpLocal"`
+	SchemaVersion        int                      `yaml:"schemaVersion"`
+	Provider             string                   `yaml:"provider"`
+	PreviewRetentionDays int                      `yaml:"previewRetentionDays,omitempty"`
+	Local                *LocalTarget             `yaml:"local"`
+	AWS                  *AWSTarget               `yaml:"aws"`
+	Cloudflare           *CloudflareTarget        `yaml:"cloudflare"`
+	GCSLocal             *GCSLocalTarget          `yaml:"gcpLocal"`
+	Sites                map[string]registry.Site `yaml:"sites,omitempty"`
 }
 
 type ResolvedConfig struct {
@@ -239,6 +240,11 @@ func (config DeploymentConfig) Validate() error {
 	if config.Provider != "local" && (config.PreviewRetentionDays < 1 || config.PreviewRetentionDays > 36500) {
 		return errors.New("previewRetentionDays must be between 1 and 36500 for provider deployments")
 	}
+	if config.Sites != nil {
+		if _, err := registry.ProjectSites(config.Sites); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -284,6 +290,29 @@ func validateConfigNode(document *yaml.Node) error {
 			}
 			if valueNode.Kind != yaml.ScalarNode || valueNode.ShortTag() != "!!str" {
 				return fmt.Errorf("%s.%s must be a string", blockName, keyNode.Value)
+			}
+		}
+	}
+	if sites := nodeMappingValue(root, "sites"); sites != nil {
+		if sites.Kind != yaml.MappingNode {
+			return errors.New("sites must be a mapping (use sites: {} for an empty registry)")
+		}
+		for index := 0; index < len(sites.Content); index += 2 {
+			idNode, siteNode := sites.Content[index], sites.Content[index+1]
+			if idNode.Kind != yaml.ScalarNode || idNode.ShortTag() != "!!str" {
+				return errors.New("site IDs must be strings")
+			}
+			if siteNode.Kind != yaml.MappingNode {
+				return fmt.Errorf("site %q must be a mapping", idNode.Value)
+			}
+			for fieldIndex := 0; fieldIndex < len(siteNode.Content); fieldIndex += 2 {
+				keyNode, valueNode := siteNode.Content[fieldIndex], siteNode.Content[fieldIndex+1]
+				if keyNode.Kind != yaml.ScalarNode || keyNode.ShortTag() != "!!str" {
+					return fmt.Errorf("site %q field names must be strings", idNode.Value)
+				}
+				if valueNode.Kind != yaml.ScalarNode || valueNode.ShortTag() != "!!str" {
+					return fmt.Errorf("site %q field %q must be a string", idNode.Value, keyNode.Value)
+				}
 			}
 		}
 	}
@@ -491,18 +520,15 @@ func (resolver Resolver) readRemoteConfig(ctx context.Context, rawLocator string
 	}
 	files := []string{locator.File}
 	if locator.File == "" {
-		files = []string{".artifact-pages.yaml", "artifact-pages.yaml"}
+		files = []string{defaultConfigName}
 	}
-	for index, file := range files {
+	for _, file := range files {
 		var content githubContent
 		query := url.Values{"ref": []string{commitSHA}}
 		endpoint := "/repos/" + url.PathEscape(locator.Owner) + "/" + url.PathEscape(locator.Repo) + "/contents/" + escapeGitHubPath(file)
 		status, readErr := resolver.getGitHubJSON(ctx, client, baseURL, endpoint, query, &content)
 		if readErr != nil {
 			return nil, "", "", readErr
-		}
-		if status == http.StatusNotFound && locator.File == "" && index < len(files)-1 {
-			continue
 		}
 		if status != http.StatusOK {
 			return nil, "", "", fmt.Errorf("GitHub config fetch failed for %s (HTTP %d)", file, status)

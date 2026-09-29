@@ -81,6 +81,41 @@ function assert(condition, message) {
   if (!condition) throw new Error(message)
 }
 
+function localDeploymentConfig(storageRoot, includeSRE = true) {
+  const sites = [
+    {
+      id: 'neighbor',
+      name: 'Neighbor documentation',
+      repository: 'acme/sre-docs',
+      sourcePath: 'sites/neighbor/content',
+    },
+  ]
+  if (includeSRE) {
+    sites.push({
+      id: 'sre',
+      name: 'SRE operations',
+      repository: 'acme/sre-docs',
+      sourcePath: 'sites/sre/content',
+    })
+  }
+  const lines = [
+    'schemaVersion: 1',
+    'provider: local',
+    'local:',
+    `  root: ${JSON.stringify(storageRoot)}`,
+    'sites:',
+  ]
+  for (const site of sites) {
+    lines.push(
+      `  ${site.id}:`,
+      `    name: ${site.name}`,
+      `    repository: ${site.repository}`,
+      `    sourcePath: ${site.sourcePath}`,
+    )
+  }
+  return `${lines.join('\n')}\n`
+}
+
 async function snapshotTree(directory) {
   const snapshot = new Map()
   async function walk(current, relative = '') {
@@ -244,26 +279,7 @@ async function main() {
       fs.mkdir(releaseRoot, { recursive: true }),
     ])
 
-    await writeFile(adminRoot, '.artifact-pages.yaml', [
-      'schemaVersion: 1',
-      'provider: local',
-      'local:',
-      `  root: ${JSON.stringify(storageRoot)}`,
-      '',
-    ].join('\n'))
-    await writeFile(adminRoot, 'sites.yaml', [
-      'schemaVersion: 1',
-      'sites:',
-      '  neighbor:',
-      '    name: Neighbor documentation',
-      '    repository: acme/sre-docs',
-      '    sourcePath: sites/neighbor/content',
-      '  sre:',
-      '    name: SRE operations',
-      '    repository: acme/sre-docs',
-      '    sourcePath: sites/sre/content',
-      '',
-    ].join('\n'))
+    await writeFile(adminRoot, '.artifact-pages.yaml', localDeploymentConfig(storageRoot))
     await writeFile(satelliteRoot, 'sites/sre/content/reports/recovery.html', [
       '<!doctype html>',
       '<html lang="en"><head><meta charset="utf-8"><title>Recovery review revision one</title>',
@@ -277,10 +293,10 @@ async function main() {
     await writeFile(satelliteRoot, 'sites/sre/content/assets/recovery.svg', '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="40"><rect width="80" height="40" fill="#176b62"/></svg>\n')
     await writeFile(satelliteRoot, 'sites/neighbor/content/index.html', '<!doctype html><title>Neighbor remains</title><h1>Neighbor remains</h1>\n')
     await writeFile(satelliteRoot, 'sites/neighbor/content/neighbor.css', 'h1 { color: teal; }\n')
-    commit(adminRoot, 'Add admin manifest and local target config')
+    commit(adminRoot, 'Add unified admin target and site config')
     commit(satelliteRoot, 'Add independent registered site sources')
 
-    assert(!(await fs.stat(path.join(satelliteRoot, 'sites.yaml')).then(() => true, () => false)), 'admin-owned sites.yaml was copied into the satellite repository')
+    assert(!(await fs.stat(path.join(satelliteRoot, 'sites.yaml')).then(() => true, () => false)), 'satellite unexpectedly contains a separate sites.yaml file')
     assert(!(await fs.stat(path.join(satelliteRoot, '.artifact-pages.yaml')).then(() => true, () => false)), 'the satellite unexpectedly owns a deployment config; this walkthrough selects the admin config explicitly')
     assert(git(adminRoot, ['status', '--porcelain']) === '', 'temporary admin repository was not clean after its initial commit')
     assert(git(satelliteRoot, ['status', '--porcelain']) === '', 'temporary satellite repository was not clean after its initial commit')
@@ -288,13 +304,13 @@ async function main() {
     run('go', ['build', '-trimpath', '-o', binaryPath, './cmd/artifact-pages'])
 
     const registryPlan = cli(binaryPath, [
-      'registry', 'register', '--manifest', 'sites.yaml', '--config', '.artifact-pages.yaml', '--dry-run',
+      'registry', 'register', '--config', '.artifact-pages.yaml', '--dry-run',
     ], adminRoot)
     assertCLI(registryPlan, 'registry register', 'planned', 'plan admin registry register with explicit config')
     assert(!(await fs.stat(storageRoot).then(() => true, () => false)), 'registry dry-run created the local object target')
 
     // The apply omits --config on purpose: the committed admin checkout config is discovered.
-    const registryApply = cli(binaryPath, ['registry', 'register', '--manifest', 'sites.yaml'], adminRoot)
+    const registryApply = cli(binaryPath, ['registry', 'register'], adminRoot)
     assertCLI(registryApply, 'registry register', 'registered', 'register sites from admin checkout config')
     assert((await fs.readFile(path.join(storageRoot, '_indexes/sites.json'), 'utf8')).includes('acme/sre-docs'), 'registry projection does not contain the satellite repository identity')
 
@@ -392,30 +408,22 @@ async function main() {
     assertSnapshotEqual(neighborArtifactsBefore, await snapshotTree(path.join(storageRoot, '_artifacts/neighbor')), 'updating SRE changed the neighbor artifacts')
     assertSnapshotEqual(neighborIndexBefore, await snapshotTree(path.join(storageRoot, '_indexes/neighbor')), 'updating SRE changed the neighbor index')
 
-    // The admin manifest removes the site first; the explicit unregister command then
-    // withdraws discovery and cleans only that site's object prefixes.
+    // The unified admin config removes the site first; unregister then withdraws
+    // discovery and cleans only that site's object prefixes.
     await writeFile(storageRoot, '_previews/sre/revisions/0123456789abcdef0123456789abcdef01234567/files/reports/review.html', '<h1>SRE preview to remove</h1>\n')
     await writeFile(storageRoot, '_previews/neighbor/revisions/abcdef0123456789abcdef0123456789abcdef01/files/reports/neighbor.html', '<h1>Neighbor preview to preserve</h1>\n')
     const neighborPreviewBefore = await snapshotTree(path.join(storageRoot, '_previews/neighbor'))
 
-    await writeFile(adminRoot, 'sites.yaml', [
-      'schemaVersion: 1',
-      'sites:',
-      '  neighbor:',
-      '    name: Neighbor documentation',
-      '    repository: acme/sre-docs',
-      '    sourcePath: sites/neighbor/content',
-      '',
-    ].join('\n'))
+    await writeFile(adminRoot, '.artifact-pages.yaml', localDeploymentConfig(storageRoot, false))
     commit(adminRoot, 'Remove SRE from the desired registry')
     const beforeUnregisterPlan = await snapshotTree(storageRoot)
     const unregisterPlan = cli(binaryPath, [
-      'registry', 'unregister', '--site', 'sre', '--manifest', 'sites.yaml', '--config', '.artifact-pages.yaml', '--dry-run',
+      'registry', 'unregister', '--site', 'sre', '--config', '.artifact-pages.yaml', '--dry-run',
     ], adminRoot)
     assertCLI(unregisterPlan, 'registry unregister', 'planned', 'plan explicit SRE unregister')
     assertSnapshotEqual(beforeUnregisterPlan, await snapshotTree(storageRoot), 'unregister dry-run')
     const unregisterApply = cli(binaryPath, [
-      'registry', 'unregister', '--site', 'sre', '--manifest', 'sites.yaml', '--config', '.artifact-pages.yaml',
+      'registry', 'unregister', '--site', 'sre', '--config', '.artifact-pages.yaml',
     ], adminRoot)
     assertCLI(unregisterApply, 'registry unregister', 'unregistered', 'unregister SRE explicitly')
 

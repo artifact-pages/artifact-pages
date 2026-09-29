@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	deploymentconfig "github.com/tasuku43/git-artifact-pages/internal/config"
 	"github.com/tasuku43/git-artifact-pages/internal/registry"
 )
 
@@ -66,7 +67,7 @@ func TestRegisterSitesDryRunMatchesApplyPlanAndDoesNotWrite(t *testing.T) {
 	backend.seed("_previews/legacy/revision/index.html", []byte("preview"))
 	beforeObjects, beforeETags := backend.snapshot()
 
-	planned, err := RegisterSites(context.Background(), backend, []byte(desiredAdminManifest), true)
+	planned, err := RegisterSites(context.Background(), backend, testRegistryProjection(t, desiredAdminManifest), true)
 	if err != nil {
 		t.Fatalf("RegisterSites(dry-run) error = %v", err)
 	}
@@ -96,7 +97,7 @@ func TestRegisterSitesDryRunMatchesApplyPlanAndDoesNotWrite(t *testing.T) {
 	}
 
 	backend.resetCounters()
-	applied, err := RegisterSites(context.Background(), backend, []byte(desiredAdminManifest), false)
+	applied, err := RegisterSites(context.Background(), backend, testRegistryProjection(t, desiredAdminManifest), false)
 	if err != nil {
 		t.Fatalf("RegisterSites() error = %v", err)
 	}
@@ -121,7 +122,7 @@ func TestRegisterSitesDryRunMatchesApplyPlanAndDoesNotWrite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read applied registry: %v", err)
 	}
-	_, expectedProjection, err := registry.Build([]byte(desiredAdminManifest))
+	_, expectedProjection, err := testRegistryBuild(t, []byte(desiredAdminManifest))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +137,7 @@ func TestRegisterSitesNoOpReportsExplicitFalseAndEmptyChanges(t *testing.T) {
 	seedRegistryFromManifest(t, backend, desiredAdminManifest)
 	before, _ := backend.snapshot()
 
-	result, err := RegisterSites(context.Background(), backend, []byte(desiredAdminManifest), false)
+	result, err := RegisterSites(context.Background(), backend, testRegistryProjection(t, desiredAdminManifest), false)
 	if err != nil {
 		t.Fatalf("RegisterSites(no-op) error = %v", err)
 	}
@@ -164,7 +165,7 @@ func TestRegisterSitesRetainsPendingCatalogInvalidationWhenCleanupTargetIsRegist
 	backend.failNextInvalidate = true
 	beforeDryRunObjects, beforeDryRunETags := backend.snapshot()
 
-	planned, err := RegisterSites(context.Background(), backend, []byte(desiredAdminManifest), true)
+	planned, err := RegisterSites(context.Background(), backend, testRegistryProjection(t, desiredAdminManifest), true)
 	if err != nil {
 		t.Fatalf("RegisterSites(dry-run) error = %v", err)
 	}
@@ -174,7 +175,7 @@ func TestRegisterSitesRetainsPendingCatalogInvalidationWhenCleanupTargetIsRegist
 		t.Fatal("dry-run changed deployed objects, ETags, or retry record")
 	}
 
-	first, err := RegisterSites(context.Background(), backend, []byte(desiredAdminManifest), false)
+	first, err := RegisterSites(context.Background(), backend, testRegistryProjection(t, desiredAdminManifest), false)
 	if err == nil || !strings.Contains(err.Error(), "cache revalidation failed") {
 		t.Fatalf("RegisterSites() = %+v, %v; want invalidation failure", first, err)
 	}
@@ -186,7 +187,7 @@ func TestRegisterSitesRetainsPendingCatalogInvalidationWhenCleanupTargetIsRegist
 	}
 
 	backend.resetCounters()
-	second, err := RegisterSites(context.Background(), backend, []byte(desiredAdminManifest), false)
+	second, err := RegisterSites(context.Background(), backend, testRegistryProjection(t, desiredAdminManifest), false)
 	if err != nil {
 		t.Fatalf("retry RegisterSites() error = %v", err)
 	}
@@ -233,7 +234,7 @@ func TestUnregisterSiteRetriesRemovedSiteCleanupAfterPostWriteFailures(t *testin
 			}
 			test.inject(backend)
 
-			first, err := UnregisterSite(context.Background(), backend, []byte(manifestWithoutLegacy), "legacy", false)
+			first, err := UnregisterSite(context.Background(), backend, testRegistryProjection(t, manifestWithoutLegacy), "legacy", false)
 			if err == nil {
 				t.Fatalf("first UnregisterSite() = %+v; want a post-registry-write %s failure", first, test.name)
 			}
@@ -256,7 +257,7 @@ func TestUnregisterSiteRetriesRemovedSiteCleanupAfterPostWriteFailures(t *testin
 			if err != nil {
 				t.Fatalf("read registry after failure: %v", err)
 			}
-			_, expectedRegistry, _ := registry.Build([]byte(manifestWithoutLegacy))
+			_, expectedRegistry, _ := testRegistryBuild(t, []byte(manifestWithoutLegacy))
 			actualRegistry, err := registry.DecodeProjection(deployedRegistry.Bytes)
 			if err != nil || !reflect.DeepEqual(actualRegistry, expectedRegistry) {
 				t.Fatalf("registry after failure = %+v, err=%v; want desired projection %+v", actualRegistry, err, expectedRegistry)
@@ -273,7 +274,7 @@ func TestUnregisterSiteRetriesRemovedSiteCleanupAfterPostWriteFailures(t *testin
 
 			backend.resetCounters()
 			beforeDryRunObjects, beforeDryRunETags := backend.snapshot()
-			plannedRetry, err := UnregisterSite(context.Background(), backend, []byte(manifestWithoutLegacy), "legacy", true)
+			plannedRetry, err := UnregisterSite(context.Background(), backend, testRegistryProjection(t, manifestWithoutLegacy), "legacy", true)
 			if err != nil {
 				t.Fatalf("dry-run UnregisterSite() error = %v", err)
 			}
@@ -288,7 +289,7 @@ func TestUnregisterSiteRetriesRemovedSiteCleanupAfterPostWriteFailures(t *testin
 				t.Fatal("dry-run retry changed deployed objects, ETags, or retry record")
 			}
 
-			second, err := UnregisterSite(context.Background(), backend, []byte(manifestWithoutLegacy), "legacy", false)
+			second, err := UnregisterSite(context.Background(), backend, testRegistryProjection(t, manifestWithoutLegacy), "legacy", false)
 			if err != nil {
 				t.Fatalf("retry UnregisterSite() error = %v", err)
 			}
@@ -357,7 +358,7 @@ func TestUnregisterSiteRetriesForcedCleanupWhenRegistrationIsAlreadyAbsent(t *te
 			}
 			test.fail(backend)
 
-			first, err := UnregisterSite(context.Background(), backend, []byte(manifestWithoutSRE), "sre", false)
+			first, err := UnregisterSite(context.Background(), backend, testRegistryProjection(t, manifestWithoutSRE), "sre", false)
 			if err == nil {
 				t.Fatalf("first UnregisterSite() = %+v; want injected %s failure", first, test.name)
 			}
@@ -377,7 +378,7 @@ func TestUnregisterSiteRetriesForcedCleanupWhenRegistrationIsAlreadyAbsent(t *te
 				t.Fatalf("cleanup record after %s failure = %+v, err=%v; want explicit sre retry target", test.name, cleanup, err)
 			}
 
-			retry, err := UnregisterSite(context.Background(), backend, []byte(manifestWithoutSRE), "sre", false)
+			retry, err := UnregisterSite(context.Background(), backend, testRegistryProjection(t, manifestWithoutSRE), "sre", false)
 			if err != nil {
 				t.Fatalf("retry UnregisterSite() error = %v", err)
 			}
@@ -456,8 +457,8 @@ func seedForcedUnregisterFixture(t *testing.T, backend *registryApplyTestBackend
 
 func TestRegisterSitesSerializesSeparateProcesses(t *testing.T) {
 	root := t.TempDir()
-	manifestPath := filepath.Join(root, "sites.yaml")
-	if err := os.WriteFile(manifestPath, []byte(desiredAdminManifest), 0o600); err != nil {
+	configPath := filepath.Join(root, ".artifact-pages.yaml")
+	if err := os.WriteFile(configPath, testUnifiedConfigFixture(desiredAdminManifest), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	storageRoot := filepath.Join(root, "storage")
@@ -506,7 +507,7 @@ func TestRegisterSitesSerializesSeparateProcesses(t *testing.T) {
 	waiter.Env = append(os.Environ(),
 		"ARTIFACT_PAGES_REGISTRY_PROCESS_HELPER=apply",
 		"ARTIFACT_PAGES_REGISTRY_ROOT="+storageRoot,
-		"ARTIFACT_PAGES_REGISTRY_MANIFEST="+manifestPath,
+		"ARTIFACT_PAGES_REGISTRY_CONFIG="+configPath,
 		"ARTIFACT_PAGES_REGISTRY_STARTED="+waiterStartedPath,
 		"ARTIFACT_PAGES_REGISTRY_HELD_OBSERVED="+observedHeldPath,
 		"ARTIFACT_PAGES_REGISTRY_REGISTRY_READ="+registryReadPath,
@@ -581,7 +582,7 @@ func TestRegisterSitesSerializesSeparateProcesses(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read cross-process result registry: %v", err)
 	}
-	_, want, err := registry.Build([]byte(desiredAdminManifest))
+	_, want, err := testRegistryBuild(t, []byte(desiredAdminManifest))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -621,7 +622,15 @@ func TestRegisterSitesCrossProcessHelper(t *testing.T) {
 		if err := os.WriteFile(os.Getenv("ARTIFACT_PAGES_REGISTRY_STARTED"), []byte("started"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		manifest, err := os.ReadFile(os.Getenv("ARTIFACT_PAGES_REGISTRY_MANIFEST"))
+		configContents, err := os.ReadFile(os.Getenv("ARTIFACT_PAGES_REGISTRY_CONFIG"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		parsedConfig, err := deploymentconfig.Parse(configContents)
+		if err != nil {
+			t.Fatal(err)
+		}
+		desired, err := registry.ProjectSites(parsedConfig.Sites)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -630,7 +639,7 @@ func TestRegisterSitesCrossProcessHelper(t *testing.T) {
 			heldObservedPath: os.Getenv("ARTIFACT_PAGES_REGISTRY_HELD_OBSERVED"),
 			registryReadPath: os.Getenv("ARTIFACT_PAGES_REGISTRY_REGISTRY_READ"),
 		}
-		if _, err := RegisterSites(context.Background(), observingBackend, manifest, false); err != nil {
+		if _, err := RegisterSites(context.Background(), observingBackend, desired, false); err != nil {
 			t.Fatal(err)
 		}
 	default:
@@ -780,7 +789,7 @@ func (backend *registryApplyTestBackend) Invalidate(_ context.Context, paths []s
 
 func seedRegistryFromManifest(t *testing.T, backend *registryApplyTestBackend, manifest string) {
 	t.Helper()
-	contents, _, err := registry.Build([]byte(manifest))
+	contents, _, err := testRegistryBuild(t, []byte(manifest))
 	if err != nil {
 		t.Fatalf("build registry fixture: %v", err)
 	}

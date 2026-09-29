@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/tasuku43/git-artifact-pages/internal/preview"
-	"github.com/tasuku43/git-artifact-pages/internal/registry"
 )
 
 type previewAdapterFakeBackend struct {
@@ -782,7 +781,7 @@ func TestObjectPreviewStoreSitePrefixesRemainIsolated(t *testing.T) {
 
 func TestObjectPreviewStoreDoesNotDeleteAfterPartialSiteListing(t *testing.T) {
 	backend := newPreviewAdapterFakeBackend()
-	registryBytes, _, err := registry.Build([]byte(registeredSREAndDocsManifest))
+	registryBytes, _, err := testRegistryBuild(t, []byte(registeredSREAndDocsManifest))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -806,7 +805,7 @@ func TestObjectPreviewStoreDoesNotDeleteAfterPartialSiteListing(t *testing.T) {
 	partialListingErr := errors.New("second preview listing page unavailable")
 	backend.failList(previewPrefix, partialListingErr)
 
-	_, err = UnregisterSite(context.Background(), backend, []byte(manifestWithoutSRE), "sre", false)
+	_, err = UnregisterSite(context.Background(), backend, testRegistryProjection(t, manifestWithoutSRE), "sre", false)
 	if !errors.Is(err, partialListingErr) {
 		t.Fatalf("UnregisterSite() error = %v, want partial listing failure", err)
 	}
@@ -822,7 +821,7 @@ func TestObjectPreviewStoreDoesNotDeleteAfterPartialSiteListing(t *testing.T) {
 	}
 
 	backend.clearListFailure(previewPrefix)
-	if _, err := UnregisterSite(context.Background(), backend, []byte(manifestWithoutSRE), "sre", false); err != nil {
+	if _, err := UnregisterSite(context.Background(), backend, testRegistryProjection(t, manifestWithoutSRE), "sre", false); err != nil {
 		t.Fatalf("UnregisterSite() retry error = %v", err)
 	}
 	if calls := backend.snapshotDeleteCalls(); len(calls) < 2 {

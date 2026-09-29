@@ -12,8 +12,6 @@ import (
 	"sync"
 	"syscall"
 	"testing"
-
-	"github.com/tasuku43/git-artifact-pages/internal/registry"
 )
 
 func TestContentTypeUsesDeterministicArtifactExtensionMap(t *testing.T) {
@@ -568,7 +566,7 @@ func writePublisherFixture(t *testing.T, root, relative string, contents []byte)
 
 func mustRegistryProjection(t *testing.T) []byte {
 	t.Helper()
-	contents, _, err := registry.Build([]byte(registeredSREManifest))
+	contents, _, err := testRegistryBuild(t, []byte(registeredSREManifest))
 	if err != nil {
 		t.Fatal(err)
 	}

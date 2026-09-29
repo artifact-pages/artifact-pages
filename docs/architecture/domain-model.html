@@ -42,10 +42,10 @@
     .relationship::before { left: 32.7%; }
     .relationship::after { left: 66.1%; }
     .relation-label { position: absolute; z-index: 2; padding: 2px 7px; background: var(--canvas); color: var(--muted); font-size: 11px; white-space: nowrap; }
-    .relation-label.registry-site { top: calc(50% - 30px); left: 30.3%; }
+    .relation-label.config-site { top: calc(50% - 30px); left: 30.3%; }
     .relation-label.site-artifact { top: calc(50% - 30px); left: 65.4%; }
     .class-card { position: relative; z-index: 1; overflow: hidden; border: 1px solid var(--line); background: var(--surface); }
-    .class-card.registry { border-top: 3px solid var(--green); }
+    .class-card.config { border-top: 3px solid var(--green); }
     .class-card.site { border-top: 3px solid var(--blue); }
     .class-card.artifact { border-top: 3px solid var(--violet); }
     .class-head { padding: 15px 17px 13px; border-bottom: 1px solid var(--line); }
@@ -98,38 +98,39 @@
       <div>
         <p class="eyebrow">Conceptual architecture · Phase 1 direction</p>
         <h1>Domain model</h1>
-        <p class="intro">A site is available in an installation because it belongs to the registry. Publishing attaches the current set of readable artifacts to that site; unregistering it withdraws that published set.</p>
+        <p class="intro">One product configuration selects the provider and contains the registered Sites. Publishing attaches the current set of readable artifacts to a Site; unregistering it removes the Site from that configuration and withdraws its published set.</p>
       </div>
-      <p class="phase-note"><strong>Current implementation boundary</strong>The local product discovers sites from index-directory metadata. The registered publishing workflow described here is a domain direction, not an implemented provider integration.</p>
+      <p class="phase-note"><strong>Configuration boundary</strong>The provider choice and registered Sites belong to one configuration. Provider-specific delivery behavior stays outside Site identity and user-facing routes.</p>
     </header>
 
     <div class="diagram-shell" role="region" aria-label="Scrollable domain relationship diagram" tabindex="0">
       <div class="diagram">
         <div class="relationship" aria-hidden="true"></div>
-        <span class="relation-label registry-site">1 contains 0..* registered sites</span>
+        <span class="relation-label config-site">1 contains 0..* registered sites</span>
         <span class="relation-label site-artifact">1 has 0..* published artifacts</span>
-        <article class="class-card registry">
-          <div class="class-head"><span class="kind">Collection owner</span><h2>SiteRegistry</h2></div>
+        <article class="class-card config">
+          <div class="class-head"><span class="kind">Unified configuration</span><h2>Config</h2></div>
           <div class="class-body">
             <ul class="member-list">
-              <li class="method">+ register(id, name, repository, sourcePath): Site</li>
+              <li>provider</li><li>sites: Site[]</li>
+              <li class="method">+ register(site)</li>
               <li class="method">+ unregister(id)</li>
               <li class="method">+ find(id): Site</li>
               <li class="method">+ list(): Site[]</li>
             </ul>
             <div class="class-divider"></div>
-            <p>The authoritative membership of sites available in this installation.</p>
+            <p>Selects a delivery provider and holds the authoritative set of sites available in this installation.</p>
           </div>
         </article>
         <article class="class-card site">
           <div class="class-head"><span class="kind">Publishing scope</span><h2>Site</h2></div>
           <div class="class-body">
             <ul class="member-list">
-              <li>id</li><li>name</li><li>repository</li><li>sourcePath</li>
+              <li>id</li><li>name</li><li>description? <span>(optional)</span></li><li>repository</li><li>sourcePath</li>
               <li class="method">+ publish(artifacts)</li>
             </ul>
             <div class="class-divider"></div>
-            <p>A stable route ID and a declared source mapping.</p>
+            <p>A stable route ID and declared source mapping. Its optional description helps visitors understand the site's purpose.</p>
           </div>
         </article>
         <article class="class-card artifact">
@@ -151,19 +152,19 @@
         <h2>Objects and boundaries</h2>
         <p class="section-copy">The model describes product concepts independently of the actor or infrastructure that performs an operation.</p>
         <dl class="definition-list">
-          <div><dt>SiteRegistry</dt><dd>Contains only registered sites. Registration creates membership; unregistering removes it. There is no separate registration entity or paused state.</dd></div>
-          <div><dt>Site</dt><dd>One logical publishing scope with a stable URL ID, a display name, and a source repository and path. Different paths in one repository may define different sites.</dd></div>
+          <div><dt>Config</dt><dd>One product configuration selects the delivery provider and contains the complete set of registered Sites. Registration adds a Site to this configuration; unregistering removes it. There is no separate registration entity or paused state.</dd></div>
+          <div><dt>Site</dt><dd>One logical publishing scope with a stable URL ID, a display name, an optional user-facing description, and a source repository and path. The description is distinct from the name and technical source details. Different paths in one repository may define different sites.</dd></div>
           <div><dt>Artifact</dt><dd>A currently published HTML or Markdown document. Its source-relative path, filename, and extension are preserved. Supporting files such as CSS, JavaScript, and images are delivered but are not separate indexed artifacts.</dd></div>
           <div><dt>Git source</dt><dd>Remains the source of truth. Unregistering withdraws the published projection; it does not delete or edit source files.</dd></div>
         </dl>
       </section>
       <section>
         <h2>Domain operations</h2>
-        <p class="section-copy">These names establish vocabulary; they do not prescribe process boundaries or provider APIs. The manifest-driven `registry register` command reconciles the complete registration set and cleans content prefixes for omitted sites.</p>
+        <p class="section-copy">These names establish vocabulary; they do not prescribe process boundaries or provider APIs. Registration reconciles the complete Site set in the unified configuration and cleans content prefixes for omitted sites.</p>
         <table>
           <thead><tr><th>Operation</th><th>Effect</th></tr></thead>
           <tbody>
-            <tr><td><code>register(site)</code></td><td>Adds a uniquely identified Site and its source mapping to the registry.</td></tr>
+            <tr><td><code>register(site)</code></td><td>Adds a uniquely identified Site, including optional description, to the unified configuration.</td></tr>
             <tr><td><code>unregister(siteId)</code></td><td>Removes the Site and withdraws its published Artifacts.</td></tr>
             <tr><td><code>site.publish(artifacts)</code></td><td>Reconciles the registered Site's published content with its source; removed source pages cease to be published.</td></tr>
             <tr><td><code>find / list / search / browse / read</code></td><td>Observes registered Sites and current Artifacts without mutating Git content.</td></tr>
@@ -179,7 +180,7 @@
       <div class="invariant"><strong>Actors are not domain objects</strong><p>Registrar and Publisher name responsibilities, not people. A person, CI job, or authorized automation may perform them.</p></div>
       <div class="invariant"><strong>Reader state stays local</strong><p>A reader's Pin is a personal shortcut and does not change the Site or Artifact.</p></div>
       <div class="invariant"><strong>Registration and first publish are separate</strong><p>A registered Site may temporarily have zero published Artifacts; its empty-state presentation is a UI decision.</p></div>
-      <div class="invariant"><strong>Representations are not extra concepts</strong><p>Registry YAML, browser JSON, indexes, and stored files represent this model; they are not additional domain objects.</p></div>
+      <div class="invariant"><strong>Representations are not extra concepts</strong><p>Configuration YAML, browser JSON, indexes, and stored files represent this model; they are not additional domain objects.</p></div>
     </section>
 
     <p class="footer-note">The composition shown here expresses product availability and ownership. It does not require every site to be updated in one transaction; registration and publishing have separate coordination rules.</p>

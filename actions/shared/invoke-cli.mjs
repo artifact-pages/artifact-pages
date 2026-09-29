@@ -30,12 +30,10 @@ function buildArguments() {
 
   if (kind === 'admin' && operation === 'registry-register') {
     args.push('registry', 'register')
-    flag(args, 'manifest', input('manifest') || 'sites.yaml')
     flag(args, 'config', input('config'))
     if (boolInput('dry-run')) args.push('--dry-run')
   } else if (kind === 'admin' && operation === 'registry-unregister') {
     args.push('registry', 'unregister', '--site', required('site'))
-    flag(args, 'manifest', input('manifest') || 'sites.yaml')
     flag(args, 'config', input('config'))
     if (boolInput('dry-run')) args.push('--dry-run')
   } else if (kind === 'admin' && operation === 'app-deploy') {

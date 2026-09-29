@@ -295,18 +295,18 @@
     <article class="flow-row" aria-label="Site registration projection">
       <section>
         <div class="flow-name"><span class="step-number">2</span><span>Reconcile the registration set</span></div>
-        <p class="node-sub" style="margin-top:9px">The admin repository's<br><code>sites.yaml</code></p>
+        <p class="node-sub" style="margin-top:9px">The admin repository's<br>deployment YAML <code>sites</code> mapping</p>
       </section>
       <section>
-        <p class="node-title">Reconcile the complete manifest</p>
-        <p class="node-sub">Validate YAML keyed by site ID and emit an ID-sorted JSON array. Name, repository, and sourcePath define each registration.</p>
+        <p class="node-title">Reconcile the configured site set</p>
+        <p class="node-sub">Read the selected config's mapping keyed by site ID and emit an ID-sorted JSON array. Name, repository, and sourcePath define each registration.</p>
         <span class="flow-arrow write">→ Unregister omitted sites and clean their content prefixes</span>
       </section>
       <section>
         <div class="object-list">
           <div class="object write-object"><span class="verb write">Write</span><div class="object-detail"><code>/_indexes/sites.json</code><small>Site list and repository / sourcePath mapping for publish validation.</small></div></div>
         </div>
-        <p class="node-sub" style="margin-top:7px"><code>registry register</code> reconciles membership to the complete manifest. Routine site publishing does not modify this object.</p>
+        <p class="node-sub" style="margin-top:7px"><code>registry register</code> uses all configured <code>sites</code>. Missing <code>sites</code> is an error; <code>sites: {}</code> means an empty set. Site publishing does not modify this object.</p>
       </section>
       <section>
         <p class="node-title">Two readers</p>
@@ -344,7 +344,7 @@
     <article class="flow-row" aria-label="Site unregister and data removal">
       <section>
         <div class="flow-name"><span class="step-number">4</span><span>Unregister a site</span></div>
-        <p class="node-sub" style="margin-top:9px">Remove the site from the admin repository's<br><code>sites.yaml</code></p>
+        <p class="node-sub" style="margin-top:9px">Remove the site from the admin config's<br><code>sites</code> mapping</p>
       </section>
       <section>
         <p class="node-title">Withdraw, then remove site data</p>

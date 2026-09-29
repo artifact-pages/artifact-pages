@@ -1,4 +1,4 @@
-import type { SiteCatalogEntry, SiteDiscoveryMetadata, SiteIndex, SiteRegistryProjection } from '../domain/index'
+import type { SiteCatalogEntry, SiteDiscoveryMetadata, SiteIndex, SiteRegistryProjection, SiteSummary } from '../domain/index'
 
 const INDEX_ROOT = '/_indexes'
 const SITE_ID_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/
@@ -34,6 +34,7 @@ function parseSiteDiscoveryMetadata(payload: unknown, url: string, expectedSiteI
     !metadata.site ||
     metadata.site.id !== expectedSiteId ||
     typeof metadata.site.title !== 'string' ||
+    (metadata.site.description !== undefined && typeof metadata.site.description !== 'string') ||
     typeof metadata.generatedAt !== 'string' ||
     !Number.isSafeInteger(metadata.artifactCount) ||
     (metadata.artifactCount ?? -1) < 0 ||
@@ -85,6 +86,7 @@ function parseSiteIndex(payload: unknown, url: string, expectedSiteId: string): 
     !index.site ||
     index.site.id !== expectedSiteId ||
     typeof index.site.title !== 'string' ||
+    (index.site.description !== undefined && typeof index.site.description !== 'string') ||
     typeof index.generatedAt !== 'string' ||
     !Array.isArray(index.artifacts)
   ) {
@@ -126,12 +128,17 @@ export async function discoverSites(fetcher: Fetcher = fetch): Promise<SiteCatal
   }
   const registry = parseSiteRegistry(payload)
   const sites = await Promise.all(registry.sites.map(async (site): Promise<SiteCatalogEntry> => {
+    const registeredSummary: SiteSummary = {
+      id: site.id,
+      title: site.name,
+      ...(site.description?.trim() ? { description: site.description } : {}),
+    }
     try {
-      const metadata = await loadSiteDiscoveryMetadata(site.id, fetcher, site.name)
-      return { ...metadata, status: 'available' }
+      const metadata = await loadSiteDiscoveryMetadata(site.id, fetcher)
+      return { ...metadata, site: registeredSummary, status: 'available' }
     } catch (error) {
       return {
-        site: { id: site.id, title: site.name },
+        site: registeredSummary,
         status: error instanceof IndexLoadError && error.status === 404
           ? 'not-published'
           : 'metadata-unavailable',
@@ -168,14 +175,17 @@ function parseSiteRegistry(payload: unknown): SiteRegistryProjection {
     if (
       typeof entry.id !== 'string' || !isValidSiteId(entry.id) || entry.id <= previousID
       || typeof entry.name !== 'string' || !entry.name.trim()
+      || (entry.description !== undefined && typeof entry.description !== 'string')
       || typeof entry.repository !== 'string' || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(entry.repository) || entry.repository.endsWith('.git')
       || typeof entry.sourcePath !== 'string' || !isCanonicalSourcePath(entry.sourcePath)
       || seenIDs.has(entry.id) || seenSources.has(`${entry.repository.toLowerCase()}\0${entry.sourcePath}`)
     ) {
       throw new IndexLoadError(`Invalid site registry: ${INDEX_ROOT}/sites.json.`, `${INDEX_ROOT}/sites.json`)
     }
-    const allowed = new Set(['id', 'name', 'repository', 'sourcePath'])
-    if (Object.keys(rawEntry).some((key) => !allowed.has(key)) || Object.keys(rawEntry).length !== allowed.size) {
+    const allowed = new Set(['id', 'name', 'repository', 'sourcePath', 'description'])
+    const entryKeys = Object.keys(rawEntry)
+    const requiredKeys = ['id', 'name', 'repository', 'sourcePath']
+    if (entryKeys.some((key) => !allowed.has(key)) || requiredKeys.some((key) => !entryKeys.includes(key))) {
       throw new IndexLoadError(`Invalid site registry: ${INDEX_ROOT}/sites.json.`, `${INDEX_ROOT}/sites.json`)
     }
     previousID = entry.id
@@ -199,7 +209,6 @@ function isCanonicalSourcePath(sourcePath: string) {
 async function loadSiteDiscoveryMetadata(
   siteId: string,
   fetcher: Fetcher,
-  registeredTitle?: string,
 ): Promise<SiteDiscoveryMetadata> {
   const url = `${INDEX_ROOT}/${encodeURIComponent(siteId)}/meta.json`
   let payload: unknown
@@ -214,5 +223,5 @@ async function loadSiteDiscoveryMetadata(
     throw new IndexLoadError(`Could not fetch ${url}.`, url, { cause: error })
   }
   const metadata = parseSiteDiscoveryMetadata(payload, url, siteId)
-  return registeredTitle ? { ...metadata, site: { ...metadata.site, title: registeredTitle } } : metadata
+  return metadata
 }

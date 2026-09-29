@@ -67,7 +67,7 @@ func TestBuildAndPublishPreviewFirstThenUnregisterCleansPreview(t *testing.T) {
 	unregisterPending = true
 	go func() {
 		defer close(unregisterStopped)
-		result, err := UnregisterSite(context.Background(), backend, []byte(docsOnlyManifest), "sre", false)
+		result, err := UnregisterSite(context.Background(), backend, testRegistryProjection(t, docsOnlyManifest), "sre", false)
 		unregisterDone <- unregisterOutcome{result: result, err: err}
 	}()
 	awaitSiteSignal(t, backend.registryWriteReached, "registry withdrawal while preview publisher holds its site lock")
@@ -149,7 +149,7 @@ func TestUnregisterFirstRejectsPreviewPublisherAfterLockAndBeforeUpload(t *testi
 	}()
 	go func() {
 		defer close(unregisterStopped)
-		result, err := UnregisterSite(context.Background(), backend, []byte(docsOnlyManifest), "sre", false)
+		result, err := UnregisterSite(context.Background(), backend, testRegistryProjection(t, docsOnlyManifest), "sre", false)
 		unregisterDone <- unregisterOutcome{result: result, err: err}
 	}()
 	awaitSiteSignal(t, backend.registryWriteReached, "registry withdrawal")
@@ -205,7 +205,7 @@ func TestUnregisterFirstRejectsPreviewPublisherAfterLockAndBeforeUpload(t *testi
 }
 
 func TestUnregisterSiteCleansEveryAWSListingPageWithFakeBackend(t *testing.T) {
-	manifestBytes, _, err := registry.Build([]byte(registeredSREAndDocsManifest))
+	manifestBytes, _, err := testRegistryBuild(t, []byte(registeredSREAndDocsManifest))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -231,7 +231,7 @@ func TestUnregisterSiteCleansEveryAWSListingPageWithFakeBackend(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, err := UnregisterSite(context.Background(), backend, []byte(docsOnlyManifest), "sre", false)
+	result, err := UnregisterSite(context.Background(), backend, testRegistryProjection(t, docsOnlyManifest), "sre", false)
 	if err != nil || result.Outcome != "unregistered" {
 		t.Fatalf("UnregisterSite() = %+v, err=%v; want successful cleanup", result, err)
 	}
@@ -255,7 +255,7 @@ func TestUnregisterSiteCleansEveryAWSListingPageWithFakeBackend(t *testing.T) {
 }
 
 func TestUnregisterSiteRetriesAfterAWSContinuationListingFailure(t *testing.T) {
-	manifestBytes, _, err := registry.Build([]byte(registeredSREAndDocsManifest))
+	manifestBytes, _, err := testRegistryBuild(t, []byte(registeredSREAndDocsManifest))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -298,7 +298,7 @@ func TestUnregisterSiteRetriesAfterAWSContinuationListingFailure(t *testing.T) {
 		t.Fatalf("newAWSBackend() error = %v", err)
 	}
 
-	_, err = UnregisterSite(context.Background(), backend, []byte(docsOnlyManifest), "sre", false)
+	_, err = UnregisterSite(context.Background(), backend, testRegistryProjection(t, docsOnlyManifest), "sre", false)
 	if err == nil || !strings.Contains(err.Error(), "injected AWS continuation-page listing failure") {
 		t.Fatalf("first UnregisterSite() error = %v, want continuation-page listing failure", err)
 	}
@@ -328,7 +328,7 @@ func TestUnregisterSiteRetriesAfterAWSContinuationListingFailure(t *testing.T) {
 		t.Fatal("cleanup retry record is missing after listing failure")
 	}
 
-	result, err := UnregisterSite(context.Background(), backend, []byte(docsOnlyManifest), "sre", false)
+	result, err := UnregisterSite(context.Background(), backend, testRegistryProjection(t, docsOnlyManifest), "sre", false)
 	if err != nil || result.Outcome != "unregistered" {
 		t.Fatalf("retry UnregisterSite() = %+v, err=%v; want successful cleanup", result, err)
 	}

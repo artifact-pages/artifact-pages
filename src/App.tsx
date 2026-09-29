@@ -217,7 +217,14 @@ function SitePage({
   }
 
   const index = registeredSite
-    ? { ...indexState.data, site: { ...indexState.data.site, title: registeredSite.site.title } }
+    ? {
+        ...indexState.data,
+        site: {
+          ...indexState.data.site,
+          title: registeredSite.site.title,
+          description: registeredSite.site.description,
+        },
+      }
     : indexState.data
 
   return (
