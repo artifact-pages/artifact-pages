@@ -8,7 +8,12 @@ const sites = [sreIndex, frontendIndex].map((value) => {
   const index = value as SiteIndex
   return {
     schemaVersion: index.schemaVersion,
-    site: index.site,
+    site: {
+      ...index.site,
+      ...(index.site.id === 'sre'
+        ? { description: 'Incident response runbooks, service ownership guidance, reliability reviews, deployment health reports, and recovery procedures for production teams.' }
+        : {}),
+    },
     generatedAt: index.generatedAt,
     artifactCount: index.artifacts.length,
     artifactIndexUrl: `/_indexes/${index.site.id}/index.json`,

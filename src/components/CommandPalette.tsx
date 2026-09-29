@@ -44,10 +44,14 @@ type PaletteEntry = {
   id: string
   kind: 'artifact' | 'site' | 'command' | 'heading'
   title: string
+  description?: string
+  siteId?: string
+  siteStatus?: string
   subtitle?: string
   badge?: string
   shortcut?: string
   titleMatch?: FuzzyMatch
+  descriptionMatch?: FuzzyMatch
   subtitleMatch?: FuzzyMatch
   onSelect: () => void
 }
@@ -362,7 +366,7 @@ export function CommandPalette({
                   const selected = index === selectedIndex
                   return (
                     <button
-                      className={`palette-entry${selected ? ' is-selected' : ''}`}
+                      className={`palette-entry${entry.kind === 'site' ? ' palette-entry--site' : ''}${selected ? ' is-selected' : ''}`}
                       key={entry.id}
                       role="option"
                       data-palette-entry-id={entry.id}
@@ -377,12 +381,34 @@ export function CommandPalette({
                       <span className="palette-entry-icon">
                         <Icon name={iconForEntry(entry.kind)} size={14} />
                       </span>
-                      <span className="palette-entry-title">{highlightMatches(entry.title, entry.titleMatch)}</span>
-                      {entry.subtitle ? (
-                        <span className="palette-entry-subtitle">
-                          {highlightMatches(entry.subtitle, entry.subtitleMatch)}
+                      {entry.kind === 'site' ? (
+                        <span className="palette-entry-copy">
+                          <span className="palette-entry-title">{highlightMatches(entry.title, entry.titleMatch)}</span>
+                          {entry.description ? (
+                            <span className="palette-entry-description">
+                              {highlightMatches(entry.description, entry.descriptionMatch)}
+                            </span>
+                          ) : null}
+                          {entry.subtitle ? (
+                            <span className="palette-entry-subtitle">
+                              <span className="palette-entry-site-id">
+                                {highlightMatches(`/${entry.siteId}`, entry.subtitleMatch)}
+                              </span>
+                              <span className="palette-entry-site-separator" aria-hidden="true">·</span>
+                              <span>{entry.siteStatus}</span>
+                            </span>
+                          ) : null}
                         </span>
-                      ) : null}
+                      ) : (
+                        <>
+                          <span className="palette-entry-title">{highlightMatches(entry.title, entry.titleMatch)}</span>
+                          {entry.subtitle ? (
+                            <span className="palette-entry-subtitle">
+                              {highlightMatches(entry.subtitle, entry.subtitleMatch)}
+                            </span>
+                          ) : null}
+                        </>
+                      )}
                       {entry.badge ? <span className="palette-entry-badge">{entry.badge}</span> : null}
                       {entry.shortcut ? <kbd>{entry.shortcut}</kbd> : null}
                     </button>
@@ -589,7 +615,9 @@ function buildSiteEntries(
   return sites.flatMap((siteEntry) => {
     const titleMatch = fuzzyMatch(siteEntry.site.title, term)
     const idMatch = fuzzyMatch(siteEntry.site.id, term)
-    if (term.trim() && !titleMatch && !idMatch) return []
+    const description = siteEntry.site.description?.trim() ? siteEntry.site.description : undefined
+    const descriptionMatch = description ? fuzzyMatch(description, term) : undefined
+    if (term.trim() && !titleMatch && !idMatch && !descriptionMatch) return []
     const statusLabel = hasSiteDiscoveryMetadata(siteEntry)
       ? `${siteEntry.artifactCount} artifacts`
       : siteEntry.status === 'not-published'
@@ -602,12 +630,16 @@ function buildSiteEntries(
         id: `site:${siteEntry.site.id}`,
         kind: 'site' as const,
         title: siteEntry.site.title,
+        description,
+        siteId: siteEntry.site.id,
+        siteStatus: statusLabel,
         subtitle,
         titleMatch,
+        descriptionMatch,
         subtitleMatch,
         onSelect: () => onNavigate(`/${encodeURIComponent(siteEntry.site.id)}`),
       },
-      score: Math.max(titleMatch?.score ?? 0, idMatch?.score ?? 0),
+      score: Math.max(titleMatch?.score ?? 0, idMatch?.score ?? 0, descriptionMatch?.score ?? 0),
     }]
   })
     .sort((left, right) => term.trim()

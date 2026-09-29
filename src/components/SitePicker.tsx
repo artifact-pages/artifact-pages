@@ -80,9 +80,15 @@ export function SitePicker({
                   <span className="site-mark" aria-hidden="true">{entry.site.title.slice(0, 1).toUpperCase()}</span>
                   <span className="site-picker-main">
                     <strong>{entry.site.title}</strong>
-                    <span className="mono">/{entry.site.id}</span>
+                    {entry.site.description?.trim() ? (
+                      <span className="site-picker-description">{entry.site.description}</span>
+                    ) : null}
+                    <span className="site-picker-meta">
+                      <span className="mono">/{entry.site.id}</span>
+                      <span className="site-picker-meta-separator" aria-hidden="true">·</span>
+                      <span>{catalogStatusLabel(entry)}</span>
+                    </span>
                   </span>
-                  <span className="site-picker-count">{catalogStatusLabel(entry)}</span>
                   <Icon name="arrow" size={16} />
                 </button>
               ))}

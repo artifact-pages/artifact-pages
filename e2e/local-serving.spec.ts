@@ -480,7 +480,13 @@ for (const failure of ['invalid metadata', 'network failure'] as const) {
       body: JSON.stringify({
         schemaVersion: 1,
         sites: [
-          { id: 'frontend', name: 'Frontend registered', repository: 'acme/frontend', sourcePath: 'sites/frontend' },
+          {
+            id: 'frontend',
+            name: 'Frontend registered',
+            description: 'Incident response runbooks, service ownership guidance, reliability reviews, deployment health reports, and recovery procedures for production teams.',
+            repository: 'acme/frontend',
+            sourcePath: 'sites/frontend',
+          },
           { id: 'sre', name: 'SRE registered', repository: 'acme/sre', sourcePath: 'sites/sre' },
         ],
       }),
@@ -500,18 +506,33 @@ for (const failure of ['invalid metadata', 'network failure'] as const) {
       }),
     }))
 
+    await page.setViewportSize({ width: 320, height: 760 })
     await page.goto('/')
     await expect(page.getByRole('heading', { name: 'Choose a site' })).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
     const frontend = page.getByRole('button', { name: /Frontend registered/ })
     await expect(frontend).toContainText('Registered · details unavailable')
     await expect(frontend).not.toContainText(/\d+ artifacts/u)
-    await expect(page.getByRole('button', { name: /SRE registered/ })).toContainText('6 artifacts')
+    await expect(frontend.locator('.site-picker-description')).toHaveText('Incident response runbooks, service ownership guidance, reliability reviews, deployment health reports, and recovery procedures for production teams.')
+    await expect(frontend.locator('.site-picker-meta')).toContainText('/frontend')
+    const sre = page.getByRole('button', { name: /SRE registered/ })
+    await expect(sre).toContainText('6 artifacts')
+    await expect(sre.locator('.site-picker-description')).toHaveCount(0)
+    await expect(sre.locator('.site-picker-meta')).toContainText('/sre')
 
     await page.getByRole('button', { name: 'Search sites' }).click()
     const palette = page.getByRole('dialog', { name: 'Command palette' })
     const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
+    await search.fill('reliability')
+    const descriptionMatch = palette.getByRole('option', { name: /Frontend registered/ })
+    await expect(descriptionMatch).toBeVisible()
+    await expect(descriptionMatch.locator('.palette-entry-description')).toHaveText('Incident response runbooks, service ownership guidance, reliability reviews, deployment health reports, and recovery procedures for production teams.')
+    await expect(descriptionMatch.locator('.palette-entry-description')).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
     await search.fill('SRE registered')
-    await expect(palette.getByRole('option', { name: /SRE registered/ })).toBeVisible()
+    const siteWithoutDescription = palette.getByRole('option', { name: /SRE registered/ })
+    await expect(siteWithoutDescription.locator('.palette-entry-description')).toHaveCount(0)
+    await expect(siteWithoutDescription).toBeVisible()
     await search.press('Enter')
     await expect(page).toHaveURL(/\/sre$/u)
     await expect(page.getByRole('heading', { name: 'SRE registered', exact: true })).toBeVisible()

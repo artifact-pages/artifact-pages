@@ -1860,6 +1860,22 @@ mark {
   color: var(--text-tertiary);
 }
 
+.palette-entry--site {
+  align-items: flex-start;
+}
+
+.palette-entry--site .palette-entry-icon {
+  margin-top: 3px;
+}
+
+.palette-entry-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+}
+
 .palette-entry-title {
   min-width: 0;
   flex: none;
@@ -1867,6 +1883,38 @@ mark {
   font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.palette-entry-description {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.palette-entry--site .palette-entry-subtitle {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+  font-family: inherit;
+}
+
+.palette-entry-site-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: nowrap;
+}
+
+.palette-entry-site-separator {
+  color: var(--text-tertiary);
 }
 
 .palette-entry-subtitle {
@@ -2302,7 +2350,7 @@ mark {
 .site-picker-row {
   display: flex;
   width: 100%;
-  align-items: center;
+  align-items: flex-start;
   gap: 13px;
   padding: 13px 9px;
   border-bottom: 1px solid var(--line);
@@ -2315,29 +2363,48 @@ mark {
 
 .site-picker-main {
   display: flex;
-  min-width: 110px;
+  min-width: 0;
+  flex: 1;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
 
 .site-picker-main strong {
+  overflow-wrap: anywhere;
   font-size: 13px;
   font-weight: 600;
 }
 
-.site-picker-main .mono,
-.site-picker-count {
-  color: var(--text-tertiary);
-  font-size: 10px;
+.site-picker-description {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
-.site-picker-count {
-  flex: 1;
-  text-align: right;
+.site-picker-meta {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin-top: 1px;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.site-picker-meta .mono {
+  white-space: nowrap;
+}
+
+.site-picker-meta-separator {
+  color: var(--text-tertiary);
 }
 
 .site-picker-row > svg {
   flex: none;
+  margin-top: 4px;
   color: var(--text-tertiary);
 }
 
@@ -2484,10 +2551,6 @@ mark {
 
   .brand-label {
     margin-bottom: 38px;
-  }
-
-  .site-picker-count {
-    display: none;
   }
 
   .site-search kbd,

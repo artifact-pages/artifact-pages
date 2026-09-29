@@ -22,13 +22,12 @@ Execution mode answers **how work can be delegated**, not its priority or comple
 | [IMP-37 — Cloudflare entry module](implementation/IMP-37-cloudflare-entry-module.md) | When assigned, implement the single entry module, local validation, and caller example. | Local acceptance closes IMP-37; hand a tested config and fresh-plan checklist to T15 for an explicitly authorized real-account run. |
 | [IMP-39 — AWS Cloudflare DNS/ACM composition](implementation/IMP-39-aws-cloudflare-dns-acm.md) | In the Terraform workflow, add the selected custom-domain path after AWS source packaging; preserve the caller-managed DNS/certificate path and test locally. | Independent review/local acceptance may close the implementation; DNS/TLS/direct CloudFront proof stays T15. Do not delay the first Cloudflare release. |
 
-ISSUE-013 is a separate product improvement, not part of the review repair pass. Done items are historical evidence and are not reopened merely to assign an execution mode.
+Completed improvements remain historical evidence and are not reopened merely to assign an execution mode.
 
 ## Current collaborative work
 
 | Work | Agent can prepare now within assigned scope | Owner handoff |
 | --- | --- | --- |
-| [ISSUE-013 — Site descriptions](issues/ISSUE-013-site-description.md) | Inspect the existing model; propose schema/UI behavior and a small mock when assigned. | Confirm the data-model/UX choice before implementing the feature. |
 | [T4](verification/T4-serving-boundary.md), [T5](verification/T5-concurrency-recovery.md), [T8](verification/T8-stale-reference-cleanup.md), [T14](verification/T14-production-reconciliation.md) | Prepare deterministic tests, failure fixtures, remaining-proof checklists, and a safe provider smoke procedure. | Authorize and participate in the remaining real-provider/CI runs; local results do not close provider proof. |
 | [T15 — Provider delivery](verification/T15-provider-delivery.md) | Prepare an isolated caller, plan instructions, permissions/cost checklist, and route/cache/storage smoke tests. Start with Cloudflare; keep AWS evidence distinct. | Select account/zone/hostname, arrange credentials, review a real plan, and authorize apply, smoke, and cleanup. Record any provider-plan limitations instead of assuming compatibility. |
 | [IMP-38 — Registry publication](implementation/IMP-38-terraform-registry-publication.md) | Prepare module source migration, packaging, candidate version, provenance, validation, and consumer examples in the two existing provider repositories. | Confirm the release version; authorize pushes/tag publication and connect Registry to GitHub. Repository names are already owner-selected. |

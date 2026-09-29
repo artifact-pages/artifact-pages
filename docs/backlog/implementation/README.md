@@ -24,7 +24,7 @@ Use the [delegation index](../delegation.md) for work modes and owner boundaries
 | --- | --- | --- | --- | --- | --- |
 | [IMP-40](IMP-40-unified-deployment-config.md) | Done | Unified deployment config, registry register/unregister, and optional site-description metadata | T10, T11, IMP-20, IMP-23, IMP-27 | [T10](../technical-design/T10-config-location.md), [T11](../technical-design/T11-command-surface.md) | Config, registry, publisher, Action parity, registered-flow, clean-room and local browser checks |
 
-Production UI placement for site descriptions remains under review in [ISSUE-013](../issues/ISSUE-013-site-description.md); this slice uses Storybook examples only. IMP-037/038/039 and all provider-infrastructure work remain outside this Phase 1 slice.
+The reviewed site-description hierarchy is implemented in the production picker and site search. IMP-037/038/039 and all provider-infrastructure work remain outside this Phase 1 slice.
 
 ## Original implementation checkpoints
 
