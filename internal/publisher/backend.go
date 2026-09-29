@@ -67,3 +67,20 @@ type ConditionalObjectBackend interface {
 	HeadObject(context.Context, string) (ObjectInfo, error)
 	PutObjectConditional(context.Context, string, Object, ObjectCondition) (string, error)
 }
+
+// InvalidationValidator checks local provider credentials/configuration for a
+// non-empty cache invalidation request before a workflow mutates origin data.
+// Providers without this optional capability keep their existing behavior.
+type InvalidationValidator interface {
+	ValidateInvalidation([]string) error
+}
+
+func validateInvalidation(backend DeploymentBackend, paths []string) error {
+	if len(paths) == 0 {
+		return nil
+	}
+	if validator, ok := backend.(InvalidationValidator); ok {
+		return validator.ValidateInvalidation(paths)
+	}
+	return nil
+}

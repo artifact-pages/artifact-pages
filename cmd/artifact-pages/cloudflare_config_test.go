@@ -32,7 +32,7 @@ func TestNewDeploymentBackendWiresCloudflareRegistryReaderEnvironment(t *testing
 	}))
 	defer server.Close()
 
-	backendValue, err := newDeploymentBackend(context.Background(), deploymentconfig.DeploymentConfig{
+	backendValue, err := newDeploymentBackendWithCapabilities(context.Background(), deploymentconfig.DeploymentConfig{
 		SchemaVersion: 1,
 		Provider:      "cloudflare",
 		Cloudflare: &deploymentconfig.CloudflareTarget{
@@ -42,7 +42,7 @@ func TestNewDeploymentBackendWiresCloudflareRegistryReaderEnvironment(t *testing
 			AccessKeyIDEnv: "CF_ACCESS", SecretAccessKeyEnv: "CF_SECRET", APITokenEnv: "CF_TOKEN",
 			RegistryReaderAccessKeyIDEnv: "CF_REGISTRY_READ_ACCESS", RegistryReaderSecretAccessKeyEnv: "CF_REGISTRY_READ_SECRET",
 		},
-	})
+	}, deploymentBackendCapabilities{useRegistryReader: true})
 	if err != nil {
 		t.Fatalf("newDeploymentBackend(): %v", err)
 	}
@@ -58,7 +58,7 @@ func TestNewDeploymentBackendWiresCloudflareRegistryReaderEnvironment(t *testing
 	}
 }
 
-func TestNewDeploymentBackendRejectsMissingConfiguredCloudflareRegistryReader(t *testing.T) {
+func TestNewDeploymentBackendDoesNotRequireUnusedCloudflareRegistryReader(t *testing.T) {
 	for name, value := range map[string]string{
 		"CF_ACCESS":               "site-writer",
 		"CF_SECRET":               "site-writer-secret",
@@ -68,7 +68,7 @@ func TestNewDeploymentBackendRejectsMissingConfiguredCloudflareRegistryReader(t 
 	} {
 		t.Setenv(name, value)
 	}
-	_, err := newDeploymentBackend(context.Background(), deploymentconfig.DeploymentConfig{
+	config := deploymentconfig.DeploymentConfig{
 		SchemaVersion: 1,
 		Provider:      "cloudflare",
 		Cloudflare: &deploymentconfig.CloudflareTarget{
@@ -77,8 +77,15 @@ func TestNewDeploymentBackendRejectsMissingConfiguredCloudflareRegistryReader(t 
 			AccessKeyIDEnv: "CF_ACCESS", SecretAccessKeyEnv: "CF_SECRET", APITokenEnv: "CF_TOKEN",
 			RegistryReaderAccessKeyIDEnv: "CF_REGISTRY_READ_ACCESS", RegistryReaderSecretAccessKeyEnv: "CF_REGISTRY_READ_SECRET",
 		},
-	})
-	if err == nil || !strings.Contains(err.Error(), "registry reader credentials named by deployment config are not set") {
-		t.Fatalf("newDeploymentBackend() error = %v, want missing configured reader credentials", err)
+	}
+	backend, err := newDeploymentBackend(context.Background(), config)
+	if err != nil {
+		t.Fatalf("newDeploymentBackend() with unused reader config: %v", err)
+	}
+	if backend == nil {
+		t.Fatal("newDeploymentBackend() returned a nil backend")
+	}
+	if _, err := newDeploymentBackendWithCapabilities(context.Background(), config, deploymentBackendCapabilities{useRegistryReader: true}); err == nil || !strings.Contains(err.Error(), "registry reader credentials named by deployment config are not set") {
+		t.Fatalf("registry-reading backend error = %v, want missing configured reader credentials", err)
 	}
 }

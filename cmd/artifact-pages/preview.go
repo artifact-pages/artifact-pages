@@ -93,7 +93,7 @@ func runPreviewPublish(ctx context.Context, args []string, stdout, stderr io.Wri
 	if err != nil {
 		return withExitCode(err, 2)
 	}
-	backend, err := newDeploymentBackend(ctx, resolved.Config)
+	backend, err := newDeploymentBackendWithCapabilities(ctx, resolved.Config, deploymentBackendCapabilities{useRegistryReader: true})
 	if err != nil {
 		return withResolvedError(err, resolved)
 	}

@@ -167,6 +167,10 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 			result.Outcome = "no-op"
 			return result, nil
 		}
+		paths := registryInvalidationPaths(catalogInvalidationPending, cleanupIDs)
+		if err := validateInvalidation(backend, paths); err != nil {
+			return result, err
+		}
 		if len(cleanupIDs) > 0 {
 			if err := writeRegistryCleanup(ctx, conditional, cleanupIDs, pendingETag); err != nil {
 				return result, err
@@ -201,13 +205,6 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 			}
 		}
 		result.FilesRemoved = len(cleanupKeys)
-		paths := make([]string, 0, 1+len(cleanupIDs)*5)
-		if catalogInvalidationPending {
-			paths = append(paths, "/_indexes/sites.json")
-		}
-		for _, siteID := range cleanupIDs {
-			paths = append(paths, "/"+siteID, "/"+siteID+"/*", "/_indexes/"+siteID+"/*", "/_artifacts/"+siteID+"/*", "/_previews/"+siteID+"/*")
-		}
 		if _, err := backend.Invalidate(ctx, paths); err != nil {
 			return result, fmt.Errorf("registry updated; cache revalidation failed: %w", err)
 		}
@@ -237,6 +234,17 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 		return result, operationErr
 	}
 	return result, nil
+}
+
+func registryInvalidationPaths(catalogInvalidationPending bool, cleanupIDs []string) []string {
+	paths := make([]string, 0, 1+len(cleanupIDs)*5)
+	if catalogInvalidationPending {
+		paths = append(paths, "/_indexes/sites.json")
+	}
+	for _, siteID := range cleanupIDs {
+		paths = append(paths, "/"+siteID, "/"+siteID+"/*", "/_indexes/"+siteID+"/*", "/_artifacts/"+siteID+"/*", "/_previews/"+siteID+"/*")
+	}
+	return paths
 }
 
 func readCurrentRegistry(ctx context.Context, backend ConditionalObjectBackend) (registry.Projection, string, error) {

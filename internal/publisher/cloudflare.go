@@ -39,6 +39,7 @@ type CloudflareOptions struct {
 	RegistryReaderSecretKey    string
 	RegistryReaderSessionToken string
 	APIToken                   string
+	APITokenProvider           func() string
 }
 
 type cloudflareBackend struct {
@@ -47,6 +48,7 @@ type cloudflareBackend struct {
 	zoneID         string
 	baseURL        *url.URL
 	apiToken       string
+	apiTokenSource func() string
 	apiBaseURL     string
 	httpClient     *http.Client
 }
@@ -105,7 +107,7 @@ func NewCloudflareBackend(ctx context.Context, options CloudflareOptions) (Deplo
 	}
 	return &cloudflareBackend{
 		objects: objects, registryReader: registryReader, zoneID: options.ZoneID, baseURL: baseURL,
-		apiToken: options.APIToken, apiBaseURL: apiBaseURL,
+		apiToken: options.APIToken, apiTokenSource: options.APITokenProvider, apiBaseURL: apiBaseURL,
 		httpClient: &http.Client{Timeout: 20 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }},
 	}, nil
 }
@@ -153,8 +155,11 @@ func (backend *cloudflareBackend) DeleteObjects(ctx context.Context, keys []stri
 }
 
 func (backend *cloudflareBackend) Invalidate(ctx context.Context, paths []string) (string, error) {
-	if strings.TrimSpace(backend.apiToken) == "" {
-		return "", errors.New("Cloudflare API token is required for cache invalidation")
+	if err := backend.ValidateInvalidation(paths); err != nil {
+		return "", err
+	}
+	if len(paths) == 0 {
+		return "", nil
 	}
 	var prefixes, files []string
 	for _, rawPath := range paths {
@@ -194,6 +199,20 @@ func (backend *cloudflareBackend) Invalidate(ctx context.Context, paths []string
 	return strings.Join(identifiers, ","), nil
 }
 
+func (backend *cloudflareBackend) ValidateInvalidation(paths []string) error {
+	if len(paths) > 0 && strings.TrimSpace(backend.currentAPIToken()) == "" {
+		return errors.New("Cloudflare API token is required for cache invalidation")
+	}
+	return nil
+}
+
+func (backend *cloudflareBackend) currentAPIToken() string {
+	if backend.apiTokenSource != nil {
+		return backend.apiTokenSource()
+	}
+	return backend.apiToken
+}
+
 func (backend *cloudflareBackend) purge(ctx context.Context, body any) (string, error) {
 	encoded, err := json.Marshal(body)
 	if err != nil {
@@ -208,7 +227,7 @@ func (backend *cloudflareBackend) purge(ctx context.Context, body any) (string, 
 	if err != nil {
 		return "", errors.New("create Cloudflare cache purge request")
 	}
-	request.Header.Set("Authorization", "Bearer "+backend.apiToken)
+	request.Header.Set("Authorization", "Bearer "+backend.currentAPIToken())
 	request.Header.Set("Content-Type", "application/json")
 	response, err := backend.httpClient.Do(request)
 	if err != nil {

@@ -745,7 +745,7 @@ func runSitePublish(ctx context.Context, args []string, stdout, stderr io.Writer
 	if err != nil {
 		return withExitCode(err, 2)
 	}
-	backend, err := newDeploymentBackend(ctx, resolved.Config)
+	backend, err := newDeploymentBackendWithCapabilities(ctx, resolved.Config, deploymentBackendCapabilities{useRegistryReader: true})
 	if err != nil {
 		return withResolvedError(err, resolved)
 	}
@@ -808,7 +808,15 @@ func changeCount(changes []publisher.Change, action string) int {
 	return count
 }
 
+type deploymentBackendCapabilities struct {
+	useRegistryReader bool
+}
+
 func newDeploymentBackend(ctx context.Context, config deploymentconfig.DeploymentConfig) (publisher.DeploymentBackend, error) {
+	return newDeploymentBackendWithCapabilities(ctx, config, deploymentBackendCapabilities{})
+}
+
+func newDeploymentBackendWithCapabilities(ctx context.Context, config deploymentconfig.DeploymentConfig, capabilities deploymentBackendCapabilities) (publisher.DeploymentBackend, error) {
 	var err error
 	config, err = config.WithDefaults()
 	if err != nil {
@@ -826,11 +834,14 @@ func newDeploymentBackend(ctx context.Context, config deploymentconfig.Deploymen
 		})
 	case "cloudflare":
 		credentials := config.Cloudflare
-		registryReaderAccessKeyID := os.Getenv(credentials.RegistryReaderAccessKeyIDEnv)
-		registryReaderSecretAccessKey := os.Getenv(credentials.RegistryReaderSecretAccessKeyEnv)
-		registryReaderSessionToken := os.Getenv(credentials.RegistryReaderSessionTokenEnv)
-		if credentials.RegistryReaderAccessKeyIDEnv != "" && (strings.TrimSpace(registryReaderAccessKeyID) == "" || strings.TrimSpace(registryReaderSecretAccessKey) == "") {
-			return nil, errors.New("Cloudflare registry reader credentials named by deployment config are not set")
+		var registryReaderAccessKeyID, registryReaderSecretAccessKey, registryReaderSessionToken string
+		if capabilities.useRegistryReader && credentials.RegistryReaderAccessKeyIDEnv != "" {
+			registryReaderAccessKeyID = os.Getenv(credentials.RegistryReaderAccessKeyIDEnv)
+			registryReaderSecretAccessKey = os.Getenv(credentials.RegistryReaderSecretAccessKeyEnv)
+			registryReaderSessionToken = os.Getenv(credentials.RegistryReaderSessionTokenEnv)
+			if strings.TrimSpace(registryReaderAccessKeyID) == "" || strings.TrimSpace(registryReaderSecretAccessKey) == "" {
+				return nil, errors.New("Cloudflare registry reader credentials named by deployment config are not set")
+			}
 		}
 		return publisher.NewCloudflareBackend(ctx, publisher.CloudflareOptions{
 			AccountID: credentials.AccountID, Bucket: credentials.Bucket, ZoneID: credentials.ZoneID,
@@ -839,7 +850,7 @@ func newDeploymentBackend(ctx context.Context, config deploymentconfig.Deploymen
 			RegistryReaderAccessKeyID:  registryReaderAccessKeyID,
 			RegistryReaderSecretKey:    registryReaderSecretAccessKey,
 			RegistryReaderSessionToken: registryReaderSessionToken,
-			APIToken:                   os.Getenv(credentials.APITokenEnv),
+			APITokenProvider:           func() string { return os.Getenv(credentials.APITokenEnv) },
 			R2Endpoint:                 credentials.R2Endpoint, APIBaseURL: credentials.APIBaseURL,
 		})
 	case "gcp-local":

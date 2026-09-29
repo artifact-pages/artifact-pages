@@ -109,6 +109,9 @@ func DeployApp(ctx context.Context, backend DeploymentBackend, options AppDeploy
 			Version: bundle.manifest.Version, FilesPublished: len(changed), SourceDirty: bundle.manifest.SourceDirty,
 		}, nil
 	}
+	if err := validateInvalidation(backend, []string{"/index.html"}); err != nil {
+		return Result{}, err
+	}
 
 	for _, file := range changed {
 		fileDigest := sha256Hex(file.data)
