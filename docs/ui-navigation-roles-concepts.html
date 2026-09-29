@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Navigation journeys · Git Artifact Pages</title>
+  <link rel="stylesheet" href="ui-navigation-roles-concepts.css">
+  <script src="ui-navigation-roles-concepts.js" defer></script>
+</head>
+<body>
+  <main class="page">
+    <div class="eyebrow">Interactive concept comparison · navigation, not production UI</div>
+    <h1>From this artifact to the next one</h1>
+    <p class="lede">Try the same journey in three patterns. Candidates stay hidden until requested. Pinned and recently opened items follow you when you switch patterns.</p>
+    <div class="controls">
+      <div class="patterns" role="group" aria-label="Navigation pattern">
+        <button class="control" data-pattern="A">A · Palette first</button>
+        <button class="control" data-pattern="B">B · Header library</button>
+        <button class="control" data-pattern="C">C · Explore + Next</button>
+      </div>
+      <div class="journeys" role="group" aria-label="Journey starting point">
+        <button class="control secondary" data-action="home">Start at site home</button>
+        <button class="control secondary" data-action="deep-link">Open a deep link</button>
+        <button class="control secondary" data-action="reset">Reset journey</button>
+      </div>
+    </div>
+    <div class="guide" id="guide"></div>
+    <div class="stage" id="app" aria-label="Interactive navigation prototype"></div>
+    <p class="note"><strong>Prototype data:</strong> the eight documents, links, tags, and ranking reasons are illustrative. The current per-site index does not yet contain a relationship graph or tags. Recent and Pinned are session state in this mock. Try opening a document, following a related item, pinning it, returning, and switching patterns.</p>
+  </main>
+</body>
+</html>
