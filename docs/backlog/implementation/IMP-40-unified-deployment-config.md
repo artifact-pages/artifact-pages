@@ -64,9 +64,11 @@ Provider-config follow-up verified locally on 2026-09-29:
 Independent provider-config verification on 2026-09-29:
 
 - `go test ./... -count=1` passed with all live AWS/Cloudflare smoke-test switches explicitly disabled.
+- `go test -race -count=1 ./internal/config ./cmd/artifact-pages` passed with those same live-test switches disabled.
 - `node scripts/test-actions-parity.mjs` and `npm run test:provider-delivery` passed; the latter completed 22/22 offline checks.
 - `npm run test:registered-flow` passed the separate admin/satellite walkthrough, including dry-run, publication, update/removal, preview resources, browser reload, and scoped unregister.
 - `E2E_PORT=4186 npm run test:e2e` completed with 65/66 cases passing. The previously recorded preview HTML-to-Markdown navigation failure reproduced at `e2e/local-serving.spec.ts:2777`; this is not an all-green browser result and remains separate from provider-config validation.
 - The ignored `artifact-pages.cloudflare.yaml` uses `https://artifact-pages.dev`. Account and zone IDs remain explicit placeholders; cloud readiness is not claimed.
+- Cross-repository config compatibility passed against actual module expressions, not hand-written YAML: `terraform-cloudflare-artifact-pages` completed three mocked Terraform-to-CLI cases and 8/8 source checks; `terraform-aws-artifact-pages` completed two mocked Terraform-to-CLI cases and 16/16 source checks. Both full `scripts/validate.sh` runs used Terraform 1.9.8. The AWS suite independently rejected the root OIDC-account mismatch and each default-provider / certificate-provider mismatch. These are offline module/config checks, not live delivery or infrastructure apply evidence.
 
 These checks establish the local contract and UI only. They do not claim live provider delivery, public distribution, or infrastructure work for IMP-037/038/039. The completed site-description issue record is retained in Git history.
