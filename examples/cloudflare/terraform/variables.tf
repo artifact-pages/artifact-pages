@@ -25,7 +25,7 @@ variable "connect_custom_domain" {
 }
 
 variable "preview_retention_days" {
-  description = "Provider-managed _previews/ object retention; keep equal to previewRetentionDays in .artifact-pages.yaml."
+  description = "Provider-managed _previews/ object retention. This lifecycle setting is separate from the CLI deployment configuration."
   type        = number
 
   validation {

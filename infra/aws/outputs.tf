@@ -26,9 +26,8 @@ output "satellite_role_arns" {
 output "aws_deployment_config_yaml" {
   description = "Provider-neutral artifact-pages AWS target configuration."
   value = yamlencode({
-    schemaVersion        = 1
-    provider             = "aws"
-    previewRetentionDays = var.preview_retention_days
+    schemaVersion = 1
+    provider      = "aws"
     aws = {
       region         = var.aws_region
       bucket         = aws_s3_bucket.origin.id

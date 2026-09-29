@@ -1,6 +1,6 @@
 # IMP-39 — AWS custom-domain delivery with Cloudflare DNS and ACM
 
-- Status: Open
+- Status: In progress
 - Phase: Provider-backed deployment / reusable distribution
 - Execution: Agent-led local implementation; real-account proof is Collaborative in T15.
 - Depends on: [IMP-30](IMP-30-aws-deployment-module.md) and the authoritative AWS module source prepared in [IMP-38](IMP-38-terraform-registry-publication.md).
@@ -51,4 +51,4 @@ The owner supplies account/zone inputs and credentials outside Git, reviews a re
 
 ## Evidence
 
-Not yet recorded. The owner accepted the domain policy on September 28, 2026. The previously inspected AWS interface exposes `aliases` and `acm_certificate_arn` with caller-managed DNS; live domain, ACM, Cloudflare DNS, and CloudFront behavior have not been tested by this backlog entry.
+On 2026-09-29, AWS module commit `7ed6f92` passed `mise exec terraform@1.9.8 -- ./scripts/validate.sh`: Terraform formatting, backend-free initialization and validation for the AWS module and both examples, two mocked Terraform-to-CLI contract cases, both core and wrapper account-mismatch checks, and 16/16 source-contract tests. The contract cases pass evaluated Terraform YAML to the OSS `config.Parse` function and independently verify the target account, region, effective bucket, mocked CloudFront distribution ID, and omission of preview retention and secrets. The wrapper mismatch cases separately reject a default AWS provider account mismatch and an `aws.us_east_1` account mismatch. Independent reviews found no remaining material blocker; the region remains a documented caller contract and is not auto-detected. The fresh real-plan checklist is in the module's `modules/cloudflare-dns-acm/README.md` under “Real-plan review checklist.” No real AWS or Cloudflare API calls, credentials, provider-connected plans, or applies were used. Live DNS, ACM issuance, CloudFront deployment, and browser behavior remain unverified in T15.

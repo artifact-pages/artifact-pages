@@ -1,6 +1,6 @@
 # IMP-37 — A single Cloudflare Terraform entry module
 
-- Status: Open
+- Status: In progress
 - Phase: Reusable distribution
 - Execution: Agent-led; live-account handoff is tracked by [T15](../verification/T15-provider-delivery.md).
 - Depends on: [IMP-33](IMP-33-cloudflare-deployment.md), accepted Cloudflare mapping in [T12](../technical-design/T12-cloudflare-production-mapping.md).
@@ -13,14 +13,14 @@ The current delivery and retention modules both require an existing R2 bucket. T
 
 ## Outcome
 
-An adopter can use one Cloudflare module declaration to create an R2 bucket and connect the accepted delivery, routing, cache, control-object denial, and preview-retention configuration. The adopter supplies the account, an existing managed DNS zone, hostname, and administrator-selected retention policy. Infrastructure stays an adapter; app deployment, site registration, and site-content publication remain separate CLI operations.
+An adopter can use one Cloudflare module declaration to create an R2 bucket and connect the accepted delivery, routing, cache, catch-all app-shell rewrite, and preview-retention configuration. The adopter supplies the account, an existing managed DNS zone, hostname, and administrator-selected retention policy. The default bucket name is `artifact-pages` within the account, with an explicit override available; availability is not guaranteed. Infrastructure stays an adapter; app deployment, site registration, and site-content publication remain separate CLI operations.
 
 For the project's first real deployment, the owner selected `artifact-pages.dev` as the long-lived production hostname with Cloudflare Registrar and authoritative DNS, using Cache/CDN + R2 rather than Pages or Workers Static Assets. Consume the owner-provisioned zone and connect only the selected custom domain; do not purchase the domain or duplicate zone ownership. This is a configurable operator deployment, not a hard-coded module hostname. The [accepted domain policy](../../architecture/deployment-domain-policy.html) separates it from the DNS-only AWS verification hostname; acquisition and live proof remain T15.
 
 ## Scope
 
 - Provide one consumer-facing module entry point at the root of the owner's existing Cloudflare module repository, composing reusable components rather than duplicating their implementation. Keep nested-module paths self-contained; do not require a sibling OSS checkout.
-- Include bucket creation, custom-domain delivery, disabled alternate `r2.dev` delivery, route/cache rules, and provider-managed preview retention.
+- Include bucket creation, custom-domain delivery, route/cache rules, and provider-managed preview retention. Leave `r2.dev` unmanaged and rely on Cloudflare's disabled-by-default state for a newly created private bucket.
 - Document required inputs, validations, supported Terraform/provider versions, and non-secret outputs that map to the existing deployment config.
 - Document ownership of the complete zone phase-root rulesets and bucket lifecycle policy. Preserve the existing rules/import guidance; do not overwrite unrelated zone rules silently.
 - Provide a minimal clean-caller example and local validation/contract tests. Keep any existing-bucket path clearly separate from the new-bucket example.
@@ -35,11 +35,11 @@ For the project's first real deployment, the owner selected `artifact-pages.dev`
 
 ## Acceptance criteria
 
-- [ ] A clean root configuration invokes one entry module; its local plan includes the new bucket and required delivery/retention resources without an externally pre-created bucket.
-- [ ] Bucket identity is shared across delivery and retention; validated retention agrees with the publisher's `previewRetentionDays` setting.
+- [ ] A clean root configuration invokes one entry module; its local plan includes the new bucket and required delivery/retention resources without an externally pre-created bucket. Omitting `bucket_name` selects `artifact-pages`; an explicit override is used as supplied, and a name collision fails without random fallback.
+- [ ] Bucket identity is shared across delivery and retention. `preview_retention_days` controls Terraform lifecycle only and is not duplicated in the CLI deployment config.
 - [ ] Outputs provide the non-secret information needed for the existing Cloudflare deployment config; secrets remain outside committed examples and outputs.
-- [ ] Source/contract tests retain logical SPA routes, real reserved-object misses, private control-object denial, cache policy, and provider-owned preview expiration. They do not stand in for live CDN evidence.
-- [ ] Existing zone rules and lifecycle ownership, migration/state handling, destruction limitations, permissions, and potentially billable operations are explicit before apply. No blanket destructive defaults are introduced.
+- [ ] Source/contract tests retain logical SPA routes, explicit content-path origin behavior, catch-all rewrites (including `/_control/*`) to `/index.html`, cache policy, and provider-owned preview expiration. They do not stand in for live CDN evidence.
+- [ ] Existing zone rules and lifecycle ownership, migration/state handling, destruction limitations, permissions, and potentially billable operations are explicit before apply. Existing-bucket callers are instructed to disable `r2.dev` separately because it bypasses custom-host rewrites. No blanket destructive defaults are introduced.
 - [ ] Formatting, initialization without a backend, validation, and mock/offline plan checks pass with pinned tool/provider versions; invalid required inputs have regression coverage.
 - [ ] An independent review is completed and any findings are addressed. Local evidence and the remaining live-account handoff are recorded separately.
 
@@ -51,4 +51,4 @@ For T15, the owner selects the account/zone/hostname, supplies credentials outsi
 
 ## Evidence
 
-Not yet recorded. Current existing-bucket source and local plan evidence belongs to IMP-33, not this new entry point.
+On 2026-09-29, Cloudflare module commits `0ca5eea` and `98e046c` passed `mise exec terraform@1.9.8 -- ./scripts/validate.sh`: Terraform formatting, backend-free initialization and validation for the module and local consumer, all three mocked Terraform-to-CLI contract cases, 8/8 source-contract tests, and the local-only `terraform_data` module-address migration fixture with a no-change plan after state moves. The contract cases pass evaluated Terraform YAML to the OSS `config.Parse` function and verify the default bucket, explicit bucket override, custom credential environment-variable names, and omission of default environment names, secrets, and Terraform-only retention. Independent review found no remaining material blocker; its output-description and lockfile notes were addressed. No Cloudflare credentials or provider API calls were used. Live account, DNS, custom-domain, and content-delivery proof remain in T15.
