@@ -1,0 +1,6 @@
+cloudflare_account_id  = "REPLACE_WITH_CLOUDFLARE_ACCOUNT_ID"
+cloudflare_zone_id     = "REPLACE_WITH_CLOUDFLARE_ZONE_ID"
+r2_bucket_name         = "artifact-pages-example-0001"
+public_hostname        = "artifacts.example.com"
+preview_retention_days = 1
+connect_custom_domain  = true

@@ -1,5 +1,10 @@
 node_modules/
 .terraform/
+*.tfvars
+*.tfvars.json
+*.tfstate
+*.tfstate.*
+*.tfplan
 dist/
 coverage/
 .local/

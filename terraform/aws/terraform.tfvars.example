@@ -1,0 +1,8 @@
+aws_region               = "us-east-1"
+bucket_name              = "artifact-pages-example-0001"
+preview_retention_days   = 1
+github_oidc_provider_arn = "arn:aws:iam::111111111111:oidc-provider/token.actions.githubusercontent.com"
+admin_github_subjects    = ["repo:example/admin:ref:refs/heads/main"]
+satellite_github_subjects = {}
+aliases                   = []
+price_class               = "PriceClass_100"
