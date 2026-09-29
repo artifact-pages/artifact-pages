@@ -12,12 +12,6 @@ locals {
   }
 
   cache_behaviors = {
-    control = {
-      path_pattern    = "/_control/*"
-      cache_policy_id = aws_cloudfront_cache_policy.no_store.id
-      allowed_methods = ["GET", "HEAD"]
-      cached_methods  = ["GET", "HEAD"]
-    }
     indexes = {
       path_pattern    = "/_indexes/*"
       cache_policy_id = aws_cloudfront_cache_policy.indexes.id

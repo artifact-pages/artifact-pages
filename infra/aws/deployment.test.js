@@ -104,7 +104,6 @@ test('AWS deployment keeps the S3 origin private behind signed CloudFront OAC', 
 test('AWS deployment maps the logical app and content paths to bounded cache policies', async () => {
   const behaviors = block(main, '  cache_behaviors = {')
   for (const [name, path, policy] of [
-    ['control', '/_control/*', 'no_store'],
     ['indexes', '/_indexes/*', 'indexes'],
     ['artifacts', '/_artifacts/*', 'artifacts'],
     ['previews', '/_previews/*', 'no_store'],
@@ -132,9 +131,7 @@ test('AWS deployment maps the logical app and content paths to bounded cache pol
   }
 
   const routeFunction = await readFile(new URL('./routes.js', import.meta.url), 'utf8')
-  assert.match(routeFunction, /uri === "\/_control" \|\| uri\.indexOf\("\/_control\/"\) === 0/u)
-  assert.match(routeFunction, /statusCode: 404/u)
-  assert.match(routeFunction, /"cache-control": \{ value: "no-store" \}/u)
+  assert.doesNotMatch(routeFunction, /uri === "\/_control"|uri\.indexOf\("\/_control\/"\)/u)
   assert.match(routeFunction, /request\.uri = "\/index\.html"/u)
 })
 

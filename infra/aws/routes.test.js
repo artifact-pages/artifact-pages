@@ -9,13 +9,13 @@ const routeFunctionSource = await readFile(routeFunctionPath, 'utf8')
 const handler = vm.runInNewContext(`${routeFunctionSource}\n; handler`)
 const distributionSource = await readFile(fileURLToPath(new URL('./main.tf', import.meta.url)), 'utf8')
 
-test('CloudFront route function blocks control paths with no-store responses', () => {
+test('unmatched control paths fall back to the app shell', () => {
   for (const uri of ['/_control', '/_control/locks/registry.json']) {
-    const response = handler({ request: { uri, method: 'GET' } })
+    const request = { uri, method: 'GET' }
+    const result = handler({ request })
 
-    assert.equal(response.statusCode, 404, `${uri} should be hidden from viewers`)
-    assert.equal(response.statusDescription, 'Not Found')
-    assert.equal(response.headers['cache-control'].value, 'no-store')
+    assert.equal(result, request)
+    assert.equal(result.uri, '/index.html', `${uri} should use the app shell rather than reach its object key`)
   }
 })
 

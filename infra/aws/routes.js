@@ -2,14 +2,6 @@ function handler(event) {
   var request = event.request;
   var uri = request.uri;
 
-  if (uri === "/_control" || uri.indexOf("/_control/") === 0) {
-    return {
-      statusCode: 404,
-      statusDescription: "Not Found",
-      headers: { "cache-control": { value: "no-store" } },
-    };
-  }
-
   if (
     uri === "/index.html" ||
     uri === "/preview-bridge.js" ||
