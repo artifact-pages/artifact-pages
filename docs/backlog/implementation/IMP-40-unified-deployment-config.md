@@ -61,4 +61,12 @@ Provider-config follow-up verified locally on 2026-09-29:
 - `node --check scripts/run-edge-profile.mjs`, `git diff --check`, and `git check-ignore -v -- artifact-pages.cloudflare.yaml` passed.
 - No AWS or Cloudflare account operations, Terraform apply, Registry publication, or public release was performed.
 
+Independent provider-config verification on 2026-09-29:
+
+- `go test ./... -count=1` passed with all live AWS/Cloudflare smoke-test switches explicitly disabled.
+- `node scripts/test-actions-parity.mjs` and `npm run test:provider-delivery` passed; the latter completed 22/22 offline checks.
+- `npm run test:registered-flow` passed the separate admin/satellite walkthrough, including dry-run, publication, update/removal, preview resources, browser reload, and scoped unregister.
+- `E2E_PORT=4186 npm run test:e2e` completed with 65/66 cases passing. The previously recorded preview HTML-to-Markdown navigation failure reproduced at `e2e/local-serving.spec.ts:2777`; this is not an all-green browser result and remains separate from provider-config validation.
+- The ignored `artifact-pages.cloudflare.yaml` uses `https://artifact-pages.dev`. Account and zone IDs remain explicit placeholders; cloud readiness is not claimed.
+
 These checks establish the local contract and UI only. They do not claim live provider delivery, public distribution, or infrastructure work for IMP-037/038/039. The completed site-description issue record is retained in Git history.
