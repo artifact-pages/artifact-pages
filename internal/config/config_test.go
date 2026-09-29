@@ -36,6 +36,117 @@ func TestParseProviderTargets(t *testing.T) {
 	}
 }
 
+func TestParseLayersInheritsSitesAndReplacesWholeSiteMapAndTarget(t *testing.T) {
+	base := []byte(`schemaVersion: 1
+sites:
+  en:
+    name: English
+    description: Product documentation
+    repository: tasuku43/git-artifact-pages
+    sourcePath: docs/public/sites/en
+  sre:
+    name: SRE
+    repository: acme/platform
+    sourcePath: docs/sre
+`)
+	local := []byte(`schemaVersion: 1
+provider: local
+local:
+  root: .local/storage
+`)
+	resolved, err := ParseLayers([][]byte{base, local})
+	if err != nil {
+		t.Fatalf("ParseLayers(base, local): %v", err)
+	}
+	if resolved.Provider != "local" || resolved.Local == nil || resolved.Local.Root != ".local/storage" {
+		t.Fatalf("resolved target = %+v, want local overlay", resolved)
+	}
+	if len(resolved.Sites) != 2 || resolved.Sites["en"].Description != "Product documentation" {
+		t.Fatalf("inherited sites = %+v, want both base sites including description", resolved.Sites)
+	}
+
+	aws := []byte(`schemaVersion: 1
+provider: aws
+aws:
+  region: us-west-2
+  bucket: pages-prod
+`)
+	resolved, err = ParseLayers([][]byte{base, local, aws})
+	if err != nil {
+		t.Fatalf("ParseLayers(base, local, aws): %v", err)
+	}
+	if resolved.Provider != "aws" || resolved.AWS == nil || resolved.Local != nil || resolved.AWS.Bucket != "pages-prod" {
+		t.Fatalf("target overlay = %+v, want AWS target replacing local target", resolved)
+	}
+	if len(resolved.Sites) != 2 {
+		t.Fatalf("sites after target replacement = %+v, want inherited site map", resolved.Sites)
+	}
+
+	replacement := []byte(`schemaVersion: 1
+sites:
+  en:
+    name: English
+    repository: tasuku43/git-artifact-pages
+    sourcePath: docs/public/sites/en
+`)
+	resolved, err = ParseLayers([][]byte{base, local, replacement})
+	if err != nil {
+		t.Fatalf("ParseLayers with site replacement: %v", err)
+	}
+	if len(resolved.Sites) != 1 || resolved.Sites["sre"].Name != "" {
+		t.Fatalf("replaced sites = %+v, want only en", resolved.Sites)
+	}
+
+	empty := []byte("schemaVersion: 1\nsites: {}\n")
+	resolved, err = ParseLayers([][]byte{base, local, empty})
+	if err != nil {
+		t.Fatalf("ParseLayers with explicit empty sites: %v", err)
+	}
+	if resolved.Sites == nil || len(resolved.Sites) != 0 {
+		t.Fatalf("explicit empty sites = %#v, want non-nil empty map", resolved.Sites)
+	}
+}
+
+func TestParseLayersRejectsInvalidPartialLayers(t *testing.T) {
+	tests := []struct {
+		name   string
+		layers [][]byte
+		want   string
+	}{
+		{
+			name:   "provider target without provider",
+			layers: [][]byte{[]byte("schemaVersion: 1\nlocal:\n  root: .local\n")},
+			want:   "provider is required",
+		},
+		{
+			name:   "provider without target",
+			layers: [][]byte{[]byte("schemaVersion: 1\nprovider: local\n")},
+			want:   "exactly one provider target",
+		},
+		{
+			name: "schema version mismatch",
+			layers: [][]byte{
+				[]byte("schemaVersion: 1\nsites: {}\n"),
+				[]byte("schemaVersion: 2\nprovider: local\nlocal:\n  root: .local\n"),
+			},
+			want: "schemaVersion must be 1",
+		},
+		{
+			name:   "no layers",
+			layers: nil,
+			want:   "at least one deployment config layer",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := ParseLayers(test.layers)
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("ParseLayers() error = %v, want substring %q", err, test.want)
+			}
+		})
+	}
+}
+
 func TestParseProviderDefaultsAndTerraformGeneratedTargets(t *testing.T) {
 	cloudflareDefault, err := Parse([]byte(`schemaVersion: 1
 provider: cloudflare
@@ -275,6 +386,56 @@ func TestResolvePrecedence(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertRoot("saved", "", ".saved")
+}
+
+func TestResolveLayersLoadsOrderedLocalFiles(t *testing.T) {
+	root := t.TempDir()
+	basePath := filepath.Join(root, "artifact-pages.yaml")
+	targetPath := filepath.Join(root, "artifact-pages.local.yaml")
+	base := `schemaVersion: 1
+sites:
+  en:
+    name: English
+    description: Public product docs
+    repository: tasuku43/git-artifact-pages
+    sourcePath: docs/public/sites/en
+`
+	target := `schemaVersion: 1
+provider: local
+local:
+  root: .local/storage
+`
+	if err := os.WriteFile(basePath, []byte(base), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(targetPath, []byte(target), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := (Resolver{WorkingDir: root}).ResolveLayers(t.Context(), []string{"artifact-pages.yaml", "artifact-pages.local.yaml"})
+	if err != nil {
+		t.Fatalf("ResolveLayers(): %v", err)
+	}
+	if resolved.Config.Provider != "local" || resolved.Config.Local == nil || resolved.Config.Local.Root != ".local/storage" {
+		t.Fatalf("resolved target = %+v", resolved.Config)
+	}
+	if len(resolved.Config.Sites) != 1 || resolved.Config.Sites["en"].Description != "Public product docs" {
+		t.Fatalf("resolved inherited sites = %+v", resolved.Config.Sites)
+	}
+	if !strings.Contains(resolved.Locator, basePath) || !strings.Contains(resolved.Locator, targetPath) || resolved.ContentSHA == "" {
+		t.Fatalf("resolved provenance = %+v, want both paths and composite digest", resolved)
+	}
+}
+
+func TestResolveLayersRejectsRemoteConfigComposition(t *testing.T) {
+	root := t.TempDir()
+	localPath := filepath.Join(root, "local.yaml")
+	if err := os.WriteFile(localPath, []byte("schemaVersion: 1\nprovider: local\nlocal:\n  root: .local\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := (Resolver{WorkingDir: root}).ResolveLayers(t.Context(), []string{"github://acme/admin", localPath})
+	if err == nil || !strings.Contains(err.Error(), "remote config cannot be combined") {
+		t.Fatalf("ResolveLayers(remote + local) error = %v, want clear unsupported-composition error", err)
+	}
 }
 
 func TestParseRemoteLocatorAcceptsGitHubRepositoryNames(t *testing.T) {

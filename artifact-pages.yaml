@@ -1,0 +1,7 @@
+schemaVersion: 1
+sites:
+  en:
+    name: English
+    description: English-language product documentation for Git Artifact Pages.
+    repository: tasuku43/git-artifact-pages
+    sourcePath: docs/public/sites/en

@@ -244,6 +244,45 @@ func TestRegistryCommandsRequireSitesMapping(t *testing.T) {
 	}
 }
 
+func TestRunRegistryRegisterAcceptsOrderedConfigLayers(t *testing.T) {
+	root := t.TempDir()
+	base := `schemaVersion: 1
+sites:
+  en:
+    name: English
+    description: Product documentation
+    repository: tasuku43/git-artifact-pages
+    sourcePath: docs/public/sites/en
+`
+	target := `schemaVersion: 1
+provider: local
+local:
+  root: .local/storage
+`
+	if err := os.WriteFile(filepath.Join(root, "artifact-pages.yaml"), []byte(base), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "artifact-pages.local.yaml"), []byte(target), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr, exitCode := runCLIProcess(t, root, []string{
+		"registry", "register",
+		"--config", "artifact-pages.yaml",
+		"--config", "artifact-pages.local.yaml",
+		"--dry-run", "--format", "json",
+	})
+	var result publisher.Result
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("decode layered config result: %v; stdout=%s stderr=%s", err, stdout, stderr)
+	}
+	if exitCode != 0 || result.Operation != "registry register" || result.Outcome != "planned" || len(result.Changes) != 3 {
+		t.Fatalf("layered registry dry-run = exit %d, %+v; stderr=%s, want inherited site and local target", exitCode, result, stderr)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".local", "storage")); !os.IsNotExist(err) {
+		t.Fatalf("layered dry-run created local storage: stat error = %v", err)
+	}
+}
+
 func TestPublishCommandHelpIsProviderNeutral(t *testing.T) {
 	for _, args := range [][]string{{"site", "publish", "--help"}, {"app", "deploy", "--help"}} {
 		var stdout, stderr bytes.Buffer

@@ -123,9 +123,62 @@ type githubContent struct {
 	SHA      string `json:"sha"`
 }
 
-// Parse validates the provider-target document and rejects unknown fields,
-// duplicate keys, multiple documents, and YAML scalar coercion.
+// Parse validates one complete provider-target document.
 func Parse(contents []byte) (DeploymentConfig, error) {
+	layer, err := parseConfigLayer(contents, false)
+	if err != nil {
+		return DeploymentConfig{}, err
+	}
+	config, err := layer.WithDefaults()
+	if err != nil {
+		return DeploymentConfig{}, err
+	}
+	if err := config.Validate(); err != nil {
+		return DeploymentConfig{}, err
+	}
+	return config, nil
+}
+
+// ParseLayers overlays ordered config documents. Site mappings are inherited
+// when omitted and replaced as a whole when explicitly present. A provider
+// target is always replaced as a whole.
+func ParseLayers(contents [][]byte) (DeploymentConfig, error) {
+	if len(contents) == 0 {
+		return DeploymentConfig{}, errors.New("at least one deployment config layer is required")
+	}
+	var config DeploymentConfig
+	for index, layerContents := range contents {
+		layer, err := parseConfigLayer(layerContents, true)
+		if err != nil {
+			return DeploymentConfig{}, fmt.Errorf("config layer %d: %w", index+1, err)
+		}
+		if index == 0 {
+			config.SchemaVersion = layer.SchemaVersion
+		} else if layer.SchemaVersion != config.SchemaVersion {
+			return DeploymentConfig{}, errors.New("all deployment config layers must use the same schemaVersion")
+		}
+		if layer.Provider != "" {
+			config.Provider = layer.Provider
+			config.Local = layer.Local
+			config.AWS = layer.AWS
+			config.Cloudflare = layer.Cloudflare
+			config.GCSLocal = layer.GCSLocal
+		}
+		if layer.Sites != nil {
+			config.Sites = cloneSites(layer.Sites)
+		}
+	}
+	config, err := config.WithDefaults()
+	if err != nil {
+		return DeploymentConfig{}, err
+	}
+	if err := config.Validate(); err != nil {
+		return DeploymentConfig{}, err
+	}
+	return config, nil
+}
+
+func parseConfigLayer(contents []byte, allowPartial bool) (DeploymentConfig, error) {
 	var nodes []yaml.Node
 	if err := yaml.Load(contents, &nodes, yaml.WithAllDocuments()); err != nil {
 		return DeploymentConfig{}, fmt.Errorf("decode deployment config: %w", err)
@@ -133,7 +186,7 @@ func Parse(contents []byte) (DeploymentConfig, error) {
 	if len(nodes) != 1 {
 		return DeploymentConfig{}, errors.New("deployment config must contain exactly one YAML document")
 	}
-	if err := validateConfigNode(&nodes[0]); err != nil {
+	if err := validateConfigNode(&nodes[0], allowPartial); err != nil {
 		return DeploymentConfig{}, err
 	}
 	var documents []DeploymentConfig
@@ -143,14 +196,19 @@ func Parse(contents []byte) (DeploymentConfig, error) {
 	if len(documents) != 1 {
 		return DeploymentConfig{}, errors.New("deployment config must contain exactly one YAML document")
 	}
-	config, err := documents[0].WithDefaults()
-	if err != nil {
-		return DeploymentConfig{}, err
+	layer := documents[0]
+	if layer.SchemaVersion != SchemaVersion {
+		return DeploymentConfig{}, fmt.Errorf("deployment config schemaVersion must be %d", SchemaVersion)
 	}
-	if err := config.Validate(); err != nil {
-		return DeploymentConfig{}, err
+	return layer, nil
+}
+
+func cloneSites(sites map[string]registry.Site) map[string]registry.Site {
+	clone := make(map[string]registry.Site, len(sites))
+	for id, site := range sites {
+		clone[id] = site
 	}
-	return config, nil
+	return clone
 }
 
 // WithDefaults returns a copy with provider defaults resolved. It does not
@@ -296,7 +354,7 @@ func (config DeploymentConfig) Validate() error {
 	return nil
 }
 
-func validateConfigNode(document *yaml.Node) error {
+func validateConfigNode(document *yaml.Node, allowPartial bool) error {
 	root := document
 	if root.Kind == yaml.DocumentNode {
 		if len(root.Content) != 1 {
@@ -317,8 +375,31 @@ func validateConfigNode(document *yaml.Node) error {
 		return errors.New("schemaVersion must be an integer")
 	}
 	provider := nodeMappingValue(root, "provider")
-	if provider == nil || provider.Kind != yaml.ScalarNode || provider.ShortTag() != "!!str" {
+	if provider == nil && !allowPartial {
 		return errors.New("provider must be a string")
+	}
+	if provider != nil && (provider.Kind != yaml.ScalarNode || provider.ShortTag() != "!!str") {
+		return errors.New("provider must be a string")
+	}
+	if allowPartial {
+		targetBlocks := 0
+		for _, blockName := range []string{"local", "aws", "cloudflare", "gcpLocal"} {
+			if nodeMappingValue(root, blockName) != nil {
+				targetBlocks++
+			}
+		}
+		if provider == nil && targetBlocks != 0 {
+			return errors.New("provider is required when a provider target is configured")
+		}
+		if provider != nil {
+			if targetBlocks != 1 {
+				return errors.New("a config layer with provider must contain exactly one provider target")
+			}
+			blockName := providerTargetBlock(provider.Value)
+			if blockName == "" || nodeMappingValue(root, blockName) == nil {
+				return fmt.Errorf("provider %q requires its matching settings block", provider.Value)
+			}
+		}
 	}
 	for _, blockName := range []string{"local", "aws", "cloudflare", "gcpLocal"} {
 		block := nodeMappingValue(root, blockName)
@@ -367,6 +448,21 @@ func validateConfigNode(document *yaml.Node) error {
 	return nil
 }
 
+func providerTargetBlock(provider string) string {
+	switch provider {
+	case "local":
+		return "local"
+	case "aws":
+		return "aws"
+	case "cloudflare":
+		return "cloudflare"
+	case "gcp-local":
+		return "gcpLocal"
+	default:
+		return ""
+	}
+}
+
 func optionalNonblankOverride(block, field string) bool {
 	switch block {
 	case "aws":
@@ -413,8 +509,18 @@ func validatePublicBaseURL(raw string) error {
 	return nil
 }
 
-// Resolve applies the documented precedence and loads one typed target config.
+// Resolve applies the documented precedence and loads one config locator.
 func (resolver Resolver) Resolve(ctx context.Context, explicitLocator string) (ResolvedConfig, error) {
+	if strings.TrimSpace(explicitLocator) == "" {
+		return resolver.ResolveLayers(ctx, nil)
+	}
+	return resolver.ResolveLayers(ctx, []string{explicitLocator})
+}
+
+// ResolveLayers loads ordered local config layers. A single GitHub locator is
+// supported for remote configs; remote/local stacks are rejected so each
+// invocation has one unambiguous remote provenance.
+func (resolver Resolver) ResolveLayers(ctx context.Context, explicitLocators []string) (ResolvedConfig, error) {
 	if err := ctx.Err(); err != nil {
 		return ResolvedConfig{}, err
 	}
@@ -422,42 +528,52 @@ func (resolver Resolver) Resolve(ctx context.Context, explicitLocator string) (R
 	if err != nil {
 		return ResolvedConfig{}, err
 	}
-	locator := strings.TrimSpace(explicitLocator)
-	if locator == "" {
-		locator = strings.TrimSpace(resolver.getenv(ConfigEnvironment))
+	locators := make([]string, 0, len(explicitLocators))
+	for _, explicitLocator := range explicitLocators {
+		locator := strings.TrimSpace(explicitLocator)
+		if locator == "" {
+			return ResolvedConfig{}, errors.New("deployment config locator must not be empty")
+		}
+		locators = append(locators, locator)
 	}
-	if locator == "" {
+	if len(locators) == 0 {
+		if locator := strings.TrimSpace(resolver.getenv(ConfigEnvironment)); locator != "" {
+			locators = append(locators, locator)
+		}
+	}
+	if len(locators) == 0 {
 		localPath := filepath.Join(workingDir, defaultConfigName)
 		info, statErr := os.Stat(localPath)
 		if statErr == nil {
 			if !info.Mode().IsRegular() {
 				return ResolvedConfig{}, fmt.Errorf("repository config %s is not a regular file", localPath)
 			}
-			locator = localPath
+			locators = append(locators, localPath)
 		} else if !errors.Is(statErr, os.ErrNotExist) {
 			return ResolvedConfig{}, fmt.Errorf("inspect repository config: %w", statErr)
 		}
 	}
-	if locator == "" {
+	if len(locators) == 0 {
 		defaultPath, pathErr := resolver.savedLocatorPath()
 		if pathErr != nil {
 			return ResolvedConfig{}, pathErr
 		}
 		contents, readErr := os.ReadFile(defaultPath)
 		if readErr == nil {
-			locator = strings.TrimSpace(string(contents))
+			locator := strings.TrimSpace(string(contents))
 			if locator == "" {
 				return ResolvedConfig{}, errors.New("saved default config locator is empty")
 			}
+			locators = append(locators, locator)
 		} else if !errors.Is(readErr, os.ErrNotExist) {
 			return ResolvedConfig{}, fmt.Errorf("read saved default config locator: %w", readErr)
 		}
 	}
-	if locator == "" {
+	if len(locators) == 0 {
 		return ResolvedConfig{}, errors.New("no deployment config found; pass --config, set ARTIFACT_PAGES_CONFIG, add .artifact-pages.yaml, or save a default")
 	}
-	if strings.HasPrefix(locator, "github://") {
-		contents, commitSHA, canonicalLocator, remoteErr := resolver.readRemoteConfig(ctx, locator)
+	if len(locators) == 1 && strings.HasPrefix(locators[0], "github://") {
+		contents, commitSHA, canonicalLocator, remoteErr := resolver.readRemoteConfig(ctx, locators[0])
 		if remoteErr != nil {
 			return ResolvedConfig{}, remoteErr
 		}
@@ -467,22 +583,42 @@ func (resolver Resolver) Resolve(ctx context.Context, explicitLocator string) (R
 		}
 		return ResolvedConfig{Config: config, Locator: canonicalLocator, CommitSHA: commitSHA, ContentSHA: digest(contents)}, nil
 	}
-	localPath, err := resolver.absoluteLocalPath(locator, workingDir)
+	for _, locator := range locators {
+		if strings.HasPrefix(locator, "github://") {
+			return ResolvedConfig{}, errors.New("remote config cannot be combined with other config layers; use one complete remote config or local layers")
+		}
+	}
+	layers := make([][]byte, 0, len(locators))
+	resolvedPaths := make([]string, 0, len(locators))
+	var totalSize int64
+	for _, locator := range locators {
+		localPath, err := resolver.absoluteLocalPath(locator, workingDir)
+		if err != nil {
+			return ResolvedConfig{}, err
+		}
+		contents, err := os.ReadFile(localPath)
+		if err != nil {
+			return ResolvedConfig{}, fmt.Errorf("read deployment config %s: %w", localPath, err)
+		}
+		totalSize += int64(len(contents))
+		if totalSize > maxRemoteConfigSize {
+			return ResolvedConfig{}, fmt.Errorf("combined deployment config exceeds %d bytes", maxRemoteConfigSize)
+		}
+		layers = append(layers, contents)
+		resolvedPaths = append(resolvedPaths, localPath)
+	}
+	config, err := ParseLayers(layers)
 	if err != nil {
-		return ResolvedConfig{}, err
+		return ResolvedConfig{}, fmt.Errorf("parse deployment config layers: %w", err)
 	}
-	contents, err := os.ReadFile(localPath)
-	if err != nil {
-		return ResolvedConfig{}, fmt.Errorf("read deployment config %s: %w", localPath, err)
+	var combined []byte
+	for _, contents := range layers {
+		combined = append(combined, contents...)
+		combined = append(combined, 0)
 	}
-	if len(contents) > maxRemoteConfigSize {
-		return ResolvedConfig{}, fmt.Errorf("deployment config exceeds %d bytes", maxRemoteConfigSize)
-	}
-	config, err := Parse(contents)
-	if err != nil {
-		return ResolvedConfig{}, fmt.Errorf("parse deployment config %s: %w", localPath, err)
-	}
-	return ResolvedConfig{Config: config, Locator: localPath, ContentSHA: digest(contents)}, nil
+	return ResolvedConfig{
+		Config: config, Locator: strings.Join(resolvedPaths, " + "), ContentSHA: digest(combined),
+	}, nil
 }
 
 // SetDefault stores a non-secret config locator in the user's config directory.

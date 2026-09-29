@@ -903,6 +903,15 @@ artifact-pages registry unregister --site sre --config .artifact-pages.yaml --dr
 artifact-pages site publish --config .artifact-pages.yaml --site sre --source docs/artifacts --dry-run
 ~~~
 
+When the same site registry must be reused with different deployment targets, keep it in a shared base layer and pass the target layer explicitly. Each layer has `schemaVersion: 1`; a target layer contains its complete `provider` and matching provider block, and replaces the earlier target as a unit. Only `sites` carries forward: if a later layer omits it, the previous mapping is inherited; if it specifies `sites`, that entire mapping replaces the previous one, including when it is `{}`. For example, `artifact-pages.yaml` can contain the non-secret `sites` mapping, while an ignored local overlay contains `provider: local` and `local.root`:
+
+~~~text
+artifact-pages registry register --config artifact-pages.yaml --config .local/artifact-pages.local.yaml --dry-run
+artifact-pages site publish --config artifact-pages.yaml --config .local/artifact-pages.local.yaml --site en --dry-run
+~~~
+
+Do not rely on automatic overlay filename discovery. Layer order is part of the command input and therefore remains visible and predictable.
+
 In a separate admin/satellite layout, the satellite can select a pinned remote target config while still using the deployed registry for eligibility:
 
 ~~~text
@@ -912,12 +921,12 @@ artifact-pages site publish --config 'github://acme/platform-admin/.artifact-pag
 The operation-oriented command surface is provider-neutral. Registry operations read `sites` from the selected config and have no `--manifest` option:
 
 ~~~text
-artifact-pages registry register [--config LOCATOR] [--dry-run] [--format text|json]
-artifact-pages registry unregister --site ID [--config LOCATOR] [--dry-run] [--format text|json]
-artifact-pages site publish --site ID [--source DIR] [--config LOCATOR] [--dry-run] [--format text|json]
-artifact-pages app deploy (--version VERSION | --archive FILE) [--repository OWNER/REPO] [--config LOCATOR] [--dry-run] [--format text|json]
-artifact-pages lock inspect (--site ID | --scope registry) [--config LOCATOR] [--format text|json]
-artifact-pages lock recover (--site ID | --scope registry) --observed-etag ETAG [--config LOCATOR] [--format text|json]
+artifact-pages registry register [--config LOCATOR ...] [--dry-run] [--format text|json]
+artifact-pages registry unregister --site ID [--config LOCATOR ...] [--dry-run] [--format text|json]
+artifact-pages site publish --site ID [--source DIR] [--config LOCATOR ...] [--dry-run] [--format text|json]
+artifact-pages app deploy (--version VERSION | --archive FILE) [--repository OWNER/REPO] [--config LOCATOR ...] [--dry-run] [--format text|json]
+artifact-pages lock inspect (--site ID | --scope registry) [--config LOCATOR ...] [--format text|json]
+artifact-pages lock recover (--site ID | --scope registry) --observed-etag ETAG [--config LOCATOR ...] [--format text|json]
 ~~~
 
 `registry register` and `registry unregister` require `sites` to be present in the selected config, create its registry projection, and reconcile the configured target to that complete desired registration set. A missing `sites` field is an input error; `sites: {}` explicitly requests an empty registry. Register removes registrations omitted from the mapping and cleans those sites' content prefixes. Unregister requires the selected site to already be omitted from the mapping, then ensures cleanup of that site's exact prefixes, including when retrying after a previous registry withdrawal. These operations serialize whole-registry updates, report `registryUpdated` as a boolean on planned, registered, unregistered, and no-op outcomes, and include an empty `changes` array when the registry is already current. A changed successful registration has outcome `registered`; a current registry has outcome `no-op`. Site, preview, and app operations do not reconcile `sites`; site and preview publishing continue to validate eligibility against the deployed `/_indexes/sites.json`. Every site operation selects one explicit site ID. `--config LOCATOR` is an optional deployment-config selector and follows the locator precedence above. `site publish` builds the index and static source projection as one operation; `index build` remains a local utility and is not required for publishing.

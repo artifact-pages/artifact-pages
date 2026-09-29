@@ -438,7 +438,8 @@ func runRegistryRegister(ctx context.Context, args []string, stdout, stderr io.W
 	flags := flag.NewFlagSet("artifact-pages registry register", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.Usage = func() { writeRegistryRegisterUsage(stderr) }
-	configLocator := flags.String("config", "", "local path or github://OWNER/REPO/FILE?ref=REF deployment config locator")
+	var configLocators stringSliceFlag
+	flags.Var(&configLocators, "config", "deployment config path or github:// locator (repeatable; later layers override earlier ones)")
 	dryRun := flags.Bool("dry-run", false, "show planned changes without writes, deletes, lock recovery, or cache changes")
 	format := flags.String("format", "text", "result format: text or json")
 	if err := flags.Parse(args); err != nil {
@@ -453,7 +454,7 @@ func runRegistryRegister(ctx context.Context, args []string, stdout, stderr io.W
 	if *format != "text" && *format != "json" {
 		return withExitCode(errors.New("--format must be text or json"), 2)
 	}
-	resolved, err := (deploymentconfig.Resolver{}).Resolve(ctx, *configLocator)
+	resolved, err := (deploymentconfig.Resolver{}).ResolveLayers(ctx, configLocators)
 	if err != nil {
 		return withExitCode(err, 2)
 	}
@@ -492,7 +493,8 @@ func runRegistryUnregister(ctx context.Context, args []string, stdout, stderr io
 	flags.SetOutput(stderr)
 	flags.Usage = func() { writeRegistryUnregisterUsage(stderr) }
 	siteID := flags.String("site", "", "site identifier to unregister")
-	configLocator := flags.String("config", "", "local path or github://OWNER/REPO/FILE?ref=REF deployment config locator")
+	var configLocators stringSliceFlag
+	flags.Var(&configLocators, "config", "deployment config path or github:// locator (repeatable; later layers override earlier ones)")
 	dryRun := flags.Bool("dry-run", false, "show planned changes without writes, deletes, lock recovery, or cache changes")
 	format := flags.String("format", "text", "result format: text or json")
 	if err := flags.Parse(args); err != nil {
@@ -513,7 +515,7 @@ func runRegistryUnregister(ctx context.Context, args []string, stdout, stderr io
 	if *format != "text" && *format != "json" {
 		return withExitCode(errors.New("--format must be text or json"), 2)
 	}
-	resolved, err := (deploymentconfig.Resolver{}).Resolve(ctx, *configLocator)
+	resolved, err := (deploymentconfig.Resolver{}).ResolveLayers(ctx, configLocators)
 	if err != nil {
 		return withExitCode(err, 2)
 	}
@@ -558,7 +560,8 @@ func runLockCommand(ctx context.Context, command string, args []string, stdout, 
 	siteID := flags.String("site", "", "site identifier")
 	scope := flags.String("scope", "site", "lock scope: site or registry")
 	observedETag := flags.String("observed-etag", "", "ETag returned by lock inspect")
-	configLocator := flags.String("config", "", "local path or github://OWNER/REPO/FILE?ref=REF deployment config locator")
+	var configLocators stringSliceFlag
+	flags.Var(&configLocators, "config", "deployment config path or github:// locator (repeatable; later layers override earlier ones)")
 	format := flags.String("format", "text", "result format: text or json")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -584,7 +587,7 @@ func runLockCommand(ctx context.Context, command string, args []string, stdout, 
 	if *format != "text" && *format != "json" {
 		return withExitCode(errors.New("--format must be text or json"), 2)
 	}
-	resolved, err := (deploymentconfig.Resolver{}).Resolve(ctx, *configLocator)
+	resolved, err := (deploymentconfig.Resolver{}).ResolveLayers(ctx, configLocators)
 	if err != nil {
 		return withExitCode(err, 2)
 	}
@@ -653,7 +656,8 @@ func runAppDeploy(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	archive := flags.String("archive", "", "local web release archive (.tar.gz) with adjacent manifest and checksum files")
 	version := flags.String("version", "", "download this published web release version from GitHub")
 	repository := flags.String("repository", "tasuku43/git-artifact-pages", "GitHub repository that publishes the web release")
-	configLocator := flags.String("config", "", "local path or github://OWNER/REPO/FILE?ref=REF deployment config locator")
+	var configLocators stringSliceFlag
+	flags.Var(&configLocators, "config", "deployment config path or github:// locator (repeatable; later layers override earlier ones)")
 	dryRun := flags.Bool("dry-run", false, "show planned changes without writes, deletes, lock recovery, or cache changes")
 	format := flags.String("format", "text", "result format: text or json")
 	if err := flags.Parse(args); err != nil {
@@ -671,7 +675,7 @@ func runAppDeploy(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	if *format != "text" && *format != "json" {
 		return withExitCode(errors.New("--format must be text or json"), 2)
 	}
-	resolved, err := (deploymentconfig.Resolver{}).Resolve(ctx, *configLocator)
+	resolved, err := (deploymentconfig.Resolver{}).ResolveLayers(ctx, configLocators)
 	if err != nil {
 		return withExitCode(err, 2)
 	}
@@ -718,7 +722,8 @@ func runSitePublish(ctx context.Context, args []string, stdout, stderr io.Writer
 	flags.Usage = func() { writeSitePublishUsage(stderr) }
 	siteID := flags.String("site", "", "site identifier (for example: sre)")
 	source := flags.String("source", "", "publishable static content directory inside the current Git working tree")
-	configLocator := flags.String("config", "", "local path or github://OWNER/REPO/FILE?ref=REF deployment config locator")
+	var configLocators stringSliceFlag
+	flags.Var(&configLocators, "config", "deployment config path or github:// locator (repeatable; later layers override earlier ones)")
 	dryRun := flags.Bool("dry-run", false, "show planned changes without writes, deletes, lock recovery, or cache changes")
 	format := flags.String("format", "text", "result format: text or json")
 	if err := flags.Parse(args); err != nil {
@@ -736,7 +741,7 @@ func runSitePublish(ctx context.Context, args []string, stdout, stderr io.Writer
 	if *format != "text" && *format != "json" {
 		return withExitCode(errors.New("--format must be text or json"), 2)
 	}
-	resolved, err := (deploymentconfig.Resolver{}).Resolve(ctx, *configLocator)
+	resolved, err := (deploymentconfig.Resolver{}).ResolveLayers(ctx, configLocators)
 	if err != nil {
 		return withExitCode(err, 2)
 	}
@@ -865,18 +870,18 @@ func writeRootUsage(writer io.Writer) {
 
 func writeLockUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "Usage:")
-	fmt.Fprintln(writer, "  artifact-pages lock inspect --site ID|--scope registry [--config LOCATOR] [--format text|json]")
-	fmt.Fprintln(writer, "  artifact-pages lock recover --site ID|--scope registry --observed-etag ETAG [--config LOCATOR] [--format text|json]")
+	fmt.Fprintln(writer, "  artifact-pages lock inspect --site ID|--scope registry [--config LOCATOR ...] [--format text|json]")
+	fmt.Fprintln(writer, "  artifact-pages lock recover --site ID|--scope registry --observed-etag ETAG [--config LOCATOR ...] [--format text|json]")
 	fmt.Fprintln(writer, "")
 	fmt.Fprintln(writer, "Inspect a retained site lock or compare-and-swap a confirmed stale lock to free.")
 }
 
 func writeLockCommandUsage(writer io.Writer, command string) {
 	if command == "inspect" {
-		fmt.Fprintln(writer, "Usage: artifact-pages lock inspect --site ID|--scope registry [--config LOCATOR] [--format text|json]")
+		fmt.Fprintln(writer, "Usage: artifact-pages lock inspect --site ID|--scope registry [--config LOCATOR ...] [--format text|json]")
 		return
 	}
-	fmt.Fprintln(writer, "Usage: artifact-pages lock recover --site ID|--scope registry --observed-etag ETAG [--config LOCATOR] [--format text|json]")
+	fmt.Fprintln(writer, "Usage: artifact-pages lock recover --site ID|--scope registry --observed-etag ETAG [--config LOCATOR ...] [--format text|json]")
 }
 
 func writeIndexUsage(writer io.Writer) {
@@ -913,7 +918,7 @@ func writeAppDeployUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  --archive FILE          verified local web release archive (.tar.gz)")
 	fmt.Fprintln(writer, "  --version VERSION       download and deploy a published GitHub release")
 	fmt.Fprintln(writer, "  --repository OWNER/REPO GitHub release repository (default tasuku43/git-artifact-pages)")
-	fmt.Fprintln(writer, "  --config LOCATOR        deployment config path or github:// locator")
+	fmt.Fprintln(writer, "  --config LOCATOR        deployment config path or github:// locator (repeatable; later layers override earlier ones)")
 	fmt.Fprintln(writer, "  --dry-run               show planned changes without writes, deletes, lock recovery, or cache changes")
 	fmt.Fprintln(writer, "  --format text|json      output a human-readable result or stable JSON")
 }
@@ -931,7 +936,7 @@ func writeSitePublishUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "Options:")
 	fmt.Fprintln(writer, "  --site ID               required site identifier")
 	fmt.Fprintln(writer, "  --source DIR            publishable static content directory (defaults to the registered sourcePath)")
-	fmt.Fprintln(writer, "  --config LOCATOR        deployment config path or github:// locator")
+	fmt.Fprintln(writer, "  --config LOCATOR        deployment config path or github:// locator (repeatable; later layers override earlier ones)")
 	fmt.Fprintln(writer, "  --dry-run               show origin changes and stale preview references without writes, deletes, lock recovery, or cache changes")
 	fmt.Fprintln(writer, "  --format text|json      output a human-readable result or stable JSON")
 }
@@ -945,22 +950,22 @@ func writeConfigUsage(writer io.Writer) {
 
 func writeRegistryUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "Usage:")
-	fmt.Fprintln(writer, "  artifact-pages registry register [--config LOCATOR] [--dry-run] [--format text|json]")
-	fmt.Fprintln(writer, "  artifact-pages registry unregister --site ID [--config LOCATOR] [--dry-run] [--format text|json]")
+	fmt.Fprintln(writer, "  artifact-pages registry register [--config LOCATOR ...] [--dry-run] [--format text|json]")
+	fmt.Fprintln(writer, "  artifact-pages registry unregister --site ID [--config LOCATOR ...] [--dry-run] [--format text|json]")
 	fmt.Fprintln(writer, "")
 	fmt.Fprintln(writer, "Reconcile the complete site set declared in the selected deployment config.")
 }
 
 func writeRegistryRegisterUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "Usage:")
-	fmt.Fprintln(writer, "  artifact-pages registry register [--config LOCATOR] [--dry-run] [--format text|json]")
+	fmt.Fprintln(writer, "  artifact-pages registry register [--config LOCATOR ...] [--dry-run] [--format text|json]")
 	fmt.Fprintln(writer, "")
 	fmt.Fprintln(writer, "Reconcile the sites mapping in the selected config; sites omitted from it are unregistered and cleaned on apply.")
 }
 
 func writeRegistryUnregisterUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "Usage:")
-	fmt.Fprintln(writer, "  artifact-pages registry unregister --site ID [--config LOCATOR] [--dry-run] [--format text|json]")
+	fmt.Fprintln(writer, "  artifact-pages registry unregister --site ID [--config LOCATOR ...] [--dry-run] [--format text|json]")
 	fmt.Fprintln(writer, "")
 	fmt.Fprintln(writer, "Remove the site from the selected config's sites mapping, then clean its deployed prefixes and cache paths.")
 }

@@ -58,7 +58,8 @@ func runPreviewPublish(ctx context.Context, args []string, stdout, stderr io.Wri
 	defaultRef := flags.String("default-ref", "origin/HEAD", "current default-branch ref used for merge-base selection")
 	pullRequest := flags.String("pull-request", "", "explicit pull request number or canonical GitHub URL; omitted means manual preview")
 	baseURL := flags.String("base-url", "", "public application origin used to build preview URLs")
-	configLocator := flags.String("config", "", "local path or github://OWNER/REPO/FILE?ref=REF deployment config locator")
+	var configLocators stringSliceFlag
+	flags.Var(&configLocators, "config", "deployment config path or github:// locator (repeatable; later layers override earlier ones)")
 	dryRun := flags.Bool("dry-run", false, "show source, object, and catalog changes without writes, deletes, lock recovery, or cache changes")
 	format := flags.String("format", "text", "result format: text or json")
 	var includes stringSliceFlag
@@ -88,7 +89,7 @@ func runPreviewPublish(ctx context.Context, args []string, stdout, stderr io.Wri
 	if err != nil {
 		return withExitCode(err, 2)
 	}
-	resolved, err := (deploymentconfig.Resolver{}).Resolve(ctx, *configLocator)
+	resolved, err := (deploymentconfig.Resolver{}).ResolveLayers(ctx, configLocators)
 	if err != nil {
 		return withExitCode(err, 2)
 	}
@@ -268,7 +269,7 @@ func writePreviewPublishUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  --pull-request REF      explicit PR number or canonical GitHub URL; omitted means manual")
 	fmt.Fprintln(writer, "  --include PATH          extra source-relative resource path or path.Match pattern (repeatable)")
 	fmt.Fprintln(writer, "  --base-url ORIGIN       public application origin for returned review URLs")
-	fmt.Fprintln(writer, "  --config LOCATOR        deployment config path or github:// locator")
+	fmt.Fprintln(writer, "  --config LOCATOR        deployment config path or github:// locator (repeatable; later layers override earlier ones)")
 	fmt.Fprintln(writer, "  --dry-run               show document/resource and catalog changes without provider writes")
 	fmt.Fprintln(writer, "  --format text|json      output a human-readable result or typed JSON")
 }
