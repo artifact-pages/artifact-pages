@@ -33,9 +33,8 @@ func TestNewDeploymentBackendWiresCloudflareRegistryReaderEnvironment(t *testing
 	defer server.Close()
 
 	backendValue, err := newDeploymentBackend(context.Background(), deploymentconfig.DeploymentConfig{
-		SchemaVersion:        1,
-		Provider:             "cloudflare",
-		PreviewRetentionDays: 30,
+		SchemaVersion: 1,
+		Provider:      "cloudflare",
 		Cloudflare: &deploymentconfig.CloudflareTarget{
 			AccountID: "0123456789abcdef0123456789abcdef", Bucket: "artifact-pages",
 			ZoneID: "abcdef0123456789abcdef0123456789", PublicBaseURL: "https://pages.example.test",
@@ -70,9 +69,8 @@ func TestNewDeploymentBackendRejectsMissingConfiguredCloudflareRegistryReader(t 
 		t.Setenv(name, value)
 	}
 	_, err := newDeploymentBackend(context.Background(), deploymentconfig.DeploymentConfig{
-		SchemaVersion:        1,
-		Provider:             "cloudflare",
-		PreviewRetentionDays: 30,
+		SchemaVersion: 1,
+		Provider:      "cloudflare",
 		Cloudflare: &deploymentconfig.CloudflareTarget{
 			AccountID: "0123456789abcdef0123456789abcdef", Bucket: "artifact-pages",
 			ZoneID: "abcdef0123456789abcdef0123456789", PublicBaseURL: "https://pages.example.test",

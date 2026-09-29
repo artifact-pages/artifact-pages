@@ -16,8 +16,7 @@ import (
 
 func TestDeploymentBackendFactoryKeepsGCPProfileLocalOnly(t *testing.T) {
 	config := deploymentconfig.DeploymentConfig{
-		SchemaVersion: deploymentconfig.SchemaVersion, Provider: "gcp-local", PreviewRetentionDays: 30,
-		GCSLocal: &deploymentconfig.GCSLocalTarget{Endpoint: "http://127.0.0.1:4443", Bucket: "artifact-pages"},
+		SchemaVersion: deploymentconfig.SchemaVersion, Provider: "gcp-local", GCSLocal: &deploymentconfig.GCSLocalTarget{Endpoint: "http://127.0.0.1:4443", Bucket: "artifact-pages"},
 	}
 	backend, err := newDeploymentBackend(context.Background(), config)
 	if err != nil {
@@ -44,22 +43,20 @@ func TestLocalAppDeployCacheConformance(t *testing.T) {
 	switch profile {
 	case "aws":
 		configLines = []string{
-			"schemaVersion: 1", "provider: aws", "previewRetentionDays: 30", "aws:",
+			"schemaVersion: 1", "provider: aws", "aws:",
 			"  region: us-east-1", "  bucket: artifact-pages",
 		}
 	case "cloudflare":
 		configLines = []string{
-			"schemaVersion: 1", "provider: cloudflare", "previewRetentionDays: 30", "cloudflare:",
-			"  accountId: 0123456789abcdef0123456789abcdef", "  bucket: artifact-pages",
+			"schemaVersion: 1", "provider: cloudflare", "cloudflare:",
+			"  accountId: 0123456789abcdef0123456789abcdef",
 			"  zoneId: abcdef0123456789abcdef0123456789", "  publicBaseURL: https://pages.example.test",
 			fmt.Sprintf("  r2Endpoint: %s", os.Getenv("EDGE_R2_ENDPOINT")),
 			fmt.Sprintf("  apiBaseURL: %s", os.Getenv("EDGE_CF_API_BASE_URL")),
-			"  accessKeyIdEnv: CF_R2_ACCESS_KEY_ID", "  secretAccessKeyEnv: CF_R2_SECRET_ACCESS_KEY",
-			"  apiTokenEnv: CF_API_TOKEN",
 		}
 	case "gcp":
 		configLines = []string{
-			"schemaVersion: 1", "provider: gcp-local", "previewRetentionDays: 30", "gcpLocal:",
+			"schemaVersion: 1", "provider: gcp-local", "gcpLocal:",
 			fmt.Sprintf("  endpoint: %s", os.Getenv("EDGE_GCS_ENDPOINT")), "  bucket: artifact-pages",
 		}
 	default:
@@ -130,17 +127,12 @@ func TestCloudflareAppDeployConformance(t *testing.T) {
 	configPath := filepath.Join(root, "deployment.yaml")
 	configContents := fmt.Sprintf(`schemaVersion: 1
 provider: cloudflare
-previewRetentionDays: 30
 cloudflare:
   accountId: 0123456789abcdef0123456789abcdef
-  bucket: artifact-pages
   zoneId: abcdef0123456789abcdef0123456789
   publicBaseURL: https://pages.example.test
   r2Endpoint: %s
   apiBaseURL: %s
-  accessKeyIdEnv: CF_R2_ACCESS_KEY_ID
-  secretAccessKeyEnv: CF_R2_SECRET_ACCESS_KEY
-  apiTokenEnv: CF_API_TOKEN
 `, os.Getenv("EDGE_R2_ENDPOINT"), os.Getenv("EDGE_CF_API_BASE_URL"))
 	if err := os.WriteFile(configPath, []byte(configContents), 0o600); err != nil {
 		t.Fatal(err)

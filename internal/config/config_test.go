@@ -20,8 +20,8 @@ func TestParseProviderTargets(t *testing.T) {
 		provider string
 	}{
 		{"local", "schemaVersion: 1\nprovider: local\nlocal:\n  root: .local/storage\n", "local"},
-		{"aws", "schemaVersion: 1\nprovider: aws\npreviewRetentionDays: 30\naws:\n  region: us-east-1\n  bucket: pages-prod\n  distributionId: E123\n", "aws"},
-		{"cloudflare", "schemaVersion: 1\nprovider: cloudflare\npreviewRetentionDays: 30\ncloudflare:\n  accountId: 0123456789abcdef0123456789abcdef\n  bucket: pages-prod\n  zoneId: abcdef0123456789abcdef0123456789\n  publicBaseURL: https://pages.example.com\n  accessKeyIdEnv: CF_R2_ACCESS_KEY_ID\n  secretAccessKeyEnv: CF_R2_SECRET_ACCESS_KEY\n  sessionTokenEnv: CF_R2_SESSION_TOKEN\n  registryReaderAccessKeyIdEnv: CF_R2_REGISTRY_READER_ACCESS_KEY_ID\n  registryReaderSecretAccessKeyEnv: CF_R2_REGISTRY_READER_SECRET_ACCESS_KEY\n  registryReaderSessionTokenEnv: CF_R2_REGISTRY_READER_SESSION_TOKEN\n  apiTokenEnv: CF_API_TOKEN\n", "cloudflare"},
+		{"aws", "schemaVersion: 1\nprovider: aws\naws:\n  region: us-east-1\n  bucket: pages-prod\n  distributionId: E123\n", "aws"},
+		{"cloudflare", "schemaVersion: 1\nprovider: cloudflare\ncloudflare:\n  accountId: 0123456789abcdef0123456789abcdef\n  bucket: pages-prod\n  zoneId: abcdef0123456789abcdef0123456789\n  publicBaseURL: https://pages.example.com\n  accessKeyIdEnv: CF_R2_ACCESS_KEY_ID\n  secretAccessKeyEnv: CF_R2_SECRET_ACCESS_KEY\n  sessionTokenEnv: CF_R2_SESSION_TOKEN\n  registryReaderAccessKeyIdEnv: CF_R2_REGISTRY_READER_ACCESS_KEY_ID\n  registryReaderSecretAccessKeyEnv: CF_R2_REGISTRY_READER_SECRET_ACCESS_KEY\n  registryReaderSessionTokenEnv: CF_R2_REGISTRY_READER_SESSION_TOKEN\n  apiTokenEnv: CF_API_TOKEN\n", "cloudflare"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -31,6 +31,113 @@ func TestParseProviderTargets(t *testing.T) {
 			}
 			if config.Provider != test.provider {
 				t.Errorf("provider = %q, want %q", config.Provider, test.provider)
+			}
+		})
+	}
+}
+
+func TestParseProviderDefaultsAndTerraformGeneratedTargets(t *testing.T) {
+	cloudflareDefault, err := Parse([]byte(`schemaVersion: 1
+provider: cloudflare
+cloudflare:
+  accountId: 0123456789abcdef0123456789abcdef
+  zoneId: abcdef0123456789abcdef0123456789
+  publicBaseURL: https://pages.example.com
+`))
+	if err != nil {
+		t.Fatalf("Parse(minimal Cloudflare config): %v", err)
+	}
+	if got := cloudflareDefault.Cloudflare; got.Bucket != "artifact-pages" || got.AccessKeyIDEnv != "CF_R2_ACCESS_KEY_ID" || got.SecretAccessKeyEnv != "CF_R2_SECRET_ACCESS_KEY" || got.APITokenEnv != "CF_API_TOKEN" {
+		t.Fatalf("Cloudflare defaults = %+v, want bucket and primary env-name defaults", got)
+	}
+
+	cloudflareOverride, err := Parse([]byte(`schemaVersion: 1
+provider: cloudflare
+cloudflare:
+  accountId: 0123456789abcdef0123456789abcdef
+  bucket: custom-r2-bucket
+  zoneId: abcdef0123456789abcdef0123456789
+  publicBaseURL: https://pages.example.com
+  accessKeyIdEnv: CUSTOM_ACCESS
+  secretAccessKeyEnv: CUSTOM_SECRET
+  apiTokenEnv: CUSTOM_API_TOKEN
+`))
+	if err != nil {
+		t.Fatalf("Parse(Cloudflare overrides): %v", err)
+	}
+	if got := cloudflareOverride.Cloudflare; got.Bucket != "custom-r2-bucket" || got.AccessKeyIDEnv != "CUSTOM_ACCESS" || got.SecretAccessKeyEnv != "CUSTOM_SECRET" || got.APITokenEnv != "CUSTOM_API_TOKEN" {
+		t.Fatalf("Cloudflare explicit values = %+v, want configured overrides", got)
+	}
+
+	awsDefault, err := Parse([]byte(`schemaVersion: 1
+provider: aws
+aws:
+  accountId: "123456789012"
+  region: ap-northeast-1
+`))
+	if err != nil {
+		t.Fatalf("Parse(AWS omitted bucket): %v", err)
+	}
+	if got := awsDefault.AWS; got.Bucket != "artifact-pages-123456789012-ap-northeast-1" || got.AccountID != "123456789012" {
+		t.Fatalf("AWS derived target = %+v, want deterministic account/region bucket", got)
+	}
+
+	awsGenerated, err := Parse([]byte(`schemaVersion: 1
+provider: aws
+aws:
+  accountId: "123456789012"
+  region: ap-northeast-1
+  bucket: artifact-pages-123456789012-ap-northeast-1
+  distributionId: E123
+`))
+	if err != nil {
+		t.Fatalf("Parse(Terraform-generated AWS config): %v", err)
+	}
+	if got := awsGenerated.AWS; got.Bucket != "artifact-pages-123456789012-ap-northeast-1" || got.DistributionID != "E123" {
+		t.Fatalf("AWS generated target = %+v, want emitted effective bucket", got)
+	}
+
+	cloudflareGenerated, err := Parse([]byte(`schemaVersion: 1
+provider: cloudflare
+cloudflare:
+  accountId: 0123456789abcdef0123456789abcdef
+  bucket: artifact-pages
+  zoneId: abcdef0123456789abcdef0123456789
+  publicBaseURL: https://pages.example.com
+`))
+	if err != nil || cloudflareGenerated.Cloudflare.Bucket != "artifact-pages" {
+		t.Fatalf("Parse(Terraform-generated Cloudflare config) = %+v, %v; want emitted bucket", cloudflareGenerated, err)
+	}
+}
+
+func TestParseAWSBucketAndAccountIDRules(t *testing.T) {
+	tests := []struct {
+		name    string
+		aws     string
+		want    string
+		wantErr string
+	}{
+		{name: "explicit bucket without account ID", aws: "region: us-east-1\nbucket: explicit-bucket", want: "explicit-bucket"},
+		{name: "explicit bucket overrides derivation", aws: "accountId: \"123456789012\"\nregion: us-east-1\nbucket: explicit-bucket", want: "explicit-bucket"},
+		{name: "missing bucket and account ID", aws: "region: us-east-1", wantErr: "aws.accountId is required when aws.bucket is omitted"},
+		{name: "malformed account ID with bucket", aws: "accountId: \"12345678901x\"\nregion: us-east-1\nbucket: explicit-bucket", wantErr: "aws.accountId must be a 12-digit AWS account ID"},
+		{name: "malformed account ID without bucket", aws: "accountId: \"12345678901x\"\nregion: us-east-1", wantErr: "aws.accountId must be a 12-digit AWS account ID"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			contents := "schemaVersion: 1\nprovider: aws\naws:\n"
+			for _, line := range strings.Split(test.aws, "\n") {
+				contents += "  " + line + "\n"
+			}
+			config, err := Parse([]byte(contents))
+			if test.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), test.wantErr) {
+					t.Fatalf("Parse() error = %v, want %q", err, test.wantErr)
+				}
+				return
+			}
+			if err != nil || config.AWS.Bucket != test.want {
+				t.Fatalf("Parse() = %+v, %v; want bucket %q", config.AWS, err, test.want)
 			}
 		})
 	}
@@ -98,6 +205,7 @@ func TestParseRejectsInvalidConfig(t *testing.T) {
 		body string
 		want string
 	}{
+		{"legacy preview retention is unknown", "schemaVersion: 1\nprovider: local\npreviewRetentionDays: 30\nlocal:\n  root: .local\n", "field previewRetentionDays not found"},
 		{"unsupported version", "schemaVersion: 2\nprovider: local\nlocal:\n  root: .local\n", "schemaVersion must be 1"},
 		{"unknown field", "schemaVersion: 1\nprovider: local\nlocal:\n  root: .local\n  bucket: accidental\n", "field bucket not found"},
 		{"duplicate key", "schemaVersion: 1\nschemaVersion: 1\nprovider: local\nlocal:\n  root: .local\n", "already defined"},
@@ -107,12 +215,16 @@ func TestParseRejectsInvalidConfig(t *testing.T) {
 		{"wrong setting type", "schemaVersion: 1\nprovider: local\nlocal:\n  root: 42\n", "local.root must be a string"},
 		{"missing local block", "schemaVersion: 1\nprovider: local\n", "only the local settings block"},
 		{"two provider blocks", "schemaVersion: 1\nprovider: local\nlocal:\n  root: .local\naws:\n  bucket: pages\n", "only the local settings block"},
-		{"empty aws region", "schemaVersion: 1\nprovider: aws\npreviewRetentionDays: 30\naws:\n  region: '  '\n  bucket: pages-prod\n", "aws.region is required"},
-		{"empty aws bucket", "schemaVersion: 1\nprovider: aws\npreviewRetentionDays: 30\naws:\n  region: us-east-1\n  bucket: '  '\n", "aws.bucket is required"},
+		{"empty aws region", "schemaVersion: 1\nprovider: aws\naws:\n  region: '  '\n  bucket: pages-prod\n", "aws.region is required"},
+		{"empty aws bucket", "schemaVersion: 1\nprovider: aws\naws:\n  region: us-east-1\n  bucket: '  '\n", "aws.bucket must not be empty when set"},
+		{"empty aws account ID", "schemaVersion: 1\nprovider: aws\naws:\n  region: us-east-1\n  bucket: pages\n  accountId: ''\n", "aws.accountId must not be empty when set"},
 		{"cloudflare http base", "schemaVersion: 1\nprovider: cloudflare\ncloudflare:\n  accountId: 0123456789abcdef0123456789abcdef\n  bucket: pages\n  zoneId: abcdef0123456789abcdef0123456789\n  publicBaseURL: http://pages.example.com\n  accessKeyIdEnv: CF_ACCESS\n  secretAccessKeyEnv: CF_SECRET\n  apiTokenEnv: CF_TOKEN\n", "HTTPS origin"},
-		{"cloudflare invalid session token variable", "schemaVersion: 1\nprovider: cloudflare\npreviewRetentionDays: 30\ncloudflare:\n  accountId: 0123456789abcdef0123456789abcdef\n  bucket: pages\n  zoneId: abcdef0123456789abcdef0123456789\n  publicBaseURL: https://pages.example.com\n  accessKeyIdEnv: CF_ACCESS\n  secretAccessKeyEnv: CF_SECRET\n  sessionTokenEnv: 'CF-SESSION'\n  apiTokenEnv: CF_TOKEN\n", "cloudflare.sessionTokenEnv must name an environment variable"},
-		{"cloudflare incomplete registry reader credentials", "schemaVersion: 1\nprovider: cloudflare\npreviewRetentionDays: 30\ncloudflare:\n  accountId: 0123456789abcdef0123456789abcdef\n  bucket: pages\n  zoneId: abcdef0123456789abcdef0123456789\n  publicBaseURL: https://pages.example.com\n  accessKeyIdEnv: CF_ACCESS\n  secretAccessKeyEnv: CF_SECRET\n  registryReaderAccessKeyIdEnv: CF_REGISTRY_READ_ACCESS\n  apiTokenEnv: CF_TOKEN\n", "registryReaderAccessKeyIdEnv and registryReaderSecretAccessKeyEnv must be set together"},
-		{"cloudflare invalid registry reader session token variable", "schemaVersion: 1\nprovider: cloudflare\npreviewRetentionDays: 30\ncloudflare:\n  accountId: 0123456789abcdef0123456789abcdef\n  bucket: pages\n  zoneId: abcdef0123456789abcdef0123456789\n  publicBaseURL: https://pages.example.com\n  accessKeyIdEnv: CF_ACCESS\n  secretAccessKeyEnv: CF_SECRET\n  registryReaderAccessKeyIdEnv: CF_REGISTRY_READ_ACCESS\n  registryReaderSecretAccessKeyEnv: CF_REGISTRY_READ_SECRET\n  registryReaderSessionTokenEnv: 'CF-SESSION'\n  apiTokenEnv: CF_TOKEN\n", "cloudflare.registryReaderSessionTokenEnv must name an environment variable"},
+		{"cloudflare invalid session token variable", "schemaVersion: 1\nprovider: cloudflare\ncloudflare:\n  accountId: 0123456789abcdef0123456789abcdef\n  bucket: pages\n  zoneId: abcdef0123456789abcdef0123456789\n  publicBaseURL: https://pages.example.com\n  accessKeyIdEnv: CF_ACCESS\n  secretAccessKeyEnv: CF_SECRET\n  sessionTokenEnv: 'CF-SESSION'\n  apiTokenEnv: CF_TOKEN\n", "cloudflare.sessionTokenEnv must name an environment variable"},
+		{"empty Cloudflare bucket override", "schemaVersion: 1\nprovider: cloudflare\ncloudflare:\n  accountId: 0123456789abcdef0123456789abcdef\n  bucket: ''\n  zoneId: abcdef0123456789abcdef0123456789\n  publicBaseURL: https://pages.example.com\n", "cloudflare.bucket must not be empty when set"},
+		{"empty Cloudflare credential-name override", "schemaVersion: 1\nprovider: cloudflare\ncloudflare:\n  accountId: 0123456789abcdef0123456789abcdef\n  zoneId: abcdef0123456789abcdef0123456789\n  publicBaseURL: https://pages.example.com\n  accessKeyIdEnv: ''\n", "cloudflare.accessKeyIdEnv must not be empty when set"},
+		{"invalid Cloudflare credential-name override", "schemaVersion: 1\nprovider: cloudflare\ncloudflare:\n  accountId: 0123456789abcdef0123456789abcdef\n  zoneId: abcdef0123456789abcdef0123456789\n  publicBaseURL: https://pages.example.com\n  accessKeyIdEnv: CF-ACCESS\n", "cloudflare.accessKeyIdEnv must name an environment variable"},
+		{"cloudflare incomplete registry reader credentials", "schemaVersion: 1\nprovider: cloudflare\ncloudflare:\n  accountId: 0123456789abcdef0123456789abcdef\n  bucket: pages\n  zoneId: abcdef0123456789abcdef0123456789\n  publicBaseURL: https://pages.example.com\n  accessKeyIdEnv: CF_ACCESS\n  secretAccessKeyEnv: CF_SECRET\n  registryReaderAccessKeyIdEnv: CF_REGISTRY_READ_ACCESS\n  apiTokenEnv: CF_TOKEN\n", "registryReaderAccessKeyIdEnv and registryReaderSecretAccessKeyEnv must be set together"},
+		{"cloudflare invalid registry reader session token variable", "schemaVersion: 1\nprovider: cloudflare\ncloudflare:\n  accountId: 0123456789abcdef0123456789abcdef\n  bucket: pages\n  zoneId: abcdef0123456789abcdef0123456789\n  publicBaseURL: https://pages.example.com\n  accessKeyIdEnv: CF_ACCESS\n  secretAccessKeyEnv: CF_SECRET\n  registryReaderAccessKeyIdEnv: CF_REGISTRY_READ_ACCESS\n  registryReaderSecretAccessKeyEnv: CF_REGISTRY_READ_SECRET\n  registryReaderSessionTokenEnv: 'CF-SESSION'\n  apiTokenEnv: CF_TOKEN\n", "cloudflare.registryReaderSessionTokenEnv must name an environment variable"},
 		{"cloudflare literal credential field", "schemaVersion: 1\nprovider: cloudflare\ncloudflare:\n  accountId: 0123456789abcdef0123456789abcdef\n  bucket: pages\n  zoneId: abcdef0123456789abcdef0123456789\n  publicBaseURL: https://pages.example.com\n  accessKeyIdEnv: CF_ACCESS\n  secretAccessKeyEnv: CF_SECRET\n  apiTokenEnv: CF_TOKEN\n  apiToken: secret\n", "field apiToken not found"},
 	}
 	for _, test := range tests {
@@ -313,7 +425,7 @@ func TestSetDefaultStoresOnlyAbsoluteLocatorWithPrivateMode(t *testing.T) {
 
 func TestResolveRemoteConfigPinsOneUnifiedConfigCommitWithoutLegacyFallback(t *testing.T) {
 	const sha = "0123456789abcdef0123456789abcdef01234567"
-	configBytes := []byte("schemaVersion: 1\nprovider: aws\npreviewRetentionDays: 30\naws:\n  region: us-west-2\n  bucket: pages-prod\n  distributionId: E123\nsites:\n  sre:\n    name: SRE\n    description: Operations\n    repository: acme/platform\n    sourcePath: docs/artifacts\n")
+	configBytes := []byte("schemaVersion: 1\nprovider: aws\naws:\n  region: us-west-2\n  bucket: pages-prod\n  distributionId: E123\nsites:\n  sre:\n    name: SRE\n    description: Operations\n    repository: acme/platform\n    sourcePath: docs/artifacts\n")
 	satellite := t.TempDir()
 	localConfigPath := filepath.Join(satellite, "deployment.yaml")
 	if err := os.WriteFile(localConfigPath, configBytes, 0o600); err != nil {

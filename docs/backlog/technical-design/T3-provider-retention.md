@@ -9,7 +9,7 @@ How does an administrator's single preview-retention policy map to AWS and Cloud
 
 ## Settled contract
 
-- Configure one positive `previewRetentionDays` value per deployment. Do not set per-PR retention values or store an application expiry timestamp.
+- Configure one positive provider-side `preview_retention_days` value per deployment. It belongs to infrastructure configuration and is not a CLI YAML field. Do not set per-PR retention values or store an application expiry timestamp.
 - Apply provider lifecycle expiration to the whole `_previews/` prefix. AWS uses S3 lifecycle expiration; Cloudflare uses an R2 object-lifecycle rule with the same prefix. Normal site publish and unregister do not change this rule.
 - Provider lifecycle processing is asynchronous. A catalog can temporarily reference a manifest that has expired; readers handle a missing revision, and catalog pruning removes the stale reference only after origin confirms absence.
 - S3 versioning is bucket-wide, not prefix-scoped. The AWS module suspends versioning and expires both current and noncurrent versions under `_previews/`, then removes expired delete markers so old versions do not accumulate. R2 lifecycle rules are prefix-scoped and provider-managed; the current R2 S3 compatibility table lists bucket versioning APIs as unsupported, so this mapping has no R2 noncurrent-version lifecycle case.

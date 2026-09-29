@@ -13,6 +13,7 @@ One strict deployment YAML config can hold provider settings and the desired sit
 ## Scope
 
 - Add an optional `sites` map to the unified deployment config, with strict validation and distinct behavior for an omitted map versus an explicitly empty map.
+- Resolve provider target defaults without credential discovery: Cloudflare uses `artifact-pages` and its standard credential environment names; AWS derives an omitted bucket only from an explicit 12-digit account ID and region. Keep preview retention out of the CLI config.
 - Have registry registration and removal project the configured site set without a separate manifest argument. Keep normal site-publish eligibility tied to the deployed registry.
 - Carry optional descriptions from config through the registry and generated index metadata to browser discovery validation.
 - Align the thin admin Action and local registered-site/clean-room examples with the single-config contract.
@@ -27,6 +28,7 @@ One strict deployment YAML config can hold provider settings and the desired sit
 ## Acceptance criteria
 
 - [x] The strict config parser accepts `sites` and optional string descriptions, rejects unknown or invalid fields, and preserves omitted-versus-empty `sites` behavior.
+- [x] The strict version-1 parser accepts Terraform-generated AWS/Cloudflare targets, resolves and reports the effective bucket, rejects malformed or explicitly blank overrides, and rejects the removed `previewRetentionDays` field.
 - [x] `registry register` and `registry unregister` consume the same selected config without a separate manifest flag; missing `sites` fails before storage access, explicit empty `sites` is valid, and a site can be unregistered only after it is absent from the configured set.
 - [x] Normal site publication still checks the deployed registry; configured desired state does not grant publish eligibility by itself.
 - [x] Optional descriptions survive registry projection and publication into per-site discovery metadata, browser validation accepts them, and omitted descriptions remain absent without breaking existing sites.
@@ -51,5 +53,12 @@ UI follow-up verified locally on 2026-09-29:
 - `npm run build` and `npm run build-storybook` passed after the production UI changes.
 - The focused registered-discovery E2E passed 2/2 cases at a 320px viewport, covering long and omitted descriptions, description search, navigation, and horizontal overflow.
 - The full E2E run passed 65/66 cases. One preview-HTML navigation case failed in the separate preview flow and also failed on isolated rerun; it does not exercise the site-picker or site-search changes.
+
+Provider-config follow-up verified locally on 2026-09-29:
+
+- `go test ./...` passed after removing CLI `previewRetentionDays`, resolving Cloudflare defaults and deterministic AWS bucket selection, and reporting effective deployment targets in text and JSON.
+- `node --test infra/cloudflare/delivery/main.test.js` passed 8/8 checks after aligning the deployment example assertion with provider-only retention.
+- `node --check scripts/run-edge-profile.mjs`, `git diff --check`, and `git check-ignore -v -- artifact-pages.cloudflare.yaml` passed.
+- No AWS or Cloudflare account operations, Terraform apply, Registry publication, or public release was performed.
 
 These checks establish the local contract and UI only. They do not claim live provider delivery, public distribution, or infrastructure work for IMP-037/038/039. The completed site-description issue record is retained in Git history.

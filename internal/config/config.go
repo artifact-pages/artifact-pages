@@ -39,6 +39,7 @@ var (
 	environmentPattern  = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 	commitPattern       = regexp.MustCompile(`^[0-9a-fA-F]{40}$`)
 	cloudflareIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{32}$`)
+	awsAccountIDPattern = regexp.MustCompile(`^[0-9]{12}$`)
 )
 
 type LocalTarget struct {
@@ -46,6 +47,7 @@ type LocalTarget struct {
 }
 
 type AWSTarget struct {
+	AccountID      string `yaml:"accountId,omitempty"`
 	Region         string `yaml:"region"`
 	Bucket         string `yaml:"bucket"`
 	DistributionID string `yaml:"distributionId"`
@@ -75,14 +77,13 @@ type GCSLocalTarget struct {
 }
 
 type DeploymentConfig struct {
-	SchemaVersion        int                      `yaml:"schemaVersion"`
-	Provider             string                   `yaml:"provider"`
-	PreviewRetentionDays int                      `yaml:"previewRetentionDays,omitempty"`
-	Local                *LocalTarget             `yaml:"local"`
-	AWS                  *AWSTarget               `yaml:"aws"`
-	Cloudflare           *CloudflareTarget        `yaml:"cloudflare"`
-	GCSLocal             *GCSLocalTarget          `yaml:"gcpLocal"`
-	Sites                map[string]registry.Site `yaml:"sites,omitempty"`
+	SchemaVersion int                      `yaml:"schemaVersion"`
+	Provider      string                   `yaml:"provider"`
+	Local         *LocalTarget             `yaml:"local"`
+	AWS           *AWSTarget               `yaml:"aws"`
+	Cloudflare    *CloudflareTarget        `yaml:"cloudflare"`
+	GCSLocal      *GCSLocalTarget          `yaml:"gcpLocal"`
+	Sites         map[string]registry.Site `yaml:"sites,omitempty"`
 }
 
 type ResolvedConfig struct {
@@ -142,9 +143,56 @@ func Parse(contents []byte) (DeploymentConfig, error) {
 	if len(documents) != 1 {
 		return DeploymentConfig{}, errors.New("deployment config must contain exactly one YAML document")
 	}
-	config := documents[0]
+	config, err := documents[0].WithDefaults()
+	if err != nil {
+		return DeploymentConfig{}, err
+	}
 	if err := config.Validate(); err != nil {
 		return DeploymentConfig{}, err
+	}
+	return config, nil
+}
+
+// WithDefaults returns a copy with provider defaults resolved. It does not
+// discover credentials or contact a provider.
+func (config DeploymentConfig) WithDefaults() (DeploymentConfig, error) {
+	switch config.Provider {
+	case "aws":
+		if config.AWS == nil {
+			return config, nil
+		}
+		target := *config.AWS
+		if target.AccountID != "" && !awsAccountIDPattern.MatchString(target.AccountID) {
+			return DeploymentConfig{}, errors.New("aws.accountId must be a 12-digit AWS account ID")
+		}
+		if strings.TrimSpace(target.Bucket) == "" {
+			if strings.TrimSpace(target.AccountID) == "" {
+				return DeploymentConfig{}, errors.New("aws.accountId is required when aws.bucket is omitted")
+			}
+			if strings.TrimSpace(target.Region) == "" {
+				return DeploymentConfig{}, errors.New("aws.region is required")
+			}
+			target.Bucket = fmt.Sprintf("artifact-pages-%s-%s", target.AccountID, target.Region)
+		}
+		config.AWS = &target
+	case "cloudflare":
+		if config.Cloudflare == nil {
+			return config, nil
+		}
+		target := *config.Cloudflare
+		if strings.TrimSpace(target.Bucket) == "" {
+			target.Bucket = "artifact-pages"
+		}
+		if target.AccessKeyIDEnv == "" {
+			target.AccessKeyIDEnv = "CF_R2_ACCESS_KEY_ID"
+		}
+		if target.SecretAccessKeyEnv == "" {
+			target.SecretAccessKeyEnv = "CF_R2_SECRET_ACCESS_KEY"
+		}
+		if target.APITokenEnv == "" {
+			target.APITokenEnv = "CF_API_TOKEN"
+		}
+		config.Cloudflare = &target
 	}
 	return config, nil
 }
@@ -170,6 +218,9 @@ func (config DeploymentConfig) Validate() error {
 		}
 		if strings.TrimSpace(config.AWS.Region) == "" {
 			return errors.New("aws.region is required")
+		}
+		if config.AWS.AccountID != "" && !awsAccountIDPattern.MatchString(config.AWS.AccountID) {
+			return errors.New("aws.accountId must be a 12-digit AWS account ID")
 		}
 		if strings.TrimSpace(config.AWS.Bucket) == "" {
 			return errors.New("aws.bucket is required")
@@ -237,9 +288,6 @@ func (config DeploymentConfig) Validate() error {
 	default:
 		return fmt.Errorf("unsupported deployment provider %q", config.Provider)
 	}
-	if config.Provider != "local" && (config.PreviewRetentionDays < 1 || config.PreviewRetentionDays > 36500) {
-		return errors.New("previewRetentionDays must be between 1 and 36500 for provider deployments")
-	}
 	if config.Sites != nil {
 		if _, err := registry.ProjectSites(config.Sites); err != nil {
 			return err
@@ -272,9 +320,6 @@ func validateConfigNode(document *yaml.Node) error {
 	if provider == nil || provider.Kind != yaml.ScalarNode || provider.ShortTag() != "!!str" {
 		return errors.New("provider must be a string")
 	}
-	if retention := nodeMappingValue(root, "previewRetentionDays"); retention != nil && (retention.Kind != yaml.ScalarNode || retention.ShortTag() != "!!int") {
-		return errors.New("previewRetentionDays must be an integer")
-	}
 	for _, blockName := range []string{"local", "aws", "cloudflare", "gcpLocal"} {
 		block := nodeMappingValue(root, blockName)
 		if block == nil {
@@ -290,6 +335,9 @@ func validateConfigNode(document *yaml.Node) error {
 			}
 			if valueNode.Kind != yaml.ScalarNode || valueNode.ShortTag() != "!!str" {
 				return fmt.Errorf("%s.%s must be a string", blockName, keyNode.Value)
+			}
+			if optionalNonblankOverride(blockName, keyNode.Value) && strings.TrimSpace(valueNode.Value) == "" {
+				return fmt.Errorf("%s.%s must not be empty when set", blockName, keyNode.Value)
 			}
 		}
 	}
@@ -317,6 +365,17 @@ func validateConfigNode(document *yaml.Node) error {
 		}
 	}
 	return nil
+}
+
+func optionalNonblankOverride(block, field string) bool {
+	switch block {
+	case "aws":
+		return field == "accountId" || field == "bucket"
+	case "cloudflare":
+		return field == "bucket" || field == "accessKeyIdEnv" || field == "secretAccessKeyEnv" || field == "apiTokenEnv"
+	default:
+		return false
+	}
 }
 
 func validateLocalHTTPOrigin(raw string, allowPath bool) error {

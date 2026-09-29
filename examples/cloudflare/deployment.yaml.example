@@ -1,10 +1,9 @@
 schemaVersion: 1
 provider: cloudflare
-previewRetentionDays: 30
 cloudflare:
-  accountId: "00000000000000000000000000000000"
+  accountId: "YOUR_CLOUDFLARE_ACCOUNT_ID"
   bucket: artifact-pages-production
-  zoneId: "11111111111111111111111111111111"
+  zoneId: "YOUR_CLOUDFLARE_ZONE_ID"
   publicBaseURL: https://artifacts.example.com
   accessKeyIdEnv: CF_R2_ACCESS_KEY_ID
   secretAccessKeyEnv: CF_R2_SECRET_ACCESS_KEY

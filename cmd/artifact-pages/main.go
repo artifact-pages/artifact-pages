@@ -26,6 +26,7 @@ func main() {
 		failure := failureResult(args, err)
 		if errors.As(err, &commandErr) {
 			failure.ConfigCommitSHA = commandErr.configCommitSHA
+			failure.Target = commandErr.target
 			if commandErr.result != nil {
 				failure.Result = *commandErr.result
 				failure.Result.Outcome = "failed"
@@ -62,6 +63,7 @@ type commandError struct {
 	err             error
 	exitCode        int
 	result          *publisher.Result
+	target          *deploymentTarget
 	previewResult   *previewPublishOutput
 	configCommitSHA string
 }
@@ -71,13 +73,22 @@ func (failure *commandError) Unwrap() error { return failure.err }
 
 type failureEnvelope struct {
 	publisher.Result
-	ConfigCommitSHA string `json:"configCommitSha,omitempty"`
-	Error           string `json:"error"`
+	ConfigCommitSHA string            `json:"configCommitSha,omitempty"`
+	Target          *deploymentTarget `json:"target,omitempty"`
+	Error           string            `json:"error"`
 }
 
 type deploymentResultEnvelope struct {
 	publisher.Result
-	ConfigCommitSHA string `json:"configCommitSha,omitempty"`
+	ConfigCommitSHA string           `json:"configCommitSha,omitempty"`
+	Target          deploymentTarget `json:"target"`
+}
+
+type deploymentTarget struct {
+	Provider  string `json:"provider"`
+	Bucket    string `json:"bucket,omitempty"`
+	Region    string `json:"region,omitempty"`
+	AccountID string `json:"accountId,omitempty"`
 }
 
 func withExitCode(err error, code int) error {
@@ -91,21 +102,24 @@ func withResolvedError(err error, resolved deploymentconfig.ResolvedConfig) erro
 	if err == nil {
 		return nil
 	}
-	return &commandError{err: err, exitCode: 1, configCommitSHA: resolved.CommitSHA}
+	target := deploymentTargetFromConfig(resolved.Config)
+	return &commandError{err: err, exitCode: 1, configCommitSHA: resolved.CommitSHA, target: &target}
 }
 
 func withResolvedResult(err error, result publisher.Result, resolved deploymentconfig.ResolvedConfig) error {
 	if err == nil {
 		return nil
 	}
-	return &commandError{err: err, exitCode: 1, result: &result, configCommitSHA: resolved.CommitSHA}
+	target := deploymentTargetFromConfig(resolved.Config)
+	return &commandError{err: err, exitCode: 1, result: &result, configCommitSHA: resolved.CommitSHA, target: &target}
 }
 
 func withResolvedPreviewError(err error, resolved deploymentconfig.ResolvedConfig, result previewPublishOutput) error {
 	if err == nil {
 		return nil
 	}
-	return &commandError{err: err, exitCode: 1, previewResult: &result, configCommitSHA: resolved.CommitSHA}
+	target := deploymentTargetFromConfig(resolved.Config)
+	return &commandError{err: err, exitCode: 1, previewResult: &result, configCommitSHA: resolved.CommitSHA, target: &target}
 }
 
 func previewFailureResult(args []string, err error, commandErr *commandError) previewPublishOutput {
@@ -119,6 +133,9 @@ func previewFailureResult(args []string, err error, commandErr *commandError) pr
 			result = *commandErr.previewResult
 		}
 		result.ConfigCommitSHA = commandErr.configCommitSHA
+		if commandErr.target != nil {
+			result.Target = commandErr.target
+		}
 	}
 	result.Operation = "preview publish"
 	result.Outcome = "failed"
@@ -140,11 +157,50 @@ func previewFailureResult(args []string, err error, commandErr *commandError) pr
 
 func encodeDeploymentResult(writer io.Writer, result publisher.Result, resolved deploymentconfig.ResolvedConfig) error {
 	return json.NewEncoder(writer).Encode(deploymentResultEnvelope{
-		Result: result, ConfigCommitSHA: resolved.CommitSHA,
+		Result: result, ConfigCommitSHA: resolved.CommitSHA, Target: deploymentTargetFromConfig(resolved.Config),
 	})
 }
 
-func reportConfigCommit(writer io.Writer, resolved deploymentconfig.ResolvedConfig) {
+func deploymentTargetFromConfig(config deploymentconfig.DeploymentConfig) deploymentTarget {
+	target := deploymentTarget{Provider: config.Provider}
+	switch config.Provider {
+	case "aws":
+		if config.AWS != nil {
+			target.Bucket, target.Region, target.AccountID = config.AWS.Bucket, config.AWS.Region, config.AWS.AccountID
+		}
+	case "cloudflare":
+		if config.Cloudflare != nil {
+			target.Bucket, target.AccountID = config.Cloudflare.Bucket, config.Cloudflare.AccountID
+		}
+	case "gcp-local":
+		if config.GCSLocal != nil {
+			target.Bucket = config.GCSLocal.Bucket
+		}
+	}
+	return target
+}
+
+func formatDeploymentTarget(config deploymentconfig.DeploymentConfig) string {
+	target := deploymentTargetFromConfig(config)
+	switch target.Provider {
+	case "local":
+		return "local filesystem storage"
+	case "aws":
+		if target.AccountID != "" {
+			return fmt.Sprintf("AWS S3 bucket %s (region %s, account %s)", target.Bucket, target.Region, target.AccountID)
+		}
+		return fmt.Sprintf("AWS S3 bucket %s (region %s)", target.Bucket, target.Region)
+	case "cloudflare":
+		return fmt.Sprintf("Cloudflare R2 bucket %s (account %s)", target.Bucket, target.AccountID)
+	case "gcp-local":
+		return fmt.Sprintf("local GCS bucket %s", target.Bucket)
+	default:
+		return target.Provider
+	}
+}
+
+func reportDeploymentConfig(writer io.Writer, resolved deploymentconfig.ResolvedConfig) {
+	fmt.Fprintf(writer, "Deployment target: %s\n", formatDeploymentTarget(resolved.Config))
 	if resolved.CommitSHA != "" {
 		fmt.Fprintf(writer, "Deployment config commit: %s\n", resolved.CommitSHA)
 	}
@@ -427,7 +483,7 @@ func runRegistryRegister(ctx context.Context, args []string, stdout, stderr io.W
 	default:
 		fmt.Fprintf(stdout, "Registered sites via %s.\n", resolved.Config.Provider)
 	}
-	reportConfigCommit(stdout, resolved)
+	reportDeploymentConfig(stdout, resolved)
 	return nil
 }
 
@@ -491,7 +547,7 @@ func runRegistryUnregister(ctx context.Context, args []string, stdout, stderr io
 	} else {
 		fmt.Fprintf(stdout, "Unregistered site %s via %s and removed %d objects.\n", *siteID, resolved.Config.Provider, result.FilesRemoved)
 	}
-	reportConfigCommit(stdout, resolved)
+	reportDeploymentConfig(stdout, resolved)
 	return nil
 }
 
@@ -586,7 +642,7 @@ func runLockCommand(ctx context.Context, command string, args []string, stdout, 
 		fmt.Fprintf(stdout, " (ETag %s)", result.Lock.ETag)
 	}
 	fmt.Fprintln(stdout, ".")
-	reportConfigCommit(stdout, resolved)
+	reportDeploymentConfig(stdout, resolved)
 	return nil
 }
 
@@ -637,12 +693,12 @@ func runAppDeploy(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	}
 	if result.Outcome == "planned" {
 		fmt.Fprintf(stdout, "App deploy plan for %s via %s: %d files; no writes.\n", result.Version, resolved.Config.Provider, len(result.Changes))
-		reportConfigCommit(stdout, resolved)
+		reportDeploymentConfig(stdout, resolved)
 		return nil
 	}
 	if result.Outcome == "no-op" {
 		fmt.Fprintf(stdout, "Artifact Pages web %s is already current via %s.\n", result.Version, resolved.Config.Provider)
-		reportConfigCommit(stdout, resolved)
+		reportDeploymentConfig(stdout, resolved)
 		return nil
 	}
 	fmt.Fprintf(stdout, "Deployed Artifact Pages web %s: %d files via %s.\n", result.Version, result.FilesPublished, resolved.Config.Provider)
@@ -652,7 +708,7 @@ func runAppDeploy(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	if result.SourceDirty {
 		fmt.Fprintln(stderr, "Warning: this web bundle was built from a source working tree with uncommitted changes.")
 	}
-	reportConfigCommit(stdout, resolved)
+	reportDeploymentConfig(stdout, resolved)
 	return nil
 }
 
@@ -720,7 +776,7 @@ func runSitePublish(ctx context.Context, args []string, stdout, stderr io.Writer
 			fmt.Fprintf(stdout, "Reconciled preview catalog: %d stale references pruned; %d groups retained.\n", pruned, previewChangeCount(result.PreviewChanges, "keep"))
 		}
 	}
-	reportConfigCommit(stdout, resolved)
+	reportDeploymentConfig(stdout, resolved)
 	return nil
 }
 
@@ -748,6 +804,11 @@ func changeCount(changes []publisher.Change, action string) int {
 }
 
 func newDeploymentBackend(ctx context.Context, config deploymentconfig.DeploymentConfig) (publisher.DeploymentBackend, error) {
+	var err error
+	config, err = config.WithDefaults()
+	if err != nil {
+		return nil, err
+	}
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}

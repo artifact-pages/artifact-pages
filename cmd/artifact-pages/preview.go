@@ -36,6 +36,7 @@ type previewPublishOutput struct {
 	Objects         []preview.PublicationObjectChange  `json:"objects"`
 	CatalogChanges  []preview.PublicationCatalogChange `json:"catalogChanges"`
 	ConfigCommitSHA string                             `json:"configCommitSha,omitempty"`
+	Target          *deploymentTarget                  `json:"target,omitempty"`
 	Error           string                             `json:"error,omitempty"`
 }
 
@@ -118,7 +119,7 @@ func runPreviewPublish(ctx context.Context, args []string, stdout, stderr io.Wri
 	}
 	buildResult, plan, err := publisher.BuildAndPlanPreview(ctx, backend, buildOptions, *dryRun)
 	if err != nil {
-		failure, outputErr := makePreviewPublishOutput(publicOrigin, buildResult, plan, *dryRun, resolved.CommitSHA)
+		failure, outputErr := makePreviewPublishOutput(publicOrigin, buildResult, plan, *dryRun, resolved)
 		if outputErr != nil {
 			return withResolvedError(err, resolved)
 		}
@@ -126,7 +127,7 @@ func runPreviewPublish(ctx context.Context, args []string, stdout, stderr io.Wri
 		failure.Error = err.Error()
 		return withResolvedPreviewError(err, resolved, failure)
 	}
-	output, err := makePreviewPublishOutput(publicOrigin, buildResult, plan, *dryRun, resolved.CommitSHA)
+	output, err := makePreviewPublishOutput(publicOrigin, buildResult, plan, *dryRun, resolved)
 	if err != nil {
 		return withExitCode(err, 2)
 	}
@@ -134,9 +135,7 @@ func runPreviewPublish(ctx context.Context, args []string, stdout, stderr io.Wri
 		return json.NewEncoder(stdout).Encode(output)
 	}
 	printPreviewPublishOutput(stdout, output)
-	if resolved.CommitSHA != "" {
-		reportConfigCommit(stdout, resolved)
-	}
+	reportDeploymentConfig(stdout, resolved)
 	return nil
 }
 
@@ -161,18 +160,19 @@ func validatePreviewPublicOrigin(value string) (string, error) {
 	return parsed.Scheme + "://" + parsed.Host, nil
 }
 
-func makePreviewPublishOutput(publicOrigin string, result preview.BuildResult, plan preview.PublicationPlan, dryRun bool, configCommitSHA string) (previewPublishOutput, error) {
+func makePreviewPublishOutput(publicOrigin string, result preview.BuildResult, plan preview.PublicationPlan, dryRun bool, resolved deploymentconfig.ResolvedConfig) (previewPublishOutput, error) {
 	groupListURL, err := previewGroupURL(publicOrigin, result.Site, result.Group.ID)
 	if err != nil {
 		return previewPublishOutput{}, err
 	}
+	target := deploymentTargetFromConfig(resolved.Config)
 	output := previewPublishOutput{
 		Operation: "preview publish", Site: result.Site, GroupID: result.Group.ID,
 		HeadSHA: result.Group.HeadSHA, PullRequestURL: result.Group.PRURL,
 		GroupListURL: groupListURL, Documents: []previewDocumentURL{},
 		Objects:         append([]preview.PublicationObjectChange(nil), plan.Objects...),
 		CatalogChanges:  append([]preview.PublicationCatalogChange(nil), plan.CatalogChanges...),
-		ConfigCommitSHA: configCommitSHA,
+		ConfigCommitSHA: resolved.CommitSHA, Target: &target,
 	}
 	if output.Objects == nil {
 		output.Objects = []preview.PublicationObjectChange{}

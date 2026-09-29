@@ -28,7 +28,7 @@ local:
   root: .local/storage
 ```
 
-AWS and Cloudflare targets use the same config locator and `artifact-pages app deploy` command. Their provider blocks name the bucket/account/zone and the environment variables that hold credentials; credential values stay outside the YAML file. See [configuration and command syntax](../specification.md#22-deployment-configuration-and-command-interface) for the provider fields and locator rules.
+AWS and Cloudflare targets use the same config locator and `artifact-pages app deploy` command. AWS derives an omitted bucket from its explicit account ID and region; Cloudflare defaults to the `artifact-pages` bucket and standard credential environment-variable names. Explicit target and environment-name overrides remain available, while credential values stay outside YAML. See [configuration and command syntax](../specification.md#22-deployment-configuration-and-command-interface) for the provider fields and locator rules.
 
 ## Deploy, upgrade, and roll back
 

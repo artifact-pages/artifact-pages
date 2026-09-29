@@ -149,7 +149,7 @@ test('Cloudflare caller composes preview retention with delivery on the same buc
   assert.match(exampleMain, /module\s+"preview_retention"\s*\{[\s\S]*?source\s*=\s*"\.\.\/\.\.\/\.\.\/infra\/cloudflare\/retention"[\s\S]*?account_id\s*=\s*var\.cloudflare_account_id[\s\S]*?bucket_name\s*=\s*var\.r2_bucket_name[\s\S]*?preview_retention_days\s*=\s*var\.preview_retention_days/u)
   assert.match(exampleVariables, /variable\s+"preview_retention_days"[\s\S]*?floor\(var\.preview_retention_days\)\s*==\s*var\.preview_retention_days/u)
   assert.match(exampleTerraformVars, /preview_retention_days\s*=\s*30/u)
-  assert.match(deploymentYaml, /previewRetentionDays:\s*30/u)
+  assert.doesNotMatch(deploymentYaml, /previewRetentionDays:/u)
   assert.match(deploymentYaml, /accessKeyIdEnv:\s*CF_R2_ACCESS_KEY_ID/u)
   assert.match(deploymentYaml, /secretAccessKeyEnv:\s*CF_R2_SECRET_ACCESS_KEY/u)
   assert.match(deploymentYaml, /sessionTokenEnv:\s*CF_R2_SESSION_TOKEN/u)

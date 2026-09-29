@@ -93,22 +93,21 @@ async function writeDeploymentConfig(profile, configPath, ports, sites = registr
   let targetSettings
   if (profile === 'aws') {
     targetSettings = [
-      'schemaVersion: 1', 'provider: aws', 'previewRetentionDays: 30', 'aws:',
+      'schemaVersion: 1', 'provider: aws', 'aws:',
       '  region: us-east-1', '  bucket: artifact-pages',
     ].join('\n')
   } else if (profile === 'cloudflare') {
     targetSettings = [
-      'schemaVersion: 1', 'provider: cloudflare', 'previewRetentionDays: 30', 'cloudflare:',
-      '  accountId: 0123456789abcdef0123456789abcdef', '  bucket: artifact-pages',
+      'schemaVersion: 1', 'provider: cloudflare', 'cloudflare:',
+      '  accountId: 0123456789abcdef0123456789abcdef',
       '  zoneId: abcdef0123456789abcdef0123456789', '  publicBaseURL: https://pages.example.test',
       `  r2Endpoint: http://127.0.0.1:${ports.minio}`,
       `  apiBaseURL: http://127.0.0.1:${ports.cloudflareAPI}/client/v4`,
-      '  accessKeyIdEnv: CF_R2_ACCESS_KEY_ID', '  secretAccessKeyEnv: CF_R2_SECRET_ACCESS_KEY',
-      '  sessionTokenEnv: CF_R2_SESSION_TOKEN', '  apiTokenEnv: CF_API_TOKEN',
+      '  sessionTokenEnv: CF_R2_SESSION_TOKEN',
     ].join('\n')
   } else {
     targetSettings = [
-      'schemaVersion: 1', 'provider: gcp-local', 'previewRetentionDays: 30', 'gcpLocal:',
+      'schemaVersion: 1', 'provider: gcp-local', 'gcpLocal:',
       `  endpoint: http://127.0.0.1:${ports.gcs}`, '  bucket: artifact-pages',
     ].join('\n')
   }

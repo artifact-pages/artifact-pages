@@ -8,7 +8,6 @@ import (
 func TestParseLocalObjectStorageProfiles(t *testing.T) {
 	validGCS := `schemaVersion: 1
 provider: gcp-local
-previewRetentionDays: 30
 gcpLocal:
   endpoint: http://127.0.0.1:4443
   bucket: artifact-pages
@@ -23,7 +22,6 @@ gcpLocal:
 
 	validCloudflare := `schemaVersion: 1
 provider: cloudflare
-previewRetentionDays: 30
 cloudflare:
   accountId: 0123456789abcdef0123456789abcdef
   bucket: artifact-pages

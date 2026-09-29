@@ -1,0 +1,8 @@
+schemaVersion: 1
+provider: cloudflare
+cloudflare:
+  accountId: "YOUR_CLOUDFLARE_ACCOUNT_ID"
+  zoneId: "YOUR_CLOUDFLARE_ZONE_ID"
+  publicBaseURL: https://artifacts.example.com
+  # bucket defaults to artifact-pages
+  # accessKeyIdEnv, secretAccessKeyEnv, and apiTokenEnv use their CLI defaults.

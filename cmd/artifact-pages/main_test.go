@@ -801,7 +801,13 @@ func TestCLIProcessHelper(t *testing.T) {
 
 func TestDeploymentResultReportsResolvedRemoteConfigCommit(t *testing.T) {
 	const sha = "0123456789abcdef0123456789abcdef01234567"
-	resolved := deploymentconfig.ResolvedConfig{CommitSHA: sha}
+	resolved := deploymentconfig.ResolvedConfig{
+		CommitSHA: sha,
+		Config: deploymentconfig.DeploymentConfig{
+			Provider: "aws",
+			AWS:      &deploymentconfig.AWSTarget{AccountID: "123456789012", Region: "us-east-1", Bucket: "artifact-pages-123456789012-us-east-1"},
+		},
+	}
 	result := publisher.Result{Operation: "site publish", Outcome: "planned", Changes: []publisher.Change{}}
 
 	var jsonOutput bytes.Buffer
@@ -812,17 +818,56 @@ func TestDeploymentResultReportsResolvedRemoteConfigCommit(t *testing.T) {
 	if err := json.Unmarshal(jsonOutput.Bytes(), &encoded); err != nil {
 		t.Fatalf("decode JSON result: %v", err)
 	}
+	target, ok := encoded["target"].(map[string]any)
+	if !ok || target["provider"] != "aws" || target["bucket"] != "artifact-pages-123456789012-us-east-1" || target["region"] != "us-east-1" || target["accountId"] != "123456789012" {
+		t.Fatalf("JSON target = %v, want effective AWS target", encoded["target"])
+	}
 	if encoded["configCommitSha"] != sha || encoded["operation"] != "site publish" {
-		t.Fatalf("JSON result = %v, want operation and resolved config SHA", encoded)
+		t.Fatalf("JSON result = %v, want operation, target, and resolved config SHA", encoded)
 	}
 	if _, nested := encoded["Result"]; nested {
 		t.Fatalf("JSON result unexpectedly nests operation fields: %v", encoded)
 	}
 
 	var textOutput bytes.Buffer
-	reportConfigCommit(&textOutput, resolved)
-	if textOutput.String() != "Deployment config commit: "+sha+"\n" {
-		t.Fatalf("text commit report = %q", textOutput.String())
+	reportDeploymentConfig(&textOutput, resolved)
+	wantText := "Deployment target: AWS S3 bucket artifact-pages-123456789012-us-east-1 (region us-east-1, account 123456789012)\nDeployment config commit: " + sha + "\n"
+	if textOutput.String() != wantText {
+		t.Fatalf("text deployment report = %q, want %q", textOutput.String(), wantText)
+	}
+}
+
+func TestDeploymentResultReportsCloudflareDefaultsWithoutCredentialNames(t *testing.T) {
+	config, err := deploymentconfig.Parse([]byte(`schemaVersion: 1
+provider: cloudflare
+cloudflare:
+  accountId: 0123456789abcdef0123456789abcdef
+  zoneId: abcdef0123456789abcdef0123456789
+  publicBaseURL: https://pages.example.test
+`))
+	if err != nil {
+		t.Fatalf("Parse(minimal Cloudflare config): %v", err)
+	}
+	resolved := deploymentconfig.ResolvedConfig{Config: config}
+	var output bytes.Buffer
+	if err := encodeDeploymentResult(&output, publisher.Result{Operation: "registry register", Outcome: "planned", Changes: []publisher.Change{}}, resolved); err != nil {
+		t.Fatalf("encodeDeploymentResult(): %v", err)
+	}
+	var encoded map[string]any
+	if err := json.Unmarshal(output.Bytes(), &encoded); err != nil {
+		t.Fatalf("decode JSON result: %v; output=%s", err, output.String())
+	}
+	target, ok := encoded["target"].(map[string]any)
+	if !ok || target["provider"] != "cloudflare" || target["bucket"] != "artifact-pages" || target["accountId"] != "0123456789abcdef0123456789abcdef" {
+		t.Fatalf("JSON target = %v, want resolved Cloudflare target", encoded["target"])
+	}
+	if strings.Contains(output.String(), "CF_R2_ACCESS_KEY_ID") || strings.Contains(output.String(), "CF_API_TOKEN") {
+		t.Fatalf("JSON output included credential environment names: %s", output.String())
+	}
+	var text bytes.Buffer
+	reportDeploymentConfig(&text, resolved)
+	if !strings.Contains(text.String(), "Cloudflare R2 bucket artifact-pages") {
+		t.Fatalf("text deployment output = %q, want effective default bucket", text.String())
 	}
 }
 
