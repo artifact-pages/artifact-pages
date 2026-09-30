@@ -8,6 +8,7 @@ node_modules/
 dist/
 coverage/
 .local/
+/artifact-pages
 /artifact-pages.cloudflare.yaml
 playwright-report/
 test-results/

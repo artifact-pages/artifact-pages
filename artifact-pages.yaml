@@ -1,4 +1,7 @@
 schemaVersion: 1
+provider: local
+local:
+  root: .local/public-site/storage
 sites:
   guide:
     name: Guide
