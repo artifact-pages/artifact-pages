@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CLI publish output concepts — Git Artifact Pages</title>
+  <style>
+    /* Neutral tokens follow web/src/styles.css. CLI status tones are restrained
+       proposal tokens: color marks state and action symbols, not whole rows. */
+    :root { color-scheme:dark; --bg:#0d0e10; --panel:#1b1e21; --terminal:#151719; --line:rgba(255,255,255,.09); --text:#eceef0; --muted:#9aa1a8; --quiet:#7f878f; --cyan:#b0bec8; --green:#adbfaf; --amber:#c5b99f; --red:#cdaaa6; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:14px/1.6 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { width:min(1450px,calc(100% - 48px)); margin:40px auto 64px; }
+    h1 { font-size:30px; letter-spacing:-.04em; margin:4px 0 8px; }
+    h2 { margin:0; font-size:18px; letter-spacing:-.02em; }
+    p { margin:0 0 14px; }
+    .eyebrow { color:var(--quiet); font-size:11px; letter-spacing:.12em; text-transform:uppercase; }
+    .lead { max-width:850px; color:var(--muted); }
+    .toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:9px; margin:25px 0; }
+    .toolbar-group { display:flex; flex-wrap:wrap; gap:5px; }
+    button { color:var(--muted); background:transparent; border:1px solid var(--line); border-radius:5px; padding:7px 11px; font:inherit; font-size:12px; cursor:pointer; }
+    button[aria-pressed="true"] { color:var(--text); background:#2b3035; border-color:#78838e; }
+    button:focus-visible { outline:2px solid var(--cyan); outline-offset:3px; }
+    label { margin-left:10px; font-size:12px; color:var(--muted); }
+    input { accent-color:#a6bbc9; }
+    .hint { color:var(--quiet); font-size:12px; margin-bottom:26px; }
+    .before { margin-bottom:30px; }
+    .before pre { margin-top:8px; background:var(--terminal); border:1px solid var(--line); padding:17px 20px; border-radius:7px; color:var(--muted); }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; align-items:start; }
+    .concept { min-width:0; }
+    .concept:last-child { grid-column:1/-1; }
+    .description { margin:5px 0 13px; color:var(--muted); font-size:13px; min-height:42px; }
+    .tag { color:var(--muted); font-size:11px; font-weight:500; margin-left:8px; white-space:nowrap; }
+    .terminal { border:1px solid var(--line); border-radius:7px; background:var(--terminal); overflow:hidden; }
+    .terminal-title { padding:7px 17px; border-bottom:1px solid #262b30; color:var(--quiet); font:11px ui-monospace,SFMono-Regular,Menlo,monospace; }
+    pre { margin:0; padding:20px; overflow-x:auto; font:12px/1.9 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; tab-size:2; }
+    .command { color:var(--muted); }
+    .strong { font-weight:700; color:var(--text); }
+    .dim { color:var(--quiet); }
+    .muted { color:var(--muted); }
+    .accent { color:var(--muted); }
+    .ok,.create { color:var(--green); }
+    .update,.dry { color:var(--amber); }
+    .remove,.error { color:var(--red); }
+    body.mono .accent,body.mono .ok,body.mono .create,body.mono .update,body.mono .dry,body.mono .remove,body.mono .error { color:var(--text); }
+    .tradeoff { color:var(--quiet); font-size:12px; margin:12px 0 0; }
+    .notes { margin-top:34px; border-top:1px solid var(--line); padding-top:20px; display:grid; grid-template-columns:1fr 1fr; gap:30px; color:var(--muted); font-size:13px; }
+    .notes h2 { margin-bottom:8px; font-size:15px; }
+    .notes ul { padding-left:18px; margin:0; }
+    @media(max-width:1000px) { .grid,.notes { grid-template-columns:1fr; } .concept:last-child { grid-column:auto; } }
+    @media(max-width:600px) { main { width:calc(100% - 24px); margin-top:24px; } h1 { font-size:24px; } pre { padding:14px; font-size:11px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Interface study · transcript mocks</p>
+    <h1>Publish output, with a clear hierarchy</h1>
+    <p class="lead">See which site and destination are selected, what changes, and whether the operation only inspected or actually synchronized files. Neutral text follows the existing application tokens; restrained color marks only action symbols and status labels.</p>
+    <div class="toolbar">
+      <div class="toolbar-group" aria-label="Operation state">
+        <button data-state="dry" aria-pressed="true">Dry run</button>
+        <button data-state="published" aria-pressed="false">Published</button>
+        <button data-state="noop" aria-pressed="false">Up to date</button>
+        <button data-state="failed" aria-pressed="false">Partial failure</button>
+      </div>
+      <div class="toolbar-group" aria-label="Example change set">
+        <button data-sample="updates" aria-pressed="true">5 updates</button>
+        <button data-sample="mixed" aria-pressed="false">Mixed changes</button>
+      </div>
+      <label><input id="color" type="checkbox" checked> Color</label>
+    </div>
+    <p class="hint">Examples are illustrative, based on the reported five-file publish. These controls do not execute the CLI. Toggle Color to inspect the plain-text fallback.</p>
+    <section class="before">
+      <h2>Current output</h2>
+      <pre>Plan for site ja via local: 0 creates, 5 updates, 0 removals.
+Preview catalog: 0 stale references to prune, 0 groups retained. No writes.
+Deployment target: local filesystem storage</pre>
+    </section>
+    <div class="grid">
+      <section class="concept">
+        <h2>A · Compact summary</h2>
+        <p class="description">A short result with aligned context and change counts. File paths stay out of the default output.</p>
+        <div class="terminal"><div class="terminal-title">Terminal · summary first</div><pre id="a"></pre></div>
+        <p class="tradeoff">Best for frequent runs and large sites. You need a separate detail mode to inspect individual changes.</p>
+      </section>
+      <section class="concept">
+        <h2>B · Change report <span class="tag">Recommended</span></h2>
+        <p class="description">The same header, followed by a bounded file change list. Artifacts and generated indexes have separate groups.</p>
+        <div class="terminal"><div class="terminal-title">Terminal · changes first</div><pre id="b"></pre></div>
+        <p class="tradeoff">Best for reviewing a publish before executing it. Show a limited number of paths by default; keep the complete list in JSON.</p>
+      </section>
+      <section class="concept">
+        <h2>C · Process and result</h2>
+        <p class="description">Visible phases while the command works, followed by the same change report as B. Finished phases remain readable.</p>
+        <div class="terminal"><div class="terminal-title">Terminal · proposed phase reporting</div><pre id="c"></pre></div>
+        <p class="tradeoff">Best for slow remote operations. The current publisher returns a final result only: this concept needs real phase events, not simulated progress or estimated percentages.</p>
+      </section>
+    </div>
+    <div class="notes">
+      <section><h2>Shared output rules</h2><ul>
+        <li>Neutral text for operations, paths, action labels, and result sentences. Low-chroma green, amber, and red only for state labels and action symbols.</li>
+        <li>Neutral colors use the existing dark-theme tokens in web/src/styles.css. Semantic CLI status tones are proposed here; they are not yet a shared terminal palette.</li>
+        <li>Keep action labels and symbols meaningful without color.</li>
+        <li>Show the actual local root, or the provider's bucket and relevant target context.</li>
+        <li>Show preview reconciliation when references are pruned or groups are retained; hide an entirely empty preview section.</li>
+        <li>Use “synced” for local and remote publication, rather than calling local copies uploads.</li>
+      </ul></section>
+      <section><h2>Terminal and automation behavior</h2><ul>
+        <li>Enable color only on a suitable interactive terminal; honor NO_COLOR.</li>
+        <li>Keep piped output free of ANSI escapes and animation.</li>
+        <li>Preserve the existing --format json result contract and exit codes.</li>
+        <li>Send live progress to stderr. Emit the final structured result on stdout.</li>
+        <li>Failures must not present planned paths as successfully synchronized. A failed publish can already have made partial writes.</li>
+      </ul></section>
+    </div>
+  </main>
+  <script>
+    const datasets = {
+      updates: [
+        ['update','_artifacts/ja/assets/site.css'],
+        ['update','_artifacts/ja/assets/site.js'],
+        ['update','_artifacts/ja/what-is-git-artifact-pages.html'],
+        ['update','_indexes/ja/index.json'],
+        ['update','_indexes/ja/meta.json']
+      ],
+      mixed: [
+        ['update','_artifacts/ja/assets/site.css'],
+        ['remove','_artifacts/ja/assets/obsolete.css'],
+        ['create','_artifacts/ja/getting-started.html'],
+        ['update','_indexes/ja/index.json'],
+        ['update','_indexes/ja/meta.json']
+      ]
+    };
+    let state = 'dry';
+    let sample = 'updates';
+    const escape = value => value.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+    const span = (kind, value) => `<span class="${kind}">${escape(value)}</span>`;
+    const styles = { create:['+','create'], update:['~','update'], remove:['-','remove'] };
+    function render() {
+      const files = state === 'noop' ? [] : datasets[sample];
+      const n = kind => files.filter(file => file[0] === kind).length;
+      const status = {dry:['dry','DRY RUN'],published:['ok','PUBLISHED'],noop:['ok','UP TO DATE'],failed:['error','FAILED']}[state];
+      const command = span('dim','$ ') + span('command','./artifact-pages site publish --site ja' + (state === 'dry' ? ' --dry-run' : ''));
+      const header = `${command}\n\n${span('accent','site publish')} ${span('strong','ja')}  ${span(...status)}\n\n`;
+      const context = `${span('dim','  Target')}    local · .local/public-site/storage\n`;
+      const marker = (action, symbol) => span(n(action) ? action : 'dim', symbol);
+      const counts = `  ${marker('create','+')} ${n('create')} create   ${marker('update','~')} ${n('update')} update   ${marker('remove','-')} ${n('remove')} remove\n`;
+      const footer = state === 'dry' ? span('muted','  Dry run complete. No writes.') : state === 'noop' ? span('muted','  Everything is up to date.') : state === 'published' ? span('muted',`  Synced ${n('create') + n('update')} files · removed ${n('remove')} stale files.`) : `  ${span('error','×')} Could not write _indexes/ja/index.json.\n${span('muted','  Some writes may have completed. Resolve the error and retry.')}\n${span('dim','  Provider detail: permission denied (illustrative error).')}`;
+      const list = prefix => files.filter(file => file[1].startsWith(prefix)).map(([action,path]) => {
+        const [symbol,kind] = styles[action];
+        return `  ${span(kind,symbol)} ${span('muted',action.padEnd(6))}  ${span('muted',path.substring(prefix.length))}`;
+      }).join('\n');
+      const detail = files.length && state !== 'failed' ? `\n${span('dim','  Artifacts · _artifacts/ja/')}\n${list('_artifacts/ja/')}\n\n${span('dim','  Indexes · _indexes/ja/')}\n${list('_indexes/ja/')}\n` : '';
+      document.getElementById('a').innerHTML = header + context + '\n' + (state === 'failed' ? '' : counts + '\n') + footer;
+      document.getElementById('b').innerHTML = header + context + '\n' + (state === 'failed' ? '' : counts) + detail + '\n' + footer;
+      const complete = name => `  ${span('dim','✓')} ${name}`;
+      let phases = [complete('Read registry and validate source'),complete('Build artifact index'),complete('Compare deployed files')];
+      if (state === 'dry') phases.push(`  ${span('dry','–')} Sync files and reconcile previews ${span('dim','(dry run: skipped)')}`);
+      if (state === 'published') phases.push(complete('Sync files, then index and metadata'),complete('Remove stale files and reconcile previews'));
+      if (state === 'noop') phases.push(`  ${span('dim','–')} Sync files ${span('dim','(no changes)')}`);
+      if (state === 'failed') phases.push(`  ${span('error','×')} Sync index and metadata`, `  ${span('dim','–')} Remove stale files ${span('dim','(not reached)')}`);
+      document.getElementById('c').innerHTML = header + context + '\n' + phases.join('\n') + '\n\n' + (state === 'failed' ? '' : counts) + detail + '\n' + footer;
+    }
+    document.querySelectorAll('[data-state]').forEach(button => button.addEventListener('click', () => {
+      state = button.dataset.state;
+      document.querySelectorAll('[data-state]').forEach(item => item.setAttribute('aria-pressed',String(item === button)));
+      render();
+    }));
+    document.querySelectorAll('[data-sample]').forEach(button => button.addEventListener('click', () => {
+      sample = button.dataset.sample;
+      document.querySelectorAll('[data-sample]').forEach(item => item.setAttribute('aria-pressed',String(item === button)));
+      render();
+    }));
+    document.getElementById('color').addEventListener('change', event => document.body.classList.toggle('mono',!event.target.checked));
+    render();
+  </script>
+</body>
+</html>

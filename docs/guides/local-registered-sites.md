@@ -79,6 +79,7 @@ artifact-pages site publish --site sre --source docs/artifacts --format json
 
 The dry-run reports creates, updates, and removals without writing. The publish updates the selected site's projection and leaves other registered site prefixes intact.
 
+Text output separates artifact changes from index changes and labels the result `DRY RUN`, `PUBLISHED`, or `UP TO DATE`. Each group shows at most 12 paths; `--format json` preserves the complete change list. Preview reconciliation counts appear only when there are preview references. Successful publishing reports files as synced, including for local storage. Muted semantic colors are used only on terminal output; redirected output and `NO_COLOR` are plain text. This is a final change report, not a live progress indicator. Failed operations keep the existing error output and do not print a successful report.
 
 ## Unregister
 

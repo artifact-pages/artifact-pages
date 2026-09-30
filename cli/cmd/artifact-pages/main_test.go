@@ -321,8 +321,8 @@ func TestRunSitePublishUsesLocalConfiguredBackend(t *testing.T) {
 	if err != nil || string(artifact) != "<title>Overview</title><h1>Overview</h1>" {
 		t.Fatalf("published local artifact = %q, err=%v", artifact, err)
 	}
-	if !strings.Contains(stdout.String(), "via local") {
-		t.Errorf("publish result should name provider without exposing storage paths: %q", stdout.String())
+	if !strings.Contains(stdout.String(), "Target    local · .local/storage") {
+		t.Errorf("publish report should identify the configured local target: %q", stdout.String())
 	}
 }
 
@@ -436,8 +436,9 @@ func TestRunSitePublishDryRunAndNoOpAreMachineReadable(t *testing.T) {
 		t.Fatalf("site publish text dry-run no-op exit code = %d, want 0; stdout=%s stderr=%s", exitCode, stdout, stderr)
 	}
 	for _, expected := range []string{
-		"Plan for site sre via local: 0 creates, 0 updates, 0 removals.",
-		"Preview catalog: 0 stale references to prune, 0 groups retained. No writes.",
+		"site publish sre  DRY RUN",
+		"+ 0 create   ~ 0 update   - 0 remove",
+		"Dry run complete. No writes.",
 	} {
 		if !strings.Contains(stdout, expected) {
 			t.Errorf("site publish text dry-run no-op output is missing %q:\n%s", expected, stdout)

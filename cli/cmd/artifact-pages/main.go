@@ -760,28 +760,7 @@ func runSitePublish(ctx context.Context, args []string, stdout, stderr io.Writer
 	if *format == "json" {
 		return encodeDeploymentResult(stdout, result, resolved)
 	}
-	switch result.Outcome {
-	case "planned":
-		fmt.Fprintf(stdout, "Plan for site %s via %s: %d creates, %d updates, %d removals.\n", *siteID, resolved.Config.Provider, changeCount(result.Changes, "create"), changeCount(result.Changes, "update"), changeCount(result.Changes, "remove"))
-		fmt.Fprintf(stdout, "Preview catalog: %d stale references to prune, %d groups retained. No writes.\n", previewChangeCount(result.PreviewChanges, "remove"), previewChangeCount(result.PreviewChanges, "keep"))
-	case "no-op":
-		if *dryRun {
-			fmt.Fprintf(stdout, "Plan for site %s via %s: %d creates, %d updates, %d removals.\n", *siteID, resolved.Config.Provider, changeCount(result.Changes, "create"), changeCount(result.Changes, "update"), changeCount(result.Changes, "remove"))
-			fmt.Fprintf(stdout, "Preview catalog: %d stale references to prune, %d groups retained. No writes.\n", previewChangeCount(result.PreviewChanges, "remove"), previewChangeCount(result.PreviewChanges, "keep"))
-		} else {
-			fmt.Fprintf(stdout, "Site %s is already up to date via %s.\n", *siteID, resolved.Config.Provider)
-			if retained := previewChangeCount(result.PreviewChanges, "keep"); retained > 0 {
-				fmt.Fprintf(stdout, "Preview catalog: %d groups retained; no stale references found.\n", retained)
-			}
-		}
-	default:
-		fmt.Fprintf(stdout, "Published site %s: %d files uploaded, %d stale files removed via %s.\n", *siteID, result.FilesPublished, result.FilesRemoved, resolved.Config.Provider)
-		if result.PreviewChanges != nil && len(*result.PreviewChanges) > 0 {
-			pruned := previewChangeCount(result.PreviewChanges, "remove")
-			fmt.Fprintf(stdout, "Reconciled preview catalog: %d stale references pruned; %d groups retained.\n", pruned, previewChangeCount(result.PreviewChanges, "keep"))
-		}
-	}
-	reportDeploymentConfig(stdout, resolved)
+	writeSitePublishReport(stdout, result, resolved, *dryRun, terminalColor(stdout))
 	return nil
 }
 
