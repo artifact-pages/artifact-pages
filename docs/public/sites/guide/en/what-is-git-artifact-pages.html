@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Git Artifact Pages publishes HTML and Markdown kept in Git as a static site readers can open by URL and search.">
+  <title>What is Git Artifact Pages?</title>
+  <script>document.documentElement.classList.add('js')</script>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../assets/site.css">
+  <script src="../assets/site.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <main id="main" class="wrap">
+    <nav class="lang-switch" aria-label="Language"><a href="../ja/what-is-git-artifact-pages.html" hreflang="ja" lang="ja">日本語</a><span aria-current="page">English</span></nav>
+    <section class="hero" aria-labelledby="hero-title">
+      <div>
+        <p class="eyebrow">From Git to a readable website</p>
+        <h1 id="hero-title">A reading place for <wbr>the work you keep in Git.</h1>
+        <p class="lead"><strong>Keep HTML and Markdown in Git, and read them by URL with search.</strong> Git Artifact Pages publishes documents managed in Git as a static site, giving readers one place to choose a site, find a page, and share a link.</p>
+      </div>
+      <div>
+        <div data-reader-demo="autoplay" role="group" aria-label="Reader demo: search, open a page, and switch sites with @">
+          <p class="demo-fallback">Readers pick pages from the sidebar, search with ⌘K / Ctrl K, and switch sites with @. (Enable JavaScript to see it in motion here.)</p>
+        </div>
+        <p class="note">The sample uses this guide's own pages plus illustrative examples.</p>
+      </div>
+    </section>
+
+    <div class="promises" aria-label="What it does">
+      <div class="promise"><span class="num">01</span><div><strong>Publish as is</strong><p>HTML and Markdown keep their filenames and extensions. URLs take the form <code>/site/file.html</code>, ready to share.</p></div></div>
+      <div class="promise"><span class="num">02</span><div><strong>A site per team</strong><p>Give each team or product its own reading space. One directory in one Git repository becomes one site.</p></div></div>
+      <div class="promise"><span class="num">03</span><div><strong>Find it fast</strong><p>Search pages with <kbd>⌘K</kbd> / <kbd>Ctrl K</kbd> and switch sites with <kbd>@</kbd>. The index is built at publish time.</p></div></div>
+    </div>
+
+    <div class="story-head" id="story">
+      <p class="eyebrow">How it works</p>
+      <h2>From publishing to reading</h2>
+    </div>
+
+    <div class="story">
+      <div class="story-copy">
+        <section class="chapter" id="step-1" data-step="1" aria-labelledby="step-1-title">
+          <span class="step-label">01 / DEPLOY THE APP <span class="role">Admin</span></span>
+          <h3 id="step-1-title">First, deploy the reader app.</h3>
+          <p>An admin deploys the static reader app (SPA) to the delivery target once. It is the shared entry point for every site. The command downloads and verifies a published web release, then writes only the application files.</p>
+          <div class="term" aria-label="Example app deploy commands">
+            <div class="term-head"><span>TERMINAL / ADMIN</span><button class="copy-btn" type="button">Copy</button></div>
+<pre><span class="c"># Review the plan first (writes nothing)</span>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">app deploy</span> --version x.y.z --dry-run</span>
+<span class="c"># Apply</span>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">app deploy</span> --version x.y.z</span></pre>
+          </div>
+          <p class="note">Replace <code>x.y.z</code> with a published release version. The delivery target comes from <code>--config</code> or the admin repository's <code>.artifact-pages.yaml</code>. Site indexes and documents are left untouched.</p>
+        </section>
+
+        <section class="chapter" id="step-2" data-step="2" aria-labelledby="step-2-title">
+          <span class="step-label">02 / REGISTER SITES <span class="role">Admin</span></span>
+          <h3 id="step-2-title">Next, register the sites.</h3>
+          <p><strong>A site per team is the usual starting point</strong>, and one team can split sites by product. Each site has an ID, a display name, a source Git repository (<code>owner/repo</code>), and a directory (<code>sourcePath</code>). The admin lists them in the config file and registers them. A site can be registered before it has any documents.</p>
+          <div class="term" aria-label="Example site registration config">
+            <div class="term-head"><span>.artifact-pages.yaml / ADMIN REPOSITORY</span></div>
+<pre><span class="k">sites</span>:
+  <span class="k">sre</span>:
+    <span class="k">name</span>: SRE
+    <span class="k">repository</span>: acme/sre-handbook
+    <span class="k">sourcePath</span>: docs/public
+  <span class="k">checkout</span>:
+    <span class="k">name</span>: Payments / Checkout
+    <span class="k">repository</span>: acme/checkout
+    <span class="k">sourcePath</span>: docs/artifacts
+  <span class="k">billing</span>:
+    <span class="k">name</span>: Payments / Billing
+    <span class="k">repository</span>: acme/billing
+    <span class="k">sourcePath</span>: docs/artifacts</pre>
+          </div>
+          <div class="term" aria-label="Example site registration commands">
+            <div class="term-head"><span>TERMINAL / ADMIN</span><button class="copy-btn" type="button">Copy</button></div>
+<pre><span class="p">$</span> <span data-copy>artifact-pages <span class="v">registry register</span> --dry-run</span>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">registry register</span></span></pre>
+          </div>
+          <p class="note">The <code>sites</code> mapping is the complete set of sites to register. A site removed from it is unregistered by the next <code>registry register</code>, and its published content is deleted. Delivery target (<code>provider</code>) settings are omitted here.</p>
+        </section>
+
+        <section class="chapter" id="step-3" data-step="3" aria-labelledby="step-3-title">
+          <span class="step-label">03 / PUBLISH FROM GIT <span class="role">Team repositories</span></span>
+          <h3 id="step-3-title">Publish from each Git repository to its site.</h3>
+          <p>Each team's Git repository publishes with an explicit site and source directory. Every publish builds the index and places HTML, Markdown, CSS, and images as they are.</p>
+          <div class="term" aria-label="Example site publish commands">
+            <div class="term-head"><span>TERMINAL / acme/checkout</span><button class="copy-btn" type="button">Copy</button></div>
+<pre><span class="c"># docs/artifacts to the checkout site</span>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site checkout --source docs/artifacts --dry-run</span>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site checkout --source docs/artifacts</span></pre>
+          </div>
+          <p class="note">Before writing, the publisher checks that the repository and directory match the registration on the delivery target. It never writes to another site. In practice, CI runs the same command on merge.</p>
+        </section>
+
+        <section class="chapter" id="step-4" data-step="4" aria-labelledby="step-4-title">
+          <span class="step-label">04 / OPEN AND FIND <span class="role">Reader</span></span>
+          <h3 id="step-4-title">Then read it at an ordinary URL.</h3>
+          <p>Readers just open a URL. While reading, <strong><kbd>⌘K</kbd> / <kbd>Ctrl K</kbd></strong> searches the current site's pages and headings, and <strong><kbd>@</kbd></strong> switches to another team's site.</p>
+          <div class="term" aria-label="How readers browse">
+            <div class="term-head"><span>BROWSER / READER</span></div>
+<pre><span class="p">→</span> https://&lt;delivery-domain&gt;/checkout/design/payment-flow.html
+<span class="c">⌘K / Ctrl K</span>   Search this site's pages and headings
+<span class="c">@</span>             Switch sites</pre>
+          </div>
+          <p class="note">URLs keep filenames and extensions, so links to documents can be shared as they are. <code>&lt;delivery-domain&gt;</code> is the address the admin chose for the delivery target.</p>
+        </section>
+      </div>
+
+      <aside class="diagram-panel" data-scene="1" aria-label="A diagram that grows with each publishing step">
+        <div class="diagram-head"><strong>Git → Web / Current setup</strong><span class="scene-count">01 / 04</span></div>
+        <div class="diagram-frame">
+          <svg viewBox="0 0 760 650" role="img" aria-labelledby="dg-title dg-desc">
+            <title id="dg-title">How Git Artifact Pages fits together</title>
+            <desc id="dg-desc">An admin deploys the shared reader app and registers sites per team or product. Each team's Git repository publishes to its own site. Finally, readers open a URL, search, and switch sites.</desc>
+            <defs><marker id="ah" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="none" stroke="currentColor" stroke-width="1.4"/></marker></defs>
+
+            <text class="d-label" x="170" y="40">DELIVERY · SHARED STATIC APP</text>
+            <rect class="d-dark" x="170" y="54" width="420" height="178" rx="14"/>
+            <rect class="d-logo" x="192" y="74" width="28" height="28" rx="6"/>
+            <text class="d-logo-t" x="201" y="94">G</text>
+            <text class="d-title" x="232" y="95">Git Artifact Pages</text>
+            <text class="d-sub2" x="193" y="132">Static reader app (SPA)</text>
+            <rect class="d-chip" x="193" y="146" width="92" height="22" rx="5"/><text class="d-chip-t" x="203" y="161">/index.html</text>
+            <rect class="d-chip" x="293" y="146" width="80" height="22" rx="5"/><text class="d-chip-t" x="303" y="161">/assets/*</text>
+            <text class="d-sub" x="193" y="208">CDN / edge + object storage</text>
+            <g class="scene s2"><rect class="d-chip" x="404" y="100" width="164" height="22" rx="5"/><text class="d-chip-t" x="414" y="115">/_indexes/sites.json</text></g>
+            <g class="scene s3"><rect class="d-chip" x="404" y="128" width="164" height="22" rx="5"/><text class="d-chip-t" x="414" y="143">/_indexes/&lt;site&gt;/*</text><rect class="d-chip" x="404" y="156" width="164" height="22" rx="5"/><text class="d-chip-t" x="414" y="171">/_artifacts/&lt;site&gt;/*</text></g>
+
+            <g class="scene s2">
+              <path class="d-arrow" d="M380 272 V238" marker-end="url(#ah)"/>
+              <rect class="d-cmd" x="392" y="240" width="152" height="24" rx="12"/><text class="d-cmd-t" x="404" y="256">registry register</text>
+              <rect class="d-panel" x="40" y="272" width="680" height="172" rx="13"/>
+              <text class="d-label" x="64" y="300">SITE REGISTRY · REGISTERED SITES</text>
+              <text class="d-status" x="696" y="300" text-anchor="end">Built from the admin repository's config</text>
+              <rect class="site-card" x="64" y="316" width="200" height="106" rx="8"/>
+              <rect class="site-card" x="280" y="316" width="200" height="106" rx="8"/>
+              <rect class="site-card" x="496" y="316" width="200" height="106" rx="8"/>
+              <text class="d-site" x="84" y="351">sre</text><text class="d-name" x="84" y="375">SRE</text>
+              <text class="d-site" x="300" y="351">checkout</text><text class="d-name" x="300" y="375">Payments / Checkout</text>
+              <text class="d-site" x="516" y="351">billing</text><text class="d-name" x="516" y="375">Payments / Billing</text>
+              <text class="d-status st-a" x="84" y="403">Registered · not published</text><text class="d-status-ok st-b" x="84" y="403">✓ Published</text>
+              <text class="d-status st-a" x="300" y="403">Registered · not published</text><text class="d-status-ok st-b" x="300" y="403">✓ Published</text>
+              <text class="d-status st-a" x="516" y="403">Registered · not published</text><text class="d-status-ok st-b" x="516" y="403">✓ Published</text>
+            </g>
+
+            <g class="scene s3">
+              <g class="sat"><path class="d-arrow" d="M164 522 V428" marker-end="url(#ah)"/><rect class="d-cmd" x="110" y="464" width="108" height="24" rx="12"/><text class="d-cmd-t" x="122" y="480">site publish</text><rect class="d-card" x="64" y="522" width="200" height="82" rx="8"/><text class="d-repo" x="82" y="553">acme/sre-handbook</text><text class="d-repo-sub" x="82" y="577">docs/public</text></g>
+              <g class="sat"><path class="d-arrow" d="M380 522 V428" marker-end="url(#ah)"/><rect class="d-cmd" x="326" y="464" width="108" height="24" rx="12"/><text class="d-cmd-t" x="338" y="480">site publish</text><rect class="d-card" x="280" y="522" width="200" height="82" rx="8"/><text class="d-repo" x="298" y="553">acme/checkout</text><text class="d-repo-sub" x="298" y="577">docs/artifacts</text></g>
+              <g class="sat"><path class="d-arrow" d="M596 522 V428" marker-end="url(#ah)"/><rect class="d-cmd" x="542" y="464" width="108" height="24" rx="12"/><text class="d-cmd-t" x="554" y="480">site publish</text><rect class="d-card" x="496" y="522" width="200" height="82" rx="8"/><text class="d-repo" x="514" y="553">acme/billing</text><text class="d-repo-sub" x="514" y="577">docs/artifacts</text></g>
+              <text class="d-note" x="64" y="636">↑ Each team's Git repository. It writes only to its own site.</text>
+            </g>
+
+            <g class="scene s4">
+              <path class="d-arrow" d="M594 132 H616" marker-end="url(#ah)"/>
+              <rect class="d-person" x="620" y="76" width="116" height="118" rx="10"/>
+              <circle cx="678" cy="110" r="10" fill="currentColor" opacity=".35"/>
+              <path d="M660 142 Q678 122 696 142 Z" fill="currentColor" opacity=".35"/>
+              <text class="d-repo" x="678" y="172" text-anchor="middle">Reader</text>
+              <rect class="d-cmd" x="626" y="204" width="104" height="22" rx="11"/><text class="d-cmd-t" x="678" y="219" text-anchor="middle">⌘K · @</text>
+            </g>
+          </svg>
+        </div>
+        <div class="diagram-foot">
+          <div class="diagram-caption"><span>The shared reader app becomes everyone's place to read.</span><span>Register a site for each team or product.</span><span>Each team's repository sends its work to its own site.</span><span>Readers open a URL, search, and move on to the next document.</span></div>
+          <div class="scene-dots" aria-label="Jump to a step"><a href="#step-1" aria-label="Step 1"></a><a href="#step-2" aria-label="Step 2"></a><a href="#step-3" aria-label="Step 3"></a><a href="#step-4" aria-label="Step 4"></a></div>
+        </div>
+      </aside>
+    </div>
+
+    <section class="section finale" id="result" aria-labelledby="result-title">
+      <div class="section-head">
+        <div><p class="eyebrow">Example</p><h2 id="result-title">What a team's site looks like.</h2></div>
+        <p>The home page of the payments team's <code>checkout</code> site (an illustrative example). Press <kbd>⌘K</kbd>, then <kbd>@</kbd>, to move to another team's site.</p>
+      </div>
+      <figure class="app-mock" data-app-mock aria-label="The reader app showing a site's home page (sample)">
+        <div class="am-side">
+          <div class="am-site"><b data-am="mark">P</b><span data-am="name">Payments / Checkout</span><i>⌄</i></div>
+          <div class="am-filter"><span>⌕ Filter navigation</span><kbd>⌘K</kbd></div>
+          <div class="am-h">Browse</div>
+          <div data-am="tree">
+            <div class="am-row am-dir">design/</div>
+            <div class="am-row am-file">payment-flow.html</div>
+            <div class="am-row am-file">refund-states.md</div>
+            <div class="am-row am-dir">incidents/</div>
+            <div class="am-row am-file">2026-09-12-timeout.html</div>
+            <div class="am-row am-dir">runbooks/</div>
+            <div class="am-row am-file">on-call.md</div>
+          </div>
+        </div>
+        <div class="am-main">
+          <div class="am-bar"><span data-am="crumb">/checkout</span><span class="am-actions"><span>Contents</span><span>Details</span></span></div>
+          <div class="am-stage">
+            <div class="am-home">
+              <div class="am-identity"><b data-am="mark">P</b><span data-am="id">/checkout</span></div>
+              <p class="am-title" data-am="name">Payments / Checkout</p>
+              <p class="am-lede" data-am="lede">4 published artifacts. Browse the latest work or find an artifact by title or path.</p>
+              <div class="am-search"><span data-am="search">⌕ Search artifacts in Payments / Checkout</span><kbd>⌘ K</kbd></div>
+              <div class="am-h">Recently updated</div>
+              <div class="am-list" data-am="recent">
+                <div class="am-item"><span><strong>Payment flow design</strong><small>design/payment-flow.html</small></span><time>Sep 28</time></div>
+                <div class="am-item"><span><strong>Sep 12 payment timeout</strong><small>incidents/2026-09-12-timeout.html</small></span><time>Sep 14</time></div>
+                <div class="am-item"><span><strong>Refund state transitions</strong><small>design/refund-states.md</small></span><time>Sep 9</time></div>
+                <div class="am-item"><span><strong>On-call runbook</strong><small>runbooks/on-call.md</small></span><time>Aug 30</time></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </figure>
+      <div class="finale-prompt">
+        <p><strong>To change sites, press <kbd>⌘K</kbd> / <kbd>Ctrl K</kbd>, then <kbd>@</kbd>.</strong> Sites for each team and product are listed; choose one to open its home page.</p>
+        <button class="btn ghost" type="button" data-app-mock-open>Try it here</button>
+      </div>
+    </section>
+
+    <footer class="foot"><strong>Git is the source. The web is where you read.</strong><p>Search, navigation, and pins exist for reading; content changes happen in Git. HTML is treated as a document from a trusted publisher, and viewer access control is configured at the delivery edge. The teams and repositories in the diagrams and config (<code>acme/…</code>) are illustrative.</p></footer>
+  </main>
+</body>
+</html>

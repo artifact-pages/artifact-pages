@@ -1,7 +1,7 @@
 schemaVersion: 1
 sites:
-  en:
-    name: English
-    description: English-language product documentation for Git Artifact Pages.
+  guide:
+    name: Guide
+    description: Adopt, publish, and read with Git Artifact Pages. 導入・公開・閲覧のガイド。
     repository: tasuku43/git-artifact-pages
-    sourcePath: docs/public/sites/en
+    sourcePath: docs/public/sites/guide

@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Git Artifact Pages は、Gitで管理しているHTMLやMarkdownを、URLで読めて検索できる静的サイトとして公開する仕組みです。">
+  <title>Git Artifact Pages とは</title>
+  <script>document.documentElement.classList.add('js')</script>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../assets/site.css">
+  <script src="../assets/site.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">本文へ移動</a>
+  <main id="main" class="wrap">
+    <nav class="lang-switch" aria-label="言語"><span aria-current="page">日本語</span><a href="../en/what-is-git-artifact-pages.html" hreflang="en" lang="en">English</a></nav>
+    <section class="hero" aria-labelledby="hero-title">
+      <div>
+        <p class="eyebrow">From Git to a readable website</p>
+        <h1 id="hero-title">Gitにある成果物を、<wbr>読むための場所へ。</h1>
+        <p class="lead"><strong>HTMLもMarkdownも、Gitに置いたまま、URLで読めて検索できる。</strong> Git Artifact Pages は、Gitで管理している文書を静的なサイトとして公開し、サイトを選び、ページを探し、リンクで共有できる閲覧体験を届けます。</p>
+      </div>
+      <div>
+        <div data-reader-demo="autoplay" role="group" aria-label="閲覧画面のデモ：検索してページを開き、@ でサイトを切り替える">
+          <p class="demo-fallback">読者は、サイドバーからページを選び、⌘K / Ctrl K の検索でページを探し、@ でサイトを切り替えます（JavaScriptを有効にすると、ここで動きを確認できます）。</p>
+        </div>
+        <p class="note">画面は、このガイド自身のページと説明用の例で構成した見本です。</p>
+      </div>
+    </section>
+
+    <div class="promises" aria-label="できること">
+      <div class="promise"><span class="num">01</span><div><strong>そのまま公開</strong><p>HTMLとMarkdownを、ファイル名と拡張子ごと。URLは <code>/サイト/ファイル名.html</code> の形で、そのまま共有できます。</p></div></div>
+      <div class="promise"><span class="num">02</span><div><strong>チームごとのサイト</strong><p>チームやプロダクトごとに、独立した閲覧先を持てます。1つのGitリポジトリのディレクトリが、1つのサイトになります。</p></div></div>
+      <div class="promise"><span class="num">03</span><div><strong>すぐ見つける</strong><p>ページは <kbd>⌘K</kbd> / <kbd>Ctrl K</kbd> で検索、<kbd>@</kbd> でサイトを切り替え。索引は公開時に作られます。</p></div></div>
+    </div>
+
+    <div class="story-head" id="story">
+      <p class="eyebrow">How it works</p>
+      <h2>公開から閲覧までの流れ</h2>
+    </div>
+
+    <div class="story">
+      <div class="story-copy">
+        <section class="chapter" id="step-1" data-step="1" aria-labelledby="step-1-title">
+          <span class="step-label">01 / DEPLOY THE APP <span class="role">管理者</span></span>
+          <h3 id="step-1-title">まず、読むためのアプリを置く。</h3>
+          <p>管理者が、静的な閲覧アプリ（SPA）を配信先へ一度だけデプロイします。これがすべてのサイトに共通する入口です。公開済みのWebリリースを取得して検証してから、アプリ本体のファイルだけを書き込みます。</p>
+          <div class="term" aria-label="アプリのデプロイコマンド例">
+            <div class="term-head"><span>TERMINAL / ADMIN</span><button class="copy-btn" type="button">コピー</button></div>
+<pre><span class="c"># まず変更計画だけ確認（何も書き込みません）</span>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">app deploy</span> --version x.y.z --dry-run</span>
+<span class="c"># 反映</span>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">app deploy</span> --version x.y.z</span></pre>
+          </div>
+          <p class="note"><code>x.y.z</code> には公開済みリリースのバージョンを指定します。配信先の設定は <code>--config</code>、または管理リポジトリの <code>.artifact-pages.yaml</code> から解決されます。サイトの索引や文書には触れません。</p>
+        </section>
+
+        <section class="chapter" id="step-2" data-step="2" aria-labelledby="step-2-title">
+          <span class="step-label">02 / REGISTER SITES <span class="role">管理者</span></span>
+          <h3 id="step-2-title">次に、サイトを登録する。</h3>
+          <p>サイトは、<strong>チームごとに持つのが基本</strong>です。同じチームでも、プロダクトごとに分けられます。サイトには、ID、表示名、元になるGitリポジトリ（<code>owner/repo</code>）とディレクトリ（<code>sourcePath</code>）があり、管理者が設定ファイルに書いて登録します。まだ文書がなくても登録できます。</p>
+          <div class="term" aria-label="サイト登録の設定例">
+            <div class="term-head"><span>.artifact-pages.yaml / 管理リポジトリ</span></div>
+<pre><span class="k">sites</span>:
+  <span class="k">sre</span>:
+    <span class="k">name</span>: SREチーム
+    <span class="k">repository</span>: acme/sre-handbook
+    <span class="k">sourcePath</span>: docs/public
+  <span class="k">checkout</span>:
+    <span class="k">name</span>: 決済チーム / Checkout
+    <span class="k">repository</span>: acme/checkout
+    <span class="k">sourcePath</span>: docs/artifacts
+  <span class="k">billing</span>:
+    <span class="k">name</span>: 決済チーム / Billing
+    <span class="k">repository</span>: acme/billing
+    <span class="k">sourcePath</span>: docs/artifacts</pre>
+          </div>
+          <div class="term" aria-label="サイト登録コマンド例">
+            <div class="term-head"><span>TERMINAL / ADMIN</span><button class="copy-btn" type="button">コピー</button></div>
+<pre><span class="p">$</span> <span data-copy>artifact-pages <span class="v">registry register</span> --dry-run</span>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">registry register</span></span></pre>
+          </div>
+          <p class="note"><code>sites</code> 全体が「登録するサイトの完全な一覧」です。ここから外したサイトは、次の <code>registry register</code> で登録解除され、公開済みの内容も削除されます。配信先（<code>provider</code>）の設定は省略しています。</p>
+        </section>
+
+        <section class="chapter" id="step-3" data-step="3" aria-labelledby="step-3-title">
+          <span class="step-label">03 / PUBLISH FROM GIT <span class="role">各チームのリポジトリ</span></span>
+          <h3 id="step-3-title">各Gitリポジトリから、担当サイトへ公開する。</h3>
+          <p>各チームのGitリポジトリが、担当するサイトと公開するディレクトリを明示して公開します。公開のたびに索引を作り、HTMLとMarkdown、CSSや画像をそのまま配置します。</p>
+          <div class="term" aria-label="サイト公開コマンド例">
+            <div class="term-head"><span>TERMINAL / acme/checkout</span><button class="copy-btn" type="button">コピー</button></div>
+<pre><span class="c"># docs/artifacts を、サイト checkout へ</span>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site checkout --source docs/artifacts --dry-run</span>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site checkout --source docs/artifacts</span></pre>
+          </div>
+          <p class="note">書き込む前に、配信先に登録されたリポジトリ・ディレクトリと一致するかを確認します。他のサイトには書き込みません。実際の運用では、同じコマンドをマージ時にCIから実行します。</p>
+        </section>
+
+        <section class="chapter" id="step-4" data-step="4" aria-labelledby="step-4-title">
+          <span class="step-label">04 / OPEN AND FIND <span class="role">読者</span></span>
+          <h3 id="step-4-title">そして、普通のURLで読む。</h3>
+          <p>読者はURLを開くだけです。読んでいる途中でも <strong><kbd>⌘K</kbd> / <kbd>Ctrl K</kbd></strong> で、いまのサイトのページや見出しを検索できます。<strong><kbd>@</kbd></strong> を打つと、ほかのチームのサイトへ切り替えられます。</p>
+          <div class="term" aria-label="閲覧のしかた">
+            <div class="term-head"><span>BROWSER / READER</span></div>
+<pre><span class="p">→</span> https://&lt;配信ドメイン&gt;/checkout/design/payment-flow.html
+<span class="c">⌘K / Ctrl K</span>   このサイトのページと見出しを検索
+<span class="c">@</span>             サイトを切り替え</pre>
+          </div>
+          <p class="note">URLはファイル名と拡張子を保持するので、文書へのリンクをそのまま共有できます。<code>&lt;配信ドメイン&gt;</code> は、管理者が配信先に選んだアドレスです。</p>
+        </section>
+      </div>
+
+      <aside class="diagram-panel" data-scene="1" aria-label="公開の流れが段階的に増える図">
+        <div class="diagram-head"><strong>Git → Web / いま見えている構成</strong><span class="scene-count">01 / 04</span></div>
+        <div class="diagram-frame">
+          <svg viewBox="0 0 760 650" role="img" aria-labelledby="dg-title dg-desc">
+            <title id="dg-title">Git Artifact Pages の構成</title>
+            <desc id="dg-desc">管理者が共通の閲覧アプリをデプロイし、チームやプロダクトごとのサイトを登録する。各チームのGitリポジトリはそれぞれの担当サイトへ公開する。最後に読者がURLを開き、検索してサイトを切り替える。</desc>
+            <defs><marker id="ah" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="none" stroke="currentColor" stroke-width="1.4"/></marker></defs>
+
+            <text class="d-label" x="170" y="40">配信 · 共通の静的アプリ</text>
+            <rect class="d-dark" x="170" y="54" width="420" height="178" rx="14"/>
+            <rect class="d-logo" x="192" y="74" width="28" height="28" rx="6"/>
+            <text class="d-logo-t" x="201" y="94">G</text>
+            <text class="d-title" x="232" y="95">Git Artifact Pages</text>
+            <text class="d-sub2" x="193" y="132">静的な閲覧アプリ（SPA）</text>
+            <rect class="d-chip" x="193" y="146" width="92" height="22" rx="5"/><text class="d-chip-t" x="203" y="161">/index.html</text>
+            <rect class="d-chip" x="293" y="146" width="80" height="22" rx="5"/><text class="d-chip-t" x="303" y="161">/assets/*</text>
+            <text class="d-sub" x="193" y="208">CDN / エッジ ＋ オブジェクトストレージ</text>
+            <g class="scene s2"><rect class="d-chip" x="404" y="100" width="164" height="22" rx="5"/><text class="d-chip-t" x="414" y="115">/_indexes/sites.json</text></g>
+            <g class="scene s3"><rect class="d-chip" x="404" y="128" width="164" height="22" rx="5"/><text class="d-chip-t" x="414" y="143">/_indexes/&lt;site&gt;/*</text><rect class="d-chip" x="404" y="156" width="164" height="22" rx="5"/><text class="d-chip-t" x="414" y="171">/_artifacts/&lt;site&gt;/*</text></g>
+
+            <g class="scene s2">
+              <path class="d-arrow" d="M380 272 V238" marker-end="url(#ah)"/>
+              <rect class="d-cmd" x="392" y="240" width="152" height="24" rx="12"/><text class="d-cmd-t" x="404" y="256">registry register</text>
+              <rect class="d-panel" x="40" y="272" width="680" height="172" rx="13"/>
+              <text class="d-label" x="64" y="300">サイト一覧 · 登録されたサイト</text>
+              <text class="d-status" x="696" y="300" text-anchor="end">管理リポジトリの設定ファイルから作られます</text>
+              <rect class="site-card" x="64" y="316" width="200" height="106" rx="8"/>
+              <rect class="site-card" x="280" y="316" width="200" height="106" rx="8"/>
+              <rect class="site-card" x="496" y="316" width="200" height="106" rx="8"/>
+              <text class="d-site" x="84" y="351">sre</text><text class="d-name" x="84" y="375">SREチーム</text>
+              <text class="d-site" x="300" y="351">checkout</text><text class="d-name" x="300" y="375">決済チーム / Checkout</text>
+              <text class="d-site" x="516" y="351">billing</text><text class="d-name" x="516" y="375">決済チーム / Billing</text>
+              <text class="d-status st-a" x="84" y="403">登録済み · 未公開</text><text class="d-status-ok st-b" x="84" y="403">✓ 公開済み</text>
+              <text class="d-status st-a" x="300" y="403">登録済み · 未公開</text><text class="d-status-ok st-b" x="300" y="403">✓ 公開済み</text>
+              <text class="d-status st-a" x="516" y="403">登録済み · 未公開</text><text class="d-status-ok st-b" x="516" y="403">✓ 公開済み</text>
+            </g>
+
+            <g class="scene s3">
+              <g class="sat"><path class="d-arrow" d="M164 522 V428" marker-end="url(#ah)"/><rect class="d-cmd" x="110" y="464" width="108" height="24" rx="12"/><text class="d-cmd-t" x="122" y="480">site publish</text><rect class="d-card" x="64" y="522" width="200" height="82" rx="8"/><text class="d-repo" x="82" y="553">acme/sre-handbook</text><text class="d-repo-sub" x="82" y="577">docs/public</text></g>
+              <g class="sat"><path class="d-arrow" d="M380 522 V428" marker-end="url(#ah)"/><rect class="d-cmd" x="326" y="464" width="108" height="24" rx="12"/><text class="d-cmd-t" x="338" y="480">site publish</text><rect class="d-card" x="280" y="522" width="200" height="82" rx="8"/><text class="d-repo" x="298" y="553">acme/checkout</text><text class="d-repo-sub" x="298" y="577">docs/artifacts</text></g>
+              <g class="sat"><path class="d-arrow" d="M596 522 V428" marker-end="url(#ah)"/><rect class="d-cmd" x="542" y="464" width="108" height="24" rx="12"/><text class="d-cmd-t" x="554" y="480">site publish</text><rect class="d-card" x="496" y="522" width="200" height="82" rx="8"/><text class="d-repo" x="514" y="553">acme/billing</text><text class="d-repo-sub" x="514" y="577">docs/artifacts</text></g>
+              <text class="d-note" x="64" y="636">↑ 各チームのGitリポジトリ。自分の担当サイトにだけ書き込みます。</text>
+            </g>
+
+            <g class="scene s4">
+              <path class="d-arrow" d="M594 132 H616" marker-end="url(#ah)"/>
+              <rect class="d-person" x="620" y="76" width="116" height="118" rx="10"/>
+              <circle cx="678" cy="110" r="10" fill="currentColor" opacity=".35"/>
+              <path d="M660 142 Q678 122 696 142 Z" fill="currentColor" opacity=".35"/>
+              <text class="d-repo" x="678" y="172" text-anchor="middle">読者</text>
+              <rect class="d-cmd" x="626" y="204" width="104" height="22" rx="11"/><text class="d-cmd-t" x="678" y="219" text-anchor="middle">⌘K · @</text>
+            </g>
+          </svg>
+        </div>
+        <div class="diagram-foot">
+          <div class="diagram-caption"><span>共通の閲覧アプリが、みんなの読む場所になります。</span><span>チームやプロダクトごとに、公開先のサイトを登録します。</span><span>各チームのリポジトリが、自分のサイトへ成果物を送ります。</span><span>読者はURLを開き、検索して、次の文書へ進みます。</span></div>
+          <div class="scene-dots" aria-label="場面へ移動"><a href="#step-1" aria-label="場面1へ"></a><a href="#step-2" aria-label="場面2へ"></a><a href="#step-3" aria-label="場面3へ"></a><a href="#step-4" aria-label="場面4へ"></a></div>
+        </div>
+      </aside>
+    </div>
+
+    <section class="section finale" id="result" aria-labelledby="result-title">
+      <div class="section-head">
+        <div><p class="eyebrow">Example</p><h2 id="result-title">チームのサイトを開くと、こう見えます。</h2></div>
+        <p>決済チームの <code>checkout</code> サイトのトップページ（説明用の例）。<kbd>⌘K</kbd> のあと <kbd>@</kbd> で、ほかのチームのサイトへ移れます。</p>
+      </div>
+      <figure class="app-mock" data-app-mock aria-label="閲覧アプリでサイトのトップページを開いた画面（見本）">
+        <div class="am-side">
+          <div class="am-site"><b data-am="mark">決</b><span data-am="name">決済チーム / Checkout</span><i>⌄</i></div>
+          <div class="am-filter"><span>⌕ Filter navigation</span><kbd>⌘K</kbd></div>
+          <div class="am-h">Browse</div>
+          <div data-am="tree">
+            <div class="am-row am-dir">design/</div>
+            <div class="am-row am-file">payment-flow.html</div>
+            <div class="am-row am-file">refund-states.md</div>
+            <div class="am-row am-dir">incidents/</div>
+            <div class="am-row am-file">2026-09-12-timeout.html</div>
+            <div class="am-row am-dir">runbooks/</div>
+            <div class="am-row am-file">on-call.md</div>
+          </div>
+        </div>
+        <div class="am-main">
+          <div class="am-bar"><span data-am="crumb">/checkout</span><span class="am-actions"><span>Contents</span><span>Details</span></span></div>
+          <div class="am-stage">
+            <div class="am-home">
+              <div class="am-identity"><b data-am="mark">決</b><span data-am="id">/checkout</span></div>
+              <p class="am-title" data-am="name">決済チーム / Checkout</p>
+              <p class="am-lede" data-am="lede">4 published artifacts. Browse the latest work or find an artifact by title or path.</p>
+              <div class="am-search"><span data-am="search">⌕ Search artifacts in 決済チーム / Checkout</span><kbd>⌘ K</kbd></div>
+              <div class="am-h">Recently updated</div>
+              <div class="am-list" data-am="recent">
+                <div class="am-item"><span><strong>決済フロー設計</strong><small>design/payment-flow.html</small></span><time>Sep 28</time></div>
+                <div class="am-item"><span><strong>9/12 決済タイムアウト障害</strong><small>incidents/2026-09-12-timeout.html</small></span><time>Sep 14</time></div>
+                <div class="am-item"><span><strong>返金ステータスの遷移</strong><small>design/refund-states.md</small></span><time>Sep 9</time></div>
+                <div class="am-item"><span><strong>オンコール手順</strong><small>runbooks/on-call.md</small></span><time>Aug 30</time></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </figure>
+      <div class="finale-prompt">
+        <p><strong>サイトを移るときは、<kbd>⌘K</kbd> / <kbd>Ctrl K</kbd> のあと <kbd>@</kbd>。</strong> チームやプロダクトごとのサイトが並び、選ぶとそのサイトのトップページが開きます。</p>
+        <button class="btn ghost" type="button" data-app-mock-open>この画面で試す</button>
+      </div>
+    </section>
+
+    <footer class="foot"><strong>Gitが正本。Webは読む場所。</strong><p>検索、ナビゲーション、ピン留めは閲覧体験のためのもので、内容の変更はGitで行います。HTMLは信頼できる公開元の文書として扱い、閲覧者のアクセス制御は配信側で設定します。図や設定に出てくるチーム・リポジトリ（<code>acme/…</code>）は説明用の例です。</p></footer>
+  </main>
+</body>
+</html>
