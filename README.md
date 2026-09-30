@@ -90,6 +90,8 @@ For a local registry and separate satellite checkout workflow, see [Local regist
 
 For package-level build tasks and explicit local/Cloudflare publishing shortcuts, see [Development tasks](docs/guides/taskfile.md).
 
+For consistent human-readable results, dry-run change lists, and failure guidance across all CLI operations, see [CLI output](docs/guides/cli-output.md).
+
 The default deployment config is `artifact-pages.yaml` in the current working directory. Selection precedence is explicit `--config`, `ARTIFACT_PAGES_CONFIG`, that local default, then the user's saved config locator. A GitHub locator with no filename also selects `artifact-pages.yaml`; other filenames, including `.artifact-pages.yaml`, require explicit selection.
 
 On first use, install the Playwright Chromium browser, then run the end-to-end checks against the production build served by nginx:

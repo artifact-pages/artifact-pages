@@ -135,8 +135,7 @@ func runPreviewPublish(ctx context.Context, args []string, stdout, stderr io.Wri
 	if *format == "json" {
 		return json.NewEncoder(stdout).Encode(output)
 	}
-	printPreviewPublishOutput(stdout, output)
-	reportDeploymentConfig(stdout, resolved)
+	printPreviewPublishReport(stdout, output, resolved, *dryRun)
 	return nil
 }
 
@@ -234,18 +233,47 @@ func previewDocumentRoute(publicOrigin, site, headSHA, documentPath, groupID str
 	return publicOrigin + route, nil
 }
 
-func printPreviewPublishOutput(writer io.Writer, output previewPublishOutput) {
-	fmt.Fprintf(writer, "Preview %s for site %s at %s.\n", output.Outcome, output.Site, output.HeadSHA)
-	fmt.Fprintf(writer, "Preview group: %s\n", output.GroupListURL)
-	for _, document := range output.Documents {
-		fmt.Fprintf(writer, "  %s: %s\n", document.Path, document.URL)
+func printPreviewPublishReport(writer io.Writer, output previewPublishOutput, resolved deploymentconfig.ResolvedConfig, dry bool) {
+	reportHeader(writer, "preview publish "+output.Site, output.Outcome, dry)
+	if resolved.Config.Provider != "" {
+		reportTarget(writer, resolved)
 	}
+	fmt.Fprintf(writer, "  Head      %s\n", reportText(output.HeadSHA))
+	if output.PullRequestURL != "" {
+		fmt.Fprintf(writer, "  PR        %s\n", reportText(output.PullRequestURL))
+	}
+	if output.GroupListURL != "" {
+		fmt.Fprintf(writer, "  Preview group: %s\n", reportText(output.GroupListURL))
+	}
+	if len(output.Documents) > 0 {
+		fmt.Fprintf(writer, "\n  Documents · %d\n", len(output.Documents))
+		for i, document := range output.Documents {
+			if i == publishReportPathLimit {
+				fmt.Fprintf(writer, "    … %d more; use --format json for all URLs.\n", len(output.Documents)-i)
+				break
+			}
+			fmt.Fprintf(writer, "    %s\n    %s\n", reportText(document.Path), reportText(document.URL))
+		}
+	}
+	objects := make([]publisher.Change, 0, len(output.Objects))
 	for _, object := range output.Objects {
-		fmt.Fprintf(writer, "  %s %s\n", object.Action, object.Path)
+		objects = append(objects, publisher.Change{Action: object.Action, Path: object.Path})
 	}
+	reportChanges(writer, "Preview objects", objects)
+	catalog := make([]publisher.Change, 0, len(output.CatalogChanges))
 	for _, change := range output.CatalogChanges {
-		fmt.Fprintf(writer, "  catalog %s %s (%s)\n", change.Action, change.GroupID, change.Reason)
+		catalog = append(catalog, publisher.Change{Action: change.Action, Path: change.GroupID + " (" + change.Reason + ")"})
 	}
+	reportChanges(writer, "Preview catalog", catalog)
+	footer := "Preview publish complete."
+	if dry {
+		footer = "Dry run complete. No writes."
+	} else if output.Outcome == "no-op" {
+		footer = "Everything is up to date."
+	} else if output.Outcome == "no-preview" {
+		footer = "No added or changed documents to preview. No preview was published."
+	}
+	fmt.Fprintf(writer, "\n  %s\n", footer)
 }
 
 func writePreviewUsage(writer io.Writer) {

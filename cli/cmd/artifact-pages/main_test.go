@@ -875,8 +875,8 @@ func TestDeploymentResultReportsResolvedRemoteConfigCommit(t *testing.T) {
 	}
 
 	var textOutput bytes.Buffer
-	reportDeploymentConfig(&textOutput, resolved)
-	wantText := "Deployment target: AWS S3 bucket artifact-pages-123456789012-us-east-1 (region us-east-1, account 123456789012)\nDeployment config commit: " + sha + "\n"
+	reportTarget(&textOutput, resolved)
+	wantText := "  Target    AWS S3 bucket artifact-pages-123456789012-us-east-1 (region us-east-1, account 123456789012)\n  Config    " + sha + "\n"
 	if textOutput.String() != wantText {
 		t.Fatalf("text deployment report = %q, want %q", textOutput.String(), wantText)
 	}
@@ -910,7 +910,7 @@ cloudflare:
 		t.Fatalf("JSON output included credential environment names: %s", output.String())
 	}
 	var text bytes.Buffer
-	reportDeploymentConfig(&text, resolved)
+	reportTarget(&text, resolved)
 	if !strings.Contains(text.String(), "Cloudflare R2 bucket artifact-pages") {
 		t.Fatalf("text deployment output = %q, want effective default bucket", text.String())
 	}
@@ -1030,7 +1030,7 @@ func TestRunAppDeployReportsNoOpForUnchangedBundleAndPreservesSiteContent(t *tes
 	if err := run(t.Context(), textArgs, &stdout, &stderr); err != nil {
 		t.Fatalf("unchanged app deploy text output error = %v; stderr=%s", err, stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "Artifact Pages web test-1 is already current via local.") {
+	if !strings.Contains(stdout.String(), "app deploy test-1  UP TO DATE") {
 		t.Errorf("unchanged app deploy text output = %q, want no-op message", stdout.String())
 	}
 

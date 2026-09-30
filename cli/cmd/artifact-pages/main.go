@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	deploymentconfig "github.com/tasuku43/git-artifact-pages/cli/internal/config"
 	"github.com/tasuku43/git-artifact-pages/cli/internal/indexer"
@@ -200,13 +199,6 @@ func formatDeploymentTarget(config deploymentconfig.DeploymentConfig) string {
 	}
 }
 
-func reportDeploymentConfig(writer io.Writer, resolved deploymentconfig.ResolvedConfig) {
-	fmt.Fprintf(writer, "Deployment target: %s\n", formatDeploymentTarget(resolved.Config))
-	if resolved.CommitSHA != "" {
-		fmt.Fprintf(writer, "Deployment config commit: %s\n", resolved.CommitSHA)
-	}
-}
-
 func commandExitCode(err error) int {
 	var commandErr *commandError
 	if errors.As(err, &commandErr) && commandErr.exitCode != 0 {
@@ -329,7 +321,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		if err != nil {
 			return withExitCode(err, 2)
 		}
-		fmt.Fprintf(stdout, "Saved default deployment config locator in %s.\n", path)
+		writeConfigReport(stdout, args[2], path)
 		return nil
 	}
 	if args[0] == "lock" {
@@ -423,15 +415,13 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 			outputPath = relative
 		}
 	}
-	fmt.Fprintf(stdout, "Indexed %d artifacts from %d files in %s.\n", result.ArtifactsIndexed, result.FilesScanned, result.Elapsed.Round(time.Millisecond))
-	fmt.Fprintf(stdout, "Wrote %s (%d bytes).\n", outputPath, result.OutputBytes)
 	metadataPath := result.MetadataPath
 	if workingDir, err := os.Getwd(); err == nil {
 		if relative, relErr := filepath.Rel(workingDir, metadataPath); relErr == nil {
 			metadataPath = relative
 		}
 	}
-	fmt.Fprintf(stdout, "Wrote %s (%d bytes).\n", metadataPath, result.MetadataBytes)
+	writeIndexReport(stdout, *siteID, result, outputPath, metadataPath)
 	return nil
 }
 
@@ -477,15 +467,7 @@ func runRegistryRegister(ctx context.Context, args []string, stdout, stderr io.W
 	if *format == "json" {
 		return encodeDeploymentResult(stdout, result, resolved)
 	}
-	switch result.Outcome {
-	case "planned":
-		fmt.Fprintf(stdout, "Registry plan via %s: %d changes.\n", resolved.Config.Provider, len(result.Changes))
-	case "no-op":
-		fmt.Fprintf(stdout, "Registry is already up to date via %s.\n", resolved.Config.Provider)
-	default:
-		fmt.Fprintf(stdout, "Registered sites via %s.\n", resolved.Config.Provider)
-	}
-	reportDeploymentConfig(stdout, resolved)
+	writeDeploymentReport(stdout, result, resolved, *dryRun)
 	return nil
 }
 
@@ -543,14 +525,7 @@ func runRegistryUnregister(ctx context.Context, args []string, stdout, stderr io
 	if *format == "json" {
 		return encodeDeploymentResult(stdout, result, resolved)
 	}
-	if result.Outcome == "planned" {
-		fmt.Fprintf(stdout, "Unregister plan for %s via %s: %d changes.\n", *siteID, resolved.Config.Provider, len(result.Changes))
-	} else if result.Outcome == "no-op" {
-		fmt.Fprintf(stdout, "Site %s is already unregistered via %s.\n", *siteID, resolved.Config.Provider)
-	} else {
-		fmt.Fprintf(stdout, "Unregistered site %s via %s and removed %d objects.\n", *siteID, resolved.Config.Provider, result.FilesRemoved)
-	}
-	reportDeploymentConfig(stdout, resolved)
+	writeDeploymentReport(stdout, result, resolved, *dryRun)
 	return nil
 }
 
@@ -641,12 +616,7 @@ func runLockCommand(ctx context.Context, command string, args []string, stdout, 
 	if *format == "json" {
 		return encodeDeploymentResult(stdout, result, resolved)
 	}
-	fmt.Fprintf(stdout, "Site %s lock: %s", result.Lock.Site, result.Lock.State)
-	if result.Lock.ETag != "" {
-		fmt.Fprintf(stdout, " (ETag %s)", result.Lock.ETag)
-	}
-	fmt.Fprintln(stdout, ".")
-	reportDeploymentConfig(stdout, resolved)
+	writeDeploymentReport(stdout, result, resolved, false)
 	return nil
 }
 
@@ -696,24 +666,10 @@ func runAppDeploy(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	if *format == "json" {
 		return encodeDeploymentResult(stdout, result, resolved)
 	}
-	if result.Outcome == "planned" {
-		fmt.Fprintf(stdout, "App deploy plan for %s via %s: %d files; no writes.\n", result.Version, resolved.Config.Provider, len(result.Changes))
-		reportDeploymentConfig(stdout, resolved)
-		return nil
-	}
-	if result.Outcome == "no-op" {
-		fmt.Fprintf(stdout, "Artifact Pages web %s is already current via %s.\n", result.Version, resolved.Config.Provider)
-		reportDeploymentConfig(stdout, resolved)
-		return nil
-	}
-	fmt.Fprintf(stdout, "Deployed Artifact Pages web %s: %d files via %s.\n", result.Version, result.FilesPublished, resolved.Config.Provider)
-	if result.InvalidationID != "" {
-		fmt.Fprintf(stdout, "Cache revalidation request: %s\n", result.InvalidationID)
-	}
+	writeDeploymentReport(stdout, result, resolved, *dryRun)
 	if result.SourceDirty {
-		fmt.Fprintln(stderr, "Warning: this web bundle was built from a source working tree with uncommitted changes.")
+		fmt.Fprintf(stderr, "  %s this web bundle was built from a source working tree with uncommitted changes.\n", reportTone("Warning:", "update", terminalColor(stderr)))
 	}
-	reportDeploymentConfig(stdout, resolved)
 	return nil
 }
 
