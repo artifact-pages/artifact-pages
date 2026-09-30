@@ -81,7 +81,7 @@ func validatePreviewRegistration(ctx context.Context, backend ConditionalObjectB
 	}
 	entry, ok := registrySite(projection, options.SiteID)
 	if !ok {
-		return fmt.Errorf("site %q is not registered in the deployed registry", options.SiteID)
+		return siteNotRegistered(projection, options.SiteID)
 	}
 	repository, _, currentRoot, err := indexer.ResolveGitRepositoryIdentity(ctx)
 	if err != nil {

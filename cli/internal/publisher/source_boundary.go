@@ -33,7 +33,7 @@ func preflightLocalSourceBoundary(
 		}
 		entry, found := registrySite(projection, siteID)
 		if !found {
-			return fmt.Errorf("site %q is not registered in the deployed registry", siteID)
+			return siteNotRegistered(projection, siteID)
 		}
 		sourceDir = filepath.Join(repositoryRoot, filepath.FromSlash(entry.SourcePath))
 	}

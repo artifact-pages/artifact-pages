@@ -79,7 +79,9 @@ artifact-pages site publish --site sre --source docs/artifacts --format json
 
 The dry-run reports creates, updates, and removals without writing. The publish updates the selected site's projection and leaves other registered site prefixes intact.
 
-Text output separates artifact changes from index changes and labels the result `DRY RUN`, `PUBLISHED`, or `UP TO DATE`. Each group shows at most 12 paths; `--format json` preserves the complete change list. Preview reconciliation counts appear only when there are preview references. Successful publishing reports files as synced, including for local storage. Muted semantic colors are used only on terminal output; redirected output and `NO_COLOR` are plain text. This is a final change report, not a live progress indicator. Failed operations keep the existing error output and do not print a successful report.
+Text output separates artifact changes from index changes and labels the result `DRY RUN`, `PUBLISHED`, or `UP TO DATE`. Each group shows at most 12 paths; `--format json` preserves the complete change list. Preview reconciliation counts appear only when there are preview references. Successful publishing reports files as synced, including for local storage. Muted semantic colors are used only on terminal output; redirected output and `NO_COLOR` are plain text. This is a final change report, not a live progress indicator.
+
+Text failures appear on stderr with `FAILED` or `DRY RUN FAILED`, the error reason, and recovery guidance, never successful sync counts. An unregistered-site error lists up to 12 site IDs from the deployed registry, not the local config. Select the correct ID and target, or ask the registry owner to register a new site. A failure after a change plan may have partially completed writes; it is not reported as a successful publish. JSON failure envelopes and exit codes are unchanged.
 
 ## Unregister
 

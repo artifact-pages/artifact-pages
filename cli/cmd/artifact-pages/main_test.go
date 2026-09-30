@@ -767,6 +767,11 @@ func TestSitePublishFailureJSONAndExitCodes(t *testing.T) {
 			t.Fatalf("unregistered-site failure result = %+v, want stable failure envelope", failure)
 		}
 		assertEmptyPreviewChangesField(t, stdout)
+		textArgs := []string{"site", "publish", "--site", "sre", "--dry-run"}
+		textOut, textErr, textExit := runCLIProcess(t, root, textArgs)
+		if textExit != 1 || textOut != "" || !strings.Contains(textErr, "site publish sre  DRY RUN FAILED") || !strings.Contains(textErr, "Registered sites: frontend") || strings.Contains(textErr, "\x1b") {
+			t.Fatalf("unregistered text report: exit=%d stdout=%q stderr=%q", textExit, textOut, textErr)
+		}
 		for _, key := range []string{
 			filepath.Join(root, ".local", "storage", "_artifacts", "sre", "overview.html"),
 			filepath.Join(root, ".local", "storage", "_indexes", "sre", "index.json"),

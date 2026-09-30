@@ -23,6 +23,25 @@ type Change struct {
 	Path   string `json:"path"`
 }
 
+// SiteNotRegisteredError preserves the deployed registry context for CLI guidance.
+type SiteNotRegisteredError struct {
+	Site            string
+	RegisteredSites []string
+}
+
+func (err *SiteNotRegisteredError) Error() string {
+	return fmt.Sprintf("site %q is not registered in the deployed registry", err.Site)
+}
+
+func siteNotRegistered(projection registry.Projection, siteID string) error {
+	ids := make([]string, 0, len(projection.Sites))
+	for _, site := range projection.Sites {
+		ids = append(ids, site.ID)
+	}
+	sort.Strings(ids)
+	return &SiteNotRegisteredError{Site: siteID, RegisteredSites: ids}
+}
+
 type desiredSiteObject struct {
 	key        string
 	relative   string
@@ -79,7 +98,7 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 		}
 		entry, ok := registrySite(projection, options.SiteID)
 		if !ok {
-			return Result{}, fmt.Errorf("site %q is not registered in the deployed registry", options.SiteID)
+			return Result{}, siteNotRegistered(projection, options.SiteID)
 		}
 		sourceDir := options.SourceDir
 		if sourceDir == "" {

@@ -51,10 +51,11 @@ func main() {
 				_ = json.NewEncoder(os.Stdout).Encode(failure)
 			}
 		}
-		if commandErr != nil && commandErr.configCommitSHA != "" && requestedFormat(args) != "json" {
-			fmt.Fprintf(os.Stderr, "Deployment config commit: %s\n", commandErr.configCommitSHA)
+		if requestedFormat(args) == "json" {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		} else {
+			writeCommandFailure(os.Stderr, args, err, terminalColor(os.Stderr))
 		}
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(commandExitCode(err))
 	}
 }
