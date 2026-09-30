@@ -260,6 +260,30 @@
     return { element: scrim, input, open, close, choose, setQuery, get isOpen() { return !scrim.hidden; }, get query() { return state.query; } };
   }
 
+  /* 閲覧アプリのサイドバー（Browse）と同じ形のツリー。フォルダ名と件数、その下にページのタイトルを並べる。
+     activePath があればそのページを選択状態にし、そのフォルダだけを開く。なければすべて開く。 */
+  function renderTree(node, artifacts, activePath) {
+    node.textContent = '';
+    const dirs = new Map();
+    artifacts.forEach(([title, path]) => {
+      const at = path.lastIndexOf('/');
+      const dir = at < 0 ? '' : path.slice(0, at);
+      if (!dirs.has(dir)) dirs.set(dir, []);
+      dirs.get(dir).push({ title, path });
+    });
+    [...dirs.keys()].sort().forEach((dir) => {
+      const pages = dirs.get(dir).sort((a, b) => a.title.localeCompare(b.title));
+      const open = !activePath || pages.some((page) => page.path === activePath);
+      if (dir) {
+        const row = el('div', 'mk-dir');
+        row.append(el('i', '', open ? '⌄' : '›'), el('span', '', dir), el('small', '', String(pages.length)));
+        node.append(row);
+      }
+      if (!open) return;
+      pages.forEach((page) => node.append(el('div', 'mk-file' + (dir ? '' : ' mk-root') + (page.path === activePath ? ' active' : ''), page.title)));
+    });
+  }
+
   function buildDemo(host) {
     const autoplay = host.dataset.readerDemo === 'autoplay';
     const state = { site: SITES[0], page: 0 };
@@ -271,10 +295,11 @@
     const siteRow = el('div', 'rm-site');
     const siteMark = el('b'); const siteName = el('span'); const caret = el('i', '', '⌄');
     siteRow.append(siteMark, siteName, caret);
-    const searchButton = el('button', 'rm-search', '⌕  Search this site      ⌘K');
+    const searchButton = el('button', 'am-filter');
     searchButton.type = 'button';
-    const rows = el('div');
-    side.append(siteRow, searchButton, rows);
+    searchButton.append(el('span', '', '⌕ Filter navigation'), el('kbd', '', '⌘K'));
+    const tree = el('div', 'mk-tree');
+    side.append(siteRow, searchButton, el('div', 'rm-h', 'Browse'), tree);
 
     const main = el('div', 'rm-main');
     const chrome = el('div', 'rm-chrome');
@@ -293,13 +318,13 @@
       siteMark.textContent = site.name.slice(0, 1).toUpperCase();
       siteName.textContent = site.name;
       crumb.textContent = '';
-      crumb.append(site.id + ' / ', Object.assign(el('strong'), { textContent: page[1] }));
+      const at = page[1].lastIndexOf('/');
+      if (at > 0) crumb.append(page[1].slice(0, at) + ' / ');
+      crumb.append(Object.assign(el('strong'), { textContent: page[0] }));
       kicker.textContent = 'GIT ARTIFACT PAGES / ' + site.id.toUpperCase();
       title.textContent = page[0];
       summary.textContent = page[2];
-      rows.textContent = '';
-      rows.append(el('div', 'rm-h', 'RECENTLY UPDATED'));
-      site.artifacts.forEach((entry) => rows.append(el('span', 'rm-row' + (entry === page ? ' active' : ''), entry[0])));
+      renderTree(tree, site.artifacts, page[1]);
     }
     const palette = createPalette({
       sites: SITES,
@@ -409,20 +434,7 @@
           node.append(item);
         });
       });
-      setAll('tree', (node) => {
-        node.textContent = '';
-        const dirs = new Map();
-        site.artifacts.forEach(([, path]) => {
-          const at = path.lastIndexOf('/');
-          const dir = at < 0 ? '' : path.slice(0, at + 1);
-          if (!dirs.has(dir)) dirs.set(dir, []);
-          dirs.get(dir).push(path.slice(at + 1));
-        });
-        [...dirs.keys()].sort().forEach((dir) => {
-          if (dir) node.append(el('div', 'am-row am-dir', dir));
-          dirs.get(dir).sort().forEach((file) => node.append(el('div', 'am-row' + (dir ? ' am-file' : ''), file)));
-        });
-      });
+      setAll('tree', (node) => renderTree(node, site.artifacts));
     }
 
     const palette = createPalette({
@@ -433,13 +445,16 @@
     });
     stage.append(palette.element);
 
-    /* 見えたら一度だけ：パレットを開き、少し置いて @ を入力する */
+    /* 見えたら一度だけ：まずトップページを見せ、少し置いてパレットを開き、さらに @ を入力する */
     function play() {
       if (state.played) return;
       state.played = true;
-      palette.open('', false);
-      if (reduceMotion) { palette.setQuery('@', false); return; }
-      setTimeout(() => { if (palette.isOpen && !palette.query) palette.setQuery('@', true); }, 700);
+      if (reduceMotion) return;
+      setTimeout(() => {
+        if (palette.isOpen) return;
+        palette.open('', false);
+        setTimeout(() => { if (palette.isOpen && !palette.query) palette.setQuery('@', true); }, 700);
+      }, 1600);
     }
     if ('IntersectionObserver' in window) {
       const observer = new IntersectionObserver(([entry]) => {

@@ -43,7 +43,7 @@ Names are English and descriptions carry both languages because registry `name` 
 | Order | Ticket | Site | Page | Status |
 | ---: | --- | --- | --- | --- |
 | 1 | [DOC-01](DOC-01-guide-site-structure.md) | guide | Move to the `guide` site structure | Done |
-| 2 | [DOC-02](DOC-02-guide-overview.md) | guide | `what-is-git-artifact-pages.html` — overview | In progress |
+| 2 | [DOC-02](DOC-02-guide-overview.md) | guide | `what-is-git-artifact-pages.html` — overview | Done |
 | 3 | [DOC-03](DOC-03-guide-getting-started.md) | guide | `getting-started.html` | Open |
 | 4 | [DOC-04](DOC-04-guide-publishing.md) | guide | `publishing.html` | Open |
 | 5 | [DOC-05](DOC-05-guide-reading.md) | guide | `reading.html` | Open |

@@ -5,7 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Git Artifact Pages publishes HTML and Markdown kept in Git as a static site readers can open by URL and search.">
   <title>What is Git Artifact Pages?</title>
-  <script>document.documentElement.classList.add('js')</script>
+  <script>
+    // Copy the reader app's theme (same-origin parent) before first paint; assets/site.js keeps it in sync.
+    (() => {
+      const root = document.documentElement;
+      root.classList.add('js');
+      try {
+        const theme = window.parent !== window && window.parent.document.documentElement.dataset.theme;
+        if (theme === 'light' || theme === 'dark') root.dataset.theme = theme;
+      } catch { /* cross-origin: fall back to prefers-color-scheme */ }
+    })();
+  </script>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="../assets/site.css">
   <script src="../assets/site.js" defer></script>
@@ -52,7 +62,7 @@
 <span class="c"># Apply</span>
 <span class="p">$</span> <span data-copy>artifact-pages <span class="v">app deploy</span> --version x.y.z</span></pre>
           </div>
-          <p class="note">Replace <code>x.y.z</code> with a published release version. The delivery target comes from <code>--config</code> or the admin repository's <code>.artifact-pages.yaml</code>. Site indexes and documents are left untouched.</p>
+          <p class="note">Replace <code>x.y.z</code> with a published release version. The delivery target comes from <code>--config</code> or the admin repository's <code>artifact-pages.yaml</code>. Site indexes and documents are left untouched.</p>
         </section>
 
         <section class="chapter" id="step-2" data-step="2" aria-labelledby="step-2-title">
@@ -60,7 +70,7 @@
           <h3 id="step-2-title">Next, register the sites.</h3>
           <p><strong>A site per team is the usual starting point</strong>, and one team can split sites by product. Each site has an ID, a display name, a source Git repository (<code>owner/repo</code>), and a directory (<code>sourcePath</code>). The admin lists them in the config file and registers them. A site can be registered before it has any documents.</p>
           <div class="term" aria-label="Example site registration config">
-            <div class="term-head"><span>.artifact-pages.yaml / ADMIN REPOSITORY</span></div>
+            <div class="term-head"><span>artifact-pages.yaml / ADMIN REPOSITORY</span></div>
 <pre><span class="k">sites</span>:
   <span class="k">sre</span>:
     <span class="k">name</span>: SRE
@@ -93,7 +103,7 @@
 <span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site checkout --source docs/artifacts --dry-run</span>
 <span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site checkout --source docs/artifacts</span></pre>
           </div>
-          <p class="note">Before writing, the publisher checks that the repository and directory match the registration on the delivery target. It never writes to another site. In practice, CI runs the same command on merge.</p>
+          <p class="note">Before writing, the publisher checks that the repository and directory match the registration on the delivery target. It never writes to another site. Running the same command from CI on merge is the expected workflow.</p>
         </section>
 
         <section class="chapter" id="step-4" data-step="4" aria-labelledby="step-4-title">
@@ -181,14 +191,14 @@
           <div class="am-site"><b data-am="mark">P</b><span data-am="name">Payments / Checkout</span><i>⌄</i></div>
           <div class="am-filter"><span>⌕ Filter navigation</span><kbd>⌘K</kbd></div>
           <div class="am-h">Browse</div>
-          <div data-am="tree">
-            <div class="am-row am-dir">design/</div>
-            <div class="am-row am-file">payment-flow.html</div>
-            <div class="am-row am-file">refund-states.md</div>
-            <div class="am-row am-dir">incidents/</div>
-            <div class="am-row am-file">2026-09-12-timeout.html</div>
-            <div class="am-row am-dir">runbooks/</div>
-            <div class="am-row am-file">on-call.md</div>
+          <div class="mk-tree" data-am="tree">
+            <div class="mk-dir"><i>⌄</i><span>design</span><small>2</small></div>
+            <div class="mk-file">Payment flow design</div>
+            <div class="mk-file">Refund state transitions</div>
+            <div class="mk-dir"><i>⌄</i><span>incidents</span><small>1</small></div>
+            <div class="mk-file">Sep 12 payment timeout</div>
+            <div class="mk-dir"><i>⌄</i><span>runbooks</span><small>1</small></div>
+            <div class="mk-file">On-call runbook</div>
           </div>
         </div>
         <div class="am-main">

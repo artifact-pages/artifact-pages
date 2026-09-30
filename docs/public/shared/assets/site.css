@@ -100,6 +100,7 @@ kbd {
 /* ── 共通の見出し類 ── */
 section[id], .chapter[id] { scroll-margin-top: calc(var(--nav-h) + 16px); }
 .eyebrow { margin: 0 0 12px; color: var(--quiet); font: 600 11px/1.5 var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+:lang(ja) .eyebrow, :lang(ja) .step-label { font-family: var(--sans); letter-spacing: .04em; text-transform: none; }
 h1 { margin: 0 0 18px; font-size: clamp(28px, 3.1vw, 38px); font-weight: 700; line-height: 1.35; letter-spacing: -.02em; text-wrap: balance; }
 h1 em { font-style: normal; }
 h2 { margin: 0 0 12px; font-size: clamp(21px, 2.1vw, 26px); font-weight: 680; line-height: 1.45; letter-spacing: -.015em; text-wrap: balance; }
@@ -231,11 +232,17 @@ html:not(.js) .st-a { opacity: 0; } html:not(.js) .st-b { opacity: 1; }
 .rm-site { display: flex; gap: 8px; align-items: center; padding: 2px 4px 12px; font-size: 12px; font-weight: 600; }
 .rm-site b { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 5px; background: var(--ink); color: var(--m-shell); font: 700 11px var(--sans); }
 .rm-site i { margin-left: auto; color: var(--quiet); font-style: normal; }
-.rm-search { width: 100%; margin-bottom: 12px; padding: 6px 8px; border: 0; border-radius: 7px; background: var(--hover); color: var(--quiet); font-size: 11px; text-align: left; }
-.rm-search:hover { background: var(--active); color: var(--ink); }
 .rm-h { margin: 14px 4px 4px; color: var(--quiet); font: 550 10px/1.4 var(--sans); }
-.rm-row { display: block; width: 100%; padding: 5px 8px; border-radius: 6px; color: var(--muted); font-size: 11.5px; }
-.rm-row.active { background: var(--active); color: var(--ink); }
+button.am-filter { width: 100%; border: 0; text-align: left; }
+button.am-filter:hover { background: var(--active); color: var(--ink); }
+/* 閲覧アプリの Browse ツリー（両方の見本で共通） */
+.mk-tree { font-size: 11.5px; line-height: 1.6; }
+.mk-dir { display: flex; align-items: center; gap: 6px; padding: 4px 8px; color: var(--ink); }
+.mk-dir i { width: 10px; color: var(--quiet); font-style: normal; text-align: center; }
+.mk-dir small { margin-left: auto; color: var(--quiet); font-size: 10px; }
+.mk-file { overflow: hidden; padding: 4px 8px 4px 24px; border-radius: 6px; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.mk-file.mk-root { padding-left: 8px; }
+.mk-file.active { background: var(--active); color: var(--ink); font-weight: 600; }
 .rm-main { position: relative; min-width: 0; overflow: hidden; border-radius: 9px; background: var(--m-surface); box-shadow: var(--lift); }
 .rm-chrome { display: flex; justify-content: space-between; gap: 10px; padding: 9px 16px; border-bottom: 1px solid var(--line-soft); color: var(--quiet); font: 11px/1.6 var(--sans); }
 .rm-chrome strong { color: var(--ink); font-weight: 600; }
@@ -300,9 +307,6 @@ html:not(.js) .st-a { opacity: 0; } html:not(.js) .st-b { opacity: 1; }
 .am-bar { display: flex; justify-content: space-between; gap: 12px; padding: 8px 14px; border-bottom: 1px solid var(--line-soft); color: var(--muted); font: 11px/1.6 var(--mono); }
 .am-actions { display: flex; gap: 14px; color: var(--quiet); font-family: var(--sans); }
 .am-stage { position: relative; flex: 1; min-height: 480px; }
-.am-side [data-am="tree"] { font-size: 11.5px; }
-.am-dir { color: var(--quiet); }
-.am-file { padding-left: 20px; }
 .am-home { width: min(100%, 640px); margin-inline: auto; padding: 30px clamp(16px, 4vw, 36px) 24px; }
 .am-identity { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; color: var(--quiet); font: 11px var(--mono); }
 .am-identity b { display: grid; place-items: center; width: 16px; height: 16px; border-radius: 4px; background: var(--ink); color: var(--m-surface); font: 700 9px var(--sans); }

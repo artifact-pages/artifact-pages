@@ -5,7 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Git Artifact Pages は、Gitで管理しているHTMLやMarkdownを、URLで読めて検索できる静的サイトとして公開する仕組みです。">
   <title>Git Artifact Pages とは</title>
-  <script>document.documentElement.classList.add('js')</script>
+  <script>
+    // 最初の描画の前に、閲覧アプリ（同一オリジンの親）のテーマを写す。追従は assets/site.js が行う。
+    (() => {
+      const root = document.documentElement;
+      root.classList.add('js');
+      try {
+        const theme = window.parent !== window && window.parent.document.documentElement.dataset.theme;
+        if (theme === 'light' || theme === 'dark') root.dataset.theme = theme;
+      } catch { /* 別オリジン：prefers-color-scheme にまかせる */ }
+    })();
+  </script>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="../assets/site.css">
   <script src="../assets/site.js" defer></script>
@@ -16,7 +26,7 @@
     <nav class="lang-switch" aria-label="言語"><span aria-current="page">日本語</span><a href="../en/what-is-git-artifact-pages.html" hreflang="en" lang="en">English</a></nav>
     <section class="hero" aria-labelledby="hero-title">
       <div>
-        <p class="eyebrow">From Git to a readable website</p>
+        <p class="eyebrow">Git から、読める Web へ</p>
         <h1 id="hero-title">Gitにある成果物を、<wbr>読むための場所へ。</h1>
         <p class="lead"><strong>HTMLもMarkdownも、Gitに置いたまま、URLで読めて検索できる。</strong> Git Artifact Pages は、Gitで管理している文書を静的なサイトとして公開し、サイトを選び、ページを探し、リンクで共有できる閲覧体験を届けます。</p>
       </div>
@@ -35,32 +45,32 @@
     </div>
 
     <div class="story-head" id="story">
-      <p class="eyebrow">How it works</p>
+      <p class="eyebrow">しくみ</p>
       <h2>公開から閲覧までの流れ</h2>
     </div>
 
     <div class="story">
       <div class="story-copy">
         <section class="chapter" id="step-1" data-step="1" aria-labelledby="step-1-title">
-          <span class="step-label">01 / DEPLOY THE APP <span class="role">管理者</span></span>
+          <span class="step-label">01 / アプリを配置 <span class="role">管理者</span></span>
           <h3 id="step-1-title">まず、読むためのアプリを置く。</h3>
           <p>管理者が、静的な閲覧アプリ（SPA）を配信先へ一度だけデプロイします。これがすべてのサイトに共通する入口です。公開済みのWebリリースを取得して検証してから、アプリ本体のファイルだけを書き込みます。</p>
           <div class="term" aria-label="アプリのデプロイコマンド例">
-            <div class="term-head"><span>TERMINAL / ADMIN</span><button class="copy-btn" type="button">コピー</button></div>
+            <div class="term-head"><span>ターミナル / 管理者</span><button class="copy-btn" type="button">コピー</button></div>
 <pre><span class="c"># まず変更計画だけ確認（何も書き込みません）</span>
 <span class="p">$</span> <span data-copy>artifact-pages <span class="v">app deploy</span> --version x.y.z --dry-run</span>
 <span class="c"># 反映</span>
 <span class="p">$</span> <span data-copy>artifact-pages <span class="v">app deploy</span> --version x.y.z</span></pre>
           </div>
-          <p class="note"><code>x.y.z</code> には公開済みリリースのバージョンを指定します。配信先の設定は <code>--config</code>、または管理リポジトリの <code>.artifact-pages.yaml</code> から解決されます。サイトの索引や文書には触れません。</p>
+          <p class="note"><code>x.y.z</code> には公開済みリリースのバージョンを指定します。配信先の設定は <code>--config</code>、または管理リポジトリの <code>artifact-pages.yaml</code> から解決されます。サイトの索引や文書には触れません。</p>
         </section>
 
         <section class="chapter" id="step-2" data-step="2" aria-labelledby="step-2-title">
-          <span class="step-label">02 / REGISTER SITES <span class="role">管理者</span></span>
+          <span class="step-label">02 / サイトを登録 <span class="role">管理者</span></span>
           <h3 id="step-2-title">次に、サイトを登録する。</h3>
           <p>サイトは、<strong>チームごとに持つのが基本</strong>です。同じチームでも、プロダクトごとに分けられます。サイトには、ID、表示名、元になるGitリポジトリ（<code>owner/repo</code>）とディレクトリ（<code>sourcePath</code>）があり、管理者が設定ファイルに書いて登録します。まだ文書がなくても登録できます。</p>
           <div class="term" aria-label="サイト登録の設定例">
-            <div class="term-head"><span>.artifact-pages.yaml / 管理リポジトリ</span></div>
+            <div class="term-head"><span>artifact-pages.yaml / 管理リポジトリ</span></div>
 <pre><span class="k">sites</span>:
   <span class="k">sre</span>:
     <span class="k">name</span>: SREチーム
@@ -76,7 +86,7 @@
     <span class="k">sourcePath</span>: docs/artifacts</pre>
           </div>
           <div class="term" aria-label="サイト登録コマンド例">
-            <div class="term-head"><span>TERMINAL / ADMIN</span><button class="copy-btn" type="button">コピー</button></div>
+            <div class="term-head"><span>ターミナル / 管理者</span><button class="copy-btn" type="button">コピー</button></div>
 <pre><span class="p">$</span> <span data-copy>artifact-pages <span class="v">registry register</span> --dry-run</span>
 <span class="p">$</span> <span data-copy>artifact-pages <span class="v">registry register</span></span></pre>
           </div>
@@ -84,24 +94,24 @@
         </section>
 
         <section class="chapter" id="step-3" data-step="3" aria-labelledby="step-3-title">
-          <span class="step-label">03 / PUBLISH FROM GIT <span class="role">各チームのリポジトリ</span></span>
+          <span class="step-label">03 / Git から公開 <span class="role">各チームのリポジトリ</span></span>
           <h3 id="step-3-title">各Gitリポジトリから、担当サイトへ公開する。</h3>
           <p>各チームのGitリポジトリが、担当するサイトと公開するディレクトリを明示して公開します。公開のたびに索引を作り、HTMLとMarkdown、CSSや画像をそのまま配置します。</p>
           <div class="term" aria-label="サイト公開コマンド例">
-            <div class="term-head"><span>TERMINAL / acme/checkout</span><button class="copy-btn" type="button">コピー</button></div>
+            <div class="term-head"><span>ターミナル / acme/checkout</span><button class="copy-btn" type="button">コピー</button></div>
 <pre><span class="c"># docs/artifacts を、サイト checkout へ</span>
 <span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site checkout --source docs/artifacts --dry-run</span>
 <span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site checkout --source docs/artifacts</span></pre>
           </div>
-          <p class="note">書き込む前に、配信先に登録されたリポジトリ・ディレクトリと一致するかを確認します。他のサイトには書き込みません。実際の運用では、同じコマンドをマージ時にCIから実行します。</p>
+          <p class="note">書き込む前に、配信先に登録されたリポジトリ・ディレクトリと一致するかを確認します。他のサイトには書き込みません。マージ時に CI から同じコマンドを実行する運用を想定しています。</p>
         </section>
 
         <section class="chapter" id="step-4" data-step="4" aria-labelledby="step-4-title">
-          <span class="step-label">04 / OPEN AND FIND <span class="role">読者</span></span>
+          <span class="step-label">04 / 開いて探す <span class="role">読者</span></span>
           <h3 id="step-4-title">そして、普通のURLで読む。</h3>
           <p>読者はURLを開くだけです。読んでいる途中でも <strong><kbd>⌘K</kbd> / <kbd>Ctrl K</kbd></strong> で、いまのサイトのページや見出しを検索できます。<strong><kbd>@</kbd></strong> を打つと、ほかのチームのサイトへ切り替えられます。</p>
           <div class="term" aria-label="閲覧のしかた">
-            <div class="term-head"><span>BROWSER / READER</span></div>
+            <div class="term-head"><span>ブラウザ / 読者</span></div>
 <pre><span class="p">→</span> https://&lt;配信ドメイン&gt;/checkout/design/payment-flow.html
 <span class="c">⌘K / Ctrl K</span>   このサイトのページと見出しを検索
 <span class="c">@</span>             サイトを切り替え</pre>
@@ -173,7 +183,7 @@
 
     <section class="section finale" id="result" aria-labelledby="result-title">
       <div class="section-head">
-        <div><p class="eyebrow">Example</p><h2 id="result-title">チームのサイトを開くと、こう見えます。</h2></div>
+        <div><p class="eyebrow">使用例</p><h2 id="result-title">チームのサイトを開くと、こう見えます。</h2></div>
         <p>決済チームの <code>checkout</code> サイトのトップページ（説明用の例）。<kbd>⌘K</kbd> のあと <kbd>@</kbd> で、ほかのチームのサイトへ移れます。</p>
       </div>
       <figure class="app-mock" data-app-mock aria-label="閲覧アプリでサイトのトップページを開いた画面（見本）">
@@ -181,14 +191,14 @@
           <div class="am-site"><b data-am="mark">決</b><span data-am="name">決済チーム / Checkout</span><i>⌄</i></div>
           <div class="am-filter"><span>⌕ Filter navigation</span><kbd>⌘K</kbd></div>
           <div class="am-h">Browse</div>
-          <div data-am="tree">
-            <div class="am-row am-dir">design/</div>
-            <div class="am-row am-file">payment-flow.html</div>
-            <div class="am-row am-file">refund-states.md</div>
-            <div class="am-row am-dir">incidents/</div>
-            <div class="am-row am-file">2026-09-12-timeout.html</div>
-            <div class="am-row am-dir">runbooks/</div>
-            <div class="am-row am-file">on-call.md</div>
+          <div class="mk-tree" data-am="tree">
+            <div class="mk-dir"><i>⌄</i><span>design</span><small>2</small></div>
+            <div class="mk-file">決済フロー設計</div>
+            <div class="mk-file">返金ステータスの遷移</div>
+            <div class="mk-dir"><i>⌄</i><span>incidents</span><small>1</small></div>
+            <div class="mk-file">9/12 決済タイムアウト障害</div>
+            <div class="mk-dir"><i>⌄</i><span>runbooks</span><small>1</small></div>
+            <div class="mk-file">オンコール手順</div>
           </div>
         </div>
         <div class="am-main">
