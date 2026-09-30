@@ -12,7 +12,7 @@ function run(args, cwd = root) {
 
 test('publish requires an explicit site and source before building', { skip: !available }, () => {
   for (const vars of [[], ['SITE=guide'], ['SOURCE=docs/public/sites/guide']]) {
-    const result = run(['cli:publish', ...vars]);
+    const result = run(['cli:site:publish', ...vars]);
     assert.notEqual(result.status, 0);
     assert.match(result.output, /missing required variables/);
     assert.doesNotMatch(result.output, /go build/);
@@ -21,9 +21,11 @@ test('publish requires an explicit site and source before building', { skip: !av
 
 test('Cloudflare tasks use the fixed base-then-overlay config stack', { skip: !available }, () => {
   for (const [task, vars] of [
-    ['publish', ['SITE=guide', 'SOURCE=docs/public/sites/guide']],
-    ['registry', []],
-    ['deploy', ['VERSION=1.2.3']],
+    ['site:publish', ['SITE=guide', 'SOURCE=docs/public/sites/guide']],
+    ['registry:register', []],
+    ['registry:unregister', ['SITE=retired']],
+    ['app:deploy', ['VERSION=1.2.3']],
+    ['preview:publish', ['SITE=guide', 'SOURCE=docs/public/sites/guide', 'BASE_URL=https://artifact-pages.dev']],
   ]) {
     const result = run(['--dry', `cli:${task}:cloudflare`, ...vars, 'DRY_RUN=true']);
     assert.equal(result.status, 0, result.output);
@@ -33,23 +35,23 @@ test('Cloudflare tasks use the fixed base-then-overlay config stack', { skip: !a
 });
 
 test('ordinary publish preserves quoting and optional config', { skip: !available }, () => {
-  const result = run(['--dry', 'cli:publish', 'SITE=guide', 'SOURCE=docs/path with spaces', 'CONFIG=config with spaces.yaml', 'DRY_RUN=true']);
+  const result = run(['--dry', 'cli:site:publish', 'SITE=guide', 'SOURCE=docs/path with spaces', 'CONFIG=config with spaces.yaml', 'DRY_RUN=true']);
   assert.equal(result.status, 0, result.output);
   assert.match(result.output, /--source 'docs\/path with spaces'/);
   assert.match(result.output, /--config 'config with spaces.yaml'/);
-  const normal = run(['--dry', 'cli:publish', 'SITE=guide', 'SOURCE=docs/public/sites/guide']);
+  const normal = run(['--dry', 'cli:site:publish', 'SITE=guide', 'SOURCE=docs/public/sites/guide']);
   assert.equal(normal.status, 0, normal.output);
   assert.doesNotMatch(normal.output, /--config|--dry-run/);
 });
 
 test('deployment input and dry-run values are validated', { skip: !available }, () => {
   for (const vars of [[], ['ARCHIVE=a.tar.gz', 'VERSION=1.2.3']]) {
-    const result = run(['cli:deploy', ...vars]);
+    const result = run(['cli:app:deploy', ...vars]);
     assert.notEqual(result.status, 0);
     assert.match(result.output, /Specify exactly one/);
     assert.doesNotMatch(result.output, /go build/);
   }
-  const result = run(['cli:publish', 'SITE=guide', 'SOURCE=docs/public/sites/guide', 'DRY_RUN=maybe']);
+  const result = run(['cli:site:publish', 'SITE=guide', 'SOURCE=docs/public/sites/guide', 'DRY_RUN=maybe']);
   assert.notEqual(result.status, 0);
   assert.doesNotMatch(result.output, /go build/);
 });
@@ -62,4 +64,47 @@ test('package Taskfiles expose build tasks directly', { skip: !available }, () =
   assert.equal(web.status, 0, web.output);
   assert.match(web.output, /npm run build/);
   assert.match(web.output, /docker compose up/);
+});
+
+test('every CLI subcommand has a corresponding task', { skip: !available }, () => {
+  const result = run(['--list-all']);
+  assert.equal(result.status, 0, result.output);
+  for (const name of ['site:publish', 'app:deploy', 'registry:register', 'registry:unregister', 'preview:publish', 'index:build', 'config:set-default', 'lock:inspect', 'lock:recover']) {
+    assert.ok(result.output.includes(`cli:${name}:`), `${name} is missing`);
+  }
+});
+
+test('new tasks validate required inputs without running the CLI', { skip: !available }, () => {
+  for (const [name, vars] of [
+    ['registry:unregister', []],
+    ['preview:publish', ['SITE=guide', 'SOURCE=docs/public/sites/guide']],
+    ['index:build', ['SITE=guide', 'SOURCE=docs/public/sites/guide']],
+    ['config:set-default', []],
+    ['lock:inspect', []],
+    ['lock:inspect', ['SITE=guide', 'SCOPE=registry']],
+    ['lock:recover', ['SITE=guide']],
+    ['lock:recover', ['SITE=guide', 'OBSERVED_ETAG=abc', 'DRY_RUN=true']],
+    ['index:build', ['SITE=guide', 'SOURCE=docs/public/sites/guide', 'OUT=.local/index', 'DRY_RUN=true']],
+    ['config:set-default', ['LOCATOR=artifact-pages.yaml', 'DRY_RUN=true']],
+  ]) {
+    const result = run([`cli:${name}`, ...vars]);
+    assert.notEqual(result.status, 0, result.output);
+    assert.doesNotMatch(result.output, /go build|task: \[.*\] .\/artifact-pages/);
+  }
+});
+
+test('new tasks map variables onto CLI arguments safely', { skip: !available }, () => {
+  for (const [name, vars, expected] of [
+    ['registry:unregister', ['SITE=retired', 'DRY_RUN=true'], /registry unregister --site retired.*--dry-run/],
+    ['preview:publish', ['SITE=guide', 'SOURCE=docs/public/sites/guide', 'BASE_URL=https://artifact-pages.dev', 'PULL_REQUEST=42', 'HEAD=feature', 'DEFAULT_REF=origin/main', 'INCLUDE=assets/*.css', 'DRY_RUN=true'], /preview publish.*--head feature.*--default-ref origin\/main.*--pull-request 42.*--include 'assets\/\*.css'.*--dry-run/],
+    ['index:build', ['SITE=guide', 'SOURCE=docs/path with spaces', 'OUT=.local/index output'], /index build --site guide --source 'docs\/path with spaces' --out '.local\/index output'/],
+    ['config:set-default', ['LOCATOR=github://acme/admin/config.yaml?ref=main'], /config set-default 'github:\/\/acme\/admin\/config.yaml\?ref=main'/],
+    ['lock:inspect', ['SITE=guide'], /lock inspect --scope site --site guide/],
+    ['lock:inspect:cloudflare', ['SCOPE=registry'], /lock inspect --scope registry.*--config artifact-pages.yaml --config artifact-pages.cloudflare.yaml/],
+    ['lock:recover:cloudflare', ['SCOPE=registry', 'OBSERVED_ETAG="abc"'], /lock recover --scope registry.*--observed-etag '"abc"'.*--config artifact-pages.yaml --config artifact-pages.cloudflare.yaml/],
+  ]) {
+    const result = run(['--dry', `cli:${name}`, ...vars]);
+    assert.equal(result.status, 0, result.output);
+    assert.match(result.output, expected);
+  }
 });

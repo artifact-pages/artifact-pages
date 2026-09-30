@@ -17,11 +17,11 @@ Local serving defaults to port 4179 and `.local/public-site/storage`, matching t
 Publishing requires both SITE and SOURCE. Every mutation task builds the CLI before invoking it. CONFIG is optional for ordinary tasks; without it the CLI uses its own config resolution rules. DRY_RUN accepts only `true` or `false` and defaults to `false`.
 
 ~~~sh
-task cli:publish SITE=guide SOURCE=docs/public/sites/guide DRY_RUN=true
-task cli:publish SITE=guide SOURCE=docs/public/sites/guide
-task cli:registry DRY_RUN=true
-task cli:deploy ARCHIVE=.local/releases/artifact-pages-web-v1.2.3.tar.gz DRY_RUN=true
-task cli:deploy VERSION=1.2.3 DRY_RUN=true
+task cli:site:publish SITE=guide SOURCE=docs/public/sites/guide DRY_RUN=true
+task cli:site:publish SITE=guide SOURCE=docs/public/sites/guide
+task cli:registry:register DRY_RUN=true
+task cli:app:deploy ARCHIVE=.local/releases/artifact-pages-web-v1.2.3.tar.gz DRY_RUN=true
+task cli:app:deploy VERSION=1.2.3 DRY_RUN=true
 ~~~
 
 App deployment requires exactly one of ARCHIVE or VERSION. Registry reconciliation is the existing `registry register` operation; it may remove registrations omitted from the desired mapping. Publishing never implicitly reconciles the registry, deploys the app, or runs Terraform.
@@ -29,11 +29,37 @@ App deployment requires exactly one of ARCHIVE or VERSION. Registry reconciliati
 ## Cloudflare overlay
 
 ~~~sh
-task cli:registry:cloudflare DRY_RUN=true
-task cli:publish:cloudflare SITE=guide SOURCE=docs/public/sites/guide DRY_RUN=true
-task cli:deploy:cloudflare VERSION=1.2.3 DRY_RUN=true
+task cli:registry:register:cloudflare DRY_RUN=true
+task cli:site:publish:cloudflare SITE=guide SOURCE=docs/public/sites/guide DRY_RUN=true
+task cli:app:deploy:cloudflare VERSION=1.2.3 DRY_RUN=true
 ~~~
 
 Cloudflare tasks select exactly `--config artifact-pages.yaml --config artifact-pages.cloudflare.yaml`, in that order. The base site's mapping is inherited when the overlay omits `sites`. The ignored overlay and credentials must already exist locally. CONFIG does not change this fixed Cloudflare stack. Drop DRY_RUN only when ready to write. Task's own `--dry` only prints commands and is not a substitute for the CLI's `DRY_RUN=true`, which reads the target and computes actual changes.
 
 Provider-module repositories have separate `tf:*` tasks. Run those within the module repository and explicitly select a consumer deployment directory with TF_DIR for initialization, validation, planning, applying, and outputs. No task in this product repository operates a sibling Terraform repository.
+
+## Other CLI subcommands
+
+Task names mirror the CLI hierarchy. The earlier `cli:publish`, `cli:registry`, and `cli:deploy` shortcuts have been replaced by `cli:site:publish`, `cli:registry:register`, and `cli:app:deploy`.
+
+~~~sh
+# First remove retired from the desired config's sites mapping.
+task cli:registry:unregister SITE=retired DRY_RUN=true
+task cli:registry:unregister:cloudflare SITE=retired DRY_RUN=true
+
+task cli:preview:publish SITE=guide SOURCE=docs/public/sites/guide BASE_URL=http://localhost:4179 DRY_RUN=true
+task cli:preview:publish:cloudflare SITE=guide SOURCE=docs/public/sites/guide BASE_URL=https://artifact-pages.dev PULL_REQUEST=42 DRY_RUN=true
+
+# Local index output, not a publish operation.
+task cli:index:build SITE=guide SOURCE=docs/public/sites/guide OUT=.local/index-only
+task cli:config:set-default LOCATOR=artifact-pages.yaml
+
+task cli:lock:inspect SITE=guide
+task cli:lock:inspect:cloudflare SCOPE=registry
+# Only after confirming the owner is stale; preserve the observed ETag exactly.
+task cli:lock:recover:cloudflare SCOPE=registry OBSERVED_ETAG='"observed-etag"'
+~~~
+
+Preview publishing requires BASE_URL and supports optional HEAD, DEFAULT_REF, PULL_REQUEST, and one INCLUDE resource path/pattern. Omitted Git refs use the CLI defaults. Use the CLI directly for repeated `--include` flags or additional output options. Index building requires OUT, and optionally accepts TITLE, REF, REPOSITORY, and REPOSITORY_URL. Config selection requires LOCATOR and changes only the user's saved locator.
+
+Lock operations require SITE, or SCOPE=registry without SITE. Recover additionally requires OBSERVED_ETAG; it is never run automatically after inspect. The CLI has no dry-run for lock recovery, index building, or config selection, so these tasks reject DRY_RUN=true instead of silently writing. Use Task's `--dry` to inspect their command expansion without executing them. Every target-dependent operation has a `:cloudflare` counterpart with the same fixed config stack; index building and config selection do not use a deployment target.

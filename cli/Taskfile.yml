@@ -17,7 +17,7 @@ tasks:
     cmds:
       - go test ./cli/... -count=1
 
-  publish: &publish
+  site:publish: &publish
     desc: Publish one explicitly selected site and source (SITE, SOURCE, optional CONFIG, DRY_RUN)
     dir: '{{.REPO_ROOT}}'
     vars:
@@ -35,13 +35,13 @@ tasks:
         ./artifact-pages site publish --site {{.SITE | shellQuote}} --source {{.SOURCE | shellQuote}}
         {{.CONFIG_FLAGS}} {{if eq .DRY_RUN "true"}}--dry-run{{end}}
 
-  publish:cloudflare:
+  site:publish:cloudflare:
     <<: *publish
     desc: Publish to Cloudflare with the base config and Cloudflare overlay (SITE, SOURCE, DRY_RUN)
     vars:
       CONFIG_FLAGS: --config artifact-pages.yaml --config artifact-pages.cloudflare.yaml
 
-  registry: &registry
+  registry:register: &registry
     desc: Reconcile the configured site registry (optional CONFIG, DRY_RUN)
     dir: '{{.REPO_ROOT}}'
     vars:
@@ -54,13 +54,13 @@ tasks:
       - task: build
       - ./artifact-pages registry register {{.CONFIG_FLAGS}} {{if eq .DRY_RUN "true"}}--dry-run{{end}}
 
-  registry:cloudflare:
+  registry:register:cloudflare:
     <<: *registry
     desc: Reconcile the Cloudflare registry with the base config and overlay (DRY_RUN)
     vars:
       CONFIG_FLAGS: --config artifact-pages.yaml --config artifact-pages.cloudflare.yaml
 
-  deploy: &deploy
+  app:deploy: &deploy
     desc: Deploy an app bundle (exactly one ARCHIVE or VERSION, optional CONFIG, DRY_RUN)
     dir: '{{.REPO_ROOT}}'
     vars:
@@ -79,8 +79,133 @@ tasks:
         {{if .ARCHIVE}}--archive {{.ARCHIVE | shellQuote}}{{else if .VERSION}}--version {{.VERSION | shellQuote}}{{end}}
         {{.CONFIG_FLAGS}} {{if eq .DRY_RUN "true"}}--dry-run{{end}}
 
-  deploy:cloudflare:
+  app:deploy:cloudflare:
     <<: *deploy
     desc: Deploy the app to Cloudflare with the base config and overlay (ARCHIVE or VERSION, DRY_RUN)
     vars:
       CONFIG_FLAGS: --config artifact-pages.yaml --config artifact-pages.cloudflare.yaml
+
+  registry:unregister: &unregister
+    desc: Remove a site already omitted from the config (SITE, optional CONFIG, DRY_RUN)
+    dir: '{{.REPO_ROOT}}'
+    vars:
+      CONFIG_FLAGS: '{{if .CONFIG}}--config {{.CONFIG | shellQuote}}{{end}}'
+    requires:
+      vars:
+        - SITE
+        - name: DRY_RUN
+          enum: ['true', 'false']
+    cmds:
+      - task: build
+      - ./artifact-pages registry unregister --site {{.SITE | shellQuote}} {{.CONFIG_FLAGS}} {{if eq .DRY_RUN "true"}}--dry-run{{end}}
+
+  registry:unregister:cloudflare:
+    <<: *unregister
+    desc: Unregister and clean one Cloudflare site (SITE, DRY_RUN)
+    vars:
+      CONFIG_FLAGS: --config artifact-pages.yaml --config artifact-pages.cloudflare.yaml
+
+  preview:publish: &preview
+    desc: Publish a review preview (SITE, SOURCE, BASE_URL, optional HEAD, DEFAULT_REF, PULL_REQUEST, CONFIG, DRY_RUN)
+    dir: '{{.REPO_ROOT}}'
+    vars:
+      CONFIG_FLAGS: '{{if .CONFIG}}--config {{.CONFIG | shellQuote}}{{end}}'
+    requires:
+      vars:
+        - SITE
+        - SOURCE
+        - BASE_URL
+        - name: DRY_RUN
+          enum: ['true', 'false']
+    cmds:
+      - task: build
+      - >-
+        ./artifact-pages preview publish --site {{.SITE | shellQuote}} --source {{.SOURCE | shellQuote}}
+        --base-url {{.BASE_URL | shellQuote}}
+        {{if .HEAD}}--head {{.HEAD | shellQuote}}{{end}}
+        {{if .DEFAULT_REF}}--default-ref {{.DEFAULT_REF | shellQuote}}{{end}}
+        {{if .PULL_REQUEST}}--pull-request {{.PULL_REQUEST | shellQuote}}{{end}}
+        {{if .INCLUDE}}--include {{.INCLUDE | shellQuote}}{{end}}
+        {{.CONFIG_FLAGS}} {{if eq .DRY_RUN "true"}}--dry-run{{end}}
+
+  preview:publish:cloudflare:
+    <<: *preview
+    desc: Publish a Cloudflare preview (SITE, SOURCE, BASE_URL, optional PULL_REQUEST, DRY_RUN)
+    vars:
+      CONFIG_FLAGS: --config artifact-pages.yaml --config artifact-pages.cloudflare.yaml
+
+  index:build:
+    desc: Build only a local site index (SITE, SOURCE, OUT, optional TITLE, REF, REPOSITORY, REPOSITORY_URL)
+    dir: '{{.REPO_ROOT}}'
+    requires:
+      vars:
+        - SITE
+        - SOURCE
+        - OUT
+        - name: DRY_RUN
+          enum: ['false']
+    cmds:
+      - task: build
+      - >-
+        ./artifact-pages index build --site {{.SITE | shellQuote}} --source {{.SOURCE | shellQuote}} --out {{.OUT | shellQuote}}
+        {{if .TITLE}}--site-title {{.TITLE | shellQuote}}{{end}}
+        {{if .REF}}--ref {{.REF | shellQuote}}{{end}}
+        {{if .REPOSITORY}}--repository {{.REPOSITORY | shellQuote}}{{end}}
+        {{if .REPOSITORY_URL}}--repository-url {{.REPOSITORY_URL | shellQuote}}{{end}}
+
+  config:set-default:
+    desc: Save the user's default config locator (LOCATOR)
+    dir: '{{.REPO_ROOT}}'
+    requires:
+      vars:
+        - LOCATOR
+        - name: DRY_RUN
+          enum: ['false']
+    cmds:
+      - task: build
+      - ./artifact-pages config set-default {{.LOCATOR | shellQuote}}
+
+  lock:inspect: &inspect
+    desc: Inspect a site or registry lock (SITE or SCOPE=registry, optional CONFIG)
+    dir: '{{.REPO_ROOT}}'
+    vars:
+      CONFIG_FLAGS: '{{if .CONFIG}}--config {{.CONFIG | shellQuote}}{{end}}'
+      SCOPE: '{{.SCOPE | default "site"}}'
+    requires:
+      vars:
+        - name: SCOPE
+          enum: ['site', 'registry']
+    preconditions:
+      - sh: '{{if eq .SCOPE "registry"}}{{if .SITE}}false{{else}}true{{end}}{{else}}{{if .SITE}}true{{else}}false{{end}}{{end}}'
+        msg: Specify SITE for a site lock, or SCOPE=registry without SITE.
+    cmds:
+      - task: build
+      - ./artifact-pages lock inspect --scope {{.SCOPE | shellQuote}} {{if .SITE}}--site {{.SITE | shellQuote}}{{end}} {{.CONFIG_FLAGS}}
+
+  lock:inspect:cloudflare:
+    <<: *inspect
+    desc: Inspect a Cloudflare site or registry lock (SITE or SCOPE=registry)
+    vars:
+      CONFIG_FLAGS: --config artifact-pages.yaml --config artifact-pages.cloudflare.yaml
+      SCOPE: '{{.SCOPE | default "site"}}'
+
+  lock:recover: &recover
+    <<: *inspect
+    desc: Recover a confirmed stale lock (SITE or SCOPE=registry, OBSERVED_ETAG, optional CONFIG; no dry-run)
+    requires:
+      vars:
+        - OBSERVED_ETAG
+        - name: SCOPE
+          enum: ['site', 'registry']
+        - name: DRY_RUN
+          enum: ['false']
+    cmds:
+      - task: build
+      - ./artifact-pages lock recover --scope {{.SCOPE | shellQuote}} {{if .SITE}}--site {{.SITE | shellQuote}}{{end}} --observed-etag {{.OBSERVED_ETAG | shellQuote}} {{.CONFIG_FLAGS}}
+
+  lock:recover:cloudflare:
+    <<: *recover
+    desc: Recover a confirmed stale Cloudflare lock (SITE or SCOPE=registry, OBSERVED_ETAG; no dry-run)
+    vars:
+      CONFIG_FLAGS: --config artifact-pages.yaml --config artifact-pages.cloudflare.yaml
+      SCOPE: '{{.SCOPE | default "site"}}'
