@@ -31,7 +31,7 @@ async function startVite(storageRoot) {
   const source = `
     import { createServer } from 'vite'
     const server = await createServer({
-      configFile: ${JSON.stringify(path.join(repositoryRoot, 'vite.config.ts'))},
+      configFile: ${JSON.stringify(path.join(repositoryRoot, 'web/vite.config.ts'))},
       logLevel: 'silent',
       server: { host: '127.0.0.1', port: 0, strictPort: true },
     })

@@ -301,7 +301,7 @@ async function main() {
     assert(git(adminRoot, ['status', '--porcelain']) === '', 'temporary admin repository was not clean after its initial commit')
     assert(git(satelliteRoot, ['status', '--porcelain']) === '', 'temporary satellite repository was not clean after its initial commit')
 
-    run('go', ['build', '-trimpath', '-o', binaryPath, './cmd/artifact-pages'])
+    run('go', ['build', '-trimpath', '-o', binaryPath, './cli/cmd/artifact-pages'])
 
     const registryPlan = cli(binaryPath, [
       'registry', 'register', '--config', '.artifact-pages.yaml', '--dry-run',

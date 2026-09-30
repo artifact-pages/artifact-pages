@@ -87,7 +87,7 @@ services:
     ports:
       - "127.0.0.1:${EDGE_PORT:-8081}:80"
     volumes:
-      - ./dist:/usr/share/nginx/html:ro
+      - ./web/dist:/usr/share/nginx/html:ro
       - ./docker/edge/nginx/s3.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       seed-s3:
@@ -99,7 +99,7 @@ services:
     ports:
       - "127.0.0.1:${EDGE_PORT:-8081}:80"
     volumes:
-      - ./dist:/usr/share/nginx/html:ro
+      - ./web/dist:/usr/share/nginx/html:ro
       - ./docker/edge/nginx/s3.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       seed-s3:
@@ -113,7 +113,7 @@ services:
     ports:
       - "127.0.0.1:${EDGE_PORT:-8081}:80"
     volumes:
-      - ./dist:/usr/share/nginx/html:ro
+      - ./web/dist:/usr/share/nginx/html:ro
       - ./docker/edge/nginx/gcs.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       seed-gcs:

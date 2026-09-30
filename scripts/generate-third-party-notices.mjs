@@ -212,7 +212,7 @@ export async function renderProductionNotices(projectRoot) {
 }
 
 export async function generateProductionNotices(projectRoot) {
-  const distRoot = path.join(projectRoot, 'dist')
+  const distRoot = path.join(projectRoot, 'web', 'dist')
   const notices = await renderProductionNotices(projectRoot)
   await fs.copyFile(path.join(projectRoot, 'LICENSE'), path.join(distRoot, 'LICENSE'))
   await fs.writeFile(path.join(distRoot, 'THIRD_PARTY_NOTICES.txt'), notices)

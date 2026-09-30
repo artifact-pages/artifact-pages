@@ -7,7 +7,7 @@ The repository can build a preview projection from Git and serve it from a local
 From the source repository, run:
 
 ```sh
-go run ./cmd/preview-local \
+go run ./cli/cmd/preview-local \
   --site sre \
   --source-path path/to/site-content \
   --default-ref origin/main \
@@ -19,7 +19,7 @@ The command compares the selected head with the merge-base of the default branch
 To attach the preview to a same-repository pull request, provide all three provenance values:
 
 ```sh
-go run ./cmd/preview-local \
+go run ./cli/cmd/preview-local \
   --site sre \
   --source-path path/to/site-content \
   --default-ref origin/main \
@@ -48,6 +48,6 @@ The owner accepted [TD3](../backlog/technical-design/TD3-preview-origin-delivery
 
 ## Provider boundary
 
-`cmd/preview-local` calls `preview.WriteLocal`, which uses `preview.DirectoryStore` directly for `.local/previews`. Separately, registered-site `site publish` uses `publisher.ObjectPreviewStore` to adapt its configured deployment backend to the shared `PreviewStore` contract. AWS and Cloudflare adapters are selected outside the preview domain; their provider-origin, locking, cache, and lifecycle behavior remains a separate verification gate. Record schemas, object keys, publication order, and browser routes stay shared. Normal production publishing commonly targets `.local/storage` and reconciles that target's `_previews` prefix.
+`cli/cmd/preview-local` calls `preview.WriteLocal`, which uses `preview.DirectoryStore` directly for `.local/previews`. Separately, registered-site `site publish` uses `publisher.ObjectPreviewStore` to adapt its configured deployment backend to the shared `PreviewStore` contract. AWS and Cloudflare adapters are selected outside the preview domain; their provider-origin, locking, cache, and lifecycle behavior remains a separate verification gate. Record schemas, object keys, publication order, and browser routes stay shared. Normal production publishing commonly targets `.local/storage` and reconciles that target's `_previews` prefix.
 
 The directory-backed lock coordinates concurrent calls inside one process. It is not a cross-process lock. Keep dynamically constructed root-relative URLs and runtime-built navigation outside the preview guarantee; explicit `--resource` paths support extra non-document files when the document uses a relative URL that resolves to the copied layout. The reader has no preview-specific hostname requirement; its frame and raw resources share the current app origin.

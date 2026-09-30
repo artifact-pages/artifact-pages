@@ -11,7 +11,7 @@ export async function withWebReleaseLock(
   task,
 ) {
   await fs.mkdir(releaseRoot, { recursive: true })
-  // Every release shares the same dist tree, so a global packaging lock must
+  // Every release shares the same web/dist tree, so a global packaging lock must
   // also serialize builds that use different version labels.
   const lockPath = path.join(releaseRoot, 'artifact-pages-web-package.lock')
 

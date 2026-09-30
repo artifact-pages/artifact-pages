@@ -97,7 +97,7 @@ async function assertCompositeActionWiring() {
     assert.match(source, /^  using: composite$/m, `${kind} Action must remain an optional composite wrapper`)
     assert.match(source, /^        go-version-file: \$\{\{ github\.action_path \}\}\/\.\.\/\.\.\/go\.mod$/m, `${kind} Action must read go.mod relative to its own source`)
     assert.match(source, /^      working-directory: \$\{\{ github\.action_path \}\}\/\.\.\/\.\.$/m, `${kind} Action must build from its own repository root`)
-    assert.match(source, /^      run: go build -trimpath -o "\$RUNNER_TEMP\/artifact-pages" \.\/cmd\/artifact-pages$/m, `${kind} Action must build the shared CLI binary`)
+    assert.match(source, /^      run: go build -trimpath -o "\$RUNNER_TEMP\/artifact-pages" \.\/cli\/cmd\/artifact-pages$/m, `${kind} Action must build the shared CLI binary`)
     assert.ok(step.lines.includes('      working-directory: ${{ github.workspace }}'), `${kind} CLI invocation must run from the adopter's workspace`)
     assert.ok(step.lines.includes('      run: node "$GITHUB_ACTION_PATH/../shared/invoke-cli.mjs"'), `${kind} Action must invoke the shared CLI wrapper from action_path`)
 
@@ -597,7 +597,7 @@ async function main() {
     await writeFile(satelliteRoot, '.artifact-pages-action.yaml', deploymentConfig(actionStorageRoot))
     await writeFile(satelliteRoot, 'docs/artifacts/overview.html', '<!doctype html><title>Overview</title><h1>SRE overview</h1>\n')
     commit(satelliteRoot, 'Add SRE artifact')
-    run('go', ['build', '-o', binaryPath, './cmd/artifact-pages'])
+    run('go', ['build', '-o', binaryPath, './cli/cmd/artifact-pages'])
 
     const registryApplyArgs = ['registry', 'register', '--config', '.artifact-pages.yaml', '--format', 'json']
     const initialRegistry = runDirect(binaryPath, adminRoot, registryApplyArgs, 'initial registry register')

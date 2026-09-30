@@ -219,7 +219,7 @@ async function main() {
     await fs.mkdir(bundlesRoot, { recursive: true })
     await fs.mkdir(storageRoot, { recursive: true })
 
-    run('go', ['build', '-o', binaryPath, './cmd/artifact-pages'])
+    run('go', ['build', '-o', binaryPath, './cli/cmd/artifact-pages'])
 
     await writeFile(adminRoot, '.artifact-pages.yaml', [
       'schemaVersion: 1',

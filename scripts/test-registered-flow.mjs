@@ -194,7 +194,7 @@ async function main() {
     commit(adminRoot, 'add registered sites and shared local target config')
     commit(satelliteRoot, 'add two registered site sources')
 
-    run('go', ['build', '-o', binaryPath, './cmd/artifact-pages'])
+    run('go', ['build', '-o', binaryPath, './cli/cmd/artifact-pages'])
 
     const adminDryRun = parseResult(run(binaryPath, [
       'registry', 'register', '--config', '.artifact-pages.yaml', '--dry-run', '--format', 'json',
@@ -222,7 +222,7 @@ async function main() {
       ...process.env,
       COMPOSE_PROJECT_NAME: e2eProject,
       WEB_PORT: String(port),
-      WEB_ROOT: path.join(projectRoot, 'dist'),
+      WEB_ROOT: path.join(projectRoot, 'web/dist'),
       STORAGE_ROOT: storageRoot,
       PREVIEW_ROOT: path.join(storageRoot, '_previews'),
     }
@@ -234,7 +234,7 @@ async function main() {
 
     run(process.execPath, [
       path.join(projectRoot, 'node_modules/@playwright/test/cli.js'),
-      'test', 'e2e/registered-flow.spec.ts', '--grep', 'registered site with no artifact publish',
+      'test', '--config', 'web/playwright.config.ts', 'web/e2e/registered-flow.spec.ts', '--grep', 'registered site with no artifact publish',
     ], {
       env: {
         ...composeEnv,
@@ -314,7 +314,7 @@ async function main() {
 
     run(process.execPath, [
       path.join(projectRoot, 'node_modules/@playwright/test/cli.js'),
-      'test', 'e2e/registered-flow.spec.ts',
+      'test', '--config', 'web/playwright.config.ts', 'web/e2e/registered-flow.spec.ts',
     ], {
       env: {
         ...composeEnv,
@@ -326,7 +326,7 @@ async function main() {
     })
 
     run('go', [
-      'test', '-race', '-count=1', './internal/publisher',
+      'test', '-race', '-count=1', './cli/internal/publisher',
       '-run', '^(TestPublishSiteRetriesAfterMetadataUploadFailureBeforeStaleDeletion|TestPublishSiteRetriesPartialStaleDeletionToConvergence|TestUnregisterSiteRetriesForcedCleanupWhenRegistrationIsAlreadyAbsent)$',
     ])
 

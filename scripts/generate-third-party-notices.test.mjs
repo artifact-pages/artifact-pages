@@ -55,10 +55,10 @@ test('collects the locked production dependency graph and renders included licen
     assert.doesNotMatch(notices, /devOnly/u)
     assert.doesNotMatch(notices, /optionalOnly/u)
 
-    await mkdir(path.join(projectRoot, 'dist'))
+    await mkdir(path.join(projectRoot, 'web', 'dist'), { recursive: true })
     await generateProductionNotices(projectRoot)
-    assert.equal(await readFile(path.join(projectRoot, 'dist/THIRD_PARTY_NOTICES.txt'), 'utf8'), notices)
-    assert.equal(await readFile(path.join(projectRoot, 'dist/LICENSE'), 'utf8'), 'Project MIT license')
+    assert.equal(await readFile(path.join(projectRoot, 'web/dist/THIRD_PARTY_NOTICES.txt'), 'utf8'), notices)
+    assert.equal(await readFile(path.join(projectRoot, 'web/dist/LICENSE'), 'utf8'), 'Project MIT license')
   } finally {
     await rm(projectRoot, { recursive: true, force: true })
   }

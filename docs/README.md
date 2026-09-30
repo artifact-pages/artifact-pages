@@ -2,6 +2,10 @@
 
 Start with the [thesis](thesis.md) for the product's purpose, the [specification](specification.md) for its contract, and the [roadmap](roadmap.md) for implementation status. The specification takes precedence over exploratory diagrams and UI studies.
 
+## Repository and product architecture
+
+- [Repository layout](architecture/repository-layout.md) — component ownership, entry commands, local output paths, and Terraform module boundaries.
+
 ## Domain and publishing
 
 - [Domain model](architecture/domain-model.html) — SiteRegistry, Site, Artifact, and the operations that change them.

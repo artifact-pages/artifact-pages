@@ -13,7 +13,7 @@ Changed HTML and Markdown documents render from their head snapshot with local d
 - [x] Verify changed-document links, unchanged-document links, and parent-app navigation from an iframe.
 - [x] Exercise explicit non-document resource includes and reject missing or out-of-tree paths.
 - [x] Document and test the unsupported boundary for runtime-built and root-relative URLs.
-- [x] Round-trip spaces, Unicode and reserved characters through the configured object-backed preview publisher, not only the directory store (completed ISSUE-015; evidence below).
+- [x] Round-trip spaces, Unicode and reserved characters through the configured object-backed preview publisher, not only the directory store (completed ISSUE-015; evidence below; implementation is in [local-serving.spec.ts](../../../web/e2e/local-serving.spec.ts)).
 - [x] Recognize static JavaScript imports and re-exports without treating ordinary strings or comments as dependencies; include the committed head-tree module closure and execute a transitive module in the same-origin preview frame (ISSUE-023 regressions).
 - [x] Collect static imports and re-exports from inline HTML module scripts with their local transitive dependencies; leave ordinary/data scripts and external HTTPS imports out of the local bundle (ISSUE-024).
 - [x] Bundle sanitized Markdown raw-HTML images and responsive image candidates ([ISSUE-025](../issues/README.md#issue-index); local evidence below).
@@ -45,7 +45,7 @@ The earlier ISSUE-024 browser case used the former local `preview.localhost` raw
 
 ISSUE-025 adds `TestBuildFromGitCollectsSanitizedMarkdownHTMLImagesFromHead`: the preview head manifest includes inline `img[src]`, `picture/source[srcset]`, and Markdown image resources with nested paths, encoded spaces, query strings, and fragments. HTTPS/data candidates remain external; stripped script content, `<img srcset>` (not allowed by the reader sanitizer), `source[srcset]` outside `<picture>`, and code-fence examples do not add resources. The preview Markdown reader now resolves allowed `source[srcset]` candidates from the artifact URL. The local E2E case `site previews filter missing revisions and keep PR and manual groups distinct` renders the committed raw-HTML picture, confirms its selected URL is under the preview revision, receives HTTP 200, and checks `naturalWidth > 0`. The Go race suite and all 60 local Playwright tests pass. This is local preview evidence, not live-provider proof or the broader TD3 profile.
 
-See [the local E2E fixture and tests](../../../e2e/local-serving.spec.ts) and the [preview selection and resource contract](../../specification.md#post-mvp-pre-publish-preview-contract).
+See [the local E2E fixture and tests](../../../web/e2e/local-serving.spec.ts) and the [preview selection and resource contract](../../specification.md#post-mvp-pre-publish-preview-contract).
 
 ## Implementation links
 

@@ -6,7 +6,7 @@ Build the command from the Git Artifact Pages product checkout and make it avail
 
 ~~~sh
 cd /path/to/git-artifact-pages
-go install ./cmd/artifact-pages
+go install ./cli/cmd/artifact-pages
 ~~~
 
 ## Admin checkout

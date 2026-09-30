@@ -110,7 +110,7 @@ The source directory must be inside the current Git working tree. Tracked files 
 Requires Go 1.26 or newer.
 
 ~~~sh
-go run ./cmd/artifact-pages index build \
+go run ./cli/cmd/artifact-pages index build \
   --site sre \
   --site-title SRE \
   --source fixtures/storage/_artifacts/sre \
@@ -123,8 +123,8 @@ Run the Go tests and the benchmarks with generated fixtures in temporary Git rep
 
 ~~~sh
 go test ./...
-go test ./internal/indexer -run '^$' -bench=BenchmarkBuildIndexFiles -benchtime=5x -benchmem
-go test ./internal/indexer -run '^$' -bench=BenchmarkBuildIndexGitHistoryPages -benchtime=3x -benchmem
+go test ./cli/internal/indexer -run '^$' -bench=BenchmarkBuildIndexFiles -benchtime=5x -benchmem
+go test ./cli/internal/indexer -run '^$' -bench=BenchmarkBuildIndexGitHistoryPages -benchtime=3x -benchmem
 ~~~
 
 The browser palette benchmark creates ignored synthetic indexes under `.local/palette-load-fixtures/`. It measures single-site index sizes and multi-site discovery separately; the latter downloads every lightweight summary but only the active site's artifact index. It reports payload and loopback-transfer timing, JSON body-read and parse time, browser heap, query time, palette-open time, and input-to-paint latency. `--recent-reads 0-20` seeds per-site recent history, checks visible results, opens a page to verify persistence, and measures search with and without an open document. Its benchmark-only contextual-scoring experiment compares runtime scoring, object profiles, packed CSR typed arrays, and inverted affinity vectors with query, recent-read, pin, and freshness signals. It checks top-eight parity in All/Recent/Pinned scopes and Japanese/astral Unicode scoring and rankings. `--palette-score-matrix` evaluates every context/signal pairing, `--palette-scope-matrix` measures Recent/Pinned candidate filtering and cached counts, and `--palette-index-matrix` measures CSR features prebuilt into the site index. No experimental scorer is wired into the product; see the [palette search benchmark report](docs/research/palette-search-benchmark.md) for the methodology and results. These timings compare browser/projection costs locally; they are not a forecast of CDN or public-network latency. For example:
@@ -147,4 +147,4 @@ It also checks that `@` site lookup does not fetch another site's artifact index
 - The SPA is stable infrastructure; artifact content and site indexes change independently.
 - Search, recent items, tree navigation, and table-of-contents metadata are precomputed at publish time where practical.
 
-Browse the [documentation map](docs/README.md), or go directly to the [thesis](docs/thesis.md), [specification](docs/specification.md), and [roadmap](docs/roadmap.md).
+Browse the [documentation map](docs/README.md) and [repository layout](docs/architecture/repository-layout.md), or go directly to the [thesis](docs/thesis.md), [specification](docs/specification.md), and [roadmap](docs/roadmap.md).

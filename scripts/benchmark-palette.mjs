@@ -2218,7 +2218,7 @@ function parseArguments(args) {
 }
 
 function startPreview() {
-  return spawn(process.execPath, [viteCli, 'preview', '--host', '127.0.0.1', '--port', String(previewPort), '--strictPort'], {
+  return spawn(process.execPath, [viteCli, 'preview', '--config', path.join(repositoryRoot, 'web/vite.config.ts'), '--host', '127.0.0.1', '--port', String(previewPort), '--strictPort'], {
     cwd: repositoryRoot,
     stdio: 'ignore',
   })

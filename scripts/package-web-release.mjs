@@ -8,7 +8,7 @@ import { withWebReleaseLock } from './web-release-lock.mjs'
 import { parseVersionLabel } from './web-release-version.mjs'
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const distRoot = path.join(projectRoot, 'dist')
+const distRoot = path.join(projectRoot, 'web', 'dist')
 const localRoot = path.join(projectRoot, '.local')
 const releaseRoot = path.join(localRoot, 'releases')
 
@@ -96,7 +96,7 @@ async function packageVersion(version) {
         !files.some((file) => file.startsWith('assets/'))
       ) {
         throw new Error(
-          'Build the Vite application and generate license notices first; dist must contain index.html, preview-bridge.js, LICENSE, assets/, and THIRD_PARTY_NOTICES.txt.',
+          'Build the Vite application and generate license notices first; web/dist must contain index.html, preview-bridge.js, LICENSE, assets/, and THIRD_PARTY_NOTICES.txt.',
         )
       }
 

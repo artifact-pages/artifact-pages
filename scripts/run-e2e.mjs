@@ -47,7 +47,7 @@ try {
   const env = {
     COMPOSE_PROJECT_NAME: projectName,
     WEB_PORT: port,
-    WEB_ROOT: process.env.WEB_ROOT ?? './dist',
+    WEB_ROOT: process.env.WEB_ROOT ?? './web/dist',
     PREVIEW_ROOT: process.env.PREVIEW_ROOT ?? './fixtures/storage/_previews',
   }
   const startStatus = run('docker', ['compose', '-p', projectName, 'up', '--detach'], env)
@@ -57,7 +57,7 @@ try {
   } else if (!(await waitForServer())) {
     console.error(`The local nginx test server did not become available at ${baseURL}.`)
   } else {
-    exitCode = run(process.execPath, ['node_modules/@playwright/test/cli.js', 'test'], {
+    exitCode = run(process.execPath, ['node_modules/@playwright/test/cli.js', 'test', '--config', 'web/playwright.config.ts'], {
       PLAYWRIGHT_BASE_URL: baseURL,
     })
   }

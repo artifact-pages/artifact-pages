@@ -1,5 +1,5 @@
 module "artifact_pages_delivery" {
-  source = "../../../infra/cloudflare/delivery"
+  source = "../../../terraform/modules/cloudflare/delivery"
 
   account_id            = var.cloudflare_account_id
   zone_id               = var.cloudflare_zone_id
@@ -9,7 +9,7 @@ module "artifact_pages_delivery" {
 }
 
 module "preview_retention" {
-  source = "../../../infra/cloudflare/retention"
+  source = "../../../terraform/modules/cloudflare/retention"
 
   account_id             = var.cloudflare_account_id
   bucket_name            = var.r2_bucket_name

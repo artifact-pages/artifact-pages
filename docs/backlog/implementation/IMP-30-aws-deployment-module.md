@@ -2,7 +2,7 @@
 
 - Status: Done
 
-The reusable module source is in [infra/aws](../../../infra/aws/README.md). It provisions the private S3/CloudFront OAC boundary, route function, TTL policies, preview lifecycle, and separate OIDC roles. Account deployment and browser/OIDC smoke evidence remain open in [T15](../verification/T15-provider-delivery.md).
+The reusable module source is in [terraform/modules/aws](../../../terraform/modules/aws/README.md). It provisions the private S3/CloudFront OAC boundary, route function, TTL policies, preview lifecycle, and separate OIDC roles. Account deployment and browser/OIDC smoke evidence remain open in [T15](../verification/T15-provider-delivery.md).
 - Phase: Provider-backed deployment
 - Depends on: [IMP-29](IMP-29-aws-production-adapter.md), [IMP-31](IMP-31-app-distribution.md)
 - Proves: [T15](../verification/T15-provider-delivery.md)

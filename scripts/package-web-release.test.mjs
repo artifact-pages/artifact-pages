@@ -71,7 +71,7 @@ async function waitForFile(filePath, timeoutMs = 10_000) {
 
 async function createProject(projectRoot) {
   const scriptsRoot = path.join(projectRoot, 'scripts')
-  await fs.mkdir(path.join(projectRoot, 'dist', 'assets'), { recursive: true })
+  await fs.mkdir(path.join(projectRoot, 'web', 'dist', 'assets'), { recursive: true })
   await fs.mkdir(scriptsRoot, { recursive: true })
 
   for (const script of [
@@ -86,7 +86,7 @@ async function createProject(projectRoot) {
 
   await fs.writeFile(
     path.join(scriptsRoot, 'generate-third-party-notices.mjs'),
-    `import { promises as fs } from 'node:fs'\nimport path from 'node:path'\nawait fs.writeFile(path.join(process.cwd(), 'dist', 'THIRD_PARTY_NOTICES.txt'), 'Fixture notices\\n')\n`,
+    `import { promises as fs } from 'node:fs'\nimport path from 'node:path'\nawait fs.writeFile(path.join(process.cwd(), 'web', 'dist', 'THIRD_PARTY_NOTICES.txt'), 'Fixture notices\\n')\n`,
   )
   await fs.writeFile(
     path.join(scriptsRoot, 'test-npm-cli.mjs'),
@@ -101,7 +101,7 @@ if (process.env.GAP_PACKAGE_WEB_BUILD_RELEASE) {
     catch (error) { if (error.code !== 'ENOENT') throw error; await new Promise((resolve) => setTimeout(resolve, 10)) }
   }
 }
-const dist = path.join(process.cwd(), 'dist')
+const dist = path.join(process.cwd(), 'web', 'dist')
 await fs.writeFile(path.join(dist, 'index.html'), '<!doctype html><title>' + process.env.GAP_PACKAGE_WEB_PAYLOAD + '</title>')
 await fs.writeFile(path.join(dist, 'preview-bridge.js'), 'console.log("preview")')
 await fs.writeFile(path.join(dist, 'LICENSE'), 'Fixture license')
@@ -213,7 +213,7 @@ test('competing public package:web operations cannot mix or replace one immutabl
     await fs.writeFile(buildRelease, 'continue')
     await waitForFile(tarMarker)
     await fs.writeFile(
-      path.join(projectRoot, 'dist', 'index.html'),
+      path.join(projectRoot, 'web', 'dist', 'index.html'),
       '<!doctype html><title>late-dist-mutation</title>',
     )
     await fs.writeFile(tarRelease, 'continue')

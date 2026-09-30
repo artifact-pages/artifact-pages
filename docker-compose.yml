@@ -4,7 +4,7 @@ services:
     ports:
       - "127.0.0.1:${WEB_PORT:-4173}:80"
     volumes:
-      - ${WEB_ROOT:-./dist}:/usr/share/nginx/html:ro
+      - ${WEB_ROOT:-./web/dist}:/usr/share/nginx/html:ro
       - ${STORAGE_ROOT:-./fixtures/storage}:/usr/share/nginx/storage:ro
       - ${PREVIEW_ROOT:-./.local/previews}:/usr/share/nginx/previews:ro
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro

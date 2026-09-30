@@ -122,7 +122,7 @@ async function publishUnregisterProbe(configPath, commandEnv, siteID, sourceDir,
   await fs.writeFile(sourcePath, `<!doctype html><title>${siteID} unregister probe</title><p>${marker}</p>\n`, { flag: 'wx' })
   try {
     const result = run('go', [
-      'run', './cmd/artifact-pages', 'site', 'publish', '--config', configPath,
+      'run', './cli/cmd/artifact-pages', 'site', 'publish', '--config', configPath,
       '--site', siteID, '--source', sourceDir, '--format=json',
     ], { env: commandEnv, stdio: 'pipe' })
     process.stdout.write(result.stdout)
@@ -265,7 +265,7 @@ function assertEdgeHasNoDynamicStorageMount(profile, env, service) {
 }
 
 async function assertEdgeAppAssetCacheHeaders(profile, edgePort) {
-  const assetRoot = path.join(projectRoot, 'dist', 'assets')
+  const assetRoot = path.join(projectRoot, 'web', 'dist', 'assets')
   const stem = `app_cache_profile_probe_${profile}_${process.pid}`
   const fixedName = `${stem}.js`
   const hashedName = `${stem}-AbC123xY.js`
@@ -414,7 +414,7 @@ async function main() {
       frontendProbeKey = await publishUnregisterProbe(configPath, sitePublishEnv, 'frontend', 'fixtures/storage/_artifacts/frontend', probeName, `${frontendProbeMarker}-frontend`)
     } else {
       const publish = run('go', [
-        'run', './cmd/artifact-pages', 'site', 'publish', '--config', configPath,
+      'run', './cli/cmd/artifact-pages', 'site', 'publish', '--config', configPath,
         '--site', 'sre', '--source', 'fixtures/storage/_artifacts/sre', '--format=json',
       ], { env: commandEnv, stdio: 'pipe' })
       process.stdout.write(publish.stdout)
@@ -431,7 +431,7 @@ async function main() {
     }
 
     const registryRegister = run('go', [
-      'run', './cmd/artifact-pages', 'registry', 'register', '--config', configPath,
+      'run', './cli/cmd/artifact-pages', 'registry', 'register', '--config', configPath,
       '--format=json',
     ], { env: commandEnv, stdio: 'pipe' })
     process.stdout.write(registryRegister.stdout)
@@ -461,10 +461,10 @@ async function main() {
       throw new Error(`Edge did not serve the seeded artifact from the object API (HTTP ${artifactProbe.status}).`)
     }
 
-    run('go', ['test', './internal/publisher', '-run', '^TestLocalEdgeConformance$', '-count=1'], {
+    run('go', ['test', './cli/internal/publisher', '-run', '^TestLocalEdgeConformance$', '-count=1'], {
       env: commandEnv,
     })
-    run('go', ['test', './cmd/artifact-pages', '-run', '^TestLocalAppDeployCacheConformance$', '-count=1'], {
+    run('go', ['test', './cli/cmd/artifact-pages', '-run', '^TestLocalAppDeployCacheConformance$', '-count=1'], {
       env: commandEnv,
     })
 
@@ -496,7 +496,7 @@ async function main() {
       }
 
       await resetCloudflarePurgeRequests(profile, env, ports.cloudflareAPI)
-      run('go', ['test', './cmd/artifact-pages', '-run', '^TestCloudflareAppDeployConformance$', '-count=1'], {
+    run('go', ['test', './cli/cmd/artifact-pages', '-run', '^TestCloudflareAppDeployConformance$', '-count=1'], {
         env: commandEnv,
       })
       await assertCloudflareAppDeployPurgeRequest(ports.cloudflareAPI)
@@ -506,7 +506,7 @@ async function main() {
 
       await writeDeploymentConfig(profile, configPath, ports, registryProbeSites.filter(({ id }) => id !== 'sre'))
       const unregister = run('go', [
-        'run', './cmd/artifact-pages', 'registry', 'unregister', '--config', configPath,
+        'run', './cli/cmd/artifact-pages', 'registry', 'unregister', '--config', configPath,
         '--site', 'sre', '--format=json',
       ], { env: commandEnv, stdio: 'pipe' })
       process.stdout.write(unregister.stdout)
@@ -558,7 +558,7 @@ async function main() {
     // observe the committed metadata and preview catalog.
     reseed(profile, env)
 
-    run(process.execPath, ['node_modules/@playwright/test/cli.js', 'test', 'e2e/local-serving.spec.ts', '--workers=1'], {
+    run(process.execPath, ['node_modules/@playwright/test/cli.js', 'test', '--config', 'web/playwright.config.ts', 'web/e2e/local-serving.spec.ts', '--workers=1'], {
       env: { ...commandEnv, PLAYWRIGHT_BASE_URL: `http://127.0.0.1:${ports.edge}` },
     })
     console.log(`\n${profile} local edge conformance passed. Edge: http://127.0.0.1:${ports.edge}`)

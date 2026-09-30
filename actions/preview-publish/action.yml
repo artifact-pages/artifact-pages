@@ -85,7 +85,7 @@ runs:
     - name: Build the shared artifact-pages CLI
       shell: bash
       working-directory: ${{ github.action_path }}/../..
-      run: go build -trimpath -o "$RUNNER_TEMP/artifact-pages" ./cmd/artifact-pages
+      run: go build -trimpath -o "$RUNNER_TEMP/artifact-pages" ./cli/cmd/artifact-pages
     - name: Run the preview CLI operation
       id: cli
       shell: bash
