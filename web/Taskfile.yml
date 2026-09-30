@@ -1,0 +1,24 @@
+version: '3'
+
+vars:
+  REPO_ROOT: '{{.TASKFILE_DIR}}/..'
+
+tasks:
+  build:
+    desc: Build the Vite application
+    dir: '{{.REPO_ROOT}}'
+    cmds:
+      - npm run build
+
+  serve:
+    desc: Build and serve locally (optional PORT and STORAGE)
+    dir: '{{.REPO_ROOT}}'
+    vars:
+      PORT: '{{.PORT | default "4179"}}'
+      STORAGE: '{{.STORAGE | default "./.local/public-site/storage"}}'
+    env:
+      WEB_PORT: '{{.PORT}}'
+      STORAGE_ROOT: '{{.STORAGE}}'
+    cmds:
+      - task: build
+      - docker compose up
