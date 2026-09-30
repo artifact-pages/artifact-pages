@@ -46,7 +46,7 @@ func TestRunPreviewPublishDryRunAndApply(t *testing.T) {
 	before := snapshotFiles(t, storageRoot)
 	args := []string{
 		"preview", "publish", "--site", "sre", "--source", "docs/artifacts", "--head", "preview", "--default-ref", baseRef,
-		"--base-url", "https://pages.example.test", "--config", ".artifact-pages.yaml", "--dry-run", "--format", "json",
+		"--base-url", "https://pages.example.test", "--config", "artifact-pages.yaml", "--dry-run", "--format", "json",
 	}
 	var stdout, stderr bytes.Buffer
 	if err := run(context.Background(), args, &stdout, &stderr); err != nil {
@@ -165,7 +165,7 @@ func TestPreviewPublishFailurePreservesResolvedPreviewURLs(t *testing.T) {
 
 	args := []string{
 		"preview", "publish", "--site", "sre", "--source", "docs/artifacts", "--head", "preview-failure", "--default-ref", baseRef,
-		"--base-url", "https://pages.example.test", "--config", ".artifact-pages.yaml", "--dry-run", "--format", "json",
+		"--base-url", "https://pages.example.test", "--config", "artifact-pages.yaml", "--dry-run", "--format", "json",
 	}
 	var stdout, stderr bytes.Buffer
 	err = run(context.Background(), args, &stdout, &stderr)
@@ -242,7 +242,7 @@ func TestRunPreviewPublishDistinguishesDeletionOnlyFromResourceOnlyChanges(t *te
 	before := snapshotFiles(t, storageRoot)
 	baseArgs := []string{
 		"preview", "publish", "--site", "sre", "--source", "docs/artifacts", "--default-ref", baseRef,
-		"--base-url", "https://pages.example.test", "--config", ".artifact-pages.yaml", "--dry-run", "--format", "json",
+		"--base-url", "https://pages.example.test", "--config", "artifact-pages.yaml", "--dry-run", "--format", "json",
 	}
 	args := append(append([]string(nil), baseArgs...), "--head", "preview-deletion")
 	var stdout, stderr bytes.Buffer

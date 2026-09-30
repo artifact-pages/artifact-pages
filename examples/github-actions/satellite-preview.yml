@@ -52,7 +52,7 @@ jobs:
           default-ref: origin/${{ github.event.pull_request.base.ref }}
           pull-request: ${{ github.event.pull_request.number }}
           base-url: ${{ vars.ARTIFACT_PAGES_BASE_URL }}
-          config: github://example/platform-admin/.artifact-pages.yaml?ref=<FULL_ADMIN_CONFIG_COMMIT_SHA>
+          config: github://example/platform-admin/artifact-pages.yaml?ref=<FULL_ADMIN_CONFIG_COMMIT_SHA>
           # Additional non-document resources may be listed one per line:
           # include: |
           #   review-data.json

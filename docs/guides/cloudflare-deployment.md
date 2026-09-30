@@ -14,7 +14,7 @@ The delivery module owns the complete zone root rulesets for the transform, cust
 
 ## 2. Configure the CLI
 
-Copy the [minimal config template](../../examples/cloudflare/artifact-pages.cloudflare.yaml.example) or the [full deployment example](../../examples/cloudflare/deployment.yaml.example) to `.artifact-pages.yaml` and replace the placeholder account, zone, and public URL values. The Cloudflare bucket defaults to `artifact-pages`; set `bucket` only when using another R2 bucket. You can instead keep the ignored local file `artifact-pages.cloudflare.yaml` and pass it with `--config artifact-pages.cloudflare.yaml`; `.artifact-pages.yaml` remains the implicit local default. Add the admin's `sites` mapping before running `registry register` or `registry unregister`; an omitted `sites` field is an input error, not an empty registry. The same YAML file contains the provider target and the registry mapping rather than using a second manifest file. The deployment config contains environment-variable names only, never credential values.
+Copy the [minimal config template](../../examples/cloudflare/artifact-pages.cloudflare.yaml.example) or the [full deployment example](../../examples/cloudflare/deployment.yaml.example) to `artifact-pages.yaml` and replace the placeholder account, zone, and public URL values. The Cloudflare bucket defaults to `artifact-pages`; set `bucket` only when using another R2 bucket. You can instead keep the ignored local file `artifact-pages.cloudflare.yaml` and pass it with `--config artifact-pages.cloudflare.yaml`; `artifact-pages.yaml` remains the implicit local default. Add the admin's `sites` mapping before running `registry register` or `registry unregister`; an omitted `sites` field is an input error, not an empty registry. The same YAML file contains the provider target and the registry mapping rather than using a second manifest file. The deployment config contains environment-variable names only, never credential values.
 
 For the normal setup, provide only the two primary R2 secrets:
 
@@ -77,7 +77,7 @@ For a satellite repository, pin the admin config to a reviewed commit so the pro
 artifact-pages site publish \
   --site sre \
   --source docs/artifacts \
-  --config 'github://acme/platform-admin/.artifact-pages.yaml?ref=0123456789abcdef0123456789abcdef01234567'
+  --config 'github://acme/platform-admin/artifact-pages.yaml?ref=0123456789abcdef0123456789abcdef01234567'
 ```
 
 The deployed registry remains the source of publication eligibility. The remote config locator is deployment input, not an authorization boundary. The object-level reader credential keeps registry reads separate from the satellite's scoped write credential; R2 path restrictions still apply to a single bucket and permission scope per credential.
@@ -93,22 +93,22 @@ cp examples/cloudflare/terraform/terraform.tfvars.example examples/cloudflare/te
 terraform -chdir=examples/cloudflare/terraform plan -var-file=terraform.tfvars
 terraform -chdir=examples/cloudflare/terraform apply -var-file=terraform.tfvars
 
-artifact-pages app deploy --version 1.2.3 --config .artifact-pages.yaml --dry-run
-artifact-pages app deploy --version 1.2.3 --config .artifact-pages.yaml
-artifact-pages registry register --config .artifact-pages.yaml --dry-run
-artifact-pages registry register --config .artifact-pages.yaml
+artifact-pages app deploy --version 1.2.3 --config artifact-pages.yaml --dry-run
+artifact-pages app deploy --version 1.2.3 --config artifact-pages.yaml
+artifact-pages registry register --config artifact-pages.yaml --dry-run
+artifact-pages registry register --config artifact-pages.yaml
 ```
 
-The versioned app bundle is verified before deployment. `registry register` writes the deterministic registry projection for the complete desired set in `.artifact-pages.yaml` and cleans content prefixes for sites omitted from its `sites` mapping. Registry commands require `sites`; omitting it is an input error, while `sites: {}` explicitly means the empty desired registry and registering it removes all current registrations. Provide the R2 credentials for registry operations, and provide the Cloudflare zone API token when the operation will invalidate public URLs; dry-runs and no-op operations do not need the API token.
+The versioned app bundle is verified before deployment. `registry register` writes the deterministic registry projection for the complete desired set in `artifact-pages.yaml` and cleans content prefixes for sites omitted from its `sites` mapping. Registry commands require `sites`; omitting it is an input error, while `sites: {}` explicitly means the empty desired registry and registering it removes all current registrations. Provide the R2 credentials for registry operations, and provide the Cloudflare zone API token when the operation will invalidate public URLs; dry-runs and no-op operations do not need the API token.
 
 With the separate read-only registry and read/write site credentials configured, each satellite repository can run the dry-run, inspect its site change plan, and publish one explicit registered site:
 
 ```sh
-artifact-pages site publish --site sre --source docs/artifacts --config .artifact-pages.yaml --dry-run
-artifact-pages site publish --site sre --source docs/artifacts --config .artifact-pages.yaml
+artifact-pages site publish --site sre --source docs/artifacts --config artifact-pages.yaml --dry-run
+artifact-pages site publish --site sre --source docs/artifacts --config artifact-pages.yaml
 ```
 
-The satellite publishes only its site projection and does not need the zone token. To remove a site, first remove it from the admin config's `sites` mapping, then run `registry unregister --site sre --config .artifact-pages.yaml` from the admin repository; unregister requires the selected config to omit that site and deletes its exact content prefixes. If viewer access should be restricted, configure Cloudflare Access or another edge policy independently; Artifact Pages does not store site visibility or authorize viewers. The commands document the external flow; [T16](../backlog/verification/T16-external-adoption.md) records clean-room adoption evidence.
+The satellite publishes only its site projection and does not need the zone token. To remove a site, first remove it from the admin config's `sites` mapping, then run `registry unregister --site sre --config artifact-pages.yaml` from the admin repository; unregister requires the selected config to omit that site and deletes its exact content prefixes. If viewer access should be restricted, configure Cloudflare Access or another edge policy independently; Artifact Pages does not store site visibility or authorize viewers. The commands document the external flow; [T16](../backlog/verification/T16-external-adoption.md) records clean-room adoption evidence.
 
 ## 4. Verify the deployed boundary
 

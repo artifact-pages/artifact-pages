@@ -457,7 +457,7 @@ func seedForcedUnregisterFixture(t *testing.T, backend *registryApplyTestBackend
 
 func TestRegisterSitesSerializesSeparateProcesses(t *testing.T) {
 	root := t.TempDir()
-	configPath := filepath.Join(root, ".artifact-pages.yaml")
+	configPath := filepath.Join(root, "artifact-pages.yaml")
 	if err := os.WriteFile(configPath, testUnifiedConfigFixture(desiredAdminManifest), 0o600); err != nil {
 		t.Fatal(err)
 	}

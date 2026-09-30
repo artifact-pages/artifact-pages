@@ -14,9 +14,9 @@ The runner needs Node.js, Go, Git, and `tar`. It needs no cloud credentials, net
 
 The run performs these steps in one clean-room scenario:
 
-1. Initializes and commits an `acme/platform-admin` repository and an independent `acme/sre-docs` repository. The admin owns one `.artifact-pages.yaml` containing provider settings and its `sites` mapping; the satellite has no admin registry config.
+1. Initializes and commits an `acme/platform-admin` repository and an independent `acme/sre-docs` repository. The admin owns one `artifact-pages.yaml` containing provider settings and its `sites` mapping; the satellite has no admin registry config.
 2. Plans registration of the complete `sites` mapping with an explicit admin config, then reconciles from the admin checkout's committed default config.
-3. Plans and publishes the `sre` and `neighbor` sites from the satellite checkout with the explicit config path `../platform-admin/.artifact-pages.yaml`. The CLI checks the satellite Git identity and exact source path against the registry.
+3. Plans and publishes the `sre` and `neighbor` sites from the satellite checkout with the explicit config path `../platform-admin/artifact-pages.yaml`. The CLI checks the satellite Git identity and exact source path against the registry.
 4. Runs a site publish dry-run and checks the object target remains byte-for-byte unchanged.
 5. Simulates a process that left the SRE site lock held. It confirms that recovery with an ETag captured before the lock changed fails, then inspects and recovers with the current ETag.
 6. Creates two local test app archives with different bytes. It checks the app dry-run is read-only, verifies that a tampered archive is rejected before writes, deploys version one, upgrades to version two, and rolls back to version one. It compares `/_indexes/`, `/_artifacts/`, and `/_previews/` byte-for-byte after each app deployment.

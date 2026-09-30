@@ -32,7 +32,7 @@ jobs:
         with:
           site: sre
           source: docs/artifacts
-          config: github://example/platform-admin/.artifact-pages.yaml?ref=<FULL_ADMIN_CONFIG_COMMIT_SHA>
+          config: github://example/platform-admin/artifact-pages.yaml?ref=<FULL_ADMIN_CONFIG_COMMIT_SHA>
           # For a private admin config repo, pass a read-only config token:
           # github-token: ${{ secrets.ARTIFACT_PAGES_CONFIG_READ_TOKEN }}
 

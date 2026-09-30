@@ -221,7 +221,7 @@ async function main() {
 
     run('go', ['build', '-o', binaryPath, './cli/cmd/artifact-pages'])
 
-    await writeFile(adminRoot, '.artifact-pages.yaml', [
+    await writeFile(adminRoot, 'artifact-pages.yaml', [
       'schemaVersion: 1',
       'provider: local',
       'local:',
@@ -231,7 +231,7 @@ async function main() {
     run('git', ['init', '--initial-branch=main'], { cwd: adminRoot })
     run('git', ['config', 'user.name', 'Artifact Pages Acceptance Test'], { cwd: adminRoot })
     run('git', ['config', 'user.email', 'artifact-pages-test@example.invalid'], { cwd: adminRoot })
-    run('git', ['add', '.artifact-pages.yaml'], { cwd: adminRoot })
+    run('git', ['add', 'artifact-pages.yaml'], { cwd: adminRoot })
     run('git', ['commit', '-m', 'Add local deployment target'], { cwd: adminRoot })
     if (run('git', ['status', '--porcelain'], { cwd: adminRoot }) !== '') {
       throw new Error('temporary admin checkout is not clean before deployment')

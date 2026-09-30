@@ -35,4 +35,4 @@ jobs:
           operation: app-deploy
           version: ${{ inputs.version }}
           repository: tasuku43/git-artifact-pages
-          config: .artifact-pages.yaml
+          config: artifact-pages.yaml

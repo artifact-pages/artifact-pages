@@ -88,6 +88,8 @@ STORAGE_ROOT=./.local/storage npm run serve:local
 
 For a local registry and separate satellite checkout workflow, see [Local registered-site development](docs/guides/local-registered-sites.md). The admin's selected deployment YAML holds both the provider target and its optional `sites` mapping; `registry register`, `site publish`, and `registry unregister` consume that shared contract.
 
+The default deployment config is `artifact-pages.yaml` in the current working directory. Selection precedence is explicit `--config`, `ARTIFACT_PAGES_CONFIG`, that local default, then the user's saved config locator. A GitHub locator with no filename also selects `artifact-pages.yaml`; other filenames, including `.artifact-pages.yaml`, require explicit selection.
+
 On first use, install the Playwright Chromium browser, then run the end-to-end checks against the production build served by nginx:
 
 ~~~sh

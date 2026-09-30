@@ -14,7 +14,7 @@ go install ./cli/cmd/artifact-pages
 In the admin checkout, configure the local projection root and the registered site in one file:
 
 ~~~yaml
-# .artifact-pages.yaml — provider target and complete desired site set
+# artifact-pages.yaml — provider target and complete desired site set
 schemaVersion: 1
 provider: local
 local:
@@ -30,8 +30,8 @@ sites:
 `registry register` reads the complete desired site set from the selected config's `sites` mapping and cleans content prefixes for sites omitted from it. Registry commands fail if `sites` is absent; `sites: {}` explicitly means an empty registry and registering it removes every current registration. Then, from the Git Artifact Pages product checkout, start nginx against the admin checkout's output and leave it running. Publish from the satellite checkout in a second terminal, and browse through `http://localhost:4173/`. The examples assume `platform-admin` and `git-artifact-pages` are sibling directories:
 
 ~~~sh
-artifact-pages registry register --config .artifact-pages.yaml --dry-run
-artifact-pages registry register --config .artifact-pages.yaml
+artifact-pages registry register --config artifact-pages.yaml --dry-run
+artifact-pages registry register --config artifact-pages.yaml
 cd /path/to/git-artifact-pages
 STORAGE_ROOT=../platform-admin/.local/storage npm run serve:local
 ~~~
@@ -43,7 +43,7 @@ The browser is available at `http://localhost:4173/`. The admin checkout owns th
 In the separate `acme/sre-docs` checkout, use a local target pointing at the admin checkout's generated directory. The example below assumes the two checkout directories are siblings; adjust the relative path for your workspace.
 
 ~~~yaml
-# .artifact-pages.yaml in the satellite checkout
+# artifact-pages.yaml in the satellite checkout
 schemaVersion: 1
 provider: local
 local:
@@ -79,13 +79,14 @@ artifact-pages site publish --site sre --source docs/artifacts --format json
 
 The dry-run reports creates, updates, and removals without writing. The publish updates the selected site's projection and leaves other registered site prefixes intact.
 
+
 ## Unregister
 
 Remove `sre` from the admin config's `sites` mapping, then run the explicit unregister operation. The selected config must already omit the site:
 
 ~~~sh
-artifact-pages registry unregister --site sre --config .artifact-pages.yaml --dry-run
-artifact-pages registry unregister --site sre --config .artifact-pages.yaml --format json
+artifact-pages registry unregister --site sre --config artifact-pages.yaml --dry-run
+artifact-pages registry unregister --site sre --config artifact-pages.yaml --format json
 ~~~
 
 Unregister withdraws the registry entry, deletes only the selected site's artifact, index, and preview prefixes, and revalidates the corresponding routes. If the site mapping has no remaining entries, keep the explicit `sites: {}` field. If a site publish or unregister process exits while holding a retained lock, inspect it with `artifact-pages lock inspect --site sre`; recover only after confirming the owner is stale and supply the exact observed ETag.

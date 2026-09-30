@@ -1,6 +1,6 @@
 # Application bundle deployment
 
-The SPA is distributed as a versioned web archive. An admin repository selects the deployment target through `.artifact-pages.yaml`; it does not copy or build the application source.
+The SPA is distributed as a versioned web archive. An admin repository selects the deployment target through `artifact-pages.yaml`; it does not copy or build the application source.
 
 ## Package the web release
 
@@ -35,8 +35,8 @@ AWS and Cloudflare targets use the same config locator and `artifact-pages app d
 Plan and deploy a published release by its exact version:
 
 ```sh
-artifact-pages app deploy --version 1.2.3 --config .artifact-pages.yaml --dry-run
-artifact-pages app deploy --version 1.2.3 --config .artifact-pages.yaml --format json
+artifact-pages app deploy --version 1.2.3 --config artifact-pages.yaml --dry-run
+artifact-pages app deploy --version 1.2.3 --config artifact-pages.yaml --format json
 ```
 
 Upgrade by deploying the next release version. Roll back intentionally by deploying the previous version again. The deployment validates the complete bundle before it writes, uploads changed app files with `index.html` last, and revalidates `/index.html` after a change. Repeating an unchanged deployment reports `no-op` and performs no object writes or cache revalidation.

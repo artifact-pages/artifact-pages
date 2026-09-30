@@ -356,7 +356,8 @@ func TestResolvePrecedence(t *testing.T) {
 	}
 	writeConfig(t, filepath.Join(root, "explicit.yaml"), ".explicit")
 	writeConfig(t, filepath.Join(root, "env.yaml"), ".env")
-	writeConfig(t, filepath.Join(root, defaultConfigName), ".repo")
+	writeConfig(t, filepath.Join(root, "artifact-pages.yaml"), ".repo")
+	writeConfig(t, filepath.Join(root, ".artifact-pages.yaml"), ".hidden")
 	writeConfig(t, filepath.Join(root, "saved.yaml"), ".saved")
 	savedPath := filepath.Join(configDir, "artifact-pages", savedLocatorName)
 	if err := os.WriteFile(savedPath, []byte(filepath.Join(root, "saved.yaml")+"\n"), 0o600); err != nil {
@@ -382,10 +383,28 @@ func TestResolvePrecedence(t *testing.T) {
 	assertRoot("environment", "", ".env")
 	delete(environment, ConfigEnvironment)
 	assertRoot("repository", "", ".repo")
-	if err := os.Remove(filepath.Join(root, defaultConfigName)); err != nil {
+	if err := os.Remove(filepath.Join(root, "artifact-pages.yaml")); err != nil {
 		t.Fatal(err)
 	}
 	assertRoot("saved", "", ".saved")
+}
+
+func TestResolveHiddenConfigRequiresExplicitSelection(t *testing.T) {
+	root := t.TempDir()
+	writeConfig(t, filepath.Join(root, ".artifact-pages.yaml"), ".hidden")
+	resolver := Resolver{
+		WorkingDir: root,
+		ConfigDir:  t.TempDir(),
+		Getenv:     func(string) string { return "" },
+	}
+	_, err := resolver.Resolve(t.Context(), "")
+	if err == nil || !strings.Contains(err.Error(), "add artifact-pages.yaml") {
+		t.Fatalf("Resolve(implicit) error = %v, want canonical default missing", err)
+	}
+	resolved, err := resolver.Resolve(t.Context(), ".artifact-pages.yaml")
+	if err != nil || resolved.Config.Local == nil || resolved.Config.Local.Root != ".hidden" {
+		t.Fatalf("Resolve(explicit hidden) = %+v, %v", resolved, err)
+	}
 }
 
 func TestResolveLayersLoadsOrderedLocalFiles(t *testing.T) {
@@ -584,7 +603,7 @@ func TestSetDefaultStoresOnlyAbsoluteLocatorWithPrivateMode(t *testing.T) {
 	}
 }
 
-func TestResolveRemoteConfigPinsOneUnifiedConfigCommitWithoutLegacyFallback(t *testing.T) {
+func TestResolveRemoteConfigPinsCanonicalDefaultWithoutHiddenFallback(t *testing.T) {
 	const sha = "0123456789abcdef0123456789abcdef01234567"
 	configBytes := []byte("schemaVersion: 1\nprovider: aws\naws:\n  region: us-west-2\n  bucket: pages-prod\n  distributionId: E123\nsites:\n  sre:\n    name: SRE\n    description: Operations\n    repository: acme/platform\n    sourcePath: docs/artifacts\n")
 	satellite := t.TempDir()
@@ -597,6 +616,7 @@ func TestResolveRemoteConfigPinsOneUnifiedConfigCommitWithoutLegacyFallback(t *t
 		t.Fatalf("Resolve(local config) error = %v", err)
 	}
 	var requests []string
+	defaultMissing := false
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		requests = append(requests, request.URL.Path+"?"+request.URL.RawQuery)
 		if request.Header.Get("Authorization") != "Bearer test-token" {
@@ -608,8 +628,14 @@ func TestResolveRemoteConfigPinsOneUnifiedConfigCommitWithoutLegacyFallback(t *t
 		case request.URL.Path == "/repos/acme/admin/commits/main":
 			_, _ = fmt.Fprintf(writer, `{"sha":%q}`, sha)
 		case request.URL.Path == "/repos/acme/admin/contents/.artifact-pages.yaml":
-			writer.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(writer).Encode(githubContent{
+				Type: "file", Encoding: "base64", Content: base64.StdEncoding.EncodeToString(configBytes), SHA: "file-sha",
+			})
 		case request.URL.Path == "/repos/acme/admin/contents/artifact-pages.yaml":
+			if defaultMissing {
+				writer.WriteHeader(http.StatusNotFound)
+				return
+			}
 			_ = json.NewEncoder(writer).Encode(githubContent{
 				Type: "file", Encoding: "base64", Content: base64.StdEncoding.EncodeToString(configBytes), SHA: "file-sha",
 			})
@@ -632,12 +658,31 @@ func TestResolveRemoteConfigPinsOneUnifiedConfigCommitWithoutLegacyFallback(t *t
 			return ""
 		},
 	}
-	_, err = resolver.Resolve(t.Context(), "github://acme/admin")
-	if err == nil || !strings.Contains(err.Error(), "GitHub config fetch failed for .artifact-pages.yaml (HTTP 404)") {
-		t.Fatalf("Resolve(remote default) error = %v, want the default file's 404 without legacy fallback", err)
+	defaultResolved, err := resolver.Resolve(t.Context(), "github://acme/admin")
+	if err != nil {
+		t.Fatalf("Resolve(remote default) error = %v", err)
 	}
-	if len(requests) != 3 || requests[2] != "/repos/acme/admin/contents/.artifact-pages.yaml?ref="+sha {
+	if defaultResolved.CommitSHA != sha || defaultResolved.Locator != "github://acme/admin/artifact-pages.yaml?ref="+sha || !reflect.DeepEqual(defaultResolved.Config, localResolved.Config) {
+		t.Fatalf("default config = %+v, want canonical file at pinned commit with unified config", defaultResolved)
+	}
+	if len(requests) != 3 || requests[2] != "/repos/acme/admin/contents/artifact-pages.yaml?ref="+sha {
 		t.Fatalf("GitHub requests = %v, want metadata, commit, and one pinned default-file request", requests)
+	}
+
+	requests = nil
+	defaultMissing = true
+	_, err = resolver.Resolve(t.Context(), "github://acme/admin")
+	if err == nil || !strings.Contains(err.Error(), "GitHub config fetch failed for artifact-pages.yaml (HTTP 404)") {
+		t.Fatalf("Resolve(missing remote default) error = %v, want canonical file's 404 without hidden fallback", err)
+	}
+	if len(requests) != 3 || requests[2] != "/repos/acme/admin/contents/artifact-pages.yaml?ref="+sha {
+		t.Fatalf("GitHub requests = %v, want no hidden-file fallback", requests)
+	}
+
+	requests = nil
+	hidden, err := resolver.Resolve(t.Context(), "github://acme/admin/.artifact-pages.yaml?ref="+sha)
+	if err != nil || !reflect.DeepEqual(hidden.Config, localResolved.Config) || len(requests) != 1 {
+		t.Fatalf("Resolve(explicit hidden remote) = %+v, %v; requests = %v", hidden, err, requests)
 	}
 
 	requests = nil

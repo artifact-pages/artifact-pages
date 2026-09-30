@@ -877,6 +877,7 @@ func writeRootUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  lock inspect|recover  Inspect or guardedly recover a site lock")
 	fmt.Fprintln(writer, "")
 	fmt.Fprintln(writer, "Run a command with --help for options.")
+	fmt.Fprintln(writer, "Default deployment config: artifact-pages.yaml (--config and ARTIFACT_PAGES_CONFIG take precedence).")
 }
 
 func writeLockUsage(writer io.Writer) {
@@ -939,6 +940,7 @@ func writeSiteUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  artifact-pages site publish [options]")
 	fmt.Fprintln(writer, "")
 	fmt.Fprintln(writer, "Build the site index and publish one selected site's static projection.")
+	fmt.Fprintln(writer, "Default deployment config: artifact-pages.yaml (--config and ARTIFACT_PAGES_CONFIG take precedence).")
 }
 
 func writeSitePublishUsage(writer io.Writer) {

@@ -156,7 +156,7 @@ async function main() {
   const satelliteRoot = path.join(scratchRoot, 'satellite')
   const storageRoot = path.join(scratchRoot, 'storage')
   const binaryPath = path.join(scratchRoot, 'artifact-pages')
-  const configPath = path.join(adminRoot, '.artifact-pages.yaml')
+  const configPath = path.join(adminRoot, 'artifact-pages.yaml')
   let composeStarted = false
   let success = false
   let port
@@ -169,7 +169,7 @@ async function main() {
     await initRepository(adminRoot, 'https://github.com/example/registered-admin.git')
     await initRepository(satelliteRoot, 'https://github.com/example/registered-satellite.git')
 
-    await writeFile(adminRoot, '.artifact-pages.yaml', localDeploymentConfig(storageRoot))
+    await writeFile(adminRoot, 'artifact-pages.yaml', localDeploymentConfig(storageRoot))
 
     await writeFile(satelliteRoot, 'sites/sre/content/reports/recovery.html', [
       '<!doctype html>',
@@ -197,12 +197,12 @@ async function main() {
     run('go', ['build', '-o', binaryPath, './cli/cmd/artifact-pages'])
 
     const adminDryRun = parseResult(run(binaryPath, [
-      'registry', 'register', '--config', '.artifact-pages.yaml', '--dry-run', '--format', 'json',
+      'registry', 'register', '--config', 'artifact-pages.yaml', '--dry-run', '--format', 'json',
     ], { cwd: adminRoot }), 'registry register dry-run')
     assert(adminDryRun.operation === 'registry register' && adminDryRun.outcome === 'planned', 'registry register dry-run did not return a planned result')
     assert(!(await fs.stat(storageRoot).then(() => true, () => false)), 'admin dry-run created the local object root')
     const adminRegister = parseResult(run(binaryPath, [
-      'registry', 'register', '--config', '.artifact-pages.yaml', '--format', 'json',
+      'registry', 'register', '--config', 'artifact-pages.yaml', '--format', 'json',
     ], { cwd: adminRoot }), 'registry register')
     assert(adminRegister.operation === 'registry register' && adminRegister.outcome === 'registered', 'registry register did not return a registered result')
 
@@ -338,16 +338,16 @@ async function main() {
     const neighborPreviewBefore = await treeSnapshot(path.join(storageRoot, '_previews', 'neighbor'))
     assert(neighborPreviewBefore.length > 0, 'neighbor preview fixture was not created')
 
-    await writeFile(adminRoot, '.artifact-pages.yaml', localDeploymentConfig(storageRoot, false))
+    await writeFile(adminRoot, 'artifact-pages.yaml', localDeploymentConfig(storageRoot, false))
     commit(adminRoot, 'unregister SRE from desired config')
     const storageBeforeUnregisterDryRun = await treeSnapshot(storageRoot)
     const unregisterDryRun = parseResult(run(binaryPath, [
-      'registry', 'unregister', '--site', 'sre', '--config', '.artifact-pages.yaml', '--dry-run', '--format', 'json',
+      'registry', 'unregister', '--site', 'sre', '--config', 'artifact-pages.yaml', '--dry-run', '--format', 'json',
     ], { cwd: adminRoot }), 'registry unregister dry-run')
     assert(unregisterDryRun.outcome === 'planned', `unregister dry-run returned ${unregisterDryRun.outcome}`)
     assert(JSON.stringify(await treeSnapshot(storageRoot)) === JSON.stringify(storageBeforeUnregisterDryRun), 'registry unregister dry-run changed the local object tree')
     run(binaryPath, [
-      'registry', 'unregister', '--site', 'sre', '--config', '.artifact-pages.yaml', '--format', 'json',
+      'registry', 'unregister', '--site', 'sre', '--config', 'artifact-pages.yaml', '--format', 'json',
     ], { cwd: adminRoot })
 
     const registry = JSON.parse(await fs.readFile(path.join(storageRoot, '_indexes/sites.json'), 'utf8'))

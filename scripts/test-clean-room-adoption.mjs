@@ -268,7 +268,7 @@ async function main() {
   const storageRoot = path.join(scratchRoot, 'local-object-target')
   const releaseRoot = path.join(scratchRoot, 'local-app-fixtures')
   const binaryPath = path.join(scratchRoot, 'artifact-pages')
-  const configPath = path.join(adminRoot, '.artifact-pages.yaml')
+  const configPath = path.join(adminRoot, 'artifact-pages.yaml')
   const satelliteConfig = path.relative(satelliteRoot, configPath)
   let success = false
 
@@ -279,7 +279,7 @@ async function main() {
       fs.mkdir(releaseRoot, { recursive: true }),
     ])
 
-    await writeFile(adminRoot, '.artifact-pages.yaml', localDeploymentConfig(storageRoot))
+    await writeFile(adminRoot, 'artifact-pages.yaml', localDeploymentConfig(storageRoot))
     await writeFile(satelliteRoot, 'sites/sre/content/reports/recovery.html', [
       '<!doctype html>',
       '<html lang="en"><head><meta charset="utf-8"><title>Recovery review revision one</title>',
@@ -297,14 +297,14 @@ async function main() {
     commit(satelliteRoot, 'Add independent registered site sources')
 
     assert(!(await fs.stat(path.join(satelliteRoot, 'sites.yaml')).then(() => true, () => false)), 'satellite unexpectedly contains a separate sites.yaml file')
-    assert(!(await fs.stat(path.join(satelliteRoot, '.artifact-pages.yaml')).then(() => true, () => false)), 'the satellite unexpectedly owns a deployment config; this walkthrough selects the admin config explicitly')
+    assert(!(await fs.stat(path.join(satelliteRoot, 'artifact-pages.yaml')).then(() => true, () => false)), 'the satellite unexpectedly owns a deployment config; this walkthrough selects the admin config explicitly')
     assert(git(adminRoot, ['status', '--porcelain']) === '', 'temporary admin repository was not clean after its initial commit')
     assert(git(satelliteRoot, ['status', '--porcelain']) === '', 'temporary satellite repository was not clean after its initial commit')
 
     run('go', ['build', '-trimpath', '-o', binaryPath, './cli/cmd/artifact-pages'])
 
     const registryPlan = cli(binaryPath, [
-      'registry', 'register', '--config', '.artifact-pages.yaml', '--dry-run',
+      'registry', 'register', '--config', 'artifact-pages.yaml', '--dry-run',
     ], adminRoot)
     assertCLI(registryPlan, 'registry register', 'planned', 'plan admin registry register with explicit config')
     assert(!(await fs.stat(storageRoot).then(() => true, () => false)), 'registry dry-run created the local object target')
@@ -347,7 +347,7 @@ async function main() {
     const releaseTwo = await makeBundle(releaseRoot, 'clean-room-two', 'release-two')
     const beforeAppPlan = await snapshotTree(storageRoot)
     const appPlan = cli(binaryPath, [
-      'app', 'deploy', '--archive', releaseOne.archivePath, '--config', '.artifact-pages.yaml', '--dry-run',
+      'app', 'deploy', '--archive', releaseOne.archivePath, '--config', 'artifact-pages.yaml', '--dry-run',
     ], adminRoot)
     assertCLI(appPlan, 'app deploy', 'planned', 'plan initial application deployment')
     assertSnapshotEqual(beforeAppPlan, await snapshotTree(storageRoot), 'app deploy dry-run')
@@ -361,7 +361,7 @@ async function main() {
     await fs.appendFile(corruptedArchive, Buffer.from('tampered'))
     const beforeCorruptDeploy = await snapshotTree(storageRoot)
     const corruptResult = invoke(binaryPath, [
-      'app', 'deploy', '--archive', corruptedArchive, '--config', '.artifact-pages.yaml', '--format', 'json',
+      'app', 'deploy', '--archive', corruptedArchive, '--config', 'artifact-pages.yaml', '--format', 'json',
     ], { cwd: adminRoot })
     assert(corruptResult.exitCode !== 0, 'app deploy accepted an archive whose checksum no longer matched')
     assertSnapshotEqual(beforeCorruptDeploy, await snapshotTree(storageRoot), 'rejected corrupted app bundle')
@@ -373,7 +373,7 @@ async function main() {
       [releaseOne, 'release-one', 'application rollback'],
     ]) {
       const deployment = cli(binaryPath, [
-        'app', 'deploy', '--archive', bundle.archivePath, '--config', '.artifact-pages.yaml',
+        'app', 'deploy', '--archive', bundle.archivePath, '--config', 'artifact-pages.yaml',
       ], adminRoot)
       assertCLI(deployment, 'app deploy', 'deployed', label)
       assert(deployment.json.version === JSON.parse(await fs.readFile(`${bundle.archivePath}.json`, 'utf8')).version, `${label}: selected version was not reported`)
@@ -414,16 +414,16 @@ async function main() {
     await writeFile(storageRoot, '_previews/neighbor/revisions/abcdef0123456789abcdef0123456789abcdef01/files/reports/neighbor.html', '<h1>Neighbor preview to preserve</h1>\n')
     const neighborPreviewBefore = await snapshotTree(path.join(storageRoot, '_previews/neighbor'))
 
-    await writeFile(adminRoot, '.artifact-pages.yaml', localDeploymentConfig(storageRoot, false))
+    await writeFile(adminRoot, 'artifact-pages.yaml', localDeploymentConfig(storageRoot, false))
     commit(adminRoot, 'Remove SRE from the desired registry')
     const beforeUnregisterPlan = await snapshotTree(storageRoot)
     const unregisterPlan = cli(binaryPath, [
-      'registry', 'unregister', '--site', 'sre', '--config', '.artifact-pages.yaml', '--dry-run',
+      'registry', 'unregister', '--site', 'sre', '--config', 'artifact-pages.yaml', '--dry-run',
     ], adminRoot)
     assertCLI(unregisterPlan, 'registry unregister', 'planned', 'plan explicit SRE unregister')
     assertSnapshotEqual(beforeUnregisterPlan, await snapshotTree(storageRoot), 'unregister dry-run')
     const unregisterApply = cli(binaryPath, [
-      'registry', 'unregister', '--site', 'sre', '--config', '.artifact-pages.yaml',
+      'registry', 'unregister', '--site', 'sre', '--config', 'artifact-pages.yaml',
     ], adminRoot)
     assertCLI(unregisterApply, 'registry unregister', 'unregistered', 'unregister SRE explicitly')
 
@@ -435,7 +435,7 @@ async function main() {
     for (const prefix of ['_artifacts/sre', '_indexes/sre', '_previews/sre']) {
       await assertPrefixEmpty(storageRoot, prefix, 'SRE unregister')
     }
-    const lockAfterUnregister = cli(binaryPath, ['lock', 'inspect', '--site', 'sre', '--config', '.artifact-pages.yaml'], adminRoot)
+    const lockAfterUnregister = cli(binaryPath, ['lock', 'inspect', '--site', 'sre', '--config', 'artifact-pages.yaml'], adminRoot)
     assertCLI(lockAfterUnregister, 'lock inspect', 'inspected', 'inspect retained lock after unregister')
     assert(lockAfterUnregister.json.lock?.state === 'free', 'unregister removed or left held the retained site lock')
 

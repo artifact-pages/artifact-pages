@@ -476,7 +476,7 @@ func TestRegistryUnregisterLocalCLIIsScopedRetryableAndMachineReadable(t *testin
 		root := createLocalUnregisterCheckout(t)
 		storageRoot := filepath.Join(root, ".local", "storage")
 		before := snapshotFiles(t, storageRoot)
-		args := []string{"registry", "unregister", "--site", "sre", "--config", ".artifact-pages.yaml", "--dry-run", "--format", "json"}
+		args := []string{"registry", "unregister", "--site", "sre", "--config", "artifact-pages.yaml", "--dry-run", "--format", "json"}
 		stdout, stderr, exitCode := runCLIProcess(t, root, args)
 		if exitCode != 0 {
 			t.Fatalf("registry unregister dry-run exit code = %d, want 0; stdout=%s stderr=%s", exitCode, stdout, stderr)
@@ -499,7 +499,7 @@ func TestRegistryUnregisterLocalCLIIsScopedRetryableAndMachineReadable(t *testin
 			t.Fatalf("dry-run changed local storage: before=%v after=%v", before, after)
 		}
 
-		args = []string{"registry", "unregister", "--site", "sre", "--config", ".artifact-pages.yaml", "--format", "json"}
+		args = []string{"registry", "unregister", "--site", "sre", "--config", "artifact-pages.yaml", "--format", "json"}
 		stdout, stderr, exitCode = runCLIProcess(t, root, args)
 		if exitCode != 0 {
 			t.Fatalf("registry unregister exit code = %d, want 0; stdout=%s stderr=%s", exitCode, stdout, stderr)
@@ -595,12 +595,12 @@ func TestRegistryUnregisterLocalCLIIsScopedRetryableAndMachineReadable(t *testin
 			{name: "site still registered in config", siteID: "sre", config: localRegistryBeforeUnregister, wantText: "still present in config sites"},
 		} {
 			t.Run(test.name, func(t *testing.T) {
-				configPath := filepath.Join(root, ".artifact-pages.yaml")
+				configPath := filepath.Join(root, "artifact-pages.yaml")
 				if err := os.WriteFile(configPath, []byte(test.config), 0o600); err != nil {
 					t.Fatal(err)
 				}
 				before := snapshotFiles(t, filepath.Join(root, ".local", "storage"))
-				args := []string{"registry", "unregister", "--site", test.siteID, "--config", ".artifact-pages.yaml", "--format", "json"}
+				args := []string{"registry", "unregister", "--site", test.siteID, "--config", "artifact-pages.yaml", "--format", "json"}
 				stdout, stderr, exitCode := runCLIProcess(t, root, args)
 				if exitCode != 2 {
 					t.Fatalf("registry unregister argument error exit code = %d, want 2; stdout=%s stderr=%s", exitCode, stdout, stderr)
@@ -629,7 +629,7 @@ func TestRegistryUnregisterLocalCLIIsScopedRetryableAndMachineReadable(t *testin
 func createLocalUnregisterCheckout(t *testing.T) string {
 	t.Helper()
 	root := createLocalSitePublishCheckout(t, localRegistryBeforeUnregister)
-	if err := os.WriteFile(filepath.Join(root, ".artifact-pages.yaml"), []byte(localUnregisterManifest), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "artifact-pages.yaml"), []byte(localUnregisterManifest), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	projection := testRegistryBytes(t, localRegistryBeforeUnregister)
@@ -748,7 +748,7 @@ func TestSitePublishFailureJSONAndExitCodes(t *testing.T) {
 	t.Run("unregistered site", func(t *testing.T) {
 		const unrelatedSiteManifest = "schemaVersion: 1\nprovider: local\nlocal:\n  root: .local/storage\nsites:\n  frontend:\n    name: Frontend\n    repository: acme/frontend\n    sourcePath: docs/artifacts\n"
 		root := createLocalSitePublishCheckout(t, unrelatedSiteManifest)
-		stdout, stderr, exitCode := runCLIProcess(t, root, []string{"site", "publish", "--site", "sre", "--source", "docs/artifacts", "--config", ".artifact-pages.yaml", "--format", "json"})
+		stdout, stderr, exitCode := runCLIProcess(t, root, []string{"site", "publish", "--site", "sre", "--source", "docs/artifacts", "--config", "artifact-pages.yaml", "--format", "json"})
 		if exitCode != 1 {
 			t.Fatalf("site publish unregistered-site exit code = %d, want 1; stdout=%s stderr=%s", exitCode, stdout, stderr)
 		}
@@ -1194,10 +1194,10 @@ func createLocalSitePublishCheckout(t *testing.T, siteManifest string) string {
 	if err := os.WriteFile(filepath.Join(root, "docs", "artifacts", "overview.html"), []byte("<title>Overview</title><h1>Overview</h1>"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, ".artifact-pages.yaml"), []byte(siteManifest), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "artifact-pages.yaml"), []byte(siteManifest), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := runGitCommand(root, "add", "docs/artifacts/overview.html", ".artifact-pages.yaml"); err != nil {
+	if err := runGitCommand(root, "add", "docs/artifacts/overview.html", "artifact-pages.yaml"); err != nil {
 		t.Fatal(err)
 	}
 	if err := runGitCommand(root, "commit", "-m", "add artifact"); err != nil {

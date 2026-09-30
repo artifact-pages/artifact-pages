@@ -27,7 +27,7 @@ import (
 const (
 	SchemaVersion       = 1
 	ConfigEnvironment   = "ARTIFACT_PAGES_CONFIG"
-	defaultConfigName   = ".artifact-pages.yaml"
+	defaultConfigName   = "artifact-pages.yaml"
 	savedLocatorName    = "default-config"
 	githubAPIBaseURL    = "https://api.github.com"
 	maxRemoteConfigSize = 512 << 10
@@ -570,7 +570,7 @@ func (resolver Resolver) ResolveLayers(ctx context.Context, explicitLocators []s
 		}
 	}
 	if len(locators) == 0 {
-		return ResolvedConfig{}, errors.New("no deployment config found; pass --config, set ARTIFACT_PAGES_CONFIG, add .artifact-pages.yaml, or save a default")
+		return ResolvedConfig{}, errors.New("no deployment config found; pass --config, set ARTIFACT_PAGES_CONFIG, add artifact-pages.yaml, or save a default")
 	}
 	if len(locators) == 1 && strings.HasPrefix(locators[0], "github://") {
 		contents, commitSHA, canonicalLocator, remoteErr := resolver.readRemoteConfig(ctx, locators[0])
