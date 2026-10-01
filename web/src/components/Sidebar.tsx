@@ -7,6 +7,7 @@ import { artifactRouteHref } from '../routing'
 import type { ArtifactRowActions } from './ArtifactTree'
 import { ArtifactTree, type TreeStyle } from './ArtifactTree'
 import { Icon } from './Icon'
+import { siteCountLabel } from '../domain/site-count-label'
 import { ThemeSwitcher } from './ThemeSwitcher'
 
 export function Sidebar({
@@ -118,6 +119,9 @@ export function Sidebar({
     lastRevealedRequest.current = revealRequest.request
   }, [expandedPaths, query, revealRequest])
 
+  const siteCount = sites.length
+  const countLabel = siteCountLabel(siteCount)
+
   return (
     <aside ref={sidebarRef} id={id} className={`sidebar-panel sidebar-panel--refined tree-style-${treeStyle}`} aria-label={`${index.site.title} navigation`}>
       <div className="sidebar-top">
@@ -125,8 +129,8 @@ export function Sidebar({
           <button
             className="site-switcher"
             id="site-switcher"
-            title="Switch site"
-            aria-label={`Switch site. Current site: ${index.site.title}`}
+            title={`Switch site — ${countLabel}`}
+            aria-label={`Switch site. Current site: ${index.site.title}. ${countLabel}`}
             onClick={(event) => {
               event.currentTarget.focus()
               onOpenPalette('@')
@@ -136,7 +140,7 @@ export function Sidebar({
               {index.site.title.slice(0, 1).toUpperCase()}
             </span>
             <span className="site-switcher-name">{index.site.title}</span>
-            <span className="site-switcher-hint">{sites.length || 1}</span>
+            <span className="site-switcher-hint" aria-hidden="true">{siteCount}</span>
             <Icon name="chevron" size={12} />
           </button>
           <button

@@ -4,6 +4,7 @@ import { CommandPalette, type PaletteCommand } from './CommandPalette'
 import { Icon } from './Icon'
 import { Sidebar } from './Sidebar'
 import { SiteHome } from './SiteHome'
+import { siteCountLabel } from '../domain/site-count-label'
 import { ThemeSwitcher } from './ThemeSwitcher'
 import { MarkdownArtifact } from './MarkdownArtifact'
 import type { TreeStyle } from './ArtifactTree'
@@ -228,6 +229,7 @@ export function ArtifactWorkspace({
         artifactIndexUrl: `/_indexes/${encodeURIComponent(index.site.id)}/index.json`,
         status: 'available',
       }, ...sites]
+  const countLabel = siteCountLabel(paletteSites.length)
   const commands: PaletteCommand[] = [
     { title: 'Toggle sidebar', shortcut: '⌘ B', onSelect: () => toggleSidebar() },
     {
@@ -335,7 +337,7 @@ export function ArtifactWorkspace({
       <Sidebar
         index={index}
         id="workspace-sidebar"
-        sites={siteSummaries}
+        sites={paletteSites.map(({ site }) => site)}
         artifactPath={currentArtifact?.path}
         expandedPaths={expandedPaths}
         onExpandedPathsChange={updateExpandedPaths}
@@ -368,8 +370,8 @@ export function ArtifactWorkspace({
             </button>
             <button
               className="collapsed-rail-button collapsed-rail-site-button"
-              title={`Switch site: ${index.site.title}`}
-              aria-label={`Switch site. Current site: ${index.site.title}`}
+              title={`Switch site — ${index.site.title} (${countLabel})`}
+              aria-label={`Switch site. Current site: ${index.site.title}. ${countLabel}`}
               onClick={(event) => {
                 event.currentTarget.focus()
                 openPalette('@')

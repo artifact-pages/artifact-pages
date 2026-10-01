@@ -1,6 +1,6 @@
 # サイト切替の横の数字が何の数か分からない
 
-- Status: Open
+- Status: Done
 - Priority: P3
 - Area: Sidebar site switcher
 
@@ -22,6 +22,13 @@
 
 ## Acceptance criteria
 
-- [ ] 数字の意味（利用できるサイトの数など）が、表示またはツールチップで分かる。
-- [ ] 押したときにサイトを切り替える操作が開くことが、操作前に予測できる。
-- [ ] スクリーンリーダー向けの名前でも、同じ意味が伝わる。
+- [x] 数字の意味（利用できるサイトの数など）が、表示またはツールチップで分かる。
+- [x] 押したときにサイトを切り替える操作が開くことが、操作前に予測できる。
+- [x] スクリーンリーダー向けの名前でも、同じ意味が伝わる。
+
+## Verification (2026-10-01)
+
+- Implemented by a Sonnet subagent and reviewed by a separate Sonnet subagent (no blockers; the rail tooltip, shared count helper, count source, and test follow-ups were applied).
+- The visible switcher still shows the site name, count, and chevron; the count is `aria-hidden` and explained by the tooltip "Switch site — N sites available" (singular "1 site available") and the accessible name "Switch site. Current site: <Name>. N sites available". The collapsed-rail button's tooltip also names the site: "Switch site — <Name> (N sites available)".
+- The count comes from the same site list the palette shows after clicking, built by `siteCountLabel` in `web/src/domain/site-count-label.ts`.
+- New e2e test "site switcher names its count in the tooltip and accessible name" covers multi-site fixtures, a route-mocked single site, and the collapsed rail. `npx tsc -p web/tsconfig.json --noEmit` and `npm run build` passed; `node scripts/run-e2e.mjs` passed 85/85 (earlier runs had only the known-flaky preview-navigation tests fail).

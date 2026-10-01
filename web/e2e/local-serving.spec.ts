@@ -709,6 +709,32 @@ test('single-site switcher selects its only destination so Enter opens the curre
   await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
 })
 
+test('site switcher names its count in the tooltip and accessible name', async ({ page }) => {
+  await page.goto('/sre')
+  const multi = page.getByRole('button', { name: /^Switch site\. Current site: SRE\. ([2-9]|\d{2,}) sites available$/ })
+  await expect(multi).toBeVisible()
+  await expect(multi).toHaveAttribute('title', /^Switch site — ([2-9]|\d{2,}) sites available$/)
+  await expect(multi.locator('.site-switcher-hint')).toHaveAttribute('aria-hidden', 'true')
+
+  await page.route('**/_indexes/sites.json', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      schemaVersion: 1,
+      sites: [{ id: 'sre', name: 'SRE', repository: 'tasuku43/git-artifact-pages', sourcePath: 'fixtures/storage/_artifacts/sre' }],
+    }),
+  }))
+  await page.goto('/sre/reports/latency-retrospective.md')
+  const single = page.getByRole('button', { name: 'Switch site. Current site: SRE. 1 site available', exact: true })
+  await expect(single).toBeVisible()
+  await expect(single).toHaveAttribute('title', 'Switch site — 1 site available')
+
+  await page.getByRole('button', { name: 'Collapse sidebar' }).click()
+  const rail = page.getByRole('button', { name: 'Switch site. Current site: SRE. 1 site available', exact: true })
+  await expect(rail).toBeVisible()
+  await expect(rail).toHaveAttribute('title', 'Switch site — SRE (1 site available)')
+})
+
 test('site switcher has no default destination, then selects matching sites by query', async ({ page }) => {
   await page.goto('/sre')
   await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
