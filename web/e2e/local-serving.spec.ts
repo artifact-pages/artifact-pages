@@ -152,6 +152,49 @@ test('mobile search affordances describe their scope and open the matching palet
   await expect(page.getByRole('dialog', { name: 'Command palette' }).locator('.palette-scope')).toHaveText('SRE only')
 })
 
+test('the command palette has a pointer close control at desktop and mobile widths', async ({ page }) => {
+  for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport)
+    await page.goto('/')
+
+    const siteTrigger = page.getByRole('button', { name: 'Search sites' })
+    await siteTrigger.click()
+    let palette = page.getByRole('dialog', { name: 'Command palette' })
+    const closeButton = palette.getByRole('button', { name: 'Close command palette' })
+    await expect(closeButton).toBeVisible()
+    await expect(closeButton).toBeInViewport()
+    await expect(palette.locator('.palette-input-row kbd')).toHaveText('esc')
+    await closeButton.click()
+    await expect(palette).toBeHidden()
+    await expect(siteTrigger).toBeFocused()
+
+    await page.goto('/sre')
+
+    const trigger = page.getByRole('button', { name: 'Search pages in SRE' })
+    await trigger.click()
+    palette = page.getByRole('dialog', { name: 'Command palette' })
+    await expect(palette.getByRole('button', { name: 'Close command palette' })).toBeVisible()
+    await expect(palette.locator('.palette-input-row kbd')).toHaveText('esc')
+
+    await palette.getByRole('button', { name: 'Close command palette' }).click()
+    await expect(palette).toBeHidden()
+    await expect(trigger).toBeFocused()
+
+    await trigger.press('Enter')
+    palette = page.getByRole('dialog', { name: 'Command palette' })
+    await expect(palette).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(palette).toBeHidden()
+    await expect(trigger).toBeFocused()
+
+    await trigger.click()
+    palette = page.getByRole('dialog', { name: 'Command palette' })
+    await page.locator('.palette-backdrop').click({ position: { x: 2, y: 2 } })
+    await expect(palette).toBeHidden()
+    await expect(trigger).toBeFocused()
+  }
+})
+
 test('desktop search affordances keep keyboard shortcuts visible', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
   await page.goto('/')

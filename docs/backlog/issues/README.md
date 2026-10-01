@@ -46,7 +46,7 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-038](ISSUE-038-palette-current-page-counts.md) | Done | P2 | Palette counts and empty results obscure the current page. |
 | [ISSUE-039](ISSUE-039-search-entry-keyboard-consistency.md) | Done | P2 | Search entry roles and Enter behavior are inconsistent. |
 | [ISSUE-040](ISSUE-040-site-switcher-initial-enter.md) | Done | P2 | Initial site-switcher candidate opens by click but not Enter. |
-| [ISSUE-041](ISSUE-041-palette-pointer-dismissal.md) | Open | P2 | Palette lacks an obvious pointer dismissal control. |
+| [ISSUE-041](ISSUE-041-palette-pointer-dismissal.md) | Done | P2 | Palette lacks an obvious pointer dismissal control. |
 | [ISSUE-042](ISSUE-042-search-empty-state-recovery.md) | Open | P2 | Empty search guidance ignores the current mode and context. |
 | [ISSUE-043](ISSUE-043-home-artifact-toolbar.md) | Open | P3 | Site home presents unavailable artifact actions. |
 | [ISSUE-044](ISSUE-044-pin-action-discovery.md) | Open | P2 | Readers struggle to discover the pin action. |

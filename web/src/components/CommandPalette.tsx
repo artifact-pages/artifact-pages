@@ -311,6 +311,14 @@ export function CommandPalette({
           />
           <span className="palette-scope" hidden={!scopeLabel}>{scopeLabel}</span>
           <kbd>esc</kbd>
+          <button
+            className="palette-close-button"
+            type="button"
+            aria-label="Close command palette"
+            onClick={onClose}
+          >
+            <Icon name="close" size={15} />
+          </button>
         </div>
 
         {showScopePicker ? (

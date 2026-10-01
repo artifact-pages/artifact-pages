@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ThemeMode } from '../domain/theme'
 import { hasSiteDiscoveryMetadata, type SiteCatalogEntry } from '../domain/index'
 import { CommandPalette, type PaletteCommand } from './CommandPalette'
@@ -16,6 +16,7 @@ export function SitePicker({
   onSetThemeMode?: (mode: ThemeMode) => void
 }) {
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const paletteReturnFocus = useRef<HTMLElement | null>(null)
   const sortedSites = [...sites].sort((left, right) => left.site.title.localeCompare(right.site.title))
   const commands: PaletteCommand[] = [
     {
@@ -35,16 +36,34 @@ export function SitePicker({
     },
   ]
 
+  const openPalette = useCallback(() => {
+    const activeElement = document.activeElement
+    paletteReturnFocus.current = activeElement instanceof HTMLElement && activeElement !== document.body
+      ? activeElement
+      : null
+    setPaletteOpen(true)
+  }, [])
+
+  const closePalette = useCallback(() => {
+    setPaletteOpen(false)
+    window.requestAnimationFrame(() => {
+      const target = paletteReturnFocus.current
+      if (target?.isConnected && target.getClientRects().length > 0) target.focus()
+      else document.querySelector<HTMLElement>('.site-picker-search-trigger')?.focus()
+    })
+  }, [])
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === 'k') {
         event.preventDefault()
-        setPaletteOpen((open) => !open)
+        if (paletteOpen) closePalette()
+        else openPalette()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [paletteOpen, closePalette, openPalette])
 
   return (
     <>
@@ -60,7 +79,7 @@ export function SitePicker({
             aria-label="Search sites"
             aria-keyshortcuts="Meta+K Control+K"
             title="Search sites (⌘ K)"
-            onClick={() => setPaletteOpen(true)}
+            onClick={openPalette}
           >
             <Icon name="search" size={16} />
             <span className="site-picker-search-desktop-label">Search sites...</span>
@@ -103,7 +122,7 @@ export function SitePicker({
           sites={sites}
           commands={commands}
           loading={false}
-          onClose={() => setPaletteOpen(false)}
+          onClose={closePalette}
           onNavigate={onNavigate}
           onJumpToHeading={() => undefined}
         />

@@ -1771,6 +1771,27 @@ mark {
   color: var(--text-tertiary);
 }
 
+.palette-close-button {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: var(--text-secondary);
+}
+
+.palette-close-button:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.palette-close-button:focus-visible {
+  outline: 2px solid var(--palette-match);
+  outline-offset: 1px;
+}
+
 .palette-scope-tabs {
   display: flex;
   gap: 4px;
