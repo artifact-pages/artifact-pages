@@ -106,7 +106,7 @@ export function CommandPalette({
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState(seed)
-  const [selectedIndex, setSelectedIndex] = useState(() => defaultSelectionIndex(seed, context, currentIndex))
+  const [selectedIndex, setSelectedIndex] = useState(() => defaultSelectionIndex(seed, context, currentIndex, sites.length))
   const [scope, setScope] = useState<PaletteScope>('all')
   const [previewState, setPreviewState] = useState<PreviewPaletteState>({ siteId: '', status: 'idle', candidates: [] })
   const currentSiteId = currentIndex?.site.id
@@ -234,15 +234,15 @@ export function CommandPalette({
   }, [])
 
   useEffect(() => {
-    setSelectedIndex(defaultSelectionIndex(query, context, currentIndex))
-  }, [query, context, currentIndex])
+    setSelectedIndex(defaultSelectionIndex(query, context, currentIndex, sites.length))
+  }, [query, context, currentIndex, sites.length])
 
   const previousEntrySequence = useRef(entrySequence)
   useEffect(() => {
     if (previousEntrySequence.current === entrySequence) return
     previousEntrySequence.current = entrySequence
-    setSelectedIndex(defaultSelectionIndex(query, context, currentIndex))
-  }, [entrySequence, query, context, currentIndex])
+    setSelectedIndex(defaultSelectionIndex(query, context, currentIndex, sites.length))
+  }, [entrySequence, query, context, currentIndex, sites.length])
 
   useEffect(() => {
     document.querySelector<HTMLElement>('[data-palette-selected="true"]')
@@ -424,9 +424,9 @@ export function CommandPalette({
   )
 }
 
-function defaultSelectionIndex(query: string, context: PaletteContext, currentIndex?: SiteIndex) {
-  const isEmptySiteSwitch = query.trim() === '@' && context !== 'sites' && currentIndex !== undefined
-  return isEmptySiteSwitch ? -1 : 0
+function defaultSelectionIndex(query: string, context: PaletteContext, currentIndex: SiteIndex | undefined, siteCount: number) {
+  const isUnfilteredSiteSwitch = query.trim() === '@' && context !== 'sites' && currentIndex !== undefined
+  return isUnfilteredSiteSwitch && siteCount !== 1 ? -1 : 0
 }
 
 function getEmptyMessage({

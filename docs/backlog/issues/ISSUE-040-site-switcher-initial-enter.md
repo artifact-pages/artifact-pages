@@ -1,6 +1,6 @@
 # サイト切替の初期候補をクリックできるのに Enter では開けない
 
-- Status: Open
+- Status: Done
 - Priority: P2
 - Area: Site switcher / @ palette
 
@@ -25,6 +25,10 @@
 
 ## Acceptance criteria
 
-- [ ] 現在サイト1件だけでも、開いた直後の選択状態と Enter で起こることが表示に一致する。
-- [ ] 追加の候補選択が必要なら、その操作が画面から分かる。
-- [ ] 現在サイト・別サイトの実行可能な候補をキーボードで選択して開ける。
+- [x] 現在サイト1件だけでも、開いた直後の選択状態と Enter で起こることが表示に一致する。
+- [x] 追加の候補選択が必要なら、その操作が画面から分かる。
+- [x] 現在サイト・別サイトの実行可能な候補をキーボードで選択して開ける。
+
+## Verification
+
+2026-10-01: npm run build and scoped git diff --check passed. The new single-site initial selection/Enter case and existing multi-site selection/navigation case passed 2/2 at port 4174; a separate gpt-6-luna max reviewer independently reran both tests, inspected the final diff, and found no actionable issues. Codex in-app browser at port 4179 showed the sole Guide candidate selected and Enter navigated from the reading artifact to /guide. The unchanged no-results path was inspected, not separately exercised in this repair.

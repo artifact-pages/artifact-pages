@@ -616,6 +616,36 @@ test('site discovery loads lightweight metadata for all sites but detailed index
   await expect.poll(() => [...indexRequests]).toEqual(['/_indexes/sre/index.json'])
 })
 
+test('single-site switcher selects its only destination so Enter opens the current site home', async ({ page }) => {
+  await page.route('**/_indexes/sites.json', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      schemaVersion: 1,
+      sites: [{
+        id: 'sre',
+        name: 'SRE',
+        repository: 'tasuku43/git-artifact-pages',
+        sourcePath: 'fixtures/storage/_artifacts/sre',
+      }],
+    }),
+  }))
+
+  await page.goto('/sre/reports/latency-retrospective.md')
+  await expect(page.getByTestId('markdown-document').getByRole('heading', { level: 2, name: 'Outcome at a glance' })).toBeVisible()
+  await page.getByRole('button', { name: 'Switch site. Current site: SRE' }).click()
+
+  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
+  const onlySite = palette.getByRole('option', { name: /SRE/ })
+  await expect(palette.getByRole('option')).toHaveCount(1)
+  await expect(onlySite).toHaveAttribute('aria-selected', 'true')
+
+  await search.press('Enter')
+  await expect(page).toHaveURL(/\/sre$/)
+  await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
+})
+
 test('site switcher has no default destination, then selects matching sites by query', async ({ page }) => {
   await page.goto('/sre')
   await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
