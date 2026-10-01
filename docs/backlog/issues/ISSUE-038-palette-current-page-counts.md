@@ -1,6 +1,6 @@
 # パレットの件数と現在の文書の省略が矛盾して見える
 
-- Status: Open
+- Status: In progress
 - Priority: P2
 - Area: Command palette / All・Recent・Pinned
 
