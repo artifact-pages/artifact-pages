@@ -1,11 +1,11 @@
 # T15 — AWS and Cloudflare delivery boundaries
 
-- Status: Open
+- Status: In progress
 - Phase: Provider-backed deployment
 
 ## Selected deployment and owner handoff
 
-The owner accepted the [domain policy](../../architecture/deployment-domain-policy.html) and reported purchasing `artifact-pages.dev` on September 28, 2026. Retain it under the selected Cloudflare Registrar/DNS policy. Production is Cloudflare Cache/CDN + R2 at the apex; independent AWS verification is `aws.artifact-pages.dev` through DNS-only Cloudflare DNS to CloudFront/private S3 with ACM in `us-east-1`, not Route 53. Hostnames and owner-confirmed acquisition are settled, but account/zone identifiers, credentials, approved real plans, authoritative DNS/TLS, and live evidence are not established. IMP-37 prepares the Cloudflare entry point; [IMP-39](../implementation/IMP-39-aws-cloudflare-dns-acm.md) prepares the selected AWS composition. Both deployments exercise the same CLI/static projection contract, not copied application source or Pages/Workers Static Assets.
+The owner accepted the [domain policy](../../architecture/deployment-domain-policy.html) and reported purchasing `artifact-pages.dev` on September 28, 2026. Retain it under the selected Cloudflare Registrar/DNS policy. Production is Cloudflare Cache/CDN + R2 at the apex; independent AWS verification is `aws.artifact-pages.dev` through DNS-only Cloudflare DNS to CloudFront/private S3 with ACM in `us-east-1`, not Route 53. The owner has applied the Cloudflare deployment, and live Cloudflare publish, DNS/TLS, route and header observations are now recorded below. Delivery-rule inspection, isolation and preview lifecycle proof remain incomplete; AWS has no live proof here. IMP-37 prepares the Cloudflare entry point; [IMP-39](../implementation/IMP-39-aws-cloudflare-dns-acm.md) prepares the selected AWS composition. Both deployments exercise the same CLI/static projection contract, not copied application source or Pages/Workers Static Assets.
 
 For lifecycle verification, the owner prefers hours rather than the 30-day sample value and may change the policy later. The Terraform `preview_retention_days` input accepts integer days; it is separate from the CLI deployment YAML. Resolve the provider-specific test configuration before apply without promising exact deletion at the configured age. Record actual provider expiry/removal timing separately from the requested retention; do not add application-managed expiry or a cleanup workflow merely to make the test finish quickly.
 
@@ -24,6 +24,33 @@ For lifecycle verification, the owner prefers hours rather than the 30-day sampl
 - [ ] Observe enforced production/preview HTML CSP and same-origin raw-preview module/resource behavior under the accepted TD3 trust model after local ISSUE-026 and ISSUE-037 checks. No additional preview hostname or broad null/wildcard CORS grant is required; verify real local/transitive modules, allowed HTTPS resources, HTTP blocking, raw 404s, and control denial. Parent-DOM/storage isolation is not an HTML guarantee ([TD3](../technical-design/TD3-preview-origin-delivery.md)).
 
 ## Evidence
+
+### Cloudflare live observations — October 1, 2026 (JST)
+
+The owner authorized publishing the existing public `guide` site and subsequent non-mutating checks. The target was R2 bucket `artifact-pages`, account `9ac354c8aa31d424224d8c4f3aa8ba2a`, zone `3eb221959ea55267ea2bfb93af45ef7e`, using the local config plus its Cloudflare overlay. No Terraform apply, registration change, unregister, preview creation, or credential change was performed during these checks. Secrets were not included in evidence.
+
+The initial dry-run identified six updates (English/Japanese introduction HTML, shared CSS/JS, index and metadata), with no creates or removals. Publish succeeded and requested revalidation of those six canonical paths. Subsequent canonical-URL GETs, without cache-busting query strings, returned changed bytes; the four artifact hashes matched the published local sources. The browser's ordinary reload rendered the new URL illustration. A later owner-authorized publish updated the four remaining CSS/JS/index/metadata objects; remote CSS/JS hashes matched local files, and the following dry-run returned `outcome: no-op` with an empty changes list. These sampled observations do not establish a global purge-propagation bound.
+
+| Check | Live observation | Proof boundary |
+| --- | --- | --- |
+| DNS and TLS | NS answers were `agustin.ns.cloudflare.com` and `kenia.ns.cloudflare.com`; verified TLS 1.3 covered `artifact-pages.dev`. | Does not verify R2 custom-domain settings or disablement of an alternate `r2.dev` endpoint. |
+| Logical routes | `/`, `/guide`, and `/guide/ja/what-is-git-artifact-pages.html` returned the same 453-byte SPA shell, SHA-256 `275370cef59ecbe624cac9f987c3ac090fa63a5340076aa727c0caf52431816e`. Browser reload loaded the site navigation and artifact iframe; no warning/error logs were captured after reload. | Existing Guide only; not preview or all route encodings. |
+| Relative resources | Both introduction documents, their relative CSS/JS, language links and `reading.html` returned 200 with the expected HTML/CSS/JavaScript content types. | HTTP resource availability and existing browser rendering, not a comprehensive module/CSP-blocking matrix. |
+| Missing storage objects | Nonexistent objects in `/_artifacts/guide/`, `/_indexes/guide/`, `/assets/` and `/_previews/guide/` returned real 404s, not the SPA shell. | Error bodies were HTML; no claim of a product-specific error presentation. |
+| Mutable cache headers | Index/catalog/metadata: `public, max-age=0, s-maxage=60, must-revalidate`; artifact HTML/CSS/JS: `public, max-age=0, s-maxage=300, must-revalidate`, with `Content-Disposition: inline`. | Sampled actual objects, not future or preview objects. |
+| App cache headers | `/index.html` and `/preview-bridge.js`: `no-cache, max-age=0, must-revalidate`; referenced hashed JS/CSS: `public, max-age=31536000, immutable`. Repeated requests observed cache HITs. | Current deployed bundle only. |
+| Production CSP | Raw Guide HTML had an enforced `Content-Security-Policy` allowing its `/_artifacts/guide/` namespace, HTTPS, data/blob and the accepted trusted-HTML script/style allowances. | Header observation only; preview CSP and runtime HTTP blocking remain unverified. |
+| Control routes | `/_control`, `/_control/`, `/_control/locks/guide.json`, `/_control/site-cache/guide.json`, encoded `/%5Fcontrol/locks/guide.json` and case-varied `/_CONTROL/locks/guide.json` returned 200 and exactly the SPA shell hash above. | No control-object bytes were observed. This does not verify the reference module's explicit block rule or every bypass; the product specification permits a shell response if private bytes are never served. |
+| Notice files | `/LICENSE` and `/THIRD_PARTY_NOTICES.txt` returned 200, `text/html`, and the SPA shell hash, not the expected notice bytes. | Failed live notice-delivery check; object presence must be distinguished from edge rewriting. |
+| Anonymous S3 API request | A GET for the Guide document at the account's R2 S3 endpoint returned 400 XML rather than artifact bytes. | Does not establish absence of every alternate public origin; R2 domain settings still need inspection. |
+
+### Identified follow-up and access boundary
+
+Read-only source comparison found that the separate `terraform-cloudflare-artifact-pages/modules/delivery/main.tf` lacks the `/_control` and notice-file logical-route exclusions and explicit control block present in this OSS repository's `terraform/modules/cloudflare/delivery/main.tf`. The live shell responses are consistent with that source gap, but deployed-rule provenance has not been established. Do not fix this by changing the product's account/access model or by treating navigation hiding as access control.
+
+Read-only API calls to list zone rulesets and R2 custom/managed-domain settings returned 403 (`Authentication error`) with the available CLI Cloudflare API token. This establishes insufficient access for those inspections, not a broken purge token or absent delivery rules. No permission expansion was attempted. Next, reconcile the separate delivery module's reserved routes, review a Terraform plan with the operator's infrastructure credentials, then reapply with owner authorization and repeat control/notice checks. Verify actual notice object bytes as well as route behavior; routing repair alone does not prove the old smoke bundle contains official notices.
+
+Preview lifecycle/runtime resource proof, satellite credential boundaries, unregister/invalidation and AWS checks remain open. Use an explicitly approved disposable site for mutating tests; do not unregister the public Guide or create public test artifacts implicitly.
 
 On September 28, 2026, the owner reported purchasing `artifact-pages.dev`. This closes only the acquisition-record prerequisite; no registrar API, nameserver lookup, account connection, TLS issuance, cloud apply, or deployed browser request was performed for that update.
 
