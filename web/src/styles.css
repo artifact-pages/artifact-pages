@@ -1360,6 +1360,20 @@ mark {
   color: var(--text);
 }
 
+.site-home-preview-link[aria-disabled="true"],
+.site-home-preview-link[aria-disabled="true"]:hover {
+  color: var(--text-tertiary);
+  cursor: default;
+  text-decoration: none;
+}
+
+.site-home-preview-note {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
 .site-home-preview-status {
   margin: 0;
   color: var(--text-tertiary);
@@ -2052,6 +2066,7 @@ mark {
   color: var(--text-secondary);
 }
 
+.palette-note,
 .palette-loading {
   padding: 5px 15px 9px;
   margin: 0;

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from 'react'
 import type { ArtifactIndexEntry, SiteIndex } from '../domain/index'
 import { RECENT_SECTION_MINIMUM_ARTIFACT_COUNT } from '../domain/navigation-sections'
-import { loadPreviewCandidates, PreviewLoadError } from '../data/previews'
+import { loadPreviewCandidates, PREVIEW_EXPLANATION, PreviewLoadError } from '../data/previews'
 import { artifactRouteHref } from '../routing'
 import { ArtifactTree, type TreeStyle } from './ArtifactTree'
 import { Icon } from './Icon'
@@ -31,6 +31,7 @@ export function SiteHome({
   const matchListRef = useRef<HTMLDivElement>(null)
   const [previewAvailability, setPreviewAvailability] = useState<PreviewAvailabilityState>({ status: 'loading' })
   const hasPreviewEntry = Boolean(onOpenPreviews)
+  const noPreviews = previewAvailability.status === 'success' && previewAvailability.count === 0
   const showRecentSection = index.artifacts.length >= RECENT_SECTION_MINIMUM_ARTIFACT_COUNT
   const recentArtifacts = useMemo(
     () => showRecentSection ? selectMostRecent(index.artifacts, 6) : [],
@@ -87,8 +88,13 @@ export function SiteHome({
         </p>
         {onOpenPreviews ? (
           <div className="site-home-preview">
-            <button className="site-home-preview-link" onClick={onOpenPreviews}>View previews <span aria-hidden="true">→</span></button>
-            <p className="site-home-preview-status" role="status">
+            <button
+              className="site-home-preview-link"
+              onClick={noPreviews ? undefined : onOpenPreviews}
+              aria-disabled={noPreviews ? 'true' : undefined}
+              aria-describedby={noPreviews ? 'site-home-preview-status' : undefined}
+            >View previews{noPreviews ? null : <> <span aria-hidden="true">→</span></>}</button>
+            <p className="site-home-preview-status" id="site-home-preview-status" role="status">
               {previewAvailability.status === 'loading'
                 ? 'Checking preview availability…'
                 : previewAvailability.status === 'error'
@@ -97,6 +103,7 @@ export function SiteHome({
                     ? 'There are no available previews for this site.'
                     : `${previewAvailability.count} preview${previewAvailability.count === 1 ? '' : 's'} listed.`}
             </p>
+            <p className="site-home-preview-note">{PREVIEW_EXPLANATION}</p>
           </div>
         ) : null}
         <div className="site-search-row">

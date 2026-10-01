@@ -46,7 +46,7 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-048](ISSUE-048-document-first-palette.md) | Open | P2 | Document discovery is obscured by mixed palette candidates. |
 | [ISSUE-049](ISSUE-049-home-search-arrow-keys.md) | Done | P2 | The down arrow does not move from site-home search into its results. |
 | [ISSUE-050](ISSUE-050-search-field-shortcut-badges.md) | Done | P2 | ⌘K badges on the search fields suggest shortcuts that open the palette instead. |
-| [ISSUE-051](ISSUE-051-empty-preview-entry-control.md) | Open | P3 | The empty-preview entry looks clickable, does nothing, and previews are unexplained. |
+| [ISSUE-051](ISSUE-051-empty-preview-entry-control.md) | Done | P3 | The empty-preview entry looks clickable, does nothing, and previews are unexplained. |
 | [ISSUE-052](ISSUE-052-site-switcher-count.md) | Open | P3 | The number beside the site switcher is unlabeled. |
 | [ISSUE-053](ISSUE-053-breadcrumb-menus-duplicate.md) | Open | P3 | Folder and document breadcrumb menus show the same content. |
 | [ISSUE-054](ISSUE-054-contents-keep-reading-label.md) | Open | P3 | The panels' "Keep reading" action is unclear. |

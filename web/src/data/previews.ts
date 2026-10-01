@@ -5,6 +5,9 @@ const FULL_SHA = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u
 const SHA256 = /^[0-9a-f]{64}$/u
 const BUNDLE_DIGEST = /^sha256:[0-9a-f]{64}$/u
 
+export const PREVIEW_EXPLANATION =
+  'Previews are review copies of changed documents, from pull requests or manual builds, kept apart from the published site.'
+
 export class PreviewLoadError extends Error {
   readonly status?: number
   readonly kind: 'network' | 'http' | 'invalid'

@@ -2915,14 +2915,31 @@ test('site home reports empty preview availability and the empty page explains h
   await page.goto('/sre')
   await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
   await expect(page.getByRole('status')).toHaveText('There are no available previews for this site.')
-  await page.getByRole('button', { name: 'View previews' }).click()
+  const previewEntry = page.getByRole('button', { name: 'View previews' })
+  await expect(previewEntry).toHaveAttribute('aria-disabled', 'true')
+  await expect(previewEntry).toHaveAccessibleDescription('There are no available previews for this site.')
+  await expect(page.getByText(/^Previews are review copies of changed documents/)).toBeVisible()
+  await previewEntry.focus()
+  await expect(previewEntry).toBeFocused()
+  await page.keyboard.press('Enter')
+  await previewEntry.click({ force: true })
+  await expect(page).toHaveURL('/sre')
 
-  await expect(page).toHaveURL('/sre/_previews')
+  await page.goto('/sre/_previews')
   await expect(page.getByRole('status')).toHaveText('There are no available previews for this site.')
   await expect(page.getByText(/Previews show changed documents from pull requests and manual preview builds\./)).toBeVisible()
   await page.getByRole('link', { name: 'Back to site home' }).click()
   await expect(page).toHaveURL('/sre')
   await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
+})
+
+test('site home keeps the preview entry active when previews exist', async ({ page }) => {
+  await page.goto('/sre')
+  await expect(page.getByRole('status')).toContainText('listed.')
+  const previewEntry = page.getByRole('button', { name: 'View previews' })
+  await expect(previewEntry).toBeEnabled()
+  await previewEntry.click()
+  await expect(page).toHaveURL('/sre/_previews')
 })
 
 test('preview list loading does not block returning to the site', async ({ page }) => {
@@ -2974,6 +2991,7 @@ test('preview palette loading, empty, and error states leave normal site navigat
   const previewTab = palette.getByRole('button', { name: 'Previews' })
   await previewTab.click()
   await expect(palette.getByText('There are no available previews for this site.')).toBeVisible()
+  await expect(palette.getByText(/^Previews are review copies of changed documents/)).toBeVisible()
 
   catalogState = 'error'
   await allPages.click()
@@ -3081,6 +3099,7 @@ test('the in-site palette has a lazy Previews tab scoped to the active site', as
   expect(previewRequests).toEqual([])
   await palette.getByRole('button', { name: 'Previews' }).click()
   await expect(palette.getByRole('option', { name: /Local preview guide/ }).first()).toBeVisible()
+  await expect(palette.getByText(/^Previews are review copies of changed documents/)).toBeVisible()
   await expect.poll(() => previewRequests.some((pathname) => pathname === '/_previews/sre/catalog.json')).toBe(true)
   expect(previewRequests.every((pathname) => pathname.startsWith('/_previews/sre/'))).toBeTruthy()
   expect(previewRequests).not.toContain('/_previews/frontend/catalog.json')

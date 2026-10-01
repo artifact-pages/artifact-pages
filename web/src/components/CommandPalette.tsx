@@ -24,7 +24,7 @@ import {
   prepareFuzzyScoreText,
 } from '../domain/fuzzy-search'
 import type { FuzzyMatch } from '../domain/fuzzy-search'
-import { loadPreviewCandidates, PreviewLoadError, previewRouteHref } from '../data/previews'
+import { loadPreviewCandidates, PREVIEW_EXPLANATION, PreviewLoadError, previewRouteHref } from '../data/previews'
 import { artifactRouteHref } from '../routing'
 import { Icon } from './Icon'
 
@@ -342,6 +342,10 @@ export function CommandPalette({
               </button>
             ))}
           </div>
+        ) : null}
+
+        {scope === 'previews' ? (
+          <p className="palette-note">{PREVIEW_EXPLANATION}</p>
         ) : null}
 
         <div className="palette-results" role="listbox" aria-label="Search results">
