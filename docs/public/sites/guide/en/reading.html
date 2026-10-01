@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="How to read documents published with Git Artifact Pages: URLs, the screen, search and site switching, contents and details, what stays in your browser, and keyboard shortcuts.">
+  <title>Reading</title>
+  <script>
+    // Copy the reader app's theme (same-origin parent) before first paint; assets/site.js keeps it in sync.
+    (() => {
+      const root = document.documentElement;
+      root.classList.add('js');
+      try {
+        const theme = window.parent !== window && window.parent.document.documentElement.dataset.theme;
+        if (theme === 'light' || theme === 'dark') root.dataset.theme = theme;
+      } catch { /* cross-origin: fall back to prefers-color-scheme */ }
+    })();
+  </script>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../assets/site.css">
+  <script src="../assets/site.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <main id="main" class="wrap">
+    <nav class="lang-switch" aria-label="Language"><a href="../ja/reading.html" hreflang="ja" lang="ja">日本語</a><span aria-current="page">English</span></nav>
+
+    <header class="page-head">
+      <div>
+        <p class="eyebrow">For readers</p>
+        <h1>Reading</h1>
+      </div>
+      <p class="lead">Published documents open from an ordinary URL. This page explains the screen and how to find pages and sites while you read.</p>
+    </header>
+
+    <section class="doc-section" aria-labelledby="urls">
+      <h2 id="urls">URLs</h2>
+      <p>A URL is the site ID followed by the file's location in the source. <strong>Filenames and extensions stay in the URL</strong>, so a shared link or a reload opens the same document.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>URL</th><th>Opens</th><th>Example</th></tr></thead>
+        <tbody>
+          <tr><td><code>/</code></td><td>The list of sites</td><td><code>/</code></td></tr>
+          <tr><td><code>/&lt;site&gt;</code></td><td>The site's home page</td><td><code>/checkout</code></td></tr>
+          <tr><td><code>/&lt;site&gt;/&lt;path&gt;</code></td><td>A document</td><td><code>/checkout/design/payment-flow.html</code></td></tr>
+        </tbody>
+      </table></div>
+      <p class="note">The example site and path are illustrative. <code>index.html</code> is opened by name like any other document; a folder URL does not open it automatically.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="layout">
+      <h2 id="layout">The screen</h2>
+      <p>Site navigation is on the left, the document is in the middle, and a panel opens on the right when you need it.</p>
+      <figure class="app-mock" aria-label="The reader app with a document open (sample)">
+        <div class="am-side" aria-hidden="true">
+          <div class="am-site"><b>G</b><span>Guide</span><i>⌄</i><span class="mk-no">1</span></div>
+          <div class="am-filter"><span>⌕ Filter navigation</span><kbd>⌘K</kbd></div>
+          <div class="am-h">Pinned<span class="mk-no">2</span></div>
+          <div class="mk-tree am-pins"><div class="mk-file mk-root">What is Git Artifact Pages?</div></div>
+          <div class="am-h">Browse<span class="mk-no">3</span></div>
+          <div class="mk-tree">
+            <div class="mk-dir"><i>⌄</i><span>en</span><small>2</small></div>
+            <div class="mk-file active">Reading</div>
+            <div class="mk-file">What is Git Artifact Pages?</div>
+            <div class="mk-dir"><i>›</i><span>ja</span><small>2</small></div>
+          </div>
+        </div>
+        <div class="am-main" aria-hidden="true">
+          <div class="am-bar"><span>en / Reading</span><span class="am-actions"><span>Guide home</span><span class="on">Contents<span class="mk-no">5</span></span><span>Details</span></span></div>
+          <div class="am-stage">
+            <div class="am-doc">
+              <p class="am-title">Reading<span class="mk-no">4</span></p>
+              <div class="rm-faux"></div><div class="rm-faux m"></div><div class="rm-faux"></div><div class="rm-faux s"></div>
+            </div>
+            <div class="am-panel"><b>Contents</b><span>URLs</span><span>The screen</span><span>Search and site switching</span><span class="sub">Try it</span><span>HTML and Markdown</span></div>
+          </div>
+        </div>
+      </figure>
+      <ol class="legend">
+        <li><span><strong>Site</strong>: the site you are reading. Select it to choose another site.</span></li>
+        <li><span><strong>Pinned</strong>: documents you pinned, saved only in your browser.</span></li>
+        <li><span><strong>Browse</strong>: documents in their folder structure. Narrow it with the field above.</span></li>
+        <li><span><strong>Document</strong>: HTML appears exactly as published; Markdown is rendered by the app.</span></li>
+        <li><span><strong>Contents / Details</strong>: headings, plus last-update and source information, in a panel over the document.</span></li>
+      </ol>
+      <p class="note">Sites with many documents also show <strong>Recently updated</strong> in the sidebar and on the home page.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="search">
+      <h2 id="search">Search and site switching</h2>
+      <p>Open the command palette with <kbd>⌘K</kbd> / <kbd>Ctrl K</kbd>. Plain text searches <strong>only the site you are reading</strong>, by title and path. A leading symbol changes what you search.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Type</th><th>Searches</th></tr></thead>
+        <tbody>
+          <tr><td>(no symbol)</td><td>Documents in the current site. With a document open, its headings and commands are also suggested.</td></tr>
+          <tr><td><code>@</code></td><td>Sites. Choosing one opens that site's home page.</td></tr>
+          <tr><td><code>#</code></td><td>Headings in the open document.</td></tr>
+          <tr><td><code>&gt;</code></td><td>Commands, such as switching the theme or copying a link.</td></tr>
+        </tbody>
+      </table></div>
+      <p>When searching documents, the tabs at the top narrow the scope: <strong>All</strong>, <strong>Recent</strong> (documents you read recently), <strong>Pinned</strong>, and <strong>Previews</strong> (pull-request previews).</p>
+      <p class="note">There is no search across several sites at once. To find a document in another site, move to that site with <code>@</code> first.</p>
+
+      <h3 id="try">Try it</h3>
+      <p>The sample below uses this guide and an illustrative site. Select <strong>Try search</strong> or the field on the left, then type a word or <code>@</code>.</p>
+      <div data-reader-demo data-demo-page="en/reading.html" role="group" aria-label="Reader sample: search and switching sites with @">
+        <p class="demo-fallback">Enable JavaScript to try search and site switching here.</p>
+      </div>
+    </section>
+
+    <section class="doc-section" aria-labelledby="formats">
+      <h2 id="formats">HTML and Markdown</h2>
+      <p><strong>HTML</strong> is shown exactly as published. Its own CSS and JavaScript run as written, so reports, dashboards, and diagrams look the way their authors built them.</p>
+      <p><strong>Markdown</strong> is rendered by the app for easy reading. It supports GitHub-style tables, task lists, and footnotes, plus Mermaid diagrams. Embedded HTML is partly removed for safety, and scripts do not run.</p>
+      <p>In both, links to other documents in the same site move within the app.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="panels">
+      <h2 id="panels">Contents and details</h2>
+      <p><strong>Contents</strong> and <strong>Details</strong> above the document open a panel on the right without changing the document's width.</p>
+      <ul>
+        <li><strong>Contents</strong>: the document's headings. Select one to jump to it.</li>
+        <li><strong>Details</strong>: the last-updated date, who committed that change, and links to the source repository and file. The committer is recorded for the latest change and is not necessarily the original author.</li>
+      </ul>
+    </section>
+
+    <section class="doc-section" aria-labelledby="local-state">
+      <h2 id="local-state">What stays in your browser</h2>
+      <p>Pins, recently read documents (up to 20 per site), and the theme (light, dark, or follow the system) are saved <strong>only in the browser you are using</strong>. They are not shared with other people or devices, and they do not change published documents or repositories.</p>
+      <p>To change a document's content, change it in its source Git repository.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="keyboard">
+      <h2 id="keyboard">Keyboard shortcuts</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Keys</th><th>Action</th></tr></thead>
+        <tbody>
+          <tr><td><kbd>⌘K</kbd> / <kbd>Ctrl K</kbd></td><td>Open the command palette</td></tr>
+          <tr><td><kbd>↑</kbd> <kbd>↓</kbd> / <kbd>Ctrl J</kbd> <kbd>Ctrl K</kbd></td><td>Move through palette results (while the palette is open)</td></tr>
+          <tr><td><kbd>⌘B</kbd> / <kbd>Ctrl B</kbd></td><td>Show or hide the sidebar</td></tr>
+          <tr><td><kbd>⌘⇧O</kbd> / <kbd>Ctrl ⇧ O</kbd></td><td>Show or hide Contents (documents with headings)</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>Close the palette or panel</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <nav class="pager" aria-label="Pages">
+      <a class="prev" href="what-is-git-artifact-pages.html"><small>Previous</small><strong>What is Git Artifact Pages?</strong></a>
+    </nav>
+  </main>
+</body>
+</html>

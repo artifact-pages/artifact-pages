@@ -37,3 +37,7 @@ Explain how a team publishes its site: choosing a publishable directory, `site p
 ## Notes
 
 - Actions are optional and not yet released; confirm with the owner how much to show.
+
+## Dependency on the release shape
+
+This page refers to how components are obtained and pinned. Draft it after the release-shape decision recorded in [DOC-03](DOC-03-guide-getting-started.md#blocker-2026-10-01).

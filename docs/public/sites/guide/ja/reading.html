@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Git Artifact Pages で公開された文書の読み方。URL、画面の構成、検索とサイトの切り替え、目次と詳細、ブラウザに残るもの、キーボード操作。">
+  <title>読者の体験</title>
+  <script>
+    // 最初の描画の前に、閲覧アプリ（同一オリジンの親）のテーマを写す。追従は assets/site.js が行う。
+    (() => {
+      const root = document.documentElement;
+      root.classList.add('js');
+      try {
+        const theme = window.parent !== window && window.parent.document.documentElement.dataset.theme;
+        if (theme === 'light' || theme === 'dark') root.dataset.theme = theme;
+      } catch { /* 別オリジン：prefers-color-scheme にまかせる */ }
+    })();
+  </script>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../assets/site.css">
+  <script src="../assets/site.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">本文へ移動</a>
+  <main id="main" class="wrap">
+    <nav class="lang-switch" aria-label="言語"><span aria-current="page">日本語</span><a href="../en/reading.html" hreflang="en" lang="en">English</a></nav>
+
+    <header class="page-head">
+      <div>
+        <p class="eyebrow">読者向け</p>
+        <h1>読者の体験</h1>
+      </div>
+      <p class="lead">公開された文書は、URLを開くだけで読めます。このページでは、画面の見方と、読みながらページやサイトを探す方法をまとめます。</p>
+    </header>
+
+    <section class="doc-section" aria-labelledby="urls">
+      <h2 id="urls">URL</h2>
+      <p>URLには、サイトのIDと、公開元でのファイルの場所をそのまま使います。<strong>ファイル名と拡張子もURLに残る</strong>ので、リンクを共有しても再読み込みしても、同じ文書が開きます。</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>URL</th><th>開くもの</th><th>例</th></tr></thead>
+        <tbody>
+          <tr><td><code>/</code></td><td>サイトの一覧</td><td><code>/</code></td></tr>
+          <tr><td><code>/&lt;サイト&gt;</code></td><td>サイトのトップページ</td><td><code>/checkout</code></td></tr>
+          <tr><td><code>/&lt;サイト&gt;/&lt;パス&gt;</code></td><td>文書</td><td><code>/checkout/design/payment-flow.html</code></td></tr>
+        </tbody>
+      </table></div>
+      <p class="note">例のサイトとパスは説明用です。<code>index.html</code>も、ほかの文書と同じくファイル名まで指定して開きます。フォルダのURLを開いても、<code>index.html</code>は自動では開きません。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="layout">
+      <h2 id="layout">画面の構成</h2>
+      <p>左にサイトのナビゲーション、中央に文書、右に必要なときだけ開くパネルがあります。</p>
+      <figure class="app-mock" aria-label="閲覧アプリで文書を開いた画面（見本）">
+        <div class="am-side" aria-hidden="true">
+          <div class="am-site"><b>G</b><span>Guide</span><i>⌄</i><span class="mk-no">1</span></div>
+          <div class="am-filter"><span>⌕ Filter navigation</span><kbd>⌘K</kbd></div>
+          <div class="am-h">Pinned<span class="mk-no">2</span></div>
+          <div class="mk-tree am-pins"><div class="mk-file mk-root">Git Artifact Pagesとは</div></div>
+          <div class="am-h">Browse<span class="mk-no">3</span></div>
+          <div class="mk-tree">
+            <div class="mk-dir"><i>›</i><span>en</span><small>2</small></div>
+            <div class="mk-dir"><i>⌄</i><span>ja</span><small>2</small></div>
+            <div class="mk-file">Git Artifact Pagesとは</div>
+            <div class="mk-file active">読者の体験</div>
+          </div>
+        </div>
+        <div class="am-main" aria-hidden="true">
+          <div class="am-bar"><span>ja / 読者の体験</span><span class="am-actions"><span>Guide home</span><span class="on">Contents<span class="mk-no">5</span></span><span>Details</span></span></div>
+          <div class="am-stage">
+            <div class="am-doc">
+              <p class="am-title">読者の体験<span class="mk-no">4</span></p>
+              <div class="rm-faux"></div><div class="rm-faux m"></div><div class="rm-faux"></div><div class="rm-faux s"></div>
+            </div>
+            <div class="am-panel"><b>Contents</b><span>URL</span><span>画面の構成</span><span>検索とサイトの切り替え</span><span class="sub">試してみる</span><span>HTMLとMarkdown</span></div>
+          </div>
+        </div>
+      </figure>
+      <ol class="legend">
+        <li><span><strong>サイト</strong>：いま読んでいるサイト。押すとほかのサイトを選べます。</span></li>
+        <li><span><strong>Pinned</strong>：ピン留めした文書。自分のブラウザにだけ保存されます。</span></li>
+        <li><span><strong>Browse</strong>：フォルダ構成のまま並んだ文書。上の欄で絞り込めます。</span></li>
+        <li><span><strong>文書</strong>：HTMLは公開されたままの見た目で、Markdownはアプリが整えて表示します。</span></li>
+        <li><span><strong>Contents / Details</strong>：目次と、最終更新や公開元の情報。文書に重ねて開きます。</span></li>
+      </ol>
+      <p class="note">文書が多いサイトでは、サイドバーとトップページに<strong>Recently updated</strong>（最近更新された文書）も表示されます。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="search">
+      <h2 id="search">検索とサイトの切り替え</h2>
+      <p><kbd>⌘K</kbd> / <kbd>Ctrl K</kbd>でコマンドパレットを開きます。記号を付けずに入力すると、<strong>いま読んでいるサイトの中だけ</strong>を、タイトルとパスで検索します。探す対象は、先頭に付ける記号で次のように変わります。</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>入力</th><th>探すもの</th></tr></thead>
+        <tbody>
+          <tr><td>（記号なし）</td><td>いまのサイトの文書。文書を開いているときは、その文書の見出しとコマンドも候補に出ます。</td></tr>
+          <tr><td><code>@</code></td><td>サイト。選ぶと、そのサイトのトップページへ移ります。</td></tr>
+          <tr><td><code>#</code></td><td>開いている文書の見出し。</td></tr>
+          <tr><td><code>&gt;</code></td><td>コマンド（テーマの切り替え、リンクのコピーなど）。</td></tr>
+        </tbody>
+      </table></div>
+      <p>文書を探すときは、パレット上部のタブで範囲を絞れます。<strong>All</strong>（すべて）、<strong>Recent</strong>（最近読んだ文書）、<strong>Pinned</strong>（ピン留め）、<strong>Previews</strong>（プルリクエストのプレビュー）です。</p>
+      <p class="note">複数のサイトをまとめて検索する機能はありません。別のサイトの文書は、<code>@</code>でサイトを移ってから探します。</p>
+
+      <h3 id="try">試してみる</h3>
+      <p>下の見本は、このガイドと説明用のサイトで作ったものです。<strong>「検索を試す」</strong>か左の欄を押して、文字や<code>@</code>を入力してみてください。</p>
+      <div data-reader-demo data-demo-page="ja/reading.html" role="group" aria-label="閲覧画面の見本：検索と @ によるサイトの切り替え">
+        <p class="demo-fallback">JavaScriptを有効にすると、ここで検索とサイトの切り替えを試せます。</p>
+      </div>
+    </section>
+
+    <section class="doc-section" aria-labelledby="formats">
+      <h2 id="formats">HTMLとMarkdown</h2>
+      <p><strong>HTML</strong>は、公開されたファイルをそのまま表示します。文書自身のCSSやJavaScriptもそのまま動くので、レポートやダッシュボード、図も作ったときの見た目で読めます。</p>
+      <p><strong>Markdown</strong>は、アプリが読みやすく整えて表示します。表、チェックリスト、脚注などのGitHub形式の書き方と、Mermaidの図に対応しています。埋め込まれたHTMLは安全のために一部が取り除かれ、スクリプトは動きません。</p>
+      <p>どちらの形式でも、同じサイトのほかの文書へのリンクを押すと、アプリの中で移動します。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="panels">
+      <h2 id="panels">目次と詳細</h2>
+      <p>文書の上部にある<strong>Contents</strong>と<strong>Details</strong>を押すと、右側にパネルが開きます。文書の幅は変わりません。</p>
+      <ul>
+        <li><strong>Contents</strong>：文書の見出しの一覧です。押すとその見出しへ移ります。</li>
+        <li><strong>Details</strong>：最終更新日、その変更をコミットした人、公開元のリポジトリとファイルへのリンクです。コミットした人は最後の変更の記録で、文書を最初に書いた人とは限りません。</li>
+      </ul>
+    </section>
+
+    <section class="doc-section" aria-labelledby="local-state">
+      <h2 id="local-state">ブラウザに残るもの</h2>
+      <p>ピン留め、最近読んだ文書（サイトごとに最大20件）、テーマ（ライト・ダーク・システム設定に合わせる）は、<strong>いま使っているブラウザにだけ</strong>保存されます。ほかの人や別の端末には共有されず、公開された文書やリポジトリも変わりません。</p>
+      <p>文書の内容を変えるときは、公開元のGitリポジトリで変更します。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="keyboard">
+      <h2 id="keyboard">キーボード操作</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>キー</th><th>動作</th></tr></thead>
+        <tbody>
+          <tr><td><kbd>⌘K</kbd> / <kbd>Ctrl K</kbd></td><td>コマンドパレットを開く</td></tr>
+          <tr><td><kbd>↑</kbd> <kbd>↓</kbd> / <kbd>Ctrl J</kbd> <kbd>Ctrl K</kbd></td><td>パレットの候補を移動（パレットを開いているとき）</td></tr>
+          <tr><td><kbd>⌘B</kbd> / <kbd>Ctrl B</kbd></td><td>サイドバーの表示を切り替える</td></tr>
+          <tr><td><kbd>⌘⇧O</kbd> / <kbd>Ctrl ⇧ O</kbd></td><td>Contentsの表示を切り替える（見出しのある文書）</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>パレットやパネルを閉じる</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <nav class="pager" aria-label="ページ送り">
+      <a class="prev" href="what-is-git-artifact-pages.html"><small>前へ</small><strong>Git Artifact Pagesとは</strong></a>
+    </nav>
+  </main>
+</body>
+</html>

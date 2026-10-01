@@ -12,7 +12,7 @@
   const T = {
     ja: {
       copy: 'コピー', copied: 'コピーしました', selectToCopy: '選択してコピー',
-      sidebar: '閲覧画面のサイドバー（見本）', tryIt: '検索を試す ↗', alsoOpens: ' でも開けます',
+      sidebar: '閲覧画面のサイドバー（見本）', tryIt: '検索を試す ↗', alsoOpens: 'でも開けます',
       palette: 'コマンドパレット（見本）', query: '検索語', empty: '一致する項目はありません',
       demoQuery: 'とは',
     },
@@ -115,12 +115,18 @@
      サイトの説明は artifact-pages.yaml の description と同じ文言です。 */
   /* このガイド自身。1つのサイトの中に ja/ と en/ があり、読んでいる言語のページを先に並べる */
   const GUIDE_PAGES = {
-    ja: ['Git Artifact Pages とは', 'ja/what-is-git-artifact-pages.html', 'Gitにある成果物を、読むための場所へ。'],
-    en: ['What is Git Artifact Pages?', 'en/what-is-git-artifact-pages.html', 'A reading place for the work you keep in Git.'],
+    ja: [
+      ['Git Artifact Pagesとは', 'ja/what-is-git-artifact-pages.html', 'Gitにある成果物を、読むための場所へ。'],
+      ['読者の体験', 'ja/reading.html', 'URL、画面の構成、検索とサイトの切り替え。'],
+    ],
+    en: [
+      ['What is Git Artifact Pages?', 'en/what-is-git-artifact-pages.html', 'A reading place for the work you keep in Git.'],
+      ['Reading', 'en/reading.html', 'URLs, the screen, search, and switching sites.'],
+    ],
   };
   const GUIDE = {
     id: 'guide', name: 'Guide', description: 'Adopt, publish, and read with Git Artifact Pages. 導入・公開・閲覧のガイド。',
-    artifacts: [GUIDE_PAGES[lang], GUIDE_PAGES[lang === 'ja' ? 'en' : 'ja']],
+    artifacts: [...GUIDE_PAGES[lang], ...GUIDE_PAGES[lang === 'ja' ? 'en' : 'ja']],
   };
   const DEMO_SRE = {
     ja: { id: 'sre', name: 'SREチーム', description: '障害の振り返り、SLO、オンコール手順（説明用の例）。', artifacts: [
@@ -286,7 +292,8 @@
 
   function buildDemo(host) {
     const autoplay = host.dataset.readerDemo === 'autoplay';
-    const state = { site: SITES[0], page: 0 };
+    const startPage = () => Math.max(0, SITES[0].artifacts.findIndex(([, path]) => path === host.dataset.demoPage));
+    const state = { site: SITES[0], page: startPage() };
     host.textContent = '';
     host.classList.add('reader-mock');
 
@@ -341,8 +348,55 @@
     if (autoplay) palette.open('', false);
     return {
       host, autoplay, palette, renderPage,
-      reset() { state.site = SITES[0]; state.page = 0; renderPage(); },
+      reset() { state.site = SITES[0]; state.page = startPage(); renderPage(); },
     };
+  }
+
+  /* ── 3b. 狭い画面：各ステップに、その時点の図を1枚ずつ置く ──
+     図の元は .diagram-panel の SVG だけにして、ここで複製する。ステップごとに注目する範囲を切り出し、
+     文字が小さくなりすぎない幅を下限にする（入りきらない分は図の枠の中で横にスクロールする）。
+     表示の切り替えは CSS（max-width: 900px）が行う。 */
+  const STEP_VIEWS = { 1: [164, 20, 432, 222], 2: [30, 236, 700, 216], 3: [30, 236, 700, 410], 4: [384, 60, 366, 176] };
+  /* 切り出した範囲の端で文字が途切れる要素は、そのステップの図から外す */
+  const STEP_DROPS = { 4: ['.d-sub'] };
+  const sourceSvg = panel && panel.querySelector('svg');
+  const captions = panel ? [...panel.querySelectorAll('.diagram-caption span')] : [];
+  if (sourceSvg) {
+    chapters.forEach((chapter) => {
+      const step = Number(chapter.dataset.step);
+      const view = STEP_VIEWS[step];
+      if (!view) return;
+      const figure = el('figure', 'step-figure');
+      figure.dataset.scene = String(step);
+      const clone = sourceSvg.cloneNode(true);
+      clone.querySelectorAll('title, desc').forEach((node) => node.remove());
+      clone.removeAttribute('role');
+      clone.removeAttribute('aria-labelledby');
+      clone.setAttribute('aria-hidden', 'true');
+      clone.setAttribute('viewBox', view.join(' '));
+      (STEP_DROPS[step] || []).forEach((selector) => clone.querySelectorAll(selector).forEach((node) => node.remove()));
+      const markerId = `ah-step-${step}`;
+      clone.querySelector('marker').id = markerId;
+      clone.querySelectorAll('[marker-end]').forEach((node) => node.setAttribute('marker-end', `url(#${markerId})`));
+      // 拡大しすぎない上限（PC の図と同程度の文字の大きさ）と、横長の図だけ文字を読める幅の下限
+      clone.style.maxWidth = Math.round(view[2] * 0.85) + 'px';
+      if (view[2] > 450) clone.style.minWidth = Math.round(view[2] * 0.8) + 'px';
+      const frame = el('div', 'step-figure-frame');
+      frame.append(clone);
+      figure.append(frame);
+      if (captions[step - 1]) figure.append(el('figcaption', '', captions[step - 1].textContent));
+      const lead = chapter.querySelector('h3 + p');
+      (lead || chapter.querySelector('h3')).after(figure);
+      /* 横に続きがあるときだけ右端をぼかし、最後までスクロールしたら外す */
+      const syncEdge = () => {
+        const scrollable = frame.scrollWidth > frame.clientWidth + 1;
+        frame.classList.toggle('is-scrollable', scrollable);
+        frame.classList.toggle('at-end', scrollable && frame.scrollLeft + frame.clientWidth >= frame.scrollWidth - 1);
+      };
+      frame.addEventListener('scroll', syncEdge, { passive: true });
+      addEventListener('resize', syncEdge);
+      requestAnimationFrame(syncEdge);
+    });
   }
 
   const demos = [...document.querySelectorAll('[data-reader-demo]')].map(buildDemo);
@@ -353,7 +407,7 @@
     ja: [
       { id: 'sre', name: 'SREチーム', description: '障害の振り返り、SLO、オンコール手順。', artifacts: [
         ['9/12 決済タイムアウト障害の振り返り', 'incidents/2026-09-12-review.html', 'Sep 16'],
-        ['SLO 定義と計測方法', 'slo/definitions.md', 'Sep 11'],
+        ['SLOの定義と計測方法', 'slo/definitions.md', 'Sep 11'],
         ['オンコール引き継ぎ手順', 'runbooks/handoff.md', 'Sep 2'],
       ] },
       { id: 'checkout', name: '決済チーム / Checkout', description: '決済画面とAPIの設計、障害対応、運用手順。', artifacts: [
@@ -367,13 +421,13 @@
         ['月次締めチェックリスト', 'runbooks/month-end.md', 'Sep 1'],
       ] },
       { id: 'platform', name: 'Platformチーム', description: 'クラスタ構成、デプロイ基盤、コストレポート。', artifacts: [
-        ['Kubernetes クラスタ構成', 'architecture/clusters.html', 'Sep 27'],
+        ['Kubernetesのクラスタ構成', 'architecture/clusters.html', 'Sep 27'],
         ['デプロイパイプライン', 'guides/deploy-pipeline.md', 'Sep 19'],
         ['コスト月次レポート', 'reports/cost-2026-09.html', 'Sep 5'],
       ] },
       { id: 'data', name: 'データ基盤チーム', description: 'イベントスキーマとDWHの設計指針。', artifacts: [
         ['イベントスキーマ一覧', 'schemas/events.html', 'Sep 24'],
-        ['DWH テーブル設計指針', 'guides/dwh-modeling.md', 'Sep 12'],
+        ['DWHのテーブル設計指針', 'guides/dwh-modeling.md', 'Sep 12'],
       ] },
       { id: 'mobile-ios', name: 'モバイルチーム / iOS', description: 'iOSアプリのリリース手順と画面設計。', artifacts: [
         ['リリース手順', 'runbooks/release.md', 'Sep 26'],

@@ -160,6 +160,16 @@ h3 { margin: 0 0 8px; font-size: 16px; font-weight: 650; line-height: 1.55; lett
 .term .p { color: var(--code-prompt); user-select: none; }
 .term .v { color: var(--code-verb); }
 .term .k { color: var(--code-key); }
+.urlbar { max-width: 580px; margin: 4px 0 0; }
+.urlbar-field { display: flex; align-items: center; gap: 0; overflow-x: auto; padding: 9px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper-2); font: 12.5px/1.6 var(--mono); white-space: nowrap; scrollbar-width: thin; }
+.urlbar-field svg { flex: none; margin-right: 10px; color: var(--quiet); }
+.u-host { color: var(--quiet); }
+.u-site { color: var(--accent); font-weight: 600; }
+.u-path { color: var(--ink); }
+.urlbar-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 8px; color: var(--quiet); font-size: 11.5px; }
+.urlbar-legend span::before { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 2px; content: ""; vertical-align: 1px; }
+.u-site-key::before { background: var(--accent); }
+.u-path-key::before { background: var(--ink); }
 .note { max-width: 560px; margin: 14px 0 0; color: var(--quiet); font-size: 12px; line-height: 1.8; }
 .chapter-next { display: inline-flex; gap: 8px; align-items: center; width: fit-content; margin-top: 22px; color: var(--muted); font-size: 13px; font-weight: 600; text-decoration: none; }
 .chapter-next:hover { color: var(--ink); }
@@ -216,14 +226,19 @@ html:not(.js) .st-a { opacity: 0; } html:not(.js) .st-b { opacity: 1; }
 .d-cmd-t { fill: var(--accent); font: 600 11px var(--mono); }
 .d-person { fill: var(--accent-wash); stroke: var(--accent); stroke-width: 1.2; }
 .d-note { fill: var(--quiet); font: 11px var(--sans); }
+.step-figure { display: none; }
 @media (max-width: 900px) {
-  .story { display: flex; flex-direction: column-reverse; align-items: stretch; gap: 0; }
-  .diagram-panel { position: sticky; top: var(--nav-h); z-index: 2; align-self: stretch; height: auto; min-height: 0; max-height: 330px; margin: 0 -20px; border-radius: 0; border-inline: 0; box-shadow: none; }
-  .diagram-frame { justify-items: start; max-height: 226px; padding: 4px; }
-  .diagram-frame svg { width: 470px; min-width: 470px; }
-  .diagram-foot { min-height: 54px; padding-block: 8px; }
-  .diagram-caption { min-height: 38px; }
-  .chapter { min-height: 500px; padding-block: 40px; }
+  .story { display: block; }
+  .chapter, .js .chapter { min-height: 0; padding-block: 36px; opacity: 1; }
+  /* JavaScript が有効なら、固定の図の代わりに各ステップの図（.step-figure）を出す。無効なら全体図をそのまま置く */
+  .js .diagram-panel { display: none; }
+  .diagram-panel { position: static; height: auto; min-height: 0; margin-top: 24px; }
+  .diagram-frame svg { min-width: 560px; }
+  .step-figure { display: block; max-width: 580px; margin: 4px 0 20px; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); }
+  .step-figure-frame { overflow-x: auto; padding: 10px; background-color: var(--paper-2); background-image: radial-gradient(var(--line) 1px, transparent 1px); background-size: 20px 20px; scrollbar-width: thin; }
+  .step-figure-frame.is-scrollable:not(.at-end) { -webkit-mask-image: linear-gradient(90deg, #000 78%, transparent); mask-image: linear-gradient(90deg, #000 78%, transparent); }
+  .step-figure svg { display: block; width: 100%; height: auto; margin-inline: auto; color: var(--accent); }
+  .step-figure figcaption { padding: 9px 14px; border-top: 1px solid var(--line-soft); color: var(--muted); font-size: 12.5px; line-height: 1.6; }
 }
 
 /* ── 閲覧画面モック（閲覧アプリの見た目に合わせる） ── */
@@ -333,6 +348,29 @@ button.am-filter:hover { background: var(--active); color: var(--ink); }
   .am-side, .am-actions { display: none; }
   .finale-prompt { flex-direction: column; align-items: flex-start; }
 }
+
+/* ── 解説ページ（読者の体験など） ── */
+.doc-section { padding-block: clamp(36px, 5vw, 56px); border-top: 1px solid var(--line-soft); }
+.doc-section > h2 { margin-bottom: 10px; }
+.doc-section > p, .doc-section > ul { max-width: 700px; color: var(--muted); }
+.doc-section > p strong, .doc-section li strong { color: var(--ink); }
+.doc-section > * + .table-wrap, .doc-section > * + .app-mock, .doc-section > * + [data-reader-demo] { margin-top: 18px; }
+.doc-section h3 { margin-top: 24px; }
+.mk-no { display: inline-grid; flex: none; place-items: center; width: 16px; height: 16px; margin-left: 6px; border-radius: 50%; background: var(--accent); color: var(--m-surface); font: 600 10px/1 var(--sans); vertical-align: middle; }
+.legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 24px; margin: 16px 0 0; padding: 0; list-style: none; counter-reset: legend; }
+.legend li { display: flex; gap: 10px; color: var(--muted); font-size: 13.5px; counter-increment: legend; }
+.legend li::before { display: inline-grid; flex: none; place-items: center; width: 18px; height: 18px; margin-top: 3px; border-radius: 50%; background: var(--accent); color: var(--bg); font: 600 10.5px/1 var(--sans); content: counter(legend); }
+.legend strong { color: var(--ink); }
+.am-doc { padding: 26px clamp(16px, 4vw, 36px); }
+.am-doc .am-title { margin-bottom: 12px; }
+.am-panel { position: absolute; top: 10px; right: 10px; width: min(200px, 45%); padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--m-raised); box-shadow: var(--pop); font-size: 11px; line-height: 1.6; }
+.am-panel b { display: block; margin-bottom: 6px; font-weight: 600; }
+.am-panel span { display: block; padding: 2px 0; color: var(--muted); }
+.am-panel span.sub { padding-left: 10px; }
+.am-actions .on { color: var(--ink); }
+.am-side .am-h + .mk-tree { margin-top: 2px; }
+.am-pins { margin-bottom: 4px; }
+.pager-single { grid-template-columns: 1fr; }
 
 /* ── カード・表・注意書き ── */
 .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Git Artifact Pages は、Gitで管理しているHTMLやMarkdownを、URLで読めて検索できる静的サイトとして公開する仕組みです。">
-  <title>Git Artifact Pages とは</title>
+  <title>Git Artifact Pagesとは</title>
   <script>
     // 最初の描画の前に、閲覧アプリ（同一オリジンの親）のテーマを写す。追従は assets/site.js が行う。
     (() => {
@@ -26,27 +26,27 @@
     <nav class="lang-switch" aria-label="言語"><span aria-current="page">日本語</span><a href="../en/what-is-git-artifact-pages.html" hreflang="en" lang="en">English</a></nav>
     <section class="hero" aria-labelledby="hero-title">
       <div>
-        <p class="eyebrow">Git から、読める Web へ</p>
+        <p class="eyebrow">Gitから、読めるWebへ</p>
         <h1 id="hero-title">Gitにある成果物を、<wbr>読むための場所へ。</h1>
-        <p class="lead"><strong>HTMLもMarkdownも、Gitに置いたまま、URLで読めて検索できる。</strong> Git Artifact Pages は、Gitで管理している文書を静的なサイトとして公開し、サイトを選び、ページを探し、リンクで共有できる閲覧体験を届けます。</p>
+        <p class="lead"><strong>HTMLもMarkdownも、Gitに置いたまま、URLで読めて検索できる。</strong>Git Artifact Pagesは、Gitで管理している文書を静的なサイトとして公開します。読者はサイトを選び、ページを探し、リンクで共有できます。</p>
       </div>
       <div>
         <div data-reader-demo="autoplay" role="group" aria-label="閲覧画面のデモ：検索してページを開き、@ でサイトを切り替える">
-          <p class="demo-fallback">読者は、サイドバーからページを選び、⌘K / Ctrl K の検索でページを探し、@ でサイトを切り替えます（JavaScriptを有効にすると、ここで動きを確認できます）。</p>
+          <p class="demo-fallback">読者は、サイドバーからページを選び、⌘K / Ctrl Kで検索し、@でサイトを切り替えます。JavaScriptを有効にすると、ここで動きを確認できます。</p>
         </div>
         <p class="note">画面は、このガイド自身のページと説明用の例で構成した見本です。</p>
       </div>
     </section>
 
     <div class="promises" aria-label="できること">
-      <div class="promise"><span class="num">01</span><div><strong>そのまま公開</strong><p>HTMLとMarkdownを、ファイル名と拡張子ごと。URLは <code>/サイト/ファイル名.html</code> の形で、そのまま共有できます。</p></div></div>
+      <div class="promise"><span class="num">01</span><div><strong>そのまま公開</strong><p>HTMLとMarkdownを、ファイル名と拡張子のまま公開します。URLは<code>/サイト/ファイル名.html</code>の形になり、そのまま共有できます。</p></div></div>
       <div class="promise"><span class="num">02</span><div><strong>チームごとのサイト</strong><p>チームやプロダクトごとに、独立した閲覧先を持てます。1つのGitリポジトリのディレクトリが、1つのサイトになります。</p></div></div>
-      <div class="promise"><span class="num">03</span><div><strong>すぐ見つける</strong><p>ページは <kbd>⌘K</kbd> / <kbd>Ctrl K</kbd> で検索、<kbd>@</kbd> でサイトを切り替え。索引は公開時に作られます。</p></div></div>
+      <div class="promise"><span class="num">03</span><div><strong>すぐ見つける</strong><p><kbd>⌘K</kbd> / <kbd>Ctrl K</kbd>でページを検索でき、<kbd>@</kbd>でサイトを切り替えられます。索引は公開時に作られます。</p></div></div>
     </div>
 
     <div class="story-head" id="story">
       <p class="eyebrow">しくみ</p>
-      <h2>公開から閲覧までの流れ</h2>
+      <h2 id="how-it-works">公開から閲覧までの流れ</h2>
     </div>
 
     <div class="story">
@@ -62,13 +62,13 @@
 <span class="c"># 反映</span>
 <span class="p">$</span> <span data-copy>artifact-pages <span class="v">app deploy</span> --version x.y.z</span></pre>
           </div>
-          <p class="note"><code>x.y.z</code> には公開済みリリースのバージョンを指定します。配信先の設定は <code>--config</code>、または管理リポジトリの <code>artifact-pages.yaml</code> から解決されます。サイトの索引や文書には触れません。</p>
+          <p class="note"><code>x.y.z</code>には公開済みリリースのバージョンを指定します。配信先の設定は<code>--config</code>、または管理リポジトリの<code>artifact-pages.yaml</code>から解決されます。サイトの索引や文書には触れません。</p>
         </section>
 
         <section class="chapter" id="step-2" data-step="2" aria-labelledby="step-2-title">
           <span class="step-label">02 / サイトを登録 <span class="role">管理者</span></span>
           <h3 id="step-2-title">次に、サイトを登録する。</h3>
-          <p>サイトは、<strong>チームごとに持つのが基本</strong>です。同じチームでも、プロダクトごとに分けられます。サイトには、ID、表示名、元になるGitリポジトリ（<code>owner/repo</code>）とディレクトリ（<code>sourcePath</code>）があり、管理者が設定ファイルに書いて登録します。まだ文書がなくても登録できます。</p>
+          <p>サイトは、<strong>チームごとに持つのが基本</strong>です。同じチームでも、プロダクトごとに分けてかまいません。サイトには、ID、表示名、元になるGitリポジトリ（<code>owner/repo</code>）とディレクトリ（<code>sourcePath</code>）があり、管理者が設定ファイルに書いて登録します。まだ文書がなくても登録できます。</p>
           <div class="term" aria-label="サイト登録の設定例">
             <div class="term-head"><span>artifact-pages.yaml / 管理リポジトリ</span></div>
 <pre><span class="k">sites</span>:
@@ -90,11 +90,11 @@
 <pre><span class="p">$</span> <span data-copy>artifact-pages <span class="v">registry register</span> --dry-run</span>
 <span class="p">$</span> <span data-copy>artifact-pages <span class="v">registry register</span></span></pre>
           </div>
-          <p class="note"><code>sites</code> 全体が「登録するサイトの完全な一覧」です。ここから外したサイトは、次の <code>registry register</code> で登録解除され、公開済みの内容も削除されます。配信先（<code>provider</code>）の設定は省略しています。</p>
+          <p class="note"><code>sites</code>に書いたサイトが、登録するサイトのすべてです。ここから外したサイトは、次の<code>registry register</code>で登録解除され、公開済みの内容も削除されます。配信先（<code>provider</code>）の設定は省略しています。</p>
         </section>
 
         <section class="chapter" id="step-3" data-step="3" aria-labelledby="step-3-title">
-          <span class="step-label">03 / Git から公開 <span class="role">各チームのリポジトリ</span></span>
+          <span class="step-label">03 / Gitから公開 <span class="role">各チームのリポジトリ</span></span>
           <h3 id="step-3-title">各Gitリポジトリから、担当サイトへ公開する。</h3>
           <p>各チームのGitリポジトリが、担当するサイトと公開するディレクトリを明示して公開します。公開のたびに索引を作り、HTMLとMarkdown、CSSや画像をそのまま配置します。</p>
           <div class="term" aria-label="サイト公開コマンド例">
@@ -103,20 +103,18 @@
 <span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site checkout --source docs/artifacts --dry-run</span>
 <span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site checkout --source docs/artifacts</span></pre>
           </div>
-          <p class="note">書き込む前に、配信先に登録されたリポジトリ・ディレクトリと一致するかを確認します。他のサイトには書き込みません。マージ時に CI から同じコマンドを実行する運用を想定しています。</p>
+          <p class="note">書き込む前に、いまのリポジトリとディレクトリが、配信先に登録された内容と一致するかを確認します。他のサイトには書き込みません。マージ時にCIから同じコマンドを実行する運用を想定しています。</p>
         </section>
 
         <section class="chapter" id="step-4" data-step="4" aria-labelledby="step-4-title">
           <span class="step-label">04 / 開いて探す <span class="role">読者</span></span>
-          <h3 id="step-4-title">そして、普通のURLで読む。</h3>
-          <p>読者はURLを開くだけです。読んでいる途中でも <strong><kbd>⌘K</kbd> / <kbd>Ctrl K</kbd></strong> で、いまのサイトのページや見出しを検索できます。<strong><kbd>@</kbd></strong> を打つと、ほかのチームのサイトへ切り替えられます。</p>
-          <div class="term" aria-label="閲覧のしかた">
-            <div class="term-head"><span>ブラウザ / 読者</span></div>
-<pre><span class="p">→</span> https://&lt;配信ドメイン&gt;/checkout/design/payment-flow.html
-<span class="c">⌘K / Ctrl K</span>   このサイトのページと見出しを検索
-<span class="c">@</span>             サイトを切り替え</pre>
-          </div>
-          <p class="note">URLはファイル名と拡張子を保持するので、文書へのリンクをそのまま共有できます。<code>&lt;配信ドメイン&gt;</code> は、管理者が配信先に選んだアドレスです。</p>
+          <h3 id="step-4-title">あとは、URLを開けば読める。</h3>
+          <p>読むのに必要なのはブラウザだけです。読んでいる途中でも<strong><kbd>⌘K</kbd> / <kbd>Ctrl K</kbd></strong>で、いまのサイトのページや見出しを検索できます。<strong><kbd>@</kbd></strong>を打つと、ほかのチームのサイトへ切り替えられます。</p>
+          <figure class="urlbar" aria-label="読者が開くURLの例">
+            <div class="urlbar-field"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.2" y="7" width="9.6" height="6.8" rx="1.6"/><path d="M5.4 7V5.2a2.6 2.6 0 0 1 5.2 0V7"/></svg><span class="u-host">https://&lt;配信ドメイン&gt;/</span><span class="u-site">checkout</span><span class="u-path">/design/payment-flow.html</span></div>
+            <figcaption class="urlbar-legend"><span class="u-site-key">サイト</span><span class="u-path-key">公開元でのファイルの場所</span></figcaption>
+          </figure>
+          <p class="note">URLはファイル名と拡張子を保持するので、文書へのリンクをそのまま共有できます。<code>&lt;配信ドメイン&gt;</code>は、管理者が配信先に選んだアドレスです。画面の見方や検索の使い方は「<a href="reading.html">読者の体験</a>」にまとめています。</p>
         </section>
       </div>
 
@@ -124,7 +122,7 @@
         <div class="diagram-head"><strong>Git → Web / いま見えている構成</strong><span class="scene-count">01 / 04</span></div>
         <div class="diagram-frame">
           <svg viewBox="0 0 760 650" role="img" aria-labelledby="dg-title dg-desc">
-            <title id="dg-title">Git Artifact Pages の構成</title>
+            <title id="dg-title">Git Artifact Pagesの構成</title>
             <desc id="dg-desc">管理者が共通の閲覧アプリをデプロイし、チームやプロダクトごとのサイトを登録する。各チームのGitリポジトリはそれぞれの担当サイトへ公開する。最後に読者がURLを開き、検索してサイトを切り替える。</desc>
             <defs><marker id="ah" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="none" stroke="currentColor" stroke-width="1.4"/></marker></defs>
 
@@ -175,7 +173,7 @@
           </svg>
         </div>
         <div class="diagram-foot">
-          <div class="diagram-caption"><span>共通の閲覧アプリが、みんなの読む場所になります。</span><span>チームやプロダクトごとに、公開先のサイトを登録します。</span><span>各チームのリポジトリが、自分のサイトへ成果物を送ります。</span><span>読者はURLを開き、検索して、次の文書へ進みます。</span></div>
+          <div class="diagram-caption"><span>共通の閲覧アプリが、みんなの読む場所になります。</span><span>チームやプロダクトごとに、公開先のサイトを登録します。</span><span>各チームのリポジトリから、担当のサイトへ成果物を公開します。</span><span>読者はURLを開き、検索して、次の文書へ進みます。</span></div>
           <div class="scene-dots" aria-label="場面へ移動"><a href="#step-1" aria-label="場面1へ"></a><a href="#step-2" aria-label="場面2へ"></a><a href="#step-3" aria-label="場面3へ"></a><a href="#step-4" aria-label="場面4へ"></a></div>
         </div>
       </aside>
@@ -184,7 +182,7 @@
     <section class="section finale" id="result" aria-labelledby="result-title">
       <div class="section-head">
         <div><p class="eyebrow">使用例</p><h2 id="result-title">チームのサイトを開くと、こう見えます。</h2></div>
-        <p>決済チームの <code>checkout</code> サイトのトップページ（説明用の例）。<kbd>⌘K</kbd> のあと <kbd>@</kbd> で、ほかのチームのサイトへ移れます。</p>
+        <p>決済チームの<code>checkout</code>サイトのトップページです（説明用の例）。<kbd>⌘K</kbd>のあと<kbd>@</kbd>で、ほかのチームのサイトへ移れます。</p>
       </div>
       <figure class="app-mock" data-app-mock aria-label="閲覧アプリでサイトのトップページを開いた画面（見本）">
         <div class="am-side">
@@ -221,12 +219,16 @@
         </div>
       </figure>
       <div class="finale-prompt">
-        <p><strong>サイトを移るときは、<kbd>⌘K</kbd> / <kbd>Ctrl K</kbd> のあと <kbd>@</kbd>。</strong> チームやプロダクトごとのサイトが並び、選ぶとそのサイトのトップページが開きます。</p>
+        <p><strong>サイトを移るときは、<kbd>⌘K</kbd> / <kbd>Ctrl K</kbd>を押してから<kbd>@</kbd>を入力します。</strong>チームやプロダクトごとのサイトが並び、選ぶとそのサイトのトップページが開きます。</p>
         <button class="btn ghost" type="button" data-app-mock-open>この画面で試す</button>
       </div>
     </section>
 
-    <footer class="foot"><strong>Gitが正本。Webは読む場所。</strong><p>検索、ナビゲーション、ピン留めは閲覧体験のためのもので、内容の変更はGitで行います。HTMLは信頼できる公開元の文書として扱い、閲覧者のアクセス制御は配信側で設定します。図や設定に出てくるチーム・リポジトリ（<code>acme/…</code>）は説明用の例です。</p></footer>
+    <nav class="pager" aria-label="ページ送り">
+      <a class="next" href="reading.html"><small>次へ</small><strong>読者の体験</strong></a>
+    </nav>
+
+    <footer class="foot"><strong>Gitが正本で、Webは読むための場所です。</strong><p>検索、ナビゲーション、ピン留めは閲覧体験のためのもので、内容の変更はGitで行います。HTMLは信頼できる公開元の文書として扱い、閲覧者のアクセス制御は配信側で設定します。図や設定に出てくるチーム・リポジトリ（<code>acme/…</code>）は説明用の例です。</p></footer>
   </main>
 </body>
 </html>

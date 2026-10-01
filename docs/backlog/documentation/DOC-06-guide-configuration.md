@@ -36,3 +36,7 @@ Document the deployment config: file location and precedence, `schemaVersion`, `
 ## Notes
 
 - Wait for the default-config filename change to settle before drafting.
+
+## Dependency on the release shape
+
+This page refers to how components are obtained and pinned. Draft it after the release-shape decision recorded in [DOC-03](DOC-03-guide-getting-started.md#blocker-2026-10-01).

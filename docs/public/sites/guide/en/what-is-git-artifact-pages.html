@@ -46,7 +46,7 @@
 
     <div class="story-head" id="story">
       <p class="eyebrow">How it works</p>
-      <h2>From publishing to reading</h2>
+      <h2 id="how-it-works">From publishing to reading</h2>
     </div>
 
     <div class="story">
@@ -108,15 +108,13 @@
 
         <section class="chapter" id="step-4" data-step="4" aria-labelledby="step-4-title">
           <span class="step-label">04 / OPEN AND FIND <span class="role">Reader</span></span>
-          <h3 id="step-4-title">Then read it at an ordinary URL.</h3>
-          <p>Readers just open a URL. While reading, <strong><kbd>⌘K</kbd> / <kbd>Ctrl K</kbd></strong> searches the current site's pages and headings, and <strong><kbd>@</kbd></strong> switches to another team's site.</p>
-          <div class="term" aria-label="How readers browse">
-            <div class="term-head"><span>BROWSER / READER</span></div>
-<pre><span class="p">→</span> https://&lt;delivery-domain&gt;/checkout/design/payment-flow.html
-<span class="c">⌘K / Ctrl K</span>   Search this site's pages and headings
-<span class="c">@</span>             Switch sites</pre>
-          </div>
-          <p class="note">URLs keep filenames and extensions, so links to documents can be shared as they are. <code>&lt;delivery-domain&gt;</code> is the address the admin chose for the delivery target.</p>
+          <h3 id="step-4-title">Then just open the URL to read.</h3>
+          <p>All a reader needs is a browser. While reading, <strong><kbd>⌘K</kbd> / <kbd>Ctrl K</kbd></strong> searches the current site's pages and headings, and <strong><kbd>@</kbd></strong> switches to another team's site.</p>
+          <figure class="urlbar" aria-label="An example URL a reader opens">
+            <div class="urlbar-field"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.2" y="7" width="9.6" height="6.8" rx="1.6"/><path d="M5.4 7V5.2a2.6 2.6 0 0 1 5.2 0V7"/></svg><span class="u-host">https://&lt;delivery-domain&gt;/</span><span class="u-site">checkout</span><span class="u-path">/design/payment-flow.html</span></div>
+            <figcaption class="urlbar-legend"><span class="u-site-key">Site</span><span class="u-path-key">File location in the source</span></figcaption>
+          </figure>
+          <p class="note">URLs keep filenames and extensions, so links to documents can be shared as they are. <code>&lt;delivery-domain&gt;</code> is the address the admin chose for the delivery target. <a href="reading.html">Reading</a> covers the screen and search in detail.</p>
         </section>
       </div>
 
@@ -225,6 +223,10 @@
         <button class="btn ghost" type="button" data-app-mock-open>Try it here</button>
       </div>
     </section>
+
+    <nav class="pager" aria-label="Pages">
+      <a class="next" href="reading.html"><small>Next</small><strong>Reading</strong></a>
+    </nav>
 
     <footer class="foot"><strong>Git is the source. The web is where you read.</strong><p>Search, navigation, and pins exist for reading; content changes happen in Git. HTML is treated as a document from a trusted publisher, and viewer access control is configured at the delivery edge. The teams and repositories in the diagrams and config (<code>acme/…</code>) are illustrative.</p></footer>
   </main>

@@ -40,13 +40,16 @@ Names are English and descriptions carry both languages because registry `name` 
 
 ## Index
 
+Work order as of 2026-10-01: DOC-05, DOC-07, then DOC-08–12. DOC-03, DOC-04, and DOC-06 wait for the release-shape decision in [DOC-03](DOC-03-guide-getting-started.md#blocker-2026-10-01).
+
+
 | Order | Ticket | Site | Page | Status |
 | ---: | --- | --- | --- | --- |
 | 1 | [DOC-01](DOC-01-guide-site-structure.md) | guide | Move to the `guide` site structure | Done |
 | 2 | [DOC-02](DOC-02-guide-overview.md) | guide | `what-is-git-artifact-pages.html` — overview | Done |
-| 3 | [DOC-03](DOC-03-guide-getting-started.md) | guide | `getting-started.html` | Open |
+| 3 | [DOC-03](DOC-03-guide-getting-started.md) | guide | `getting-started.html` | Blocked |
 | 4 | [DOC-04](DOC-04-guide-publishing.md) | guide | `publishing.html` | Open |
-| 5 | [DOC-05](DOC-05-guide-reading.md) | guide | `reading.html` | Open |
+| 5 | [DOC-05](DOC-05-guide-reading.md) | guide | `reading.html` | In progress |
 | 6 | [DOC-06](DOC-06-guide-configuration.md) | guide | `configuration.html` | Open |
 | 7 | [DOC-07](DOC-07-guide-access-and-trust.md) | guide | `access-and-trust.html` | Open |
 | 8 | [DOC-08](DOC-08-architecture-overview.md) | architecture | `overview.html` and site registration | Open |
@@ -62,3 +65,4 @@ These surfaced while planning the sites. They are not yet product issues; file t
 - Registry site `name` and `description` cannot be localized, so a bilingual site shows one language in the picker and palette.
 - One site with `ja/` and `en/` mixes both languages in Browse, Recently updated, and page search. Language filtering is explicitly undecided in `docs/public/sites/AGENTS.md`.
 - Per-site CSP means sites cannot share CSS or JavaScript; every site needs its own copy.
+- From the 2026-10-01 beginner review of the reader (documentation-side, not product issues): the guide pages use smooth scrolling, so a Contents jump to a distant heading takes about one to two seconds and looks unresponsive at first; and the overview page's autoplay palette sample looks identical to the real palette, so a first-time reader may not tell them apart despite the "sample" note.

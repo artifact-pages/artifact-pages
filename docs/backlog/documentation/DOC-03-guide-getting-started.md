@@ -1,6 +1,6 @@
 # DOC-03 — Guide: getting started
 
-- Status: Open
+- Status: Blocked
 - Site: `guide`
 - Page: `ja/getting-started.html`, `en/getting-started.html`
 - Audience: Admins setting up a deployment for the first time
@@ -36,3 +36,7 @@ Take an admin from nothing to a first readable site: choose a delivery target, d
 ## Notes
 
 - Decide with the owner whether the local path or a cloud path is the primary walkthrough.
+
+## Blocker (2026-10-01)
+
+No public release exists yet (no tags or GitHub releases), so an external reader cannot follow `app deploy --version` or a pinned CLI install. Resume after the owner decides the minimal release shape: how the CLI is obtained (commit-pinned `go install github.com/tasuku43/git-artifact-pages/cli/cmd/artifact-pages@<sha>` or binaries) and whether a `v0.x` web bundle is published as a GitHub pre-release. Release-independent pages (DOC-05, DOC-07, DOC-08–12) proceed first.
