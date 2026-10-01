@@ -25,6 +25,10 @@ For lifecycle verification, the owner prefers hours rather than the 30-day sampl
 
 ## Evidence
 
+### Retained lifecycle probe and main-publish cleanup — October 2, 2026 (JST)
+
+The owner approved a retained one-day preview and separately requested simulated deletion followed by main publication. The [lifecycle/reconciliation record](../cloudflare-preview-lifecycle-proof.md) separates pending natural deletion observation from completed origin/catalog and browser reconciliation. A second revision's eight objects were deleted; main-source publish had zero production changes, pruned only its missing-manifest group and preserved the retained revision's bytes and lifecycle age. The warm browser list no longer showed the simulation. Its former document URL initially retained cached content, then showed `Preview unavailable` on reload around 08:20 JST, without a manual revision purge. This is sampled revalidation, not instant withdrawal. The retained revision is eligible on October 3 around 08:12 JST and is monitored by a temporary thread heartbeat. Test content intentionally remains for approved observation, so this is not a completed-cleanup or completed-T15 claim.
+
 ### Scoped R2 publisher credentials — October 2, 2026 (JST)
 
 The owner approved 15-minute temporary identities without changing parent permissions. The [scoped-credential proof](../cloudflare-scoped-credentials-proof.md) records native read/write denials and successful production/preview CLI publication using a registry-only reader and a site-only writer. Same-head retry returned `no-op`. The disposable site was removed, its three content prefixes are empty, and the registry returned byte-for-byte to its baseline. This closes the sampled Cloudflare delegated-credential gap, not OIDC, AWS retained-history delete restrictions, lifecycle timing or comprehensive identity isolation. The writer needs the exact site cache-retry key in addition to its site lock; the older T12 scope example omits it.
