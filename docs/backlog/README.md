@@ -4,7 +4,7 @@ This is the entry point for work that is not yet complete. Keep product defects,
 
 | Track | Purpose | Open | In progress | Blocked | Done |
 | --- | --- | ---: | ---: | ---: | ---: |
-| [Issues](issues/README.md) | Independently actionable product problems with evidence and acceptance criteria. | 1 | 0 | 0 | 0 |
+| [Issues](issues/README.md) | Independently actionable product problems with evidence and acceptance criteria. | 2 | 0 | 0 | 0 |
 | [Documentation](documentation/README.md) | Public reader-facing documentation sites, one page per ticket, reviewed one at a time. | 10 | 0 | 0 | 2 |
 | Technical design | Decisions about how to fulfill an accepted contract. | 0 | 0 | 0 | 10 |
 | [Implementation](implementation/README.md) | Independently reviewable slices for preview, registry, normal publish, providers, local contract tests and distribution. | 3 | 0 | 0 | 37 |
@@ -94,5 +94,5 @@ The P2 site-description product issue was completed with local UI verification o
 | [T8 — Stale-reference cleanup](verification/T8-stale-reference-cleanup.md) | In progress | CI wrapper parity and AWS/Cloudflare provider-origin cleanup; local ordering and retry are evidenced. |
 | [T13 — Registered admin and satellite flow](verification/T13-registered-flow.md) | Done | Strict registry projection and separate-checkout local workflow verified. |
 | [T14 — Production reconciliation and race safety](verification/T14-production-reconciliation.md) | In progress | Local retry, pagination, boundary and invalidation adapter tests are recorded; provider races and real-provider smoke remain open. |
-| [T15 — AWS and Cloudflare delivery boundaries](verification/T15-provider-delivery.md) | In progress | Live Cloudflare route/cache/CSP evidence recorded; notice delivery, explicit control blocking, preview/isolation and AWS proof remain open. |
+| [T15 — AWS and Cloudflare delivery boundaries](verification/T15-provider-delivery.md) | In progress | Live Cloudflare notices, preview resources/CAS/retries, simulated stale-reference cleanup and unregister verified; lifecycle timing, credential isolation, recovery/HTTP-negative and AWS proof remain open. Control-to-SPA fallback is accepted. |
 | [T16 — Clean-room distribution and upgrade](verification/T16-external-adoption.md) | Open | External repositories using pinned released components and rollback. |

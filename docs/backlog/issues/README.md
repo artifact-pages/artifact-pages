@@ -44,5 +44,6 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | Issue | Status | Priority | Problem |
 | --- | --- | --- | --- |
 | [ISSUE-048](ISSUE-048-document-first-palette.md) | Open | P2 | Document discovery is obscured by mixed palette candidates. |
+| [ISSUE-059](ISSUE-059-unregistered-preview-route.md) | Open | P2 | Unregistered preview routes look like registered sites with no previews. |
 
 ISSUE-013's verified completion record is retained in Git history.

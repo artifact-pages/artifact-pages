@@ -25,11 +25,39 @@ For lifecycle verification, the owner prefers hours rather than the 30-day sampl
 
 ## Evidence
 
+### Disposable Cloudflare site — October 1, 2026 (JST)
+
+The owner explicitly authorized the disposable `release-smoke` register/publish/preview/unregister sequence. Every normal CLI mutation was preceded by its dry-run. Whole-registry reconciliation retained the existing `guide` registration. The test source was an ignored, synthetic local Git repository with the registered repository remote and `docs` source path; nothing was pushed to GitHub. This proves the current CLI/provider/static-reader flow, not authentic GitHub PR provenance, independent released-package adoption, or satellite credential isolation.
+
+Production commit: `5d1d1c980a73902e69f1607e5f825876d5fcdc2e`. Preview head: `df741e32ce5205411f494f9f9c571cef03f93e2f`. The production projection created nine objects. The manual preview contained two changed documents (`index.html`, `notes.md`), four copied resources (CSS, SVG, entry module and its transitive module), and its completion manifest. Logical preview URLs used `/release-smoke/_previews/<head>/<document>`; stored files used `/_previews/release-smoke/revisions/<head>/files/`.
+
+| Check | Observed result | Remaining boundary |
+| --- | --- | --- |
+| Production HTML | Browser rendered the baseline, SVG and `Transitive module loaded`. | Deliberately small fixture, not all HTML execution behavior. |
+| Preview HTML | Both local and HTTPS images had natural width 80; computed heading color was `rgb(24, 67, 91)`; transitive module executed. | HTTPS image was same-host production storage, not third-party CORS proof. |
+| Reader routing | Clicking changed Markdown stayed in the same preview; clicking unchanged HTML navigated to `/release-smoke/unchanged.html`. Manual discovery listed both changed documents without a fabricated PR link. | Raw standalone HTML anchors are not the reader's navigation bridge. |
+| Markdown | Native reader displayed the image and Mermaid flowchart; injected script nodes were absent and the body mutation marker stayed absent. | One flowchart, not the complete Mermaid/security matrix. |
+| Preview headers | Raw HTML returned 200, inline HTML, revision-scoped enforced CSP and `public, max-age=0, s-maxage=300, must-revalidate`. | Do not describe this actual preview cache policy as `no-store`. |
+| HTTP negative case | The source's HTTP script URL appeared as HTTPS in the delivered HTML. | The negative fixture did not exercise HTTP refusal; edge rewriting must be accounted for before closing that proof. |
+| Same-head retries | Dry-run and two overlapping CLI invocations returned `no-op`, retained all seven objects, and left one catalog group. | Overlapping no-op calls do not prove competing new-group publication. |
+| R2 publication flow | Opt-in `TestCloudflarePreviewPublicationFlowSmoke` passed against real R2 (12.56 s): lock-required catalog writes, immutable same-byte retry, different-byte conflict, unchanged ETags and no preview file/manifest/catalog puts on same-head retry (coordination lock writes excluded), second-group retention, free retained lock and isolated cleanup. | Groups were published sequentially; no interruption/forced-lock-loss injection. |
+| R2 conditional race | Opt-in `TestCloudflarePreviewBackendSmoke` passed (2.37 s): metadata/read/list, create-once, stale ETag rejection, and two simultaneous If-Match writers produced one success and one conflict; temporary objects were removed. | Provider CAS race, not a complete two-new-head CLI race. |
+| Missing completion manifest | Deleted only this disposable revision's manifest to simulate confirmed origin absence. Production dry-run had no artifact changes and one `manifest-missing` catalog removal. Publish pruned it; a canonical CDN GET then returned an empty group list. | Simulated absence, not observed lifecycle expiry. Remaining revision files stayed until unregister. |
+| Lifecycle metadata | R2 HEAD reported `expiry-date="Fri, 02 Oct 2026 10:08:02 GMT", rule-id="expire-preview-objects"`. | Rule eligibility observed; actual asynchronous expiry timing remains unverified. |
+| Unregister | Removed 16 remaining test objects, withdrew registration, and requested scoped cache invalidation. Authenticated listings for the three exact smoke prefixes returned no objects. Warm canonical artifact/index/catalog/preview URLs returned real 404s; normal logical artifact navigation displayed `Page not found`. | Sampled withdrawal, not a global cache propagation bound. Retained private coordination records are not site content. |
+| Actual control-key routes | Public GETs for `/_control/locks/sites/release-smoke.json` and `/_control/locks/sites/guide.json` returned exactly the app shell hash, not lock bytes. | Sampled real lock-key paths under the accepted SPA fallback, not proof of every encoded bypass. |
+
+After cleanup the catalog contained only `guide`, with exactly its pre-test SHA-256 `69331e8348a17a5ee6989521cc481660c8ed828d82b34e517827ceb3d9d0deeb`. Guide index, metadata, both introduction documents, CSS and JS, and the app shell all retained their recorded pre-test hashes. No public test site or content remains. A repeated unregister dry-run still proposes the cleanup scope and invalidations, but no concrete object deletion or registry update; do not label that plan a no-op.
+
+One presentation gap was observed: an unregistered site's `/_previews` logical route displays `No available previews` rather than the normal unknown-site `Page not found`. Raw preview objects still return real 404s. [ISSUE-059](../issues/ISSUE-059-unregistered-preview-route.md) tracks this separately from storage withdrawal; do not claim the preview route has the same missing-site presentation as normal routes.
+
+The current gates still include actual lifecycle deletion timing, publisher credential boundaries, a competing-new-group CLI race/interruption-recovery proof, the HTTP negative case, official independently pinned distribution/adoption, and live AWS verification. This sampled Cloudflare flow does not mark T15 or its cross-provider parent checks Done.
+
 ### Live configuration inspection — October 1, 2026 (JST)
 
 With the infrastructure-side `CLOUDFLARE_API_TOKEN` now available, read-only API inspection succeeded. R2 reported the `artifact-pages.dev` custom domain enabled with active SSL/ownership and the managed `r2.dev` domain disabled. The zone's active transform ruleset rewrites logical/control paths to `/index.html` while excluding notice files and the public object planes; its cache ruleset includes both notice paths, and its response-header ruleset contains the production and revision-scoped preview CSP rules. This supersedes the earlier CLI-token inspection limitation without expanding that CLI token's permissions. API configuration inspection does not prove preview runtime behavior or publisher credential isolation.
 
-The next mutating test requires owner approval for a disposable `release-smoke` site and its eventual unregister/deletion. The deployed catalog was read first and contained only `guide`; whole-registry reconciliation must retain that exact registration. No temporary site has been registered or preview published by this preparation. Test HTML/Markdown and resources must be deliberately public, and the Guide's object bytes and registration must remain unchanged. Exercise dry-run before each registration/publication/removal, record the actual preview URLs/head, and verify raw resource/CSP behavior, immutable same-head retries, catalog discovery and final origin/edge withdrawal. Provider lifecycle timing and delegated-credential denial remain separate proofs.
+At this preparation stage, the mutating test awaited owner approval. The deployed catalog was read first and contained only `guide`. Approval and the completed disposable-site sequence are recorded above; provider lifecycle timing and delegated-credential denial remain separate proofs.
 
 ### Notice-route repair verified — October 1, 2026 (JST)
 
