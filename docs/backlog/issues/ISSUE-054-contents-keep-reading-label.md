@@ -1,6 +1,6 @@
 # 目次パネルの「Keep reading」の意味が分からない
 
-- Status: Open
+- Status: Done
 - Priority: P3
 - Area: Contents / Details panel
 
@@ -22,10 +22,21 @@ Contents と Details のパネルの右上にある「Keep reading」が、何�
 
 ## Acceptance criteria
 
-- [ ] 「Keep reading」に当たる操作の役割が、名前または見た目から分かる。
-- [ ] 目次の項目を選んだあとのパネルの動き（閉じる・開いたまま）が、利用者の予測と合う。
-- [ ] 通常幅と狭い幅で、本文が読める状態へ戻れる。
+- [x] 「Keep reading」に当たる操作の役割が、名前または見た目から分かる。
+- [x] 目次の項目を選んだあとのパネルの動き（閉じる・開いたまま）が、利用者の予測と合う。
+- [x] 通常幅と狭い幅で、本文が読める状態へ戻れる。
 
 ## Related issues and scope
 
 - ISSUE-047（完了記録は Git 履歴に保存）で、パネルを開いたまま読むと本文が隠れる問題に対して、読み続ける操作を追加した。本件はその操作の名前の分かりにくさを扱う。
+
+## Verification (2026-10-01)
+
+- Implemented by a Sonnet subagent and reviewed in two rounds by separate Sonnet subagents (no blockers; the occlusion criterion, stale-poll cancellation, `aria-current` clearing, focus, and test-timing follow-ups were applied).
+- "Keep reading" is replaced by an × close button like the palette's, named and tooltipped "Close Contents" / "Close Details". Escape still closes; closing returns focus to the toggle that opened the panel.
+- After choosing a heading in Contents, the panel stays open only when the heading would remain visible, preserving ISSUE-047's goal:
+  - HTML artifacts: the panel closes right after navigating (their headings land under the panel in practice) and focus moves to the Contents toggle.
+  - Markdown artifacts: once the heading's position settles, its text box is compared with the panel; if they intersect (or the heading cannot be measured), the panel closes and focus moves to the Contents toggle; otherwise it stays open and the chosen entry gets `aria-current="location"`.
+  - Palette `#` jumps still close the palette and panel.
+- A pending check is cancelled when the panel closes or changes or the artifact changes, so it cannot close a newly opened panel.
+- e2e covers the close control, HTML closing with focus on the toggle, Markdown kept open at 1280px without overlap, 390px closing, geometry at 800–1000px with and without the sidebar, and the close-and-reopen race. Waits use a `data-heading-jump` settled signal. `npx tsc -p web/tsconfig.json --noEmit` and `npm run build` passed; `node scripts/run-e2e.mjs` passed 89/89 (one earlier run had a known-flaky preview-navigation failure).

@@ -68,6 +68,12 @@ export function ArtifactWorkspace({
   const toastTimer = useRef<number | undefined>(undefined)
   const paletteReturnFocus = useRef<HTMLElement | null>(null)
   const htmlFrameRef = useRef<HTMLIFrameElement>(null)
+  const contentsToggleRef = useRef<HTMLButtonElement>(null)
+  const detailsToggleRef = useRef<HTMLButtonElement>(null)
+  const headingJumpRequest = useRef(0)
+  const headingJumpTimer = useRef<number | null>(null)
+  const [headingJump, setHeadingJump] = useState<'pending' | 'settled' | null>(null)
+  const [activeHeading, setActiveHeading] = useState<{ artifactId: string, id: string } | null>(null)
   const currentArtifact = route.artifactPath
     ? findArtifact(index, route.artifactPath)
     : undefined
@@ -77,6 +83,18 @@ export function ArtifactWorkspace({
   const hasContents = Boolean(currentArtifact?.toc?.length)
   const tocOpen = activePanel === 'contents'
   const detailsOpen = activePanel === 'details'
+  const panelLabel = activePanel === 'details' ? 'Details' : 'Contents'
+
+  // Any panel change, artifact change or unmount invalidates a pending jump check.
+  useEffect(() => {
+    return () => {
+      headingJumpRequest.current += 1
+      if (headingJumpTimer.current !== null) window.clearTimeout(headingJumpTimer.current)
+      headingJumpTimer.current = null
+      setActiveHeading(null)
+      setHeadingJump((current) => current === 'pending' ? null : current)
+    }
+  }, [activePanel, currentArtifact?.id])
 
   const togglePanel = useCallback((panel: Exclude<WorkspacePanel, null>) => {
     setActivePanel((current) => current === panel ? null : panel)
@@ -299,10 +317,66 @@ export function ArtifactWorkspace({
     updateSidebarOpen(true)
   }
 
-  function jumpToHeading(id: string) {
+  function cancelHeadingJump() {
+    headingJumpRequest.current += 1
+    if (headingJumpTimer.current !== null) window.clearTimeout(headingJumpTimer.current)
+    headingJumpTimer.current = null
+    setActiveHeading(null)
+  }
+
+  function closePanelAfterJump() {
+    setHeadingJump('settled')
+    setActivePanel(null)
+    contentsToggleRef.current?.focus()
+  }
+
+  // Contents stays open after a jump only when the target heading is not
+  // covered by the (absolutely positioned) panel. HTML artifacts always close
+  // (their headings end up under the panel, and measuring would only delay the
+  // close); Markdown headings are measured once the scroll settles. Unmeasurable
+  // targets fall back to closing. Palette jumps always close.
+  function jumpToHeading(id: string, options: { keepPanelIfClear?: boolean } = {}) {
+    cancelHeadingJump()
     navigateWithinWorkspace(`${pathname}#${encodeURIComponent(id)}`)
     setPaletteSeed(null)
+    if (!options.keepPanelIfClear) {
+      setActivePanel(null)
+      return
+    }
+    if (currentFormat !== 'markdown') {
+      closePanelAfterJump()
+      return
+    }
+    const request = headingJumpRequest.current
+    const artifactId = currentArtifact?.id ?? ''
+    setHeadingJump('pending')
+    // Wait for the scroll to settle (heading position unchanged between polls).
+    let previousTop: number | null = null
+    let attempts = 0
+    const settle = () => {
+      headingJumpTimer.current = null
+      if (request !== headingJumpRequest.current) return
+      const top = headingTop(id)
+      attempts += 1
+      if ((top === null && attempts < 5) || (top !== null && top !== previousTop && attempts < 20)) {
+        previousTop = top
+        headingJumpTimer.current = window.setTimeout(settle, 60)
+        return
+      }
+      if (headingIsClearOfPanel(id)) {
+        setHeadingJump('settled')
+        setActiveHeading({ artifactId, id })
+      } else {
+        closePanelAfterJump()
+      }
+    }
+    headingJumpTimer.current = window.setTimeout(settle, 60)
+  }
+
+  function closePanel() {
+    const toggle = activePanel === 'details' ? detailsToggleRef.current : contentsToggleRef.current
     setActivePanel(null)
+    toggle?.focus()
   }
 
   const htmlArtifactUrl = currentArtifact && currentFormat === 'html'
@@ -460,6 +534,7 @@ export function ArtifactWorkspace({
               {currentArtifact ? (
                 <>
                   <button
+                    ref={contentsToggleRef}
                     className={`context-button${tocOpen ? ' is-active' : ''}`}
                     disabled={tocEntries.length === 0}
                     aria-pressed={tocOpen}
@@ -470,6 +545,7 @@ export function ArtifactWorkspace({
                     <span>Contents</span>
                   </button>
                   <button
+                    ref={detailsToggleRef}
                     className={`context-button${detailsOpen ? ' is-active' : ''}`}
                     aria-pressed={detailsOpen}
                     title="Artifact details"
@@ -502,7 +578,7 @@ export function ArtifactWorkspace({
             </div>
           </header>
 
-          <main className={`stage${currentArtifact ? ' has-artifact' : ''}`}>
+          <main className={`stage${currentArtifact ? ' has-artifact' : ''}`} data-heading-jump={headingJump ?? undefined}>
             {currentArtifact && currentFormat === 'markdown' ? (
               <MarkdownArtifact
                 key={currentArtifact.artifactUrl}
@@ -547,17 +623,18 @@ export function ArtifactWorkspace({
             {activePanel && currentArtifact ? (
               <aside
                 className="context-panel"
-                aria-label={activePanel === 'contents' ? 'Contents' : 'Details'}
+                aria-label={panelLabel}
               >
                 <div className="context-panel-header">
-                  <span>{activePanel === 'contents' ? 'Contents' : 'Details'}</span>
+                  <span>{panelLabel}</span>
                   <button
-                    className="context-panel-read-action"
+                    className="context-panel-close"
                     type="button"
-                    title="Hide this panel and keep reading"
-                    onClick={() => setActivePanel(null)}
+                    title={`Close ${panelLabel}`}
+                    aria-label={`Close ${panelLabel}`}
+                    onClick={closePanel}
                   >
-                    Keep reading
+                    <Icon name="close" size={14} />
                   </button>
                 </div>
                 {activePanel === 'contents' ? (
@@ -569,7 +646,8 @@ export function ArtifactWorkspace({
                         <button
                           className={`toc-link${entry.level >= 3 ? ' toc-level-3' : ''}`}
                           key={`${entry.id}:${entry.text}`}
-                          onClick={() => jumpToHeading(entry.id)}
+                          aria-current={activeHeading?.artifactId === currentArtifact.id && activeHeading.id === entry.id ? 'location' : undefined}
+                          onClick={() => jumpToHeading(entry.id, { keepPanelIfClear: true })}
                         >
                           {entry.text}
                         </button>
@@ -605,6 +683,28 @@ export function ArtifactWorkspace({
       {toast ? <div className="toast" role="status" aria-live="polite">{toast}</div> : null}
     </div>
   )
+}
+
+function headingTop(id: string) {
+  try {
+    const target = document.getElementById(id)
+    return target ? Math.round(target.getBoundingClientRect().top) : null
+  } catch {
+    return null
+  }
+}
+
+// Measures the heading's text (not its full-width block box).
+function headingIsClearOfPanel(id: string) {
+  const panel = document.querySelector('.context-panel')?.getBoundingClientRect()
+  const target = document.getElementById(id)
+  if (!panel || !target) return false
+  const range = target.ownerDocument.createRange()
+  range.selectNodeContents(target)
+  const heading = range.getBoundingClientRect()
+  if (heading.width === 0 && heading.height === 0) return false
+  return heading.right <= panel.left || heading.left >= panel.right
+    || heading.bottom <= panel.top || heading.top >= panel.bottom
 }
 
 function findArtifact(index: SiteIndex, path: string) {
