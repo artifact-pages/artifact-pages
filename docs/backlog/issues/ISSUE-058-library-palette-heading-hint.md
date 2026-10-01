@@ -1,6 +1,6 @@
 # サイト一覧のパレットに、その画面では使えない「# headings」の案内が出る
 
-- Status: Open
+- Status: Done
 - Priority: P3
 - Area: Library (site list) palette
 
@@ -22,9 +22,16 @@
 
 ## Acceptance criteria
 
-- [ ] サイト一覧の画面では、使えない「# headings」の案内が表示されない（または使えない理由が分かる）。
-- [ ] 文書を開いている画面では、これまでどおり見出し検索の案内が表示される。
+- [x] サイト一覧の画面では、使えない「# headings」の案内が表示されない（または使えない理由が分かる）。
+- [x] 文書を開いている画面では、これまでどおり見出し検索の案内が表示される。
 
 ## Related issues and scope
 
 - ISSUE-042（完了記録は Git 履歴に保存）はゼロ件時の案内を扱った。本件は通常時の下部の案内を扱う。
+
+## Verification (2026-10-01)
+
+- Implemented by a Sonnet subagent and reviewed by a separate Sonnet subagent (no blockers; test follow-ups applied).
+- The palette footer renders "# headings" only while an artifact is open, so it is hidden on the library and the site home, where typing `#` answers "Open an artifact first to search its headings." The navigate, open, "> commands", and "@ sites" hints stay because they work in those contexts. With an artifact open the footer is unchanged.
+- New e2e test "the palette footer advertises headings only when an artifact is open" covers the library (including the `#` message), a site home, and an open artifact. The review also found a readiness race in ISSUE-055's palette pin test (Control+K pressed before the workspace listened); it now waits for the page and asserts the palette opened before typing, with text-filtered toast assertions.
+- `npx tsc -p web/tsconfig.json --noEmit` and `npm run build` passed; `node scripts/run-e2e.mjs` passed 92/92, and a second run had only the known-flaky "preview HTML uses the actual app origin…" failure.

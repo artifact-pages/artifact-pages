@@ -882,42 +882,48 @@ test('palette commands pin and unpin the current artifact and toggle Details onl
   await page.goto('/sre/architecture/platform-topology/index.html')
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
+  const openPalette = async () => {
+    await page.keyboard.press('Control+k')
+    await expect(palette).toBeVisible()
+  }
   const pinStorage = () => page.evaluate(() => JSON.parse(
     window.localStorage.getItem('git-artifact-pages:pinned-artifacts:v1') ?? '{}',
   ))
 
-  await page.keyboard.press('Control+k')
+  await expect(page.getByRole('button', { name: /Pin Platform topology/ })).toBeVisible()
+  await openPalette()
   await search.fill('>pin artifact')
   await expect(palette.getByRole('option', { name: 'Unpin artifact' })).toHaveCount(0)
   await palette.getByRole('option', { name: 'Pin artifact' }).click()
   await expect(palette).toBeHidden()
-  await expect(page.getByRole('status')).toHaveText('Pinned Platform topology.')
+  await expect(page.getByRole('status').filter({ hasText: 'Pinned' })).toHaveText('Pinned Platform topology.')
   await expect(page.getByRole('button', { name: 'Unpin Platform topology' })).toHaveAttribute('aria-pressed', 'true')
   await expect.poll(pinStorage).toEqual({ sre: ['architecture/platform-topology/index.html'] })
   await expect(page.locator('.pinned-tree .tree-artifact')).toContainText('Platform topology')
 
-  await page.keyboard.press('Control+k')
+  await openPalette()
   await search.fill('>pin artifact')
   await expect(palette.getByRole('option', { name: 'Pin artifact', exact: true })).toHaveCount(0)
   await palette.getByRole('option', { name: 'Unpin artifact' }).click()
-  await expect(page.getByRole('status')).toHaveText('Unpinned Platform topology.')
+  await expect(page.getByRole('status').filter({ hasText: 'Unpinned' })).toHaveText('Unpinned Platform topology.')
   await expect(page.getByRole('button', { name: 'Pin Platform topology' })).toHaveAttribute('aria-pressed', 'false')
   await expect.poll(pinStorage).toEqual({ sre: [] })
   await expect(page.locator('.pinned-tree')).toHaveCount(0)
 
   const details = page.getByRole('complementary', { name: 'Details' })
   await expect(details).toBeHidden()
-  await page.keyboard.press('Control+k')
+  await openPalette()
   await search.fill('>Toggle details')
   await palette.getByRole('option', { name: 'Toggle details' }).click()
   await expect(details).toBeVisible()
-  await page.keyboard.press('Control+k')
+  await openPalette()
   await search.fill('>Toggle details')
   await palette.getByRole('option', { name: 'Toggle details' }).click()
   await expect(details).toBeHidden()
 
   await page.goto('/sre')
-  await page.keyboard.press('Control+k')
+  await expect(page.getByRole('button', { name: 'Search pages in SRE' })).toBeVisible()
+  await openPalette()
   await search.fill('>Toggle')
   await expect(palette.getByRole('option', { name: 'Toggle sidebar' })).toBeVisible()
   await expect(palette.getByRole('option', { name: 'Toggle details' })).toHaveCount(0)
@@ -963,6 +969,38 @@ test('the current page pin control stays discoverable with the sidebar closed an
   await expect(page.getByRole('status')).toHaveText('Unpinned Platform topology.')
   await page.reload()
   await expect(page.getByRole('button', { name: 'Pin Platform topology' })).toHaveAttribute('aria-pressed', 'false')
+})
+
+test('the palette footer advertises headings only when an artifact is open', async ({ page }) => {
+  const open = async (trigger: string) => {
+    await page.getByRole('button', { name: trigger }).click()
+    const palette = page.getByRole('dialog', { name: 'Command palette' })
+    await expect(palette).toBeVisible()
+    return palette.locator('.palette-footer')
+  }
+
+  await page.goto('/')
+  let footer = await open('Search sites')
+  await expect(footer).toContainText('navigate')
+  await expect(footer).toContainText('@ sites')
+  await expect(footer).not.toContainText('# headings')
+  await page.getByRole('dialog', { name: 'Command palette' })
+    .getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' }).fill('#')
+  await expect(page.getByRole('dialog', { name: 'Command palette' })).toContainText('Open an artifact first')
+  await page.keyboard.press('Escape')
+
+  await page.goto('/sre')
+  footer = await open('Search pages in SRE')
+  await expect(footer).toContainText('> commands')
+  await expect(footer).not.toContainText('# headings')
+  await page.keyboard.press('Escape')
+
+  await page.goto('/sre/architecture/platform-topology/index.html')
+  await expect(page.getByRole('button', { name: /Pin Platform topology/ })).toBeVisible()
+  await page.keyboard.press('Control+k')
+  await expect(page.getByRole('dialog', { name: 'Command palette' })).toBeVisible()
+  footer = page.getByRole('dialog', { name: 'Command palette' }).locator('.palette-footer')
+  await expect(footer).toContainText('# headings')
 })
 
 test('the command palette supports Ctrl+J/K navigation and opens the selected result', async ({ page }) => {

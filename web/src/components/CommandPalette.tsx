@@ -429,7 +429,7 @@ export function CommandPalette({
           <span><kbd>↵</kbd> open</span>
           <span><code>&gt;</code> commands</span>
           <span><code>@</code> sites</span>
-          <span><code>#</code> headings</span>
+          {currentArtifact ? <span><code>#</code> headings</span> : null}
         </footer>
       </section>
     </div>
