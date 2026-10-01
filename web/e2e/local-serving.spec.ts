@@ -1296,6 +1296,64 @@ test('HTML heading navigation keeps the URL and iframe section in sync with one 
   await expect(practiceHeading).toBeInViewport()
 })
 
+test('Contents and Details can be dismissed and reopened without losing the reading position', async ({ page }) => {
+  const iframe = page.locator('iframe[title="Designing for resilience"]')
+  const iframeScrollY = () => iframe.evaluate((frame) => (frame as HTMLIFrameElement).contentWindow?.scrollY ?? -1)
+  const iframeHash = () => iframe.evaluate((frame) => (frame as HTMLIFrameElement).contentWindow?.location.hash ?? null)
+  const contentsButton = page.locator('.context-actions .context-button[title^="Contents"]')
+  const detailsButton = page.locator('.context-actions .context-button[title="Artifact details"]')
+
+  for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport)
+    await page.goto('/showcase/editorial/field-notes/index.html')
+    await expect(page.frameLocator('iframe[title="Designing for resilience"]')
+      .getByRole('heading', { name: 'Designing for resilience' })).toBeVisible()
+
+    const frameWidth = await iframe.evaluate((frame) => frame.getBoundingClientRect().width)
+    const readingPosition = await iframe.evaluate((frame) => {
+      const frameWindow = (frame as HTMLIFrameElement).contentWindow
+      frameWindow?.scrollTo({ top: 480, behavior: 'instant' })
+      return frameWindow?.scrollY ?? -1
+    })
+    expect(readingPosition).toBeGreaterThan(0)
+    const expectReadingPositionPreserved = () => expect.poll(async () => Math.abs(
+      await iframeScrollY() - readingPosition,
+    )).toBeLessThanOrEqual(2)
+
+    await contentsButton.click()
+    const contents = page.getByRole('complementary', { name: 'Contents' })
+    const keepReading = contents.getByRole('button', { name: 'Keep reading' })
+    await expect(keepReading).toBeVisible()
+    await expect(keepReading).toBeInViewport()
+    await keepReading.click()
+    await expect(contents).toBeHidden()
+    await expectReadingPositionPreserved()
+
+    await contentsButton.click()
+    await expect(contents).toBeVisible()
+    await expectReadingPositionPreserved()
+    await detailsButton.click()
+    const details = page.getByRole('complementary', { name: 'Details' })
+    await expect(details.getByRole('button', { name: 'Keep reading' })).toBeVisible()
+    await details.getByRole('button', { name: 'Keep reading' }).click()
+    await expect(details).toBeHidden()
+    await expectReadingPositionPreserved()
+
+    await detailsButton.click()
+    await expect(details).toBeVisible()
+    await expectReadingPositionPreserved()
+    expect(await iframe.evaluate((frame) => frame.getBoundingClientRect().width)).toBe(frameWidth)
+
+    await contentsButton.click()
+    await contents.getByRole('button', { name: 'Practice over prediction' }).click()
+    await expect(page).toHaveURL(/#practice$/)
+    await expect.poll(iframeHash).toBe('#practice')
+    await expect(contents).toBeHidden()
+    await expect(page.frameLocator('iframe[title="Designing for resilience"]')
+      .getByRole('heading', { name: 'Practice over prediction' })).toBeInViewport()
+  }
+})
+
 test('multi-file artifacts stay in their site namespace when relative asset paths overlap', async ({ page }) => {
   const artifactResponsePaths: string[] = []
   page.on('response', (response) => {

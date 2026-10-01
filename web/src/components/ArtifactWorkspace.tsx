@@ -548,11 +548,12 @@ export function ArtifactWorkspace({
                 <div className="context-panel-header">
                   <span>{activePanel === 'contents' ? 'Contents' : 'Details'}</span>
                   <button
-                    className="icon-button"
-                    aria-label={`Close ${activePanel}`}
+                    className="context-panel-read-action"
+                    type="button"
+                    title="Hide this panel and keep reading"
                     onClick={() => setActivePanel(null)}
                   >
-                    <Icon name="close" size={14} />
+                    Keep reading
                   </button>
                 </div>
                 {activePanel === 'contents' ? (
