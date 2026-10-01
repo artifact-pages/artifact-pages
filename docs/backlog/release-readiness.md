@@ -13,6 +13,8 @@ Checked on October 1, 2026 (JST). This is an execution order and handoff map, no
 
 ## Work that can advance without another routine decision
 
+The [October 1 distribution preflight](distribution-preflight.md) records completed clean-source Go/race, local clean-consumer/Action parity, warm-browser synthetic rollback, actual Vite packaging/deployment, and self-contained pinned module validation. The smoke source and module commits are not approved release pins; revalidate the final reviewed selection after concurrent repairs. Credential isolation, actual lifecycle observation and authorized publication remain separate handoffs.
+
 - Local module repair, regression tests, package validation and independent review.
 - Reusable non-mutating delivery checks and preparation of an isolated provider smoke procedure.
 - Candidate manifests/checksums, source-pin consistency and clean-consumer test preparation.

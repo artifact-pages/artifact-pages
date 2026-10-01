@@ -14,4 +14,6 @@
 
 ## Evidence
 
-Not yet recorded. Documentation alone does not close this proof.
+Local pre-release preparation was verified on October 1, 2026; see the [distribution preflight](../distribution-preflight.md) for exact pins, bundle digest, commands and limitations. Clean source `eba726a128bac0db98f1578e1c282ed1bbb8a3ff` passed the separate-admin/satellite walkthrough and local Action parity. A real clean-source 100-file Vite archive was deployed from a separate temporary admin checkout with identical bytes. A warm-browser synthetic app upgrade/rollback preserved site content. Cloudflare module `25b6e97031a6fe5202077fe781dc4f14617b0ceb` passed package/contracts and independent pinned local Git consumer initialization/validation. These are preparation results; no Registry version, remote released asset, hosted Action or live released-app rollback was exercised. Keep the released-component acceptance checks above open.
+
+The fixed source's local nginx browser suite passed 83/83 with retries disabled and one worker after explicitly checking server readiness. An initial manually launched server run had a startup `ECONNREFUSED` on its first request and succeeded on retry; that result was not used as the clean browser regression proof. The Go suite and publisher/preview race tests also passed in this clean clone. Later shared-checkout UI changes are outside this pin and require their own regression/review before any release selection.
