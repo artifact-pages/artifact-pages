@@ -75,6 +75,19 @@ type InvalidationValidator interface {
 	ValidateInvalidation([]string) error
 }
 
+// InvalidationPlanner exposes adapter-specific path compaction to read-only
+// plans and reports without issuing a cache request.
+type InvalidationPlanner interface {
+	PlanInvalidation([]string) []string
+}
+
+func plannedInvalidationPaths(backend DeploymentBackend, paths []string) []string {
+	if planner, ok := backend.(InvalidationPlanner); ok {
+		return planner.PlanInvalidation(paths)
+	}
+	return paths
+}
+
 func validateInvalidation(backend DeploymentBackend, paths []string) error {
 	if len(paths) == 0 {
 		return nil

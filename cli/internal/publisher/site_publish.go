@@ -130,15 +130,31 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 			return result, fmt.Errorf("plan preview catalog reconciliation: %w", err)
 		}
 		result.PreviewChanges = &previewPlan.Changes
+		pending, pendingETag, err := readSiteCacheRetry(operationCtx, conditional, options.SiteID)
+		if err != nil {
+			return result, err
+		}
+		paths := siteCachePaths(options.SiteID, plan, result.PreviewChanges, pending.Paths)
+		result.InvalidationPaths = plannedInvalidationPaths(backend, paths)
 		if options.DryRun {
 			result.FilesPublished = countChanges(plan, "create") + countChanges(plan, "update")
 			result.FilesRemoved = countChanges(plan, "remove")
-			if len(plan) == 0 && countPreviewChanges(result.PreviewChanges, "remove") == 0 {
+			if len(paths) == 0 {
 				result.Outcome = "no-op"
 			} else {
 				result.Outcome = "planned"
 			}
 			return result, nil
+		}
+		if err := validateInvalidation(backend, paths); err != nil {
+			return result, err
+		}
+		// Save before origin writes: partial uploads/deletes and failed cache
+		// requests must remain retryable even when the next origin plan is empty.
+		if len(paths) > 0 {
+			if err := writeSiteCacheRetry(operationCtx, conditional, options.SiteID, paths, pendingETag); err != nil {
+				return result, err
+			}
 		}
 		filesPublished, filesRemoved := 0, 0
 		if len(plan) > 0 {
@@ -150,9 +166,16 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 		if err := preview.ApplyCatalogReconciliationUnderSiteLock(operationCtx, previewStore, options.SiteID, previewPlan); err != nil {
 			return result, fmt.Errorf("production projection is committed but preview catalog reconciliation failed: %w", err)
 		}
-		if len(plan) == 0 && countPreviewChanges(result.PreviewChanges, "remove") == 0 {
+		if len(paths) == 0 {
 			result.Outcome = "no-op"
 			return result, nil
+		}
+		result.InvalidationID, err = backend.Invalidate(operationCtx, paths)
+		if err != nil {
+			return result, fmt.Errorf("site origin synchronized but cache revalidation failed; retry site publish: %w", err)
+		}
+		if err := backend.DeleteObjects(operationCtx, []string{siteCacheRetryKey(options.SiteID)}); err != nil {
+			return result, fmt.Errorf("site synchronized and cache revalidation requested; clear cache retry record: %w", err)
 		}
 		result.Outcome, result.FilesPublished, result.FilesRemoved = "published", filesPublished, filesRemoved
 		return result, nil

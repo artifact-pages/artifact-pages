@@ -87,6 +87,25 @@ func TestSitePublishReportBoundedAndSafe(t *testing.T) {
 	}
 }
 
+func TestSitePublishReportCacheOnlyRetry(t *testing.T) {
+	for _, dry := range []bool{true, false} {
+		var output bytes.Buffer
+		result := publisher.Result{Site: "guide", Outcome: "published", InvalidationPaths: []string{"/_artifacts/guide/report.html"}}
+		verb := "planned"
+		if !dry {
+			verb = "requested"
+			result.InvalidationID = "purge-request-123"
+		}
+		writeSitePublishReport(&output, result, deploymentconfig.ResolvedConfig{}, dry, false)
+		if !strings.Contains(output.String(), "Cache revalidation: 1 paths "+verb) || strings.Contains(output.String(), "Everything is up to date") {
+			t.Fatalf("cache-only report = %s", output.String())
+		}
+		if !dry && !strings.Contains(output.String(), "Request   purge-request-123") {
+			t.Fatal("cache request ID missing")
+		}
+	}
+}
+
 func TestReportColorPolicy(t *testing.T) {
 	var output bytes.Buffer
 	t.Setenv("TERM", "xterm-256color")

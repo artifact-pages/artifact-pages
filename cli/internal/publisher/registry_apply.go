@@ -447,6 +447,13 @@ func listSiteKeys(ctx context.Context, backend DeploymentBackend, siteID string)
 		return nil, err
 	}
 	keys := append(append(artifacts, indexes...), previews...)
+	if conditional, ok := backend.(ConditionalObjectBackend); ok {
+		if _, _, err := conditional.GetObject(ctx, siteCacheRetryKey(siteID)); err == nil {
+			keys = append(keys, siteCacheRetryKey(siteID))
+		} else if !errors.Is(err, ErrObjectNotFound) {
+			return nil, fmt.Errorf("read site cache retry record for cleanup: %w", err)
+		}
+	}
 	sort.Strings(keys)
 	return keys, nil
 }

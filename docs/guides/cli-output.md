@@ -5,7 +5,7 @@ All operational commands use the same low-chroma text report: operation and resu
 | Command | Details shown |
 | --- | --- |
 | `registry register` / `unregister` | Registration changes, registry projection, cleanup scopes and objects, cache revalidation, and whether the registry changes |
-| `site publish` | Artifact and index changes, nonempty preview reconciliation counts, synced and removed file counts |
+| `site publish` | Artifact and index changes, nonempty preview reconciliation counts, synced and removed file counts, cache paths and request ID |
 | `app deploy` | Version, application file changes, cache revalidation request, and source-dirty warning |
 | `preview publish` | Head SHA, optional explicit PR link, preview-list link, document URLs, object and catalog changes |
 | `index build` | Artifact/file counts, elapsed time, output paths and byte sizes; no artifacts are copied or published |

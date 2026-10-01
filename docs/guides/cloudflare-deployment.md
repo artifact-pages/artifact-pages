@@ -46,7 +46,9 @@ cloudflare:
   registryReaderSessionTokenEnv: CF_R2_REGISTRY_READER_SESSION_TOKEN # only for temporary reader credentials
 ```
 
-R2 temporary credentials support one bucket-level operation scope (`object-read-only` or `object-read-write`) plus exact object and prefix restrictions. Give the delegated publisher a read-only credential scoped to the exact `_indexes/sites.json` object and a read/write credential scoped to `_indexes/<site>/`, `_artifacts/<site>/`, `_previews/<site>/`, and the exact `_control/locks/sites/<site>.json` object. The CLI uses the reader only for the registry read and the primary credential for site writes. Do not put the parent R2 secret or the API token used to mint temporary credentials in the satellite repository or workflow. Set the primary credential's session token through `CF_R2_SESSION_TOKEN`; set the reader credential's session token through `CF_R2_REGISTRY_READER_SESSION_TOKEN`. The CLI does not mint or refresh either credential.
+R2 temporary credentials support one bucket-level operation scope (`object-read-only` or `object-read-write`) plus exact object and prefix restrictions. Give the delegated publisher a read-only credential scoped to the exact `_indexes/sites.json` object and a read/write credential scoped to `_indexes/<site>/`, `_artifacts/<site>/`, `_previews/<site>/`, and the exact `_control/locks/sites/<site>.json` and `_control/site-cache/<site>.json` objects. The latter is a private cache-request retry record and must support deletion as well as reads/writes. The CLI uses the reader only for the registry read and the primary credential for site writes. Do not put the parent R2 secret or the API token used to mint temporary credentials in the satellite repository or workflow. Set the primary credential's session token through `CF_R2_SESSION_TOKEN`; set the reader credential's session token through `CF_R2_REGISTRY_READER_SESSION_TOKEN`. The CLI does not mint or refresh either credential.
+
+For a changed production site publish or a pending cache retry, `CF_API_TOKEN` must authorize cache purge for the configured zone. Dry-run and a fully converged no-op do not require the token. The CLI checks token presence before mutating the projection, then purges changed URLs after synchronization; provider rejection reports failure and preserves the retry record. Retry the same site publish to complete the cache request, even if it reports zero file differences. Successful purge submission does not reload an already-open application; reload to fetch its fresh catalog/index.
 
 Make two separate R2 temporary-credential requests. Substitute a registered site ID and use a short TTL appropriate for the publish job:
 
@@ -66,7 +68,7 @@ Make two separate R2 temporary-credential requests. Substitute a registered site
   "parentAccessKeyId": "<parent-r2-access-key-id>",
   "permission": "object-read-write",
   "ttlSeconds": 3600,
-  "objects": ["_control/locks/sites/sre.json"],
+  "objects": ["_control/locks/sites/sre.json", "_control/site-cache/sre.json"],
   "prefixes": ["_indexes/sre/", "_artifacts/sre/", "_previews/sre/"]
 }
 ```

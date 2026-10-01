@@ -39,6 +39,9 @@ func TestPublishSitePrunesOnlyMissingPreviewManifestsAfterProductionCommit(t *te
 	if result.Outcome != "published" || !reflect.DeepEqual(previewChangesFromResult(result), wantPreviewChanges) {
 		t.Fatalf("PublishSite() = %+v, want published with preview plan %+v", result, wantPreviewChanges)
 	}
+	if !strings.Contains(strings.Join(result.InvalidationPaths, "\n"), "/_previews/sre/catalog.json") {
+		t.Fatal("pruned preview catalog was not included in cache revalidation")
+	}
 
 	finalCatalog := readPreviewPublishCatalog(t, backend.lockMemoryBackend, "sre")
 	if len(finalCatalog.Groups) != 4 || finalCatalog.Groups[0].ID != liveMerged.ID || finalCatalog.Groups[1].ID != liveClosed.ID || finalCatalog.Groups[2].ID != liveOpen.ID || finalCatalog.Groups[3].ID != liveManual.ID {

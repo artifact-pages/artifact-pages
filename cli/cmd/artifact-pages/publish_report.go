@@ -133,6 +133,16 @@ func writeSitePublishReport(writer io.Writer, result publisher.Result, resolved 
 		}
 		fmt.Fprintf(writer, "\n  Preview catalog: %d stale references %s · %d groups retained.\n", pruned, verb, retained)
 	}
+	if len(result.InvalidationPaths) > 0 {
+		verb := "requested"
+		if dryRun {
+			verb = "planned"
+		}
+		fmt.Fprintf(writer, "\n  Cache revalidation: %d paths %s.\n", len(result.InvalidationPaths), verb)
+		if result.InvalidationID != "" {
+			fmt.Fprintf(writer, "  Request   %s\n", reportText(result.InvalidationID))
+		}
+	}
 	fmt.Fprintln(writer)
 	switch {
 	case dryRun:

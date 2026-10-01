@@ -27,6 +27,8 @@ S3 lifecycle processing is asynchronous. An expired object can remain readable f
 
 ## Apply and configure the CLI
 
+Production site publishers also need read/write/delete permission on the exact private `_control/site-cache/<site>.json` retry record and `cloudfront:CreateInvalidation` on the configured distribution. This module includes those permissions in its satellite role policy. Review and reapply an older module's IAM policy before using the cache-revalidating CLI; do not broaden satellite storage access to other sites or the registry. Invalidation permission is distribution-scoped in AWS IAM, while the CLI limits its requests to the selected site's changed content paths.
+
 Use a reviewed `terraform plan` before applying. CloudFront distribution changes can take time to propagate. After apply, place the `aws_deployment_config_yaml` output in a local config or a pinned remote config file. Give the admin and satellite workflows their respective role ARNs; each workflow exchanges its GitHub OIDC token for temporary AWS credentials.
 
 The module follows AWS's recommended signed OAC access for private S3 origins and the Terraform AWS provider's CloudFront distribution resources. See [Restrict access to an Amazon S3 origin](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-restricting-access-to-s3.html), [CloudFront distribution Terraform resource](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudfront_distribution.html), and [CloudFront cache behavior TTL guidance](https://docs.aws.amazon.com/AmazonCloudFront/latest/APIReference/API_DefaultCacheBehavior.html).

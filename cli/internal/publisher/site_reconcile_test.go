@@ -116,7 +116,9 @@ func TestPublishSitePreservesFilesMetadataOrderAndPrefixBoundaries(t *testing.T)
 			lastPut = index
 			putOrder = append(putOrder, strings.TrimPrefix(event, "put:"))
 		case strings.HasPrefix(event, "delete:"):
-			deleteIndex = index
+			if strings.HasPrefix(event, "delete:_artifacts/") {
+				deleteIndex = index
+			}
 		}
 	}
 	if strings.Join(putOrder, "\n") != strings.Join(wantPuts, "\n") {
@@ -125,7 +127,7 @@ func TestPublishSitePreservesFilesMetadataOrderAndPrefixBoundaries(t *testing.T)
 	if artifactListed < 0 || indexListed < 0 || firstPut < artifactListed || firstPut < indexListed {
 		t.Fatalf("both site prefixes must be listed before writes: %v", events)
 	}
-	if deleteIndex < 0 || deleteIndex <= lastPut || deleteIndex != len(events)-1 {
+	if deleteIndex < 0 || deleteIndex <= lastPut || deleteIndex != len(events)-2 {
 		t.Fatalf("stale deletion must follow all puts: %v", events)
 	}
 	if got := backend.eventSnapshot()[deleteIndex]; got != "delete:_artifacts/sre/stale.txt" {
@@ -244,7 +246,7 @@ func TestPublishSiteRetriesAfterMetadataUploadFailureBeforeStaleDeletion(t *test
 	if got := backend.lockMemoryBackend.objects["_indexes/sre/meta.json"].ContentType; got != "application/json; charset=utf-8" {
 		t.Fatalf("meta.json Content-Type = %q", got)
 	}
-	if events := backend.eventSnapshot(); len(events) == 0 || events[len(events)-1] != "delete:_artifacts/sre/stale.html" {
+	if events := backend.eventSnapshot(); len(events) < 2 || events[len(events)-2] != "delete:_artifacts/sre/stale.html" || events[len(events)-1] != "delete:"+siteCacheRetryKey("sre") {
 		t.Fatalf("retry operations = %v, want stale deletion last", events)
 	}
 }
@@ -320,7 +322,7 @@ func TestPublishSiteRetriesAfterArtifactAndIndexUploadFailures(t *testing.T) {
 				t.Fatal("retry left stale artifact behind")
 			}
 			events := backend.eventSnapshot()
-			if len(events) == 0 || events[len(events)-1] != "delete:_artifacts/sre/stale.html" {
+			if len(events) < 2 || events[len(events)-2] != "delete:_artifacts/sre/stale.html" || events[len(events)-1] != "delete:"+siteCacheRetryKey("sre") {
 				t.Fatalf("retry operations = %v, want stale deletion last", events)
 			}
 		})

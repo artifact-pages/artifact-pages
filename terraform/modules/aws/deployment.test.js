@@ -184,7 +184,7 @@ test('admin and satellite OIDC roles have separate exact-subject trust and scope
 
   const satellitePolicy = block(main, 'resource "aws_iam_role_policy" "satellite"')
   assert.deepEqual(actionLists(satellitePolicy), [
-    ['s3:GetObject'], ['s3:ListBucket'], ['s3:PutObject'], ['s3:DeleteObject'],
+    ['s3:GetObject'], ['s3:ListBucket'], ['s3:PutObject'], ['s3:DeleteObject'], ['cloudfront:CreateInvalidation'],
   ])
   assert.match(satellitePolicy, /"_indexes\/\$\{each\.key\}\/\*"/u)
   assert.match(satellitePolicy, /"_artifacts\/\$\{each\.key\}\/\*"/u)
@@ -202,7 +202,10 @@ test('admin and satellite OIDC roles have separate exact-subject trust and scope
   const satelliteDelete = satellitePolicy.slice(satelliteDeleteStart)
   assert.match(satelliteDelete, /"s3:DeleteObject"/u)
   assert.match(satelliteDelete, /_artifacts\/\$\{each\.key\}\/\*/u)
-  assert.doesNotMatch(satelliteDelete, /_indexes|_previews|_control/u)
+  assert.doesNotMatch(satelliteDelete, /_indexes|_previews|_control\/locks/u)
+  assert.match(satelliteDelete, /_control\/site-cache\/\$\{each\.key\}\.json/u)
+  assert.match(satelliteWrite, /_control\/site-cache\/\$\{each\.key\}\.json/u)
+  assert.match(satellitePolicy, /Sid\s*=\s*"RevalidateSelectedSiteDistribution"[\s\S]*?Resource\s*=\s*aws_cloudfront_distribution\.site\.arn/u)
   assert.match(variables, /satellite_github_subjects"[\s\S]*?type\s*=\s*map\(list\(string\)\)/u)
   assert.match(outputs, /satellite_role_arns/u)
 })

@@ -62,6 +62,7 @@ locals {
             "_indexes/*",
             "_previews/*",
             "_control/locks/*",
+            "_control/site-cache/*",
             "_control/registry-cleanup.json",
           ]
         }
@@ -74,6 +75,7 @@ locals {
       Resource = [
         "${local.bucket_arn}/_indexes/sites.json",
         "${local.bucket_arn}/_control/locks/*",
+        "${local.bucket_arn}/_control/site-cache/*",
         "${local.bucket_arn}/_control/registry-cleanup.json",
         "${local.bucket_arn}/index.html",
         "${local.bucket_arn}/preview-bridge.js",
@@ -94,6 +96,7 @@ locals {
         "${local.bucket_arn}/assets/*",
         "${local.bucket_arn}/_indexes/sites.json",
         "${local.bucket_arn}/_control/locks/*",
+        "${local.bucket_arn}/_control/site-cache/*",
         "${local.bucket_arn}/_control/registry-cleanup.json",
       ]
     },
@@ -106,6 +109,7 @@ locals {
         "${local.bucket_arn}/_indexes/*/*",
         "${local.bucket_arn}/_previews/*",
         "${local.bucket_arn}/_control/registry-cleanup.json",
+        "${local.bucket_arn}/_control/site-cache/*",
       ]
     },
     {
@@ -546,6 +550,7 @@ resource "aws_iam_role_policy" "satellite" {
           "${local.bucket_arn}/_artifacts/${each.key}/*",
           "${local.bucket_arn}/_previews/${each.key}/*",
           "${local.bucket_arn}/_control/locks/sites/${each.key}.json",
+          "${local.bucket_arn}/_control/site-cache/${each.key}.json",
         ]
       },
       {
@@ -560,6 +565,7 @@ resource "aws_iam_role_policy" "satellite" {
               "_artifacts/${each.key}/*",
               "_previews/${each.key}/*",
               "_control/locks/sites/${each.key}.json",
+              "_control/site-cache/${each.key}.json",
             ]
           }
         }
@@ -573,6 +579,7 @@ resource "aws_iam_role_policy" "satellite" {
           "${local.bucket_arn}/_artifacts/${each.key}/*",
           "${local.bucket_arn}/_previews/${each.key}/*",
           "${local.bucket_arn}/_control/locks/sites/${each.key}.json",
+          "${local.bucket_arn}/_control/site-cache/${each.key}.json",
         ]
       },
       {
@@ -581,7 +588,14 @@ resource "aws_iam_role_policy" "satellite" {
         Action = ["s3:DeleteObject"]
         Resource = [
           "${local.bucket_arn}/_artifacts/${each.key}/*",
+          "${local.bucket_arn}/_control/site-cache/${each.key}.json",
         ]
+      },
+      {
+        Sid      = "RevalidateSelectedSiteDistribution"
+        Effect   = "Allow"
+        Action   = ["cloudfront:CreateInvalidation"]
+        Resource = aws_cloudfront_distribution.site.arn
       },
     ]
   })

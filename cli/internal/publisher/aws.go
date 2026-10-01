@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -207,7 +209,55 @@ func (backend *s3CompatibleBackend) DeleteObjects(ctx context.Context, keys []st
 }
 
 func (backend *awsBackend) Invalidate(ctx context.Context, paths []string) (string, error) {
-	return invalidate(ctx, backend.cloudFront, backend.distributionID, paths)
+	return invalidate(ctx, backend.cloudFront, backend.distributionID, backend.PlanInvalidation(paths))
+}
+
+func (backend *awsBackend) PlanInvalidation(paths []string) []string {
+	return awsSiteInvalidationPaths(paths)
+}
+
+// CloudFront cannot invalidate a tilde path, and literal '*' resource URLs
+// cannot be expressed as an exact invalidation. Bulk site publishes also must
+// not send an unbounded exact-path batch. Coalesce only the affected site's
+// artifact subtree, leaving indexes, other sites, and application paths alone.
+func awsSiteInvalidationPaths(paths []string) []string {
+	counts := make(map[string]int)
+	fallback := make(map[string]bool)
+	prefixFor := func(p string) string {
+		parts := strings.SplitN(strings.TrimPrefix(p, "/_artifacts/"), "/", 2)
+		if !strings.HasPrefix(p, "/_artifacts/") || len(parts) != 2 || validateLockSite(parts[0]) != nil {
+			return ""
+		}
+		return "/_artifacts/" + parts[0] + "/"
+	}
+	for _, p := range paths {
+		prefix := prefixFor(p)
+		if prefix == "" {
+			continue
+		}
+		counts[prefix]++
+		decoded, _ := url.PathUnescape(p)
+		if strings.Contains(decoded, "~") || strings.Contains(strings.ToUpper(p), "%2A") || len(p) > 4000 || counts[prefix] > 1000 {
+			fallback[prefix] = true
+		}
+	}
+	if len(fallback) == 0 {
+		return paths
+	}
+	set := make(map[string]bool)
+	for _, p := range paths {
+		if prefix := prefixFor(p); fallback[prefix] {
+			set[prefix+"*"] = true
+		} else {
+			set[p] = true
+		}
+	}
+	result := make([]string, 0, len(set))
+	for p := range set {
+		result = append(result, p)
+	}
+	sort.Strings(result)
+	return result
 }
 
 func newAWSClients(ctx context.Context, options AWSOptions) (awsClients, error) {
