@@ -209,19 +209,7 @@ export function CommandPalette({
   const scopedCount = scope === 'all'
     ? memoizedScopeCounts?.all ?? currentIndex?.artifacts.length ?? 0
     : scope === 'recent' ? recentCount : scope === 'pinned' ? pinnedCount : previewDocumentCount
-  const currentArtifactInScope = currentArtifact !== undefined && (
-    scope === 'all'
-    || (scope === 'recent' && recentArtifactIds.has(currentArtifact.id))
-    || (scope === 'pinned' && pinnedArtifactIdSet.has(currentArtifact.id))
-  )
-  const availableScopeCount = scope === 'previews' ? previewDocumentCount : memoizedScopeCounts
-    ? scopedCount - (!term.trim() && currentArtifactInScope ? 1 : 0)
-    : currentIndex?.artifacts.filter((artifact) => (
-      (scope === 'all'
-        || (scope === 'recent' && recentArtifactIds.has(artifact.id))
-        || (scope === 'pinned' && pinnedArtifactIdSet.has(artifact.id)))
-      && (term.trim() || artifact.id !== currentArtifact?.id)
-    )).length ?? 0
+  const availableScopeCount = scopedCount
   const emptyMessage = getEmptyMessage({ mode, scope, currentArtifact, siteCount: sites.length, availableScopeCount })
 
   useEffect(() => {
@@ -463,13 +451,13 @@ function getEmptyMessage({
 
   if (mode === 'search' && scope === 'recent') {
     return availableScopeCount === 0
-      ? 'No other recently read pages are available in this site.'
+      ? 'No recently read pages are available in this site.'
       : 'No matches in Recent. Clear the query or switch scopes.'
   }
 
   if (mode === 'search' && scope === 'pinned') {
     return availableScopeCount === 0
-      ? 'No other pinned pages are available in this site.'
+      ? 'No pinned pages are available in this site.'
       : 'No matches in Pinned. Clear the query or switch scopes.'
   }
 
@@ -745,8 +733,8 @@ function buildPageSections(
 
     const isRecent = recentReadById.has(artifact.id)
     const isPinned = pinnedIds.has(artifact.id)
+    const isCurrent = artifact.id === currentArtifact?.id
     if ((scope === 'recent' && !isRecent) || (scope === 'pinned' && !isPinned)) continue
-    if (!term.trim() && artifact.id === currentArtifact?.id) continue
 
     const read = recentReadById.get(artifact.id)
     const score = scoreArtifact({
@@ -761,6 +749,7 @@ function buildPageSections(
       ordinal,
     })
     const badge = [
+      isCurrent ? 'Current page' : undefined,
       isPinned ? 'Pinned' : undefined,
       read ? formatRecentRead(read.viewedAt) : undefined,
     ].filter(Boolean).join(' · ') || undefined

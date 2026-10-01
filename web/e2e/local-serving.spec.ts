@@ -854,8 +854,10 @@ test('recent reads persist across reloads and remain scoped while the query is r
   const recentScope = palette.getByRole('button', { name: /Recently read pages/ })
   await recentScope.click()
   const platform = palette.getByRole('option', { name: /Platform topology/ })
+  const checkout = palette.getByRole('option', { name: /Checkout latency incident review/ })
   await expect(platform).toBeVisible()
-  await expect(palette.getByRole('option', { name: /Checkout latency incident review/ })).toHaveCount(0)
+  await expect(checkout).toBeVisible()
+  await expect(checkout.locator('.palette-entry-badge')).toContainText('Current page')
 
   await page.keyboard.press('Escape')
   await page.reload()
@@ -869,6 +871,42 @@ test('recent reads persist across reloads and remain scoped while the query is r
   await palette.getByRole('button', { name: /All pages/ }).click()
   await expect(search).toHaveValue('platform')
   await expect(palette.getByRole('option').first()).toContainText('Platform topology')
+})
+
+test('palette includes the current page in blank All, Recent, and Pinned results after reload', async ({ page }) => {
+  const currentPath = 'architecture/platform-topology/index.html'
+  await page.goto(`/sre/${currentPath}`)
+
+  const currentRow = page.locator(`.browse-tree .tree-artifact[data-tree-path="${currentPath}"][aria-current="page"]`).locator('xpath=..')
+  await currentRow.getByRole('button', { name: 'Actions for Platform topology' }).click()
+  await page.getByRole('menu', { name: 'Platform topology actions' }).getByRole('menuitem', { name: 'Pin' }).click()
+  await page.reload()
+  await expect(page.locator('.pinned-tree .tree-artifact')).toContainText('Platform topology')
+
+  await page.getByRole('button', { name: 'Search pages in SRE' }).click()
+  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
+  const currentResult = palette.getByRole('option', { name: /Platform topology/ })
+
+  await expect(currentResult).toBeVisible()
+  await expect(currentResult.locator('.palette-entry-badge')).toContainText('Current page')
+
+  const recentScope = palette.getByRole('button', { name: /Recently read pages/ })
+  await expect(recentScope.locator('span')).toHaveText('1')
+  await recentScope.click()
+  await expect(currentResult).toBeVisible()
+  await expect(currentResult.locator('.palette-entry-badge')).toContainText('Current page')
+
+  const pinnedScope = palette.getByRole('button', { name: /Pinned pages/ })
+  await expect(pinnedScope.locator('span')).toHaveText('1')
+  await pinnedScope.click()
+  await expect(currentResult).toBeVisible()
+  await expect(currentResult.locator('.palette-entry-badge')).toContainText('Current page')
+  await expect(palette.getByText('No pinned pages are available in this site.')).toHaveCount(0)
+
+  await search.fill('Platform topology')
+  await expect(currentResult).toBeVisible()
+  await expect(currentResult.locator('.palette-entry-badge')).toContainText('Current page')
 })
 
 test('normal page search stays on the current site while @ and > select explicit scopes', async ({ page }) => {

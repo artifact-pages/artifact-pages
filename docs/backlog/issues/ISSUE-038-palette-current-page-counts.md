@@ -1,6 +1,6 @@
 # パレットの件数と現在の文書の省略が矛盾して見える
 
-- Status: In progress
+- Status: Done
 - Priority: P2
 - Area: Command palette / All・Recent・Pinned
 
@@ -25,6 +25,10 @@ Recent も件数2に対して空欄では1件、All も4文書中3件だった�
 
 ## Acceptance criteria
 
-- [ ] 現在の文書だけをピン留めした状態で、保存失敗に見える件数と空状態の食い違いがない。
-- [ ] All・Recent・Pinned で現在の文書の扱いが明確で、空欄とタイトル検索の結果の差を理解できる。
-- [ ] 再読み込み後も同じ基準で件数・一覧・空状態が表示される。
+- [x] 現在の文書だけをピン留めした状態で、保存失敗に見える件数と空状態の食い違いがない。
+- [x] All・Recent・Pinned で現在の文書の扱いが明確で、空欄とタイトル検索の結果の差を理解できる。
+- [x] 再読み込み後も同じ基準で件数・一覧・空状態が表示される。
+
+## Verification
+
+2026-10-01: `npm run build` and `git diff --check` passed. Two focused Playwright cases (current-page scope counts and persistent recent reads) passed 2/2 against the isolated fixture server at port 4174. The Guide-only server at port 4179 was checked in the Codex in-app browser for blank All/Recent/Pinned, title search, and reload; Pinned 1 matched its current-page result. Test pin state was restored. A separate gpt-6-luna max reviewer inspected the final implementation and exact-count regression and found no blocking issues; it did not repeat the browser check. Only the palette component and related browser regressions changed.
