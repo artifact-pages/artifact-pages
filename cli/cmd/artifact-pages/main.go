@@ -377,6 +377,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	siteTitle := flags.String("site-title", "", "display title for the site (defaults to the site identifier)")
 	sourceDir := flags.String("source", "", "publishable static content directory inside the current Git working tree")
 	outputDir := flags.String("out", ".local/storage", "projection output directory for site metadata and artifact index")
+	fullText := flags.Bool("fulltext", false, "build optional site-scoped static full-text search data")
 	repository := flags.String("repository", "", "source repository name, such as owner/repository (inferred from origin when possible)")
 	repositoryURL := flags.String("repository-url", "", "canonical source repository URL (inferred from origin when possible)")
 	ref := flags.String("ref", "", "source Git ref (inferred from the current branch or commit)")
@@ -399,6 +400,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	result, err := indexer.Build(ctx, indexer.BuildOptions{
 		SiteID:        *siteID,
 		SiteTitle:     *siteTitle,
+		FullText:      *fullText,
 		SourceDir:     *sourceDir,
 		OutputDir:     *outputDir,
 		Repository:    *repository,
@@ -681,6 +683,7 @@ func runSitePublish(ctx context.Context, args []string, stdout, stderr io.Writer
 	source := flags.String("source", "", "publishable static content directory inside the current Git working tree")
 	var configLocators stringSliceFlag
 	flags.Var(&configLocators, "config", "deployment config path or github:// locator (repeatable; later layers override earlier ones)")
+	fullText := flags.Bool("fulltext", false, "build and publish optional site-scoped static full-text search data")
 	dryRun := flags.Bool("dry-run", false, "show planned changes without writes, deletes, lock recovery, or cache changes")
 	format := flags.String("format", "text", "result format: text or json")
 	if err := flags.Parse(args); err != nil {
@@ -710,6 +713,7 @@ func runSitePublish(ctx context.Context, args []string, stdout, stderr io.Writer
 		SiteID:    *siteID,
 		SourceDir: *source,
 		DryRun:    *dryRun,
+		FullText:  *fullText,
 	})
 	if err != nil {
 		return withResolvedResult(err, result, resolved)
@@ -847,6 +851,7 @@ func writeBuildUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  --site-title TITLE     site display title")
 	fmt.Fprintln(writer, "  --source DIR           publishable static content directory (relative to the current directory)")
 	fmt.Fprintln(writer, "  --out DIR              output root (default .local/storage)")
+	fmt.Fprintln(writer, "  --fulltext             generate site-scoped full-text search data")
 	fmt.Fprintln(writer, "  --repository NAME      override repository name inferred from origin")
 	fmt.Fprintln(writer, "  --repository-url URL   override repository URL inferred from origin")
 	fmt.Fprintln(writer, "  --ref REF              override the current branch or commit")
@@ -883,6 +888,7 @@ func writeSitePublishUsage(writer io.Writer) {
 	writeSiteUsage(writer)
 	fmt.Fprintln(writer, "")
 	fmt.Fprintln(writer, "Options:")
+	fmt.Fprintln(writer, "  --fulltext              generate and publish site-scoped full-text search data")
 	fmt.Fprintln(writer, "  --site ID               required site identifier")
 	fmt.Fprintln(writer, "  --source DIR            publishable static content directory (defaults to the registered sourcePath)")
 	fmt.Fprintln(writer, "  --config LOCATOR        deployment config path or github:// locator (repeatable; later layers override earlier ones)")

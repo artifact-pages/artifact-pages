@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ja">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>全文検索のローカル検証</title>
+<style>
+body{margin:0;background:#f5f6f8;color:#192331;font:16px/1.6 system-ui,sans-serif}main{max-width:850px;margin:5vh auto;padding:24px}h1{font-size:28px;margin-bottom:8px}p{color:#536174}form{display:flex;gap:10px;flex-wrap:wrap;margin:28px 0}input,select,button{font:inherit;border:1px solid #aab7c7;border-radius:7px;padding:10px;background:white}input{flex:1;min-width:180px}button{cursor:pointer;background:#234a75;color:white;border:0}button:disabled{opacity:.5}a{color:#234a75}ol{padding:0;list-style:none}li{padding:16px;background:white;border:1px solid #dbe2eb;border-radius:8px;margin:10px 0}li small{display:block;color:#536174;overflow-wrap:anywhere}output{display:block;font-weight:600}.help{font-size:14px}.metrics{font-size:13px;color:#536174}#more{margin-top:10px}
+</style>
+<main>
+<a href="/">通常のサイト一覧を開く</a>
+<h1>全文検索のローカル検証</h1>
+<p>検索文字列を確定すると、そのサイトの検索データを取得します。結果を開くと通常のリーダーに移動します。</p>
+<form>
+<select aria-label="検証サイト">__SITE_OPTIONS__</select>
+<input aria-label="検索文字列" placeholder="cache、再試行、body-only-000007" autocomplete="off">
+<button type="submit">検索</button>
+</form>
+<p class="help">空白区切りで AND 部分一致。例えば <code>body-only-000007</code> は本文だけにある識別子です。</p>
+<output aria-live="polite">検索を確定してください。</output>
+<p class="metrics" id="metrics"></p>
+<ol aria-label="検索結果"></ol>
+<button id="more" type="button" hidden>次の20件を表示</button>
+<script type="module" src="/fulltext-lab/client.js"></script>
+</main>
+</html>

@@ -164,6 +164,9 @@ func writeIndexReport(w io.Writer, site string, result indexer.BuildResult, inde
 	reportHeader(w, "index build "+site, "built", false)
 	fmt.Fprintf(w, "  Indexed   %d artifacts\n  Scanned   %d files\n  Elapsed   %s\n", result.ArtifactsIndexed, result.FilesScanned, result.Elapsed.Round(time.Millisecond))
 	fmt.Fprintf(w, "\n  Output files\n  %s %s (%d bytes)\n  %s %s (%d bytes)\n", reportTone("✓", "create", terminalColor(w)), reportText(indexPath), result.OutputBytes, reportTone("✓", "create", terminalColor(w)), reportText(metaPath), result.MetadataBytes)
+	if len(result.SearchFiles) > 0 {
+		fmt.Fprintf(w, "  ✓ Full-text search (%d files, %d bytes)\n", len(result.SearchFiles), result.SearchBytes)
+	}
 	fmt.Fprintln(w, "\n  Index build complete. No artifacts were copied or published.")
 }
 

@@ -4,6 +4,7 @@ Start with the [thesis](thesis.md) for the product's purpose, the [specification
 
 ## Repository and product architecture
 
+- [Static full-text search core](architecture/fulltext-search.md) — optional build/publish, callable browser API and versioned format; detailed palette UX deferred.
 - [Repository layout](architecture/repository-layout.md) — component ownership, entry commands, local output paths, and Terraform module boundaries.
 
 ## Domain and publishing
@@ -21,6 +22,7 @@ Start with the [thesis](thesis.md) for the product's purpose, the [specification
 - [Clean-room adoption and recovery](guides/clean-room-adoption.md) — exercise separate adopter repositories, local deployment, app rollback, and guarded lock recovery.
 - [Cloudflare deployment](guides/cloudflare-deployment.md) — connect an R2 bucket and Cloudflare edge policy, then deploy the app and registered content.
 - [Local registered-site development](guides/local-registered-sites.md) — work across an admin checkout and a satellite checkout locally.
+- [Local full-text load verification](guides/local-fulltext-load.md) — generate actual pages, deploy an isolated nginx lab, and measure submit-to-search behavior.
 - [Optional GitHub Actions](guides/github-actions.md) — thin admin and explicit-site entry points, outputs, credential boundaries, and workflow templates.
 
 ## Backlog
@@ -41,3 +43,4 @@ These are design explorations, not the current application contract.
 ## Research
 
 - [Palette search benchmark](research/palette-search-benchmark.md)
+- [Full-text feasibility](research/fulltext-search-feasibility.md), [capacity-focused design](research/fulltext-search-cost.md), and [actual local load benchmark](research/fulltext-local-load-benchmark.md)

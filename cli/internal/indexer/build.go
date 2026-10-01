@@ -20,6 +20,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/tasuku43/git-artifact-pages/cli/internal/fulltext"
+
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
 	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
@@ -40,6 +42,7 @@ func ValidateUTF8RelativePath(relative string) error {
 }
 
 type BuildOptions struct {
+	FullText        bool
 	SiteID          string
 	SiteTitle       string
 	SiteDescription string
@@ -52,6 +55,8 @@ type BuildOptions struct {
 }
 
 type BuildResult struct {
+	SearchFiles      []string
+	SearchBytes      int
 	FilesScanned     int
 	ArtifactsIndexed int
 	OutputPath       string
@@ -79,6 +84,7 @@ type SiteIndex struct {
 }
 
 type SiteDiscoveryMetadata struct {
+	FullTextURL      string      `json:"fullTextUrl,omitempty"`
 	SchemaVersion    int         `json:"schemaVersion"`
 	Site             SiteSummary `json:"site"`
 	GeneratedAt      string      `json:"generatedAt"`
@@ -242,8 +248,9 @@ func Build(ctx context.Context, options BuildOptions) (BuildResult, error) {
 		Artifacts:     make([]ArtifactIndexEntry, 0, len(artifacts)),
 	}
 	modTimeByDirectory := make(map[string]time.Time)
+	searchRecords := make([]fulltext.Record, 0)
 	for _, artifact := range artifacts {
-		metadata, err := readArtifactMetadata(artifact.file, artifact.filename)
+		metadata, searchText, err := readArtifactWithSearch(artifact.file, artifact.filename, options.FullText)
 		if err != nil {
 			return BuildResult{}, fmt.Errorf("parse artifact %q: %w", artifact.relative, err)
 		}
@@ -295,6 +302,9 @@ func Build(ctx context.Context, options BuildOptions) (BuildResult, error) {
 			}
 		}
 		index.Artifacts = append(index.Artifacts, entry)
+		if options.FullText {
+			searchRecords = append(searchRecords, fulltext.Record{Path: entry.Path, Text: entry.Title + " " + searchText})
+		}
 	}
 	sort.Slice(index.Artifacts, func(i, j int) bool {
 		return index.Artifacts[i].ID < index.Artifacts[j].ID
@@ -304,6 +314,30 @@ func Build(ctx context.Context, options BuildOptions) (BuildResult, error) {
 		index.PaletteScoringProfile = &profile
 	}
 
+	var searchFiles []string
+	searchBytes := 0
+	if options.FullText {
+		projection, err := fulltext.Build(ctx, options.SiteID, searchRecords)
+		if err != nil {
+			return BuildResult{}, fmt.Errorf("build full-text index: %w", err)
+		}
+		// Publish all immutable bytes locally before exposing the manifest.
+		for name := range projection.Files {
+			if name != "manifest.json" {
+				searchFiles = append(searchFiles, name)
+			}
+		}
+		sort.Strings(searchFiles)
+		searchFiles = append(searchFiles, "manifest.json")
+		for i, name := range searchFiles {
+			filename := filepath.Join(outputRoot, "_indexes", options.SiteID, "search", name)
+			if err := writeAtomically(filename, projection.Files[name]); err != nil {
+				return BuildResult{}, fmt.Errorf("write full-text index: %w", err)
+			}
+			searchBytes += len(projection.Files[name])
+			searchFiles[i] = filename
+		}
+	}
 	serialized, err := json.MarshalIndent(index, "", "  ")
 	if err != nil {
 		return BuildResult{}, fmt.Errorf("encode site index: %w", err)
@@ -320,6 +354,9 @@ func Build(ctx context.Context, options BuildOptions) (BuildResult, error) {
 		ArtifactCount:    len(index.Artifacts),
 		ArtifactIndexURL: siteIndexURL(options.SiteID),
 	}
+	if options.FullText {
+		metadata.FullTextURL = "/_indexes/" + options.SiteID + "/search/manifest.json"
+	}
 	metadataBytes, err := json.MarshalIndent(metadata, "", "  ")
 	if err != nil {
 		return BuildResult{}, fmt.Errorf("encode site discovery metadata: %w", err)
@@ -329,8 +366,13 @@ func Build(ctx context.Context, options BuildOptions) (BuildResult, error) {
 	if err := writeAtomically(metadataPath, metadataBytes); err != nil {
 		return BuildResult{}, fmt.Errorf("write site discovery metadata: %w", err)
 	}
+	if err := pruneSearchFiles(filepath.Join(outputRoot, "_indexes", options.SiteID, "search"), searchFiles); err != nil {
+		return BuildResult{}, fmt.Errorf("remove stale local search data: %w", err)
+	}
 
 	return BuildResult{
+		SearchFiles:      searchFiles,
+		SearchBytes:      searchBytes,
 		FilesScanned:     scannedFiles,
 		ArtifactsIndexed: len(index.Artifacts),
 		OutputPath:       indexPath,
@@ -579,6 +621,55 @@ func readArtifactMetadata(filename, basename string) (artifactHTMLMetadata, erro
 	metadata := readArtifactHTMLDocumentNode(document)
 	metadata.title = metadata.firstH1
 	return metadata, nil
+}
+
+func readArtifactWithSearch(filename, basename string, enabled bool) (artifactHTMLMetadata, string, error) {
+	if !enabled {
+		metadata, err := readArtifactMetadata(filename, basename)
+		return metadata, "", err
+	}
+	source, err := os.ReadFile(filename)
+	if err != nil {
+		return artifactHTMLMetadata{}, "", err
+	}
+	var document *html.Node
+	if isMarkdownDocument(basename) {
+		document, err = renderMarkdownHTMLDocument(source)
+	} else {
+		document, err = html.Parse(bytes.NewReader(source))
+	}
+	if err != nil {
+		return artifactHTMLMetadata{}, "", err
+	}
+	metadata := readArtifactHTMLDocumentNode(document)
+	if isMarkdownDocument(basename) {
+		metadata.title = metadata.firstH1
+	}
+	return metadata, fulltext.ExtractText(document), nil
+}
+
+// Only remove files owned by this format, after the new metadata is visible.
+func pruneSearchFiles(directory string, files []string) error {
+	entries, err := os.ReadDir(directory)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	keep := make(map[string]bool)
+	for _, filename := range files {
+		keep[filepath.Base(filename)] = true
+	}
+	owned := regexp.MustCompile(`^(root|leaf)-[a-f0-9]{64}\.gz$`)
+	for _, entry := range entries {
+		if !entry.IsDir() && !keep[entry.Name()] && (entry.Name() == "manifest.json" || owned.MatchString(entry.Name())) {
+			if err := os.Remove(filepath.Join(directory, entry.Name())); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func renderMarkdownHTMLDocument(source []byte) (*html.Node, error) {

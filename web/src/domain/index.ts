@@ -10,6 +10,8 @@ export type SiteDiscoveryMetadata = {
   generatedAt: string
   artifactCount: number
   artifactIndexUrl: string
+  /** Optional static full-text projection; fetched only by an explicit search. */
+  fullTextUrl?: string
 }
 
 export type SiteCatalogEntry =

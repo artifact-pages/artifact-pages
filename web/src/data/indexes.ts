@@ -39,7 +39,8 @@ function parseSiteDiscoveryMetadata(payload: unknown, url: string, expectedSiteI
     !Number.isSafeInteger(metadata.artifactCount) ||
     (metadata.artifactCount ?? -1) < 0 ||
     typeof metadata.artifactIndexUrl !== 'string' ||
-    !isLocalIndexUrl(metadata.artifactIndexUrl)
+    !isLocalIndexUrl(metadata.artifactIndexUrl) ||
+    (metadata.fullTextUrl !== undefined && metadata.fullTextUrl !== `/_indexes/${expectedSiteId}/search/manifest.json`)
   ) {
     throw new IndexLoadError(`Invalid site discovery metadata: ${url}.`, url)
   }

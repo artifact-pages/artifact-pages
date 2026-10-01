@@ -77,7 +77,7 @@ func readSiteCacheRetry(ctx context.Context, backend ConditionalObjectBackend, s
 	for i, p := range record.Paths {
 		decoded, err := url.PathUnescape(p)
 		if err != nil || strings.ContainsAny(p, "?#*") ||
-			!(strings.HasPrefix(decoded, "/_artifacts/"+site+"/") || decoded == "/_indexes/"+site+"/index.json" || decoded == "/_indexes/"+site+"/meta.json" || decoded == "/_previews/"+site+"/catalog.json") {
+			!(strings.HasPrefix(decoded, "/_artifacts/"+site+"/") || decoded == "/_indexes/"+site+"/index.json" || decoded == "/_indexes/"+site+"/meta.json" || strings.HasPrefix(decoded, "/_indexes/"+site+"/search/") || decoded == "/_previews/"+site+"/catalog.json") {
 			return record, "", errors.New("site cache retry record contains an out-of-scope path")
 		}
 		for _, segment := range strings.Split(decoded, "/") {

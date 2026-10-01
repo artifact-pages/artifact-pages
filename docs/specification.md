@@ -172,7 +172,7 @@ Example discovery metadata:
 }
 ~~~
 
-The `artifactIndexUrl` pointer keeps the browser from hard-coding the artifact-index location. The current implementation still publishes one complete artifact index per site; sharding or an inverted index is not part of the contract until benchmarks demonstrate a need.
+The `artifactIndexUrl` pointer keeps the browser from hard-coding the artifact-index location. The navigation/palette implementation still publishes one complete artifact index per site. Optional submit-to-search full-text data is a separate projection advertised by `fullTextUrl`; see [the full-text core contract](architecture/fulltext-search.md). It does not change the navigation index loading model.
 
 A registered site may have no HTML or Markdown documents. Its index uses `"artifacts": []`, and its discovery metadata reports `"artifactCount": 0`. This is a published empty site, distinct from an unpublished site: `/:site` remains the site home and shows an empty state, while an explicit document route such as `/:site/index.html` is not inferred. Static resources still follow normal publish rules, and stale document objects are removed during reconciliation without unregistering the site.
 
@@ -384,6 +384,8 @@ Initial searchable fields:
 - filename where available
 
 Search should feel immediate after the index is loaded.
+
+The optional full-text core is built/published with `--fulltext` and advertised by `meta.json.fullTextUrl`. A browser consumer explicitly calls its site-scoped API after committing a nonblank query; construction does not download search data. It searches normalized static title/body text with whitespace-separated AND substring terms, returning full artifact IDs/logical routes, total count and a path-ordered result page. This API is implemented independently of the current metadata palette; detailed submit-to-search UX, ranking and snippets remain deferred. The versioned format, caching, update/retry and extraction semantics are defined in [the full-text core contract](architecture/fulltext-search.md).
 
 ### Left sidebar
 

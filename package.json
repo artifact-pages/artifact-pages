@@ -15,6 +15,8 @@
     "fixtures:palette": "node scripts/benchmark-palette.mjs --generate-only",
     "benchmark:palette": "npm run build && node scripts/benchmark-palette.mjs",
     "benchmark:preview-discovery": "npm run build && node scripts/benchmark-preview-discovery.mjs",
+    "fulltext:load": "node scripts/fulltext-load.mjs",
+    "test:fulltext": "node scripts/test-fulltext-core.mjs",
     "package:web": "node scripts/package-web.mjs",
     "preview": "vite preview --config web/vite.config.ts",
     "serve:local": "npm run build && docker compose up",
