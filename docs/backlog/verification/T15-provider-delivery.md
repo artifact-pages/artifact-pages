@@ -25,6 +25,12 @@ For lifecycle verification, the owner prefers hours rather than the 30-day sampl
 
 ## Evidence
 
+### Notice-route repair verified — October 1, 2026 (JST)
+
+After the owner reported applying the reviewed plan (zero additions, three in-place changes, zero deletions), canonical GETs for `/LICENSE` and `/THIRD_PARTY_NOTICES.txt` returned 200 with `text/plain; charset=utf-8` and `no-cache, max-age=0, must-revalidate`. Their bytes matched the packaged local build exactly: SHA-256 `ad63728a4da8874e36cf492b65eb8f4b20fc7bdbb8e7b30e15f198280b356d88` (LICENSE) and `d9be5dc26f21bf211a555db0ae263bfa47ec363eb0724a9eb2dbc0fcf7a26c2c` (third-party notices). Neither returned the app shell. The Guide index and document still returned their previous hashes with JSON/HTML content types; a nonexistent artifact remained a real 404. The control URL still returned the app shell, and a normal browser reload showed `Page not found` rather than control bytes. This closes the sampled Cloudflare notice-route defect, not official-release, AWS or alternate-origin proof.
+
+Packaging copies the project license and generates dependency notices into the web bundle. `app deploy` uploads these bundle objects along with the application. Terraform configures their delivery-route/cache behavior; it does not generate or upload their text. Site publishers do not need to maintain these app-level files.
+
 ### Cloudflare live observations — October 1, 2026 (JST)
 
 The owner authorized publishing the existing public `guide` site and subsequent non-mutating checks. The target was R2 bucket `artifact-pages`, account `9ac354c8aa31d424224d8c4f3aa8ba2a`, zone `3eb221959ea55267ea2bfb93af45ef7e`, using the local config plus its Cloudflare overlay. No Terraform apply, registration change, unregister, preview creation, or credential change was performed during these checks. Secrets were not included in evidence.
