@@ -313,7 +313,7 @@ function safeRawArtifactUrl(value: string) {
 
 function matches(artifact: ArtifactIndexEntry, query: string) {
   if (!query) return true
-  return `${artifact.title} ${artifact.path} ${artifact.filename ?? ''}`.toLocaleLowerCase().includes(query)
+  return [artifact.title, artifact.path, artifact.filename ?? ''].some((text) => text.toLocaleLowerCase().includes(query))
 }
 
 function folderAncestors(path?: string) {

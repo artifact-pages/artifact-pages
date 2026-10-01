@@ -51,7 +51,7 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-053](ISSUE-053-breadcrumb-menus-duplicate.md) | Done | P3 | Folder and document breadcrumb menus show the same content. |
 | [ISSUE-054](ISSUE-054-contents-keep-reading-label.md) | Done | P3 | The panels' "Keep reading" action is unclear. |
 | [ISSUE-055](ISSUE-055-palette-missing-artifact-commands.md) | Done | P3 | Pin and Details are missing from palette commands. |
-| [ISSUE-056](ISSUE-056-sidebar-filter-match-reason.md) | Open | P3 | Sidebar filter results matched only by path do not show why they matched. |
+| [ISSUE-056](ISSUE-056-sidebar-filter-match-reason.md) | Done | P3 | Sidebar filter results matched only by path do not show why they matched. |
 | [ISSUE-057](ISSUE-057-search-typo-tolerance.md) | Open | P3 | Small typos such as swapped letters find no documents. |
 | [ISSUE-058](ISSUE-058-library-palette-heading-hint.md) | Open | P3 | The site-list palette footer advertises heading search that is unavailable there. |
 | [ISSUE-059](ISSUE-059-unregistered-preview-route.md) | Open | P2 | Unregistered preview routes look like registered sites with no previews. |

@@ -1206,6 +1206,37 @@ test('single-site sidebar empty results recover by changing or clearing the filt
   await expect(sidebar.locator('.tree-artifact').filter({ hasText: 'Checkout latency incident review' })).toBeVisible()
 })
 
+test('sidebar filter shows the path with a highlight only when the title does not match', async ({ page }) => {
+  for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport)
+    await page.goto('/sre/incidents/checkout-latency/index.html')
+    if (viewport.width < 600) {
+      await page.getByRole('button', { name: 'Expand navigation' }).click()
+      await expect(page.getByRole('button', { name: 'Collapse sidebar' })).toBeVisible()
+    }
+    const sidebar = page.locator('.sidebar-panel')
+    const filter = sidebar.getByRole('textbox', { name: 'Filter SRE navigation' })
+
+    await filter.fill('checkout-latency')
+    const pathOnly = sidebar.locator('.tree-artifact').filter({ hasText: 'Checkout latency incident review' })
+    await expect(pathOnly.locator('.tree-path mark')).toHaveText('checkout-latency')
+    await expect(pathOnly.locator('.tree-path')).toContainText('index.html')
+
+    await filter.fill('incident')
+    await expect(sidebar.locator('.tree-artifact').filter({ hasText: 'Checkout latency incident review' }).locator('.tree-label mark')).toHaveText('incident')
+    await expect(sidebar.locator('.tree-path')).toHaveCount(0)
+
+    await filter.fill('checkout-latency')
+    const body = sidebar.locator('.sidebar-body')
+    const mark = sidebar.locator('.tree-path mark')
+    await expect(mark).toBeVisible()
+    const [markBox, bodyBox] = [await mark.boundingBox(), await body.boundingBox()]
+    expect(markBox!.x + markBox!.width).toBeLessThanOrEqual(bodyBox!.x + bodyBox!.width)
+    const overflow = await body.evaluate((element) => element.scrollWidth - element.clientWidth)
+    expect(overflow).toBeLessThanOrEqual(0)
+  }
+})
+
 test('site search updates correctly for sequential typing, backspace, and a new query', async ({ page }) => {
   await page.goto('/sre')
   await page.getByRole('button', { name: 'Search pages in SRE' }).click()

@@ -236,10 +236,15 @@ function ArtifactRow({
   onOpenArtifact: (artifact: ArtifactIndexEntry) => void
   actions?: ArtifactRowActions
 }) {
+  const reason = !showPath && query && !artifact.title.toLocaleLowerCase().includes(query)
+    ? matchReason(artifact, query)
+    : undefined
+  const pathText = showPath ? artifact.path : reason
+  const withPath = showPath || Boolean(reason)
   return (
     <div className={`tree-artifact-row${actions ? ' has-actions' : ''}`}>
       <button
-        className={`tree-artifact${active ? ' is-active' : ''}${showPath ? ' tree-path-row' : ''}`}
+        className={`tree-artifact${active ? ' is-active' : ''}${withPath ? ' tree-path-row' : ''}`}
         style={{ paddingInlineStart: style === 'branch-guides' ? '8px' : `${10 + depth * 14}px` }}
         data-tree-depth={depth}
         data-tree-path={artifact.path}
@@ -247,9 +252,13 @@ function ArtifactRow({
         aria-current={active ? 'page' : undefined}
         onClick={() => onOpenArtifact(artifact)}
       >
-        <span className={showPath ? 'tree-path-copy' : 'tree-label'}>
+        <span className={withPath ? 'tree-path-copy' : 'tree-label'}>
           <span className="tree-label">{highlight(artifact.title, query)}</span>
-          {showPath ? <span className="tree-path mono">{highlight(artifact.path, query)}</span> : null}
+          {withPath ? (
+            <span className="tree-path mono" aria-hidden="true">
+              {highlight(pathText ?? artifact.path, query)}
+            </span>
+          ) : null}
         </span>
         {artifact.format === 'markdown' ? (
           <span className="tree-format-tag" title="Markdown document">MD</span>
@@ -282,7 +291,17 @@ function folderAncestors(path?: string) {
 
 function matches(artifact: ArtifactIndexEntry, query: string) {
   if (!query) return true
-  return `${artifact.title} ${artifact.path} ${artifact.filename ?? ''}`.toLocaleLowerCase().includes(query)
+  return [artifact.title, artifact.path, artifact.filename ?? ''].some((text) => text.toLocaleLowerCase().includes(query))
+}
+
+function matchReason(artifact: ArtifactIndexEntry, query: string) {
+  const text = artifact.path.toLocaleLowerCase().includes(query)
+    ? artifact.path
+    : artifact.filename?.toLocaleLowerCase().includes(query) ? artifact.filename : undefined
+  if (!text) return undefined
+  const index = text.toLocaleLowerCase().indexOf(query)
+  // Keep the matched part visible when the row truncates a long path.
+  return index > 14 ? `\u2026${text.slice(index - 10)}` : text
 }
 
 function countMatching(node: ArtifactTreeNode, query: string): number {
