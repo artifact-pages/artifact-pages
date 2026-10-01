@@ -1170,6 +1170,10 @@ mark {
   color: var(--text-tertiary);
 }
 
+.current-artifact-pin-button.is-active svg {
+  color: var(--palette-match);
+}
+
 .action-divider {
   width: 1px;
   height: 17px;
@@ -2540,6 +2544,15 @@ mark {
 
   .context-button span {
     display: none;
+  }
+
+  .context-button.current-artifact-pin-button {
+    width: auto;
+    padding: 0 7px;
+  }
+
+  .context-button.current-artifact-pin-button span {
+    display: inline;
   }
 
   .action-divider {

@@ -53,7 +53,8 @@ export function ArtifactWorkspace({
   const [activePanel, setActivePanel] = useState<WorkspacePanel>(null)
   const [paletteSeed, setPaletteSeed] = useState<string | null>(null)
   const [sidebarFilterResetKey, setSidebarFilterResetKey] = useState(0)
-  const [pinnedArtifactIds, setPinnedArtifactIds] = useState<string[]>([])
+  const [pinnedArtifactsBySite, setPinnedArtifactsBySite] = useState<Record<string, string[]>>(readPinnedArtifacts)
+  const pinnedArtifactIds = pinnedArtifactsBySite[index.site.id] ?? []
   const [storedRecentReads, setStoredRecentReads] = useState<RecentArtifactRead[]>(
     () => readRecentArtifactReads(index.site.id),
   )
@@ -131,6 +132,14 @@ export function ArtifactWorkspace({
   }, [])
 
   useEffect(() => () => window.clearTimeout(toastTimer.current), [])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(PINNED_STORAGE_KEY, JSON.stringify(pinnedArtifactsBySite))
+    } catch {
+      // Pinning remains available for this session if browser storage is disabled.
+    }
+  }, [pinnedArtifactsBySite])
 
   useEffect(() => {
     if (initialSidebarOpen !== undefined) updateSidebarOpen(initialSidebarOpen)
@@ -263,6 +272,18 @@ export function ArtifactWorkspace({
     toastTimer.current = window.setTimeout(() => setToast(null), 1900)
   }
 
+  function toggleArtifactPin(artifact: ArtifactIndexEntry) {
+    const willPin = !pinnedArtifactIds.includes(artifact.id)
+    setPinnedArtifactsBySite((current) => {
+      const sitePins = current[index.site.id] ?? []
+      const nextPins = willPin
+        ? [...sitePins, artifact.id]
+        : sitePins.filter((id) => id !== artifact.id)
+      return { ...current, [index.site.id]: nextPins }
+    })
+    showToast(willPin ? `Pinned ${artifact.title}.` : `Unpinned ${artifact.title}.`)
+  }
+
   function openArtifact(artifact: ArtifactIndexEntry) {
     navigateWithinWorkspace(artifactRouteHref(index.site.id, artifact.path))
     setActivePanel(null)
@@ -325,7 +346,8 @@ export function ArtifactWorkspace({
         themeMode={themeMode}
         onSetThemeMode={onSetThemeMode}
         onCollapse={() => updateSidebarOpen(false, true)}
-        onPinnedIdsChange={setPinnedArtifactIds}
+        pinnedArtifactIds={pinnedArtifactIds}
+        onTogglePin={toggleArtifactPin}
         filterResetKey={sidebarFilterResetKey}
         treeStyle={sidebarTreeStyle}
       />
@@ -405,6 +427,21 @@ export function ArtifactWorkspace({
                 >
                   <Icon name="home" size={14} />
                   <span>{index.site.title} home</span>
+                </button>
+              ) : null}
+              {currentArtifact ? (
+                <button
+                  className={`context-button current-artifact-pin-button${pinnedArtifactIds.includes(currentArtifact.id) ? ' is-active' : ''}`}
+                  type="button"
+                  aria-label={`${pinnedArtifactIds.includes(currentArtifact.id) ? 'Unpin' : 'Pin'} ${currentArtifact.title}`}
+                  aria-pressed={pinnedArtifactIds.includes(currentArtifact.id)}
+                  title={pinnedArtifactIds.includes(currentArtifact.id)
+                    ? `Unpin ${currentArtifact.title}`
+                    : `Pin ${currentArtifact.title} for later`}
+                  onClick={() => toggleArtifactPin(currentArtifact)}
+                >
+                  <Icon name="pin" size={14} />
+                  <span>{pinnedArtifactIds.includes(currentArtifact.id) ? 'Pinned' : 'Pin'}</span>
                 </button>
               ) : null}
               <button
@@ -559,6 +596,23 @@ export function ArtifactWorkspace({
 
 function findArtifact(index: SiteIndex, path: string) {
   return index.artifacts.find((artifact) => artifact.path === path || artifact.id === path)
+}
+
+const PINNED_STORAGE_KEY = 'git-artifact-pages:pinned-artifacts:v1'
+
+function readPinnedArtifacts(): Record<string, string[]> {
+  try {
+    const value = window.localStorage.getItem(PINNED_STORAGE_KEY)
+    if (!value) return {}
+    const parsed: unknown = JSON.parse(value)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    return Object.fromEntries(Object.entries(parsed).flatMap(([siteId, ids]) => {
+      if (!Array.isArray(ids)) return []
+      return [[siteId, ids.filter((id): id is string => typeof id === 'string')]]
+    }))
+  } catch {
+    return {}
+  }
 }
 
 function ArtifactDetails({ artifact }: { artifact: ArtifactIndexEntry }) {

@@ -9,8 +9,6 @@ import { ArtifactTree, type TreeStyle } from './ArtifactTree'
 import { Icon } from './Icon'
 import { ThemeSwitcher } from './ThemeSwitcher'
 
-const EMPTY_PINNED_IDS: string[] = []
-
 export function Sidebar({
   id,
   index,
@@ -25,7 +23,8 @@ export function Sidebar({
   themeMode,
   onSetThemeMode,
   onCollapse,
-  onPinnedIdsChange,
+  pinnedArtifactIds,
+  onTogglePin,
   filterResetKey,
   treeStyle = 'branch-guides',
 }: {
@@ -42,12 +41,12 @@ export function Sidebar({
   themeMode: ThemeMode
   onSetThemeMode: (mode: ThemeMode) => void
   onCollapse: () => void
-  onPinnedIdsChange?: (ids: string[]) => void
+  pinnedArtifactIds: string[]
+  onTogglePin: (artifact: ArtifactIndexEntry) => void
   filterResetKey?: number
   treeStyle?: TreeStyle
 }) {
   const [query, setQuery] = useState('')
-  const [pinnedBySite, setPinnedBySite] = useState<Record<string, string[]>>(readPinnedArtifacts)
   const sidebarRef = useRef<HTMLElement>(null)
   const lastRevealedRequest = useRef<number | null>(null)
   const normalizedQuery = query.trim().toLocaleLowerCase()
@@ -60,40 +59,15 @@ export function Sidebar({
       : [],
     [index.artifacts, showRecentSection],
   )
-  const pinnedIds = pinnedBySite[index.site.id] ?? EMPTY_PINNED_IDS
   const pinned = useMemo(() => {
     const artifactsById = new Map(index.artifacts.map((artifact) => [artifact.id, artifact]))
-    return pinnedIds.map((id) => artifactsById.get(id)).filter((artifact): artifact is ArtifactIndexEntry => artifact !== undefined)
-  }, [index.artifacts, pinnedIds])
+    return pinnedArtifactIds.map((id) => artifactsById.get(id)).filter((artifact): artifact is ArtifactIndexEntry => artifact !== undefined)
+  }, [index.artifacts, pinnedArtifactIds])
   const matchCount = index.artifacts.filter((artifact) => matches(artifact, normalizedQuery)).length
-
-  useEffect(() => {
-    onPinnedIdsChange?.(pinnedIds)
-  }, [onPinnedIdsChange, pinnedIds])
 
   useEffect(() => {
     setQuery('')
   }, [artifactPath, filterResetKey])
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(PINNED_STORAGE_KEY, JSON.stringify(pinnedBySite))
-    } catch {
-      // Pinning remains available for this session if browser storage is disabled.
-    }
-  }, [pinnedBySite])
-
-  function togglePin(artifact: ArtifactIndexEntry) {
-    const willPin = !pinnedIds.includes(artifact.id)
-    setPinnedBySite((current) => {
-      const sitePins = current[index.site.id] ?? []
-      const nextPins = willPin
-        ? [...sitePins, artifact.id]
-        : sitePins.filter((id) => id !== artifact.id)
-      return { ...current, [index.site.id]: nextPins }
-    })
-    onToast(willPin ? `Pinned ${artifact.title}.` : `Unpinned ${artifact.title}.`)
-  }
 
   async function copyArtifactLink(artifact: ArtifactIndexEntry) {
     const href = new URL(artifactRouteHref(index.site.id, artifact.path), window.location.origin).href
@@ -112,11 +86,11 @@ export function Sidebar({
   function getArtifactActions(artifact: ArtifactIndexEntry): ArtifactRowActions {
     const sourceLinks = artifactSourceLinks(artifact)
     return {
-      pinned: pinnedIds.includes(artifact.id),
+      pinned: pinnedArtifactIds.includes(artifact.id),
       sourceUrl: sourceLinks.sourceUrl,
       historyUrl: sourceLinks.historyUrl,
       rawUrl: safeRawArtifactUrl(artifact.artifactUrl),
-      onTogglePin: () => togglePin(artifact),
+      onTogglePin: () => onTogglePin(artifact),
       onCopyLink: () => void copyArtifactLink(artifact),
     }
   }
@@ -320,23 +294,6 @@ export function Sidebar({
       </footer>
     </aside>
   )
-}
-
-const PINNED_STORAGE_KEY = 'git-artifact-pages:pinned-artifacts:v1'
-
-function readPinnedArtifacts(): Record<string, string[]> {
-  try {
-    const value = window.localStorage.getItem(PINNED_STORAGE_KEY)
-    if (!value) return {}
-    const parsed: unknown = JSON.parse(value)
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
-    return Object.fromEntries(Object.entries(parsed).flatMap(([siteId, ids]) => {
-      if (!Array.isArray(ids)) return []
-      return [[siteId, ids.filter((id): id is string => typeof id === 'string')]]
-    }))
-  } catch {
-    return {}
-  }
 }
 
 function safeRawArtifactUrl(value: string) {

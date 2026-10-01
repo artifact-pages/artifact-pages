@@ -1,6 +1,6 @@
 # 閲覧中の文書をピン留めする入口が見つけにくい
 
-- Status: Open
+- Status: Done
 - Priority: P2
 - Area: Artifact reading / Pin discovery
 
@@ -25,6 +25,10 @@
 
 ## Acceptance criteria
 
-- [ ] ピン0件・文書閲覧中に、ピン留めの入口を画面上の手がかりから発見できる。
-- [ ] サイドバーを閉じた状態でも現在の文書のピン操作へ辿れる。
-- [ ] ピン済み状態と解除方法が明確で、既存の保持動作を損なわない。
+- [x] ピン0件・文書閲覧中に、ピン留めの入口を画面上の手がかりから発見できる。
+- [x] サイドバーを閉じた状態でも現在の文書のピン操作へ辿れる。
+- [x] ピン済み状態と解除方法が明確で、既存の保持動作を損なわない。
+
+## Verification
+
+2026-10-01: npm run build and git diff --check passed. New collapsed-sidebar/mobile current-page pin persistence regression and existing sidebar artifact-action regression passed at port 4174. A separate gpt-6-luna max reviewer independently ran both cases and a one-off preloaded per-site hydration/SRE→Frontend→SRE check, verifying Frontend unpin preserves SRE pins; no findings. The reviewer confirmed the existing localStorage map/key is retained and no artifact writes occur. Codex in-app browser at port 4179 verified header Pin/Pinned with collapsed navigation, pin persistence after reload, unpin, and restoration of the original unpinned state; owned temporary tab was closed. Sidebar has no standalone production/story caller requiring migration.

@@ -832,6 +832,46 @@ test('artifact actions pin locally without changing selection or Browse, and exp
   await expect(page).toHaveURL(/\/sre\/architecture\/platform-topology\/index\.html$/)
 })
 
+test('the current page pin control stays discoverable with the sidebar closed and preserves pin state', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/sre/architecture/platform-topology/index.html')
+
+  await expect(page.locator('.sidebar-panel')).toBeHidden()
+  await expect.poll(() => page.evaluate(() => {
+    const value = window.localStorage.getItem('git-artifact-pages:pinned-artifacts:v1')
+    return value ? JSON.parse(value) : {}
+  })).toEqual({})
+
+  const pinButton = page.getByRole('button', { name: 'Pin Platform topology' })
+  await expect(pinButton).toBeVisible()
+  await expect(pinButton).toContainText('Pin')
+  await expect(pinButton).toHaveAttribute('aria-pressed', 'false')
+  await pinButton.click()
+
+  const unpinButton = page.getByRole('button', { name: 'Unpin Platform topology' })
+  await expect(unpinButton).toBeVisible()
+  await expect(unpinButton).toContainText('Pinned')
+  await expect(unpinButton).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('status')).toHaveText('Pinned Platform topology.')
+  await expect.poll(() => page.evaluate(() => JSON.parse(
+    window.localStorage.getItem('git-artifact-pages:pinned-artifacts:v1') ?? '{}',
+  ))).toEqual({ sre: ['architecture/platform-topology/index.html'] })
+
+  await page.reload()
+  await expect(page.locator('.sidebar-panel')).toBeHidden()
+  const persistedUnpinButton = page.getByRole('button', { name: 'Unpin Platform topology' })
+  await expect(persistedUnpinButton).toBeVisible()
+  await expect(persistedUnpinButton).toHaveAttribute('aria-pressed', 'true')
+  await persistedUnpinButton.click()
+
+  const restoredPinButton = page.getByRole('button', { name: 'Pin Platform topology' })
+  await expect(restoredPinButton).toBeVisible()
+  await expect(restoredPinButton).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.getByRole('status')).toHaveText('Unpinned Platform topology.')
+  await page.reload()
+  await expect(page.getByRole('button', { name: 'Pin Platform topology' })).toHaveAttribute('aria-pressed', 'false')
+})
+
 test('the command palette supports Ctrl+J/K navigation and opens the selected result', async ({ page }) => {
   await page.goto('/sre')
   await page.getByRole('button', { name: 'Search pages in SRE' }).click()
