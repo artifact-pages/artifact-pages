@@ -411,6 +411,7 @@ export function ArtifactWorkspace({
             {route.artifactPath ? (
               <ArtifactBreadcrumbs
                 artifactPath={currentArtifact?.path ?? route.artifactPath}
+                siteTitle={index.site.title}
                 artifacts={index.artifacts}
                 currentArtifact={currentArtifact}
                 onOpenArtifact={openArtifact}

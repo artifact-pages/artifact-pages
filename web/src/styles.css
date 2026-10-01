@@ -992,6 +992,7 @@ mark {
 }
 
 .breadcrumb-current {
+  cursor: default;
   color: var(--text);
   font-family: inherit;
   font-size: 12px;

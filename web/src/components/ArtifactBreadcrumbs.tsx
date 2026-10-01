@@ -9,16 +9,20 @@ type BreadcrumbMenuState = {
   isDirectory: boolean
 }
 
+const ROOT_KEY = 'root'
+
 type MenuPosition = { top: number; left: number }
 
 export function ArtifactBreadcrumbs({
   artifactPath,
+  siteTitle,
   artifacts,
   currentArtifact,
   onOpenArtifact,
   onRevealInSidebar,
 }: {
   artifactPath: string
+  siteTitle: string
   artifacts: ArtifactIndexEntry[]
   currentArtifact?: ArtifactIndexEntry
   onOpenArtifact: (artifact: ArtifactIndexEntry) => void
@@ -26,9 +30,9 @@ export function ArtifactBreadcrumbs({
 }) {
   const navRef = useRef<HTMLElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
-  const currentTriggerRef = useRef<HTMLButtonElement>(null)
+  const currentLabelRef = useRef<HTMLSpanElement>(null)
+  const pendingFocusKey = useRef<string | null>(null)
   const triggerRefs = useRef(new Map<string, HTMLButtonElement>())
-  const focusCurrentAfterNavigation = useRef(false)
   const [openMenu, setOpenMenu] = useState<BreadcrumbMenuState | null>(null)
   const [position, setPosition] = useState<MenuPosition>({ top: 0, left: 0 })
   const menuId = useId()
@@ -98,9 +102,11 @@ export function ArtifactBreadcrumbs({
   }, [artifactPath])
 
   useLayoutEffect(() => {
-    if (!focusCurrentAfterNavigation.current) return
-    focusCurrentAfterNavigation.current = false
-    currentTriggerRef.current?.focus({ preventScroll: true })
+    const key = pendingFocusKey.current
+    if (!key) return
+    pendingFocusKey.current = null
+    const target = triggerRefs.current.get(key) ?? currentLabelRef.current
+    target?.focus({ preventScroll: true })
   }, [artifactPath])
 
   function closeMenu(restoreFocus = false) {
@@ -123,9 +129,12 @@ export function ArtifactBreadcrumbs({
 
   function chooseArtifact(artifact: ArtifactIndexEntry) {
     const current = isCurrentArtifact(artifact, currentArtifact, artifactPath)
-    closeMenu(current)
-    if (current) return
-    focusCurrentAfterNavigation.current = true
+    if (current) {
+      closeMenu(true)
+      return
+    }
+    pendingFocusKey.current = openMenu?.key ?? null
+    closeMenu()
     onOpenArtifact(artifact)
   }
 
@@ -152,38 +161,65 @@ export function ArtifactBreadcrumbs({
   return (
     <>
       <nav ref={navRef} className="breadcrumbs" aria-label="Artifact path">
+        {segments.length === 1 ? (
+          <span className={`breadcrumb-part${openMenu?.key === ROOT_KEY ? ' is-open' : ''}`}>
+            <button
+              ref={(element) => {
+                if (element) triggerRefs.current.set(ROOT_KEY, element)
+                else triggerRefs.current.delete(ROOT_KEY)
+              }}
+              type="button"
+              className="breadcrumb-trigger"
+              aria-label={`Browse artifacts in ${siteTitle}`}
+              aria-haspopup="menu"
+              aria-expanded={openMenu?.key === ROOT_KEY}
+              aria-controls={openMenu?.key === ROOT_KEY ? menuId : undefined}
+              title={siteTitle}
+              onClick={() => toggleMenu(ROOT_KEY, '', true)}
+            >
+              <span className="breadcrumb-trigger-label">{siteTitle}</span>
+              <Icon name="chevron" size={10} />
+            </button>
+          </span>
+        ) : null}
         {segments.map((segment, segmentIndex) => {
           const isDirectory = segmentIndex < segments.length - 1
           const path = segments.slice(0, segmentIndex + 1).join('/')
           const key = `${isDirectory ? 'folder' : 'artifact'}:${path}`
-          const isCurrent = !isDirectory
-          const label = isCurrent && currentArtifact ? currentArtifact.title : segment
-          const ariaLabel = isCurrent
-            ? `Open sibling artifacts for ${currentArtifact?.title ?? segment}`
-            : `Browse artifacts in ${path}`
+          const label = isDirectory ? segment : currentArtifact?.title ?? segment
 
           return (
             <span className={`breadcrumb-part${openMenu?.key === key ? ' is-open' : ''}`} key={key}>
-              {segmentIndex > 0 ? <span className="breadcrumb-separator" aria-hidden="true">/</span> : null}
-              <button
-                ref={(element) => {
-                  if (element) triggerRefs.current.set(key, element)
-                  else triggerRefs.current.delete(key)
-                  if (isCurrent) currentTriggerRef.current = element
-                }}
-                type="button"
-                className={`breadcrumb-trigger${isCurrent ? ' breadcrumb-current' : ''}`}
-                aria-current={isCurrent ? 'page' : undefined}
-                aria-label={ariaLabel}
-                aria-haspopup="menu"
-                aria-expanded={openMenu?.key === key}
-                aria-controls={openMenu?.key === key ? menuId : undefined}
-                title={isCurrent && currentArtifact ? currentArtifact.path : path}
-                onClick={() => toggleMenu(key, path, isDirectory)}
-              >
-                <span className="breadcrumb-trigger-label">{label}</span>
-                <Icon name="chevron" size={10} />
-              </button>
+              {segmentIndex > 0 || segments.length === 1 ? <span className="breadcrumb-separator" aria-hidden="true">/</span> : null}
+              {isDirectory ? (
+                <button
+                  ref={(element) => {
+                    if (element) triggerRefs.current.set(key, element)
+                    else triggerRefs.current.delete(key)
+                  }}
+                  type="button"
+                  className="breadcrumb-trigger"
+                  aria-label={`Browse artifacts in ${path}`}
+                  aria-haspopup="menu"
+                  aria-expanded={openMenu?.key === key}
+                  aria-controls={openMenu?.key === key ? menuId : undefined}
+                  title={path}
+                  onClick={() => toggleMenu(key, path, true)}
+                >
+                  <span className="breadcrumb-trigger-label">{label}</span>
+                  <Icon name="chevron" size={10} />
+                </button>
+              ) : (
+                <span
+                  ref={currentLabelRef}
+                  tabIndex={-1}
+                  className="breadcrumb-trigger breadcrumb-current"
+                  aria-current="page"
+                  title={currentArtifact?.path ?? path}
+                >
+                  <span className="breadcrumb-trigger-label">{label}</span>
+                </span>
+              )}
             </span>
           )
         })}
@@ -196,11 +232,11 @@ export function ArtifactBreadcrumbs({
           className="breadcrumb-popover"
           style={{ top: position.top, left: position.left }}
           role="menu"
-          aria-label={openMenu.isDirectory ? `Artifacts in ${openMenu.path}` : `Artifacts beside ${currentArtifact?.title ?? openMenu.path}`}
+          aria-label={`Artifacts in ${openMenu.path || siteTitle}`}
           onKeyDown={handleMenuKeyDown}
         >
           <div className="breadcrumb-popover-heading">
-            <span>{openMenu.path}</span>
+            <span>{openMenu.path || siteTitle}</span>
             <small>{menuArtifacts.length} {menuArtifacts.length === 1 ? 'artifact' : 'artifacts'}</small>
           </div>
           <div className="breadcrumb-menu-list">
@@ -251,6 +287,10 @@ export function ArtifactBreadcrumbs({
 }
 
 function getNearbyArtifacts(artifacts: ArtifactIndexEntry[], path: string, isDirectory: boolean) {
+  if (isDirectory && !path) {
+    // Site root: the artifacts that sit directly at the top level.
+    return artifacts.filter((artifact) => !artifact.path.includes('/')).sort(compareArtifacts)
+  }
   if (isDirectory) {
     const prefix = `${path}/`
     return artifacts
@@ -277,6 +317,6 @@ function isCurrentArtifact(
 }
 
 function menuPathLabel(artifact: ArtifactIndexEntry, menuPath: string, isDirectory: boolean) {
-  if (isDirectory) return artifact.path.slice(`${menuPath}/`.length)
+  if (isDirectory && menuPath) return artifact.path.slice(`${menuPath}/`.length)
   return artifact.path.split('/').at(-1) ?? artifact.filename ?? artifact.path
 }

@@ -2372,7 +2372,7 @@ test('HTML showcase covers distinct page styles in the artifact iframe', async (
   await expect(dashboard.locator('body')).toHaveCSS('background-color', 'rgb(11, 17, 24)')
 })
 
-test('artifact breadcrumb menus show nearby files and keep sidebar reveal available', async ({ page }) => {
+test('folder breadcrumb menus list their contents, the current page is a plain label, and sidebar reveal stays available', async ({ page }) => {
   await page.goto('/showcase/reports/cloud-spend-review/index.html')
 
   const breadcrumb = page.getByRole('navigation', { name: 'Artifact path' })
@@ -2392,19 +2392,92 @@ test('artifact breadcrumb menus show nearby files and keep sidebar reveal availa
   await expect(artifact).toHaveAttribute('aria-current', 'page')
   await expect(artifact).toBeInViewport()
 
-  const fileTrigger = breadcrumb.getByRole('button', { name: /Open sibling artifacts for Cloud spend review/ })
-  await fileTrigger.click()
-  menu = page.getByRole('menu', { name: /Artifacts beside Cloud spend review/ })
+  const currentLabel = breadcrumb.locator('.breadcrumb-current')
+  await expect(currentLabel).toHaveText('Cloud spend review · Q3')
+  await expect(currentLabel).toHaveAttribute('aria-current', 'page')
+  await expect(breadcrumb.getByRole('button', { name: /Open sibling artifacts/ })).toHaveCount(0)
+
+  // Nested folder segments each have their own menu; Escape then one click on another opens it.
+  const folderTrigger = breadcrumb.getByRole('button', { name: 'Browse artifacts in reports/cloud-spend-review', exact: true })
+  const topTrigger = breadcrumb.getByRole('button', { name: 'Browse artifacts in reports', exact: true })
+  await folderTrigger.click()
+  menu = page.getByRole('menu', { name: 'Artifacts in reports/cloud-spend-review', exact: true })
   await expect(menu.getByRole('menuitem', { name: /Cloud spend review.*current artifact/ })).toHaveAttribute('aria-current', 'page')
   await page.keyboard.press('Escape')
   await expect(menu).toHaveCount(0)
-  await expect(fileTrigger).toBeFocused()
+  await expect(folderTrigger).toBeFocused()
 
-  await fileTrigger.click()
-  menu = page.getByRole('menu', { name: /Artifacts beside Cloud spend review/ })
-  await menu.getByRole('menuitem', { name: /Cloud spend review.*current artifact/ }).click()
+  // Escape on one menu, then a single click on a different trigger must open it.
+  await topTrigger.click()
+  await expect(page.getByRole('menu', { name: 'Artifacts in reports', exact: true })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('menu')).toHaveCount(0)
+  await folderTrigger.click()
+  await expect(page.getByRole('menu', { name: 'Artifacts in reports/cloud-spend-review', exact: true })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('menu')).toHaveCount(0)
+  await topTrigger.focus()
+  await page.keyboard.press('Enter')
+  menu = page.getByRole('menu', { name: 'Artifacts in reports', exact: true })
+  await expect(menu).toBeVisible()
+  await menu.getByRole('menuitem', { name: /Cloud spend review.*current artifact/ }).press('Enter')
   await expect(menu).toHaveCount(0)
-  await expect(fileTrigger).toBeFocused()
+  await expect(topTrigger).toBeFocused()
+})
+
+async function routeShowcaseExtras(page: import('@playwright/test').Page, paths: string[]) {
+  await page.route('**/_indexes/showcase/index.json', async (route) => {
+    const response = await route.fetch()
+    const siteIndex = await response.json()
+    const base = siteIndex.artifacts.find((artifact: { path: string }) => (
+      artifact.path === 'reports/cloud-spend-review/index.html'
+    ))
+    for (const path of paths) {
+      const filename = path.split('/').at(-1)!
+      siteIndex.artifacts.push({
+        ...base,
+        id: path,
+        title: filename.replace('.html', ''),
+        path,
+        filename,
+      })
+    }
+    await route.fulfill({ response, body: JSON.stringify(siteIndex) })
+  })
+}
+
+test('choosing a breadcrumb menu item across subfolders keeps focus on the breadcrumb, not the body', async ({ page }) => {
+  await routeShowcaseExtras(page, ['reports/cloud-spend-review/appendix/notes.html'])
+  await page.goto('/showcase/reports/cloud-spend-review/index.html')
+  const breadcrumb = page.getByRole('navigation', { name: 'Artifact path' })
+  const trigger = breadcrumb.getByRole('button', { name: 'Browse artifacts in reports/cloud-spend-review', exact: true })
+  await trigger.click()
+  await page.getByRole('menu', { name: 'Artifacts in reports/cloud-spend-review', exact: true })
+    .getByRole('menuitem', { name: /notes/ }).click()
+  await expect(page).toHaveURL(/\/showcase\/reports\/cloud-spend-review\/appendix\/notes\.html$/)
+  await expect(breadcrumb.locator('.breadcrumb-current')).toHaveText('notes')
+  await expect.poll(() => page.evaluate(() => document.activeElement === document.body)).toBe(false)
+  await expect(breadcrumb.locator('[aria-haspopup]')).toHaveCount(3)
+  await expect(breadcrumb.locator('.breadcrumb-current[aria-haspopup]')).toHaveCount(0)
+  await expect(breadcrumb.locator(':focus')).toHaveCount(1)
+})
+
+test('a root-level artifact gets a site-root breadcrumb menu', async ({ page }) => {
+  await routeShowcaseExtras(page, ['welcome.html', 'second.html'])
+  await page.goto('/showcase/welcome.html')
+  const breadcrumb = page.getByRole('navigation', { name: 'Artifact path' })
+  await expect(breadcrumb.locator('.breadcrumb-current')).toHaveText('welcome')
+  await expect(breadcrumb.locator('.breadcrumb-current[aria-haspopup]')).toHaveCount(0)
+
+  const rootTrigger = breadcrumb.getByRole('button', { name: 'Browse artifacts in HTML Showcase', exact: true })
+  await rootTrigger.click()
+  const menu = page.getByRole('menu', { name: 'Artifacts in HTML Showcase', exact: true })
+  await expect(menu.getByRole('menuitem', { name: /welcome.*current artifact/ })).toHaveAttribute('aria-current', 'page')
+  await expect(menu.getByRole('menuitem', { name: /second/ })).toBeVisible()
+  await expect(menu.getByRole('menuitem', { name: /Cloud spend review/ })).toHaveCount(0)
+  await menu.getByRole('menuitem', { name: /second/ }).click()
+  await expect(page).toHaveURL(/\/showcase\/second\.html$/)
+  await expect(rootTrigger).toBeFocused()
 })
 
 test('breadcrumb menus close after browser history navigates to another artifact', async ({ page }) => {
@@ -2426,8 +2499,8 @@ test('breadcrumb menus close after browser history navigates to another artifact
   await expect(page).toHaveURL(/\/showcase\/reports\/cloud-spend-review\/index\.html$/)
 
   const breadcrumb = page.getByRole('navigation', { name: 'Artifact path' })
-  await breadcrumb.getByRole('button', { name: /Open sibling artifacts for Cloud spend review/ }).click()
-  const menu = page.getByRole('menu', { name: /Artifacts beside Cloud spend review/ })
+  await breadcrumb.getByRole('button', { name: 'Browse artifacts in reports/cloud-spend-review', exact: true }).click()
+  const menu = page.getByRole('menu', { name: 'Artifacts in reports/cloud-spend-review', exact: true })
   await expect(menu).toBeVisible()
 
   await page.goForward()
@@ -2484,10 +2557,10 @@ test('breadcrumb sibling menus stay within narrow screens and scroll long lists'
 
   await page.goto('/showcase/reports/cloud-spend-review/index.html')
   const breadcrumb = page.getByRole('navigation', { name: 'Artifact path' })
-  const currentFile = breadcrumb.getByRole('button', { name: /Open sibling artifacts for Cloud spend review/ })
+  const currentFile = breadcrumb.getByRole('button', { name: 'Browse artifacts in reports/cloud-spend-review', exact: true })
   await currentFile.tap()
 
-  const menu = page.getByRole('menu', { name: /Artifacts beside Cloud spend review/ })
+  const menu = page.getByRole('menu', { name: 'Artifacts in reports/cloud-spend-review', exact: true })
   const menuList = menu.locator('.breadcrumb-menu-list')
   await expect(menuList.getByRole('menuitem')).toHaveCount(29)
   const viewport = page.viewportSize()!
@@ -2508,18 +2581,18 @@ test('breadcrumb sibling menus stay within narrow screens and scroll long lists'
   await page.goBack()
   await expect(page).toHaveURL(/\/showcase\/reports\/cloud-spend-review\/index\.html$/)
   await currentFile.click()
-  await page.getByRole('menu', { name: /Artifacts beside Cloud spend review/ })
+  await page.getByRole('menu', { name: 'Artifacts in reports/cloud-spend-review', exact: true })
     .getByRole('menuitem', { name: /Follow-up 01/ }).click()
   await expect(page).toHaveURL(/\/showcase\/reports\/cloud-spend-review\/follow-up-01\.html$/)
 
   await page.goBack()
   await expect(page).toHaveURL(/\/showcase\/reports\/cloud-spend-review\/index\.html$/)
   await currentFile.tap()
-  const reopenedMenu = page.getByRole('menu', { name: /Artifacts beside Cloud spend review/ })
+  const reopenedMenu = page.getByRole('menu', { name: 'Artifacts in reports/cloud-spend-review', exact: true })
   await reopenedMenu.getByRole('menuitem', { name: /Follow-up 28/ }).tap()
   await expect(page).toHaveURL(/\/showcase\/reports\/cloud-spend-review\/follow-up-28\.html$/)
   await expect(reopenedMenu).toHaveCount(0)
-  await expect(page.getByRole('navigation', { name: 'Artifact path' }).getByRole('button', { name: /Open sibling artifacts for Follow-up 28/ })).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Artifact path' }).locator('.breadcrumb-current')).toHaveText('Follow-up 28')
   await page.close()
 })
 
