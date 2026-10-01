@@ -3464,6 +3464,12 @@ test('preview PR context disappears when its catalog group advances or is remove
   await expect(page.getByRole('link', { name: 'Return to PR #43 ↗' })).toHaveAttribute('href', 'https://github.com/acme/sre-docs/pull/43')
 })
 
+// The reader injects preview-bridge.js after the frame loads and marks the script "ready" once it has executed;
+// clicking earlier would fall through to native frame navigation instead of the bridge.
+async function waitForPreviewBridge(page: Page) {
+  await expect(page.frameLocator('iframe[title="Local preview HTML"]').locator('script[data-preview-reader-bridge="ready"]')).toHaveCount(1)
+}
+
 test('preview HTML keeps changed-document navigation in the preview and unchanged documents in production', async ({ page }) => {
   const externalResourcePaths = new Set<string>()
   let insecureResourceReached = false
@@ -3588,23 +3594,27 @@ test('preview HTML keeps changed-document navigation in the preview and unchange
     localStorage.removeItem('issue026-preview-storage')
   })
 
+  await waitForPreviewBridge(page)
   await frame.getByRole('link', { name: 'Open the changed Markdown document with query and fragment' }).click()
   await expect(page).toHaveURL(`/sre/_previews/${previewHeadSha}/guides/preview-guide.md?group=pr%3A42&tab=summary#local-preview-guide`)
   await expect(page.getByRole('link', { name: 'Return to PR #42 ↗' })).toBeVisible()
 
   await page.goto(`/sre/_previews/${previewHeadSha}/guides/preview.html?group=pr%3A42`)
   const externalFrame = page.frameLocator('iframe[title="Local preview HTML"]')
+  await waitForPreviewBridge(page)
   await externalFrame.getByRole('link', { name: 'Open external HTTPS documentation' }).click()
   await expect(externalFrame.getByRole('heading', { name: 'External guide' })).toBeVisible()
   await expect(page).toHaveURL(`/sre/_previews/${previewHeadSha}/guides/preview.html?group=pr%3A42`)
 
   await page.goto(`/sre/_previews/${previewHeadSha}/guides/preview.html?group=pr%3A42`)
   const changedFrame = page.frameLocator('iframe[title="Local preview HTML"]')
+  await waitForPreviewBridge(page)
   await changedFrame.getByRole('link', { name: 'Open the changed Markdown document', exact: true }).click()
   await expect(page).toHaveURL(new RegExp(`/sre/_previews/${previewHeadSha}/guides/preview-guide\\.md\\?group=pr%3A42$`))
   await expect(page.getByRole('link', { name: 'Return to PR #42 ↗' })).toBeVisible()
 
   await page.goto(`/sre/_previews/${previewHeadSha}/guides/preview.html?group=pr%3A42`)
+  await waitForPreviewBridge(page)
   await page.frameLocator('iframe[title="Local preview HTML"]').getByRole('link', { name: 'Open the published retrospective' }).click()
   await expect(page).toHaveURL('/sre/reports/latency-retrospective.md')
   await expect(page.getByRole('heading', { name: 'Preview' })).toHaveCount(0)
@@ -3682,6 +3692,7 @@ test('preview HTML fragments reach the frame on direct load, same-document links
 
   await page.goto(previewUrl)
   await expect(page.frameLocator('iframe[title="Local preview HTML"]').locator('script[data-preview-reader-bridge]')).toHaveCount(1)
+  await waitForPreviewBridge(page)
   await frame.getByRole('link', { name: 'Jump to deep target' }).click()
   await expect(page).toHaveURL(`${previewUrl}#deep-target`)
   await expect.poll(frameHash).toBe('#deep-target')
@@ -3698,6 +3709,7 @@ test('preview HTML fragments reach the frame on direct load, same-document links
   await expect(deepTarget).toBeInViewport()
 
   await page.goto(previewUrl)
+  await waitForPreviewBridge(page)
   await page.frameLocator('iframe[title="Local preview HTML"]').getByRole('link', { name: 'Jump to missing target' }).click()
   await expect(page).toHaveURL(`${previewUrl}#missing-target`)
   await expect.poll(frameHash).toBe('#missing-target')
@@ -3706,6 +3718,7 @@ test('preview HTML fragments reach the frame on direct load, same-document links
   await expect(iframe).toBeVisible()
 
   await page.goto(previewUrl)
+  await waitForPreviewBridge(page)
   await page.frameLocator('iframe[title="Local preview HTML"]').getByRole('link', { name: 'Open a changed HTML document with fragment' }).click()
   const changedPreviewUrl = `/sre/_previews/${previewHeadSha}/guides/preview-target.html?group=pr%3A42&source=fixture#changed-target`
   await expect(page).toHaveURL(changedPreviewUrl)
@@ -3734,6 +3747,7 @@ test('preview HTML raw resources use native frame navigation and preserve downlo
     const url = new URL(response.url())
     return response.request().method() === 'GET' && url.pathname === `${filesPrefix}/assets/mark.svg` && url.search === '?view=raw'
   }, { timeout: 5000 })
+  await waitForPreviewBridge(page)
   await frame.getByRole('link', { name: 'Open the preview SVG resource' }).click()
   const svgResponse = await svgResponsePromise
   expect(svgResponse.status()).toBe(200)
@@ -3748,6 +3762,7 @@ test('preview HTML raw resources use native frame navigation and preserve downlo
     const url = new URL(response.url())
     return response.request().method() === 'GET' && url.pathname === `${filesPrefix}/assets/guide.pdf`
   })
+  await waitForPreviewBridge(page)
   await page.frameLocator('iframe[title="Local preview HTML"]').getByRole('link', { name: 'Open the preview PDF resource' }).click()
   const pdfResponse = await pdfResponsePromise
   expect(pdfResponse.status()).toBe(200)
@@ -3757,6 +3772,7 @@ test('preview HTML raw resources use native frame navigation and preserve downlo
 
   await page.goto(previewUrl)
   const downloadPromise = page.waitForEvent('download')
+  await waitForPreviewBridge(page)
   await page.frameLocator('iframe[title="Local preview HTML"]').getByRole('link', { name: 'Download the preview SVG resource' }).click()
   const download = await downloadPromise
   expect(download.suggestedFilename()).toBe('preview-mark.svg')
@@ -3765,6 +3781,7 @@ test('preview HTML raw resources use native frame navigation and preserve downlo
 
   await page.goto(previewUrl)
   const targetPopupPromise = page.waitForEvent('popup')
+  await waitForPreviewBridge(page)
   await page.frameLocator('iframe[title="Local preview HTML"]').getByRole('link', { name: 'Open the preview SVG in a new tab' }).click()
   const targetPopup = await targetPopupPromise
   await expect(targetPopup).toHaveURL(`${new URL(parentUrl).origin}${filesPrefix}/assets/mark.svg?target=tab`)
@@ -3773,6 +3790,7 @@ test('preview HTML raw resources use native frame navigation and preserve downlo
   await targetPopup.close()
 
   await page.goto(previewUrl)
+  await waitForPreviewBridge(page)
   await page.frameLocator('iframe[title="Local preview HTML"]').getByRole('link', { name: 'Open the preview SVG with a modifier' }).click({ modifiers: ['ControlOrMeta'] })
   const modifiedResourceUrl = `${new URL(parentUrl).origin}${filesPrefix}/assets/mark.svg?modifier=tab`
   await expect.poll(() => (
@@ -3782,6 +3800,7 @@ test('preview HTML raw resources use native frame navigation and preserve downlo
   expect(page.url()).toBe(parentUrl)
 
   await page.goto(previewUrl)
+  await waitForPreviewBridge(page)
   await page.frameLocator('iframe[title="Local preview HTML"]').getByRole('link', { name: 'Open a logical document outside the preview files' }).click()
   await expect.poll(() => page.frames().some((candidate) => new URL(candidate.url()).pathname === '/sre/reports/latency-retrospective.md')).toBe(true)
   expect(page.url()).toBe(parentUrl)
@@ -3821,6 +3840,7 @@ test('preview HTML uses the actual app origin and survives direct reload on a no
   await expect(page.locator('iframe[title="Local preview HTML"]')).toHaveAttribute('src', `/_previews/sre/revisions/${previewHeadSha}/files/guides/preview.html`)
   await expect(page.frameLocator('iframe[title="Local preview HTML"]').getByRole('heading', { name: 'Local preview HTML' })).toBeVisible()
 
+  await waitForPreviewBridge(page)
   await page.frameLocator('iframe[title="Local preview HTML"]').getByRole('link', { name: 'Open the changed Markdown document' }).click()
   await expect(page).toHaveURL(`${appOrigin.origin}/sre/_previews/${previewHeadSha}/guides/preview-guide.md?group=pr%3A42`)
 })

@@ -229,6 +229,7 @@ function PreviewHtmlDocument({
             bridge.src = new URL('/preview-bridge.js', window.location.origin).href
             bridge.dataset.previewReaderBridge = 'true'
             bridge.referrerPolicy = 'strict-origin'
+            bridge.addEventListener('load', () => { bridge.dataset.previewReaderBridge = 'ready' })
             frameDocument.body?.append(bridge)
           }).catch(() => {
             if (!controller.signal.aborted) setLoadState('failed')
