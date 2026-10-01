@@ -25,6 +25,10 @@ For lifecycle verification, the owner prefers hours rather than the 30-day sampl
 
 ## Evidence
 
+### Scoped R2 publisher credentials — October 2, 2026 (JST)
+
+The owner approved 15-minute temporary identities without changing parent permissions. The [scoped-credential proof](../cloudflare-scoped-credentials-proof.md) records native read/write denials and successful production/preview CLI publication using a registry-only reader and a site-only writer. Same-head retry returned `no-op`. The disposable site was removed, its three content prefixes are empty, and the registry returned byte-for-byte to its baseline. This closes the sampled Cloudflare delegated-credential gap, not OIDC, AWS retained-history delete restrictions, lifecycle timing or comprehensive identity isolation. The writer needs the exact site cache-retry key in addition to its site lock; the older T12 scope example omits it.
+
 ### Disposable Cloudflare site — October 1, 2026 (JST)
 
 The owner explicitly authorized the disposable `release-smoke` register/publish/preview/unregister sequence. Every normal CLI mutation was preceded by its dry-run. Whole-registry reconciliation retained the existing `guide` registration. The test source was an ignored, synthetic local Git repository with the registered repository remote and `docs` source path; nothing was pushed to GitHub. This proves the current CLI/provider/static-reader flow, not authentic GitHub PR provenance, independent released-package adoption, or satellite credential isolation.
