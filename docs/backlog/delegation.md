@@ -47,4 +47,6 @@ The owner selected the [public domain and provider delivery policy](../architect
 
 ## Cloudflare adoption sequence
 
+Use the [Cloudflare-first release execution map](release-readiness.md) for the current ordered gates and narrow owner handoffs. It links the existing tracks rather than introducing a second set of tickets.
+
 Current review repairs continue independently. The next adoption path is IMP-37 local preparation → T15 Cloudflare plan/apply and delivery proof → IMP-38 authorized Registry publication → T16 clean-consumer adoption. IMP-38 package preparation can run alongside IMP-37/T15, but its public release waits for the advertised provider's proof. Web-app packaging/release, site registration, and site-content publication retain their own existing gates; publishing a Terraform module does not deploy the application or publish documentation automatically.
