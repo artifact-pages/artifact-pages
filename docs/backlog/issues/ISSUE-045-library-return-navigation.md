@@ -1,6 +1,6 @@
 # サイト内からライブラリへ戻る導線が見つけにくい
 
-- Status: Open
+- Status: Done
 - Priority: P2
 - Area: Site navigation / Library return
 
@@ -25,6 +25,10 @@
 
 ## Acceptance criteria
 
-- [ ] サイトホームと文書閲覧画面から、ライブラリへ戻る操作を発見して実行できる。
-- [ ] サイトホームへの移動と全サイト一覧への移動の違いが分かる。
-- [ ] サイドバーを閉じた状態・390px幅でも同じ移動先へ辿れる。
+- [x] サイトホームと文書閲覧画面から、ライブラリへ戻る操作を発見して実行できる。
+- [x] サイトホームへの移動と全サイト一覧への移動の違いが分かる。
+- [x] サイドバーを閉じた状態・390px幅でも同じ移動先へ辿れる。
+
+## Verification
+
+2026-10-01: npm run build, focused library-return regression, and git diff --check passed. The regression verifies site-home and artifact deep-link return to / at 390px with navigation closed. Codex in-app browser at port 4179 verified Guide document and site-home controls reach Choose a site; owned temporary tab closed. A separate gpt-6-luna max reviewer independently ran the new case plus root-catalog, single-site @ Enter, multi-site switcher, and current-page pin cases, and a one-off 390px Tab/Enter library return check; all passed, no material findings. Desktop labels distinguish All sites from site home; narrow controls retain explicit accessible names.

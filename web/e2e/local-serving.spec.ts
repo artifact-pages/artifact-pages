@@ -2512,6 +2512,25 @@ test('artifact title and site home navigation stay clear on narrow screens', asy
   await expect(page.getByRole('heading', { name: 'SRE' })).toBeVisible()
 })
 
+test('all-sites navigation is available from site home and documents with the sidebar closed on narrow screens', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+
+  for (const path of ['/sre', '/sre/reports/latency-retrospective.md']) {
+    await page.goto(path)
+    await expect(page.locator('.sidebar-panel')).toBeHidden()
+
+    const allSitesButton = page.getByRole('button', { name: 'Go to all sites' })
+    await expect(allSitesButton).toBeVisible()
+    if (path !== '/sre') {
+      await expect(page.getByRole('button', { name: 'Go to SRE home' })).toBeVisible()
+    }
+
+    await allSitesButton.click()
+    await expect(page).toHaveURL('/')
+    await expect(page.getByRole('heading', { name: 'Choose a site' })).toBeVisible()
+  }
+})
+
 test('unknown sites show a clear not-found state and safe recovery action', async ({ page }) => {
   await page.goto('/unknown-site')
 

@@ -417,6 +417,16 @@ export function ArtifactWorkspace({
             ) : null}
 
             <div className="context-actions">
+              <button
+                className="context-button context-library-button"
+                type="button"
+                aria-label="Go to all sites"
+                title="All sites"
+                onClick={() => navigateWithinWorkspace('/')}
+              >
+                <Icon name="library" size={14} />
+                <span>All sites</span>
+              </button>
               {currentArtifact ? (
                 <button
                   className="context-button context-home-button"

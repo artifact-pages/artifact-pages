@@ -1,5 +1,6 @@
 type IconName =
   | 'home'
+  | 'library'
   | 'sidebar'
   | 'search'
   | 'chevron'
@@ -36,6 +37,8 @@ export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
   switch (name) {
     case 'home':
       return <svg {...common}><path d="m2 7 6-4.8L14 7" /><path d="M3.8 6.3v6.9h8.4V6.3M6.3 13.2V9h3.4v4.2" /></svg>
+    case 'library':
+      return <svg {...common}><rect x="2" y="2" width="4.7" height="5.2" rx="1" /><rect x="9.3" y="2" width="4.7" height="5.2" rx="1" /><rect x="2" y="9" width="4.7" height="5" rx="1" /><rect x="9.3" y="9" width="4.7" height="5" rx="1" /></svg>
     case 'sidebar':
       return <svg {...common}><rect x="1.8" y="2.8" width="12.4" height="10.4" rx="2.3" /><path d="M6 2.8v10.4" /></svg>
     case 'search':
