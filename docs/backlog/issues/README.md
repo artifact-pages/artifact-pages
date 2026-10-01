@@ -51,7 +51,7 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-043](ISSUE-043-home-artifact-toolbar.md) | Done | P3 | Site home presents unavailable artifact actions. |
 | [ISSUE-044](ISSUE-044-pin-action-discovery.md) | Done | P2 | Readers struggle to discover the pin action. |
 | [ISSUE-045](ISSUE-045-library-return-navigation.md) | Done | P2 | Readers struggle to find the route back to the library. |
-| [ISSUE-046](ISSUE-046-empty-preview-entry.md) | Open | P3 | Empty previews require an unproductive screen transition. |
+| [ISSUE-046](ISSUE-046-empty-preview-entry.md) | Done | P3 | Empty previews require an unproductive screen transition. |
 | [ISSUE-047](ISSUE-047-panel-reading-occlusion.md) | Open | P3 | Open panels obscure text during reading. |
 | [ISSUE-048](ISSUE-048-document-first-palette.md) | Open | P2 | Document discovery is obscured by mixed palette candidates. |
 

@@ -2656,7 +2656,9 @@ test('published preview documents stay out of production browsing and the site-h
   await expect(browse).toBeVisible()
   await expect(recent).not.toContainText(previewOnlyTitle)
   await expect(browse).not.toContainText(previewOnlyTitle)
-  expect(previewRequests).toEqual([])
+  await expect(page.getByRole('status')).toHaveText('1 preview listed.')
+  expect(previewRequests).toContain('/_previews/showcase/catalog.json')
+  expect(previewRequests).toContain(`/_previews/showcase/revisions/${previewHeadSha}/manifest.json`)
 
   const siteSearch = page.getByRole('searchbox', { name: 'Filter artifacts in HTML Showcase' })
   await siteSearch.fill(previewOnlyTitle)
@@ -2749,6 +2751,26 @@ test('preview list distinguishes missing groups, empty catalogs, missing catalog
   await page.reload()
   await expect(page.getByRole('alert')).toHaveText('The preview list could not be loaded.')
   await page.getByRole('link', { name: '← sre' }).click()
+  await expect(page).toHaveURL('/sre')
+  await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
+})
+
+test('site home reports empty preview availability and the empty page explains how to return', async ({ page }) => {
+  await page.route('**/_previews/sre/catalog.json', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ schemaVersion: 1, site: 'sre', groups: [] }),
+  }))
+
+  await page.goto('/sre')
+  await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
+  await expect(page.getByRole('status')).toHaveText('There are no available previews for this site.')
+  await page.getByRole('button', { name: 'View previews' }).click()
+
+  await expect(page).toHaveURL('/sre/_previews')
+  await expect(page.getByRole('status')).toHaveText('There are no available previews for this site.')
+  await expect(page.getByText(/Previews show changed documents from pull requests and manual preview builds\./)).toBeVisible()
+  await page.getByRole('link', { name: 'Back to site home' }).click()
   await expect(page).toHaveURL('/sre')
   await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
 })
@@ -2901,6 +2923,8 @@ test('the in-site palette has a lazy Previews tab scoped to the active site', as
   })
 
   await page.goto('/sre')
+  await expect(page.getByRole('status')).toContainText('listed.')
+  previewRequests.length = 0
   await page.getByRole('button', { name: 'Search pages in SRE' }).click()
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   await expect(palette).toBeVisible()

@@ -1,9 +1,15 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { ArtifactIndexEntry, SiteIndex } from '../domain/index'
 import { RECENT_SECTION_MINIMUM_ARTIFACT_COUNT } from '../domain/navigation-sections'
+import { loadPreviewCandidates, PreviewLoadError } from '../data/previews'
 import { artifactRouteHref } from '../routing'
 import { ArtifactTree, type TreeStyle } from './ArtifactTree'
 import { Icon } from './Icon'
+
+type PreviewAvailabilityState =
+  | { status: 'loading' }
+  | { status: 'success'; count: number }
+  | { status: 'error' }
 
 export function SiteHome({
   index,
@@ -19,6 +25,8 @@ export function SiteHome({
   defaultExpandedPaths?: string[]
 }) {
   const [query, setQuery] = useState('')
+  const [previewAvailability, setPreviewAvailability] = useState<PreviewAvailabilityState>({ status: 'loading' })
+  const hasPreviewEntry = Boolean(onOpenPreviews)
   const showRecentSection = index.artifacts.length >= RECENT_SECTION_MINIMUM_ARTIFACT_COUNT
   const recentArtifacts = useMemo(
     () => showRecentSection ? selectMostRecent(index.artifacts, 6) : [],
@@ -36,6 +44,29 @@ export function SiteHome({
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
   }, [index.artifacts, normalizedQuery])
 
+  useEffect(() => {
+    if (!hasPreviewEntry) return
+
+    let cancelled = false
+    setPreviewAvailability({ status: 'loading' })
+    loadPreviewCandidates(index.site.id).then(
+      (candidates) => {
+        const count = candidates.filter(({ availability }) => availability === 'available' || availability === 'unknown').length
+        if (!cancelled) setPreviewAvailability({ status: 'success', count })
+      },
+      (error: unknown) => {
+        if (cancelled) return
+        if (error instanceof PreviewLoadError && error.status === 404) {
+          setPreviewAvailability({ status: 'success', count: 0 })
+        } else {
+          setPreviewAvailability({ status: 'error' })
+        }
+      },
+    )
+
+    return () => { cancelled = true }
+  }, [hasPreviewEntry, index.site.id])
+
   return (
     <div className="site-home">
       <div className="site-home-heading">
@@ -51,7 +82,18 @@ export function SiteHome({
             : 'Browse artifacts or find one by title or path.'}
         </p>
         {onOpenPreviews ? (
-          <button className="site-home-preview-link" onClick={onOpenPreviews}>View previews <span aria-hidden="true">→</span></button>
+          <div className="site-home-preview">
+            <button className="site-home-preview-link" onClick={onOpenPreviews}>View previews <span aria-hidden="true">→</span></button>
+            <p className="site-home-preview-status" role="status">
+              {previewAvailability.status === 'loading'
+                ? 'Checking preview availability…'
+                : previewAvailability.status === 'error'
+                  ? 'Preview availability could not be checked.'
+                  : previewAvailability.count === 0
+                    ? 'There are no available previews for this site.'
+                    : `${previewAvailability.count} preview${previewAvailability.count === 1 ? '' : 's'} listed.`}
+            </p>
+          </div>
         ) : null}
         <label className="site-search">
           <Icon name="search" size={16} />

@@ -1,6 +1,6 @@
 # プレビュー0件を入口で判断できず、空画面への移動が必要になる
 
-- Status: Open
+- Status: Done
 - Priority: P3
 - Area: Site home / Preview discovery
 
@@ -25,6 +25,10 @@
 
 ## Acceptance criteria
 
-- [ ] ホームのプレビュー入口で、現在0件であることを判断できる。
-- [ ] 0件でも何を待つ・確認する画面なのか分かり、サイトホームへの復帰手段が明確。
-- [ ] プレビューが存在する場合は一覧へ進む導線を維持する。
+- [x] ホームのプレビュー入口で、現在0件であることを判断できる。
+- [x] 0件でも何を待つ・確認する画面なのか分かり、サイトホームへの復帰手段が明確。
+- [x] プレビューが存在する場合は一覧へ進む導線を維持する。
+
+## Verification
+
+Site home now checks validated preview candidates and reports zero, listed count, loading or availability-check failure. Empty preview list explains previews and publishing checks, with an explicit site-home return link; nonempty navigation remains intact. Build and seven focused Playwright cases passed against fixture 4174. Independent review_issue_046 found no blocking correctness issue and independently passed four focused cases, including missing/error distinction and loading return. Manual in-app browser follow-up remains unavailable. Known tradeoff: home checks catalog plus revision manifests, and list navigation currently repeats those uncached requests; malformed manifest warnings remain on the list while home reports available count.

@@ -57,6 +57,8 @@ export function PreviewListPage({ route, navigate }: {
     return () => { cancelled = true }
   }, [route.siteId, route.groupId])
 
+  const siteHomeHref = `/${encodeURIComponent(route.siteId)}`
+
   return (
     <main className="preview-page">
       <header className="preview-page-header">
@@ -74,10 +76,20 @@ export function PreviewListPage({ route, navigate }: {
       {state.status === 'success' && state.invalidCount > 0 ? (
         <p className="preview-availability" role="alert">Some preview catalog records did not match their revision manifests.</p>
       ) : null}
-      {state.status === 'success' && state.groups.length === 0 ? (
-        <p className="preview-empty" role="status">
-          {route.groupId ? 'This preview is no longer listed.' : 'There are no available previews for this site.'}
-        </p>
+      {state.status === 'success' && state.groups.length === 0 ? route.groupId ? (
+        <p className="preview-empty" role="status">This preview is no longer listed.</p>
+      ) : (
+        <section className="preview-empty-state" aria-label="No available previews">
+          <p className="preview-empty" role="status">There are no available previews for this site.</p>
+          <p className="preview-empty-explanation">
+            Previews show changed documents from pull requests and manual preview builds. Once one is published for this site, its documents will appear here. If you expected a preview, check that publishing completed successfully.
+          </p>
+          <a className="preview-return-link" href={siteHomeHref} onClick={(event) => {
+            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+            event.preventDefault()
+            navigate(siteHomeHref)
+          }}>Back to site home</a>
+        </section>
       ) : null}
       {state.status === 'success' ? (
         <div className="preview-groups">

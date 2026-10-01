@@ -1336,8 +1336,16 @@ mark {
   line-height: 1.5;
 }
 
-.site-home-preview-link {
+.site-home-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
   margin: -18px 0 22px;
+}
+
+.site-home-preview-link {
+  margin: 0;
   padding: 0;
   color: var(--text-tertiary);
   font-size: 12px;
@@ -1345,6 +1353,12 @@ mark {
 
 .site-home-preview-link:hover {
   color: var(--text);
+}
+
+.site-home-preview-status {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: 12px;
 }
 
 .site-search {
@@ -2101,6 +2115,32 @@ mark {
 .preview-page-lede,
 .preview-empty {
   margin: 0;
+  color: var(--text-secondary);
+}
+
+.preview-empty-state {
+  display: grid;
+  gap: 13px;
+  max-width: 58ch;
+  padding: 24px 0 12px;
+}
+
+.preview-empty-explanation {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.preview-return-link {
+  justify-self: start;
+  color: var(--text);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.preview-return-link:hover {
   color: var(--text-secondary);
 }
 
