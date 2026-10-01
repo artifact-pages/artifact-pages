@@ -1,6 +1,6 @@
 # 上部の文書操作の一部がパレットのコマンドにない
 
-- Status: Open
+- Status: Done
 - Priority: P3
 - Area: Command palette commands
 
@@ -22,10 +22,17 @@
 
 ## Acceptance criteria
 
-- [ ] 文書を開いているとき、パレットのコマンドからピン留めとピン留めの解除ができる。
-- [ ] パレットのコマンドから Details を開閉できる。
-- [ ] 文書を開いていない画面では、これらのコマンドが実行できない状態で表示されない。
+- [x] 文書を開いているとき、パレットのコマンドからピン留めとピン留めの解除ができる。
+- [x] パレットのコマンドから Details を開閉できる。
+- [x] 文書を開いていない画面では、これらのコマンドが実行できない状態で表示されない。
 
 ## Related issues and scope
 
 - ISSUE-048 はパレットの候補の見せ方を扱う。本件はコマンドの種類の不足だけを扱い、候補の並べ方は変えない。
+
+## Verification (2026-10-01)
+
+- Implemented by a Sonnet subagent and reviewed by a separate Sonnet subagent (no blockers; the sidebar Pinned assertion was added).
+- The palette's `>` commands now include "Pin artifact" / "Unpin artifact" (the title follows the current pin state, like the header button) and "Toggle details" (mirroring "Toggle contents"). The pin command uses the same `toggleArtifactPin` as the header and sidebar, so state, storage, and the toast are shared. Both commands use `available: Boolean(currentArtifact)`, so they are hidden where no artifact is open. Candidate grouping and ranking are unchanged (ISSUE-048).
+- New e2e test "palette commands pin and unpin the current artifact and toggle Details only while an artifact is open" covers pin and unpin (toast, header state, storage, sidebar Pinned section), opening and closing Details, and absence on the site home. `npx tsc -p web/tsconfig.json --noEmit` and `npm run build` passed; `node scripts/run-e2e.mjs` passed 90/90.
+- Follow-up noted by the review, not part of this issue: opening Contents or Details from the palette leaves focus where the palette restores it (outside the panel), as "Toggle contents" already did. Moving focus into the panel after a palette-driven open would help keyboard users.

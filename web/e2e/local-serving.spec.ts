@@ -878,6 +878,53 @@ test('artifact actions pin locally without changing selection or Browse, and exp
   await expect(page).toHaveURL(/\/sre\/architecture\/platform-topology\/index\.html$/)
 })
 
+test('palette commands pin and unpin the current artifact and toggle Details only while an artifact is open', async ({ page }) => {
+  await page.goto('/sre/architecture/platform-topology/index.html')
+  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
+  const pinStorage = () => page.evaluate(() => JSON.parse(
+    window.localStorage.getItem('git-artifact-pages:pinned-artifacts:v1') ?? '{}',
+  ))
+
+  await page.keyboard.press('Control+k')
+  await search.fill('>pin artifact')
+  await expect(palette.getByRole('option', { name: 'Unpin artifact' })).toHaveCount(0)
+  await palette.getByRole('option', { name: 'Pin artifact' }).click()
+  await expect(palette).toBeHidden()
+  await expect(page.getByRole('status')).toHaveText('Pinned Platform topology.')
+  await expect(page.getByRole('button', { name: 'Unpin Platform topology' })).toHaveAttribute('aria-pressed', 'true')
+  await expect.poll(pinStorage).toEqual({ sre: ['architecture/platform-topology/index.html'] })
+  await expect(page.locator('.pinned-tree .tree-artifact')).toContainText('Platform topology')
+
+  await page.keyboard.press('Control+k')
+  await search.fill('>pin artifact')
+  await expect(palette.getByRole('option', { name: 'Pin artifact', exact: true })).toHaveCount(0)
+  await palette.getByRole('option', { name: 'Unpin artifact' }).click()
+  await expect(page.getByRole('status')).toHaveText('Unpinned Platform topology.')
+  await expect(page.getByRole('button', { name: 'Pin Platform topology' })).toHaveAttribute('aria-pressed', 'false')
+  await expect.poll(pinStorage).toEqual({ sre: [] })
+  await expect(page.locator('.pinned-tree')).toHaveCount(0)
+
+  const details = page.getByRole('complementary', { name: 'Details' })
+  await expect(details).toBeHidden()
+  await page.keyboard.press('Control+k')
+  await search.fill('>Toggle details')
+  await palette.getByRole('option', { name: 'Toggle details' }).click()
+  await expect(details).toBeVisible()
+  await page.keyboard.press('Control+k')
+  await search.fill('>Toggle details')
+  await palette.getByRole('option', { name: 'Toggle details' }).click()
+  await expect(details).toBeHidden()
+
+  await page.goto('/sre')
+  await page.keyboard.press('Control+k')
+  await search.fill('>Toggle')
+  await expect(palette.getByRole('option', { name: 'Toggle sidebar' })).toBeVisible()
+  await expect(palette.getByRole('option', { name: 'Toggle details' })).toHaveCount(0)
+  await search.fill('>pin')
+  await expect(palette.getByRole('option', { name: /Pin artifact|Unpin artifact/ })).toHaveCount(0)
+})
+
 test('the current page pin control stays discoverable with the sidebar closed and preserves pin state', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/sre/architecture/platform-topology/index.html')

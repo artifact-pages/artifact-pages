@@ -256,6 +256,18 @@ export function ArtifactWorkspace({
       available: hasContents,
       onSelect: () => togglePanel('contents'),
     },
+    {
+      title: 'Toggle details',
+      available: Boolean(currentArtifact),
+      onSelect: () => togglePanel('details'),
+    },
+    {
+      title: currentArtifact && pinnedArtifactIds.includes(currentArtifact.id) ? 'Unpin artifact' : 'Pin artifact',
+      available: Boolean(currentArtifact),
+      onSelect: () => {
+        if (currentArtifact) toggleArtifactPin(currentArtifact)
+      },
+    },
     { title: 'Go to site home', onSelect: () => navigateWithinWorkspace(`/${encodeURIComponent(index.site.id)}`) },
     {
       title: 'Use light theme',
