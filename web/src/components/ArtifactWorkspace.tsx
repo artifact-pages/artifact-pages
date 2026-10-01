@@ -535,6 +535,7 @@ export function ArtifactWorkspace({
                 index={index}
                 onOpenArtifact={navigateWithinWorkspace}
                 onOpenPreviews={() => navigateWithinWorkspace(`/${encodeURIComponent(index.site.id)}/_previews`)}
+                onOpenPalette={() => openPalette('')}
                 treeStyle={siteHomeTreeStyle}
                 defaultExpandedPaths={initialExpandedPaths}
               />

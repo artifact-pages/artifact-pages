@@ -15,12 +15,14 @@ export function SiteHome({
   index,
   onOpenArtifact,
   onOpenPreviews,
+  onOpenPalette,
   treeStyle = 'path-list',
   defaultExpandedPaths,
 }: {
   index: SiteIndex
   onOpenArtifact: (href: string) => void
   onOpenPreviews?: () => void
+  onOpenPalette?: () => void
   treeStyle?: TreeStyle
   defaultExpandedPaths?: string[]
 }) {
@@ -97,45 +99,60 @@ export function SiteHome({
             </p>
           </div>
         ) : null}
-        <label className="site-search">
-          <Icon name="search" size={16} />
-          <input
-            ref={searchInputRef}
-            type="search"
-            aria-label={`Filter artifacts in ${index.site.title}`}
-            aria-describedby="site-search-help"
-            aria-keyshortcuts="Meta+K Control+K"
-            placeholder={`Filter artifacts in ${index.site.title}`}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
+        <div className="site-search-row">
+          <label className="site-search">
+            <Icon name="search" size={16} />
+            <input
+              ref={searchInputRef}
+              type="search"
+              aria-label={`Filter artifacts in ${index.site.title}`}
+              aria-describedby="site-search-help"
+              placeholder={`Filter artifacts in ${index.site.title}`}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
 
-              if (event.key === 'Escape') {
-                event.preventDefault()
-                setQuery('')
-                event.currentTarget.blur()
-              } else if (event.key === 'Enter' && matches.length === 1) {
-                event.preventDefault()
-                onOpenArtifact(artifactRouteHref(index.site.id, matches[0].path))
-              } else if (event.key === 'ArrowDown' && matches.length > 0 && !hasModifier(event)) {
-                event.preventDefault()
-                matchListRef.current?.querySelector<HTMLButtonElement>('.artifact-list-row')?.focus()
-              }
-            }}
-          />
-          <kbd>⌘ K / Ctrl K</kbd>
-        </label>
+                if (event.key === 'Escape') {
+                  event.preventDefault()
+                  setQuery('')
+                  event.currentTarget.blur()
+                } else if (event.key === 'Enter' && matches.length === 1) {
+                  event.preventDefault()
+                  onOpenArtifact(artifactRouteHref(index.site.id, matches[0].path))
+                } else if (event.key === 'ArrowDown' && matches.length > 0 && !hasModifier(event)) {
+                  event.preventDefault()
+                  matchListRef.current?.querySelector<HTMLButtonElement>('.artifact-list-row')?.focus()
+                }
+              }}
+            />
+          </label>
+          {onOpenPalette ? (
+            // ⌘ K opens the palette rather than this field, so the shortcut lives on its own control.
+            <button
+              type="button"
+              className="site-search-palette"
+              aria-label={`Full search in ${index.site.title}`}
+              aria-keyshortcuts="Meta+K Control+K"
+              title="Search pages, headings, and commands (⌘ K / Ctrl K)"
+              onClick={(event) => {
+                // Safari and Firefox do not focus buttons on click; focus first so closing the palette returns here.
+                event.currentTarget.focus()
+                onOpenPalette()
+              }}
+            >
+              Full search <kbd>⌘ K</kbd>
+            </button>
+          ) : null}
+        </div>
         <p className="site-search-help" id="site-search-help" aria-live="polite">
           {!normalizedQuery
-            ? 'Typing filters artifacts in this site. '
+            ? 'Typing filters artifacts in this site by title or path.'
             : matches.length === 1
-              ? 'Press Enter to open this match. '
+              ? 'Press Enter to open this match.'
               : matches.length > 1
-                ? 'Press ↓ or Tab to choose a match, then Enter to open it. '
-                : 'No matches to open. Clear the filter to browse this site. '}
-          <span className="search-help-keyboard">⌘ K / Ctrl K opens full search.</span>
-          <span className="search-help-touch">Use Search pages in the navigation to open full search.</span>
+                ? 'Press ↓ to choose a match, then Enter to open it.'
+                : 'No matches to open. Clear the filter to browse this site.'}
         </p>
       </div>
 

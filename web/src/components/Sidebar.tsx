@@ -190,6 +190,7 @@ export function Sidebar({
               onOpenPalette('')
             }}
           >
+            <span className="sidebar-palette-label">Search</span>
             <kbd>⌘ K</kbd>
             <span className="mobile-search-hint">Search pages</span>
           </button>

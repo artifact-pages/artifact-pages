@@ -344,18 +344,23 @@ kbd {
 }
 
 .sidebar-palette-trigger {
-  display: grid;
+  display: inline-flex;
   min-width: 30px;
   height: 24px;
   flex: none;
-  place-items: center;
-  padding: 0;
-  border-radius: 5px;
-  color: var(--text-tertiary);
+  align-items: center;
+  gap: 5px;
+  padding: 0 4px 0 7px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  /* A bordered chip reads as its own control, not as this field's shortcut. */
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-size: 11px;
 }
 
 .sidebar-palette-trigger:hover {
   color: var(--text);
+  background: var(--active);
 }
 
 .sidebar-palette-trigger kbd {
@@ -1361,9 +1366,36 @@ mark {
   font-size: 12px;
 }
 
+.site-search-row {
+  display: flex;
+  width: min(100%, 680px);
+  align-items: center;
+  gap: 8px;
+}
+
+.site-search-palette {
+  display: inline-flex;
+  height: 42px;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-radius: 9px;
+  color: var(--text-secondary);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.site-search-palette:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
 .site-search {
   display: flex;
-  width: min(100%, 580px);
+  min-width: 0;
+  flex: 1;
   height: 42px;
   align-items: center;
   gap: 10px;
@@ -1388,10 +1420,6 @@ mark {
 
 .site-search input::placeholder {
   color: var(--text-tertiary);
-}
-
-.site-search kbd {
-  white-space: nowrap;
 }
 
 .site-search-help {
@@ -2652,9 +2680,10 @@ mark {
     margin-bottom: 38px;
   }
 
-  .site-search kbd,
+  .site-search-palette kbd,
   .site-picker-search-trigger kbd,
-  .sidebar-palette-trigger kbd {
+  .sidebar-palette-trigger kbd,
+  .sidebar-palette-trigger .sidebar-palette-label {
     display: none;
   }
 

@@ -1,6 +1,6 @@
 # 検索欄の ⌘K 表示が、その欄へのショートカットに見える
 
-- Status: Open
+- Status: Done
 - Priority: P2
 - Area: Site home search / Sidebar filter
 
@@ -22,10 +22,18 @@
 
 ## Acceptance criteria
 
-- [ ] ⌘K の表示が、実際に ⌘K で起きること（パレットが開く）と矛盾しない。
-- [ ] ホーム検索とサイドバーの絞り込みが、それぞれ何を絞り込む欄なのかが画面から分かる。
-- [ ] 通常幅と狭い幅で、表示が崩れたり重なったりしない。
+- [x] ⌘K の表示が、実際に ⌘K で起きること（パレットが開く）と矛盾しない。
+- [x] ホーム検索とサイドバーの絞り込みが、それぞれ何を絞り込む欄なのかが画面から分かる。
+- [x] 通常幅と狭い幅で、表示が崩れたり重なったりしない。
 
 ## Related issues and scope
 
 - ISSUE-039（完了記録は Git 履歴に保存）は検索入口の役割の分かりやすさを扱った。本件は欄の中のショートカット表示と実際の動作の食い違いを扱う。
+
+## Verification (2026-10-01)
+
+- Site home: the filter field no longer shows a ⌘K badge or declares `aria-keyshortcuts`. A separate "Full search ⌘ K" button (accessible name "Full search in <site>", `aria-keyshortcuts` on the button) beside the field opens the palette and receives focus back when the palette closes; on narrow screens it shows "Full search" without the kbd. The help text now says the field filters by title or path; with several matches it says "Press ↓ to choose a match, then Enter to open it." (Tab reaches the Full search button before the results.)
+- Sidebar: the existing palette trigger inside the filter now shows a visible "Search" label and a bordered chip style so it reads as its own control; the narrow-screen "Search pages" hint is unchanged.
+- Other remaining ⌘K hints (site picker trigger, collapsed rail) sit on controls that open the palette.
+- Updated e2e tests cover the desktop and mobile affordances, the button opening the palette and restoring focus, and keyboard paths. `npx tsc -p web/tsconfig.json --noEmit` and `npm run build` passed; `node scripts/run-e2e.mjs` passed 83/83 (earlier runs each had one or two preview-navigation tests fail and pass on rerun, unrelated to this change). Manual check in Chrome at 606px.
+- A Sonnet subagent review found no blockers; its should-fix item (focus restore in Safari and Firefox) and nits (indentation, redundant width) were applied.
