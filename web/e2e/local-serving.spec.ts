@@ -2528,7 +2528,7 @@ test('site home search keeps multi, empty, Escape, and IME Enter behavior predic
   const siteSearch = page.getByRole('searchbox', { name: 'Filter artifacts in SRE' })
   await siteSearch.fill('latency')
   await expect(page.locator('.site-home .artifact-list-row')).toHaveCount(2)
-  await expect(page.getByText('Use Tab to focus a match, then press Enter to open it.', { exact: false })).toBeVisible()
+  await expect(page.getByText('Press ↓ or Tab to choose a match, then Enter to open it.', { exact: false })).toBeVisible()
   await siteSearch.press('Enter')
   await expect(page).toHaveURL(/\/sre$/)
 
@@ -2558,6 +2558,41 @@ test('site home search keeps multi, empty, Escape, and IME Enter behavior predic
   await expect(page.getByText('No matches to open.', { exact: false })).toBeVisible()
   await siteSearch.press('Enter')
   await expect(page).toHaveURL(/\/sre$/)
+})
+
+test('site home search moves through matches with arrow keys like the other search entries', async ({ page }) => {
+  await page.goto('/sre')
+
+  const siteSearch = page.getByRole('searchbox', { name: 'Filter artifacts in SRE' })
+  const rows = page.locator('.site-home .artifact-list-row')
+  await siteSearch.fill('latency')
+  await expect(rows).toHaveCount(2)
+
+  await siteSearch.press('ArrowDown')
+  await expect(rows.first()).toBeFocused()
+  await page.keyboard.press('ArrowDown')
+  await expect(rows.nth(1)).toBeFocused()
+  await page.keyboard.press('ArrowDown')
+  await expect(rows.nth(1)).toBeFocused()
+  await page.keyboard.press('ArrowUp')
+  await expect(rows.first()).toBeFocused()
+  await page.keyboard.press('End')
+  await expect(rows.nth(1)).toBeFocused()
+  await page.keyboard.press('Home')
+  await expect(rows.first()).toBeFocused()
+  await page.keyboard.press('ArrowUp')
+  await expect(siteSearch).toBeFocused()
+  await expect(siteSearch).toHaveValue('latency')
+
+  await siteSearch.press('ArrowDown')
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/\/sre\/incidents\/checkout-latency\/index\.html$/)
+
+  await page.goto('/sre')
+  await siteSearch.fill('no-such-artifact')
+  await siteSearch.press('ArrowDown')
+  await expect(siteSearch).toBeFocused()
 })
 
 test('artifact title and site home navigation stay clear on narrow screens', async ({ page }) => {

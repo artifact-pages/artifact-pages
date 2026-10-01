@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from 'react'
 import type { ArtifactIndexEntry, SiteIndex } from '../domain/index'
 import { RECENT_SECTION_MINIMUM_ARTIFACT_COUNT } from '../domain/navigation-sections'
 import { loadPreviewCandidates, PreviewLoadError } from '../data/previews'
@@ -25,6 +25,8 @@ export function SiteHome({
   defaultExpandedPaths?: string[]
 }) {
   const [query, setQuery] = useState('')
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const matchListRef = useRef<HTMLDivElement>(null)
   const [previewAvailability, setPreviewAvailability] = useState<PreviewAvailabilityState>({ status: 'loading' })
   const hasPreviewEntry = Boolean(onOpenPreviews)
   const showRecentSection = index.artifacts.length >= RECENT_SECTION_MINIMUM_ARTIFACT_COUNT
@@ -98,6 +100,7 @@ export function SiteHome({
         <label className="site-search">
           <Icon name="search" size={16} />
           <input
+            ref={searchInputRef}
             type="search"
             aria-label={`Filter artifacts in ${index.site.title}`}
             aria-describedby="site-search-help"
@@ -115,6 +118,9 @@ export function SiteHome({
               } else if (event.key === 'Enter' && matches.length === 1) {
                 event.preventDefault()
                 onOpenArtifact(artifactRouteHref(index.site.id, matches[0].path))
+              } else if (event.key === 'ArrowDown' && matches.length > 0 && !hasModifier(event)) {
+                event.preventDefault()
+                matchListRef.current?.querySelector<HTMLButtonElement>('.artifact-list-row')?.focus()
               }
             }}
           />
@@ -126,7 +132,7 @@ export function SiteHome({
             : matches.length === 1
               ? 'Press Enter to open this match. '
               : matches.length > 1
-                ? 'Use Tab to focus a match, then press Enter to open it. '
+                ? 'Press ↓ or Tab to choose a match, then Enter to open it. '
                 : 'No matches to open. Clear the filter to browse this site. '}
           <span className="search-help-keyboard">⌘ K / Ctrl K opens full search.</span>
           <span className="search-help-touch">Use Search pages in the navigation to open full search.</span>
@@ -141,6 +147,8 @@ export function SiteHome({
           siteId={index.site.id}
           query={normalizedQuery}
           onOpenArtifact={onOpenArtifact}
+          listRef={matchListRef}
+          onExitTop={() => searchInputRef.current?.focus()}
           emptyMessage={(
             <>
               Nothing in this site matches your search.{' '}
@@ -209,6 +217,8 @@ function ArtifactSection({
   query = '',
   onOpenArtifact,
   emptyMessage,
+  listRef,
+  onExitTop,
 }: {
   title: string
   icon: 'clock' | 'search'
@@ -217,14 +227,38 @@ function ArtifactSection({
   query?: string
   onOpenArtifact: (href: string) => void
   emptyMessage: ReactNode
+  listRef?: Ref<HTMLDivElement>
+  /** Called when ↑ is pressed on the first row, so the caller can return focus to its search field. */
+  onExitTop?: () => void
 }) {
+  // Arrow keys move between rows like the palette and the menu components; Home/End jump to either end.
+  function handleListKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) || hasModifier(event)) return
+    const rows = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('.artifact-list-row')]
+    const current = rows.indexOf(event.target as HTMLButtonElement)
+    if (current < 0) return
+    if (event.key === 'ArrowUp' && current === 0) {
+      if (!onExitTop) return
+      event.preventDefault()
+      onExitTop()
+      return
+    }
+    event.preventDefault()
+    const next = event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? rows.length - 1
+        : Math.max(0, Math.min(rows.length - 1, current + (event.key === 'ArrowDown' ? 1 : -1)))
+    rows[next]?.focus()
+  }
+
   return (
     <section className="artifact-list-section" aria-label={title}>
       <h2 className="home-section-title"><Icon name={icon} size={13} />{title}</h2>
       {artifacts.length === 0 ? (
         <p className="empty-note">{emptyMessage}</p>
       ) : (
-        <div className="artifact-list">
+        <div className="artifact-list" ref={listRef} onKeyDown={handleListKeyDown}>
           {artifacts.map((artifact) => (
             <button
               className="artifact-list-row"
@@ -242,6 +276,10 @@ function ArtifactSection({
       )}
     </section>
   )
+}
+
+function hasModifier(event: KeyboardEvent<HTMLElement>) {
+  return event.shiftKey || event.altKey || event.metaKey || event.ctrlKey
 }
 
 function highlight(text: string, query: string) {
