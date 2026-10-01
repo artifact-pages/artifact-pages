@@ -453,9 +453,16 @@ function getEmptyMessage({
   if (mode === 'heading') {
     if (!currentArtifact) return 'Open an artifact first to search its headings.'
     if ((currentArtifact.toc?.length ?? 0) === 0) return 'This artifact has no indexed headings.'
+    return 'No headings match. Change or clear your search.'
   }
 
-  if (mode === 'site' && siteCount === 0) return 'No sites are available.'
+  if (mode === 'site') {
+    return siteCount === 0
+      ? 'No sites are available.'
+      : 'No sites match. Change or clear your search.'
+  }
+
+  if (mode === 'command') return 'No commands match. Change or clear your search.'
 
   if (mode === 'search' && scope === 'recent') {
     return availableScopeCount === 0

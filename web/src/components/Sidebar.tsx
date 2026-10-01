@@ -232,8 +232,7 @@ export function Sidebar({
             {matchCount === 0 ? (
               <p className="sidebar-empty">
                 Nothing in {index.site.title} matches.<br />
-                <span className="search-help-keyboard">Press ⌘ K, then @, to find another site.</span>
-                <span className="search-help-touch">Use the site switcher to find another site.</span>
+                Change your search or clear the filter.
               </p>
             ) : (
               <ArtifactTree

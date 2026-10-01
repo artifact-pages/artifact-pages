@@ -1,6 +1,6 @@
 # 検索ゼロ件の案内が現在のモードと検索目的に合わない
 
-- Status: Open
+- Status: Done
 - Priority: P2
 - Area: Sidebar filter / Command palette empty states
 
@@ -24,6 +24,10 @@
 
 ## Acceptance criteria
 
-- [ ] コマンド・サイト・見出しモードで、すでに選択中のモードへの切替を主な回復案として表示しない。
-- [ ] サイドバーのゼロ件で、検索語の変更や解除など、その場で有効な回復操作を案内する。
-- [ ] 1サイト環境でも案内が行き止まりを作らず、検索語を変更・解除すると通常の候補へ復帰する。
+- [x] コマンド・サイト・見出しモードで、すでに選択中のモードへの切替を主な回復案として表示しない。
+- [x] サイドバーのゼロ件で、検索語の変更や解除など、その場で有効な回復操作を案内する。
+- [x] 1サイト環境でも案内が行き止まりを作らず、検索語を変更・解除すると通常の候補へ復帰する。
+
+## Verification
+
+2026-10-01: npm run build and git diff --check passed. Explicit command/site/heading zero-result guidance and candidate recovery, plus mocked single-site sidebar edit/Clear filter recovery, passed two focused Playwright tests at port 4174. A separate gpt-6-luna max reviewer inspected the final diff, independently reran both cases (2/2), and found no findings. Codex in-app browser at port 4179 reproduced the old wording and verified the rebuilt wording and >theme recovery; temporary page state was restored. No Japanese command aliases or ISSUE-048 redesign was included.

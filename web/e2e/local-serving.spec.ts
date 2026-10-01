@@ -1017,6 +1017,62 @@ test('normal page search stays on the current site while @ and > select explicit
   await expect(palette.getByRole('option')).toHaveCount(3)
 })
 
+test('explicit palette scopes give recovery guidance for their own results', async ({ page }) => {
+  await page.goto('/sre/incidents/checkout-latency/index.html')
+  await page.getByRole('button', { name: 'Search pages in SRE' }).click()
+
+  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
+
+  await search.fill('>no-such-command')
+  await expect(palette.getByText('No commands match. Change or clear your search.', { exact: true })).toBeVisible()
+  await search.fill('>theme')
+  await expect(palette.getByRole('option', { name: 'Use light theme' })).toBeVisible()
+
+  await search.fill('@no-such-site')
+  await expect(palette.getByText('No sites match. Change or clear your search.', { exact: true })).toBeVisible()
+  await search.fill('@front')
+  await expect(palette.getByRole('option', { name: /Frontend/ })).toBeVisible()
+
+  await search.fill('#no-such-heading')
+  await expect(palette.getByText('No headings match. Change or clear your search.', { exact: true })).toBeVisible()
+  await search.fill('#root')
+  await expect(palette.getByRole('option', { name: /Root cause/ })).toBeVisible()
+})
+
+test('single-site sidebar empty results recover by changing or clearing the filter', async ({ page }) => {
+  await page.route('**/_indexes/sites.json', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      schemaVersion: 1,
+      sites: [{
+        id: 'sre',
+        name: 'SRE',
+        repository: 'tasuku43/git-artifact-pages',
+        sourcePath: 'fixtures/storage/_artifacts/sre',
+      }],
+    }),
+  }))
+
+  await page.goto('/sre/incidents/checkout-latency/index.html')
+  const sidebar = page.getByRole('complementary', { name: 'SRE navigation' })
+  const filter = sidebar.getByRole('textbox', { name: 'Filter SRE navigation' })
+  await filter.fill('no-such-artifact')
+
+  await expect(sidebar.locator('.sidebar-empty')).toContainText('Change your search or clear the filter.')
+  await expect(sidebar.getByRole('button', { name: 'Clear filter' })).toBeVisible()
+  await expect(sidebar.locator('.sidebar-empty')).not.toContainText('find another site')
+
+  await filter.fill('checkout')
+  await expect(sidebar.locator('.tree-artifact').filter({ hasText: 'Checkout latency incident review' })).toBeVisible()
+
+  await filter.fill('no-such-artifact')
+  await sidebar.getByRole('button', { name: 'Clear filter' }).click()
+  await expect(filter).toHaveValue('')
+  await expect(sidebar.locator('.tree-artifact').filter({ hasText: 'Checkout latency incident review' })).toBeVisible()
+})
+
 test('site search updates correctly for sequential typing, backspace, and a new query', async ({ page }) => {
   await page.goto('/sre')
   await page.getByRole('button', { name: 'Search pages in SRE' }).click()

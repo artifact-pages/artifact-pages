@@ -4,7 +4,7 @@ This is the entry point for work that is not yet complete. Keep product defects,
 
 | Track | Purpose | Open | In progress | Blocked | Done |
 | --- | --- | ---: | ---: | ---: | ---: |
-| [Issues](issues/README.md) | Independently actionable product problems with evidence and acceptance criteria. | 7 | 0 | 0 | 4 |
+| [Issues](issues/README.md) | Independently actionable product problems with evidence and acceptance criteria. | 6 | 0 | 0 | 5 |
 | [Documentation](documentation/README.md) | Public reader-facing documentation sites, one page per ticket, reviewed one at a time. | 10 | 0 | 0 | 2 |
 | Technical design | Decisions about how to fulfill an accepted contract. | 0 | 0 | 0 | 10 |
 | [Implementation](implementation/README.md) | Independently reviewable slices for preview, registry, normal publish, providers, local contract tests and distribution. | 3 | 0 | 0 | 37 |
