@@ -2541,6 +2541,33 @@ test('all-sites navigation is available from site home and documents with the si
   }
 })
 
+test('site home hides artifact actions while an open artifact provides usable actions', async ({ page }) => {
+  await page.goto('/sre')
+
+  const contextActions = page.locator('.context-actions')
+  await expect(contextActions.getByRole('button', { name: 'Go to all sites' })).toBeVisible()
+  await expect(contextActions.getByRole('button', { name: 'Contents', exact: true })).toHaveCount(0)
+  await expect(contextActions.getByRole('button', { name: 'Details', exact: true })).toHaveCount(0)
+  await expect(contextActions.getByRole('button', { name: 'Copy artifact link' })).toHaveCount(0)
+  await expect(contextActions.getByRole('link', { name: 'Open raw artifact' })).toHaveCount(0)
+
+  await page.goto('/sre/incidents/checkout-latency/index.html')
+  const contentsButton = contextActions.getByRole('button', { name: 'Contents', exact: true })
+  const detailsButton = contextActions.getByRole('button', { name: 'Details', exact: true })
+  const copyButton = contextActions.getByRole('button', { name: 'Copy artifact link' })
+  const rawLink = contextActions.getByRole('link', { name: 'Open raw artifact' })
+
+  await expect(contentsButton).toBeEnabled()
+  await expect(detailsButton).toBeEnabled()
+  await expect(copyButton).toBeEnabled()
+  await expect(rawLink).toHaveAttribute('href', '/_artifacts/sre/incidents/checkout-latency/index.html')
+
+  await detailsButton.click()
+  await expect(page.getByRole('complementary', { name: 'Details' })).toBeVisible()
+  await contentsButton.click()
+  await expect(page.getByRole('complementary', { name: 'Contents' })).toBeVisible()
+})
+
 test('unknown sites show a clear not-found state and safe recovery action', async ({ page }) => {
   await page.goto('/unknown-site')
 

@@ -454,50 +454,48 @@ export function ArtifactWorkspace({
                   <span>{pinnedArtifactIds.includes(currentArtifact.id) ? 'Pinned' : 'Pin'}</span>
                 </button>
               ) : null}
-              <button
-                className={`context-button${tocOpen ? ' is-active' : ''}`}
-                disabled={!currentArtifact || tocEntries.length === 0}
-                aria-pressed={tocOpen}
-                title={tocEntries.length ? 'Contents (⌘ ⇧ O)' : 'No indexed contents for this artifact'}
-                onClick={() => togglePanel('contents')}
-              >
-                <Icon name="contents" size={14} />
-                <span>Contents</span>
-              </button>
-              <button
-                className={`context-button${detailsOpen ? ' is-active' : ''}`}
-                disabled={!currentArtifact}
-                aria-pressed={detailsOpen}
-                title="Artifact details"
-                onClick={() => togglePanel('details')}
-              >
-                <Icon name="info" size={14} />
-                <span>Details</span>
-              </button>
-              <span className="action-divider" />
-              <button
-                className="icon-button"
-                title="Copy link"
-                aria-label="Copy artifact link"
-                disabled={!currentArtifact}
-                onClick={() => void copyCurrentLink(showToast)}
-              >
-                <Icon name="copy" size={15} />
-              </button>
-              <a
-                className={`icon-button${currentArtifact ? '' : ' is-disabled'}`}
-                title="Open raw artifact"
-                aria-label="Open raw artifact"
-                aria-disabled={!currentArtifact}
-                href={currentArtifact?.artifactUrl ?? '#'}
-                target="_blank"
-                rel="noreferrer"
-                onClick={(event) => {
-                  if (!currentArtifact) event.preventDefault()
-                }}
-              >
-                <Icon name="external" size={15} />
-              </a>
+              {currentArtifact ? (
+                <>
+                  <button
+                    className={`context-button${tocOpen ? ' is-active' : ''}`}
+                    disabled={tocEntries.length === 0}
+                    aria-pressed={tocOpen}
+                    title={tocEntries.length ? 'Contents (⌘ ⇧ O)' : 'No indexed contents for this artifact'}
+                    onClick={() => togglePanel('contents')}
+                  >
+                    <Icon name="contents" size={14} />
+                    <span>Contents</span>
+                  </button>
+                  <button
+                    className={`context-button${detailsOpen ? ' is-active' : ''}`}
+                    aria-pressed={detailsOpen}
+                    title="Artifact details"
+                    onClick={() => togglePanel('details')}
+                  >
+                    <Icon name="info" size={14} />
+                    <span>Details</span>
+                  </button>
+                  <span className="action-divider" />
+                  <button
+                    className="icon-button"
+                    title="Copy link"
+                    aria-label="Copy artifact link"
+                    onClick={() => void copyCurrentLink(showToast)}
+                  >
+                    <Icon name="copy" size={15} />
+                  </button>
+                  <a
+                    className="icon-button"
+                    title="Open raw artifact"
+                    aria-label="Open raw artifact"
+                    href={currentArtifact.artifactUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <Icon name="external" size={15} />
+                  </a>
+                </>
+              ) : null}
             </div>
           </header>
 

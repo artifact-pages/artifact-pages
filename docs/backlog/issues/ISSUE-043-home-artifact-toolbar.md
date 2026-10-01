@@ -1,6 +1,6 @@
 # サイトホームに使えない文書操作が並ぶ
 
-- Status: Open
+- Status: Done
 - Priority: P3
 - Area: Site home toolbar
 
@@ -24,6 +24,10 @@
 
 ## Acceptance criteria
 
-- [ ] ホームの文書専用操作は表示されないか、現在使えない理由が明確になる。
-- [ ] 文書を開いていない状態で raw 操作が意味のない移動先を提供しない。
-- [ ] 文書を開いた後は Contents・Details・Copy・raw の有効な操作を利用できる。
+- [x] ホームの文書専用操作は表示されないか、現在使えない理由が明確になる。
+- [x] 文書を開いていない状態で raw 操作が意味のない移動先を提供しない。
+- [x] 文書を開いた後は Contents・Details・Copy・raw の有効な操作を利用できる。
+
+## Verification
+
+Artifact-only toolbar actions now render only for an open artifact. Build and focused home/document toolbar, narrow all-sites, pin, and existing artifact-action regressions passed. Independent review by review_issue_043 found no blocking findings and passed four focused cases. The full 75-case run passed 74 cases; its stale ISSUE-042 mobile expectation was separately repaired and independently verified (3/3). Manual in-app browser follow-up was unavailable because the in-app browser surface was not available; narrow and toolbar verification used repository Playwright tests.
