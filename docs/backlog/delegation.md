@@ -1,6 +1,6 @@
 # Backlog delegation and collaboration
 
-[Backlog overview](README.md) · [Issue repair order](issues/README.md#repair-order) · [Implementation index](implementation/README.md)
+[Release execution order](release-readiness.md) · [Issue repair order](issues/README.md#repair-order) · [Implementation index](implementation/README.md)
 
 Execution mode answers **how work can be delegated**, not its priority or completion status. Keep the existing tracks and directories; do not create a second backlog sorted by assignee. This index records the current modes and handoffs. Each ticket remains the source of truth for status, dependencies, acceptance criteria, and evidence.
 
@@ -17,6 +17,7 @@ Execution mode answers **how work can be delegated**, not its priority or comple
 
 | Work | Delegation scope | Completion / handoff |
 | --- | --- | --- |
+| [T17 — Local preview retirement E2E](verification/T17-local-preview-retirement-e2e.md) | When assigned, connect actual CLI publication, local object deletion, main-source reconciliation and warm-browser withdrawal in the existing local test path. | Record repeatable local results and independent review. No cloud account, real expiry wait or product expiry mechanism; do not treat the local proof as T15 completion. |
 | [Review repair queue](issues/README.md#repair-order), beginning with ISSUE-027 | Follow its current priority/order one issue at a time. Reproduce, add a regression, verify, and obtain independent review under the accepted contracts. | Commit each verified concern; update/remove completed issue records under the issue policy. Do not wait for unrelated cloud access. |
 | [T6 — Resources and navigation](verification/T6-resources-navigation.md) | The ISSUE-026 same-origin rendering and intentional parent-access checks passed in the local and emulator profiles; continue with remaining resource/navigation issues. | Record actual local evidence; provider behavior remains T15. TD3 is a completed decision, not a remaining blocker. |
 | [IMP-37 — Cloudflare entry module](implementation/IMP-37-cloudflare-entry-module.md) | When assigned, implement the single entry module, local validation, and caller example. | Local acceptance closes IMP-37; hand a tested config and fresh-plan checklist to T15 for an explicitly authorized real-account run. |
