@@ -431,7 +431,7 @@ test('an empty registered site stays on its home route and does not affect a nei
 
   await page.goto('/empty/index.html')
   await expect(page).toHaveURL(/\/empty\/index\.html$/u)
-  await expect(page.getByRole('heading', { name: 'Artifact not found' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
   expect(artifactRequests).toEqual([])
 
   await page.goto('/neighbor')
@@ -2629,8 +2629,8 @@ test('site home hides artifact actions while an open artifact provides usable ac
 test('unknown sites show a clear not-found state and safe recovery action', async ({ page }) => {
   await page.goto('/unknown-site')
 
-  await expect(page.getByRole('heading', { name: 'Site not found' })).toBeVisible()
-  await expect(page.getByRole('alert')).toHaveText('We could not find a site named “unknown-site”.')
+  await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
+  await expect(page.getByRole('alert')).toHaveText('The page you requested does not exist or is no longer available.')
   await expect(page.locator('.status-content')).not.toContainText('/_indexes/')
 
   await page.getByRole('button', { name: '← All sites' }).click()
@@ -2641,9 +2641,53 @@ test('unknown sites show a clear not-found state and safe recovery action', asyn
 test('invalid site IDs also use the not-found state', async ({ page }) => {
   await page.goto('/unknown_site')
 
-  await expect(page.getByRole('heading', { name: 'Site not found' })).toBeVisible()
-  await expect(page.getByRole('alert')).toHaveText('We could not find a site named “unknown_site”.')
+  await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
+  await expect(page.getByRole('alert')).toHaveText('The page you requested does not exist or is no longer available.')
   await expect(page.locator('.status-content')).not.toContainText('/_indexes/')
+})
+
+for (const path of ['/_control/locks/guide.json', '/%5Fcontrol/locks/guide.json', '/_CONTROL/locks/guide.json', '/unknown-site/nested/missing.html']) {
+  test(`unavailable resource ${path} uses generic not-found recovery`, async ({ page }) => {
+    if (decodeURIComponent(path).toLowerCase().startsWith('/_control/')) {
+      // nginx rejects control paths before React runs. Model the permitted
+      // Cloudflare SPA fallback without weakening the local storage boundary.
+      await page.route('**/*', async (route) => {
+        const request = route.request()
+        if (request.resourceType() === 'document' && decodeURIComponent(new URL(request.url()).pathname).toLowerCase().startsWith('/_control/')) {
+          await route.fulfill({ response: await page.request.get('/index.html') })
+        } else {
+          await route.continue()
+        }
+      })
+    }
+    const controlRequests: string[] = []
+    page.on('request', (request) => {
+      if (request.resourceType() !== 'document' && /^\/_control(?:\/|$)/iu.test(new URL(request.url()).pathname)) {
+        controlRequests.push(request.url())
+      }
+    })
+    await page.goto(path)
+    await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
+    await expect(page.getByRole('alert')).toHaveText('The page you requested does not exist or is no longer available.')
+    await expect(page.locator('.status-content')).not.toContainText('_control')
+    await page.reload()
+    await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
+    expect(controlRequests).toEqual([])
+    await page.getByRole('button', { name: '← All sites' }).click()
+    await expect(page).toHaveURL('/')
+    await expect(page.getByRole('heading', { name: 'Choose a site' })).toBeVisible()
+  })
+}
+
+test('an unmatched artifact uses generic not-found while preserving site navigation', async ({ page }) => {
+  await page.goto('/sre/no-such-document.html')
+  await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
+  await expect(page.getByRole('alert')).toHaveText('The page you requested does not exist or is no longer available.')
+  await expect(page.getByRole('complementary', { name: 'SRE navigation' })).toBeVisible()
+  await expect(page.locator('.artifact-frame')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Back to site', exact: true }).click()
+  await expect(page).toHaveURL('/sre')
+  await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
 })
 
 test('a failed known-site index load stays distinct from an unknown site', async ({ page }) => {
@@ -2657,7 +2701,7 @@ test('a failed known-site index load stays distinct from an unknown site', async
 
   await expect(page.getByRole('heading', { name: 'Unable to load this site' })).toBeVisible()
   await expect(page.getByRole('alert')).toHaveText('The site could not be loaded (HTTP 503). Please try again in a moment.')
-  await expect(page.getByRole('heading', { name: 'Site not found' })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Page not found' })).toHaveCount(0)
   await expect(page.locator('.status-content')).not.toContainText('/_indexes/')
   expect(indexRequests).toEqual(['/_indexes/sre/index.json'])
 

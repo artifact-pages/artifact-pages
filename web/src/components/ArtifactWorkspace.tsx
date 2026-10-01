@@ -524,8 +524,8 @@ export function ArtifactWorkspace({
             ) : route.artifactPath ? (
               <div className="stage-message">
                 <p className="eyebrow">{index.site.title}</p>
-                <h1>Artifact not found</h1>
-                <p>No artifact matches <code>{route.artifactPath}</code>.</p>
+                <h1>Page not found</h1>
+                <p role="alert">The page you requested does not exist or is no longer available.</p>
                 <button className="text-action" onClick={() => navigate(`/${encodeURIComponent(index.site.id)}`)}>
                   <Icon name="arrow" size={14} /> Back to site
                 </button>

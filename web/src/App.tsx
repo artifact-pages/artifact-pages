@@ -195,7 +195,7 @@ function SitePage({
         !registeredSite
       )
     ) {
-      return <SiteNotFoundPage siteId={route.siteId} onBack={() => navigate('/')} />
+      return <PageNotFoundPage onBack={() => navigate('/')} />
     }
     if (missingIndex && registeredSite?.status === 'not-published') {
       return <RegisteredSiteStatusPage
@@ -311,14 +311,14 @@ function RegisteredSiteStatusPage({
   )
 }
 
-function SiteNotFoundPage({ siteId, onBack }: { siteId: string; onBack: () => void }) {
+function PageNotFoundPage({ onBack }: { onBack: () => void }) {
   return (
     <main className="status-page">
       <div className="status-content">
         <p className="brand-label"><span className="brand-mark">G</span> Git Artifact Pages</p>
-        <p className="eyebrow">{siteId}</p>
-        <h1>Site not found</h1>
-        <p role="alert">We could not find a site named “{siteId}”.</p>
+        <p className="eyebrow">404</p>
+        <h1>Page not found</h1>
+        <p role="alert">The page you requested does not exist or is no longer available.</p>
         <button className="text-action" onClick={onBack}>← All sites</button>
       </div>
     </main>
