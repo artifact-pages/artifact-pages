@@ -1,6 +1,6 @@
 # 検索入口ごとの操作差が分かりにくく、ホーム検索で Enter が止まる
 
-- Status: Open
+- Status: Done
 - Priority: P2
 - Area: Site home / Sidebar filter / Command palette
 
@@ -25,6 +25,10 @@
 
 ## Acceptance criteria
 
-- [ ] ホームで1件に絞った文書をキーボードで選択・実行でき、実行方法が画面から分かる。
-- [ ] 一覧／ツリーの絞り込みとパレットを開く操作の違いがラベルや操作表示で分かる。
-- [ ] 複数件・ゼロ件でも選択対象と実行可否が明確で、既存のサイドバー・パレットの操作を損なわない。
+- [x] ホームで1件に絞った文書をキーボードで選択・実行でき、実行方法が画面から分かる。
+- [x] 一覧／ツリーの絞り込みとパレットを開く操作の違いがラベルや操作表示で分かる。
+- [x] 複数件・ゼロ件でも選択対象と実行可否が明確で、既存のサイドバー・パレットの操作を損なわない。
+
+## Verification
+
+2026-10-01: `npm run build` passed. Four focused Playwright cases for site-home search and desktop/mobile search affordances passed against port 4174, including unique/multiple/zero results, Escape, and synthetic IME composition. Codex in-app browser at port 4179 reproduced the original failure and verified Enter opens `/guide/ja/reading.html` for the unique 「読者」 match after the fix. The final wording-only follow-up shows both ⌘K and Ctrl+K and passed rendered desktop/mobile assertions; it was not rechecked in the in-app browser after its binding disappeared. Real-device IME remains unverified. A separate gpt-6-luna max reviewer approved the behavior, then rechecked the corrected shortcut hints with no remaining findings.

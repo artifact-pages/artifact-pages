@@ -1376,6 +1376,13 @@ mark {
   white-space: nowrap;
 }
 
+.site-search-help {
+  margin: 7px 0 0;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .artifact-list-section,
 .browse-section {
   padding-top: 2px;

@@ -124,9 +124,11 @@ test('mobile search affordances describe their scope and open the matching palet
   await page.getByRole('button', { name: /SRE/ }).click()
   await expect(page).toHaveURL(/\/sre$/)
   const siteSearch = page.locator('.site-search')
-  await expect(siteSearch.getByRole('searchbox', { name: 'Search artifacts in SRE' })).toBeVisible()
+  await expect(siteSearch.getByRole('searchbox', { name: 'Filter artifacts in SRE' })).toBeVisible()
   await expect(siteSearch.locator('kbd')).toBeHidden()
-  await siteSearch.getByRole('searchbox', { name: 'Search artifacts in SRE' }).fill('no-such-artifact')
+  await expect(page.locator('.site-search-help .search-help-keyboard')).toBeHidden()
+  await expect(page.locator('.site-search-help .search-help-touch')).toBeVisible()
+  await siteSearch.getByRole('searchbox', { name: 'Filter artifacts in SRE' }).fill('no-such-artifact')
   await expect(page.getByText('Use the site switcher to find another site.')).toBeVisible()
   await expect(page.getByText('Use ⌘ K, then @, to find another site.')).toBeHidden()
 
@@ -160,8 +162,11 @@ test('desktop search affordances keep keyboard shortcuts visible', async ({ page
 
   await page.getByRole('button', { name: /SRE/ }).click()
   await expect(page).toHaveURL(/\/sre$/)
-  const pageSearch = page.getByRole('searchbox', { name: 'Search artifacts in SRE' })
+  const pageSearch = page.getByRole('searchbox', { name: 'Filter artifacts in SRE' })
   await expect(page.locator('.site-search kbd')).toBeVisible()
+  await expect(page.locator('.site-search kbd')).toHaveText('⌘ K / Ctrl K')
+  await expect(page.locator('.site-search-help .search-help-keyboard')).toBeVisible()
+  await expect(page.locator('.site-search-help .search-help-touch')).toBeHidden()
   await pageSearch.fill('no-such-artifact')
   await expect(page.getByText('Use ⌘ K, then @, to find another site.')).toBeVisible()
   await expect(page.getByText('Use the site switcher to find another site.')).toBeHidden()
@@ -2249,16 +2254,19 @@ test('site home search and navigation filter stay distinct and navigation clears
   await page.goto('/sre')
 
   const navigationFilter = page.getByRole('textbox', { name: 'Filter SRE navigation' })
-  const siteSearch = page.getByRole('searchbox', { name: 'Search artifacts in SRE' })
+  const siteSearch = page.getByRole('searchbox', { name: 'Filter artifacts in SRE' })
+  await expect(page.getByText('Typing filters artifacts in this site.', { exact: false })).toBeVisible()
+  await expect(page.getByText('⌘ K / Ctrl K opens full search.')).toBeVisible()
   await navigationFilter.fill('latency')
   await expect(page.locator('.sidebar-section-label', { hasText: 'Matches' })).toBeVisible()
 
   await siteSearch.fill('topology')
   await expect(page.locator('.site-home .artifact-list-row')).toHaveCount(1)
   await expect(page.locator('.site-home .artifact-list-row')).toContainText('Platform topology')
+  await expect(page.getByText('Press Enter to open this match.', { exact: false })).toBeVisible()
   await expect(navigationFilter).toHaveValue('latency')
 
-  await page.locator('.site-home .artifact-list-row').click()
+  await siteSearch.press('Enter')
   await expect(page).toHaveURL(/\/sre\/architecture\/platform-topology\/index\.html$/)
   await expect(navigationFilter).toHaveValue('')
   await expect(page.locator('.browse-tree .tree-artifact[aria-current="page"]')).toBeVisible()
@@ -2275,6 +2283,44 @@ test('site home search and navigation filter stay distinct and navigation clears
   await expect(page).toHaveURL(/\/sre\/incidents\/checkout-latency\/index\.html$/)
   await expect(navigationFilter).toHaveValue('')
   await expect(page.locator('.browse-tree .tree-artifact[aria-current="page"]')).toBeVisible()
+})
+
+test('site home search keeps multi, empty, Escape, and IME Enter behavior predictable', async ({ page }) => {
+  await page.goto('/sre')
+
+  const siteSearch = page.getByRole('searchbox', { name: 'Filter artifacts in SRE' })
+  await siteSearch.fill('latency')
+  await expect(page.locator('.site-home .artifact-list-row')).toHaveCount(2)
+  await expect(page.getByText('Use Tab to focus a match, then press Enter to open it.', { exact: false })).toBeVisible()
+  await siteSearch.press('Enter')
+  await expect(page).toHaveURL(/\/sre$/)
+
+  await siteSearch.press('Tab')
+  await expect(page.locator('.site-home .artifact-list-row').first()).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/\/sre\/reports\/latency-retrospective\.md$/)
+
+  await page.goto('/sre')
+  await siteSearch.fill('topology')
+  await siteSearch.evaluate((input) => {
+    input.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'Enter',
+      isComposing: true,
+      bubbles: true,
+    }))
+  })
+  await expect(page).toHaveURL(/\/sre$/)
+
+  await siteSearch.press('Escape')
+  await expect(siteSearch).toHaveValue('')
+  await expect(siteSearch).not.toBeFocused()
+  await expect(page.locator('.site-home .browse-section')).toBeVisible()
+
+  await siteSearch.fill('no-such-artifact')
+  await expect(page.locator('.site-home .artifact-list-row')).toHaveCount(0)
+  await expect(page.getByText('No matches to open.', { exact: false })).toBeVisible()
+  await siteSearch.press('Enter')
+  await expect(page).toHaveURL(/\/sre$/)
 })
 
 test('artifact title and site home navigation stay clear on narrow screens', async ({ page }) => {
@@ -2387,7 +2433,7 @@ test('published preview documents stay out of production browsing and the site-h
   await expect(browse).not.toContainText(previewOnlyTitle)
   expect(previewRequests).toEqual([])
 
-  const siteSearch = page.getByRole('searchbox', { name: 'Search artifacts in HTML Showcase' })
+  const siteSearch = page.getByRole('searchbox', { name: 'Filter artifacts in HTML Showcase' })
   await siteSearch.fill(previewOnlyTitle)
   await expect(page.getByText(/Nothing in this site matches your search/)).toBeVisible()
   await expect(page.locator('.site-home .tree-artifact')).toHaveCount(0)

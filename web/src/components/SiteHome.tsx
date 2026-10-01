@@ -57,13 +57,38 @@ export function SiteHome({
           <Icon name="search" size={16} />
           <input
             type="search"
-            aria-label={`Search artifacts in ${index.site.title}`}
-            placeholder={`Search artifacts in ${index.site.title}`}
+            aria-label={`Filter artifacts in ${index.site.title}`}
+            aria-describedby="site-search-help"
+            aria-keyshortcuts="Meta+K Control+K"
+            placeholder={`Filter artifacts in ${index.site.title}`}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
+
+              if (event.key === 'Escape') {
+                event.preventDefault()
+                setQuery('')
+                event.currentTarget.blur()
+              } else if (event.key === 'Enter' && matches.length === 1) {
+                event.preventDefault()
+                onOpenArtifact(artifactRouteHref(index.site.id, matches[0].path))
+              }
+            }}
           />
-          <kbd>⌘ K</kbd>
+          <kbd>⌘ K / Ctrl K</kbd>
         </label>
+        <p className="site-search-help" id="site-search-help" aria-live="polite">
+          {!normalizedQuery
+            ? 'Typing filters artifacts in this site. '
+            : matches.length === 1
+              ? 'Press Enter to open this match. '
+              : matches.length > 1
+                ? 'Use Tab to focus a match, then press Enter to open it. '
+                : 'No matches to open. Clear the filter to browse this site. '}
+          <span className="search-help-keyboard">⌘ K / Ctrl K opens full search.</span>
+          <span className="search-help-touch">Use Search pages in the navigation to open full search.</span>
+        </p>
       </div>
 
       {normalizedQuery ? (
