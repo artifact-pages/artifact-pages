@@ -1,6 +1,6 @@
 # 2文字の入れ替えのような打ち間違いで文書が見つからない
 
-- Status: Open
+- Status: Won't fix
 - Priority: P3
 - Area: Command palette search
 
@@ -31,3 +31,7 @@
 ## Related issues and scope
 
 - 許す範囲は製品の判断が必要なため、実装前に案を比較して決める。
+
+## Decision (2026-10-01)
+
+Won't fix. The owner decided to keep the current fuzzy search, which matches characters in order: a query is found when its characters appear in the same order in the title or path, so swapped letters such as `raeding` do not match `reading`. Order-sensitive matching keeps unrelated results out of the list, and the empty-result guidance (ISSUE-042) already tells readers how to continue. Revisit only if real usage shows readers commonly fail on transposed or mistyped queries.
