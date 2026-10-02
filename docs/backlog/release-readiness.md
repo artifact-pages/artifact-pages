@@ -1,5 +1,7 @@
 # Cloudflare-first release execution
 
+[Component lanes and dependencies](workstreams.md) · [Delegation and owner handoffs](delegation.md)
+
 Checked on October 2, 2026 (JST). This is an execution order and handoff map, not a second specification or ticket queue. Linked tickets own their acceptance criteria and status. Public demo deployment is already live; general release/adoption readiness is not yet proven. AWS is independently gated, and GCP remains emulator-only.
 
 | Order | Outcome required | Existing records | Current evidence / next action |

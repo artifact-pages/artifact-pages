@@ -1,6 +1,6 @@
 # Backlog delegation and collaboration
 
-[Release execution order](release-readiness.md) · [Issue repair order](issues/README.md#repair-order) · [Implementation index](implementation/README.md)
+[Release execution order](release-readiness.md) · [Component lanes and dependencies](workstreams.md) · [Issue repair order](issues/README.md#repair-order) · [Implementation index](implementation/README.md)
 
 Execution mode answers **how work can be delegated**, not its priority or completion status. Keep the existing tracks and directories; do not create a second backlog sorted by assignee. This index records the current modes and handoffs. Each ticket remains the source of truth for status, dependencies, acceptance criteria, and evidence.
 
