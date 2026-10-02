@@ -2,6 +2,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ArtifactIndexEntry } from '../domain/index'
 import { Icon } from './Icon'
+import { followInApp } from './spa-link'
 
 type BreadcrumbMenuState = {
   key: string
@@ -19,6 +20,7 @@ export function ArtifactBreadcrumbs({
   artifacts,
   currentArtifact,
   onOpenArtifact,
+  artifactHref,
   onRevealInSidebar,
 }: {
   artifactPath: string
@@ -26,6 +28,8 @@ export function ArtifactBreadcrumbs({
   artifacts: ArtifactIndexEntry[]
   currentArtifact?: ArtifactIndexEntry
   onOpenArtifact: (artifact: ArtifactIndexEntry) => void
+  /** The link target of a menu entry. */
+  artifactHref: (artifact: ArtifactIndexEntry) => string
   onRevealInSidebar: (path: string, isDirectory: boolean) => void
 }) {
   const navRef = useRef<HTMLElement>(null)
@@ -146,6 +150,12 @@ export function ArtifactBreadcrumbs({
       return
     }
 
+    if (event.key === ' ' && event.target instanceof HTMLAnchorElement) {
+      event.preventDefault()
+      event.target.click()
+      return
+    }
+
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
     event.preventDefault()
     const items = [...(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]
@@ -243,14 +253,14 @@ export function ArtifactBreadcrumbs({
             {menuArtifacts.length ? menuArtifacts.map((artifact) => {
               const current = isCurrentArtifact(artifact, currentArtifact, artifactPath)
               return (
-                <button
+                <a
                   key={artifact.id}
-                  type="button"
+                  href={artifactHref(artifact)}
                   role="menuitem"
                   className={`breadcrumb-menu-item${current ? ' is-current' : ''}`}
                   aria-current={current ? 'page' : undefined}
                   aria-label={`${artifact.title}${current ? ', current artifact' : ''}, ${artifact.path}`}
-                  onClick={() => chooseArtifact(artifact)}
+                  onClick={(event) => followInApp(event, () => chooseArtifact(artifact))}
                 >
                   <Icon name="file" size={15} />
                   <span className="breadcrumb-menu-item-copy">
@@ -258,7 +268,7 @@ export function ArtifactBreadcrumbs({
                     <small>{menuPathLabel(artifact, openMenu.path, openMenu.isDirectory)}</small>
                   </span>
                   {current ? <span className="breadcrumb-current-badge">Current</span> : null}
-                </button>
+                </a>
               )
             }) : (
               <p className="breadcrumb-menu-empty">No artifacts in this location.</p>

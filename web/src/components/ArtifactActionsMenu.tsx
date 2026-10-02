@@ -69,7 +69,7 @@ export function ArtifactActionsMenu({
           return
         }
 
-        const browseRow = [...document.querySelectorAll<HTMLButtonElement>('.browse-tree .tree-artifact')]
+        const browseRow = [...document.querySelectorAll<HTMLElement>('.browse-tree .tree-artifact')]
           .find((row) => row.dataset.treePath === artifact.path)
         const nextTarget = browseRow
           ?? document.querySelector<HTMLButtonElement>('.browse-tree .tree-directory-button')

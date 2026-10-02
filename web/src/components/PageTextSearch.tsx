@@ -3,6 +3,7 @@ import type { FullTextHit } from '../data/fulltext'
 import type { ArtifactIndexEntry, SiteIndex } from '../domain/index'
 import { searchTerms } from '../domain/text-highlight'
 import { Icon } from './Icon'
+import { followInApp } from './spa-link'
 import { describePageTextSearchError, type PageTextSearchState } from './usePageTextSearch'
 
 export const PAGE_TEXT_SEARCH_INPUT_ID = 'page-text-search'
@@ -84,6 +85,7 @@ export function PageTextSearchResults({
   currentArtifactId,
   listRef,
   onOpen,
+  hitHref,
   onRetry,
   onLoadMore,
   onFocusInput,
@@ -95,6 +97,8 @@ export function PageTextSearchResults({
   currentArtifactId?: string
   listRef: RefObject<HTMLDivElement | null>
   onOpen: (hit: FullTextHit) => void
+  /** The link target of a result row. */
+  hitHref: (hit: FullTextHit) => string
   onRetry: () => void
   onLoadMore: () => void
   onFocusInput: () => void
@@ -173,8 +177,8 @@ export function PageTextSearchResults({
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
-    const items = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[data-text-search-item]')]
-    const current = items.indexOf(event.target as HTMLButtonElement)
+    const items = [...event.currentTarget.querySelectorAll<HTMLElement>('[data-text-search-item]')]
+    const current = items.indexOf(event.target as HTMLElement)
     if (current < 0) return
     const item = items[current]
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -268,6 +272,7 @@ export function PageTextSearchResults({
                     folder={folder}
                     artifact={artifactsById.get(hit.id)}
                     current={hit.id === currentArtifactId}
+                    href={hitHref(hit)}
                     onOpen={onOpen}
                   />
                 ))}
@@ -306,29 +311,31 @@ function ResultRow({
   folder,
   artifact,
   current,
+  href,
   onOpen,
 }: {
   hit: FullTextHit
   folder: string
   artifact?: ArtifactIndexEntry
   current: boolean
+  href: string
   onOpen: (hit: FullTextHit) => void
 }) {
   const filename = hit.path.slice(folder ? folder.length + 1 : 0)
   return (
-    <button
-      type="button"
+    <a
+      href={href}
       className={`page-text-result${current ? ' is-current' : ''}`}
       data-text-search-item="hit"
       data-folder={folder}
       data-hit-id={hit.id}
       aria-current={current ? 'page' : undefined}
       title={hit.path}
-      onClick={() => onOpen(hit)}
+      onClick={(event) => followInApp(event, () => onOpen(hit))}
     >
       <span className="page-text-result-title">{artifact?.title ?? filename}</span>
       <span className="page-text-result-path">{filename}</span>
-    </button>
+    </a>
   )
 }
 

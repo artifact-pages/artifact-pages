@@ -32,6 +32,7 @@ export function Sidebar({
   revealRequest,
   onOpenPalette,
   onOpenArtifact,
+  artifactHref,
   onToast,
   themeMode,
   onSetThemeMode,
@@ -50,6 +51,8 @@ export function Sidebar({
   revealRequest: { path: string; request: number } | null
   onOpenPalette: (seed: string) => void
   onOpenArtifact: (artifact: ArtifactIndexEntry) => void
+  /** Resolves a logical route to the link target a row carries (for example with `?q=` kept). */
+  artifactHref: (href: string) => string
   onToast: (message: string) => void
   themeMode: ThemeMode
   onSetThemeMode: (mode: ThemeMode) => void
@@ -77,6 +80,8 @@ export function Sidebar({
   useEffect(() => {
     setDraft(committedQuery)
   }, [committedQuery])
+
+  const rowHref = (artifact: ArtifactIndexEntry) => artifactHref(artifactRouteHref(index.site.id, artifact.path))
 
   async function copyArtifactLink(artifact: ArtifactIndexEntry) {
     const href = new URL(artifactRouteHref(index.site.id, artifact.path), window.location.origin).href
@@ -203,6 +208,7 @@ export function Sidebar({
             currentArtifactId={currentArtifactId}
             listRef={resultListRef}
             onOpen={pageTextSearch.onOpenHit}
+            hitHref={(hit) => artifactHref(hit.href)}
             onRetry={pageTextSearch.onRetry}
             onLoadMore={pageTextSearch.onLoadMore}
             onFocusInput={() => document.getElementById(PAGE_TEXT_SEARCH_INPUT_ID)?.focus()}
@@ -220,6 +226,7 @@ export function Sidebar({
                   style={treeStyle}
                   view="recent"
                   onOpenArtifact={onOpenArtifact}
+                  artifactHref={rowHref}
                   getArtifactActions={getArtifactActions}
                 />
               </div>
@@ -239,6 +246,7 @@ export function Sidebar({
                   expandedPaths={expandedPaths}
                   onExpandedPathsChange={onExpandedPathsChange}
                   onOpenArtifact={onOpenArtifact}
+                  artifactHref={rowHref}
                   getArtifactActions={getArtifactActions}
                 />
               )}

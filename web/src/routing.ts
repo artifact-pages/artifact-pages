@@ -48,3 +48,18 @@ export function artifactRouteHref(siteId: string, artifactPath: string) {
     .join('/')
   return `/${encodeURIComponent(siteId)}/${encodedPath}`
 }
+
+/**
+ * The canonical form of a location's path for the same logical route: duplicate
+ * slashes collapse, and a trailing slash after the site ID alone (`/guide/`) is
+ * dropped. Folder-like paths such as `/guide/en/` keep their trailing slash.
+ * Returns the pathname unchanged when it is already canonical.
+ */
+export function canonicalPathname(pathname: string) {
+  let canonical = pathname.replace(/\/{2,}/g, '/')
+  if (/^\/[^/]+\/$/.test(canonical)) canonical = canonical.slice(0, -1)
+  if (canonical === pathname) return pathname
+  const before = parseRoute(pathname)
+  const after = parseRoute(canonical)
+  return JSON.stringify(before) === JSON.stringify(after) ? canonical : pathname
+}

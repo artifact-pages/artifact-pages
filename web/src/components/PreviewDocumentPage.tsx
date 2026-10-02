@@ -6,11 +6,14 @@ import type { PreviewGroup, PreviewManifest } from '../domain/preview'
 import type { ArtifactIndexEntry, SiteIndex } from '../domain/index'
 import { MarkdownArtifact } from './MarkdownArtifact'
 import type { AppRoute } from '../routing'
+import { pageTitle, usePageTitle } from './usePageTitle'
 
 type PreviewDocumentRoute = Extract<AppRoute, { kind: 'preview-document' }>
 
-export function PreviewDocumentPage({ route, hash, navigate }: {
+export function PreviewDocumentPage({ route, hash, navigate, siteTitle }: {
   route: PreviewDocumentRoute
+  /** The registered site's title once the registry is loaded; the site ID until then. */
+  siteTitle?: string
   hash: string
   navigate: (href: string) => void
 }) {
@@ -60,19 +63,24 @@ export function PreviewDocumentPage({ route, hash, navigate }: {
     return () => { cancelled = true }
   }, [route.siteId])
 
+  const siteName = siteTitle ?? route.siteId
+  const documentTitle = manifestState.status === 'success'
+    ? manifestState.manifest.documents.find(({ path }) => path === route.artifactPath)?.title
+    : undefined
+  usePageTitle(pageTitle(documentTitle ?? 'Preview', 'Previews', siteName))
   const siteHref = `/${encodeURIComponent(route.siteId)}`
   const previewsHref = `/${encodeURIComponent(route.siteId)}/_previews`
   const returnHref = route.groupId ? `${previewsHref}?group=${encodeURIComponent(route.groupId)}` : previewsHref
 
   if (manifestState.status === 'loading') {
-    return <PreviewStatusPage siteId={route.siteId} message="Loading preview…" />
+    return <PreviewStatusPage siteName={siteName} message="Loading preview…" />
   }
   if (manifestState.status === 'error') {
-    return <PreviewUnavailable siteId={route.siteId} returnHref={returnHref} navigate={navigate} />
+    return <PreviewUnavailable siteName={siteName} returnHref={returnHref} navigate={navigate} />
   }
   const { manifest } = manifestState
   const document = manifest.documents.find(({ path }) => path === route.artifactPath)
-  if (!document) return <PreviewUnavailable siteId={route.siteId} returnHref={returnHref} navigate={navigate} />
+  if (!document) return <PreviewUnavailable siteName={siteName} returnHref={returnHref} navigate={navigate} />
 
   const artifactUrl = previewFileUrl(route.siteId, route.headSha, document.path)
   const artifact: ArtifactIndexEntry = {
@@ -128,7 +136,7 @@ export function PreviewDocumentPage({ route, hash, navigate }: {
           />
         )}
       </section>
-      <a className="preview-site-link" href={siteHref} onClick={handleNavigate(siteHref, navigate)}>Back to {route.siteId}</a>
+      <a className="preview-site-link" href={siteHref} onClick={handleNavigate(siteHref, navigate)}>Back to {siteName}</a>
     </main>
   )
 }
@@ -320,21 +328,21 @@ function handleNavigate(href: string, navigate: (href: string) => void) {
   }
 }
 
-function PreviewUnavailable({ siteId, returnHref, navigate }: {
-  siteId: string
+function PreviewUnavailable({ siteName, returnHref, navigate }: {
+  siteName: string
   returnHref: string
   navigate: (href: string) => void
 }) {
   return (
     <main className="preview-page preview-unavailable">
       <a className="preview-back-link" href={returnHref} onClick={handleNavigate(returnHref, navigate)}>← Back to previews</a>
-      <p className="eyebrow">{siteId} · Preview</p>
+      <p className="eyebrow">{siteName} · Preview</p>
       <h1>Preview unavailable</h1>
       <p role="status">This preview document is no longer available.</p>
     </main>
   )
 }
 
-function PreviewStatusPage({ siteId, message }: { siteId: string; message: string }) {
-  return <main className="status-page"><div className="status-content"><p className="eyebrow">{siteId} · Preview</p><p role="status">{message}</p></div></main>
+function PreviewStatusPage({ siteName, message }: { siteName: string; message: string }) {
+  return <main className="status-page"><div className="status-content"><p className="eyebrow">{siteName} · Preview</p><p role="status">{message}</p></div></main>
 }

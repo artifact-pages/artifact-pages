@@ -6,7 +6,7 @@ This document records the current local product contract and identifies decision
 
 ## 1. Product definition
 
-Git Artifact Pages is a Git-backed platform for publishing static artifacts as searchable, browsable websites.
+Git Artifact Pages is a Git-backed platform in which each registered site publishes its static artifacts independently, from its own repository, into one shared static projection that a single browser application presents as one reading space.
 
 A typical source artifact is generated or maintained in a Git repository, for example:
 
@@ -18,7 +18,7 @@ A typical source artifact is generated or maintained in a Git repository, for ex
 - review artifacts
 - documentation bundles
 
-The product preserves Git as the source of truth while presenting artifacts through a normal web experience.
+The product preserves Git as the source of truth. Publishing is per site: no central build regenerates every site, and one site's publish does not wait for another's. All sites share the projection layout and the reader application, so readers get the same discovery, navigation, search, and reading experience on every site.
 
 ## 2. System model
 
@@ -111,6 +111,8 @@ internal artifact URL:
 
 The SPA resolves the logical route and loads the corresponding artifact. Indexed document routes
 retain their full source-relative path, filename, and extension; `/:site` remains the separate site-home route.
+
+A path that names the same route in a non-canonical form is corrected in place: the app replaces the address-bar URL (no history entry, query and fragment kept) when duplicate slashes collapse (`/guide//en//reading.html` becomes `/guide/en/reading.html`) or a trailing slash follows the site ID alone (`/guide/` becomes `/guide`). A folder-like path such as `/guide/en/` is left as written and is not turned into a listing.
 
 ## 5. Storage projection
 
@@ -240,9 +242,9 @@ The builder recursively indexes every `.html`, `.htm`, and `.md` file under that
 
 Local resources referenced by those pages must also be present under `sourcePath`, with their relative directory structure intact. External resources may be referenced over HTTPS under the artifact resource policy described below. The index builder leaves the tree unchanged and emits metadata only. The later publish operation treats the publishable files in `sourcePath` as the desired artifact state: it uploads new and changed files and removes stale objects under that site's artifact prefix, excluding Git metadata such as `.git` and without touching another site, the registry object, or the application plane. It also publishes the generated per-site metadata and index.
 
-Provider-backed publish accepts only regular files and directories beneath `sourcePath`. It fails on symbolic links or other special filesystem entries; it neither follows a link outside the selected tree nor publishes the link target or link text as an artifact. This keeps the published projection within the declared source boundary and gives object storage consistent file semantics.
+Site publish accepts only regular files and directories beneath `sourcePath` for every delivery target, including local storage. It fails on symbolic links or other special filesystem entries; it neither follows a link outside the selected tree nor publishes the link target or link text as an artifact. This keeps the published projection within the declared source boundary and gives object storage consistent file semantics.
 
-For a provider-backed publish, build the desired projection locally, acquire the site's lock, and revalidate the deployed registry before writing. Upload new and changed artifact files first; after those uploads succeed, replace `index.json` and then `meta.json`; delete stale artifact objects last. This ordering reduces broken references but does not make a multi-object site update atomic. A reader may temporarily observe old metadata with new artifact bytes, a new index while stale objects are still being removed, or cached older content. V1 accepts this eventual-consistency window and does not use versioned release directories or an atomic site pointer.
+For every target, acquire the site's lock (dry-run takes none), revalidate the deployed registry, then build the desired projection locally with the registered name and description and compare it with the origin before writing. A local-storage target additionally checks, before locking, that its storage root does not overlap the source. Upload new and changed artifact files first; after those uploads succeed, replace `index.json` and then `meta.json`; delete stale artifact objects last. This ordering reduces broken references but does not make a multi-object site update atomic. A reader may temporarily observe old metadata with new artifact bytes, a new index while stale objects are still being removed, or cached older content. V1 accepts this eventual-consistency window and does not use versioned release directories or an atomic site pointer.
 
 Publish is idempotent desired-state synchronization, not a transaction with rollback. If an operation fails partway through, it reports failure and releases its lock when it can stop safely; a process crash leaves the lock held for explicit recovery. Retrying the same desired source reuploads or verifies needed objects, republishes index and metadata, removes remaining stale objects, and converges the site. After origin synchronization and preview-catalog reconciliation, site publish requests cache invalidation for changed artifact/resource URLs (including removed objects), changed index/metadata URLs, and the preview catalog when pruned. A successful request does not guarantee every CDN edge has refreshed or update an already-open reader's in-memory state.
 
@@ -379,7 +381,7 @@ The site picker marks sites that publish page text search. Below nine sites it l
 
 Finding a page by name and searching page text are separate surfaces.
 
-Normal page search (the ⌘ K palette) is client-side and scoped to the active site's artifact index. It must not read other sites' artifact indexes. It has no scope tabs. A blank query lists the reader's Pinned pages, then Recently read pages, then commands; with neither, it lists ranked pages. Pins and reads also boost ranking. The `@` prefix searches lightweight site metadata and switches site; `>` searches commands; `#` searches headings in the open artifact. Cross-site artifact search is not implemented. If it becomes a product need, evaluate its cost and UX separately rather than widening ordinary search silently.
+Normal page search (the ⌘ K palette) is client-side and scoped to the active site's artifact index. It must not read other sites' artifact indexes. It has no scope tabs. A blank query lists the reader's Pinned pages, then Recently read pages, then commands; with neither, it lists ranked pages. Pins and reads also boost ranking. The `@` prefix searches lightweight site metadata (name, ID and description) and switches site; a site whose name or ID matches is listed before one that matches only in its description. `>` searches commands; `#` searches headings in the open artifact. Matching folds compatibility forms (NFKC, then lowercase) in both the query and the text, so full-width input such as `ＲＥＡＤ` matches `read`, and the full-width prefixes `＠`, `＞` and `＃` select the same modes as `@`, `>` and `#`. Palette options are listbox options, not links. After a choice that navigates, keyboard focus lands on the page (the artifact frame, or the main region); Esc or closing without a choice returns focus to the element that had it before the palette opened (the main region when nothing had focus). On the site picker, with no registered page text search, an empty result says pages are searched after a site is chosen. Cross-site artifact search is not implemented. If it becomes a product need, evaluate its cost and UX separately rather than widening ordinary search silently.
 
 Initial searchable fields:
 
@@ -395,9 +397,19 @@ On a site that advertises it, the sidebar's search field takes a committed query
 
 When the query is not blank, the palette also offers "Search page text for …" after the page matches (selected by default when no page name matches), and ⌘ ↵ hands the query to the sidebar at any time; after a hand-off focus is in the sidebar's search field, so ↓ enters the results. On a site without page text search the sidebar shows a "Jump to a page… ⌘ K" button instead of the field, the palette offers no hand-off, and ⌘ ⇧ F shows a short notice.
 
+### Links, tab titles and shortcuts
+
+Every row that navigates is a real link (`<a href>` to its logical route): site picker cards, Recently updated and Browse rows on the site home, sidebar Browse and Pinned items, page text search results, and breadcrumb menu entries. Only a plain primary click is handled in the app; ⌘/Ctrl/Shift/Alt-click, middle-click and "copy link address" keep the browser's behavior. A link's `href` already carries the committed `?q=` wherever following it in the app would (within the same site, never to previews). Counts read "1 artifact" and "N artifacts".
+
+The tab title reads from the most specific page to its container, joined by " · ": an artifact is "<artifact title> · <site title>", a site home is "<site title>", the site picker is "Git Artifact Pages", the Previews list is "Previews · <site title>", a preview document is "<document title> · Previews · <site title>", and a not-found page inside a site is "Page not found · <site title>". Pages outside any site (loading, error and not-found states) end with "· Git Artifact Pages". The site title is the registered name; the site ID stands in until the registry has loaded.
+
+⌘ B (Ctrl B) toggles the sidebar, ⌘ K opens the palette and ⌘ ⇧ F focuses page text search from anywhere in the app, including while keyboard focus is inside an HTML artifact's frame. "Copy link" (the header button and the palette command) copies the document's link without the reader's `?q=` search and with its fragment; the committed search is personal context, not part of the document.
+
+Below 620 px wide the workspace header puts the breadcrumb path on its own row above the actions, so the current document's title keeps the full width (an ellipsis at its end at most) while the folder menus stay available. The site picker keeps its "Page text search" badge at every width (smaller on narrow screens).
+
 ### Left sidebar
 
-The left sidebar derives a tree/navigation model from the site index. Its top holds the page text search field, or a "Jump to a page… ⌘ K" button on sites without page text search; the sidebar does not filter by name, which the palette does. Artifact rows may offer Pin/Unpin, Copy link, Open source, View history, and Open raw artifact actions. Pin stores only a site-scoped artifact reference in the current browser's local storage; it does not change the index, artifact bytes, source tree, or Browse hierarchy. The Pinned section is a shortcut list above Browse. Recently updated pages are listed on the site home rather than in the sidebar. Copy link copies the application's artifact route, while raw/source/history actions open their corresponding projections in a new tab. No sidebar action mutates Git content.
+The left sidebar derives a tree/navigation model from the site index. Its top holds the page text search field, or a "Jump to a page… ⌘ K" button on sites without page text search; the sidebar does not filter by name, which the palette does. Artifact rows may offer Pin/Unpin, Copy link, Open source, View history, and Open raw artifact actions. Pin stores only a site-scoped artifact reference in the current browser's local storage; it does not change the index, artifact bytes, source tree, or Browse hierarchy. The Pinned section is a shortcut list above Browse. Recently updated pages are listed on the site home rather than in the sidebar. Copy link copies the application's artifact route (without `?q=`), while raw/source/history actions open their corresponding projections in a new tab. No sidebar action mutates Git content.
 
 ### Main pane
 
@@ -503,7 +515,7 @@ sites:
     sourcePath: docs/artifacts
 ~~~
 
-The site ID is the stable machine key; `name` is the human-readable display name and may contain spaces or punctuation. `name` is canonical in the registry. Per-site `meta.json` and `index.json` carry it as `site.title` for the browser, generated from the registry rather than edited separately.
+The site ID is the stable machine key; `name` is the human-readable display name and may contain spaces or punctuation. `name` is canonical in the registry. Per-site `meta.json` and `index.json` carry it as `site.title` for the browser, generated from the registry rather than edited separately. An entry may also carry an optional one-line `description`; a blank value is omitted. It is copied into `sites.json` and into `site.description` in `meta.json` and `index.json`, and the site picker shows it.
 
 For GitHub, source identity is the human-readable `owner/repo` locator together with `sourcePath`; a numeric repository ID is not required. If a repository is renamed or transferred, its locator in the registry must be updated.
 
@@ -541,15 +553,15 @@ When `registry register` finds registered sites omitted from the complete desire
 
 Checking the registry and then publishing without coordination has a time-of-check/time-of-use race: an unregister can remove the registration and delete the site's objects after a publisher's check but before that publisher writes. The provider publishing contract therefore uses one cooperative, per-site storage lock shared by satellite publish and `registry unregister` operations.
 
-The lock is a reserved control object outside the site's index and artifact prefixes, for example `/_control/locks/<site>.json`. It is not part of the registry, browser index, or published site data, and deleting a site's projection must not delete it. The hosting adapter must not expose control objects through the public site distribution. Keep one small lock record per site with `free` or `held` state and an opaque operation/run identifier while held; retain the free record after `registry unregister` rather than relying on conditional object deletion. For first use, create it atomically only if absent. For later acquisitions, releases, and recovery, compare-and-swap the record with a conditional `PutObject` using the current ETag (`If-Match`). This lets a recovery operation detect that the lock changed after inspection rather than clearing a newer owner's lock.
+The lock is a reserved control object outside the site's index and artifact prefixes, at `/_control/locks/sites/<site>.json`. It is not part of the registry, browser index, or published site data, and deleting a site's projection must not delete it. The hosting adapter must not expose control objects through the public site distribution. Keep one small lock record per site with `free` or `held` state and an opaque operation/run identifier while held; retain the free record after `registry unregister` rather than relying on conditional object deletion. For first use, create it atomically only if absent. For later acquisitions, releases, and recovery, compare-and-swap the record with a conditional `PutObject` using the current ETag (`If-Match`). This lets a recovery operation detect that the lock changed after inspection rather than clearing a newer owner's lock.
 
 The critical sequences are:
 
 ~~~text
 satellite publish:
-  build locally
   acquire site lock
   fetch the current deployed registry directly from storage and validate the exact source
+  build locally with the registered name and description
   synchronize that site's index and artifact prefixes
   release site lock
 
@@ -571,7 +583,7 @@ The publisher must perform its authoritative registry check **after acquiring th
 
 Locks do not expire automatically in v1. This fails closed if a process dies: publishing or unregister cleanup for that site remains blocked until an operator confirms no operation is active and uses a compare-and-swap transition to mark the stale lock free. The Artifact Pages command must provide lock inspection and guarded stale-lock recovery; operators should not need raw provider CLIs. If the ETag changed since inspection, recovery must stop and inspect again. A time-based lease without fencing is not sufficient, because a paused publisher could resume after its lease expires and write anyway. Commands wait/retry for a bounded period when another operation holds the lock, then fail without taking it over; the precise timeout and retry schedule are adapter details. This is coordination among supported Artifact Pages commands, not an IAM security boundary; callers with direct write credentials can bypass it.
 
-The YAML source accepts only the schema shown above: `schemaVersion` must be the integer `1`, `sites` must be a mapping (an empty mapping is valid), and each site entry must contain exactly `name`, `repository`, and `sourcePath`. Reject duplicate YAML keys, unknown fields, missing fields, and values of the wrong type rather than silently ignoring or overwriting them. The deployed JSON projection uses the separate array shape shown above. Its path and role as the shared runtime representation are fixed for this model. The initial model has one source per site and no mount-path merging; if multi-repository sites are introduced later, the registry must prevent overlapping mount paths.
+The YAML source accepts only the schema shown above: `schemaVersion` must be the integer `1`, `sites` must be a mapping (an empty mapping is valid), and each site entry must contain exactly `name`, `repository`, and `sourcePath`, plus an optional `description` string. Reject duplicate YAML keys, unknown fields, missing fields, and values of the wrong type rather than silently ignoring or overwriting them. The deployed JSON projection uses the separate array shape shown above. Its path and role as the shared runtime representation are fixed for this model. The initial model has one source per site and no mount-path merging; if multi-repository sites are introduced later, the registry must prevent overlapping mount paths.
 
 Registry validation must reject invalid or reserved site IDs, blank names, and unsafe source paths. Site IDs use lowercase ASCII letters and digits separated by single hyphens (`[a-z0-9]+(?:-[a-z0-9]+)*`). Reserve `assets`, which conflicts with the SPA's `/assets/*` application plane; `_indexes` and `_artifacts` are already excluded by the site-ID syntax. Names must be non-empty after trimming; duplicate display names are allowed because the site ID remains the unique key. A GitHub repository locator must be exactly two non-empty `owner/repo` components, not a URL, clone URL, or value ending in `.git`. Repository identity is compared case-insensitively, matching satellite checkout eligibility checks; source paths are compared exactly. Source paths are canonical repository-relative POSIX paths: `.` represents the repository root; absolute paths, `..` segments, backslashes, and leading/trailing whitespace are rejected. A `(repository, sourcePath)` pair may be registered only once under those comparison rules, while different paths in the same repository may belong to different sites. The publisher also verifies that `sourcePath` exists as a directory inside its checkout. If mount-path merging is introduced, it must also reject:
 
@@ -733,7 +745,7 @@ The user-facing publishing interface is the `artifact-pages` command. Its provid
 
 Site publish and unregister must enumerate object prefixes completely before treating the result as the site's current stored state. Adapters follow every listing continuation token/page; they must not assume that one response contains every object. Before deleting stale keys, the command must have successfully completed listings for both `/_artifacts/<site>/` and `/_indexes/<site>/`. A failed or incomplete listing aborts reconciliation rather than risking deletion based on a partial view.
 
-Delete operations use batches within the provider's documented limits and inspect per-object failures as well as request-level errors. A partial delete is a failed operation; retrying the same desired publish or unregister repeats the listing and converges idempotently. Site operations may read or delete only their exact artifact and index prefixes. They must never include `/_indexes/sites.json`, `/_indexes/index.html`, the application plane, or `/_control/locks/<site>.json` in site-content cleanup. Provider pagination and batch sizes stay inside the adapter, not in the product data model.
+Delete operations use batches within the provider's documented limits and inspect per-object failures as well as request-level errors. A partial delete is a failed operation; retrying the same desired publish or unregister repeats the listing and converges idempotently. Site operations may read or delete only their exact artifact and index prefixes. They must never include `/_indexes/sites.json`, `/_indexes/index.html`, the application plane, or `/_control/locks/sites/<site>.json` in site-content cleanup. Provider pagination and batch sizes stay inside the adapter, not in the product data model.
 
 The intended GitHub-to-AWS path uses GitHub Actions OIDC rather than long-lived AWS access keys. The admin and satellite workflows use separate roles:
 
@@ -898,7 +910,7 @@ Commands that use a deployment target report the effective target bucket in norm
 
 Operational text reports share the low-chroma, terminal-aware [CLI output contract](guides/cli-output.md). They show the operation and outcome first, with grouped bounded change details, target context, and explicit dry-run/no-op completion. Registry changes distinguish logical registrations, concrete projection objects, cleanup scopes, and cache requests. Preview links, lock state/ETag, local index outputs, and saved config locators retain their operation-specific meaning. Piped output and `NO_COLOR` contain no color escapes; machine-readable JSON and exit codes are unchanged. These reports do not simulate live progress or claim that a cache request has propagated.
 
-Config locator precedence is explicit `--config` layer(s), `ARTIFACT_PAGES_CONFIG`, repository-local `artifact-pages.yaml`, then the user's saved locator. The environment, implicit repository default, and saved locator each select one file; only repeated explicit `--config` flags create a local stack. `artifact-pages.yaml` remains the implicit local default; explicit `--config` and saved locators support arbitrary filenames. `artifact-pages config set-default LOCATOR` updates only that locator in the user's config directory. A satellite repository resolves its deployment target without cloning the admin repository; publishing eligibility still comes from the deployed `/_indexes/sites.json` registry, regardless of whether the selected config contains `sites`.
+Config locator precedence is explicit `--config` layer(s), `ARTIFACT_PAGES_CONFIG`, `artifact-pages.yaml` in the current working directory, then the user's saved locator. The environment, implicit working-directory default, and saved locator each select one file; only repeated explicit `--config` flags create a local stack. `artifact-pages.yaml` remains the implicit local default; explicit `--config` and saved locators support arbitrary filenames. `artifact-pages config set-default LOCATOR` updates only that locator in the user's config directory. A satellite repository resolves its deployment target without cloning the admin repository; publishing eligibility still comes from the deployed `/_indexes/sites.json` registry, regardless of whether the selected config contains `sites`.
 
 For local development, one repository may commit a config containing both a non-secret target and the admin-owned registry:
 

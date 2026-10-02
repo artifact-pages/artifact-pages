@@ -104,6 +104,7 @@ function SidebarPreview({ variant, showHoverPreview }: PreviewProps) {
             style="branch-guides"
             view="recent"
             onOpenArtifact={openArtifact}
+            artifactHref={(artifact) => `/${index.site.id}/${artifact.path}`}
           />
         </div>
 
@@ -119,6 +120,7 @@ function SidebarPreview({ variant, showHoverPreview }: PreviewProps) {
             expandedPaths={expandedPaths}
             onExpandedPathsChange={updateExpandedPaths}
             onOpenArtifact={openArtifact}
+            artifactHref={(artifact) => `/${index.site.id}/${artifact.path}`}
           />
         </div>
       </nav>

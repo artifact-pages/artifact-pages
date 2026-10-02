@@ -8,7 +8,8 @@ import { createSiteFullTextSearch } from './data/fulltext'
 import { hasSiteDiscoveryMetadata, type SiteCatalogEntry, type SiteIndex } from './domain/index'
 import { isThemeMode, resolveTheme } from './domain/theme'
 import type { ResolvedTheme, ThemeMode } from './domain/theme'
-import { parseRoute, type AppRoute } from './routing'
+import { canonicalPathname, parseRoute, type AppRoute } from './routing'
+import { APP_NAME, pageTitle, usePageTitle } from './components/usePageTitle'
 
 type LoadingState<T> =
   | { status: 'loading' }
@@ -31,6 +32,15 @@ function useLocation() {
       window.removeEventListener('hashchange', sync)
     }
   }, [])
+
+  // A non-canonical path (`/guide//en//x.html`, `/guide/`) shows the same route; the
+  // address bar is corrected in place, without a history entry.
+  useEffect(() => {
+    const canonical = canonicalPathname(url.pathname)
+    if (canonical === url.pathname) return
+    window.history.replaceState(window.history.state, '', `${canonical}${url.search}${url.hash}`)
+    setUrl({ pathname: window.location.pathname, search: window.location.search, hash: window.location.hash })
+  }, [url])
 
   const navigate = useCallback((href: string) => {
     window.history.pushState({}, '', href)
@@ -117,9 +127,12 @@ function App() {
     )) {
       return <PageNotFoundPage onBack={() => navigate('/')} />
     }
+    const siteTitle = sites.status === 'success'
+      ? sites.data.find(({ site }) => site.id === route.siteId)?.site.title
+      : undefined
     return route.kind === 'preview-list'
-      ? <PreviewListPage route={route} navigate={navigate} />
-      : <PreviewDocumentPage route={route} hash={hash} navigate={navigate} />
+      ? <PreviewListPage route={route} navigate={navigate} siteTitle={siteTitle} />
+      : <PreviewDocumentPage route={route} hash={hash} navigate={navigate} siteTitle={siteTitle} />
   }
 
   return (
@@ -266,6 +279,7 @@ function SitePage({
 }
 
 function StatusPage({ title, message }: { title: string; message: string }) {
+  usePageTitle(pageTitle(title === 'Sites' ? undefined : title, APP_NAME))
   return (
     <main className="status-page">
       <div className="status-content">
@@ -288,6 +302,7 @@ function ErrorPage({
   error: Error
   onBack?: () => void
 }) {
+  usePageTitle(pageTitle(scope === 'catalog' ? undefined : title, APP_NAME))
   return (
     <main className="status-page">
       <div className="status-content">
@@ -320,6 +335,7 @@ function RegisteredSiteStatusPage({
   message: string
   onBack: () => void
 }) {
+  usePageTitle(pageTitle(title, APP_NAME))
   return (
     <main className="status-page">
       <div className="status-content">
@@ -334,6 +350,7 @@ function RegisteredSiteStatusPage({
 }
 
 function PageNotFoundPage({ onBack }: { onBack: () => void }) {
+  usePageTitle(pageTitle('Page not found', APP_NAME))
   return (
     <main className="status-page">
       <div className="status-content">

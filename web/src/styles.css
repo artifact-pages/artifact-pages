@@ -1183,6 +1183,10 @@ mark {
   background: var(--line-soft);
 }
 
+.stage:focus {
+  outline: none;
+}
+
 .stage {
   position: relative;
   min-width: 0;
@@ -2528,7 +2532,19 @@ mark {
     width: 27px;
   }
 
+  /* Too narrow to share one row with the actions: the path takes its own row
+     above them, so the current document's title keeps the full width (an
+     ellipsis at its end at most) and the folders stay one scroll away. */
+  .context-bar {
+    height: auto;
+    min-height: var(--context-height);
+    flex-wrap: wrap;
+    padding-top: 3px;
+    padding-bottom: 3px;
+  }
+
   .breadcrumbs {
+    flex: 1 0 100%;
     margin-left: 2px;
     font-size: 10px;
     touch-action: pan-x;
@@ -2536,6 +2552,22 @@ mark {
 
   .breadcrumb-part {
     max-width: 48vw;
+  }
+
+  /* Folders give way first (ellipsis, down to their menu chevron); the current
+     document keeps its full title up to the width of the row. */
+  .breadcrumb-part:not(:last-child) {
+    min-width: 34px;
+    flex: 0 1 auto;
+  }
+
+  .breadcrumb-part:last-child {
+    max-width: 100%;
+    flex: 0 0 auto;
+  }
+
+  .context-actions {
+    margin-left: auto;
   }
 
   .breadcrumb-current {
@@ -2927,6 +2959,14 @@ mark {
   color: inherit;
 }
 
+a.site-picker-row,
+a.tree-artifact,
+a.artifact-list-row,
+a.page-text-result,
+a.breadcrumb-menu-item {
+  text-decoration: none;
+}
+
 @media (max-width: 860px) {
   .sidebar-palette-trigger--wide {
     min-width: 0;
@@ -2946,6 +2986,7 @@ mark {
   }
 
   .site-picker-badge {
-    display: none;
+    padding: 1px 6px;
+    font-size: 10px;
   }
 }

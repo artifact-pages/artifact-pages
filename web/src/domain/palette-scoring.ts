@@ -230,6 +230,6 @@ function getFreshnessBoost(updatedAt: string, now: number): number {
 }
 
 function paletteWords(value: string): string[] {
-  return value.toLowerCase().split(/[^\p{L}\p{N}]+/u)
+  return value.normalize('NFKC').toLowerCase().split(/[^\p{L}\p{N}]+/u)
     .filter((word) => word.length >= 4 && !ignoredWords.has(word))
 }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { hasSiteDiscoveryMetadata, type ArtifactIndexEntry, type SiteCatalogEntry, type SiteIndex, type TocEntry } from '../domain/index'
 import type { RecentArtifactRead } from '../domain/recent-reads'
+import { artifactCountLabel } from '../domain/site-count-label'
 import {
   createPaletteProductionScorer,
   getPaletteFreshnessBoost,
@@ -99,15 +100,8 @@ export function CommandPalette({
   const [query, setQuery] = useState(seed)
   const [selectedIndex, setSelectedIndex] = useState(() => defaultSelectionIndex(seed, context, currentIndex, sites.length))
   const scoringConfig = paletteScoringExperimentConfig(window.location.search)
-  const normalized = query.toLocaleLowerCase()
-  const mode = normalized.startsWith('@')
-    ? 'site'
-    : normalized.startsWith('>')
-      ? 'command'
-      : normalized.startsWith('#')
-        ? 'heading'
-        : 'search'
-  const hasScopePrefix = normalized.startsWith('@') || normalized.startsWith('>') || normalized.startsWith('#')
+  const mode = paletteMode(query)
+  const hasScopePrefix = mode !== 'search'
   const term = (hasScopePrefix ? query.slice(1) : query).trim()
   const scoringExperiment = useMemo(() => {
     if (!scoringConfig || !currentIndex) return undefined
@@ -158,7 +152,7 @@ export function CommandPalette({
   )
   const entries = sections.flatMap((section) => section.entries)
   const entrySequence = mode === 'site' ? JSON.stringify(entries.map(({ id }) => id)) : ''
-  const emptyMessage = getEmptyMessage({ mode, currentArtifact, siteCount: sites.length })
+  const emptyMessage = getEmptyMessage({ mode, context, currentArtifact, siteCount: sites.length })
 
   useEffect(() => {
     inputRef.current?.focus()
@@ -340,16 +334,18 @@ export function CommandPalette({
 }
 
 function defaultSelectionIndex(query: string, context: PaletteContext, currentIndex: SiteIndex | undefined, siteCount: number) {
-  const isUnfilteredSiteSwitch = query.trim() === '@' && context !== 'sites' && currentIndex !== undefined
+  const isUnfilteredSiteSwitch = query.trim().normalize('NFKC') === '@' && context !== 'sites' && currentIndex !== undefined
   return isUnfilteredSiteSwitch && siteCount !== 1 ? -1 : 0
 }
 
 function getEmptyMessage({
   mode,
+  context,
   currentArtifact,
   siteCount,
 }: {
   mode: 'site' | 'command' | 'heading' | 'search'
+  context: PaletteContext
   currentArtifact?: ArtifactIndexEntry
   siteCount: number
 }): string {
@@ -364,7 +360,16 @@ function getEmptyMessage({
       : 'No sites match. Change or clear your search.'
   }
   if (mode === 'command') return 'No commands match. Change or clear your search.'
-  return 'Nothing matches. Try > for commands, @ for sites, or # for headings.'
+  if (context === 'sites') return 'No sites or commands match. Pages are searched after you choose a site.'
+  return currentArtifact
+    ? 'Nothing matches. Try > for commands, @ for sites, or # for headings.'
+    : 'Nothing matches. Try > for commands or @ for sites.'
+}
+
+// A full-width prefix (＠, ＞, ＃) selects the same mode as its ordinary form.
+function paletteMode(query: string): 'site' | 'command' | 'heading' | 'search' {
+  const prefix = query.slice(0, 1).normalize('NFKC')
+  return prefix === '@' ? 'site' : prefix === '>' ? 'command' : prefix === '#' ? 'heading' : 'search'
 }
 
 function buildSections({
@@ -512,7 +517,7 @@ function buildSiteEntries(
     const descriptionMatch = description ? fuzzyMatch(description, term) : undefined
     if (term.trim() && !titleMatch && !idMatch && !descriptionMatch) return []
     const statusLabel = hasSiteDiscoveryMetadata(siteEntry)
-      ? `${siteEntry.artifactCount} artifacts`
+      ? artifactCountLabel(siteEntry.artifactCount)
       : siteEntry.status === 'not-published'
         ? 'not published yet'
         : 'details unavailable'
@@ -532,11 +537,13 @@ function buildSiteEntries(
         subtitleMatch,
         onSelect: () => onNavigate(`/${encodeURIComponent(siteEntry.site.id)}`),
       },
+      // A match on the name or ID outranks one that only appears in the description.
+      nameMatched: Boolean(titleMatch || idMatch),
       score: Math.max(titleMatch?.score ?? 0, idMatch?.score ?? 0, descriptionMatch?.score ?? 0),
     }]
   })
     .sort((left, right) => term.trim()
-      ? right.score - left.score
+      ? Number(right.nameMatched) - Number(left.nameMatched) || right.score - left.score
       : left.entry.title.localeCompare(right.entry.title))
     .map(({ entry }) => entry)
 }

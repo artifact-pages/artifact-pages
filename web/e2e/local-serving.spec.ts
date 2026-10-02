@@ -124,11 +124,11 @@ test('static sites catalog discovers sites and opens a site home without directo
   // Three sites are easier to scan than to search; ⌘ K still opens site search.
   await expect(page.getByRole('button', { name: 'Search sites' })).toHaveCount(0)
   await expect(page.locator('.site-picker-badge')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: /SRE/ })).toBeVisible()
-  await expect(page.getByRole('button', { name: /Frontend/ })).toBeVisible()
-  await expect(page.getByRole('button', { name: /HTML Showcase/ })).toBeVisible()
+  await expect(page.getByRole('link', { name: /SRE/ })).toBeVisible()
+  await expect(page.getByRole('link', { name: /Frontend/ })).toBeVisible()
+  await expect(page.getByRole('link', { name: /HTML Showcase/ })).toBeVisible()
 
-  await page.getByRole('button', { name: /SRE/ }).click()
+  await page.getByRole('link', { name: /SRE/ }).click()
   await expect(page).toHaveURL(/\/sre$/)
   await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
   await expect(page.locator('.site-home .artifact-list-section[aria-label="Recently updated"]')).toHaveCount(0)
@@ -157,7 +157,7 @@ test('mobile search affordances describe their scope and open the matching palet
     .toHaveAttribute('placeholder', 'Search sites...')
   await page.keyboard.press('Escape')
 
-  await page.getByRole('button', { name: /SRE/ }).click()
+  await page.getByRole('link', { name: /SRE/ }).click()
   await expect(page).toHaveURL(/\/sre$/)
   const homeJump = page.locator('.site-home').getByRole('button', { name: /Jump to a page/ })
   await expect(homeJump).toBeVisible()
@@ -234,7 +234,7 @@ test('desktop search affordances keep keyboard shortcuts visible', async ({ page
   await expect(siteSearchTrigger.locator('kbd')).toBeVisible()
   await expect(siteSearchTrigger.getByText('Search sites...')).toBeVisible()
 
-  await page.getByRole('button', { name: /SRE/ }).click()
+  await page.getByRole('link', { name: /SRE/ }).click()
   await expect(page).toHaveURL(/\/sre$/)
   // The site home has no inline filter; its ⌘ K button opens the palette.
   await expect(page.locator('.site-home').getByRole('searchbox')).toHaveCount(0)
@@ -359,14 +359,14 @@ test('registered discovery honors sites.json, hides unregistered storage, and lo
 
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Choose a site' })).toBeVisible()
-  await expect(page.getByRole('button', { name: /Frontend registered/ })).toBeVisible()
-  await expect(page.getByRole('button', { name: /SRE registered/ })).toBeVisible()
-  await expect(page.getByRole('button', { name: /HTML Showcase/ })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: /Frontend registered/ })).toBeVisible()
+  await expect(page.getByRole('link', { name: /SRE registered/ })).toBeVisible()
+  await expect(page.getByRole('link', { name: /HTML Showcase/ })).toHaveCount(0)
   expect(metadataRequests.sort()).toEqual(['/_indexes/frontend/meta.json', '/_indexes/sre/meta.json'])
   expect(indexRequests).toEqual([])
   expect(directoryRequests).toEqual([])
 
-  await page.getByRole('button', { name: /SRE registered/ }).click()
+  await page.getByRole('link', { name: /SRE registered/ }).click()
   await expect(page).toHaveURL(/\/sre$/u)
   await expect(page.getByRole('heading', { name: 'SRE registered', exact: true })).toBeVisible()
   await expect.poll(() => [...indexRequests]).toEqual(['/_indexes/sre/index.json'])
@@ -442,7 +442,7 @@ test('an empty registered site stays on its home route and does not affect a nei
   })
 
   await page.goto('/')
-  const emptySite = page.getByRole('button', { name: /Empty registered/ })
+  const emptySite = page.getByRole('link', { name: /Empty registered/ })
   await expect(emptySite).toContainText('0 artifacts')
   await emptySite.click()
   await expect(page).toHaveURL(/\/empty$/u)
@@ -511,10 +511,10 @@ test('a registered site remains discoverable before and after its first publish'
 
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Choose a site' })).toBeVisible()
-  const frontendBeforePublish = page.getByRole('button', { name: /Frontend registered/ })
+  const frontendBeforePublish = page.getByRole('link', { name: /Frontend registered/ })
   await expect(frontendBeforePublish).toContainText('Registered · not published yet')
   await expect(frontendBeforePublish).not.toContainText(/\d+ artifacts/u)
-  await expect(page.getByRole('button', { name: /SRE registered/ })).toContainText('6 artifacts')
+  await expect(page.getByRole('link', { name: /SRE registered/ })).toContainText('6 artifacts')
   expect(indexRequests).toEqual([])
 
   await frontendBeforePublish.click()
@@ -536,7 +536,7 @@ test('a registered site remains discoverable before and after its first publish'
 
   frontendPublished = true
   await page.goto('/')
-  const frontendAfterPublish = page.getByRole('button', { name: /Frontend registered/ })
+  const frontendAfterPublish = page.getByRole('link', { name: /Frontend registered/ })
   await expect(frontendAfterPublish).toContainText('3 artifacts')
   await expect(frontendAfterPublish).not.toContainText('not published yet')
   await frontendAfterPublish.click()
@@ -592,12 +592,12 @@ for (const failure of ['invalid metadata', 'network failure'] as const) {
     await page.goto('/')
     await expect(page.getByRole('heading', { name: 'Choose a site' })).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
-    const frontend = page.getByRole('button', { name: /Frontend registered/ })
+    const frontend = page.getByRole('link', { name: /Frontend registered/ })
     await expect(frontend).toContainText('Registered · details unavailable')
     await expect(frontend).not.toContainText(/\d+ artifacts/u)
     await expect(frontend.locator('.site-picker-description')).toHaveText('Incident response runbooks, service ownership guidance, reliability reviews, deployment health reports, and recovery procedures for production teams.')
     await expect(frontend.locator('.site-picker-meta')).toContainText('/frontend')
-    const sre = page.getByRole('button', { name: /SRE registered/ })
+    const sre = page.getByRole('link', { name: /SRE registered/ })
     await expect(sre).toContainText('6 artifacts')
     await expect(sre.locator('.site-picker-description')).toHaveCount(0)
     await expect(sre.locator('.site-picker-meta')).toContainText('/sre')
@@ -663,12 +663,12 @@ test('registered discovery shows empty and malformed registries and refreshes re
 
   registryState = 'first'
   await page.reload()
-  await expect(page.getByRole('button', { name: /SRE first name/ })).toBeVisible()
+  await expect(page.getByRole('link', { name: /SRE first name/ })).toBeVisible()
 
   registryState = 'renamed'
   await page.reload()
-  await expect(page.getByRole('button', { name: /SRE renamed/ })).toBeVisible()
-  await expect(page.getByRole('button', { name: /SRE first name/ })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: /SRE renamed/ })).toBeVisible()
+  await expect(page.getByRole('link', { name: /SRE first name/ })).toHaveCount(0)
 })
 
 test('site discovery loads lightweight metadata for all sites but detailed indexes on demand', async ({ page }) => {
@@ -3045,7 +3045,7 @@ test('published preview documents stay out of production browsing and the site-h
   expect(previewRequests).toContain('/_previews/showcase/catalog.json')
   expect(previewRequests).toContain(`/_previews/showcase/revisions/${previewHeadSha}/manifest.json`)
 
-  await page.getByRole('link', { name: '← showcase' }).click()
+  await page.getByRole('link', { name: '← HTML Showcase' }).click()
   await expect(page).toHaveURL('/showcase')
   await expect(recent).toBeVisible()
   await expect(browse).toBeVisible()
@@ -3058,7 +3058,7 @@ test('published preview documents stay out of production browsing and the site-h
   const paletteSearch = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
   await paletteSearch.fill(previewOnlyTitle)
   await expect(palette.getByRole('option')).toHaveCount(0)
-  await expect(palette.getByText('Nothing matches. Try > for commands, @ for sites, or # for headings.')).toBeVisible()
+  await expect(palette.getByText('Nothing matches. Try > for commands or @ for sites.')).toBeVisible()
   expect(previewRequests).toEqual([])
 })
 
@@ -3124,7 +3124,7 @@ test('preview list distinguishes missing groups, empty catalogs, missing catalog
   catalogState = 'error'
   await page.reload()
   await expect(page.getByRole('alert')).toHaveText('The preview list could not be loaded.')
-  await page.getByRole('link', { name: '← sre' }).click()
+  await page.getByRole('link', { name: '← SRE' }).click()
   await expect(page).toHaveURL('/sre')
   await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
 })
@@ -3185,7 +3185,7 @@ test('preview list loading does not block returning to the site', async ({ page 
   await catalogStarted
   await expect(page.getByRole('status')).toHaveText('Loading previews…')
   try {
-    await page.getByRole('link', { name: '← sre' }).click()
+    await page.getByRole('link', { name: '← SRE' }).click()
     await expect(page).toHaveURL('/sre')
     await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
   } finally {
@@ -4038,8 +4038,8 @@ test.describe('page text search', () => {
 
   test('the site picker marks sites with page text search', async ({ page }) => {
     await page.goto('/')
-    await expect(page.getByRole('button', { name: /Text Search/ }).locator('.site-picker-badge')).toHaveText('Page text search')
-    await expect(page.getByRole('button', { name: /SRE/ }).locator('.site-picker-badge')).toHaveCount(0)
+    await expect(page.getByRole('link', { name: /Text Search/ }).locator('.site-picker-badge')).toHaveText('Page text search')
+    await expect(page.getByRole('link', { name: /SRE/ }).locator('.site-picker-badge')).toHaveCount(0)
     await expect(page.locator('.site-picker-badge')).toHaveCount(1)
   })
 
@@ -4388,16 +4388,19 @@ test.describe('page text search', () => {
     await expect(page.locator('.page-text-result-more')).toHaveAttribute('aria-disabled', 'true')
     await expect.poll(() => held.length).toBeGreaterThan(0)
 
-    // Clicking plain text moves focus to <body>, which must not read as "the button was removed".
+    // Clicking plain text moves focus to the page (the focusable main region, else <body>), which must not read as "the button was removed".
+    const focusIsOnPage = () => page.evaluate(() => (
+      document.activeElement === document.body || document.activeElement?.classList.contains('stage') === true
+    ))
     await reader.locator('article p').first().click()
-    await expect.poll(() => page.evaluate(() => document.activeElement === document.body)).toBe(true)
+    await expect.poll(focusIsOnPage).toBe(true)
     holding = false
     await Promise.all(held.map((release) => release()))
     await expect(hits(page)).toHaveCount(24)
     await expect(page.locator('.page-text-result-more')).toHaveCount(0)
     await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 100)))
     await expect(page.locator('[data-hit-id="bulk/note-21.md"]')).not.toBeFocused()
-    expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true)
+    expect(await focusIsOnPage()).toBe(true)
   })
 
   test('a "Show more" failure is announced and can be retried', async ({ page }) => {
@@ -4815,5 +4818,317 @@ test.describe('page text search', () => {
     await page.keyboard.press('ControlOrMeta+Shift+F')
     await expect(page.locator('.toast')).toHaveText('Page text search is not available for this site.')
     expect(requests).toEqual([])
+  })
+
+  test('result links keep ?q= and leave modified clicks to the browser', async ({ page, context }) => {
+    await page.goto('/textsearch/long/scroll-target.md?q=lighthouse')
+    await expect(status(page)).toHaveText('24 pages contain “lighthouse”')
+    const hit = page.locator('[data-hit-id="bulk/note-01.md"]')
+    await expect(hit).toHaveJSProperty('tagName', 'A')
+    await expect(hit).toHaveAttribute('href', '/textsearch/bulk/note-01.md?q=lighthouse')
+    const [tab] = await Promise.all([
+      context.waitForEvent('page'),
+      hit.click({ modifiers: ['ControlOrMeta'] }),
+    ])
+    await tab.waitForURL('**/textsearch/bulk/note-01.md?q=lighthouse')
+    await tab.close()
+    await expect(page).toHaveURL(/\/long\/scroll-target\.md\?q=lighthouse$/)
+    await hit.click()
+    await expect(page).toHaveURL(/\/bulk\/note-01\.md\?q=lighthouse$/)
+  })
+
+  test('site home rows and Browse rows carry ?q= while a search is committed', async ({ page }) => {
+    await page.goto('/textsearch?q=lighthouse')
+    await expect(page.locator('.site-home .artifact-list-row').first()).toHaveAttribute('href', /\?q=lighthouse$/)
+    await expect(page.locator('.site-home a.tree-artifact').first()).toHaveAttribute('href', /\?q=lighthouse$/)
+    await page.goto('/textsearch')
+    await expect(page.locator('.site-home .artifact-list-row').first()).not.toHaveAttribute('href', /q=/)
+  })
+
+  test('Copy link omits the committed search and keeps the fragment', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    await page.goto('/textsearch/long/scroll-target.md?q=lighthouse#middle-section')
+    await expect(status(page)).toHaveText('24 pages contain “lighthouse”')
+    const origin = new URL(page.url()).origin
+    await page.getByRole('button', { name: 'Copy artifact link' }).click()
+    await expect(page.getByRole('status').filter({ hasText: 'Link copied to clipboard.' })).toBeVisible()
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe(`${origin}/textsearch/long/scroll-target.md#middle-section`)
+    await expect(page).toHaveURL(/\?q=lighthouse#middle-section$/)
+
+    await page.keyboard.press('Control+k')
+    await page.getByRole('dialog', { name: 'Command palette' })
+      .getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' }).fill('>copy artifact link')
+    await page.keyboard.press('Enter')
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe(`${origin}/textsearch/long/scroll-target.md#middle-section`)
+  })
+
+  test('the site picker shows the page text search badge at 390px', async ({ browser }) => {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true })
+    await registerTextSearchSite(page)
+    await page.goto('/')
+    const badge = page.getByRole('link', { name: /Text Search/ }).locator('.site-picker-badge')
+    await expect(badge).toBeVisible()
+    const box = await badge.boundingBox()
+    expect(box!.x + box!.width).toBeLessThanOrEqual(390)
+    await page.close()
+  })
+
+  test('in-frame links of the documentation script carry the committed search to same-site routes only', async ({ page }) => {
+    // docs/public/shared/assets/site.js is embedded by the documentation sites; load it into an artifact frame.
+    const docsScript = readFileSync('docs/public/shared/assets/site.js', 'utf8').replace(/<\/script/gi, '<\\/script')
+    await page.route('**/_artifacts/textsearch/long/scroll-target.html', (route) => route.fulfill({
+      contentType: 'text/html',
+      body: `<!doctype html><html><head><meta charset="utf-8"><title>Docs</title></head><body>
+        <a id="same" href="/_artifacts/textsearch/bulk/note-01.md">same site</a>
+        <a id="own" href="/_artifacts/textsearch/bulk/note-02.md?q=mine">own query</a>
+        <a id="other" href="/_artifacts/sre/incidents/checkout-latency/index.html">other site</a>
+        <script>${docsScript}</script></body></html>`,
+    }))
+    const open = async (id: string) => {
+      await page.goto('/textsearch/long/scroll-target.html?q=lighthouse')
+      await page.frameLocator('iframe.artifact-frame').locator(`#${id}`).click()
+    }
+    await open('same')
+    await expect(page).toHaveURL(/\/textsearch\/bulk\/note-01\.md\?q=lighthouse$/)
+    await open('own')
+    await expect(page).toHaveURL(/\/textsearch\/bulk\/note-02\.md\?q=mine$/)
+    await open('other')
+    await expect(page).toHaveURL(/\/sre\/incidents\/checkout-latency\/index\.html$/)
+  })
+})
+
+test.describe('release UX fixes', () => {
+  const palette = (page: Page) => page.getByRole('dialog', { name: 'Command palette' })
+  const paletteInput = (page: Page) => palette(page).getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
+  const checkoutPath = '/sre/incidents/checkout-latency/index.html'
+
+  test('palette folds full-width input and prefixes like ordinary text', async ({ page }) => {
+    await page.goto(checkoutPath)
+    await page.keyboard.press('Control+k')
+    await paletteInput(page).fill('ＣＨＥＣＫＯＵＴ')
+    await expect(palette(page).getByRole('option', { name: /Checkout latency incident review/ })).toBeVisible()
+    await expect(palette(page).locator('mark.palette-match').first()).toBeVisible()
+
+    await paletteInput(page).fill('＠ｓｒｅ')
+    await expect(palette(page).locator('.palette-scope')).toHaveText('Sites')
+    await expect(palette(page).getByRole('option', { name: /SRE/ })).toBeVisible()
+
+    await paletteInput(page).fill('＞ＤＡＲＫ')
+    await expect(palette(page).getByRole('option', { name: /Use dark theme/ })).toBeVisible()
+
+    await paletteInput(page).fill('＃')
+    await expect(palette(page).locator('.palette-scope')).toHaveText('This artifact')
+  })
+
+  test('palette folds full-width input on the site picker too', async ({ page }) => {
+    await registerManySites(page)
+    await page.goto('/')
+    await expect(page.getByRole('heading', { name: 'Choose a site' })).toBeVisible()
+    await page.keyboard.press('Control+k')
+    await paletteInput(page).fill('ＨＴＭＬ')
+    await expect(palette(page).getByRole('option', { name: /HTML Showcase/ })).toBeVisible()
+    await paletteInput(page).fill('ｎｏｔｈｉｎｇ－ｈｅｒｅ')
+    await expect(palette(page).getByText('No sites or commands match. Pages are searched after you choose a site.')).toBeVisible()
+  })
+
+  test('artifact counts are singular for one artifact', async ({ page }) => {
+    await page.route('**/_indexes/sre/meta.json', async (route) => {
+      const response = await route.fetch()
+      const metadata = await response.json()
+      await route.fulfill({ response, json: { ...metadata, artifactCount: 1 } })
+    })
+    await page.goto('/')
+    const row = page.getByRole('link', { name: /SRE/ })
+    await expect(row).toContainText('1 artifact ·')
+    await expect(row).not.toContainText('1 artifacts')
+    await page.keyboard.press('Control+k')
+    await paletteInput(page).fill('@sre')
+    await expect(palette(page).getByRole('option', { name: /SRE/ })).toContainText('1 artifact')
+    await expect(palette(page).getByRole('option', { name: /SRE/ })).not.toContainText('1 artifacts')
+  })
+
+  test('the tab title follows the route', async ({ page }) => {
+    await page.goto('/')
+    await expect(page).toHaveTitle('Git Artifact Pages')
+    await page.getByRole('link', { name: /SRE/ }).click()
+    await expect(page).toHaveTitle('SRE')
+    await page.goto(checkoutPath)
+    await expect(page).toHaveTitle('Checkout latency incident review · SRE')
+    await page.goto('/sre/_previews')
+    await expect(page).toHaveTitle('Previews · SRE')
+    await page.goto('/sre/does-not-exist.html')
+    await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
+    await expect(page).toHaveTitle('Page not found · SRE')
+    await page.goto('/no-such-site')
+    await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
+    await expect(page).toHaveTitle('Page not found · Git Artifact Pages')
+    // In-app navigation updates the title without a reload.
+    await page.goto('/sre')
+    await page.locator('.site-home .tree-artifact').first().click()
+    await expect(page).toHaveTitle(/ · SRE$/)
+  })
+
+  test('navigation rows are real links that keep modified clicks for the browser', async ({ page, context }) => {
+    await registerManySites(page)
+    await page.goto('/')
+    await expect(page.getByRole('link', { name: /SRE/ })).toHaveAttribute('href', '/sre')
+    const [newTab] = await Promise.all([
+      context.waitForEvent('page'),
+      page.getByRole('link', { name: /SRE/ }).click({ modifiers: ['ControlOrMeta'] }),
+    ])
+    await newTab.waitForURL(/\/sre$/)
+    await newTab.close()
+    await expect(page).toHaveURL(/\/$/)
+    const [middleTab] = await Promise.all([
+      context.waitForEvent('page'),
+      page.getByRole('link', { name: /SRE/ }).click({ button: 'middle' }),
+    ])
+    await middleTab.waitForURL(/\/sre$/)
+    await middleTab.close()
+
+    // A plain click stays inside the app (no document reload).
+    await page.evaluate(() => { (window as unknown as { __kept: boolean }).__kept = true })
+    await page.getByRole('link', { name: /SRE/ }).click()
+    await expect(page).toHaveURL(/\/sre$/)
+    expect(await page.evaluate(() => (window as unknown as { __kept?: boolean }).__kept)).toBe(true)
+
+    // Site home and sidebar rows.
+    await expect(page.locator('.site-home a.tree-artifact').first()).toHaveAttribute('href', /^\/sre\//)
+  })
+
+  test('sidebar Browse rows, Pinned items and breadcrumb menu entries are links', async ({ page, context }) => {
+    await page.goto(checkoutPath)
+    const browseRow = page.locator('.browse-tree a.tree-artifact[aria-current="page"]')
+    await expect(browseRow).toHaveAttribute('href', checkoutPath)
+    const [rowTab] = await Promise.all([
+      context.waitForEvent('page'),
+      browseRow.click({ modifiers: ['ControlOrMeta'] }),
+    ])
+    await rowTab.waitForURL(`**${checkoutPath}`)
+    await rowTab.close()
+    await page.getByRole('button', { name: 'Pin Checkout latency incident review' }).click()
+    await expect(page.locator('.pinned-tree a.tree-artifact')).toHaveAttribute('href', checkoutPath)
+    await page.getByRole('navigation', { name: 'Artifact path' })
+      .getByRole('button', { name: 'Browse artifacts in incidents/checkout-latency', exact: true }).click()
+    const item = page.getByRole('menu').getByRole('menuitem').first()
+    await expect(item).toHaveAttribute('href', /^\/sre\/incidents\//)
+    await expect(item).toHaveJSProperty('tagName', 'A')
+  })
+
+  test('the 390px header keeps the current document title readable', async ({ browser }) => {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+    await page.goto(checkoutPath)
+    const nav = page.getByRole('navigation', { name: 'Artifact path' })
+    const label = nav.locator('.breadcrumb-current .breadcrumb-trigger-label')
+    await expect(label).toHaveText('Checkout latency incident review')
+    const metrics = await page.evaluate(() => {
+      const navElement = document.querySelector('.breadcrumbs')!
+      const text = document.querySelector('.breadcrumb-current .breadcrumb-trigger-label')!
+      const navBox = navElement.getBoundingClientRect()
+      const textBox = text.getBoundingClientRect()
+      return { navLeft: navBox.left, navRight: navBox.right, left: textBox.left, right: textBox.right, scrollLeft: navElement.scrollLeft, width: textBox.width }
+    })
+    expect(metrics.scrollLeft).toBe(0)
+    expect(metrics.left).toBeGreaterThanOrEqual(metrics.navLeft - 1)
+    expect(metrics.right).toBeLessThanOrEqual(metrics.navRight + 1)
+    expect(metrics.width).toBeGreaterThanOrEqual(180)
+    expect(await label.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+    // Folders stay reachable through their menus.
+    await expect(nav.getByRole('button', { name: 'Browse artifacts in incidents', exact: true })).toHaveCount(1)
+    await page.close()
+  })
+
+  test('preview pages show the registered site title and fall back to the site ID', async ({ page }) => {
+    await page.goto('/sre/_previews')
+    await expect(page.getByRole('link', { name: '← SRE', exact: true })).toBeVisible()
+    await expect(page.getByText('SRE · Previews')).toBeVisible()
+
+    await page.unroute('**/_indexes/sites.json').catch(() => undefined)
+    await page.route('**/_indexes/sites.json', (route) => route.fulfill({ status: 503, body: 'unavailable' }))
+    await page.goto('/sre/_previews')
+    await expect(page.getByRole('link', { name: '← sre', exact: true })).toBeVisible()
+  })
+
+  test('Esc returns focus to where it was and a chosen page receives focus', async ({ page }) => {
+    await page.goto(checkoutPath)
+    const trigger = page.locator('.sidebar-palette-trigger, #site-switcher').first()
+    await trigger.focus()
+    await page.keyboard.press('Control+k')
+    await expect(paletteInput(page)).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(palette(page)).toHaveCount(0)
+    await expect(trigger).toBeFocused()
+
+    // With nothing focused, Esc lands on the page rather than <body>.
+    await page.goto(checkoutPath)
+    await expect(page.locator('iframe.artifact-frame')).toBeVisible()
+    await page.keyboard.press('Control+k')
+    await page.keyboard.press('Escape')
+    await expect.poll(() => page.evaluate(() => (
+      document.activeElement === document.body ? 'body' : document.activeElement?.closest('.stage') ? 'stage' : 'other'
+    ))).toBe('stage')
+
+    // Choosing a page moves focus to the page.
+    await page.keyboard.press('Control+k')
+    await paletteInput(page).fill('platform topology')
+    await page.keyboard.press('Enter')
+    await expect(page).toHaveURL(/\/sre\/architecture\/platform-topology\/index\.html$/)
+    await expect.poll(() => page.evaluate(() => (
+      document.activeElement === document.body ? 'body' : document.activeElement?.closest('.stage') ? 'stage' : 'other'
+    ))).toBe('stage')
+  })
+
+  test('Ctrl/⌘ B toggles the sidebar while focus is inside the HTML artifact', async ({ page }) => {
+    await page.goto(checkoutPath)
+    const frame = page.frameLocator('iframe.artifact-frame')
+    await expect(frame.locator('body')).toBeVisible()
+    await frame.locator('body').click()
+    await expect(page.locator('.app-shell')).not.toHaveClass(/sidebar-collapsed/)
+    await page.keyboard.press('ControlOrMeta+b')
+    await expect(page.locator('.app-shell')).toHaveClass(/sidebar-collapsed/)
+    await page.locator('iframe.artifact-frame').focus()
+    await frame.locator('body').click()
+    await page.keyboard.press('ControlOrMeta+b')
+    await expect(page.locator('.app-shell')).not.toHaveClass(/sidebar-collapsed/)
+  })
+
+  test('non-canonical paths are replaced in place with the canonical route', async ({ page }) => {
+    await page.goto('/')
+    await page.goto('/sre//incidents//checkout-latency//index.html?x=1#section')
+    await expect(page).toHaveURL(`/sre/incidents/checkout-latency/index.html?x=1#section`)
+    await expect(page).toHaveTitle('Checkout latency incident review · SRE')
+    await page.goBack()
+    await expect(page).toHaveURL(/\/$/)
+
+    await page.goto('/sre/')
+    await expect(page).toHaveURL(/\/sre$/)
+    await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
+
+    // Folder-like paths are left alone.
+    await page.goto('/sre/incidents/')
+    await expect(page).toHaveURL(/\/sre\/incidents\/$/)
+  })
+
+  test('@ lists name and ID matches before description-only matches', async ({ page }) => {
+    await page.route('**/_indexes/sites.json', async (route) => {
+      const response = await route.fetch()
+      const registry = await response.json() as { sites: Array<Record<string, string>> }
+      const sites = registry.sites.map((site) => (
+        site.id === 'frontend' ? { ...site, description: 'Component archives and architecture notes' } : site
+      ))
+      sites.push({ id: 'arch-hub', name: 'Arch Hub', repository: 'example/e2e', sourcePath: 'sites/arch-hub' })
+      sites.sort((left, right) => (left.id < right.id ? -1 : 1))
+      await route.fulfill({ response, json: { ...registry, sites } })
+    })
+    await page.goto('/sre')
+    await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
+    await page.keyboard.press('Control+k')
+    await paletteInput(page).fill('@arch')
+    const options = palette(page).getByRole('option')
+    await expect(options).toHaveCount(2)
+    await expect(options.first()).toContainText('Arch Hub')
+    await expect(options.nth(1)).toContainText('Frontend')
   })
 })

@@ -2,12 +2,15 @@ import { useEffect, useState } from 'react'
 import type { PreviewGroup } from '../domain/preview'
 import { loadPreviewCatalog, loadPreviewManifest, PreviewLoadError, previewRouteHref } from '../data/previews'
 import type { AppRoute } from '../routing'
+import { pageTitle, usePageTitle } from './usePageTitle'
 
 type PreviewListRoute = Extract<AppRoute, { kind: 'preview-list' }>
 type GroupAvailability = 'available' | 'missing' | 'unknown' | 'invalid'
 
-export function PreviewListPage({ route, navigate }: {
+export function PreviewListPage({ route, navigate, siteTitle }: {
   route: PreviewListRoute
+  /** The registered site's title once the registry is loaded; the site ID until then. */
+  siteTitle?: string
   navigate: (href: string) => void
 }) {
   const [state, setState] = useState<
@@ -57,6 +60,8 @@ export function PreviewListPage({ route, navigate }: {
     return () => { cancelled = true }
   }, [route.siteId, route.groupId])
 
+  const siteName = siteTitle ?? route.siteId
+  usePageTitle(pageTitle('Previews', siteName))
   const siteHomeHref = `/${encodeURIComponent(route.siteId)}`
 
   return (
@@ -65,8 +70,8 @@ export function PreviewListPage({ route, navigate }: {
         <a className="preview-back-link" href={`/${encodeURIComponent(route.siteId)}`} onClick={(event) => {
           event.preventDefault()
           navigate(`/${encodeURIComponent(route.siteId)}`)
-        }}>← {route.siteId}</a>
-        <p className="eyebrow">{route.siteId} · Previews</p>
+        }}>← {siteName}</a>
+        <p className="eyebrow">{siteName} · Previews</p>
         <h1>{route.groupId ? 'Preview link' : 'Previews'}</h1>
         <p className="preview-page-lede">Review changed documents from a specific source revision.</p>
       </header>

@@ -9,6 +9,7 @@ import { ThemeSwitcher } from './ThemeSwitcher'
 import { MarkdownArtifact } from './MarkdownArtifact'
 import { PAGE_TEXT_SEARCH_INPUT_ID } from './PageTextSearch'
 import { usePageTextSearch } from './usePageTextSearch'
+import { pageTitle, usePageTitle } from './usePageTitle'
 import type { SiteFullTextSearch } from '../data/fulltext'
 import { clearSearchHighlight, ensureSearchHighlightStyle, keepSearchHighlighted, watchReaderScroll } from '../domain/text-highlight'
 import type { TreeStyle } from './ArtifactTree'
@@ -86,6 +87,9 @@ export function ArtifactWorkspace({
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<number | undefined>(undefined)
   const paletteReturnFocus = useRef<HTMLElement | null>(null)
+  // Set when a palette choice navigates; focus then goes to the page rather than back to the trigger.
+  const focusStageAfterPalette = useRef(false)
+  const stageRef = useRef<HTMLElement>(null)
   const htmlFrameRef = useRef<HTMLIFrameElement>(null)
   const contentsToggleRef = useRef<HTMLButtonElement>(null)
   const detailsToggleRef = useRef<HTMLButtonElement>(null)
@@ -97,6 +101,9 @@ export function ArtifactWorkspace({
     ? findArtifact(index, route.artifactPath)
     : undefined
   const effectiveRecentReads = recentReads ?? storedRecentReads
+  usePageTitle(route.artifactPath
+    ? pageTitle(currentArtifact?.title ?? 'Page not found', index.site.title)
+    : pageTitle(index.site.title))
   const lastRecordedArtifactId = useRef<string | null>(null)
   const currentFormat = currentArtifact?.format
   const hasContents = Boolean(currentArtifact?.toc?.length)
@@ -151,6 +158,7 @@ export function ArtifactWorkspace({
   }, [index.site.id])
 
   function navigateWithinWorkspace(href: string) {
+    focusStageAfterPalette.current = true
     navigate(withTextSearch(href))
     if (window.innerWidth <= 860) updateSidebarOpen(false)
   }
@@ -203,6 +211,7 @@ export function ArtifactWorkspace({
     paletteReturnFocus.current = activeElement instanceof HTMLElement && activeElement !== document.body
       ? activeElement
       : null
+    focusStageAfterPalette.current = false
     setPaletteSeed(seed)
   }, [])
 
@@ -217,17 +226,37 @@ export function ArtifactWorkspace({
       event.preventDefault()
       event.stopImmediatePropagation()
       focusTextSearch()
+    } else if (modifier && !event.shiftKey && key === 'b') {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      toggleSidebar(true)
     }
-  }, [openPalette, focusTextSearch])
+  }, [openPalette, focusTextSearch, toggleSidebar])
+
+  // The page itself (its frame, when it has one) is where a keyboard reader continues reading.
+  const focusStage = useCallback(() => {
+    const stage = stageRef.current
+    if (!stage) return
+    const frame = stage.querySelector<HTMLElement>('.artifact-frame')
+    ;(frame ?? stage).focus({ preventScroll: true })
+  }, [])
 
   const closePalette = useCallback(() => {
     setPaletteSeed(null)
-    window.requestAnimationFrame(() => {
+    // Runs after the choice (if any) has navigated, twice so a newly mounted page frame exists.
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      if (focusStageAfterPalette.current) {
+        focusStageAfterPalette.current = false
+        focusStage()
+        return
+      }
+      // Something else already took focus (the hand-off to page text search does).
+      if (document.activeElement && document.activeElement !== document.body) return
       const target = paletteReturnFocus.current
       if (target?.isConnected && target.getClientRects().length > 0) target.focus()
-      else document.getElementById('sidebar-toggle-trigger')?.focus()
-    })
-  }, [])
+      else focusStage()
+    }))
+  }, [focusStage])
 
   useEffect(() => () => window.clearTimeout(toastTimer.current), [])
 
@@ -286,7 +315,7 @@ export function ArtifactWorkspace({
         event.preventDefault()
         togglePanel('contents')
       } else if (event.key === 'Escape') {
-        setPaletteSeed(null)
+        closePalette()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
@@ -544,6 +573,7 @@ export function ArtifactWorkspace({
         revealRequest={sidebarReveal}
         onOpenPalette={openPalette}
         onOpenArtifact={openArtifact}
+        artifactHref={withTextSearch}
         onToast={showToast}
         themeMode={themeMode}
         onSetThemeMode={onSetThemeMode}
@@ -623,6 +653,7 @@ export function ArtifactWorkspace({
                 artifacts={index.artifacts}
                 currentArtifact={currentArtifact}
                 onOpenArtifact={openArtifact}
+                artifactHref={(artifact) => withTextSearch(artifactRouteHref(index.site.id, artifact.path))}
                 onRevealInSidebar={revealSidebarLocation}
               />
             ) : null}
@@ -727,7 +758,7 @@ export function ArtifactWorkspace({
             </div>
           </header>
 
-          <main className={`stage${currentArtifact ? ' has-artifact' : ''}`} data-heading-jump={headingJump ?? undefined}>
+          <main ref={stageRef} tabIndex={-1} className={`stage${currentArtifact ? ' has-artifact' : ''}`} data-heading-jump={headingJump ?? undefined}>
             {currentArtifact && currentFormat === 'markdown' ? (
               <MarkdownArtifact
                 key={currentArtifact.artifactUrl}
@@ -764,6 +795,7 @@ export function ArtifactWorkspace({
               <SiteHome
                 index={index}
                 onOpenArtifact={navigateWithinWorkspace}
+                linkHref={withTextSearch}
                 onOpenPreviews={() => navigateWithinWorkspace(`/${encodeURIComponent(index.site.id)}/_previews`)}
                 onOpenPalette={() => openPalette('')}
                 treeStyle={siteHomeTreeStyle}
@@ -982,9 +1014,17 @@ function folderPaths(path: string) {
   return segments.map((_, index) => segments.slice(0, index + 1).join('/'))
 }
 
+// The link to the document itself: the reader's committed search (`?q=`) is
+// personal context, not part of what is shared. The fragment is kept.
+function documentLink(location: Pick<Location, 'href'>) {
+  const url = new URL(location.href)
+  url.searchParams.delete('q')
+  return url.href
+}
+
 async function copyCurrentLink(showToast: (message: string) => void) {
   try {
-    await navigator.clipboard.writeText(window.location.href)
+    await navigator.clipboard.writeText(documentLink(window.location))
     showToast('Link copied to clipboard.')
   } catch {
     showToast('Clipboard access is unavailable.')

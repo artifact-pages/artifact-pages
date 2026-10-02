@@ -5,6 +5,7 @@ import { loadPreviewCandidates, PREVIEW_EXPLANATION, PreviewLoadError } from '..
 import { artifactRouteHref } from '../routing'
 import { ArtifactTree, type TreeStyle } from './ArtifactTree'
 import { Icon } from './Icon'
+import { followInApp } from './spa-link'
 
 type PreviewAvailabilityState =
   | { status: 'loading' }
@@ -14,6 +15,7 @@ type PreviewAvailabilityState =
 export function SiteHome({
   index,
   onOpenArtifact,
+  linkHref = (href) => href,
   onOpenPreviews,
   onOpenPalette,
   treeStyle = 'path-list',
@@ -21,6 +23,8 @@ export function SiteHome({
 }: {
   index: SiteIndex
   onOpenArtifact: (href: string) => void
+  /** Maps a logical route to the link target a row carries (for example with `?q=` kept). */
+  linkHref?: (href: string) => string
   onOpenPreviews?: () => void
   onOpenPalette?: () => void
   treeStyle?: TreeStyle
@@ -117,6 +121,7 @@ export function SiteHome({
               artifacts={recentArtifacts}
               siteId={index.site.id}
               onOpenArtifact={onOpenArtifact}
+              linkHref={linkHref}
               emptyMessage="No artifacts have been published to this site yet."
             />
           ) : null}
@@ -133,6 +138,7 @@ export function SiteHome({
                 style={treeStyle}
                 defaultExpandedPaths={defaultExpandedPaths}
                 onOpenArtifact={(artifact) => onOpenArtifact(artifactRouteHref(index.site.id, artifact.path))}
+                artifactHref={(artifact) => linkHref(artifactRouteHref(index.site.id, artifact.path))}
                 virtualizePaths
               />
             )}
@@ -166,6 +172,7 @@ function ArtifactSection({
   siteId,
   query = '',
   onOpenArtifact,
+  linkHref,
   emptyMessage,
   listRef,
   onExitTop,
@@ -176,6 +183,7 @@ function ArtifactSection({
   siteId: string
   query?: string
   onOpenArtifact: (href: string) => void
+  linkHref: (href: string) => string
   emptyMessage: ReactNode
   listRef?: Ref<HTMLDivElement>
   /** Called when ↑ is pressed on the first row, so the caller can return focus to its search field. */
@@ -184,8 +192,8 @@ function ArtifactSection({
   // Arrow keys move between rows like the palette and the menu components; Home/End jump to either end.
   function handleListKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) || hasModifier(event)) return
-    const rows = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('.artifact-list-row')]
-    const current = rows.indexOf(event.target as HTMLButtonElement)
+    const rows = [...event.currentTarget.querySelectorAll<HTMLElement>('.artifact-list-row')]
+    const current = rows.indexOf(event.target as HTMLElement)
     if (current < 0) return
     if (event.key === 'ArrowUp' && current === 0) {
       if (!onExitTop) return
@@ -210,17 +218,18 @@ function ArtifactSection({
       ) : (
         <div className="artifact-list" ref={listRef} onKeyDown={handleListKeyDown}>
           {artifacts.map((artifact) => (
-            <button
+            <a
               className="artifact-list-row"
               key={artifact.id}
-              onClick={() => onOpenArtifact(artifactRouteHref(siteId, artifact.path))}
+              href={linkHref(artifactRouteHref(siteId, artifact.path))}
+              onClick={(event) => followInApp(event, () => onOpenArtifact(artifactRouteHref(siteId, artifact.path)))}
             >
               <span className="artifact-row-main">
                 <span className="artifact-row-title">{highlight(artifact.title, query)}</span>
                 <span className="artifact-row-path mono">{highlight(artifact.path, query)}</span>
               </span>
               <time dateTime={artifact.updatedAt}>{formatDate(artifact.updatedAt)}</time>
-            </button>
+            </a>
           ))}
         </div>
       )}

@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ThemeMode } from '../domain/theme'
+import { artifactCountLabel } from '../domain/site-count-label'
 import { hasSiteDiscoveryMetadata, type SiteCatalogEntry } from '../domain/index'
 import { CommandPalette, type PaletteCommand } from './CommandPalette'
 import { Icon } from './Icon'
+import { followInApp } from './spa-link'
+import { pageTitle, usePageTitle } from './usePageTitle'
 
 // A short list is easier to scan than to search; ⌘ K still opens the palette.
 const SEARCH_TRIGGER_MINIMUM_SITE_COUNT = 9
@@ -18,6 +21,7 @@ export function SitePicker({
   themeMode?: ThemeMode
   onSetThemeMode?: (mode: ThemeMode) => void
 }) {
+  usePageTitle(pageTitle())
   const [paletteOpen, setPaletteOpen] = useState(false)
   const paletteReturnFocus = useRef<HTMLElement | null>(null)
   const sortedSites = [...sites].sort((left, right) => left.site.title.localeCompare(right.site.title))
@@ -94,10 +98,11 @@ export function SitePicker({
           ) : (
             <div className="site-picker-list">
               {sortedSites.map((entry) => (
-                <button
+                <a
                   className="site-picker-row"
                   key={entry.site.id}
-                  onClick={() => onNavigate(`/${encodeURIComponent(entry.site.id)}`)}
+                  href={`/${encodeURIComponent(entry.site.id)}`}
+                  onClick={(event) => followInApp(event, () => onNavigate(`/${encodeURIComponent(entry.site.id)}`))}
                 >
                   <span className="site-mark" aria-hidden="true">{entry.site.title.slice(0, 1).toUpperCase()}</span>
                   <span className="site-picker-main">
@@ -115,7 +120,7 @@ export function SitePicker({
                     <span className="site-picker-badge" title="Page text can be searched in this site">Page text search</span>
                   ) : null}
                   <Icon name="arrow" size={16} />
-                </button>
+                </a>
               ))}
             </div>
           )}
@@ -139,7 +144,7 @@ export function SitePicker({
 
 function catalogStatusLabel(entry: SiteCatalogEntry) {
   if (hasSiteDiscoveryMetadata(entry)) {
-    return `${entry.artifactCount} artifacts · updated ${formatDate(entry.generatedAt)}`
+    return `${artifactCountLabel(entry.artifactCount)} · updated ${formatDate(entry.generatedAt)}`
   }
   if (entry.status === 'not-published') return 'Registered · not published yet'
   return 'Registered · details unavailable'

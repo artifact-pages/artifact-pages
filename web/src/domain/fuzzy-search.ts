@@ -20,12 +20,22 @@ type Word = {
 const WORD_SEPARATOR = /[\s/-]/u
 const ASTRAL_CHARACTER = /[\u{10000}-\u{10FFFF}]/u
 
+// Full-width and other compatibility forms match their ordinary forms, as in page
+// text search. Text is folded one character at a time so match positions still
+// index the source text; a character whose NFKC form is longer stays as written.
+export function foldSearchText(text: string): string {
+  return Array.from(text, (character) => {
+    const folded = character.normalize('NFKC')
+    return Array.from(folded).length === 1 ? folded : character
+  }).join('').toLocaleLowerCase()
+}
+
 export function fuzzyMatch(text: string, query: string): FuzzyMatch | undefined {
   return fuzzyMatchPreparedText(prepareFuzzyText(text), prepareFuzzyQuery(query))
 }
 
 export function prepareFuzzyQuery(query: string): FuzzyQuery {
-  const terms = query.toLocaleLowerCase().split(/[\s/-]+/u).filter(Boolean)
+  const terms = foldSearchText(query).split(/[\s/-]+/u).filter(Boolean)
   return {
     terms: terms.map((normalized) => ({ normalized, characters: Array.from(normalized) })),
   }
@@ -36,7 +46,7 @@ export function fuzzyMatchPrepared(text: string, query: FuzzyQuery): FuzzyMatch 
 }
 
 export function prepareFuzzyScoreText(text: string): string {
-  return text.split(/[\s/-]+/u).filter(Boolean).map((word) => word.toLocaleLowerCase()).join('\0')
+  return text.split(/[\s/-]+/u).filter(Boolean).map(foldSearchText).join('\0')
 }
 
 export function prepareFuzzyText(text: string): FuzzyText {
@@ -47,7 +57,7 @@ export function prepareFuzzyText(text: string): FuzzyText {
   for (let index = 0; index <= sourceCharacters.length; index += 1) {
     if (index < sourceCharacters.length && !WORD_SEPARATOR.test(sourceCharacters[index])) continue
     if (index > start) {
-      const normalized = sourceCharacters.slice(start, index).join('').toLocaleLowerCase()
+      const normalized = foldSearchText(sourceCharacters.slice(start, index).join(''))
       words.push({
         normalized,
         sourceStart: start,

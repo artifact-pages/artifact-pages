@@ -3,6 +3,7 @@ import type { ArtifactIndexEntry } from '../domain/index'
 import { buildArtifactTree, countArtifacts, flattenArtifacts, type ArtifactTreeNode } from '../domain/tree'
 import { ArtifactActionsMenu } from './ArtifactActionsMenu'
 import { Icon } from './Icon'
+import { followInApp } from './spa-link'
 
 export type TreeStyle = 'quiet' | 'branch-guides' | 'path-list'
 type TreeView = 'tree' | 'recent' | 'paths'
@@ -29,6 +30,7 @@ export function ArtifactTree({
   onExpandedPathsChange,
   defaultExpandedPaths,
   onOpenArtifact,
+  artifactHref,
   getArtifactActions,
   virtualizePaths = false,
 }: {
@@ -41,6 +43,8 @@ export function ArtifactTree({
   onExpandedPathsChange?: (update: (current: Set<string>) => Set<string>) => void
   defaultExpandedPaths?: string[]
   onOpenArtifact: (artifact: ArtifactIndexEntry) => void
+  /** The link target of an artifact row; plain clicks still go through `onOpenArtifact`. */
+  artifactHref: (artifact: ArtifactIndexEntry) => string
   getArtifactActions?: (artifact: ArtifactIndexEntry) => ArtifactRowActions
   virtualizePaths?: boolean
 }) {
@@ -135,6 +139,7 @@ export function ArtifactTree({
         query={normalizedQuery}
         showPath={showPath}
         onOpenArtifact={onOpenArtifact}
+        href={artifactHref(artifact)}
         actions={getArtifactActions?.(artifact)}
       />
     )
@@ -225,6 +230,7 @@ function ArtifactRow({
   query,
   showPath = false,
   onOpenArtifact,
+  href,
   actions,
 }: {
   artifact: ArtifactIndexEntry
@@ -234,6 +240,7 @@ function ArtifactRow({
   query: string
   showPath?: boolean
   onOpenArtifact: (artifact: ArtifactIndexEntry) => void
+  href: string
   actions?: ArtifactRowActions
 }) {
   const reason = !showPath && query && !artifact.title.toLocaleLowerCase().includes(query)
@@ -243,14 +250,15 @@ function ArtifactRow({
   const withPath = showPath || Boolean(reason)
   return (
     <div className={`tree-artifact-row${actions ? ' has-actions' : ''}`}>
-      <button
+      <a
+        href={href}
         className={`tree-artifact${active ? ' is-active' : ''}${withPath ? ' tree-path-row' : ''}`}
         style={{ paddingInlineStart: style === 'branch-guides' ? '8px' : `${10 + depth * 14}px` }}
         data-tree-depth={depth}
         data-tree-path={artifact.path}
         title={artifact.path}
         aria-current={active ? 'page' : undefined}
-        onClick={() => onOpenArtifact(artifact)}
+        onClick={(event) => followInApp(event, () => onOpenArtifact(artifact))}
       >
         <span className={withPath ? 'tree-path-copy' : 'tree-label'}>
           <span className="tree-label">{highlight(artifact.title, query)}</span>
@@ -263,7 +271,7 @@ function ArtifactRow({
         {artifact.format === 'markdown' ? (
           <span className="tree-format-tag" title="Markdown document">MD</span>
         ) : null}
-      </button>
+      </a>
       {actions ? (
         <ArtifactActionsMenu
           artifact={artifact}
