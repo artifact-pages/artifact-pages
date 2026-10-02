@@ -18,6 +18,15 @@ Use the [priority-ordered, one-at-a-time repair queue](../issues/README.md#repai
 
 Use the [delegation index](../delegation.md) for work modes and owner boundaries. Existing review repairs remain the active repair queue; these new tickets are not an instruction to interrupt it. IMP-33 remains Done for its existing-bucket implementation, not as evidence for the new root module or Registry publication.
 
+## Optional operator-managed edge policy
+
+| Ticket | Status | Lane | Execution / next step |
+| --- | --- | --- | --- |
+| [IMP-43](IMP-43-cloudflare-waf-custom-rules.md) | Open | Infra / Cloudflare | Design first in a dedicated thread; optional module variables, ownership and provider capabilities must be settled before implementation. |
+| [IMP-44](IMP-44-aws-waf-custom-rules.md) | Open | Infra / AWS | Separate design-first item, not assigned. No dependency on Cloudflare WAF completion and no new Cloudflare-first release gate. |
+
+These are operator-owned Terraform capabilities, not application authorization. Rule schemas and composition are intentionally left to the assigned designer; live changes need separate approval.
+
 ## Current Phase 1 work
 
 | Ticket | Status | Slice | Depends on | Design | Verification |
