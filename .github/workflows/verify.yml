@@ -42,6 +42,9 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      # Some fast Node tests (full-text core, app cache rollback) drive Chromium.
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
       - name: Go tests
         run: go test ./... -count=1
       - name: Type check
@@ -57,8 +60,6 @@ jobs:
           npm run test:actions-parity
           npm run test:app-cache-rollback
           node scripts/test-clean-room-adoption.mjs
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
       - name: Browser tests (nginx behind Docker Compose)
         run: npm run test:e2e
 
