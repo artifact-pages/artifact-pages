@@ -77,8 +77,11 @@ func (backend *DirectoryBackend) HeadObject(ctx context.Context, key string) (Ob
 		return ObjectInfo{}, err
 	}
 	sum := sha256.Sum256(object.Bytes)
-	cacheControl := ""
-	if strings.HasPrefix(key, "_indexes/") {
+	cacheControl, objectType := "", contentType(key)
+	if strings.HasPrefix(key, "_indexes/") && strings.HasSuffix(key, ".gz") {
+		// Content-addressed full-text search blobs; the publisher writes them as opaque immutable bytes.
+		cacheControl, objectType = immutableCache, "application/octet-stream"
+	} else if strings.HasPrefix(key, "_indexes/") {
 		cacheControl = indexCacheControl
 	} else if strings.HasPrefix(key, "_artifacts/") {
 		cacheControl = artifactCacheControl
@@ -86,7 +89,7 @@ func (backend *DirectoryBackend) HeadObject(ctx context.Context, key string) (Ob
 		cacheControl = appFileCacheControl(key)
 	}
 	return ObjectInfo{
-		ETag: etag, Size: int64(len(object.Bytes)), ContentType: contentType(key), ContentDisposition: "inline",
+		ETag: etag, Size: int64(len(object.Bytes)), ContentType: objectType, ContentDisposition: "inline",
 		CacheControl: cacheControl,
 		Metadata:     map[string]string{"artifact-pages-sha256": hex.EncodeToString(sum[:])},
 	}, nil

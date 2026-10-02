@@ -171,3 +171,27 @@ func waitForLocalLockHelperFile(t *testing.T, filePath string) {
 	}
 	t.Fatal("lock helper did not acquire site lock before timeout")
 }
+
+func TestDirectoryBackendReportsSearchBlobMetadataAsPublished(t *testing.T) {
+	backend, err := NewDirectoryBackend(filepath.Join(t.TempDir(), "storage"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	data := []byte("gzip bytes")
+	desired := desiredSiteObject{
+		key: "_indexes/sre/search/leaf-0a.gz", data: data, digest: sha256Hex(data),
+		object: Object{ContentType: "application/octet-stream", ContentDisposition: "inline", Cache: immutableCache},
+	}
+	if err := backend.PutObject(ctx, desired.key, Object{Bytes: data}); err != nil {
+		t.Fatal(err)
+	}
+	info, err := backend.HeadObject(ctx, desired.key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Without this, every --fulltext publish re-uploads all search blobs to local storage.
+	if !siteObjectMetadataMatches(info, desired) {
+		t.Fatalf("HeadObject(search blob) = type %q cache %q, want it to match the published object", info.ContentType, info.CacheControl)
+	}
+}
