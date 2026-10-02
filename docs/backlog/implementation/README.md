@@ -24,6 +24,7 @@ Use the [delegation index](../delegation.md) for work modes and owner boundaries
 | --- | --- | --- | --- |
 | [IMP-43](IMP-43-cloudflare-waf-custom-rules.md) | Open | Infra / Cloudflare | Design first in a dedicated thread; optional module variables, ownership and provider capabilities must be settled before implementation. |
 | [IMP-44](IMP-44-aws-waf-custom-rules.md) | Open | Infra / AWS | Separate design-first item, not assigned. No dependency on Cloudflare WAF completion and no new Cloudflare-first release gate. |
+| [IMP-45](IMP-45-unified-release-and-compatibility.md) | Open | CLI / release | One product version (TD2 2026-10-03): CLI-pinned web bundle, reader compatibility rules, PR and tag workflows with a baseline-vs-candidate compatibility gate, `v0.1.0` re-release. |
 
 These are operator-owned Terraform capabilities, not application authorization. Rule schemas and composition are intentionally left to the assigned designer; live changes need separate approval.
 
