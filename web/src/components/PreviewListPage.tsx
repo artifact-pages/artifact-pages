@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import type { PreviewGroup } from '../domain/preview'
+import { UnsupportedSchemaError } from '../data/schema'
 import { loadPreviewCatalog, loadPreviewManifest, PreviewLoadError, previewRouteHref } from '../data/previews'
 import type { AppRoute } from '../routing'
 import { pageTitle, usePageTitle } from './usePageTitle'
 
 type PreviewListRoute = Extract<AppRoute, { kind: 'preview-list' }>
-type GroupAvailability = 'available' | 'missing' | 'unknown' | 'invalid'
+type GroupAvailability = 'available' | 'missing' | 'unknown' | 'invalid' | 'unsupported'
 
 export function PreviewListPage({ route, navigate, siteTitle }: {
   route: PreviewListRoute
@@ -15,8 +16,9 @@ export function PreviewListPage({ route, navigate, siteTitle }: {
 }) {
   const [state, setState] = useState<
     | { status: 'loading' }
-    | { status: 'success'; groups: Array<{ group: PreviewGroup; availability: GroupAvailability }>; invalidCount: number }
+    | { status: 'success'; groups: Array<{ group: PreviewGroup; availability: GroupAvailability }>; invalidCount: number; unsupportedCount: number }
     | { status: 'error'; error: Error }
+    | { status: 'needs-republish' }
   >({ status: 'loading' })
 
   useEffect(() => {
@@ -34,6 +36,7 @@ export function PreviewListPage({ route, navigate, siteTitle }: {
             sameDocuments(group.documents, manifest.documents) ? 'available' as const : 'invalid' as const
           )).catch((error: unknown) => {
             if (error instanceof PreviewLoadError && error.status === 404) return 'missing' as const
+            if (error instanceof UnsupportedSchemaError) return 'unsupported' as const
             if (error instanceof PreviewLoadError && error.kind === 'invalid') return 'invalid' as const
             return 'unknown' as const
           })
@@ -47,12 +50,15 @@ export function PreviewListPage({ route, navigate, siteTitle }: {
           groups: checked.filter(({ availability }) => availability === 'available' || availability === 'unknown')
             .sort((left, right) => right.group.updatedAt.localeCompare(left.group.updatedAt)),
           invalidCount: checked.filter(({ availability }) => availability === 'invalid').length,
+          unsupportedCount: checked.filter(({ availability }) => availability === 'unsupported').length,
         })
       }
     }).catch((error: unknown) => {
       if (cancelled) return
       if (error instanceof Error && 'status' in error && error.status === 404) {
-        setState({ status: 'success', groups: [], invalidCount: 0 })
+        setState({ status: 'success', groups: [], invalidCount: 0, unsupportedCount: 0 })
+      } else if (error instanceof UnsupportedSchemaError) {
+        setState({ status: 'needs-republish' })
       } else {
         setState({ status: 'error', error: error instanceof Error ? error : new Error(String(error)) })
       }
@@ -78,6 +84,16 @@ export function PreviewListPage({ route, navigate, siteTitle }: {
 
       {state.status === 'loading' ? <p role="status">Loading previews…</p> : null}
       {state.status === 'error' ? <p className="preview-empty" role="alert">The preview list could not be loaded.</p> : null}
+      {state.status === 'needs-republish' ? (
+        <section className="preview-empty-state" aria-label="Previews need to be republished">
+          <h2>Previews need to be republished</h2>
+          <p className="preview-empty" role="status">This site's preview list uses a format this version of Git Artifact Pages cannot read.</p>
+          <p className="preview-empty-explanation">Ask the site owner to publish the previews again. The published site itself is not affected.</p>
+        </section>
+      ) : null}
+      {state.status === 'success' && state.unsupportedCount > 0 ? (
+        <p className="preview-availability" role="alert">Some previews need to be republished and are not listed.</p>
+      ) : null}
       {state.status === 'success' && state.invalidCount > 0 ? (
         <p className="preview-availability" role="alert">Some preview catalog records did not match their revision manifests.</p>
       ) : null}

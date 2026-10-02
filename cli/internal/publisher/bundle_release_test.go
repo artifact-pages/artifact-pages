@@ -160,3 +160,33 @@ func (transport *localReleaseRoundTripper) requestURLs() []string {
 	defer transport.mu.Unlock()
 	return append([]string(nil), transport.urls...)
 }
+
+func TestDeployAppExplainsUnreachablePinnedRelease(t *testing.T) {
+	server := httptest.NewTLSServer(http.NotFoundHandler())
+	defer server.Close()
+	localURL, _ := url.Parse(server.URL)
+	previousTransport := http.DefaultTransport
+	http.DefaultTransport = &localReleaseRoundTripper{target: localURL, next: server.Client().Transport}
+	defer func() { http.DefaultTransport = previousTransport }()
+
+	backend := &memoryDeploymentBackend{objects: make(map[string]Object)}
+	_, err := DeployApp(context.Background(), backend, AppDeployOptions{Version: "9.9.9", Repository: "acme/pages"})
+	if err == nil {
+		t.Fatal("DeployApp() error = nil for a release that does not exist")
+	}
+	for _, want := range []string{"cannot fetch web release v9.9.9 from acme/pages", "HTTP 404", "--archive"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not contain %q", err, want)
+		}
+	}
+	if len(backend.objects) != 0 {
+		t.Fatalf("failed download wrote objects: %v", backend.objects)
+	}
+}
+
+func TestDeployAppRequiresArchiveOrPinnedVersion(t *testing.T) {
+	_, err := DeployApp(context.Background(), &memoryDeploymentBackend{objects: make(map[string]Object)}, AppDeployOptions{})
+	if err == nil {
+		t.Fatal("DeployApp() error = nil without archive or version")
+	}
+}

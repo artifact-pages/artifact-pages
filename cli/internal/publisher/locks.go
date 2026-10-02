@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/tasuku43/git-artifact-pages/cli/internal/compat"
 	"regexp"
 	"time"
 )
@@ -332,8 +333,10 @@ func marshalLockRecord(record lockRecord) ([]byte, error) {
 
 func decodeLockRecord(contents []byte, siteID string) (lockRecord, error) {
 	var record lockRecord
+	if err := compat.CheckSchemaVersion("site lock record", contents, 1); err != nil {
+		return lockRecord{}, err
+	}
 	decoder := json.NewDecoder(bytes.NewReader(contents))
-	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&record); err != nil {
 		return lockRecord{}, fmt.Errorf("decode site lock: %w", err)
 	}

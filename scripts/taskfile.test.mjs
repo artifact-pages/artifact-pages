@@ -24,7 +24,7 @@ test('Cloudflare tasks use the fixed base-then-overlay config stack', { skip: !a
     ['site:publish', ['SITE=guide', 'SOURCE=docs/public/sites/guide']],
     ['registry:register', []],
     ['registry:unregister', ['SITE=retired']],
-    ['app:deploy', ['VERSION=1.2.3']],
+    ['app:deploy', []],
     ['preview:publish', ['SITE=guide', 'SOURCE=docs/public/sites/guide', 'BASE_URL=https://artifact-pages.dev']],
   ]) {
     const result = run(['--dry', `cli:${task}:cloudflare`, ...vars, 'DRY_RUN=true']);
@@ -45,12 +45,12 @@ test('ordinary publish preserves quoting and optional config', { skip: !availabl
 });
 
 test('deployment input and dry-run values are validated', { skip: !available }, () => {
-  for (const vars of [[], ['ARCHIVE=a.tar.gz', 'VERSION=1.2.3']]) {
-    const result = run(['cli:app:deploy', ...vars]);
-    assert.notEqual(result.status, 0);
-    assert.match(result.output, /Specify exactly one/);
-    assert.doesNotMatch(result.output, /go build/);
-  }
+  const pinned = run(['--dry', 'cli:app:deploy', 'DRY_RUN=true']);
+  assert.equal(pinned.status, 0, pinned.output);
+  assert.doesNotMatch(pinned.output, /--version|--archive/);
+  const archive = run(['--dry', 'cli:app:deploy', 'ARCHIVE=a.tar.gz', 'DRY_RUN=true']);
+  assert.equal(archive.status, 0, archive.output);
+  assert.match(archive.output, /--archive a.tar.gz/);
   const result = run(['cli:site:publish', 'SITE=guide', 'SOURCE=docs/public/sites/guide', 'DRY_RUN=maybe']);
   assert.notEqual(result.status, 0);
   assert.doesNotMatch(result.output, /go build/);

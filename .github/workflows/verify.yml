@@ -1,0 +1,105 @@
+# Reusable verification shared by ci.yml and release.yml so a release runs the
+# same tests as every pull request, plus the compatibility gate.
+name: Verify
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag (vX.Y.Z) to run the gate's version check for; empty outside releases.
+        required: false
+        type: string
+        default: ""
+    outputs:
+      compat_verdict:
+        description: Compatibility gate verdict (compatible, breaking or skipped).
+        value: ${{ jobs.compat-gate.outputs.verdict }}
+      compat_report:
+        description: Complete compatibility gate report as one line of JSON.
+        value: ${{ jobs.compat-gate.outputs.report }}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Unit, type and browser tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Go tests
+        run: go test ./... -count=1
+      - name: Type check
+        run: npx tsc -b web/tsconfig.json
+      - name: Fast Node tests
+        run: |
+          npm run test:text-highlight
+          npm run test:fulltext
+          npm run test:third-party-notices
+          npm run test:vite-malformed-url
+          npm run test:web-packaging
+          npm run test:provider-delivery
+          npm run test:actions-parity
+          npm run test:app-cache-rollback
+          node scripts/test-clean-room-adoption.mjs
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Browser tests (nginx behind Docker Compose)
+        run: npm run test:e2e
+
+  compat-gate:
+    name: Compatibility gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      verdict: ${{ steps.gate.outputs.verdict }}
+      report: ${{ steps.gate.outputs.report }}
+    steps:
+      - name: Check out the repository with its release tags
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run the gate against the latest release
+        id: gate
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          args=(--out "$RUNNER_TEMP/compat-verdict.json")
+          if [ -n "$RELEASE_TAG" ]; then args+=(--tag "$RELEASE_TAG"); fi
+          status=0
+          node scripts/compat-gate.mjs "${args[@]}" || status=$?
+          if [ -f "$RUNNER_TEMP/compat-verdict.json" ]; then
+            echo "verdict=$(jq -r .verdict "$RUNNER_TEMP/compat-verdict.json")" >> "$GITHUB_OUTPUT"
+            echo "report=$(jq -c . "$RUNNER_TEMP/compat-verdict.json")" >> "$GITHUB_OUTPUT"
+          fi
+          exit "$status"

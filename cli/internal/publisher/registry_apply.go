@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/tasuku43/git-artifact-pages/cli/internal/compat"
 	"io"
 	"sort"
 
@@ -360,8 +361,10 @@ func readRegistryCleanup(ctx context.Context, backend ConditionalObjectBackend) 
 	if err != nil {
 		return registryCleanupRecord{}, "", fmt.Errorf("read registry cleanup record: %w", err)
 	}
+	if err := compat.CheckSchemaVersion("registry cleanup record", object.Bytes, 1); err != nil {
+		return registryCleanupRecord{}, "", err
+	}
 	decoder := json.NewDecoder(bytes.NewReader(object.Bytes))
-	decoder.DisallowUnknownFields()
 	var record registryCleanupRecord
 	if err := decoder.Decode(&record); err != nil {
 		return registryCleanupRecord{}, "", fmt.Errorf("decode registry cleanup record: %w", err)

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/tasuku43/git-artifact-pages/cli/internal/compat"
 	"io"
 	"net/url"
 	"sort"
@@ -62,8 +63,10 @@ func readSiteCacheRetry(ctx context.Context, backend ConditionalObjectBackend, s
 	if err != nil {
 		return siteCacheRetry{}, "", fmt.Errorf("read site cache retry record: %w", err)
 	}
+	if err := compat.CheckSchemaVersion("site cache retry record", object.Bytes, 1); err != nil {
+		return siteCacheRetry{}, "", err
+	}
 	decoder := json.NewDecoder(bytes.NewReader(object.Bytes))
-	decoder.DisallowUnknownFields()
 	var record siteCacheRetry
 	if err := decoder.Decode(&record); err != nil {
 		return record, "", fmt.Errorf("decode site cache retry record: %w", err)

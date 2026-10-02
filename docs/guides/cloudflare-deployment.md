@@ -95,8 +95,8 @@ cp examples/cloudflare/terraform/terraform.tfvars.example examples/cloudflare/te
 terraform -chdir=examples/cloudflare/terraform plan -var-file=terraform.tfvars
 terraform -chdir=examples/cloudflare/terraform apply -var-file=terraform.tfvars
 
-artifact-pages app deploy --version 1.2.3 --config artifact-pages.yaml --dry-run
-artifact-pages app deploy --version 1.2.3 --config artifact-pages.yaml
+artifact-pages app deploy --config artifact-pages.yaml --dry-run
+artifact-pages app deploy --config artifact-pages.yaml
 artifact-pages registry register --config artifact-pages.yaml --dry-run
 artifact-pages registry register --config artifact-pages.yaml
 ```

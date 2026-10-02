@@ -13,7 +13,7 @@ const actionRunner = path.join(projectRoot, 'actions', 'shared', 'invoke-cli.mjs
 const expectedActionContracts = {
   admin: {
     directory: path.join(projectRoot, 'actions', 'admin'),
-    inputs: ['operation', 'config', 'github-token', 'site', 'archive', 'version', 'repository', 'dry-run'],
+    inputs: ['operation', 'config', 'github-token', 'site', 'archive', 'repository', 'dry-run'],
     outputs: ['operation', 'outcome', 'site', 'registry_updated', 'changes_json', 'preview_changes_json', 'result_json', 'exit_code', 'error'],
   },
   site: {

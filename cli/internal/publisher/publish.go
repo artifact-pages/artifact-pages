@@ -64,7 +64,7 @@ func DeployApp(ctx context.Context, backend DeploymentBackend, options AppDeploy
 		return Result{}, err
 	}
 	if options.Version != "" && options.Version != bundle.manifest.Version {
-		return Result{}, fmt.Errorf("downloaded release version %q does not match requested version %q", bundle.manifest.Version, options.Version)
+		return Result{}, fmt.Errorf("downloaded release version %q does not match this CLI's pinned version %q", bundle.manifest.Version, options.Version)
 	}
 	metadataBackend, ok := backend.(ObjectMetadataBackend)
 	if !ok {

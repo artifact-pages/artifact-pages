@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/tasuku43/git-artifact-pages/cli/internal/compat"
 	"io"
 	"net/url"
 	"path"
@@ -154,6 +155,9 @@ func EncodeCatalog(catalog Catalog) ([]byte, error) {
 
 func DecodeCatalog(data []byte) (Catalog, error) {
 	var catalog Catalog
+	if err := compat.CheckSchemaVersion("preview catalog", data, SchemaVersion); err != nil {
+		return Catalog{}, err
+	}
 	if err := decodeStrict(data, &catalog); err != nil {
 		return Catalog{}, fmt.Errorf("decode preview catalog: %w", err)
 	}
@@ -172,6 +176,9 @@ func EncodeManifest(manifest RevisionManifest) ([]byte, error) {
 
 func DecodeManifest(data []byte) (RevisionManifest, error) {
 	var manifest RevisionManifest
+	if err := compat.CheckSchemaVersion("preview revision manifest", data, SchemaVersion); err != nil {
+		return RevisionManifest{}, err
+	}
 	if err := decodeStrict(data, &manifest); err != nil {
 		return RevisionManifest{}, fmt.Errorf("decode preview revision manifest: %w", err)
 	}
@@ -392,9 +399,10 @@ func encodeJSON(value any) ([]byte, error) {
 	return append(encoded, '\n'), nil
 }
 
+// decodeStrict rejects trailing JSON values but, per the reader rules, ignores
+// unknown fields.
 func decodeStrict(data []byte, target any) error {
 	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
 		return err
 	}

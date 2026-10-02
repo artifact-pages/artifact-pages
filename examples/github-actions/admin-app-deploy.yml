@@ -2,11 +2,6 @@ name: Deploy Artifact Pages application
 
 on:
   workflow_dispatch:
-    inputs:
-      version:
-        description: Exact published Artifact Pages web release version.
-        required: true
-        type: string
 
 permissions:
   contents: read
@@ -29,10 +24,10 @@ jobs:
           aws-region: us-east-1
           role-session-name: artifact-pages-app-${{ github.run_id }}
 
-      - name: Deploy the selected application release
+      # The Action ref below pins the CLI, and the CLI deploys the web bundle of
+      # its own version. Updating the pinned ref is the application upgrade.
+      - name: Deploy the web application pinned by the Action version
         uses: tasuku43/git-artifact-pages/actions/admin@<FULL_REVIEWED_ACTION_COMMIT_SHA>
         with:
           operation: app-deploy
-          version: ${{ inputs.version }}
-          repository: tasuku43/git-artifact-pages
           config: artifact-pages.yaml

@@ -1,6 +1,7 @@
 import type { SiteDiscoveryMetadata } from '../domain/index'
 import type { Leaf, Root } from '../domain/fulltext-codec'
 import { isValidSiteId } from './indexes'
+import { assertSupportedSchema, UnsupportedSchemaError } from './schema'
 
 export type FullTextHit = { id: string; path: string; href: string }
 export type FullTextResult = {
@@ -13,7 +14,7 @@ export type FullTextResult = {
   hasMore: boolean
 }
 export class FullTextSearchError extends Error {
-  constructor(readonly code: 'unavailable' | 'network' | 'invalid-data', message: string, readonly status?: number, options?: ErrorOptions) {
+  constructor(readonly code: 'unavailable' | 'network' | 'invalid-data' | 'needs-republish', message: string, readonly status?: number, options?: ErrorOptions) {
     super(message, options); this.name = 'FullTextSearchError'
   }
 }
@@ -26,6 +27,13 @@ type SearchOptions = { signal?: AbortSignal; offset?: number; limit?: number }
 function parseManifest(payload: unknown, site: string): Manifest {
   const fail = () => { throw new FullTextSearchError('invalid-data', 'Invalid full-text manifest') }
   if (!payload || typeof payload !== 'object') return fail()
+  // The manifest's version field is named `version` (TD2 renames it to
+  // schemaVersion in its next breaking change); an unknown value needs a republish.
+  try { assertSupportedSchema(payload, 'full-text', `/_indexes/${site}/search/manifest.json`, 'version') }
+  catch (cause) {
+    if (cause instanceof UnsupportedSchemaError) throw new FullTextSearchError('needs-republish', 'Search data needs to be republished', undefined, { cause })
+    throw cause
+  }
   const m = payload as Manifest
   if (m.version !== 1 || !/^[a-f0-9]{64}$/.test(m.generation) || m.site !== site || !Number.isSafeInteger(m.documents) || m.documents < 0 || !Array.isArray(m.shards) || m.shards.length !== 128) return fail()
   const validRef = (r: ObjectRef, kind: string) => r && /^[a-f0-9]{64}$/.test(r.sha256) &&

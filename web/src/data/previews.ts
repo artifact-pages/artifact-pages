@@ -1,5 +1,6 @@
 import type { PreviewCatalog, PreviewDocument, PreviewGroup, PreviewManifest } from '../domain/preview'
 import { isValidSiteId } from './indexes'
+import { assertSupportedSchema, UnsupportedSchemaError } from './schema'
 
 const FULL_SHA = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u
 const SHA256 = /^[0-9a-f]{64}$/u
@@ -20,7 +21,7 @@ export class PreviewLoadError extends Error {
   }
 }
 
-export type PreviewGroupAvailability = 'available' | 'missing' | 'unknown' | 'invalid'
+export type PreviewGroupAvailability = 'available' | 'missing' | 'unknown' | 'invalid' | 'unsupported'
 
 export type PreviewCandidate = {
   group: PreviewGroup
@@ -50,6 +51,7 @@ export async function loadPreviewCatalog(siteId: string, fetcher: typeof fetch =
   if (!isValidSiteId(siteId)) throw new PreviewLoadError(`Invalid preview site: ${siteId}`, previewCatalogUrl(siteId))
   const url = previewCatalogUrl(siteId)
   const payload = await fetchJson(url, fetcher)
+  assertSupportedSchema(payload, 'preview-catalog', url)
   if (!isRecord(payload) || payload.schemaVersion !== 1 || payload.site !== siteId || !Array.isArray(payload.groups)) {
     throw new PreviewLoadError(`Invalid preview catalog: ${url}`, url)
   }
@@ -72,6 +74,7 @@ export async function loadPreviewCandidates(siteId: string, fetcher: typeof fetc
         sameDocuments(group.documents, manifest.documents) ? 'available' as const : 'invalid' as const
       )).catch((error: unknown) => {
         if (error instanceof PreviewLoadError && error.status === 404) return 'missing' as const
+        if (error instanceof UnsupportedSchemaError) return 'unsupported' as const
         if (error instanceof PreviewLoadError && error.kind === 'invalid') return 'invalid' as const
         return 'unknown' as const
       })
@@ -88,6 +91,7 @@ export async function loadPreviewManifest(siteId: string, headSha: string, fetch
   }
   const url = previewManifestUrl(siteId, headSha)
   const payload = await fetchJson(url, fetcher)
+  assertSupportedSchema(payload, 'preview-manifest', url)
   if (
     !isRecord(payload) || payload.schemaVersion !== 1 || payload.site !== siteId || payload.headSha !== headSha ||
     !isFullSha(payload.defaultHeadSha) || !isFullSha(payload.mergeBaseSha) ||

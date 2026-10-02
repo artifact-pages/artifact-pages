@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react'
 import { artifactRouteHref } from '../routing'
 import { defaultSiteIndexUrl, loadSiteIndex } from '../data/indexes'
+import { UnsupportedSchemaError } from '../data/schema'
 import { loadPreviewCatalog, loadPreviewManifest, previewFileUrl, previewRouteHref } from '../data/previews'
 import type { PreviewGroup, PreviewManifest } from '../domain/preview'
 import type { ArtifactIndexEntry, SiteIndex } from '../domain/index'
@@ -20,7 +21,7 @@ export function PreviewDocumentPage({ route, hash, navigate, siteTitle }: {
   const [manifestState, setManifestState] = useState<
     | { status: 'loading' }
     | { status: 'success'; manifest: PreviewManifest }
-    | { status: 'error' }
+    | { status: 'error'; needsRepublish?: boolean }
   >({ status: 'loading' })
   const [prGroup, setPrGroup] = useState<PreviewGroup | null>(null)
   const [productionIndex, setProductionIndex] = useState<SiteIndex | null>(null)
@@ -30,7 +31,7 @@ export function PreviewDocumentPage({ route, hash, navigate, siteTitle }: {
     setManifestState({ status: 'loading' })
     loadPreviewManifest(route.siteId, route.headSha).then(
       (manifest) => { if (!cancelled) setManifestState({ status: 'success', manifest }) },
-      () => { if (!cancelled) setManifestState({ status: 'error' }) },
+      (error: unknown) => { if (!cancelled) setManifestState({ status: 'error', needsRepublish: error instanceof UnsupportedSchemaError }) },
     )
     return () => { cancelled = true }
   }, [route.siteId, route.headSha])
@@ -76,7 +77,7 @@ export function PreviewDocumentPage({ route, hash, navigate, siteTitle }: {
     return <PreviewStatusPage siteName={siteName} message="Loading preview…" />
   }
   if (manifestState.status === 'error') {
-    return <PreviewUnavailable siteName={siteName} returnHref={returnHref} navigate={navigate} />
+    return <PreviewUnavailable siteName={siteName} returnHref={returnHref} navigate={navigate} needsRepublish={manifestState.needsRepublish} />
   }
   const { manifest } = manifestState
   const document = manifest.documents.find(({ path }) => path === route.artifactPath)
@@ -328,17 +329,20 @@ function handleNavigate(href: string, navigate: (href: string) => void) {
   }
 }
 
-function PreviewUnavailable({ siteName, returnHref, navigate }: {
+function PreviewUnavailable({ siteName, returnHref, navigate, needsRepublish = false }: {
   siteName: string
   returnHref: string
   navigate: (href: string) => void
+  needsRepublish?: boolean
 }) {
   return (
     <main className="preview-page preview-unavailable">
       <a className="preview-back-link" href={returnHref} onClick={handleNavigate(returnHref, navigate)}>← Back to previews</a>
       <p className="eyebrow">{siteName} · Preview</p>
-      <h1>Preview unavailable</h1>
-      <p role="status">This preview document is no longer available.</p>
+      <h1>{needsRepublish ? 'This preview needs to be republished' : 'Preview unavailable'}</h1>
+      <p role="status">{needsRepublish
+        ? 'It uses a format this version of Git Artifact Pages cannot read. Ask the site owner to publish the preview again.'
+        : 'This preview document is no longer available.'}</p>
     </main>
   )
 }

@@ -16,7 +16,7 @@ export type SiteDiscoveryMetadata = {
 
 export type SiteCatalogEntry =
   | (SiteDiscoveryMetadata & { status?: 'available' })
-  | { site: SiteSummary; status: 'not-published' | 'metadata-unavailable' }
+  | { site: SiteSummary; status: 'not-published' | 'metadata-unavailable' | 'needs-republish' }
 
 export function hasSiteDiscoveryMetadata(entry: SiteCatalogEntry): entry is SiteDiscoveryMetadata & { status?: 'available' } {
   return 'artifactCount' in entry

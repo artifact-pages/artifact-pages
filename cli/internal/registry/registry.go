@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/tasuku43/git-artifact-pages/cli/internal/compat"
 	"io"
 	"path"
 	"regexp"
@@ -167,8 +168,10 @@ func validateSourcePath(sourcePath string) error {
 // DecodeProjection validates the public JSON representation and requires its
 // array to be sorted and unique, matching the deterministic writer contract.
 func DecodeProjection(contents []byte) (Projection, error) {
+	if err := compat.CheckSchemaVersion("registry (sites.json)", contents, SchemaVersion); err != nil {
+		return Projection{}, err
+	}
 	decoder := json.NewDecoder(bytes.NewReader(contents))
-	decoder.DisallowUnknownFields()
 	var projection Projection
 	if err := decoder.Decode(&projection); err != nil {
 		return Projection{}, fmt.Errorf("decode sites.json: %w", err)

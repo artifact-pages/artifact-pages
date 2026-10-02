@@ -1,6 +1,6 @@
 # Application bundle deployment
 
-The SPA is distributed as a versioned web archive. An admin repository selects the deployment target through `artifact-pages.yaml`; it does not copy or build the application source.
+The SPA is distributed as a versioned web archive. The CLI knows which web bundle it deploys: `artifact-pages app deploy` deploys the bundle of the CLI's own product version. An admin repository selects the deployment target through `artifact-pages.yaml`; it does not copy or build the application source.
 
 ## Package the web release
 
@@ -13,9 +13,9 @@ npm run package:web -- --version 1.2.3
 
 The package command writes an archive, JSON release manifest, and SHA-256 checksum under `.local/releases/`. The archive contains `index.html`, `preview-bridge.js`, files under `assets/`, the project `LICENSE`, and a generated `THIRD_PARTY_NOTICES.txt` for installed production web dependencies. Its complete file list is checked against the deployed application path contract before packaging; adding a root file requires updating the route and deployment policy first. It does not contain site indexes, artifacts, or previews. The command refuses to replace an existing release label.
 
-Publish those three files as assets on the matching immutable GitHub release tag (for example, `v1.2.3`). The `vMAJOR.MINOR.PATCH` tag versions this web bundle only; it is not a version for the whole repository. `app deploy --version 1.2.3` downloads and verifies the archive against both the manifest and checksum before writing objects. Do not replace assets or move an existing release tag; publish a new web version to correct a release. A CLI or Action source change alone does not require a new app archive or app deployment.
+The release workflow publishes those three files as assets on the immutable GitHub release tag `vX.Y.Z`. That one `vMAJOR.MINOR.PATCH` tag series versions the whole product: the CLI, the composite Actions and the web bundle ([TD2](../backlog/technical-design/TD2-component-release-policy.md)). The CLI holds its version as a constant (`artifact-pages version` prints it). Without `--archive`, `app deploy` downloads the assets of `v<that version>` and verifies the archive against both the manifest and checksum before writing objects; it fails without writing when the release cannot be fetched or the manifest version differs. There is no `--version` option: to deploy a different web bundle, use the CLI of that version. A CLI-only release carries a web bundle with identical file contents, so `app deploy` reports `no-op`. Do not replace assets or move an existing release tag; publish a new version to correct a release.
 
-For a local or caller-managed release flow, `app deploy --archive FILE` accepts an already packaged archive with its adjacent manifest and checksum. It is the same deployment operation and supports the same `--dry-run` behavior.
+For local and pre-release bundles, `app deploy --archive FILE` accepts an already packaged archive with its adjacent manifest and checksum. It is the same deployment operation and supports the same `--dry-run` behavior.
 
 ## Select a deployment target
 
@@ -32,14 +32,15 @@ AWS and Cloudflare targets use the same config locator and `artifact-pages app d
 
 ## Deploy, upgrade, and roll back
 
-Plan and deploy a published release by its exact version:
+Plan and deploy the web bundle pinned by the CLI:
 
 ```sh
-artifact-pages app deploy --version 1.2.3 --config artifact-pages.yaml --dry-run
-artifact-pages app deploy --version 1.2.3 --config artifact-pages.yaml --format json
+artifact-pages version
+artifact-pages app deploy --config artifact-pages.yaml --dry-run
+artifact-pages app deploy --config artifact-pages.yaml --format json
 ```
 
-Upgrade by deploying the next release version. Roll back intentionally by deploying the previous version again. The deployment validates the complete bundle before it writes, uploads changed app files with `index.html` last, and revalidates `/index.html` after a change. Repeating an unchanged deployment reports `no-op` and performs no object writes or cache revalidation.
+Between releases the constant still names the last release, so a development build deploys that release's bundle unless given `--archive`. Upgrade by installing or pinning the CLI (or the Action ref) of the next release and running `app deploy`; a new tag or CLI upgrade never deploys the app by itself. Roll back intentionally by running the previous release's CLI. In an admin workflow, the pinned `actions/admin` ref selects the CLI and therefore the web bundle; the Action has no `version` input. The deployment validates the complete bundle before it writes, uploads changed app files with `index.html` last, and revalidates `/index.html` after a change. Repeating an unchanged deployment reports `no-op` and performs no object writes or cache revalidation.
 
 The command writes the application plane only. It neither lists nor deletes site indexes, artifacts, or previews. The shell uses browser revalidation; hashed assets use the immutable one-year cache policy. Site registration and published site content continue to use their separate admin and satellite operations.
 

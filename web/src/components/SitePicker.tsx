@@ -147,6 +147,7 @@ function catalogStatusLabel(entry: SiteCatalogEntry) {
     return `${artifactCountLabel(entry.artifactCount)} · updated ${formatDate(entry.generatedAt)}`
   }
   if (entry.status === 'not-published') return 'Registered · not published yet'
+  if (entry.status === 'needs-republish') return 'Registered · needs to be republished'
   return 'Registered · details unavailable'
 }
 

@@ -12,6 +12,8 @@ The repository is in **Phase 1: local product**.
 
 Do not implement AWS infrastructure, Terraform, GitHub Actions publishing, or a general-purpose CLI unless explicitly requested. First prove the browser product and local serving contract.
 
+Note: release and CI workflows (`.github/workflows/`, the compatibility gate and release scripts) were requested on 2026-10-03 (TD2 / IMP-45).
+
 ## Backlog and issue tracking
 
 Unfinished work lives in `docs/backlog/`, one item per Markdown file, split into tracks with different definitions of `Done`:

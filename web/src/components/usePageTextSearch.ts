@@ -116,6 +116,13 @@ export function describePageTextSearchError(error: Error): PageTextSearchErrorDe
   if (error instanceof FullTextSearchError && error.code === 'unavailable') {
     return { title: 'Page text search is not available', detail: 'This site was published without page text search.', retryable: false }
   }
+  if (error instanceof FullTextSearchError && error.code === 'needs-republish') {
+    return {
+      title: 'Page text search needs to be republished',
+      detail: 'This site\'s search data uses a format this version cannot read. Ask the site owner to publish the site again.',
+      retryable: false,
+    }
+  }
   if (error instanceof FullTextSearchError) {
     return {
       title: 'Search data could not be read',

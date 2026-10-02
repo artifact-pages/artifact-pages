@@ -1,0 +1,133 @@
+# Pushing a vMAJOR.MINOR.PATCH tag is the owner's release approval (TD2). The
+# workflow never edits the repository; any failure before "Create the GitHub
+# pre-release" stops the release.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Tag preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out the tagged commit with full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Tag equals the CLI version constant and the commit is on main
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: node scripts/release-preflight.mjs --tag "$RELEASE_TAG" --sha "$GITHUB_SHA" --main-ref origin/main
+
+  verify:
+    name: Verify
+    needs: preflight
+    uses: ./.github/workflows/verify.yml
+    permissions:
+      contents: read
+    with:
+      tag: ${{ github.ref_name }}
+
+  release:
+    name: Create the GitHub pre-release
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out the tagged commit with release tags
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Package the web bundle from the tagged commit
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          npm run package:web -- --version "$version"
+          manifest=".local/releases/artifact-pages-web-v${version}.tar.gz.json"
+          if [ "$(jq -r .sourceDirty "$manifest")" != "false" ]; then
+            echo "::error::the web bundle was built from a dirty source tree"
+            exit 1
+          fi
+          if [ "$(jq -r .sourceCommit "$manifest")" != "$GITHUB_SHA" ]; then
+            echo "::error::the web bundle was not built from the tagged commit"
+            exit 1
+          fi
+      - name: Generate release notes
+        env:
+          VERDICT_JSON: ${{ needs.verify.outputs.compat_report }}
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          args=(--version "$version" --archive ".local/releases/artifact-pages-web-v${version}.tar.gz" --out "$RUNNER_TEMP/notes.md")
+          if [ -n "$VERDICT_JSON" ]; then
+            printf '%s' "$VERDICT_JSON" > "$RUNNER_TEMP/verdict.json"
+            args+=(--verdict "$RUNNER_TEMP/verdict.json")
+          fi
+          previous="$(node -e 'const f=process.argv[1];try{const v=JSON.parse(require("fs").readFileSync(f,"utf8"));if(v.baseline&&/^v\d/.test(v.baseline.ref))console.log(v.baseline.ref)}catch{}' "$RUNNER_TEMP/verdict.json" 2>/dev/null || true)"
+          if [ -n "$previous" ]; then
+            mkdir -p "$RUNNER_TEMP/previous"
+            gh release download "$previous" --pattern '*.tar.gz' --dir "$RUNNER_TEMP/previous"
+            args+=(--previous-archive "$(ls "$RUNNER_TEMP"/previous/*.tar.gz)" --previous-tag "$previous")
+          fi
+          node scripts/release-notes.mjs "${args[@]}"
+      - name: Create the GitHub pre-release
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          base=".local/releases/artifact-pages-web-v${version}.tar.gz"
+          gh release create "$RELEASE_TAG" "$base" "$base.json" "$base.sha256" \
+            --verify-tag --prerelease --title "Artifact Pages $RELEASE_TAG" --notes-file "$RUNNER_TEMP/notes.md"
+
+  verify-published:
+    name: Verify the published release
+    needs: release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out the tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: Build the CLI at the tag
+        run: go build -o "$RUNNER_TEMP/artifact-pages" ./cli/cmd/artifact-pages
+      - name: Download the published assets
+        run: gh release download "$RELEASE_TAG" --dir "$RUNNER_TEMP/assets"
+      - name: Deploy with no flags beyond --config and compare bytes
+        run: node scripts/verify-release.mjs --cli "$RUNNER_TEMP/artifact-pages" --assets "$RUNNER_TEMP/assets" --version "${RELEASE_TAG#v}"

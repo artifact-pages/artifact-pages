@@ -1,3 +1,4 @@
+import { assertSupportedSchema, UnsupportedSchemaError } from './schema'
 import type { SiteCatalogEntry, SiteDiscoveryMetadata, SiteIndex, SiteRegistryProjection, SiteSummary } from '../domain/index'
 
 const INDEX_ROOT = '/_indexes'
@@ -28,9 +29,10 @@ function parseSiteDiscoveryMetadata(payload: unknown, url: string, expectedSiteI
     throw new IndexLoadError(`Invalid site discovery metadata: ${url}.`, url)
   }
 
+  assertSupportedSchema(payload, 'site-metadata', url)
   const metadata = payload as Partial<SiteDiscoveryMetadata>
   if (
-    typeof metadata.schemaVersion !== 'number' ||
+    metadata.schemaVersion !== 1 ||
     !metadata.site ||
     metadata.site.id !== expectedSiteId ||
     typeof metadata.site.title !== 'string' ||
@@ -81,9 +83,10 @@ function parseSiteIndex(payload: unknown, url: string, expectedSiteId: string): 
     throw new IndexLoadError(`Invalid site artifact index data: ${url}.`, url)
   }
 
+  assertSupportedSchema(payload, 'artifact-index', url)
   const index = payload as Partial<SiteIndex>
   if (
-    typeof index.schemaVersion !== 'number' ||
+    index.schemaVersion !== 1 ||
     !index.site ||
     index.site.id !== expectedSiteId ||
     typeof index.site.title !== 'string' ||
@@ -140,9 +143,11 @@ export async function discoverSites(fetcher: Fetcher = fetch): Promise<SiteCatal
     } catch (error) {
       return {
         site: registeredSummary,
-        status: error instanceof IndexLoadError && error.status === 404
-          ? 'not-published'
-          : 'metadata-unavailable',
+        status: error instanceof UnsupportedSchemaError
+          ? 'needs-republish'
+          : error instanceof IndexLoadError && error.status === 404
+            ? 'not-published'
+            : 'metadata-unavailable',
       }
     }
   }))
@@ -161,6 +166,7 @@ function parseSiteRegistry(payload: unknown): SiteRegistryProjection {
   if (!payload || typeof payload !== 'object') {
     throw new IndexLoadError(`Invalid site registry: ${INDEX_ROOT}/sites.json.`, `${INDEX_ROOT}/sites.json`)
   }
+  assertSupportedSchema(payload, 'registry', `${INDEX_ROOT}/sites.json`)
   const registry = payload as Partial<SiteRegistryProjection>
   if (registry.schemaVersion !== 1 || !Array.isArray(registry.sites)) {
     throw new IndexLoadError(`Invalid site registry: ${INDEX_ROOT}/sites.json.`, `${INDEX_ROOT}/sites.json`)
@@ -183,19 +189,9 @@ function parseSiteRegistry(payload: unknown): SiteRegistryProjection {
     ) {
       throw new IndexLoadError(`Invalid site registry: ${INDEX_ROOT}/sites.json.`, `${INDEX_ROOT}/sites.json`)
     }
-    const allowed = new Set(['id', 'name', 'repository', 'sourcePath', 'description'])
-    const entryKeys = Object.keys(rawEntry)
-    const requiredKeys = ['id', 'name', 'repository', 'sourcePath']
-    if (entryKeys.some((key) => !allowed.has(key)) || requiredKeys.some((key) => !entryKeys.includes(key))) {
-      throw new IndexLoadError(`Invalid site registry: ${INDEX_ROOT}/sites.json.`, `${INDEX_ROOT}/sites.json`)
-    }
     previousID = entry.id
     seenIDs.add(entry.id)
     seenSources.add(`${entry.repository.toLowerCase()}\0${entry.sourcePath}`)
-  }
-  const rootKeys = Object.keys(payload)
-  if (rootKeys.length !== 2 || rootKeys.some((key) => key !== 'schemaVersion' && key !== 'sites')) {
-    throw new IndexLoadError(`Invalid site registry: ${INDEX_ROOT}/sites.json.`, `${INDEX_ROOT}/sites.json`)
   }
   return registry as SiteRegistryProjection
 }

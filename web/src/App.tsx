@@ -3,6 +3,7 @@ import { ArtifactWorkspace } from './components/ArtifactWorkspace'
 import { PreviewDocumentPage } from './components/PreviewDocumentPage'
 import { PreviewListPage } from './components/PreviewListPage'
 import { SitePicker } from './components/SitePicker'
+import { UnsupportedSchemaError } from './data/schema'
 import { defaultSiteIndexUrl, discoverSites, IndexLoadError, isValidSiteId, loadSiteIndex } from './data/indexes'
 import { createSiteFullTextSearch } from './data/fulltext'
 import { hasSiteDiscoveryMetadata, type SiteCatalogEntry, type SiteIndex } from './domain/index'
@@ -108,6 +109,9 @@ function App() {
 
   if (route.kind === 'sites') {
     if (sites.status === 'loading') return <StatusPage title="Sites" message="Loading sites…" />
+    if (sites.status === 'error' && sites.error instanceof UnsupportedSchemaError) {
+      return <RepublishPage scope="registry" title="Sites" onBack={() => navigate('/')} />
+    }
     if (sites.status === 'error') return <ErrorPage title="Sites" scope="catalog" error={sites.error} />
     return (
       <SitePicker
@@ -230,6 +234,9 @@ function SitePage({
     ) {
       return <PageNotFoundPage onBack={() => navigate('/')} />
     }
+    if (indexState.error instanceof UnsupportedSchemaError || registeredSite?.status === 'needs-republish') {
+      return <RepublishPage scope="site" title={registeredSite?.site.title ?? route.siteId} onBack={() => navigate('/')} />
+    }
     if (missingIndex && registeredSite?.status === 'not-published') {
       return <RegisteredSiteStatusPage
         title={registeredSite.site.title}
@@ -344,6 +351,31 @@ function RegisteredSiteStatusPage({
         <h1>{heading}</h1>
         <p role="status">{message}</p>
         <button className="text-action" onClick={onBack}>← All sites</button>
+      </div>
+    </main>
+  )
+}
+
+/**
+ * A confirmed but unreadable format: the data was written by a different major
+ * product version. Distinct from a network or invalid-data error, which stay on
+ * ErrorPage.
+ */
+function RepublishPage({ scope, title, onBack }: { scope: 'site' | 'registry'; title: string; onBack: () => void }) {
+  const heading = scope === 'site' ? 'This site needs to be republished' : 'This library needs to be updated'
+  usePageTitle(pageTitle(scope === 'registry' ? undefined : title, APP_NAME))
+  return (
+    <main className="status-page">
+      <div className="status-content" data-state="needs-republish">
+        <p className="brand-label"><span className="brand-mark">G</span> Git Artifact Pages</p>
+        <p className="eyebrow">{title}</p>
+        <h1>{heading}</h1>
+        <p role="status">
+          {scope === 'site'
+            ? 'Its published data uses a format this version of Git Artifact Pages cannot read. Ask the site owner to publish it again; it will appear here afterwards.'
+            : 'The list of sites uses a format this version of Git Artifact Pages cannot read. Ask the administrator to register the sites again and republish each one.'}
+        </p>
+        {scope === 'site' ? <button className="text-action" onClick={onBack}>← All sites</button> : null}
       </div>
     </main>
   )

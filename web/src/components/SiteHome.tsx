@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode, type 
 import type { ArtifactIndexEntry, SiteIndex } from '../domain/index'
 import { RECENT_SECTION_MINIMUM_ARTIFACT_COUNT } from '../domain/navigation-sections'
 import { loadPreviewCandidates, PREVIEW_EXPLANATION, PreviewLoadError } from '../data/previews'
+import { UnsupportedSchemaError } from '../data/schema'
 import { artifactRouteHref } from '../routing'
 import { ArtifactTree, type TreeStyle } from './ArtifactTree'
 import { Icon } from './Icon'
@@ -11,6 +12,7 @@ type PreviewAvailabilityState =
   | { status: 'loading' }
   | { status: 'success'; count: number }
   | { status: 'error' }
+  | { status: 'needs-republish' }
 
 export function SiteHome({
   index,
@@ -52,6 +54,8 @@ export function SiteHome({
         if (cancelled) return
         if (error instanceof PreviewLoadError && error.status === 404) {
           setPreviewAvailability({ status: 'success', count: 0 })
+        } else if (error instanceof UnsupportedSchemaError) {
+          setPreviewAvailability({ status: 'needs-republish' })
         } else {
           setPreviewAvailability({ status: 'error' })
         }
@@ -88,7 +92,9 @@ export function SiteHome({
                 ? 'Checking preview availability…'
                 : previewAvailability.status === 'error'
                   ? 'Preview availability could not be checked.'
-                  : previewAvailability.count === 0
+                  : previewAvailability.status === 'needs-republish'
+                    ? 'Previews for this site need to be republished.'
+                    : previewAvailability.count === 0
                     ? 'There are no available previews for this site.'
                     : `${previewAvailability.count} preview${previewAvailability.count === 1 ? '' : 's'} listed.`}
             </p>

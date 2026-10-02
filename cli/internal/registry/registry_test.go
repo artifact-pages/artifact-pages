@@ -2,6 +2,8 @@ package registry
 
 import (
 	"encoding/json"
+	"errors"
+	"github.com/tasuku43/git-artifact-pages/cli/internal/compat"
 	"strings"
 	"testing"
 )
@@ -109,7 +111,6 @@ func TestDecodeProjectionRejectsMalformedRuntimeJSON(t *testing.T) {
 		json string
 		want string
 	}{
-		{"unknown field", `{"schemaVersion":1,"sites":[],"extra":true}`, "unknown field"},
 		{"duplicate ID", `{"schemaVersion":1,"sites":[{"id":"sre","name":"One","repository":"acme/repo","sourcePath":"docs"},{"id":"sre","name":"Two","repository":"acme/other","sourcePath":"docs"}]}`, "sorted by ID"},
 		{"unsorted IDs", `{"schemaVersion":1,"sites":[{"id":"zeta","name":"Zeta","repository":"acme/zeta","sourcePath":"docs"},{"id":"alpha","name":"Alpha","repository":"acme/alpha","sourcePath":"docs"}]}`, "sorted by ID"},
 		{"duplicate source pair with repository case difference", `{"schemaVersion":1,"sites":[{"id":"alpha","name":"Alpha","repository":"Acme/Repo","sourcePath":"docs"},{"id":"beta","name":"Beta","repository":"acme/repo","sourcePath":"docs"}]}`, "same repository and sourcePath"},
@@ -122,6 +123,18 @@ func TestDecodeProjectionRejectsMalformedRuntimeJSON(t *testing.T) {
 				t.Fatalf("DecodeProjection() error = %v, want substring %q", err, test.want)
 			}
 		})
+	}
+}
+
+func TestDecodeProjectionReaderRules(t *testing.T) {
+	projection, err := DecodeProjection([]byte(`{"schemaVersion":1,"future":{"a":1},"sites":[{"id":"sre","name":"SRE","repository":"acme/repo","sourcePath":"docs","futureField":true}]}`))
+	if err != nil || len(projection.Sites) != 1 {
+		t.Fatalf("unknown fields must be ignored: %+v, %v", projection, err)
+	}
+	_, err = DecodeProjection([]byte(`{"schemaVersion":2,"sites":"different shape"}`))
+	var unsupported *compat.UnsupportedSchemaError
+	if !errors.As(err, &unsupported) || unsupported.Found != 2 || !strings.Contains(err.Error(), "Upgrade the CLI") {
+		t.Fatalf("DecodeProjection(v2) error = %v, want an unsupported-schema error naming the upgrade", err)
 	}
 }
 

@@ -16,6 +16,7 @@ import (
 	"github.com/tasuku43/git-artifact-pages/cli/internal/preview"
 	"github.com/tasuku43/git-artifact-pages/cli/internal/publisher"
 	"github.com/tasuku43/git-artifact-pages/cli/internal/registry"
+	"github.com/tasuku43/git-artifact-pages/cli/internal/version"
 )
 
 func main() {
@@ -262,6 +263,9 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
 		writeRootUsage(stdout)
 		return nil
+	}
+	if args[0] == "version" || args[0] == "--version" {
+		return runVersion(args[1:], stdout, stderr)
 	}
 	if args[0] == "app" {
 		if len(args) < 2 || args[1] == "--help" || args[1] == "-h" {
@@ -627,12 +631,16 @@ func runAppDeploy(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	flags.SetOutput(stderr)
 	flags.Usage = func() { writeAppDeployUsage(stderr) }
 	archive := flags.String("archive", "", "local web release archive (.tar.gz) with adjacent manifest and checksum files")
-	version := flags.String("version", "", "download this published web release version from GitHub")
 	repository := flags.String("repository", "tasuku43/git-artifact-pages", "GitHub repository that publishes the web release")
 	var configLocators stringSliceFlag
 	flags.Var(&configLocators, "config", "deployment config path or github:// locator (repeatable; later layers override earlier ones)")
 	dryRun := flags.Bool("dry-run", false, "show planned changes without writes, deletes, lock recovery, or cache changes")
 	format := flags.String("format", "text", "result format: text or json")
+	for _, arg := range args {
+		if arg == "--version" || arg == "-version" || strings.HasPrefix(arg, "--version=") || strings.HasPrefix(arg, "-version=") {
+			return withExitCode(fmt.Errorf("--version was removed: this CLI deploys the web bundle of its own version (%s); use a CLI of the version you want, or --archive FILE", version.Product), 2)
+		}
+	}
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
@@ -641,9 +649,6 @@ func runAppDeploy(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	}
 	if flags.NArg() != 0 {
 		return withExitCode(fmt.Errorf("unexpected arguments: %v", flags.Args()), 2)
-	}
-	if (*archive == "") == (*version == "") {
-		return withExitCode(errors.New("choose exactly one of --archive or --version"), 2)
 	}
 	if *format != "text" && *format != "json" {
 		return withExitCode(errors.New("--format must be text or json"), 2)
@@ -658,7 +663,7 @@ func runAppDeploy(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	}
 	result, err := publisher.DeployApp(ctx, backend, publisher.AppDeployOptions{
 		ArchivePath: *archive,
-		Version:     *version,
+		Version:     pinnedVersion(*archive),
 		Repository:  *repository,
 		DryRun:      *dryRun,
 	})
@@ -673,6 +678,62 @@ func runAppDeploy(ctx context.Context, args []string, stdout, stderr io.Writer) 
 		fmt.Fprintf(stderr, "  %s this web bundle was built from a source working tree with uncommitted changes.\n", reportTone("Warning:", "update", terminalColor(stderr)))
 	}
 	return nil
+}
+
+// pinnedVersion is the web release this CLI deploys when no local archive is
+// given: the CLI's own product version.
+func pinnedVersion(archive string) string {
+	if archive != "" {
+		return ""
+	}
+	return version.Product
+}
+
+type versionOutput struct {
+	Operation string `json:"operation"`
+	Version   string `json:"version"`
+	Revision  string `json:"revision,omitempty"`
+	Modified  bool   `json:"modified"`
+}
+
+func runVersion(args []string, stdout, stderr io.Writer) error {
+	flags := flag.NewFlagSet("artifact-pages version", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	flags.Usage = func() { writeVersionUsage(stderr) }
+	format := flags.String("format", "text", "result format: text or json")
+	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
+		return withExitCode(err, 2)
+	}
+	if flags.NArg() != 0 {
+		return withExitCode(fmt.Errorf("unexpected arguments: %v", flags.Args()), 2)
+	}
+	if *format != "text" && *format != "json" {
+		return withExitCode(errors.New("--format must be text or json"), 2)
+	}
+	build := version.ReadBuild()
+	if *format == "json" {
+		return json.NewEncoder(stdout).Encode(versionOutput{Operation: "version", Version: version.Product, Revision: build.Revision, Modified: build.Modified})
+	}
+	fmt.Fprintf(stdout, "artifact-pages %s\n", version.Product)
+	switch {
+	case build.Revision == "":
+		fmt.Fprintln(stdout, "  Revision  unknown (no VCS information in this build)")
+	case build.Modified:
+		fmt.Fprintf(stdout, "  Revision  %s (uncommitted changes)\n", reportText(build.Revision))
+	default:
+		fmt.Fprintf(stdout, "  Revision  %s\n", reportText(build.Revision))
+	}
+	fmt.Fprintf(stdout, "  Web app   %s (pinned; deployed by app deploy)\n", "v"+version.Product)
+	return nil
+}
+
+func writeVersionUsage(writer io.Writer) {
+	fmt.Fprintln(writer, "Usage: artifact-pages version [--format text|json]")
+	fmt.Fprintln(writer, "")
+	fmt.Fprintln(writer, "Print the product version and the VCS revision recorded in the build.")
 }
 
 func runSitePublish(ctx context.Context, args []string, stdout, stderr io.Writer) error {
@@ -815,6 +876,7 @@ func writeRootUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  registry unregister  Remove a site's registration and stored projection")
 	fmt.Fprintln(writer, "  config set-default  Save the user's default deployment config locator")
 	fmt.Fprintln(writer, "  lock inspect|recover  Inspect or guardedly recover a site lock")
+	fmt.Fprintln(writer, "  version       Print the product version and build revision")
 	fmt.Fprintln(writer, "")
 	fmt.Fprintln(writer, "Run a command with --help for options.")
 	fmt.Fprintln(writer, "Default deployment config: artifact-pages.yaml (--config and ARTIFACT_PAGES_CONFIG take precedence).")
@@ -861,7 +923,9 @@ func writeAppUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "Usage:")
 	fmt.Fprintln(writer, "  artifact-pages app deploy [options]")
 	fmt.Fprintln(writer, "")
-	fmt.Fprintln(writer, "Deploy the versioned web application using the configured provider target.")
+	fmt.Fprintln(writer, "Deploy the web application using the configured provider target.")
+	fmt.Fprintln(writer, "Without --archive this CLI downloads and verifies the web release that matches its own")
+	fmt.Fprintf(writer, "version (v%s).\n", version.Product)
 }
 
 func writeAppDeployUsage(writer io.Writer) {
@@ -869,8 +933,7 @@ func writeAppDeployUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "")
 	fmt.Fprintln(writer, "Options:")
 	fmt.Fprintln(writer, "  --archive FILE          verified local web release archive (.tar.gz)")
-	fmt.Fprintln(writer, "  --version VERSION       download and deploy a published GitHub release")
-	fmt.Fprintln(writer, "  --repository OWNER/REPO GitHub release repository (default tasuku43/git-artifact-pages)")
+	fmt.Fprintln(writer, "  --repository OWNER/REPO GitHub release repository for the pinned download (default tasuku43/git-artifact-pages)")
 	fmt.Fprintln(writer, "  --config LOCATOR        deployment config path or github:// locator (repeatable; later layers override earlier ones)")
 	fmt.Fprintln(writer, "  --dry-run               show planned changes without writes, deletes, lock recovery, or cache changes")
 	fmt.Fprintln(writer, "  --format text|json      output a human-readable result or stable JSON")

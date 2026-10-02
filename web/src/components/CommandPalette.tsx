@@ -520,7 +520,9 @@ function buildSiteEntries(
       ? artifactCountLabel(siteEntry.artifactCount)
       : siteEntry.status === 'not-published'
         ? 'not published yet'
-        : 'details unavailable'
+        : siteEntry.status === 'needs-republish'
+          ? 'needs to be republished'
+          : 'details unavailable'
     const subtitle = `/${siteEntry.site.id} · ${statusLabel}`
     const subtitleMatch = idMatch ? offsetMatch(idMatch, 1) : undefined
     return [{

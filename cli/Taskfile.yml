@@ -61,7 +61,7 @@ tasks:
       CONFIG_FLAGS: --config artifact-pages.yaml --config artifact-pages.cloudflare.yaml
 
   app:deploy: &deploy
-    desc: Deploy an app bundle (exactly one ARCHIVE or VERSION, optional CONFIG, DRY_RUN)
+    desc: Deploy the app bundle pinned by this CLI, or a local ARCHIVE (optional CONFIG, DRY_RUN)
     dir: '{{.REPO_ROOT}}'
     vars:
       CONFIG_FLAGS: '{{if .CONFIG}}--config {{.CONFIG | shellQuote}}{{end}}'
@@ -69,19 +69,16 @@ tasks:
       vars:
         - name: DRY_RUN
           enum: ['true', 'false']
-    preconditions:
-      - sh: '{{if and .ARCHIVE .VERSION}}false{{else if or .ARCHIVE .VERSION}}true{{else}}false{{end}}'
-        msg: Specify exactly one of ARCHIVE or VERSION.
     cmds:
       - task: build
       - >-
         ./artifact-pages app deploy
-        {{if .ARCHIVE}}--archive {{.ARCHIVE | shellQuote}}{{else if .VERSION}}--version {{.VERSION | shellQuote}}{{end}}
+        {{if .ARCHIVE}}--archive {{.ARCHIVE | shellQuote}}{{end}}
         {{.CONFIG_FLAGS}} {{if eq .DRY_RUN "true"}}--dry-run{{end}}
 
   app:deploy:cloudflare:
     <<: *deploy
-    desc: Deploy the app to Cloudflare with the base config and overlay (ARCHIVE or VERSION, DRY_RUN)
+    desc: Deploy the app to Cloudflare with the base config and overlay (optional ARCHIVE, DRY_RUN)
     vars:
       CONFIG_FLAGS: --config artifact-pages.yaml --config artifact-pages.cloudflare.yaml
 

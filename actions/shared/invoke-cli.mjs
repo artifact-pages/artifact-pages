@@ -38,13 +38,7 @@ function buildArguments() {
     if (boolInput('dry-run')) args.push('--dry-run')
   } else if (kind === 'admin' && operation === 'app-deploy') {
     args.push('app', 'deploy')
-    const archive = input('archive').trim()
-    const version = input('version').trim()
-    if ((archive === '') === (version === '')) {
-      throw new Error('admin app-deploy requires exactly one of "archive" or "version"')
-    }
-    flag(args, 'archive', archive)
-    flag(args, 'version', version)
+    flag(args, 'archive', input('archive').trim())
     flag(args, 'repository', input('repository') || 'tasuku43/git-artifact-pages')
     flag(args, 'config', input('config'))
     if (boolInput('dry-run')) args.push('--dry-run')

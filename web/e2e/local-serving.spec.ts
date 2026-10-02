@@ -3072,7 +3072,8 @@ test('preview list validates candidate manifests before presenting entries', asy
       await route.fulfill({ response, body: JSON.stringify(manifest) })
       return
     }
-    await route.fulfill({ response, body: JSON.stringify({ ...manifest, schemaVersion: 99 }) })
+    const { files: _files, ...malformed } = manifest
+    await route.fulfill({ response, body: JSON.stringify(malformed) })
   })
 
   await page.goto('/sre/_previews')
@@ -4464,7 +4465,7 @@ test.describe('page text search', () => {
       if (manifestState === 'unavailable') return route.fulfill({ status: 503, body: 'temporarily unavailable' })
       if (manifestState === 'invalid') {
         const response = await route.fetch()
-        return route.fulfill({ response, json: { ...(await response.json()), version: 99 } })
+        return route.fulfill({ response, json: { ...(await response.json()), generation: 'not-a-digest' } })
       }
       return route.continue()
     })
@@ -5130,5 +5131,119 @@ test.describe('release UX fixes', () => {
     await expect(options).toHaveCount(2)
     await expect(options.first()).toContainText('Arch Hub')
     await expect(options.nth(1)).toContainText('Frontend')
+  })
+})
+
+// Reader compatibility rules (TD2): unknown fields are ignored; an unknown
+// schemaVersion is a confirmed but unreadable format and shows a republish
+// state, which is distinct from a network or invalid-data error.
+test.describe('reader compatibility rules', () => {
+  type Json = Record<string, unknown>
+  async function mutateJson(page: Page, glob: string, mutate: (payload: Json) => Json) {
+    await page.route(glob, async (route) => {
+      const response = await route.fetch()
+      await route.fulfill({ response, json: mutate(await response.json() as Json) })
+    })
+  }
+
+  test('unknown fields in every published format are ignored', async ({ page }) => {
+    await mutateJson(page, '**/_indexes/sites.json', (registry) => ({
+      ...registry,
+      futureRootField: { anything: true },
+      sites: (registry.sites as Json[]).map((site) => ({ ...site, futureEntryField: 'x' })),
+    }))
+    await mutateJson(page, '**/_indexes/sre/meta.json', (meta) => ({ ...meta, futureMetaField: [1, 2, 3] }))
+    await mutateJson(page, '**/_indexes/sre/index.json', (index) => ({
+      ...index,
+      futureIndexField: 'x',
+      artifacts: (index.artifacts as Json[]).map((artifact) => ({ ...artifact, futureArtifactField: { nested: 1 } })),
+    }))
+    await page.goto('/')
+    await expect(page.getByRole('heading', { name: 'Choose a site' })).toBeVisible()
+    await expect(page.getByRole('link', { name: /SRE/ }).first()).toBeVisible()
+    await page.goto('/sre')
+    await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
+    await expect(page.getByText('needs to be republished')).toHaveCount(0)
+  })
+
+  test('an unknown registry schemaVersion shows a product-level republish state on the site picker', async ({ page }) => {
+    await mutateJson(page, '**/_indexes/sites.json', (registry) => ({ ...registry, schemaVersion: 2 }))
+    await page.goto('/')
+    await expect(page.getByRole('heading', { name: 'This library needs to be updated' })).toBeVisible()
+    await expect(page.getByText(/cannot read/)).toBeVisible()
+    await expect(page.getByText('Unable to load sites')).toHaveCount(0)
+    await expect(page).toHaveTitle(/Git Artifact Pages/)
+  })
+
+  test('an unreadable registry is an error, not a republish state', async ({ page }) => {
+    await page.route('**/_indexes/sites.json', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"schemaVersion":1,"sites":"nope"}' }))
+    await page.goto('/')
+    await expect(page.getByRole('heading', { name: 'Unable to load sites' })).toBeVisible()
+    await expect(page.getByText('needs to be updated')).toHaveCount(0)
+  })
+
+  test('an unknown meta.json schemaVersion lists the site as needing a republish and opens the republish state', async ({ page }) => {
+    await mutateJson(page, '**/_indexes/sre/meta.json', (meta) => ({ ...meta, schemaVersion: 2, someNewShape: { x: 1 } }))
+    await mutateJson(page, '**/_indexes/sre/index.json', (index) => ({ ...index, schemaVersion: 2 }))
+    await page.goto('/')
+    const row = page.getByRole('link', { name: /SRE/ }).first()
+    await expect(row).toContainText('needs to be republished')
+    await expect(page.getByRole('link', { name: /Frontend/ }).first()).not.toContainText('needs to be republished')
+    await row.click()
+    await expect(page.getByRole('heading', { name: 'This site needs to be republished' })).toBeVisible()
+    await expect(page.getByRole('status')).toContainText('Ask the site owner to publish it again')
+    await page.getByRole('button', { name: '← All sites' }).click()
+    await expect(page.getByRole('heading', { name: 'Choose a site' })).toBeVisible()
+  })
+
+  test('an unknown index.json schemaVersion opens the republish state even when meta.json is readable', async ({ page }) => {
+    await mutateJson(page, '**/_indexes/sre/index.json', (index) => ({ ...index, schemaVersion: 2 }))
+    await page.goto('/sre')
+    await expect(page.getByRole('heading', { name: 'This site needs to be republished' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Unable to load this site' })).toHaveCount(0)
+    // A deep link to an artifact reaches the same state instead of a misread page.
+    await page.goto('/sre/incidents/checkout-latency/index.html')
+    await expect(page.getByRole('heading', { name: 'This site needs to be republished' })).toBeVisible()
+  })
+
+  test('a server error for index.json stays an ordinary load error', async ({ page }) => {
+    await page.route('**/_indexes/sre/index.json', (route) => route.fulfill({ status: 503, body: 'unavailable' }))
+    await page.goto('/sre')
+    await expect(page.getByRole('heading', { name: 'Unable to load this site' })).toBeVisible()
+    await expect(page.getByText('needs to be republished')).toHaveCount(0)
+  })
+
+  test('an unknown preview catalog schemaVersion says previews need a republish', async ({ page }) => {
+    await mutateJson(page, '**/_previews/sre/catalog.json', (catalog) => ({ ...catalog, schemaVersion: 2 }))
+    await page.goto('/sre/_previews')
+    await expect(page.getByRole('heading', { name: 'Previews need to be republished' })).toBeVisible()
+    await expect(page.getByText('The preview list could not be loaded.')).toHaveCount(0)
+  })
+
+  test('an unknown preview manifest schemaVersion marks only that preview as needing a republish', async ({ page }) => {
+    await mutateJson(page, `**/_previews/sre/revisions/${previewHeadSha}/manifest.json`, (manifest) => ({ ...manifest, schemaVersion: 2 }))
+    await page.goto('/sre/_previews')
+    await expect(page.getByRole('alert')).toHaveText('Some previews need to be republished and are not listed.')
+  })
+
+  test('an unknown full-text manifest version says search needs a republish, not a read error', async ({ page }) => {
+    await registerTextSearchSite(page)
+    await mutateJson(page, '**/_indexes/textsearch/search/manifest.json', (manifest) => ({ ...manifest, version: 2 }))
+    await page.goto('/textsearch?q=latency')
+    const alert = page.locator('.sidebar-panel').getByRole('alert')
+    await expect(alert).toContainText('Page text search needs to be republished')
+    await expect(alert).not.toContainText('could not be read')
+  })
+
+  test('unknown preview fields are ignored', async ({ page }) => {
+    await mutateJson(page, '**/_previews/sre/catalog.json', (catalog) => ({
+      ...catalog,
+      futureField: 1,
+      groups: (catalog.groups as Json[]).map((group) => ({ ...group, futureGroupField: 1 })),
+    }))
+    await page.goto('/sre/_previews')
+    await expect(page.getByRole('heading', { name: 'Previews', exact: true })).toBeVisible()
+    await expect(page.getByText('Previews need to be republished')).toHaveCount(0)
+    await expect(page.locator('.preview-group').first()).toBeVisible()
   })
 })

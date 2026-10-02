@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"github.com/tasuku43/git-artifact-pages/cli/internal/compat"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -590,11 +591,16 @@ func TestPreviewFixtureRecordsAndStrictValidation(t *testing.T) {
 	if !reflect.DeepEqual(manifest.Files, describeFiles(files)) || manifest.BundleDigest != digestBundle(files) {
 		t.Fatal("preview fixture manifest file records or bundle digest do not match the committed files")
 	}
-	if _, err := DecodeManifest([]byte(strings.Replace(string(manifestBytes), `"schemaVersion": 1`, `"schemaVersion": 2`, 1))); err == nil {
-		t.Fatal("DecodeManifest accepted an unknown schema version")
+	if _, err := DecodeManifest([]byte(strings.Replace(string(manifestBytes), `"schemaVersion": 1`, `"schemaVersion": 2`, 1))); !compat.Is(err) {
+		t.Fatalf("DecodeManifest error = %v, want an unsupported schema error", err)
 	}
-	if _, err := DecodeCatalog(append(catalogBytes[:len(catalogBytes)-2], []byte(`,"unknown":true}`)...)); err == nil {
-		t.Fatal("DecodeCatalog accepted an unknown field")
+	if _, err := DecodeCatalog([]byte(strings.Replace(string(catalogBytes), `"schemaVersion": 1`, `"schemaVersion": 2, "newShape": {}`, 1))); !compat.Is(err) {
+		t.Fatalf("DecodeCatalog error = %v, want an unsupported schema error", err)
+	}
+	// Reader rule: unknown fields are ignored.
+	withUnknown := append(append([]byte(nil), catalogBytes[:len(catalogBytes)-2]...), []byte(`,"unknown":true}`)...)
+	if _, err := DecodeCatalog(withUnknown); err != nil {
+		t.Fatalf("DecodeCatalog rejected an unknown field: %v", err)
 	}
 	duplicateGroupCatalog := catalog
 	duplicateGroupCatalog.Groups = append(append([]Group(nil), catalog.Groups...), catalog.Groups[0])

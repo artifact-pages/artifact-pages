@@ -182,11 +182,11 @@ func loadAppBundle(archivePath string) (appBundle, error) {
 }
 
 func resolveAppArchive(ctx context.Context, options AppDeployOptions) (string, func(), error) {
-	if (options.ArchivePath == "") == (options.Version == "") {
-		return "", nil, errors.New("choose exactly one of a local --archive or a published --version")
-	}
 	if options.ArchivePath != "" {
 		return options.ArchivePath, nil, nil
+	}
+	if options.Version == "" {
+		return "", nil, errors.New("a local archive or the CLI's pinned release version is required")
 	}
 	if !versionLabel.MatchString(options.Version) {
 		return "", nil, fmt.Errorf("invalid release version %q", options.Version)
@@ -218,7 +218,7 @@ func resolveAppArchive(ctx context.Context, options AppDeployOptions) (string, f
 		contents, err := downloadReleaseAsset(ctx, baseURL+url.PathEscape(asset.name), asset.limit)
 		if err != nil {
 			cleanup()
-			return "", nil, err
+			return "", nil, fmt.Errorf("cannot fetch web release v%s from %s: %w; this CLI deploys the web bundle of its own version, so use a CLI build whose release exists or pass --archive with a bundle from npm run package:web", options.Version, repository, err)
 		}
 		if err := os.WriteFile(filepath.Join(downloadRoot, asset.name), contents, 0o600); err != nil {
 			cleanup()

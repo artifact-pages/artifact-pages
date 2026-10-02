@@ -18,15 +18,11 @@ inputs:
     required: false
     default: ""
   archive:
-    description: Local app release archive; app-deploy requires this or version.
-    required: false
-    default: ""
-  version:
-    description: Pinned published app release version; app-deploy requires this or archive.
+    description: Optional local app release archive for app-deploy. Without it, app-deploy downloads the web release that matches the pinned CLI version (the Action ref).
     required: false
     default: ""
   repository:
-    description: Owner/repository containing a pinned published app release.
+    description: Owner/repository that publishes the pinned web release (used only when archive is empty).
     required: false
     default: tasuku43/git-artifact-pages
   dry-run:
@@ -84,7 +80,6 @@ runs:
         ARTIFACT_PAGES_INPUT_CONFIG: ${{ inputs.config }}
         ARTIFACT_PAGES_INPUT_SITE: ${{ inputs.site }}
         ARTIFACT_PAGES_INPUT_ARCHIVE: ${{ inputs.archive }}
-        ARTIFACT_PAGES_INPUT_VERSION: ${{ inputs.version }}
         ARTIFACT_PAGES_INPUT_REPOSITORY: ${{ inputs.repository }}
         ARTIFACT_PAGES_INPUT_DRY_RUN: ${{ inputs.dry-run }}
         GITHUB_TOKEN: ${{ inputs.github-token || github.token }}

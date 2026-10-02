@@ -121,7 +121,7 @@ try {
   // No external URL, wrong site, or unsupported version may be followed.
   const validManifest = manifest()
   for (const mutation of [
-    { ...validManifest, version: 9 }, { ...validManifest, site: 'core-two' },
+    { ...validManifest, version: 'x' }, { ...validManifest, site: 'core-two' },
     { ...validManifest, root: { ...validManifest.root, url: 'https://example.invalid/search.gz' } },
   ]) {
     await page.route('**/_indexes/core-one/search/manifest.json', (route) => route.fulfill({ json: mutation }))
@@ -129,6 +129,11 @@ try {
     assert.equal(await page.evaluate(async () => { try { await window.api.search('cache'); return null } catch (e) { return e.code } }), 'invalid-data')
     await page.unroute('**/_indexes/core-one/search/manifest.json')
   }
+  // An unknown integer version is a confirmed but unreadable format, not invalid data.
+  await page.route('**/_indexes/core-one/search/manifest.json', (route) => route.fulfill({ json: { ...validManifest, version: 9 } }))
+  await page.evaluate(() => window.api.clear())
+  assert.equal(await page.evaluate(async () => { try { await window.api.search('cache'); return null } catch (e) { return e.code } }), 'needs-republish')
+  await page.unroute('**/_indexes/core-one/search/manifest.json')
   await page.route('**/_indexes/core-one/search/manifest.json', (route) => route.fulfill({ status: 503, body: 'temporarily unavailable' }))
   assert.equal(await page.evaluate(async () => { try { await window.api.search('cache'); return null } catch (e) { return e.status } }), 503)
   await page.unroute('**/_indexes/core-one/search/manifest.json')

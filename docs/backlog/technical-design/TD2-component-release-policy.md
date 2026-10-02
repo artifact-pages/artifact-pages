@@ -98,6 +98,12 @@ The release commit (version constant bump) is prepared locally and reviewed like
 - [x] Define the automated gate that classifies changes and the release workflow it guards.
 - [x] Hand implementation and the `v0.1.0` re-release to [IMP-45](../implementation/IMP-45-unified-release-and-compatibility.md).
 
+## Known gate limits and release runbook
+
+- The gate classifies formats from what a completed run leaves in storage. Control records that a successful run removes or never writes (locks after release, registry cleanup and cache-retry records) are not compared; a change to their `schemaVersion` must be declared as breaking by the author and reviewed. `only-in-baseline` / `only-in-candidate` formats are reported but do not change the verdict. Cross-CLI checks cover republish, preview and `lock inspect`, not `lock recover`. In breaking mode only registry and site formats have explicit republish-state assertions.
+- Each web build is smoke-tested with the compatibility spec from its own tree, so the spec's environment contract (`PLAYWRIGHT_BASE_URL`, `COMPAT_MODE`, `COMPAT_SITES`, `COMPAT_EXPECT`) must stay stable across releases.
+- If the tag workflow fails after the release was created (post-publication verification), the release stays published. While no consumer can have used it (minutes after creation, still a pre-release), delete the release and tag, fix, and push the tag again; otherwise leave it, mark it superseded in its notes, and ship a new patch version.
+
 ## Evidence and limitations
 
 `npm run test:third-party-notices` covers notice generation. The deleted `v0.1.0` pre-release proved the current manual path end to end: clean-clone packaging, `app deploy --version 0.1.0` downloading from GitHub into a clean local target with byte-identical output and a no-op repeat. The new flow's evidence will be recorded here once the workflows exist. Local packaging and synthetic upgrade tests do not prove provider behavior; [T15](../verification/T15-provider-delivery.md) and [T16](../verification/T16-external-adoption.md) remain the gates for live delivery and clean-consumer adoption.

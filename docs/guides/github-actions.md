@@ -9,7 +9,7 @@ They build the CLI from the same pinned Action source and invoke the command wit
 
 ## Inputs and typed outputs
 
-The admin Action accepts `operation: registry-register | registry-unregister | app-deploy`. All three operations accept `dry-run`; `registry-unregister` requires `site`, and `app-deploy` requires exactly one of `archive` or `version`. The site Action requires `site` and accepts `source`, `config`, and `dry-run`.
+The admin Action accepts `operation: registry-register | registry-unregister | app-deploy`. All three operations accept `dry-run`; `registry-unregister` requires `site`, and `app-deploy` deploys the web bundle that matches the pinned Action's CLI version, or a local `archive` when given (there is no `version` input; the pinned Action ref selects the CLI and therefore the web bundle; `repository` overrides the release source). The site Action requires `site` and accepts `source`, `config`, and `dry-run`.
 
 Both Actions expose the original CLI result through `result_json` and preserve its process status through `exit_code`. They also expose the common result fields: `operation`, `outcome`, `site`, `changes_json`, `preview_changes_json`, and `error`; registry operations expose `registry_updated`. GitHub Action outputs are strings, so JSON arrays and objects are compact JSON text, `registry_updated` is `true`/`false`, and `exit_code` is an integer string. The invoke step writes outputs before returning a non-zero CLI exit code.
 
@@ -29,7 +29,7 @@ The config and storage provider remain independent. Registry Actions use the sel
 
 The files under [`examples/github-actions`](../../examples/github-actions) are templates. They pin the third-party checkout, Go setup, and AWS credential Actions by full commit SHA. The Artifact Pages Action itself has not been published as a release in this checkout; replace `<FULL_REVIEWED_ACTION_COMMIT_SHA>` with the full 40-character commit SHA of the reviewed release that contains the action files before adopting a template. The satellite template also uses a full commit SHA for the admin config locator.
 
-The templates show registering the desired site set, application deploy by exact version, and satellite publish for the explicit `sre` site. The admin Action's `registry-register` operation value maps to the `registry register` CLI command. For pull-request planning, use the same operation with `dry-run: true` and a read-only provider role. Decide which PRs may receive read-only cloud credentials in the adopting repository's trust policy. A merge or another selected event can run the write operation; the Action does not choose one.
+The templates show registering the desired site set, application deploy of the web bundle pinned by the Action ref, and satellite publish for the explicit `sre` site. The admin Action's `registry-register` operation value maps to the `registry register` CLI command. For pull-request planning, use the same operation with `dry-run: true` and a read-only provider role. Decide which PRs may receive read-only cloud credentials in the adopting repository's trust policy. A merge or another selected event can run the write operation; the Action does not choose one.
 
 The component uses `actions/setup-go` pinned to commit `b7ad1dad31e06c5925ef5d2fc7ad053ef454303e` (v7.0.0) and reads the Go version from this repository's `go.mod`. The consuming workflow's checkout should also disable persisted credentials unless later steps need Git authentication.
 

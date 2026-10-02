@@ -21,6 +21,7 @@ import (
 	previewrecords "github.com/tasuku43/git-artifact-pages/cli/internal/preview"
 	"github.com/tasuku43/git-artifact-pages/cli/internal/publisher"
 	"github.com/tasuku43/git-artifact-pages/cli/internal/registry"
+	"github.com/tasuku43/git-artifact-pages/cli/internal/version"
 )
 
 const (
@@ -1311,4 +1312,49 @@ func envWithout(environment []string, names ...string) []string {
 		}
 	}
 	return filtered
+}
+
+func TestRunVersionPrintsProductVersionAndRevision(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if err := run(t.Context(), []string{"version"}, &stdout, &stderr); err != nil {
+		t.Fatalf("run(version) error = %v", err)
+	}
+	if !strings.HasPrefix(stdout.String(), "artifact-pages "+version.Product+"\n") || !strings.Contains(stdout.String(), "Revision") {
+		t.Fatalf("text version output = %q", stdout.String())
+	}
+	stdout.Reset()
+	if err := run(t.Context(), []string{"version", "--format", "json"}, &stdout, &stderr); err != nil {
+		t.Fatalf("run(version --format json) error = %v", err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
+		t.Fatalf("json output %q: %v", stdout.String(), err)
+	}
+	if decoded["operation"] != "version" || decoded["version"] != version.Product {
+		t.Fatalf("json version output = %v", decoded)
+	}
+	if _, ok := decoded["modified"].(bool); !ok {
+		t.Fatalf("json output lacks boolean modified: %v", decoded)
+	}
+}
+
+func TestRunVersionRejectsBadInput(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if err := run(t.Context(), []string{"version", "--format", "yaml"}, &stdout, &stderr); commandExitCode(err) != 2 {
+		t.Fatalf("bad format error = %v, want exit 2", err)
+	}
+	if err := run(t.Context(), []string{"version", "extra"}, &stdout, &stderr); commandExitCode(err) != 2 {
+		t.Fatalf("extra argument error = %v, want exit 2", err)
+	}
+}
+
+func TestAppDeployNoLongerAcceptsVersionFlag(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	err := run(t.Context(), []string{"app", "deploy", "--version", "1.2.3"}, &stdout, &stderr)
+	if commandExitCode(err) != 2 {
+		t.Fatalf("--version error = %v, want exit 2", err)
+	}
+	if pinnedVersion("") != version.Product || pinnedVersion("x.tar.gz") != "" {
+		t.Fatalf("pinnedVersion() does not follow the CLI constant")
+	}
 }
