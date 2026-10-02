@@ -4907,6 +4907,8 @@ test.describe('release UX fixes', () => {
 
   test('palette folds full-width input and prefixes like ordinary text', async ({ page }) => {
     await page.goto(checkoutPath)
+    // The shortcut listener exists once the workspace has rendered.
+    await expect(page.getByRole('complementary', { name: 'SRE navigation' })).toBeVisible()
     await page.keyboard.press('Control+k')
     await paletteInput(page).fill('ＣＨＥＣＫＯＵＴ')
     await expect(palette(page).getByRole('option', { name: /Checkout latency incident review/ })).toBeVisible()

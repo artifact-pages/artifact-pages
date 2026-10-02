@@ -57,7 +57,12 @@
         if (to.pathname === location.pathname) return; // 同じ文書内のアンカー
         const at = to.pathname.indexOf(marker);
         if (at !== 0) return;
-        const route = '/' + to.pathname.slice(marker.length) + to.search + to.hash;
+        // 読者が確定した全文検索（?q=）は、同じサイト内の移動では引き継ぐ。
+        const target = new URL('/' + to.pathname.slice(marker.length) + to.search + to.hash, window.top.location.origin);
+        const query = new URLSearchParams(window.top.location.search).get('q');
+        const sameSite = window.top.location.pathname.split('/')[1] === target.pathname.split('/')[1];
+        if (query && sameSite && !target.searchParams.has('q')) target.searchParams.set('q', query);
+        const route = target.pathname + target.search + target.hash;
         window.top.location.assign(route);
         event.preventDefault();
       } catch { /* 別オリジンなど：通常のリンク動作にまかせる */ }
