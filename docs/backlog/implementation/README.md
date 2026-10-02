@@ -13,7 +13,7 @@ Use the [priority-ordered, one-at-a-time repair queue](../issues/README.md#repai
 | Order | Ticket | Status | Execution | Outcome / handoff |
 | --- | --- | --- | --- | --- |
 | 1 | [IMP-37](IMP-37-cloudflare-entry-module.md) | In progress | Agent-led | One Cloudflare entry module creates the bucket and composes delivery/retention; local acceptance hands off real-account proof to T15. |
-| 2 | [IMP-38](IMP-38-terraform-registry-publication.md) | Open | Collaborative | Prepare the package in parallel; owner-approved publication follows Cloudflare proof, then exact-version retrieval feeds T16. |
+| 2 | [IMP-38](IMP-38-terraform-registry-publication.md) | In progress | Collaborative | Prepare the package in parallel; owner-approved publication follows Cloudflare proof, then exact-version retrieval feeds T16. |
 | AWS parallel/follow-up | [IMP-39](IMP-39-aws-cloudflare-dns-acm.md) | In progress | Agent-led | Compose DNS-only Cloudflare records and ACM in us-east-1 with CloudFront; keep Cloudflare publication independent and hand AWS live evidence to T15. |
 
 Use the [delegation index](../delegation.md) for work modes and owner boundaries. Existing review repairs remain the active repair queue; these new tickets are not an instruction to interrupt it. IMP-33 remains Done for its existing-bucket implementation, not as evidence for the new root module or Registry publication.

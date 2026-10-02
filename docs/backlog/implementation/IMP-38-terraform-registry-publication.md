@@ -1,6 +1,6 @@
 # IMP-38 — Publish provider modules through Terraform Registry
 
-- Status: Open
+- Status: In progress
 - Phase: Reusable distribution
 - Execution: Collaborative; local packaging and release preparation are agent-led.
 - Depends on: [IMP-37](IMP-37-cloudflare-entry-module.md) for the Cloudflare entry point; [T15](../verification/T15-provider-delivery.md) evidence for the provider advertised by the initial release.
@@ -33,8 +33,8 @@ An adopter selects the Cloudflare module using a Registry `source` and an exact 
 
 ## Acceptance criteria
 
-- [ ] The provider-specific package has a root entry module and locally resolvable nested modules; examples do not depend on sibling paths in the OSS checkout.
-- [ ] Local formatting, initialization/validation, package-content checks, and an isolated consumer initialization pass. README, license, input/output docs, provider constraints, and provenance are included.
+- [x] The provider-specific package has a root entry module and locally resolvable nested modules; examples do not depend on sibling paths in the OSS checkout.
+- [x] Local formatting, initialization/validation, package-content checks, and an isolated consumer initialization pass. README, license, input/output docs, provider constraints, and provenance are included.
 - [ ] The existing owner-selected repositories are populated without duplicating module source-of-truth; repository visibility and Registry namespace eligibility are verified. The owner confirms the initial version, explicitly authorizes public changes, and connects GitHub to Registry for first publication.
 - [ ] The reviewed module is published with a valid immutable SemVer tag. Record the actual Registry URL, exact version, source/export commits, and publication evidence; never replace a published version's contents.
 - [ ] A clean external caller retrieves that exact module version through Registry and initializes/validates without copying OSS code. Record dependency resolution and the selected provider versions.
@@ -49,6 +49,8 @@ The agent can prepare the package, source migration/validation procedure, exampl
 After authorization, execute only the approved publication steps and verify Registry retrieval. This ticket remains unfinished until those external acceptance criteria have evidence; local preparation alone is not Done. Cloudflare is the first live target; AWS preparation must not block the Cloudflare package or imply AWS proof.
 
 ## Evidence and references
+
+October 2, 2026: latest local Cloudflare package preparation and independent review completed. Clean isolated snapshot `2daab42c7c1878d9fdbacef3d6d0db6c75b82019` includes pending reviewed WAF/reader/retention changes and passes the full contract suite plus exact-SHA external local-Git consumers with providers 5.26.0 and 5.24.0; a separate Terraform 1.5.7/provider 5.24.0 consumer also initialized/validated. Authoritative packaging-only commit `611ca8ae83dd25669bbcbacea04f0ddbc4eb2aae` adds standalone package checks and an exact publication procedure. The inherited source changes remain uncommitted and preserved; land them and revalidate an authoritative release SHA before selecting/pushing any tag. GitHub is public but lacks its description, Registry versions API remains 404, and publication authority is unverified. Candidate `0.1.0` remains unapproved. See [the preparation record](../cloudflare-module-publication-preparation.md) for tested trees, tools, actual results, resolved review findings, and exact remaining owner actions. Local preparation does not close public Registry retrieval or T15/T16 gates.
 
 October 1, 2026 local package preflight: clean module commit `25b6e97031a6fe5202077fe781dc4f14617b0ceb` passed Terraform 1.9.8 recursive formatting, root and local example initialization/validation, three evaluated CLI-output contracts, ten Node tests, and the isolated synthetic state-move migration with a no-change plan. A separate caller retrieved that exact commit through a local Git file URL and initialized/validated with Cloudflare 5.26.0. This is self-contained local Git package evidence, not Registry/GitHub retrieval or live infrastructure proof. Preflight repaired the validator's obsolete CLI import/helper placement; independent review found no actionable issues. The shared module checkout still has unrelated uncommitted registry-reader work, excluded from this pin. See [distribution preflight](../distribution-preflight.md) for producer source, provider resolutions and remaining owner handoffs.
 
