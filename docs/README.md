@@ -27,7 +27,7 @@ Start with the [thesis](thesis.md) for the product's purpose, the [specification
 
 ## Backlog
 
-- [Backlog index and status legend](backlog/README.md) — product issues, technical design, and verification in separate tracks.
+- Backlog — unfinished work in separate tracks: [issues](backlog/issues/README.md), [implementation](backlog/implementation/README.md), [documentation](backlog/documentation/README.md), [technical design](backlog/technical-design/), and [verification](backlog/verification/). Statuses and conventions are in [AGENTS.md](../AGENTS.md#backlog-and-issue-tracking).
 - [Product issues](backlog/issues/README.md) — issue-specific priority, acceptance criteria, and the current active issue index; no issues are currently open.
 
 ## UI studies

@@ -1,6 +1,6 @@
 # Documentation backlog
 
-[Backlog overview and shared status legend](../README.md). This track covers the public, reader-facing documentation sites published from `docs/public/sites/`. Internal design notes, UI concepts, and backlog records stay in their existing tracks and are not published as these sites.
+Statuses follow the [shared backlog legend](../../../AGENTS.md#backlog-and-issue-tracking). This track covers the public, reader-facing documentation sites published from `docs/public/sites/`. Internal design notes, UI concepts, and backlog records stay in their existing tracks and are not published as these sites.
 
 Each ticket is one page (or one structural change). Pages are written and reviewed **one at a time**: the owner reviews each draft before the next page starts.
 

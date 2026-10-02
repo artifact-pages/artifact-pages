@@ -1,8 +1,8 @@
 # Product issues
 
-[Backlog overview and shared status legend](../README.md). This track is for independently actionable product problems; unresolved design questions and unrun contract proofs have their own backlog tracks. Remove completed issue files from this backlog after verifying their acceptance criteria; Git history retains the completed records.
+Statuses follow the [shared backlog legend](../../../AGENTS.md#backlog-and-issue-tracking). This track is for independently actionable product problems; unresolved design questions and unrun contract proofs have their own backlog tracks. Remove completed issue files from this backlog after verifying their acceptance criteria; Git history retains the completed records.
 
-Each issue file records one independently actionable problem. New issues start as `Open`; keep this index and the [parent backlog summary](../README.md) in sync. Use [_template.md](_template.md) for new issues.
+Each issue file records one independently actionable problem. New issues start as `Open`; keep this index in sync. Use [_template.md](_template.md) for new issues.
 
 ## Status
 
@@ -37,7 +37,7 @@ Work one issue at a time: mark it In progress, reproduce it, add a regression, i
 
 ISSUE-038–047 were repaired individually by Luna max agents and reviewed by separate Luna max agents. The final local e2e suite passed 77/77 on 2026-10-01. Their verified completion records were removed under the backlog policy and remain in Git history through `670dd87`. The initial UX review used the Codex in-app browser; final follow-up visual checks were limited to automated browser tests because the in-app browser was unavailable. ISSUE-048 is the remaining owner-selected document-first palette direction; prepare inspectable concepts before implementation. ISSUE-049–058 record a second beginner review on 2026-10-01 in Chrome (Claude in Chrome) at about 1568×568 with one site and four HTML documents; narrow widths were not exercised. Four of them follow up on residual behavior after ISSUE-039, ISSUE-046, ISSUE-047, and ISSUE-042, and each names the related issue. Work ISSUE-049 and ISSUE-050 first because they share the search-entry concern.
 
-This is the default repair queue, not authorization to operate cloud accounts or release publicly. Complete review defects before claiming readiness, or record an explicit approved deferral with impact. Actual provider and clean-consumer proofs remain separate gates in the [release order](../README.md#first-public-release-order).
+This is the default repair queue, not authorization to operate cloud accounts or release publicly. Complete review defects before claiming readiness, or record an explicit approved deferral with impact. Actual provider and clean-consumer proofs remain separate gates in the [release execution order](../release-readiness.md).
 
 ## Issue index
 

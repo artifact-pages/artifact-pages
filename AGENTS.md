@@ -12,13 +12,49 @@ The repository is in **Phase 1: local product**.
 
 Do not implement AWS infrastructure, Terraform, GitHub Actions publishing, or a general-purpose CLI unless explicitly requested. First prove the browser product and local serving contract.
 
-## Issue tracking
+## Backlog and issue tracking
 
-Project issues live as Markdown files in `docs/backlog/issues/`. Read `docs/backlog/README.md` for the backlog tracks and status legend, then `docs/backlog/issues/README.md` for the issue index and priority definitions; use `docs/backlog/issues/_template.md` when creating an issue. Keep technical design and verification in their separate backlog tracks rather than turning them into issues.
+Unfinished work lives in `docs/backlog/`, one item per Markdown file, split into tracks with different definitions of `Done`:
 
-- Record one independently actionable problem per issue, with evidence, an expected outcome, and acceptance criteria.
-- Set a status and priority on every issue, and keep the README index in sync when either changes.
-- Mark an issue `Done` only after its acceptance criteria have been verified.
+| Track | Holds | Index |
+| --- | --- | --- |
+| `issues/` | Independently actionable product problems with evidence and acceptance criteria. | `issues/README.md` (also defines P0–P3); new items from `issues/_template.md` |
+| `implementation/` | Independently reviewable implementation slices. | `implementation/README.md` |
+| `technical-design/` | Decisions about how to fulfil an accepted contract. | The `TD*` files |
+| `verification/` | Tests or measurements that prove an accepted contract. | The `T*` files |
+| `documentation/` | Public reader-facing documentation pages, one per ticket, reviewed one at a time. | `documentation/README.md` |
+
+`docs/backlog/delegation.md` records work modes and owner boundaries; `docs/backlog/release-readiness.md` records the release execution order.
+
+| Status | Meaning | Completion rule |
+| --- | --- | --- |
+| `Open` | Not yet started. | — |
+| `In progress` | Actively being worked on. | — |
+| `Blocked` | Cannot proceed without a decision, dependency, or external change. | Record the blocker in the item. |
+| `Done` | Outcome established. | Issue or implementation: acceptance criteria verified. Technical design: settled contract recorded. Verification: actual results or measurements linked. |
+| `Deferred` | Deliberately postponed. | Design, implementation and verification only; record when to revisit. |
+| `Won't fix` | The problem will not be pursued. | Issues only; record why. |
+
+- An item's own file is the source of truth for its status; keep its track index in sync when status or priority changes.
+- Keep one independently finishable problem, slice, decision, or proof per file. Do not turn design or verification work into issues.
+- Priorities `P0`–`P3` apply to issues only.
+- Accepted product behavior belongs in `docs/specification.md`, not in a backlog item.
+
+Derive counts and the active list from the items instead of maintaining them by hand:
+
+~~~sh
+# Status counts per track
+for t in issues implementation technical-design verification documentation; do
+  printf '%-17s' "$t"
+  grep -rh -m1 '^- Status:' --include='*.md' --exclude=_template.md "docs/backlog/$t" |
+    sed 's/^- Status: //' | sort | uniq -c | awk '{n=$1; $1=""; printf "%s %s · ", substr($0,2), n}'
+  echo
+done
+
+# Every item that is not finished
+grep -rH -m1 '^- Status:' --include='*.md' --exclude=_template.md docs/backlog |
+  grep -vE "Status: (Done|Won't fix)$" | sed 's|^docs/backlog/||; s|:- Status: | — |' | sort
+~~~
 
 ## Current implementation direction
 
