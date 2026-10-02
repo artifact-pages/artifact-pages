@@ -13,13 +13,17 @@
 
 The AWS Terraform module should accept optional operator-selected WAF custom-rule configuration through module variables for its CloudFront delivery path. The owner mentioned permitted ports as an example, but the variable schema and AWS composition are intentionally undecided.
 
+Design priority: choose the least expensive, simplest configuration that actually satisfies the operator's requirements. Start from the required behavior, not from WAF resources. Prefer standard CloudFront or other already-required infrastructure capabilities wherever they provide equivalent enforcement; introduce paid WAF resources only for requirements those capabilities cannot meet. Compare recurring charges, request-based costs and operational overhead, with assumptions and limitations made explicit. Do not weaken the required protection to reduce cost.
+
+For example, evaluate HTTPS-only viewer access through CloudFront Viewer Protocol Policy rather than a WAF custom rule. Distinguish rejecting HTTP from redirecting HTTP to HTTPS, and confirm the desired behavior before selecting the policy. Verify current official provider semantics and costs during design; this example does not settle all edge-policy inputs.
+
 Infrastructure remains an adapter. This does not introduce application accounts, login, per-site permissions or policy fields in CLI config/registry/artifact metadata. An operator owns the edge policy; Cloudflare DNS in the AWS composition is not the enforcement point for the direct CloudFront read path.
 
 ## Start with design
 
-1. Inspect the authoritative AWS module and provider aliases. Verify current AWS WAF/CloudFront and Terraform-provider contracts using official documentation, including scope/region constraints, request fields, actions, rule priority, permissions and costs.
+1. Inspect the authoritative AWS module and provider aliases. Map each requested behavior to standard infrastructure capabilities first, then identify any remaining need for WAF. Verify current AWS WAF/CloudFront and Terraform-provider contracts using official documentation, including scope/region constraints, request fields, actions, rule priority, permissions and costs.
 2. Assess the permitted-port example against actual CloudFront/WAF request semantics. Distinguish destination listener ports, HTTP request fields and client source ports; do not model a network firewall or promise unsupported matching.
-3. Propose a minimal typed variable contract, safe no-policy default and useful examples. Compare module-managed policy with attachment of a caller-managed policy, including whether both modes are needed and how mutually exclusive inputs are validated.
+3. Compare the lowest-cost requirement-complete alternatives and recommend a minimal typed variable contract, safe defaults and useful examples. Only where WAF is needed, compare module-managed policy with attachment of a caller-managed policy, including whether both modes are needed and how mutually exclusive inputs are validated. A standard-feature-only configuration must not require a WAF ACL or paid custom rules.
 4. Define ownership, association, existing-policy migration/import, updates/removal and rollback. Assess logical/raw-route coverage, default action and how unintended distribution-wide blocking is avoided.
 5. Present a recommended design and unresolved security/UX choices for acceptance before implementation. Share lessons with the Cloudflare ticket without requiring identical variables or merging provider-specific implementations.
 
@@ -39,6 +43,7 @@ Infrastructure remains an adapter. This does not introduce application accounts,
 ## Acceptance criteria
 
 - [ ] Recommended design and variable contract are recorded and accepted before implementation; port-related capabilities and limitations are explicit and verified against provider semantics.
+- [ ] Each requirement is mapped to its enforcement mechanism. The recommended configuration minimizes cost and complexity without weakening requirements; standard features are preferred, and any additional WAF charges have an explicit justification. HTTPS-only behavior is evaluated through Viewer Protocol Policy, with reject-versus-redirect behavior documented.
 - [ ] An operator can configure the accepted policy through documented typed module variables; unsupported/ambiguous combinations fail clearly.
 - [ ] Omitted/disabled policy preserves existing callers and delivery behavior; policy ownership and existing-association handling are explicit.
 - [ ] Scope/region/provider requirements, default action, rule ordering and logical/raw-route coverage are documented and tested at the appropriate boundary.
