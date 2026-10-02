@@ -2,6 +2,12 @@
 
 Checked on October 2, 2026 (JST). This reconciles existing evidence for [T15](verification/T15-provider-delivery.md), [IMP-38](implementation/IMP-38-terraform-registry-publication.md) and [T16](verification/T16-external-adoption.md). It neither changes the accepted contract nor declares a release ready. T15 spans providers; its unchecked parent criteria cannot be read as a list of entirely untested Cloudflare features. Ticket files remain the status source of truth.
 
+## Owner-selected execution boundary
+
+On October 2 the owner selected completing the remaining live Cloudflare verification **before publication**, and authorized continuing narrowly scoped disposable verification and fixing discovered defects. Candidate `208abf5` / module-only `0.1.0` remains on hold; no push, tag, Registry publication or cloud infrastructure/security-policy change is authorized here. Preserve Guide, other registrations and the retained natural-lifecycle experiment. Infrastructure changes or tests requiring another identity/network must stop at an explicit handoff.
+
+If a defect changes source, select a new clean candidate SHA, independently review the repair and repeat affected checks before release selection. No release tag exists yet; create it only after final approval. Never move or replace an already published tag or its assets: a correction after publication requires a new version. CLI/Action and module selections remain independent.
+
 ## Evidence already established, with limits
 
 | Outcome | Existing evidence | Limit on the claim |
