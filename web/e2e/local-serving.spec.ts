@@ -2886,6 +2886,42 @@ test('invalid site IDs also use the not-found state', async ({ page }) => {
   await expect(page.locator('.status-content')).not.toContainText('/_indexes/')
 })
 
+for (const path of ['/unknown-site/_previews', '/unknown-site/_previews?group=pr%3A42', '/unknown-site/_previews/0123456789abcdef0123456789abcdef01234567/notes.md']) {
+  test(`unregistered site preview route ${path} uses generic not-found recovery`, async ({ page }) => {
+    await page.goto(path)
+    await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
+    await expect(page.getByRole('alert')).toHaveText('The page you requested does not exist or is no longer available.')
+    await expect(page.locator('a[href="/unknown-site"]')).toHaveCount(0)
+    await page.reload()
+    await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
+    await page.getByRole('button', { name: '← All sites' }).click()
+    await expect(page).toHaveURL('/')
+    await expect(page.getByRole('heading', { name: 'Choose a site' })).toBeVisible()
+  })
+}
+
+test('preview routes of an unregistered site are not found even when preview objects remain', async ({ page }) => {
+  // Model a reload after unregister while the site's preview catalog is still cached or present.
+  await page.route('**/_indexes/sites.json', async (route) => {
+    const response = await route.fetch()
+    const registry = await response.json() as { sites: Array<{ id: string }> }
+    await route.fulfill({ response, body: JSON.stringify({ ...registry, sites: registry.sites.filter(({ id }) => id !== 'sre') }) })
+  })
+  await page.goto('/sre/_previews')
+  await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
+  await expect(page.locator('a[href="/sre"]')).toHaveCount(0)
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
+})
+
+test('a failed site registry load does not turn a preview list into not-found', async ({ page }) => {
+  await page.route('**/_indexes/sites.json', (route) => route.fulfill({ status: 503, body: 'temporarily unavailable' }))
+  await page.goto('/sre/_previews')
+  await expect(page.getByRole('heading', { name: 'Previews', exact: true })).toBeVisible()
+  await expect(page.locator('.preview-group').first()).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Page not found' })).toHaveCount(0)
+})
+
 for (const path of ['/_control/locks/guide.json', '/%5Fcontrol/locks/guide.json', '/_CONTROL/locks/guide.json', '/unknown-site/nested/missing.html']) {
   test(`unavailable resource ${path} uses generic not-found recovery`, async ({ page }) => {
     if (decodeURIComponent(path).toLowerCase().startsWith('/_control/')) {

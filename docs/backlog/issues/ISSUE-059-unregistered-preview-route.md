@@ -1,6 +1,6 @@
 # Unregistered preview routes look like registered sites with no previews
 
-- Status: Open
+- Status: Done
 - Priority: P2
 - Area: Preview discovery and missing-resource presentation
 
@@ -25,8 +25,14 @@ Unknown/unregistered preview routes use the common missing-page presentation wit
 
 ## Acceptance criteria
 
-- [ ] An absent site's preview list, group and document routes display `Page not found` with an All sites action, without links implying a valid site home.
-- [ ] A registered site without previews still shows the intended empty-preview explanation and its valid site-home link.
-- [ ] Registry loading/fetch failures do not become a false not-found or empty-preview result.
-- [ ] Browser regression tests distinguish unknown-site preview routes from registered-empty routes, including a reload after unregister.
-- [ ] Raw preview storage misses still return real HTTP 404s; no edge rewrite, WAF or product identity model is introduced for this presentation fix.
+- [x] An absent site's preview list, group and document routes display `Page not found` with an All sites action, without links implying a valid site home.
+- [x] A registered site without previews still shows the intended empty-preview explanation and its valid site-home link.
+- [x] Registry loading/fetch failures do not become a false not-found or empty-preview result.
+- [x] Browser regression tests distinguish unknown-site preview routes from registered-empty routes, including a reload after unregister.
+- [x] Raw preview storage misses still return real HTTP 404s; no edge rewrite, WAF or product identity model is introduced for this presentation fix.
+
+## Resolution (2026-10-02)
+
+`App` now checks preview list, group and document routes against the loaded site registry (`/_indexes/sites.json`) before rendering a preview page. An invalid site ID, or a registry that loaded without the site, shows the common `Page not found` page with `← All sites`. While the registry is loading or after it fails, the preview page renders as before, so a registry failure never becomes a confirmed absence. Registered sites keep their empty-preview explanation and site-home link. No nginx, edge or storage behavior changed; raw preview misses keep their HTTP 404.
+
+Evidence: new browser regressions in `web/e2e/local-serving.spec.ts` cover unknown-site list/group/document routes with reload, a registered site removed from the registry while its preview catalog remains (reload after unregister), and a registry 503 that keeps the preview list. The existing registered-empty and raw-404 tests still pass. Full `npm run test:e2e` on nginx: 118 passed.

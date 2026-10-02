@@ -109,12 +109,17 @@ function App() {
     )
   }
 
-  if (route.kind === 'preview-list') {
-    return <PreviewListPage route={route} navigate={navigate} />
-  }
-
-  if (route.kind === 'preview-document') {
-    return <PreviewDocumentPage route={route} hash={hash} navigate={navigate} />
+  if (route.kind === 'preview-list' || route.kind === 'preview-document') {
+    // Previews belong to a registered site. Only a loaded registry can confirm
+    // absence; while it loads or after it fails, the preview page decides.
+    if (!isValidSiteId(route.siteId) || (
+      sites.status === 'success' && !sites.data.some(({ site }) => site.id === route.siteId)
+    )) {
+      return <PageNotFoundPage onBack={() => navigate('/')} />
+    }
+    return route.kind === 'preview-list'
+      ? <PreviewListPage route={route} navigate={navigate} />
+      : <PreviewDocumentPage route={route} hash={hash} navigate={navigate} />
   }
 
   return (

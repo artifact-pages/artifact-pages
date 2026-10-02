@@ -54,7 +54,7 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-056](ISSUE-056-sidebar-filter-match-reason.md) | Done | P3 | Sidebar filter results matched only by path do not show why they matched. |
 | [ISSUE-057](ISSUE-057-search-typo-tolerance.md) | Won't fix | P3 | Small typos such as swapped letters find no documents. |
 | [ISSUE-058](ISSUE-058-library-palette-heading-hint.md) | Done | P3 | The site-list palette footer advertises heading search that is unavailable there. |
-| [ISSUE-059](ISSUE-059-unregistered-preview-route.md) | Open | P2 | Unregistered preview routes look like registered sites with no previews. |
+| [ISSUE-059](ISSUE-059-unregistered-preview-route.md) | Done | P2 | Unregistered preview routes look like registered sites with no previews. |
 | [ISSUE-060](ISSUE-060-flaky-preview-navigation-tests.md) | Done | P2 | Preview-navigation e2e tests fail intermittently under parallel runs. |
 | [ISSUE-061](ISSUE-061-early-preview-click-escapes-reader.md) | Open | P3 | A click right after a preview loads can open the raw file outside the reader. |
 
