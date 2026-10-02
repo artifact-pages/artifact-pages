@@ -16,7 +16,9 @@ test('registered site with no artifact publish remains visible beside a healthy 
   await expect(page.getByRole('button', { name: /Neighbor site/ })).toBeVisible()
   expect(indexRequests).toEqual([])
 
-  await page.getByRole('button', { name: 'Search sites' }).click()
+  // Two sites are listed without a separate search trigger; ⌘ K / Ctrl K opens site search.
+  await expect(page.getByRole('button', { name: 'Search sites' })).toHaveCount(0)
+  await page.keyboard.press('Control+k')
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
   await search.fill('Neighbor site')

@@ -4,6 +4,7 @@ import { ArtifactWorkspace } from './ArtifactWorkspace'
 import { parseRoute, type AppRoute } from '../routing'
 import { deepExpandedPaths, deepSreIndex, storyIndexes } from '../stories/fixtures'
 import { resolveTheme } from '../domain/theme'
+import { createStoryFullTextSearch } from '../stories/fake-fulltext'
 import type { ThemeMode } from '../domain/theme'
 
 const indexes = storyIndexes
@@ -13,7 +14,9 @@ const sites = indexes.map((index) => ({
   generatedAt: index.generatedAt,
   artifactCount: index.artifacts.length,
   artifactIndexUrl: `/_indexes/${index.site.id}/index.json`,
+  fullTextUrl: index.site.id === deepSreIndex.site.id ? `/_indexes/${index.site.id}/search/manifest.json` : undefined,
 }))
+const sreFullTextSearch = createStoryFullTextSearch(deepSreIndex)
 
 type WorkspaceStoryArgs = {
   view: 'site-home' | 'artifact' | 'markdown'
@@ -31,7 +34,7 @@ function WorkspaceStory({ view, theme, initialSidebarOpen }: WorkspaceStoryArgs)
         ? 'runbooks/service-recovery.md'
         : 'incidents/checkout-latency/index.html',
   }))
-  const [hash, setHash] = useState('')
+  const [location, setLocation] = useState({ search: '', hash: '' })
   const [activeThemeMode, setActiveThemeMode] = useState(theme)
   const index = indexes.find(({ site }) => site.id === route.siteId) ?? deepSreIndex
 
@@ -45,7 +48,7 @@ function WorkspaceStory({ view, theme, initialSidebarOpen }: WorkspaceStoryArgs)
           ? 'runbooks/service-recovery.md'
           : 'incidents/checkout-latency/index.html',
     })
-    setHash('')
+    setLocation({ search: '', hash: '' })
   }, [view])
 
   useEffect(() => {
@@ -62,7 +65,7 @@ function WorkspaceStory({ view, theme, initialSidebarOpen }: WorkspaceStoryArgs)
     const destination = new URL(href, window.location.origin)
     const nextRoute = parseRoute(destination.pathname)
     if (nextRoute.kind === 'site') setRoute(nextRoute)
-    setHash(destination.hash)
+    setLocation({ search: destination.search, hash: destination.hash })
   }
 
   const pathname = `/${route.siteId}${route.artifactPath ? `/${route.artifactPath}` : ''}`
@@ -71,7 +74,8 @@ function WorkspaceStory({ view, theme, initialSidebarOpen }: WorkspaceStoryArgs)
     <ArtifactWorkspace
       route={route}
       pathname={pathname}
-      hash={hash}
+      search={location.search}
+      hash={location.hash}
       sites={sites}
       sitesLoading={false}
       navigate={navigate}
@@ -79,6 +83,7 @@ function WorkspaceStory({ view, theme, initialSidebarOpen }: WorkspaceStoryArgs)
       theme={activeTheme}
       onSetThemeMode={setActiveThemeMode}
       index={index}
+      fullTextSearch={index.site.id === deepSreIndex.site.id ? sreFullTextSearch : undefined}
       initialExpandedPaths={deepExpandedPaths}
       initialSidebarOpen={initialSidebarOpen}
     />

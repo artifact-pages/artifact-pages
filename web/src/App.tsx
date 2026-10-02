@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useLayoutEffect, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import { ArtifactWorkspace } from './components/ArtifactWorkspace'
 import { PreviewDocumentPage } from './components/PreviewDocumentPage'
 import { PreviewListPage } from './components/PreviewListPage'
 import { SitePicker } from './components/SitePicker'
 import { defaultSiteIndexUrl, discoverSites, IndexLoadError, isValidSiteId, loadSiteIndex } from './data/indexes'
+import { createSiteFullTextSearch } from './data/fulltext'
 import { hasSiteDiscoveryMetadata, type SiteCatalogEntry, type SiteIndex } from './domain/index'
 import { isThemeMode, resolveTheme } from './domain/theme'
 import type { ResolvedTheme, ThemeMode } from './domain/theme'
@@ -75,7 +76,7 @@ function useTheme() {
 }
 
 function App() {
-  const { route, pathname, hash, navigate } = useLocation()
+  const { route, pathname, search, hash, navigate } = useLocation()
   const { themeMode, theme, setThemeMode } = useTheme()
   const [sites, setSites] = useState<LoadingState<SiteCatalogEntry[]>>({ status: 'loading' })
 
@@ -121,6 +122,7 @@ function App() {
       key={route.siteId}
       route={route}
       pathname={pathname}
+      search={search}
       hash={hash}
       sites={sites.status === 'success' ? sites.data : []}
       sitesLoading={sites.status === 'loading'}
@@ -139,6 +141,7 @@ function SitePage({
   sitesLoading,
   siteDiscoveryStatus,
   pathname,
+  search,
   hash,
   navigate,
   themeMode,
@@ -150,6 +153,7 @@ function SitePage({
   sitesLoading: boolean
   siteDiscoveryStatus: LoadingState<SiteCatalogEntry[]>['status']
   pathname: string
+  search: string
   hash: string
   navigate: (href: string) => void
   themeMode: ThemeMode
@@ -161,6 +165,17 @@ function SitePage({
   const artifactIndexUrl = registeredSite && hasSiteDiscoveryMetadata(registeredSite)
     ? registeredSite.artifactIndexUrl
     : defaultSiteIndexUrl(route.siteId)
+  const fullTextUrl = registeredSite && hasSiteDiscoveryMetadata(registeredSite) ? registeredSite.fullTextUrl : undefined
+  // Construction is network-free; search data loads only when a query is committed.
+  const fullTextSearch = useMemo(() => {
+    if (!fullTextUrl) return undefined
+    try {
+      return createSiteFullTextSearch({ site: { id: route.siteId, title: route.siteId }, fullTextUrl })
+    } catch {
+      return undefined
+    }
+  }, [route.siteId, fullTextUrl])
+  useEffect(() => () => fullTextSearch?.clear(), [fullTextSearch])
 
   useEffect(() => {
     let cancelled = false
@@ -233,12 +248,14 @@ function SitePage({
       sites={sites}
       sitesLoading={sitesLoading}
       pathname={pathname}
+      search={search}
       hash={hash}
       navigate={navigate}
       themeMode={themeMode}
       theme={theme}
       onSetThemeMode={onSetThemeMode}
       index={index}
+      fullTextSearch={fullTextSearch}
     />
   )
 }

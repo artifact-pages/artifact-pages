@@ -15,6 +15,13 @@ const sites: SiteDiscoveryMetadata[] = indexes.map((index) => ({
 const currentIndex = indexes[0]
 const currentArtifact = currentIndex.artifacts[0] as ArtifactIndexEntry
 
+const now = Date.now()
+const recentReads = currentIndex.artifacts.slice(1, 4).map((artifact, order) => ({
+  artifactId: artifact.id,
+  viewedAt: now - (order + 1) * 37 * 60_000,
+}))
+const pinnedArtifactIds = currentIndex.artifacts.slice(4, 5).map(({ id }) => id)
+
 type PaletteStoryArgs = { seed: string; context: PaletteContext }
 
 function PaletteStory({ seed, context }: PaletteStoryArgs) {
@@ -35,11 +42,14 @@ function PaletteStory({ seed, context }: PaletteStoryArgs) {
       sites={sites}
       currentIndex={currentIndex}
       currentArtifact={currentArtifact}
+      recentReads={recentReads}
+      pinnedArtifactIds={pinnedArtifactIds}
       commands={commands}
       loading={false}
       onClose={() => setIsOpen(false)}
       onNavigate={() => setIsOpen(false)}
       onJumpToHeading={() => setIsOpen(false)}
+      onSearchPageText={context === 'sites' ? undefined : () => setIsOpen(false)}
     />
   ) : (
     <div style={{ padding: 24 }}>
@@ -54,7 +64,7 @@ const meta = {
   argTypes: {
     seed: {
       control: 'radio',
-      options: ['', 'checkout', 'pltf', 'chk lat', '@', '>', '#'],
+      options: ['', 'checkout', 'pltf', 'chk lat', 'idempotency', '@', '>', '#'],
       description: 'Try fuzzy terms or prefix with @, >, or # to explicitly scope results.',
     },
     context: {
@@ -81,6 +91,11 @@ export const SiteHomePages: Story = {
 
 export const SearchArtifacts: Story = {
   args: { context: 'artifact', seed: 'checkout' },
+}
+
+export const NoNameMatchOffersPageText: Story = {
+  name: 'No name match · search page text',
+  args: { seed: 'idempotency' },
 }
 
 export const FuzzySearchInlineTrace: Story = {

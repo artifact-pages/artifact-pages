@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process'
 import process from 'node:process'
+import { E2E_STORAGE_ROOT, prepareE2eStorage } from './prepare-e2e-storage.mjs'
 
 const projectName = 'git-artifact-pages-e2e'
 const port = process.env.E2E_PORT ?? '4174'
@@ -44,7 +45,13 @@ async function waitForServer() {
 }
 
 try {
+  // Committed fixtures plus a generated page-text-search site, all under .local/.
+  // A custom STORAGE_ROOT is served unchanged; the page text search tests skip
+  // unless it was produced by scripts/prepare-e2e-storage.mjs (it must serve
+  // /_indexes/textsearch/meta.json).
+  if (!process.env.STORAGE_ROOT) prepareE2eStorage()
   const env = {
+    STORAGE_ROOT: process.env.STORAGE_ROOT ?? `./${E2E_STORAGE_ROOT}`,
     COMPOSE_PROJECT_NAME: projectName,
     WEB_PORT: port,
     WEB_ROOT: process.env.WEB_ROOT ?? './web/dist',

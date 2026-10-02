@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from 'react'
+import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode, type Ref } from 'react'
 import type { ArtifactIndexEntry, SiteIndex } from '../domain/index'
 import { RECENT_SECTION_MINIMUM_ARTIFACT_COUNT } from '../domain/navigation-sections'
 import { loadPreviewCandidates, PREVIEW_EXPLANATION, PreviewLoadError } from '../data/previews'
@@ -26,9 +26,6 @@ export function SiteHome({
   treeStyle?: TreeStyle
   defaultExpandedPaths?: string[]
 }) {
-  const [query, setQuery] = useState('')
-  const searchInputRef = useRef<HTMLInputElement>(null)
-  const matchListRef = useRef<HTMLDivElement>(null)
   const [previewAvailability, setPreviewAvailability] = useState<PreviewAvailabilityState>({ status: 'loading' })
   const hasPreviewEntry = Boolean(onOpenPreviews)
   const noPreviews = previewAvailability.status === 'success' && previewAvailability.count === 0
@@ -37,18 +34,6 @@ export function SiteHome({
     () => showRecentSection ? selectMostRecent(index.artifacts, 6) : [],
     [index.artifacts, showRecentSection],
   )
-  const normalizedQuery = query.trim().toLocaleLowerCase()
-  const matches = useMemo(() => {
-    if (!normalizedQuery) return []
-    return index.artifacts
-      .filter((artifact) => (
-        `${artifact.title} ${artifact.path} ${artifact.filename ?? ''}`
-          .toLocaleLowerCase()
-          .includes(normalizedQuery)
-      ))
-      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
-  }, [index.artifacts, normalizedQuery])
-
   useEffect(() => {
     if (!hasPreviewEntry) return
 
@@ -83,8 +68,8 @@ export function SiteHome({
         <p className="site-home-lede">
           {index.artifacts.length} published {index.artifacts.length === 1 ? 'artifact' : 'artifacts'}.
           {' '}{showRecentSection
-            ? 'Browse the latest work or find an artifact by title or path.'
-            : 'Browse artifacts or find one by title or path.'}
+            ? 'Browse the latest work or jump to an artifact by name.'
+            : 'Browse artifacts or jump to one by name.'}
         </p>
         {onOpenPreviews ? (
           <div className="site-home-preview">
@@ -106,83 +91,25 @@ export function SiteHome({
             <p className="site-home-preview-note">{PREVIEW_EXPLANATION}</p>
           </div>
         ) : null}
-        <div className="site-search-row">
-          <label className="site-search">
+        {onOpenPalette ? (
+          <button
+            type="button"
+            className="site-home-jump"
+            aria-keyshortcuts="Meta+K Control+K"
+            onClick={(event) => {
+              // Safari and Firefox do not focus buttons on click; focus first so closing the palette returns here.
+              event.currentTarget.focus()
+              onOpenPalette()
+            }}
+          >
             <Icon name="search" size={16} />
-            <input
-              ref={searchInputRef}
-              type="search"
-              aria-label={`Filter artifacts in ${index.site.title}`}
-              aria-describedby="site-search-help"
-              placeholder={`Filter artifacts in ${index.site.title}`}
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
-
-                if (event.key === 'Escape') {
-                  event.preventDefault()
-                  setQuery('')
-                  event.currentTarget.blur()
-                } else if (event.key === 'Enter' && matches.length === 1) {
-                  event.preventDefault()
-                  onOpenArtifact(artifactRouteHref(index.site.id, matches[0].path))
-                } else if (event.key === 'ArrowDown' && matches.length > 0 && !hasModifier(event)) {
-                  event.preventDefault()
-                  matchListRef.current?.querySelector<HTMLButtonElement>('.artifact-list-row')?.focus()
-                }
-              }}
-            />
-          </label>
-          {onOpenPalette ? (
-            // ⌘ K opens the palette rather than this field, so the shortcut lives on its own control.
-            <button
-              type="button"
-              className="site-search-palette"
-              aria-label={`Full search in ${index.site.title}`}
-              aria-keyshortcuts="Meta+K Control+K"
-              title="Search pages, headings, and commands (⌘ K / Ctrl K)"
-              onClick={(event) => {
-                // Safari and Firefox do not focus buttons on click; focus first so closing the palette returns here.
-                event.currentTarget.focus()
-                onOpenPalette()
-              }}
-            >
-              Full search <kbd>⌘ K</kbd>
-            </button>
-          ) : null}
-        </div>
-        <p className="site-search-help" id="site-search-help" aria-live="polite">
-          {!normalizedQuery
-            ? 'Typing filters artifacts in this site by title or path.'
-            : matches.length === 1
-              ? 'Press Enter to open this match.'
-              : matches.length > 1
-                ? 'Press ↓ to choose a match, then Enter to open it.'
-                : 'No matches to open. Clear the filter to browse this site.'}
-        </p>
+            <span>Jump to a page…</span>
+            <kbd>⌘ K</kbd>
+          </button>
+        ) : null}
       </div>
 
-      {normalizedQuery ? (
-        <ArtifactSection
-          title={`${matches.length} ${matches.length === 1 ? 'match' : 'matches'}`}
-          icon="search"
-          artifacts={matches}
-          siteId={index.site.id}
-          query={normalizedQuery}
-          onOpenArtifact={onOpenArtifact}
-          listRef={matchListRef}
-          onExitTop={() => searchInputRef.current?.focus()}
-          emptyMessage={(
-            <>
-              Nothing in this site matches your search.{' '}
-              <span className="search-help-keyboard">Use ⌘ K, then @, to find another site.</span>
-              <span className="search-help-touch">Use the site switcher to find another site.</span>
-            </>
-          )}
-        />
-      ) : (
-        <>
+      <>
           {showRecentSection ? (
             <ArtifactSection
               title="Recently updated"
@@ -210,8 +137,7 @@ export function SiteHome({
               />
             )}
           </section>
-        </>
-      )}
+      </>
     </div>
   )
 }

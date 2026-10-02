@@ -16,6 +16,7 @@ function SiteHomeStory({ theme }: SiteHomeStoryArgs) {
     <SiteHomeView
       index={deepSreIndex}
       onOpenArtifact={() => undefined}
+      onOpenPalette={() => undefined}
       treeStyle="path-list"
       defaultExpandedPaths={deepExpandedPaths}
     />

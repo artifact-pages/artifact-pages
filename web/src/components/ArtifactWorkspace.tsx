@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArtifactBreadcrumbs } from './ArtifactBreadcrumbs'
 import { CommandPalette, type PaletteCommand } from './CommandPalette'
 import { Icon } from './Icon'
@@ -7,6 +7,10 @@ import { SiteHome } from './SiteHome'
 import { siteCountLabel } from '../domain/site-count-label'
 import { ThemeSwitcher } from './ThemeSwitcher'
 import { MarkdownArtifact } from './MarkdownArtifact'
+import { PAGE_TEXT_SEARCH_INPUT_ID } from './PageTextSearch'
+import { usePageTextSearch } from './usePageTextSearch'
+import type { SiteFullTextSearch } from '../data/fulltext'
+import { clearSearchHighlight, ensureSearchHighlightStyle, keepSearchHighlighted, watchReaderScroll } from '../domain/text-highlight'
 import type { TreeStyle } from './ArtifactTree'
 import type { ArtifactIndexEntry, SiteCatalogEntry, SiteIndex, SiteSummary } from '../domain/index'
 import { readRecentArtifactReads, recordRecentArtifactRead, type RecentArtifactRead } from '../domain/recent-reads'
@@ -19,6 +23,7 @@ type WorkspacePanel = 'contents' | 'details' | null
 export function ArtifactWorkspace({
   route,
   pathname,
+  search = '',
   hash,
   sites,
   sitesLoading,
@@ -27,6 +32,7 @@ export function ArtifactWorkspace({
   theme,
   onSetThemeMode,
   index,
+  fullTextSearch,
   recentReads,
   sidebarTreeStyle = 'branch-guides',
   siteHomeTreeStyle = 'path-list',
@@ -35,6 +41,8 @@ export function ArtifactWorkspace({
 }: {
   route: SiteRoute
   pathname: string
+  /** The location's query string; `q` carries the committed page text search. */
+  search?: string
   hash: string
   sites: SiteCatalogEntry[]
   sitesLoading: boolean
@@ -43,6 +51,8 @@ export function ArtifactWorkspace({
   theme: ResolvedTheme
   onSetThemeMode: (mode: ThemeMode) => void
   index: SiteIndex
+  /** The active site's full-text client. Omit it, or pass an unavailable one, for sites without page text search. */
+  fullTextSearch?: SiteFullTextSearch
   recentReads?: RecentArtifactRead[]
   sidebarTreeStyle?: TreeStyle
   siteHomeTreeStyle?: TreeStyle
@@ -53,7 +63,16 @@ export function ArtifactWorkspace({
   const sidebarOpenRef = useRef(sidebarOpen)
   const [activePanel, setActivePanel] = useState<WorkspacePanel>(null)
   const [paletteSeed, setPaletteSeed] = useState<string | null>(null)
-  const [sidebarFilterResetKey, setSidebarFilterResetKey] = useState(0)
+  const textSearchClient = fullTextSearch?.available ? fullTextSearch : undefined
+  const committedQuery = useMemo(
+    () => textSearchClient ? new URLSearchParams(search).get('q')?.trim() ?? '' : '',
+    [search, textSearchClient],
+  )
+  const committedQueryRef = useRef(committedQuery)
+  committedQueryRef.current = committedQuery
+  const hashRef = useRef(hash)
+  hashRef.current = hash
+  const textSearch = usePageTextSearch(textSearchClient, committedQuery)
   const [pinnedArtifactsBySite, setPinnedArtifactsBySite] = useState<Record<string, string[]>>(readPinnedArtifacts)
   const pinnedArtifactIds = pinnedArtifactsBySite[index.site.id] ?? []
   const [storedRecentReads, setStoredRecentReads] = useState<RecentArtifactRead[]>(
@@ -118,11 +137,66 @@ export function ArtifactWorkspace({
     updateSidebarOpen(!sidebarOpenRef.current, restoreFocus)
   }, [updateSidebarOpen])
 
+  // Moving around the site keeps the committed search, so its results stay in the sidebar.
+  const withTextSearch = useCallback((href: string) => {
+    const query = committedQueryRef.current
+    if (!query) return href
+    const destination = new URL(href, window.location.origin)
+    const sitePrefix = `/${encodeURIComponent(index.site.id)}`
+    if (destination.origin !== window.location.origin) return href
+    if (destination.pathname !== sitePrefix && !destination.pathname.startsWith(`${sitePrefix}/`)) return href
+    if (destination.pathname.startsWith(`${sitePrefix}/_previews`) || destination.searchParams.has('q')) return href
+    destination.searchParams.set('q', query)
+    return `${destination.pathname}${destination.search}${destination.hash}`
+  }, [index.site.id])
+
   function navigateWithinWorkspace(href: string) {
-    setSidebarFilterResetKey((key) => key + 1)
-    navigate(href)
+    navigate(withTextSearch(href))
     if (window.innerWidth <= 860) updateSidebarOpen(false)
   }
+
+  // Committing the query that is already committed adds no history entry; after
+  // a failure it retries instead. A new query keeps the URL fragment: the
+  // fragment is a position in the open page, which the site-wide search does
+  // not replace (and, per the highlight rule, no match is scrolled over it).
+  function commitTextSearch(query: string) {
+    if (query === committedQuery) {
+      if (textSearch.state.status === 'error') textSearch.retry()
+      return
+    }
+    const params = new URLSearchParams(search)
+    params.set('q', query)
+    navigate(`${pathname}?${params}${hash}`)
+  }
+
+  // Clearing only an uncommitted draft leaves the URL (and history) unchanged;
+  // the sidebar clears its own draft.
+  function clearTextSearch() {
+    if (!committedQuery) return
+    const params = new URLSearchParams(search)
+    params.delete('q')
+    const rest = params.toString()
+    navigate(`${pathname}${rest ? `?${rest}` : ''}${hash}`)
+  }
+
+  // `select` selects the field's text (the shortcut, ready to type a new query);
+  // otherwise the caret goes to the end (after a palette hand-off, so ↓ enters the results).
+  const focusTextSearch = useCallback((select = true) => {
+    if (!textSearchClient) {
+      showToast('Page text search is not available for this site.')
+      return
+    }
+    setPaletteSeed(null)
+    updateSidebarOpen(true)
+    window.requestAnimationFrame(() => {
+      const input = document.getElementById(PAGE_TEXT_SEARCH_INPUT_ID)
+      if (input instanceof HTMLInputElement) {
+        input.focus()
+        if (select) input.select()
+        else input.setSelectionRange(input.value.length, input.value.length)
+      }
+    })
+  }, [textSearchClient, updateSidebarOpen])
 
   const openPalette = useCallback((seed: string) => {
     const activeElement = document.activeElement
@@ -134,12 +208,17 @@ export function ArtifactWorkspace({
 
   const handleArtifactKeyDown = useCallback((event: KeyboardEvent) => {
     const modifier = event.metaKey || event.ctrlKey
-    if (modifier && event.key.toLocaleLowerCase() === 'k') {
+    const key = event.key.toLocaleLowerCase()
+    if (modifier && !event.shiftKey && key === 'k') {
       event.preventDefault()
       event.stopImmediatePropagation()
       openPalette('')
+    } else if (modifier && event.shiftKey && key === 'f') {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      focusTextSearch()
     }
-  }, [openPalette])
+  }, [openPalette, focusTextSearch])
 
   const closePalette = useCallback(() => {
     setPaletteSeed(null)
@@ -197,6 +276,9 @@ export function ArtifactWorkspace({
       if (modifier && key === 'k') {
         event.preventDefault()
         closePalette()
+      } else if (modifier && event.shiftKey && key === 'f') {
+        event.preventDefault()
+        focusTextSearch()
       } else if (modifier && key === 'b') {
         event.preventDefault()
         toggleSidebar()
@@ -209,7 +291,7 @@ export function ArtifactWorkspace({
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [paletteSeed, closePalette, toggleSidebar, togglePanel])
+  }, [paletteSeed, closePalette, toggleSidebar, togglePanel, focusTextSearch])
 
   useEffect(() => {
     if (paletteSeed !== null) return
@@ -220,6 +302,9 @@ export function ArtifactWorkspace({
       if (modifier && key === 'k') {
         event.preventDefault()
         openPalette('')
+      } else if (modifier && event.shiftKey && key === 'f') {
+        event.preventDefault()
+        focusTextSearch()
       } else if (modifier && key === 'b') {
         event.preventDefault()
         toggleSidebar(true)
@@ -232,7 +317,7 @@ export function ArtifactWorkspace({
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [paletteSeed, hasContents, activePanel, openPalette, toggleSidebar, togglePanel])
+  }, [paletteSeed, hasContents, activePanel, openPalette, toggleSidebar, togglePanel, focusTextSearch])
 
   const siteSummaries: SiteSummary[] = sites.length
     ? sites.map(({ site }) => site).sort((left, right) => left.title.localeCompare(right.title))
@@ -269,6 +354,13 @@ export function ArtifactWorkspace({
       },
     },
     { title: 'Go to site home', onSelect: () => navigateWithinWorkspace(`/${encodeURIComponent(index.site.id)}`) },
+    {
+      title: 'Search page text',
+      shortcut: '⌘ ⇧ F',
+      available: Boolean(textSearchClient),
+      onSelect: () => focusTextSearch(),
+    },
+    { title: 'Open previews', onSelect: () => navigateWithinWorkspace(`/${encodeURIComponent(index.site.id)}/_previews`) },
     {
       title: 'Use light theme',
       subtitle: themeMode === 'light' ? 'Current' : undefined,
@@ -323,6 +415,8 @@ export function ArtifactWorkspace({
   }
 
   function revealSidebarLocation(path: string, isDirectory: boolean) {
+    // The Browse tree is replaced by search results until the search is closed.
+    if (committedQuery) clearTextSearch()
     const folders = isDirectory ? folderPaths(path) : folderAncestors(path)
     setExpandedPaths((current) => new Set([...current, ...folders]))
     setSidebarReveal({ path, request: ++sidebarRevealRequest.current })
@@ -407,7 +501,10 @@ export function ArtifactWorkspace({
         || frameUrl.search !== expectedUrl.search
         || frameUrl.hash === hash) return
       frameUrl.hash = hash
-      frameWindow.location.replace(frameUrl.href)
+      // Removing the fragment navigates to `page#` rather than `page`: an empty
+      // fragment stays a same-document navigation (to the top of the page), so
+      // the frame is not reloaded and does not scroll to the first match again.
+      frameWindow.location.replace(hash ? frameUrl.href : `${frameUrl.href}#`)
     } catch {
       // Cross-origin redirects remain isolated; same-origin artifacts receive the logical fragment.
     }
@@ -416,6 +513,23 @@ export function ArtifactWorkspace({
   useEffect(() => {
     syncHtmlFrameLocation()
   }, [syncHtmlFrameLocation])
+
+  // Re-highlight the open HTML artifact when the committed query changes; loading highlights it too.
+  // Each newly committed query scrolls to its first match unless the URL or the
+  // frame's own location (an in-artifact link) has a fragment.
+  useEffect(() => {
+    if (htmlFrameRef.current) highlightFrame(htmlFrameRef.current, committedQuery, !hashRef.current)
+  }, [committedQuery])
+
+  // Stop observing an artifact frame's document once that frame is replaced or unmounted.
+  useEffect(() => {
+    const frame = htmlFrameRef.current
+    if (!frame) return
+    return () => {
+      frameHighlightCleanup.get(frame)?.()
+      frameHighlightCleanup.delete(frame)
+    }
+  }, [htmlArtifactUrl])
 
   const tocEntries = currentArtifact?.toc ?? []
   return (
@@ -436,7 +550,15 @@ export function ArtifactWorkspace({
         onCollapse={() => updateSidebarOpen(false, true)}
         pinnedArtifactIds={pinnedArtifactIds}
         onTogglePin={toggleArtifactPin}
-        filterResetKey={sidebarFilterResetKey}
+        pageTextSearch={textSearchClient ? {
+          committedQuery,
+          state: textSearch.state,
+          onCommit: commitTextSearch,
+          onClear: clearTextSearch,
+          onRetry: textSearch.retry,
+          onLoadMore: textSearch.loadMore,
+          onOpenHit: (hit) => navigateWithinWorkspace(hit.href),
+        } : undefined}
         treeStyle={sidebarTreeStyle}
       />
       {sidebarOpen ? <button className="sidebar-backdrop" aria-label="Close navigation" onClick={() => updateSidebarOpen(false, true)} /> : null}
@@ -467,8 +589,8 @@ export function ArtifactWorkspace({
             </button>
             <button
               className="collapsed-rail-button"
-              title={`Search pages in ${index.site.title} (⌘ K)`}
-              aria-label={`Search pages in ${index.site.title}`}
+              title={`Jump to a page in ${index.site.title} (⌘ K)`}
+              aria-label={`Jump to a page in ${index.site.title}`}
               aria-keyshortcuts="Meta+K Control+K"
               onClick={(event) => {
                 event.currentTarget.focus()
@@ -505,6 +627,21 @@ export function ArtifactWorkspace({
               />
             ) : null}
 
+            {committedQuery && !sidebarOpen ? (
+              <button
+                type="button"
+                className="context-search-chip"
+                title="Show page text search results"
+                aria-label={`Show page text search results for ${committedQuery}`}
+                onClick={() => updateSidebarOpen(true)}
+              >
+                <Icon name="search" size={12} />
+                <span className="context-search-chip-query">{committedQuery}</span>
+                {textSearch.state.status === 'success' ? (
+                  <span className="context-search-chip-count">{searchPositionLabel(textSearch.state.hits, currentArtifact?.id, textSearch.state.total)}</span>
+                ) : null}
+              </button>
+            ) : null}
             <div className="context-actions">
               <button
                 className="context-button context-library-button"
@@ -597,7 +734,8 @@ export function ArtifactWorkspace({
                 artifact={currentArtifact}
                 siteId={index.site.id}
                 hash={hash}
-                navigate={navigate}
+                navigate={(href) => navigate(withTextSearch(href))}
+                highlightQuery={committedQuery}
               />
             ) : currentArtifact && htmlArtifactUrl ? (
               <iframe
@@ -610,6 +748,7 @@ export function ArtifactWorkspace({
                 onLoad={(event) => {
                   event.currentTarget.contentWindow?.addEventListener('keydown', handleArtifactKeyDown, true)
                   syncHtmlFrameLocation(event.currentTarget)
+                  highlightFrame(event.currentTarget, committedQueryRef.current, !hash)
                 }}
               />
             ) : route.artifactPath ? (
@@ -617,7 +756,7 @@ export function ArtifactWorkspace({
                 <p className="eyebrow">{index.site.title}</p>
                 <h1>Page not found</h1>
                 <p role="alert">The page you requested does not exist or is no longer available.</p>
-                <button className="text-action" onClick={() => navigate(`/${encodeURIComponent(index.site.id)}`)}>
+                <button className="text-action" onClick={() => navigateWithinWorkspace(`/${encodeURIComponent(index.site.id)}`)}>
                   <Icon name="arrow" size={14} /> Back to site
                 </button>
               </div>
@@ -689,12 +828,52 @@ export function ArtifactWorkspace({
           onClose={closePalette}
           onNavigate={navigateWithinWorkspace}
           onJumpToHeading={jumpToHeading}
+          onSearchPageText={textSearchClient ? (query) => {
+            commitTextSearch(query)
+            // Closes the palette, opens the sidebar and focuses the field.
+            focusTextSearch(false)
+          } : undefined}
         />
       ) : null}
 
       {toast ? <div className="toast" role="status" aria-live="polite">{toast}</div> : null}
     </div>
   )
+}
+
+function highlightFrame(iframe: HTMLIFrameElement, query: string, scrollToFirst: boolean) {
+  frameHighlightCleanup.get(iframe)?.()
+  frameHighlightCleanup.delete(iframe)
+  try {
+    const document = iframe.contentDocument
+    if (!document?.body) return
+    if (!query) {
+      clearSearchHighlight(document)
+      return
+    }
+    ensureSearchHighlightStyle(document)
+    // A fragment in the frame's own location (an in-artifact link such as
+    // page.html#section, which leaves the app URL unchanged) wins as well.
+    const scroll = scrollToFirst && !iframe.contentWindow?.location.hash
+    // A match found after the reader started scrolling the page does not move it.
+    const reader = document.defaultView ? watchReaderScroll(document.defaultView) : undefined
+    const stop = keepSearchHighlighted(document.body, query, (first) => {
+      if (scroll && !reader?.scrolled) first.startContainer.parentElement?.scrollIntoView({ block: 'center' })
+    })
+    frameHighlightCleanup.set(iframe, () => {
+      stop()
+      reader?.dispose()
+    })
+  } catch {
+    // Cross-origin artifacts cannot be highlighted.
+  }
+}
+
+const frameHighlightCleanup = new WeakMap<HTMLIFrameElement, () => void>()
+
+function searchPositionLabel(hits: { id: string }[], currentId: string | undefined, total: number) {
+  const position = currentId ? hits.findIndex(({ id }) => id === currentId) : -1
+  return position >= 0 ? `${position + 1} / ${total}` : `${total}`
 }
 
 function headingTop(id: string) {

@@ -73,7 +73,7 @@ export function ArtifactActionsMenu({
           .find((row) => row.dataset.treePath === artifact.path)
         const nextTarget = browseRow
           ?? document.querySelector<HTMLButtonElement>('.browse-tree .tree-directory-button')
-          ?? document.querySelector<HTMLInputElement>('.sidebar-filter input')
+          ?? document.querySelector<HTMLElement>('.sidebar-filter input, .sidebar-palette-trigger')
         nextTarget?.focus()
       })
     }

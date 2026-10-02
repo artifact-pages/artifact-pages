@@ -3,17 +3,10 @@ import type { RecentArtifactRead } from './recent-reads'
 
 export type PaletteContextStrategy = 'raw' | 'profile' | 'csr' | 'inverted' | 'indexed'
 export type PaletteSignalStrategy = 'dynamic' | 'float64' | 'float32' | 'split' | 'sparse' | 'lazy'
-export type PaletteCandidateStrategy = 'scan' | 'prefilter'
-export type PaletteScopeCountStrategy = 'live' | 'memo'
 
 export type PaletteScoringExperimentConfig = {
   context: PaletteContextStrategy
   signals: PaletteSignalStrategy
-}
-
-export type PaletteScopeExperimentConfig = {
-  candidates: PaletteCandidateStrategy
-  counts: PaletteScopeCountStrategy
 }
 
 export type PaletteScoringExperiment = {
@@ -62,15 +55,6 @@ export function paletteScoringExperimentConfig(search: string): PaletteScoringEx
   if (!paletteContextStrategies.includes(context as PaletteContextStrategy)
     || !paletteSignalStrategies.includes(signals as PaletteSignalStrategy)) return undefined
   return { context: context as PaletteContextStrategy, signals: signals as PaletteSignalStrategy }
-}
-
-export function paletteScopeExperimentConfig(search: string): PaletteScopeExperimentConfig | undefined {
-  if (!isPaletteBenchmarkBuild()) return undefined
-  const params = new URLSearchParams(search)
-  return {
-    candidates: params.get('paletteCandidateScope') === 'prefilter' ? 'prefilter' : 'scan',
-    counts: params.get('paletteScopeCounts') === 'memo' ? 'memo' : 'live',
-  }
 }
 
 export function buildPaletteScoringExperiment({

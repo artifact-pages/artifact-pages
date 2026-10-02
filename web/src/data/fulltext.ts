@@ -116,7 +116,14 @@ export function createSiteFullTextSearch(metadata: Pick<SiteDiscoveryMetadata, '
     if (query.length > 4096) throw new RangeError('Search query is too long')
     const empty = { siteId, query, generation: null, total: 0, hits: [], hasMore: false }
     if (!query.normalize('NFKC').trim()) return empty
-    const codec = await cancellable(import('../domain/fulltext-codec'), signal)
+    // The decoder is a lazily loaded chunk: failing to fetch it is a network
+    // failure like failing to fetch search data, so the caller can retry.
+    let codec: typeof import('../domain/fulltext-codec')
+    try { codec = await cancellable(import('../domain/fulltext-codec'), signal) }
+    catch (cause) {
+      if (signal?.aborted) throw cause
+      throw new FullTextSearchError('network', 'Failed to load the search decoder', undefined, { cause })
+    }
     async function run(): Promise<FullTextResult> {
       const g = await cancellable(load(codec), signal)
       const queryPlan = codec.plan(g.root, query, g.manifest.shards.length), leaves = new Map<number, Leaf>()
@@ -158,3 +165,5 @@ export function createSiteFullTextSearch(metadata: Pick<SiteDiscoveryMetadata, '
   }
   return { available: url !== undefined, search, clear }
 }
+
+export type SiteFullTextSearch = ReturnType<typeof createSiteFullTextSearch>

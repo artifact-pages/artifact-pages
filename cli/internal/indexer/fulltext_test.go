@@ -71,3 +71,25 @@ func TestBuildFullTextPointerSharedParseAndLocalCleanup(t *testing.T) {
 		t.Fatalf("cleanup affected caller files: %v, %v", entries, err)
 	}
 }
+
+func TestBuildWritesWorldReadableProjectionFiles(t *testing.T) {
+	root := initializeGitRepository(t)
+	restore := chdirForTest(t, root)
+	defer restore()
+	writeFixtureFile(t, root, "artifacts/guide.md", "# Guide\n\nReadable by the web server\n")
+	commitFixture(t, root, "readable fixtures", time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC))
+	result, err := Build(context.Background(), BuildOptions{SiteID: "readable", SourceDir: "artifacts", OutputDir: ".local/storage", FullText: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := append([]string{result.MetadataPath, filepath.Join(root, ".local/storage/_indexes/readable/index.json")}, result.SearchFiles...)
+	for _, file := range files {
+		info, err := os.Stat(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if mode := info.Mode().Perm(); mode != 0o644 {
+			t.Errorf("%s mode = %o, want 644", file, mode)
+		}
+	}
+}

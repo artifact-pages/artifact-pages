@@ -17,6 +17,7 @@ const sites = [sreIndex, frontendIndex].map((value) => {
     generatedAt: index.generatedAt,
     artifactCount: index.artifacts.length,
     artifactIndexUrl: `/_indexes/${index.site.id}/index.json`,
+    fullTextUrl: index.site.id === 'sre' ? '/_indexes/sre/search/manifest.json' : undefined,
   }
 }) as SiteDiscoveryMetadata[]
 

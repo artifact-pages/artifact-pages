@@ -8,6 +8,8 @@ This records Phase 1 browser-side discovery measurements for T7. The synthetic c
 npm run benchmark:preview-discovery -- --sites 20 --groups 100,500,1000 --runs 3 --input-samples 5 --seed t7-20260927
 ```
 
+Since 2026-10-02 (IMP-42) the palette no longer lists preview documents and the `--input-samples` option is gone; the second surface is now `palette-open-previews-command` (open the palette, check it fetches no preview data, run "Open previews" and time the list paint). The palette results below were measured with the former Previews tab and remain as a record.
+
 The runner builds the SPA, launches Chromium against Vite preview, and fulfills generated `/_indexes/*` and `/_previews/*` responses in Playwright. Each run uses a new browser context. The first scenario replays the committed SRE preview catalog and manifests; the other scenarios use deterministic synthetic catalogs with 100, 500, and 1,000 unique revision heads in one selected site and 19 other sites.
 
 The synthetic manifest mix is 80% HTTP 200, 10% confirmed 404, and 10% HTTP 503. Missing entries are hidden; read errors remain visible as unknown. Each surface is repeated three times. The palette input-to-paint measurement uses five samples per run. P50/P95 below summarize those runs; with three independent runs, the run-level P95 is the maximum observation.

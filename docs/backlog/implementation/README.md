@@ -33,7 +33,7 @@ These are operator-owned Terraform capabilities, not application authorization. 
 | --- | --- | --- | --- | --- | --- |
 | [IMP-40](IMP-40-unified-deployment-config.md) | Done | Unified deployment config, registry register/unregister, and optional site-description metadata | T10, T11, IMP-20, IMP-23, IMP-27 | [T10](../technical-design/T10-config-location.md), [T11](../technical-design/T11-command-surface.md) | Config, registry, publisher, Action parity, registered-flow, clean-room and local browser checks |
 | [IMP-41](IMP-41-fulltext-search-core.md) | Done | P1: optional static full-text build/publish and callable site-scoped browser API; palette UX deferred | Local full-text research | Versioned static format; checkpoint in ticket | Go/browser interoperability, update/retry and scale proof |
-| [IMP-42](IMP-42-fulltext-search-ux.md) | Deferred | P2: committed-query search UX and API integration; resume on owner request | IMP-41 | Interface to be reviewed | Commit-only downloads, IME, query races, results/reader and error flows |
+| [IMP-42](IMP-42-fulltext-search-ux.md) | In progress | P2: sidebar page text search (⌘ ⇧ F), name-only palette, `?q=` results and in-page highlight | IMP-41 | Agreed interaction recorded in ticket | Spec and e2e (generated `textsearch` projection) written; five review rounds, last one clean. nginx `npm run test:e2e`: 113/113 in 10 of 11 runs (one uncaptured single failure). Public guide, cross-OS ⌘ ⇧ F and real IME checks pending |
 
 The reviewed site-description hierarchy is implemented in the production picker and site search. IMP-037/038/039 and all provider-infrastructure work remain outside this Phase 1 slice.
 

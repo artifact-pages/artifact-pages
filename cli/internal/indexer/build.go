@@ -1126,6 +1126,12 @@ func writeAtomically(filename string, contents []byte) error {
 		temporary.Close()
 		return err
 	}
+	// os.CreateTemp creates 0600 files; generated indexes are served by a web
+	// server that may run as another user, so make them world-readable.
+	if err := temporary.Chmod(0o644); err != nil {
+		temporary.Close()
+		return err
+	}
 	if err := temporary.Close(); err != nil {
 		return err
 	}

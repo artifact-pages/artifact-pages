@@ -41,7 +41,6 @@ try {
     sites: options.siteCount,
     scenarios: scenarios.map(({ id }) => id),
     runsPerSurface: options.runs,
-    paletteInputSamples: options.inputSamples,
     environment: {
       node: process.version,
       platform: process.platform,
@@ -67,7 +66,6 @@ try {
       catalogGroupCount: dataset.catalogs.get(dataset.selectedSiteId).groupCount,
       uniqueSelectedManifestCount: dataset.selectedManifestCount,
       expectedVisibleGroupCount: dataset.expectedVisibleGroupCount,
-      expectedPaletteDocumentCount: dataset.expectedPaletteDocumentCount,
       payloadBytes: dataset.payloadBytes,
       statusMix: dataset.statusMix,
     })
@@ -82,11 +80,11 @@ try {
         ...listResult,
       })
 
-      const paletteResult = await measurePalette(browser, dataset, run, options.inputSamples)
+      const paletteResult = await measurePaletteCommand(browser, dataset)
       await appendRow(output, {
         type: 'measurement',
         scenario: dataset.id,
-        surface: 'palette',
+        surface: 'palette-open-previews-command',
         run,
         ...paletteResult,
       })
@@ -110,7 +108,6 @@ function parseArguments(args) {
     siteCount: 20,
     groupCounts: [100, 500],
     runs: 1,
-    inputSamples: 5,
     seed: '20260927',
     output: undefined,
   }
@@ -118,12 +115,12 @@ function parseArguments(args) {
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index]
     if (argument === '--help') {
-      console.log('Usage: npm run benchmark:preview-discovery -- [--sites 20] [--groups 100,500,1000] [--runs 1] [--input-samples 5] [--seed text] [--output path.jsonl]')
+      console.log('Usage: npm run benchmark:preview-discovery -- [--sites 20] [--groups 100,500,1000] [--runs 1] [--seed text] [--output path.jsonl]')
       console.log('The committed SRE fixture baseline runs first. Output defaults to .local/preview-discovery-benchmark/.')
       process.exit(0)
     }
     const [flag, inlineValue] = argument.split('=', 2)
-    if (!['--sites', '--groups', '--runs', '--input-samples', '--seed', '--output'].includes(flag)) {
+    if (!['--sites', '--groups', '--runs', '--seed', '--output'].includes(flag)) {
       throw new Error(`Unknown argument: ${argument}`)
     }
     const value = inlineValue ?? args[++index]
@@ -131,7 +128,6 @@ function parseArguments(args) {
     if (flag === '--sites') values.siteCount = Number(value)
     else if (flag === '--groups') values.groupCounts = value.split(',').map(Number)
     else if (flag === '--runs') values.runs = Number(value)
-    else if (flag === '--input-samples') values.inputSamples = Number(value)
     else if (flag === '--seed') values.seed = value
     else values.output = value
   }
@@ -145,9 +141,6 @@ function parseArguments(args) {
   if (new Set(values.groupCounts).size !== values.groupCounts.length) throw new Error('--groups must not contain duplicates.')
   if (!Number.isSafeInteger(values.runs) || values.runs < 1 || values.runs > 10) {
     throw new Error('--runs must be a whole number between 1 and 10.')
-  }
-  if (!Number.isSafeInteger(values.inputSamples) || values.inputSamples < 1 || values.inputSamples > 20) {
-    throw new Error('--input-samples must be a whole number between 1 and 20.')
   }
   if (!values.seed.trim()) throw new Error('--seed must not be empty.')
   if (previewPort < 1 || previewPort > 65_535) throw new Error('PREVIEW_DISCOVERY_BENCH_PORT must be a valid TCP port.')
@@ -320,11 +313,6 @@ function finalizeDataset(data, id, source) {
       return status === 200 || status === 503
     }).length
     : 0
-  const expectedPaletteDocumentCount = expectedVisibleGroupCount
-    ? JSON.parse(selectedCatalog.body).groups
-      .filter(({ headSha }) => selectedStatuses.get(headSha) === 200 || selectedStatuses.get(headSha) === 503)
-      .reduce((total, { documents }) => total + documents.length, 0)
-    : 0
   const selectedManifestCount = selectedStatuses.size
   const allCatalogBytes = [...data.catalogs.values()].reduce((total, { body }) => total + utf8Bytes(body), 0)
   const selectedCatalogBytes = utf8Bytes(selectedCatalog.body)
@@ -336,7 +324,6 @@ function finalizeDataset(data, id, source) {
   data.id = id
   data.source = source
   data.expectedVisibleGroupCount = expectedVisibleGroupCount
-  data.expectedPaletteDocumentCount = expectedPaletteDocumentCount
   data.selectedManifestCount = selectedManifestCount
   data.payloadBytes = {
     registry: utf8Bytes(data.registryBody),
@@ -382,6 +369,7 @@ async function measurePreviewList(browserInstance, dataset, run) {
   const { page, cdp, routeEvents, pageErrors } = session
   try {
     const homeHeapBytes = await readJsHeapBytes(cdp)
+    const firstMeasuredEvent = routeEvents.length
     const startedAt = await page.evaluate(() => performance.now())
     await page.locator('.site-home-preview-link').click()
     await page.getByRole('heading', { name: 'Previews', exact: true }).waitFor({ state: 'visible' })
@@ -395,7 +383,7 @@ async function measurePreviewList(browserInstance, dataset, run) {
     }))
     const afterPreviewHeapBytes = await readJsHeapBytes(cdp)
     if (pageErrors.length) throw new Error(`Browser page error: ${pageErrors[0]}`)
-    const requestCounts = summarizeRequests(routeEvents, dataset.selectedSiteId)
+    const requestCounts = summarizeRequests(routeEvents.slice(firstMeasuredEvent), dataset.selectedSiteId)
     assertDiscoveryRequests(dataset, requestCounts)
     return {
       selectedSiteId: dataset.selectedSiteId,
@@ -420,71 +408,51 @@ async function measurePreviewList(browserInstance, dataset, run) {
   }
 }
 
-async function measurePalette(browserInstance, dataset, run, inputSamples) {
+// The palette no longer lists preview documents; it reaches the preview list
+// through the "Open previews" command. Opening the palette must not fetch
+// preview data; the command then loads the same list as the site-home link.
+async function measurePaletteCommand(browserInstance, dataset) {
   const session = await openMeasuredPage(browserInstance, dataset)
   const { page, cdp, routeEvents, pageErrors } = session
   try {
     const homeHeapBytes = await readJsHeapBytes(cdp)
-    await page.getByRole('button', { name: `Search pages in ${pageTitle(dataset)}` }).click()
+    const previewRequestsBeforePalette = routeEvents.filter(({ category }) => category === 'preview').length
+    await page.getByRole('button', { name: `Jump to a page in ${pageTitle(dataset)}` }).first().click()
     const palette = page.getByRole('dialog', { name: 'Command palette' })
     await palette.waitFor({ state: 'visible' })
-    const previewTab = palette.getByRole('button', { name: /^Previews(?:, selected)?$/u })
-    const discoveryStartedAt = await page.evaluate(() => performance.now())
-    await previewTab.click()
-    await page.waitForFunction((count) => document.querySelectorAll('[role="dialog"] [role="option"]').length === count, dataset.expectedPaletteDocumentCount)
     await nextPaint(page)
-    const previewTabToPaintMs = await page.evaluate((startedAt) => performance.now() - startedAt, discoveryStartedAt)
-    const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
-    const inputToPaintSamplesMs = []
-    const inputJsSamplesMs = []
-    let optionsAfterInput = 0
-    for (let sample = 1; sample <= inputSamples; sample += 1) {
-      await search.fill('')
-      await nextPaint(page)
-      const sampleResult = await search.evaluate((input, value) => {
-        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
-        if (!setter) throw new Error('Could not access native input value setter.')
-        const startedAt = performance.now()
-        setter.call(input, value)
-        input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: value }))
-        const inputJsMs = performance.now() - startedAt
-        return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => {
-          resolve({
-            inputJsMs,
-            inputToPaintMs: performance.now() - startedAt,
-            value: input.value,
-            visibleOptions: document.querySelectorAll('[role="dialog"] [role="option"]').length,
-          })
-        })))
-      }, 'p')
-      if (sampleResult.value !== 'p') throw new Error('Palette benchmark input did not update.')
-      if (sampleResult.visibleOptions !== dataset.expectedPaletteDocumentCount) {
-        throw new Error(`Expected ${dataset.expectedPaletteDocumentCount} palette matches for "p", received ${sampleResult.visibleOptions}.`)
-      }
-      inputJsSamplesMs.push(round(sampleResult.inputJsMs))
-      inputToPaintSamplesMs.push(round(sampleResult.inputToPaintMs))
-      optionsAfterInput = sampleResult.visibleOptions
+    const previewRequestsWhilePaletteOpen = routeEvents.filter(({ category }) => category === 'preview').length - previewRequestsBeforePalette
+    if (previewRequestsWhilePaletteOpen !== 0) {
+      throw new Error(`Opening the palette requested ${previewRequestsWhilePaletteOpen} preview resource(s).`)
     }
+    const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
+    await search.fill('Open previews')
+    const command = palette.getByRole('option', { name: /^Open previews/u })
+    await command.waitFor({ state: 'visible' })
+    const firstMeasuredEvent = routeEvents.length
+    const startedAt = await page.evaluate(() => performance.now())
+    await command.click()
+    await page.getByRole('heading', { name: 'Previews', exact: true }).waitFor({ state: 'visible' })
+    await page.waitForFunction((count) => document.querySelectorAll('.preview-group').length === count, dataset.expectedVisibleGroupCount)
+    await nextPaint(page)
+    const commandToPaintMs = await page.evaluate((startedAtValue) => performance.now() - startedAtValue, startedAt)
     const afterPreviewHeapBytes = await readJsHeapBytes(cdp)
     if (pageErrors.length) throw new Error(`Browser page error: ${pageErrors[0]}`)
-    const requestCounts = summarizeRequests(routeEvents, dataset.selectedSiteId)
+    const requestCounts = summarizeRequests(routeEvents.slice(firstMeasuredEvent), dataset.selectedSiteId)
     assertDiscoveryRequests(dataset, requestCounts)
     return {
       selectedSiteId: dataset.selectedSiteId,
       requestCounts,
       jsonParse: await readPreviewJsonParseMetrics(page),
       render: {
-        previewTabInputToPaintMs: round(previewTabToPaintMs),
+        previewRequestsWhilePaletteOpen,
+        commandToListPaintMs: round(commandToPaintMs),
         manifestAvailability: await readManifestAvailabilityMetrics(page, dataset.selectedSiteId),
-        paletteInputJsSamplesMs: inputJsSamplesMs,
-        paletteInputToPaintSamplesMs: inputToPaintSamplesMs,
-        paletteInputToPaintP50Ms: round(percentile(inputToPaintSamplesMs, 0.5)),
-        paletteInputToPaintP95Ms: round(percentile(inputToPaintSamplesMs, 0.95)),
-        visibleOptionsAfterInput: optionsAfterInput,
+        visibleGroups: await page.locator('.preview-group').count(),
       },
       cdpHeapBytes: {
         siteHomeAfterGc: homeHeapBytes,
-        paletteAfterQueryAndGc: afterPreviewHeapBytes,
+        previewListAfterGc: afterPreviewHeapBytes,
         deltaFromSiteHome: delta(afterPreviewHeapBytes, homeHeapBytes),
       },
       pageErrors,
@@ -546,7 +514,14 @@ async function openMeasuredPage(browserInstance, dataset) {
 
   await page.goto(`${previewUrl}/${encodeURIComponent(dataset.selectedSiteId)}`, { waitUntil: 'domcontentloaded' })
   await page.locator('.site-home h1').waitFor({ state: 'visible', timeout: 60_000 })
-  await page.waitForLoadState('networkidle')
+  // The site home discovers previews for its "View previews" link, and one of
+  // those fetches may never report completion, so 'networkidle' is not usable.
+  // Wait for a quiet period in the fulfilled API traffic instead; measured
+  // request counts start after this point.
+  for (let seen = -1, deadline = Date.now() + 15_000; seen !== routeEvents.length && Date.now() < deadline;) {
+    seen = routeEvents.length
+    await page.waitForTimeout(500)
+  }
   return { context, page, cdp, routeEvents, pageErrors }
 }
 
@@ -667,12 +642,6 @@ async function readJsHeapBytes(cdp) {
 
 async function nextPaint(page) {
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
-}
-
-function percentile(values, fraction) {
-  if (!values.length) return 0
-  const sorted = [...values].sort((left, right) => left - right)
-  return sorted[Math.min(sorted.length - 1, Math.ceil(fraction * sorted.length) - 1)]
 }
 
 function delta(value, baseline) {

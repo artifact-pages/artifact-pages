@@ -5,6 +5,7 @@ import type { RecentArtifactRead } from '../domain/recent-reads'
 import { deepExpandedPaths, deepSreIndex, storyIndexes } from '../stories/fixtures'
 import { parseRoute, type AppRoute } from '../routing'
 import { resolveTheme } from '../domain/theme'
+import { createStoryFullTextSearch } from '../stories/fake-fulltext'
 
 const index = deepSreIndex
 const sites = storyIndexes.map((siteIndex) => ({
@@ -13,7 +14,9 @@ const sites = storyIndexes.map((siteIndex) => ({
   generatedAt: siteIndex.generatedAt,
   artifactCount: siteIndex.artifacts.length,
   artifactIndexUrl: `/_indexes/${siteIndex.site.id}/index.json`,
+  fullTextUrl: siteIndex.site.id === index.site.id ? `/_indexes/${siteIndex.site.id}/search/manifest.json` : undefined,
 }))
+const fullTextSearch = createStoryFullTextSearch(index)
 const initialRoute: Extract<AppRoute, { kind: 'site' }> = {
   kind: 'site',
   siteId: index.site.id,
@@ -22,7 +25,7 @@ const initialRoute: Extract<AppRoute, { kind: 'site' }> = {
 
 function NavigationJourney() {
   const [route, setRoute] = useState(initialRoute)
-  const [hash, setHash] = useState('')
+  const [location, setLocation] = useState({ search: '', hash: '' })
   const [recentReads, setRecentReads] = useState<RecentArtifactRead[]>(() => {
     const now = Date.now()
     return [
@@ -53,7 +56,7 @@ function NavigationJourney() {
         }
       }
     }
-    setHash(destination.hash)
+    setLocation({ search: destination.search, hash: destination.hash })
   }
 
   const pathname = `/${route.siteId}${route.artifactPath ? `/${route.artifactPath}` : ''}`
@@ -61,7 +64,8 @@ function NavigationJourney() {
     <ArtifactWorkspace
       route={route}
       pathname={pathname}
-      hash={hash}
+      search={location.search}
+      hash={location.hash}
       sites={sites}
       sitesLoading={false}
       navigate={navigate}
@@ -69,6 +73,7 @@ function NavigationJourney() {
       theme={theme}
       onSetThemeMode={setThemeMode}
       index={index}
+      fullTextSearch={fullTextSearch}
       initialExpandedPaths={deepExpandedPaths}
       initialSidebarOpen={false}
       recentReads={recentReads}
@@ -81,7 +86,7 @@ const meta = {
   parameters: {
     docs: {
       description: {
-        story: 'Uses the real ArtifactWorkspace, collapsed navigation rail, artifact iframe, and CommandPalette. Open the palette with ⌘/Ctrl K or the search icon. All, Recent, and Pinned filter the candidate set; the same ranking combines fuzzy query matches, proximity to the open artifact, reading history, pins, and update freshness. Search “latency” and switch scopes while keeping the query. Pin a page from the expanded sidebar to see it affect ranking. Explicit links and tags are not yet present in the index metadata.',
+        story: 'Uses the real ArtifactWorkspace, collapsed navigation rail, artifact iframe, and CommandPalette. Open the palette with ⌘/Ctrl K or the search icon: before typing it lists pinned pages and recently read pages; typing ranks pages by fuzzy query match, proximity to the open artifact, reading history, pins, and update freshness. Pin a page from the expanded sidebar to see it affect ranking. When no page name matches, the palette offers to search page text instead (⌘ ↵), which opens the results in the sidebar.',
       },
     },
   },
@@ -92,5 +97,5 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const PaletteFirstWithRecentReads: Story = {
-  name: 'Palette first · ranked across scopes',
+  name: 'Palette first · recent reads and ranking',
 }

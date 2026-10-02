@@ -6,6 +6,7 @@ import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
 import remarkGfm from 'remark-gfm'
 import { artifactRouteHref } from '../routing'
 import type { ArtifactIndexEntry } from '../domain/index'
+import { clearSearchHighlight, keepSearchHighlighted, watchReaderScroll } from '../domain/text-highlight'
 import { MermaidDiagram } from './MermaidDiagram'
 
 const markdownSanitizeSchema = {
@@ -153,12 +154,15 @@ export function MarkdownArtifact({
   hash,
   navigate,
   resolveHref,
+  highlightQuery = '',
 }: {
   artifact: ArtifactIndexEntry
   siteId: string
   hash: string
   navigate: (href: string) => void
   resolveHref?: (url: URL) => string | undefined
+  /** Committed page text search to highlight in the rendered document. */
+  highlightQuery?: string
 }) {
   const [source, setSource] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -193,6 +197,42 @@ export function MarkdownArtifact({
       target.scrollIntoView({ block: 'start' })
     })
   }, [artifact.format, hash, source])
+
+  // Each newly committed query scrolls to its first match once, never over an
+  // explicit fragment and never after the reader has started scrolling (the
+  // query then counts as handled). Re-applying the same query (re-render,
+  // fragment change, asynchronous rendering) does not scroll again.
+  const scrolledQuery = useRef<string | null>(null)
+  // Whether the reader has scrolled since this document loaded or this query
+  // was committed. It is watched separately so a fragment change, which
+  // re-applies the highlight below, does not forget that the reader scrolled.
+  const readerScroll = useRef<ReturnType<typeof watchReaderScroll> | null>(null)
+  useEffect(() => {
+    const article = articleRef.current
+    if (source === null || !article || !highlightQuery) return
+    const reader = watchReaderScroll(article.closest('.markdown-scroll') ?? article)
+    readerScroll.current = reader
+    return () => {
+      reader.dispose()
+      if (readerScroll.current === reader) readerScroll.current = null
+    }
+  }, [source, highlightQuery])
+  useEffect(() => {
+    const article = articleRef.current
+    if (source === null || !article) return
+    if (!highlightQuery) {
+      scrolledQuery.current = null
+      clearSearchHighlight(article.ownerDocument)
+      return
+    }
+    return keepSearchHighlighted(article, highlightQuery, (first) => {
+      if (scrolledQuery.current === highlightQuery) return
+      scrolledQuery.current = highlightQuery
+      if (!hash && !readerScroll.current?.scrolled) first.startContainer.parentElement?.scrollIntoView({ block: 'center' })
+    })
+  }, [source, highlightQuery, hash])
+
+  useEffect(() => () => clearSearchHighlight(document), [])
 
   if (error) {
     return (

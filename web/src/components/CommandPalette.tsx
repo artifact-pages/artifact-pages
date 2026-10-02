@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { hasSiteDiscoveryMetadata, type ArtifactIndexEntry, type SiteCatalogEntry, type SiteIndex, type TocEntry } from '../domain/index'
 import type { RecentArtifactRead } from '../domain/recent-reads'
-import type { PreviewCandidate } from '../data/previews'
 import {
   createPaletteProductionScorer,
   getPaletteFreshnessBoost,
@@ -13,7 +12,6 @@ import {
 import {
   buildPaletteScoringExperiment,
   isPaletteBenchmarkBuild,
-  paletteScopeExperimentConfig,
   paletteScoringExperimentConfig,
   type PaletteScoringExperiment,
 } from '../domain/palette-scoring-experiment'
@@ -24,7 +22,6 @@ import {
   prepareFuzzyScoreText,
 } from '../domain/fuzzy-search'
 import type { FuzzyMatch } from '../domain/fuzzy-search'
-import { loadPreviewCandidates, PREVIEW_EXPLANATION, PreviewLoadError, previewRouteHref } from '../data/previews'
 import { artifactRouteHref } from '../routing'
 import { Icon } from './Icon'
 
@@ -37,12 +34,11 @@ export type PaletteCommand = {
 }
 
 export type PaletteContext = 'sites' | 'site' | 'artifact'
-type PaletteScope = 'all' | 'recent' | 'pinned' | 'previews'
 export type { RecentArtifactRead } from '../domain/recent-reads'
 
 type PaletteEntry = {
   id: string
-  kind: 'artifact' | 'site' | 'command' | 'heading'
+  kind: 'artifact' | 'site' | 'command' | 'heading' | 'page-text'
   title: string
   description?: string
   siteId?: string
@@ -65,14 +61,6 @@ type PreparedArtifactText = { title: string; path: string }
 type PageSearchCache = {
   terms: string[]
   candidateOrdinals: number[]
-  scope: PaletteScope
-  recentReads: RecentArtifactRead[]
-  pinnedArtifactIds: string[]
-}
-type PreviewPaletteState = {
-  siteId: string
-  status: 'idle' | 'loading' | 'success' | 'error'
-  candidates: PreviewCandidate[]
 }
 const preparedArtifactText = new WeakMap<ArtifactIndexEntry, PreparedArtifactText>()
 const pageSearchCache = new WeakMap<SiteIndex, PageSearchCache>()
@@ -90,6 +78,7 @@ export function CommandPalette({
   onClose,
   onNavigate,
   onJumpToHeading,
+  onSearchPageText,
 }: {
   seed: string
   sites: SiteCatalogEntry[]
@@ -103,17 +92,13 @@ export function CommandPalette({
   onClose: () => void
   onNavigate: (href: string) => void
   onJumpToHeading: (headingId: string) => void
+  /** Hands the query to the sidebar's page text search; present only when the site supports it. */
+  onSearchPageText?: (query: string) => void
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState(seed)
   const [selectedIndex, setSelectedIndex] = useState(() => defaultSelectionIndex(seed, context, currentIndex, sites.length))
-  const [scope, setScope] = useState<PaletteScope>('all')
-  const [previewState, setPreviewState] = useState<PreviewPaletteState>({ siteId: '', status: 'idle', candidates: [] })
-  const currentSiteId = currentIndex?.site.id
   const scoringConfig = paletteScoringExperimentConfig(window.location.search)
-  const scopeExperiment = paletteScopeExperimentConfig(window.location.search)
-  const recentArtifactIds = useMemo(() => new Set(recentReads.map(({ artifactId }) => artifactId)), [recentReads])
-  const pinnedArtifactIdSet = useMemo(() => new Set(pinnedArtifactIds), [pinnedArtifactIds])
   const normalized = query.toLocaleLowerCase()
   const mode = normalized.startsWith('@')
     ? 'site'
@@ -145,12 +130,6 @@ export function CommandPalette({
     if (isPaletteBenchmarkBuild() || mode !== 'search' || !currentIndex) return undefined
     return createPaletteProductionScorer({ index: currentIndex, currentArtifact, recentReads, pinnedArtifactIds })
   }, [mode, currentIndex, currentArtifact, recentReads, pinnedArtifactIds])
-  const prefilterScopeCandidates = scopeExperiment
-    ? scopeExperiment.candidates === 'prefilter'
-    : true
-  const memoizeScopeCounts = scopeExperiment
-    ? scopeExperiment.counts === 'memo'
-    : true
 
   const scopeLabel = mode === 'site'
     ? 'Sites'
@@ -160,9 +139,7 @@ export function CommandPalette({
         ? 'This artifact'
         : context === 'sites'
           ? 'Sites'
-          : scope === 'previews'
-            ? 'Previews'
-            : currentIndex?.site.title
+          : currentIndex?.site.title
             ? `${currentIndex.site.title} only`
             : undefined
   const placeholder = mode === 'site'
@@ -173,61 +150,15 @@ export function CommandPalette({
         ? 'Search headings in this artifact...'
         : context === 'sites'
           ? 'Search sites...'
-          : scope === 'previews'
-            ? 'Search preview documents...'
-          : scope === 'recent'
-            ? 'Search recently read pages...'
-            : scope === 'pinned'
-              ? 'Search pinned pages...'
-              : 'Search pages, headings, and commands...'
+          : 'Jump to a page, heading, or command...'
 
-  const availablePreviewCandidates = previewState.siteId === currentSiteId
-    ? previewState.candidates.filter(({ availability }) => availability === 'available' || availability === 'unknown')
-    : []
-  const previewDocumentCount = availablePreviewCandidates.reduce((count, { group }) => count + group.documents.length, 0)
   const sections = useMemo(
-    () => buildSections({ mode, context, term, sites, currentIndex, currentArtifact, recentReads, pinnedArtifactIds, scope, commands, onNavigate, onJumpToHeading, scoringExperiment, productionScorer, prefilterScopeCandidates, previewCandidates: availablePreviewCandidates }),
-    [mode, context, term, sites, currentIndex, currentArtifact, recentReads, pinnedArtifactIds, scope, commands, onNavigate, onJumpToHeading, scoringExperiment, productionScorer, prefilterScopeCandidates, availablePreviewCandidates],
+    () => buildSections({ mode, context, term, sites, currentIndex, currentArtifact, recentReads, pinnedArtifactIds, commands, onNavigate, onJumpToHeading, scoringExperiment, productionScorer, onSearchPageText }),
+    [mode, context, term, sites, currentIndex, currentArtifact, recentReads, pinnedArtifactIds, commands, onNavigate, onJumpToHeading, scoringExperiment, productionScorer, onSearchPageText],
   )
   const entries = sections.flatMap((section) => section.entries)
   const entrySequence = mode === 'site' ? JSON.stringify(entries.map(({ id }) => id)) : ''
-  const showScopePicker = mode === 'search' && context !== 'sites' && Boolean(currentIndex)
-  const memoizedScopeCounts = useMemo(() => {
-    if (!memoizeScopeCounts || !currentIndex) return undefined
-    let recent = 0
-    let pinned = 0
-    for (const { id } of currentIndex.artifacts) {
-      if (recentArtifactIds.has(id)) recent += 1
-      if (pinnedArtifactIdSet.has(id)) pinned += 1
-    }
-    return { all: currentIndex.artifacts.length, recent, pinned }
-  }, [memoizeScopeCounts, currentIndex, recentArtifactIds, pinnedArtifactIdSet])
-  const recentCount = memoizedScopeCounts?.recent
-    ?? currentIndex?.artifacts.filter(({ id }) => recentArtifactIds.has(id)).length ?? 0
-  const pinnedCount = memoizedScopeCounts?.pinned
-    ?? currentIndex?.artifacts.filter(({ id }) => pinnedArtifactIdSet.has(id)).length ?? 0
-  const scopedCount = scope === 'all'
-    ? memoizedScopeCounts?.all ?? currentIndex?.artifacts.length ?? 0
-    : scope === 'recent' ? recentCount : scope === 'pinned' ? pinnedCount : previewDocumentCount
-  const availableScopeCount = scopedCount
-  const emptyMessage = getEmptyMessage({ mode, scope, currentArtifact, siteCount: sites.length, availableScopeCount })
-
-  useEffect(() => {
-    if (scope !== 'previews' || !currentSiteId) return
-    let cancelled = false
-    setPreviewState({ siteId: currentSiteId, status: 'loading', candidates: [] })
-    loadPreviewCandidates(currentSiteId).then((candidates) => {
-      if (!cancelled) setPreviewState({ siteId: currentSiteId, status: 'success', candidates })
-    }).catch((error: unknown) => {
-      if (cancelled) return
-      if (error instanceof PreviewLoadError && error.status === 404) {
-        setPreviewState({ siteId: currentSiteId, status: 'success', candidates: [] })
-      } else {
-        setPreviewState({ siteId: currentSiteId, status: 'error', candidates: [] })
-      }
-    })
-    return () => { cancelled = true }
-  }, [scope, currentSiteId])
+  const emptyMessage = getEmptyMessage({ mode, currentArtifact, siteCount: sites.length })
 
   useEffect(() => {
     inputRef.current?.focus()
@@ -261,6 +192,11 @@ export function CommandPalette({
       event.preventDefault()
       if (event.ctrlKey) event.stopPropagation()
       setSelectedIndex((current) => Math.max(current - 1, 0))
+    } else if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229)) {
+      // Confirming an IME conversion is not a selection.
+    } else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && onSearchPageText && mode === 'search' && term) {
+      event.preventDefault()
+      onSearchPageText(term)
     } else if (event.key === 'Enter') {
       event.preventDefault()
       const selectedEntry = entries[selectedIndex]
@@ -321,39 +257,8 @@ export function CommandPalette({
           </button>
         </div>
 
-        {showScopePicker ? (
-          <div className="palette-scope-tabs" role="group" aria-label="Filter site results">
-            {(['all', 'recent', 'pinned', 'previews'] as const).map((value) => (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={scope === value}
-                aria-label={`${value === 'all' ? 'All pages' : value === 'recent' ? 'Recently read pages' : value === 'pinned' ? 'Pinned pages' : 'Previews'}${value === scope ? ', selected' : ''}`}
-                onClick={() => {
-                  setScope(value)
-                  setSelectedIndex(0)
-                  inputRef.current?.focus()
-                }}
-              >
-                {value === 'all' ? 'All' : value === 'recent' ? 'Recent' : value === 'pinned' ? 'Pinned' : 'Previews'}
-                {value === 'recent' ? <span aria-hidden="true">{recentCount}</span> : null}
-                {value === 'pinned' ? <span aria-hidden="true">{pinnedCount}</span> : null}
-                {value === 'previews' && previewState.status === 'success' && previewState.siteId === currentSiteId ? <span aria-hidden="true">{previewDocumentCount}</span> : null}
-              </button>
-            ))}
-          </div>
-        ) : null}
-
-        {scope === 'previews' ? (
-          <p className="palette-note">{PREVIEW_EXPLANATION}</p>
-        ) : null}
-
         <div className="palette-results" role="listbox" aria-label="Search results">
-          {scope === 'previews' && previewState.siteId === currentSiteId && previewState.status === 'loading' ? (
-            <p className="palette-empty" role="status">Loading previews…</p>
-          ) : scope === 'previews' && previewState.siteId === currentSiteId && previewState.status === 'error' ? (
-            <p className="palette-empty" role="alert">The preview list could not be loaded.</p>
-          ) : sections.length === 0 ? (
+          {sections.length === 0 ? (
             <p className="palette-empty">
               {emptyMessage}
             </p>
@@ -366,7 +271,7 @@ export function CommandPalette({
                   const selected = index === selectedIndex
                   return (
                     <button
-                      className={`palette-entry${entry.kind === 'site' ? ' palette-entry--site' : ''}${selected ? ' is-selected' : ''}`}
+                      className={`palette-entry${entry.kind === 'site' ? ' palette-entry--site' : ''}${entry.kind === 'page-text' ? ' palette-entry--page-text' : ''}${selected ? ' is-selected' : ''}`}
                       key={entry.id}
                       role="option"
                       data-palette-entry-id={entry.id}
@@ -420,13 +325,11 @@ export function CommandPalette({
         </div>
 
         {loading ? <p className="palette-loading" role="status">Loading site information…</p> : null}
-        {scope === 'previews' && previewState.status === 'success' && previewState.candidates.some(({ availability }) => availability === 'invalid') ? (
-          <p className="palette-loading" role="status">Some preview records did not match their revision manifests.</p>
-        ) : null}
 
         <footer className="palette-footer">
           <span><kbd>↑</kbd><kbd>↓</kbd> or <kbd>Ctrl+J/K</kbd> navigate</span>
           <span><kbd>↵</kbd> open</span>
+          {onSearchPageText && mode === 'search' && context !== 'sites' ? <span><kbd>⌘↵</kbd> search page text</span> : null}
           <span><code>&gt;</code> commands</span>
           <span><code>@</code> sites</span>
           {currentArtifact ? <span><code>#</code> headings</span> : null}
@@ -443,49 +346,24 @@ function defaultSelectionIndex(query: string, context: PaletteContext, currentIn
 
 function getEmptyMessage({
   mode,
-  scope,
   currentArtifact,
   siteCount,
-  availableScopeCount,
 }: {
   mode: 'site' | 'command' | 'heading' | 'search'
-  scope: PaletteScope
   currentArtifact?: ArtifactIndexEntry
   siteCount: number
-  availableScopeCount: number
 }): string {
   if (mode === 'heading') {
     if (!currentArtifact) return 'Open an artifact first to search its headings.'
     if ((currentArtifact.toc?.length ?? 0) === 0) return 'This artifact has no indexed headings.'
     return 'No headings match. Change or clear your search.'
   }
-
   if (mode === 'site') {
     return siteCount === 0
       ? 'No sites are available.'
       : 'No sites match. Change or clear your search.'
   }
-
   if (mode === 'command') return 'No commands match. Change or clear your search.'
-
-  if (mode === 'search' && scope === 'recent') {
-    return availableScopeCount === 0
-      ? 'No recently read pages are available in this site.'
-      : 'No matches in Recent. Clear the query or switch scopes.'
-  }
-
-  if (mode === 'search' && scope === 'pinned') {
-    return availableScopeCount === 0
-      ? 'No pinned pages are available in this site.'
-      : 'No matches in Pinned. Clear the query or switch scopes.'
-  }
-
-  if (mode === 'search' && scope === 'previews') {
-    return availableScopeCount === 0
-      ? 'There are no available previews for this site.'
-      : 'No matches in Previews. Clear the query to see all preview documents.'
-  }
-
   return 'Nothing matches. Try > for commands, @ for sites, or # for headings.'
 }
 
@@ -498,14 +376,12 @@ function buildSections({
   currentArtifact,
   recentReads,
   pinnedArtifactIds,
-  scope,
   commands,
   onNavigate,
   onJumpToHeading,
   scoringExperiment,
   productionScorer,
-  prefilterScopeCandidates,
-  previewCandidates,
+  onSearchPageText,
 }: {
   mode: 'site' | 'command' | 'heading' | 'search'
   context: PaletteContext
@@ -515,14 +391,12 @@ function buildSections({
   currentArtifact?: ArtifactIndexEntry
   recentReads: RecentArtifactRead[]
   pinnedArtifactIds: string[]
-  scope: PaletteScope
   commands: PaletteCommand[]
   onNavigate: (href: string) => void
   onJumpToHeading: (headingId: string) => void
   scoringExperiment?: PaletteScoringExperiment
   productionScorer?: PaletteProductionScorer
-  prefilterScopeCandidates: boolean
-  previewCandidates: PreviewCandidate[]
+  onSearchPageText?: (query: string) => void
 }): PaletteSection[] {
   if (mode === 'site') {
     const entries = buildSiteEntries(sites, term, onNavigate)
@@ -550,8 +424,11 @@ function buildSections({
   }
 
   if (!currentIndex) return []
-  if (scope === 'previews') {
-    return buildPreviewSections(currentIndex.site.id, previewCandidates, term, onNavigate)
+  const allCommandEntries = buildCommandEntries(commands, term)
+  if (!term.trim()) {
+    const returnSections = buildReturnSections(currentIndex, currentArtifact, recentReads, pinnedArtifactIds, onNavigate)
+    const commandSection = allCommandEntries.length ? [{ title: 'Commands', entries: allCommandEntries.slice(0, 3) }] : []
+    if (returnSections.length) return [...returnSections, ...commandSection]
   }
   const pageSections = buildPageSections(
     currentIndex,
@@ -559,59 +436,68 @@ function buildSections({
     onNavigate,
     recentReads,
     pinnedArtifactIds,
-    scope,
     currentArtifact,
     scoringExperiment,
     productionScorer,
-    prefilterScopeCandidates,
   )
-  const includeOtherResults = scope === 'all'
-  const headingEntries = includeOtherResults && term.trim() && context === 'artifact'
+  const headingEntries = term.trim() && context === 'artifact'
     ? buildHeadingEntries(currentArtifact, term, onJumpToHeading)
     : []
   const headingSection = headingEntries.length
     ? [{ title: `In ${currentArtifact?.title ?? 'this artifact'}`, entries: headingEntries }]
     : []
-  const allCommandEntries = includeOtherResults ? buildCommandEntries(commands, term) : []
+  // Listed after page matches, it becomes the default selection when no page name matches.
+  const pageTextSection: PaletteSection[] = onSearchPageText && term.trim()
+    ? [{
+        title: 'Page text',
+        entries: [{
+          id: 'page-text-search',
+          kind: 'page-text',
+          title: `Search page text for “${term}”`,
+          shortcut: '⌘ ↵',
+          onSelect: () => onSearchPageText(term),
+        }],
+      }]
+    : []
   const commandEntries = term.trim() ? allCommandEntries : allCommandEntries.slice(0, 3)
   const commandSection = commandEntries.length ? [{ title: 'Commands', entries: commandEntries }] : []
 
   return [
-    ...headingSection,
     ...pageSections,
+    ...pageTextSection,
+    ...headingSection,
     ...commandSection,
   ]
 }
 
-function buildPreviewSections(
-  siteId: string,
-  candidates: PreviewCandidate[],
-  term: string,
+// A blank palette is where readers return from: pinned pages first, then their own recent reads.
+function buildReturnSections(
+  index: SiteIndex,
+  currentArtifact: ArtifactIndexEntry | undefined,
+  recentReads: RecentArtifactRead[],
+  pinnedArtifactIds: string[],
   onNavigate: (href: string) => void,
 ): PaletteSection[] {
-  return candidates.flatMap(({ group, availability }) => {
-    if (availability !== 'available' && availability !== 'unknown') return []
-    const entries = group.documents.flatMap((document) => {
-      const titleMatch = fuzzyMatch(document.title, term)
-      const pathMatch = fuzzyMatch(document.path, term)
-      if (term.trim() && !titleMatch && !pathMatch) return []
-      return [{
-        id: `preview:${siteId}:${group.id}:${document.path}`,
-        kind: 'artifact' as const,
-        title: document.title,
-        subtitle: document.path,
-        badge: availability === 'unknown' ? 'Availability unknown' : undefined,
-        titleMatch,
-        subtitleMatch: pathMatch,
-        onSelect: () => onNavigate(previewRouteHref(siteId, group.headSha, document.path, group.id)),
-      }]
-    }).sort((left, right) => (right.titleMatch?.score ?? right.subtitleMatch?.score ?? 0) - (left.titleMatch?.score ?? left.subtitleMatch?.score ?? 0))
-    if (entries.length === 0) return []
-    const title = group.kind === 'pull-request'
-      ? `PR #${group.id.slice(3)}`
-      : `Manual preview · ${group.headSha.slice(0, 8)}`
-    return [{ title, entries }]
+  const artifactsById = new Map(index.artifacts.map((artifact) => [artifact.id, artifact]))
+  const pinnedIds = new Set(pinnedArtifactIds)
+  const currentBadge = (artifact: ArtifactIndexEntry) => artifact.id === currentArtifact?.id ? 'Current page' : undefined
+  const pinned = pinnedArtifactIds.flatMap((id) => {
+    const artifact = artifactsById.get(id)
+    return artifact ? [artifactEntry(index, artifact, onNavigate, undefined, undefined, currentBadge(artifact))] : []
   })
+  const recent = [...recentReads]
+    .sort((left, right) => right.viewedAt - left.viewedAt)
+    .flatMap((read) => {
+      const artifact = artifactsById.get(read.artifactId)
+      if (!artifact || pinnedIds.has(artifact.id)) return []
+      const badge = [currentBadge(artifact), formatRecentRead(read.viewedAt)].filter(Boolean).join(' · ')
+      return [artifactEntry(index, artifact, onNavigate, undefined, undefined, badge)]
+    })
+    .slice(0, 8)
+  return [
+    ...(pinned.length ? [{ title: 'Pinned', entries: pinned }] : []),
+    ...(recent.length ? [{ title: 'Recently read', entries: recent }] : []),
+  ]
 }
 
 function buildSiteEntries(
@@ -697,24 +583,16 @@ function buildPageSections(
   onNavigate: (href: string) => void,
   recentReads: RecentArtifactRead[],
   pinnedArtifactIds: string[],
-  scope: PaletteScope,
   currentArtifact?: ArtifactIndexEntry,
   scoringExperiment?: PaletteScoringExperiment,
   productionScorer?: PaletteProductionScorer,
-  prefilterScopeCandidates = false,
 ): PaletteSection[] {
   if (!currentIndex) return []
   const query = prepareFuzzyQuery(term)
   const recentReadById = new Map(recentReads.map((read) => [read.artifactId, read] as const))
   const pinnedIds = new Set(pinnedArtifactIds)
-  const cacheScope = prefilterScopeCandidates ? scope : 'all'
   const previousSearch = pageSearchCache.get(currentIndex)
-  const scopeIdentityIsCurrent = !prefilterScopeCandidates
-    || scope === 'all'
-    || (previousSearch?.recentReads === recentReads && previousSearch.pinnedArtifactIds === pinnedArtifactIds)
   const isQueryExtension = previousSearch !== undefined
-    && previousSearch.scope === cacheScope
-    && scopeIdentityIsCurrent
     && query.terms.length >= previousSearch.terms.length
     && previousSearch.terms.every((previousTerm, index) => (
       query.terms[index].normalized.startsWith(previousTerm)
@@ -722,14 +600,6 @@ function buildPageSections(
   let candidateOrdinals: number[] | undefined
   if (isQueryExtension) {
     candidateOrdinals = previousSearch.candidateOrdinals
-  } else if (prefilterScopeCandidates && scope !== 'all') {
-    candidateOrdinals = []
-    for (let ordinal = 0; ordinal < currentIndex.artifacts.length; ordinal += 1) {
-      const artifact = currentIndex.artifacts[ordinal]
-      if (scope === 'recent' ? recentReadById.has(artifact.id) : pinnedIds.has(artifact.id)) {
-        candidateOrdinals.push(ordinal)
-      }
-    }
   }
   const candidateCount = candidateOrdinals?.length ?? currentIndex.artifacts.length
   const entries: Array<{ artifact: ArtifactIndexEntry; score: number; badge?: string }> = []
@@ -750,10 +620,8 @@ function buildPageSections(
     if (term.trim() && titleScore === undefined && pathScore === undefined) continue
     matchingOrdinals.push(ordinal)
 
-    const isRecent = recentReadById.has(artifact.id)
     const isPinned = pinnedIds.has(artifact.id)
     const isCurrent = artifact.id === currentArtifact?.id
-    if ((scope === 'recent' && !isRecent) || (scope === 'pinned' && !isPinned)) continue
 
     const read = recentReadById.get(artifact.id)
     const score = scoreArtifact({
@@ -782,13 +650,10 @@ function buildPageSections(
   pageSearchCache.set(currentIndex, {
     terms: query.terms.map(({ normalized }) => normalized),
     candidateOrdinals: matchingOrdinals,
-    scope: cacheScope,
-    recentReads,
-    pinnedArtifactIds,
   })
   if (!entries.length) return []
   return [{
-    title: scope === 'recent' ? 'Recent pages' : scope === 'pinned' ? 'Pinned pages' : 'Pages',
+    title: 'Pages',
     entries: entries.slice(0, 8).map(({ artifact, badge }) => (
       artifactEntry(
         currentIndex,
@@ -888,6 +753,7 @@ function iconForEntry(kind: PaletteEntry['kind']) {
   if (kind === 'site') return 'folder' as const
   if (kind === 'command') return 'chevron' as const
   if (kind === 'heading') return 'contents' as const
+  if (kind === 'page-text') return 'search' as const
   return 'file' as const
 }
 

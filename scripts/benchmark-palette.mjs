@@ -90,8 +90,8 @@ try {
     for (const dataset of datasets) {
       fixtureServer.setDataset(dataset)
       for (let loadIteration = 0; loadIteration < options.loads; loadIteration += 1) {
-        const result = options.paletteScoreMatrix || options.paletteScopeMatrix || options.paletteIndexMatrix || options.paletteBaselineMatrix
-          ? await benchmarkPaletteScoringUiMatrix(browser, dataset, options.iterations, fixtureServer.url, loadIteration + 1, options.paletteScopeMatrix, options.paletteIndexMatrix, options.paletteBaselineMatrix)
+        const result = options.paletteScoreMatrix || options.paletteIndexMatrix || options.paletteBaselineMatrix
+          ? await benchmarkPaletteScoringUiMatrix(browser, dataset, options.iterations, fixtureServer.url, loadIteration + 1, options.paletteIndexMatrix, options.paletteBaselineMatrix)
           : await benchmarkDataset(browser, dataset, options.iterations, fixtureServer.url)
         console.log(JSON.stringify({ loadIteration: loadIteration + 1, ...result }))
       }
@@ -259,7 +259,7 @@ async function benchmarkDataset(browserInstance, dataset, iterations, fixtureUrl
   page.on('request', (request) => {
     const pathname = new URL(request.url()).pathname
     if (/^\/_indexes\/[^/]+\/meta\.json$/u.test(pathname)) metadataRequests.push(pathname)
-    if (pathname.startsWith('/_indexes/') && pathname.endsWith('.json') && !pathname.endsWith('/meta.json')) {
+    if (pathname.startsWith('/_indexes/') && pathname.endsWith('.json') && !pathname.endsWith('/meta.json') && pathname !== '/_indexes/sites.json') {
       artifactIndexRequests.push(pathname)
     }
   })
@@ -434,14 +434,14 @@ async function benchmarkDataset(browserInstance, dataset, iterations, fixtureUrl
     })
   }
 
+  // A blank palette lists the reader's Recently read pages (up to eight, pinned pages excluded).
   await search.fill('')
-  await palette.getByRole('button', { name: /Recently read pages/ }).click()
-  const recentVisibleOptions = await palette.getByRole('option').count()
+  const recentSection = palette.locator('.palette-section').filter({ has: page.locator('.palette-section-title', { hasText: /^Recently read$/ }) })
+  const recentVisibleOptions = await recentSection.getByRole('option').count()
   const expectedRecentVisibleOptions = Math.min(8, dataset.recentReadCountPerSite)
   if (recentVisibleOptions !== expectedRecentVisibleOptions) {
-    throw new Error(`Expected ${expectedRecentVisibleOptions} visible recent results, received ${recentVisibleOptions}.`)
+    throw new Error(`Expected ${expectedRecentVisibleOptions} blank-palette Recently read results, received ${recentVisibleOptions}.`)
   }
-  await palette.getByRole('button', { name: /All pages/ }).click()
 
   if (metadataRequests.length !== dataset.siteCount) {
     throw new Error(`Expected ${dataset.siteCount} discovery metadata requests, received ${metadataRequests.length}.`)
@@ -457,7 +457,7 @@ async function benchmarkDataset(browserInstance, dataset, iterations, fixtureUrl
     const metrics = window.__paletteBenchMetrics
     const jsonLoads = metrics.jsonLoads
     const detailed = jsonLoads.filter(({ pathname }) => (
-      pathname.startsWith('/_indexes/') && !pathname.endsWith('/meta.json')
+      pathname.startsWith('/_indexes/') && !pathname.endsWith('/meta.json') && pathname !== '/_indexes/sites.json'
     ))
     const metadata = jsonLoads.filter(({ pathname }) => pathname.endsWith('/meta.json'))
     const detailBodyReadDurations = detailed.map(({ bodyReadMs }) => bodyReadMs)
@@ -1273,30 +1273,13 @@ async function benchmarkContextScoringIndexesExpanded(page, cdp, records, curren
       const allParity = Object.fromEntries(Object.entries(lastAll)
         .map(([name, ids]) => [name, compareTop(baseline, ids)]))
       if (Object.values(allParity).some((same) => !same)) {
-        throw new Error('Full-signal all-scope top-eight mismatch for query ' + query)
-      }
-      const scopeParity = { all: allParity }
-      const scopeCounts = { all: matches.length }
-      for (const scope of ['recent', 'pinned']) {
-        const scoped = matches.filter(({ id }) => scope === 'recent'
-          ? recentReadById.has(records[id].id)
-          : pinnedIds.has(records[id].id))
-        scopeCounts[scope] = scoped.length
-        const scopedTop = Object.fromEntries(Object.entries(strategies)
-          .map(([name, [context, signal]]) => [name, top(scoped, context, signal)]))
-        const scopedBaseline = scopedTop.raw
-        scopeParity[scope] = Object.fromEntries(Object.entries(scopedTop)
-          .map(([name, ids]) => [name, compareTop(scopedBaseline, ids)]))
-        if (Object.values(scopeParity[scope]).some((same) => !same)) {
-          throw new Error('Full-signal ' + scope + '-scope top-eight mismatch for query ' + query)
-        }
+        throw new Error('Full-signal top-eight mismatch for query ' + query)
       }
       queryResults.push({
         query,
         matchingCandidates: matches.length,
         fullSignalRankingP50Ms: queryTimingP50Ms,
-        scopeCandidateCounts: scopeCounts,
-        allScopesTop8Identical: scopeParity,
+        top8Identical: allParity,
       })
     }
     const freshnessBranchCounts = { twoPoint: 0, onePoint: 0, zero: 0 }
@@ -1679,40 +1662,23 @@ async function benchmarkContextScoringIndexesExpanded(page, cdp, records, curren
   }
 }
 
-async function benchmarkPaletteScoringUiMatrix(browserInstance, dataset, iterations, fixtureUrl, loadIteration, scopeMatrix = false, indexMatrix = false, baselineOnly = false) {
+async function benchmarkPaletteScoringUiMatrix(browserInstance, dataset, iterations, fixtureUrl, loadIteration, indexMatrix = false, baselineOnly = false) {
   const contextStrategies = indexMatrix ? ['indexed'] : ['raw', 'profile', 'csr', 'inverted']
   const signalStrategies = ['dynamic', 'float64', 'float32', 'split', 'sparse', 'lazy']
   const strategies = baselineOnly
-    ? [{ context: 'baseline', signals: 'dynamic', candidateScope: 'scan', scopeCounts: 'live' }]
-    : scopeMatrix
-    ? [
-      { context: 'baseline', signals: 'dynamic', candidateScope: 'scan', scopeCounts: 'live' },
-      { context: 'baseline', signals: 'dynamic', candidateScope: 'prefilter', scopeCounts: 'live' },
-      { context: 'baseline', signals: 'dynamic', candidateScope: 'scan', scopeCounts: 'memo' },
-      { context: 'baseline', signals: 'dynamic', candidateScope: 'prefilter', scopeCounts: 'memo' },
-    ]
+    ? [{ context: 'baseline', signals: 'dynamic' }]
     : [
-      { context: 'baseline', signals: 'dynamic', candidateScope: 'scan', scopeCounts: 'live' },
-      ...contextStrategies.flatMap((context) => signalStrategies.map((signals) => ({
-        context,
-        signals,
-        candidateScope: 'scan',
-        scopeCounts: 'live',
-      }))),
+      { context: 'baseline', signals: 'dynamic' },
+      ...contextStrategies.flatMap((context) => signalStrategies.map((signals) => ({ context, signals }))),
     ]
-  const rotation = baselineOnly ? 0 : ((loadIteration - 1) * (scopeMatrix ? 1 : indexMatrix ? 2 : 8) + 3) % strategies.length
+  const rotation = baselineOnly ? 0 : ((loadIteration - 1) * (indexMatrix ? 2 : 8) + 3) % strategies.length
   const orderedStrategies = [...strategies.slice(rotation), ...strategies.slice(0, rotation)]
   const targetArtifact = dataset.searchRecords.find(({ path: artifactPath }) => artifactPath.endsWith('.md'))
     ?? dataset.searchRecords[0]
   const route = `/${encodeURIComponent(dataset.currentSiteId)}/${targetArtifact.path.split('/').map(encodeURIComponent).join('/')}`
   const rows = []
 
-  for (const {
-    context: contextStrategy,
-    signals: signalStrategy,
-    candidateScope,
-    scopeCounts,
-  } of orderedStrategies) {
+  for (const { context: contextStrategy, signals: signalStrategy } of orderedStrategies) {
       const page = await browserInstance.newPage({ viewport: { width: 1440, height: 960 } })
       const cdp = await page.context().newCDPSession(page)
       await cdp.send('HeapProfiler.enable')
@@ -1730,9 +1696,7 @@ async function benchmarkPaletteScoringUiMatrix(browserInstance, dataset, iterati
       })
 
       const loadStarted = performance.now()
-      const candidateQuery = candidateScope === 'prefilter' ? '&paletteCandidateScope=prefilter' : ''
-      const countsQuery = scopeCounts === 'memo' ? '&paletteScopeCounts=memo' : ''
-      const targetUrl = `${fixtureUrl}${route}?paletteContext=${contextStrategy}&paletteSignals=${signalStrategy}${candidateQuery}${countsQuery}`
+      const targetUrl = `${fixtureUrl}${route}?paletteContext=${contextStrategy}&paletteSignals=${signalStrategy}`
       await page.goto(targetUrl, { waitUntil: 'domcontentloaded' })
       await page.locator('main.stage.has-artifact').waitFor({ state: 'visible', timeout: 60_000 })
       await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
@@ -1772,70 +1736,25 @@ async function benchmarkPaletteScoringUiMatrix(browserInstance, dataset, iterati
         { name: 'pltfrm', value: 'pltfrm' },
         { name: 'zzzz', value: 'zzzz' },
       ]
-      const rankingByScope = Object.create(null)
-      const timingByScopeAndQuery = Object.create(null)
-      const scopeSwitchAtA = []
-
-      for (const scope of ['all', 'recent', 'pinned']) {
-        const accessibleName = scope === 'all' ? /^All pages/ : scope === 'recent' ? /^Recently read pages/ : /^Pinned pages/
-        await palette.getByRole('button', { name: accessibleName }).click()
-        rankingByScope[scope] = Object.create(null)
-        timingByScopeAndQuery[scope] = Object.create(null)
-        for (const query of queryNames) {
-          const measurement = await search.evaluate(async (input, value) => {
-            const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
-            if (!setter) throw new Error('Could not access the native input value setter.')
-            const started = performance.now()
-            if (input.value !== value) {
-              setter.call(input, value)
-              input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: value }))
-            }
-            const processingMilliseconds = performance.now() - started
-            await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
-            return {
-              processingMilliseconds,
-              inputToPaintMilliseconds: performance.now() - started,
-              inputValue: input.value,
-              ids: [...document.querySelectorAll('[role="option"][data-palette-entry-id^="artifact:"]')]
-                .map((entry) => entry.getAttribute('data-palette-entry-id')),
-            }
-          }, query.value)
-          if (measurement.inputValue !== query.value) throw new Error(`Scoring matrix input failed for ${query.name}.`)
-          rankingByScope[scope][query.name] = measurement.ids
-          timingByScopeAndQuery[scope][query.name] = {
-            jsMs: roundHundredths(measurement.processingMilliseconds),
-            inputToPaintMs: roundHundredths(measurement.inputToPaintMilliseconds),
-          }
+      // The palette is one ranked name search; a blank query shows Pinned and Recently read.
+      const ranking = Object.create(null)
+      const timingByQuery = Object.create(null)
+      for (const query of queryNames) {
+        const measurement = await measurePaletteQuery(search, query.value)
+        ranking[query.name] = measurement.ids
+        timingByQuery[query.name] = {
+          jsMs: roundHundredths(measurement.jsMs),
+          inputToPaintMs: roundHundredths(measurement.inputToPaintMs),
         }
       }
-
-      await palette.getByRole('button', { name: /^All pages/ }).click()
-      await measurePaletteQuery(search, 'a')
-      for (const scope of ['recent', 'pinned', 'all']) {
-        const accessibleName = scope === 'all' ? /^All pages/ : scope === 'recent' ? /^Recently read pages/ : /^Pinned pages/
-        const button = await palette.getByRole('button', { name: accessibleName }).elementHandle()
-        const switchMeasurement = await button.evaluate(async (element) => {
-          const started = performance.now()
-          element.click()
-          const jsMs = performance.now() - started
-          await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
-          return {
-            jsMs,
-            inputToPaintMs: performance.now() - started,
-            ids: [...document.querySelectorAll('[role="option"][data-palette-entry-id^="artifact:"]')]
-              .map((entry) => entry.getAttribute('data-palette-entry-id')),
-          }
-        })
-        scopeSwitchAtA.push({ scope, jsMs: roundHundredths(switchMeasurement.jsMs), inputToPaintMs: roundHundredths(switchMeasurement.inputToPaintMs), ids: switchMeasurement.ids })
-      }
+      await measurePaletteQuery(search, '')
+      const blankSections = await palette.locator('.palette-section-title').allTextContents()
 
       const heapAfterBytes = await readJsHeapBytes(cdp)
       const backingAfterBytes = await readBackingStorageBytes(cdp)
       const row = {
         context: contextStrategy,
         signals: signalStrategy,
-        candidateScope,
-        scopeCounts,
         pageReadyMs: round(pageReadyMs),
         paletteOpenMs: round(paletteOpenMs),
         firstCharacterJsMs: roundHundredths(percentile(firstCharacterSamples.map(({ jsMs }) => jsMs), 0.5)),
@@ -1843,7 +1762,7 @@ async function benchmarkPaletteScoringUiMatrix(browserInstance, dataset, iterati
         firstCharacterInputToPaintMs: roundHundredths(percentile(firstCharacterSamples.map(({ inputToPaintMs }) => inputToPaintMs), 0.5)),
         firstCharacterInputToPaintP95Ms: roundHundredths(percentile(firstCharacterSamples.map(({ inputToPaintMs }) => inputToPaintMs), 0.95)),
         setup: metrics,
-        scopeSwitchAtA,
+        blankSections,
         heapBeforePaletteBytes,
         heapAfterPaletteBytes: heapAfterBytes,
         backingBeforePaletteBytes,
@@ -1854,21 +1773,19 @@ async function benchmarkPaletteScoringUiMatrix(browserInstance, dataset, iterati
         backingStorageDeltaAfterPaletteBytes: backingBeforePaletteBytes === null || backingAfterBytes === null
           ? null
           : backingAfterBytes - backingBeforePaletteBytes,
-        rankingByScope,
-        timingByScopeAndQuery,
+        ranking,
+        timingByQuery,
       }
       if (errors.length) row.pageErrors = errors
       rows.push(row)
       await page.close()
   }
 
-  const baselineRow = rows.find(({ context, signals, candidateScope, scopeCounts: countStrategy }) => (
-    context === 'baseline' && signals === 'dynamic' && candidateScope === 'scan' && countStrategy === 'live'
-  ))
+  const baselineRow = rows.find(({ context, signals }) => context === 'baseline' && signals === 'dynamic')
   if (!baselineRow) throw new Error('Scoring matrix did not include the current product baseline.')
-  const baselineByKey = flattenRanking(baselineRow.rankingByScope, baselineRow.scopeSwitchAtA)
+  const baselineByKey = baselineRow.ranking
   for (const row of rows) {
-    const actualByKey = flattenRanking(row.rankingByScope, row.scopeSwitchAtA)
+    const actualByKey = row.ranking
     row.parityMismatches = []
     for (const [key, ids] of Object.entries(baselineByKey)) {
       if (JSON.stringify(ids) !== JSON.stringify(actualByKey[key])) {
@@ -1917,15 +1834,6 @@ async function measurePaletteQuery(search, value) {
       .map((entry) => entry.getAttribute('data-palette-entry-id'))
     return { jsMs, inputToPaintMs: performance.now() - started, ids }
   }, value)
-}
-
-function flattenRanking(rankingByScope, scopeSwitchAtA) {
-  const flattened = Object.create(null)
-  for (const [scope, queries] of Object.entries(rankingByScope)) {
-    for (const [query, ids] of Object.entries(queries)) flattened[`${scope}:${query}`] = ids
-  }
-  for (const { scope, ids } of scopeSwitchAtA) flattened[`switch:${scope}`] = ids
-  return flattened
 }
 
 async function benchmarkTyping(search, iterations, sequence) {
@@ -2125,7 +2033,6 @@ function parseArguments(args) {
     seed: '20260924',
     generateOnly: false,
     paletteScoreMatrix: false,
-    paletteScopeMatrix: false,
     paletteIndexMatrix: false,
     paletteBaselineMatrix: false,
   }
@@ -2133,7 +2040,6 @@ function parseArguments(args) {
     const argument = args[index]
     if (argument === '--help') {
       console.log('Usage: npm run benchmark:palette -- [--counts 1000,5000,10000,20000] [--sites 20 --artifacts-per-site 1000] [--recent-reads 0-20] [--chunk-sizes 250,1000,5000] [--iterations 20] [--loads 3] [--seed text] [--palette-score-matrix]')
-      console.log('       npm run benchmark:palette -- [--counts 20000,100000] [--sites 20 --artifacts-per-site 1000] [--recent-reads 20] [--iterations 5] [--loads 3] [--seed text] [--palette-scope-matrix]')
       console.log('       npm run benchmark:palette -- [--counts 20000,100000] [--sites 20 --artifacts-per-site 1000] [--recent-reads 20] [--iterations 5] [--loads 3] [--seed text] [--palette-index-matrix]')
       console.log('       npm run benchmark:palette -- [--counts 100000] [--recent-reads 20] [--iterations 5] [--loads 3] [--seed text] [--palette-baseline-matrix]')
       console.log('       npm run fixtures:palette -- [--counts 1000,5000,10000,20000] [--sites 20 --artifacts-per-site 1000] [--recent-reads 0-20] [--seed text]')
@@ -2145,10 +2051,6 @@ function parseArguments(args) {
     }
     if (argument === '--palette-score-matrix') {
       values.paletteScoreMatrix = true
-      continue
-    }
-    if (argument === '--palette-scope-matrix') {
-      values.paletteScopeMatrix = true
       continue
     }
     if (argument === '--palette-index-matrix') {
@@ -2178,7 +2080,7 @@ function parseArguments(args) {
     throw new Error(`Unknown argument: ${argument}`)
   }
 
-  const matrixModes = [values.paletteScoreMatrix, values.paletteScopeMatrix, values.paletteIndexMatrix, values.paletteBaselineMatrix]
+  const matrixModes = [values.paletteScoreMatrix, values.paletteIndexMatrix, values.paletteBaselineMatrix]
   if (matrixModes.filter(Boolean).length > 1) throw new Error('Choose only one palette benchmark matrix mode at a time.')
 
   if (values.siteCount !== undefined && values.artifactsPerSite === undefined
@@ -2231,6 +2133,15 @@ async function startFixtureServer() {
     if (pathname === '/_indexes/') {
       const body = `<!doctype html>${dataset.sites.map(({ site }) => `<a href="${site.id}/">${site.id}/</a>`).join('')}`
       sendResponse(outgoing, 200, 'text/html; charset=utf-8', body)
+      return
+    }
+
+    if (pathname === '/_indexes/sites.json') {
+      // Site discovery reads the registry projection, then each site's meta.json.
+      const sites = dataset.sites
+        .map(({ site }) => ({ id: site.id, name: site.title, repository: 'example/palette-bench', sourcePath: `sites/${site.id}` }))
+        .sort((left, right) => (left.id < right.id ? -1 : 1))
+      sendResponse(outgoing, 200, 'application/json; charset=utf-8', JSON.stringify({ schemaVersion: 1, sites }))
       return
     }
 

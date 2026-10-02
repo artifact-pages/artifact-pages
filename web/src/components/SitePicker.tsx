@@ -4,6 +4,9 @@ import { hasSiteDiscoveryMetadata, type SiteCatalogEntry } from '../domain/index
 import { CommandPalette, type PaletteCommand } from './CommandPalette'
 import { Icon } from './Icon'
 
+// A short list is easier to scan than to search; ⌘ K still opens the palette.
+const SEARCH_TRIGGER_MINIMUM_SITE_COUNT = 9
+
 export function SitePicker({
   sites,
   onNavigate,
@@ -73,7 +76,7 @@ export function SitePicker({
           <p className="eyebrow">Artifact library</p>
           <h1>Choose a site</h1>
           <p className="site-picker-lede">Browse published artifacts from the sites available in this environment.</p>
-          <button
+          {sortedSites.length >= SEARCH_TRIGGER_MINIMUM_SITE_COUNT ? <button
             type="button"
             className="site-picker-search-trigger"
             aria-label="Search sites"
@@ -85,7 +88,7 @@ export function SitePicker({
             <span className="site-picker-search-desktop-label">Search sites...</span>
             <span className="site-picker-search-mobile-label">Tap to search sites</span>
             <kbd>⌘ K</kbd>
-          </button>
+          </button> : null}
           {sortedSites.length === 0 ? (
             <p className="empty-note">No registered sites were found.</p>
           ) : (
@@ -108,6 +111,9 @@ export function SitePicker({
                       <span>{catalogStatusLabel(entry)}</span>
                     </span>
                   </span>
+                  {hasSiteDiscoveryMetadata(entry) && entry.fullTextUrl ? (
+                    <span className="site-picker-badge" title="Page text can be searched in this site">Page text search</span>
+                  ) : null}
                   <Icon name="arrow" size={16} />
                 </button>
               ))}
