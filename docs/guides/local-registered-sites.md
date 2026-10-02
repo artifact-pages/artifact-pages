@@ -70,6 +70,18 @@ node scripts/test-registered-flow.mjs
 
 The runner creates an admin checkout and a separate satellite checkout under ignored `.local/`, shares the admin deployment config with the satellite, and keeps the admin `sites` mapping out of satellite ownership. It checks that admin and site dry-runs leave storage unchanged, publishes two sites, edits a page and removes a stale file before republishing, serves the generated storage through nginx for Playwright deep-link/reload and relative HTML/Markdown resource checks, exercises publisher failure/retry tests, and unregisters one site while asserting the selected site's artifact, index, and preview prefixes are empty and the neighboring site's objects remain byte-for-byte unchanged. The preview assertions use revision-file objects rather than catalogs. Successful runs remove their temporary checkouts; failed runs retain the path they print for inspection.
 
+To verify preview retirement across actual CLI publication, object deletion and a warm browser, run:
+
+~~~sh
+npm run test:preview-retirement
+~~~
+
+This registered-flow scenario requires Docker Compose, Go, Node dependencies and Playwright Chromium (`npx playwright install chromium` if needed). It starts the existing `gcp-local` fake-gcs-server and nginx profile with a unique Compose project, two allocated loopback ports and isolated storage. It skips fixture seeding: an empty bucket is created through the local API and the real CLI publishes the registry, two production sites and two previews from separate disposable admin/satellite Git repositories with explicit source paths.
+
+The runner deletes only one revision's files and manifest through the JSON API, keeps its catalog reference, verifies an unchanged main-source dry-run has no writes, and runs ordinary production publication to prune only that reference. Object snapshots compare SHA-256 bytes and full API metadata (including generations and timestamps) for production, the neighbor and the live revision. The same browser pages used before deletion reload the list and old document URL; the latter must show `Preview unavailable` without an iframe. Raw document/manifest requests must return real nginx/origin 404s. Deleting the catalog separately must converge to a production no-op without inventing a removal.
+
+Success and failure both remove the scenario's containers/network; SIGINT/SIGTERM also request cleanup. Generated repositories, storage, stage JSON, browser screenshots and trace remain ignored under the printed `.local/preview-retirement-*/` directory for inspection; remove that directory when no longer needed. No cloud credentials or public cloud endpoints are used. This proves the local JSON API/nginx/browser contract, not GCP production support, R2 lifecycle scheduling or global CDN propagation. [T17](../backlog/verification/T17-local-preview-retirement-e2e.md) records the results and related origin-error regressions.
+
 For a manual update in an existing satellite checkout, edit a document, remove an obsolete file, and repeat the same explicit publish:
 
 ~~~sh

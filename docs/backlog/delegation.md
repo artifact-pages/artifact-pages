@@ -17,11 +17,12 @@ Execution mode answers **how work can be delegated**, not its priority or comple
 
 | Work | Delegation scope | Completion / handoff |
 | --- | --- | --- |
-| [T17 — Local preview retirement E2E](verification/T17-local-preview-retirement-e2e.md) | When assigned, connect actual CLI publication, local object deletion, main-source reconciliation and warm-browser withdrawal in the existing local test path. | Record repeatable local results and independent review. No cloud account, real expiry wait or product expiry mechanism; do not treat the local proof as T15 completion. |
 | [Review repair queue](issues/README.md#repair-order), beginning with ISSUE-027 | Follow its current priority/order one issue at a time. Reproduce, add a regression, verify, and obtain independent review under the accepted contracts. | Commit each verified concern; update/remove completed issue records under the issue policy. Do not wait for unrelated cloud access. |
 | [T6 — Resources and navigation](verification/T6-resources-navigation.md) | The ISSUE-026 same-origin rendering and intentional parent-access checks passed in the local and emulator profiles; continue with remaining resource/navigation issues. | Record actual local evidence; provider behavior remains T15. TD3 is a completed decision, not a remaining blocker. |
 | [IMP-37 — Cloudflare entry module](implementation/IMP-37-cloudflare-entry-module.md) | When assigned, implement the single entry module, local validation, and caller example. | Local acceptance closes IMP-37; hand a tested config and fresh-plan checklist to T15 for an explicitly authorized real-account run. |
 | [IMP-39 — AWS Cloudflare DNS/ACM composition](implementation/IMP-39-aws-cloudflare-dns-acm.md) | In the Terraform workflow, add the selected custom-domain path after AWS source packaging; preserve the caller-managed DNS/certificate path and test locally. | Independent review/local acceptance may close the implementation; DNS/TLS/direct CloudFront proof stays T15. Do not delay the first Cloudflare release. |
+
+[T17 — Local preview retirement E2E](verification/T17-local-preview-retirement-e2e.md) completed its assigned local CLI/API/nginx/browser proof and independent review on October 2, 2026. Repeat it with `npm run test:preview-retirement`; provider-specific lifecycle proof remains T15.
 
 Completed improvements remain historical evidence and are not reopened merely to assign an execution mode.
 

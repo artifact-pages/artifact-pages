@@ -382,7 +382,13 @@ async function main() {
   }
 }
 
-main().catch((error) => {
+const scenario = process.argv.includes('--preview-retirement')
+  ? import('./registered-preview-retirement.mjs').then(({ previewRetirement }) => previewRetirement({
+    projectRoot, localRoot, run, git, initRepository, commit, writeFile, freePort, assert,
+  }))
+  : main()
+
+scenario.catch((error) => {
   console.error(error instanceof Error ? error.stack ?? error.message : error)
   process.exitCode = 1
 })

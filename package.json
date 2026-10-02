@@ -28,6 +28,7 @@
     "test:app-cache-rollback": "node scripts/test-app-deploy-rollback.mjs",
     "pretest:e2e": "npm run build",
     "test:e2e": "node scripts/run-e2e.mjs",
+    "test:preview-retirement": "npm run build && node scripts/test-registered-flow.mjs --preview-retirement",
     "test:registered-flow": "npm run build && node scripts/test-registered-flow.mjs",
     "docs:sync-assets": "node scripts/sync-docs-site-assets.mjs",
     "docs:check-assets": "node scripts/sync-docs-site-assets.mjs --check"
