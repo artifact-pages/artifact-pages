@@ -3,6 +3,10 @@
 - Status: In progress
 - Phase: Provider-backed deployment
 
+## Cloudflare-first branch
+
+The [October 2 proof reconciliation](../cloudflare-release-proof-gates.md) separates completed Cloudflare samples, remaining provider proof, AWS-only checks and publication/adoption gates. It does not waive requirements or close the cross-provider criteria below. Later evidence supersedes historical limitations only for the named checks. Final module/source integration proceeds in IMP-38; natural lifecycle observation continues separately under its existing authorization.
+
 ## Selected deployment and owner handoff
 
 The owner accepted the [domain policy](../../architecture/deployment-domain-policy.html) and reported purchasing `artifact-pages.dev` on September 28, 2026. Retain it under the selected Cloudflare Registrar/DNS policy. Production is Cloudflare Cache/CDN + R2 at the apex; independent AWS verification is `aws.artifact-pages.dev` through DNS-only Cloudflare DNS to CloudFront/private S3 with ACM in `us-east-1`, not Route 53. The owner has applied the Cloudflare deployment, and live Cloudflare publish, DNS/TLS, route and header observations are now recorded below. Delivery-rule inspection, isolation and preview lifecycle proof remain incomplete; AWS has no live proof here. IMP-37 prepares the Cloudflare entry point; [IMP-39](../implementation/IMP-39-aws-cloudflare-dns-acm.md) prepares the selected AWS composition. Both deployments exercise the same CLI/static projection contract, not copied application source or Pages/Workers Static Assets.
