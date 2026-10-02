@@ -2686,6 +2686,12 @@ mark {
   flex: none;
 }
 
+/* "n / total" must stay on one line beside a long status. */
+.page-text-results-title .mono {
+  flex: none;
+  white-space: nowrap;
+}
+
 /* The live status stays in the accessibility tree while the pending-draft hint is shown. */
 .page-text-results-title .page-text-search-status-hidden,
 .page-text-search-live {
