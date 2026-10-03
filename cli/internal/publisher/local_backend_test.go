@@ -195,3 +195,30 @@ func TestDirectoryBackendReportsSearchBlobMetadataAsPublished(t *testing.T) {
 		t.Fatalf("HeadObject(search blob) = type %q cache %q, want it to match the published object", info.ContentType, info.CacheControl)
 	}
 }
+
+func TestDirectoryBackendKeepsAFreshRootReadableAndControlPrivate(t *testing.T) {
+	old := syscallUmask(0o022)
+	defer syscallUmask(old)
+	root := filepath.Join(t.TempDir(), "fresh", "storage")
+	backend, err := NewDirectoryBackend(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A registry register on a fresh root starts with a conditional write.
+	if _, err := backend.PutObjectConditional(context.Background(), "_indexes/sites.json", Object{Bytes: []byte(`{}`)}, ObjectCondition{IfNoneMatch: true}); err != nil {
+		t.Fatalf("PutObjectConditional() error = %v", err)
+	}
+	for path, want := range map[string]os.FileMode{
+		root:                            0o755,
+		filepath.Join(root, "_indexes"): 0o755,
+		filepath.Join(root, "_control"): 0o700,
+	} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := info.Mode().Perm(); got != want {
+			t.Errorf("mode of %s = %o, want %o", path, got, want)
+		}
+	}
+}

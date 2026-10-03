@@ -353,6 +353,13 @@ func withLocalObjectMutex(ctx context.Context, root, mutexPath string, action fu
 	if err := rejectDeploymentSymlink(root, mutexPath); err != nil {
 		return err
 	}
+	// The storage root is served to readers; only the control records below it
+	// are private. Without this, a fresh root would be created 0700 together
+	// with the mutex directory and a web server running as another user could
+	// not read the published objects.
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(filepath.Dir(mutexPath), 0o700); err != nil {
 		return err
 	}
