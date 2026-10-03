@@ -8,7 +8,8 @@ Create `~/.config/artifact-pages/verify.env` with mode 600. It holds two tokens:
 
 ```sh
 # Terraform token: zone artifact-pages.stream (Zone Read, DNS Edit, Transform Rules
-# Edit, Cache Rules Edit, Zone WAF Edit) plus account Workers R2 Storage Edit.
+# Edit, Cache Rules Edit, Config Rules Edit, Zone WAF Edit) plus account Workers R2
+# Storage Edit.
 CLOUDFLARE_API_TOKEN=...
 CLOUDFLARE_ACCOUNT_ID=...
 CLOUDFLARE_ZONE_ID=...
