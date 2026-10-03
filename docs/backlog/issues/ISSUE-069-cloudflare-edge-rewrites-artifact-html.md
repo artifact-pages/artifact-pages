@@ -24,7 +24,7 @@ The Terraform module owns an `http_config_settings` rule scoped to the Artifact 
 
 ## Acceptance criteria
 
-- [ ] The module change (terraform-cloudflare-artifact-pages PR #1) is merged and applied to the verification zone, then production, after the Terraform tokens gain Config Rules Edit.
+- [ ] The module change (terraform-cloudflare-artifact-pages PR #1) is merged and applied to the verification zone, then production, after the Terraform tokens gain Config Settings Edit.
 - [ ] With the zone-wide dashboard setting restored to its default, `guide/en/publishing.html` served from production hashes equal to the Git blob and contains no `__cf_email__` or `/cdn-cgi/` script.
 - [ ] A raw preview HTML object on production also hashes equal to its published bytes.
 - [ ] `docs/specification.md` states the unchanged-delivery contract (done in the linked docs PR).
