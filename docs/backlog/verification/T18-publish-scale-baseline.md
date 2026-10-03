@@ -44,6 +44,25 @@ Counts include the lock, registry and preview operations. The baseline's no-op m
 
 Full phase JSON logs are retained locally at `.local/publish-scale-baseline/verify-scale-*.log`; they are generated evidence and stay untracked. Every run reported `neighborAndControlPreserved: true`. The harness intentionally makes no Cloudflare, AWS, S3 or R2 request.
 
+## Pre-change Cloudflare baseline
+
+This separate live baseline used publisher revision `182a6bc4fb94955628a4462e3eeb0fa7ed563872`, the committed scale corpus at `fc00c139`, and verification config commit `d39a65eb`. The provider target was R2 bucket `artifact-pages-verify` with public origin `https://artifact-pages.stream`. A read-only registry dry-run showed exactly the pre-existing `smoke` registration and five scale-site creates; the authorized registration then added `verify-scale-{10,100,1000,5000,10000}` and retained `smoke`. Commands ran in a clean `env -i` environment with only `PATH`, `HOME`, `CF_VERIFY_R2_ACCESS_KEY_ID`, `CF_VERIFY_R2_SECRET_ACCESS_KEY`, and `CF_VERIFY_API_TOKEN`; no production config or `CF_R2_*` values were supplied.
+
+The measured publishes used `--fulltext=false`:
+
+| Site | Source files (pages / resources) | Run | Outcome | Changed objects | Wall time |
+| --- | ---: | --- | --- | ---: | ---: |
+| `verify-scale-10` | 10 (2 pages: 1 HTML, 1 Markdown; 8 resources) | first | `published` | 12 | 9.77 s |
+| `verify-scale-10` | 10 (2 pages: 1 HTML, 1 Markdown; 8 resources) | repeat | `no-op`; zero changes and invalidation paths | 0 | 3.19 s |
+| `verify-scale-100` | 100 (10 pages: 7 HTML, 3 Markdown; 90 resources) | first | `published` | 102 | 52.12 s |
+| `verify-scale-100` | 100 (10 pages: 7 HTML, 3 Markdown; 90 resources) | repeat | `no-op`; zero changes and invalidation paths | 0 | 12.66 s |
+
+The preflight and publication command forms were `artifact-pages registry register --config artifact-pages.verify.yaml --dry-run --format json`, then the same registration without `--dry-run`, followed by each site twice with `artifact-pages site publish --config artifact-pages.verify.yaml --site <verify-scale-id> --fulltext=false --format json`. `/usr/bin/time -p` recorded the wall times. The actual clean-environment commands, JSON results, time files, and empty stderr captures remain in ignored `.local/publish-scale-cloud-baseline/RESULTS.md` and sibling files. The CLI's changed-object counts are not provider request counts. The Cloudflare adapter exposed no request/byte counters, so provider requests and transfer bytes were not measured.
+
+## Candidate state-assisted measurements — pending
+
+Post-change Cloudflare measurements are pending the final candidate run. Keep them separate from the pre-change values above and use the same verification bucket, fixture revision, full-text setting, and command sequence. Do not estimate provider request counts or bytes from changed-object counts. Record candidate no-op and explicit `--reconcile` results only after the commands complete; retain the raw JSON/time output under ignored `.local/`.
+
 ## Final evidence
 
-Add the post-change table and exact commands here after implementation. Keep raw logs under `.local/`, and compare the same source revision/profile and desired state. Report remote call counts at the shared interface boundary unless an adapter-level test measures provider pagination and batching directly.
+Add the post-change in-memory interface-count table here after implementation, with the exact test command and fixture revision. Keep raw logs under `.local/`, and compare the same source revision/profile and desired state. Report remote call counts at the shared interface boundary unless an adapter-level test measures provider pagination and batching directly.

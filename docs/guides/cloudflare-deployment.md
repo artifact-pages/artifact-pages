@@ -47,7 +47,26 @@ cloudflare:
   registryReaderSessionTokenEnv: CF_R2_REGISTRY_READER_SESSION_TOKEN # only for temporary reader credentials
 ```
 
-R2 temporary credentials support one bucket-level operation scope (`object-read-only` or `object-read-write`) plus exact object and prefix restrictions. Give the delegated publisher a read-only credential scoped to the exact `_indexes/sites.json` object and a read/write credential scoped to `_indexes/<site>/`, `_artifacts/<site>/`, `_previews/<site>/`, and the exact `_control/locks/sites/<site>.json` and `_control/site-cache/<site>.json` objects. The latter is a private cache-request retry record and must support deletion as well as reads/writes. The CLI uses the reader only for the registry read and the primary credential for site writes. Do not put the parent R2 secret or the API token used to mint temporary credentials in the satellite repository or workflow. Set the primary credential's session token through `CF_R2_SESSION_TOKEN`; set the reader credential's session token through `CF_R2_REGISTRY_READER_SESSION_TOKEN`. The CLI does not mint or refresh either credential.
+R2 temporary credentials support one bucket-level operation scope (`object-read-only` or `object-read-write`) plus exact object and prefix restrictions. Give the delegated publisher a read-only credential scoped to the exact `_indexes/sites.json` object and a read/write credential scoped to `_indexes/<site>/`, `_artifacts/<site>/`, `_previews/<site>/`, and the exact `_control/locks/sites/<site>.json`, `_control/site-cache/<site>.json`, and `_control/publish-state/<site>.json.gz` objects. The writer must be able to list and read its site prefixes, HEAD/GET/PUT its site objects, and delete stale artifacts and generated index/search objects under those prefixes; the exact cache retry and publish-state objects also need read/write/delete support for retries and unregister cleanup. The `object-read-write` scope supports read, write, and list; when minting locally with explicit action scopes, allow `ListObjectsV2`, `HeadObject`, `GetObject`, `PutObject`, `DeleteObject`, and `DeleteObjects`. Do not widen this to another site's paths, `/_indexes/sites.json`, or the application plane. The CLI uses the reader only for the registry read and the primary credential for site writes. Do not put the parent R2 secret or the API token used to mint temporary credentials in the satellite repository or workflow. Set the primary credential's session token through `CF_R2_SESSION_TOKEN`; set the reader credential's session token through `CF_R2_REGISTRY_READER_SESSION_TOKEN`. The CLI does not mint or refresh either credential.
+
+### Publish-state fast path and explicit repair
+
+Each registered site has a private publisher record at `/_control/publish-state/<site>.json.gz`. It stores a deterministic gzip snapshot of the last successful input root and each committed site's object hash, size, and HTTP representation metadata. A sorted pending-key journal is written before origin mutations and retained after a partial failure so a later invocation can replay the touched keys and converge. The compressed state is `application/octet-stream`, has no `Content-Encoding`, uses `Cache-Control: no-store`, and carries schema, site, input-root, pending, and compressed-body SHA-256 metadata. The compressed state is limited to 16 MiB and its decoded JSON to 64 MiB. State is private control data: the delivery boundary must never serve its bytes to viewers. See the [publisher state contract](../specification.md#per-site-publish-state-and-reconciliation) for the exact JSON schema and metadata names.
+
+After the registry and lock checks, a normal publish may compare the current prepared-input root with validated state HEAD metadata. When the root matches, no pending journal exists, and the prepared input is reusable, the publisher trusts its previous successful commit: it skips Build and the per-object origin checks and does not GET the state body. JSON reports `buildSkipped: true`; the whole operation reports `no-op` when preview cleanup, cache retry, and other publication duties also have no work. This fast path does not detect manual deletion, replacement, or HTTP metadata edits made directly in R2.
+
+Use `--reconcile` for an explicit origin check or repair. It completely lists the selected site's `_artifacts/<site>/` and `_indexes/<site>/` prefixes and HEAD-checks the listed objects against the committed SHA metadata and HTTP representation policy. It repairs missing objects, stale keys, and metadata drift. It does not download object bodies, so it cannot verify body integrity if another writer replaced bytes but retained the stored SHA metadata. Both prefix listings must complete before stale deletion. If state is absent, the publisher migrates by completely listing both prefixes and HEAD-checking existing objects; a list/HEAD failure aborts before writes. Malformed state or a newer unsupported state schema is an error, never a reason to treat the record as missing.
+
+The input root includes full-text mode and the output-affecting builder, index, HTTP, and cache policies. Turning full-text on or off therefore changes the root. Policy versions must advance when those semantics change; the state schema version changes only for a breaking record-format change. A tracked dependency deletion can make an affected document's `updatedAt` depend on the current build time; such a prepared snapshot is deliberately non-reusable, so that case rebuilds on later invocations.
+
+To inspect the plan without writing, use `--reconcile --dry-run`. For example:
+
+```sh
+artifact-pages site publish --site sre --source docs/artifacts --config artifact-pages.yaml --reconcile --dry-run
+artifact-pages site publish --site sre --source docs/artifacts --config artifact-pages.yaml --reconcile
+```
+
+Ordinary `site publish` keeps the fast path. Use explicit reconciliation after a suspected out-of-band origin edit or when checking for drift; a reported normal no-op is not an origin-integrity audit.
 
 For a changed production site publish or a pending cache retry, `CF_API_TOKEN` must authorize cache purge for the configured zone. Dry-run and a fully converged no-op do not require the token. The CLI checks token presence before mutating the projection, then purges changed URLs after synchronization; provider rejection reports failure and preserves the retry record. Retry the same site publish to complete the cache request, even if it reports zero file differences. Successful purge submission does not reload an already-open application; reload to fetch its fresh catalog/index.
 
@@ -69,10 +88,12 @@ Make two separate R2 temporary-credential requests. Substitute a registered site
   "parentAccessKeyId": "<parent-r2-access-key-id>",
   "permission": "object-read-write",
   "ttlSeconds": 3600,
-  "objects": ["_control/locks/sites/sre.json", "_control/site-cache/sre.json"],
+  "objects": ["_control/locks/sites/sre.json", "_control/site-cache/sre.json", "_control/publish-state/sre.json.gz"],
   "prefixes": ["_indexes/sre/", "_artifacts/sre/", "_previews/sre/"]
 }
 ```
+
+The site prefixes must permit complete `ListObjectsV2` inventory for migration and `--reconcile`; include stale-object deletion for `_indexes/sre/` as well as `_artifacts/sre/`. Do not infer provider request counts from CLI object-change counts.
 
 For a satellite repository, pin the admin config to a reviewed commit so the provider endpoint and bucket cannot silently change during a run:
 
@@ -127,6 +148,8 @@ artifact-pages site publish --site sre --source docs/artifacts --config artifact
 artifact-pages site publish --site sre --source docs/artifacts --config artifact-pages.yaml
 ```
 
+An ordinary successful no-op trusts the state written by the last publisher success and can skip object-by-object checks. To force missing/stale/metadata-drift checks, include `--reconcile` as shown above; this still checks HEAD metadata rather than downloading every artifact body.
+
 The satellite publishes only its site projection and does not need the zone token. To remove a site, first remove it from the admin config's `sites` mapping, then run `registry unregister --site sre --config artifact-pages.yaml` from the admin repository; unregister requires the selected config to omit that site and deletes its exact content prefixes. If viewer access should be restricted, configure Cloudflare Access or another edge policy independently; Artifact Pages does not store site visibility or authorize viewers. The commands document the external flow; [T16](../backlog/verification/T16-external-adoption.md) records clean-room adoption evidence.
 
 ## 4. Verify the deployed boundary
@@ -135,7 +158,7 @@ After publishing, verify the hostname directly. A successful local MinIO/purge-m
 
 - `/` loads the app; `/sre` and a nested logical path such as `/sre/reliability/summary` keep their browser URL while serving the app shell.
 - `/assets/<hashed-file>` is served as the original object. Missing objects under `/_indexes/`, `/_artifacts/`, and `/_previews/` return 404 rather than the SPA shell.
-- `/_control` and `/_control/locks/sites/sre.json` are blocked, with no object bytes exposed. Confirm the R2 `r2.dev` domain is disabled.
+- `/_control`, `/_control/locks/sites/sre.json`, and `/_control/publish-state/sre.json.gz` are blocked or return only the SPA shell, with no private object bytes exposed. Confirm the R2 `r2.dev` domain is disabled.
 - Inspect origin and edge response headers for `index.html`, a mutable index, an artifact, and a hashed asset. Confirm browser and edge behavior respect the published origin `Cache-Control` bounds. Check `CF-Cache-Status` on a cold request and a warm request.
 - If the operator enables Cloudflare Access, verify its cold/warm request behavior in that deployment; this is an operator-owned edge policy, not an Artifact Pages product check.
 - Publish a change, confirm new bytes at origin, request the site through the custom domain, and confirm purge/revalidation reaches the updated content within the expected bound.
@@ -144,7 +167,7 @@ After publishing, verify the hostname directly. A successful local MinIO/purge-m
 
 ## Limitations
 
-R2 temporary credentials must be minted and renewed outside this CLI. Viewer access is configured and verified independently by the operator at the edge; Artifact Pages has no user identity or per-site permission model. Cache purge cannot clear a viewer's browser cache; origin/browser TTLs therefore stay part of the contract. The modules and local profile have not been applied to or smoke-tested against a live account. [T15](../backlog/verification/T15-provider-delivery.md) owns live delivery/cache evidence, and [T16](../backlog/verification/T16-external-adoption.md) owns the external clean-room flow.
+R2 temporary credentials must be minted and renewed outside this CLI. Viewer access is configured and verified independently by the operator at the edge; Artifact Pages has no user identity or per-site permission model. Cache purge cannot clear a viewer's browser cache; origin/browser TTLs therefore stay part of the contract. The post-change state fast path and `--reconcile` behavior still need candidate measurements against the same target and fixture source used for the recorded pre-change baseline; [T18](../backlog/verification/T18-publish-scale-baseline.md) keeps those results separate. [T15](../backlog/verification/T15-provider-delivery.md) owns live delivery/cache evidence, and [T16](../backlog/verification/T16-external-adoption.md) owns the external clean-room flow.
 
 ## References
 
