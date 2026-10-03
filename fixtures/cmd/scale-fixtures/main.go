@@ -209,32 +209,57 @@ func extDirectory(ext string) string {
 	return ext
 }
 
+func relativeAssetsPath(i int) string {
+	if i == 0 {
+		return "../../assets"
+	}
+	return "../../../assets"
+}
+
 func htmlPage(siteID string, i int) []byte {
 	title := fmt.Sprintf("Verification page %05d for %s", i+1, siteID)
+	assets := relativeAssetsPath(i)
 	base := fmt.Sprintf(`<!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>%s</title><link rel="stylesheet" href="../../assets/styles/site.css"></head>
-<body><main><h1>%s</h1><p>verification fixture page html-index-%05d searchable content for %s.</p><p><a href="../../assets/downloads/summary%%20%%3Fmode%%3Dfull+text.txt">Read the deterministic resource</a> · <a href="../../assets/locale/%%E6%%97%%A5%%E6%%9C%%AC%%E8%%AA%%9E/version%%2525.dat">Read the Unicode resource</a></p><img src="../../assets/images/branding%%20%%231.svg" alt="Generated mark"><script src="../../assets/scripts/runtime.js"></script>
-`, title, title, i+1, siteID)
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>%s</title><link rel="stylesheet" href="%s/styles/site.css"></head>
+<body><main><h1>%s</h1><p>verification fixture page html-index-%05d searchable content for %s.</p><p><a href="%s/downloads/summary%%20%%3Fmode%%3Dfull+text.txt">Read the deterministic resource</a> · <a href="%s/locale/%%E6%%97%%A5%%E6%%9C%%AC%%E8%%AA%%9E/version%%2525.dat">Read the Unicode resource</a></p><img src="%s/images/branding%%20%%231.svg" alt="Generated mark"><script src="%s/scripts/runtime.js"></script>
+`, title, assets, title, i+1, siteID, assets, assets, assets, assets)
 	return []byte(withHTMLPadding(base, 256+[]int{0, 128, 768, 1792}[i%4], siteID, i))
 }
 
 func markdownPage(siteID string, i int) []byte {
-	base := fmt.Sprintf(`# Verification page %05d for %s
+	assets := relativeAssetsPath(i)
+	var base string
+	if i == 0 {
+		base = fmt.Sprintf(`# 日本語の確認ページ
+
+このページは %s に含まれる、日本語のタイトルと本文を持つ Markdown の検証データです。本文検索が日本語の文字を保持し、ページを見つけられることを確認します。
+
+検索語: 日本語全文検索、公開、確認、記事。
+
+[生成された静的リソース](%s/styles/site.css)
+`, siteID, assets)
+	} else {
+		base = fmt.Sprintf(`# Verification page %05d for %s
 
 This Markdown source includes verification fixture markdown-index-%05d and searchable content for %s.
 
-[A generated static resource](../../assets/styles/site.css)
+[A generated static resource](%s/styles/site.css)
 
 ## Stable content
 
 The generator writes deterministic pages so publisher scans can be repeated against the same input.
-`, i+1, siteID, i+1, siteID)
+		`, i+1, siteID, i+1, siteID, assets)
+	}
 	target := 256 + []int{0, 128, 768, 1792}[i%4]
 	for len(base) < target {
 		base += fmt.Sprintf("\nRepeated deterministic verification text for %s page %05d supports full-text indexing and size variation.\n", siteID, i+1)
 	}
-	return []byte(base)
+	lines := strings.Split(base, "\n")
+	for line := range lines {
+		lines[line] = strings.TrimRight(lines[line], " \t")
+	}
+	return []byte(strings.TrimRight(strings.Join(lines, "\n"), "\n") + "\n")
 }
 
 func withHTMLPadding(base string, target int, siteID string, i int) string {

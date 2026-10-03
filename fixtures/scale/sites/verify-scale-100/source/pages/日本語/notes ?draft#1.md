@@ -1,9 +1,7 @@
-# Verification page 00001 for verify-scale-100
+# 日本語の確認ページ
 
-This Markdown source includes verification fixture markdown-index-00001 and searchable content for verify-scale-100.
+このページは verify-scale-100 に含まれる、日本語のタイトルと本文を持つ Markdown の検証データです。本文検索が日本語の文字を保持し、ページを見つけられることを確認します。
 
-[A generated static resource](../../assets/styles/site.css)
+検索語: 日本語全文検索、公開、確認、記事。
 
-## Stable content
-
-The generator writes deterministic pages so publisher scans can be repeated against the same input.
+[生成された静的リソース](../../assets/styles/site.css)
