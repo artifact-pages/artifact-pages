@@ -26,10 +26,10 @@ const buildInputPolicyVersion = 2
 // emitted document timestamp.
 type SourceFileSnapshot struct {
 	RelativePath string
-	Bytes        []byte
 	SHA256       string
 	Size         int64
 	ModTime      time.Time
+	bytes        []byte
 }
 
 type preparedDocument struct {
@@ -43,9 +43,9 @@ type preparedDocument struct {
 // Callers may compare InputRoot with a previous publish state and skip Build
 // when Reusable is true.
 type PreparedBuild struct {
-	InputRoot string
-	Reusable  bool
-	Files     []SourceFileSnapshot
+	inputRoot string
+	reusable  bool
+	files     []SourceFileSnapshot
 
 	options        BuildOptions
 	outputRoot     string
@@ -56,6 +56,36 @@ type PreparedBuild struct {
 	fileByRelative map[string]SourceFileSnapshot
 	scannedFiles   int
 	indexTime      time.Time
+}
+
+// InputRoot is a stable hash of all inputs that affect the generated
+// projection, excluding the transaction-time generatedAt field.
+func (prepared *PreparedBuild) InputRoot() string { return prepared.inputRoot }
+
+// Reusable reports whether the resolved metadata can be safely reused on a
+// matching input root. It is false when Build's current contract uses the
+// invocation clock for an absent tracked dependency.
+func (prepared *PreparedBuild) Reusable() bool { return prepared.reusable }
+
+// SourceFiles returns a copy of the snapshot's public file metadata. Bytes
+// remain private so callers cannot mutate content after its fingerprint was
+// computed.
+func (prepared *PreparedBuild) SourceFiles() []SourceFileSnapshot {
+	files := make([]SourceFileSnapshot, len(prepared.files))
+	copy(files, prepared.files)
+	for index := range files {
+		files[index].bytes = nil
+	}
+	return files
+}
+
+// ReadSourceFile returns a copy of one captured file's exact bytes.
+func (prepared *PreparedBuild) ReadSourceFile(relativePath string) ([]byte, bool) {
+	file, exists := prepared.fileByRelative[relativePath]
+	if !exists {
+		return nil, false
+	}
+	return append([]byte(nil), file.bytes...), true
 }
 
 type inputFingerprint struct {
@@ -183,8 +213,8 @@ func PrepareBuild(ctx context.Context, options BuildOptions) (*PreparedBuild, er
 	options.SourceDir = sourcePath
 	options.OutputDir = outputRoot
 	prepared := &PreparedBuild{
-		Reusable:       len(clockDependent) == 0,
-		Files:          files,
+		reusable:       len(clockDependent) == 0,
+		files:          files,
 		fileByRelative: make(map[string]SourceFileSnapshot, len(files)),
 		options:        options,
 		outputRoot:     outputRoot,
@@ -213,7 +243,7 @@ func PrepareBuild(ctx context.Context, options BuildOptions) (*PreparedBuild, er
 		}
 		prepared.documents = append(prepared.documents, preparedDocument{artifact: artifact, updatedAt: updatedAt, lastCommitter: gitUpdate.lastCommitter})
 	}
-	prepared.InputRoot, err = fingerprintPreparedBuild(prepared)
+	prepared.inputRoot, err = fingerprintPreparedBuild(prepared)
 	if err != nil {
 		return nil, fmt.Errorf("fingerprint site build inputs: %w", err)
 	}
@@ -278,10 +308,10 @@ func snapshotSourceTree(sourcePath, outputRoot string, rejectSymlinks bool) ([]S
 		digest := sha256.Sum256(data)
 		file := SourceFileSnapshot{
 			RelativePath: relative,
-			Bytes:        data,
 			SHA256:       hex.EncodeToString(digest[:]),
 			Size:         int64(len(data)),
 			ModTime:      info.ModTime(),
+			bytes:        data,
 		}
 		files = append(files, file)
 		directory := path.Dir(relative)
@@ -382,10 +412,10 @@ func fingerprintPreparedBuild(prepared *PreparedBuild) (string, error) {
 		Title: prepared.options.SiteTitle, Description: prepared.options.SiteDescription,
 		FullText: true, SourcePath: prepared.relativeSource,
 		Repository: prepared.gitInfo.repository, RepositoryURL: prepared.gitInfo.repositoryURL, Ref: prepared.gitInfo.ref,
-		Files:     make([]fingerprintFile, 0, len(prepared.Files)),
+		Files:     make([]fingerprintFile, 0, len(prepared.files)),
 		Documents: make([]fingerprintDocument, 0, len(prepared.documents)),
 	}
-	for _, file := range prepared.Files {
+	for _, file := range prepared.files {
 		fingerprint.Files = append(fingerprint.Files, fingerprintFile{Path: file.RelativePath, SHA256: file.SHA256, Size: file.Size})
 	}
 	for _, document := range prepared.documents {

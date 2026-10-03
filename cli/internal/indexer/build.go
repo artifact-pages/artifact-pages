@@ -216,7 +216,7 @@ func BuildPrepared(ctx context.Context, prepared *PreparedBuild, outputDir strin
 	for _, document := range prepared.documents {
 		artifact := document.artifact
 		sourceFile := prepared.fileByRelative[artifact.relative]
-		metadata, searchText, err := readArtifactWithSearchBytes(sourceFile.Bytes, artifact.filename)
+		metadata, searchText, err := readArtifactWithSearchBytes(sourceFile.bytes, artifact.filename)
 		if err != nil {
 			return BuildResult{}, fmt.Errorf("parse artifact %q: %w", artifact.relative, err)
 		}

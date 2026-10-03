@@ -28,15 +28,15 @@ func TestPrepareBuildFingerprintTracksOutputInputsAndIgnoresCleanCheckoutMtime(t
 	if err != nil {
 		t.Fatalf("PrepareBuild(first) error = %v", err)
 	}
-	if !first.Reusable || first.InputRoot == "" || len(first.Files) != 2 {
-		t.Fatalf("first prepared input = reusable %v, root %q, files %d", first.Reusable, first.InputRoot, len(first.Files))
+	if !first.Reusable() || first.InputRoot() == "" || len(first.SourceFiles()) != 2 {
+		t.Fatalf("first prepared input = reusable %v, root %q, files %d", first.Reusable(), first.InputRoot(), len(first.SourceFiles()))
 	}
 	second, err := PrepareBuild(context.Background(), options)
 	if err != nil {
 		t.Fatalf("PrepareBuild(second) error = %v", err)
 	}
-	if second.InputRoot != first.InputRoot {
-		t.Fatalf("unchanged input root = %q, want %q", second.InputRoot, first.InputRoot)
+	if second.InputRoot() != first.InputRoot() {
+		t.Fatalf("unchanged input root = %q, want %q", second.InputRoot(), first.InputRoot())
 	}
 
 	// A clean tracked checkout's file mtime does not feed the emitted Git-based
@@ -50,8 +50,8 @@ func TestPrepareBuildFingerprintTracksOutputInputsAndIgnoresCleanCheckoutMtime(t
 	if err != nil {
 		t.Fatalf("PrepareBuild(after touch) error = %v", err)
 	}
-	if afterTouch.InputRoot != first.InputRoot {
-		t.Fatalf("clean checkout mtime changed input root from %q to %q", first.InputRoot, afterTouch.InputRoot)
+	if afterTouch.InputRoot() != first.InputRoot() {
+		t.Fatalf("clean checkout mtime changed input root from %q to %q", first.InputRoot(), afterTouch.InputRoot())
 	}
 
 	changedMetadata := options
@@ -60,7 +60,7 @@ func TestPrepareBuildFingerprintTracksOutputInputsAndIgnoresCleanCheckoutMtime(t
 	if err != nil {
 		t.Fatalf("PrepareBuild(metadata) error = %v", err)
 	}
-	if metadataInput.InputRoot == first.InputRoot {
+	if metadataInput.InputRoot() == first.InputRoot() {
 		t.Fatal("site description change did not change the input root")
 	}
 	changedPolicy := options
@@ -69,7 +69,7 @@ func TestPrepareBuildFingerprintTracksOutputInputsAndIgnoresCleanCheckoutMtime(t
 	if err != nil {
 		t.Fatalf("PrepareBuild(policy) error = %v", err)
 	}
-	if policyInput.InputRoot == first.InputRoot {
+	if policyInput.InputRoot() == first.InputRoot() {
 		t.Fatal("publisher policy change did not change the input root")
 	}
 }
@@ -87,6 +87,11 @@ func TestBuildPreparedUsesExactCapturedSourceBytes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PrepareBuild() error = %v", err)
 	}
+	captured, ok := prepared.ReadSourceFile("index.html")
+	if !ok {
+		t.Fatal("ReadSourceFile() omitted prepared document")
+	}
+	captured[0] = 'x'
 	writeFixtureFile(t, repositoryRoot, "content/index.html", "<title>After snapshot</title><h1>After snapshot</h1>")
 	if _, err := BuildPrepared(context.Background(), prepared, ".local/snapshot-build"); err != nil {
 		t.Fatalf("BuildPrepared() error = %v", err)
@@ -121,7 +126,7 @@ func TestPrepareBuildDoesNotReuseInvocationClockForDeletedGitDependency(t *testi
 	if err != nil {
 		t.Fatalf("PrepareBuild() error = %v", err)
 	}
-	if prepared.Reusable {
+	if prepared.Reusable() {
 		t.Fatal("deleted tracked dependency should disable the early build skip because Build uses invocation time")
 	}
 }
