@@ -1,15 +1,37 @@
+# Complete local verification target. The sites mapping includes the existing
+# Actions smoke registration and the five committed publisher scale fixtures.
 schemaVersion: 1
 provider: local
 local:
-  root: .local/public-site/storage
+  root: .local/verify/storage
 sites:
-  guide:
-    name: Guide
-    description: Adopt, publish, and read with Git Artifact Pages. 導入・公開・閲覧のガイド。
+  smoke:
+    name: Actions smoke
+    description: Verification fixture published from the OSS repository.
     repository: tasuku43/git-artifact-pages
-    sourcePath: docs/public/sites/guide
-  architecture:
-    name: Architecture
-    description: How Git Artifact Pages works and why. 仕組みと設計の考え方。
+    sourcePath: fixtures/actions-smoke/site
+  verify-scale-10:
+    name: Scale verification · 10 files
+    description: Deterministic publisher fixture.
     repository: tasuku43/git-artifact-pages
-    sourcePath: docs/public/sites/architecture
+    sourcePath: fixtures/scale/sites/verify-scale-10/source
+  verify-scale-100:
+    name: Scale verification · 100 files
+    description: Deterministic publisher fixture.
+    repository: tasuku43/git-artifact-pages
+    sourcePath: fixtures/scale/sites/verify-scale-100/source
+  verify-scale-1000:
+    name: Scale verification · 1,000 files
+    description: Deterministic publisher fixture.
+    repository: tasuku43/git-artifact-pages
+    sourcePath: fixtures/scale/sites/verify-scale-1000/source
+  verify-scale-5000:
+    name: Scale verification · 5,000 files
+    description: Deterministic publisher fixture.
+    repository: tasuku43/git-artifact-pages
+    sourcePath: fixtures/scale/sites/verify-scale-5000/source
+  verify-scale-10000:
+    name: Scale verification · 10,000 files
+    description: Deterministic publisher fixture.
+    repository: tasuku43/git-artifact-pages
+    sourcePath: fixtures/scale/sites/verify-scale-10000/source

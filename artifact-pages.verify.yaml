@@ -1,6 +1,8 @@
-# Verification deployment on artifact-pages.stream (TD5). Non-secret: credentials
-# are read from CF_VERIFY_* variables, which never collide with production names.
-# Load them with: set -a; source ~/.config/artifact-pages/verify.env; set +a
+# Complete single-file Cloudflare verification config. This preserves the
+# historical artifact-pages.stream target for callers using --config once;
+# sites is the complete desired registration set, including smoke.
+# Secrets remain in CF_VERIFY_* environment variables. Load them with:
+#   set -a; source ~/.config/artifact-pages/verify.env; set +a
 schemaVersion: 1
 provider: cloudflare
 cloudflare:
@@ -17,3 +19,28 @@ sites:
     description: Verification fixture published from the OSS repository.
     repository: tasuku43/git-artifact-pages
     sourcePath: fixtures/actions-smoke/site
+  verify-scale-10:
+    name: Scale verification · 10 files
+    description: Deterministic publisher fixture.
+    repository: tasuku43/git-artifact-pages
+    sourcePath: fixtures/scale/sites/verify-scale-10/source
+  verify-scale-100:
+    name: Scale verification · 100 files
+    description: Deterministic publisher fixture.
+    repository: tasuku43/git-artifact-pages
+    sourcePath: fixtures/scale/sites/verify-scale-100/source
+  verify-scale-1000:
+    name: Scale verification · 1,000 files
+    description: Deterministic publisher fixture.
+    repository: tasuku43/git-artifact-pages
+    sourcePath: fixtures/scale/sites/verify-scale-1000/source
+  verify-scale-5000:
+    name: Scale verification · 5,000 files
+    description: Deterministic publisher fixture.
+    repository: tasuku43/git-artifact-pages
+    sourcePath: fixtures/scale/sites/verify-scale-5000/source
+  verify-scale-10000:
+    name: Scale verification · 10,000 files
+    description: Deterministic publisher fixture.
+    repository: tasuku43/git-artifact-pages
+    sourcePath: fixtures/scale/sites/verify-scale-10000/source

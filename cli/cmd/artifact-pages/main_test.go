@@ -56,6 +56,118 @@ sites:
     sourcePath: docs/artifacts
 `
 
+func expectedVerificationSites() map[string]registry.Site {
+	return map[string]registry.Site{
+		"smoke": {
+			Name:        "Actions smoke",
+			Description: "Verification fixture published from the OSS repository.",
+			Repository:  "tasuku43/git-artifact-pages",
+			SourcePath:  "fixtures/actions-smoke/site",
+		},
+		"verify-scale-10": {
+			Name: "Scale verification · 10 files", Description: "Deterministic publisher fixture.",
+			Repository: "tasuku43/git-artifact-pages", SourcePath: "fixtures/scale/sites/verify-scale-10/source",
+		},
+		"verify-scale-100": {
+			Name: "Scale verification · 100 files", Description: "Deterministic publisher fixture.",
+			Repository: "tasuku43/git-artifact-pages", SourcePath: "fixtures/scale/sites/verify-scale-100/source",
+		},
+		"verify-scale-1000": {
+			Name: "Scale verification · 1,000 files", Description: "Deterministic publisher fixture.",
+			Repository: "tasuku43/git-artifact-pages", SourcePath: "fixtures/scale/sites/verify-scale-1000/source",
+		},
+		"verify-scale-5000": {
+			Name: "Scale verification · 5,000 files", Description: "Deterministic publisher fixture.",
+			Repository: "tasuku43/git-artifact-pages", SourcePath: "fixtures/scale/sites/verify-scale-5000/source",
+		},
+		"verify-scale-10000": {
+			Name: "Scale verification · 10,000 files", Description: "Deterministic publisher fixture.",
+			Repository: "tasuku43/git-artifact-pages", SourcePath: "fixtures/scale/sites/verify-scale-10000/source",
+		},
+	}
+}
+
+func repositoryRoot(t *testing.T) string {
+	t.Helper()
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate main_test.go")
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(filename), "../../.."))
+}
+
+func assertVerificationCloudflareTarget(t *testing.T, config deploymentconfig.DeploymentConfig) {
+	t.Helper()
+	if config.Provider != "cloudflare" || config.Cloudflare == nil || config.Local != nil {
+		t.Fatalf("effective target = provider %q, cloudflare=%+v, local=%+v; want Cloudflare only", config.Provider, config.Cloudflare, config.Local)
+	}
+	target := config.Cloudflare
+	if target.AccountID != "9ac354c8aa31d424224d8c4f3aa8ba2a" || target.ZoneID != "b647a1ef28dde558fa8b80b50ad0c040" || target.Bucket != "artifact-pages-verify" || target.PublicBaseURL != "https://artifact-pages.stream" {
+		t.Fatalf("Cloudflare verification target = %+v; want artifact-pages-verify at https://artifact-pages.stream", target)
+	}
+	if target.AccessKeyIDEnv != "CF_VERIFY_R2_ACCESS_KEY_ID" || target.SecretAccessKeyEnv != "CF_VERIFY_R2_SECRET_ACCESS_KEY" || target.APITokenEnv != "CF_VERIFY_API_TOKEN" {
+		t.Fatalf("Cloudflare credential variable names = %q, %q, %q; want the CF_VERIFY_* variables", target.AccessKeyIDEnv, target.SecretAccessKeyEnv, target.APITokenEnv)
+	}
+}
+
+func TestVerificationConfigsResolveCompleteLocalAndCloudflareTargets(t *testing.T) {
+	root := repositoryRoot(t)
+	readConfig := func(name string) []byte {
+		t.Helper()
+		contents, err := os.ReadFile(filepath.Join(root, name))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		return contents
+	}
+	wantSites := expectedVerificationSites()
+
+	localBytes := readConfig("artifact-pages.yaml")
+	local, err := deploymentconfig.Parse(localBytes)
+	if err != nil {
+		t.Fatalf("parse artifact-pages.yaml: %v", err)
+	}
+	if local.Provider != "local" || local.Local == nil || local.Local.Root != ".local/verify/storage" {
+		t.Fatalf("local verification target = provider %q, local=%+v; want .local/verify/storage", local.Provider, local.Local)
+	}
+	if !reflect.DeepEqual(local.Sites, wantSites) {
+		t.Fatalf("local sites = %+v; want complete smoke + scale mapping %+v", local.Sites, wantSites)
+	}
+
+	fixtureLocal, err := deploymentconfig.Parse(readConfig("fixtures/scale/publisher.yaml"))
+	if err != nil {
+		t.Fatalf("parse fixtures/scale/publisher.yaml: %v", err)
+	}
+	if fixtureLocal.Provider != "local" || fixtureLocal.Local == nil || fixtureLocal.Local.Root != ".local/scale-fixtures/storage" || !reflect.DeepEqual(fixtureLocal.Sites, wantSites) {
+		t.Fatalf("isolated fixture config = %+v; want complete verification sites at .local/scale-fixtures/storage", fixtureLocal)
+	}
+
+	verify, err := deploymentconfig.Parse(readConfig("artifact-pages.verify.yaml"))
+	if err != nil {
+		t.Fatalf("parse artifact-pages.verify.yaml: %v", err)
+	}
+	assertVerificationCloudflareTarget(t, verify)
+	if !reflect.DeepEqual(verify.Sites, wantSites) {
+		t.Fatalf("single-file verify sites = %+v; want complete smoke + scale mapping %+v", verify.Sites, wantSites)
+	}
+
+	// The ignored Cloudflare file is a target-only layer; when present in a
+	// developer checkout it must inherit the complete site mapping from the base.
+	cloudLayer, err := os.ReadFile(filepath.Join(root, "artifact-pages.cloudflare.yaml"))
+	if err == nil {
+		effective, err := deploymentconfig.ParseLayers([][]byte{localBytes, cloudLayer})
+		if err != nil {
+			t.Fatalf("resolve artifact-pages.yaml + artifact-pages.cloudflare.yaml: %v", err)
+		}
+		assertVerificationCloudflareTarget(t, effective)
+		if !reflect.DeepEqual(effective.Sites, wantSites) {
+			t.Fatalf("layered sites = %+v; want inherited complete mapping %+v", effective.Sites, wantSites)
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("read ignored artifact-pages.cloudflare.yaml: %v", err)
+	}
+}
+
 func TestRunRootHelp(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	if err := run(t.Context(), []string{"--help"}, &stdout, &stderr); err != nil {
