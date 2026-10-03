@@ -91,11 +91,102 @@
     });
   });
 
+  /* ── 3a. 場面3：各リポジトリが、それぞれのタイミングで公開する ──
+     場面3に入ると、リポジトリを中央（checkout）→左（sre）→右（billing）の順に1つずつ出し、そのあとは
+     リポジトリごとに別の周期と位相で「site publish」を繰り返す。矢印を光の点が上り、チップが一瞬光り、
+     そのサイトのカードだけが「公開済み」（2回目からは「更新を公開」）に変わる。全体をまとめるビルドが無いことを示す。
+     どの2つの公開も同時には始めない（開始の間隔を MIN_GAP 以上あける）。
+     図が画面外か、タブが裏にあるときは止め、場面3に戻ったら最初からやり直す。場面4から戻ったときは、
+     リポジトリが出て3つとも公開済みの状態から（遷移を止めて）始め、公開の繰り返しだけをやり直す。
+     動きを減らす設定では何もしない（CSS が、3つとも公開済みの静止した状態を出す）。 */
+  function publishingLoop(panel) {
+    const inert = { sync() {} };
+    if (reduceMotion || !panel.querySelector('.sat[data-site]')) return inert;
+    panel.classList.add('is-live');
+    const ORDER = ['checkout', 'sre', 'billing'];
+    const APPEAR = { checkout: 250, sre: 1250, billing: 2250 };
+    const FIRST = { checkout: 3300, sre: 5000, billing: 6900 };
+    const PERIOD = { checkout: 6100, sre: 7700, billing: 9300 };
+    const TRAVEL = 850;   // 光の点が矢印を上りきるまで
+    const MIN_GAP = 1500; // 公開どうしの開始の最小間隔
+    const parts = (site) => panel.querySelectorAll(`[data-site="${site}"]`);
+    const sat = (site) => panel.querySelector(`.sat[data-site="${site}"]`);
+    const card = (site) => panel.querySelector(`.site-card[data-site="${site}"]`);
+    let timers = [];
+    let running = false;
+    let visible = !('IntersectionObserver' in window);
+    let lastStart = -Infinity;
+    const runs = {};
+    const later = (fn, ms) => { timers.push(setTimeout(fn, ms)); };
+    const restart = (node, cls) => { node.classList.remove(cls); void node.getBoundingClientRect(); node.classList.add(cls); };
+    const reset = () => {
+      timers.forEach(clearTimeout);
+      timers = [];
+      lastStart = -Infinity;
+      ORDER.forEach((site) => { runs[site] = 0; parts(site).forEach((node) => node.classList.remove('is-in', 'is-run', 'is-pub', 'is-upd', 'is-flash')); });
+    };
+    const publish = (site) => {
+      const now = performance.now();
+      const wait = lastStart + MIN_GAP - now;
+      if (wait > 0) { later(() => publish(site), wait); return; }
+      lastStart = now;
+      runs[site] += 1;
+      const first = runs[site] === 1;
+      restart(sat(site), 'is-run');
+      later(() => sat(site).classList.remove('is-run'), TRAVEL + 400);
+      later(() => {
+        parts(site).forEach((node) => node.classList.add('is-pub'));
+        if (!first) parts(site).forEach((node) => node.classList.add('is-upd'));
+        restart(card(site), 'is-flash');
+      }, TRAVEL);
+      later(() => { card(site).classList.remove('is-flash'); parts(site).forEach((node) => node.classList.remove('is-upd')); }, TRAVEL + 2000);
+      later(() => publish(site), PERIOD[site]);
+    };
+    const WARM_LEAD = 2000; // 場面4から戻ったときは、出てくる時間のぶん最初の公開を早める
+    let previousScene = panel.dataset.scene;
+    const start = (warm) => {
+      reset();
+      running = true;
+      if (warm) {
+        // 場面4と同じ見た目（出ていて公開済み）のまま続ける。この1フレームは遷移を止めてちらつきを防ぐ
+        panel.classList.add('is-resetting');
+        ORDER.forEach((site) => {
+          runs[site] = 1;
+          sat(site).classList.add('is-in');
+          parts(site).forEach((node) => node.classList.add('is-pub'));
+        });
+        void panel.getBoundingClientRect();
+        requestAnimationFrame(() => requestAnimationFrame(() => panel.classList.remove('is-resetting')));
+      }
+      ORDER.forEach((site) => {
+        if (!warm) later(() => sat(site).classList.add('is-in'), APPEAR[site]);
+        later(() => publish(site), FIRST[site] - (warm ? WARM_LEAD : 0));
+      });
+    };
+    const stop = () => { running = false; reset(); };
+    const sync = () => {
+      const scene = panel.dataset.scene;
+      const want = visible && !document.hidden && scene === '3';
+      if (want && !running) start(previousScene === '4');
+      else if (!want && running) stop();
+      previousScene = scene;
+    };
+    if (!visible) {
+      new IntersectionObserver((entries) => {
+        visible = entries[entries.length - 1].isIntersecting;
+        sync();
+      }).observe(panel);
+    }
+    document.addEventListener('visibilitychange', sync);
+    return { sync };
+  }
+
   /* ── 3. 紙芝居：スクロール位置に合わせて図の要素を増やす ── */
   const panel = document.querySelector('.diagram-panel');
   const chapters = [...document.querySelectorAll('.chapter[data-step]')];
   if (panel && chapters.length) {
     const count = panel.querySelector('.scene-count');
+    const publishing = publishingLoop(panel);
     let scheduled = false;
     const update = () => {
       scheduled = false;
@@ -107,6 +198,7 @@
       panel.dataset.scene = String(active);
       if (count) count.textContent = String(active).padStart(2, '0') + ' / ' + String(chapters.length).padStart(2, '0');
       chapters.forEach((chapter) => chapter.classList.toggle('is-current', Number(chapter.dataset.step) === active));
+      publishing.sync();
     };
     const schedule = () => { if (!scheduled) { scheduled = true; requestAnimationFrame(update); } };
     addEventListener('scroll', schedule, { passive: true });
@@ -121,12 +213,18 @@
   /* このガイド自身。1つのサイトの中に ja/ と en/ があり、読んでいる言語のページを先に並べる */
   const GUIDE_PAGES = {
     ja: [
-      ['Git Artifact Pagesとは', 'ja/what-is-git-artifact-pages.html', 'Gitにある成果物を、読むための場所へ。'],
+      ['Git Artifact Pagesとは', 'ja/what-is-git-artifact-pages.html', '各リポジトリから公開し、ひとつの場所で読む。'],
       ['読者の体験', 'ja/reading.html', 'URL、画面の構成、検索とサイトの切り替え。'],
+      ['サイトの公開', 'ja/publishing.html', '公開するディレクトリ、site publish、CIとプレビュー。'],
+      ['設定ファイル', 'ja/configuration.html', 'artifact-pages.yamlの選ばれ方、配信先、sites。'],
+      ['信頼とアクセス制御', 'ja/access-and-trust.html', '公開してよいものと、読める人の制限。'],
     ],
     en: [
-      ['What is Git Artifact Pages?', 'en/what-is-git-artifact-pages.html', 'A reading place for the work you keep in Git.'],
+      ['What is Git Artifact Pages?', 'en/what-is-git-artifact-pages.html', 'Publish from each repository. Read in one place.'],
       ['Reading', 'en/reading.html', 'URLs, the screen, search, and switching sites.'],
+      ['Publishing', 'en/publishing.html', 'The publishable directory, site publish, CI, and previews.'],
+      ['Configuration', 'en/configuration.html', 'How artifact-pages.yaml is selected, delivery targets, and sites.'],
+      ['Access and trust', 'en/access-and-trust.html', 'What is safe to publish, and how to limit who can read.'],
     ],
   };
   const GUIDE = {
@@ -182,12 +280,6 @@
     input.setAttribute('aria-label', T.query);
     const scopeLabel = el('span', 'pal-scope');
     inputRow.append(icon('search', 16), input, scopeLabel, el('kbd', '', 'esc'));
-    const tabs = el('div', 'pal-tabs');
-    ['All', 'Recent', 'Pinned', 'Previews'].forEach((label, index) => {
-      const tab = el('span', '', label);
-      if (index === 0) tab.setAttribute('aria-current', 'true');
-      tabs.append(tab);
-    });
     const list = el('div', 'pal-list'); list.setAttribute('role', 'listbox');
     const foot = el('div', 'pal-foot');
     const hint = (keys, label) => { const span = el('span'); keys.forEach((key) => span.append(key)); span.append(' ' + label); return span; };
@@ -198,7 +290,7 @@
       hint([el('code', '', '@')], 'sites'),
       hint([el('code', '', '#')], 'headings'),
     );
-    pal.append(inputRow, tabs, list, foot); scrim.append(pal);
+    pal.append(inputRow, list, foot); scrim.append(pal);
 
     function render(animate) {
       const raw = state.query;
@@ -216,8 +308,7 @@
           .filter((entry) => !needle || (entry.title + ' ' + entry.path).toLocaleLowerCase().includes(needle));
       }
       scopeLabel.textContent = siteMode ? 'Sites' : site.name + ' only';
-      input.placeholder = siteMode ? 'Search sites...' : 'Search pages, headings, and commands...';
-      tabs.hidden = siteMode;
+      input.placeholder = siteMode ? 'Search sites...' : 'Jump to a page, heading, or command...';
       if (state.selected >= state.results.length) state.selected = state.results.length - 1;
       list.textContent = '';
       if (!state.results.length) { list.append(el('div', 'pal-empty', T.empty)); return; }
@@ -307,9 +398,9 @@
     const siteRow = el('div', 'rm-site');
     const siteMark = el('b'); const siteName = el('span'); const caret = el('i', '', '⌄');
     siteRow.append(siteMark, siteName, caret);
-    const searchButton = el('button', 'am-filter');
-    searchButton.type = 'button';
-    searchButton.append(el('span', '', '⌕ Filter navigation'), el('kbd', '', '⌘K'));
+    // 本文検索の欄（見本では検索できないので、押せない表示だけ）。名前の検索は「検索を試す」で開くパレットで試す。
+    const searchButton = el('div', 'am-filter');
+    searchButton.append(el('span', '', '⌕ Search page text…'), el('kbd', '', '⌘⇧F'));
     const tree = el('div', 'mk-tree');
     side.append(siteRow, searchButton, el('div', 'rm-h', 'Browse'), tree);
 
@@ -317,7 +408,7 @@
     const chrome = el('div', 'rm-chrome');
     const crumb = el('span'); chrome.append(crumb, el('span', '', 'Contents  Details'));
     const article = el('article', 'rm-article');
-    const kicker = el('small'); const title = el('h3'); const summary = el('p');
+    const kicker = el('small'); const title = el('div', 'rm-title'); const summary = el('p');
     const actions = el('div', 'rm-actions');
     const tryButton = el('button', 'rm-try', T.tryIt); tryButton.type = 'button';
     const hint = el('span'); hint.append(el('kbd', '', '⌘K'), ' / ', el('kbd', '', 'Ctrl K'), T.alsoOpens);
@@ -346,7 +437,6 @@
     });
     main.append(chrome, article, palette.element);
     host.append(side, main);
-    searchButton.addEventListener('click', () => palette.open(''));
     tryButton.addEventListener('click', () => palette.open(''));
 
     renderPage();
@@ -360,8 +450,51 @@
   /* ── 3b. 狭い画面：各ステップに、その時点の図を1枚ずつ置く ──
      図の元は .diagram-panel の SVG だけにして、ここで複製する。ステップごとに注目する範囲を切り出し、
      文字が小さくなりすぎない幅を下限にする（入りきらない分は図の枠の中で横にスクロールする）。
-     表示の切り替えは CSS（max-width: 900px）が行う。 */
-  const STEP_VIEWS = { 1: [164, 20, 432, 222], 2: [30, 236, 700, 216], 3: [30, 236, 700, 410], 4: [384, 60, 366, 176] };
+     表示の切り替えは CSS（max-width: 900px）が行う。
+     ステップ3だけは、3つのリポジトリが狭い幅に入りきるように、専用の縦の配置（narrowPublishing）を組む。 */
+  const STEP_VIEWS = { 1: [164, 20, 432, 222], 2: [30, 236, 700, 216], 4: [384, 60, 366, 176] };
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const svgEl = (tag, attrs, text) => {
+    const node = document.createElementNS(SVG_NS, tag);
+    Object.entries(attrs || {}).forEach(([key, value]) => node.setAttribute(key, String(value)));
+    if (text !== undefined) node.textContent = text;
+    return node;
+  };
+  /* ステップ3の狭い図：左にリポジトリ、右に登録したサイトを3行に並べ、横向きの矢印でつなぐ。
+     文言はすべて元の図から取るので、言語ごとの指定はいらない。静止画で、3つとも公開済みの状態を示す。 */
+  function narrowPublishing(source, markerId) {
+    const W = 380, CARD = 158, GAP_X = 6, SITE_X = W - 6 - CARD, ROW = 86, ROW_GAP = 12, TOP = 58;
+    const text = (selector, root = source) => (root.querySelector(selector)?.textContent || '').trim();
+    const ids = [...source.querySelectorAll('.sat[data-site]')].map((node) => node.dataset.site);
+    const names = [...source.querySelectorAll('.s2 .d-name')].map((node) => node.textContent);
+    const note = text('.s3 .d-note').replace(/^[↑←→\s]+/, '');
+    const bottom = TOP + ids.length * (ROW + ROW_GAP) - ROW_GAP;
+    const height = bottom + (note ? 34 : 10);
+    const svg = svgEl('svg', { viewBox: `0 0 ${W} ${height}`, 'aria-hidden': 'true' });
+    const defs = svgEl('defs');
+    const marker = svgEl('marker', { id: markerId, markerWidth: 8, markerHeight: 8, refX: 6, refY: 4, orient: 'auto' });
+    marker.append(svgEl('path', { d: 'M0 0 L8 4 L0 8', fill: 'none', stroke: 'currentColor', 'stroke-width': 1.4 }));
+    defs.append(marker);
+    svg.append(defs);
+    svg.append(svgEl('text', { class: 'd-label', x: W - 6, y: 16, 'text-anchor': 'end' }, text('.s2 .d-label')));
+    const cmdX = GAP_X + CARD + (SITE_X - GAP_X - CARD) / 2;
+    svg.append(svgEl('rect', { class: 'd-cmd', x: cmdX - 54, y: 26, width: 108, height: 22, rx: 11 }));
+    svg.append(svgEl('text', { class: 'd-cmd-t', x: cmdX, y: 41, 'text-anchor': 'middle' }, text('.sat .d-cmd-t')));
+    ids.forEach((id, index) => {
+      const y = TOP + index * (ROW + ROW_GAP);
+      const repo = source.querySelector(`.sat[data-site="${id}"]`);
+      svg.append(svgEl('rect', { class: 'd-card', x: GAP_X, y, width: CARD, height: ROW, rx: 8 }));
+      svg.append(svgEl('text', { class: 'd-repo', x: GAP_X + 12, y: y + 36 }, text('.d-repo', repo)));
+      svg.append(svgEl('text', { class: 'd-repo-sub', x: GAP_X + 12, y: y + 58 }, text('.d-repo-sub', repo)));
+      svg.append(svgEl('path', { class: 'd-arrow', d: `M${GAP_X + CARD + 4} ${y + ROW / 2} H${SITE_X - 4}`, 'marker-end': `url(#${markerId})` }));
+      svg.append(svgEl('rect', { class: 'site-card', x: SITE_X, y, width: CARD, height: ROW, rx: 8 }));
+      svg.append(svgEl('text', { class: 'd-site', x: SITE_X + 12, y: y + 28 }, id));
+      svg.append(svgEl('text', { class: 'd-name', x: SITE_X + 12, y: y + 51 }, names[index] || ''));
+      svg.append(svgEl('text', { class: 'd-status-ok', x: SITE_X + 12, y: y + 72 }, text(`.st-b[data-site="${id}"]`)));
+    });
+    if (note) svg.append(svgEl('text', { class: 'd-note', x: GAP_X, y: bottom + 24 }, note));
+    return svg;
+  }
   /* 切り出した範囲の端で文字が途切れる要素は、そのステップの図から外す */
   const STEP_DROPS = { 4: ['.d-sub'] };
   const sourceSvg = panel && panel.querySelector('svg');
@@ -370,32 +503,45 @@
     chapters.forEach((chapter) => {
       const step = Number(chapter.dataset.step);
       const view = STEP_VIEWS[step];
-      if (!view) return;
+      if (!view && step !== 3) return;
       const figure = el('figure', 'step-figure');
       figure.dataset.scene = String(step);
-      const clone = sourceSvg.cloneNode(true);
-      clone.querySelectorAll('title, desc').forEach((node) => node.remove());
-      clone.removeAttribute('role');
-      clone.removeAttribute('aria-labelledby');
-      clone.setAttribute('aria-hidden', 'true');
-      clone.setAttribute('viewBox', view.join(' '));
-      (STEP_DROPS[step] || []).forEach((selector) => clone.querySelectorAll(selector).forEach((node) => node.remove()));
-      const markerId = `ah-step-${step}`;
-      clone.querySelector('marker').id = markerId;
-      clone.querySelectorAll('[marker-end]').forEach((node) => node.setAttribute('marker-end', `url(#${markerId})`));
-      // 拡大しすぎない上限（PC の図と同程度の文字の大きさ）と、横長の図だけ文字を読める幅の下限
-      clone.style.maxWidth = Math.round(view[2] * 0.85) + 'px';
-      if (view[2] > 450) clone.style.minWidth = Math.round(view[2] * 0.8) + 'px';
       const frame = el('div', 'step-figure-frame');
-      frame.append(clone);
+      if (step === 3) {
+        const narrow = narrowPublishing(sourceSvg, `ah-step-${step}`);
+        narrow.style.maxWidth = '420px';
+        frame.append(narrow);
+      } else {
+        const clone = sourceSvg.cloneNode(true);
+        clone.querySelectorAll('title, desc').forEach((node) => node.remove());
+        // 狭い画面の図は静止画にする（場面3の動きで付くクラスを持ち込まない）
+        clone.querySelectorAll('.is-in, .is-run, .is-pub, .is-upd, .is-flash').forEach((node) => node.classList.remove('is-in', 'is-run', 'is-pub', 'is-upd', 'is-flash'));
+        clone.removeAttribute('role');
+        clone.removeAttribute('aria-labelledby');
+        clone.setAttribute('aria-hidden', 'true');
+        clone.setAttribute('viewBox', view.join(' '));
+        (STEP_DROPS[step] || []).forEach((selector) => clone.querySelectorAll(selector).forEach((node) => node.remove()));
+        const markerId = `ah-step-${step}`;
+        clone.querySelector('marker').id = markerId;
+        clone.querySelectorAll('[marker-end]').forEach((node) => node.setAttribute('marker-end', `url(#${markerId})`));
+        // 拡大しすぎない上限（PC の図と同程度の文字の大きさ）と、横長の図だけ文字を読める幅の下限
+        clone.style.maxWidth = Math.round(view[2] * 0.85) + 'px';
+        if (view[2] > 450) clone.style.minWidth = Math.round(view[2] * 0.8) + 'px';
+        frame.append(clone);
+      }
       figure.append(frame);
       if (captions[step - 1]) figure.append(el('figcaption', '', captions[step - 1].textContent));
+      // スクロールできるときはフォーカスが止まるので、図の内容を名前として伝える
+      frame.setAttribute('role', 'group');
+      if (captions[step - 1]) frame.setAttribute('aria-label', captions[step - 1].textContent);
       const lead = chapter.querySelector('h3 + p');
       (lead || chapter.querySelector('h3')).after(figure);
-      /* 横に続きがあるときだけ右端をぼかし、最後までスクロールしたら外す */
+      /* 横に続きがあるときだけ右端をぼかし、最後までスクロールしたら外す。スクロールできる枠はキーボードでも動かせるようにする */
       const syncEdge = () => {
         const scrollable = frame.scrollWidth > frame.clientWidth + 1;
         frame.classList.toggle('is-scrollable', scrollable);
+        if (scrollable) frame.setAttribute('tabindex', '0');
+        else frame.removeAttribute('tabindex');
         frame.classList.toggle('at-end', scrollable && frame.scrollLeft + frame.clientWidth >= frame.scrollWidth - 1);
       };
       frame.addEventListener('scroll', syncEdge, { passive: true });
@@ -417,8 +563,11 @@
       ] },
       { id: 'checkout', name: '決済チーム / Checkout', description: '決済画面とAPIの設計、障害対応、運用手順。', artifacts: [
         ['決済フロー設計', 'design/payment-flow.html', 'Sep 28'],
+        ['Checkout APIのエラーコード', 'api/error-codes.md', 'Sep 22'],
         ['9/12 決済タイムアウト障害', 'incidents/2026-09-12-timeout.html', 'Sep 14'],
+        ['3-Dセキュアの認証フロー', 'design/3ds-flow.html', 'Sep 10'],
         ['返金ステータスの遷移', 'design/refund-states.md', 'Sep 9'],
+        ['カード決済のリトライ方針', 'design/retry-policy.md', 'Sep 3'],
         ['オンコール手順', 'runbooks/on-call.md', 'Aug 30'],
       ] },
       { id: 'billing', name: '決済チーム / Billing', description: '請求・締め処理の設計と運用。', artifacts: [
@@ -447,8 +596,11 @@
       ] },
       { id: 'checkout', name: 'Payments / Checkout', description: 'Checkout UI and API design, incidents, and runbooks.', artifacts: [
         ['Payment flow design', 'design/payment-flow.html', 'Sep 28'],
+        ['Checkout API error codes', 'api/error-codes.md', 'Sep 22'],
         ['Sep 12 payment timeout', 'incidents/2026-09-12-timeout.html', 'Sep 14'],
+        ['3-D Secure flow', 'design/3ds-flow.html', 'Sep 10'],
         ['Refund state transitions', 'design/refund-states.md', 'Sep 9'],
+        ['Card retry policy', 'design/retry-policy.md', 'Sep 3'],
         ['On-call runbook', 'runbooks/on-call.md', 'Aug 30'],
       ] },
       { id: 'billing', name: 'Payments / Billing', description: 'Invoicing and month-end close design and operations.', artifacts: [
@@ -482,11 +634,17 @@
       setAll('name', (node) => { node.textContent = site.name; });
       setAll('id', (node) => { node.textContent = '/' + site.id; });
       setAll('crumb', (node) => { node.textContent = '/' + site.id; });
-      setAll('search', (node) => { node.textContent = '⌕ Search artifacts in ' + site.name; });
-      setAll('lede', (node) => { node.textContent = `${site.artifacts.length} published artifacts. Browse the latest work or find an artifact by title or path.`; });
+      setAll('search', (node) => { node.textContent = '⌕ Jump to a page…'; });
+      /* 閲覧アプリと同じく、7件以上のサイトだけが「Recently updated」（新しい順に6件）を出す。少ないサイトはBrowseのツリーを出す */
+      const n = site.artifacts.length;
+      const showRecent = n >= 7;
+      setAll('lede', (node) => { node.textContent = `${n} published ${n === 1 ? 'artifact' : 'artifacts'}. ` + (showRecent ? 'Browse the latest work or jump to an artifact by name.' : 'Browse artifacts or jump to one by name.'); });
+      setAll('recent-h', (node) => { node.textContent = showRecent ? 'Recently updated' : 'Browse'; });
       setAll('recent', (node) => {
         node.textContent = '';
-        site.artifacts.forEach(([title, path, date]) => {
+        node.classList.toggle('mk-tree', !showRecent);
+        if (!showRecent) { renderTree(node, site.artifacts); return; }
+        site.artifacts.slice(0, 6).forEach(([title, path, date]) => {
           const item = el('div', 'am-item'); const copy = el('span');
           copy.append(el('strong', '', title), el('small', '', path));
           item.append(copy, el('time', '', date));
@@ -578,4 +736,32 @@
       }, { threshold: 0.4 }).observe(hero.host);
     } else { visible = true; play(); }
   }
+})();
+
+/* ── architecture site ─────────────────────────────
+   docs/public/sites/architecture/ の図（.fig）と、guideの図（.figure）のための任意の強化です。JavaScriptが無効でも図は枠の中でスクロールできます。
+   幅の広い図は狭い画面で枠の中だけが横にスクロールします。実際にスクロールする枠だけをキーボードで
+   フォーカスできるようにし（tabindex="0"）、末尾が隠れている間は右端を薄くして続きがあることを示します。 */
+(() => {
+  'use strict';
+  const frames = [...document.querySelectorAll('.fig-frame, .figure-frame')];
+  if (!frames.length) return;
+  const update = (frame) => {
+    const scrollable = frame.scrollWidth > frame.clientWidth + 1;
+    frame.classList.toggle('is-scrollable', scrollable);
+    frame.closest('.fig, .figure')?.classList.toggle('is-scrollable', scrollable);
+    frame.classList.toggle('at-end', !scrollable || frame.scrollLeft + frame.clientWidth >= frame.scrollWidth - 2);
+    if (scrollable) frame.setAttribute('tabindex', '0');
+    else frame.removeAttribute('tabindex');
+  };
+  frames.forEach((frame) => {
+    frame.addEventListener('scroll', () => update(frame), { passive: true });
+    update(frame);
+  });
+  let scheduled = false;
+  addEventListener('resize', () => {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(() => { scheduled = false; frames.forEach(update); });
+  });
 })();

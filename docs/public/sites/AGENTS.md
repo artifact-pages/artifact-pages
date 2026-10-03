@@ -29,7 +29,7 @@ These instructions apply to public documentation under this directory.
 
 ## Shared assets
 
-- The source of the shared `site.css` and `site.js` is `docs/public/shared/assets/`. Per-site CSP prevents one site from loading another site's assets, so each site keeps a committed copy in its own `assets/`.
+- The source of the shared `site.css` and `site.js` is `docs/public/shared/assets/`. Each site keeps a committed copy in its own `assets/` and never loads another site's assets. Per-site CSP blocks cross-site asset paths only over plain HTTP (for example local nginx); over HTTPS its `https:` source matches every same-origin path, so CSP alone does not enforce this. The copies keep each site self-contained and working under both policies.
 - Edit only the shared source, then run `npm run docs:sync-assets`. `npm run docs:check-assets` fails when a site copy is missing or differs.
 - Pages reference the copy relative to their language directory, for example `../assets/site.css`.
 
