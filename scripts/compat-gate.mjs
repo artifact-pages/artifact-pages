@@ -31,7 +31,7 @@
 //
 // Exit status: 0 = gate passed (or skipped), 1 = failed, 2 = usage error.
 import { spawnSync } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import path from 'node:path'
 import process from 'node:process'
@@ -409,6 +409,10 @@ async function main() {
   }
   mkdirSync(localRoot, { recursive: true })
   const runRoot = mkdtempSync(path.join(localRoot, 'compat-gate-'))
+  // mkdtemp creates the directory as 0700. nginx in the container runs as another
+  // user, and on Linux bind mounts keep host permissions, so it could not read
+  // the served web builds and storage (Docker Desktop on macOS hides this).
+  chmodSync(runRoot, 0o755)
   const work = path.join(runRoot, 'work')
   mkdirSync(work, { recursive: true })
   let exitCode = 1
