@@ -456,6 +456,20 @@ func listSiteKeys(ctx context.Context, backend DeploymentBackend, siteID string)
 		} else if !errors.Is(err, ErrObjectNotFound) {
 			return nil, fmt.Errorf("read site cache retry record for cleanup: %w", err)
 		}
+		// Check only the exact fixed key prefix, without reading or decoding it,
+		// so unregister can clean malformed or crash-interrupted state while
+		// keeping FilesRemoved accurate for an already-absent state object.
+		stateKey := sitePublishStateKey(siteID)
+		stateKeys, err := backend.ListKeys(ctx, stateKey)
+		if err != nil {
+			return nil, fmt.Errorf("list site publish state for cleanup: %w", err)
+		}
+		for _, key := range stateKeys {
+			if key == stateKey {
+				keys = append(keys, key)
+				break
+			}
+		}
 	}
 	sort.Strings(keys)
 	return keys, nil

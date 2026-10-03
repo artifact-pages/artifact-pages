@@ -114,12 +114,21 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 		if err := rejectLocalSourceOverlap(conditional, sourceDir); err != nil {
 			return Result{}, err
 		}
-		plan, stale, desired, err := buildSitePlan(operationCtx, conditional, options.SiteID, entry.Name, entry.Description, sourceDir, identity)
+		preparedOptions := sitePublishBuildOptions(options.SiteID, entry.Name, entry.Description, sourceDir, identity)
+		prepared, err := indexer.PrepareBuild(operationCtx, preparedOptions)
+		if err != nil {
+			return Result{}, fmt.Errorf("prepare site publish inputs: %w", err)
+		}
+		snapshot, err := loadSitePublishSnapshot(operationCtx, conditional, options.SiteID, prepared, options.Reconcile)
+		if err != nil {
+			return Result{}, err
+		}
+		diff, err := buildSitePublishDiff(operationCtx, conditional, options.SiteID, prepared, snapshot, options.Reconcile)
 		if err != nil {
 			return Result{}, err
 		}
 		emptyPreviewChanges := []preview.CatalogReconciliationChange{}
-		result := Result{Operation: "site publish", Site: options.SiteID, Changes: plan, PreviewChanges: &emptyPreviewChanges}
+		result := Result{Operation: "site publish", Site: options.SiteID, Changes: diff.changes, PreviewChanges: &emptyPreviewChanges, BuildSkipped: diff.buildSkipped}
 		var previewPlan preview.CatalogReconciliationPlan
 		if options.DryRun {
 			previewPlan, err = preview.PlanCatalogReconciliation(operationCtx, previewStore, options.SiteID)
@@ -134,11 +143,11 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 		if err != nil {
 			return result, err
 		}
-		paths := siteCachePaths(options.SiteID, plan, result.PreviewChanges, pending.Paths)
+		paths := siteCachePaths(options.SiteID, diff.changes, result.PreviewChanges, pending.Paths)
 		result.InvalidationPaths = plannedInvalidationPaths(backend, paths)
 		if options.DryRun {
-			result.FilesPublished = countChanges(plan, "create") + countChanges(plan, "update")
-			result.FilesRemoved = countChanges(plan, "remove")
+			result.FilesPublished = countChanges(diff.changes, "create") + countChanges(diff.changes, "update")
+			result.FilesRemoved = countChanges(diff.changes, "remove")
 			if len(paths) == 0 {
 				result.Outcome = "no-op"
 			} else {
@@ -157,10 +166,27 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 			}
 		}
 		filesPublished, filesRemoved := 0, 0
-		if len(plan) > 0 {
-			filesPublished, filesRemoved, err = applySitePlan(operationCtx, backend, desired, plan, stale)
+		stateETag := diff.stateETag
+		if diff.needsPending {
+			stateETag, err = writeSitePublishState(operationCtx, conditional, options.SiteID, diff.pending, diff.stateExists, diff.stateETag)
+			if err != nil {
+				return result, fmt.Errorf("write pending site publish state: %w", err)
+			}
+		}
+		if len(diff.changes) > 0 {
+			filesPublished, filesRemoved, err = applySitePlan(operationCtx, backend, diff.desired, diff.changes, diff.stale)
 			if err != nil {
 				return result, err
+			}
+		}
+		if diff.needsCommit {
+			finalExists := diff.stateExists || diff.needsPending
+			stateConditionETag := diff.stateETag
+			if diff.needsPending {
+				stateConditionETag = stateETag
+			}
+			if _, err := writeSitePublishState(operationCtx, conditional, options.SiteID, diff.committedNext, finalExists, stateConditionETag); err != nil {
+				return result, fmt.Errorf("commit site publish state after origin projection: %w", err)
 			}
 		}
 		if err := preview.ApplyCatalogReconciliationUnderSiteLock(operationCtx, previewStore, options.SiteID, previewPlan); err != nil {

@@ -219,6 +219,7 @@ func TestUnregisterSiteRetriesRemovedSiteCleanupAfterPostWriteFailures(t *testin
 			seedRegistryFromManifest(t, backend, currentAdminManifest)
 			backend.seed("_artifacts/legacy/report.html", []byte("legacy artifact"))
 			backend.seed("_indexes/legacy/meta.json", []byte(`{"site":"legacy"}`))
+			backend.seed(sitePublishStateKey("legacy"), []byte("private legacy publish state"))
 			seedForcedUnregisterFixture(t, backend)
 			preservedBefore := make(map[string][]byte)
 			for _, key := range []string{
@@ -313,6 +314,9 @@ func TestUnregisterSiteRetriesRemovedSiteCleanupAfterPostWriteFailures(t *testin
 					t.Errorf("removed site object %q remains after successful cleanup retry", key)
 				}
 			}
+			if _, exists := backend.objects[sitePublishStateKey("legacy")]; exists {
+				t.Error("removed site's private publish state remains after successful cleanup retry")
+			}
 			for key, want := range preservedBefore {
 				object, _, err := backend.GetObject(context.Background(), key)
 				if err != nil || !bytes.Equal(object.Bytes, want) {
@@ -348,7 +352,7 @@ func TestUnregisterSiteRetriesForcedCleanupWhenRegistrationIsAlreadyAbsent(t *te
 			preservedBefore := make(map[string][]byte)
 			for _, key := range []string{
 				"_artifacts/docs/neighbor.html", "_indexes/docs/meta.json", "_previews/docs/catalog.json",
-				"index.html", "assets/app.js", "_control/private/sentinel", "_control/locks/sites/docs.json",
+				sitePublishStateKey("docs"), "index.html", "assets/app.js", "_control/private/sentinel", "_control/locks/sites/docs.json",
 			} {
 				object, _, err := backend.GetObject(context.Background(), key)
 				if err != nil {
@@ -406,6 +410,9 @@ func TestUnregisterSiteRetriesForcedCleanupWhenRegistrationIsAlreadyAbsent(t *te
 					t.Fatalf("keys after retry under %q = %v, err=%v; want empty", prefix, keys, err)
 				}
 			}
+			if _, exists := backend.objects[sitePublishStateKey("sre")]; exists {
+				t.Error("unregistered site's private publish state remains after cleanup")
+			}
 			for key, want := range preservedBefore {
 				object, _, err := backend.GetObject(context.Background(), key)
 				if err != nil || !bytes.Equal(object.Bytes, want) {
@@ -437,6 +444,8 @@ func seedForcedUnregisterFixture(t *testing.T, backend *registryApplyTestBackend
 		"_indexes/sre/meta.json":                 []byte(`{"site":"sre"}`),
 		"_previews/sre/catalog.json":             []byte(`{"site":"sre"}`),
 		"_previews/sre/revisions/head/report.md": []byte("preview document"),
+		sitePublishStateKey("sre"):               []byte("private publish state"),
+		sitePublishStateKey("docs"):              []byte("neighbor publish state"),
 		"_artifacts/docs/neighbor.html":          []byte("neighbor artifact"),
 		"_indexes/docs/meta.json":                []byte(`{"site":"docs"}`),
 		"_previews/docs/catalog.json":            []byte(`{"site":"docs"}`),

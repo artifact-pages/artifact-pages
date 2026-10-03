@@ -63,6 +63,7 @@ locals {
             "_previews/*",
             "_control/locks/*",
             "_control/site-cache/*",
+            "_control/publish-state/*",
             "_control/registry-cleanup.json",
           ]
         }
@@ -76,6 +77,7 @@ locals {
         "${local.bucket_arn}/_indexes/sites.json",
         "${local.bucket_arn}/_control/locks/*",
         "${local.bucket_arn}/_control/site-cache/*",
+        "${local.bucket_arn}/_control/publish-state/*",
         "${local.bucket_arn}/_control/registry-cleanup.json",
         "${local.bucket_arn}/index.html",
         "${local.bucket_arn}/preview-bridge.js",
@@ -97,6 +99,7 @@ locals {
         "${local.bucket_arn}/_indexes/sites.json",
         "${local.bucket_arn}/_control/locks/*",
         "${local.bucket_arn}/_control/site-cache/*",
+        "${local.bucket_arn}/_control/publish-state/*",
         "${local.bucket_arn}/_control/registry-cleanup.json",
       ]
     },
@@ -110,6 +113,7 @@ locals {
         "${local.bucket_arn}/_previews/*",
         "${local.bucket_arn}/_control/registry-cleanup.json",
         "${local.bucket_arn}/_control/site-cache/*",
+        "${local.bucket_arn}/_control/publish-state/*",
       ]
     },
     {
@@ -551,6 +555,7 @@ resource "aws_iam_role_policy" "satellite" {
           "${local.bucket_arn}/_previews/${each.key}/*",
           "${local.bucket_arn}/_control/locks/sites/${each.key}.json",
           "${local.bucket_arn}/_control/site-cache/${each.key}.json",
+          "${local.bucket_arn}/_control/publish-state/${each.key}.json.gz",
         ]
       },
       {
@@ -566,6 +571,7 @@ resource "aws_iam_role_policy" "satellite" {
               "_previews/${each.key}/*",
               "_control/locks/sites/${each.key}.json",
               "_control/site-cache/${each.key}.json",
+              "_control/publish-state/${each.key}.json.gz",
             ]
           }
         }
@@ -580,6 +586,7 @@ resource "aws_iam_role_policy" "satellite" {
           "${local.bucket_arn}/_previews/${each.key}/*",
           "${local.bucket_arn}/_control/locks/sites/${each.key}.json",
           "${local.bucket_arn}/_control/site-cache/${each.key}.json",
+          "${local.bucket_arn}/_control/publish-state/${each.key}.json.gz",
         ]
       },
       {
@@ -588,7 +595,9 @@ resource "aws_iam_role_policy" "satellite" {
         Action = ["s3:DeleteObject"]
         Resource = [
           "${local.bucket_arn}/_artifacts/${each.key}/*",
+          "${local.bucket_arn}/_indexes/${each.key}/*",
           "${local.bucket_arn}/_control/site-cache/${each.key}.json",
+          "${local.bucket_arn}/_control/publish-state/${each.key}.json.gz",
         ]
       },
       {

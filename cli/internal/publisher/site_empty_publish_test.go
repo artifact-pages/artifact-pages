@@ -55,8 +55,8 @@ func TestPublishSiteAllowsEmptyDocumentsAndRetriesPartialStaleDeletion(t *testin
 	if err != nil {
 		t.Fatalf("retry empty-site PublishSite() error = %v", err)
 	}
-	if result.Outcome != "published" || result.FilesPublished != 0 || result.FilesRemoved != 2 {
-		t.Fatalf("retry empty-site PublishSite() = %+v, want the remaining stale document and the superseded search root removed", result)
+	if result.Outcome != "published" || result.FilesPublished != 2 || result.FilesRemoved != 2 {
+		t.Fatalf("retry empty-site PublishSite() = %+v, want touched index/meta replays and both uncertain stale deletes", result)
 	}
 
 	indexObject, _, err := backend.lockMemoryBackend.GetObject(context.Background(), "_indexes/sre/index.json")

@@ -347,10 +347,16 @@ func validateSitePublishOwnedKey(site, key string) error {
 		return nil
 	}
 	indexPrefix := "_indexes/" + site + "/"
-	if key == indexPrefix+"index.json" || key == indexPrefix+"meta.json" || key == indexPrefix+"search/manifest.json" {
-		return nil
-	}
-	if strings.HasPrefix(key, indexPrefix+"search/") && sitePublishStateSearchBlob.MatchString(strings.TrimPrefix(key, indexPrefix+"search/")) {
+	if strings.HasPrefix(key, indexPrefix) {
+		relative := strings.TrimPrefix(key, indexPrefix)
+		if relative == "" || path.Clean(relative) != relative || relative == "." || relative == ".." || strings.HasPrefix(relative, "../") || path.IsAbs(relative) {
+			return fmt.Errorf("index key %q is not a canonical relative path", key)
+		}
+		for _, segment := range strings.Split(relative, "/") {
+			if segment == "" || segment == "." || segment == ".." {
+				return fmt.Errorf("index key %q is not a canonical relative path", key)
+			}
+		}
 		return nil
 	}
 	return fmt.Errorf("key %q is outside the selected site's managed object scope", key)

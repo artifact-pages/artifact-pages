@@ -260,8 +260,18 @@ func snapshotSourceTree(sourcePath, outputRoot string, rejectSymlinks bool) ([]S
 			return walkErr
 		}
 		if currentPath != sourcePath && entry.Name() == ".git" {
-			if entry.IsDir() {
+			if entry.Type()&os.ModeSymlink != 0 {
+				return fmt.Errorf("site source must not contain symbolic links: %s", currentPath)
+			}
+			info, err := entry.Info()
+			if err != nil {
+				return err
+			}
+			if info.IsDir() {
 				return filepath.SkipDir
+			}
+			if !info.Mode().IsRegular() {
+				return fmt.Errorf("unsupported filesystem entry in site source: %s", currentPath)
 			}
 			return nil
 		}

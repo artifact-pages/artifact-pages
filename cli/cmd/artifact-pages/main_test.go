@@ -626,7 +626,7 @@ func TestRegistryUnregisterLocalCLIIsScopedRetryableAndMachineReadable(t *testin
 			t.Fatalf("decode registry unregister JSON: %v; output=%s", err, stdout)
 		}
 		if applied.Operation != "registry unregister" || applied.Outcome != "unregistered" || applied.Site != "sre" || applied.RegistryUpdated == nil || !*applied.RegistryUpdated || applied.FilesRemoved != 6 {
-			t.Fatalf("registry unregister = %+v; want committed registry, selected site, and six removed objects", applied)
+			t.Fatalf("registry unregister = %+v; want committed registry, selected site, and six existing site objects removed", applied)
 		}
 		if !reflect.DeepEqual(applied.Changes, planned.Changes) {
 			t.Fatalf("registry unregister changes = %+v, dry-run changes = %+v", applied.Changes, planned.Changes)

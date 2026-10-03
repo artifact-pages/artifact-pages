@@ -3,6 +3,7 @@ package publisher
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
@@ -35,6 +36,10 @@ func TestDirectoryBackendProjectsStaticObjectsLocally(t *testing.T) {
 	if !reflect.DeepEqual(keys, []string{"_artifacts/sre/overview.html"}) {
 		t.Fatalf("ListKeys() = %v, want one site artifact", keys)
 	}
+	keys, err = backend.ListKeys(ctx, "_artifacts/sre/overview.html")
+	if err != nil || !reflect.DeepEqual(keys, []string{"_artifacts/sre/overview.html"}) {
+		t.Fatalf("ListKeys(exact key prefix) = %v, err=%v, want the exact object", keys, err)
+	}
 	contents, err := os.ReadFile(filepath.Join(root, "_artifacts", "sre", "overview.html"))
 	if err != nil || string(contents) != "<h1>Overview</h1>" {
 		t.Fatalf("local artifact = %q, err=%v", contents, err)
@@ -48,6 +53,57 @@ func TestDirectoryBackendProjectsStaticObjectsLocally(t *testing.T) {
 	keys, err = backend.ListKeys(ctx, "_artifacts/sre/")
 	if err != nil || len(keys) != 0 {
 		t.Fatalf("ListKeys() after delete = %v, err=%v", keys, err)
+	}
+}
+
+func TestDirectoryBackendPersistsPrivateControlMetadataForHeadAndCAS(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "storage")
+	backend, err := NewDirectoryBackend(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := "_control/publish-state/sre.json.gz"
+	body := []byte("compressed private state bytes")
+	digest := sha256Hex(body)
+	object := Object{
+		Bytes: body, ContentType: "application/octet-stream", Cache: "no-store",
+		Metadata: map[string]string{
+			"artifact-pages-site": "sre", "artifact-pages-sha256": digest,
+			"artifact-pages-publish-state-schema": "1", "artifact-pages-publish-input-root": strings.Repeat("a", 64),
+			"artifact-pages-publish-pending": "false",
+		},
+	}
+	etag, err := backend.PutObjectConditional(context.Background(), key, object, ObjectCondition{IfNoneMatch: true})
+	if err != nil {
+		t.Fatalf("PutObjectConditional() error = %v", err)
+	}
+	cleanupKeys, err := listSiteKeys(context.Background(), backend, "sre")
+	if err != nil || !reflect.DeepEqual(cleanupKeys, []string{key}) {
+		t.Fatalf("listSiteKeys() = %v, err=%v, want the exact private state key", cleanupKeys, err)
+	}
+	info, err := backend.HeadObject(context.Background(), key)
+	if err != nil {
+		t.Fatalf("HeadObject() error = %v", err)
+	}
+	if info.ETag != etag || info.Size != int64(len(body)) || info.ContentType != object.ContentType || info.CacheControl != object.Cache || info.ContentEncoding != "" || info.Metadata["artifact-pages-publish-input-root"] != strings.Repeat("a", 64) || info.Metadata["artifact-pages-sha256"] != digest {
+		t.Fatalf("HeadObject() = %+v, want persisted control metadata and ETag %q", info, etag)
+	}
+	got, gotETag, err := backend.GetObject(context.Background(), key)
+	if err != nil {
+		t.Fatalf("GetObject() error = %v", err)
+	}
+	if gotETag != etag || !bytes.Equal(got.Bytes, body) || got.Metadata["artifact-pages-publish-pending"] != "false" {
+		t.Fatalf("GetObject() = %+v, ETag %q", got, gotETag)
+	}
+	metadataPath, err := backend.storedObjectMetadataPath(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := backend.DeleteObjects(context.Background(), []string{key}); err != nil {
+		t.Fatalf("DeleteObjects() error = %v", err)
+	}
+	if _, err := os.Stat(metadataPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("private metadata sidecar still exists after object deletion: %v", err)
 	}
 }
 
@@ -193,6 +249,89 @@ func TestDirectoryBackendReportsSearchBlobMetadataAsPublished(t *testing.T) {
 	// Without this, every site publish re-uploads all search blobs to local storage.
 	if !siteObjectMetadataMatches(info, desired) {
 		t.Fatalf("HeadObject(search blob) = type %q cache %q, want it to match the published object", info.ContentType, info.CacheControl)
+	}
+}
+
+func TestDirectoryBackendRecoversMetadataJournalAcrossBodyRename(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "storage")
+	backend, err := NewDirectoryBackend(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	key := "_control/publish-state/sre.json.gz"
+	oldBody := []byte("old compressed state")
+	oldObject := Object{
+		Bytes: oldBody, ContentType: "application/octet-stream", Cache: "no-store",
+		Metadata: map[string]string{"artifact-pages-publish-state-schema": "1", "artifact-pages-sha256": sha256Hex(oldBody)},
+	}
+	if err := backend.PutObject(ctx, key, oldObject); err != nil {
+		t.Fatal(err)
+	}
+	newBody := []byte("new compressed state")
+	newObject := Object{
+		Bytes: newBody, ContentType: "application/octet-stream", Cache: "no-store",
+		Metadata: map[string]string{"artifact-pages-publish-state-schema": "1", "artifact-pages-sha256": sha256Hex(newBody)},
+	}
+	oldMetadata, err := backend.readStoredObjectMetadata(key, oldBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := metadataVersion(oldMetadata)
+	next := metadataVersionForObject(newObject)
+	journal := localStoredObjectMetadata{
+		ContentType: next.ContentType, ContentDisposition: next.ContentDisposition,
+		ContentEncoding: next.ContentEncoding, CacheControl: next.CacheControl,
+		Metadata: next.Metadata, BodySHA256: next.BodySHA256, Pending: true, Previous: &previous,
+	}
+	journalBytes, err := json.Marshal(journal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadataPath, err := backend.storedObjectMetadataPath(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(metadataPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := atomicDeploymentWrite(metadataPath, journalBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// A restart before the body rename selects the previous metadata version.
+	restarted, err := NewDirectoryBackend(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldInfo, err := restarted.HeadObject(ctx, key)
+	if err != nil || oldInfo.Metadata["artifact-pages-publish-state-schema"] != "1" || oldInfo.Metadata["artifact-pages-sha256"] != sha256Hex(oldBody) {
+		t.Fatalf("HEAD before body rename = %+v, %v; want old metadata", oldInfo, err)
+	}
+
+	// Simulate process death immediately after replacing object bytes but before
+	// finalizing the sidecar: the journal must make the new state readable.
+	bodyPath, err := restarted.objectPath(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := atomicDeploymentWrite(bodyPath, newBody, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	restartedAfterRename, err := NewDirectoryBackend(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newInfo, err := restartedAfterRename.HeadObject(ctx, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if newInfo.Metadata["artifact-pages-sha256"] != sha256Hex(newBody) {
+		t.Fatalf("HEAD after body rename = %+v, want new body metadata", newInfo)
+	}
+	got, _, err := restartedAfterRename.GetObject(ctx, key)
+	if err != nil || string(got.Bytes) != string(newBody) || got.Metadata["artifact-pages-sha256"] != sha256Hex(newBody) {
+		t.Fatalf("GET after body rename = (%q, %+v), %v", got.Bytes, got.Metadata, err)
 	}
 }
 

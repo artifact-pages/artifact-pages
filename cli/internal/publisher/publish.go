@@ -26,6 +26,7 @@ type AppDeployOptions struct {
 }
 
 type SitePublishOptions struct {
+	Reconcile bool
 	SiteID    string
 	SourceDir string
 	DryRun    bool
@@ -45,6 +46,7 @@ type Result struct {
 	InvalidationID    string                                 `json:"invalidationId,omitempty"`
 	InvalidationPaths []string                               `json:"invalidationPaths,omitempty"`
 	SourceDirty       bool                                   `json:"sourceDirty,omitempty"`
+	BuildSkipped      bool                                   `json:"buildSkipped,omitempty"`
 }
 
 func DeployApp(ctx context.Context, backend DeploymentBackend, options AppDeployOptions) (Result, error) {

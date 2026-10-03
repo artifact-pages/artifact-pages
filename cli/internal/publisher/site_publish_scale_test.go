@@ -1,8 +1,6 @@
 package publisher
 
 import (
-	"bytes"
-	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -86,6 +84,7 @@ func TestSitePublishScaleProbe(t *testing.T) {
 		ext := strings.ToLower(filepath.Ext(name))
 		return !extIsPage(ext)
 	})
+	resourceDir := filepath.Dir(resourcePath)
 	originalPage, err := os.ReadFile(pagePath)
 	if err != nil {
 		t.Fatal(err)
@@ -93,7 +92,7 @@ func TestSitePublishScaleProbe(t *testing.T) {
 	if err := os.WriteFile(pagePath, append(append([]byte(nil), originalPage...), []byte("\n<!-- verification small update -->\n")...), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(workSource, "assets", "scale-added.css"), []byte("/* deterministic add */\nbody { --scale-added: 1; }\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(resourceDir, "scale-added.css"), []byte("/* deterministic add */\nbody { --scale-added: 1; }\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Remove(resourcePath); err != nil {
@@ -120,10 +119,10 @@ func TestSitePublishScaleProbe(t *testing.T) {
 	if err := os.WriteFile(pagePath, append(append([]byte(nil), originalPage...), []byte("\n<!-- interrupted generation -->\n")...), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(workSource, "assets", "interrupted-a.css"), []byte("/* interrupted A */\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(resourceDir, "interrupted-a.css"), []byte("/* interrupted A */\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(workSource, "assets", "interrupted-b.css"), []byte("/* interrupted B */\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(resourceDir, "interrupted-b.css"), []byte("/* interrupted B */\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Remove(recoveryResourcePath); err != nil {
@@ -135,14 +134,14 @@ func TestSitePublishScaleProbe(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"interrupted-a.css", "interrupted-b.css"} {
-		if err := os.Remove(filepath.Join(workSource, "assets", name)); err != nil {
+		if err := os.Remove(filepath.Join(resourceDir, name)); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if err := os.WriteFile(recoveryResourcePath, recoveryResource, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(workSource, "assets", "recovered-latest.css"), []byte("/* latest desired source */\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(resourceDir, "recovered-latest.css"), []byte("/* latest desired source */\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	phases = append(phases, runSitePublishScalePhase(t, backend, "retry-with-different-source", options, false))
@@ -303,15 +302,16 @@ func seedScaleRegistry(t *testing.T, backend *lockMemoryBackend, siteID string, 
 }
 
 type sitePublishScalePhase struct {
-	Name       string         `json:"name"`
-	Outcome    string         `json:"outcome,omitempty"`
-	Error      string         `json:"error,omitempty"`
-	WallMS     float64        `json:"wallMs"`
-	CallCounts map[string]int `json:"callCounts"`
-	BytesRead  int64          `json:"bytesReadGetBodies"`
-	BytesList  int64          `json:"bytesReturnedByList"`
-	BytesWrite int64          `json:"bytesWrittenPutBodies"`
-	ModeledMS  int64          `json:"modeledFixedRequestLatencyMs"`
+	Name         string         `json:"name"`
+	Outcome      string         `json:"outcome,omitempty"`
+	BuildSkipped bool           `json:"buildSkipped,omitempty"`
+	Error        string         `json:"error,omitempty"`
+	WallMS       float64        `json:"wallMs"`
+	CallCounts   map[string]int `json:"callCounts"`
+	BytesRead    int64          `json:"bytesReadGetBodies"`
+	BytesList    int64          `json:"bytesReturnedByList"`
+	BytesWrite   int64          `json:"bytesWrittenPutBodies"`
+	ModeledMS    int64          `json:"modeledFixedRequestLatencyMs"`
 }
 
 type sitePublishScaleReport struct {
@@ -355,11 +355,14 @@ func runSitePublishScalePhase(t *testing.T, backend *sitePublishScaleBackend, na
 		phase.Error = err.Error()
 	} else {
 		phase.Outcome = result.Outcome
+		phase.BuildSkipped = result.BuildSkipped
 	}
 	return phase
 }
 
-func sitePublishScaleStateKey(site string) string { return "_control/publish-state/" + site + ".json" }
+func sitePublishScaleStateKey(site string) string {
+	return "_control/publish-state/" + site + ".json.gz"
+}
 
 func scaleStateSizes(backend *sitePublishScaleBackend, site string) (int, int) {
 	backend.mu.Lock()
@@ -369,15 +372,11 @@ func scaleStateSizes(backend *sitePublishScaleBackend, site string) (int, int) {
 	if !exists {
 		return 0, 0
 	}
-	var compressed bytes.Buffer
-	writer := gzip.NewWriter(&compressed)
-	if _, err := writer.Write(data); err != nil {
-		return len(data), 0
+	plain, err := decompressSitePublishState(data)
+	if err != nil {
+		return 0, len(data)
 	}
-	if err := writer.Close(); err != nil {
-		return len(data), 0
-	}
-	return len(data), compressed.Len()
+	return len(plain), len(data)
 }
 
 type sitePublishScaleBackend struct {

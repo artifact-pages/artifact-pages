@@ -1,6 +1,7 @@
 package publisher
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -209,7 +210,7 @@ func TestPublishSiteAbortsBeforeWritesWhenIndexListingFails(t *testing.T) {
 	backend.failListPrefix = "_indexes/sre/"
 
 	_, err := PublishSite(context.Background(), backend, SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts"})
-	if err == nil || !strings.Contains(err.Error(), "list deployed site index objects") {
+	if err == nil || !strings.Contains(err.Error(), "list deployed site objects under _indexes/sre/") {
 		t.Fatalf("PublishSite() error = %v, want index-prefix listing failure", err)
 	}
 	events := backend.eventSnapshot()
@@ -228,7 +229,7 @@ func TestPublishSiteRetriesAfterMetadataUploadFailureBeforeStaleDeletion(t *test
 	seedMemoryObject(backend.lockMemoryBackend, "_artifacts/sre/stale.html", []byte("stale"))
 	backend.failPutKey = "_indexes/sre/meta.json"
 
-	_, err := PublishSite(context.Background(), backend, SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts"})
+	_, err := PublishSite(context.Background(), backend, SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts", Reconcile: true})
 	if err == nil || !strings.Contains(err.Error(), "injected object upload failure") {
 		t.Fatalf("first PublishSite() error = %v, want injected metadata upload failure", err)
 	}
@@ -241,7 +242,7 @@ func TestPublishSiteRetriesAfterMetadataUploadFailureBeforeStaleDeletion(t *test
 	}
 
 	backend.resetEvents()
-	result, err := PublishSite(context.Background(), backend, SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts"})
+	result, err := PublishSite(context.Background(), backend, SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts", Reconcile: true})
 	if err != nil {
 		t.Fatalf("retry PublishSite() error = %v", err)
 	}
@@ -349,7 +350,7 @@ func TestPublishSiteRetriesPartialStaleDeletionToConvergence(t *testing.T) {
 	backend.resetEvents()
 	backend.partialDeleteCount = 1
 
-	_, err := PublishSite(context.Background(), backend, SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts"})
+	_, err := PublishSite(context.Background(), backend, SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts", Reconcile: true})
 	if err == nil || !strings.Contains(err.Error(), "injected partial delete failure") {
 		t.Fatalf("partial-delete PublishSite() error = %v, want injected failure", err)
 	}
@@ -360,12 +361,12 @@ func TestPublishSiteRetriesPartialStaleDeletionToConvergence(t *testing.T) {
 	}
 
 	backend.resetEvents()
-	result, err := PublishSite(context.Background(), backend, SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts"})
+	result, err := PublishSite(context.Background(), backend, SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts", Reconcile: true})
 	if err != nil {
 		t.Fatalf("retry after partial delete error = %v", err)
 	}
-	if result.FilesPublished != 0 || result.FilesRemoved != 1 {
-		t.Fatalf("retry after partial delete = %+v, want only the remaining stale key removed", result)
+	if result.FilesPublished != 0 || result.FilesRemoved != 2 {
+		t.Fatalf("retry after partial delete = %+v, want both uncertain stale keys replayed idempotently", result)
 	}
 	for _, key := range []string{"_artifacts/sre/stale-a.html", "_artifacts/sre/stale-b.html"} {
 		if _, exists := backend.lockMemoryBackend.objects[key]; exists {
@@ -401,6 +402,49 @@ func TestPublishSiteRepairsHTTPMetadataWhenBytesAlreadyMatch(t *testing.T) {
 	object := backend.lockMemoryBackend.objects["_artifacts/sre/report.html"]
 	if object.ContentType != "text/html; charset=utf-8" || object.ContentDisposition != "inline" || object.ContentEncoding != "" || object.Cache != artifactCacheControl || string(object.Bytes) != string(contents) {
 		t.Fatalf("repaired HTML representation = type %q, disposition %q, encoding %q, cache %q, bytes %q", object.ContentType, object.ContentDisposition, object.ContentEncoding, object.Cache, object.Bytes)
+	}
+}
+
+func TestPublishSiteReconcileRepairsLocalOutOfBandBytes(t *testing.T) {
+	root := createPublisherCheckout(t, "git@github.com:acme/sre.git")
+	storageRoot := filepath.Join(t.TempDir(), "storage")
+	backend, err := NewDirectoryBackend(storageRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := backend.PutObject(context.Background(), "_indexes/sites.json", Object{Bytes: mustRegistryProjection(t)}); err != nil {
+		t.Fatal(err)
+	}
+	options := SitePublishOptions{SiteID: "sre", SourceDir: filepath.Join(root, "docs", "artifacts")}
+	if _, err := PublishSite(context.Background(), backend, options); err != nil {
+		t.Fatalf("initial local PublishSite() error = %v", err)
+	}
+	target := filepath.Join(storageRoot, "_artifacts", "sre", "report.html")
+	if err := os.WriteFile(target, []byte("out-of-band body"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ordinary, err := PublishSite(context.Background(), backend, options)
+	if err != nil {
+		t.Fatalf("normal manifest-trusting PublishSite() error = %v", err)
+	}
+	if ordinary.Outcome != "no-op" || !ordinary.BuildSkipped {
+		t.Fatalf("normal publish after out-of-band edit = %+v, want root-matched no-op", ordinary)
+	}
+	if got, err := os.ReadFile(target); err != nil || string(got) != "out-of-band body" {
+		t.Fatalf("normal publish unexpectedly changed out-of-band object: %q, %v", got, err)
+	}
+
+	options.Reconcile = true
+	result, err := PublishSite(context.Background(), backend, options)
+	if err != nil {
+		t.Fatalf("explicit reconcile error = %v", err)
+	}
+	if result.FilesPublished != 1 {
+		t.Fatalf("explicit reconcile = %+v, want one repaired artifact", result)
+	}
+	want := []byte("<title>Report</title><h1>Report</h1>")
+	if got, err := os.ReadFile(target); err != nil || !bytes.Equal(got, want) {
+		t.Fatalf("reconciled object = %q, %v; want source bytes %q", got, err, want)
 	}
 }
 

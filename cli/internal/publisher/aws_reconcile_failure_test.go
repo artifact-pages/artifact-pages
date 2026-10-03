@@ -30,6 +30,7 @@ func TestPublishSiteStopsWhenS3ArtifactListingContinuationFails(t *testing.T) {
 	client.adapter = &awsReconcileAdapterS3{
 		listObjects: client.listObjects,
 		putObject:   client.putObject,
+		headObject:  client.headObject,
 		deleteObjects: func(_ context.Context, input *s3.DeleteObjectsInput) (*s3.DeleteObjectsOutput, error) {
 			client.deleteCalls++
 			return &s3.DeleteObjectsOutput{}, nil
@@ -46,7 +47,7 @@ func TestPublishSiteStopsWhenS3ArtifactListingContinuationFails(t *testing.T) {
 	}
 
 	if len(client.listRequests) != 2 {
-		t.Fatalf("ListObjectsV2 calls = %d, want 2", len(client.listRequests))
+		t.Fatalf("ListObjectsV2 calls = %d, want two artifact pages", len(client.listRequests))
 	}
 	first, second := client.listRequests[0], client.listRequests[1]
 	if got := aws.ToString(first.Prefix); got != "_artifacts/sre/" {
@@ -117,6 +118,20 @@ func (client *awsReconcileFailureS3) GetObject(_ context.Context, input *s3.GetO
 		return nil, s3ResponseError(http.StatusNotFound, "NoSuchKey")
 	}
 	return &s3.GetObjectOutput{Body: io.NopCloser(bytes.NewReader(object.bytes)), ETag: aws.String(object.etag)}, nil
+}
+
+func (client *awsReconcileFailureS3) HeadObject(ctx context.Context, input *s3.HeadObjectInput, options ...func(*s3.Options)) (*s3.HeadObjectOutput, error) {
+	return client.adapter.HeadObject(ctx, input, options...)
+}
+
+func (client *awsReconcileFailureS3) headObject(_ context.Context, input *s3.HeadObjectInput) (*s3.HeadObjectOutput, error) {
+	key := aws.ToString(input.Key)
+	object, exists := client.objects[key]
+	if !exists {
+		return nil, s3ResponseError(http.StatusNotFound, "NoSuchKey")
+	}
+	length := int64(len(object.bytes))
+	return &s3.HeadObjectOutput{ETag: aws.String(object.etag), ContentLength: &length}, nil
 }
 
 func (client *awsReconcileFailureS3) listObjects(_ context.Context, input *s3.ListObjectsV2Input) (*s3.ListObjectsV2Output, error) {
