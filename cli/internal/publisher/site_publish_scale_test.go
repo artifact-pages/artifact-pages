@@ -114,7 +114,6 @@ func TestSitePublishScaleProbe(t *testing.T) {
 	phases = append(phases, runSitePublishScalePhase(t, backend, "metadata-only", options, false))
 
 	fullTextOptions := options
-	fullTextOptions.FullText = true
 	phases = append(phases, runSitePublishScalePhase(t, backend, "fulltext-on", fullTextOptions, false))
 	phases = append(phases, runSitePublishScalePhase(t, backend, "fulltext-off", options, false))
 

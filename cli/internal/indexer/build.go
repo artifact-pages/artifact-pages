@@ -50,7 +50,11 @@ type BuildOptions struct {
 	Repository      string
 	RepositoryURL   string
 	Ref             string
-	Now             func() time.Time
+	// InputPolicy is a caller-owned version string for projection inputs that
+	// affect published bytes but are outside the indexer's own schema.
+	InputPolicy    string
+	RejectSymlinks bool
+	Now            func() time.Time
 }
 
 type BuildResult struct {
@@ -149,87 +153,49 @@ type artifactGitUpdate struct {
 
 func Build(ctx context.Context, options BuildOptions) (BuildResult, error) {
 	startedAt := time.Now()
-	if !siteIDPattern.MatchString(options.SiteID) {
-		return BuildResult{}, fmt.Errorf("invalid site identifier %q: use lowercase letters, numbers, and internal hyphens", options.SiteID)
+	prepared, err := PrepareBuild(ctx, options)
+	if err != nil {
+		return BuildResult{}, err
 	}
-	if options.SourceDir == "" {
-		return BuildResult{}, errors.New("source directory is required")
+	result, err := BuildPrepared(ctx, prepared, prepared.outputRoot)
+	if err == nil {
+		result.Elapsed = time.Since(startedAt)
 	}
-	if options.OutputDir == "" {
-		options.OutputDir = ".local/storage"
-	}
-	indexTime := time.Now()
-	if options.Now != nil {
-		indexTime = options.Now()
-	}
+	return result, err
+}
 
-	workingDir, err := os.Getwd()
-	if err != nil {
-		return BuildResult{}, fmt.Errorf("get current directory: %w", err)
+// BuildPrepared generates the index and search projection from the
+// exact files and Git metadata captured by PrepareBuild. outputDir may differ
+// from the preparation default, but the source snapshot and build options are
+// fixed.
+func BuildPrepared(ctx context.Context, prepared *PreparedBuild, outputDir string) (BuildResult, error) {
+	startedAt := time.Now()
+	if prepared == nil {
+		return BuildResult{}, errors.New("prepared site build is required")
 	}
-	repositoryRoot, err := gitOutput(ctx, workingDir, "rev-parse", "--show-toplevel")
-	if err != nil {
-		return BuildResult{}, fmt.Errorf("index builds must run inside a Git working tree: %w", err)
+	options := prepared.options
+	outputRoot := outputDir
+	if outputRoot == "" {
+		outputRoot = prepared.outputRoot
 	}
-	repositoryRoot, err = filepath.EvalSymlinks(strings.TrimSpace(repositoryRoot))
-	if err != nil {
-		return BuildResult{}, fmt.Errorf("resolve Git working tree: %w", err)
-	}
-
-	sourcePath := options.SourceDir
-	if !filepath.IsAbs(sourcePath) {
-		sourcePath = filepath.Join(workingDir, sourcePath)
-	}
-	sourcePath, err = filepath.Abs(sourcePath)
-	if err != nil {
-		return BuildResult{}, fmt.Errorf("resolve source directory: %w", err)
-	}
-	sourcePath, err = filepath.EvalSymlinks(sourcePath)
-	if err != nil {
-		return BuildResult{}, fmt.Errorf("resolve source directory %q: %w", options.SourceDir, err)
-	}
-	if err := ensureWithin(repositoryRoot, sourcePath); err != nil {
-		return BuildResult{}, fmt.Errorf("source directory must be inside the Git working tree: %w", err)
-	}
-	sourceInfo, err := os.Stat(sourcePath)
-	if err != nil {
-		return BuildResult{}, fmt.Errorf("read source directory: %w", err)
-	}
-	if !sourceInfo.IsDir() {
-		return BuildResult{}, fmt.Errorf("source path %q is not a directory", options.SourceDir)
-	}
-
-	outputRoot := options.OutputDir
 	if !filepath.IsAbs(outputRoot) {
+		workingDir, err := os.Getwd()
+		if err != nil {
+			return BuildResult{}, fmt.Errorf("get current directory: %w", err)
+		}
 		outputRoot = filepath.Join(workingDir, outputRoot)
 	}
-	outputRoot, err = filepath.Abs(outputRoot)
+	outputRoot, err := filepath.Abs(outputRoot)
 	if err != nil {
 		return BuildResult{}, fmt.Errorf("resolve output directory: %w", err)
 	}
-	if filepath.Clean(outputRoot) == filepath.Clean(sourcePath) {
+	if filepath.Clean(outputRoot) == filepath.Clean(prepared.options.SourceDir) {
 		return BuildResult{}, errors.New("output directory cannot be the artifact source directory")
 	}
-
-	artifacts, scannedFiles, err := discoverArtifacts(sourcePath, outputRoot)
-	if err != nil {
-		return BuildResult{}, err
-	}
-
-	relativeSource, err := filepath.Rel(repositoryRoot, sourcePath)
-	if err != nil {
-		return BuildResult{}, fmt.Errorf("resolve source path relative to Git working tree: %w", err)
-	}
-	relativeSource = filepath.ToSlash(relativeSource)
-	gitUpdatesByArtifact, err := artifactGitUpdates(ctx, repositoryRoot, relativeSource, artifacts)
-	if err != nil {
-		return BuildResult{}, err
-	}
-	workingTreeUpdates, err := artifactWorkingTreeUpdates(ctx, repositoryRoot, relativeSource, artifacts, indexTime)
-	if err != nil {
-		return BuildResult{}, err
-	}
-	gitInfo := resolveGitMetadata(ctx, repositoryRoot, options)
+	indexTime := prepared.indexTime
+	relativeSource := prepared.relativeSource
+	gitInfo := prepared.gitInfo
+	scannedFiles := prepared.scannedFiles
 
 	title := strings.TrimSpace(options.SiteTitle)
 	if title == "" {
@@ -244,12 +210,13 @@ func Build(ctx context.Context, options BuildOptions) (BuildResult, error) {
 		SchemaVersion: 1,
 		Site:          SiteSummary{ID: options.SiteID, Title: title, Description: description},
 		GeneratedAt:   indexTime.UTC().Format(time.RFC3339),
-		Artifacts:     make([]ArtifactIndexEntry, 0, len(artifacts)),
+		Artifacts:     make([]ArtifactIndexEntry, 0, len(prepared.documents)),
 	}
-	modTimeByDirectory := make(map[string]time.Time)
 	searchRecords := make([]fulltext.Record, 0)
-	for _, artifact := range artifacts {
-		metadata, searchText, err := readArtifactWithSearch(artifact.file, artifact.filename)
+	for _, document := range prepared.documents {
+		artifact := document.artifact
+		sourceFile := prepared.fileByRelative[artifact.relative]
+		metadata, searchText, err := readArtifactWithSearchBytes(sourceFile.Bytes, artifact.filename)
 		if err != nil {
 			return BuildResult{}, fmt.Errorf("parse artifact %q: %w", artifact.relative, err)
 		}
@@ -258,22 +225,7 @@ func Build(ctx context.Context, options BuildOptions) (BuildResult, error) {
 			artifactTitle = fallbackArtifactTitle(artifact)
 		}
 
-		gitUpdate := gitUpdatesByArtifact[artifact.relative]
-		updatedAt, found := gitUpdate.updatedAt, !gitUpdate.updatedAt.IsZero()
-		if workingTreeTime, hasWorkingTreeUpdate := workingTreeUpdates[artifact.relative]; hasWorkingTreeUpdate && (!found || workingTreeTime.After(updatedAt)) {
-			updatedAt = workingTreeTime
-			found = true
-		}
-		if !found {
-			updatedAt, found = modTimeByDirectory[artifact.directory]
-			if !found {
-				updatedAt, err = latestArtifactFileModTime(artifact.directory)
-				if err != nil {
-					return BuildResult{}, fmt.Errorf("read modification time for artifact %q: %w", artifact.relative, err)
-				}
-				modTimeByDirectory[artifact.directory] = updatedAt
-			}
-		}
+		updatedAt := document.updatedAt
 
 		entry := ArtifactIndexEntry{
 			ID:          artifact.relative,
@@ -285,8 +237,8 @@ func Build(ctx context.Context, options BuildOptions) (BuildResult, error) {
 			UpdatedAt:   updatedAt.UTC().Format(time.RFC3339),
 			TOC:         metadata.toc,
 		}
-		if gitUpdate.lastCommitter != "" {
-			entry.LastCommitter = &ArtifactCommitter{Name: gitUpdate.lastCommitter}
+		if document.lastCommitter != "" {
+			entry.LastCommitter = &ArtifactCommitter{Name: document.lastCommitter}
 		}
 		if gitInfo.repository != "" {
 			repositoryFilePath := artifact.relative
@@ -311,12 +263,12 @@ func Build(ctx context.Context, options BuildOptions) (BuildResult, error) {
 		index.PaletteScoringProfile = &profile
 	}
 
-	var searchFiles []string
-	searchBytes := 0
 	projection, err := fulltext.Build(ctx, options.SiteID, searchRecords)
 	if err != nil {
 		return BuildResult{}, fmt.Errorf("build full-text index: %w", err)
 	}
+	var searchFiles []string
+	searchBytes := 0
 	// Publish all immutable bytes locally before exposing the manifest.
 	for name := range projection.Files {
 		if name != "manifest.json" {
@@ -621,7 +573,12 @@ func readArtifactWithSearch(filename, basename string) (artifactHTMLMetadata, st
 	if err != nil {
 		return artifactHTMLMetadata{}, "", err
 	}
+	return readArtifactWithSearchBytes(source, basename)
+}
+
+func readArtifactWithSearchBytes(source []byte, basename string) (artifactHTMLMetadata, string, error) {
 	var document *html.Node
+	var err error
 	if isMarkdownDocument(basename) {
 		document, err = renderMarkdownHTMLDocument(source)
 	} else {
