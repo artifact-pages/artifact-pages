@@ -114,6 +114,7 @@ func TestSitePublishScaleProbe(t *testing.T) {
 
 	fullTextOptions := options
 	phases = append(phases, runSitePublishScalePhase(t, backend, "fulltext-on", fullTextOptions, false))
+	fullTextStateRaw, fullTextStateGzip := scaleStateSizes(backend, siteID)
 	phases = append(phases, runSitePublishScalePhase(t, backend, "fulltext-off", options, false))
 
 	if err := os.WriteFile(pagePath, append(append([]byte(nil), originalPage...), []byte("\n<!-- interrupted generation -->\n")...), 0o600); err != nil {
@@ -166,6 +167,7 @@ func TestSitePublishScaleProbe(t *testing.T) {
 		SourceRevision: revision,
 		Site:           siteID, SourceFiles: profile.SourceFiles, Pages: profile.Pages, Resources: profile.Resources,
 		Phases: phases, PublishStateRawBytes: stateRaw, PublishStateGzipBytes: stateGzip,
+		FullTextOnPublishStateRawBytes: fullTextStateRaw, FullTextOnPublishStateGzipBytes: fullTextStateGzip,
 		FinalProjectionObjects: finalObjects, NeighborAndControlPreserved: neighborOK,
 		ModeledFixedRequestLatencyMS: 10,
 	}
@@ -315,17 +317,19 @@ type sitePublishScalePhase struct {
 }
 
 type sitePublishScaleReport struct {
-	SourceRevision               string                  `json:"sourceRevision"`
-	Site                         string                  `json:"site"`
-	SourceFiles                  int                     `json:"sourceFiles"`
-	Pages                        int                     `json:"pages"`
-	Resources                    int                     `json:"resources"`
-	Phases                       []sitePublishScalePhase `json:"phases"`
-	PublishStateRawBytes         int                     `json:"publishStateRawBytes,omitempty"`
-	PublishStateGzipBytes        int                     `json:"publishStateGzipBytes,omitempty"`
-	FinalProjectionObjects       int                     `json:"finalProjectionObjects"`
-	NeighborAndControlPreserved  bool                    `json:"neighborAndControlPreserved"`
-	ModeledFixedRequestLatencyMS int                     `json:"modeledFixedRequestLatencyMs"`
+	SourceRevision                  string                  `json:"sourceRevision"`
+	Site                            string                  `json:"site"`
+	SourceFiles                     int                     `json:"sourceFiles"`
+	Pages                           int                     `json:"pages"`
+	Resources                       int                     `json:"resources"`
+	Phases                          []sitePublishScalePhase `json:"phases"`
+	PublishStateRawBytes            int                     `json:"publishStateRawBytes,omitempty"`
+	PublishStateGzipBytes           int                     `json:"publishStateGzipBytes,omitempty"`
+	FullTextOnPublishStateRawBytes  int                     `json:"fullTextOnPublishStateRawBytes,omitempty"`
+	FullTextOnPublishStateGzipBytes int                     `json:"fullTextOnPublishStateGzipBytes,omitempty"`
+	FinalProjectionObjects          int                     `json:"finalProjectionObjects"`
+	NeighborAndControlPreserved     bool                    `json:"neighborAndControlPreserved"`
+	ModeledFixedRequestLatencyMS    int                     `json:"modeledFixedRequestLatencyMs"`
 }
 
 func runSitePublishScalePhase(t *testing.T, backend *sitePublishScaleBackend, name string, options SitePublishOptions, wantError bool) sitePublishScalePhase {

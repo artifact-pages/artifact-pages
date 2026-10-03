@@ -1,6 +1,6 @@
 # T18 — Publisher scale baseline and state-manifest comparison
 
-- Status: In progress
+- Status: Done
 - Phase: Local verification of the provider-neutral publishing contract
 - Related: [T5](T5-concurrency-recovery.md), [T14](T14-production-reconciliation.md), [T15](T15-provider-delivery.md)
 
@@ -8,9 +8,9 @@
 
 - [x] Measure the unmodified shared `PublishSite` flow against deterministic, committed multi-site fixtures.
 - [x] Implement state-assisted reconciliation and repeat the same matrix at the same fixture revision.
-- [ ] Verify unchanged local inputs can avoid unnecessary build/index work without skipping registry, lock, cache-retry, pending-journal or preview duties.
-- [ ] Prove state migration, interruption recovery, dry-run, malformed-state failure, explicit repair, unregister cleanup and neighboring-site isolation.
-- [ ] Record final request, byte, manifest-size and local-time results without presenting the local fake backend as a cloud benchmark.
+- [x] Verify unchanged local inputs can avoid unnecessary build/index work without skipping registry, lock, cache-retry, pending-journal or preview duties.
+- [x] Prove state migration, interruption recovery, dry-run, malformed-state failure, explicit repair, unregister cleanup and neighboring-site isolation.
+- [x] Record final request, byte, manifest-size and local-time results without presenting the local fake backend as a cloud benchmark.
 
 ## Baseline method
 
@@ -104,10 +104,32 @@ The measured publishes used `--fulltext=false`:
 
 The preflight and publication command forms were `artifact-pages registry register --config artifact-pages.verify.yaml --dry-run --format json`, then the same registration without `--dry-run`, followed by each site twice with `artifact-pages site publish --config artifact-pages.verify.yaml --site <verify-scale-id> --fulltext=false --format json`. `/usr/bin/time -p` recorded the wall times. The actual clean-environment commands, JSON results, time files, and empty stderr captures remain in ignored `.local/publish-scale-cloud-baseline/RESULTS.md` and sibling files. The CLI's changed-object counts are not provider request counts. The Cloudflare adapter exposed no request/byte counters, so provider requests and transfer bytes were not measured.
 
-## Candidate state-assisted measurements — pending
+## Candidate state-assisted measurements
 
-Post-change Cloudflare measurements are pending the final candidate run. Keep them separate from the pre-change values above and use the same verification bucket, fixture revision, full-text setting, and command sequence. Do not estimate provider request counts or bytes from changed-object counts. Record candidate no-op and explicit `--reconcile` results only after the commands complete; retain the raw JSON/time output under ignored `.local/`.
+The candidate local flow probe ran at revision `437f37f9482771ea0c52f354191bd498ca3b7f9c` against the 10,000-file fixture. It confirmed that a normal no-op does one publish-state `HEAD`, skips the build, reads no state body or projection objects, and makes no `LIST` calls. The observed logical calls were `HEAD=1`, `GET=5`, `PUT=2` (the two lock writes), with 569 GET-body bytes and no state body reads or writes. A dry-run no-op made `HEAD=1`, `GET=3`, and no mutations. The regular initial publication used the legacy-inventory path because the fake origin began without state: `LIST=2`, `HEAD=1`, `PUT=10,008`; it published 10,000 source files plus generated projection and private state objects.
+
+The same probe captured the actual gzip state object and decompressed it for size reporting. With full text off, the final 10,000-file state after the add/update/remove and retry phases was 3,366,962 uncompressed bytes / 396,752 compressed bytes. The state captured after enabling full text for that same changed source set was 3,410,920 / 402,226 bytes. These are measured state bodies from the in-memory backend, not estimates of an R2 transfer. The raw probe output is retained under ignored `.local/publish-scale-cloud-after/final-scale-probe.log`.
+
+The Cloudflare candidate used only the `artifact-pages-verify` bucket with `artifact-pages.stream`, the `CF_VERIFY_*` credentials, and the six-site verification registry. The registration check preserved the existing `smoke` row and contained exactly the five scale fixture IDs alongside it. The 10- and 100-file live publishes used full text off; the 1,000-, 5,000- and 10,000-file publishes used full text on.
+
+| Site | Source files (pages / resources) | Candidate operation | Outcome | Changed objects | Wall time |
+| --- | ---: | --- | --- | ---: | ---: |
+| `verify-scale-10` | 10 (2 / 8) | initial, full text off | `published` | 12 | 11.99 s |
+| `verify-scale-10` | 10 (2 / 8) | three no-op repeats, median | `no-op`; `buildSkipped=true` | 0 | 3.74 s |
+| `verify-scale-100` | 100 (10 / 90) | initial, full text off | `published` | 102 | 27.75 s |
+| `verify-scale-100` | 100 (10 / 90) | three no-op repeats, median | `no-op`; `buildSkipped=true` | 0 | 3.76 s |
+| `verify-scale-1000` | 1,000 (100 / 900) | full text on, followed by no-op | `published`, then `no-op` | 1,059; then 0 | no-op 1.50 s |
+| `verify-scale-5000` | 5,000 (500 / 4,500) | full text on | origin projection published; first cache purge returned Cloudflare HTTP 429 / code 1134 | 5,111 | 189.70 s |
+| `verify-scale-5000` | 5,000 (500 / 4,500) | retry after prefix compaction | `published`; retry purged the two site-owned prefixes, with no object changes | 0 | 3.06 s |
+| `verify-scale-10000` | 10,000 (1,000 / 9,000) | full text on | `published`; invalidated only the two site-owned prefixes | 10,129 | 460.01 s |
+| `verify-scale-10000` | 10,000 (1,000 / 9,000) | no-op repeat, full text on | `no-op`; `buildSkipped=true` | 0 | 2.69 s |
+
+The 10,000-file result contains 10,000 source objects and 129 generated objects. The first 5,000-file purge rejection occurred after origin writes and the state commit; the durable retry record stayed in place. The new Cloudflare plan compacts more than 100 unique paths within each canonical site's artifact and index prefix to one trailing-slash prefix purge. The retry completed without re-uploading the site, and did not invalidate another site's keys. Cloudflare documents prefix purge support for all plans and limits a request to 100 prefixes; the live request stayed within that bound ([purge by prefix](https://developers.cloudflare.com/cache/how-to/purge-cache/purge_by_prefix/), [purge API](https://developers.cloudflare.com/api/resources/cache/methods/purge/)).
+
+Three no-op repeats were measured with the pinned baseline and candidate binaries at the same repository-relative path, fixture, source revision and full-text setting. The medians were 6.42 s versus 3.74 s for 10 files and 23.42 s versus 3.76 s for 100 files. Live durations include registry/lock/cache/provider/network effects and vary by run. The verification matrix has no Cloudflare adapter request or transfer-byte counters: live `changed objects` must not be interpreted as provider request counts, and no provider-wire request or transfer-byte total is claimed. The local matrix's logical `LIST` counts are one backend interface call per prefix rather than provider pagination pages.
+
+Public checks after all five site publishes confirmed the registry still contained `smoke` and all five scale IDs; each site's `index.json` and `meta.json` returned 200 JSON; search manifests returned 200 for the three full-text sites; and the encoded Unicode/reserved-name HTML sample plus CSS resource matched the committed fixture bytes exactly at every scale. Requests to each site's private publish-state key returned only the application HTML shell, with no manifest contents. These checks used the public verification host and did not read credentials.
 
 ## Final evidence
 
-The pinned before/after matrix above records the local interface counts, body bytes, source mutations, generated object deltas, fresh-projection stage timings and actual `PublishSite` wall times. The remaining T18 work is the proof of fast-path responsibilities, state failure/recovery behavior, cleanup and neighboring-site isolation listed above, plus the separate candidate live Cloudflare measurements; local fake-backend results are not remote request measurements.
+The pinned before/after matrix records local interface counts, body bytes, source mutations, generated object deltas, fresh-projection stage timings and actual `PublishSite` wall times. Focused publisher tests cover no-op duties, migration, malformed state, pending-state and final-state failure boundaries, changed-source retry after partial PUT/DELETE, dry-run, repair, unregister cleanup and neighboring-site isolation. `go test ./...`, `go test -race ./cli/internal/publisher`, and the five-site fixture generator check passed for the final implementation. Local fake-backend timings and counts are not remote request measurements.
