@@ -13,8 +13,6 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/tdewolff/parse/v2"
-	jsparser "github.com/tdewolff/parse/v2/js"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
@@ -280,35 +278,11 @@ type jsModuleToken struct {
 	lineBreakBefore bool
 }
 
-// javascriptModuleReferences recognizes static imports and re-exports from
-// the module AST. Invalid or newer syntax falls back to the tolerant scanner
-// so resource collection does not become a JavaScript syntax validator.
+// javascriptModuleReferences recognizes static imports and re-exports with the
+// in-repo tolerant scanner, so resource collection never becomes a JavaScript
+// syntax validator and unknown or newer syntax is skipped instead of rejected.
 func javascriptModuleReferences(source []byte) []string {
-	if references, err := parsedJavaScriptModuleReferences(source); err == nil {
-		return uniqueStrings(references)
-	}
-	return lexJavaScriptModuleReferences(source)
-}
-
-func parsedJavaScriptModuleReferences(source []byte) ([]string, error) {
-	module, err := jsparser.Parse(parse.NewInputBytes(source), jsparser.Options{})
-	if err != nil {
-		return nil, err
-	}
-	var references []string
-	for _, statement := range module.BlockStmt.List {
-		switch statement := statement.(type) {
-		case *jsparser.ImportStmt:
-			if reference, ok := decodeJavaScriptStringLiteral(statement.Module); ok {
-				references = append(references, reference)
-			}
-		case *jsparser.ExportStmt:
-			if reference, ok := decodeJavaScriptStringLiteral(statement.Module); ok {
-				references = append(references, reference)
-			}
-		}
-	}
-	return references, nil
+	return uniqueStrings(lexJavaScriptModuleReferences(source))
 }
 
 func decodeJavaScriptStringLiteral(source []byte) (string, bool) {
@@ -319,8 +293,8 @@ func decodeJavaScriptStringLiteral(source []byte) (string, bool) {
 	return value, ok && next == len(source)
 }
 
-// lexJavaScriptModuleReferences is a tolerant fallback for syntax that the
-// module parser does not yet accept. It recognizes only static declarations.
+// lexJavaScriptModuleReferences scans the token stream for static import and
+// re-export declarations. It recognizes only static declarations.
 func lexJavaScriptModuleReferences(source []byte) []string {
 	tokens := lexJavaScriptModuleTokens(source)
 	var references []string

@@ -58,5 +58,6 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-060](ISSUE-060-flaky-preview-navigation-tests.md) | Done | P2 | Preview-navigation e2e tests fail intermittently under parallel runs. |
 | [ISSUE-061](ISSUE-061-early-preview-click-escapes-reader.md) | Open | P3 | A click right after a preview loads can open the raw file outside the reader. |
 | [ISSUE-063](ISSUE-063-actions-missing-fulltext.md) | Done | P1 | The site-publish Action could not pass `--fulltext`, so publishing through it withdrew page text search. |
+| [ISSUE-064](ISSUE-064-r2-uses-shared-aws-config.md) | Open | P2 | The Cloudflare R2 path loads the shared AWS configuration, so AWS profiles and environment variables can affect R2 publishing. |
 
 ISSUE-013's verified completion record is retained in Git history.

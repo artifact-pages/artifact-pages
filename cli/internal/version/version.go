@@ -6,26 +6,38 @@
 // Actions' `go build` cannot pass them.
 package version
 
-import "runtime/debug"
+import (
+	"runtime"
+	"runtime/debug"
+)
 
 // Product is the product version this source tree releases. Between releases it
 // still names the last release, so a development build deploys that release's
 // web bundle unless given --archive.
-const Product = "0.1.1"
+const Product = "0.1.2"
 
 // Build describes the VCS state recorded in the Go build info.
 type Build struct {
 	Revision string // full VCS revision, empty when unavailable
 	Modified bool   // the working tree had uncommitted changes
+
+	ModuleVersion string // main module version from the build info; "(devel)" for a source build, empty when unavailable
+	ModuleSum     string // main module checksum (h1:...); empty unless built from a downloaded module
+	GoVersion     string // Go toolchain that built the binary
 }
 
-// ReadBuild returns the VCS revision and modified flag of the running binary.
+// ReadBuild returns the module version and sum, Go version, VCS revision and
+// modified flag of the running binary.
 func ReadBuild() Build {
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
-		return Build{}
+		return Build{GoVersion: runtime.Version()}
 	}
-	return buildFromSettings(info.Settings)
+	build := buildFromSettings(info.Settings)
+	build.ModuleVersion = info.Main.Version
+	build.ModuleSum = info.Main.Sum
+	build.GoVersion = runtime.Version()
+	return build
 }
 
 func buildFromSettings(settings []debug.BuildSetting) Build {

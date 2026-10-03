@@ -1,0 +1,38 @@
+# Intent: keep dependency noise low and still get fixes for known vulnerabilities.
+# - GitHub Actions references (pinned by SHA) get a monthly version update.
+# - Go modules and npm packages have routine version updates disabled
+#   (open-pull-requests-limit: 0). Dependabot still opens pull requests for
+#   security advisories, which are not limited by that setting. The AWS SDK
+#   modules move together, so their security updates are grouped.
+# Security updates also need "Dependabot security updates" enabled in the
+# repository settings (Settings > Advanced Security); this file alone does not
+# turn them on.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+
+  - package-ecosystem: gomod
+    directory: /
+    open-pull-requests-limit: 0
+    schedule:
+      interval: weekly
+    groups:
+      aws-sdk:
+        applies-to: security-updates
+        patterns:
+          - "github.com/aws/*"
+
+  - package-ecosystem: gomod
+    directory: /scripts/gomodzip
+    open-pull-requests-limit: 0
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: /
+    open-pull-requests-limit: 0
+    schedule:
+      interval: weekly

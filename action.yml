@@ -65,6 +65,10 @@ runs:
       with:
         go-version-file: ${{ github.action_path }}/go.mod
         cache: false
+      # setup-go exports GOTOOLCHAIN=local, which makes a later setup-go in the
+      # same job ignore go.mod's toolchain line; auto lets each Action honor it.
+      env:
+        GOTOOLCHAIN: auto
     - name: Build the shared artifact-pages CLI
       shell: bash
       working-directory: ${{ github.action_path }}

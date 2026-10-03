@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -21,7 +22,7 @@ import (
 
 	"github.com/tasuku43/git-artifact-pages/cli/internal/githubrepo"
 	"github.com/tasuku43/git-artifact-pages/cli/internal/registry"
-	"go.yaml.in/yaml/v4"
+	"go.yaml.in/yaml/v3"
 )
 
 const (
@@ -179,9 +180,9 @@ func ParseLayers(contents [][]byte) (DeploymentConfig, error) {
 }
 
 func parseConfigLayer(contents []byte, allowPartial bool) (DeploymentConfig, error) {
-	var nodes []yaml.Node
-	if err := yaml.Load(contents, &nodes, yaml.WithAllDocuments()); err != nil {
-		return DeploymentConfig{}, fmt.Errorf("decode deployment config: %w", err)
+	nodes, err := decodeYAMLDocuments[yaml.Node](contents, false)
+	if err != nil {
+		return DeploymentConfig{}, err
 	}
 	if len(nodes) != 1 {
 		return DeploymentConfig{}, errors.New("deployment config must contain exactly one YAML document")
@@ -189,9 +190,9 @@ func parseConfigLayer(contents []byte, allowPartial bool) (DeploymentConfig, err
 	if err := validateConfigNode(&nodes[0], allowPartial); err != nil {
 		return DeploymentConfig{}, err
 	}
-	var documents []DeploymentConfig
-	if err := yaml.Load(contents, &documents, yaml.WithAllDocuments(), yaml.WithKnownFields(), yaml.WithUniqueKeys()); err != nil {
-		return DeploymentConfig{}, fmt.Errorf("decode deployment config: %w", err)
+	documents, err := decodeYAMLDocuments[DeploymentConfig](contents, true)
+	if err != nil {
+		return DeploymentConfig{}, err
 	}
 	if len(documents) != 1 {
 		return DeploymentConfig{}, errors.New("deployment config must contain exactly one YAML document")
@@ -201,6 +202,51 @@ func parseConfigLayer(contents []byte, allowPartial bool) (DeploymentConfig, err
 		return DeploymentConfig{}, fmt.Errorf("deployment config schemaVersion must be %d", SchemaVersion)
 	}
 	return layer, nil
+}
+
+// decodeYAMLDocuments decodes every document in contents. Decode errors are
+// reduced to one line so CLI output stays a single message.
+func decodeYAMLDocuments[T any](contents []byte, knownFields bool) ([]T, error) {
+	decoder := yaml.NewDecoder(bytes.NewReader(contents))
+	decoder.KnownFields(knownFields)
+	var documents []T
+	for {
+		var document T
+		err := decoder.Decode(&document)
+		if errors.Is(err, io.EOF) {
+			return documents, nil
+		}
+		if err != nil {
+			return nil, fmt.Errorf("decode deployment config: %s", singleLineYAMLError(err))
+		}
+		documents = append(documents, document)
+	}
+}
+
+func singleLineYAMLError(err error) string {
+	var typeErr *yaml.TypeError
+	if errors.As(err, &typeErr) {
+		return strings.Join(typeErr.Errors, "; ")
+	}
+	return strings.TrimPrefix(strings.Join(strings.Fields(err.Error()), " "), "yaml: ")
+}
+
+// rejectDuplicateKeys fails when a mapping defines the same key twice. The
+// YAML library only checks this while decoding into Go maps, so the node walk
+// makes the rule uniform for every level and for quoted keys.
+func rejectDuplicateKeys(mapping *yaml.Node) error {
+	seen := make(map[string]bool, len(mapping.Content)/2)
+	for index := 0; index+1 < len(mapping.Content); index += 2 {
+		key := mapping.Content[index]
+		if key.Kind != yaml.ScalarNode {
+			continue
+		}
+		if seen[key.Value] {
+			return fmt.Errorf("decode deployment config: line %d: mapping key %q already defined", key.Line, key.Value)
+		}
+		seen[key.Value] = true
+	}
+	return nil
 }
 
 func cloneSites(sites map[string]registry.Site) map[string]registry.Site {
@@ -365,6 +411,9 @@ func validateConfigNode(document *yaml.Node, allowPartial bool) error {
 	if root.Kind != yaml.MappingNode {
 		return errors.New("deployment config root must be a mapping")
 	}
+	if err := rejectDuplicateKeys(root); err != nil {
+		return err
+	}
 	for index := 0; index < len(root.Content); index += 2 {
 		if root.Content[index].Kind != yaml.ScalarNode || root.Content[index].ShortTag() != "!!str" {
 			return errors.New("deployment config keys must be strings")
@@ -409,6 +458,9 @@ func validateConfigNode(document *yaml.Node, allowPartial bool) error {
 		if block.Kind != yaml.MappingNode {
 			return fmt.Errorf("%s settings must be a mapping", blockName)
 		}
+		if err := rejectDuplicateKeys(block); err != nil {
+			return err
+		}
 		for index := 0; index < len(block.Content); index += 2 {
 			keyNode, valueNode := block.Content[index], block.Content[index+1]
 			if keyNode.Kind != yaml.ScalarNode || keyNode.ShortTag() != "!!str" {
@@ -426,6 +478,9 @@ func validateConfigNode(document *yaml.Node, allowPartial bool) error {
 		if sites.Kind != yaml.MappingNode {
 			return errors.New("sites must be a mapping (use sites: {} for an empty registry)")
 		}
+		if err := rejectDuplicateKeys(sites); err != nil {
+			return err
+		}
 		for index := 0; index < len(sites.Content); index += 2 {
 			idNode, siteNode := sites.Content[index], sites.Content[index+1]
 			if idNode.Kind != yaml.ScalarNode || idNode.ShortTag() != "!!str" {
@@ -433,6 +488,9 @@ func validateConfigNode(document *yaml.Node, allowPartial bool) error {
 			}
 			if siteNode.Kind != yaml.MappingNode {
 				return fmt.Errorf("site %q must be a mapping", idNode.Value)
+			}
+			if err := rejectDuplicateKeys(siteNode); err != nil {
+				return err
 			}
 			for fieldIndex := 0; fieldIndex < len(siteNode.Content); fieldIndex += 2 {
 				keyNode, valueNode := siteNode.Content[fieldIndex], siteNode.Content[fieldIndex+1]

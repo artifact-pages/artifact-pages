@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -1319,7 +1320,7 @@ func TestRunVersionPrintsProductVersionAndRevision(t *testing.T) {
 	if err := run(t.Context(), []string{"version"}, &stdout, &stderr); err != nil {
 		t.Fatalf("run(version) error = %v", err)
 	}
-	if !strings.HasPrefix(stdout.String(), "artifact-pages "+version.Product+"\n") || !strings.Contains(stdout.String(), "Revision") {
+	if !strings.HasPrefix(stdout.String(), "artifact-pages "+version.Product+"\n") || !strings.Contains(stdout.String(), "Revision") || !strings.Contains(stdout.String(), "  Go        "+runtime.Version()+"\n") {
 		t.Fatalf("text version output = %q", stdout.String())
 	}
 	stdout.Reset()
@@ -1332,6 +1333,9 @@ func TestRunVersionPrintsProductVersionAndRevision(t *testing.T) {
 	}
 	if decoded["operation"] != "version" || decoded["version"] != version.Product {
 		t.Fatalf("json version output = %v", decoded)
+	}
+	if decoded["goVersion"] != runtime.Version() {
+		t.Fatalf("json output goVersion = %v, want %s", decoded["goVersion"], runtime.Version())
 	}
 	if _, ok := decoded["modified"].(bool); !ok {
 		t.Fatalf("json output lacks boolean modified: %v", decoded)

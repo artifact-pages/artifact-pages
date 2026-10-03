@@ -62,9 +62,6 @@ func TestJavaScriptModuleReferences(t *testing.T) {
 		"./after-block.js",
 		"./after-expression.js",
 	}
-	if _, err := parsedJavaScriptModuleReferences([]byte(source)); err != nil {
-		t.Fatalf("parsedJavaScriptModuleReferences() error = %v", err)
-	}
 	if got := javascriptModuleReferences([]byte(source)); !reflect.DeepEqual(got, want) {
 		t.Fatalf("javascriptModuleReferences() = %#v, want %#v", got, want)
 	}

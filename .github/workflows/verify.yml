@@ -45,6 +45,16 @@ jobs:
       # Some fast Node tests (full-text core, app cache rollback) drive Chromium.
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
+      - name: Go vet
+        run: go vet ./...
+      - name: Go modules are tidy
+        run: |
+          go mod tidy -diff
+          cd scripts/gomodzip && go mod tidy -diff
+      # Pinned so a new release cannot change results unreviewed; the scheduled
+      # Vulnerability check workflow reports new advisories between pull requests.
+      - name: Known vulnerabilities (govulncheck)
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
       - name: Go tests
         run: go test ./... -count=1
       # A file name Go rejects would break `go install …@vX.Y.Z` for everyone.

@@ -694,6 +694,10 @@ type versionOutput struct {
 	Version   string `json:"version"`
 	Revision  string `json:"revision,omitempty"`
 	Modified  bool   `json:"modified"`
+
+	ModuleVersion string `json:"moduleVersion,omitempty"`
+	ModuleSum     string `json:"moduleSum,omitempty"`
+	GoVersion     string `json:"goVersion,omitempty"`
 }
 
 func runVersion(args []string, stdout, stderr io.Writer) error {
@@ -715,7 +719,7 @@ func runVersion(args []string, stdout, stderr io.Writer) error {
 	}
 	build := version.ReadBuild()
 	if *format == "json" {
-		return json.NewEncoder(stdout).Encode(versionOutput{Operation: "version", Version: version.Product, Revision: build.Revision, Modified: build.Modified})
+		return json.NewEncoder(stdout).Encode(versionOutput{Operation: "version", Version: version.Product, Revision: build.Revision, Modified: build.Modified, ModuleVersion: build.ModuleVersion, ModuleSum: build.ModuleSum, GoVersion: build.GoVersion})
 	}
 	fmt.Fprintf(stdout, "artifact-pages %s\n", version.Product)
 	switch {
@@ -726,6 +730,13 @@ func runVersion(args []string, stdout, stderr io.Writer) error {
 	default:
 		fmt.Fprintf(stdout, "  Revision  %s\n", reportText(build.Revision))
 	}
+	if build.ModuleVersion != "" {
+		fmt.Fprintf(stdout, "  Module    %s\n", reportText(build.ModuleVersion))
+	}
+	if build.ModuleSum != "" {
+		fmt.Fprintf(stdout, "  Sum       %s\n", reportText(build.ModuleSum))
+	}
+	fmt.Fprintf(stdout, "  Go        %s\n", reportText(build.GoVersion))
 	fmt.Fprintf(stdout, "  Web app   %s (pinned; deployed by app deploy)\n", "v"+version.Product)
 	return nil
 }
@@ -733,7 +744,7 @@ func runVersion(args []string, stdout, stderr io.Writer) error {
 func writeVersionUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "Usage: artifact-pages version [--format text|json]")
 	fmt.Fprintln(writer, "")
-	fmt.Fprintln(writer, "Print the product version and the VCS revision recorded in the build.")
+	fmt.Fprintln(writer, "Print the product version, the module version and sum, the Go version and the VCS revision recorded in the build.")
 }
 
 func runSitePublish(ctx context.Context, args []string, stdout, stderr io.Writer) error {

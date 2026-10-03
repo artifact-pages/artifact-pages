@@ -36,7 +36,7 @@ The owner decided (2026-10-03) to ship one product version in which the CLI know
 - The CLI source holds its product version as a constant (`cli/internal/version`). The release commit sets it; `-ldflags` are not used because `go install` and the Actions' `go build` cannot pass them.
 - `artifact-pages app deploy` deploys the web bundle of the CLI's own version: it downloads `vX.Y.Z`'s release assets and verifies archive, manifest and checksum before writing. The `--version` option and the admin Action's `version` input are removed. `--archive FILE` remains for local and pre-release bundles.
 - Between releases the constant still names the last release, so a development build deploys that release's web bundle unless given `--archive`.
-- `artifact-pages version` prints the product version and the VCS revision recorded in the Go build info.
+- `artifact-pages version` prints the product version, the module version and sum, the Go version and the VCS revision recorded in the Go build info.
 - Pinning an Action or CLI ref therefore pins a tested CLI/web pair. Deployment stays explicit: a new tag or a CLI upgrade never deploys the app by itself.
 
 Every kind of change goes through the same release:
@@ -103,6 +103,18 @@ The release commit (version constant bump) is prepared locally and reviewed like
 - The gate classifies formats from what a completed run leaves in storage. Control records that a successful run removes or never writes (locks after release, registry cleanup and cache-retry records) are not compared; a change to their `schemaVersion` must be declared as breaking by the author and reviewed. `only-in-baseline` / `only-in-candidate` formats are reported but do not change the verdict. Cross-CLI checks cover republish, preview and `lock inspect`, not `lock recover`. In breaking mode only registry and site formats have explicit republish-state assertions.
 - Each web build is smoke-tested with the compatibility spec from its own tree, so the spec's environment contract (`PLAYWRIGHT_BASE_URL`, `COMPAT_MODE`, `COMPAT_SITES`, `COMPAT_EXPECT`) must stay stable across releases.
 - If the tag workflow fails after the release was created (post-publication verification), the release stays published. While no consumer can have used it (minutes after creation, still a pre-release), delete the release and tag, fix, and push the tag again; otherwise leave it, mark it superseded in its notes, and ship a new patch version.
+
+## Supply chain
+
+Decided 2026-10-03 for `v0.1.2`, after two independent dependency and toolchain audits.
+
+- **Toolchain.** Both Go modules keep `go 1.26.0` as the language floor and add `toolchain go1.26.7`. `actions/setup-go` (pinned v7.0.0) reads the `toolchain` line of `go.mod` when `GOTOOLCHAIN` is not already `local`, then sets `GOTOOLCHAIN=local` for the job. Without the line it installed exactly `go1.26.0`, which has reachable standard-library vulnerabilities. Raising `go` itself was rejected because it would force every `go install` consumer onto the newer language version. Because `setup-go` exports `GOTOOLCHAIN=local` to later steps, each composite Action's `setup-go` step sets `GOTOOLCHAIN: auto` in its own `env` so a second Action in the same job still honors the `toolchain` line.
+- **Vulnerability scanning.** `govulncheck` (pinned version, run through `go run`) runs in the `Verify` test job, so every pull request and push to `main` is checked, and in a weekly scheduled workflow on `main` so new advisories surface without a code change.
+- **Dependabot.** Version updates are off (`open-pull-requests-limit: 0`) for Go modules and npm; only security updates open pull requests, with the AWS SDK modules grouped. GitHub Actions references get monthly updates. The owner must enable "Dependabot security updates" in the repository settings; the configuration file alone does not.
+- **Dependencies removed.** The JavaScript module parser (`tdewolff/parse`) is gone; preview resource collection uses the in-repo scanner only. YAML moved from a release-candidate library to `go.yaml.in/yaml/v3` (stable); duplicate keys are rejected by an explicit node walk in `cli/internal/config`.
+- **Build identity.** `artifact-pages version` shows the module version and sum and the Go version, so a user can match a binary to a released module.
+- **Not adopted now.** `-trimpath`, `CGO_ENABLED=0` and `-mod=readonly` on the verification build (no distributed binary, so no reproducibility claim to protect); raising the `go` directive; CODEOWNERS and branch protection (single-maintainer repository).
+- **Owner action.** Create a tag ruleset protecting `v*` from deletion and force-update, so a published version cannot be re-pointed (the Go checksum database would then reject it).
 
 ## Evidence and limitations
 

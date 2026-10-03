@@ -320,6 +320,13 @@ func TestParseRejectsInvalidConfig(t *testing.T) {
 		{"unsupported version", "schemaVersion: 2\nprovider: local\nlocal:\n  root: .local\n", "schemaVersion must be 1"},
 		{"unknown field", "schemaVersion: 1\nprovider: local\nlocal:\n  root: .local\n  bucket: accidental\n", "field bucket not found"},
 		{"duplicate key", "schemaVersion: 1\nschemaVersion: 1\nprovider: local\nlocal:\n  root: .local\n", "already defined"},
+		{"duplicate quoted key", "schemaVersion: 1\n\"provider\": local\nprovider: local\nlocal:\n  root: .local\n", `mapping key "provider" already defined`},
+		{"duplicate setting in block", "schemaVersion: 1\nprovider: local\nlocal:\n  root: .a\n  root: .b\n", `mapping key "root" already defined`},
+		{"duplicate site ID", "schemaVersion: 1\nprovider: local\nlocal:\n  root: .local\nsites:\n  sre:\n    name: A\n    repository: acme/a\n    sourcePath: docs\n  sre:\n    name: B\n    repository: acme/b\n    sourcePath: docs\n", `mapping key "sre" already defined`},
+		{"empty document", "", "exactly one YAML document"},
+		{"document marker only", "---\n", "root must be a mapping"},
+		{"anchor and alias", "schemaVersion: 1\nprovider: local\nlocal: &l\n  root: .local\nsites:\n  sre: *l\n", "must be a mapping"},
+		{"merge key", "schemaVersion: 1\nprovider: local\nbase: &b\n  root: .local\nlocal:\n  <<: *b\n", "setting names must be strings"},
 		{"multiple docs", "schemaVersion: 1\nprovider: local\nlocal:\n  root: .local\n---\nschemaVersion: 1\nprovider: local\nlocal:\n  root: .other\n", "exactly one YAML document"},
 		{"wrong provider type", "schemaVersion: 1\nprovider: 1\nlocal:\n  root: .local\n", "provider must be a string"},
 		{"wrong block type", "schemaVersion: 1\nprovider: local\nlocal: []\n", "local settings must be a mapping"},
@@ -731,5 +738,32 @@ func writeConfig(t *testing.T, filePath, root string) {
 	contents := fmt.Sprintf("schemaVersion: 1\nprovider: local\nlocal:\n  root: %s\n", root)
 	if err := os.WriteFile(filePath, []byte(contents), 0o600); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestParseConfigLayerPartialRejectsDuplicatesAndAliases(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want string
+	}{
+		{"duplicate top-level key", "schemaVersion: 1\nsites: {}\nsites: {}\n", "already defined"},
+		{"unknown field", "schemaVersion: 1\nunknown: 1\n", "field unknown not found"},
+		{"alias value", "schemaVersion: 1\nsites: &s {}\nother: *s\n", "field other not found"},
+		{"multiple documents", "schemaVersion: 1\n---\nschemaVersion: 1\n", "exactly one YAML document"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := parseConfigLayer([]byte(test.body), true)
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("parseConfigLayer() error = %v, want substring %q", err, test.want)
+			}
+			if strings.Contains(err.Error(), "\n") {
+				t.Fatalf("parseConfigLayer() error = %q, want a single line", err)
+			}
+		})
+	}
+	if _, err := parseConfigLayer([]byte("schemaVersion: 1\nsites: {}\n"), true); err != nil {
+		t.Fatalf("parseConfigLayer(sites only) error = %v", err)
 	}
 }
