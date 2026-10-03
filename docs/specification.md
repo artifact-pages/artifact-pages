@@ -366,6 +366,8 @@ The `https:` source is intentionally broad: it matches resources from any HTTPS 
 
 The policy does not confine redirects to an artifact path: an allowed HTTPS resource may redirect to another HTTPS URL. Any future hosting adapter must preserve the HTTPS-resource behavior and the same trusted-publisher assumption. If mutually untrusted publishers or private artifacts need isolation, use a per-site HTTPS-origin allowlist or a separate origin before supporting that use case.
 
+Delivery must not alter the bytes of an artifact or preview object: the response body equals the published object. Edge features that rewrite or inject into response bodies, such as email obfuscation, Rocket Loader, Automatic HTTPS Rewrites, Fonts, analytics injection, and Polish, are disabled for the Artifact Pages hostname by the provider module, scoped to that hostname rather than the zone.
+
 Artifacts are served from the same origin as the SPA under `/_artifacts/*`. The policy does not isolate artifacts: an artifact script can access the parent application and other same-origin resources, and the broad HTTPS source permits same-origin HTTPS requests outside its site prefix. This product trusts published HTML rather than isolating hostile publishers. If private or authenticated content, or mutually untrusted HTML publishers, become part of the product, artifact hosting must move to a separate origin and the security model must be revisited before that use case is supported.
 
 ### Markdown reader trust boundary
