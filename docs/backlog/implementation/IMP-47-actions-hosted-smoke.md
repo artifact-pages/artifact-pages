@@ -1,6 +1,6 @@
 # IMP-47 — Hosted-runner smoke workflow for the composite Actions
 
-- Status: In progress
+- Status: Done
 - Lanes: CLI / release
 - Execution: Agent-led. No cloud credentials or secrets are required.
 - Depends on: [IMP-34](IMP-34-actions.md), [IMP-13](IMP-13-action.md); the root Action case follows [IMP-46](IMP-46-action-marketplace-release.md) slice 1.
@@ -24,10 +24,10 @@ A workflow in this repository calls each Action with `uses: ./actions/<name>` (a
 
 ## Acceptance criteria
 
-- [ ] Every Action in `actions/` (and the root Action once added) runs through `uses:` on a GitHub-hosted runner, and the run is green on a pull request and on `main`.
-- [ ] Assertions cover outputs, written objects, dry-run immutability and failure exit codes, as listed in the slices.
-- [ ] The release workflow requires the smoke job before creating a release.
-- [ ] Run links are recorded here.
+- [x] Every Action in `actions/` (and the root Action once added) runs through `uses:` on a GitHub-hosted runner, and the run is green on a pull request and on `main`.
+- [x] Assertions cover outputs, written objects, dry-run immutability and failure exit codes, as listed in the slices.
+- [x] The release workflow requires the smoke job before creating a release (via `verify.yml`).
+- [x] Run links are recorded here.
 
 ## Progress
 
@@ -40,4 +40,7 @@ A workflow in this repository calls each Action with `uses: ./actions/<name>` (a
 - the manual and explicit-PR preflight
 - preview-publish of a committed change, and a mismatched-PR rejection
 
-`ci.yml` and `release.yml` grant `pull-requests: read` to the reusable workflow for the explicit-PR check. Before pushing, the same CLI sequence was replayed locally through `actions/shared/invoke-cli.mjs` in a scratch clone, and every assertion's assumption held: file layout, output shapes, exit codes, preview documents and unregister cleanup. That replay does not exercise the composite runtime. The first hosted run is pending a push.
+`ci.yml` and `release.yml` grant `pull-requests: read` to the reusable workflow for the explicit-PR check. Before pushing, the same CLI sequence was replayed locally through `actions/shared/invoke-cli.mjs` in a scratch clone, and every assertion's assumption held: file layout, output shapes, exit codes, preview documents and unregister cleanup. That replay does not exercise the composite runtime. Hosted runs (all 40 steps successful):
+
+- Pull request #2, `pull_request` event including the explicit-PR preflight, 51 s: https://github.com/tasuku43/git-artifact-pages/actions/runs/37091816417/job/111113567208
+- `main` after the merge (`ae017b1`): https://github.com/tasuku43/git-artifact-pages/actions/runs/37092025051

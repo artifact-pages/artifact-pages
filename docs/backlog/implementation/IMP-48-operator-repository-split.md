@@ -21,6 +21,15 @@
 
 ## Progress
 
+- 2026-10-03: created both repositories as public and empty: https://github.com/tasuku43/artifact-pages-admin and https://github.com/tasuku43/artifact-pages-docs.
+- 2026-10-03, slice 1 (verification environment), this part only:
+  - **Terraform:** `terraform/deployments/cloudflare-verify` (own state, bucket `artifact-pages-verify`, zone guard) was applied by the owner: 7 resources, all in the `artifact-pages.stream` zone and account.
+  - **CLI (v0.1.2), using `artifact-pages.verify.yaml`:** `registry register`, `app deploy` (release bundle v0.1.2), `site publish --site smoke --fulltext` and a manual `preview publish` all succeeded against `https://artifact-pages.stream`.
+  - **HTTP checks:** `/`, `/smoke`, registry and site indexes, the raw artifact and the preview list return 200. `meta.json` advertises `fullTextUrl`. The raw preview carries its revision-scoped CSP and `nosniff`. HTTP is blocked with 403. Requests for `_control/locks/*.json` return the app shell, not the lock object.
+  - **Credential isolation:** the CLI key pair is denied on the production bucket `artifact-pages`, and the Terraform token sees only `artifact-pages.stream`.
+  - **Problems found:** the first runs failed because the CLI token lacked Cache Purge; reruns converged. This surfaced [ISSUE-066](../issues/ISSUE-066-registry-app-deploy-lose-failed-purge.md) (failed registry/app purges are not retried), [ISSUE-065](../issues/ISSUE-065-registry-dry-run-says-unchanged.md) and [ISSUE-067](../issues/ISSUE-067-single-cloudflare-publisher-token.md).
+  - **Not yet covered:** a browser walk-through and the Action against this target.
+
 - 2026-10-03: created both repositories as public and empty with `gh repo create`: https://github.com/tasuku43/artifact-pages-admin and https://github.com/tasuku43/artifact-pages-docs. Local clones are at `~/work/github.com/tasuku43/artifact-pages-{admin,docs}` (ghq).
 - 2026-10-03: the owner reported that the `artifact-pages.stream` zone is registered. Public DNS returns Cloudflare nameservers `agustin` and `kenia`, the same pair as `artifact-pages.dev`, which suggests the same account. The current local `CLOUDFLARE_API_TOKEN` lists only `artifact-pages.dev`, so the zone ID, active status and account have not been checked through the API. A verification token scoped to `artifact-pages.stream` and the verification bucket is still needed. It should be separate from the production token, which must not gain access to the verification zone, and vice versa.
 

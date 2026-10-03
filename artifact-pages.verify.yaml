@@ -1,0 +1,19 @@
+# Verification deployment on artifact-pages.stream (TD5). Non-secret: credentials
+# are read from CF_VERIFY_* variables, which never collide with production names.
+# Load them with: set -a; source ~/.config/artifact-pages/verify.env; set +a
+schemaVersion: 1
+provider: cloudflare
+cloudflare:
+  accountId: 9ac354c8aa31d424224d8c4f3aa8ba2a
+  zoneId: b647a1ef28dde558fa8b80b50ad0c040
+  bucket: artifact-pages-verify
+  publicBaseURL: https://artifact-pages.stream
+  accessKeyIdEnv: CF_VERIFY_R2_ACCESS_KEY_ID
+  secretAccessKeyEnv: CF_VERIFY_R2_SECRET_ACCESS_KEY
+  apiTokenEnv: CF_VERIFY_API_TOKEN
+sites:
+  smoke:
+    name: Actions smoke
+    description: Verification fixture published from the OSS repository.
+    repository: tasuku43/git-artifact-pages
+    sourcePath: fixtures/actions-smoke/site
