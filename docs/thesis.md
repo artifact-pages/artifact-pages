@@ -1,34 +1,45 @@
 # Thesis
 
-Git Artifact Pages exists because static artifacts often want two properties at the same time:
+Independent publishing, shared experience.
 
-1. **Git-native lifecycle** — artifacts should be reviewed, linked, versioned, and recoverable alongside engineering work.
-2. **Web-native consumption** — a reviewer should open a normal URL and immediately browse, search, and read the rendered artifact.
+Teams produce static artifacts in many Git repositories: HTML reports, design documents, diagrams, generated explanations, Markdown notes. Readers want to find, open, and read them in one place. The usual ways of getting there each give something up:
 
-Existing choices tend to optimize for only one side. Git hosts preserve history well but treat HTML primarily as source. Static hosting makes HTML easy to consume but usually turns deployment into a separate lifecycle.
+- A central documentation build gathers every repository and regenerates the whole website. Readers get one site, but every team now depends on a shared pipeline and its timing.
+- Each repository hosts its own static site. Teams publish freely, but readers face scattered websites with different navigation and no shared way to find anything.
+- A dedicated documentation service holds the content. Reading is unified, but the artifacts leave Git and acquire a second lifecycle outside review and history.
 
-Git Artifact Pages treats Git as the source of truth and a static website as a **projection** of that source.
+Git Artifact Pages keeps the publishing independence of the second option and the single reading place of the first, without moving the source of truth out of Git.
 
 ## The central model
 
 ~~~text
-Git source
-(repository, ref, sourcePath)
+Git-managed artifacts
+(repository, sourcePath; made, reviewed, versioned there)
         ↓
-publish
+independent publish
+(one site per run, from that site's own repository, CI, and timing)
         ↓
-site namespace / mountPath
-        ↓
-static projection
+shared static projection
 ├── _indexes
 └── _artifacts
         ↓
 object storage + CDN
+(no particular cloud, no application server in the request path)
         ↓
-browser SPA
+one reader app
+(site discovery, tree, palette, page text search, pins and recents, reader, contents, links to previews and Git)
 ~~~
 
-The SPA is not the system of record. S3 is not the system of record. The CDN is not the system of record.
+The four parts depend on each other:
+
+1. **Git is the source of truth.** Artifacts are made in the repository that produces them, reviewed there, and published with their history intact. Artifact Pages does not edit or manage them.
+2. **Publishing is independent.** No central build gathers every site. A site is registered once, and from then on its repository publishes only that site's scope, whenever it changes, without waiting for any other site's build or deploy.
+3. **The platform is shared and static.** Every site's output lands in one common static projection with a fixed layout. It is designed so that any object store and CDN can serve it; there is no always-on backend. Because the layout is shared, independently published sites form one Artifact Pages space rather than separate websites.
+4. **The frontend is rich and unified.** One browser application reads that projection and gives every site the same way to discover, navigate, search, and read.
+
+Individual features such as page text search or CDN delivery are components that make this model work.
+
+The SPA is not the system of record. Object storage is not the system of record. The CDN is not the system of record.
 
 **Git is authoritative. Everything served to the browser is reproducible projection data.**
 
@@ -42,9 +53,17 @@ If a feature can be computed at publish time and served as a static file, prefer
 
 Search metadata, recent items, file trees, and table-of-contents information should be precomputed when practical.
 
+### Publish per site, not per platform
+
+A publish run writes one site's scope and nothing else. No step should require rebuilding or redeploying other sites, and the shared parts (the reader app and the site registry) change through their own explicit operations.
+
 ### Stable application, changing content
 
 The browser application changes infrequently. /_indexes/* and /_artifacts/* change as teams publish.
+
+### Shared layout, shared experience
+
+Every site uses the same projection layout and the same reader. Upgrading the reader app changes the reading experience of every site without republishing them, and a site publishes without coordinating with the app's release.
 
 ### Site namespace over repository identity
 
