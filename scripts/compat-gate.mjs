@@ -371,6 +371,16 @@ async function serveAndSmoke(name, { web, storage, mode = 'smoke', expect = {}, 
     const summary = /(\d+) passed/.exec(result.stdout)?.[0]
     const failed = /(\d+) failed/.exec(result.stdout)?.[0]
     if (result.status !== 0) log(`${name}: smoke FAILED\n${result.stdout}\n${result.stderr}`)
+    if (result.status !== 0) {
+      // Enough context to tell a serving problem from a reader problem in CI logs.
+      for (const url of ['/', '/_indexes/sites.json']) {
+        const response = await fetch(baseURL + url).catch((error) => ({ status: String(error) }))
+        log(`${name}: GET ${url} -> ${response.status}`)
+      }
+      log(sh('ls', ['-ld', web, storage, path.join(storage, '_indexes')], { allowFail: true }).stdout)
+      log(sh('ls', ['-la', web], { allowFail: true }).stdout)
+      log(compose(['logs', '--tail', '30']).stdout)
+    }
     return { name, mode, status: result.status === 0 ? 'passed' : 'failed', detail: [summary, failed].filter(Boolean).join(', ') }
   } finally {
     compose(['down', '--remove-orphans'])
