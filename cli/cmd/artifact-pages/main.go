@@ -276,7 +276,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 			writeAppUsage(stderr)
 			return withExitCode(fmt.Errorf("unknown app command %q", args[1]), 2)
 		}
-		if len(args) < 3 || args[2] == "--help" || args[2] == "-h" {
+		if len(args) >= 3 && (args[2] == "--help" || args[2] == "-h") {
 			writeAppDeployUsage(stdout)
 			return nil
 		}
@@ -291,7 +291,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 			writePreviewUsage(stderr)
 			return withExitCode(fmt.Errorf("unknown preview command %q", args[1]), 2)
 		}
-		if len(args) < 3 || args[2] == "--help" || args[2] == "-h" {
+		if len(args) >= 3 && (args[2] == "--help" || args[2] == "-h") {
 			writePreviewPublishUsage(stdout)
 			return nil
 		}
@@ -306,7 +306,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 			writeSiteUsage(stderr)
 			return withExitCode(fmt.Errorf("unknown site command %q", args[1]), 2)
 		}
-		if len(args) < 3 || args[2] == "--help" || args[2] == "-h" {
+		if len(args) >= 3 && (args[2] == "--help" || args[2] == "-h") {
 			writeSitePublishUsage(stdout)
 			return nil
 		}
@@ -345,14 +345,14 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 			return nil
 		}
 		if args[1] == "register" {
-			if len(args) < 3 || args[2] == "--help" || args[2] == "-h" {
+			if len(args) >= 3 && (args[2] == "--help" || args[2] == "-h") {
 				writeRegistryRegisterUsage(stdout)
 				return nil
 			}
 			return runRegistryRegister(ctx, args[2:], stdout, stderr)
 		}
 		if args[1] == "unregister" {
-			if len(args) < 3 || args[2] == "--help" || args[2] == "-h" {
+			if len(args) >= 3 && (args[2] == "--help" || args[2] == "-h") {
 				writeRegistryUnregisterUsage(stdout)
 				return nil
 			}
