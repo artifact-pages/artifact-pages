@@ -47,6 +47,13 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Go tests
         run: go test ./... -count=1
+      # A file name Go rejects would break `go install …@vX.Y.Z` for everyone.
+      - name: Go module zip check
+        run: |
+          module_dir="$RUNNER_TEMP/module"
+          mkdir -p "$module_dir"
+          git archive HEAD | tar -x -C "$module_dir"
+          cd scripts/gomodzip && go run . "$module_dir"
       - name: Type check
         run: npx tsc -b web/tsconfig.json
       - name: Fast Node tests
