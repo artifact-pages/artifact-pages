@@ -18,7 +18,7 @@ const expectedActionContracts = {
   },
   site: {
     directory: path.join(projectRoot, 'actions', 'site-publish'),
-    inputs: ['site', 'source', 'config', 'github-token', 'dry-run'],
+    inputs: ['site', 'source', 'config', 'github-token', 'fulltext', 'dry-run'],
     outputs: ['operation', 'outcome', 'site', 'registry_updated', 'changes_json', 'preview_changes_json', 'result_json', 'exit_code', 'error'],
   },
   preview: {
@@ -81,6 +81,28 @@ function parseCliStep(source) {
   return { lines: stepLines, env }
 }
 
+// The Marketplace entry point at the repository root must stay the site-publish
+// Action, differing only in listing metadata and root-relative source paths.
+async function assertRootActionMatchesSitePublish() {
+  const root = await fs.readFile(path.join(projectRoot, 'action.yml'), 'utf8')
+  const site = await fs.readFile(path.join(expectedActionContracts.site.directory, 'action.yml'), 'utf8')
+  assert.match(root, /^name: Artifact Pages$/m, 'root Action must keep its Marketplace name')
+  assert.match(root, /^branding:\n  icon: book-open\n  color: blue$/m, 'root Action must keep its Marketplace branding')
+  const description = root.match(/^description: (.*)$/m)?.[1] ?? ''
+  assert.ok(description.length > 0 && description.length <= 125, 'root Action description must be present and short enough for the Marketplace card')
+  const rootBody = root.slice(root.indexOf('\ninputs:\n'))
+  const siteBody = site.slice(site.indexOf('\ninputs:\n'))
+    .replace('${{ github.action_path }}/../../go.mod', '${{ github.action_path }}/go.mod')
+    .replace('working-directory: ${{ github.action_path }}/../..', 'working-directory: ${{ github.action_path }}')
+    .replace('$GITHUB_ACTION_PATH/../shared/invoke-cli.mjs', '$GITHUB_ACTION_PATH/actions/shared/invoke-cli.mjs')
+  assert.equal(rootBody, siteBody, 'root Action inputs, outputs and steps must match actions/site-publish apart from root-relative paths')
+  assert.equal(
+    await fs.realpath(path.join(projectRoot, 'actions', 'shared', 'invoke-cli.mjs')),
+    await fs.realpath(actionRunner),
+    'root Action runner path must resolve to the shared wrapper',
+  )
+}
+
 async function assertCompositeActionWiring() {
   for (const [kind, contract] of Object.entries(expectedActionContracts)) {
     const actionPath = path.join(contract.directory, 'action.yml')
@@ -139,6 +161,8 @@ async function assertCompositeActionWiring() {
       assert.match(source, /ARTIFACT_PAGES_ACTION_KIND: preview/, 'preview Action must let preflight return a typed failure envelope')
     }
   }
+
+  await assertRootActionMatchesSitePublish()
 
   const preflightAction = await fs.readFile(path.join(projectRoot, 'actions', 'preview-preflight', 'action.yml'), 'utf8')
   assert.deepEqual(sectionKeys(preflightAction, 'inputs').sort(), ['github-token', 'pull-request'])
@@ -807,6 +831,29 @@ async function main() {
       assert.deepEqual(catalog.groups, [], `${label} should remove the stale catalog reference`)
     }
 
+    const fullTextArgs = ['site', 'publish', '--site', 'sre', '--source', 'docs/artifacts', '--config', 'artifact-pages.yaml', '--fulltext', '--format', 'json']
+    const directFullText = runDirect(binaryPath, satelliteRoot, fullTextArgs, 'direct full-text site publish')
+    const actionFullText = await runAction('site', 'publish', fullTextArgs, {
+      site: 'sre', source: 'docs/artifacts', config: '.artifact-pages-action.yaml', fulltext: 'true',
+    }, satelliteRoot, binaryPath, scratchRoot)
+    assertActionParity(directFullText, actionFullText, 'site publish with fulltext')
+    assert.equal(directFullText.exitCode, 0, `full-text site publish failed: ${JSON.stringify(directFullText.result)}`)
+    for (const [label, root] of [['direct CLI', storageRoot], ['shared Action', actionStorageRoot]]) {
+      const meta = JSON.parse(await fs.readFile(path.join(root, '_indexes', 'sre', 'meta.json'), 'utf8'))
+      assert.ok(meta.fullTextUrl, `${label} full-text publish should advertise fullTextUrl`)
+    }
+
+    const withdrawArgs = ['site', 'publish', '--site', 'sre', '--source', 'docs/artifacts', '--config', 'artifact-pages.yaml', '--format', 'json']
+    const directWithdraw = runDirect(binaryPath, satelliteRoot, withdrawArgs, 'direct site publish without fulltext')
+    const actionWithdraw = await runAction('site', 'publish', withdrawArgs, {
+      site: 'sre', source: 'docs/artifacts', config: '.artifact-pages-action.yaml', fulltext: 'false',
+    }, satelliteRoot, binaryPath, scratchRoot)
+    assertActionParity(directWithdraw, actionWithdraw, 'site publish without fulltext')
+    for (const [label, root] of [['direct CLI', storageRoot], ['shared Action', actionStorageRoot]]) {
+      const meta = JSON.parse(await fs.readFile(path.join(root, '_indexes', 'sre', 'meta.json'), 'utf8'))
+      assert.equal(meta.fullTextUrl, undefined, `${label} publish without fulltext should withdraw fullTextUrl`)
+    }
+
     const appArchive = await makeTestBundle(scratchRoot)
     const directAppDryRunArgs = ['app', 'deploy', '--archive', appArchive, '--config', 'artifact-pages.yaml', '--dry-run', '--format', 'json']
     const directStorageBeforeAppDryRun = await treeSnapshot(storageRoot)
@@ -828,7 +875,7 @@ async function main() {
     }, adminRoot, binaryPath, scratchRoot)
     assertActionParity(directApp, actionApp, 'app deploy')
 
-    console.log('GitHub Action parity smoke passed: admin, site, and preview wrappers relay their shared CLI contracts, outputs, and exit codes; preview dry-run/apply matches direct CLI behavior, including newline includes and manual provenance in a PR event. Trust checks reject forks and pull_request_target before API/provider work, validate explicit same-repository PR identity/head SHA, and return typed preflight failures. The workflow example keeps fork jobs step-free, checks out only the base branch, and orders preflight before provider credentials. No provider credentials or live GitHub Actions run were used.')
+    console.log('GitHub Action parity smoke passed: admin, site (and the identical root Marketplace entry point), and preview wrappers relay their shared CLI contracts, outputs, and exit codes; preview dry-run/apply matches direct CLI behavior, including newline includes and manual provenance in a PR event. Trust checks reject forks and pull_request_target before API/provider work, validate explicit same-repository PR identity/head SHA, and return typed preflight failures. The workflow example keeps fork jobs step-free, checks out only the base branch, and orders preflight before provider credentials. No provider credentials or live GitHub Actions run were used.')
   } finally {
     await fs.rm(scratchRoot, { recursive: true, force: true })
   }

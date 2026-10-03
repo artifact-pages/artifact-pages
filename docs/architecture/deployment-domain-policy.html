@@ -49,11 +49,13 @@
         <thead><tr><th scope="col">Hostname</th><th scope="col">Purpose</th><th scope="col">Browser delivery path</th><th scope="col">TLS</th></tr></thead>
         <tbody>
           <tr><td><code>artifact-pages.dev</code></td><td>Production documentation and public demonstration</td><td>Cloudflare Cache/CDN → R2 custom domain</td><td>Cloudflare-managed custom-domain TLS</td></tr>
-          <tr><td><code>aws.artifact-pages.dev</code></td><td>AWS adapter verification</td><td>CloudFront → private S3 through OAC</td><td>ACM in <code>us-east-1</code></td></tr>
-          <tr><td><code>gcp.artifact-pages.dev</code></td><td>Possible future provider verification</td><td>Not provisioned; requires a separate production-adapter decision</td><td>Not selected</td></tr>
+          <tr><td><code>artifact-pages.stream</code></td><td>Cloudflare adapter verification, owned by the OSS repository</td><td>Cloudflare Cache/CDN → R2 custom domain on a separate bucket</td><td>Cloudflare-managed custom-domain TLS</td></tr>
+          <tr><td><code>aws.artifact-pages.stream</code></td><td>AWS adapter verification</td><td>CloudFront → private S3 through OAC</td><td>ACM in <code>us-east-1</code></td></tr>
+          <tr><td><code>gcp.artifact-pages.stream</code></td><td>Possible future provider verification</td><td>Not provisioned; requires a separate production-adapter decision</td><td>Not selected</td></tr>
         </tbody>
       </table></div>
       <p class="note">Ordinary subdomains are DNS records beneath the purchased domain, not separate domain registrations. This is not a promise that registration, storage, CDN traffic, optional DNS features, or all provider resources are free. Check current plans and the real Terraform plan before approval.</p>
+      <p class="note">Revised October 3, 2026 (<a href="../backlog/technical-design/TD5-verification-environment-and-operator-repositories.md">TD5</a>): verification moved to the separately purchased <code>artifact-pages.stream</code>. Cloudflare allows one zone entry point ruleset per phase, so a verification hostname inside the production zone would share production's rules. <code>artifact-pages.dev</code> now serves production only, operated from a separate admin repository.</p>
     </section>
 
     <section aria-labelledby="delivery">
@@ -66,7 +68,7 @@
         </div>
         <div>
           <h3>AWS verification</h3>
-          <p>Create a Cloudflare <strong>DNS-only</strong> CNAME for <code>aws.artifact-pages.dev</code> pointing to the CloudFront distribution hostname. Do not proxy it through Cloudflare: the browser must exercise CloudFront directly, without a second CDN masking AWS behavior.</p>
+          <p>Create a Cloudflare <strong>DNS-only</strong> CNAME for <code>aws.artifact-pages.stream</code> pointing to the CloudFront distribution hostname. Do not proxy it through Cloudflare: the browser must exercise CloudFront directly, without a second CDN masking AWS behavior.</p>
           <p>Issue the viewer certificate in ACM <code>us-east-1</code>, publish its DNS-validation CNAMEs in Cloudflare as DNS-only records, wait for validation, and attach the certificate and matching alias to CloudFront. Keep validation records for renewal. The S3 origin region is independent of the certificate region. Do not create a Route 53 hosted zone.</p>
         </div>
       </div>

@@ -27,7 +27,7 @@ There is no application server in the request path. Git is the source of truth; 
 
 Phase 1 local product. The SPA discovers sites from lightweight metadata, loads only the active site's artifact index, and provides a site picker, recent-artifact home, searchable navigation tree, and command palette. HTML artifacts run in an iframe; Markdown artifacts use a sanitized native reader.
 
-AWS infrastructure and published reusable distribution packages come later. The optional, unreleased GitHub Action entry points for admin and satellite workflows are documented in the [GitHub Actions guide](docs/guides/github-actions.md); replace the documented Action SHA placeholder with a reviewed commit before using its templates.
+AWS infrastructure and published reusable distribution packages come later. The optional, unreleased GitHub Action entry points are documented in the [GitHub Actions guide](docs/guides/github-actions.md). The repository root `action.yml` is the site-publish Action and the Marketplace listing; `actions/admin`, `actions/site-publish`, `actions/preview-preflight` and `actions/preview-publish` are its companions; replace the documented Action SHA placeholder with a reviewed commit before using its templates.
 
 ## Local development
 

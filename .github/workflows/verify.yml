@@ -70,6 +70,216 @@ jobs:
       - name: Browser tests (nginx behind Docker Compose)
         run: npm run test:e2e
 
+  # Runs every composite Action through `uses:` on a GitHub-hosted runner against a
+  # runner-local target (IMP-47). The parity script covers the shared wrapper logic;
+  # this job covers the composite runtime: expressions, action_path resolution,
+  # setup-go and go build, and the output mapping. No credentials are used.
+  actions-smoke:
+    name: Composite Actions smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Check out the repository with its branches
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Prepare the runner-local target
+        id: prep
+        env:
+          SMOKE_ROOT: ${{ runner.temp }}/actions-smoke
+        run: node scripts/actions-smoke-prepare.mjs
+
+      - name: Admin registry register (dry-run)
+        id: register-plan
+        uses: ./actions/admin
+        with:
+          operation: registry-register
+          config: ${{ steps.prep.outputs.config }}
+          dry-run: "true"
+      - name: Assert the dry-run planned without writes
+        env:
+          OUTCOME: ${{ steps.register-plan.outputs.outcome }}
+          STORAGE: ${{ steps.prep.outputs.storage }}
+        run: |
+          test "$OUTCOME" = planned
+          test -z "$(find "$STORAGE" -type f)"
+      - name: Admin registry register
+        id: register
+        uses: ./actions/admin
+        with:
+          operation: registry-register
+          config: ${{ steps.prep.outputs.config }}
+      - name: Admin app deploy from a packaged archive
+        id: app
+        uses: ./actions/admin
+        with:
+          operation: app-deploy
+          archive: ${{ steps.prep.outputs.archive }}
+          config: ${{ steps.prep.outputs.config }}
+      - name: Assert registry and app outputs
+        env:
+          REGISTER_EXIT: ${{ steps.register.outputs.exit_code }}
+          REGISTRY_UPDATED: ${{ steps.register.outputs.registry_updated }}
+          APP_EXIT: ${{ steps.app.outputs.exit_code }}
+          STORAGE: ${{ steps.prep.outputs.storage }}
+        run: |
+          test "$REGISTER_EXIT" = 0
+          test "$REGISTRY_UPDATED" = true
+          test "$APP_EXIT" = 0
+          jq -e '.sites | map(.id) | index("smoke")' "$STORAGE/_indexes/sites.json"
+          test -f "$STORAGE/index.html"
+
+      - name: Snapshot storage before the site dry-run
+        id: before-site-plan
+        env:
+          STORAGE: ${{ steps.prep.outputs.storage }}
+        run: echo "digest=$(cd "$STORAGE" && find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      - name: Site publish (dry-run)
+        id: site-plan
+        uses: ./actions/site-publish
+        with:
+          site: smoke
+          config: ${{ steps.prep.outputs.config }}
+          dry-run: "true"
+      - name: Assert the site dry-run planned without writes
+        env:
+          OUTCOME: ${{ steps.site-plan.outputs.outcome }}
+          CHANGES: ${{ steps.site-plan.outputs.changes_json }}
+          BEFORE: ${{ steps.before-site-plan.outputs.digest }}
+          STORAGE: ${{ steps.prep.outputs.storage }}
+        run: |
+          test "$OUTCOME" = planned
+          test "$(jq length <<<"$CHANGES")" -gt 0
+          test "$BEFORE" = "$(cd "$STORAGE" && find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)"
+      - name: Root Action publish with full-text search
+        id: site-fulltext
+        uses: ./
+        with:
+          site: smoke
+          config: ${{ steps.prep.outputs.config }}
+          fulltext: "true"
+      - name: Assert the publish and its full-text data
+        env:
+          OUTCOME: ${{ steps.site-fulltext.outputs.outcome }}
+          SITE: ${{ steps.site-fulltext.outputs.site }}
+          STORAGE: ${{ steps.prep.outputs.storage }}
+        run: |
+          test "$OUTCOME" = published
+          test "$SITE" = smoke
+          jq -e '.fullTextUrl' "$STORAGE/_indexes/smoke/meta.json"
+          test -f "$STORAGE/_artifacts/smoke/overview.html"
+      - name: Site publish without full-text search
+        id: site-withdraw
+        uses: ./actions/site-publish
+        with:
+          site: smoke
+          config: ${{ steps.prep.outputs.config }}
+      - name: Assert the full-text data was withdrawn
+        env:
+          EXIT_CODE: ${{ steps.site-withdraw.outputs.exit_code }}
+          STORAGE: ${{ steps.prep.outputs.storage }}
+        run: |
+          test "$EXIT_CODE" = 0
+          jq -e 'has("fullTextUrl") | not' "$STORAGE/_indexes/smoke/meta.json"
+
+      - name: Site publish for an unregistered site
+        id: unregistered
+        continue-on-error: true
+        uses: ./actions/site-publish
+        with:
+          site: not-registered
+          config: ${{ steps.prep.outputs.config }}
+          dry-run: "true"
+      - name: Site publish with an invalid input
+        id: invalid
+        continue-on-error: true
+        uses: ./actions/site-publish
+        with:
+          site: smoke
+          config: ${{ steps.prep.outputs.config }}
+          dry-run: maybe
+      - name: Assert relayed failure classes
+        env:
+          UNREGISTERED_OUTCOME: ${{ steps.unregistered.outcome }}
+          UNREGISTERED_EXIT: ${{ steps.unregistered.outputs.exit_code }}
+          UNREGISTERED_ERROR: ${{ steps.unregistered.outputs.error }}
+          INVALID_OUTCOME: ${{ steps.invalid.outcome }}
+          INVALID_EXIT: ${{ steps.invalid.outputs.exit_code }}
+        run: |
+          test "$UNREGISTERED_OUTCOME" = failure
+          test "$UNREGISTERED_EXIT" = 1
+          test -n "$UNREGISTERED_ERROR"
+          test "$INVALID_OUTCOME" = failure
+          test "$INVALID_EXIT" = 2
+
+      - name: Commit a document change to preview
+        run: |
+          git switch -c actions-smoke-preview
+          printf '<p>Preview change from run %s.</p>\n' "$GITHUB_RUN_ID" >> fixtures/actions-smoke/site/overview.html
+          git -c user.name=actions-smoke -c user.email=actions-smoke@users.noreply.github.com commit -qam "Actions smoke preview change"
+      - name: Preview trust preflight (manual preview)
+        uses: ./actions/preview-preflight
+      - name: Preview trust preflight with an explicit pull request
+        if: github.event_name == 'pull_request'
+        uses: ./actions/preview-preflight
+        with:
+          pull-request: ${{ github.event.pull_request.number }}
+      - name: Preview publish
+        id: preview
+        uses: ./actions/preview-publish
+        with:
+          site: smoke
+          source: fixtures/actions-smoke/site
+          default-ref: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || 'origin/main' }}
+          base-url: http://localhost:4179
+          config: ${{ steps.prep.outputs.config }}
+      - name: Assert the preview outputs
+        env:
+          EXIT_CODE: ${{ steps.preview.outputs.exit_code }}
+          DOCUMENTS: ${{ steps.preview.outputs.documents }}
+          GROUP_LIST_URL: ${{ steps.preview.outputs.group-list-url }}
+        run: |
+          test "$EXIT_CODE" = 0
+          jq -e 'map(tostring) | any(test("overview"))' <<<"$DOCUMENTS"
+          test -n "$GROUP_LIST_URL"
+      - name: Preview publish with a mismatched pull request
+        id: preview-rejected
+        continue-on-error: true
+        uses: ./actions/preview-publish
+        with:
+          site: smoke
+          source: fixtures/actions-smoke/site
+          pull-request: "999999"
+          base-url: http://localhost:4179
+          config: ${{ steps.prep.outputs.config }}
+      - name: Assert the mismatched preview was rejected before the CLI
+        env:
+          OUTCOME: ${{ steps.preview-rejected.outcome }}
+          ERROR: ${{ steps.preview-rejected.outputs.error }}
+        run: |
+          test "$OUTCOME" = failure
+          test -n "$ERROR"
+
+      - name: Admin registry unregister
+        id: unregister
+        uses: ./actions/admin
+        with:
+          operation: registry-unregister
+          site: smoke
+          config: ${{ steps.prep.outputs.unregister-config }}
+      - name: Assert the site was unregistered
+        env:
+          EXIT_CODE: ${{ steps.unregister.outputs.exit_code }}
+          STORAGE: ${{ steps.prep.outputs.storage }}
+        run: |
+          test "$EXIT_CODE" = 0
+          jq -e '.sites | map(.id) | index("smoke") | not' "$STORAGE/_indexes/sites.json"
+          test ! -e "$STORAGE/_indexes/smoke"
+
   compat-gate:
     name: Compatibility gate
     runs-on: ubuntu-24.04
