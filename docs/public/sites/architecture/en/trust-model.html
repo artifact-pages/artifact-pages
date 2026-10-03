@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="The trust model of Git Artifact Pages: publishing as the trust decision, HTML as same-origin content in an unsandboxed iframe, sanitized Markdown, the per-site Content Security Policy and its limits, previews, and why viewer access belongs to the operator's edge.">
+  <title>Trust model</title>
+  <script>
+    // Copy the reader app's theme (same-origin parent) before first paint; assets/site.js keeps it in sync.
+    (() => {
+      const root = document.documentElement;
+      root.classList.add('js');
+      try {
+        const theme = window.parent !== window && window.parent.document.documentElement.dataset.theme;
+        if (theme === 'light' || theme === 'dark') root.dataset.theme = theme;
+      } catch { /* cross-origin: fall back to prefers-color-scheme */ }
+    })();
+  </script>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../assets/site.css">
+  <script src="../assets/site.js" defer></script>
+</head>
+<body class="arch">
+  <a class="skip" href="#main">Skip to content</a>
+  <main id="main" class="wrap">
+    <div class="arch-bar">
+      <a class="arch-brand" href="overview.html"><b aria-hidden="true">A</b>Architecture</a>
+      <nav class="lang-switch" aria-label="Language"><a href="../ja/trust-model.html" hreflang="ja" lang="ja">日本語</a><span aria-current="page">English</span></nav>
+    </div>
+    <nav class="arch-pages" aria-label="Architecture pages">
+      <ol>
+        <li><a href="overview.html"><small>01</small>Overview</a></li>
+        <li><a href="storage-layout.html"><small>02</small>Storage layout</a></li>
+        <li><a href="publishing-model.html"><small>03</small>Publishing model</a></li>
+        <li><a href="search.html"><small>04</small>Search and indexes</a></li>
+        <li><a href="previews.html"><small>05</small>Previews</a></li>
+        <li><a href="trust-model.html" aria-current="page"><small>06</small>Trust model</a></li>
+      </ol>
+    </nav>
+
+    <header class="page-head">
+      <div>
+        <p class="eyebrow">Architecture · 06</p>
+        <h1>Trust model</h1>
+      </div>
+      <p class="answer"><span class="answer-label">Short answer</span>Publishing is the trust decision. Published HTML is approved, executable content rendered on the app's own origin in an unsandboxed iframe; Markdown is sanitized and never runs scripts. Who may read is decided by the operator's edge or network, not by Artifact Pages.</p>
+    </header>
+
+    <figure class="fig" style="--fig-min: 760px; --fig-max: 1060px">
+      <div class="fig-head"><strong>Where the boundaries are</strong><span>solid: product · dashed: operator-managed</span></div>
+      <div class="fig-frame" role="group" aria-label="Diagram: where the boundaries are">
+        <svg viewBox="0 0 960 440" role="img" aria-labelledby="tm-b-t tm-b-d">
+          <title id="tm-b-t">Where the boundaries are</title>
+          <desc id="tm-b-d">Trusted publishers write to one origin. An optional access gate configured by the operator surrounds the origin. Inside the origin, the reader app hosts HTML artifacts in an unsandboxed same-origin iframe that can reach the app's DOM and storage, and renders Markdown itself after sanitizing it. Viewers reach the origin only through the operator's gate; the product has no viewer identity.</desc>
+          <defs>
+            <marker id="tm-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ad-head"/></marker>
+            <marker id="tm-q" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ad-head q"/></marker>
+          </defs>
+          <text class="ad-lab ok" x="16" y="24">TRUSTED PUBLISHERS</text>
+          <rect class="ad-box ok" x="16" y="40" width="180" height="340" rx="10"/>
+          <text class="ad-t" x="30" y="66">People and CI you</text>
+          <text class="ad-t" x="30" y="84">allow to publish</text>
+          <text class="ad-s" x="30" y="116">Gates on the way in:</text>
+          <text class="ad-s" x="30" y="140">· registered repository</text>
+          <text class="ad-s" x="30" y="158">  and sourcePath</text>
+          <text class="ad-s" x="30" y="182">· no previews from forks</text>
+          <text class="ad-s" x="30" y="206">· credentials scoped by</text>
+          <text class="ad-s" x="30" y="224">  the provider setup</text>
+          <text class="ad-q" x="30" y="262">The registry check is a</text>
+          <text class="ad-q" x="30" y="278">workflow rule, not IAM.</text>
+          <text class="ad-q" x="30" y="316">Publishing HTML approves</text>
+          <text class="ad-q" x="30" y="332">its scripts and requests.</text>
+          <path class="ad-flow ok" d="M196 210 H274" marker-end="url(#tm-a)"/>
+          <text class="ad-q" x="221" y="200" text-anchor="middle">publish</text>
+
+          <rect class="ad-zone warn" x="248" y="40" width="508" height="380" rx="14"/>
+          <text class="ad-lab warn" x="264" y="62">OPERATOR EDGE OR NETWORK GATE (OPTIONAL)</text>
+          <text class="ad-q" x="264" y="80">VPN or IP rules, Basic auth, Cloudflare Access, signed cookies… configured outside the product</text>
+
+          <rect class="ad-box" x="276" y="96" width="452" height="296" rx="10"/>
+          <text class="ad-lab" x="292" y="118">ONE ORIGIN · READER APP /index.html</text>
+          <rect class="ad-box soft" x="540" y="104" width="176" height="24" rx="6"/>
+          <text class="ad-mq" x="550" y="120">localStorage: pins, reads</text>
+
+          <rect class="ad-box acc" x="292" y="148" width="208" height="228" rx="8"/>
+          <text class="ad-lab acc" x="306" y="170">HTML ARTIFACT · IFRAME</text>
+          <text class="ad-m" x="306" y="192" style="font-size:10px">/_artifacts/&lt;site&gt;/…</text>
+          <text class="ad-s" x="306" y="218">no sandbox attribute</text>
+          <text class="ad-s" x="306" y="238">own CSS and scripts run</text>
+          <text class="ad-s" x="306" y="266">CSP allows: its own site</text>
+          <text class="ad-s" x="306" y="284">path, https:, data:, blob:</text>
+          <text class="ad-s" x="306" y="302">blocks: external http:</text>
+          <text class="ad-q" x="306" y="334">same origin as the app:</text>
+          <text class="ad-q" x="306" y="350">can read its DOM and storage</text>
+          <path class="ad-flow ad-dash" d="M470 148 V132 H540" marker-end="url(#tm-a)"/>
+
+          <rect class="ad-box" x="516" y="148" width="196" height="228" rx="8"/>
+          <text class="ad-lab" x="530" y="170">MARKDOWN · APP DOM</text>
+          <text class="ad-m" x="530" y="192" style="font-size:10px">/_artifacts/&lt;site&gt;/….md</text>
+          <text class="ad-s" x="530" y="218">rendered by the app</text>
+          <text class="ad-s" x="530" y="238">after a sanitizer</text>
+          <text class="ad-s" x="530" y="266">no scripts; Mermaid in</text>
+          <text class="ad-s" x="530" y="284">strict mode</text>
+          <text class="ad-s" x="530" y="302">resources: own site path</text>
+          <text class="ad-s" x="530" y="320">or https: only</text>
+
+          <text class="ad-lab" x="790" y="24">VIEWERS</text>
+          <rect class="ad-box" x="790" y="40" width="154" height="340" rx="10"/>
+          <text class="ad-t" x="804" y="66">Anyone the</text>
+          <text class="ad-t" x="804" y="84">gate admits</text>
+          <text class="ad-s" x="804" y="116">no accounts, logins,</text>
+          <text class="ad-s" x="804" y="134">or roles in the product</text>
+          <text class="ad-s" x="804" y="166">everyone admitted gets</text>
+          <text class="ad-s" x="804" y="184">the same static content</text>
+          <text class="ad-q" x="804" y="222">a hidden site or an</text>
+          <text class="ad-q" x="804" y="238">unguessable SHA is</text>
+          <text class="ad-q" x="804" y="254">not access control</text>
+          <path class="ad-line" d="M790 210 H730" marker-end="url(#tm-q)"/>
+          <text class="ad-q" x="16" y="434">/_control/* (locks, retry records) is never served, whatever the gate.</text>
+        </svg>
+      </div>
+      <figcaption>Everything inside the solid box is one origin, so it is one trust zone. The iframe separates layout and CSS, not scripts. <span class="fig-scroll">Scroll sideways to see the whole diagram.</span></figcaption>
+      <details class="fig-text">
+        <summary>The diagram as text</summary>
+        <ul>
+          <li>Trusted publishers (people and CI the operator allows) write content. On the way in, the source must be the registered repository and source path, fork pull requests get no previews, and credentials are scoped by the provider setup. The registry check is a workflow rule, not IAM.</li>
+          <li>An optional gate configured by the operator (VPN or IP rules, Basic authentication, Cloudflare Access, signed cookies) can surround the whole origin. It is outside the product.</li>
+          <li>On the origin, the reader app loads an HTML artifact from <code>/_artifacts/&lt;site&gt;/…</code> into an iframe without a sandbox. Its scripts run; its CSP allows its own site path, HTTPS, <code>data:</code> and <code>blob:</code>, and blocks external HTTP. Because it shares the app's origin, it can read the app's DOM and local storage.</li>
+          <li>Markdown is rendered by the app after sanitizing; scripts never run, Mermaid runs in strict mode, and resources must come from the site's own path or HTTPS.</li>
+          <li>Viewers have no identity in the product. Everyone the gate admits gets the same content. Hiding a site or using an unguessable SHA is not access control. <code>/_control/*</code> is never served.</li>
+        </ul>
+      </details>
+    </figure>
+
+    <section class="doc-section" aria-labelledby="decision">
+      <h2 id="decision">Publishing is the trust decision</h2>
+      <p>Git Artifact Pages exists to show HTML reports, dashboards, and diagrams <strong>exactly as their authors built them</strong>, scripts included. It therefore treats published HTML as approved executable content, the way a team trusts its own internal web pages. The operator decides who may publish (people, CI workflows, credentials); the product does not try to make hostile HTML safe to view.</p>
+      <p>This is a deliberate fit for one organization, or several teams that trust each other, publishing to one origin. It is not designed for mutually untrusted publishers.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="html">
+      <h2 id="html">HTML: same origin, no sandbox</h2>
+      <p>The reader loads <code>/_artifacts/&lt;site&gt;/&lt;path&gt;</code> into an ordinary iframe <strong>without a <code>sandbox</code> attribute</strong>, from the same origin as the app. That keeps relative URLs, ES modules, fonts, and fetches working exactly as when the file is opened directly, and keeps the artifact's CSS from leaking into the app.</p>
+      <p>The consequence is spelled out in the specification: an artifact's scripts <strong>can access the parent application's DOM, its local storage, and any other same-origin content</strong>. The reader keeps pins, recently read pages, and the theme in local storage, so an artifact could read or change them. These documentation pages use this on purpose: their script reads the reader app's theme from the parent page so they match it, and the reader in turn reaches into the frame to highlight page text search terms.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="csp">
+      <h2 id="csp">The per-site Content Security Policy</h2>
+      <p>The edge sends an enforced CSP with every artifact response. Locally, nginx builds it from the request path:</p>
+      <div class="term" aria-label="Artifact CSP from the local nginx config">
+        <div class="term-head"><span>Content-Security-Policy · /_artifacts/checkout/…</span></div>
+<pre><span class="k">default-src</span> http://localhost:4179/_artifacts/checkout/ https: data: blob:;
+<span class="k">script-src</span>  http://localhost:4179/_artifacts/checkout/ https: <span class="s">'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'</span> data: blob:;
+<span class="k">style-src</span>   http://localhost:4179/_artifacts/checkout/ https: <span class="s">'unsafe-inline'</span> data: blob:</pre>
+      </div>
+      <ul>
+        <li><strong>Allowed:</strong> resources under the page's own site path, and any HTTPS origin (CSS, scripts, images, fonts, media, fetch), subject to normal TLS, CORS, and mixed-content rules. Inline scripts, styles, and <code>eval</code> stay allowed because artifacts are trusted.</li>
+        <li><strong>Blocked:</strong> insecure external <code>http:</code> resources.</li>
+        <li><strong>Not a cross-site wall.</strong> The <code>https:</code> source matches every HTTPS URL, including other sites' paths on the app's own origin once it is served over HTTPS. So in production one site's page <em>can</em> load another site's files. Over plain HTTP locally, the path source does block other sites' paths. <code>'self'</code> is deliberately not used, because all sites share one origin. Allowed HTTPS resources may also redirect anywhere on HTTPS.</li>
+      </ul>
+      <p>Practical consequence: <strong>each site carries its own copies of shared files</strong>. These documentation sites, for example, keep a copy of the same <code>site.css</code> and <code>site.js</code> in each site's <code>assets/</code> rather than loading one site's files from another, so they work under both the local and the production policy.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="markdown">
+      <h2 id="markdown">Markdown: sanitized, never executed</h2>
+      <p>Markdown follows a different model. The app renders it into its own DOM after passing embedded raw HTML through a sanitizer that removes script-bearing and disallowed elements and attributes. Publishing Markdown never grants script execution.</p>
+      <ul>
+        <li>Mermaid diagrams render locally with <code>securityLevel: "strict"</code> and no diagram interactions; if rendering fails, the source stays visible as code.</li>
+        <li>Relative resources resolve from the Markdown file and must stay inside that site's artifact namespace. External links and images must be HTTPS; <code>data:</code> is allowed only for base64 PNG, JPEG, GIF, WebP, or AVIF images; <code>mailto:</code> links are allowed.</li>
+        <li>Links to other pages in the same site become app routes; other links open in a new tab with <code>noopener</code> and <code>noreferrer</code>.</li>
+      </ul>
+    </section>
+
+    <section class="doc-section" aria-labelledby="previews-trust">
+      <h2 id="previews-trust">Previews carry the same trust</h2>
+      <p>Preview HTML is rendered under exactly the production model: same origin, unsandboxed iframe, the same resource rules scoped to the revision's path. Running <code>preview publish</code> approves that content before merge; it is not a safe viewer for arbitrary changes. That is why the trust gates sit at the input:</p>
+      <ul>
+        <li>Only heads in the site's registered repository are previewed; pull requests from forks are excluded, even when they target a registered repository.</li>
+        <li>A privileged <code>pull_request_target</code> workflow must not check out and run fork content.</li>
+        <li>No preview-only hostname, no <code>srcdoc</code> fallback, and no blanket <code>Access-Control-Allow-Origin: null</code> or wildcard CORS grant.</li>
+      </ul>
+      <p>Supporting fork previews or mutually untrusted publishers would need a separate approval and isolation model, such as a separate origin. That would be a new product decision.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="viewers">
+      <h2 id="viewers">Who may read is decided at the edge</h2>
+      <p>Artifact Pages has <strong>no viewer accounts, logins, sessions, roles, or per-site access policy</strong>. If content must be restricted, the operator configures that at the hosting edge or the surrounding network: VPN or IP restrictions, Basic authentication, an identity provider with CloudFront signed cookies, Cloudflare Access, or an equivalent. Once a request is admitted, everyone gets the same static content.</p>
+      <p>Why keep identity out of the product?</p>
+      <ul>
+        <li><strong>The product stays static.</strong> There is no session to check, so any CDN can cache and serve every object, and there is no identity-aware cache partitioning to get wrong.</li>
+        <li><strong>The operator chooses the mechanism.</strong> Each organization can use the gate that fits its provider and identity setup, protecting a hostname, selected paths, or a whole network, without the product defining an identity policy.</li>
+        <li><strong>One boundary covers everything.</strong> A single gate in front of the origin protects pages, indexes, search data, and previews alike.</li>
+      </ul>
+      <p>For that to hold, the gate must cover the logical routes <strong>and</strong> the raw <code>/_indexes/*</code>, <code>/_artifacts/*</code>, and <code>/_previews/*</code> paths, and run before protected bytes come from the origin or a shared cache. Several things are explicitly <strong>not</strong> access control:</p>
+      <ul class="checklist no">
+        <li>Removing a site from the registry or hiding it from navigation; direct object URLs still work until the objects are deleted.</li>
+        <li>An unguessable preview SHA, or a preview being “before merge”.</li>
+        <li>Unregistering as revocation: it deletes origin objects and requests cache invalidation, but cannot recall bytes already delivered.</li>
+      </ul>
+    </section>
+
+    <section class="doc-section" aria-labelledby="publishers">
+      <h2 id="publishers">Publisher credentials and control objects</h2>
+      <p>The registry check and the site lock coordinate Artifact Pages commands; they are <strong>not</strong> a permission system, and anyone with direct write credentials to the bucket bypasses them. Narrowing what a publisher can touch is the job of provider credentials: a satellite publisher should be able to read only the registry object; read, write, and delete only within its own site's index and artifact prefixes; read and write its preview prefix (the AWS reference policy withholds deletion of preview history); read and write its site lock <code>_control/locks/sites/&lt;site&gt;.json</code>; read, write, and delete its cache retry record <code>_control/site-cache/&lt;site&gt;.json</code>; and request CDN invalidation (CloudFront <code>CreateInvalidation</code>, or a Cloudflare zone token with cache purge permission), because a publish that changes content purges the changed URLs. It never writes the registry or the application plane. Cloudflare supports this with an optional separate registry-reader identity; the AWS reference design intends GitHub Actions OIDC with separate admin and satellite roles.</p>
+      <p>Private coordination objects under <code>/_control/*</code> must never be returned to viewers. Delivery may answer those paths with the app shell, as long as the lock and retry-record bytes are never served.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="proof">
+      <h2 id="proof">What has been proven</h2>
+      <ul class="proof">
+        <li><span class="chip local">Proven locally</span><span>Iframe CSS containment, intended parent-DOM and storage access from benign fixtures, Markdown script removal, same-origin module loading without a null or wildcard CORS grant, external HTTPS allowed and external HTTP blocked by the CSP (T4, T6, ISSUE-037 browser cases).</span></li>
+        <li><span class="chip sampled">Sampled on Cloudflare</span><span>On 2026-10-01: an enforced artifact CSP header on live Guide HTML, a revision-scoped enforced CSP on preview HTML, and control-key paths returning only the app shell. On 2026-10-02: on the live Guide page, a fetch to an HTTP URL built at runtime was refused by the enforced CSP (<code>connect-src</code> via the <code>default-src</code> fallback, in Chromium), and temporary scoped R2 credentials were denied writes outside their site while still publishing it (T15).</span></li>
+        <li><span class="chip open">Not yet proven</span><span>The external-HTTP refusal across the full matrix of resource types and browsers, isolating the cache-purge token from publisher processes, GitHub OIDC roles, and anything on live AWS.</span></li>
+      </ul>
+    </section>
+
+    <div class="callout guide"><span class="ico">GUIDE</span><p>What this means when you set up a deployment, including where to put an access gate, is in the guide's <a href="/guide/en/access-and-trust.html" target="_top">Access and trust</a>.</p></div>
+
+    <nav class="pager" aria-label="Pages">
+      <a class="prev" href="previews.html"><small>Previous</small><strong>Previews</strong></a>
+      <a class="next" href="overview.html"><small>Back to the start</small><strong>Overview</strong></a>
+    </nav>
+
+    <footer class="foot"><strong>Architecture</strong><p>These pages describe the behavior recorded in the project's specification and verification records. Team and repository names such as <code>acme/checkout</code> are illustrative.</p></footer>
+  </main>
+</body>
+</html>

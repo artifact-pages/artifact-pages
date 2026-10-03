@@ -8,3 +8,8 @@ sites:
     description: Adopt, publish, and read with Git Artifact Pages. 導入・公開・閲覧のガイド。
     repository: tasuku43/git-artifact-pages
     sourcePath: docs/public/sites/guide
+  architecture:
+    name: Architecture
+    description: How Git Artifact Pages works and why. 仕組みと設計の考え方。
+    repository: tasuku43/git-artifact-pages
+    sourcePath: docs/public/sites/architecture

@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Git Artifact Pagesのプルリクエスト・プレビューの仕組み。プレビューの対象、コミットSHAで識別する不変のリビジョンとマニフェスト、サイトごとのプレビューの一覧とグループ、ルート、プロバイダーに任せる保持期間、消えた参照の片付け。">
+  <title>プレビューの仕組み</title>
+  <script>
+    // 閲覧アプリ（同一オリジンの親）のテーマを描画前に写す。以後の追従は assets/site.js が行う。
+    (() => {
+      const root = document.documentElement;
+      root.classList.add('js');
+      try {
+        const theme = window.parent !== window && window.parent.document.documentElement.dataset.theme;
+        if (theme === 'light' || theme === 'dark') root.dataset.theme = theme;
+      } catch { /* 別オリジン：prefers-color-scheme にまかせる */ }
+    })();
+  </script>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../assets/site.css">
+  <script src="../assets/site.js" defer></script>
+</head>
+<body class="arch">
+  <a class="skip" href="#main">本文へ移動</a>
+  <main id="main" class="wrap">
+    <div class="arch-bar">
+      <a class="arch-brand" href="overview.html"><b aria-hidden="true">A</b>アーキテクチャ</a>
+      <nav class="lang-switch" aria-label="言語"><span aria-current="page">日本語</span><a href="../en/previews.html" hreflang="en" lang="en">English</a></nav>
+    </div>
+    <nav class="arch-pages" aria-label="アーキテクチャのページ">
+      <ol>
+        <li><a href="overview.html"><small>01</small>全体像</a></li>
+        <li><a href="storage-layout.html"><small>02</small>ストレージの構成</a></li>
+        <li><a href="publishing-model.html"><small>03</small>公開の仕組み</a></li>
+        <li><a href="search.html"><small>04</small>検索とインデックス</a></li>
+        <li><a href="previews.html" aria-current="page"><small>05</small>プレビューの仕組み</a></li>
+        <li><a href="trust-model.html"><small>06</small>信頼モデル</a></li>
+      </ol>
+    </nav>
+
+    <header class="page-head">
+      <div>
+        <p class="eyebrow">アーキテクチャ · 05</p>
+        <h1>プレビューの仕組み</h1>
+      </div>
+      <p class="answer"><span class="answer-label">要点</span>プレビューは、あるGitのheadで変更された文書を、コミットSHAで識別する不変のリビジョンとして公開し、サイトごとの小さなプレビューの一覧（<code>catalog.json</code>）に載せます。いつまで残すかはストレージのプロバイダーに任せます。リビジョンが消えたら、そのあとの本番の公開がプレビューの一覧から項目を除きます。</p>
+    </header>
+
+    <figure class="fig" style="--fig-min: 760px; --fig-max: 1060px">
+      <div class="fig-head"><strong>プレビューのライフサイクル</strong><span>例：checkoutのプルリクエスト#42（説明用）</span></div>
+      <div class="fig-frame" role="group" aria-label="図：プレビューのライフサイクル">
+        <svg viewBox="0 0 960 400" role="img" aria-labelledby="pv-life-t pv-life-d">
+          <title id="pv-life-t">プレビューのライフサイクル</title>
+          <desc id="pv-life-d">プルリクエストのheadをマージベースと比べて、変更された文書を選びます。preview publishは、headのSHAを名前に持つリビジョンのパスにファイルを書き、最後にマニフェストを書き、プレビューの一覧を更新してプルリクエストのグループがそのheadを指すようにします。読者はプレビューの一覧か、固定されたリビジョンのURLを開きます。のちにプロバイダーのライフサイクル規則がプレビューのオブジェクトを期限切れにします。閲覧アプリはマニフェストが無い項目を隠し、次の本番の公開がその項目をプレビューの一覧から除きます。</desc>
+          <defs>
+            <marker id="pv-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ad-head"/></marker>
+            <marker id="pv-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ad-head warn"/></marker>
+          </defs>
+          <circle class="ad-num" cx="26" cy="24" r="10"/><text class="ad-num-t" x="26" y="28" text-anchor="middle">1</text>
+          <text class="ad-lab" x="42" y="28">Git</text>
+          <rect class="ad-box" x="16" y="40" width="170" height="150" rx="8"/>
+          <text class="ad-t" x="28" y="64">PRのhead</text>
+          <text class="ad-mq" x="28" y="84">head = &lt;sha&gt;</text>
+          <text class="ad-s" x="28" y="110">origin/HEADとの</text>
+          <text class="ad-s" x="28" y="128">マージベースから</text>
+          <text class="ad-s" x="28" y="146">の変更を見る</text>
+          <text class="ad-q" x="28" y="174">フォークのheadは対象外</text>
+
+          <circle class="ad-num" cx="226" cy="24" r="10"/><text class="ad-num-t" x="226" y="28" text-anchor="middle">2</text>
+          <text class="ad-lab" x="242" y="28">公開</text>
+          <rect class="ad-box acc" x="216" y="40" width="200" height="150" rx="8"/>
+          <text class="ad-m acc" x="228" y="64">preview publish</text>
+          <text class="ad-s" x="228" y="88">追加・変更された</text>
+          <text class="ad-s" x="228" y="106">HTMLとMarkdownだけ</text>
+          <text class="ad-s" x="228" y="130">＋必要なローカルのリソース</text>
+          <text class="ad-s" x="228" y="154">PRへのリンクは</text>
+          <text class="ad-mq" x="228" y="172">--pull-requestのときだけ</text>
+
+          <circle class="ad-num" cx="456" cy="24" r="10"/><text class="ad-num-t" x="456" y="28" text-anchor="middle">3</text>
+          <text class="ad-lab" x="472" y="28">/_previews/checkout/に保存</text>
+          <rect class="ad-box" x="446" y="40" width="250" height="150" rx="8"/>
+          <text class="ad-m" x="458" y="64">revisions/&lt;sha&gt;/files/…</text>
+          <text class="ad-m" x="458" y="88">revisions/&lt;sha&gt;/manifest.json</text>
+          <text class="ad-q" x="458" y="106">不変 · マニフェストは最後に書く</text>
+          <path class="ad-line" d="M458 120 H684"/>
+          <text class="ad-m" x="458" y="142">catalog.json</text>
+          <text class="ad-s" x="458" y="162">グループpr:42 → 最新のhead</text>
+          <text class="ad-q" x="458" y="180">変わりうる · グループごとに1項目</text>
+
+          <circle class="ad-num" cx="736" cy="24" r="10"/><text class="ad-num-t" x="736" y="28" text-anchor="middle">4</text>
+          <text class="ad-lab" x="752" y="28">読む</text>
+          <rect class="ad-box" x="726" y="40" width="218" height="150" rx="8"/>
+          <text class="ad-s" x="738" y="62">そのPRの最新：</text>
+          <text class="ad-m" x="738" y="80" style="font-size:10px">/checkout/_previews</text>
+          <text class="ad-m ad-pre" x="738" y="94" style="font-size:10px">  ?group=pr%3A42</text>
+          <text class="ad-s" x="738" y="120">固定のリビジョン：</text>
+          <text class="ad-m" x="738" y="138" style="font-size:10px">/checkout/_previews/&lt;sha&gt;/</text>
+          <text class="ad-m ad-pre" x="738" y="152" style="font-size:10px">  design/flow.html</text>
+          <text class="ad-q" x="738" y="176">ヘッダーに短いSHAとPR番号</text>
+
+          <path class="ad-flow" d="M186 115 H214" marker-end="url(#pv-a)"/>
+          <path class="ad-flow" d="M416 115 H444" marker-end="url(#pv-a)"/>
+          <path class="ad-flow" d="M696 115 H724" marker-end="url(#pv-a)"/>
+
+          <circle class="ad-num" cx="456" cy="236" r="10"/><text class="ad-num-t" x="456" y="240" text-anchor="middle">5</text>
+          <text class="ad-lab warn" x="472" y="240">プロバイダーのライフサイクル</text>
+          <rect class="ad-box warn" x="446" y="252" width="250" height="110" rx="8"/>
+          <text class="ad-s" x="458" y="276">_previews/の接頭辞にかけた規則が、</text>
+          <text class="ad-s" x="458" y="294">管理者の決めた日数を過ぎた</text>
+          <text class="ad-s" x="458" y="312">オブジェクトを期限切れにする</text>
+          <text class="ad-q" x="458" y="340">アプリは期限を計算しない</text>
+
+          <circle class="ad-num" cx="26" cy="236" r="10"/><text class="ad-num-t" x="26" y="240" text-anchor="middle">6</text>
+          <text class="ad-lab" x="42" y="240">片付け</text>
+          <rect class="ad-box" x="16" y="252" width="400" height="110" rx="8"/>
+          <text class="ad-m acc" x="28" y="276">site publish</text>
+          <text class="ad-s" x="114" y="276">（とpreview publish）がプレビューの一覧を読む</text>
+          <text class="ad-s" x="28" y="300">マニフェストが無いと確認できた → 参照を除く</text>
+          <text class="ad-s" x="28" y="320">マニフェストがある、または読めない → 残す</text>
+          <text class="ad-q" x="28" y="346">除くのは参照だけ。リビジョンの中身は消さない</text>
+
+          <rect class="ad-box soft" x="726" y="252" width="218" height="110" rx="8"/>
+          <text class="ad-s" x="738" y="276">プレビューの一覧は、</text>
+          <text class="ad-s" x="738" y="294">候補ごとにマニフェストを</text>
+          <text class="ad-s" x="738" y="312">確かめ、無いものを隠す</text>
+          <text class="ad-q" x="738" y="340">無いページはPreview unavailable</text>
+
+          <path class="ad-flow warn" d="M570 192 V250" marker-end="url(#pv-w)"/>
+          <path class="ad-flow warn" d="M446 306 H418" marker-end="url(#pv-w)"/>
+          <path class="ad-flow" d="M300 252 V214 H520 V192" marker-end="url(#pv-a)"/>
+          <text class="ad-q" x="306" y="208">参照を除く</text>
+          <path class="ad-line ad-dash" d="M835 192 V250"/>
+          <text class="ad-q" x="16" y="390">PRをマージしても閉じても、それだけでは何も変わりません。プレビューの一覧に出るかどうかは、プロバイダーに残っているかで決まります。</text>
+        </svg>
+      </div>
+      <figcaption>1から4はプレビューを公開するたびに起こります。5と6は後から別々に起こります。プロバイダーが古いオブジェクトを消し、次の公開がプレビューの一覧を整えます。<span class="fig-scroll">図の全体は横にスクロールして見られます。</span></figcaption>
+      <details class="fig-text">
+        <summary>図の内容を文章で読む</summary>
+        <ol>
+          <li>プルリクエストのhead（コミットSHA）を、<code>origin/HEAD</code>とのマージベースと比べます。フォークのheadは対象外です。</li>
+          <li><code>preview publish</code>が、追加・変更されたHTMLとMarkdown、そのために必要なローカルのリソースを選びます。PRへのリンクは、<code>--pull-request</code>を指定して検証できたときだけ記録します。</li>
+          <li>ファイルを<code>/_previews/checkout/revisions/&lt;sha&gt;/files/…</code>に書き、最後に不変の<code>manifest.json</code>を書きます。続けて変わりうる<code>catalog.json</code>を更新し、グループ<code>pr:42</code>が新しいheadを指すようにします。</li>
+          <li>読者は、そのPRの最新のプレビューなら<code>/checkout/_previews?group=pr%3A42</code>を、固定のリビジョンなら<code>/checkout/_previews/&lt;sha&gt;/design/flow.html</code>のようなURLを開きます。</li>
+          <li><code>_previews/</code>にかけたプロバイダーのライフサイクル規則が、設定した日数を過ぎたオブジェクトを期限切れにします。閲覧アプリは、プレビューの一覧でマニフェストが無い項目を隠します。</li>
+          <li>次の<code>site publish</code>（または<code>preview publish</code>）が、マニフェストが無いと確認できた参照をプレビューの一覧から除きます。マニフェストがあるもの、読めなかったものは残します。</li>
+        </ol>
+      </details>
+    </figure>
+
+    <section class="doc-section" aria-labelledby="selection">
+      <h2 id="selection">プレビューの対象</h2>
+      <p>プレビューが答えるのは「変更したページがどう見えるか」で、「マージしたあとのサイト全体がどう見えるか」ではありません。</p>
+      <ul>
+        <li><strong>選び方：</strong>デフォルトブランチのいまのHEAD（<code>--default-ref</code>、既定は<code>origin/HEAD</code>）とプレビューするhead（<code>--head</code>、既定は<code>HEAD</code>）のマージベースを、そのheadと比べます。対象は、登録したソースパスの下で<strong>追加・変更されたHTMLとMarkdown</strong>だけです。名前を変えた文書は新しいパスでプレビューし、削除した文書にはプレビューがありません。</li>
+        <li><strong>スナップショット：</strong>プレビューする中身は、すべてheadのコミット済みのツリーから取ります。デフォルトブランチとの仮のマージは作りません。</li>
+        <li><strong>結果：</strong>文書を削除しただけの変更は<code>no-preview</code>を返します。文書以外のファイルだけの変更はエラーです。</li>
+        <li><strong>リソース：</strong>変更された文書に必要なローカルのCSS、JavaScript（静的なモジュールのimportは先までたどる）、画像、フォントを、相対的な配置を保ってリビジョンにコピーします。実行時に名前を組み立てるものは<code>--include PATH</code>（パスそのもの、または<code>path.Match</code>のパターン）で加えます。JavaScriptが組み立てるルート相対のURLや、実行時の任意の画面移動は保証の対象外です。</li>
+      </ul>
+    </section>
+
+    <section class="doc-section" aria-labelledby="records">
+      <h2 id="records">記録、キー、ルート</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>オブジェクト</th><th>キー</th><th>中身</th></tr></thead>
+        <tbody>
+          <tr><td>リビジョンのファイル</td><td><code>/_previews/&lt;site&gt;/revisions/&lt;sha&gt;/files/&lt;path&gt;</code></td><td>headのツリーにある文書とリソースを、バイト単位でそのまま</td></tr>
+          <tr><td>リビジョンのマニフェスト</td><td><code>/_previews/&lt;site&gt;/revisions/&lt;sha&gt;/manifest.json</code></td><td><code>headSha</code>、<code>defaultHeadSha</code>、<code>mergeBaseSha</code>、<code>createdAt</code>、<code>bundleDigest</code>、<code>files[]</code>（パス、SHA-256、Content-Type）、<code>documents[]</code></td></tr>
+          <tr><td>プレビューの一覧</td><td><code>/_previews/&lt;site&gt;/catalog.json</code></td><td><code>groups[]</code>：<code>id</code>（<code>pr:&lt;番号&gt;</code>または<code>head:&lt;sha&gt;</code>）、<code>kind</code>、<code>headSha</code>、任意の<code>prUrl</code>、<code>updatedAt</code>、<code>documents[]</code></td></tr>
+        </tbody>
+      </table></div>
+      <p>文書の論理ルートは<code>/:site/_previews/&lt;SHA全体&gt;/&lt;文書のパス&gt;</code>で、<code>/:site/_previews</code>がそのサイトのプレビューの一覧です。任意で付ける<code>?group=pr%3A42</code>は閲覧アプリのための文脈で、リビジョンも中身も変えません。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="identity">
+      <h2 id="identity">リビジョンとグループ</h2>
+      <p>2つの識別子は、役割が違います。</p>
+      <div class="split">
+        <div class="pane">
+          <span class="label">リビジョン＝headのSHA全体</span>
+          <p>プロバイダーに残っている間、リビジョンのURLが指す中身は変わりません。同じheadをもう一度公開すると、保存済みのオブジェクトを書き直さずに確かめます。同じheadで投影が違えばエラーです。直接のURLはプレビューの一覧ではなく、そのリビジョン自身のマニフェストで解決します。</p>
+        </div>
+        <div class="pane">
+          <span class="label">グループ＝プレビューの一覧に何を出すか</span>
+          <p>プレビューの一覧には、グループごとに完了した最新のリビジョンを出します。<code>--pull-request</code>を指定すればグループは<code>pr:&lt;番号&gt;</code>、指定しなければ手動のプレビューで、グループは<code>head:&lt;sha&gt;</code>です。古いリビジョンはプレビューの一覧から外れますが、オブジェクトがある間は直接のURLで開けます。</p>
+        </div>
+      </div>
+      <p>PRとの関係を、ブランチ、コミット、CIのイベントから推測することはありません。<code>--pull-request</code>を指定すると、CLIはGitHubのAPIでプルリクエストを読み、ベースのリポジトリ、headが同じリポジトリにあること、headのSHAを確かめます。フォークからのプルリクエストは対象外です。閲覧アプリはヘッダーに短いSHAを控えめに表示し、指定されたグループがいまもそのSHAを指しているとプレビューの一覧で確認できたときだけPRへのリンクを出します。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="publication">
+      <h2 id="publication">公開の順序とリンク</h2>
+      <p><code>preview publish</code>は、<code>site publish</code>や<code>registry unregister</code>と同じサイトのロックを取り、デプロイ済みのサイトの登録情報を確かめ直します。リビジョンのファイルとマニフェストは新規作成だけを許すオブジェクトとして書き、そのあとでプレビューの一覧を読み、グループ単位の冪等な追加・更新を行います。プレビューの一覧の更新に失敗したら失敗を報告し、再試行できます。プレビューの一覧に載らなかったオブジェクトも、ほかと同じくプロバイダーの保持期間で消えます。</p>
+      <p>プレビューの中で、<strong>ほかの変更された文書</strong>へのリンクは同じリビジョンのその文書を開きます。<strong>変更されていない文書</strong>へのリンクは本番のルートを開きます。HTMLのリンクはフレームの中にアプリを入れ子にせず、閲覧アプリそのものを移動させます。</p>
+      <p>プレビューは本番の画面には出ません。<code>index.json</code>、Browse、最近の更新、本文検索、パレットのページの候補のどれにも入りません。サイトのホームにはプレビューの一覧への控えめなリンクがあり、パレットには「Open previews」のコマンドがあります。プレビューの一覧を開いたときに読むのは、そのサイトの<code>catalog.json</code>だけです。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="lifetime">
+      <h2 id="lifetime">保持期間と片付け</h2>
+      <p><strong>プレビューをいつまで残すかはプロバイダーが決めます。</strong>管理者はインフラの設定（CLIの設定ではありません）で<code>preview_retention_days</code>を1つ決めます。この値は、AWSならS3のライフサイクルによる期限切れ、CloudflareならR2のオブジェクトのライフサイクル規則になり、<code>_previews/</code>の接頭辞全体にかかります。アプリは期限の時刻を記録せず、タイマーも動かさず、正確な削除時刻も約束しません。</p>
+      <p>プロバイダーの削除は非同期なので、期限切れになったリビジョンをプレビューの一覧がしばらく指していることがあります。これには2つの仕組みで対処します。</p>
+      <ol>
+        <li>プレビューの一覧を開くと、閲覧アプリが候補ごとにマニフェストを確かめ、無いものを隠します。無いプレビューの文書には「Preview unavailable」とサイトへ戻る手段を表示し、無い生のリソースには実際の404応答を返します。</li>
+        <li><code>site publish</code>と<code>preview publish</code>は毎回、サイトのロックの中でオリジンのプレビューの一覧を読みます。参照を除くのは、マニフェストが<strong>無いと確認できたとき</strong>だけで、読み取りのエラーは無いことの証拠にしません。<code>site publish</code>が小さくなったプレビューの一覧を書くのは本番の投影を書き終えたあとなので、本番の公開が失敗してプレビューが隠れることはありません。</li>
+      </ol>
+      <p>PRを閉じたときに動くワークフローはありません。マージ済み、閉じたもの、手動のプレビューも、マニフェストがある間はプレビューの一覧に出ます。<code>registry unregister</code>は、サイトのほかの投影と一緒にプレビューもすぐに消します。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="proof">
+      <h2 id="proof">どこまで実証されているか</h2>
+      <ul class="proof">
+        <li><span class="chip local">ローカルで実証済み</span><span>記録の契約、直接のルート、エンコードされたパス、同じheadの再試行、マニフェストが消えた場合（T1）。消えたマニフェストを隠すことと生の404（T4）。グループの同時更新、中断した公開、プレビューと登録解除の両方の順序（T5）。リソース、先までたどるモジュール、変更・未変更の文書へのリンクの振り分け（T6）。ローカルのCLIで、無いと確認できた参照だけを除くこと（T8）。実際のCLI、ローカルのエッジとストレージのAPIで、リビジョンを1つ消したあとの本番の公開がその参照だけを除き、開いていたブラウザのプレビューの一覧から消え、古いURLが「Preview unavailable」になること（T17、<code>npm run test:preview-retirement</code>）。</span></li>
+        <li><span class="chip sampled">Cloudflareで抜き取り確認</span><span>2026-10-01に、使い捨てのサイトで、手動のプレビューがモジュールとリソースごと表示されること、同じheadの再試行が<code>no-op</code>になること、わざと消したマニフェストが次の本番の公開でプレビューの一覧から除かれること、R2がプレビューのオブジェクトにライフサイクル規則を示すことを確かめました。2026-10-02には、CLIで新しい2つのheadを同時に公開して両方がプレビューの一覧に残ること、途中で止めた公開のロックを観測したETagで復旧して再試行できること、ロックを失った古いプロセスがプレビューの一覧を書き換える前に拒否されることを確かめました。リビジョンを1つ消したあとの本番の公開ではその参照だけが除かれ、ブラウザのプレビューの一覧からも消えました（古いURLは再読み込みで「Preview unavailable」になりましたが、すぐに消えるわけではありません）（T15）。</span></li>
+        <li><span class="chip open">未実証</span><span>プロバイダーのライフサイクルで実際に削除されるまでの時間（観察中）、実際のGitHubのプルリクエストとCIからの公開、AWSに対する片付け。</span></li>
+      </ul>
+    </section>
+
+    <div class="callout guide"><span class="ico">ガイド</span><p>プレビューにも、オリジンのほかのものと同じアクセスの規則が適用されます。推測しにくいSHAはアクセス制御になりません。<a href="trust-model.html#previews-trust">信頼モデル</a>と、ガイドの<a href="/guide/ja/access-and-trust.html" target="_top">信頼とアクセス制御</a>を参照してください。</p></div>
+
+    <nav class="pager" aria-label="ページ送り">
+      <a class="prev" href="search.html"><small>前へ</small><strong>検索とインデックス</strong></a>
+      <a class="next" href="trust-model.html"><small>次へ</small><strong>信頼モデル</strong></a>
+    </nav>
+
+    <footer class="foot"><strong>アーキテクチャ</strong><p>このサイトは、プロジェクトの仕様と検証記録にある動作を説明しています。<code>acme/checkout</code>などのチームやリポジトリの名前は説明用の例です。</p></footer>
+  </main>
+</body>
+</html>

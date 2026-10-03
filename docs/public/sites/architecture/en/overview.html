@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="How Git Artifact Pages works: Git as the source of truth, independent per-site publishing into one shared static projection, one reader app for every site, the application and content planes, logical routes, and why there is no request-time server.">
+  <title>Architecture overview</title>
+  <script>
+    // Copy the reader app's theme (same-origin parent) before first paint; assets/site.js keeps it in sync.
+    (() => {
+      const root = document.documentElement;
+      root.classList.add('js');
+      try {
+        const theme = window.parent !== window && window.parent.document.documentElement.dataset.theme;
+        if (theme === 'light' || theme === 'dark') root.dataset.theme = theme;
+      } catch { /* cross-origin: fall back to prefers-color-scheme */ }
+    })();
+  </script>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../assets/site.css">
+  <script src="../assets/site.js" defer></script>
+</head>
+<body class="arch">
+  <a class="skip" href="#main">Skip to content</a>
+  <main id="main" class="wrap">
+    <div class="arch-bar">
+      <a class="arch-brand" href="overview.html"><b aria-hidden="true">A</b>Architecture</a>
+      <nav class="lang-switch" aria-label="Language"><a href="../ja/overview.html" hreflang="ja" lang="ja">日本語</a><span aria-current="page">English</span></nav>
+    </div>
+    <nav class="arch-pages" aria-label="Architecture pages">
+      <ol>
+        <li><a href="overview.html" aria-current="page"><small>01</small>Overview</a></li>
+        <li><a href="storage-layout.html"><small>02</small>Storage layout</a></li>
+        <li><a href="publishing-model.html"><small>03</small>Publishing model</a></li>
+        <li><a href="search.html"><small>04</small>Search and indexes</a></li>
+        <li><a href="previews.html"><small>05</small>Previews</a></li>
+        <li><a href="trust-model.html"><small>06</small>Trust model</a></li>
+      </ol>
+    </nav>
+
+    <header class="page-head">
+      <div>
+        <p class="eyebrow">Architecture · 01</p>
+        <h1>How Git Artifact Pages works</h1>
+      </div>
+      <p class="answer"><span class="answer-label">Short answer</span>Git holds the source. Each site publishes from its own repository, separately from every other site, into one shared static projection in object storage. One static reader app in the browser reads that projection and presents every site the same way. No application server sits in the request path.</p>
+    </header>
+
+    <figure class="fig" style="--fig-min: 720px; --fig-max: 1080px">
+      <div class="fig-head"><strong>From Git to the browser</strong><span>publish writes → · ← reader requests</span></div>
+      <div class="fig-frame" role="group" aria-label="Diagram: from Git to the browser">
+        <svg viewBox="0 0 960 456" role="img" aria-labelledby="ov-sys-t ov-sys-d">
+          <title id="ov-sys-t">From Git to the browser</title>
+          <desc id="ov-sys-d">Commands write a web release, the admin config and site sources into object storage. Storage holds an application plane, a content plane and a private control area. The edge maps logical routes to the app shell and object paths to stored objects. The browser loads the shell, the indexes and the artifact.</desc>
+          <defs>
+            <marker id="ov-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ad-head"/></marker>
+            <marker id="ov-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ad-head q"/></marker>
+          </defs>
+          <text class="ad-lab" x="16" y="24">GIT &amp; RELEASES</text>
+          <text class="ad-lab" x="216" y="24">ORIGIN · OBJECT STORAGE</text>
+          <text class="ad-lab" x="566" y="24">EDGE · CDN / NGINX</text>
+          <text class="ad-lab" x="746" y="24">BROWSER</text>
+
+          <!-- sources -->
+          <rect class="ad-box" x="16" y="48" width="170" height="74" rx="8"/>
+          <text class="ad-t" x="28" y="70">Web release</text>
+          <text class="ad-mq" x="28" y="88">versioned SPA bundle</text>
+          <text class="ad-m acc" x="28" y="110">app deploy</text>
+          <rect class="ad-box" x="16" y="142" width="170" height="74" rx="8"/>
+          <text class="ad-t" x="28" y="164">Admin config</text>
+          <text class="ad-mq" x="28" y="182">artifact-pages.yaml</text>
+          <text class="ad-m acc" x="28" y="204">registry register</text>
+          <rect class="ad-box" x="16" y="236" width="170" height="74" rx="8"/>
+          <text class="ad-t" x="28" y="258">Site source</text>
+          <text class="ad-mq" x="28" y="276">acme/checkout · docs/</text>
+          <text class="ad-m acc" x="28" y="298">site publish</text>
+          <rect class="ad-box" x="16" y="330" width="170" height="74" rx="8"/>
+          <text class="ad-t" x="28" y="352">Pull request head</text>
+          <text class="ad-mq" x="28" y="370">acme/checkout @ &lt;sha&gt;</text>
+          <text class="ad-m acc" x="28" y="392">preview publish</text>
+          <path class="ad-flow" d="M186 90 H226" marker-end="url(#ov-a)"/>
+          <path class="ad-flow" d="M186 184 H226" marker-end="url(#ov-a)"/>
+          <path class="ad-flow" d="M186 270 H202 V218 H226" marker-end="url(#ov-a)"/>
+          <path class="ad-flow" d="M202 256 H226" marker-end="url(#ov-a)"/>
+          <path class="ad-flow" d="M186 364 H202 V294 H226" marker-end="url(#ov-a)"/>
+
+          <!-- origin -->
+          <rect class="ad-zone" x="216" y="36" width="320" height="380" rx="12"/>
+          <rect class="ad-box" x="228" y="48" width="296" height="84" rx="8"/>
+          <text class="ad-lab" x="240" y="66">APPLICATION PLANE</text>
+          <text class="ad-m" x="240" y="92">/index.html</text>
+          <text class="ad-q" x="404" y="92">app shell</text>
+          <text class="ad-m" x="240" y="116">/assets/*</text>
+          <text class="ad-q" x="404" y="116">hashed JS and CSS</text>
+          <rect class="ad-box acc" x="228" y="144" width="296" height="184" rx="8"/>
+          <text class="ad-lab acc" x="240" y="162">CONTENT PLANE</text>
+          <text class="ad-m" x="240" y="188">/_indexes/sites.json</text>
+          <text class="ad-q" x="404" y="188">site registry</text>
+          <text class="ad-m" x="240" y="222">/_indexes/checkout/</text>
+          <text class="ad-q" x="404" y="222">meta · index · search</text>
+          <text class="ad-m" x="240" y="260">/_artifacts/checkout/</text>
+          <text class="ad-q" x="404" y="260">files as published</text>
+          <text class="ad-m" x="240" y="298">/_previews/checkout/</text>
+          <text class="ad-q" x="404" y="298">preview revisions</text>
+          <rect class="ad-box warn" x="228" y="342" width="296" height="62" rx="8"/>
+          <text class="ad-m warn" x="240" y="366">/_control/*</text>
+          <text class="ad-q" x="240" y="388">locks and retry records · never served</text>
+
+          <!-- edge -->
+          <rect class="ad-box soft" x="566" y="36" width="150" height="380" rx="12"/>
+          <text class="ad-m" x="578" y="86">/:site/…</text>
+          <text class="ad-q" x="578" y="102">logical routes → shell</text>
+          <text class="ad-m" x="578" y="120">/assets/*</text>
+          <text class="ad-m" x="578" y="208">/_indexes/*</text>
+          <text class="ad-m" x="578" y="260">/_artifacts/*</text>
+          <text class="ad-q" x="578" y="276">missing → real 404</text>
+          <text class="ad-m" x="578" y="304">/_previews/*</text>
+          <text class="ad-m warn" x="578" y="366">/_control/*</text>
+          <text class="ad-q" x="578" y="382">no control bytes</text>
+          <path class="ad-line" d="M566 92 H528" marker-end="url(#ov-r)"/>
+          <path class="ad-line" d="M566 116 H528" marker-end="url(#ov-r)"/>
+          <path class="ad-line" d="M566 204 H548 V188 H528" marker-end="url(#ov-r)"/>
+          <path class="ad-line" d="M548 204 V222 H528" marker-end="url(#ov-r)"/>
+          <path class="ad-line" d="M566 256 H528" marker-end="url(#ov-r)"/>
+          <path class="ad-line" d="M566 300 H528" marker-end="url(#ov-r)"/>
+          <path class="ad-flow warn ad-dash" d="M566 372 H534"/>
+          <text class="ad-t warn" x="540" y="368">×</text>
+
+          <!-- browser -->
+          <rect class="ad-box" x="746" y="36" width="198" height="380" rx="12"/>
+          <rect class="ad-box soft" x="758" y="48" width="174" height="28" rx="6"/>
+          <text class="ad-m" x="768" y="66" style="font-size:10px">/checkout/design/flow.html</text>
+          <rect class="ad-box soft" x="758" y="88" width="174" height="316" rx="8"/>
+          <text class="ad-lab" x="770" y="106">READER APP (SPA)</text>
+          <text class="ad-s" x="770" y="126">routes, sidebar, palette</text>
+          <text class="ad-mq" x="770" y="144">reads /_indexes/…</text>
+          <rect class="ad-box acc" x="770" y="160" width="150" height="122" rx="6"/>
+          <text class="ad-lab acc" x="782" y="178">IFRAME · HTML</text>
+          <text class="ad-m" x="782" y="200" style="font-size:10px">/_artifacts/checkout/</text>
+          <text class="ad-m" x="782" y="216" style="font-size:10px">design/flow.html</text>
+          <text class="ad-s" x="782" y="240">runs as published,</text>
+          <text class="ad-s" x="782" y="258">with its own CSS</text>
+          <rect class="ad-box" x="770" y="294" width="150" height="96" rx="6"/>
+          <text class="ad-lab" x="782" y="312">MARKDOWN</text>
+          <text class="ad-s" x="782" y="334">rendered by the app,</text>
+          <text class="ad-s" x="782" y="352">sanitized,</text>
+          <text class="ad-s" x="782" y="370">no scripts</text>
+          <path class="ad-line" d="M758 62 H744 V92 H718" marker-end="url(#ov-r)"/>
+          <path class="ad-line" d="M758 140 H740 V204 H718" marker-end="url(#ov-r)"/>
+          <path class="ad-line" d="M770 256 H718" marker-end="url(#ov-r)"/>
+
+          <!-- legend -->
+          <path class="ad-flow" d="M16 440 H46" marker-end="url(#ov-a)"/>
+          <text class="ad-q" x="54" y="444">publish commands write objects</text>
+          <path class="ad-line" d="M236 440 H266" marker-end="url(#ov-r)"/>
+          <text class="ad-q" x="274" y="444">reader requests, routed by path</text>
+          <text class="ad-q" x="566" y="444">acme/checkout and its paths are illustrative.</text>
+        </svg>
+      </div>
+      <figcaption>Commands on the left write objects; the browser on the right only reads them. The edge decides by path whether a request gets the app shell or a stored object. <span class="fig-scroll">Scroll sideways to see the whole diagram.</span></figcaption>
+      <details class="fig-text">
+        <summary>The diagram as text</summary>
+        <ol>
+          <li><code>app deploy</code> writes a versioned SPA bundle to the application plane: <code>/index.html</code> and <code>/assets/*</code>.</li>
+          <li><code>registry register</code> writes <code>/_indexes/sites.json</code> from the <code>sites</code> mapping in <code>artifact-pages.yaml</code>.</li>
+          <li><code>site publish</code> writes one site's index objects under <code>/_indexes/&lt;site&gt;/</code> and its files under <code>/_artifacts/&lt;site&gt;/</code>. <code>preview publish</code> writes under <code>/_previews/&lt;site&gt;/</code>.</li>
+          <li>Private locks and retry records live under <code>/_control/*</code> and are never returned to viewers.</li>
+          <li>The edge sends logical routes such as <code>/checkout/design/flow.html</code> to the app shell, and <code>/assets/*</code>, <code>/_indexes/*</code>, <code>/_artifacts/*</code> and <code>/_previews/*</code> to stored objects; a missing object is a real 404.</li>
+          <li>In the browser, the app reads the indexes and loads an HTML artifact into an iframe from <code>/_artifacts/…</code>; Markdown is rendered by the app itself.</li>
+        </ol>
+      </details>
+    </figure>
+
+    <section class="doc-section" aria-labelledby="git-source">
+      <h2 id="git-source">Git is the source; the website is a projection</h2>
+      <p>Artifacts are made and reviewed in the repository that produces them, and Artifact Pages never edits them. A site is registered as one pair of <strong>repository and source directory</strong> (<code>repository</code>, <code>sourcePath</code>). Publishing reads that directory in a Git checkout, builds the site's index, and copies the files <strong>unchanged</strong>. It does not run templates, bundle CSS or JavaScript, or rewrite links.</p>
+      <p>Everything served to the browser is <strong>reproducible projection data</strong>. The reader app, the object storage, and the CDN are not systems of record. If a published object goes missing or a publish stops halfway, publishing the same source again brings the site back to the same state. How that convergence works is on <a href="publishing-model.html">Publishing model</a>.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="independent">
+      <h2 id="independent">Independent publishing, shared experience</h2>
+      <p>Publishing has no central step. An admin deploys the reader app and registers each site once in the <code>sites</code> mapping of <code>artifact-pages.yaml</code>; neither operation builds any site's content. From then on, each site's repository runs <code>site publish</code> from its own CI whenever its content changes. A run writes only that site's prefixes, <code>/_indexes/&lt;site&gt;/</code> and <code>/_artifacts/&lt;site&gt;/</code>, under that site's own lock, so it neither rebuilds nor waits for any other site.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Who</th><th>Command</th><th>Writes</th><th>When</th></tr></thead>
+        <tbody>
+          <tr><td>Admin</td><td><code>app deploy</code></td><td>The application plane</td><td>When the reader app is upgraded or rolled back</td></tr>
+          <tr><td>Admin</td><td><code>registry register</code></td><td><code>/_indexes/sites.json</code></td><td>When the set of sites changes</td></tr>
+          <tr><td>Each site's repository</td><td><code>site publish</code></td><td>That site's <code>/_indexes/&lt;site&gt;/</code> and <code>/_artifacts/&lt;site&gt;/</code></td><td>Whenever that site's content changes, on its own schedule</td></tr>
+        </tbody>
+      </table></div>
+      <p>What the sites share is the layout of the static projection and the reader app that reads it. Every site's output follows the same object layout, and the app finds sites through <code>/_indexes/sites.json</code> and each site's small <code>meta.json</code>. Independently published sites therefore appear as one Artifact Pages space instead of separate websites. The site picker, file tree, command palette, page text search (on sites published with it), pins and recent reads, the reader, Contents and Details, and links to previews and to Git work the same on every site. Search stays within the site being read.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="planes">
+      <h2 id="planes">Two planes, plus a private area</h2>
+      <p>The served origin is split by how often things change. The <strong>application plane</strong> is the reader app; it changes when an operator upgrades it. The <strong>content plane</strong> is the published sites; it changes every time someone publishes. The two are deployed independently: upgrading the app does not touch site objects, and publishing a site does not touch the app.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Area</th><th>Paths</th><th>Changes when</th><th>Written by</th></tr></thead>
+        <tbody>
+          <tr><td>Application plane</td><td><code>/index.html</code>, <code>/assets/*</code> (also <code>/preview-bridge.js</code>, <code>/LICENSE</code>, <code>/THIRD_PARTY_NOTICES.txt</code>)</td><td>The reader app is upgraded or rolled back</td><td><code>app deploy</code></td></tr>
+          <tr><td>Content plane</td><td><code>/_indexes/*</code>, <code>/_artifacts/*</code>, <code>/_previews/*</code></td><td>Sites are registered, published, previewed, or unregistered</td><td><code>registry register</code> / <code>unregister</code>, <code>site publish</code>, <code>preview publish</code></td></tr>
+          <tr><td>Control (private)</td><td><code>/_control/*</code></td><td>Commands take locks or keep retry records</td><td>The same commands; never served</td></tr>
+        </tbody>
+      </table></div>
+      <p>The exact object keys and the cache rule for each are on <a href="storage-layout.html">Storage layout</a>.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="routes">
+      <h2 id="routes">Logical routes and storage paths</h2>
+      <p>Readers use and share only three kinds of URL. Storage paths are internal and are not the navigation model.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Route</th><th>Shows</th><th>Example (illustrative)</th></tr></thead>
+        <tbody>
+          <tr><td><code>/</code></td><td>Site selection</td><td><code>/</code></td></tr>
+          <tr><td><code>/:site</code></td><td>The site's home</td><td><code>/checkout</code></td></tr>
+          <tr><td><code>/:site/*</code></td><td>One document</td><td><code>/checkout/design/flow.html</code></td></tr>
+        </tbody>
+      </table></div>
+      <p>For <code>/checkout/design/flow.html</code>, the edge returns the app shell. The app reads <code>/_indexes/sites.json</code> and the site's small <code>meta.json</code>, loads <code>/_indexes/checkout/index.json</code> because <code>checkout</code> is now the active site, and finally loads <code>/_artifacts/checkout/design/flow.html</code> into an iframe.</p>
+      <ul>
+        <li><strong>Filenames and extensions stay in the route.</strong> <code>flow.html</code> and <code>flow.md</code> are two different pages, and <code>index.html</code> is opened by name; a folder URL never opens it implicitly.</li>
+        <li><strong>Each path segment is percent-encoded once</strong>, so spaces, <code>#</code>, <code>?</code>, <code>%</code> and non-ASCII names keep their meaning. Names are never slugified.</li>
+        <li><strong>A site is a logical namespace, not a repository.</strong> The repository is recorded as metadata (the Details panel shows it) and does not appear in the URL, so a site can move between repositories without changing its links.</li>
+      </ul>
+    </section>
+
+    <section class="doc-section" aria-labelledby="edge">
+      <h2 id="edge">What the edge does</h2>
+      <p>The serving layer needs only path-based routing. Object paths go to storage; everything else falls back to the app shell.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Request</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td><code>/_indexes/*</code>, <code>/_artifacts/*</code>, <code>/_previews/*</code>, <code>/assets/*</code></td><td>The stored object. A missing object is a <strong>real 404</strong>, not the app shell, so a broken relative link in an artifact fails visibly.</td></tr>
+          <tr><td><code>/_control/*</code></td><td>Never the control object. The delivery layer may answer with the app shell, which shows <em>Page not found</em>, but must not return lock or retry-record bytes.</td></tr>
+          <tr><td>Anything else</td><td>The app shell <code>/index.html</code>, which resolves the logical route in the browser.</td></tr>
+        </tbody>
+      </table></div>
+      <p>Locally this is nginx in Docker Compose (<code>docker/nginx/default.conf</code>). The AWS reference deployment uses CloudFront in front of a private S3 bucket read through Origin Access Control. The Cloudflare deployment uses its Cache/CDN in front of R2 on a custom domain, with transform rules that rewrite logical routes to <code>/index.html</code>.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="static">
+      <h2 id="static">Why there is no request-time server</h2>
+      <p>The design rule is <strong>static by default, build-time over request-time</strong>. Anything that can be computed when publishing is computed then and stored as a file:</p>
+      <ul>
+        <li>Titles, paths, headings for Contents, last-update times and committers come from the source and Git history and are written to <code>index.json</code>.</li>
+        <li>The site list is a JSON file generated from the admin's config, not a directory listing. The browser never calls a storage listing API or relies on nginx <code>autoindex</code>.</li>
+        <li>Page text search, when enabled, is a set of static files built at publish time. See <a href="search.html">Search and indexes</a>.</li>
+      </ul>
+      <p>The result is that any static host with a CDN can serve the product, scaling is the CDN's job, and there is no database, server-side rendering, or search API to operate. The costs are deliberate: a change becomes visible only after it is published and caches revalidate, and there is no per-viewer logic. Who may read is decided at the edge, as described on <a href="trust-model.html">Trust model</a>.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="proof">
+      <h2 id="proof">What has been proven where</h2>
+      <p>The repository is in its local-product phase. The contract above is proven locally first; provider delivery is checked separately and is not complete.</p>
+      <ul class="proof">
+        <li><span class="chip local">Proven locally</span><span>The reader, nginx routing, committed fixtures, and registered-site publishing to a local storage directory. Emulator profiles (MinIO for the S3 API shape, fake-gcs-server for the <code>gcp-local</code> profile) prove adapter and HTTP contracts, <strong>not</strong> equivalence with real CloudFront, Cloudflare, or GCP services.</span></li>
+        <li><span class="chip sampled">Sampled on Cloudflare</span><span>On 2026-10-01 and 10-02, live checks on the Cloudflare deployment observed logical routes returning the app shell, real 404s for missing objects, the cache headers, and the production and preview CSP headers. Disposable sites were taken through publish, preview, and unregister, concurrent preview publishes and interruption recovery, publishing with scoped credentials, and a runtime HTTP request refused by the CSP. These are samples; the provider-delivery verification (T15) is still in progress.</span></li>
+        <li><span class="chip open">Not yet proven</span><span>Live AWS delivery (CloudFront and S3), actual preview lifecycle deletion timing, provider race and recovery cases such as concurrent publishes for different sites, and GitHub OIDC. Each page states its own open items.</span></li>
+      </ul>
+    </section>
+
+    <section class="doc-section" aria-labelledby="next">
+      <h2 id="next">Where to go next</h2>
+      <ul class="cards two">
+        <li><a class="card" href="storage-layout.html"><span class="tag">02</span><h3>Storage layout</h3><p>Every object key, what writes it, and its cache rule.</p></a></li>
+        <li><a class="card" href="publishing-model.html"><span class="tag">03</span><h3>Publishing model</h3><p>Desired-state sync, digests, ordering, locks, and retries.</p></a></li>
+        <li><a class="card" href="search.html"><span class="tag">04</span><h3>Search and indexes</h3><p>Finding by name and static page text search.</p></a></li>
+        <li><a class="card" href="previews.html"><span class="tag">05</span><h3>Previews</h3><p>Immutable pull-request revisions and their cleanup.</p></a></li>
+        <li><a class="card" href="trust-model.html"><span class="tag">06</span><h3>Trust model</h3><p>Same-origin HTML as a trust decision, per-site CSP, publisher credentials, and viewer access at the edge.</p></a></li>
+      </ul>
+      <div class="callout guide"><span class="ico">GUIDE</span><p>For the practical side, read the guide: <a href="/guide/en/what-is-git-artifact-pages.html" target="_top">What is Git Artifact Pages?</a> walks through deploying, registering, and publishing, and <a href="/guide/en/reading.html" target="_top">Reading</a> covers the screen and search from a reader's point of view.</p></div>
+    </section>
+
+    <nav class="pager" aria-label="Pages">
+      <a class="next" href="storage-layout.html"><small>Next</small><strong>Storage layout</strong></a>
+    </nav>
+
+    <footer class="foot"><strong>Architecture</strong><p>These pages describe the behavior recorded in the project's specification and verification records. Team and repository names such as <code>acme/checkout</code> are illustrative.</p></footer>
+  </main>
+</body>
+</html>

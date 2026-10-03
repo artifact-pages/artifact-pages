@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="How site publish converges: desired-state synchronization, digest-based change detection, write ordering, the per-site lock and registry check, failure and retry, cache invalidation, and concurrent publish and unregister.">
+  <title>Publishing model</title>
+  <script>
+    // Copy the reader app's theme (same-origin parent) before first paint; assets/site.js keeps it in sync.
+    (() => {
+      const root = document.documentElement;
+      root.classList.add('js');
+      try {
+        const theme = window.parent !== window && window.parent.document.documentElement.dataset.theme;
+        if (theme === 'light' || theme === 'dark') root.dataset.theme = theme;
+      } catch { /* cross-origin: fall back to prefers-color-scheme */ }
+    })();
+  </script>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../assets/site.css">
+  <script src="../assets/site.js" defer></script>
+</head>
+<body class="arch">
+  <a class="skip" href="#main">Skip to content</a>
+  <main id="main" class="wrap">
+    <div class="arch-bar">
+      <a class="arch-brand" href="overview.html"><b aria-hidden="true">A</b>Architecture</a>
+      <nav class="lang-switch" aria-label="Language"><a href="../ja/publishing-model.html" hreflang="ja" lang="ja">日本語</a><span aria-current="page">English</span></nav>
+    </div>
+    <nav class="arch-pages" aria-label="Architecture pages">
+      <ol>
+        <li><a href="overview.html"><small>01</small>Overview</a></li>
+        <li><a href="storage-layout.html"><small>02</small>Storage layout</a></li>
+        <li><a href="publishing-model.html" aria-current="page"><small>03</small>Publishing model</a></li>
+        <li><a href="search.html"><small>04</small>Search and indexes</a></li>
+        <li><a href="previews.html"><small>05</small>Previews</a></li>
+        <li><a href="trust-model.html"><small>06</small>Trust model</a></li>
+      </ol>
+    </nav>
+
+    <header class="page-head">
+      <div>
+        <p class="eyebrow">Architecture · 03</p>
+        <h1>Publishing model</h1>
+      </div>
+      <p class="answer"><span class="answer-label">Short answer</span><code>site publish</code> makes the stored site match one source directory. It compares the whole desired projection with what is already at the origin, writes the difference in an order that keeps references intact, and can simply be run again until the site converges. There is no transaction and no rollback.</p>
+    </header>
+
+    <figure class="fig" style="--fig-min: 600px; --fig-max: 820px">
+      <div class="fig-head"><strong>One run of <code>site publish</code></strong><span>top to bottom</span></div>
+      <div class="fig-frame" role="group" aria-label="Diagram: one run of site publish">
+        <svg viewBox="0 0 720 664" role="img" aria-labelledby="pm-run-t pm-run-d">
+          <title id="pm-run-t">One run of site publish</title>
+          <desc id="pm-run-d">Thirteen steps. With local storage, the publisher first checks that the storage root and the source do not overlap. It then takes the site lock, checks the registry at the origin, builds the projection locally with the registered name and description, and compares it with both site prefixes to make a plan. A dry run takes no lock and stops there. A real run then saves a cache retry record, uploads files, search blobs, the index, the search manifest and the metadata in that order, deletes stale objects, prunes missing preview references, requests cache invalidation, clears the retry record and releases the lock.</desc>
+          <text class="ad-lab" x="470" y="30">WHERE</text>
+          <text class="ad-lab" x="604" y="30" text-anchor="middle">LOCK</text>
+          <text class="ad-lab" x="664" y="30" text-anchor="middle">RETRY REC.</text>
+          <rect class="ad-bar" x="600" y="100" width="8" height="530" rx="4"/>
+          <rect class="ad-bar warn" x="660" y="304" width="8" height="326" rx="4"/>
+          <path class="ad-line" d="M30 64 V620"/>
+
+          <circle class="ad-num" cx="30" cy="64" r="11"/><text class="ad-num-t" x="30" y="68" text-anchor="middle">1</text>
+          <text class="ad-t" x="52" y="62">Check that source and storage do not overlap</text>
+          <text class="ad-mq" x="52" y="80">local storage only · before the lock</text>
+          <text class="ad-lab" x="470" y="66">LOCAL</text>
+
+          <circle class="ad-num" cx="30" cy="108" r="11"/><text class="ad-num-t" x="30" y="112" text-anchor="middle">2</text>
+          <text class="ad-t" x="52" y="106">Acquire the site lock</text>
+          <text class="ad-mq" x="52" y="124">_control/locks/sites/&lt;site&gt;.json · skipped by --dry-run</text>
+          <text class="ad-lab acc" x="470" y="110">ORIGIN</text>
+
+          <circle class="ad-num" cx="30" cy="152" r="11"/><text class="ad-num-t" x="30" y="156" text-anchor="middle">3</text>
+          <text class="ad-t" x="52" y="150">Check the registry at the origin</text>
+          <text class="ad-mq" x="52" y="168">sites.json: repository and sourcePath must match</text>
+          <text class="ad-lab acc" x="470" y="154">ORIGIN</text>
+
+          <circle class="ad-num" cx="30" cy="196" r="11"/><text class="ad-num-t" x="30" y="200" text-anchor="middle">4</text>
+          <text class="ad-t" x="52" y="194">Build the projection locally</text>
+          <text class="ad-mq" x="52" y="212">registered name; index.json, meta.json, search data</text>
+          <text class="ad-lab" x="470" y="198">LOCAL</text>
+
+          <circle class="ad-num" cx="30" cy="240" r="11"/><text class="ad-num-t" x="30" y="244" text-anchor="middle">5</text>
+          <text class="ad-t" x="52" y="238">List both prefixes and compare</text>
+          <text class="ad-mq" x="52" y="256">digest + headers; also reads preview catalog, retry record</text>
+          <text class="ad-lab acc" x="470" y="242">ORIGIN</text>
+
+          <path class="ad-flow warn ad-dash" d="M8 278 H700"/>
+          <rect x="52" y="266" width="300" height="24" rx="12" style="fill:var(--paper-2);stroke:var(--gold-line)"/>
+          <text class="ad-s warn" x="64" y="282">--dry-run stops here and prints the plan</text>
+
+          <circle class="ad-num" cx="30" cy="312" r="11"/><text class="ad-num-t" x="30" y="316" text-anchor="middle">6</text>
+          <text class="ad-t" x="52" y="310">Save the cache retry record</text>
+          <text class="ad-mq" x="52" y="328">_control/site-cache/&lt;site&gt;.json</text>
+          <text class="ad-lab acc" x="470" y="314">ORIGIN</text>
+
+          <circle class="ad-num" cx="30" cy="356" r="11"/><text class="ad-num-t" x="30" y="360" text-anchor="middle">7</text>
+          <text class="ad-t" x="52" y="354">Upload new and changed files</text>
+          <text class="ad-mq" x="52" y="372">_artifacts/&lt;site&gt;/…</text>
+          <text class="ad-lab acc" x="470" y="358">ORIGIN</text>
+
+          <circle class="ad-num" cx="30" cy="400" r="11"/><text class="ad-num-t" x="30" y="404" text-anchor="middle">8</text>
+          <text class="ad-t" x="52" y="398">Upload search blobs, then index.json</text>
+          <text class="ad-mq" x="52" y="416">blobs exist before anything refers to them</text>
+          <text class="ad-lab acc" x="470" y="402">ORIGIN</text>
+
+          <circle class="ad-num" cx="30" cy="444" r="11"/><text class="ad-num-t" x="30" y="448" text-anchor="middle">9</text>
+          <text class="ad-t" x="52" y="442">Upload search manifest, then meta.json</text>
+          <text class="ad-mq" x="52" y="460">discovery metadata is written last</text>
+          <text class="ad-lab acc" x="470" y="446">ORIGIN</text>
+
+          <circle class="ad-num" cx="30" cy="488" r="11"/><text class="ad-num-t" x="30" y="492" text-anchor="middle">10</text>
+          <text class="ad-t" x="52" y="486">Delete stale objects</text>
+          <text class="ad-mq" x="52" y="504">only within this site's two prefixes</text>
+          <text class="ad-lab acc" x="470" y="490">ORIGIN</text>
+
+          <circle class="ad-num" cx="30" cy="532" r="11"/><text class="ad-num-t" x="30" y="536" text-anchor="middle">11</text>
+          <text class="ad-t" x="52" y="530">Prune missing preview references</text>
+          <text class="ad-mq" x="52" y="548">catalog entries whose manifest is confirmed missing</text>
+          <text class="ad-lab acc" x="470" y="534">ORIGIN</text>
+
+          <circle class="ad-num" cx="30" cy="576" r="11"/><text class="ad-num-t" x="30" y="580" text-anchor="middle">12</text>
+          <text class="ad-t" x="52" y="574">Request cache invalidation</text>
+          <text class="ad-mq" x="52" y="592">changed and removed URLs, plus any still owed</text>
+          <text class="ad-lab" x="470" y="578">CDN</text>
+
+          <circle class="ad-num" cx="30" cy="620" r="11"/><text class="ad-num-t" x="30" y="624" text-anchor="middle">13</text>
+          <text class="ad-t" x="52" y="618">Clear the retry record, release the lock</text>
+          <text class="ad-mq" x="52" y="636">outcome: published (or no-op when nothing changed)</text>
+          <text class="ad-lab acc" x="470" y="622">ORIGIN</text>
+        </svg>
+      </div>
+      <figcaption>The blue bar is how long the site lock is held; the gold bar is how long the cache retry record exists. Building the projection (step 4) also happens under the lock, after the registry check. A failure anywhere after step 6 leaves the record in place for the next run. <span class="fig-scroll">Scroll sideways to see the whole diagram.</span></figcaption>
+      <details class="fig-text">
+        <summary>The diagram as text</summary>
+        <ol>
+          <li>Only when the target is local storage: resolve the source path from the registry and check, before locking, that the storage directory and the source do not overlap. This early registry read is advisory; the authoritative check is step 3.</li>
+          <li>Acquire the per-site lock <code>_control/locks/sites/&lt;site&gt;.json</code> with a conditional write. A dry run does not.</li>
+          <li>Read <code>/_indexes/sites.json</code> from the origin, not through the CDN, and require that the site is registered and that the checkout's repository and source path match the registration.</li>
+          <li>Collect the source files (regular files only) and build the index, metadata and (with <code>--fulltext</code>) search data in a temporary directory, using the registered name and description.</li>
+          <li>List <code>_artifacts/&lt;site&gt;/</code> and <code>_indexes/&lt;site&gt;/</code> completely and compare each desired object's digest and headers. The preview catalog and any outstanding cache retry record are read too. A dry run prints this plan and stops.</li>
+          <li>Save the invalidation paths in <code>_control/site-cache/&lt;site&gt;.json</code>.</li>
+          <li>Upload new and changed files.</li>
+          <li>Upload search blobs, then <code>index.json</code>.</li>
+          <li>Upload the search manifest, then <code>meta.json</code>.</li>
+          <li>Delete stale objects in the site's two prefixes.</li>
+          <li>Remove preview catalog entries whose manifests are confirmed missing.</li>
+          <li>Request cache invalidation for the changed URLs.</li>
+          <li>Delete the retry record and release the lock.</li>
+        </ol>
+      </details>
+    </figure>
+
+    <section class="doc-section" aria-labelledby="desired-state">
+      <h2 id="desired-state">The source directory is the desired state</h2>
+      <p><code>sourcePath</code> is the exact static tree to serve under <code>/_artifacts/&lt;site&gt;/</code>. Publishing <strong>uploads what is new or changed and deletes what is no longer there</strong>, within that site's prefixes only. It never touches another site, the registry, or the application plane.</p>
+      <ul>
+        <li>HTML and Markdown must already be ready to serve. If they come from a generator, run it first and publish its output directory.</li>
+        <li>Every <code>.html</code>, <code>.htm</code> and <code>.md</code> file is indexed; no directory or dotfile heuristics exclude pages. <code>.git</code> is never published.</li>
+        <li>Only regular files and directories are accepted. A symbolic link or special file makes publishing fail instead of following it out of the source tree.</li>
+        <li><code>sourcePath</code> must be inside the current Git checkout. Git history supplies <code>updatedAt</code> and the committer; files without history still publish.</li>
+      </ul>
+    </section>
+
+    <section class="doc-section" aria-labelledby="digest">
+      <h2 id="digest">How changes are detected</h2>
+      <p>Each stored object carries the SHA-256 of its bytes as object metadata (<code>artifact-pages-sha256</code>). Planning looks up every desired object at the origin and compares that digest together with <code>Content-Type</code>, <code>Cache-Control</code>, encoding, and disposition. Anything that differs is an <strong>update</strong>, anything missing is a <strong>create</strong>, and anything listed under the site's prefixes but not desired is a <strong>remove</strong>.</p>
+      <p>The generated <code>index.json</code> and <code>meta.json</code> contain a <code>generatedAt</code> time. When no file changed, planning ignores that field and keeps the stored copy, so publishing the same source twice is a real <strong>no-op</strong>.</p>
+      <p>A dry run reads the config, the deployed registry, and the stored objects, but writes nothing, takes no lock, and requests no cache changes. It reports <code>planned</code> or <code>no-op</code>. With <code>--format json</code> it lists every per-path change, every preview catalog decision, and the <code>invalidationPaths</code> it would request.</p>
+      <div class="term" aria-label="Plan, then apply">
+        <div class="term-head"><span>TERMINAL</span></div>
+<pre><span class="c"># Plan: reads only</span>
+<span class="p">$ </span><span class="v">artifact-pages</span> site publish --site checkout --dry-run
+<span class="c"># Apply the same plan</span>
+<span class="p">$ </span><span class="v">artifact-pages</span> site publish --site checkout</pre>
+      </div>
+      <p class="note"><code>checkout</code> is an illustrative site ID. Add <code>--fulltext</code> to both commands to publish page text search; see <a href="search.html">Search and indexes</a>.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="ordering">
+      <h2 id="ordering">Write order, and what readers may see meanwhile</h2>
+      <p>Objects are written so that <strong>nothing refers to an object that does not exist yet</strong>: files first, then immutable search blobs, then <code>index.json</code>, then the search manifest, and <code>meta.json</code> last. Stale objects are deleted only after the new index no longer points at them.</p>
+      <p>This reduces broken references, but a multi-object update is <strong>not atomic</strong>. For a short window a reader may see old metadata with new file bytes, a new index while stale files are still being removed, or older content from a cache. Version 1 accepts this eventual consistency: there are no versioned release directories and no atomic site pointer.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="retry">
+      <h2 id="retry">Failure and retry</h2>
+      <p>Publishing is <strong>idempotent desired-state synchronization</strong>. If a run fails partway, it reports the failure and releases its lock when it can stop safely. Running the same command again re-checks every object, finishes what is missing, and removes what is left over.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Where it stops</th><th>State left behind</th><th>What the next run does</th></tr></thead>
+        <tbody>
+          <tr><td>A listing fails</td><td>Nothing changed. Planning never deletes from a partial view.</td><td>Lists again from the start.</td></tr>
+          <tr><td>During uploads</td><td>Some new bytes are stored; the old index is still in place.</td><td>Skips matching objects, uploads the rest, then the index and metadata.</td></tr>
+          <tr><td>During deletion</td><td>The new index is live; some stale objects remain.</td><td>Deletes the remaining stale objects. A partial batch delete counts as a failure.</td></tr>
+          <tr><td>The cache request fails</td><td>The origin is fully updated; the retry record still lists the URLs.</td><td>Requests the owed invalidation even with no origin changes, and reports <code>published</code>, not <code>no-op</code>.</td></tr>
+          <tr><td>The process dies</td><td>The lock stays held. Locks do not expire.</td><td>Waits for a bounded time, then fails. An operator confirms nothing is running and frees the lock with <code>lock inspect</code> and <code>lock recover --observed-etag</code>.</td></tr>
+        </tbody>
+      </table></div>
+      <p id="cache-retry">Why no rollback? Each run's goal is to make the origin equal to one source, so finishing a failed run is the same operation as starting it. To return to earlier content, publish that earlier content; the same convergence applies. The cache retry record exists because a failed CDN request leaves nothing at the origin to diff: it remembers the URLs still owed, including ones that no longer exist at the origin.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="lock">
+      <h2 id="lock">The site lock and the registry check</h2>
+      <p>Each site has one small lock record, <code>_control/locks/sites/&lt;site&gt;.json</code>, shared by <code>site publish</code>, <code>preview publish</code>, and <code>registry unregister</code>. It is created only if absent and changed only with a compare-and-swap on its ETag, so a recovery that inspected an old state cannot release a newer owner's lock. Different sites use different locks and publish independently.</p>
+      <p>The registry check runs <strong>after</strong> the lock is held and reads <code>sites.json</code> directly from the origin rather than a cached copy. That closes the gap between “is this source registered?” and “write the objects”. A publisher in another repository does not need the admin's config checkout; it only needs to read the deployed registry.</p>
+      <p>This is coordination between Artifact Pages commands, <strong>not a security boundary</strong>. Someone with direct write credentials to the bucket can bypass it. Scoping credentials is a provider setup concern; see <a href="trust-model.html#publishers">Trust model</a>.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="unregister">
+      <h2 id="unregister">Concurrent publish and unregister</h2>
+      <p><code>registry unregister</code> first removes the site from the deployed registry, which closes the gate to new publishes, then takes the same site lock before deleting the site's prefixes. Either ordering ends in the same state.</p>
+      <figure class="fig" style="--fig-min: 620px; --fig-max: 860px">
+        <div class="fig-head"><strong>Both orderings converge</strong><span>time →</span></div>
+        <div class="fig-frame" role="group" aria-label="Diagram: concurrent publish and unregister">
+          <svg viewBox="0 0 760 352" role="img" aria-labelledby="pm-race-t pm-race-d">
+            <title id="pm-race-t">Concurrent publish and unregister</title>
+            <desc id="pm-race-d">Case A: the publisher holds the lock and finishes writing while unregister, having already removed the registry entry, waits; unregister then takes the lock and deletes the site. Case B: unregister removes the entry and deletes the site first; the publisher then takes the lock, finds the site missing from the registry and exits without writing. Both end unregistered with no site objects.</desc>
+            <defs>
+              <marker id="pm-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ad-head q"/></marker>
+            </defs>
+            <text class="ad-t" x="16" y="24">A · The publisher holds the lock first</text>
+            <text class="ad-s" x="16" y="74">Publisher</text>
+            <text class="ad-s" x="16" y="134">Unregister</text>
+            <path class="ad-line" d="M110 70 H740" marker-end="url(#pm-a)"/>
+            <path class="ad-line" d="M110 130 H740" marker-end="url(#pm-a)"/>
+            <rect class="ad-bar" x="140" y="64" width="250" height="12" rx="6"/>
+            <circle class="ad-dot" cx="200" cy="70" r="5"/><text class="ad-q" x="200" y="56" text-anchor="middle">registry: present</text>
+            <text class="ad-q" x="300" y="56" text-anchor="middle">writes</text>
+            <circle class="ad-dot warn" cx="250" cy="130" r="5"/><text class="ad-q" x="250" y="154" text-anchor="middle">removes entry</text>
+            <path class="ad-flow warn ad-dash" d="M262 130 H398"/>
+            <text class="ad-q" x="330" y="120" text-anchor="middle">waits for the lock</text>
+            <rect class="ad-bar" x="400" y="124" width="250" height="12" rx="6"/>
+            <text class="ad-q" x="470" y="154" text-anchor="middle">deletes prefixes</text>
+            <text class="ad-q" x="590" y="154" text-anchor="middle">invalidates</text>
+            <text class="ad-s ok" x="740" y="24" text-anchor="end">→ unregistered, no site objects</text>
+
+            <text class="ad-t" x="16" y="204">B · Unregister removes the entry first</text>
+            <text class="ad-s" x="16" y="254">Unregister</text>
+            <text class="ad-s" x="16" y="314">Publisher</text>
+            <path class="ad-line" d="M110 250 H740" marker-end="url(#pm-a)"/>
+            <path class="ad-line" d="M110 310 H740" marker-end="url(#pm-a)"/>
+            <circle class="ad-dot warn" cx="150" cy="250" r="5"/><text class="ad-q" x="150" y="236" text-anchor="middle">removes entry</text>
+            <rect class="ad-bar" x="190" y="244" width="230" height="12" rx="6"/>
+            <text class="ad-q" x="260" y="236" text-anchor="middle">deletes prefixes</text>
+            <text class="ad-q" x="370" y="236" text-anchor="middle">invalidates</text>
+            <path class="ad-flow warn ad-dash" d="M230 310 H428"/>
+            <text class="ad-q" x="330" y="334" text-anchor="middle">waits for the lock</text>
+            <rect class="ad-bar" x="430" y="304" width="110" height="12" rx="6"/>
+            <circle class="ad-dot warn" cx="480" cy="310" r="5"/><text class="ad-q" x="490" y="334" text-anchor="middle">registry: missing → exits, writes nothing</text>
+            <text class="ad-s ok" x="740" y="204" text-anchor="end">→ unregistered, no site objects</text>
+          </svg>
+        </div>
+        <figcaption>Blue bars are periods holding the site lock. The publisher's registry check happens inside its lock, so it cannot write after the projection has been deleted. <span class="fig-scroll">Scroll sideways to see the whole diagram.</span></figcaption>
+      </figure>
+      <p>Unregister reports success only after the registry update, the origin deletion, and the cache request have all succeeded, and it is safe to retry if any of them fails. It is eventual consistency, not revocation: an edge may serve a stale response while invalidation propagates, and pages already delivered to a browser cannot be recalled. Whole-registry updates are serialized separately through <code>_control/locks/registry.json</code>.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="proof">
+      <h2 id="proof">What has been proven</h2>
+      <ul class="proof">
+        <li><span class="chip local">Proven locally</span><span>With deterministic local and fake backends (T14, T5): both publish/unregister orderings; failures injected during artifact upload, <code>index.json</code> and <code>meta.json</code> replacement, and partial stale deletion, each followed by a converging retry; aborting when either listing fails; AWS listing pagination and 1,000-key delete batches with per-object failures; guarded stale-lock recovery; a second process waiting on a held lock; and zero-document sites.</span></li>
+        <li><span class="chip sampled">Sampled on Cloudflare</span><span>A disposable site was registered, published, previewed, retried, and unregistered against the live R2 deployment on 2026-10-01, and an R2 compare-and-swap race produced exactly one winner. On 2026-10-02, an interrupted <code>preview publish</code> left its lock held, <code>lock recover</code> with the observed ETag freed it, and the retry succeeded; a stale process that had lost the lock was rejected before replacing the catalog. Publishing with temporary scoped credentials (including the site lock and cache retry record) also worked (T15). These are samples, not the complete provider proof.</span></li>
+        <li><span class="chip open">Not yet proven</span><span>Concurrent <code>site publish</code> runs for different sites across processes against a real provider, and real S3 and R2 conditional-write and interruption-recovery runs of <code>site publish</code> with provider cache behavior (T14). No live AWS run.</span></li>
+      </ul>
+    </section>
+
+    <div class="callout guide"><span class="ico">GUIDE</span><p>How to run these commands day to day, including dry runs and <code>--fulltext</code>, is in the guide's <a href="/guide/en/publishing.html" target="_top">Publishing</a>. The whole flow from deploying the app to reading is in <a href="/guide/en/what-is-git-artifact-pages.html" target="_top">What is Git Artifact Pages?</a></p></div>
+
+    <nav class="pager" aria-label="Pages">
+      <a class="prev" href="storage-layout.html"><small>Previous</small><strong>Storage layout</strong></a>
+      <a class="next" href="search.html"><small>Next</small><strong>Search and indexes</strong></a>
+    </nav>
+
+    <footer class="foot"><strong>Architecture</strong><p>These pages describe the behavior recorded in the project's specification and verification records. Team and repository names such as <code>acme/checkout</code> are illustrative.</p></footer>
+  </main>
+</body>
+</html>

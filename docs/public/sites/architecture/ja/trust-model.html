@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Git Artifact Pagesの信頼モデル。公開を信頼の判断とする考え方、サンドボックスの無い同一オリジンのiframeで表示するHTML、サニタイズするMarkdown、サイトごとのContent Security Policyとその限界、プレビュー、読者のアクセス制御を運用者のエッジに任せる理由。">
+  <title>信頼モデル</title>
+  <script>
+    // 閲覧アプリ（同一オリジンの親）のテーマを描画前に写す。以後の追従は assets/site.js が行う。
+    (() => {
+      const root = document.documentElement;
+      root.classList.add('js');
+      try {
+        const theme = window.parent !== window && window.parent.document.documentElement.dataset.theme;
+        if (theme === 'light' || theme === 'dark') root.dataset.theme = theme;
+      } catch { /* 別オリジン：prefers-color-scheme にまかせる */ }
+    })();
+  </script>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../assets/site.css">
+  <script src="../assets/site.js" defer></script>
+</head>
+<body class="arch">
+  <a class="skip" href="#main">本文へ移動</a>
+  <main id="main" class="wrap">
+    <div class="arch-bar">
+      <a class="arch-brand" href="overview.html"><b aria-hidden="true">A</b>アーキテクチャ</a>
+      <nav class="lang-switch" aria-label="言語"><span aria-current="page">日本語</span><a href="../en/trust-model.html" hreflang="en" lang="en">English</a></nav>
+    </div>
+    <nav class="arch-pages" aria-label="アーキテクチャのページ">
+      <ol>
+        <li><a href="overview.html"><small>01</small>全体像</a></li>
+        <li><a href="storage-layout.html"><small>02</small>ストレージの構成</a></li>
+        <li><a href="publishing-model.html"><small>03</small>公開の仕組み</a></li>
+        <li><a href="search.html"><small>04</small>検索とインデックス</a></li>
+        <li><a href="previews.html"><small>05</small>プレビューの仕組み</a></li>
+        <li><a href="trust-model.html" aria-current="page"><small>06</small>信頼モデル</a></li>
+      </ol>
+    </nav>
+
+    <header class="page-head">
+      <div>
+        <p class="eyebrow">アーキテクチャ · 06</p>
+        <h1>信頼モデル</h1>
+      </div>
+      <p class="answer"><span class="answer-label">要点</span>公開することが、信頼するという判断です。公開したHTMLは承認済みの実行可能なコンテンツとして、アプリと同じオリジンの、サンドボックスの無いiframeで表示します。Markdownはサニタイズし、スクリプトは決して動かしません。誰が読めるかは運用者のエッジやネットワークが決め、Artifact Pagesは決めません。</p>
+    </header>
+
+    <figure class="fig" style="--fig-min: 760px; --fig-max: 1060px">
+      <div class="fig-head"><strong>境界の位置</strong><span>実線：製品 · 破線：運用者が管理</span></div>
+      <div class="fig-frame" role="group" aria-label="図：境界の位置">
+        <svg viewBox="0 0 960 440" role="img" aria-labelledby="tm-b-t tm-b-d">
+          <title id="tm-b-t">境界の位置</title>
+          <desc id="tm-b-d">信頼された公開者が1つのオリジンへ書き込みます。運用者が設定する任意のアクセスの関門が、オリジン全体を囲みます。オリジンの中では、閲覧アプリがHTMLの成果物をサンドボックスの無い同一オリジンのiframeで表示し、その成果物はアプリのDOMと保存領域に届きます。Markdownはアプリがサニタイズしてから自分で描画します。読者は運用者の関門を通ってだけオリジンに届き、製品は読者の身元を扱いません。</desc>
+          <defs>
+            <marker id="tm-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ad-head"/></marker>
+            <marker id="tm-q" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ad-head q"/></marker>
+          </defs>
+          <text class="ad-lab ok" x="16" y="24">信頼された公開者</text>
+          <rect class="ad-box ok" x="16" y="40" width="180" height="340" rx="10"/>
+          <text class="ad-t" x="30" y="66">公開を許した</text>
+          <text class="ad-t" x="30" y="84">人とCI</text>
+          <text class="ad-s" x="30" y="116">入口での確認：</text>
+          <text class="ad-s" x="30" y="140">・登録したリポジトリと</text>
+          <text class="ad-s" x="30" y="158">　sourcePath</text>
+          <text class="ad-s" x="30" y="182">・フォークのプレビュー不可</text>
+          <text class="ad-s" x="30" y="206">・認証情報の範囲は</text>
+          <text class="ad-s" x="30" y="224">　プロバイダー側で絞る</text>
+          <text class="ad-q" x="30" y="262">サイトの登録情報の確認は作業の</text>
+          <text class="ad-q" x="30" y="278">決まりで、IAMではない</text>
+          <text class="ad-q" x="30" y="316">HTMLの公開は、その</text>
+          <text class="ad-q" x="30" y="332">スクリプトと通信の承認</text>
+          <path class="ad-flow ok" d="M196 210 H274" marker-end="url(#tm-a)"/>
+          <text class="ad-q" x="221" y="200" text-anchor="middle">公開</text>
+
+          <rect class="ad-zone warn" x="248" y="40" width="508" height="380" rx="14"/>
+          <text class="ad-lab warn" x="264" y="62">運用者のエッジやネットワークの関門（任意）</text>
+          <text class="ad-q" x="264" y="80">VPNやIPの制限、Basic認証、Cloudflare Access、署名付きCookieなど。製品の外で設定</text>
+
+          <rect class="ad-box" x="276" y="96" width="452" height="296" rx="10"/>
+          <text class="ad-lab" x="292" y="118">1つのオリジン · 閲覧アプリ /index.html</text>
+          <rect class="ad-box soft" x="540" y="104" width="176" height="24" rx="6"/>
+          <text class="ad-q" x="550" y="120">localStorage：ピン、既読</text>
+
+          <rect class="ad-box acc" x="292" y="148" width="208" height="228" rx="8"/>
+          <text class="ad-lab acc" x="306" y="170">HTMLの成果物 · iframe</text>
+          <text class="ad-m" x="306" y="192" style="font-size:10px">/_artifacts/&lt;site&gt;/…</text>
+          <text class="ad-s" x="306" y="218">sandbox属性なし</text>
+          <text class="ad-s" x="306" y="238">CSSもスクリプトも動く</text>
+          <text class="ad-s" x="306" y="266">CSPで許可：自サイトの</text>
+          <text class="ad-s" x="306" y="284">パス、https:、data:、blob:</text>
+          <text class="ad-s" x="306" y="302">拒否：外部のhttp:</text>
+          <text class="ad-q" x="306" y="334">アプリと同じオリジン：</text>
+          <text class="ad-q" x="306" y="350">DOMと保存領域を読める</text>
+          <path class="ad-flow ad-dash" d="M470 148 V132 H540" marker-end="url(#tm-a)"/>
+
+          <rect class="ad-box" x="516" y="148" width="196" height="228" rx="8"/>
+          <text class="ad-lab" x="530" y="170">Markdown · アプリのDOM</text>
+          <text class="ad-m" x="530" y="192" style="font-size:10px">/_artifacts/&lt;site&gt;/….md</text>
+          <text class="ad-s" x="530" y="218">サニタイズしてから</text>
+          <text class="ad-s" x="530" y="238">アプリが描画</text>
+          <text class="ad-s" x="530" y="266">スクリプトなし、Mermaid</text>
+          <text class="ad-s" x="530" y="284">はstrictモード</text>
+          <text class="ad-s" x="530" y="302">リソースは自サイトの</text>
+          <text class="ad-s" x="530" y="320">パスかhttps:だけ</text>
+
+          <text class="ad-lab" x="790" y="24">読者</text>
+          <rect class="ad-box" x="790" y="40" width="154" height="340" rx="10"/>
+          <text class="ad-t" x="804" y="66">関門を通った</text>
+          <text class="ad-t" x="804" y="84">すべての人</text>
+          <text class="ad-s" x="804" y="116">製品にアカウント、</text>
+          <text class="ad-s" x="804" y="134">ログイン、役割はない</text>
+          <text class="ad-s" x="804" y="166">通った人には誰にでも</text>
+          <text class="ad-s" x="804" y="184">同じ静的な中身を返す</text>
+          <text class="ad-q" x="804" y="222">隠したサイトや推測</text>
+          <text class="ad-q" x="804" y="238">しにくいSHAは</text>
+          <text class="ad-q" x="804" y="254">アクセス制御ではない</text>
+          <path class="ad-line" d="M790 210 H730" marker-end="url(#tm-q)"/>
+          <text class="ad-q" x="16" y="434">/_control/*（ロック、再試行の記録）は、関門の有無にかかわらず配信しません。</text>
+        </svg>
+      </div>
+      <figcaption>実線の箱の中はすべて1つのオリジンで、1つの信頼の範囲です。iframeが分けるのはレイアウトとCSSで、スクリプトは分けません。<span class="fig-scroll">図の全体は横にスクロールして見られます。</span></figcaption>
+      <details class="fig-text">
+        <summary>図の内容を文章で読む</summary>
+        <ul>
+          <li>信頼された公開者（運用者が公開を許した人とCI）がコンテンツを書き込みます。入口では、ソースが登録したリポジトリとソースパスであること、フォークのプルリクエストにプレビューを作らないことを確かめ、認証情報の範囲はプロバイダー側の設定で絞ります。サイトの登録情報の確認は作業の決まりで、IAMではありません。</li>
+          <li>運用者が設定する任意の関門（VPNやIPの制限、Basic認証、Cloudflare Access、署名付きCookie）が、オリジン全体を囲めます。これは製品の外にあります。</li>
+          <li>オリジンでは、閲覧アプリがHTMLの成果物を<code>/_artifacts/&lt;site&gt;/…</code>からサンドボックスの無いiframeに読み込みます。スクリプトは動き、CSPは自サイトのパス、HTTPS、<code>data:</code>、<code>blob:</code>を許し、外部のHTTPを拒否します。アプリと同じオリジンなので、アプリのDOMとローカルの保存領域を読めます。</li>
+          <li>Markdownはアプリがサニタイズしてから描画します。スクリプトは動かず、Mermaidはstrictモードで動き、リソースは自サイトのパスかHTTPSに限ります。</li>
+          <li>製品は読者の身元を扱いません。関門を通った人には誰にでも同じ中身を返します。サイトを隠すことや推測しにくいSHAは、アクセス制御ではありません。<code>/_control/*</code>は配信しません。</li>
+        </ul>
+      </details>
+    </figure>
+
+    <section class="doc-section" aria-labelledby="decision">
+      <h2 id="decision">公開することが信頼の判断</h2>
+      <p>Git Artifact Pagesは、HTMLのレポート、ダッシュボード、図を、スクリプトも含めて<strong>作者が作ったとおりに</strong>見せるためのものです。そのため、公開したHTMLを承認済みの実行可能なコンテンツとして扱います。チームが自分たちの社内ページを信頼するのと同じです。誰が公開できるか（人、CIのワークフロー、認証情報）は運用者が決めます。製品は、悪意のあるHTMLを安全に見せようとはしません。</p>
+      <p>1つの組織、または互いに信頼し合ういくつかのチームが1つのオリジンに公開する使い方に合わせた、意図的な設計です。互いに信頼できない公開者が同居する使い方は想定していません。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="html">
+      <h2 id="html">HTML：同一オリジン、サンドボックスなし</h2>
+      <p>閲覧アプリは、<code>/_artifacts/&lt;site&gt;/&lt;path&gt;</code>を、アプリと同じオリジンから、<strong><code>sandbox</code>属性の無い</strong>普通のiframeに読み込みます。こうすると、相対URL、ESモジュール、フォント、fetchが、ファイルを直接開いたときと同じように動き、成果物のCSSがアプリに漏れることもありません。</p>
+      <p>その結果として、仕様にも書いているとおり、成果物のスクリプトは<strong>親のアプリのDOM、ローカルの保存領域、同じオリジンのほかのコンテンツにアクセスできます</strong>。閲覧アプリはピン留め、最近読んだページ、テーマをローカルの保存領域に置いているので、成果物がそれを読んだり書き換えたりすることもできます。このドキュメントのページはこの性質を意図して使っています。ページのスクリプトが親のページから閲覧アプリのテーマを読んで合わせ、逆に閲覧アプリは本文検索の語を強調するためにフレームの中へ手を伸ばします。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="csp">
+      <h2 id="csp">サイトごとのContent Security Policy</h2>
+      <p>エッジは、成果物の応答ごとに強制のCSPを付けます。ローカルではnginxがリクエストのパスから組み立てます。</p>
+      <div class="term" aria-label="ローカルのnginx設定による成果物のCSP">
+        <div class="term-head"><span>Content-Security-Policy · /_artifacts/checkout/…</span></div>
+<pre><span class="k">default-src</span> http://localhost:4179/_artifacts/checkout/ https: data: blob:;
+<span class="k">script-src</span>  http://localhost:4179/_artifacts/checkout/ https: <span class="s">'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'</span> data: blob:;
+<span class="k">style-src</span>   http://localhost:4179/_artifacts/checkout/ https: <span class="s">'unsafe-inline'</span> data: blob:</pre>
+      </div>
+      <ul>
+        <li><strong>許可するもの：</strong>ページ自身のサイトのパスの下にあるリソースと、あらゆるHTTPSのオリジン（CSS、スクリプト、画像、フォント、メディア、fetch）。通常のTLS、CORS、混在コンテンツの規則には従います。成果物は信頼されているので、インラインのスクリプトとスタイル、<code>eval</code>も許可します。</li>
+        <li><strong>拒否するもの：</strong>安全でない外部の<code>http:</code>のリソース。</li>
+        <li><strong>サイトの間の壁ではありません。</strong><code>https:</code>はすべてのHTTPSのURLに一致するので、アプリをHTTPSで配信すると、同じオリジンにあるほかのサイトのパスにも一致します。つまり本番では、あるサイトのページがほかのサイトのファイルを読み込<em>めます</em>。ローカルの素のHTTPでは、パスの指定がほかのサイトのパスを拒否します。すべてのサイトが1つのオリジンを共有するので、<code>'self'</code>はあえて使っていません。許可したHTTPSのリソースが、ほかのHTTPSのURLへリダイレクトすることもあります。</li>
+      </ul>
+      <p>実際の帰結として、<strong>共有のファイルはサイトごとに複製を持ちます</strong>。たとえばこのドキュメントのサイトは、同じ<code>site.css</code>と<code>site.js</code>をサイトごとの<code>assets/</code>に置き、ほかのサイトから読み込みません。ローカルと本番のどちらのポリシーでも動くようにするためです。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="markdown">
+      <h2 id="markdown">Markdown：サニタイズし、実行しない</h2>
+      <p>Markdownは別のモデルです。アプリは、埋め込まれた生のHTMLをサニタイザーに通し、スクリプトを含む要素や許可しない要素・属性を取り除いてから、自分のDOMに描画します。Markdownを公開しても、スクリプトを実行する許可にはなりません。</p>
+      <ul>
+        <li>Mermaidの図は、<code>securityLevel: "strict"</code>で図の操作を無効にしてローカルで描画します。描画に失敗したら、元のテキストをコードとして表示したままにします。</li>
+        <li>相対パスのリソースはMarkdownのファイルの位置から解決し、そのサイトの成果物の名前空間の中に限ります。外部のリンクと画像はHTTPSに限ります。<code>data:</code>はbase64のPNG、JPEG、GIF、WebP、AVIFの画像だけ、<code>mailto:</code>のリンクは許可します。</li>
+        <li>同じサイトのページへのリンクはアプリのルートになり、それ以外のリンクは<code>noopener</code>と<code>noreferrer</code>を付けて新しいタブで開きます。</li>
+      </ul>
+    </section>
+
+    <section class="doc-section" aria-labelledby="previews-trust">
+      <h2 id="previews-trust">プレビューも同じ信頼で扱う</h2>
+      <p>プレビューのHTMLも、本番とまったく同じモデルで表示します。同じオリジン、サンドボックスの無いiframe、リビジョンのパスに合わせた同じリソースの規則です。<code>preview publish</code>を実行することは、マージ前のその内容を承認することで、どんな変更でも安全に見られるビューアーではありません。だから信頼の確認は入口にあります。</p>
+      <ul>
+        <li>プレビューするのは、サイトの登録済みリポジトリにあるheadだけです。フォークからのプルリクエストは、登録済みのリポジトリが宛先でも対象外です。</li>
+        <li>特権のある<code>pull_request_target</code>のワークフローで、フォークの内容をチェックアウトして実行してはいけません。</li>
+        <li>プレビュー専用のホスト名、<code>srcdoc</code>による代替表示、一律の<code>Access-Control-Allow-Origin: null</code>やワイルドカードのCORSは使いません。</li>
+      </ul>
+      <p>フォークのプレビューや、互いに信頼できない公開者に対応するには、別のオリジンなど、承認と隔離の別のモデルが必要です。それは製品としての新しい判断になります。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="viewers">
+      <h2 id="viewers">誰が読めるかはエッジで決める</h2>
+      <p>Artifact Pagesには、<strong>読者のアカウント、ログイン、セッション、役割、サイトごとのアクセス方針がありません</strong>。中身を制限する必要があれば、運用者が配信のエッジや周りのネットワークで設定します。VPNやIPの制限、Basic認証、IDプロバイダーとCloudFrontの署名付きCookie、Cloudflare Accessなどです。リクエストが通れば、誰にでも同じ静的な中身を返します。</p>
+      <p>読者の身元を製品に入れない理由は次のとおりです。</p>
+      <ul>
+        <li><strong>製品が静的なままでいられる。</strong>確かめるセッションが無いので、どのCDNでもすべてのオブジェクトをキャッシュして配信でき、身元ごとにキャッシュを分けて間違える心配もありません。</li>
+        <li><strong>仕組みは運用者が選べる。</strong>組織ごとに、使っているプロバイダーやIDの仕組みに合う関門を選び、ホスト名、一部のパス、ネットワーク全体のどれを守るかも決められます。製品がIDの方針を定める必要はありません。</li>
+        <li><strong>1つの境界ですべてを覆える。</strong>オリジンの前に関門を1つ置けば、ページ、インデックス、検索データ、プレビューをまとめて守れます。</li>
+      </ul>
+      <p>そのためには、関門が論理ルート<strong>と</strong>生の<code>/_indexes/*</code>、<code>/_artifacts/*</code>、<code>/_previews/*</code>を覆い、守るべき中身がオリジンや共有キャッシュから返る前に働く必要があります。次のものは、はっきりと<strong>アクセス制御ではありません</strong>。</p>
+      <ul class="checklist no">
+        <li>サイトの登録情報からサイトを外すこと、画面の一覧から隠すこと。オブジェクトを消すまでは、直接のURLで開けます。</li>
+        <li>推測しにくいプレビューのSHA、プレビューが「マージ前」であること。</li>
+        <li>登録解除を取り消しとみなすこと。オリジンのオブジェクトを消してキャッシュの無効化を依頼しますが、すでに届いた中身は取り戻せません。</li>
+      </ul>
+    </section>
+
+    <section class="doc-section" aria-labelledby="publishers">
+      <h2 id="publishers">公開者の認証情報と制御用のオブジェクト</h2>
+      <p>サイトの登録情報の確認とサイトのロックはArtifact Pagesのコマンド同士の調整で、権限の仕組みでは<strong>ありません</strong>。バケットへ直接書き込める認証情報を持つ人は迂回できます。公開者が触れる範囲を絞るのは、プロバイダーの認証情報の役目です。別のリポジトリから公開する人に許すのは、サイトの登録情報のオブジェクトの読み取り、自分のサイトのインデックスと成果物の接頭辞の中での読み書きと削除、プレビューの接頭辞の読み書き（AWSの参照構成では、プレビューの履歴を消す権限は与えません）、サイトのロック<code>_control/locks/sites/&lt;site&gt;.json</code>の読み書き、キャッシュ再試行の記録<code>_control/site-cache/&lt;site&gt;.json</code>の読み書きと削除、それにCDNの無効化の依頼（CloudFrontの<code>CreateInvalidation</code>、またはキャッシュ削除の権限を持つCloudflareのゾーンのトークン）です。無効化の依頼が要るのは、中身が変わる公開が、変わったURLのキャッシュを消すからです。サイトの登録情報とアプリケーションプレーンへの書き込みは許しません。Cloudflareでは、サイトの登録情報を読むための別の身元を任意で設定できます。AWSの参照構成では、管理者用と公開者用に分けたロールをGitHub ActionsのOIDCで使う想定です。</p>
+      <p><code>/_control/*</code>にある非公開の調整用オブジェクトは、読者に返してはいけません。ロックや再試行の記録の中身を返さない限り、配信側がこれらのパスにアプリのシェルを返すことは許されます。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="proof">
+      <h2 id="proof">どこまで実証されているか</h2>
+      <ul class="proof">
+        <li><span class="chip local">ローカルで実証済み</span><span>iframeでのCSSの閉じ込め、害の無いフィクスチャからの意図どおりの親のDOMと保存領域へのアクセス、Markdownからのスクリプトの除去、nullやワイルドカードのCORSを付けない同一オリジンでのモジュールの読み込み、CSPによる外部HTTPSの許可と外部HTTPの拒否（T4、T6、ISSUE-037のブラウザのテスト）。</span></li>
+        <li><span class="chip sampled">Cloudflareで抜き取り確認</span><span>2026-10-01に、稼働中のGuideのHTMLに強制の成果物CSPのヘッダーが付くこと、プレビューのHTMLにリビジョンのパスに合わせた強制のCSPが付くこと、制御用のキーのパスがアプリのシェルしか返さないことを確かめました。2026-10-02には、稼働中のGuideのページで実行時に組み立てたHTTPのURLへのfetchが、強制のCSP（<code>default-src</code>から引き継ぐ<code>connect-src</code>）で拒否されること（Chromium）、範囲を絞った一時的なR2の認証情報が自分のサイトの外への書き込みを拒否されつつ、そのサイトは公開できることを確かめました（T15）。</span></li>
+        <li><span class="chip open">未実証</span><span>リソースの種類とブラウザをひととおり組み合わせた、外部HTTPの拒否の確認。公開者のプロセスからキャッシュ削除用のトークンを切り離すこと。GitHubのOIDCのロール、AWSでの実際の動作すべて。</span></li>
+      </ul>
+    </section>
+
+    <div class="callout guide"><span class="ico">ガイド</span><p>デプロイを準備するときに何を決めるか、アクセスの関門をどこに置くかは、ガイドの<a href="/guide/ja/access-and-trust.html" target="_top">信頼とアクセス制御</a>にあります。</p></div>
+
+    <nav class="pager" aria-label="ページ送り">
+      <a class="prev" href="previews.html"><small>前へ</small><strong>プレビューの仕組み</strong></a>
+      <a class="next" href="overview.html"><small>最初に戻る</small><strong>全体像</strong></a>
+    </nav>
+
+    <footer class="foot"><strong>アーキテクチャ</strong><p>このサイトは、プロジェクトの仕様と検証記録にある動作を説明しています。<code>acme/checkout</code>などのチームやリポジトリの名前は説明用の例です。</p></footer>
+  </main>
+</body>
+</html>

@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="How pull-request previews work in Git Artifact Pages: which documents are previewed, immutable SHA-addressed revisions and manifests, the per-site catalog and groups, routes, provider-owned retention, and stale-reference cleanup.">
+  <title>Previews</title>
+  <script>
+    // Copy the reader app's theme (same-origin parent) before first paint; assets/site.js keeps it in sync.
+    (() => {
+      const root = document.documentElement;
+      root.classList.add('js');
+      try {
+        const theme = window.parent !== window && window.parent.document.documentElement.dataset.theme;
+        if (theme === 'light' || theme === 'dark') root.dataset.theme = theme;
+      } catch { /* cross-origin: fall back to prefers-color-scheme */ }
+    })();
+  </script>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../assets/site.css">
+  <script src="../assets/site.js" defer></script>
+</head>
+<body class="arch">
+  <a class="skip" href="#main">Skip to content</a>
+  <main id="main" class="wrap">
+    <div class="arch-bar">
+      <a class="arch-brand" href="overview.html"><b aria-hidden="true">A</b>Architecture</a>
+      <nav class="lang-switch" aria-label="Language"><a href="../ja/previews.html" hreflang="ja" lang="ja">日本語</a><span aria-current="page">English</span></nav>
+    </div>
+    <nav class="arch-pages" aria-label="Architecture pages">
+      <ol>
+        <li><a href="overview.html"><small>01</small>Overview</a></li>
+        <li><a href="storage-layout.html"><small>02</small>Storage layout</a></li>
+        <li><a href="publishing-model.html"><small>03</small>Publishing model</a></li>
+        <li><a href="search.html"><small>04</small>Search and indexes</a></li>
+        <li><a href="previews.html" aria-current="page"><small>05</small>Previews</a></li>
+        <li><a href="trust-model.html"><small>06</small>Trust model</a></li>
+      </ol>
+    </nav>
+
+    <header class="page-head">
+      <div>
+        <p class="eyebrow">Architecture · 05</p>
+        <h1>Previews</h1>
+      </div>
+      <p class="answer"><span class="answer-label">Short answer</span>A preview publishes the changed documents of one Git head as an immutable revision addressed by its commit SHA, lists it in a small per-site catalog, and leaves its lifetime to the storage provider. Production publishing later removes catalog entries whose revisions are gone.</p>
+    </header>
+
+    <figure class="fig" style="--fig-min: 760px; --fig-max: 1060px">
+      <div class="fig-head"><strong>The life of a preview</strong><span>example: pull request #42 on checkout (illustrative)</span></div>
+      <div class="fig-frame" role="group" aria-label="Diagram: the life of a preview">
+        <svg viewBox="0 0 960 400" role="img" aria-labelledby="pv-life-t pv-life-d">
+          <title id="pv-life-t">The life of a preview</title>
+          <desc id="pv-life-d">A pull request head is compared with the merge base to select changed documents. preview publish stores the files and then a manifest under a revision path named by the head SHA and updates the site's catalog so the pull request's group points to that head. Readers open the group list or a fixed revision URL. The provider's lifecycle rule later expires preview objects; the reader hides catalog entries whose manifest is missing, and the next production publish removes those entries.</desc>
+          <defs>
+            <marker id="pv-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ad-head"/></marker>
+            <marker id="pv-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ad-head warn"/></marker>
+          </defs>
+          <circle class="ad-num" cx="26" cy="24" r="10"/><text class="ad-num-t" x="26" y="28" text-anchor="middle">1</text>
+          <text class="ad-lab" x="42" y="28">GIT</text>
+          <rect class="ad-box" x="16" y="40" width="170" height="150" rx="8"/>
+          <text class="ad-t" x="28" y="64">Pull request head</text>
+          <text class="ad-mq" x="28" y="84">head = &lt;sha&gt;</text>
+          <text class="ad-s" x="28" y="110">changes since the</text>
+          <text class="ad-s" x="28" y="128">merge base with</text>
+          <text class="ad-mq" x="28" y="146">origin/HEAD</text>
+          <text class="ad-q" x="28" y="174">fork heads are excluded</text>
+
+          <circle class="ad-num" cx="226" cy="24" r="10"/><text class="ad-num-t" x="226" y="28" text-anchor="middle">2</text>
+          <text class="ad-lab" x="242" y="28">PUBLISH</text>
+          <rect class="ad-box acc" x="216" y="40" width="200" height="150" rx="8"/>
+          <text class="ad-m acc" x="228" y="64">preview publish</text>
+          <text class="ad-s" x="228" y="88">added or modified</text>
+          <text class="ad-s" x="228" y="106">HTML and Markdown only</text>
+          <text class="ad-s" x="228" y="130">+ their local resources</text>
+          <text class="ad-s" x="228" y="154">PR link only with</text>
+          <text class="ad-mq" x="228" y="172">--pull-request</text>
+
+          <circle class="ad-num" cx="456" cy="24" r="10"/><text class="ad-num-t" x="456" y="28" text-anchor="middle">3</text>
+          <text class="ad-lab" x="472" y="28">STORED UNDER /_previews/checkout/</text>
+          <rect class="ad-box" x="446" y="40" width="250" height="150" rx="8"/>
+          <text class="ad-m" x="458" y="64">revisions/&lt;sha&gt;/files/…</text>
+          <text class="ad-m" x="458" y="88">revisions/&lt;sha&gt;/manifest.json</text>
+          <text class="ad-q" x="458" y="106">immutable · manifest written last</text>
+          <path class="ad-line" d="M458 120 H684"/>
+          <text class="ad-m" x="458" y="142">catalog.json</text>
+          <text class="ad-s" x="458" y="162">group pr:42 → latest head</text>
+          <text class="ad-q" x="458" y="180">mutable · one entry per group</text>
+
+          <circle class="ad-num" cx="736" cy="24" r="10"/><text class="ad-num-t" x="736" y="28" text-anchor="middle">4</text>
+          <text class="ad-lab" x="752" y="28">READ</text>
+          <rect class="ad-box" x="726" y="40" width="218" height="150" rx="8"/>
+          <text class="ad-s" x="738" y="62">Latest for the PR:</text>
+          <text class="ad-m" x="738" y="80" style="font-size:10px">/checkout/_previews</text>
+          <text class="ad-m ad-pre" x="738" y="94" style="font-size:10px">  ?group=pr%3A42</text>
+          <text class="ad-s" x="738" y="120">Fixed revision:</text>
+          <text class="ad-m" x="738" y="138" style="font-size:10px">/checkout/_previews/&lt;sha&gt;/</text>
+          <text class="ad-m ad-pre" x="738" y="152" style="font-size:10px">  design/flow.html</text>
+          <text class="ad-q" x="738" y="176">header shows short SHA, PR #</text>
+
+          <path class="ad-flow" d="M186 115 H214" marker-end="url(#pv-a)"/>
+          <path class="ad-flow" d="M416 115 H444" marker-end="url(#pv-a)"/>
+          <path class="ad-flow" d="M696 115 H724" marker-end="url(#pv-a)"/>
+
+          <circle class="ad-num" cx="456" cy="236" r="10"/><text class="ad-num-t" x="456" y="240" text-anchor="middle">5</text>
+          <text class="ad-lab warn" x="472" y="240">PROVIDER LIFECYCLE</text>
+          <rect class="ad-box warn" x="446" y="252" width="250" height="110" rx="8"/>
+          <text class="ad-s" x="458" y="276">A rule on the _previews/ prefix</text>
+          <text class="ad-s" x="458" y="294">expires objects after the days</text>
+          <text class="ad-s" x="458" y="312">the administrator configured.</text>
+          <text class="ad-q" x="458" y="340">no expiry clock in the app</text>
+
+          <circle class="ad-num" cx="26" cy="236" r="10"/><text class="ad-num-t" x="26" y="240" text-anchor="middle">6</text>
+          <text class="ad-lab" x="42" y="240">CLEANUP</text>
+          <rect class="ad-box" x="16" y="252" width="400" height="110" rx="8"/>
+          <text class="ad-m acc" x="28" y="276">site publish</text>
+          <text class="ad-s" x="114" y="276">(and preview publish) read the catalog:</text>
+          <text class="ad-s" x="28" y="300">manifest confirmed missing → remove the reference</text>
+          <text class="ad-s" x="28" y="320">manifest present or unreadable → keep it</text>
+          <text class="ad-q" x="28" y="346">removes references only, never revision bytes</text>
+
+          <rect class="ad-box soft" x="726" y="252" width="218" height="110" rx="8"/>
+          <text class="ad-s" x="738" y="276">The Previews list checks</text>
+          <text class="ad-s" x="738" y="294">each candidate's manifest</text>
+          <text class="ad-s" x="738" y="312">and hides missing ones.</text>
+          <text class="ad-q" x="738" y="340">a missing page: Preview unavailable</text>
+
+          <path class="ad-flow warn" d="M570 192 V250" marker-end="url(#pv-w)"/>
+          <path class="ad-flow warn" d="M446 306 H418" marker-end="url(#pv-w)"/>
+          <path class="ad-flow" d="M300 252 V214 H520 V192" marker-end="url(#pv-a)"/>
+          <text class="ad-q" x="306" y="208">prune</text>
+          <path class="ad-line ad-dash" d="M835 192 V250"/>
+          <text class="ad-q" x="16" y="390">Merging or closing the pull request changes nothing by itself. Discovery follows what the provider still holds.</text>
+        </svg>
+      </div>
+      <figcaption>Steps 1 to 4 happen on every preview publish. Steps 5 and 6 happen later and independently: the provider removes old objects, and the next publish tidies the catalog. <span class="fig-scroll">Scroll sideways to see the whole diagram.</span></figcaption>
+      <details class="fig-text">
+        <summary>The diagram as text</summary>
+        <ol>
+          <li>A pull request head (a commit SHA) is compared with its merge base with <code>origin/HEAD</code>. Heads from forks are excluded.</li>
+          <li><code>preview publish</code> selects added or modified HTML and Markdown and the local resources they need. It records a PR link only when <code>--pull-request</code> is given and verified.</li>
+          <li>Files go to <code>/_previews/checkout/revisions/&lt;sha&gt;/files/…</code>, then the immutable <code>manifest.json</code>; the mutable <code>catalog.json</code> is updated so group <code>pr:42</code> points at the new head.</li>
+          <li>Readers open <code>/checkout/_previews?group=pr%3A42</code> for the latest preview of that PR, or a fixed revision URL such as <code>/checkout/_previews/&lt;sha&gt;/design/flow.html</code>.</li>
+          <li>A provider lifecycle rule on <code>_previews/</code> expires objects after the configured number of days. The reader hides catalog entries whose manifest is missing.</li>
+          <li>The next <code>site publish</code> (or <code>preview publish</code>) removes catalog references whose manifest is confirmed missing, and keeps those that are present or could not be read.</li>
+        </ol>
+      </details>
+    </figure>
+
+    <section class="doc-section" aria-labelledby="selection">
+      <h2 id="selection">What gets previewed</h2>
+      <p>A preview answers “what will these changed pages look like?”, not “what will the whole site look like after merging?”.</p>
+      <ul>
+        <li><strong>Selection:</strong> compare the merge base of the default branch's current HEAD (<code>--default-ref</code>, default <code>origin/HEAD</code>) and the preview head (<code>--head</code>, default <code>HEAD</code>) against that head. Only <strong>added or modified HTML and Markdown</strong> under the registered source path are previewed. A rename previews the new path; a deleted document has no preview.</li>
+        <li><strong>Snapshot:</strong> every previewed byte comes from the head's committed tree, not a temporary merge with the default branch.</li>
+        <li><strong>Outcomes:</strong> a change that only deletes documents returns <code>no-preview</code>; a change that touches only non-document files is an error.</li>
+        <li><strong>Resources:</strong> local CSS, JavaScript (including static module imports, followed transitively), images, and fonts that a changed document needs are copied into the revision, keeping their relative layout. Names built at runtime can be added with <code>--include PATH</code> (exact paths or <code>path.Match</code> patterns). JavaScript-built root-relative URLs and arbitrary runtime navigation are outside the guarantee.</li>
+      </ul>
+    </section>
+
+    <section class="doc-section" aria-labelledby="records">
+      <h2 id="records">Records, keys, and routes</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Object</th><th>Key</th><th>Content</th></tr></thead>
+        <tbody>
+          <tr><td>Revision files</td><td><code>/_previews/&lt;site&gt;/revisions/&lt;sha&gt;/files/&lt;path&gt;</code></td><td>The documents and resources, byte for byte from the head tree</td></tr>
+          <tr><td>Revision manifest</td><td><code>/_previews/&lt;site&gt;/revisions/&lt;sha&gt;/manifest.json</code></td><td><code>headSha</code>, <code>defaultHeadSha</code>, <code>mergeBaseSha</code>, <code>createdAt</code>, <code>bundleDigest</code>, <code>files[]</code> (path, SHA-256, content type), <code>documents[]</code></td></tr>
+          <tr><td>Catalog</td><td><code>/_previews/&lt;site&gt;/catalog.json</code></td><td><code>groups[]</code>: <code>id</code> (<code>pr:&lt;number&gt;</code> or <code>head:&lt;sha&gt;</code>), <code>kind</code>, <code>headSha</code>, optional <code>prUrl</code>, <code>updatedAt</code>, <code>documents[]</code></td></tr>
+        </tbody>
+      </table></div>
+      <p>The logical document route is <code>/:site/_previews/&lt;full SHA&gt;/&lt;document path&gt;</code>, and <code>/:site/_previews</code> is the site's Previews list. An optional <code>?group=pr%3A42</code> is reader context only: it never changes the revision or its bytes.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="identity">
+      <h2 id="identity">Revisions and groups</h2>
+      <p>The two identities do different jobs.</p>
+      <div class="split">
+        <div class="pane">
+          <span class="label">REVISION = FULL HEAD SHA</span>
+          <p>A revision URL never changes content while the provider keeps it. Publishing the same head again verifies the stored objects instead of rewriting them; a different projection for the same head is an error. A direct URL resolves through its own manifest, not the catalog.</p>
+        </div>
+        <div class="pane">
+          <span class="label">GROUP = WHAT DISCOVERY SHOWS</span>
+          <p>The catalog shows the latest completed revision per group. With an explicit <code>--pull-request</code>, the group is <code>pr:&lt;number&gt;</code>; without it, the preview is manual and its group is <code>head:&lt;sha&gt;</code>. Older revisions leave the catalog, but their direct URLs keep working while the objects exist.</p>
+        </div>
+      </div>
+      <p>PR provenance is never inferred from a branch, commit, or CI event. With <code>--pull-request</code>, the CLI reads the pull request through GitHub's API and checks its base repository, that the head is in the same repository, and the head SHA. Pull requests from forks are excluded. The reader shows a quiet header label with the short SHA, and a PR link only when the catalog confirms that the named group still points at that SHA.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="publication">
+      <h2 id="publication">Publication order and links</h2>
+      <p><code>preview publish</code> takes the same per-site lock as <code>site publish</code> and <code>registry unregister</code>, then rechecks the deployed registry. It uploads the revision files and its manifest as create-only objects, and only then reads and updates the catalog as an idempotent upsert by group. If the catalog update fails, the run reports failure and can be retried; uploaded objects that never reached the catalog are removed by provider retention like any others.</p>
+      <p>Inside a preview, a link to <strong>another changed document</strong> opens that document in the same revision; a link to an <strong>unchanged document</strong> opens its production route. HTML links move the reader app itself rather than nesting the app inside the frame.</p>
+      <p>Previews stay out of production views: they are not in <code>index.json</code>, Browse, Recently updated, page text search, or palette page results. The site home has a quiet link to the Previews list, and the palette has an “Open previews” command. Opening that list loads only this site's catalog.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="lifetime">
+      <h2 id="lifetime">Lifetime and cleanup</h2>
+      <p><strong>The provider owns preview lifetime.</strong> An administrator sets one <code>preview_retention_days</code> value in the infrastructure configuration (not the CLI config). It becomes an S3 lifecycle expiration on AWS or an R2 object-lifecycle rule on Cloudflare, applied to the whole <code>_previews/</code> prefix. The app stores no expiry timestamp, runs no timer, and promises no exact deletion time.</p>
+      <p>Because provider deletion is asynchronous, a catalog can briefly point at an expired revision. Two things handle that:</p>
+      <ol>
+        <li>When the Previews list opens, the reader checks each candidate's manifest and hides missing ones. A missing preview document shows <em>Preview unavailable</em> with a way back to the site; a missing raw resource returns a real 404.</li>
+        <li>Every <code>site publish</code> and <code>preview publish</code> reads the catalog at the origin under the site lock. A reference is removed only when its manifest is <strong>confirmed missing</strong>; a read error is not proof of absence. <code>site publish</code> writes the reduced catalog only after the production projection is committed, so a failed production publish never hides previews.</li>
+      </ol>
+      <p>There is no PR-close workflow. Merged, closed, and manual previews stay discoverable while their manifests exist. <code>registry unregister</code> deletes a site's previews immediately along with the rest of its projection.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="proof">
+      <h2 id="proof">What has been proven</h2>
+      <ul class="proof">
+        <li><span class="chip local">Proven locally</span><span>The record contract, direct routes, encoded paths, same-head retry, and a manifest going missing (T1); missing manifests hidden and raw 404s (T4); concurrent group updates, interrupted publication, and both preview/unregister orderings (T5); resources, transitive modules, and changed/unchanged link routing (T6); pruning only confirmed-missing references through the local CLI (T8); and, with the real CLI, a local edge and the storage API, deleting one revision so that the next production publish prunes only that reference, a warm browser's list drops it, and its old URL shows “Preview unavailable” (T17, <code>npm run test:preview-retirement</code>).</span></li>
+        <li><span class="chip sampled">Sampled on Cloudflare</span><span>On 2026-10-01, a disposable site's manual preview rendered with its modules and resources, same-head retries returned <code>no-op</code>, a deliberately deleted manifest was pruned by the next production publish, and R2 reported the lifecycle rule on a preview object. On 2026-10-02, two new heads published concurrently through the CLI both stayed in the catalog, an interrupted publish recovered through <code>lock recover</code> with the observed ETag and a retry, and a stale process that had lost the lock was rejected before replacing the catalog. After one revision was deleted, the next production publish pruned only its reference and the browser list dropped it; the old URL showed “Preview unavailable” on a later reload, not instantly (T15).</span></li>
+        <li><span class="chip open">Not yet proven</span><span>Actual provider lifecycle deletion timing (observation in progress), publishing from a real GitHub pull request and CI, and cleanup against AWS.</span></li>
+      </ul>
+    </section>
+
+    <div class="callout guide"><span class="ico">GUIDE</span><p>Previews follow the same access rules as everything else on the origin: an unguessable SHA is not access control. See <a href="trust-model.html#previews-trust">Trust model</a> and the guide's <a href="/guide/en/access-and-trust.html" target="_top">Access and trust</a>.</p></div>
+
+    <nav class="pager" aria-label="Pages">
+      <a class="prev" href="search.html"><small>Previous</small><strong>Search and indexes</strong></a>
+      <a class="next" href="trust-model.html"><small>Next</small><strong>Trust model</strong></a>
+    </nav>
+
+    <footer class="foot"><strong>Architecture</strong><p>These pages describe the behavior recorded in the project's specification and verification records. Team and repository names such as <code>acme/checkout</code> are illustrative.</p></footer>
+  </main>
+</body>
+</html>

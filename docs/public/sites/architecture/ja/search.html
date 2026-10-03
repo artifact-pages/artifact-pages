@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Git Artifact Pagesの検索の仕組み。サイトごとの成果物インデックスで名前から探す検索と、公開時に--fulltextで作る分割済みの静的なインデックスによる本文検索。一致の規則、トレードオフ、計測値、静的にしている理由。">
+  <title>検索とインデックス</title>
+  <script>
+    // 閲覧アプリ（同一オリジンの親）のテーマを描画前に写す。以後の追従は assets/site.js が行う。
+    (() => {
+      const root = document.documentElement;
+      root.classList.add('js');
+      try {
+        const theme = window.parent !== window && window.parent.document.documentElement.dataset.theme;
+        if (theme === 'light' || theme === 'dark') root.dataset.theme = theme;
+      } catch { /* 別オリジン：prefers-color-scheme にまかせる */ }
+    })();
+  </script>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../assets/site.css">
+  <script src="../assets/site.js" defer></script>
+</head>
+<body class="arch">
+  <a class="skip" href="#main">本文へ移動</a>
+  <main id="main" class="wrap">
+    <div class="arch-bar">
+      <a class="arch-brand" href="overview.html"><b aria-hidden="true">A</b>アーキテクチャ</a>
+      <nav class="lang-switch" aria-label="言語"><span aria-current="page">日本語</span><a href="../en/search.html" hreflang="en" lang="en">English</a></nav>
+    </div>
+    <nav class="arch-pages" aria-label="アーキテクチャのページ">
+      <ol>
+        <li><a href="overview.html"><small>01</small>全体像</a></li>
+        <li><a href="storage-layout.html"><small>02</small>ストレージの構成</a></li>
+        <li><a href="publishing-model.html"><small>03</small>公開の仕組み</a></li>
+        <li><a href="search.html" aria-current="page"><small>04</small>検索とインデックス</a></li>
+        <li><a href="previews.html"><small>05</small>プレビューの仕組み</a></li>
+        <li><a href="trust-model.html"><small>06</small>信頼モデル</a></li>
+      </ol>
+    </nav>
+
+    <header class="page-head">
+      <div>
+        <p class="eyebrow">アーキテクチャ · 04</p>
+        <h1>検索とインデックス</h1>
+      </div>
+      <p class="answer"><span class="answer-label">要点</span>2種類の検索は、どちらも公開時に作ったファイルを使ってブラウザの中で動きます。名前で探す検索は、開いているサイトの成果物インデックスをメモリ上で順位付けします。本文検索は、分割済みの静的なインデックスのうち、確定した検索語に必要な部分だけをダウンロードします。検索サーバーはありません。</p>
+    </header>
+
+    <figure class="fig" style="--fig-min: 760px; --fig-max: 1060px">
+      <div class="fig-head"><strong>2つの検索と1つの静的な投影</strong><span>公開時 → 保存されるオブジェクト → ブラウザ</span></div>
+      <div class="fig-frame" role="group" aria-label="図：2つの検索と1つの静的な投影">
+        <svg viewBox="0 0 960 420" role="img" aria-labelledby="se-flow-t se-flow-d">
+          <title id="se-flow-t">2つの検索と1つの静的な投影</title>
+          <desc id="se-flow-d">名前で探す：site publishがindex.jsonを書き、ブラウザはサイトを開いたときに読み込んで、入力のたびにタイトルとパスをメモリ上で順位付けします。本文検索：--fulltext付きのsite publishが検索のマニフェスト、root、最大128個のleafを書き、meta.jsonで知らせます。ブラウザはEnterまで何も取得せず、Enterでマニフェスト、root、必要なleafだけを取り、パス順の結果を返し、開いたページで検索語を強調します。</desc>
+          <defs>
+            <marker id="se-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ad-head"/></marker>
+          </defs>
+          <text class="ad-lab" x="16" y="24">公開時</text>
+          <text class="ad-lab" x="256" y="24">保存されるオブジェクト</text>
+          <text class="ad-lab" x="556" y="24">ブラウザの中</text>
+
+          <text class="ad-lab acc" x="16" y="56">名前で探す</text>
+          <rect class="ad-box" x="16" y="68" width="200" height="104" rx="8"/>
+          <text class="ad-m acc" x="28" y="92">site publish</text>
+          <text class="ad-s" x="28" y="116">タイトル、パス、見出し、</text>
+          <text class="ad-s" x="28" y="134">Gitの日時とコミッター</text>
+          <text class="ad-q" x="28" y="156">公開のたびに作る</text>
+          <rect class="ad-box" x="256" y="68" width="260" height="104" rx="8"/>
+          <text class="ad-m" x="268" y="94">_indexes/&lt;site&gt;/index.json</text>
+          <text class="ad-s" x="268" y="118">サイトごとに全件で1ファイル</text>
+          <text class="ad-q" x="268" y="140">Browse、目次、詳細にも使う</text>
+          <rect class="ad-box" x="556" y="68" width="388" height="104" rx="8"/>
+          <text class="ad-s" x="568" y="92">サイトを開いたときに1回だけ読み込む</text>
+          <text class="ad-t" x="568" y="116">入力のたびにメモリ上で順位付け</text>
+          <text class="ad-s" x="568" y="138">ピン留めと最近読んだページを上げる</text>
+          <text class="ad-mq ad-pre" x="568" y="158">@ サイト   # 見出し   &gt; コマンド</text>
+          <path class="ad-flow" d="M216 120 H254" marker-end="url(#se-a)"/>
+          <path class="ad-flow" d="M516 120 H554" marker-end="url(#se-a)"/>
+
+          <text class="ad-lab acc" x="16" y="212">本文を検索する（任意）</text>
+          <rect class="ad-box acc" x="16" y="224" width="200" height="168" rx="8"/>
+          <text class="ad-m acc" x="28" y="248">site publish --fulltext</text>
+          <text class="ad-s" x="28" y="272">タイトルと本文の</text>
+          <text class="ad-s" x="28" y="290">静的なテキストを取り出す</text>
+          <text class="ad-s" x="28" y="314">正規化：NFKC、小文字、</text>
+          <text class="ad-s" x="28" y="332">空白の統一</text>
+          <text class="ad-q" x="28" y="356">語をハッシュで</text>
+          <text class="ad-q" x="28" y="372">128の区画に振り分ける</text>
+          <rect class="ad-box acc" x="256" y="224" width="260" height="168" rx="8"/>
+          <text class="ad-m" x="268" y="248">meta.json → fullTextUrl</text>
+          <text class="ad-m" x="268" y="276">search/manifest.json</text>
+          <text class="ad-q" x="268" y="292">変わりうる入口 · 60秒</text>
+          <text class="ad-m" x="268" y="318">search/root-&lt;sha256&gt;.gz</text>
+          <text class="ad-q" x="268" y="334">辞書とパスの表</text>
+          <text class="ad-m" x="268" y="360">search/leaf-&lt;sha256&gt;.gz ×≤128</text>
+          <text class="ad-q" x="268" y="376">文書の集合 · 不変</text>
+          <rect class="ad-box acc" x="556" y="224" width="388" height="168" rx="8"/>
+          <circle class="ad-num" cx="578" cy="248" r="9"/><text class="ad-num-t" x="578" y="252" text-anchor="middle">1</text>
+          <text class="ad-s" x="596" y="252">入力中は何も取得しない。Enterで検索語を確定。</text>
+          <circle class="ad-num" cx="578" cy="278" r="9"/><text class="ad-num-t" x="578" y="282" text-anchor="middle">2</text>
+          <text class="ad-s" x="596" y="282">マニフェスト、続けてrootを取得。</text>
+          <circle class="ad-num" cx="578" cy="308" r="9"/><text class="ad-num-t" x="578" y="312" text-anchor="middle">3</text>
+          <text class="ad-s" x="596" y="312">検索語に必要なleafだけを取得（同時に6つまで）。</text>
+          <circle class="ad-num" cx="578" cy="338" r="9"/><text class="ad-num-t" x="578" y="342" text-anchor="middle">4</text>
+          <text class="ad-s" x="596" y="342">全語に一致した文書の件数と、パス順の1ページ分。</text>
+          <circle class="ad-num" cx="578" cy="368" r="9"/><text class="ad-num-t" x="578" y="372" text-anchor="middle">5</text>
+          <text class="ad-s" x="596" y="372">タイトルはindex.jsonから。開くと検索語を強調。</text>
+          <path class="ad-flow" d="M216 308 H254" marker-end="url(#se-a)"/>
+          <path class="ad-flow" d="M516 308 H554" marker-end="url(#se-a)"/>
+          <text class="ad-q" x="16" y="412">どちらの検索も、開いているサイトの中だけが対象です。サイトをまたぐ検索も、リクエスト時の検索サービスもありません。</text>
+        </svg>
+      </div>
+      <figcaption>名前のインデックスは画面の移動にもともと必要なので、名前で探すための追加のダウンロードはありません。本文検索は別の投影で、Enterを押したあとに必要な分だけ少しずつ取得します。<span class="fig-scroll">図の全体は横にスクロールして見られます。</span></figcaption>
+      <details class="fig-text">
+        <summary>図の内容を文章で読む</summary>
+        <ul>
+          <li>名前で探す：<code>site publish</code>が公開のたびに<code>_indexes/&lt;site&gt;/index.json</code>を書きます。ブラウザはサイトを開いたときに1回だけ読み込み、入力のたびにタイトルとパスをメモリ上で順位付けします。ピン留めと最近読んだページは上に来ます。<code>@</code>、<code>#</code>、<code>&gt;</code>でサイト、見出し、コマンドの検索に切り替わります。</li>
+          <li>本文検索：<code>site publish --fulltext</code>が静的なテキストを取り出して正規化し、<code>search/manifest.json</code>、<code>search/root-&lt;sha256&gt;.gz</code>、最大128個の<code>search/leaf-&lt;sha256&gt;.gz</code>を書きます。場所は<code>meta.json</code>の<code>fullTextUrl</code>で知らせます。</li>
+          <li>ブラウザでは、入力中は何も取得しません。Enterでマニフェストとrootを取り、必要なleafだけを（同時に6つまで）取って検索語の結果を掛け合わせ、件数とパス順の1ページ分を返します。タイトルは<code>index.json</code>から取り、開いたページでは検索語を強調します。</li>
+        </ul>
+      </details>
+    </figure>
+
+    <section class="doc-section" aria-labelledby="surfaces">
+      <h2 id="surfaces">別々の2つの入口</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th></th><th>名前で探す</th><th>本文を検索する</th></tr></thead>
+        <tbody>
+          <tr><td>場所</td><td>コマンドパレット（<kbd>⌘K</kbd> / <kbd>Ctrl K</kbd>）</td><td>サイドバーの入力欄（<kbd>⌘⇧F</kbd> / <kbd>Ctrl ⇧ F</kbd>）</td></tr>
+          <tr><td>使うデータ</td><td>画面の移動のために読み込み済みの<code>index.json</code></td><td><code>search/*</code>。<code>--fulltext</code>付きで公開した場合だけ</td></tr>
+          <tr><td>動くとき</td><td>入力のたび</td><td><kbd>Enter</kbd>で検索語を確定したときだけ</td></tr>
+          <tr><td>対象</td><td>タイトル、パス、ファイル名</td><td>タイトルと本文の静的なテキスト</td></tr>
+          <tr><td>並び順</td><td>順位付け</td><td>パス順。順位付けなし</td></tr>
+          <tr><td>範囲</td><td colspan="2">開いているサイトだけ</td></tr>
+        </tbody>
+      </table></div>
+      <p>パレットから本文検索へ検索語を渡せます。検索語が空でなければ「Search page text for …」が候補に出て、<kbd>⌘↵</kbd> / <kbd>Ctrl ↵</kbd>でも同じことができます。読者から見た操作は、ガイドの<a href="/guide/ja/reading.html#search" target="_top">読者の体験</a>にあります。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="by-name">
+      <h2 id="by-name">名前で探す</h2>
+      <p>ブラウザがサイトの成果物インデックスを全件読み込むのは、そのサイトを開いたときだけで、ほかのサイトのインデックスは読みません。読み込んだあとの検索はページ内の計算だけなので、入力に合わせて結果がすぐ変わります。</p>
+      <ul>
+        <li><strong>一致の仕方：</strong>タイトルとパスを空白、スラッシュ、ハイフンで語に分けます。入力した語の文字が、どれか1つの語の中に順番どおり含まれていれば一致です。語全体や先頭が一致するものほど高い点になります。たとえば<code>pay flow</code>で<code>design/payment-flow.html</code>が見つかります。</li>
+        <li><strong>順位：</strong>ピン留めしたページと最近読んだページを上げます。この情報は読者のブラウザの保存領域にあり、外へは出ません。文書が5,000件以上のサイトでは、公開時に計算した採点用のプロファイルを<code>index.json</code>に加え、開いているページに近い語やフォルダも考慮できるようにします。</li>
+        <li><strong>何も入力していないとき</strong>は、ピン留めしたページ、最近読んだページ、コマンドの順に並べます。</li>
+        <li><strong>範囲の切り替え：</strong><code>@</code>は起動時に読み込んだ軽いサイトのメタデータを検索してサイトを切り替えます。<code>#</code>は、インデックスに記録した<code>toc</code>から、開いているページの見出しを検索します。<code>&gt;</code>はコマンドを検索します。</li>
+      </ul>
+      <p>サイトごとに1つの完全なインデックスにしている理由もあります。ベンチマーク（ローカルのヘッドレスChromium、合成データ、2026-09-25）では、20,000件のインデックスを分割して先読みしても、使えるようになるまでの時間もメモリも改善しませんでした。分割しない9.85 MBのインデックスは中央値606 ms、分割した場合は606〜621 msで使えるようになりました。1,000件のサイトが20個ある場合、開いているサイトのインデックスは486 KB、全サイトのメタデータの合計は3.7 KBで、中央値107.8 msで使えるようになりました。いずれもローカルでの計測で、CDNやネットワークの遅延を予測するものではありません。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="page-text">
+      <h2 id="page-text">本文検索</h2>
+      <h3 id="build">公開時に作るもの</h3>
+      <p>本文検索は<strong>任意</strong>です。<code>site publish --fulltext</code>（ローカルで作るだけなら<code>index build --fulltext</code>）は、各文書から静的なテキストを取り出して正規化し、<code>_indexes/&lt;site&gt;/search/</code>に別の投影として書きます。<code>meta.json</code>の<code>fullTextUrl</code>がその場所を知らせ、<code>index.json</code>は変わりません。検索を残したい公開では、毎回このフラグを付けます。付けずに公開すると<code>fullTextUrl</code>は外れ、サイトの検索オブジェクトも消えます。</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>オブジェクト</th><th>中身</th><th>キャッシュ</th></tr></thead>
+        <tbody>
+          <tr><td><code>search/manifest.json</code></td><td>形式の版、文書数、rootとすべてのleafをまとめて表す<code>generation</code>のハッシュ、rootとちょうど128の区画への参照（URL、SHA-256、サイズ）</td><td>変わりうる。<code>s-maxage=60</code></td></tr>
+          <tr><td><code>search/root-&lt;sha256&gt;.gz</code></td><td>語の辞書、1つの文書にしか出ない語（その文書を辞書の中に直接記録）、結果の順に並べたパスの表</td><td>不変。1年</td></tr>
+          <tr><td><code>search/leaf-&lt;sha256&gt;.gz</code></td><td>その区画に振り分けた語ごとの文書の集合。5通りの符号化のうち最も小さいもので保存</td><td>不変。1年</td></tr>
+        </tbody>
+      </table></div>
+      <p>ファイル名は中身のハッシュなので、変わらなかった区画は公開を繰り返してもURLが同じままで、キャッシュも効き続けます。保存時の型は<code>application/octet-stream</code>で、HTTPの<code>Content-Encoding</code>は付けません。ブラウザがファイルごとにSHA-256とサイズを確かめてから、自分で<code>.gz</code>を展開します。</p>
+
+      <h3 id="query">Enterを押したときの流れ</h3>
+      <ol>
+        <li>入力欄に打っている間は何もダウンロードしません。<kbd>Enter</kbd>で検索語を確定します（IMEの変換を確定するEnterは除きます）。検索語はURLに<code>?q=</code>として残ります。</li>
+        <li>空でない最初の検索で、展開用のコードを必要になった時点で読み込みます。クライアントはマニフェスト（60秒たつと取り直す）とrootを取得します。</li>
+        <li>検索語に必要なleafだけを、同時に6つまで取得し、それぞれを検証します。区画が欠けていたり壊れていたりすればエラーにし、一部だけの結果を空として扱うことはありません。</li>
+        <li>すべての文書を対象に検索語の結果を掛け合わせ、件数と、パス順に並べたIDの1ページ分（既定は20件）を返します。タイトルは読み込み済みの<code>index.json</code>から取ります。</li>
+        <li>結果を開くと、HTMLでもMarkdownでも、CSS Custom Highlight APIで検索語を強調します。ページのDOMは変えません。URLにフラグメントがあるときや、読者がすでにスクロールしたときを除き、最初の一致までスクロールします。</li>
+      </ol>
+
+      <h3 id="semantics">一致の規則</h3>
+      <ul>
+        <li>本文と検索語は同じ方法で正規化します。<strong>NFKC</strong>のあと<strong>小文字</strong>にし、空白をそろえます。検索語は空白で区切ります。</li>
+        <li><strong>すべての語が一致した文書</strong>だけが見つかります（AND）。語の順序は問いません。文書の中の、空白で区切られた1つの語の<strong>一部分</strong>に含まれていれば一致です。そのため、日本語の辞書が無くても<code>試行</code>で<code>再試行</code>が見つかります。</li>
+        <li>フレーズの完全一致、入力ミスの許容、語幹の処理、同義語、意味（ベクトル）検索には対応しません。4,096文字を超える検索語は受け付けません。</li>
+        <li>インデックスに入るもの：HTMLのタイトルと静的な本文、Markdownのタイトルと描画したテキスト（コードブロックとリンクの文字を含む）。入らないもの：タイトル以外の<code>&lt;head&gt;</code>の中身、スクリプト、スタイル、<code>template</code>、<code>noscript</code>、<code>hidden</code>・<code>aria-hidden="true"</code>・<code>data-search-ignore</code>の付いた要素。CSSによる表示・非表示や、スクリプトが作るテキストは評価しません。画像の<code>alt</code>とパスも本文のインデックスには入りません（パスは名前で探す検索が扱います）。</li>
+      </ul>
+
+      <h3 id="consistency">検索中に公開が入ったとき</h3>
+      <p>公開では、検索のblobを<code>index.json</code>、マニフェスト、<code>meta.json</code>より先に書き、古いblobはそのあとで消します。古いマニフェストを持ったままのブラウザが、消えたばかりのleafを取りに行くと404になります。その場合はマニフェストを1回だけ取り直し、検索全体をやり直します。結果のページをめくる間に検索データが変わったときは、世代を混ぜずに最初から取り直します。公開のほかの部分と同じく結果整合性で、トランザクションのようなスナップショットではありません。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="tradeoffs">
+      <h2 id="tradeoffs">トレードオフと計測値</h2>
+      <ul>
+        <li><strong>関連度の順位付けも抜粋もありません。</strong>インデックスに残すのは、ある語を含む文書がどれかだけで、位置や回数は残しません。そのため結果はフォルダごとにまとめ、パス順に並べます。</li>
+        <li><strong>rootは必ず取得します。</strong>パスの表全体と、1つの文書にしか出ない語の辞書を含むので、一致が0件の検索でも、マニフェストの世代ごとに1回はダウンロードします。</li>
+        <li><strong>空白の無い長い日本語</strong>は、辞書の長い項目になります。部分一致の正しさは保たれますが、文書の間で項目を共有しにくく、空白のある文章ほどは小さくなりません。</li>
+        <li><strong>広い部分文字列は多くのleafに触れます。</strong>1回の検索で取得する量は、サイトの規模だけでなく検索語によっても変わります。</li>
+      </ul>
+      <p>以下は記録されている計測値です。いずれも、生成した統制済みのコーパスを使ったローカルでの実行で、本番のトラフィックでもプロバイダーでの配信でもありません。</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>計測</th><th>結果</th><th>計測したもの</th></tr></thead>
+        <tbody>
+          <tr><td>現在の形式、50,000ページ</td><td>メタデータと検索をまとめて作るのに約6〜7秒。rootは221 KB。マニフェストを含む検索データの保存量は5.40 MB</td><td>2026-10-01のコア試行。以前の50,000ページのコーパスを再利用</td></tr>
+          <tr><td>研究段階の形式、50,000ページ</td><td>初回の入力から描画まで中央値でローカル112.3 ms、制約下1,485.1 ms。初回の検索ごとの取得量329.6〜370.8 KB</td><td>2026-10-01の負荷ベンチマーク。nginx経由、ヘッドレスChromium。root 326 KB、検索データ5.59 MBの以前の形式。「制約下」は遅延80 ms、下り2.5 Mbps、CPUを4倍遅くした条件で、実機ではありません</td></tr>
+          <tr><td>研究段階の形式、1,000 / 10,000ページ</td><td>初回の中央値はローカルで40.5 / 41.9 ms。初回の検索ごとの取得量25.1〜26.1 / 83.0〜91.4 KB</td><td>同じベンチマーク</td></tr>
+          <tr><td>研究段階の形式、全6条件</td><td>同じ検索語をもう一度検索すると中央値8.6〜27.2 ms。追加の取得なし</td><td>同じベンチマーク。1,000、10,000、50,000ページのそれぞれをローカルと制約下で計測した6条件を通した範囲</td></tr>
+        </tbody>
+      </table></div>
+      <p class="note">コア試行はAPI単位の検索を、研究段階のベンチマークは入力から描画までを計測しているため、時間を直接は比べられません。ベンチマークでは共通の語彙を使ったので初回の検索が触れるleafは少なく、25〜371 KBという範囲がどの検索語にも当てはまるわけではありません。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="why-static">
+      <h2 id="why-static">静的にしている理由</h2>
+      <p>製品の原則は、ファイルとして配れるものは公開時に計算しておくことです。検索もこれに従っています。</p>
+      <ul>
+        <li><strong>運用するものが無い。</strong>動かし、増強し、守り、同期を保つ検索クラスタはありません。検索データは、対象のページと同じ<code>site publish</code>が書き込み、ロックし、無効化し、削除します。</li>
+        <li><strong>配信の経路もアクセス制御も同じ。</strong>検索のファイルは<code>/_indexes/&lt;site&gt;/</code>にある普通のオブジェクトで、同じCDNから配信され、運用者がエッジでそのパスに設定したアクセス制御がそのまま効きます。</li>
+        <li><strong>使ったときだけ取得する。</strong>サイトを開いただけでは検索データをダウンロードしません。<code>--fulltext</code>を付けずに公開したサイトには検索データがありません。</li>
+      </ul>
+      <p>その代わりに、上に挙げた制約があります。順位付け、抜粋、意味検索を加えるには、保存するデータを増やすか、検索時にモデルを動かす必要があり、いまの契約には含めていません。</p>
+    </section>
+
+    <div class="callout guide"><span class="ico">ガイド</span><p>読者が2つの検索をどう使うか、キーボード操作を含めてガイドの<a href="/guide/ja/reading.html#search" target="_top">読者の体験</a>にまとめています。</p></div>
+
+    <nav class="pager" aria-label="ページ送り">
+      <a class="prev" href="publishing-model.html"><small>前へ</small><strong>公開の仕組み</strong></a>
+      <a class="next" href="previews.html"><small>次へ</small><strong>プレビューの仕組み</strong></a>
+    </nav>
+
+    <footer class="foot"><strong>アーキテクチャ</strong><p>このサイトは、プロジェクトの仕様と検証記録にある動作を説明しています。<code>acme/checkout</code>などのチームやリポジトリの名前は説明用の例です。</p></footer>
+  </main>
+</body>
+</html>

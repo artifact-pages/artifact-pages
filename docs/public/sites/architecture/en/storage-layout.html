@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="The published object layout of Git Artifact Pages: the site registry, per-site meta.json and index.json, artifact keys, how routes map to keys, what the browser loads when, and the cache rule for each object class.">
+  <title>Storage layout</title>
+  <script>
+    // Copy the reader app's theme (same-origin parent) before first paint; assets/site.js keeps it in sync.
+    (() => {
+      const root = document.documentElement;
+      root.classList.add('js');
+      try {
+        const theme = window.parent !== window && window.parent.document.documentElement.dataset.theme;
+        if (theme === 'light' || theme === 'dark') root.dataset.theme = theme;
+      } catch { /* cross-origin: fall back to prefers-color-scheme */ }
+    })();
+  </script>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../assets/site.css">
+  <script src="../assets/site.js" defer></script>
+</head>
+<body class="arch">
+  <a class="skip" href="#main">Skip to content</a>
+  <main id="main" class="wrap">
+    <div class="arch-bar">
+      <a class="arch-brand" href="overview.html"><b aria-hidden="true">A</b>Architecture</a>
+      <nav class="lang-switch" aria-label="Language"><a href="../ja/storage-layout.html" hreflang="ja" lang="ja">日本語</a><span aria-current="page">English</span></nav>
+    </div>
+    <nav class="arch-pages" aria-label="Architecture pages">
+      <ol>
+        <li><a href="overview.html"><small>01</small>Overview</a></li>
+        <li><a href="storage-layout.html" aria-current="page"><small>02</small>Storage layout</a></li>
+        <li><a href="publishing-model.html"><small>03</small>Publishing model</a></li>
+        <li><a href="search.html"><small>04</small>Search and indexes</a></li>
+        <li><a href="previews.html"><small>05</small>Previews</a></li>
+        <li><a href="trust-model.html"><small>06</small>Trust model</a></li>
+      </ol>
+    </nav>
+
+    <header class="page-head">
+      <div>
+        <p class="eyebrow">Architecture · 02</p>
+        <h1>Storage layout</h1>
+      </div>
+      <p class="answer"><span class="answer-label">Short answer</span>Everything a reader sees is a static object at a predictable key: one site registry, two small JSON documents per site, the site's files under their own prefix, and optional search and preview objects. Each class of object has its own cache rule.</p>
+    </header>
+
+    <figure class="fig" style="--fig-min: 640px; --fig-max: 860px">
+      <div class="fig-head"><strong>The object map</strong><span>example site: checkout (illustrative)</span></div>
+      <div class="fig-frame" role="group" aria-label="Diagram: the object map">
+        <svg viewBox="0 0 760 572" role="img" aria-labelledby="sl-map-t sl-map-d">
+          <title id="sl-map-t">The object map</title>
+          <desc id="sl-map-d">A tree of every stored key for one example site, grouped into the application plane, the content plane and the private control area, with what each object is, which command writes it, and how long a shared cache may keep it.</desc>
+          <rect class="ad-band" x="8" y="48" width="744" height="72" rx="6"/>
+          <rect class="ad-band acc" x="8" y="120" width="744" height="360" rx="6"/>
+          <rect class="ad-band warn" x="8" y="480" width="744" height="72" rx="6"/>
+          <text class="ad-lab" x="24" y="30">KEY</text>
+          <text class="ad-lab" x="290" y="30">WHAT IT IS</text>
+          <text class="ad-lab" x="450" y="30">WRITTEN BY</text>
+          <text class="ad-lab" x="618" y="30">SHARED CACHE</text>
+          <g class="ad-m ad-pre" xml:space="preserve">
+            <text x="24" y="68">/</text>
+            <text x="24" y="92">├─ index.html</text>
+            <text x="24" y="116">├─ assets/app-&lt;hash&gt;.js</text>
+            <text x="24" y="140">├─ _indexes/</text>
+            <text x="24" y="164">│  ├─ sites.json</text>
+            <text x="24" y="188">│  └─ checkout/</text>
+            <text x="24" y="212">│     ├─ meta.json</text>
+            <text x="24" y="236">│     ├─ index.json</text>
+            <text x="24" y="260">│     └─ search/</text>
+            <text x="24" y="284">│        ├─ manifest.json</text>
+            <text x="24" y="308">│        ├─ root-&lt;sha256&gt;.gz</text>
+            <text x="24" y="332">│        └─ leaf-&lt;sha256&gt;.gz</text>
+            <text x="24" y="356">├─ _artifacts/checkout/</text>
+            <text x="24" y="380">│  ├─ design/flow.html</text>
+            <text x="24" y="404">│  └─ design/flow.css</text>
+            <text x="24" y="428">├─ _previews/checkout/</text>
+            <text x="24" y="452">│  ├─ catalog.json</text>
+            <text x="24" y="476">│  └─ revisions/&lt;sha&gt;/…</text>
+            <text x="24" y="500">└─ _control/</text>
+            <text x="24" y="524">   ├─ locks/sites/checkout.json</text>
+            <text x="24" y="548">   └─ site-cache/checkout.json</text>
+          </g>
+          <text class="ad-lab" x="290" y="68">APPLICATION PLANE</text>
+          <text class="ad-lab acc" x="290" y="140">CONTENT PLANE</text>
+          <text class="ad-lab warn" x="290" y="500">PRIVATE · NEVER SERVED</text>
+          <g class="ad-s">
+            <text x="290" y="92">App shell</text>
+            <text x="290" y="116">Hashed app file</text>
+            <text x="290" y="164">Site registry</text>
+            <text x="290" y="212">Discovery metadata</text>
+            <text x="290" y="236">Artifact records</text>
+            <text x="290" y="260">Page text search</text>
+            <text x="290" y="284">Search entry point</text>
+            <text x="290" y="308">Dictionary, paths</text>
+            <text x="290" y="332">Postings (≤ 128)</text>
+            <text x="290" y="380">Page (indexed)</text>
+            <text x="290" y="404">Resource (not indexed)</text>
+            <text x="290" y="452">Preview catalog</text>
+            <text x="290" y="476">Manifest and files</text>
+            <text x="290" y="524">Site lock</text>
+            <text x="290" y="548">Cache retry record</text>
+          </g>
+          <g class="ad-mq">
+            <text x="450" y="92">app deploy</text>
+            <text x="450" y="116">app deploy</text>
+            <text x="450" y="164">registry register</text>
+            <text x="450" y="212">site publish</text>
+            <text x="450" y="236">site publish</text>
+            <text x="450" y="260">site publish --fulltext</text>
+            <text x="450" y="380">site publish</text>
+            <text x="450" y="404">site publish</text>
+            <text x="450" y="452">preview publish</text>
+            <text x="450" y="476">preview publish</text>
+            <text x="450" y="524">publish, unregister</text>
+            <text x="450" y="548">site publish</text>
+          </g>
+          <g class="ad-s">
+            <text x="618" y="92">revalidate</text>
+            <text x="618" y="116" class="ad-s ok">1 year, immutable</text>
+            <text x="618" y="164">≤ 60 s</text>
+            <text x="618" y="212">≤ 60 s</text>
+            <text x="618" y="236">≤ 60 s</text>
+            <text x="618" y="284">≤ 60 s</text>
+            <text x="618" y="308" class="ad-s ok">1 year, immutable</text>
+            <text x="618" y="332" class="ad-s ok">1 year, immutable</text>
+            <text x="618" y="380">≤ 300 s</text>
+            <text x="618" y="404">≤ 300 s</text>
+            <text x="618" y="452">≤ 60 s</text>
+            <text x="618" y="476">≤ 300 s</text>
+            <text x="618" y="524" class="ad-s warn">not served</text>
+            <text x="618" y="548" class="ad-s warn">not served</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>Browsers revalidate every mutable object on use; the “shared cache” column is how long a CDN may serve it without checking the origin. Names under <code>checkout</code> and the hashes are illustrative. <span class="fig-scroll">Scroll sideways to see the whole diagram.</span></figcaption>
+      <details class="fig-text">
+        <summary>The diagram as text</summary>
+        <ul>
+          <li>Application plane: <code>/index.html</code> (app shell, always revalidated) and <code>/assets/&lt;name&gt;-&lt;hash&gt;.*</code> (cached for a year), written by <code>app deploy</code>.</li>
+          <li>Content plane: <code>/_indexes/sites.json</code> from <code>registry register</code>; <code>/_indexes/checkout/meta.json</code>, <code>index.json</code> and, with <code>--fulltext</code>, <code>search/manifest.json</code>, <code>root-&lt;sha256&gt;.gz</code> and <code>leaf-&lt;sha256&gt;.gz</code> from <code>site publish</code>; the site's files under <code>/_artifacts/checkout/</code>; previews under <code>/_previews/checkout/</code> from <code>preview publish</code>.</li>
+          <li>Private area: <code>/_control/locks/sites/checkout.json</code> and <code>/_control/site-cache/checkout.json</code>, never returned to viewers.</li>
+          <li>Shared caches may keep JSON indexes and catalogs for up to 60 seconds, artifacts and preview files for up to 300 seconds, and content-hashed app and search files for a year.</li>
+        </ul>
+      </details>
+    </figure>
+
+    <section class="doc-section" aria-labelledby="registry">
+      <h2 id="registry">The site registry: <code>sites.json</code></h2>
+      <p>The admin keeps the list of sites in the <code>sites</code> mapping of <code>artifact-pages.yaml</code>, reviewed in Git. <code>registry register</code> validates it and writes <code>/_indexes/sites.json</code>: an array sorted by site ID, so equivalent YAML always produces the same JSON. Nobody edits the JSON by hand.</p>
+      <div class="term" aria-label="Example sites.json">
+        <div class="term-head"><span>/_indexes/sites.json</span></div>
+<pre>{
+  <span class="k">"schemaVersion"</span>: 1,
+  <span class="k">"sites"</span>: [
+    {
+      <span class="k">"id"</span>: <span class="s">"checkout"</span>,
+      <span class="k">"name"</span>: <span class="s">"Payments / Checkout"</span>,
+      <span class="k">"description"</span>: <span class="s">"Payment flow designs and incident reviews."</span>,
+      <span class="k">"repository"</span>: <span class="s">"acme/checkout"</span>,
+      <span class="k">"sourcePath"</span>: <span class="s">"docs/artifacts"</span>
+    }
+  ]
+}</pre>
+      </div>
+      <p>The same file serves two readers. The <strong>browser</strong> uses the IDs, names, and descriptions to list sites. The <strong>publisher</strong> uses <code>repository</code> and <code>sourcePath</code> to check that the checkout it is publishing from is the registered source. The file changes only when sites are registered or unregistered, not when someone publishes. The values above are illustrative.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="per-site">
+      <h2 id="per-site">Two documents per site: <code>meta.json</code> and <code>index.json</code></h2>
+      <p>Each site has a small discovery document and a full artifact index, with separate jobs.</p>
+      <div class="split">
+        <div class="pane">
+          <span class="label">META.JSON — SMALL, READ FOR EVERY SITE</span>
+          <p>The site's title and description, <code>artifactCount</code>, <code>generatedAt</code>, the <code>artifactIndexUrl</code> pointer to its index, and <code>fullTextUrl</code> when page text search is published. No artifact records.</p>
+        </div>
+        <div class="pane">
+          <span class="label">INDEX.JSON — FULL, READ FOR THE ACTIVE SITE</span>
+          <p>One record per HTML or Markdown document: <code>id</code> and <code>path</code> (the exact source-relative path), <code>title</code>, <code>format</code>, <code>artifactUrl</code>, <code>updatedAt</code>, <code>lastCommitter.name</code>, <code>source</code> (repository, URL, ref, file path), and <code>toc</code> headings.</p>
+        </div>
+      </div>
+      <div class="term" aria-label="Example meta.json">
+        <div class="term-head"><span>/_indexes/checkout/meta.json</span></div>
+<pre>{
+  <span class="k">"schemaVersion"</span>: 1,
+  <span class="k">"site"</span>: {
+    <span class="k">"id"</span>: <span class="s">"checkout"</span>,
+    <span class="k">"title"</span>: <span class="s">"Payments / Checkout"</span>,
+    <span class="k">"description"</span>: <span class="s">"Payment flow designs and incident reviews."</span>
+  },
+  <span class="k">"generatedAt"</span>: <span class="s">"2026-09-28T00:00:00Z"</span>,
+  <span class="k">"artifactCount"</span>: 4,
+  <span class="k">"artifactIndexUrl"</span>: <span class="s">"/_indexes/checkout/index.json"</span>,
+  <span class="k">"fullTextUrl"</span>: <span class="s">"/_indexes/checkout/search/manifest.json"</span>
+}</pre>
+      </div>
+      <p>The pointer fields keep the browser from hard-coding locations. A site with no documents is still published: its index has <code>"artifacts": []</code> and its metadata reports <code>"artifactCount": 0</code>, which the reader shows as an empty site rather than an unpublished one.</p>
+      <ul>
+        <li>A <strong>404 for <code>meta.json</code></strong> leaves the registered site listed as <em>not yet published</em>; any other metadata error leaves it listed with its details unavailable. One bad site never breaks the site list.</li>
+        <li>The display title comes from HTML <code>&lt;title&gt;</code> or the first Markdown H1, with a readable filename as the fallback. <code>updatedAt</code> and the committer come from Git history; files without history fall back to their modification time and have no committer.</li>
+      </ul>
+    </section>
+
+    <section class="doc-section" aria-labelledby="loading">
+      <h2 id="loading">What the browser loads, and when</h2>
+      <p>Requests grow with what the reader does, not with how many sites exist. Only the active site's full index is ever downloaded.</p>
+      <figure class="fig" style="--fig-min: 540px; --fig-max: 760px">
+        <div class="fig-head"><strong>Loading order</strong><span>no storage listing at any step</span></div>
+        <div class="fig-frame" role="group" aria-label="Diagram: loading order">
+          <svg viewBox="0 0 700 516" role="img" aria-labelledby="sl-load-t sl-load-d">
+            <title id="sl-load-t">What the browser loads, and when</title>
+            <desc id="sl-load-d">Six reader actions in order, each with the static objects it requests: the app shell, the registry and per-site metadata, the active site's index, the artifact and its resources, page text search objects, and the preview catalog.</desc>
+            <path class="ad-line" d="M36 44 V472"/>
+            <g>
+              <circle class="ad-num" cx="36" cy="44" r="11"/><text class="ad-num-t" x="36" y="48" text-anchor="middle">1</text>
+              <text class="ad-t" x="60" y="48">Any route opens</text>
+              <text class="ad-m" x="60" y="70">GET /index.html, then /assets/&lt;name&gt;-&lt;hash&gt;.*</text>
+              <text class="ad-q" x="60" y="88">Application plane. The same shell for every route.</text>
+            </g>
+            <g>
+              <circle class="ad-num" cx="36" cy="124" r="11"/><text class="ad-num-t" x="36" y="128" text-anchor="middle">2</text>
+              <text class="ad-t" x="60" y="128">The app starts</text>
+              <text class="ad-m" x="60" y="150">GET /_indexes/sites.json</text>
+              <text class="ad-m" x="60" y="168">GET /_indexes/&lt;site&gt;/meta.json  for each listed site</text>
+              <text class="ad-q" x="60" y="186">Small: names, counts, and whether page text search exists.</text>
+            </g>
+            <g>
+              <circle class="ad-num" cx="36" cy="222" r="11"/><text class="ad-num-t" x="36" y="226" text-anchor="middle">3</text>
+              <text class="ad-t" x="60" y="226">A site becomes active</text>
+              <text class="ad-m acc" x="60" y="248">GET /_indexes/checkout/index.json</text>
+              <text class="ad-q" x="60" y="266">Only this site. Other sites' indexes are never fetched.</text>
+            </g>
+            <g>
+              <circle class="ad-num" cx="36" cy="302" r="11"/><text class="ad-num-t" x="36" y="306" text-anchor="middle">4</text>
+              <text class="ad-t" x="60" y="306">A page opens</text>
+              <text class="ad-m" x="60" y="328">iframe GET /_artifacts/checkout/design/flow.html</text>
+              <text class="ad-q" x="60" y="346">The page then loads its own relative CSS, scripts and images. Markdown is fetched and rendered by the app.</text>
+            </g>
+            <g>
+              <circle class="ad-num" cx="36" cy="382" r="11"/><text class="ad-num-t" x="36" y="386" text-anchor="middle">5</text>
+              <text class="ad-t" x="60" y="386">The reader presses Enter in page text search</text>
+              <text class="ad-m" x="60" y="408">GET search/manifest.json → root-&lt;sha256&gt;.gz → needed leaf-&lt;sha256&gt;.gz</text>
+              <text class="ad-q" x="60" y="426">Nothing is fetched while typing. Only on sites published with --fulltext.</text>
+            </g>
+            <g>
+              <circle class="ad-num" cx="36" cy="472" r="11"/><text class="ad-num-t" x="36" y="476" text-anchor="middle">6</text>
+              <text class="ad-t" x="60" y="476">The Previews list opens</text>
+              <text class="ad-m" x="60" y="498">GET /_previews/checkout/catalog.json, then each revision's manifest.json</text>
+            </g>
+          </svg>
+        </div>
+        <figcaption>Steps 3 to 6 happen only when the reader does that thing. <code>checkout</code> and the paths are illustrative. <span class="fig-scroll">Scroll sideways to see the whole diagram.</span></figcaption>
+      </figure>
+      <p>The browser never lists storage. It does not call an object-storage listing API or depend on nginx <code>autoindex</code>; everything it needs to find is named in <code>sites.json</code>, <code>meta.json</code>, or <code>index.json</code>.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="keys">
+      <h2 id="keys">Artifact keys and routes</h2>
+      <p>A file at <code>docs/artifacts/design/flow.html</code> in a site whose <code>sourcePath</code> is <code>docs/artifacts</code> is stored at <code>/_artifacts/checkout/design/flow.html</code> and opened at <code>/checkout/design/flow.html</code>. The directory structure and names are kept exactly, so relative links between a page and its CSS, scripts, images, and modules keep working.</p>
+      <ul>
+        <li><strong>Every <code>.html</code>, <code>.htm</code> and <code>.md</code> file is a page</strong>, including <code>index.html</code> and files in folders such as <code>_includes/</code>. Other files are copied and addressable but are not listed as pages.</li>
+        <li><strong>Each path segment is percent-encoded once</strong> when building <code>artifactUrl</code> or a route, so spaces, <code>#</code>, <code>?</code>, <code>%</code>, <code>+</code> and non-ASCII names round-trip. Filenames that are not valid UTF-8 are rejected.</li>
+        <li><strong>Keep resources relative.</strong> A root-relative URL such as <code>/assets/report.css</code> starts at the origin root and leaves the site's namespace.</li>
+        <li><strong>A missing resource is a real 404</strong>, not the app shell.</li>
+      </ul>
+      <p>Each stored object gets its <code>Content-Type</code> from a fixed, case-insensitive extension map rather than the publishing machine's MIME database. Publishing never sets <code>Content-Disposition: attachment</code> and never claims a <code>Content-Encoding</code> the bytes do not have.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Extensions</th><th><code>Content-Type</code></th></tr></thead>
+        <tbody>
+          <tr><td><code>.html</code>, <code>.htm</code></td><td><code>text/html; charset=utf-8</code></td></tr>
+          <tr><td><code>.md</code>, <code>.markdown</code></td><td><code>text/markdown; charset=utf-8</code></td></tr>
+          <tr><td><code>.css</code> / <code>.js</code>, <code>.mjs</code>, <code>.cjs</code></td><td><code>text/css; charset=utf-8</code> / <code>text/javascript; charset=utf-8</code></td></tr>
+          <tr><td><code>.json</code>, <code>.map</code></td><td><code>application/json; charset=utf-8</code></td></tr>
+          <tr><td><code>.svg</code></td><td><code>image/svg+xml; charset=utf-8</code></td></tr>
+          <tr><td>Images, fonts, <code>.pdf</code>, <code>.wasm</code></td><td>Their standard types (for example <code>image/png</code>, <code>font/woff2</code>, <code>application/wasm</code>)</td></tr>
+          <tr><td>Anything else</td><td><code>application/octet-stream</code> (still copied and addressable)</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section class="doc-section" aria-labelledby="cache">
+      <h2 id="cache">Cache rules, and why</h2>
+      <p>The two planes change on different schedules, so they get different rules. Mutable URLs are always revalidated by browsers; shared caches get a short, bounded lifetime; URLs whose name changes with their content are cached for a year.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Object</th><th><code>Cache-Control</code></th></tr></thead>
+        <tbody>
+          <tr><td><code>/index.html</code>, fixed-name app files</td><td><code>no-cache, max-age=0, must-revalidate</code></td></tr>
+          <tr><td><code>/assets/&lt;name&gt;-&lt;8-character hash&gt;.*</code></td><td><code>public, max-age=31536000, immutable</code></td></tr>
+          <tr><td><code>sites.json</code>, <code>meta.json</code>, <code>index.json</code>, <code>search/manifest.json</code></td><td><code>public, max-age=0, s-maxage=60, must-revalidate</code></td></tr>
+          <tr><td><code>/_artifacts/&lt;site&gt;/*</code></td><td><code>public, max-age=0, s-maxage=300, must-revalidate</code></td></tr>
+          <tr><td><code>search/root-*.gz</code>, <code>search/leaf-*.gz</code></td><td><code>public, max-age=31536000, immutable</code></td></tr>
+          <tr><td>Preview <code>catalog.json</code> / revision files</td><td><code>s-maxage=60</code> / <code>s-maxage=300</code>, both with <code>max-age=0, must-revalidate</code></td></tr>
+        </tbody>
+      </table></div>
+      <p>Bounded freshness is only the fallback. After the origin is updated, <code>site publish</code> asks the CDN to invalidate exactly the URLs that changed, and keeps a retry record until that request succeeds (see <a href="publishing-model.html#cache-retry">Publishing model</a>). A successful request still does not mean every edge has refreshed, and it cannot update a reader who already has the page open.</p>
+      <p class="note">The local nginx analogue serves <code>/_indexes/*</code> with <code>no-store</code> so changes show immediately during development. The rules above are what publishing stores on each object and what provider delivery must honor; live Cloudflare responses for sampled index and artifact objects matched them (T15). Live AWS headers have not been observed yet.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="control">
+      <h2 id="control">The private control area</h2>
+      <p>Coordination state lives under <code>/_control/</code>, outside every site's index and artifact prefixes, so cleaning a site never deletes it.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Key</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td><code>_control/locks/sites/&lt;site&gt;.json</code></td><td>The per-site lock shared by site publish, preview publish, and unregister. Kept (as <code>free</code>) even after the site is unregistered.</td></tr>
+          <tr><td><code>_control/locks/registry.json</code></td><td>Serializes whole-registry updates.</td></tr>
+          <tr><td><code>_control/site-cache/&lt;site&gt;.json</code></td><td>Cache invalidation paths still owed after a failed publish.</td></tr>
+          <tr><td><code>_control/registry-cleanup.json</code></td><td>Content cleanup still owed for sites removed from the registry.</td></tr>
+        </tbody>
+      </table></div>
+      <p>Delivery must never return these bytes. Locally nginx answers <code>/_control/*</code> with 404; a provider route may instead return the app shell, which shows <em>Page not found</em>.</p>
+    </section>
+
+    <nav class="pager" aria-label="Pages">
+      <a class="prev" href="overview.html"><small>Previous</small><strong>Overview</strong></a>
+      <a class="next" href="publishing-model.html"><small>Next</small><strong>Publishing model</strong></a>
+    </nav>
+
+    <footer class="foot"><strong>Architecture</strong><p>These pages describe the behavior recorded in the project's specification and verification records. Team and repository names such as <code>acme/checkout</code> are illustrative.</p></footer>
+  </main>
+</body>
+</html>

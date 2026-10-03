@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Git Artifact Pagesの全体像。Gitを正本とし、各サイトが独立して共通の静的な投影へ公開する構成、全サイトに共通の閲覧アプリ、アプリケーションプレーンとコンテンツプレーン、論理ルート、リクエスト時のサーバーを持たない理由。">
+  <title>アーキテクチャの全体像</title>
+  <script>
+    // 閲覧アプリ（同一オリジンの親）のテーマを描画前に写す。以後の追従は assets/site.js が行う。
+    (() => {
+      const root = document.documentElement;
+      root.classList.add('js');
+      try {
+        const theme = window.parent !== window && window.parent.document.documentElement.dataset.theme;
+        if (theme === 'light' || theme === 'dark') root.dataset.theme = theme;
+      } catch { /* 別オリジン：prefers-color-scheme にまかせる */ }
+    })();
+  </script>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../assets/site.css">
+  <script src="../assets/site.js" defer></script>
+</head>
+<body class="arch">
+  <a class="skip" href="#main">本文へ移動</a>
+  <main id="main" class="wrap">
+    <div class="arch-bar">
+      <a class="arch-brand" href="overview.html"><b aria-hidden="true">A</b>アーキテクチャ</a>
+      <nav class="lang-switch" aria-label="言語"><span aria-current="page">日本語</span><a href="../en/overview.html" hreflang="en" lang="en">English</a></nav>
+    </div>
+    <nav class="arch-pages" aria-label="アーキテクチャのページ">
+      <ol>
+        <li><a href="overview.html" aria-current="page"><small>01</small>全体像</a></li>
+        <li><a href="storage-layout.html"><small>02</small>ストレージの構成</a></li>
+        <li><a href="publishing-model.html"><small>03</small>公開の仕組み</a></li>
+        <li><a href="search.html"><small>04</small>検索とインデックス</a></li>
+        <li><a href="previews.html"><small>05</small>プレビューの仕組み</a></li>
+        <li><a href="trust-model.html"><small>06</small>信頼モデル</a></li>
+      </ol>
+    </nav>
+
+    <header class="page-head">
+      <div>
+        <p class="eyebrow">アーキテクチャ · 01</p>
+        <h1>Git Artifact Pagesの仕組み</h1>
+      </div>
+      <p class="answer"><span class="answer-label">要点</span>正本はGitにあります。各サイトは自分のリポジトリから、ほかのサイトとは別々に公開し、その結果はオブジェクトストレージにある共通の静的な投影に集まります。ブラウザ上の1つの静的な閲覧アプリがその投影を読み、どのサイトも同じように表示します。リクエストの経路にアプリケーションサーバーはありません。</p>
+    </header>
+
+    <figure class="fig" style="--fig-min: 720px; --fig-max: 1080px">
+      <div class="fig-head"><strong>Gitからブラウザまで</strong><span>公開の書き込み → · ← 読者のリクエスト</span></div>
+      <div class="fig-frame" role="group" aria-label="図：Gitからブラウザまで">
+        <svg viewBox="0 0 960 456" role="img" aria-labelledby="ov-sys-t ov-sys-d">
+          <title id="ov-sys-t">Gitからブラウザまで</title>
+          <desc id="ov-sys-d">コマンドがWebリリース、管理者の設定、サイトのソースをオブジェクトストレージへ書き込みます。ストレージにはアプリケーションプレーン、コンテンツプレーン、非公開の制御領域があります。エッジは論理ルートをアプリのシェルへ、オブジェクトのパスを保存済みのオブジェクトへ振り分けます。ブラウザはシェル、インデックス、成果物の順に読み込みます。</desc>
+          <defs>
+            <marker id="ov-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ad-head"/></marker>
+            <marker id="ov-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ad-head q"/></marker>
+          </defs>
+          <text class="ad-lab" x="16" y="24">Gitとリリース</text>
+          <text class="ad-lab" x="216" y="24">オリジン（オブジェクトストレージ）</text>
+          <text class="ad-lab" x="566" y="24">エッジ（CDN / nginx）</text>
+          <text class="ad-lab" x="746" y="24">ブラウザ</text>
+
+          <rect class="ad-box" x="16" y="48" width="170" height="74" rx="8"/>
+          <text class="ad-t" x="28" y="70">Webリリース</text>
+          <text class="ad-q" x="28" y="88">版番号付きのSPA一式</text>
+          <text class="ad-m acc" x="28" y="110">app deploy</text>
+          <rect class="ad-box" x="16" y="142" width="170" height="74" rx="8"/>
+          <text class="ad-t" x="28" y="164">管理者の設定</text>
+          <text class="ad-mq" x="28" y="182">artifact-pages.yaml</text>
+          <text class="ad-m acc" x="28" y="204">registry register</text>
+          <rect class="ad-box" x="16" y="236" width="170" height="74" rx="8"/>
+          <text class="ad-t" x="28" y="258">サイトのソース</text>
+          <text class="ad-mq" x="28" y="276">acme/checkout · docs/</text>
+          <text class="ad-m acc" x="28" y="298">site publish</text>
+          <rect class="ad-box" x="16" y="330" width="170" height="74" rx="8"/>
+          <text class="ad-t" x="28" y="352">PRのhead</text>
+          <text class="ad-mq" x="28" y="370">acme/checkout @ &lt;sha&gt;</text>
+          <text class="ad-m acc" x="28" y="392">preview publish</text>
+          <path class="ad-flow" d="M186 90 H226" marker-end="url(#ov-a)"/>
+          <path class="ad-flow" d="M186 184 H226" marker-end="url(#ov-a)"/>
+          <path class="ad-flow" d="M186 270 H202 V218 H226" marker-end="url(#ov-a)"/>
+          <path class="ad-flow" d="M202 256 H226" marker-end="url(#ov-a)"/>
+          <path class="ad-flow" d="M186 364 H202 V294 H226" marker-end="url(#ov-a)"/>
+
+          <rect class="ad-zone" x="216" y="36" width="320" height="380" rx="12"/>
+          <rect class="ad-box" x="228" y="48" width="296" height="84" rx="8"/>
+          <text class="ad-lab" x="240" y="66">アプリケーションプレーン</text>
+          <text class="ad-m" x="240" y="92">/index.html</text>
+          <text class="ad-q" x="404" y="92">アプリのシェル</text>
+          <text class="ad-m" x="240" y="116">/assets/*</text>
+          <text class="ad-q" x="404" y="116">ハッシュ付きJS・CSS</text>
+          <rect class="ad-box acc" x="228" y="144" width="296" height="184" rx="8"/>
+          <text class="ad-lab acc" x="240" y="162">コンテンツプレーン</text>
+          <text class="ad-m" x="240" y="188">/_indexes/sites.json</text>
+          <text class="ad-q" x="404" y="188">サイトの登録情報</text>
+          <text class="ad-m" x="240" y="222">/_indexes/checkout/</text>
+          <text class="ad-q" x="404" y="222">meta · index · search</text>
+          <text class="ad-m" x="240" y="260">/_artifacts/checkout/</text>
+          <text class="ad-q" x="404" y="260">公開したファイル</text>
+          <text class="ad-m" x="240" y="298">/_previews/checkout/</text>
+          <text class="ad-q" x="404" y="298">プレビュー</text>
+          <rect class="ad-box warn" x="228" y="342" width="296" height="62" rx="8"/>
+          <text class="ad-m warn" x="240" y="366">/_control/*</text>
+          <text class="ad-q" x="240" y="388">ロックと再試行の記録。配信しない</text>
+
+          <rect class="ad-box soft" x="566" y="36" width="150" height="380" rx="12"/>
+          <text class="ad-m" x="578" y="86">/:site/…</text>
+          <text class="ad-q" x="578" y="102">論理ルート → シェル</text>
+          <text class="ad-m" x="578" y="120">/assets/*</text>
+          <text class="ad-m" x="578" y="208">/_indexes/*</text>
+          <text class="ad-m" x="578" y="260">/_artifacts/*</text>
+          <text class="ad-q" x="578" y="276">無ければ実際の404応答</text>
+          <text class="ad-m" x="578" y="304">/_previews/*</text>
+          <text class="ad-m warn" x="578" y="366">/_control/*</text>
+          <text class="ad-q" x="578" y="382">制御データは返さない</text>
+          <path class="ad-line" d="M566 92 H528" marker-end="url(#ov-r)"/>
+          <path class="ad-line" d="M566 116 H528" marker-end="url(#ov-r)"/>
+          <path class="ad-line" d="M566 204 H548 V188 H528" marker-end="url(#ov-r)"/>
+          <path class="ad-line" d="M548 204 V222 H528" marker-end="url(#ov-r)"/>
+          <path class="ad-line" d="M566 256 H528" marker-end="url(#ov-r)"/>
+          <path class="ad-line" d="M566 300 H528" marker-end="url(#ov-r)"/>
+          <path class="ad-flow warn ad-dash" d="M566 372 H534"/>
+          <text class="ad-t warn" x="540" y="368">×</text>
+
+          <rect class="ad-box" x="746" y="36" width="198" height="380" rx="12"/>
+          <rect class="ad-box soft" x="758" y="48" width="174" height="28" rx="6"/>
+          <text class="ad-m" x="768" y="66" style="font-size:10px">/checkout/design/flow.html</text>
+          <rect class="ad-box soft" x="758" y="88" width="174" height="316" rx="8"/>
+          <text class="ad-lab" x="770" y="106">閲覧アプリ（SPA）</text>
+          <text class="ad-s" x="770" y="126">ルート、サイドバー、検索</text>
+          <text class="ad-mq" x="770" y="144">/_indexes/… を読む</text>
+          <rect class="ad-box acc" x="770" y="160" width="150" height="122" rx="6"/>
+          <text class="ad-lab acc" x="782" y="178">iframe · HTML</text>
+          <text class="ad-m" x="782" y="200" style="font-size:10px">/_artifacts/checkout/</text>
+          <text class="ad-m" x="782" y="216" style="font-size:10px">design/flow.html</text>
+          <text class="ad-s" x="782" y="240">公開したとおりに動く</text>
+          <text class="ad-s" x="782" y="258">CSSも成果物のもの</text>
+          <rect class="ad-box" x="770" y="294" width="150" height="96" rx="6"/>
+          <text class="ad-lab" x="782" y="312">Markdown</text>
+          <text class="ad-s" x="782" y="334">アプリが描画する</text>
+          <text class="ad-s" x="782" y="352">サニタイズ済み</text>
+          <text class="ad-s" x="782" y="370">スクリプトは動かない</text>
+          <path class="ad-line" d="M758 62 H744 V92 H718" marker-end="url(#ov-r)"/>
+          <path class="ad-line" d="M758 140 H740 V204 H718" marker-end="url(#ov-r)"/>
+          <path class="ad-line" d="M770 256 H718" marker-end="url(#ov-r)"/>
+
+          <path class="ad-flow" d="M16 440 H46" marker-end="url(#ov-a)"/>
+          <text class="ad-q" x="54" y="444">公開コマンドが書き込む</text>
+          <path class="ad-line" d="M236 440 H266" marker-end="url(#ov-r)"/>
+          <text class="ad-q" x="274" y="444">読者のリクエスト（パスで振り分け）</text>
+          <text class="ad-q" x="566" y="444">acme/checkoutとそのパスは説明用の例です。</text>
+        </svg>
+      </div>
+      <figcaption>左のコマンドがオブジェクトを書き込み、右のブラウザは読むだけです。リクエストにアプリのシェルを返すか保存済みのオブジェクトを返すかは、エッジがパスで決めます。<span class="fig-scroll">図の全体は横にスクロールして見られます。</span></figcaption>
+      <details class="fig-text">
+        <summary>図の内容を文章で読む</summary>
+        <ol>
+          <li><code>app deploy</code>が、版番号付きのSPA一式をアプリケーションプレーン（<code>/index.html</code>と<code>/assets/*</code>）へ書き込みます。</li>
+          <li><code>registry register</code>が、<code>artifact-pages.yaml</code>の<code>sites</code>から<code>/_indexes/sites.json</code>を作ります。</li>
+          <li><code>site publish</code>が、サイトのインデックス類を<code>/_indexes/&lt;site&gt;/</code>に、ファイルを<code>/_artifacts/&lt;site&gt;/</code>に書き込みます。<code>preview publish</code>の書き込み先は<code>/_previews/&lt;site&gt;/</code>です。</li>
+          <li>ロックや再試行の記録は非公開の<code>/_control/*</code>に置き、読者には返しません。</li>
+          <li>エッジは<code>/checkout/design/flow.html</code>のような論理ルートをアプリのシェルへ、<code>/assets/*</code>・<code>/_indexes/*</code>・<code>/_artifacts/*</code>・<code>/_previews/*</code>を保存済みのオブジェクトへ振り分けます。オブジェクトが無ければ実際の404応答を返します。</li>
+          <li>ブラウザでは、閲覧アプリがインデックスを読み、HTMLの成果物を<code>/_artifacts/…</code>からiframeに読み込みます。Markdownはアプリ自身が描画します。</li>
+        </ol>
+      </details>
+    </figure>
+
+    <section class="doc-section" aria-labelledby="git-source">
+      <h2 id="git-source">Gitが正本、Webサイトはそこから作る投影</h2>
+      <p>成果物は、それを作るリポジトリで作成とレビューを行い、Artifact Pagesが書き換えることはありません。サイトは、<strong>リポジトリとソースディレクトリの組</strong>（<code>repository</code>と<code>sourcePath</code>）として1つずつ登録します。公開コマンドはGitのチェックアウトからそのディレクトリを読み、サイトのインデックスを作り、ファイルを<strong>そのまま</strong>コピーします。テンプレートの展開、CSSやJavaScriptのバンドル、リンクの書き換えは行いません。</p>
+      <p>ブラウザに届くものはすべて、<strong>Gitから作り直せる投影</strong>です。閲覧アプリもオブジェクトストレージもCDNも、正本ではありません。公開したオブジェクトが消えても、公開が途中で止まっても、同じソースをもう一度公開すれば同じ状態に戻ります。収束の仕組みは<a href="publishing-model.html">公開の仕組み</a>で説明します。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="independent">
+      <h2 id="independent">公開はサイトごとに、読む体験は共通に</h2>
+      <p>公開には、全サイトをまとめる段階がありません。管理者は閲覧アプリをデプロイし、<code>artifact-pages.yaml</code>の<code>sites</code>に各サイトを1度登録します。どちらの操作も、サイトの中身はビルドしません。そのあとは各サイトのリポジトリが、内容が変わったときに自分のCIから<code>site publish</code>を実行します。1回の公開が書き込むのはそのサイトの<code>/_indexes/&lt;site&gt;/</code>と<code>/_artifacts/&lt;site&gt;/</code>だけです。サイトごとのロックの下で動くので、ほかのサイトを作り直すことも、ほかのサイトを待つこともありません。</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>誰が</th><th>コマンド</th><th>書き込む先</th><th>いつ</th></tr></thead>
+        <tbody>
+          <tr><td>管理者</td><td><code>app deploy</code></td><td>アプリケーションプレーン</td><td>閲覧アプリを更新・切り戻すとき</td></tr>
+          <tr><td>管理者</td><td><code>registry register</code></td><td><code>/_indexes/sites.json</code></td><td>登録するサイトが変わったとき</td></tr>
+          <tr><td>各サイトのリポジトリ</td><td><code>site publish</code></td><td>そのサイトの<code>/_indexes/&lt;site&gt;/</code>と<code>/_artifacts/&lt;site&gt;/</code></td><td>そのサイトの内容が変わったとき。タイミングは各サイトで決める</td></tr>
+        </tbody>
+      </table></div>
+      <p>サイトどうしが共有するのは、静的な投影の構成と、それを読む閲覧アプリです。どのサイトの出力も同じオブジェクトの構成に従い、アプリは<code>/_indexes/sites.json</code>と各サイトの小さな<code>meta.json</code>からサイトを見つけます。そのため、別々に公開したサイトがばらばらのWebサイトにならず、1つのArtifact Pagesとしてまとまって見えます。サイトの選択、ファイルツリー、コマンドパレット、本文検索（有効にして公開したサイトのみ）、ピン留めと最近読んだページ、成果物の表示、目次と詳細、プレビューとGitへのリンクは、どのサイトでも同じように使えます。検索は、いま読んでいるサイトの中で行います。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="planes">
+      <h2 id="planes">2つのプレーンと非公開の領域</h2>
+      <p>オリジンの中身は、変わる頻度で分けています。<strong>アプリケーションプレーン</strong>は閲覧アプリで、運用者が更新したときだけ変わります。<strong>コンテンツプレーン</strong>は公開されたサイトで、誰かが公開するたびに変わります。2つは別々にデプロイします。アプリを更新してもサイトのオブジェクトには触れず、サイトを公開してもアプリには触れません。</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>領域</th><th>パス</th><th>変わるとき</th><th>書き込むコマンド</th></tr></thead>
+        <tbody>
+          <tr><td>アプリケーションプレーン</td><td><code>/index.html</code>、<code>/assets/*</code>（ほかに<code>/preview-bridge.js</code>、<code>/LICENSE</code>、<code>/THIRD_PARTY_NOTICES.txt</code>）</td><td>閲覧アプリの更新・切り戻し</td><td><code>app deploy</code></td></tr>
+          <tr><td>コンテンツプレーン</td><td><code>/_indexes/*</code>、<code>/_artifacts/*</code>、<code>/_previews/*</code></td><td>サイトの登録・公開・プレビュー・登録解除</td><td><code>registry register</code> / <code>unregister</code>、<code>site publish</code>、<code>preview publish</code></td></tr>
+          <tr><td>制御（非公開）</td><td><code>/_control/*</code></td><td>コマンドがロックを取る、再試行の記録を残す</td><td>上と同じコマンド。配信はしない</td></tr>
+        </tbody>
+      </table></div>
+      <p>オブジェクトのキーとキャッシュの規則は<a href="storage-layout.html">ストレージの構成</a>にまとめています。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="routes">
+      <h2 id="routes">論理ルートとストレージのパス</h2>
+      <p>読者が使い、共有するURLは3種類だけです。ストレージのパスは内部の都合で、画面移動のURLには使いません。</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>ルート</th><th>表示するもの</th><th>例（説明用）</th></tr></thead>
+        <tbody>
+          <tr><td><code>/</code></td><td>サイトの選択</td><td><code>/</code></td></tr>
+          <tr><td><code>/:site</code></td><td>サイトのホーム</td><td><code>/checkout</code></td></tr>
+          <tr><td><code>/:site/*</code></td><td>1つの文書</td><td><code>/checkout/design/flow.html</code></td></tr>
+        </tbody>
+      </table></div>
+      <p><code>/checkout/design/flow.html</code>を開くと、エッジはアプリのシェルを返します。アプリは<code>/_indexes/sites.json</code>と各サイトの小さな<code>meta.json</code>を読み、<code>checkout</code>が開いているサイトになったので<code>/_indexes/checkout/index.json</code>を読み込み、最後に<code>/_artifacts/checkout/design/flow.html</code>をiframeに読み込みます。</p>
+      <ul>
+        <li><strong>ファイル名と拡張子はルートに残ります。</strong><code>flow.html</code>と<code>flow.md</code>は別のページです。<code>index.html</code>も名前を指定して開くもので、フォルダのURLで暗黙に開くことはありません。</li>
+        <li><strong>パスの区切りごとに1回だけパーセントエンコードします。</strong>空白、<code>#</code>、<code>?</code>、<code>%</code>、日本語の名前も意味を保ちます。名前をslug化することはありません。</li>
+        <li><strong>サイトは論理的な名前空間で、リポジトリではありません。</strong>リポジトリはメタデータとして記録し（詳細パネルに表示）、URLには出しません。サイトを別のリポジトリへ移しても、リンクは変わりません。</li>
+      </ul>
+    </section>
+
+    <section class="doc-section" aria-labelledby="edge">
+      <h2 id="edge">エッジの役割</h2>
+      <p>配信側に必要なのは、パスによる振り分けだけです。オブジェクトのパスはストレージへ、それ以外はアプリのシェルへ送ります。</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>リクエスト</th><th>返すもの</th></tr></thead>
+        <tbody>
+          <tr><td><code>/_indexes/*</code>、<code>/_artifacts/*</code>、<code>/_previews/*</code>、<code>/assets/*</code></td><td>保存済みのオブジェクト。存在しなければ<strong>実際の404応答</strong>を返し、アプリのシェルは返しません。成果物の相対リンクが壊れていれば、目に見えて失敗します。</td></tr>
+          <tr><td><code>/_control/*</code></td><td>制御オブジェクトは決して返しません。アプリのシェル（「Page not found」を表示）を返すことはありますが、ロックや再試行の記録の中身は返しません。</td></tr>
+          <tr><td>それ以外</td><td>アプリのシェル<code>/index.html</code>。論理ルートはブラウザ側で解決します。</td></tr>
+        </tbody>
+      </table></div>
+      <p>ローカルではDocker Compose上のnginx（<code>docker/nginx/default.conf</code>）がこれを担います。AWSの参照構成では、Origin Access Controlで非公開のS3バケットを読むCloudFrontが担います。Cloudflareの構成では、カスタムドメインのR2の前にCache/CDNを置き、論理ルートを<code>/index.html</code>に書き換えるTransform Rulesを使います。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="static">
+      <h2 id="static">リクエスト時のサーバーを持たない理由</h2>
+      <p>設計の原則は<strong>静的を基本にし、リクエスト時より公開時に計算する</strong>ことです。公開時に計算できるものは、そのときに計算してファイルとして置きます。</p>
+      <ul>
+        <li>タイトル、パス、目次用の見出し、最終更新日時とコミッターは、ソースとGitの履歴から取り出して<code>index.json</code>に書きます。</li>
+        <li>サイトの一覧は、管理者の設定から生成したJSONファイルで、ディレクトリの一覧ではありません。ブラウザはストレージの一覧APIを呼ばず、nginxの<code>autoindex</code>にも頼りません。</li>
+        <li>本文検索を有効にした場合も、公開時に作る静的なファイル群です。<a href="search.html">検索とインデックス</a>で説明します。</li>
+      </ul>
+      <p>その結果、CDNのある静的ホスティングならどこでも配信でき、負荷への対応はCDNに任せられます。運用するデータベースも、サーバーサイドレンダリングも、検索APIもありません。代わりに、変更は公開してキャッシュが更新されるまで見えず、読者ごとの処理もできません。誰が読めるかはエッジで決めます。詳しくは<a href="trust-model.html">信頼モデル</a>を参照してください。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="proof">
+      <h2 id="proof">どこまで実証されているか</h2>
+      <p>リポジトリはいま、ローカルで製品を固める段階にあります。上の契約はまずローカルで実証し、プロバイダーでの配信は別に確認しています。プロバイダーの確認はまだ終わっていません。</p>
+      <ul class="proof">
+        <li><span class="chip local">ローカルで実証済み</span><span>閲覧アプリ、nginxによる振り分け、コミット済みのフィクスチャ、ローカルのストレージディレクトリへの登録済みサイトの公開。エミュレーターのプロファイル（S3 APIの形を確かめるMinIO、<code>gcp-local</code>用のfake-gcs-server）はアダプターとHTTPの契約を確かめるもので、実際のCloudFront、Cloudflare、GCPと同じ動きをする<strong>保証ではありません</strong>。</span></li>
+        <li><span class="chip sampled">Cloudflareで抜き取り確認</span><span>2026-10-01と10-02に、稼働中のCloudflare環境で、論理ルートがアプリのシェルを返すこと、存在しないオブジェクトが実際の404応答になること、キャッシュのヘッダーと、本番とプレビューのCSPヘッダーを確認しました。使い捨てのサイトでの公開、プレビュー、登録解除、プレビューの同時公開と中断からの復旧、範囲を絞った認証情報での公開、CSPによる実行時のHTTPの拒否も試しています。いずれも抜き取りで、プロバイダー配信の検証（T15）は継続中です。</span></li>
+        <li><span class="chip open">未実証</span><span>AWS（CloudFrontとS3）での実配信、プレビューのライフサイクルで実際に削除されるまでの時間、プロバイダー上で別々のサイトを同時に公開する場合などの競合と復旧のケース、GitHubのOIDC。各ページの最後に、そのページに関わる未実証の項目を挙げています。</span></li>
+      </ul>
+    </section>
+
+    <section class="doc-section" aria-labelledby="next">
+      <h2 id="next">次に読むページ</h2>
+      <ul class="cards two">
+        <li><a class="card" href="storage-layout.html"><span class="tag">02</span><h3>ストレージの構成</h3><p>すべてのオブジェクトのキー、書き込むコマンド、キャッシュの規則。</p></a></li>
+        <li><a class="card" href="publishing-model.html"><span class="tag">03</span><h3>公開の仕組み</h3><p>あるべき状態への同期、ダイジェスト、書き込み順、ロック、再試行。</p></a></li>
+        <li><a class="card" href="search.html"><span class="tag">04</span><h3>検索とインデックス</h3><p>名前で探す仕組みと、静的な本文検索。</p></a></li>
+        <li><a class="card" href="previews.html"><span class="tag">05</span><h3>プレビューの仕組み</h3><p>PRの内容を固定したリビジョンと、その後片付け。</p></a></li>
+        <li><a class="card" href="trust-model.html"><span class="tag">06</span><h3>信頼モデル</h3><p>HTMLを同じオリジンで動かす判断、サイトごとのCSP、公開者の認証情報、読者のアクセスをエッジで決める理由。</p></a></li>
+      </ul>
+      <div class="callout guide"><span class="ico">ガイド</span><p>使い方はガイドにまとめています。<a href="/guide/ja/what-is-git-artifact-pages.html" target="_top">Git Artifact Pagesとは</a>ではデプロイ、登録、公開の流れを、<a href="/guide/ja/reading.html" target="_top">読者の体験</a>では読む側から見た画面と検索を説明しています。</p></div>
+    </section>
+
+    <nav class="pager" aria-label="ページ送り">
+      <a class="next" href="storage-layout.html"><small>次へ</small><strong>ストレージの構成</strong></a>
+    </nav>
+
+    <footer class="foot"><strong>アーキテクチャ</strong><p>このサイトは、プロジェクトの仕様と検証記録にある動作を説明しています。<code>acme/checkout</code>などのチームやリポジトリの名前は説明用の例です。</p></footer>
+  </main>
+</body>
+</html>

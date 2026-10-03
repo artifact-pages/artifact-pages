@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Git Artifact Pagesが公開するオブジェクトの構成。サイトの登録情報、サイトごとのmeta.jsonとindex.json、成果物のキー、ルートとキーの対応、ブラウザが読み込む順序、オブジェクトの種類ごとのキャッシュ規則。">
+  <title>ストレージの構成</title>
+  <script>
+    // 閲覧アプリ（同一オリジンの親）のテーマを描画前に写す。以後の追従は assets/site.js が行う。
+    (() => {
+      const root = document.documentElement;
+      root.classList.add('js');
+      try {
+        const theme = window.parent !== window && window.parent.document.documentElement.dataset.theme;
+        if (theme === 'light' || theme === 'dark') root.dataset.theme = theme;
+      } catch { /* 別オリジン：prefers-color-scheme にまかせる */ }
+    })();
+  </script>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../assets/site.css">
+  <script src="../assets/site.js" defer></script>
+</head>
+<body class="arch">
+  <a class="skip" href="#main">本文へ移動</a>
+  <main id="main" class="wrap">
+    <div class="arch-bar">
+      <a class="arch-brand" href="overview.html"><b aria-hidden="true">A</b>アーキテクチャ</a>
+      <nav class="lang-switch" aria-label="言語"><span aria-current="page">日本語</span><a href="../en/storage-layout.html" hreflang="en" lang="en">English</a></nav>
+    </div>
+    <nav class="arch-pages" aria-label="アーキテクチャのページ">
+      <ol>
+        <li><a href="overview.html"><small>01</small>全体像</a></li>
+        <li><a href="storage-layout.html" aria-current="page"><small>02</small>ストレージの構成</a></li>
+        <li><a href="publishing-model.html"><small>03</small>公開の仕組み</a></li>
+        <li><a href="search.html"><small>04</small>検索とインデックス</a></li>
+        <li><a href="previews.html"><small>05</small>プレビューの仕組み</a></li>
+        <li><a href="trust-model.html"><small>06</small>信頼モデル</a></li>
+      </ol>
+    </nav>
+
+    <header class="page-head">
+      <div>
+        <p class="eyebrow">アーキテクチャ · 02</p>
+        <h1>ストレージの構成</h1>
+      </div>
+      <p class="answer"><span class="answer-label">要点</span>読者が目にするものは、すべて決まったキーにある静的なオブジェクトです。サイトの登録情報（レジストリ、<code>sites.json</code>）が1つ、サイトごとに小さなJSONが2つ、サイト専用の接頭辞の下にファイル一式、必要に応じて検索とプレビューのオブジェクト。オブジェクトの種類ごとにキャッシュの規則が決まっています。</p>
+    </header>
+
+    <figure class="fig" style="--fig-min: 640px; --fig-max: 860px">
+      <div class="fig-head"><strong>オブジェクトの配置</strong><span>例のサイト：checkout（説明用）</span></div>
+      <div class="fig-frame" role="group" aria-label="図：オブジェクトの配置">
+        <svg viewBox="0 0 760 572" role="img" aria-labelledby="sl-map-t sl-map-d">
+          <title id="sl-map-t">オブジェクトの配置</title>
+          <desc id="sl-map-d">例のサイト1つ分について、保存されるキーをすべて木構造で示し、アプリケーションプレーン、コンテンツプレーン、非公開の制御領域に分けています。各オブジェクトが何か、どのコマンドが書き込むか、共有キャッシュがどれだけ保持してよいかを並べています。</desc>
+          <rect class="ad-band" x="8" y="48" width="744" height="72" rx="6"/>
+          <rect class="ad-band acc" x="8" y="120" width="744" height="360" rx="6"/>
+          <rect class="ad-band warn" x="8" y="480" width="744" height="72" rx="6"/>
+          <text class="ad-lab" x="24" y="30">キー</text>
+          <text class="ad-lab" x="290" y="30">中身</text>
+          <text class="ad-lab" x="450" y="30">書き込むコマンド</text>
+          <text class="ad-lab" x="618" y="30">共有キャッシュ</text>
+          <g class="ad-m ad-pre" xml:space="preserve">
+            <text x="24" y="68">/</text>
+            <text x="24" y="92">├─ index.html</text>
+            <text x="24" y="116">├─ assets/app-&lt;hash&gt;.js</text>
+            <text x="24" y="140">├─ _indexes/</text>
+            <text x="24" y="164">│  ├─ sites.json</text>
+            <text x="24" y="188">│  └─ checkout/</text>
+            <text x="24" y="212">│     ├─ meta.json</text>
+            <text x="24" y="236">│     ├─ index.json</text>
+            <text x="24" y="260">│     └─ search/</text>
+            <text x="24" y="284">│        ├─ manifest.json</text>
+            <text x="24" y="308">│        ├─ root-&lt;sha256&gt;.gz</text>
+            <text x="24" y="332">│        └─ leaf-&lt;sha256&gt;.gz</text>
+            <text x="24" y="356">├─ _artifacts/checkout/</text>
+            <text x="24" y="380">│  ├─ design/flow.html</text>
+            <text x="24" y="404">│  └─ design/flow.css</text>
+            <text x="24" y="428">├─ _previews/checkout/</text>
+            <text x="24" y="452">│  ├─ catalog.json</text>
+            <text x="24" y="476">│  └─ revisions/&lt;sha&gt;/…</text>
+            <text x="24" y="500">└─ _control/</text>
+            <text x="24" y="524">   ├─ locks/sites/checkout.json</text>
+            <text x="24" y="548">   └─ site-cache/checkout.json</text>
+          </g>
+          <text class="ad-lab" x="290" y="68">アプリケーションプレーン</text>
+          <text class="ad-lab acc" x="290" y="140">コンテンツプレーン</text>
+          <text class="ad-lab warn" x="290" y="500">非公開・配信しない</text>
+          <g class="ad-s">
+            <text x="290" y="92">アプリのシェル</text>
+            <text x="290" y="116">ハッシュ付きのファイル</text>
+            <text x="290" y="164">サイトの登録情報</text>
+            <text x="290" y="212">発見用のメタデータ</text>
+            <text x="290" y="236">成果物の一覧</text>
+            <text x="290" y="260">本文検索</text>
+            <text x="290" y="284">検索の入口</text>
+            <text x="290" y="308">辞書とパスの表</text>
+            <text x="290" y="332">文書の集合（最大128）</text>
+            <text x="290" y="380">ページ（インデックスあり）</text>
+            <text x="290" y="404">リソース（インデックスなし）</text>
+            <text x="290" y="452">プレビューの一覧</text>
+            <text x="290" y="476">マニフェストとファイル</text>
+            <text x="290" y="524">サイトのロック</text>
+            <text x="290" y="548">キャッシュ再試行の記録</text>
+          </g>
+          <g class="ad-mq">
+            <text x="450" y="92">app deploy</text>
+            <text x="450" y="116">app deploy</text>
+            <text x="450" y="164">registry register</text>
+            <text x="450" y="212">site publish</text>
+            <text x="450" y="236">site publish</text>
+            <text x="450" y="260">site publish --fulltext</text>
+            <text x="450" y="380">site publish</text>
+            <text x="450" y="404">site publish</text>
+            <text x="450" y="452">preview publish</text>
+            <text x="450" y="476">preview publish</text>
+            <text x="450" y="524">publish, unregister</text>
+            <text x="450" y="548">site publish</text>
+          </g>
+          <g class="ad-s">
+            <text x="618" y="92">毎回再検証</text>
+            <text x="618" y="116" class="ad-s ok">1年・不変</text>
+            <text x="618" y="164">60秒以内</text>
+            <text x="618" y="212">60秒以内</text>
+            <text x="618" y="236">60秒以内</text>
+            <text x="618" y="284">60秒以内</text>
+            <text x="618" y="308" class="ad-s ok">1年・不変</text>
+            <text x="618" y="332" class="ad-s ok">1年・不変</text>
+            <text x="618" y="380">300秒以内</text>
+            <text x="618" y="404">300秒以内</text>
+            <text x="618" y="452">60秒以内</text>
+            <text x="618" y="476">300秒以内</text>
+            <text x="618" y="524" class="ad-s warn">配信しない</text>
+            <text x="618" y="548" class="ad-s warn">配信しない</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>変わりうるオブジェクトは、ブラウザが使うたびに再検証します。「共有キャッシュ」の列は、CDNがオリジンに確かめずに返してよい時間です。<code>checkout</code>以下の名前とハッシュは説明用の例です。<span class="fig-scroll">図の全体は横にスクロールして見られます。</span></figcaption>
+      <details class="fig-text">
+        <summary>図の内容を文章で読む</summary>
+        <ul>
+          <li>アプリケーションプレーン：<code>/index.html</code>（アプリのシェル、毎回再検証）と<code>/assets/&lt;name&gt;-&lt;hash&gt;.*</code>（1年キャッシュ）。<code>app deploy</code>が書き込みます。</li>
+          <li>コンテンツプレーン：<code>registry register</code>が書く<code>/_indexes/sites.json</code>。<code>site publish</code>が書く<code>/_indexes/checkout/meta.json</code>、<code>index.json</code>、<code>--fulltext</code>を付けた場合の<code>search/manifest.json</code>・<code>root-&lt;sha256&gt;.gz</code>・<code>leaf-&lt;sha256&gt;.gz</code>。サイトのファイル一式は<code>/_artifacts/checkout/</code>、<code>preview publish</code>が書くプレビューは<code>/_previews/checkout/</code>にあります。</li>
+          <li>非公開の領域：<code>/_control/locks/sites/checkout.json</code>と<code>/_control/site-cache/checkout.json</code>。読者には返しません。</li>
+          <li>共有キャッシュは、JSONのインデックスとプレビューの一覧を最大60秒、成果物とプレビューのファイルを最大300秒、内容のハッシュを名前に持つアプリと検索のファイルを1年保持できます。</li>
+        </ul>
+      </details>
+    </figure>
+
+    <section class="doc-section" aria-labelledby="registry">
+      <h2 id="registry">サイトの登録情報：<code>sites.json</code></h2>
+      <p>サイトの一覧は、管理者が<code>artifact-pages.yaml</code>の<code>sites</code>に書き、Gitでレビューします。<code>registry register</code>がそれを検証して<code>/_indexes/sites.json</code>を書きます。中身はサイトIDで並べた配列なので、同じ内容のYAMLからは常に同じJSONができます。JSONを手で編集することはありません。</p>
+      <div class="term" aria-label="sites.jsonの例">
+        <div class="term-head"><span>/_indexes/sites.json</span></div>
+<pre>{
+  <span class="k">"schemaVersion"</span>: 1,
+  <span class="k">"sites"</span>: [
+    {
+      <span class="k">"id"</span>: <span class="s">"checkout"</span>,
+      <span class="k">"name"</span>: <span class="s">"Payments / Checkout"</span>,
+      <span class="k">"description"</span>: <span class="s">"Payment flow designs and incident reviews."</span>,
+      <span class="k">"repository"</span>: <span class="s">"acme/checkout"</span>,
+      <span class="k">"sourcePath"</span>: <span class="s">"docs/artifacts"</span>
+    }
+  ]
+}</pre>
+      </div>
+      <p>このファイルには読み手が2つあります。<strong>ブラウザ</strong>はID、名前、説明を使ってサイトを並べます。<strong>公開コマンド</strong>は<code>repository</code>と<code>sourcePath</code>を使い、公開しようとしているチェックアウトが登録どおりのソースかを確かめます。このファイルが変わるのはサイトの登録と登録解除のときだけで、公開では変わりません。値は説明用の例です。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="per-site">
+      <h2 id="per-site">サイトごとの2つの文書：<code>meta.json</code>と<code>index.json</code></h2>
+      <p>サイトごとに、小さな発見用の文書と、成果物をすべて載せたインデックスがあります。役割は分かれています。</p>
+      <div class="split">
+        <div class="pane">
+          <span class="label">meta.json：小さい。全サイト分を読む</span>
+          <p>サイトのタイトルと説明、<code>artifactCount</code>、<code>generatedAt</code>、インデックスの場所を示す<code>artifactIndexUrl</code>、本文検索を公開した場合の<code>fullTextUrl</code>。成果物ごとの記録は持ちません。</p>
+        </div>
+        <div class="pane">
+          <span class="label">index.json：全件。開いているサイトの分だけ読む</span>
+          <p>HTMLとMarkdownの文書ごとに1件。<code>id</code>と<code>path</code>（ソースからの相対パスそのまま）、<code>title</code>、<code>format</code>、<code>artifactUrl</code>、<code>updatedAt</code>、<code>lastCommitter.name</code>、<code>source</code>（リポジトリ、URL、ref、ファイルのパス）、目次の見出し<code>toc</code>。</p>
+        </div>
+      </div>
+      <div class="term" aria-label="meta.jsonの例">
+        <div class="term-head"><span>/_indexes/checkout/meta.json</span></div>
+<pre>{
+  <span class="k">"schemaVersion"</span>: 1,
+  <span class="k">"site"</span>: {
+    <span class="k">"id"</span>: <span class="s">"checkout"</span>,
+    <span class="k">"title"</span>: <span class="s">"Payments / Checkout"</span>,
+    <span class="k">"description"</span>: <span class="s">"Payment flow designs and incident reviews."</span>
+  },
+  <span class="k">"generatedAt"</span>: <span class="s">"2026-09-28T00:00:00Z"</span>,
+  <span class="k">"artifactCount"</span>: 4,
+  <span class="k">"artifactIndexUrl"</span>: <span class="s">"/_indexes/checkout/index.json"</span>,
+  <span class="k">"fullTextUrl"</span>: <span class="s">"/_indexes/checkout/search/manifest.json"</span>
+}</pre>
+      </div>
+      <p>場所を指すフィールドがあるので、ブラウザは場所を決め打ちせずに済みます。文書が1つもないサイトも公開できます。その場合インデックスは<code>"artifacts": []</code>、メタデータは<code>"artifactCount": 0</code>になり、閲覧アプリは未公開ではなく空のサイトとして表示します。</p>
+      <ul>
+        <li><strong><code>meta.json</code>が404</strong>なら、登録済みのサイトを「まだ公開されていない」として一覧に残します。それ以外のエラーなら、詳細を表示できない状態で一覧に残します。1つのサイトの不具合で一覧全体が壊れることはありません。</li>
+        <li>表示用のタイトルは、HTMLなら<code>&lt;title&gt;</code>、Markdownなら最初のH1から取り、無ければファイル名を読みやすくして使います。<code>updatedAt</code>とコミッターはGitの履歴から取ります。履歴の無いファイルは更新日時にファイルの変更時刻を使い、コミッターは記録しません。</li>
+      </ul>
+    </section>
+
+    <section class="doc-section" aria-labelledby="loading">
+      <h2 id="loading">ブラウザが読み込むものと、そのタイミング</h2>
+      <p>リクエストの数は、サイトの数ではなく読者の操作に応じて増えます。インデックスの全体をダウンロードするのは、開いているサイトの分だけです。</p>
+      <figure class="fig" style="--fig-min: 540px; --fig-max: 760px">
+        <div class="fig-head"><strong>読み込みの順序</strong><span>どの段階でもストレージの一覧は取らない</span></div>
+        <div class="fig-frame" role="group" aria-label="図：読み込みの順序">
+          <svg viewBox="0 0 700 516" role="img" aria-labelledby="sl-load-t sl-load-d">
+            <title id="sl-load-t">ブラウザが読み込むものと、そのタイミング</title>
+            <desc id="sl-load-d">読者の6つの操作と、それぞれで要求する静的なオブジェクトを順に示します。アプリのシェル、サイトの登録情報とサイトごとのメタデータ、開いたサイトのインデックス、成果物とそのリソース、本文検索のオブジェクト、プレビューの一覧です。</desc>
+            <path class="ad-line" d="M36 44 V472"/>
+            <circle class="ad-num" cx="36" cy="44" r="11"/><text class="ad-num-t" x="36" y="48" text-anchor="middle">1</text>
+            <text class="ad-t" x="60" y="48">どのルートを開いても</text>
+            <text class="ad-m" x="60" y="70">GET /index.html、続けて /assets/&lt;name&gt;-&lt;hash&gt;.*</text>
+            <text class="ad-q" x="60" y="88">アプリケーションプレーン。どのルートでも同じシェルです。</text>
+
+            <circle class="ad-num" cx="36" cy="124" r="11"/><text class="ad-num-t" x="36" y="128" text-anchor="middle">2</text>
+            <text class="ad-t" x="60" y="128">アプリの起動</text>
+            <text class="ad-m" x="60" y="150">GET /_indexes/sites.json</text>
+            <text class="ad-m" x="60" y="168">GET /_indexes/&lt;site&gt;/meta.json（一覧のサイトごと）</text>
+            <text class="ad-q" x="60" y="186">小さい。名前、件数、本文検索の有無。</text>
+
+            <circle class="ad-num" cx="36" cy="222" r="11"/><text class="ad-num-t" x="36" y="226" text-anchor="middle">3</text>
+            <text class="ad-t" x="60" y="226">サイトを開く</text>
+            <text class="ad-m acc" x="60" y="248">GET /_indexes/checkout/index.json</text>
+            <text class="ad-q" x="60" y="266">このサイトの分だけ。ほかのサイトのインデックスは取得しません。</text>
+
+            <circle class="ad-num" cx="36" cy="302" r="11"/><text class="ad-num-t" x="36" y="306" text-anchor="middle">4</text>
+            <text class="ad-t" x="60" y="306">ページを開く</text>
+            <text class="ad-m" x="60" y="328">iframeでGET /_artifacts/checkout/design/flow.html</text>
+            <text class="ad-q" x="60" y="346">続けてページ自身が相対パスのCSS、スクリプト、画像を読みます。Markdownはアプリが取得して描画します。</text>
+
+            <circle class="ad-num" cx="36" cy="382" r="11"/><text class="ad-num-t" x="36" y="386" text-anchor="middle">5</text>
+            <text class="ad-t" x="60" y="386">本文検索でEnterを押す</text>
+            <text class="ad-m" x="60" y="408">GET search/manifest.json → root-&lt;sha256&gt;.gz → 必要なleafだけ</text>
+            <text class="ad-q" x="60" y="426">入力中は何も取得しません。--fulltext付きで公開したサイトだけです。</text>
+
+            <circle class="ad-num" cx="36" cy="472" r="11"/><text class="ad-num-t" x="36" y="476" text-anchor="middle">6</text>
+            <text class="ad-t" x="60" y="476">プレビューの一覧を開く</text>
+            <text class="ad-m" x="60" y="498">GET /_previews/checkout/catalog.json、続けて各リビジョンのmanifest.json</text>
+          </svg>
+        </div>
+        <figcaption>3から6は、読者がその操作をしたときだけ起こります。<code>checkout</code>とパスは説明用の例です。<span class="fig-scroll">図の全体は横にスクロールして見られます。</span></figcaption>
+      </figure>
+      <p>ブラウザはストレージの一覧を取りません。オブジェクトストレージの一覧APIを呼ばず、nginxの<code>autoindex</code>にも頼りません。探す必要のあるものは、すべて<code>sites.json</code>、<code>meta.json</code>、<code>index.json</code>に名前が書いてあります。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="keys">
+      <h2 id="keys">成果物のキーとルート</h2>
+      <p><code>sourcePath</code>が<code>docs/artifacts</code>のサイトにある<code>docs/artifacts/design/flow.html</code>は、<code>/_artifacts/checkout/design/flow.html</code>に保存され、<code>/checkout/design/flow.html</code>で開きます。ディレクトリの構成も名前もそのまま保つので、ページとCSS、スクリプト、画像、モジュールの間の相対リンクはそのまま動きます。</p>
+      <ul>
+        <li><strong><code>.html</code>、<code>.htm</code>、<code>.md</code>はすべてページになります。</strong><code>index.html</code>も、<code>_includes/</code>のようなフォルダにあるファイルも同じです。それ以外のファイルはコピーされ、URLで参照できますが、ページとしては一覧に出ません。</li>
+        <li><strong>パスの区切りごとに1回だけパーセントエンコードします。</strong><code>artifactUrl</code>やルートを作るときの規則です。空白、<code>#</code>、<code>?</code>、<code>%</code>、<code>+</code>、日本語の名前も往復で崩れません。UTF-8として正しくないファイル名は拒否します。</li>
+        <li><strong>リソースは相対パスで参照します。</strong><code>/assets/report.css</code>のようなルート相対のURLはオリジンの先頭から始まり、サイトの名前空間の外に出てしまいます。</li>
+        <li><strong>存在しないリソースには実際の404応答を返し</strong>、アプリのシェルは返しません。</li>
+      </ul>
+      <p>保存するオブジェクトの<code>Content-Type</code>は、公開するマシンのMIMEデータベースではなく、大文字小文字を区別しない固定の拡張子表で決めます。<code>Content-Disposition: attachment</code>は付けず、実際に圧縮していないのに<code>Content-Encoding</code>を名乗ることもしません。</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>拡張子</th><th><code>Content-Type</code></th></tr></thead>
+        <tbody>
+          <tr><td><code>.html</code>、<code>.htm</code></td><td><code>text/html; charset=utf-8</code></td></tr>
+          <tr><td><code>.md</code>、<code>.markdown</code></td><td><code>text/markdown; charset=utf-8</code></td></tr>
+          <tr><td><code>.css</code> / <code>.js</code>、<code>.mjs</code>、<code>.cjs</code></td><td><code>text/css; charset=utf-8</code> / <code>text/javascript; charset=utf-8</code></td></tr>
+          <tr><td><code>.json</code>、<code>.map</code></td><td><code>application/json; charset=utf-8</code></td></tr>
+          <tr><td><code>.svg</code></td><td><code>image/svg+xml; charset=utf-8</code></td></tr>
+          <tr><td>画像、フォント、<code>.pdf</code>、<code>.wasm</code></td><td>それぞれの標準の型（例：<code>image/png</code>、<code>font/woff2</code>、<code>application/wasm</code>）</td></tr>
+          <tr><td>それ以外</td><td><code>application/octet-stream</code>（コピーされ、URLで参照できます）</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section class="doc-section" aria-labelledby="cache">
+      <h2 id="cache">キャッシュの規則と理由</h2>
+      <p>2つのプレーンは変わる頻度が違うので、規則も分けています。変わりうるURLはブラウザが毎回再検証し、共有キャッシュには短く上限のある期間だけ保持させます。内容が変わると名前も変わるURLは、1年キャッシュします。</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>オブジェクト</th><th><code>Cache-Control</code></th></tr></thead>
+        <tbody>
+          <tr><td><code>/index.html</code>、名前が固定のアプリのファイル</td><td><code>no-cache, max-age=0, must-revalidate</code></td></tr>
+          <tr><td><code>/assets/&lt;name&gt;-&lt;8文字のハッシュ&gt;.*</code></td><td><code>public, max-age=31536000, immutable</code></td></tr>
+          <tr><td><code>sites.json</code>、<code>meta.json</code>、<code>index.json</code>、<code>search/manifest.json</code></td><td><code>public, max-age=0, s-maxage=60, must-revalidate</code></td></tr>
+          <tr><td><code>/_artifacts/&lt;site&gt;/*</code></td><td><code>public, max-age=0, s-maxage=300, must-revalidate</code></td></tr>
+          <tr><td><code>search/root-*.gz</code>、<code>search/leaf-*.gz</code></td><td><code>public, max-age=31536000, immutable</code></td></tr>
+          <tr><td>プレビューの<code>catalog.json</code> /リビジョンのファイル</td><td><code>s-maxage=60</code> / <code>s-maxage=300</code>（どちらも<code>max-age=0, must-revalidate</code>）</td></tr>
+        </tbody>
+      </table></div>
+      <p>上限のある鮮度は、あくまで最後の守りです。<code>site publish</code>はオリジンを更新したあと、変わったURLだけをCDNに無効化させ、その依頼が成功するまで再試行の記録を残します（<a href="publishing-model.html#cache-retry">公開の仕組み</a>を参照）。依頼が成功しても、すべてのエッジが更新済みとは限らず、すでにページを開いている読者の画面も更新されません。</p>
+      <p class="note">ローカルのnginxは、開発中の変更がすぐ見えるように<code>/_indexes/*</code>を<code>no-store</code>で返します。上の表は、公開時に各オブジェクトへ保存する値と、プロバイダーの配信が守るべき値です。稼働中のCloudflareでは、抜き取ったインデックスと成果物の応答がこの値と一致しました（T15）。AWSの実際のヘッダーはまだ確認していません。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="control">
+      <h2 id="control">非公開の制御領域</h2>
+      <p>調整のための状態は、どのサイトのインデックスや成果物の接頭辞にも入らない<code>/_control/</code>に置きます。サイトを片付けても消えません。</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>キー</th><th>用途</th></tr></thead>
+        <tbody>
+          <tr><td><code>_control/locks/sites/&lt;site&gt;.json</code></td><td>サイトの公開、プレビューの公開、登録解除が共有するサイトごとのロック。登録解除のあとも（<code>free</code>の状態で）残します。</td></tr>
+          <tr><td><code>_control/locks/registry.json</code></td><td>サイトの登録情報の更新を1つずつ順に行うためのロック。</td></tr>
+          <tr><td><code>_control/site-cache/&lt;site&gt;.json</code></td><td>失敗した公開のあと、まだ済んでいないキャッシュ無効化のパス。</td></tr>
+          <tr><td><code>_control/registry-cleanup.json</code></td><td>サイトの登録情報から外したサイトについて、まだ済んでいない片付け。</td></tr>
+        </tbody>
+      </table></div>
+      <p>配信では、これらの中身を決して返しません。ローカルのnginxは<code>/_control/*</code>に404を返します。プロバイダーによっては代わりにアプリのシェル（「Page not found」を表示）を返すこともあります。</p>
+    </section>
+
+    <nav class="pager" aria-label="ページ送り">
+      <a class="prev" href="overview.html"><small>前へ</small><strong>全体像</strong></a>
+      <a class="next" href="publishing-model.html"><small>次へ</small><strong>公開の仕組み</strong></a>
+    </nav>
+
+    <footer class="foot"><strong>アーキテクチャ</strong><p>このサイトは、プロジェクトの仕様と検証記録にある動作を説明しています。<code>acme/checkout</code>などのチームやリポジトリの名前は説明用の例です。</p></footer>
+  </main>
+</body>
+</html>

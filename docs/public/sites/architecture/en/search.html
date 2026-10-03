@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="How search works in Git Artifact Pages: finding a page by name from the per-site artifact index, and optional page text search from a static, sharded index built at publish time with --fulltext. Semantics, trade-offs, measurements, and why it is static.">
+  <title>Search and indexes</title>
+  <script>
+    // Copy the reader app's theme (same-origin parent) before first paint; assets/site.js keeps it in sync.
+    (() => {
+      const root = document.documentElement;
+      root.classList.add('js');
+      try {
+        const theme = window.parent !== window && window.parent.document.documentElement.dataset.theme;
+        if (theme === 'light' || theme === 'dark') root.dataset.theme = theme;
+      } catch { /* cross-origin: fall back to prefers-color-scheme */ }
+    })();
+  </script>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../assets/site.css">
+  <script src="../assets/site.js" defer></script>
+</head>
+<body class="arch">
+  <a class="skip" href="#main">Skip to content</a>
+  <main id="main" class="wrap">
+    <div class="arch-bar">
+      <a class="arch-brand" href="overview.html"><b aria-hidden="true">A</b>Architecture</a>
+      <nav class="lang-switch" aria-label="Language"><a href="../ja/search.html" hreflang="ja" lang="ja">日本語</a><span aria-current="page">English</span></nav>
+    </div>
+    <nav class="arch-pages" aria-label="Architecture pages">
+      <ol>
+        <li><a href="overview.html"><small>01</small>Overview</a></li>
+        <li><a href="storage-layout.html"><small>02</small>Storage layout</a></li>
+        <li><a href="publishing-model.html"><small>03</small>Publishing model</a></li>
+        <li><a href="search.html" aria-current="page"><small>04</small>Search and indexes</a></li>
+        <li><a href="previews.html"><small>05</small>Previews</a></li>
+        <li><a href="trust-model.html"><small>06</small>Trust model</a></li>
+      </ol>
+    </nav>
+
+    <header class="page-head">
+      <div>
+        <p class="eyebrow">Architecture · 04</p>
+        <h1>Search and indexes</h1>
+      </div>
+      <p class="answer"><span class="answer-label">Short answer</span>Both kinds of search run in the browser against files made at publish time. Finding a page by name ranks the active site's artifact index in memory. Page text search downloads only the parts of a static, sharded index that a committed query needs. No search server is involved.</p>
+    </header>
+
+    <figure class="fig" style="--fig-min: 760px; --fig-max: 1060px">
+      <div class="fig-head"><strong>Two searches, one static projection</strong><span>publish time → stored objects → browser</span></div>
+      <div class="fig-frame" role="group" aria-label="Diagram: two searches, one static projection">
+        <svg viewBox="0 0 960 420" role="img" aria-labelledby="se-flow-t se-flow-d">
+          <title id="se-flow-t">Two searches, one static projection</title>
+          <desc id="se-flow-d">Finding by name: site publish writes index.json, the browser loads it when the site becomes active and ranks titles and paths in memory as the reader types. Page text search: site publish with --fulltext writes a search manifest, a root and up to 128 leaf files and advertises them in meta.json; the browser fetches nothing until Enter, then the manifest, the root and only the needed leaves, and returns path-ordered results whose terms are highlighted in the open page.</desc>
+          <defs>
+            <marker id="se-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ad-head"/></marker>
+          </defs>
+          <text class="ad-lab" x="16" y="24">PUBLISH TIME</text>
+          <text class="ad-lab" x="256" y="24">STORED OBJECTS</text>
+          <text class="ad-lab" x="556" y="24">IN THE BROWSER</text>
+
+          <text class="ad-lab acc" x="16" y="56">FIND BY NAME</text>
+          <rect class="ad-box" x="16" y="68" width="200" height="104" rx="8"/>
+          <text class="ad-m acc" x="28" y="92">site publish</text>
+          <text class="ad-s" x="28" y="116">titles, paths, headings,</text>
+          <text class="ad-s" x="28" y="134">Git dates and committers</text>
+          <text class="ad-q" x="28" y="156">every publish</text>
+          <rect class="ad-box" x="256" y="68" width="260" height="104" rx="8"/>
+          <text class="ad-m" x="268" y="94">_indexes/&lt;site&gt;/index.json</text>
+          <text class="ad-s" x="268" y="118">one complete file per site</text>
+          <text class="ad-q" x="268" y="140">also feeds Browse, Contents,</text>
+          <text class="ad-q" x="268" y="156">and Details</text>
+          <rect class="ad-box" x="556" y="68" width="388" height="104" rx="8"/>
+          <text class="ad-s" x="568" y="92">Loaded once when the site becomes active</text>
+          <text class="ad-t" x="568" y="116">Ranked in memory on every keystroke</text>
+          <text class="ad-s" x="568" y="138">pins and recent reads lift results</text>
+          <text class="ad-mq ad-pre" x="568" y="158">@ sites   # headings   &gt; commands</text>
+          <path class="ad-flow" d="M216 120 H254" marker-end="url(#se-a)"/>
+          <path class="ad-flow" d="M516 120 H554" marker-end="url(#se-a)"/>
+
+          <text class="ad-lab acc" x="16" y="212">SEARCH PAGE TEXT (OPTIONAL)</text>
+          <rect class="ad-box acc" x="16" y="224" width="200" height="168" rx="8"/>
+          <text class="ad-m acc" x="28" y="248">site publish --fulltext</text>
+          <text class="ad-s" x="28" y="272">extract static text</text>
+          <text class="ad-s" x="28" y="290">of titles and bodies</text>
+          <text class="ad-s" x="28" y="314">normalize: NFKC,</text>
+          <text class="ad-s" x="28" y="332">lowercase, whitespace</text>
+          <text class="ad-q" x="28" y="356">tokens bucketed into</text>
+          <text class="ad-q" x="28" y="372">128 shards by hash</text>
+          <rect class="ad-box acc" x="256" y="224" width="260" height="168" rx="8"/>
+          <text class="ad-m ad-pre" x="268" y="248">meta.json → fullTextUrl</text>
+          <text class="ad-m" x="268" y="276">search/manifest.json</text>
+          <text class="ad-q" x="268" y="292">mutable entry point · 60 s</text>
+          <text class="ad-m" x="268" y="318">search/root-&lt;sha256&gt;.gz</text>
+          <text class="ad-q" x="268" y="334">dictionary + path table</text>
+          <text class="ad-m" x="268" y="360">search/leaf-&lt;sha256&gt;.gz ×≤128</text>
+          <text class="ad-q" x="268" y="376">postings · immutable</text>
+          <rect class="ad-box acc" x="556" y="224" width="388" height="168" rx="8"/>
+          <circle class="ad-num" cx="578" cy="248" r="9"/><text class="ad-num-t" x="578" y="252" text-anchor="middle">1</text>
+          <text class="ad-s" x="596" y="252">Typing fetches nothing. Enter commits the query.</text>
+          <circle class="ad-num" cx="578" cy="278" r="9"/><text class="ad-num-t" x="578" y="282" text-anchor="middle">2</text>
+          <text class="ad-s" x="596" y="282">Fetch the manifest, then the root.</text>
+          <circle class="ad-num" cx="578" cy="308" r="9"/><text class="ad-num-t" x="578" y="312" text-anchor="middle">3</text>
+          <text class="ad-s" x="596" y="312">Fetch only the leaves the terms need (≤ 6 at once).</text>
+          <circle class="ad-num" cx="578" cy="338" r="9"/><text class="ad-num-t" x="578" y="342" text-anchor="middle">4</text>
+          <text class="ad-s" x="596" y="342">Every term must match: total + path-ordered page.</text>
+          <circle class="ad-num" cx="578" cy="368" r="9"/><text class="ad-num-t" x="578" y="372" text-anchor="middle">5</text>
+          <text class="ad-s" x="596" y="372">Titles from index.json; terms highlighted on open.</text>
+          <path class="ad-flow" d="M216 308 H254" marker-end="url(#se-a)"/>
+          <path class="ad-flow" d="M516 308 H554" marker-end="url(#se-a)"/>
+          <text class="ad-q" x="16" y="412">Both searches stay inside the active site. There is no cross-site search and no request-time search service.</text>
+        </svg>
+      </div>
+      <figcaption>The name index is needed for navigation anyway, so finding by name costs no extra download. Page text search is a separate projection that is fetched piece by piece, only after Enter. <span class="fig-scroll">Scroll sideways to see the whole diagram.</span></figcaption>
+      <details class="fig-text">
+        <summary>The diagram as text</summary>
+        <ul>
+          <li>Find by name: every <code>site publish</code> writes <code>_indexes/&lt;site&gt;/index.json</code>. The browser loads it once when the site becomes active and ranks titles and paths in memory on every keystroke; pins and recent reads lift results. <code>@</code>, <code>#</code> and <code>&gt;</code> switch to sites, headings, and commands.</li>
+          <li>Page text search: <code>site publish --fulltext</code> extracts and normalizes static text and writes <code>search/manifest.json</code>, <code>search/root-&lt;sha256&gt;.gz</code> and up to 128 <code>search/leaf-&lt;sha256&gt;.gz</code> files, advertised by <code>meta.json</code>'s <code>fullTextUrl</code>.</li>
+          <li>In the browser, typing fetches nothing. Enter fetches the manifest and root, then only the needed leaves (at most six at a time), intersects the terms, and returns a total and a path-ordered page of results. Titles come from <code>index.json</code>; the terms are highlighted in the opened page.</li>
+        </ul>
+      </details>
+    </figure>
+
+    <section class="doc-section" aria-labelledby="surfaces">
+      <h2 id="surfaces">Two separate surfaces</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th></th><th>Find by name</th><th>Search page text</th></tr></thead>
+        <tbody>
+          <tr><td>Where</td><td>Command palette, <kbd>⌘K</kbd> / <kbd>Ctrl K</kbd></td><td>Sidebar field, <kbd>⌘⇧F</kbd> / <kbd>Ctrl ⇧ F</kbd></td></tr>
+          <tr><td>Data</td><td><code>index.json</code>, already loaded for navigation</td><td><code>search/*</code>, only if published with <code>--fulltext</code></td></tr>
+          <tr><td>Runs</td><td>On every keystroke</td><td>Only when the query is committed with <kbd>Enter</kbd></td></tr>
+          <tr><td>Matches</td><td>Titles, paths, filenames</td><td>Static text of titles and bodies</td></tr>
+          <tr><td>Order</td><td>Ranked</td><td>Path order, no ranking</td></tr>
+          <tr><td>Scope</td><td colspan="2">The active site only</td></tr>
+        </tbody>
+      </table></div>
+      <p>The palette can hand a query to page text search: when the query is not blank it offers “Search page text for …”, and <kbd>⌘↵</kbd> / <kbd>Ctrl ↵</kbd> does the same. How this looks to a reader is in the guide's <a href="/guide/en/reading.html#search" target="_top">Reading</a> page.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="by-name">
+      <h2 id="by-name">Finding by name</h2>
+      <p>The browser loads a site's full artifact index only when that site becomes active, and never reads other sites' indexes. Once it is loaded, searching is pure computation in the page, so results update as you type.</p>
+      <ul>
+        <li><strong>Matching:</strong> titles and paths are split into words at spaces, slashes, and hyphens. Each typed word must appear, letter by letter in order, inside one of those words, and exact and prefix matches score higher. So <code>pay flow</code> finds <code>design/payment-flow.html</code>.</li>
+        <li><strong>Ranking:</strong> pins and recently read pages are lifted. These come from the reader's own browser storage and never leave it. For sites with 5,000 or more documents, the publisher adds a precomputed scoring profile to <code>index.json</code> so the palette can also weigh words and folders near the open page.</li>
+        <li><strong>A blank query</strong> lists the reader's pinned pages, then recently read pages, then commands.</li>
+        <li><strong>Scopes:</strong> <code>@</code> searches the lightweight site metadata already loaded at startup and switches site; <code>#</code> searches headings of the open page, from the <code>toc</code> recorded in the index; <code>&gt;</code> searches commands.</li>
+      </ul>
+      <p>Why one complete index per site? A benchmark (local headless Chromium, synthetic data, 2026-09-25) found that splitting a 20,000-artifact index into eagerly loaded chunks did not improve ready-to-use time or memory: the monolithic 9.85 MB index was ready at a median of 606 ms, chunked variants at 606–621 ms. With 20 sites of 1,000 artifacts each, the active index was 486 KB and all sites' metadata together was 3.7 KB, ready at a median of 107.8 ms. These are local measurements, not a forecast of CDN or network latency.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="page-text">
+      <h2 id="page-text">Page text search</h2>
+      <h3 id="build">What publishing builds</h3>
+      <p>Page text search is <strong>optional</strong>. <code>site publish --fulltext</code> (or <code>index build --fulltext</code> for a local build) extracts each document's static text, normalizes it, and writes a separate projection under <code>_indexes/&lt;site&gt;/search/</code>. <code>meta.json</code> advertises it with <code>fullTextUrl</code>; <code>index.json</code> is unchanged. The flag has to be passed on every publish that should keep search: publishing without it withdraws <code>fullTextUrl</code> and removes the site's search objects.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Object</th><th>Holds</th><th>Cache</th></tr></thead>
+        <tbody>
+          <tr><td><code>search/manifest.json</code></td><td>Version, document count, a <code>generation</code> hash covering root and all leaves, and references (URL, SHA-256, sizes) to the root and exactly 128 shard slots</td><td>Mutable, <code>s-maxage=60</code></td></tr>
+          <tr><td><code>search/root-&lt;sha256&gt;.gz</code></td><td>The token dictionary, terms that occur in only one document (with that document inline), and the path table in result order</td><td>Immutable, one year</td></tr>
+          <tr><td><code>search/leaf-&lt;sha256&gt;.gz</code></td><td>Document lists for the tokens hashed to that shard, each stored in its most compact of five encodings</td><td>Immutable, one year</td></tr>
+        </tbody>
+      </table></div>
+      <p>The files are named by the hash of their bytes, so an unchanged shard keeps its URL across publishes and stays cached. They are stored as <code>application/octet-stream</code> without HTTP <code>Content-Encoding</code>; the browser inflates the <code>.gz</code> itself after checking each file's SHA-256 and sizes.</p>
+
+      <h3 id="query">What happens on Enter</h3>
+      <ol>
+        <li>Typing in the field downloads nothing. <kbd>Enter</kbd> commits the query (an IME conversion Enter does not). The query is kept in the URL as <code>?q=</code>.</li>
+        <li>On the first non-blank search the decoder code is loaded on demand. The client fetches the manifest (refreshed after 60 seconds) and the root.</li>
+        <li>It fetches only the leaves the query terms need, at most six at a time, and verifies each one. A missing or corrupt shard is an error, never an empty partial result.</li>
+        <li>It intersects the terms over the complete document set and returns the total plus one page of IDs (20 by default) in path order. Titles come from the already loaded <code>index.json</code>.</li>
+        <li>Opening a result highlights the terms in the HTML or Markdown page with the CSS Custom Highlight API, without changing the page's DOM, and scrolls to the first match unless the URL has a fragment or the reader has already scrolled.</li>
+      </ol>
+
+      <h3 id="semantics">Matching rules</h3>
+      <ul>
+        <li>Text and query are normalized the same way: <strong>NFKC</strong>, then <strong>lowercase</strong>, with whitespace folded. The query is split on whitespace.</li>
+        <li><strong>Every term must match</strong> (AND), in any order. A term matches when it is a <strong>substring</strong> of one whitespace-separated token in the document, so <code>試行</code> finds <code>再試行</code> without a Japanese dictionary.</li>
+        <li>Not supported: exact phrases, typo tolerance, stemming, synonyms, or semantic (vector) search. A query longer than 4,096 characters is rejected.</li>
+        <li>Indexed: the HTML title and static body text; the Markdown title and rendered text, including code blocks and link labels. Skipped: <code>&lt;head&gt;</code> content other than the title, scripts, styles, <code>template</code>, <code>noscript</code>, and elements marked <code>hidden</code>, <code>aria-hidden="true"</code>, or <code>data-search-ignore</code>. CSS visibility and text created by scripts are not evaluated; image <code>alt</code> text and paths are not part of the text index (paths are covered by finding by name).</li>
+      </ul>
+
+      <h3 id="consistency">Updates while someone is searching</h3>
+      <p>Publishing writes search blobs before <code>index.json</code>, the manifest, and <code>meta.json</code>, and deletes old blobs afterwards. A browser still holding an older manifest whose leaf was just deleted gets a 404, reloads the manifest once, and reruns the whole search. If the search data changes between pages of results, the list is fetched again from the start rather than mixing generations. Like the rest of publishing, this is eventually consistent, not a transactional snapshot.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="tradeoffs">
+      <h2 id="tradeoffs">Trade-offs and measurements</h2>
+      <ul>
+        <li><strong>No relevance ranking and no snippets.</strong> The index stores which documents contain a token, not where or how often, so results are listed in path order, grouped by folder.</li>
+        <li><strong>The root is always fetched.</strong> It holds the complete path table and the one-document vocabulary, so even a query with no matches downloads it once per manifest generation.</li>
+        <li><strong>Long unspaced Japanese</strong> becomes long dictionary entries. Substring matching stays correct, but sharing between documents, and therefore size reduction, is weaker than for spaced text.</li>
+        <li><strong>Broad substrings can touch many leaves.</strong> The payload of a query depends on the query, not only on the site size.</li>
+      </ul>
+      <p>Recorded measurements, all from local runs on a generated, controlled corpus. They are not production traffic and not provider delivery.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Measurement</th><th>Result</th><th>What it measured</th></tr></thead>
+        <tbody>
+          <tr><td>Current format, 50,000 pages</td><td>About 6–7 s for the full metadata and search build; 221 KB root; 5.40 MB stored search data including the manifest</td><td>The 2026-10-01 core trial, reusing the earlier 50,000-page corpus</td></tr>
+          <tr><td>Research format, 50,000 pages</td><td>Cold input-to-paint median 112.3 ms locally and 1,485.1 ms constrained; 329.6–370.8 KB fetched per cold search</td><td>2026-10-01 load benchmark through nginx in headless Chromium; earlier format with a 326 KB root and 5.59 MB of search data. “Constrained” adds 80 ms latency, 2.5 Mbps down, and 4× CPU slowdown; it is not a real device</td></tr>
+          <tr><td>Research format, 1,000 / 10,000 pages</td><td>Cold median 40.5 / 41.9 ms locally; 25.1–26.1 / 83.0–91.4 KB per cold search</td><td>Same benchmark</td></tr>
+          <tr><td>Research format, all six scenarios</td><td>Repeating the same query: median 8.6–27.2 ms, with no further requests</td><td>Same benchmark; the range spans 1,000, 10,000, and 50,000 pages, each local and constrained</td></tr>
+        </tbody>
+      </table></div>
+      <p class="note">The core trial measured API-level search, while the research benchmark measured from input to paint, so their timings are not directly comparable. The benchmark's shared vocabulary made cold queries touch few leaves; the 25–371 KB range does not generalize to every query.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="why-static">
+      <h2 id="why-static">Why it is static</h2>
+      <p>The product rule is to compute at publish time whatever can be served as a file. Search follows it:</p>
+      <ul>
+        <li><strong>Nothing to operate.</strong> There is no search cluster to run, scale, secure, or keep in sync. The search data is published, locked, invalidated, and deleted by the same <code>site publish</code> as the pages it describes.</li>
+        <li><strong>The same delivery and the same gate.</strong> Search files are ordinary objects under <code>/_indexes/&lt;site&gt;/</code>, served by the same CDN and covered by whatever access control the operator configures at the edge for that path.</li>
+        <li><strong>Pay only when used.</strong> Opening a site downloads no search data; a site published without <code>--fulltext</code> has none.</li>
+      </ul>
+      <p>The cost is the set of limits above. Ranking, snippets, and semantic search would need more stored data or a model run at query time, and are not part of the current contract.</p>
+    </section>
+
+    <div class="callout guide"><span class="ico">GUIDE</span><p>How readers use both searches, with the keyboard shortcuts, is in the guide's <a href="/guide/en/reading.html#search" target="_top">Reading</a> page.</p></div>
+
+    <nav class="pager" aria-label="Pages">
+      <a class="prev" href="publishing-model.html"><small>Previous</small><strong>Publishing model</strong></a>
+      <a class="next" href="previews.html"><small>Next</small><strong>Previews</strong></a>
+    </nav>
+
+    <footer class="foot"><strong>Architecture</strong><p>These pages describe the behavior recorded in the project's specification and verification records. Team and repository names such as <code>acme/checkout</code> are illustrative.</p></footer>
+  </main>
+</body>
+</html>

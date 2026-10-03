@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="site publishが収束する仕組み。あるべき状態への同期、ダイジェストによる変更検出、書き込みの順序、サイトごとのロックとサイトの登録情報の確認、失敗と再試行、キャッシュの無効化、公開と登録解除の競合。">
+  <title>公開の仕組み</title>
+  <script>
+    // 閲覧アプリ（同一オリジンの親）のテーマを描画前に写す。以後の追従は assets/site.js が行う。
+    (() => {
+      const root = document.documentElement;
+      root.classList.add('js');
+      try {
+        const theme = window.parent !== window && window.parent.document.documentElement.dataset.theme;
+        if (theme === 'light' || theme === 'dark') root.dataset.theme = theme;
+      } catch { /* 別オリジン：prefers-color-scheme にまかせる */ }
+    })();
+  </script>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../assets/site.css">
+  <script src="../assets/site.js" defer></script>
+</head>
+<body class="arch">
+  <a class="skip" href="#main">本文へ移動</a>
+  <main id="main" class="wrap">
+    <div class="arch-bar">
+      <a class="arch-brand" href="overview.html"><b aria-hidden="true">A</b>アーキテクチャ</a>
+      <nav class="lang-switch" aria-label="言語"><span aria-current="page">日本語</span><a href="../en/publishing-model.html" hreflang="en" lang="en">English</a></nav>
+    </div>
+    <nav class="arch-pages" aria-label="アーキテクチャのページ">
+      <ol>
+        <li><a href="overview.html"><small>01</small>全体像</a></li>
+        <li><a href="storage-layout.html"><small>02</small>ストレージの構成</a></li>
+        <li><a href="publishing-model.html" aria-current="page"><small>03</small>公開の仕組み</a></li>
+        <li><a href="search.html"><small>04</small>検索とインデックス</a></li>
+        <li><a href="previews.html"><small>05</small>プレビューの仕組み</a></li>
+        <li><a href="trust-model.html"><small>06</small>信頼モデル</a></li>
+      </ol>
+    </nav>
+
+    <header class="page-head">
+      <div>
+        <p class="eyebrow">アーキテクチャ · 03</p>
+        <h1>公開の仕組み</h1>
+      </div>
+      <p class="answer"><span class="answer-label">要点</span><code>site publish</code>は、保存されたサイトを1つのソースディレクトリと同じ状態にします。あるべき投影の全体とオリジンにあるものを比べ、参照が壊れにくい順に差分を書き込みます。途中で失敗しても、同じコマンドを再実行すれば収束します。トランザクションもロールバックもありません。</p>
+    </header>
+
+    <figure class="fig" style="--fig-min: 600px; --fig-max: 820px">
+      <div class="fig-head"><strong><code>site publish</code>の1回の実行</strong><span>上から下へ</span></div>
+      <div class="fig-frame" role="group" aria-label="図：site publishの1回の実行">
+        <svg viewBox="0 0 720 664" role="img" aria-labelledby="pm-run-t pm-run-d">
+          <title id="pm-run-t">site publishの1回の実行</title>
+          <desc id="pm-run-d">13の手順。ローカルのストレージなら、まず配信先とソースが重ならないことを確かめます。サイトのロックを取り、オリジンでサイトの登録情報を確かめてから、登録の名前と説明を使ってローカルで投影を組み立て、サイトの2つの接頭辞と比べて計画を作ります。ドライランはロックを取らず、ここで終わります。実際の公開では続けて、キャッシュ再試行の記録を保存し、ファイル、検索のblob、インデックス、検索のマニフェスト、メタデータの順に書き込み、古いオブジェクトを消し、消えたプレビューへの参照を除き、キャッシュの無効化を依頼し、記録を消してロックを解放します。</desc>
+          <text class="ad-lab" x="470" y="30">場所</text>
+          <text class="ad-lab" x="604" y="30" text-anchor="middle">ロック</text>
+          <text class="ad-lab" x="664" y="30" text-anchor="middle">再試行記録</text>
+          <rect class="ad-bar" x="600" y="100" width="8" height="530" rx="4"/>
+          <rect class="ad-bar warn" x="660" y="304" width="8" height="326" rx="4"/>
+          <path class="ad-line" d="M30 64 V620"/>
+
+          <circle class="ad-num" cx="30" cy="64" r="11"/><text class="ad-num-t" x="30" y="68" text-anchor="middle">1</text>
+          <text class="ad-t" x="52" y="62">ソースと配信先が重ならないか確かめる</text>
+          <text class="ad-mq" x="52" y="80">ローカルのストレージのときだけ · ロックより前</text>
+          <text class="ad-lab" x="470" y="66">ローカル</text>
+
+          <circle class="ad-num" cx="30" cy="108" r="11"/><text class="ad-num-t" x="30" y="112" text-anchor="middle">2</text>
+          <text class="ad-t" x="52" y="106">サイトのロックを取る</text>
+          <text class="ad-mq" x="52" y="124">_control/locks/sites/&lt;site&gt;.json · --dry-runでは取らない</text>
+          <text class="ad-lab acc" x="470" y="110">オリジン</text>
+
+          <circle class="ad-num" cx="30" cy="152" r="11"/><text class="ad-num-t" x="30" y="156" text-anchor="middle">3</text>
+          <text class="ad-t" x="52" y="150">オリジンでサイトの登録情報を確かめる</text>
+          <text class="ad-mq" x="52" y="168">sites.jsonのrepositoryとsourcePathが一致すること</text>
+          <text class="ad-lab acc" x="470" y="154">オリジン</text>
+
+          <circle class="ad-num" cx="30" cy="196" r="11"/><text class="ad-num-t" x="30" y="200" text-anchor="middle">4</text>
+          <text class="ad-t" x="52" y="194">ローカルで投影を組み立てる</text>
+          <text class="ad-mq" x="52" y="212">登録の名前と説明でindex.json、meta.json、検索データ</text>
+          <text class="ad-lab" x="470" y="198">ローカル</text>
+
+          <circle class="ad-num" cx="30" cy="240" r="11"/><text class="ad-num-t" x="30" y="244" text-anchor="middle">5</text>
+          <text class="ad-t" x="52" y="238">2つの接頭辞を一覧して比べる</text>
+          <text class="ad-mq" x="52" y="256">ダイジェストとヘッダー · プレビューの一覧と再試行記録も読む</text>
+          <text class="ad-lab acc" x="470" y="242">オリジン</text>
+
+          <path class="ad-flow warn ad-dash" d="M8 278 H700"/>
+          <rect x="52" y="266" width="300" height="24" rx="12" style="fill:var(--paper-2);stroke:var(--gold-line)"/>
+          <text class="ad-s warn" x="64" y="282">--dry-runはここで計画を表示して終わる</text>
+
+          <circle class="ad-num" cx="30" cy="312" r="11"/><text class="ad-num-t" x="30" y="316" text-anchor="middle">6</text>
+          <text class="ad-t" x="52" y="310">キャッシュ再試行の記録を保存する</text>
+          <text class="ad-mq" x="52" y="328">_control/site-cache/&lt;site&gt;.json</text>
+          <text class="ad-lab acc" x="470" y="314">オリジン</text>
+
+          <circle class="ad-num" cx="30" cy="356" r="11"/><text class="ad-num-t" x="30" y="360" text-anchor="middle">7</text>
+          <text class="ad-t" x="52" y="354">新規と変更のファイルを書き込む</text>
+          <text class="ad-mq" x="52" y="372">_artifacts/&lt;site&gt;/…</text>
+          <text class="ad-lab acc" x="470" y="358">オリジン</text>
+
+          <circle class="ad-num" cx="30" cy="400" r="11"/><text class="ad-num-t" x="30" y="404" text-anchor="middle">8</text>
+          <text class="ad-t" x="52" y="398">検索のblob、次にindex.json</text>
+          <text class="ad-mq" x="52" y="416">参照される側を先に置く</text>
+          <text class="ad-lab acc" x="470" y="402">オリジン</text>
+
+          <circle class="ad-num" cx="30" cy="444" r="11"/><text class="ad-num-t" x="30" y="448" text-anchor="middle">9</text>
+          <text class="ad-t" x="52" y="442">検索のマニフェスト、最後にmeta.json</text>
+          <text class="ad-mq" x="52" y="460">発見用のメタデータは最後に書く</text>
+          <text class="ad-lab acc" x="470" y="446">オリジン</text>
+
+          <circle class="ad-num" cx="30" cy="488" r="11"/><text class="ad-num-t" x="30" y="492" text-anchor="middle">10</text>
+          <text class="ad-t" x="52" y="486">古いオブジェクトを消す</text>
+          <text class="ad-mq" x="52" y="504">このサイトの2つの接頭辞の中だけ</text>
+          <text class="ad-lab acc" x="470" y="490">オリジン</text>
+
+          <circle class="ad-num" cx="30" cy="532" r="11"/><text class="ad-num-t" x="30" y="536" text-anchor="middle">11</text>
+          <text class="ad-t" x="52" y="530">消えたプレビューへの参照を除く</text>
+          <text class="ad-mq" x="52" y="548">プレビューの一覧で、マニフェストが無いと確認できた項目</text>
+          <text class="ad-lab acc" x="470" y="534">オリジン</text>
+
+          <circle class="ad-num" cx="30" cy="576" r="11"/><text class="ad-num-t" x="30" y="580" text-anchor="middle">12</text>
+          <text class="ad-t" x="52" y="574">キャッシュの無効化を依頼する</text>
+          <text class="ad-mq" x="52" y="592">変更・削除したURLと、残っている分</text>
+          <text class="ad-lab" x="470" y="578">CDN</text>
+
+          <circle class="ad-num" cx="30" cy="620" r="11"/><text class="ad-num-t" x="30" y="624" text-anchor="middle">13</text>
+          <text class="ad-t" x="52" y="618">記録を消し、ロックを解放する</text>
+          <text class="ad-mq" x="52" y="636">結果はpublished（変更が無ければno-op）</text>
+          <text class="ad-lab acc" x="470" y="622">オリジン</text>
+        </svg>
+      </div>
+      <figcaption>青い帯はサイトのロックを持っている期間、金色の帯はキャッシュ再試行の記録がある期間です。投影の組み立て（4）もロックの中で、サイトの登録情報を確かめたあとに行います。6より後のどこで失敗しても、記録は次の実行のために残ります。<span class="fig-scroll">図の全体は横にスクロールして見られます。</span></figcaption>
+      <details class="fig-text">
+        <summary>図の内容を文章で読む</summary>
+        <ol>
+          <li>配信先がローカルのストレージのときだけ、登録からソースのパスを求め、ストレージのディレクトリとソースが重ならないことをロックの前に確かめます。この時点の登録の読み取りは事前の確認で、正式な確認は3で行います。</li>
+          <li>サイトのロック<code>_control/locks/sites/&lt;site&gt;.json</code>を条件付き書き込みで取ります。ドライランでは取りません。</li>
+          <li><code>/_indexes/sites.json</code>をCDN経由ではなくオリジンから直接読み、サイトが登録されていること、チェックアウトのリポジトリとソースパスが登録と一致することを確かめます。</li>
+          <li>ソースのファイルを集め（通常のファイルだけ）、登録の名前と説明を使ってインデックス、メタデータ、（<code>--fulltext</code>のときは）検索データを一時ディレクトリに作ります。</li>
+          <li><code>_artifacts/&lt;site&gt;/</code>と<code>_indexes/&lt;site&gt;/</code>を最後まで一覧にし、あるべき各オブジェクトのダイジェストとヘッダーを比べます。プレビューの一覧と、残っているキャッシュ再試行の記録も読みます。ドライランはこの計画を表示して終わります。</li>
+          <li>無効化するパスを<code>_control/site-cache/&lt;site&gt;.json</code>に保存します。</li>
+          <li>新規と変更のファイルを書き込みます。</li>
+          <li>検索のblob、次に<code>index.json</code>を書き込みます。</li>
+          <li>検索のマニフェスト、次に<code>meta.json</code>を書き込みます。</li>
+          <li>サイトの2つの接頭辞の中で、古いオブジェクトを消します。</li>
+          <li>マニフェストが無いと確認できたプレビューの項目を一覧から除きます。</li>
+          <li>変わったURLのキャッシュ無効化を依頼します。</li>
+          <li>再試行の記録を消し、ロックを解放します。</li>
+        </ol>
+      </details>
+    </figure>
+
+    <section class="doc-section" aria-labelledby="desired-state">
+      <h2 id="desired-state">ソースディレクトリが「あるべき状態」</h2>
+      <p><code>sourcePath</code>は、<code>/_artifacts/&lt;site&gt;/</code>の下で配信する静的なツリーそのものです。公開コマンドは、そのサイトの接頭辞の中だけで、<strong>新しいものと変わったものを書き込み、無くなったものを消します</strong>。ほかのサイト、サイトの登録情報、アプリケーションプレーンには触れません。</p>
+      <ul>
+        <li>HTMLとMarkdownは、そのまま配信できる状態にしておきます。ジェネレーターで作る場合は、先に実行して出力先のディレクトリを公開します。</li>
+        <li><code>.html</code>、<code>.htm</code>、<code>.md</code>はすべてインデックスに入ります。ディレクトリ名やドットファイルで除外することはありません。<code>.git</code>は公開しません。</li>
+        <li>受け付けるのは通常のファイルとディレクトリだけです。シンボリックリンクや特殊ファイルがあると、ソースのツリーの外へたどらずに公開を失敗させます。</li>
+        <li><code>sourcePath</code>はいまのGitのチェックアウトの中になければなりません。<code>updatedAt</code>とコミッターはGitの履歴から取ります。履歴の無いファイルも公開できます。</li>
+      </ul>
+    </section>
+
+    <section class="doc-section" aria-labelledby="digest">
+      <h2 id="digest">変更の見つけ方</h2>
+      <p>保存したオブジェクトには、中身のSHA-256をオブジェクトのメタデータ（<code>artifact-pages-sha256</code>）として付けています。計画を作るときは、あるべきオブジェクトを1つずつオリジンで調べ、このダイジェストと<code>Content-Type</code>、<code>Cache-Control</code>、エンコーディング、ディスポジションを比べます。違えば<strong>更新</strong>、無ければ<strong>作成</strong>、サイトの接頭辞にあるのに要らないものは<strong>削除</strong>です。</p>
+      <p>生成する<code>index.json</code>と<code>meta.json</code>には<code>generatedAt</code>の時刻が入ります。ファイルが1つも変わっていなければ、計画ではこの項目を無視して保存済みのものを使います。同じソースを2回公開すると、2回目は本当に<strong>no-op</strong>になります。</p>
+      <p>ドライランは、設定、デプロイ済みのサイトの登録情報、保存済みのオブジェクトを読みますが、何も書き込まず、ロックも取らず、キャッシュの変更も依頼しません。結果は<code>planned</code>か<code>no-op</code>です。<code>--format json</code>を付けると、パスごとのすべての変更、プレビューの一覧についての判断、依頼する予定の<code>invalidationPaths</code>を出力します。</p>
+      <div class="term" aria-label="計画してから適用する">
+        <div class="term-head"><span>ターミナル</span></div>
+<pre><span class="c"># 計画：読むだけ</span>
+<span class="p">$ </span><span class="v">artifact-pages</span> site publish --site checkout --dry-run
+<span class="c"># 同じ計画を適用する</span>
+<span class="p">$ </span><span class="v">artifact-pages</span> site publish --site checkout</pre>
+      </div>
+      <p class="note"><code>checkout</code>は説明用のサイトIDです。本文検索も公開するには、両方のコマンドに<code>--fulltext</code>を付けます。<a href="search.html">検索とインデックス</a>を参照してください。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="ordering">
+      <h2 id="ordering">書き込みの順序と、その間に読者が見るもの</h2>
+      <p>書き込みは、<strong>まだ存在しないオブジェクトを指す状態を作らない</strong>順に行います。ファイル、内容で名前が決まる検索のblob、<code>index.json</code>、検索のマニフェストと続き、<code>meta.json</code>が最後です。古いオブジェクトは、新しいインデックスが指さなくなってから消します。</p>
+      <p>この順序で参照切れは減りますが、複数のオブジェクトの更新は<strong>不可分ではありません</strong>。短い間、古いメタデータと新しいファイルが同時に見えたり、新しいインデックスが出たあとも古いファイルが残っていたり、キャッシュから古い内容が返ったりします。バージョン1はこの結果整合性を受け入れています。版ごとのディレクトリも、サイトを一度に切り替えるポインターもありません。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="retry">
+      <h2 id="retry">失敗と再試行</h2>
+      <p>公開は<strong>冪等な、あるべき状態への同期</strong>です。途中で失敗したら失敗を報告し、安全に止まれるならロックを解放します。同じコマンドを再実行すると、すべてのオブジェクトを確かめ直し、足りないものを書き、残ったものを消します。</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>止まった場所</th><th>残る状態</th><th>次の実行がすること</th></tr></thead>
+        <tbody>
+          <tr><td>一覧の取得</td><td>何も変わっていません。部分的な一覧から削除することはありません。</td><td>一覧を最初から取り直します。</td></tr>
+          <tr><td>書き込みの途中</td><td>新しい中身の一部が保存され、インデックスはまだ古いままです。</td><td>一致するものは飛ばし、残りを書き、続けてインデックスとメタデータを書きます。</td></tr>
+          <tr><td>削除の途中</td><td>新しいインデックスは公開済みで、古いオブジェクトが一部残っています。</td><td>残った古いオブジェクトを消します。一括削除が一部だけ成功した場合も失敗として扱います。</td></tr>
+          <tr><td>キャッシュの依頼</td><td>オリジンは更新済みで、再試行の記録にURLが残っています。</td><td>オリジンに差分が無くても、残っている無効化を依頼し、<code>no-op</code>ではなく<code>published</code>と報告します。</td></tr>
+          <tr><td>プロセスの異常終了</td><td>ロックが取られたまま残ります。ロックに有効期限はありません。</td><td>一定時間待ってから失敗します。運用者が何も動いていないことを確かめ、<code>lock inspect</code>と<code>lock recover --observed-etag</code>でロックを解放します。</td></tr>
+        </tbody>
+      </table></div>
+      <p id="cache-retry">ロールバックが無い理由は、1回ごとの目的が「オリジンを1つのソースと同じにすること」だからです。失敗した実行の続きは、最初から実行するのと同じ操作になります。前の内容に戻したいときは、前の内容を公開します。収束の仕方は同じです。キャッシュ再試行の記録があるのは、CDNへの依頼が失敗してもオリジン側には比べる差分が残らないためです。記録には、オリジンにもう存在しないURLも含めて、まだ済んでいないURLを残します。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="lock">
+      <h2 id="lock">サイトのロックとサイトの登録情報の確認</h2>
+      <p>サイトごとに小さなロックの記録<code>_control/locks/sites/&lt;site&gt;.json</code>が1つあり、<code>site publish</code>、<code>preview publish</code>、<code>registry unregister</code>が共有します。記録は存在しないときだけ作り、変更はETagによる比較交換（compare-and-swap）でだけ行います。そのため、古い状態を見て復旧しようとした操作が、あとから取った別の持ち主のロックを解放してしまうことはありません。サイトが違えばロックも別なので、別々に公開できます。</p>
+      <p>サイトの登録情報の確認は、ロックを取った<strong>あと</strong>に、キャッシュではなくオリジンの<code>sites.json</code>を直接読んで行います。「このソースは登録されているか」の確認と「オブジェクトを書く」の間に隙間ができません。別のリポジトリから公開する人は、管理者の設定のチェックアウトを必要とせず、デプロイ済みのサイトの登録情報を読めれば足ります。</p>
+      <p>これはArtifact Pagesのコマンド同士の調整で、<strong>セキュリティの境界ではありません</strong>。バケットへ直接書き込める認証情報を持つ人は迂回できます。認証情報の範囲を絞るのはプロバイダー側の設定の役目です。<a href="trust-model.html#publishers">信頼モデル</a>を参照してください。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="unregister">
+      <h2 id="unregister">公開と登録解除が重なったとき</h2>
+      <p><code>registry unregister</code>は、まずデプロイ済みのサイトの登録情報からサイトを外して新しい公開の入口を閉じ、そのあと同じサイトのロックを取ってからサイトの接頭辞を消します。どちらが先に動いても、結果は同じ状態になります。</p>
+      <figure class="fig" style="--fig-min: 620px; --fig-max: 860px">
+        <div class="fig-head"><strong>どちらの順でも同じ結果になる</strong><span>時間 →</span></div>
+        <div class="fig-frame" role="group" aria-label="図：公開と登録解除の競合">
+          <svg viewBox="0 0 760 352" role="img" aria-labelledby="pm-race-t pm-race-d">
+            <title id="pm-race-t">公開と登録解除の競合</title>
+            <desc id="pm-race-d">A：公開側がロックを持って書き込みを終えるまで、すでにサイトの登録情報から項目を外した登録解除側は待ちます。そのあと登録解除側がロックを取り、サイトを消します。B：登録解除側が先に項目を外してサイトを消します。そのあと公開側がロックを取り、サイトの登録情報にサイトが無いことを見て、何も書かずに終わります。どちらも登録解除済みで、サイトのオブジェクトは残りません。</desc>
+            <defs>
+              <marker id="pm-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ad-head q"/></marker>
+            </defs>
+            <text class="ad-t" x="16" y="24">A · 公開側が先にロックを持つ</text>
+            <text class="ad-s" x="16" y="74">公開</text>
+            <text class="ad-s" x="16" y="134">登録解除</text>
+            <path class="ad-line" d="M110 70 H740" marker-end="url(#pm-a)"/>
+            <path class="ad-line" d="M110 130 H740" marker-end="url(#pm-a)"/>
+            <rect class="ad-bar" x="140" y="64" width="250" height="12" rx="6"/>
+            <circle class="ad-dot" cx="200" cy="70" r="5"/><text class="ad-q" x="200" y="56" text-anchor="middle">登録情報：あり</text>
+            <text class="ad-q" x="310" y="56" text-anchor="middle">書き込み</text>
+            <circle class="ad-dot warn" cx="250" cy="130" r="5"/><text class="ad-q" x="250" y="154" text-anchor="middle">項目を外す</text>
+            <path class="ad-flow warn ad-dash" d="M262 130 H398"/>
+            <text class="ad-q" x="330" y="120" text-anchor="middle">ロックを待つ</text>
+            <rect class="ad-bar" x="400" y="124" width="250" height="12" rx="6"/>
+            <text class="ad-q" x="470" y="154" text-anchor="middle">接頭辞を消す</text>
+            <text class="ad-q" x="590" y="154" text-anchor="middle">無効化を依頼</text>
+            <text class="ad-s ok" x="740" y="24" text-anchor="end">→ 登録解除済み、オブジェクトなし</text>
+
+            <text class="ad-t" x="16" y="204">B · 登録解除側が先に項目を外す</text>
+            <text class="ad-s" x="16" y="254">登録解除</text>
+            <text class="ad-s" x="16" y="314">公開</text>
+            <path class="ad-line" d="M110 250 H740" marker-end="url(#pm-a)"/>
+            <path class="ad-line" d="M110 310 H740" marker-end="url(#pm-a)"/>
+            <circle class="ad-dot warn" cx="150" cy="250" r="5"/><text class="ad-q" x="150" y="236" text-anchor="middle">項目を外す</text>
+            <rect class="ad-bar" x="190" y="244" width="230" height="12" rx="6"/>
+            <text class="ad-q" x="260" y="236" text-anchor="middle">接頭辞を消す</text>
+            <text class="ad-q" x="370" y="236" text-anchor="middle">無効化を依頼</text>
+            <path class="ad-flow warn ad-dash" d="M230 310 H428"/>
+            <text class="ad-q" x="330" y="334" text-anchor="middle">ロックを待つ</text>
+            <rect class="ad-bar" x="430" y="304" width="110" height="12" rx="6"/>
+            <circle class="ad-dot warn" cx="480" cy="310" r="5"/><text class="ad-q" x="500" y="334" text-anchor="middle">登録情報：なし → 何も書かずに終了</text>
+            <text class="ad-s ok" x="740" y="204" text-anchor="end">→ 登録解除済み、オブジェクトなし</text>
+          </svg>
+        </div>
+        <figcaption>青い帯は、サイトのロックを持っている期間です。公開側はロックの中でサイトの登録情報を確かめるので、投影が消されたあとに書き込むことはありません。<span class="fig-scroll">図の全体は横にスクロールして見られます。</span></figcaption>
+      </figure>
+      <p>登録解除が成功を報告するのは、サイトの登録情報の更新、オリジンからの削除、キャッシュの依頼がすべて成功したあとです。どれかが失敗しても、安全に再試行できます。これは結果整合性で、取り消しではありません。無効化が行き渡るまでエッジが古い応答を返すことがあり、すでにブラウザへ届いたページを取り戻すこともできません。サイトの登録情報の更新は、別に<code>_control/locks/registry.json</code>で1つずつ行います。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="proof">
+      <h2 id="proof">どこまで実証されているか</h2>
+      <ul class="proof">
+        <li><span class="chip local">ローカルで実証済み</span><span>決定的なローカルと模擬のバックエンドで確認しました（T14、T5）。公開と登録解除の両方の順序。成果物の書き込み、<code>index.json</code>と<code>meta.json</code>の差し替え、古いオブジェクトの部分的な削除のそれぞれで失敗させ、再試行で収束すること。どちらかの一覧が失敗したら中止すること。AWSの一覧のページ送りと、1,000件ずつの一括削除での個別の失敗。古いロックの安全な復旧。保持中のロックを別プロセスが待つこと。文書が0件のサイト。</span></li>
+        <li><span class="chip sampled">Cloudflareで抜き取り確認</span><span>2026-10-01に、稼働中のR2環境で使い捨てのサイトを登録、公開、プレビュー、再試行、登録解除しました。R2の比較交換の競合では、勝つのが1つだけであることも確かめています。2026-10-02には、<code>preview publish</code>を中断させてロックが残ったあと、観測したETagで<code>lock recover</code>して再試行が成功すること、ロックを失った古いプロセスが一覧を書き換える前に拒否されることを確かめました。範囲を絞った一時的な認証情報（サイトのロックと再試行の記録を含む）での公開も確認しています（T15）。いずれも抜き取りで、プロバイダーでの実証が完了したわけではありません。</span></li>
+        <li><span class="chip open">未実証</span><span>実際のプロバイダーに対して、別々のプロセスから別のサイトを同時に<code>site publish</code>する場合。実際のS3とR2での、<code>site publish</code>の条件付き書き込みと中断からの復旧、プロバイダーのキャッシュの挙動（T14）。AWSでの実行。</span></li>
+      </ul>
+    </section>
+
+    <div class="callout guide"><span class="ico">ガイド</span><p>ドライランや<code>--fulltext</code>を含め、普段これらのコマンドをどう使うかはガイドの<a href="/guide/ja/publishing.html" target="_top">サイトの公開</a>にあります。アプリのデプロイから読むまでの全体の流れは<a href="/guide/ja/what-is-git-artifact-pages.html" target="_top">Git Artifact Pagesとは</a>にあります。</p></div>
+
+    <nav class="pager" aria-label="ページ送り">
+      <a class="prev" href="storage-layout.html"><small>前へ</small><strong>ストレージの構成</strong></a>
+      <a class="next" href="search.html"><small>次へ</small><strong>検索とインデックス</strong></a>
+    </nav>
+
+    <footer class="foot"><strong>アーキテクチャ</strong><p>このサイトは、プロジェクトの仕様と検証記録にある動作を説明しています。<code>acme/checkout</code>などのチームやリポジトリの名前は説明用の例です。</p></footer>
+  </main>
+</body>
+</html>
