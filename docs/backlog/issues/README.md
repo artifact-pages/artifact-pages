@@ -62,5 +62,6 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-065](ISSUE-065-registry-dry-run-says-unchanged.md) | Open | P3 | `registry register --dry-run` text says "unchanged" while planning to create the registry. |
 | [ISSUE-066](ISSUE-066-registry-app-deploy-lose-failed-purge.md) | Open | P2 | Registry register and app deploy forget a failed cache purge; reruns return no-op. |
 | [ISSUE-067](ISSUE-067-single-cloudflare-publisher-token.md) | Open | P3 | Cloudflare publishing needs three secrets that one token can provide. |
+| [ISSUE-068](ISSUE-068-bare-apply-commands-print-help.md) | Done | P1 | Bare `app deploy`, `registry register|unregister`, `site publish` and `preview publish` printed help and exited 0 instead of running. |
 
 ISSUE-013's verified completion record is retained in Git history.
