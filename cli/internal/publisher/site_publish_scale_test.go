@@ -128,7 +128,7 @@ func TestSitePublishScaleProbe(t *testing.T) {
 	if err := os.Remove(recoveryResourcePath); err != nil {
 		t.Fatal(err)
 	}
-	backend.failAfterArtifactPuts = 1
+	backend.setFailAfterArtifactPuts(1)
 	phases = append(phases, runSitePublishScalePhase(t, backend, "interrupted-write", options, true))
 	if err := os.WriteFile(pagePath, originalPage, 0o600); err != nil {
 		t.Fatal(err)
@@ -451,16 +451,27 @@ func (backend *sitePublishScaleBackend) PutObject(ctx context.Context, key strin
 	backend.recordRequest("PUT")
 	backend.countMu.Lock()
 	backend.bytesWritten += int64(len(object.Bytes))
-	backend.countMu.Unlock()
+	failPut := false
 	if strings.HasPrefix(key, "_artifacts/") && backend.failAfterArtifactPuts > 0 {
 		backend.artifactPutsBeforeError++
 		if backend.artifactPutsBeforeError > backend.failAfterArtifactPuts {
 			backend.failAfterArtifactPuts = 0
 			backend.artifactPutsBeforeError = 0
-			return errors.New("injected publish interruption after partial artifact upload")
+			failPut = true
 		}
 	}
+	backend.countMu.Unlock()
+	if failPut {
+		return errors.New("injected publish interruption after partial artifact upload")
+	}
 	return backend.lockMemoryBackend.PutObject(ctx, key, object)
+}
+
+func (backend *sitePublishScaleBackend) setFailAfterArtifactPuts(successfulPuts int) {
+	backend.countMu.Lock()
+	backend.failAfterArtifactPuts = successfulPuts
+	backend.artifactPutsBeforeError = 0
+	backend.countMu.Unlock()
 }
 
 func (backend *sitePublishScaleBackend) PutObjectConditional(ctx context.Context, key string, object Object, condition ObjectCondition) (string, error) {

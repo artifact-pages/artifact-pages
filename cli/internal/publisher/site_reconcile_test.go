@@ -121,17 +121,26 @@ func TestPublishSitePreservesFilesMetadataOrderAndPrefixBoundaries(t *testing.T)
 			}
 		}
 	}
-	// Search blobs are content-addressed: expect them after the sources and
-	// before index.json, then the manifest, with discovery metadata last.
-	wantPuts := append([]string(nil), wantSourceKeys...)
-	for _, key := range putOrder {
-		if strings.HasPrefix(key, "_indexes/sre/search/") && key != "_indexes/sre/search/manifest.json" {
-			wantPuts = append(wantPuts, key)
-		}
+	// Source and immutable search writes use bounded independent workers, so
+	// their order is arbitrary inside each phase. The serial reference-bearing
+	// objects must remain after both phases and in dependency order.
+	generatedCount := 5 // index, search manifest, meta, and two search blobs
+	if len(putOrder) != len(wantSourceKeys)+generatedCount {
+		t.Fatalf("site put count = %d, want %d; order=%v events=%v", len(putOrder), len(wantSourceKeys)+generatedCount, putOrder, events)
 	}
-	wantPuts = append(wantPuts, "_indexes/sre/index.json", "_indexes/sre/search/manifest.json", "_indexes/sre/meta.json")
-	if strings.Join(putOrder, "\n") != strings.Join(wantPuts, "\n") {
-		t.Fatalf("site put order = %v, want %v; events=%v", putOrder, wantPuts, events)
+	observedSources := append([]string(nil), putOrder[:len(wantSourceKeys)]...)
+	sort.Strings(observedSources)
+	if strings.Join(observedSources, "\n") != strings.Join(wantSourceKeys, "\n") {
+		t.Fatalf("source objects published = %v, want %v; events=%v", observedSources, wantSourceKeys, events)
+	}
+	generated := putOrder[len(wantSourceKeys):]
+	if got := strings.Join(generated[len(generated)-3:], "\n"); got != strings.Join([]string{"_indexes/sre/index.json", "_indexes/sre/search/manifest.json", "_indexes/sre/meta.json"}, "\n") {
+		t.Fatalf("reference-bearing generated objects were published in order %v; events=%v", generated[len(generated)-3:], events)
+	}
+	for _, key := range generated[:len(generated)-3] {
+		if !strings.HasPrefix(key, "_indexes/sre/search/") || !(strings.HasSuffix(key, ".gz")) {
+			t.Fatalf("immutable search phase contains unexpected key %q; events=%v", key, events)
+		}
 	}
 	if artifactListed < 0 || indexListed < 0 || firstPut < artifactListed || firstPut < indexListed {
 		t.Fatalf("both site prefixes must be listed before writes: %v", events)
@@ -538,6 +547,7 @@ func TestPublishSiteRejectsInvalidUTF8Path(t *testing.T) {
 type siteReconcileBackend struct {
 	*lockMemoryBackend
 	eventsMu           sync.Mutex
+	failPutMu          sync.Mutex
 	events             []string
 	failListPrefix     string
 	failPutKey         string
@@ -558,8 +568,13 @@ func (backend *siteReconcileBackend) ListKeys(ctx context.Context, prefix string
 
 func (backend *siteReconcileBackend) PutObject(ctx context.Context, key string, object Object) error {
 	backend.record("put:" + key)
-	if backend.failPutKey == key {
+	backend.failPutMu.Lock()
+	failPut := backend.failPutKey == key
+	if failPut {
 		backend.failPutKey = ""
+	}
+	backend.failPutMu.Unlock()
+	if failPut {
 		return errors.New("injected object upload failure")
 	}
 	return backend.lockMemoryBackend.PutObject(ctx, key, object)

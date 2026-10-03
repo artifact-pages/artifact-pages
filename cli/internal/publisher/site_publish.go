@@ -500,45 +500,6 @@ func verifySiteArtifactSnapshot(root, prefix, siteID string, expected []desiredS
 	return nil
 }
 
-func applySitePlan(ctx context.Context, backend DeploymentBackend, desired []desiredSiteObject, changes []Change, stale []string) (int, int, error) {
-	changed := make(map[string]ChangeAction, len(changes))
-	for _, change := range changes {
-		changed[change.Path] = ChangeAction(change.Action)
-	}
-	filesPublished := 0
-	for _, object := range desired {
-		if _, shouldPut := changed[object.key]; !shouldPut {
-			continue
-		}
-		data := object.data
-		if object.sourcePath != "" {
-			contents, err := os.ReadFile(object.sourcePath)
-			if err != nil {
-				return filesPublished, 0, fmt.Errorf("read site source %s before publish: %w", object.relative, err)
-			}
-			if sha256Hex(contents) != object.digest {
-				return filesPublished, 0, fmt.Errorf("site source %s changed while preparing publish; retry with a stable working tree", object.relative)
-			}
-			data = contents
-		}
-		object.object.Bytes = data
-		if object.object.Metadata == nil {
-			object.object.Metadata = make(map[string]string)
-		}
-		object.object.Metadata["artifact-pages-sha256"] = object.digest
-		if err := backend.PutObject(ctx, object.key, object.object); err != nil {
-			return filesPublished, 0, fmt.Errorf("publish %s: %w", object.key, err)
-		}
-		filesPublished++
-	}
-	if len(stale) > 0 {
-		if err := backend.DeleteObjects(ctx, stale); err != nil {
-			return filesPublished, 0, fmt.Errorf("remove stale site objects: %w", err)
-		}
-	}
-	return filesPublished, len(stale), nil
-}
-
 type ChangeAction string
 
 func countChanges(changes []Change, action string) int {
