@@ -19,3 +19,18 @@ terraform -chdir=terraform/deployments/cloudflare plan -var-file=terraform.tfvar
 The local backend stores state under the ignored `.local/` directory. `terraform.tfvars`, state files, and saved `*.tfplan` files are ignored by the apprepo `.gitignore`. Keep credential values out of Terraform variables and files. `preview_retention_days` is configured and enforced only through the Terraform lifecycle policy; it is not part of the CLI deployment configuration. R2 lifecycle expiration is asynchronous.
 
 The module's `artifact_pages_deployment_config_yaml` output omits CLI-default environment names and registry-reader fields in the normal configuration. To opt into a delegated publisher, set the optional `registry_reader` object in the local `terraform.tfvars`; it accepts the reader access-key and secret environment names, plus an optional session-token environment name for temporary credentials.
+
+Optional viewer-edge WAF configuration is passed through `waf_custom_rules` to the authoritative module. Keep actual source-network CIDRs in the ignored local variable file. For example:
+
+```hcl
+waf_custom_rules = {
+  presets = {
+    https_only   = true
+    ip_allowlist = ["192.0.2.10/32"] # Replace with the operator's current public IPv4 address.
+  }
+}
+```
+
+Enabled presets compile into one hostname-scoped Block rule: a viewer request must use HTTPS on port 443 and originate from an allowed network. The allowlist is static; recheck it when the operator's network changes. IPv6 requires its own explicitly allowed CIDR. The presets apply to logical routes and raw app/index/artifact/preview objects, and do not configure authentication or HTTP-to-HTTPS redirects. Provider-native additional rules may be supplied through `rules`.
+
+Omitting `waf_custom_rules` leaves WAF unmanaged. Before enabling against a zone with an existing custom-WAF entrypoint, follow the module's import, complete-rule-preservation and single-state ownership instructions. A fresh plan alone does not establish live enforcement or account entitlement compatibility. Review the full plan, including unrelated pre-existing drift. Set `enabled = false` within the WAF object to disable module-added rules in place; returning a managed object to null is a state-handoff operation, not an emergency disable. This caller does not pass WAF settings into CLI deployment YAML. Applying the saved plan requires a separate operator decision.

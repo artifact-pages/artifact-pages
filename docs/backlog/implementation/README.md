@@ -22,8 +22,8 @@ Use the [delegation index](../delegation.md) for work modes and owner boundaries
 
 | Ticket | Status | Lane | Execution / next step |
 | --- | --- | --- | --- |
-| [IMP-43](IMP-43-cloudflare-waf-custom-rules.md) | Open | Infra / Cloudflare | Design first in a dedicated thread; optional module variables, ownership and provider capabilities must be settled before implementation. |
-| [IMP-44](IMP-44-aws-waf-custom-rules.md) | Open | Infra / AWS | Separate design-first item, not assigned. No dependency on Cloudflare WAF completion and no new Cloudflare-first release gate. |
+| [IMP-43](IMP-43-cloudflare-waf-custom-rules.md) | Done | Infra / Cloudflare | Flexible rules and one combined HTTPS/IP preset implemented; Luna/max design and independent review, local/minimum-version tests, and actual consumer plan completed. No apply. |
+| [IMP-44](IMP-44-aws-waf-custom-rules.md) | In progress | Infra / AWS | AWS-native rules/preset and separate HTTPS input implemented locally; independent review and 89/89 pre-plan tests passed at current/minimum versions. Evaluated plans and T15 proof remain pending; no new Cloudflare-first release gate. |
 | [IMP-45](IMP-45-unified-release-and-compatibility.md) | Done | CLI / release | One product version (TD2 2026-10-03): CLI-pinned web bundle, reader compatibility rules, PR and tag workflows with a baseline-vs-candidate compatibility gate, `v0.1.0` re-release. |
 | [IMP-46](IMP-46-action-marketplace-release.md) | Open | CLI / release, Docs | After IMP-45, per settled [TD4](../technical-design/TD4-action-marketplace-distribution.md): root `site-publish` Action, parity, build cache, released references in examples and guides, hosted-runner run and owner-approved listing. |
 | [IMP-47](IMP-47-actions-hosted-smoke.md) | Done | CLI / release | Run every composite Action through `uses:` on GitHub-hosted runners against a runner-local target, on PRs, `main` and before release. |

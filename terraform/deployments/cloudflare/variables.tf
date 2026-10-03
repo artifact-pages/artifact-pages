@@ -39,3 +39,9 @@ variable "registry_reader" {
   })
   default = null
 }
+
+variable "waf_custom_rules" {
+  description = "Optional operator-owned WAF configuration. The authoritative module validates provider-native rules and opt-in HTTPS/IP presets."
+  type        = any
+  default     = null
+}

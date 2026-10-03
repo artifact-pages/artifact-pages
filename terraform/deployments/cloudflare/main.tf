@@ -8,4 +8,5 @@ module "artifact_pages" {
   preview_retention_days = var.preview_retention_days
   connect_custom_domain  = var.connect_custom_domain
   registry_reader        = var.registry_reader
+  waf_custom_rules       = var.waf_custom_rules
 }
