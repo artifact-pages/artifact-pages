@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Git Artifact Pagesで公開する前に知っておくこと。HTMLは公開したとおりに動き、Markdownは無害化され、閲覧者の制限は配信側で行います。">
+  <title>信頼とアクセス制御</title>
+  <script>
+    // Copy the reader app's theme (same-origin parent) before first paint; assets/site.js keeps it in sync.
+    (() => {
+      const root = document.documentElement;
+      root.classList.add('js');
+      try {
+        const theme = window.parent !== window && window.parent.document.documentElement.dataset.theme;
+        if (theme === 'light' || theme === 'dark') root.dataset.theme = theme;
+      } catch { /* cross-origin: fall back to prefers-color-scheme */ }
+    })();
+  </script>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../assets/site.css">
+  <script src="../assets/site.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">本文へ移動</a>
+  <main id="main" class="wrap">
+    <nav class="lang-switch" aria-label="言語"><span aria-current="page">日本語</span><a href="../en/access-and-trust.html" hreflang="en" lang="en">English</a></nav>
+
+    <header class="page-head">
+      <div>
+        <p class="eyebrow">公開する前に</p>
+        <h1>信頼とアクセス制御</h1>
+      </div>
+      <p class="lead">最初に公開する前に、決めておくことが2つあります。誰のHTMLを信頼するかと、誰に読ませるかです。Git Artifact Pagesはどちらも代わりに決めてはくれません。このページでは、製品がすることとしないこと、それぞれをどこで決めるかを説明します。</p>
+    </header>
+
+    <section class="split" aria-labelledby="summary">
+      <h2 id="summary" class="sr-only">要点</h2>
+      <div class="pane trust">
+        <span class="label">信頼：公開するもの</span>
+        <h3>HTMLを公開することは、そのコードを動かすことです。</h3>
+        <p>公開したHTMLのページは、読者全員のブラウザで、閲覧アプリと同じ権限のまま自分のJavaScriptを動かします。自分で実行してもよいと思えるHTMLだけを公開してください。Markdownは違います。表示する前に不要な要素を取り除き、スクリプトは動きません。</p>
+      </div>
+      <div class="pane access">
+        <span class="label">アクセス：読める人</span>
+        <h3>ログインはありません。入口で制限します。</h3>
+        <p>Git Artifact Pagesには、アカウントもサイトごとの権限もありません。配信先のアドレスに届く人は、そこにあるすべてのサイトを読めます。読める人を限るには、配信側やネットワークでアクセス制御を行います。</p>
+      </div>
+    </section>
+
+    <section class="doc-section" aria-labelledby="html">
+      <h2 id="html">HTMLは公開したとおりに動く</h2>
+      <p>HTMLのページは、閲覧アプリの中の枠（iframe）に、公開したとおりに表示されます。枠はページのCSSをアプリと分けるためのもので、安全のための境界ではありません。すべてのサイトが同じアドレスにあるので、ページのスクリプトはそのページの外にも手が届きます。</p>
+      <figure class="figure">
+        <div class="fig-head"><strong>公開したHTMLのページが届く範囲</strong><span>説明用の例</span></div>
+        <div class="figure-frame" role="group" aria-label="図：公開したHTMLのページが届く範囲">
+          <svg viewBox="0 0 720 300" role="img" aria-labelledby="fig-html-title fig-html-desc">
+            <title id="fig-html-title">公開したHTMLのページが届く範囲</title>
+            <desc id="fig-html-desc">閲覧アプリ、checkoutサイトのHTMLのページ、ほかのサイトのファイルは、すべて同じオリジンにあります。ページのスクリプトは、閲覧アプリとブラウザの保存領域を読み書きでき、ほかのサイトのファイルも取得できます。</desc>
+            <defs><marker id="ah-html" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="none" stroke="currentColor" stroke-width="1.4"/></marker></defs>
+            <rect class="d-panel" x="16" y="16" width="688" height="268" rx="14"/>
+            <text class="d-label" x="40" y="46">同じオリジン · https://&lt;配信ドメイン&gt;</text>
+            <rect class="d-card" x="40" y="70" width="186" height="178" rx="10"/>
+            <text class="d-repo" x="58" y="100">閲覧アプリ</text>
+            <rect class="d-chip" x="58" y="116" width="150" height="24" rx="5"/><text class="d-chip-t" x="68" y="132">サイドバー · パレット</text>
+            <rect class="d-chip" x="58" y="148" width="150" height="24" rx="5"/><text class="d-chip-t" x="68" y="164">ブラウザの保存領域</text>
+            <text class="d-repo-sub" x="58" y="196">ピン留め、最近読んだ</text>
+            <text class="d-repo-sub" x="58" y="212">ページ、テーマ</text>
+            <rect class="d-person" x="268" y="70" width="186" height="178" rx="10"/>
+            <text class="d-repo" x="286" y="100">HTMLのページ</text>
+            <text class="d-repo-sub" x="286" y="120">/checkout/report.html</text>
+            <rect class="d-cmd" x="286" y="138" width="132" height="24" rx="12"/><text class="d-cmd-t" x="300" y="154">スクリプトが動く</text>
+            <text class="d-repo-sub" x="286" y="196">sandboxなしの枠</text>
+            <text class="d-repo-sub" x="286" y="212">CSSは枠の中だけ</text>
+            <rect class="d-card" x="496" y="70" width="186" height="178" rx="10"/>
+            <text class="d-repo" x="514" y="100">ほかのサイトのファイル</text>
+            <rect class="d-chip" x="514" y="116" width="150" height="24" rx="5"/><text class="d-chip-t" x="524" y="132">/_artifacts/billing/…</text>
+            <rect class="d-chip" x="514" y="148" width="150" height="24" rx="5"/><text class="d-chip-t" x="524" y="164">/_indexes/…</text>
+            <path class="d-arrow" d="M268 182 H232" marker-end="url(#ah-html)"/>
+            <path class="d-arrow" d="M454 182 H490" marker-end="url(#ah-html)"/>
+            <text class="d-ok-t" x="247" y="270" text-anchor="middle">読み書きできる</text>
+            <text class="d-ok-t" x="474" y="270" text-anchor="middle">取得できる</text>
+          </svg>
+        </div>
+        <figcaption>ページ、閲覧アプリ、ほかのすべてのサイトは、同じオリジンにあります。<code>checkout</code>のページとパスは説明用の例です。<span class="fig-scroll">図の全体は横にスクロールして見られます。</span></figcaption>
+        <details class="fig-text">
+          <summary>図の内容を文章で読む</summary>
+          <ul>
+            <li>1つのオリジン（<code>https://&lt;配信ドメイン&gt;</code>）に、3つのものがあります。閲覧アプリ（サイドバー、パレット、ピン留め・最近読んだページ・テーマを入れたブラウザの保存領域）、<code>/checkout/report.html</code>のようなHTMLのページ、<code>/_artifacts/billing/…</code>や<code>/_indexes/…</code>のようなほかのサイトのファイルです。</li>
+            <li>HTMLのページはsandboxなしの枠に表示されるので、スクリプトが動きます。枠の中にとどまるのはCSSだけです。</li>
+            <li>ページのスクリプトは、閲覧アプリとブラウザの保存領域を読み書きでき、ほかのサイトのファイルも取得できます。</li>
+          </ul>
+        </details>
+      </figure>
+      <ul>
+        <li><strong>閲覧アプリと同じ権限。</strong>公開したページのスクリプトは、閲覧アプリの画面を読んだり書き換えたりでき、ピン留めや最近読んだページを入れているブラウザの保存領域も使えます。同じアドレスにあるほかのサイトの公開ファイルも取得できます。</li>
+        <li><strong>外部のリソース。</strong>ページは、HTTPSのアドレスであればどこからでも、スクリプト、スタイル、画像、フォント、データを読み込めます（ブラウザの通常の制約には従います）。<code>http://</code>のリソースは読み込めません。ほかのホストへのリクエストには、ふつうのWebサイトと同じくリクエストの情報が付きます。</li>
+        <li><strong>サイトどうしは分離されていません。</strong>あるサイトのHTMLから、別のサイトを守るしくみはありません。そのアドレスのどこかのサイトにHTMLを公開できる人は、すべてのサイトの読者から信頼されていることになります。</li>
+        <li><strong>プレビューも同じです。</strong>プレビューのHTMLも、レビューが終わる前から同じように動きます。フォークからのプレビューには対応していません。</li>
+      </ul>
+    </section>
+
+    <section class="doc-section" aria-labelledby="markdown">
+      <h2 id="markdown">Markdownは表示する前に無害化される</h2>
+      <p>Markdownは閲覧アプリが整えて表示するもので、コードとしては動きません。多くの人が書く文書には、こちらのほうが安全です。</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th></th><th>HTML</th><th>Markdown</th></tr></thead>
+        <tbody>
+          <tr><td>表示するもの</td><td>ページ自身（枠の中）</td><td>閲覧アプリが整えて表示</td></tr>
+          <tr><td>スクリプト</td><td>書いたとおりに動く</td><td>取り除かれ、動かない</td></tr>
+          <tr><td>埋め込んだHTML</td><td>ページそのもの</td><td>許可されない要素と属性は取り除かれる</td></tr>
+          <tr><td>図</td><td>ページが描くもの</td><td>Mermaid（strictモード、操作なし）</td></tr>
+          <tr><td>画像とリソース</td><td>サイトのファイルと、HTTPSのアドレス</td><td>サイト自身のファイル、HTTPSの画像、埋め込みのPNG・JPEG・GIF・WebP・AVIF画像</td></tr>
+          <tr><td><code>http://</code></td><td>読み込めない</td><td>読み込めない</td></tr>
+          <tr><td>リンク</td><td>書いたとおりに動く</td><td>同じサイトのページは閲覧アプリの中で開き、それ以外は新しいタブで開く</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section class="doc-section" aria-labelledby="what-to-publish">
+      <h2 id="what-to-publish">公開してよいもの、いけないもの</h2>
+      <ul class="checklist" aria-label="公開してよいもの">
+        <li><strong>チームが書き、コードと同じようにGitでレビューしたページ。</strong></li>
+        <li><strong>レビュー済みのコードから、自分たちのCIが生成したレポートや図。</strong></li>
+        <li><strong>多くの人が書くMarkdown。</strong>スクリプトは動きません。</li>
+      </ul>
+      <ul class="checklist no" aria-label="公開してはいけないもの">
+        <li><strong>レビューしていないHTMLやJavaScript。</strong>信頼できない人やツールが作ったもの。</li>
+        <li><strong>秘密情報、トークン、社内限りのメモ。</strong>公開したディレクトリのファイルは、どのページからもリンクされていなくても取得できます。</li>
+        <li><strong>人に見せてはいけない内容。</strong>配信側のアクセス制御がアドレス全体をすでに覆っている場合を除きます。</li>
+      </ul>
+      <p>誰が公開できるかは、GitとCIの設定で決まります。公開するブランチへマージできる人と、公開用の認証情報を持つCIのジョブです。これらの権限は、コードをデプロイする権限と同じように扱ってください。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="access">
+      <h2 id="access">読める人を限る</h2>
+      <p>Git Artifact Pagesには、アカウント、サインイン、役割、サイトごとの権限がありません。リクエストが届けば、誰にでも同じページを返します。読める人を限るのは、その手前で、配信先のアドレスを運用する人が行います。</p>
+      <figure class="figure">
+        <div class="fig-head"><strong>アクセス制御を置く場所</strong></div>
+        <div class="figure-frame" role="group" aria-label="図：アクセス制御を置く場所">
+          <svg viewBox="0 0 720 320" role="img" aria-labelledby="fig-gate-title fig-gate-desc">
+            <title id="fig-gate-title">アクセス制御を置く場所</title>
+            <desc id="fig-gate-desc">読者は、配信側のアクセス制御を通ってから、閲覧アプリのURL、サイトの登録情報とインデックス、公開したファイル、プレビューのどのパスにも届きます。サイトの登録情報、一覧から隠すこと、推測しにくいURLは、アクセス制御ではありません。</desc>
+            <defs><marker id="ah-gate" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="none" stroke="currentColor" stroke-width="1.4"/></marker></defs>
+            <rect class="d-person" x="20" y="96" width="112" height="84" rx="10"/>
+            <circle cx="76" cy="122" r="9" fill="currentColor" opacity=".35"/>
+            <path d="M60 150 Q76 132 92 150 Z" fill="currentColor" opacity=".35"/>
+            <text class="d-repo" x="76" y="170" text-anchor="middle">読者</text>
+            <path class="d-arrow" d="M132 138 H186" marker-end="url(#ah-gate)"/>
+            <text class="d-label" x="176" y="26">アクセス制御 · 運用者が設定</text>
+            <rect class="d-gate" x="190" y="38" width="56" height="200" rx="8"/>
+            <path d="M210 128 v-8 a8 8 0 0 1 16 0 v8" fill="none" stroke="currentColor" stroke-width="1.6" style="color: var(--gold)"/>
+            <rect x="206" y="128" width="24" height="18" rx="3" fill="none" stroke-width="1.6" style="stroke: var(--gold)"/>
+            <path class="d-arrow" d="M246 68 H318" marker-end="url(#ah-gate)"/>
+            <path class="d-arrow" d="M246 118 H318" marker-end="url(#ah-gate)"/>
+            <path class="d-arrow" d="M246 168 H318" marker-end="url(#ah-gate)"/>
+            <path class="d-arrow" d="M246 218 H318" marker-end="url(#ah-gate)"/>
+            <rect class="d-panel" x="300" y="38" width="400" height="200" rx="12"/>
+            <text class="d-label" x="512" y="26" text-anchor="middle">配信 · CDNとストレージ</text>
+            <rect class="d-chip" x="324" y="56" width="356" height="26" rx="6"/><text class="d-chip-t" x="336" y="73">/   /&lt;site&gt;/…</text><text class="d-repo-sub" x="668" y="73" text-anchor="end">閲覧アプリのURL</text>
+            <rect class="d-chip" x="324" y="106" width="356" height="26" rx="6"/><text class="d-chip-t" x="336" y="123">/_indexes/*</text><text class="d-repo-sub" x="668" y="123" text-anchor="end">サイトの登録情報とインデックス</text>
+            <rect class="d-chip" x="324" y="156" width="356" height="26" rx="6"/><text class="d-chip-t" x="336" y="173">/_artifacts/*</text><text class="d-repo-sub" x="668" y="173" text-anchor="end">公開したファイル</text>
+            <rect class="d-chip" x="324" y="206" width="356" height="26" rx="6"/><text class="d-chip-t" x="336" y="223">/_previews/*</text><text class="d-repo-sub" x="668" y="223" text-anchor="end">プレビュー</text>
+            <rect class="d-muted-box" x="20" y="262" width="680" height="44" rx="10"/>
+            <text class="d-warn-t" x="40" y="289">✕ アクセス制御ではないもの：サイトの登録情報 · 一覧から隠すこと · 推測しにくいプレビューのURL</text>
+          </svg>
+        </div>
+        <figcaption>守りたい内容を返すすべてのパスの手前に置きます。読者が開くページのURLだけでなく、<code>/_indexes/</code>、<code>/_artifacts/</code>、<code>/_previews/</code>の下にある生のファイルも含めます。<span class="fig-scroll">図の全体は横にスクロールして見られます。</span></figcaption>
+        <details class="fig-text">
+          <summary>図の内容を文章で読む</summary>
+          <ul>
+            <li>読者は、運用者が配信先の手前に置いたアクセス制御を通ってからでないと、配信先に届きません。</li>
+            <li>その奥でCDNとストレージが返すパスは4種類です。閲覧アプリのURL（<code>/</code>と<code>/&lt;site&gt;/…</code>）、サイトの登録情報とインデックス（<code>/_indexes/*</code>）、公開したファイル（<code>/_artifacts/*</code>）、プレビュー（<code>/_previews/*</code>）。アクセス制御は4つすべてを覆う必要があります。</li>
+            <li>サイトの登録情報、一覧から隠すこと、推測しにくいプレビューのURLは、アクセス制御ではありません。</li>
+          </ul>
+        </details>
+      </figure>
+      <ul>
+        <li><strong>配信環境で使える方法を選びます。</strong>たとえば、VPNやIPアドレスの許可リスト、Basic認証、IDプロバイダーとCloudFrontの署名付きCookieの組み合わせ、Cloudflare Accessなどです。</li>
+        <li><strong>範囲を決めます。</strong>ホスト名全体、一部のパス、もっと広いネットワークのどれを守るかを選べます。この設定はインフラ側で行い、<code>artifact-pages.yaml</code>、サイトの登録情報、閲覧アプリには書きません。</li>
+        <li><strong>何かを返す前に効くようにします。</strong>共有キャッシュから返す応答も含みます。</li>
+        <li><strong>自分で確かめます。</strong>アクセス制御が入っているかどうかを、Git Artifact Pagesは判断できません。</li>
+      </ul>
+    </section>
+
+    <section class="doc-section" aria-labelledby="removal">
+      <h2 id="removal">公開した内容を取り下げる</h2>
+      <p>ファイルを消してもう一度公開するか、サイトごと登録を外します（「<a href="configuration.html#registry">設定ファイル</a>」を参照）。どちらも配信元のファイルを削除し、CDNにキャッシュの更新を依頼します。それでも、しばらくは古いコピーがキャッシュから返ることがあり、読者がすでに開いたり保存したりしたページは取り消せません。ファイルはGitの履歴にも残ります。秘密情報を公開してしまったときは、漏れたものとして扱い、新しいものに取り替えてください。</p>
+      <p><strong>プレビューには別のコピーが残ります。</strong>ファイルを消してもう一度公開しても、そのファイルを含むプレビューは変わりません。プレビューの一覧からは消えることがありますが、プレビューのURLを直接開けば、配信先の保持ルールで削除されるまで読めます（「<a href="publishing.html#previews">サイトの公開</a>」のプレビューを参照）。プレビューをすぐに消せるのは、サイトの登録を外したときだけです。漏れた秘密情報がプレビューに入っていたなら、それまではそのURLから読めるものと考えてください。</p>
+    </section>
+
+    <div class="callout" role="note">
+      <span class="ico">理由</span>
+      <div><p><strong>理由を知りたいときは、</strong>Architectureサイトの「<a href="/architecture/ja/trust-model.html" target="_top">信頼モデル</a>」を読んでください。HTMLを同じオリジンで動かす理由、リソースの規則がサイトごとにどう効くか、閲覧者の識別を配信側に任せる理由を説明しています。</p></div>
+    </div>
+
+    <nav class="pager" aria-label="ページ送り">
+      <a class="prev" href="configuration.html"><small>前へ</small><strong>設定ファイル</strong></a>
+    </nav>
+  </main>
+</body>
+</html>

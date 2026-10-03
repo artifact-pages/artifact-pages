@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Git Artifact Pages で公開された文書の読み方。URL、画面の構成、検索とサイトの切り替え、目次と詳細、ブラウザに残るもの、キーボード操作。">
+  <meta name="description" content="Git Artifact Pagesで公開された文書の読み方。URL、画面の構成、検索とサイトの切り替え、目次と詳細、ブラウザに残るもの、キーボード操作。">
   <title>読者の体験</title>
   <script>
     // 最初の描画の前に、閲覧アプリ（同一オリジンの親）のテーマを写す。追従は assets/site.js が行う。
@@ -53,14 +53,17 @@
       <figure class="app-mock" aria-label="閲覧アプリで文書を開いた画面（見本）">
         <div class="am-side" aria-hidden="true">
           <div class="am-site"><b>G</b><span>Guide</span><i>⌄</i><span class="mk-no">1</span></div>
-          <div class="am-filter"><span>⌕ Filter navigation</span><kbd>⌘K</kbd></div>
+          <div class="am-filter"><span>⌕ Search page text…</span><kbd>⌘⇧F</kbd></div>
           <div class="am-h">Pinned<span class="mk-no">2</span></div>
           <div class="mk-tree am-pins"><div class="mk-file mk-root">Git Artifact Pagesとは</div></div>
           <div class="am-h">Browse<span class="mk-no">3</span></div>
           <div class="mk-tree">
-            <div class="mk-dir"><i>›</i><span>en</span><small>2</small></div>
-            <div class="mk-dir"><i>⌄</i><span>ja</span><small>2</small></div>
+            <div class="mk-dir"><i>›</i><span>en</span><small>5</small></div>
+            <div class="mk-dir"><i>⌄</i><span>ja</span><small>5</small></div>
             <div class="mk-file">Git Artifact Pagesとは</div>
+            <div class="mk-file">サイトの公開</div>
+            <div class="mk-file">信頼とアクセス制御</div>
+            <div class="mk-file">設定ファイル</div>
             <div class="mk-file active">読者の体験</div>
           </div>
         </div>
@@ -78,16 +81,19 @@
       <ol class="legend">
         <li><span><strong>サイト</strong>：いま読んでいるサイト。押すとほかのサイトを選べます。</span></li>
         <li><span><strong>Pinned</strong>：ピン留めした文書。自分のブラウザにだけ保存されます。</span></li>
-        <li><span><strong>Browse</strong>：フォルダ構成のまま並んだ文書。上の欄で絞り込めます。</span></li>
+        <li><span><strong>Browse</strong>：フォルダ構成のまま並んだ文書。上の欄で本文を検索すると、ここに結果が並びます。</span></li>
         <li><span><strong>文書</strong>：HTMLは公開されたままの見た目で、Markdownはアプリが整えて表示します。</span></li>
         <li><span><strong>Contents / Details</strong>：目次と、最終更新や公開元の情報。文書に重ねて開きます。</span></li>
       </ol>
-      <p class="note">文書が多いサイトでは、サイドバーとトップページに<strong>Recently updated</strong>（最近更新された文書）も表示されます。</p>
+      <p class="note">文書が多いサイトでは、トップページに<strong>Recently updated</strong>（最近更新された文書）も表示されます。</p>
     </section>
 
     <section class="doc-section" aria-labelledby="search">
       <h2 id="search">検索とサイトの切り替え</h2>
-      <p><kbd>⌘K</kbd> / <kbd>Ctrl K</kbd>でコマンドパレットを開きます。記号を付けずに入力すると、<strong>いま読んでいるサイトの中だけ</strong>を、タイトルとパスで検索します。探す対象は、先頭に付ける記号で次のように変わります。</p>
+      <p>探し方は2つあります。文書の名前やパスで探すときは<strong>コマンドパレット</strong>、中身の言葉で探すときは<strong>サイドバーの本文検索</strong>を使います。どちらも、<strong>いま読んでいるサイトの中だけ</strong>を探します。</p>
+
+      <h3 id="find-by-name">名前で探す</h3>
+      <p><kbd>⌘K</kbd> / <kbd>Ctrl K</kbd>でコマンドパレットを開きます。記号を付けずに入力すると、タイトルとパスで探し、入力するたびに候補が絞り込まれます。探す対象は、先頭に付ける記号で次のように変わります。</p>
       <div class="table-wrap"><table>
         <thead><tr><th>入力</th><th>探すもの</th></tr></thead>
         <tbody>
@@ -97,11 +103,22 @@
           <tr><td><code>&gt;</code></td><td>コマンド（テーマの切り替え、リンクのコピーなど）。</td></tr>
         </tbody>
       </table></div>
-      <p>文書を探すときは、パレット上部のタブで範囲を絞れます。<strong>All</strong>（すべて）、<strong>Recent</strong>（最近読んだ文書）、<strong>Pinned</strong>（ピン留め）、<strong>Previews</strong>（プルリクエストのプレビュー）です。</p>
+      <p>何も入力していないパレットには、ピン留めした文書と、最近読んだ文書が並びます。読みかけの文書へ戻るときに使えます。</p>
+
+      <h3 id="search-text">本文を検索する</h3>
+      <p>サイドバー上部の欄に言葉を入れて<kbd>Enter</kbd>を押すと、文書の本文とタイトルから探します。<kbd>⌘⇧F</kbd> / <kbd>Ctrl ⇧ F</kbd>でこの欄へ移れます。入力しているあいだは検索せず、<kbd>Enter</kbd>を押したときに初めて検索します。</p>
+      <ul>
+        <li>スペースで区切って複数の語を入れると、<strong>すべての語を含む文書</strong>だけが見つかります。語の途中にある文字列でも一致します。</li>
+        <li>結果はフォルダごとにまとめて、パスの順に並びます。関連度の順ではありません。</li>
+        <li>結果から文書を開くと、一致した語がハイライトされ、最初の一致の位置まで移動します。一覧は残るので、続けてほかの結果を確かめられます。</li>
+        <li>検索語はURLの<code>?q=</code>に入るので、結果を出した状態のリンクを共有できます。<kbd>Esc</kbd>か×で検索を閉じると、PinnedとBrowseに戻ります。</li>
+      </ul>
+      <p>パレットで名前を探して見つからないときは、候補の下の<strong>Search page text</strong>を選ぶか<kbd>⌘↵</kbd> / <kbd>Ctrl ↵</kbd>を押すと、同じ言葉で本文を検索できます。</p>
+      <p class="note">本文検索は、公開時に有効にしたサイトだけで使えます（「<a href="publishing.html#page-text-search">サイトの公開</a>」を参照）。サイトの一覧では、使えるサイトに<strong>Page text search</strong>と表示されます。使えないサイトでは、欄の代わりにパレットを開く<strong>Jump to a page…</strong>が表示されます。</p>
       <p class="note">複数のサイトをまとめて検索する機能はありません。別のサイトの文書は、<code>@</code>でサイトを移ってから探します。</p>
 
       <h3 id="try">試してみる</h3>
-      <p>下の見本は、このガイドと説明用のサイトで作ったものです。<strong>「検索を試す」</strong>か左の欄を押して、文字や<code>@</code>を入力してみてください。</p>
+      <p>下の見本は、このガイドと説明用のサイトで作ったものです。<strong>「検索を試す」</strong>を押して、文字や<code>@</code>を入力してみてください。見本で試せるのは、名前で探すこととサイトの切り替えです。</p>
       <div data-reader-demo data-demo-page="ja/reading.html" role="group" aria-label="閲覧画面の見本：検索と @ によるサイトの切り替え">
         <p class="demo-fallback">JavaScriptを有効にすると、ここで検索とサイトの切り替えを試せます。</p>
       </div>
@@ -112,6 +129,7 @@
       <p><strong>HTML</strong>は、公開されたファイルをそのまま表示します。文書自身のCSSやJavaScriptもそのまま動くので、レポートやダッシュボード、図も作ったときの見た目で読めます。</p>
       <p><strong>Markdown</strong>は、アプリが読みやすく整えて表示します。表、チェックリスト、脚注などのGitHub形式の書き方と、Mermaidの図に対応しています。埋め込まれたHTMLは安全のために一部が取り除かれ、スクリプトは動きません。</p>
       <p>どちらの形式でも、同じサイトのほかの文書へのリンクを押すと、アプリの中で移動します。</p>
+      <p class="note">HTMLは公開したとおりに動くため、サイトには公開する人が信頼できるHTMLだけを置きます。その意味と、アクセス制御をどこで行うかは「<a href="access-and-trust.html">信頼とアクセス制御</a>」で説明しています。</p>
     </section>
 
     <section class="doc-section" aria-labelledby="panels">
@@ -135,16 +153,19 @@
         <thead><tr><th>キー</th><th>動作</th></tr></thead>
         <tbody>
           <tr><td><kbd>⌘K</kbd> / <kbd>Ctrl K</kbd></td><td>コマンドパレットを開く</td></tr>
+          <tr><td><kbd>⌘⇧F</kbd> / <kbd>Ctrl ⇧ F</kbd></td><td>本文検索の欄へ移る（本文検索を使えるサイト）</td></tr>
+          <tr><td><kbd>⌘↵</kbd> / <kbd>Ctrl ↵</kbd></td><td>パレットに入力した言葉で本文を検索する</td></tr>
           <tr><td><kbd>↑</kbd> <kbd>↓</kbd> / <kbd>Ctrl J</kbd> <kbd>Ctrl K</kbd></td><td>パレットの候補を移動（パレットを開いているとき）</td></tr>
           <tr><td><kbd>⌘B</kbd> / <kbd>Ctrl B</kbd></td><td>サイドバーの表示を切り替える</td></tr>
           <tr><td><kbd>⌘⇧O</kbd> / <kbd>Ctrl ⇧ O</kbd></td><td>Contentsの表示を切り替える（見出しのある文書）</td></tr>
-          <tr><td><kbd>Esc</kbd></td><td>パレットやパネルを閉じる</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>パレットやパネル、本文検索を閉じる</td></tr>
         </tbody>
       </table></div>
     </section>
 
     <nav class="pager" aria-label="ページ送り">
       <a class="prev" href="what-is-git-artifact-pages.html"><small>前へ</small><strong>Git Artifact Pagesとは</strong></a>
+      <a class="next" href="publishing.html"><small>次へ</small><strong>サイトの公開</strong></a>
     </nav>
   </main>
 </body>

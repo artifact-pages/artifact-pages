@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="How a team publishes its Git Artifact Pages site: what goes in the publishable directory, site publish, page text search, when changes appear, CI, and previews.">
+  <title>Publishing</title>
+  <script>
+    // Copy the reader app's theme (same-origin parent) before first paint; assets/site.js keeps it in sync.
+    (() => {
+      const root = document.documentElement;
+      root.classList.add('js');
+      try {
+        const theme = window.parent !== window && window.parent.document.documentElement.dataset.theme;
+        if (theme === 'light' || theme === 'dark') root.dataset.theme = theme;
+      } catch { /* cross-origin: fall back to prefers-color-scheme */ }
+    })();
+  </script>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../assets/site.css">
+  <script src="../assets/site.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <main id="main" class="wrap">
+    <nav class="lang-switch" aria-label="Language"><a href="../ja/publishing.html" hreflang="ja" lang="ja">日本語</a><span aria-current="page">English</span></nav>
+
+    <header class="page-head">
+      <div>
+        <p class="eyebrow">For publishing teams</p>
+        <h1>Publishing</h1>
+      </div>
+      <p class="lead">Each team publishes its own site from one directory in its Git repository. This page covers what goes in that directory, the <code>site publish</code> command, running it from CI, and previews.</p>
+    </header>
+
+    <div class="callout" role="note">
+      <span class="ico">BEFORE YOU START</span>
+      <div>
+        <p><strong>Before you start, you need two things:</strong> the <code>artifact-pages</code> command, and a site that an admin has registered for your repository and directory. Ask the admin for the site ID and the deployment config to use.</p>
+        <p>The <code>artifact-pages</code> CLI is distributed through <a href="https://github.com/tasuku43/git-artifact-pages/releases" target="_blank" rel="noopener">GitHub Releases</a>. The examples below use the illustrative <code>checkout</code> site, published from <code>docs/artifacts</code> in <code>acme/checkout</code>.</p>
+      </div>
+    </div>
+
+    <section class="doc-section" aria-labelledby="source">
+      <h2 id="source">What to publish</h2>
+      <p>A site comes from one directory in one repository: the <code>sourcePath</code> that the admin registered. Everything in that directory is published as it is, so it must already be ready to serve. Publishing does not run a site generator, expand templates, bundle CSS or JavaScript, or rewrite links. If you use a generator, publish its output directory.</p>
+      <div class="mapping" role="table" aria-label="How files in the directory become URLs (illustrative)">
+        <div class="mapping-head" role="row"><span role="columnheader">In acme/checkout · docs/artifacts/</span><span aria-hidden="true"></span><span role="columnheader">Reader URL</span><span role="columnheader">Kind</span></div>
+        <div class="map-row" role="row"><code class="src" role="cell">design/payment-flow.html</code><span class="to" aria-hidden="true">→</span><code class="dst" role="cell">/checkout/design/payment-flow.html</code><span class="kind" role="cell"><span class="pill on">Page</span></span></div>
+        <div class="map-row" role="row"><code class="src" role="cell">design/refund-states.md</code><span class="to" aria-hidden="true">→</span><code class="dst" role="cell">/checkout/design/refund-states.md</code><span class="kind" role="cell"><span class="pill on">Page</span></span></div>
+        <div class="map-row" role="row"><code class="src" role="cell">design/img/flow.svg</code><span class="to" aria-hidden="true">→</span><span class="dst none" role="cell">Loaded by the pages that use it</span><span class="kind" role="cell"><span class="pill">Resource</span></span></div>
+        <div class="map-row" role="row"><code class="src" role="cell">incidents/2026-09-12-timeout.html</code><span class="to" aria-hidden="true">→</span><code class="dst" role="cell">/checkout/incidents/2026-09-12-timeout.html</code><span class="kind" role="cell"><span class="pill on">Page</span></span></div>
+        <div class="map-row" role="row"><code class="src" role="cell">index.html</code><span class="to" aria-hidden="true">→</span><code class="dst" role="cell">/checkout/index.html</code><span class="kind" role="cell"><span class="pill on">Page</span></span></div>
+        <div class="map-row" role="row"><code class="src" role="cell">assets/report.css</code><span class="to" aria-hidden="true">→</span><span class="dst none" role="cell">Loaded by the pages that use it</span><span class="kind" role="cell"><span class="pill">Resource</span></span></div>
+      </div>
+      <ul>
+        <li><strong>Every <code>.html</code>, <code>.htm</code>, and <code>.md</code> file is a page</strong>, in any folder, including <code>index.html</code> and files in folders such as <code>_includes/</code>. Keep templates and partials outside the directory.</li>
+        <li><strong><code>index.html</code> is an ordinary page.</strong> <code>/checkout</code> opens the site's home page, not <code>index.html</code>.</li>
+        <li><strong>Other files are published but not listed</strong>: CSS, JavaScript, images, fonts, JSON, and so on. Pages load them with relative links such as <code>img/flow.svg</code> or <code>../assets/report.css</code>. A root-relative link such as <code>/assets/report.css</code> points outside the site and breaks.</li>
+        <li><strong>Titles</strong> come from an HTML page's <code>&lt;title&gt;</code> or a Markdown page's first <code>#</code> heading. Without one, the filename is used: <code>payment-flow.html</code> becomes “Payment Flow”.</li>
+        <li><strong>Dates and committers</strong> come from Git history. A file changed or added in the working tree uses its modification time when that is newer than its commit date. Files Git ignores, such as generated output, are still published; they take the newest modification time among the files in the page's directory and its subdirectories, and show no committer.</li>
+        <li><strong>Symbolic links make publishing fail.</strong> The <code>.git</code> folder is never published.</li>
+      </ul>
+      <div class="callout warn" role="note">
+        <span class="ico">CHECK</span>
+        <div>
+          <p><strong>Every file in the directory can be read once published</strong>, even if no page links to it. Keep secrets, private notes, and drafts out of the directory. HTML runs as published, so publish only HTML you trust; see <a href="access-and-trust.html">Access and trust</a>.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="doc-section" aria-labelledby="publish">
+      <h2 id="publish">Publish with <code>site publish</code></h2>
+      <p>Run the command in a checkout of the registered repository. Check the plan with <code>--dry-run</code> first, then publish.</p>
+      <div class="term" aria-label="Example site publish commands">
+        <div class="term-head"><span>TERMINAL / acme/checkout</span><button class="copy-btn" type="button">Copy</button></div>
+<pre><span class="c"># See what would change (writes nothing)</span>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site checkout --source docs/artifacts --dry-run</span>
+<span class="c"># Publish</span>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site checkout --source docs/artifacts</span></pre>
+      </div>
+      <ol class="flow" style="--steps: 4" aria-label="What site publish does, in order">
+        <li><strong>Build</strong><p>Reads the directory and builds the site's page index: titles, headings, dates.</p></li>
+        <li><strong>Check</strong><p>Reads the site registry from the delivery target. The repository and directory must match the site's registration, or nothing is written.</p></li>
+        <li><strong>Sync</strong><p>Uploads new and changed files, replaces the index, then removes files that are no longer in the directory.</p></li>
+        <li><strong>Refresh</strong><p>Asks the CDN to refresh the URLs that changed.</p></li>
+      </ol>
+      <p>The repository is identified from the checkout's Git remote as <code>owner/repo</code>. Publishing changes only your site: never another site, the site registry, or the reader app. Only one publish runs for a site at a time.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Option</th><th></th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td><code>--site ID</code></td><td><span class="pill on">Required</span></td><td>The registered site ID. It is never inferred from the repository.</td></tr>
+          <tr><td><code>--source DIR</code></td><td><span class="pill">Optional</span></td><td>The directory to publish. Its path from the repository root must equal the registered <code>sourcePath</code>. Defaults to that registered path.</td></tr>
+          <tr><td><code>--fulltext</code></td><td><span class="pill">Optional</span></td><td>Also publish the data for page text search. Pass it every time (see below).</td></tr>
+          <tr><td><code>--config LOCATOR</code></td><td><span class="pill">Optional</span></td><td>The deployment config that names the delivery target. See <a href="configuration.html#precedence">Configuration</a> for how it is chosen when omitted.</td></tr>
+          <tr><td><code>--dry-run</code></td><td><span class="pill">Optional</span></td><td>Show the changes without writing, deleting, or requesting a cache refresh.</td></tr>
+          <tr><td><code>--format text|json</code></td><td><span class="pill">Optional</span></td><td><code>json</code> returns the complete change list, for CI.</td></tr>
+        </tbody>
+      </table></div>
+      <p>Text output starts with the result (<code>DRY RUN</code>, <code>PUBLISHED</code>, or <code>UP TO DATE</code>) and lists created, updated, and removed paths, up to 12 per group. The exit code is <code>0</code> for a plan, a publish, or no change; <code>2</code> for invalid options or config; and <code>1</code> when publishing fails.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="page-text-search">
+      <h2 id="page-text-search">Page text search</h2>
+      <p>Add <code>--fulltext</code> to publish the data that the reader's page text search uses. Readers of the site then get the search field in the sidebar and <kbd>⌘⇧F</kbd>.</p>
+      <div class="term" aria-label="Example publish with page text search">
+        <div class="term-head"><span>TERMINAL / acme/checkout</span><button class="copy-btn" type="button">Copy</button></div>
+<pre><span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site checkout --source docs/artifacts --fulltext</span></pre>
+      </div>
+      <div class="callout warn" role="note">
+        <span class="ico">EVERY TIME</span>
+        <div><p><strong>Pass <code>--fulltext</code> on every publish.</strong> A publish without it removes the site's search data, and the sidebar shows <strong>Jump to a page…</strong> instead of the search field. There is no config setting that keeps it on, so put the flag in your publish script or CI job.</p></div>
+      </div>
+      <p>What is searched: an HTML page's title and its static text, and a Markdown page's title and rendered text, including code blocks. Text that scripts create, image <code>alt</code> text, and paths are not searched. Text hidden only with CSS is still searched. To leave out navigation or other repeated text, mark its element with <code>hidden</code>, <code>aria-hidden="true"</code>, or <code>data-search-ignore</code>.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="timing">
+      <h2 id="timing">When readers see the change</h2>
+      <ul>
+        <li><strong>Not all at once.</strong> Files are uploaded first, the index next, and old files are removed last. While a publish runs, a reader may briefly see a mix of old and new.</li>
+        <li><strong>Caches.</strong> The delivery CDN may keep a site's index for up to 60 seconds and pages for up to 300 seconds. Publishing asks it to refresh the changed URLs.</li>
+        <li><strong>Open readers.</strong> Someone who already has the site open sees new pages in the sidebar after reloading.</li>
+        <li><strong>Failures.</strong> Fix the cause and run the same command again; it finishes the remaining changes. There is no rollback: to undo, publish the earlier content again.</li>
+      </ul>
+    </section>
+
+    <section class="doc-section" aria-labelledby="ci">
+      <h2 id="ci">Run it from CI</h2>
+      <p>The usual setup runs the same command in CI: a dry run on pull requests, and a publish after merge. Which branch may publish is your workflow's decision; the site registry has no branch setting.</p>
+      <ol class="timeline">
+        <li><div><h3>On a pull request: plan</h3><p>Run with <code>--dry-run</code> and read-only credentials. The JSON result lists exactly what would change.</p>
+          <div class="term" aria-label="Example CI dry-run command">
+            <div class="term-head"><span>CI / PULL REQUEST</span><button class="copy-btn" type="button">Copy</button></div>
+<pre><span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site checkout --source docs/artifacts --fulltext --dry-run --format json</span></pre>
+          </div></div></li>
+        <li><div><h3>After merge: publish</h3><p>Run the same command without <code>--dry-run</code>, using credentials that can write only this site.</p>
+          <div class="term" aria-label="Example CI publish command">
+            <div class="term-head"><span>CI / DEFAULT BRANCH</span><button class="copy-btn" type="button">Copy</button></div>
+<pre><span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site checkout --source docs/artifacts --fulltext --format json</span></pre>
+          </div></div></li>
+      </ol>
+      <ul>
+        <li><strong>Credentials</strong> stay in the CI secret store, never in the config file. A publishing job needs to read the site registry, to read and write only this site's files, its previews, its lock, and its cache-retry record (<code>_control/site-cache/&lt;site&gt;.json</code>), and to request a CDN cache refresh. See <a href="configuration.html#credentials">Configuration</a>.</li>
+        <li><strong>No copy of the admin config.</strong> The job can point <code>--config</code> at the admin repository's file with a <code>github://</code> locator pinned to a commit; see <a href="configuration.html#remote">remote config</a>. Eligibility is still checked against the registry on the delivery target.</li>
+        <li><strong>GitHub Actions.</strong> The repository also contains an optional Action that wraps this command.</li>
+      </ul>
+    </section>
+
+    <section class="doc-section" aria-labelledby="previews">
+      <h2 id="previews">Previews</h2>
+      <p>A preview lets reviewers read changed pages before merge, without changing the published site. It is a separate command, <code>preview publish</code>.</p>
+      <div class="term" aria-label="Example preview publish commands">
+        <div class="term-head"><span>TERMINAL / acme/checkout (pull request #42)</span><button class="copy-btn" type="button">Copy</button></div>
+<pre><span class="p">$</span> <span data-copy>artifact-pages <span class="v">preview publish</span> --site checkout --source docs/artifacts --base-url https://docs.example.com --pull-request 42 --dry-run</span>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">preview publish</span> --site checkout --source docs/artifacts --base-url https://docs.example.com --pull-request 42</span></pre>
+      </div>
+      <p class="note"><code>--base-url</code> is the reader's address, used to build the returned links; <code>https://docs.example.com</code> is illustrative. <code>--site</code>, <code>--source</code>, and <code>--base-url</code> are required.</p>
+      <div class="split">
+        <div class="pane">
+          <span class="label">WHAT IS INCLUDED</span>
+          <p>HTML and Markdown pages added or changed on the head (<code>--head</code>, default <code>HEAD</code>) since it branched from the default branch (<code>--default-ref</code>, default <code>origin/HEAD</code>), plus the files they load.</p>
+          <p>Links to unchanged pages open their published version. Deleted pages have no preview. Add <code>--include PATH</code> for resources whose names scripts build at run time.</p>
+        </div>
+        <div class="pane">
+          <span class="label">WHERE READERS FIND IT</span>
+          <p>Each page gets a URL like <code>/checkout/_previews/&lt;head SHA&gt;/design/payment-flow.html</code>. The site home's <strong>View previews</strong> link and the palette's <strong>Open previews</strong> command list them.</p>
+          <p>Previews do not appear in Browse, search, or Recently updated.</p>
+        </div>
+      </div>
+      <ul>
+        <li><strong>Pull requests.</strong> With <code>--pull-request</code> (a number or the PR's URL), the preview is grouped under that PR and shows a link back to it. The PR must come from the registered repository itself; pull requests from forks are refused. Without the option, the preview is a manual one with no PR link.</li>
+        <li><strong>Posting links.</strong> The command returns the preview URLs (use <code>--format json</code>). Whether to comment them on the PR is up to your workflow.</li>
+        <li><strong>Lifetime.</strong> A newer preview for the same PR replaces the older one in the list, but the older URLs keep working until the delivery target's retention rule deletes them. The admin sets that rule in the provider, not in Artifact Pages.</li>
+        <li><strong>Trust.</strong> Preview HTML runs exactly like published HTML, before review is finished. Publish previews only from branches you trust.</li>
+      </ul>
+    </section>
+
+    <section class="doc-section" aria-labelledby="troubleshooting">
+      <h2 id="troubleshooting">If publishing fails</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Situation</th><th>What to do</th></tr></thead>
+        <tbody>
+          <tr><td>The site is not registered</td><td>The error lists the registered site IDs. Check <code>--site</code> and the delivery target in the config, or ask the admin to register the site.</td></tr>
+          <tr><td>“registered to … selected checkout is …”</td><td>The repository or directory differs from the registration. Run in a checkout of the registered repository and pass the registered directory.</td></tr>
+          <tr><td>Symbolic links in the source</td><td>Replace them with real files, or move them out of the directory.</td></tr>
+          <tr><td>The site's lock is held</td><td>Another publish or unregister for this site is running; retry later. If a crashed run left the lock behind, the admin checks it with <code>lock inspect --site</code> and releases it with <code>lock recover</code>.</td></tr>
+          <tr><td>Failed after some changes</td><td>Fix the cause and run the same command again. It completes the remaining changes.</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <nav class="pager" aria-label="Pages">
+      <a class="prev" href="reading.html"><small>Previous</small><strong>Reading</strong></a>
+      <a class="next" href="configuration.html"><small>Next</small><strong>Configuration</strong></a>
+    </nav>
+  </main>
+</body>
+</html>

@@ -53,15 +53,18 @@
       <figure class="app-mock" aria-label="The reader app with a document open (sample)">
         <div class="am-side" aria-hidden="true">
           <div class="am-site"><b>G</b><span>Guide</span><i>⌄</i><span class="mk-no">1</span></div>
-          <div class="am-filter"><span>⌕ Filter navigation</span><kbd>⌘K</kbd></div>
+          <div class="am-filter"><span>⌕ Search page text…</span><kbd>⌘⇧F</kbd></div>
           <div class="am-h">Pinned<span class="mk-no">2</span></div>
           <div class="mk-tree am-pins"><div class="mk-file mk-root">What is Git Artifact Pages?</div></div>
           <div class="am-h">Browse<span class="mk-no">3</span></div>
           <div class="mk-tree">
-            <div class="mk-dir"><i>⌄</i><span>en</span><small>2</small></div>
+            <div class="mk-dir"><i>⌄</i><span>en</span><small>5</small></div>
+            <div class="mk-file">Access and trust</div>
+            <div class="mk-file">Configuration</div>
+            <div class="mk-file">Publishing</div>
             <div class="mk-file active">Reading</div>
             <div class="mk-file">What is Git Artifact Pages?</div>
-            <div class="mk-dir"><i>›</i><span>ja</span><small>2</small></div>
+            <div class="mk-dir"><i>›</i><span>ja</span><small>5</small></div>
           </div>
         </div>
         <div class="am-main" aria-hidden="true">
@@ -78,16 +81,19 @@
       <ol class="legend">
         <li><span><strong>Site</strong>: the site you are reading. Select it to choose another site.</span></li>
         <li><span><strong>Pinned</strong>: documents you pinned, saved only in your browser.</span></li>
-        <li><span><strong>Browse</strong>: documents in their folder structure. Narrow it with the field above.</span></li>
+        <li><span><strong>Browse</strong>: documents in their folder structure. A page text search from the field above lists its results here.</span></li>
         <li><span><strong>Document</strong>: HTML appears exactly as published; Markdown is rendered by the app.</span></li>
         <li><span><strong>Contents / Details</strong>: headings, plus last-update and source information, in a panel over the document.</span></li>
       </ol>
-      <p class="note">Sites with many documents also show <strong>Recently updated</strong> in the sidebar and on the home page.</p>
+      <p class="note">Sites with many documents also show <strong>Recently updated</strong> on the home page.</p>
     </section>
 
     <section class="doc-section" aria-labelledby="search">
       <h2 id="search">Search and site switching</h2>
-      <p>Open the command palette with <kbd>⌘K</kbd> / <kbd>Ctrl K</kbd>. Plain text searches <strong>only the site you are reading</strong>, by title and path. A leading symbol changes what you search.</p>
+      <p>There are two ways to find a document. Use the <strong>command palette</strong> to find it by name or path, and the <strong>page text search</strong> in the sidebar to find it by the words inside. Both search <strong>only the site you are reading</strong>.</p>
+
+      <h3 id="find-by-name">Find by name</h3>
+      <p>Open the command palette with <kbd>⌘K</kbd> / <kbd>Ctrl K</kbd>. Plain text matches titles and paths, and the results narrow as you type. A leading symbol changes what you search.</p>
       <div class="table-wrap"><table>
         <thead><tr><th>Type</th><th>Searches</th></tr></thead>
         <tbody>
@@ -97,11 +103,22 @@
           <tr><td><code>&gt;</code></td><td>Commands, such as switching the theme or copying a link.</td></tr>
         </tbody>
       </table></div>
-      <p>When searching documents, the tabs at the top narrow the scope: <strong>All</strong>, <strong>Recent</strong> (documents you read recently), <strong>Pinned</strong>, and <strong>Previews</strong> (pull-request previews).</p>
+      <p>Before you type, the palette lists your pinned documents and the documents you read recently, so you can get back to them quickly.</p>
+
+      <h3 id="search-text">Search page text</h3>
+      <p>Type words into the field at the top of the sidebar and press <kbd>Enter</kbd> to search the documents' text and titles. <kbd>⌘⇧F</kbd> / <kbd>Ctrl ⇧ F</kbd> moves to this field. Nothing is searched while you type; the search runs when you press <kbd>Enter</kbd>.</p>
+      <ul>
+        <li>With several words separated by spaces, only documents that contain <strong>all of them</strong> are found. Words also match inside longer words.</li>
+        <li>Results are grouped by folder and listed in path order, not by relevance.</li>
+        <li>Opening a result highlights the matching words and scrolls to the first match. The list stays open, so you can go on to the next result.</li>
+        <li>The query is kept in the URL as <code>?q=</code>, so you can share a link with the results open. Press <kbd>Esc</kbd> or × to close the search and return to Pinned and Browse.</li>
+      </ul>
+      <p>If the palette finds no document by name, choose <strong>Search page text</strong> below the results or press <kbd>⌘↵</kbd> / <kbd>Ctrl ↵</kbd> to search page text for the same words.</p>
+      <p class="note">Page text search is available only for sites published with it enabled (see <a href="publishing.html#page-text-search">Publishing</a>). The site list marks those sites with <strong>Page text search</strong>. Other sites show <strong>Jump to a page…</strong>, which opens the palette, in place of the field.</p>
       <p class="note">There is no search across several sites at once. To find a document in another site, move to that site with <code>@</code> first.</p>
 
       <h3 id="try">Try it</h3>
-      <p>The sample below uses this guide and an illustrative site. Select <strong>Try search</strong> or the field on the left, then type a word or <code>@</code>.</p>
+      <p>The sample below uses this guide and an illustrative site. Select <strong>Try search</strong>, then type a word or <code>@</code>. The sample covers finding by name and switching sites.</p>
       <div data-reader-demo data-demo-page="en/reading.html" role="group" aria-label="Reader sample: search and switching sites with @">
         <p class="demo-fallback">Enable JavaScript to try search and site switching here.</p>
       </div>
@@ -112,6 +129,7 @@
       <p><strong>HTML</strong> is shown exactly as published. Its own CSS and JavaScript run as written, so reports, dashboards, and diagrams look the way their authors built them.</p>
       <p><strong>Markdown</strong> is rendered by the app for easy reading. It supports GitHub-style tables, task lists, and footnotes, plus Mermaid diagrams. Embedded HTML is partly removed for safety, and scripts do not run.</p>
       <p>In both, links to other documents in the same site move within the app.</p>
+      <p class="note">Because HTML runs as published, a site publishes only HTML its publishers trust. <a href="access-and-trust.html">Access and trust</a> explains what that means and where access control belongs.</p>
     </section>
 
     <section class="doc-section" aria-labelledby="panels">
@@ -135,16 +153,19 @@
         <thead><tr><th>Keys</th><th>Action</th></tr></thead>
         <tbody>
           <tr><td><kbd>⌘K</kbd> / <kbd>Ctrl K</kbd></td><td>Open the command palette</td></tr>
+          <tr><td><kbd>⌘⇧F</kbd> / <kbd>Ctrl ⇧ F</kbd></td><td>Move to the page text search field (sites with page text search)</td></tr>
+          <tr><td><kbd>⌘↵</kbd> / <kbd>Ctrl ↵</kbd></td><td>Search page text for the words typed in the palette</td></tr>
           <tr><td><kbd>↑</kbd> <kbd>↓</kbd> / <kbd>Ctrl J</kbd> <kbd>Ctrl K</kbd></td><td>Move through palette results (while the palette is open)</td></tr>
           <tr><td><kbd>⌘B</kbd> / <kbd>Ctrl B</kbd></td><td>Show or hide the sidebar</td></tr>
           <tr><td><kbd>⌘⇧O</kbd> / <kbd>Ctrl ⇧ O</kbd></td><td>Show or hide Contents (documents with headings)</td></tr>
-          <tr><td><kbd>Esc</kbd></td><td>Close the palette or panel</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>Close the palette, a panel, or the page text search</td></tr>
         </tbody>
       </table></div>
     </section>
 
     <nav class="pager" aria-label="Pages">
       <a class="prev" href="what-is-git-artifact-pages.html"><small>Previous</small><strong>What is Git Artifact Pages?</strong></a>
+      <a class="next" href="publishing.html"><small>Next</small><strong>Publishing</strong></a>
     </nav>
   </main>
 </body>

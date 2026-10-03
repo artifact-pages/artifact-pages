@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="The Git Artifact Pages deployment config, artifact-pages.yaml: how it is selected, layers and remote configs, delivery targets, credentials, and the sites mapping.">
+  <title>Configuration</title>
+  <script>
+    // Copy the reader app's theme (same-origin parent) before first paint; assets/site.js keeps it in sync.
+    (() => {
+      const root = document.documentElement;
+      root.classList.add('js');
+      try {
+        const theme = window.parent !== window && window.parent.document.documentElement.dataset.theme;
+        if (theme === 'light' || theme === 'dark') root.dataset.theme = theme;
+      } catch { /* cross-origin: fall back to prefers-color-scheme */ }
+    })();
+  </script>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../assets/site.css">
+  <script src="../assets/site.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <main id="main" class="wrap">
+    <nav class="lang-switch" aria-label="Language"><a href="../ja/configuration.html" hreflang="ja" lang="ja">日本語</a><span aria-current="page">English</span></nav>
+
+    <header class="page-head">
+      <div>
+        <p class="eyebrow">For admins</p>
+        <h1>Configuration</h1>
+      </div>
+      <p class="lead">Every <code>artifact-pages</code> command reads one YAML deployment config, usually <code>artifact-pages.yaml</code> in the admin repository. It names the delivery target and, for the registry commands, the complete set of sites.</p>
+    </header>
+
+    <section class="doc-section" aria-labelledby="file">
+      <h2 id="file">The file at a glance</h2>
+      <p>One file holds two kinds of settings: <strong>where to deliver</strong> (the provider and its settings) and <strong>which sites exist</strong> (<code>sites</code>). It holds no secrets; credentials come from the environment.</p>
+      <div class="term" aria-label="Example artifact-pages.yaml">
+        <div class="term-head"><span>artifact-pages.yaml / ADMIN REPOSITORY</span></div>
+<pre><span class="k">schemaVersion</span>: 1             <span class="c"># always the integer 1</span>
+<span class="k">provider</span>: local              <span class="c"># local, aws, or cloudflare</span>
+<span class="k">local</span>:                       <span class="c"># the block for that provider, and only that one</span>
+  <span class="k">root</span>: .local/storage
+<span class="k">sites</span>:                       <span class="c"># the complete set of registered sites</span>
+  <span class="k">checkout</span>:
+    <span class="k">name</span>: Payments / Checkout
+    <span class="k">description</span>: Checkout design, incidents, and runbooks.
+    <span class="k">repository</span>: acme/checkout
+    <span class="k">sourcePath</span>: docs/artifacts</pre>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Key</th><th></th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><code>schemaVersion</code></td><td><span class="pill on">Required</span></td><td>The integer <code>1</code>.</td></tr>
+          <tr><td><code>provider</code></td><td><span class="pill on">Required</span></td><td>The delivery target: <code>local</code>, <code>aws</code>, or <code>cloudflare</code>. A shared base layer may omit it (see <a href="#layers">layers</a>).</td></tr>
+          <tr><td><code>local</code> / <code>aws</code> / <code>cloudflare</code></td><td><span class="pill on">Required</span></td><td>Exactly the settings block that matches <code>provider</code>. See <a href="#providers">delivery targets</a>.</td></tr>
+          <tr><td><code>sites</code></td><td><span class="pill">Optional</span></td><td>The sites to register, keyed by site ID. Required by <code>registry register</code> and <code>registry unregister</code>. See <a href="#sites">sites</a>.</td></tr>
+        </tbody>
+      </table></div>
+      <p class="note">The file is checked strictly: unknown or duplicate keys, more than one YAML document, and values of the wrong type are errors rather than being ignored. The example site is illustrative.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="precedence">
+      <h2 id="precedence">Which file is used</h2>
+      <p>Each command looks for its config in this order and uses the first one it finds. A config doesn't have to be named <code>artifact-pages.yaml</code> when it is chosen explicitly.</p>
+      <ol class="timeline">
+        <li><div><h3><code>--config LOCATOR</code></h3><p>A local path or a <a href="#remote"><code>github://</code> locator</a>. Repeat it to stack local files as <a href="#layers">layers</a>.</p></div></li>
+        <li><div><h3><code>ARTIFACT_PAGES_CONFIG</code></h3><p>An environment variable holding one locator.</p></div></li>
+        <li><div><h3><code>artifact-pages.yaml</code> in the current directory</h3><p>The default, so commands run in the admin repository need no option.</p></div></li>
+        <li><div><h3>Your saved default</h3><p>One locator saved in your user config directory with <code>artifact-pages config set-default LOCATOR</code>. Nothing else is saved there, and never credentials.</p></div></li>
+      </ol>
+      <p>Commands that use a delivery target print it (for example the bucket) in their output, so you can see which target a run used.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="layers">
+      <h2 id="layers">Layers</h2>
+      <p>To reuse one list of sites with different delivery targets, keep <code>sites</code> in a shared file and the target in a second file, then pass both with <code>--config</code> in order.</p>
+      <div class="split">
+        <div class="term" aria-label="Shared base layer">
+          <div class="term-head"><span>artifact-pages.yaml / SHARED</span></div>
+<pre><span class="k">schemaVersion</span>: 1
+<span class="k">sites</span>:
+  <span class="k">checkout</span>:
+    <span class="k">name</span>: Payments / Checkout
+    <span class="k">repository</span>: acme/checkout
+    <span class="k">sourcePath</span>: docs/artifacts</pre>
+        </div>
+        <div class="term" aria-label="Target layer">
+          <div class="term-head"><span>.local/artifact-pages.local.yaml / NOT COMMITTED</span></div>
+<pre><span class="k">schemaVersion</span>: 1
+<span class="k">provider</span>: local
+<span class="k">local</span>:
+  <span class="k">root</span>: .local/storage</pre>
+        </div>
+      </div>
+      <div class="term" aria-label="Command using two layers">
+        <div class="term-head"><span>TERMINAL / ADMIN</span><button class="copy-btn" type="button">Copy</button></div>
+<pre><span class="p">$</span> <span data-copy>artifact-pages <span class="v">registry register</span> --config artifact-pages.yaml --config .local/artifact-pages.local.yaml --dry-run</span></pre>
+      </div>
+      <ul>
+        <li>Every layer has <code>schemaVersion: 1</code>. A layer that sets <code>provider</code> also has exactly the matching block.</li>
+        <li>A later target <strong>replaces</strong> the earlier one as a whole; provider settings are never merged.</li>
+        <li>A later layer without <code>sites</code> keeps the earlier list. A later layer with <code>sites</code> replaces the whole list, even when it is <code>{}</code>; sites are never merged one by one.</li>
+        <li>Only repeated <code>--config</code> options make layers. Overlay files are never picked up automatically.</li>
+      </ul>
+    </section>
+
+    <section class="doc-section" aria-labelledby="remote">
+      <h2 id="remote">Remote config</h2>
+      <p>A team's repository can use the admin repository's file without a copy. Point <code>--config</code> at it with a <code>github://</code> locator, pinned to a commit:</p>
+      <div class="term" aria-label="Example remote config locator">
+        <div class="term-head"><span>TERMINAL / acme/checkout</span><button class="copy-btn" type="button">Copy</button></div>
+<pre><span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site checkout --source docs/artifacts --config 'github://acme/platform-admin/artifact-pages.yaml?ref=0123456789abcdef0123456789abcdef01234567' --dry-run</span></pre>
+      </div>
+      <ul>
+        <li>The form is <code>github://OWNER/REPO/FILE?ref=REF</code>. Without <code>FILE</code>, <code>artifact-pages.yaml</code> is read. Without <code>ref</code>, the default branch is resolved to one commit for the whole command; pin a full commit SHA in CI so a run cannot change target midway.</li>
+        <li>Quote the locator in the shell because of the <code>?</code>. Private repositories are read with <code>GITHUB_TOKEN</code> or <code>GH_TOKEN</code>.</li>
+        <li>The file is fetched again on every run, and the output shows the config commit it used.</li>
+        <li>A remote config must be complete; it cannot be combined with other layers.</li>
+        <li>It only tells the command where to deliver. Whether a repository may publish to a site is still decided by the registry on the delivery target.</li>
+      </ul>
+      <p class="note"><code>acme/platform-admin</code> is an illustrative admin repository.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="providers">
+      <h2 id="providers">Delivery targets</h2>
+      <p>The provider block says where the reader app and the published sites are stored. Sites, URLs, and commands are the same for every provider.</p>
+
+      <h3 id="provider-local"><code>local</code>: a directory</h3>
+      <p>Writes to a directory on this machine, for development and for trying things out. Serve it with a local web server.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Key</th><th></th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><code>root</code></td><td><span class="pill on">Required</span></td><td>The output directory, such as <code>.local/storage</code>. It must not overlap a site's source directory.</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3 id="provider-aws"><code>aws</code>: S3 and CloudFront</h3>
+      <div class="term" aria-label="Example aws block">
+        <div class="term-head"><span>artifact-pages.yaml / AWS</span></div>
+<pre><span class="k">provider</span>: aws
+<span class="k">aws</span>:
+  <span class="k">region</span>: ap-northeast-1
+  <span class="k">accountId</span>: "123456789012"     <span class="c"># bucket becomes artifact-pages-123456789012-ap-northeast-1</span>
+  <span class="k">distributionId</span>: E1234567890ABC</pre>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Key</th><th></th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><code>region</code></td><td><span class="pill on">Required</span></td><td>The bucket's AWS region.</td></tr>
+          <tr><td><code>bucket</code></td><td><span class="pill">Optional</span></td><td>The S3 bucket. When set, it always wins.</td></tr>
+          <tr><td><code>accountId</code></td><td><span class="pill">Optional</span></td><td>A quoted 12-digit string. Required only when <code>bucket</code> is omitted; the bucket is then <code>artifact-pages-&lt;accountId&gt;-&lt;region&gt;</code>. It is never looked up from your credentials.</td></tr>
+          <tr><td><code>distributionId</code></td><td><span class="pill">Optional</span></td><td>The CloudFront distribution to send cache refresh requests to. Without it, no refresh is requested.</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3 id="provider-cloudflare"><code>cloudflare</code>: R2 and the Cloudflare cache</h3>
+      <div class="term" aria-label="Example cloudflare block">
+        <div class="term-head"><span>artifact-pages.yaml / CLOUDFLARE</span></div>
+<pre><span class="k">provider</span>: cloudflare
+<span class="k">cloudflare</span>:
+  <span class="k">accountId</span>: "&lt;32-character account ID&gt;"
+  <span class="k">zoneId</span>: "&lt;32-character zone ID&gt;"
+  <span class="k">publicBaseURL</span>: https://docs.example.com
+  <span class="c"># bucket defaults to artifact-pages; credential variable names use their defaults</span></pre>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Key</th><th></th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><code>accountId</code></td><td><span class="pill on">Required</span></td><td>The Cloudflare account that owns the R2 bucket (32 hexadecimal characters).</td></tr>
+          <tr><td><code>zoneId</code></td><td><span class="pill on">Required</span></td><td>The zone whose cache is purged after changes (32 hexadecimal characters).</td></tr>
+          <tr><td><code>publicBaseURL</code></td><td><span class="pill on">Required</span></td><td>The public HTTPS origin readers use, without a path. Purge requests are built from it.</td></tr>
+          <tr><td><code>bucket</code></td><td><span class="pill">Optional</span></td><td>The R2 bucket. Defaults to <code>artifact-pages</code>.</td></tr>
+          <tr><td><code>accessKeyIdEnv</code>, <code>secretAccessKeyEnv</code></td><td><span class="pill">Optional</span></td><td>Names of the environment variables holding the R2 access key. Default <code>CF_R2_ACCESS_KEY_ID</code> and <code>CF_R2_SECRET_ACCESS_KEY</code>.</td></tr>
+          <tr><td><code>apiTokenEnv</code></td><td><span class="pill">Optional</span></td><td>Name of the variable holding the API token used for cache purges. Default <code>CF_API_TOKEN</code>.</td></tr>
+          <tr><td><code>sessionTokenEnv</code></td><td><span class="pill">Optional</span></td><td>Name of a variable holding a session token, when the R2 credential is temporary.</td></tr>
+          <tr><td><code>registryReaderAccessKeyIdEnv</code>, <code>registryReaderSecretAccessKeyEnv</code>, <code>registryReaderSessionTokenEnv</code></td><td><span class="pill">Optional</span></td><td>A separate read-only credential that <code>site publish</code> and <code>preview publish</code> use only to read the site registry. Set the first two together. See <a href="#credentials">credentials</a>.</td></tr>
+        </tbody>
+      </table></div>
+      <p class="note">The values shown are placeholders. Setting up the bucket, hostname, cache rules, and preview retention is done in Cloudflare or AWS itself (for example with Terraform), not in this file. The command also accepts a <code>gcp-local</code> provider, which is an emulator profile for tests, not a production target.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="credentials">
+      <h2 id="credentials">Credentials</h2>
+      <p>The config only names environment variables; it never contains credential values. Give each job only what it needs.</p>
+      <ul>
+        <li><strong>AWS</strong> uses the standard AWS credential chain: environment variables, profiles, or a role assumed in CI (for example through GitHub Actions OIDC).</li>
+        <li><strong>Cloudflare</strong> reads the variables named in the <code>cloudflare</code> block. Which ones a command needs:</li>
+      </ul>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Command</th><th>R2 access key and secret</th><th>Registry reader</th><th>API token</th></tr></thead>
+        <tbody>
+          <tr><td><code>site publish</code></td><td><span class="pill on">Required</span></td><td>Used only if configured</td><td>For any run that changes the site or retries an unfinished purge; checked before anything is written</td></tr>
+          <tr><td><code>preview publish</code></td><td><span class="pill on">Required</span></td><td>Used only if configured</td><td>Not needed</td></tr>
+          <tr><td><code>registry register</code>, <code>registry unregister</code></td><td><span class="pill on">Required</span></td><td>Not used</td><td>For any run that changes the registry or removes a site; checked before anything is written</td></tr>
+          <tr><td><code>app deploy</code></td><td><span class="pill on">Required</span></td><td>Not used</td><td>For any run that changes the app; checked before anything is written</td></tr>
+          <tr><td><code>lock inspect</code>, <code>lock recover</code></td><td><span class="pill on">Required</span></td><td>Not used</td><td>Not needed</td></tr>
+          <tr><td><code>index build</code>, <code>config set-default</code></td><td>Not needed</td><td>Not used</td><td>Not needed</td></tr>
+        </tbody>
+      </table></div>
+      <p>The token is what lets the CLI ask Cloudflare to purge the changed URLs, so a run that changes content stops before writing if it is missing. Dry runs and runs with nothing to change never need it. A team's publishing job should be able to read the site registry; read, write, and delete only its own site's files and cache-retry record (<code>_control/site-cache/&lt;site&gt;.json</code>); read and write its previews and lock; and request a cache refresh from the CDN (a CloudFront invalidation on AWS, a zone cache purge on Cloudflare). It never needs to write the registry or the reader app. With the registry-reader fields set, the registry is read with that separate credential, so the main credential can be limited to the site. If those fields are set but their values are missing, the publish stops instead of falling back.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="sites">
+      <h2 id="sites">Sites</h2>
+      <p><code>sites</code> maps each site ID to where its content comes from.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Field</th><th></th><th>Rules</th></tr></thead>
+        <tbody>
+          <tr><td>Site ID (the key)</td><td><span class="pill on">Required</span></td><td>Lowercase letters and digits, separated by single hyphens, such as <code>checkout</code> or <code>mobile-ios</code>. It appears in URLs. <code>assets</code> is reserved.</td></tr>
+          <tr><td><code>name</code></td><td><span class="pill on">Required</span></td><td>The display name. Spaces and punctuation are fine; two sites may share a name.</td></tr>
+          <tr><td><code>description</code></td><td><span class="pill">Optional</span></td><td>A short line shown with the site in the site list and the <code>@</code> palette.</td></tr>
+          <tr><td><code>repository</code></td><td><span class="pill on">Required</span></td><td>Exactly <code>owner/repo</code> on GitHub; not a URL and not ending in <code>.git</code>. Compared without regard to case.</td></tr>
+          <tr><td><code>sourcePath</code></td><td><span class="pill on">Required</span></td><td>The directory to publish, relative to the repository root, with <code>/</code> separators; <code>.</code> means the root. No leading <code>/</code>, <code>..</code>, or backslashes. Compared exactly.</td></tr>
+        </tbody>
+      </table></div>
+      <p>A repository and directory pair can belong to only one site, but one repository can publish several sites from different directories. There is no branch setting: the team's workflow decides which branch publishes.</p>
+      <div class="callout warn" role="note">
+        <span class="ico">COMPLETE SET</span>
+        <div>
+          <p><strong><code>sites</code> lists every site that should exist.</strong> A site missing from it is unregistered by the next <code>registry register</code>, and its published pages, index, and previews are deleted. Always review the dry run.</p>
+          <p>Leaving <code>sites</code> out is an error for the registry commands, never an empty list. To have no sites, write <code>sites: {}</code>.</p>
+        </div>
+      </div>
+      <p>Only the registry commands read <code>sites</code>. <code>site publish</code> and <code>preview publish</code> check the registry deployed on the delivery target, so a team's config may contain only the target.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="registry">
+      <h2 id="registry">Apply changes to sites</h2>
+      <p>After editing <code>sites</code>, apply it from the admin repository. Plan with <code>--dry-run</code> first.</p>
+      <div class="term" aria-label="Registry commands">
+        <div class="term-head"><span>TERMINAL / ADMIN</span><button class="copy-btn" type="button">Copy</button></div>
+<pre><span class="c"># Add, change, or remove sites to match the file</span>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">registry register</span> --dry-run</span>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">registry register</span></span>
+<span class="c"># Or remove one site: delete it from sites first, then</span>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">registry unregister</span> --site billing --dry-run</span>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">registry unregister</span> --site billing</span></pre>
+      </div>
+      <ul>
+        <li><code>registry register</code> makes the deployed registry match the file and cleans up sites that were removed from it.</li>
+        <li><code>registry unregister --site ID</code> requires that the site is already gone from the file. It removes the registration, deletes that site's content and previews, and asks the CDN to refresh. It is safe to run again if it stops partway.</li>
+        <li>Deleted content can stay in caches for a short time, and pages a reader already opened cannot be recalled.</li>
+        <li>If a crashed run leaves a lock, check it with <code>lock inspect --scope registry</code> (or <code>--site ID</code>) and, once you are sure nothing is running, release it with <code>lock recover … --observed-etag ETAG</code> using the value you saw.</li>
+      </ul>
+      <p class="note">The same file also tells <code>app deploy</code> where to install the reader app. It installs the app of the same version as the CLI you run; releases are listed on <a href="https://github.com/tasuku43/git-artifact-pages/releases" target="_blank" rel="noopener">GitHub Releases</a>.</p>
+    </section>
+
+    <nav class="pager" aria-label="Pages">
+      <a class="prev" href="publishing.html"><small>Previous</small><strong>Publishing</strong></a>
+      <a class="next" href="access-and-trust.html"><small>Next</small><strong>Access and trust</strong></a>
+    </nav>
+  </main>
+</body>
+</html>

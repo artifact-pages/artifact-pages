@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Git Artifact Pagesでチームのサイトを公開する方法。公開するディレクトリ、site publish、本文検索、反映のタイミング、CI、プレビュー。">
+  <title>サイトの公開</title>
+  <script>
+    // Copy the reader app's theme (same-origin parent) before first paint; assets/site.js keeps it in sync.
+    (() => {
+      const root = document.documentElement;
+      root.classList.add('js');
+      try {
+        const theme = window.parent !== window && window.parent.document.documentElement.dataset.theme;
+        if (theme === 'light' || theme === 'dark') root.dataset.theme = theme;
+      } catch { /* cross-origin: fall back to prefers-color-scheme */ }
+    })();
+  </script>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../assets/site.css">
+  <script src="../assets/site.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">本文へ移動</a>
+  <main id="main" class="wrap">
+    <nav class="lang-switch" aria-label="言語"><span aria-current="page">日本語</span><a href="../en/publishing.html" hreflang="en" lang="en">English</a></nav>
+
+    <header class="page-head">
+      <div>
+        <p class="eyebrow">公開するチーム向け</p>
+        <h1>サイトの公開</h1>
+      </div>
+      <p class="lead">各チームは、自分のGitリポジトリにある1つのディレクトリから、自分のサイトを公開します。このページでは、そのディレクトリに置くもの、<code>site publish</code>コマンド、CIからの実行、プレビューを説明します。</p>
+    </header>
+
+    <div class="callout" role="note">
+      <span class="ico">前提</span>
+      <div>
+        <p><strong>始める前に、次の2つが必要です。</strong><code>artifact-pages</code>コマンドと、管理者があなたのリポジトリとディレクトリに対して登録したサイトです。サイトのIDと使う設定ファイルは、管理者に確認してください。</p>
+        <p><code>artifact-pages</code>のCLIは<a href="https://github.com/tasuku43/git-artifact-pages/releases" target="_blank" rel="noopener">GitHub Releases</a>で配布しています。以下の例では、<code>acme/checkout</code>の<code>docs/artifacts</code>から公開する、説明用の<code>checkout</code>サイトを使います。</p>
+      </div>
+    </div>
+
+    <section class="doc-section" aria-labelledby="source">
+      <h2 id="source">公開するもの</h2>
+      <p>1つのサイトの中身は、1つのリポジトリの1つのディレクトリです。管理者が<code>sourcePath</code>として登録したディレクトリがそれにあたります。ディレクトリの中身はそのまま公開されるので、配信できる状態になっている必要があります。公開時にサイトジェネレーターを動かしたり、テンプレートを展開したり、CSSやJavaScriptをまとめたり、リンクを書き換えたりはしません。ジェネレーターを使う場合は、その出力先のディレクトリを公開します。</p>
+      <div class="mapping" role="table" aria-label="ディレクトリのファイルとURLの対応（説明用の例）">
+        <div class="mapping-head" role="row"><span role="columnheader">acme/checkoutのdocs/artifacts/</span><span aria-hidden="true"></span><span role="columnheader">読者が開くURL</span><span role="columnheader">種類</span></div>
+        <div class="map-row" role="row"><code class="src" role="cell">design/payment-flow.html</code><span class="to" aria-hidden="true">→</span><code class="dst" role="cell">/checkout/design/payment-flow.html</code><span class="kind" role="cell"><span class="pill on">ページ</span></span></div>
+        <div class="map-row" role="row"><code class="src" role="cell">design/refund-states.md</code><span class="to" aria-hidden="true">→</span><code class="dst" role="cell">/checkout/design/refund-states.md</code><span class="kind" role="cell"><span class="pill on">ページ</span></span></div>
+        <div class="map-row" role="row"><code class="src" role="cell">design/img/flow.svg</code><span class="to" aria-hidden="true">→</span><span class="dst none" role="cell">参照するページが読み込む</span><span class="kind" role="cell"><span class="pill">リソース</span></span></div>
+        <div class="map-row" role="row"><code class="src" role="cell">incidents/2026-09-12-timeout.html</code><span class="to" aria-hidden="true">→</span><code class="dst" role="cell">/checkout/incidents/2026-09-12-timeout.html</code><span class="kind" role="cell"><span class="pill on">ページ</span></span></div>
+        <div class="map-row" role="row"><code class="src" role="cell">index.html</code><span class="to" aria-hidden="true">→</span><code class="dst" role="cell">/checkout/index.html</code><span class="kind" role="cell"><span class="pill on">ページ</span></span></div>
+        <div class="map-row" role="row"><code class="src" role="cell">assets/report.css</code><span class="to" aria-hidden="true">→</span><span class="dst none" role="cell">参照するページが読み込む</span><span class="kind" role="cell"><span class="pill">リソース</span></span></div>
+      </div>
+      <ul>
+        <li><strong><code>.html</code>、<code>.htm</code>、<code>.md</code>のファイルは、どのフォルダにあってもすべてページになります。</strong><code>index.html</code>も、<code>_includes/</code>のようなフォルダの中のファイルも同じです。テンプレートや部品のファイルは、ディレクトリの外に置いてください。</li>
+        <li><strong><code>index.html</code>は普通のページです。</strong><code>/checkout</code>を開くと表示されるのはサイトのトップページで、<code>index.html</code>ではありません。</li>
+        <li><strong>それ以外のファイルは、公開されますが一覧には出ません。</strong>CSS、JavaScript、画像、フォント、JSONなどです。ページからは<code>img/flow.svg</code>や<code>../assets/report.css</code>のような相対リンクで読み込みます。<code>/assets/report.css</code>のように<code>/</code>から始まるリンクはサイトの外を指すので、読み込めません。</li>
+        <li><strong>ページのタイトル</strong>は、HTMLなら<code>&lt;title&gt;</code>、Markdownなら最初の<code>#</code>見出しから取ります。どちらもなければファイル名を使い、<code>payment-flow.html</code>は「Payment Flow」になります。</li>
+        <li><strong>更新日とコミットした人</strong>はGitの履歴から取ります。作業ツリーで変更・追加したファイルは、ファイルの更新時刻がコミットの日時より新しければ、その時刻を更新日にします。Gitが無視するファイル（生成物など）も公開されます。その更新日は、ページのディレクトリ（その下を含む）にあるファイルのうち最も新しい更新時刻で、コミットした人は表示されません。</li>
+        <li><strong>シンボリックリンクがあると公開は失敗します。</strong><code>.git</code>フォルダは公開されません。</li>
+      </ul>
+      <div class="callout warn" role="note">
+        <span class="ico">確認</span>
+        <div>
+          <p><strong>ディレクトリにあるファイルは、どのページからもリンクされていなくても、公開すれば読めます。</strong>秘密情報や内部メモ、下書きは置かないでください。また、HTMLは公開したとおりに動くので、信頼できるHTMLだけを公開します。詳しくは「<a href="access-and-trust.html">信頼とアクセス制御</a>」を参照してください。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="doc-section" aria-labelledby="publish">
+      <h2 id="publish"><code>site publish</code>で公開する</h2>
+      <p>登録したリポジトリをチェックアウトした場所で実行します。まず<code>--dry-run</code>で変更内容を確かめてから公開します。</p>
+      <div class="term" aria-label="site publishのコマンド例">
+        <div class="term-head"><span>ターミナル / acme/checkout</span><button class="copy-btn" type="button">コピー</button></div>
+<pre><span class="c"># 何が変わるかを確認（何も書き込みません）</span>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site checkout --source docs/artifacts --dry-run</span>
+<span class="c"># 公開する</span>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site checkout --source docs/artifacts</span></pre>
+      </div>
+      <ol class="flow" style="--steps: 4" aria-label="site publishが行うこと（順番）">
+        <li><strong>インデックスを作る</strong><p>ディレクトリを読み、タイトル、見出し、日付などのページのインデックスを作ります。</p></li>
+        <li><strong>登録を確認する</strong><p>配信先からサイトの登録情報を読みます。リポジトリとディレクトリが登録と一致しなければ、何も書き込みません。</p></li>
+        <li><strong>同期する</strong><p>新しいファイルと変わったファイルを送り、インデックスを差し替え、最後にディレクトリから消えたファイルを削除します。</p></li>
+        <li><strong>キャッシュを更新する</strong><p>変わったURLのキャッシュの更新をCDNに依頼します。</p></li>
+      </ol>
+      <p>リポジトリは、チェックアウトしたGitのリモートから<code>owner/repo</code>の形で判定します。書き換えるのは自分のサイトだけで、ほかのサイト、サイトの登録情報、閲覧アプリには触れません。1つのサイトで同時に動く公開は1つだけです。</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>オプション</th><th></th><th>内容</th></tr></thead>
+        <tbody>
+          <tr><td><code>--site ID</code></td><td><span class="pill on">必須</span></td><td>登録されたサイトのID。リポジトリ名から推測はしません。</td></tr>
+          <tr><td><code>--source DIR</code></td><td><span class="pill">任意</span></td><td>公開するディレクトリ。リポジトリのルートからのパスが、登録した<code>sourcePath</code>と一致する必要があります。省略すると登録されたパスを使います。</td></tr>
+          <tr><td><code>--fulltext</code></td><td><span class="pill">任意</span></td><td>本文検索のデータも公開します。毎回付けてください（後述）。</td></tr>
+          <tr><td><code>--config LOCATOR</code></td><td><span class="pill">任意</span></td><td>配信先を指定する設定ファイル。省略したときの選ばれ方は「<a href="configuration.html#precedence">設定ファイル</a>」を参照してください。</td></tr>
+          <tr><td><code>--dry-run</code></td><td><span class="pill">任意</span></td><td>書き込み、削除、キャッシュ更新の依頼をせずに、変更内容だけを表示します。</td></tr>
+          <tr><td><code>--format text|json</code></td><td><span class="pill">任意</span></td><td><code>json</code>にすると、変更の全一覧を返します。CI向けです。</td></tr>
+        </tbody>
+      </table></div>
+      <p>テキストの出力は、先頭に結果（<code>DRY RUN</code>、<code>PUBLISHED</code>、<code>UP TO DATE</code>）を示し、追加・更新・削除したパスをグループごとに最大12件まで並べます。終了コードは、計画・公開・変更なしのとき<code>0</code>、オプションや設定が不正なとき<code>2</code>、公開に失敗したとき<code>1</code>です。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="page-text-search">
+      <h2 id="page-text-search">本文検索</h2>
+      <p><code>--fulltext</code>を付けると、閲覧アプリの本文検索が使うデータも公開します。そのサイトの読者は、サイドバーの検索欄と<kbd>⌘⇧F</kbd>を使えるようになります。</p>
+      <div class="term" aria-label="本文検索を有効にして公開するコマンド例">
+        <div class="term-head"><span>ターミナル / acme/checkout</span><button class="copy-btn" type="button">コピー</button></div>
+<pre><span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site checkout --source docs/artifacts --fulltext</span></pre>
+      </div>
+      <div class="callout warn" role="note">
+        <span class="ico">毎回</span>
+        <div><p><strong><code>--fulltext</code>は公開のたびに付けてください。</strong>付けずに公開すると、そのサイトの検索データは削除され、サイドバーには検索欄の代わりに<strong>Jump to a page…</strong>が表示されます。有効なままにしておく設定項目はないので、公開用のスクリプトやCIのジョブにこのオプションを書いておきます。</p></div>
+      </div>
+      <p>検索の対象は、HTMLならタイトルと静的な本文、Markdownならタイトルと表示される本文（コードブロックを含む）です。スクリプトが作る文字、画像の<code>alt</code>、パスは対象外です。CSSで隠しただけの文字は対象になります。ナビゲーションのように毎ページ繰り返す文字を除くには、その要素に<code>hidden</code>、<code>aria-hidden="true"</code>、<code>data-search-ignore</code>のいずれかを付けます。</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="timing">
+      <h2 id="timing">読者に反映されるまで</h2>
+      <ul>
+        <li><strong>一度には切り替わりません。</strong>ファイルを送り、次にインデックスを差し替え、最後に古いファイルを消します。公開の途中では、読者に古い内容と新しい内容が混ざって見えることがあります。</li>
+        <li><strong>キャッシュ。</strong>配信側のCDNは、サイトのインデックスを最大60秒、ページを最大300秒キャッシュすることがあります。公開時には、変わったURLの更新をCDNに依頼します。</li>
+        <li><strong>開いている読者。</strong>すでにサイトを開いている人は、再読み込みするとサイドバーに新しいページが出ます。</li>
+        <li><strong>失敗したとき。</strong>原因を直して同じコマンドをもう一度実行すれば、残りの変更が反映されます。自動で元に戻す機能はないので、戻すときは前の内容をもう一度公開します。</li>
+      </ul>
+    </section>
+
+    <section class="doc-section" aria-labelledby="ci">
+      <h2 id="ci">CIから実行する</h2>
+      <p>CIで同じコマンドを動かすのが基本の運用です。プルリクエストでは<code>--dry-run</code>だけを実行し、マージ後に公開します。どのブランチから公開してよいかはワークフロー側で決めます。サイトの登録情報にブランチの設定はありません。</p>
+      <ol class="timeline">
+        <li><div><h3>プルリクエストで：変更を確認する</h3><p>読み取り専用の認証情報で、<code>--dry-run</code>を付けて実行します。JSONの結果に、変わる内容がすべて出ます。</p>
+          <div class="term" aria-label="CIでのドライランのコマンド例">
+            <div class="term-head"><span>CI / プルリクエスト</span><button class="copy-btn" type="button">コピー</button></div>
+<pre><span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site checkout --source docs/artifacts --fulltext --dry-run --format json</span></pre>
+          </div></div></li>
+        <li><div><h3>マージ後に：公開する</h3><p>このサイトだけに書き込める認証情報で、<code>--dry-run</code>を外して実行します。</p>
+          <div class="term" aria-label="CIでの公開のコマンド例">
+            <div class="term-head"><span>CI / デフォルトブランチ</span><button class="copy-btn" type="button">コピー</button></div>
+<pre><span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site checkout --source docs/artifacts --fulltext --format json</span></pre>
+          </div></div></li>
+      </ol>
+      <ul>
+        <li><strong>認証情報</strong>はCIのシークレットに置き、設定ファイルには書きません。公開のジョブに必要なのは、サイトの登録情報の読み取りと、このサイトのファイル・プレビュー・ロック・キャッシュ再試行の記録（<code>_control/site-cache/&lt;site&gt;.json</code>）の読み書き、それにCDNのキャッシュ更新の依頼だけです。「<a href="configuration.html#credentials">設定ファイル</a>」を参照してください。</li>
+        <li><strong>管理者の設定ファイルを写す必要はありません。</strong><code>--config</code>に、コミットを固定した<code>github://</code>の指定で管理リポジトリのファイルを渡せます（<a href="configuration.html#remote">リモートの設定ファイル</a>）。公開してよいかどうかは、その場合も配信先にある登録情報で確認します。</li>
+        <li><strong>GitHub Actions。</strong>このリポジトリには、同じコマンドを包む任意のActionもあります。</li>
+      </ul>
+    </section>
+
+    <section class="doc-section" aria-labelledby="previews">
+      <h2 id="previews">プレビュー</h2>
+      <p>プレビューを使うと、公開中のサイトを変えずに、マージ前の変更をレビュアーが読めます。公開とは別のコマンド<code>preview publish</code>を使います。</p>
+      <div class="term" aria-label="preview publishのコマンド例">
+        <div class="term-head"><span>ターミナル / acme/checkout（プルリクエスト#42）</span><button class="copy-btn" type="button">コピー</button></div>
+<pre><span class="p">$</span> <span data-copy>artifact-pages <span class="v">preview publish</span> --site checkout --source docs/artifacts --base-url https://docs.example.com --pull-request 42 --dry-run</span>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">preview publish</span> --site checkout --source docs/artifacts --base-url https://docs.example.com --pull-request 42</span></pre>
+      </div>
+      <p class="note"><code>--base-url</code>は閲覧アプリのアドレスで、返すリンクを組み立てるのに使います。<code>https://docs.example.com</code>は説明用の例です。<code>--site</code>、<code>--source</code>、<code>--base-url</code>は必須です。</p>
+      <div class="split">
+        <div class="pane">
+          <span class="label">対象になるもの</span>
+          <p>デフォルトブランチ（<code>--default-ref</code>、既定は<code>origin/HEAD</code>）から分かれたあと、ヘッド（<code>--head</code>、既定は<code>HEAD</code>）で追加・変更されたHTMLとMarkdownのページと、それらが読み込むファイルです。</p>
+          <p>変更していないページへのリンクは、公開中の版を開きます。削除したページのプレビューはありません。スクリプトが実行時に名前を組み立てるリソースは<code>--include PATH</code>で追加します。</p>
+        </div>
+        <div class="pane">
+          <span class="label">読者が見つける場所</span>
+          <p>各ページは<code>/checkout/_previews/&lt;ヘッドのSHA&gt;/design/payment-flow.html</code>のようなURLになります。サイトのトップページの<strong>View previews</strong>と、パレットの<strong>Open previews</strong>から一覧を開けます。</p>
+          <p>プレビューは、Browse、検索、Recently updatedには出ません。</p>
+        </div>
+      </div>
+      <ul>
+        <li><strong>プルリクエスト。</strong><code>--pull-request</code>（番号かPRのURL）を付けると、そのPRのプレビューとしてまとめられ、PRへ戻るリンクが表示されます。PRは登録したリポジトリ自身のブランチから出ている必要があり、フォークからのPRは受け付けません。付けなければ、PRのリンクがない手動のプレビューになります。</li>
+        <li><strong>リンクの共有。</strong>コマンドはプレビューのURLを返します（<code>--format json</code>）。PRにコメントするかどうかは、ワークフロー側で決めます。</li>
+        <li><strong>残る期間。</strong>同じPRで新しいプレビューを作ると一覧では置き換わりますが、古いURLは配信先の保持ルールで削除されるまで開けます。このルールは管理者がクラウド側で設定するもので、Artifact Pagesの設定ではありません。</li>
+        <li><strong>信頼。</strong>プレビューのHTMLは、レビューが終わる前から公開済みのHTMLとまったく同じように動きます。プレビューは信頼できるブランチからだけ作ってください。</li>
+      </ul>
+    </section>
+
+    <section class="doc-section" aria-labelledby="troubleshooting">
+      <h2 id="troubleshooting">公開に失敗したとき</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>状況</th><th>対処</th></tr></thead>
+        <tbody>
+          <tr><td>サイトが登録されていない</td><td>エラーに登録済みのサイトIDが並びます。<code>--site</code>と設定ファイルの配信先を確かめるか、管理者にサイトの登録を依頼します。</td></tr>
+          <tr><td>「registered to … selected checkout is …」</td><td>リポジトリかディレクトリが登録と違います。登録したリポジトリのチェックアウトで、登録したディレクトリを指定して実行します。</td></tr>
+          <tr><td>公開元にシンボリックリンクがある</td><td>実体のファイルに置き換えるか、ディレクトリの外へ移します。</td></tr>
+          <tr><td>サイトのロックが取られている</td><td>同じサイトの公開か登録解除が実行中です。しばらくして再実行します。途中で止まった実行がロックを残した場合は、管理者が<code>lock inspect --site</code>で確認し、<code>lock recover</code>で解除します。</td></tr>
+          <tr><td>一部を変更したあとで失敗した</td><td>原因を直して同じコマンドをもう一度実行します。残りの変更が反映されます。</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <nav class="pager" aria-label="ページ送り">
+      <a class="prev" href="reading.html"><small>前へ</small><strong>読者の体験</strong></a>
+      <a class="next" href="configuration.html"><small>次へ</small><strong>設定ファイル</strong></a>
+    </nav>
+  </main>
+</body>
+</html>

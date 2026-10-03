@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="What to know before publishing with Git Artifact Pages: HTML runs as published, Markdown is sanitized, and access control belongs at the delivery edge.">
+  <title>Access and trust</title>
+  <script>
+    // Copy the reader app's theme (same-origin parent) before first paint; assets/site.js keeps it in sync.
+    (() => {
+      const root = document.documentElement;
+      root.classList.add('js');
+      try {
+        const theme = window.parent !== window && window.parent.document.documentElement.dataset.theme;
+        if (theme === 'light' || theme === 'dark') root.dataset.theme = theme;
+      } catch { /* cross-origin: fall back to prefers-color-scheme */ }
+    })();
+  </script>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../assets/site.css">
+  <script src="../assets/site.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <main id="main" class="wrap">
+    <nav class="lang-switch" aria-label="Language"><a href="../ja/access-and-trust.html" hreflang="ja" lang="ja">日本語</a><span aria-current="page">English</span></nav>
+
+    <header class="page-head">
+      <div>
+        <p class="eyebrow">Before you publish</p>
+        <h1>Access and trust</h1>
+      </div>
+      <p class="lead">Two decisions come before the first publish: whose HTML you trust, and who may read. Git Artifact Pages makes neither for you. This page explains what it does and does not do, and where each decision belongs.</p>
+    </header>
+
+    <section class="split" aria-labelledby="summary">
+      <h2 id="summary" class="sr-only">Summary</h2>
+      <div class="pane trust">
+        <span class="label">TRUST · WHAT YOU PUBLISH</span>
+        <h3>Publishing HTML means running its code.</h3>
+        <p>A published HTML page runs its own JavaScript for every reader, with the same access as the reader app. Publish only HTML you would be willing to run yourself. Markdown is different: it is cleaned, and its scripts never run.</p>
+      </div>
+      <div class="pane access">
+        <span class="label">ACCESS · WHO CAN READ</span>
+        <h3>There are no logins. Gate the address.</h3>
+        <p>Artifact Pages has no accounts and no per-site permissions. Anyone who can reach the delivery address can read every site there. To limit readers, put access control at the delivery edge or network.</p>
+      </div>
+    </section>
+
+    <section class="doc-section" aria-labelledby="html">
+      <h2 id="html">HTML runs as published</h2>
+      <p>An HTML page is shown in a frame inside the reader, exactly as published. The frame keeps the page's CSS separate from the app; it is not a security boundary. All sites share one address, so a page's scripts can reach far beyond the page itself.</p>
+      <figure class="figure">
+        <div class="fig-head"><strong>What a published HTML page can reach</strong><span>illustrative</span></div>
+        <div class="figure-frame" role="group" aria-label="Diagram: what a published HTML page can reach">
+          <svg viewBox="0 0 720 300" role="img" aria-labelledby="fig-html-title fig-html-desc">
+            <title id="fig-html-title">What a published HTML page can reach</title>
+            <desc id="fig-html-desc">The reader app, an HTML page from the checkout site, and the files of other sites all share one origin. The page's scripts can read and change the reader app and its browser storage, and can fetch other sites' files.</desc>
+            <defs><marker id="ah-html" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="none" stroke="currentColor" stroke-width="1.4"/></marker></defs>
+            <rect class="d-panel" x="16" y="16" width="688" height="268" rx="14"/>
+            <text class="d-label" x="40" y="46">ONE ORIGIN · https://&lt;delivery-domain&gt;</text>
+            <rect class="d-card" x="40" y="70" width="186" height="178" rx="10"/>
+            <text class="d-repo" x="58" y="100">Reader app</text>
+            <rect class="d-chip" x="58" y="116" width="150" height="24" rx="5"/><text class="d-chip-t" x="68" y="132">sidebar · palette</text>
+            <rect class="d-chip" x="58" y="148" width="150" height="24" rx="5"/><text class="d-chip-t" x="68" y="164">browser storage</text>
+            <text class="d-repo-sub" x="58" y="196">pins, recent reads,</text>
+            <text class="d-repo-sub" x="58" y="212">theme</text>
+            <rect class="d-person" x="268" y="70" width="186" height="178" rx="10"/>
+            <text class="d-repo" x="286" y="100">HTML page</text>
+            <text class="d-repo-sub" x="286" y="120">/checkout/report.html</text>
+            <rect class="d-cmd" x="286" y="138" width="120" height="24" rx="12"/><text class="d-cmd-t" x="300" y="154">scripts run</text>
+            <text class="d-repo-sub" x="286" y="196">frame without sandbox</text>
+            <text class="d-repo-sub" x="286" y="212">CSS stays inside</text>
+            <rect class="d-card" x="496" y="70" width="186" height="178" rx="10"/>
+            <text class="d-repo" x="514" y="100">Other sites' files</text>
+            <rect class="d-chip" x="514" y="116" width="150" height="24" rx="5"/><text class="d-chip-t" x="524" y="132">/_artifacts/billing/…</text>
+            <rect class="d-chip" x="514" y="148" width="150" height="24" rx="5"/><text class="d-chip-t" x="524" y="164">/_indexes/…</text>
+            <path class="d-arrow" d="M268 182 H232" marker-end="url(#ah-html)"/>
+            <path class="d-arrow" d="M454 182 H490" marker-end="url(#ah-html)"/>
+            <text class="d-ok-t" x="247" y="270" text-anchor="middle">reads and changes</text>
+            <text class="d-ok-t" x="474" y="270" text-anchor="middle">fetches</text>
+          </svg>
+        </div>
+        <figcaption>The page, the reader app, and every other site share one origin. The <code>checkout</code> page and paths are illustrative. <span class="fig-scroll">Scroll sideways to see the whole diagram.</span></figcaption>
+        <details class="fig-text">
+          <summary>The diagram as text</summary>
+          <ul>
+            <li>One origin, <code>https://&lt;delivery-domain&gt;</code>, holds three things: the reader app (its sidebar, palette, and browser storage with pins, recent reads, and theme), an HTML page such as <code>/checkout/report.html</code>, and other sites' files such as <code>/_artifacts/billing/…</code> and <code>/_indexes/…</code>.</li>
+            <li>The HTML page is shown in a frame without a sandbox, so its scripts run. Only its CSS stays inside the frame.</li>
+            <li>The page's scripts can read and change the reader app and its browser storage, and can fetch other sites' files.</li>
+          </ul>
+        </details>
+      </figure>
+      <ul>
+        <li><strong>Same access as the reader.</strong> Scripts in a published page can read and change the reader page, use the browser storage that holds pins and recent reads, and fetch other sites' published files on the same address.</li>
+        <li><strong>External resources.</strong> Pages can load scripts, styles, images, fonts, and data from any HTTPS address, subject to the browser's usual rules. Plain <code>http://</code> resources are blocked. Requests to other hosts carry ordinary request details, as on any website.</li>
+        <li><strong>No isolation between sites.</strong> Artifact Pages does not protect one site from another site's HTML. Everyone who can publish HTML to any site on the address is trusted by the readers of all of them.</li>
+        <li><strong>Previews too.</strong> Preview HTML runs the same way, before its review is finished. Previews from forks are not supported.</li>
+      </ul>
+    </section>
+
+    <section class="doc-section" aria-labelledby="markdown">
+      <h2 id="markdown">Markdown is cleaned before it is shown</h2>
+      <p>Markdown is rendered by the reader itself, not run. That makes it the safer format when many people contribute.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th></th><th>HTML</th><th>Markdown</th></tr></thead>
+        <tbody>
+          <tr><td>Shown by</td><td>The page itself, in a frame</td><td>The reader, which formats it</td></tr>
+          <tr><td>Scripts</td><td>Run as written</td><td>Removed; never run</td></tr>
+          <tr><td>Embedded HTML</td><td>Is the page</td><td>Disallowed elements and attributes are removed</td></tr>
+          <tr><td>Diagrams</td><td>Whatever the page draws</td><td>Mermaid, in strict mode, without interaction</td></tr>
+          <tr><td>Images and resources</td><td>The site's files and any HTTPS address</td><td>The site's own files, HTTPS images, and embedded PNG, JPEG, GIF, WebP, or AVIF images</td></tr>
+          <tr><td>Plain <code>http://</code></td><td>Blocked</td><td>Blocked</td></tr>
+          <tr><td>Links</td><td>Behave as written</td><td>Pages on the same site open in the reader; other links open in a new tab</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section class="doc-section" aria-labelledby="what-to-publish">
+      <h2 id="what-to-publish">What to publish, and what not to</h2>
+      <ul class="checklist" aria-label="Good to publish">
+        <li><strong>Pages your team writes and reviews</strong> in Git like code.</li>
+        <li><strong>Reports and diagrams that your own CI generates</strong> from reviewed code.</li>
+        <li><strong>Markdown from a wider group</strong> of contributors; it cannot run scripts.</li>
+      </ul>
+      <ul class="checklist no" aria-label="Do not publish">
+        <li><strong>HTML or JavaScript you have not reviewed</strong>, from people or tools you do not trust.</li>
+        <li><strong>Secrets, tokens, and internal-only notes.</strong> Every file in the published directory can be fetched, even if no page links to it.</li>
+        <li><strong>Content that must stay private</strong>, unless access control at the edge already covers the whole address.</li>
+      </ul>
+      <p>Who may publish is decided in Git and in your CI: who can merge to the publishing branch, and which jobs hold publishing credentials. Treat those permissions like permission to deploy code.</p>
+    </section>
+
+    <section class="doc-section" aria-labelledby="access">
+      <h2 id="access">Who can read</h2>
+      <p>Artifact Pages has no accounts, sign-in, roles, or per-site permissions. Once a request reaches it, everyone gets the same pages. Limiting readers is done in front of it, by whoever operates the delivery address.</p>
+      <figure class="figure">
+        <div class="fig-head"><strong>Where access control belongs</strong></div>
+        <div class="figure-frame" role="group" aria-label="Diagram: where access control belongs">
+          <svg viewBox="0 0 720 320" role="img" aria-labelledby="fig-gate-title fig-gate-desc">
+            <title id="fig-gate-title">Where access control belongs</title>
+            <desc id="fig-gate-desc">Readers pass through access control at the delivery edge before reaching any path: the reader app routes, the site registry and indexes, published files, and previews. The site registry, hidden lists, and hard-to-guess URLs are not access control.</desc>
+            <defs><marker id="ah-gate" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="none" stroke="currentColor" stroke-width="1.4"/></marker></defs>
+            <rect class="d-person" x="20" y="96" width="112" height="84" rx="10"/>
+            <circle cx="76" cy="122" r="9" fill="currentColor" opacity=".35"/>
+            <path d="M60 150 Q76 132 92 150 Z" fill="currentColor" opacity=".35"/>
+            <text class="d-repo" x="76" y="170" text-anchor="middle">Readers</text>
+            <path class="d-arrow" d="M132 138 H186" marker-end="url(#ah-gate)"/>
+            <text class="d-label" x="176" y="26">ACCESS CONTROL · OPERATOR</text>
+            <rect class="d-gate" x="190" y="38" width="56" height="200" rx="8"/>
+            <path d="M210 128 v-8 a8 8 0 0 1 16 0 v8" fill="none" stroke="currentColor" stroke-width="1.6" style="color: var(--gold)"/>
+            <rect x="206" y="128" width="24" height="18" rx="3" fill="none" stroke-width="1.6" style="stroke: var(--gold)"/>
+            <path class="d-arrow" d="M246 68 H318" marker-end="url(#ah-gate)"/>
+            <path class="d-arrow" d="M246 118 H318" marker-end="url(#ah-gate)"/>
+            <path class="d-arrow" d="M246 168 H318" marker-end="url(#ah-gate)"/>
+            <path class="d-arrow" d="M246 218 H318" marker-end="url(#ah-gate)"/>
+            <rect class="d-panel" x="300" y="38" width="400" height="200" rx="12"/>
+            <text class="d-label" x="512" y="26" text-anchor="middle">DELIVERY · CDN AND STORAGE</text>
+            <rect class="d-chip" x="324" y="56" width="356" height="26" rx="6"/><text class="d-chip-t" x="336" y="73">/   /&lt;site&gt;/…</text><text class="d-repo-sub" x="668" y="73" text-anchor="end">reader app routes</text>
+            <rect class="d-chip" x="324" y="106" width="356" height="26" rx="6"/><text class="d-chip-t" x="336" y="123">/_indexes/*</text><text class="d-repo-sub" x="668" y="123" text-anchor="end">site registry and indexes</text>
+            <rect class="d-chip" x="324" y="156" width="356" height="26" rx="6"/><text class="d-chip-t" x="336" y="173">/_artifacts/*</text><text class="d-repo-sub" x="668" y="173" text-anchor="end">published files</text>
+            <rect class="d-chip" x="324" y="206" width="356" height="26" rx="6"/><text class="d-chip-t" x="336" y="223">/_previews/*</text><text class="d-repo-sub" x="668" y="223" text-anchor="end">previews</text>
+            <rect class="d-muted-box" x="20" y="262" width="680" height="44" rx="10"/>
+            <text class="d-warn-t" x="40" y="289">✕ Not access control: the site registry · hiding a site from lists · hard-to-guess preview URLs</text>
+          </svg>
+        </div>
+        <figcaption>Put the control in front of every path that serves protected content, including the raw files under <code>/_indexes/</code>, <code>/_artifacts/</code>, and <code>/_previews/</code>, not only the reader's page URLs. <span class="fig-scroll">Scroll sideways to see the whole diagram.</span></figcaption>
+        <details class="fig-text">
+          <summary>The diagram as text</summary>
+          <ul>
+            <li>Readers reach the delivery target only through access control that the operator sets up in front of it.</li>
+            <li>Behind that control, the CDN and storage serve four kinds of paths: the reader app routes (<code>/</code> and <code>/&lt;site&gt;/…</code>), the site registry and indexes (<code>/_indexes/*</code>), published files (<code>/_artifacts/*</code>), and previews (<code>/_previews/*</code>). The control must cover all four.</li>
+            <li>These are not access control: the site registry, hiding a site from lists, and hard-to-guess preview URLs.</li>
+          </ul>
+        </details>
+      </figure>
+      <ul>
+        <li><strong>Choose a mechanism your hosting supports</strong>, for example a VPN or IP allowlist, Basic Authentication, an identity provider with CloudFront signed cookies, or Cloudflare Access.</li>
+        <li><strong>Choose its scope.</strong> It can protect the whole hostname, selected paths, or a wider network. That choice lives in your infrastructure, not in <code>artifact-pages.yaml</code>, the site registry, or the reader.</li>
+        <li><strong>Make it run before anything is served</strong>, including responses from a shared cache.</li>
+        <li><strong>Verify it yourself.</strong> Artifact Pages cannot tell whether a gate is in place.</li>
+      </ul>
+    </section>
+
+    <section class="doc-section" aria-labelledby="removal">
+      <h2 id="removal">Taking content down</h2>
+      <p>Delete the file and publish again, or unregister the whole site (see <a href="configuration.html#registry">Configuration</a>). Both delete the files at the origin and ask the CDN to refresh. A cache may still serve the old copy for a short time, and pages a reader already opened or saved cannot be recalled. The file also remains in Git history. If a secret was published, treat it as exposed and replace it.</p>
+      <p><strong>Previews keep their own copy.</strong> A preview revision that contained the file is not changed by deleting the file and publishing again. Its entry may leave the preview list, but its direct URL keeps working until the delivery target's retention rule deletes it (see <a href="publishing.html#previews">Previews</a>). Only unregistering the site deletes its previews at once. If a leaked secret was ever in a preview, assume it can still be read from that URL until then.</p>
+    </section>
+
+    <div class="callout" role="note">
+      <span class="ico">WHY</span>
+      <div><p><strong>Want the reasoning?</strong> The <a href="/architecture/en/trust-model.html" target="_top">trust model</a> page on the Architecture site explains why HTML runs on the same origin, how resource rules apply to each site, and why viewer identity is left to the edge.</p></div>
+    </div>
+
+    <nav class="pager" aria-label="Pages">
+      <a class="prev" href="configuration.html"><small>Previous</small><strong>Configuration</strong></a>
+    </nav>
+  </main>
+</body>
+</html>

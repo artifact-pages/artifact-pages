@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Git Artifact Pages は、Gitで管理しているHTMLやMarkdownを、URLで読めて検索できる静的サイトとして公開する仕組みです。">
+  <meta name="description" content="Git Artifact Pagesでは、各チームがGitで管理しているHTMLやMarkdownを自分のリポジトリから独立して公開し、読者は共通の閲覧アプリでどのサイトも同じように探して読めます。">
   <title>Git Artifact Pagesとは</title>
   <script>
     // 最初の描画の前に、閲覧アプリ（同一オリジンの親）のテーマを写す。追従は assets/site.js が行う。
@@ -26,9 +26,9 @@
     <nav class="lang-switch" aria-label="言語"><span aria-current="page">日本語</span><a href="../en/what-is-git-artifact-pages.html" hreflang="en" lang="en">English</a></nav>
     <section class="hero" aria-labelledby="hero-title">
       <div>
-        <p class="eyebrow">Gitから、読めるWebへ</p>
-        <h1 id="hero-title">Gitにある成果物を、<wbr>読むための場所へ。</h1>
-        <p class="lead"><strong>HTMLもMarkdownも、Gitに置いたまま、URLで読めて検索できる。</strong>Git Artifact Pagesは、Gitで管理している文書を静的なサイトとして公開します。読者はサイトを選び、ページを探し、リンクで共有できます。</p>
+        <p class="eyebrow">公開は各チームで、読む場所はひとつに</p>
+        <h1 id="hero-title">各リポジトリから公開し、<wbr>ひとつの場所で読む。</h1>
+        <p class="lead"><strong>成果物はGitで作ってレビューし、チームごとに公開します。</strong>全サイトをまとめて組み立てるビルドはなく、各チームは自分のリポジトリとCIから、自分のサイトだけを公開します。公開したサイトは共通の静的な配信先に集まり、読者は1つの閲覧アプリでサイトを選び、ページを探して読み、リンクで共有できます。操作はどのサイトでも同じです。</p>
       </div>
       <div>
         <div data-reader-demo="autoplay" role="group" aria-label="閲覧画面のデモ：検索してページを開き、@ でサイトを切り替える">
@@ -39,14 +39,101 @@
     </section>
 
     <div class="promises" aria-label="できること">
-      <div class="promise"><span class="num">01</span><div><strong>そのまま公開</strong><p>HTMLとMarkdownを、ファイル名と拡張子のまま公開します。URLは<code>/サイト/ファイル名.html</code>の形になり、そのまま共有できます。</p></div></div>
-      <div class="promise"><span class="num">02</span><div><strong>チームごとのサイト</strong><p>チームやプロダクトごとに、独立した閲覧先を持てます。1つのGitリポジトリのディレクトリが、1つのサイトになります。</p></div></div>
-      <div class="promise"><span class="num">03</span><div><strong>すぐ見つける</strong><p><kbd>⌘K</kbd> / <kbd>Ctrl K</kbd>でページを検索でき、<kbd>@</kbd>でサイトを切り替えられます。索引は公開時に作られます。</p></div></div>
+      <div class="promise"><span class="num">01</span><div><strong>Gitが正本</strong><p>成果物は、それを作ったリポジトリでレビューし、Gitの履歴とともに公開します。Artifact Pagesの中で編集することはありません。HTMLとMarkdownはファイル名と拡張子のまま、<code>/サイト/ファイル名.html</code>のURLで開けます。</p></div></div>
+      <div class="promise"><span class="num">02</span><div><strong>公開はサイトごとに独立</strong><p>1つのGitリポジトリのディレクトリが、1つのサイトになります。各サイトは自分のリポジトリから、変更があったときに自分の範囲だけを公開し、ほかのサイトのビルドやデプロイを待ちません。</p></div></div>
+      <div class="promise"><span class="num">03</span><div><strong>読む場所はひとつ</strong><p>公開したサイトは共通の静的な配信先に集まり、常時動くサーバーを持たない静的な配信（オブジェクトストレージとCDN）から届きます。サイトの切り替え、ページの検索、目次、Gitへのリンクは、どのサイトでも同じ閲覧アプリで使えます。</p></div></div>
     </div>
+
+    <section class="section" id="reading-at-a-glance" aria-labelledby="reading-title">
+      <div class="section-head">
+        <div><p class="eyebrow">読者向け</p><h2 id="reading-title">読むときにできること</h2></div>
+        <p>どのチームのサイトも、同じ閲覧アプリと同じ操作で読めます。操作はブラウザの中で完結し、検索はいま開いているサイトの中で行います。見本のページは説明用の例です。</p>
+      </div>
+      <ul class="features">
+        <li class="feature wide">
+          <div class="fx" aria-hidden="true">
+            <div class="fx-url"><span class="u-host">https://&lt;配信ドメイン&gt;/</span><span class="u-site">checkout</span><span class="u-path">/design/payment-flow.html</span></div>
+            <div class="fx-crumb"><span>checkout</span><span>/</span><span>design</span><span>/</span><strong>決済フロー設計</strong></div>
+          </div>
+          <h3>ページごとに変わらないURL</h3>
+          <p>URLは、サイトのIDと、公開元でのファイルのパス（拡張子まで）でできています。共有しても、ブックマークしても、再読み込みしても、同じページが開きます。</p>
+        </li>
+        <li class="feature">
+          <div class="fx" aria-hidden="true">
+            <div class="fx-box">
+              <div class="fx-in"><span>⌕</span><b>決済</b><kbd>esc</kbd></div>
+              <div class="fx-row sel"><span><mark>決済</mark>フロー設計</span><small>design/</small></div>
+              <div class="fx-row"><span>9/12 <mark>決済</mark>タイムアウト障害</span><small>incidents/</small></div>
+            </div>
+          </div>
+          <h3>名前で探す <kbd>⌘K</kbd></h3>
+          <p>コマンドパレットが、入力に合わせてタイトルとパスから候補を絞ります。<code>#</code>で開いているページの見出しへ、<code>&gt;</code>でコマンドへ。</p>
+        </li>
+        <li class="feature">
+          <div class="fx" aria-hidden="true">
+            <div class="fx-field">⌕ タイムアウト<kbd>↵</kbd></div>
+            <div class="fx-row"><i>⌄</i><span>incidents</span><span class="n">1 / 3</span></div>
+            <div class="fx-text">…ゲートウェイの<mark class="fx-hit">タイムアウト</mark>を延ばし…</div>
+          </div>
+          <h3>本文を検索する <kbd>⌘⇧F</kbd></h3>
+          <p>Enterを押すと、入力した語をすべて含むページが並びます。結果を開くと、ページの中で一致した語がハイライトされます。</p>
+          <p class="scope">本文検索を有効にして公開したサイトだけで使えます。</p>
+        </li>
+        <li class="feature">
+          <div class="fx" aria-hidden="true">
+            <div class="fx-box">
+              <div class="fx-in"><b>@</b></div>
+              <div class="fx-row sel"><b>S</b><span>SREチーム</span><small>/sre</small></div>
+              <div class="fx-row"><b>決</b><span>決済チーム / Billing</span><small>/billing</small></div>
+            </div>
+          </div>
+          <h3><kbd>@</kbd>でサイトを移る</h3>
+          <p>パレットで<code>@</code>を打つとサイトが並び、選ぶとそのチームのトップページへ移ります。検索はいまいるサイトの中だけで行います。</p>
+        </li>
+        <li class="feature">
+          <div class="fx" aria-hidden="true">
+            <div class="fx-doc">
+              <div class="t">決済フロー設計</div>
+              <div class="fx-line"></div><div class="fx-line m"></div><div class="fx-line s"></div><div class="fx-line"></div>
+              <div class="fx-panel"><b><span>Contents</span><span>Details</span></b><span>概要</span><span class="sub">再試行</span><span>移行手順</span></div>
+            </div>
+          </div>
+          <h3>目次と詳細</h3>
+          <p>ページに重ねて開くパネルで、見出しの一覧や、最終更新日、その変更をコミットした人、Gitの公開元を確認できます。</p>
+        </li>
+        <li class="feature">
+          <div class="fx" aria-hidden="true">
+            <div class="fx-box">
+              <div class="fx-sec">Pinned</div>
+              <div class="fx-row"><span>オンコール手順</span><small>runbooks/</small></div>
+              <div class="fx-sec">Recently read</div>
+              <div class="fx-row"><span>決済フロー設計</span><small>design/</small></div>
+            </div>
+          </div>
+          <h3>ピン留めと最近読んだページ</h3>
+          <p>何も入力していないパレットの先頭に並びます。保存先は自分のブラウザだけです。</p>
+        </li>
+        <li class="feature">
+          <div class="fx" aria-hidden="true">
+            <div class="fx-cols">
+              <div class="fx-tile"><span class="fx-tag">HTML</span><div class="fx-bars"><span style="height:45%"></span><span style="height:80%"></span><span style="height:60%"></span><span style="height:95%"></span></div></div>
+              <div class="fx-tile"><span class="fx-tag">MD</span><div class="fx-line m"></div><div class="fx-grid"><span></span><span></span><span></span><span></span><span></span><span></span></div><div class="fx-line s"></div></div>
+            </div>
+          </div>
+          <h3>HTMLはそのまま、Markdownは整えて</h3>
+          <p>HTMLは、文書自身のCSSとJavaScriptで公開したとおりに動きます。Markdownは、表やMermaidの図も含めてアプリが表示を整えます。</p>
+        </li>
+      </ul>
+      <div class="feature-more">
+        <p>キーボード操作や検索の決まり、画面の各部分の役割は「読者の体験」で詳しく説明しています。</p>
+        <a class="btn ghost" href="reading.html">「読者の体験」を読む <span aria-hidden="true">→</span></a>
+      </div>
+    </section>
 
     <div class="story-head" id="story">
       <p class="eyebrow">しくみ</p>
       <h2 id="how-it-works">公開から閲覧までの流れ</h2>
+      <p class="story-sub">Gitの文書が読者に届くまでには、4つの役割があります。管理者が用意するのは共通の閲覧アプリとサイトの登録で、公開は各チームのリポジトリがそれぞれ行います。ファイルの置き場所や、リクエストごとに動くサーバーがない理由など、内部のしくみは「<a href="/architecture/ja/overview.html" target="_top">アーキテクチャの全体像</a>」で説明しています。</p>
     </div>
 
     <div class="story">
@@ -54,15 +141,15 @@
         <section class="chapter" id="step-1" data-step="1" aria-labelledby="step-1-title">
           <span class="step-label">01 / アプリを配置 <span class="role">管理者</span></span>
           <h3 id="step-1-title">まず、読むためのアプリを置く。</h3>
-          <p>管理者が、静的な閲覧アプリ（SPA）を配信先へ一度だけデプロイします。これがすべてのサイトに共通する入口です。公開済みのWebリリースを取得して検証してから、アプリ本体のファイルだけを書き込みます。</p>
+          <p>管理者が、静的な閲覧アプリ（SPA）を配信先へ一度だけデプロイします。これがすべてのサイトに共通する入口です。アプリのWebリリースを取得して検証してから、アプリ本体のファイルだけを書き込みます。</p>
           <div class="term" aria-label="アプリのデプロイコマンド例">
             <div class="term-head"><span>ターミナル / 管理者</span><button class="copy-btn" type="button">コピー</button></div>
 <pre><span class="c"># まず変更計画だけ確認（何も書き込みません）</span>
-<span class="p">$</span> <span data-copy>artifact-pages <span class="v">app deploy</span> --version x.y.z --dry-run</span>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">app deploy</span> --dry-run</span>
 <span class="c"># 反映</span>
-<span class="p">$</span> <span data-copy>artifact-pages <span class="v">app deploy</span> --version x.y.z</span></pre>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">app deploy</span></span></pre>
           </div>
-          <p class="note"><code>x.y.z</code>には公開済みリリースのバージョンを指定します。配信先の設定は<code>--config</code>、または管理リポジトリの<code>artifact-pages.yaml</code>から解決されます。サイトの索引や文書には触れません。</p>
+          <p class="note"><code>app deploy</code>は、使っているCLIと同じバージョン（<code>x.y.z</code>）の閲覧アプリを配置します。別のバージョンのアプリを置くときは、そのバージョンのCLIを使います。リリースは<a href="https://github.com/tasuku43/git-artifact-pages/releases" target="_blank" rel="noopener">GitHub Releases</a>で確認できます。配信先の設定は<code>--config</code>、または管理リポジトリの<code>artifact-pages.yaml</code>から解決されます。サイトのインデックスや文書には触れません。</p>
         </section>
 
         <section class="chapter" id="step-2" data-step="2" aria-labelledby="step-2-title">
@@ -96,7 +183,8 @@
         <section class="chapter" id="step-3" data-step="3" aria-labelledby="step-3-title">
           <span class="step-label">03 / Gitから公開 <span class="role">各チームのリポジトリ</span></span>
           <h3 id="step-3-title">各Gitリポジトリから、担当サイトへ公開する。</h3>
-          <p>各チームのGitリポジトリが、担当するサイトと公開するディレクトリを明示して公開します。公開のたびに索引を作り、HTMLとMarkdown、CSSや画像をそのまま配置します。</p>
+          <p>各チームのGitリポジトリが、担当するサイトと公開するディレクトリを明示して公開します。公開のたびにインデックスを作り、HTMLとMarkdown、CSSや画像をそのまま配置します。</p>
+          <p>公開はサイトごとに独立しています。全サイトをまとめて組み立てるビルドはなく、各リポジトリは自分のCIから、変更があったときに自分のサイトだけを公開します。ほかのサイトの公開を待つこともありません。</p>
           <div class="term" aria-label="サイト公開コマンド例">
             <div class="term-head"><span>ターミナル / acme/checkout</span><button class="copy-btn" type="button">コピー</button></div>
 <pre><span class="c"># docs/artifacts を、サイト checkout へ</span>
@@ -109,7 +197,7 @@
         <section class="chapter" id="step-4" data-step="4" aria-labelledby="step-4-title">
           <span class="step-label">04 / 開いて探す <span class="role">読者</span></span>
           <h3 id="step-4-title">あとは、URLを開けば読める。</h3>
-          <p>読むのに必要なのはブラウザだけです。読んでいる途中でも<strong><kbd>⌘K</kbd> / <kbd>Ctrl K</kbd></strong>で、いまのサイトのページや見出しを検索できます。<strong><kbd>@</kbd></strong>を打つと、ほかのチームのサイトへ切り替えられます。</p>
+          <p>読むのに必要なのはブラウザだけです。読んでいる途中でも<strong><kbd>⌘K</kbd> / <kbd>Ctrl K</kbd></strong>で、いまのサイトのページと、開いているページの見出しを探せます。<strong><kbd>@</kbd></strong>を打つと、ほかのチームのサイトへ切り替えられます。</p>
           <figure class="urlbar" aria-label="読者が開くURLの例">
             <div class="urlbar-field"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.2" y="7" width="9.6" height="6.8" rx="1.6"/><path d="M5.4 7V5.2a2.6 2.6 0 0 1 5.2 0V7"/></svg><span class="u-host">https://&lt;配信ドメイン&gt;/</span><span class="u-site">checkout</span><span class="u-path">/design/payment-flow.html</span></div>
             <figcaption class="urlbar-legend"><span class="u-site-key">サイト</span><span class="u-path-key">公開元でのファイルの場所</span></figcaption>
@@ -123,7 +211,7 @@
         <div class="diagram-frame">
           <svg viewBox="0 0 760 650" role="img" aria-labelledby="dg-title dg-desc">
             <title id="dg-title">Git Artifact Pagesの構成</title>
-            <desc id="dg-desc">管理者が共通の閲覧アプリをデプロイし、チームやプロダクトごとのサイトを登録する。各チームのGitリポジトリはそれぞれの担当サイトへ公開する。最後に読者がURLを開き、検索してサイトを切り替える。</desc>
+            <desc id="dg-desc">管理者が共通の閲覧アプリをデプロイし、チームやプロダクトごとのサイトを登録する。各チームのGitリポジトリは、それぞれのタイミングで担当サイトへ公開し、全体をまとめるビルドはない。最後に読者がURLを開き、検索してサイトを切り替える。</desc>
             <defs><marker id="ah" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="none" stroke="currentColor" stroke-width="1.4"/></marker></defs>
 
             <text class="d-label" x="170" y="40">配信 · 共通の静的アプリ</text>
@@ -142,23 +230,23 @@
               <path class="d-arrow" d="M380 272 V238" marker-end="url(#ah)"/>
               <rect class="d-cmd" x="392" y="240" width="152" height="24" rx="12"/><text class="d-cmd-t" x="404" y="256">registry register</text>
               <rect class="d-panel" x="40" y="272" width="680" height="172" rx="13"/>
-              <text class="d-label" x="64" y="300">サイト一覧 · 登録されたサイト</text>
+              <text class="d-label" x="64" y="300">サイトの登録情報 · 登録されたサイト</text>
               <text class="d-status" x="696" y="300" text-anchor="end">管理リポジトリの設定ファイルから作られます</text>
-              <rect class="site-card" x="64" y="316" width="200" height="106" rx="8"/>
-              <rect class="site-card" x="280" y="316" width="200" height="106" rx="8"/>
-              <rect class="site-card" x="496" y="316" width="200" height="106" rx="8"/>
+              <rect class="site-card" data-site="sre" x="64" y="316" width="200" height="106" rx="8"/>
+              <rect class="site-card" data-site="checkout" x="280" y="316" width="200" height="106" rx="8"/>
+              <rect class="site-card" data-site="billing" x="496" y="316" width="200" height="106" rx="8"/>
               <text class="d-site" x="84" y="351">sre</text><text class="d-name" x="84" y="375">SREチーム</text>
               <text class="d-site" x="300" y="351">checkout</text><text class="d-name" x="300" y="375">決済チーム / Checkout</text>
               <text class="d-site" x="516" y="351">billing</text><text class="d-name" x="516" y="375">決済チーム / Billing</text>
-              <text class="d-status st-a" x="84" y="403">登録済み · 未公開</text><text class="d-status-ok st-b" x="84" y="403">✓ 公開済み</text>
-              <text class="d-status st-a" x="300" y="403">登録済み · 未公開</text><text class="d-status-ok st-b" x="300" y="403">✓ 公開済み</text>
-              <text class="d-status st-a" x="516" y="403">登録済み · 未公開</text><text class="d-status-ok st-b" x="516" y="403">✓ 公開済み</text>
+              <text class="d-status st-a" data-site="sre" x="84" y="403">登録済み · 未公開</text><text class="d-status-ok st-b" data-site="sre" x="84" y="403">✓ 公開済み</text><text class="d-status-ok st-c" data-site="sre" x="84" y="403">✓ 更新を公開</text>
+              <text class="d-status st-a" data-site="checkout" x="300" y="403">登録済み · 未公開</text><text class="d-status-ok st-b" data-site="checkout" x="300" y="403">✓ 公開済み</text><text class="d-status-ok st-c" data-site="checkout" x="300" y="403">✓ 更新を公開</text>
+              <text class="d-status st-a" data-site="billing" x="516" y="403">登録済み · 未公開</text><text class="d-status-ok st-b" data-site="billing" x="516" y="403">✓ 公開済み</text><text class="d-status-ok st-c" data-site="billing" x="516" y="403">✓ 更新を公開</text>
             </g>
 
             <g class="scene s3">
-              <g class="sat"><path class="d-arrow" d="M164 522 V428" marker-end="url(#ah)"/><rect class="d-cmd" x="110" y="464" width="108" height="24" rx="12"/><text class="d-cmd-t" x="122" y="480">site publish</text><rect class="d-card" x="64" y="522" width="200" height="82" rx="8"/><text class="d-repo" x="82" y="553">acme/sre-handbook</text><text class="d-repo-sub" x="82" y="577">docs/public</text></g>
-              <g class="sat"><path class="d-arrow" d="M380 522 V428" marker-end="url(#ah)"/><rect class="d-cmd" x="326" y="464" width="108" height="24" rx="12"/><text class="d-cmd-t" x="338" y="480">site publish</text><rect class="d-card" x="280" y="522" width="200" height="82" rx="8"/><text class="d-repo" x="298" y="553">acme/checkout</text><text class="d-repo-sub" x="298" y="577">docs/artifacts</text></g>
-              <g class="sat"><path class="d-arrow" d="M596 522 V428" marker-end="url(#ah)"/><rect class="d-cmd" x="542" y="464" width="108" height="24" rx="12"/><text class="d-cmd-t" x="554" y="480">site publish</text><rect class="d-card" x="496" y="522" width="200" height="82" rx="8"/><text class="d-repo" x="514" y="553">acme/billing</text><text class="d-repo-sub" x="514" y="577">docs/artifacts</text></g>
+              <g class="sat" data-site="sre"><path class="d-arrow" d="M164 522 V428" marker-end="url(#ah)"/><circle class="d-pulse" cx="164" cy="516" r="4.5"/><rect class="d-cmd" x="110" y="464" width="108" height="24" rx="12"/><text class="d-cmd-t" x="122" y="480">site publish</text><rect class="d-card" x="64" y="522" width="200" height="82" rx="8"/><text class="d-repo" x="82" y="553">acme/sre-handbook</text><text class="d-repo-sub" x="82" y="577">docs/public</text></g>
+              <g class="sat" data-site="checkout"><path class="d-arrow" d="M380 522 V428" marker-end="url(#ah)"/><circle class="d-pulse" cx="380" cy="516" r="4.5"/><rect class="d-cmd" x="326" y="464" width="108" height="24" rx="12"/><text class="d-cmd-t" x="338" y="480">site publish</text><rect class="d-card" x="280" y="522" width="200" height="82" rx="8"/><text class="d-repo" x="298" y="553">acme/checkout</text><text class="d-repo-sub" x="298" y="577">docs/artifacts</text></g>
+              <g class="sat" data-site="billing"><path class="d-arrow" d="M596 522 V428" marker-end="url(#ah)"/><circle class="d-pulse" cx="596" cy="516" r="4.5"/><rect class="d-cmd" x="542" y="464" width="108" height="24" rx="12"/><text class="d-cmd-t" x="554" y="480">site publish</text><rect class="d-card" x="496" y="522" width="200" height="82" rx="8"/><text class="d-repo" x="514" y="553">acme/billing</text><text class="d-repo-sub" x="514" y="577">docs/artifacts</text></g>
               <text class="d-note" x="64" y="636">↑ 各チームのGitリポジトリ。自分の担当サイトにだけ書き込みます。</text>
             </g>
 
@@ -173,7 +261,7 @@
           </svg>
         </div>
         <div class="diagram-foot">
-          <div class="diagram-caption"><span>共通の閲覧アプリが、みんなの読む場所になります。</span><span>チームやプロダクトごとに、公開先のサイトを登録します。</span><span>各チームのリポジトリから、担当のサイトへ成果物を公開します。</span><span>読者はURLを開き、検索して、次の文書へ進みます。</span></div>
+          <div class="diagram-caption"><span>共通の閲覧アプリが、みんなの読む場所になります。</span><span>チームやプロダクトごとに、公開先のサイトを登録します。</span><span>各リポジトリが、それぞれのタイミングで担当のサイトだけを公開します。全体をまとめるビルドはありません。</span><span>読者はURLを開き、検索して、次の文書へ進みます。</span></div>
           <div class="scene-dots" aria-label="場面へ移動"><a href="#step-1" aria-label="場面1へ"></a><a href="#step-2" aria-label="場面2へ"></a><a href="#step-3" aria-label="場面3へ"></a><a href="#step-4" aria-label="場面4へ"></a></div>
         </div>
       </aside>
@@ -187,10 +275,14 @@
       <figure class="app-mock" data-app-mock aria-label="閲覧アプリでサイトのトップページを開いた画面（見本）">
         <div class="am-side">
           <div class="am-site"><b data-am="mark">決</b><span data-am="name">決済チーム / Checkout</span><i>⌄</i></div>
-          <div class="am-filter"><span>⌕ Filter navigation</span><kbd>⌘K</kbd></div>
+          <div class="am-filter"><span>⌕ Search page text…</span><kbd>⌘⇧F</kbd></div>
           <div class="am-h">Browse</div>
           <div class="mk-tree" data-am="tree">
-            <div class="mk-dir"><i>⌄</i><span>design</span><small>2</small></div>
+            <div class="mk-dir"><i>⌄</i><span>api</span><small>1</small></div>
+            <div class="mk-file">Checkout APIのエラーコード</div>
+            <div class="mk-dir"><i>⌄</i><span>design</span><small>4</small></div>
+            <div class="mk-file">3-Dセキュアの認証フロー</div>
+            <div class="mk-file">カード決済のリトライ方針</div>
             <div class="mk-file">決済フロー設計</div>
             <div class="mk-file">返金ステータスの遷移</div>
             <div class="mk-dir"><i>⌄</i><span>incidents</span><small>1</small></div>
@@ -205,14 +297,16 @@
             <div class="am-home">
               <div class="am-identity"><b data-am="mark">決</b><span data-am="id">/checkout</span></div>
               <p class="am-title" data-am="name">決済チーム / Checkout</p>
-              <p class="am-lede" data-am="lede">4 published artifacts. Browse the latest work or find an artifact by title or path.</p>
-              <div class="am-search"><span data-am="search">⌕ Search artifacts in 決済チーム / Checkout</span><kbd>⌘ K</kbd></div>
-              <div class="am-h">Recently updated</div>
+              <p class="am-lede" data-am="lede">7 published artifacts. Browse the latest work or jump to an artifact by name.</p>
+              <div class="am-search"><span data-am="search">⌕ Jump to a page…</span><kbd>⌘ K</kbd></div>
+              <div class="am-h" data-am="recent-h">Recently updated</div>
               <div class="am-list" data-am="recent">
                 <div class="am-item"><span><strong>決済フロー設計</strong><small>design/payment-flow.html</small></span><time>Sep 28</time></div>
+                <div class="am-item"><span><strong>Checkout APIのエラーコード</strong><small>api/error-codes.md</small></span><time>Sep 22</time></div>
                 <div class="am-item"><span><strong>9/12 決済タイムアウト障害</strong><small>incidents/2026-09-12-timeout.html</small></span><time>Sep 14</time></div>
+                <div class="am-item"><span><strong>3-Dセキュアの認証フロー</strong><small>design/3ds-flow.html</small></span><time>Sep 10</time></div>
                 <div class="am-item"><span><strong>返金ステータスの遷移</strong><small>design/refund-states.md</small></span><time>Sep 9</time></div>
-                <div class="am-item"><span><strong>オンコール手順</strong><small>runbooks/on-call.md</small></span><time>Aug 30</time></div>
+                <div class="am-item"><span><strong>カード決済のリトライ方針</strong><small>design/retry-policy.md</small></span><time>Sep 3</time></div>
               </div>
             </div>
           </div>
@@ -224,11 +318,23 @@
       </div>
     </section>
 
+    <section class="section" id="next-steps" aria-labelledby="next-title">
+      <div class="section-head">
+        <div><p class="eyebrow">次に読むページ</p><h2 id="next-title">役割に合わせて選ぶ</h2></div>
+      </div>
+      <ul class="cards four">
+        <li><a class="card" href="publishing.html"><span class="tag">公開するチーム</span><h3>サイトの公開</h3><p>公開するディレクトリを決めて<code>site publish</code>を実行し、CIで自動化します。</p><span class="go">サイトの公開 →</span></a></li>
+        <li><a class="card" href="configuration.html"><span class="tag">管理者</span><h3>設定ファイル</h3><p><code>artifact-pages.yaml</code>の書き方。配信先、登録するサイト、ファイルの選ばれ方。</p><span class="go">設定ファイル →</span></a></li>
+        <li><a class="card" href="access-and-trust.html"><span class="tag">公開する前に</span><h3>信頼とアクセス制御</h3><p>公開したHTMLはコードとして動きます。読める人の制限は配信側で行います。</p><span class="go">信頼とアクセス制御 →</span></a></li>
+        <li><a class="card" href="/architecture/ja/overview.html" target="_top"><span class="tag">しくみ</span><h3>アーキテクチャの全体像</h3><p>Gitを正本とする考え方、サイトごとに独立した公開、共通の静的な投影とアプリケーションプレーン・コンテンツプレーン。</p><span class="go">アーキテクチャの全体像 → <span class="ext">（Architectureサイト）</span></span></a></li>
+      </ul>
+    </section>
+
     <nav class="pager" aria-label="ページ送り">
       <a class="next" href="reading.html"><small>次へ</small><strong>読者の体験</strong></a>
     </nav>
 
-    <footer class="foot"><strong>Gitが正本で、Webは読むための場所です。</strong><p>検索、ナビゲーション、ピン留めは閲覧体験のためのもので、内容の変更はGitで行います。HTMLは信頼できる公開元の文書として扱い、閲覧者のアクセス制御は配信側で設定します。図や設定に出てくるチーム・リポジトリ（<code>acme/…</code>）は説明用の例です。</p></footer>
+    <footer class="foot"><strong>Gitが正本で、Webは読むための場所です。</strong><p>検索、ナビゲーション、ピン留めは閲覧体験のためのもので、内容の変更はGitで行います。HTMLは信頼できる公開元の文書として扱い、閲覧者のアクセス制御は配信側で設定します（「<a href="access-and-trust.html">信頼とアクセス制御</a>」を参照）。図や設定に出てくるチーム・リポジトリ（<code>acme/…</code>）は説明用の例です。</p></footer>
   </main>
 </body>
 </html>
