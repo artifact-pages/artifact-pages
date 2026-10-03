@@ -354,6 +354,10 @@ async function serveAndSmoke(name, { web, storage, mode = 'smoke', expect = {}, 
   const port = await freePort()
   const project = `gap-compat-${path.basename(runRoot).slice(-8)}-${port}`.toLowerCase().replace(/[^a-z0-9-]/g, '')
   mkdirSync(path.join(storage, '_previews'), { recursive: true })
+  // The gate compares data formats, not file modes: a baseline CLI may have
+  // created its storage root 0700 (fixed after the first v0.1.0 candidate), which
+  // nginx in the container cannot read on Linux. CLI tests cover the modes.
+  chmodSync(storage, 0o755)
   const composeEnv = { WEB_PORT: String(port), WEB_ROOT: web, STORAGE_ROOT: storage, PREVIEW_ROOT: path.join(storage, '_previews'), COMPOSE_PROJECT_NAME: project }
   const compose = (args) => sh('docker', ['compose', '-f', path.join(projectRoot, 'docker-compose.yml'), '-p', project, ...args], { env: composeEnv, allowFail: true })
   log(`${name}: serving on ${port} (${mode})`)
