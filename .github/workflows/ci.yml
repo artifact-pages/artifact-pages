@@ -18,3 +18,5 @@ jobs:
     uses: ./.github/workflows/verify.yml
     permissions:
       contents: read
+      # The composite Actions smoke verifies an explicit pull request through the API.
+      pull-requests: read

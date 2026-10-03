@@ -37,7 +37,7 @@ Completed improvements remain historical evidence and are not reopened merely to
 
 These groups cover the current unfinished tracks without copying fast-changing issue statuses here. A newly discovered decision moves only the affected slice to collaboration; unrelated agent-led work continues.
 
-The owner selected the [public domain and provider delivery policy](../architecture/deployment-domain-policy.html) and confirmed purchase of `artifact-pages.dev` on September 28, 2026. Retain it under the Cloudflare Registrar/DNS policy; use the apex for Cloudflare Cache/CDN + R2 production and `aws.artifact-pages.dev` for direct CloudFront/S3 verification via DNS-only records. Domain acquisition is recorded; account/zone identifiers, credentials, authoritative DNS/TLS proof, plan approval, and external actions remain explicit owner handoffs. No Route 53 hosted zone or production GCP implementation follows from this policy.
+The owner selected the [public domain and provider delivery policy](../architecture/deployment-domain-policy.html) and confirmed purchase of `artifact-pages.dev` on September 28, 2026. Retain it under the Cloudflare Registrar/DNS policy; use the apex for Cloudflare Cache/CDN + R2 production and `aws.artifact-pages.stream` for direct CloudFront/S3 verification via DNS-only records. Domain acquisition is recorded; account/zone identifiers, credentials, authoritative DNS/TLS proof, plan approval, and external actions remain explicit owner handoffs. No Route 53 hosted zone or production GCP implementation follows from this policy.
 
 ## Delegation and handoff protocol
 
