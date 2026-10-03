@@ -1,0 +1,3 @@
+verification fixture resource-00881 for verify-scale-1000
+verification fixture resource-00881 for verify-scale-1000
+verification fixture resource-00881 for verify-scale-1000

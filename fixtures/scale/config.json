@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "generatedRoot": "sites",
+  "profiles": {
+    "smoke": [
+      "verify-scale-10"
+    ],
+    "full": [
+      "verify-scale-10",
+      "verify-scale-100",
+      "verify-scale-1000",
+      "verify-scale-5000",
+      "verify-scale-10000"
+    ]
+  },
+  "datasets": [
+    {
+      "id": "verify-scale-10",
+      "sourceFiles": 10,
+      "htmlPages": 1,
+      "markdownPages": 1,
+      "staticResources": 8
+    },
+    {
+      "id": "verify-scale-100",
+      "sourceFiles": 100,
+      "htmlPages": 7,
+      "markdownPages": 3,
+      "staticResources": 90
+    },
+    {
+      "id": "verify-scale-1000",
+      "sourceFiles": 1000,
+      "htmlPages": 70,
+      "markdownPages": 30,
+      "staticResources": 900
+    },
+    {
+      "id": "verify-scale-5000",
+      "sourceFiles": 5000,
+      "htmlPages": 350,
+      "markdownPages": 150,
+      "staticResources": 4500
+    },
+    {
+      "id": "verify-scale-10000",
+      "sourceFiles": 10000,
+      "htmlPages": 700,
+      "markdownPages": 300,
+      "staticResources": 9000
+    }
+  ]
+}
