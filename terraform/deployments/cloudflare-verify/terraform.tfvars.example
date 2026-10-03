@@ -1,0 +1,14 @@
+# Copy to terraform.tfvars (ignored). Account and zone IDs come from the mise env
+# (~/.config/artifact-pages/verify.env).
+r2_bucket_name  = "artifact-pages-verify"
+public_hostname = "artifact-pages.stream"
+
+preview_retention_days = 1
+connect_custom_domain  = true
+
+waf_custom_rules = {
+  presets = {
+    https_only = true
+    # ip_allowlist = ["203.0.113.10/32"]
+  }
+}

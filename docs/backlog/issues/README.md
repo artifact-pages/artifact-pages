@@ -59,5 +59,8 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-061](ISSUE-061-early-preview-click-escapes-reader.md) | Open | P3 | A click right after a preview loads can open the raw file outside the reader. |
 | [ISSUE-063](ISSUE-063-actions-missing-fulltext.md) | Done | P1 | The site-publish Action could not pass `--fulltext`, so publishing through it withdrew page text search. |
 | [ISSUE-064](ISSUE-064-r2-uses-shared-aws-config.md) | Open | P2 | The Cloudflare R2 path loads the shared AWS configuration, so AWS profiles and environment variables can affect R2 publishing. |
+| [ISSUE-065](ISSUE-065-registry-dry-run-says-unchanged.md) | Open | P3 | `registry register --dry-run` text says "unchanged" while planning to create the registry. |
+| [ISSUE-066](ISSUE-066-registry-app-deploy-lose-failed-purge.md) | Open | P2 | Registry register and app deploy forget a failed cache purge; reruns return no-op. |
+| [ISSUE-067](ISSUE-067-single-cloudflare-publisher-token.md) | Open | P3 | Cloudflare publishing needs three secrets that one token can provide. |
 
 ISSUE-013's verified completion record is retained in Git history.
