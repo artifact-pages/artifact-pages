@@ -28,12 +28,13 @@ The CLI defaults to those names, so the deployment YAML and Terraform output omi
 | CLI operation | Primary R2 credential | Registry-reader credential | `CF_API_TOKEN` |
 | --- | --- | --- | --- |
 | `index build`, `config set-default` | Not needed | Not needed | Not needed |
-| `site publish`, `preview publish` | Required | Optional; used only when reader env names are configured | Not needed |
+| `site publish` | Required | Optional; used only when reader env names are configured | Required when a real publish changes content or retries pending invalidation (cache purge) |
+| `preview publish` | Required | Optional; used only when reader env names are configured | Not needed |
 | `app deploy` | Required | Not used | Required only when a real deploy requests invalidation |
 | `registry register`, `registry unregister` | Required | Not used | Required only when a real operation requests invalidation |
 | `lock inspect`, `lock recover` | Required | Not used | Not needed |
 
-If registry-reader env names are present, `site publish` and `preview publish` require the corresponding access key and secret values before making provider requests, and use that identity only for `GetObject("_indexes/sites.json")`. Without those names, these commands read the registry with the primary credential. Other commands ignore configured reader env values. Registry and app mutations check that the API token is configured before changing registry or application objects.
+If registry-reader env names are present, `site publish` and `preview publish` require the corresponding access key and secret values before making provider requests, and use that identity only for `GetObject("_indexes/sites.json")`. Without those names, these commands read the registry with the primary credential. Other commands ignore configured reader env values. Registry, app, and site-publish mutations check that the API token is configured before changing projection objects.
 
 ### Optional delegated publisher
 
