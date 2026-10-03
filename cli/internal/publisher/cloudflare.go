@@ -155,6 +155,12 @@ func (backend *cloudflareBackend) DeleteObjects(ctx context.Context, keys []stri
 }
 
 func (backend *cloudflareBackend) Invalidate(ctx context.Context, paths []string) (string, error) {
+	for _, rawPath := range paths {
+		if !validCloudflareInvalidationPath(rawPath) {
+			return "", fmt.Errorf("invalid cache path %q", rawPath)
+		}
+	}
+	paths = backend.PlanInvalidation(paths)
 	if err := backend.ValidateInvalidation(paths); err != nil {
 		return "", err
 	}
@@ -163,9 +169,6 @@ func (backend *cloudflareBackend) Invalidate(ctx context.Context, paths []string
 	}
 	var prefixes, files []string
 	for _, rawPath := range paths {
-		if !strings.HasPrefix(rawPath, "/") || strings.Contains(rawPath, "?") || strings.Contains(rawPath, "#") {
-			return "", fmt.Errorf("invalid cache path %q", rawPath)
-		}
 		if strings.HasSuffix(rawPath, "/*") {
 			prefixPath := strings.TrimSuffix(rawPath, "*")
 			prefixes = append(prefixes, backend.baseURL.Host+prefixPath)
@@ -197,6 +200,77 @@ func (backend *cloudflareBackend) Invalidate(ctx context.Context, paths []string
 		}
 	}
 	return strings.Join(identifiers, ","), nil
+}
+
+func (backend *cloudflareBackend) PlanInvalidation(paths []string) []string {
+	return cloudflareSiteInvalidationPaths(paths)
+}
+
+const cloudflareExactSiteInvalidationLimit = 100
+
+func validCloudflareInvalidationPath(rawPath string) bool {
+	return strings.HasPrefix(rawPath, "/") && !strings.ContainsAny(rawPath, "?#") &&
+		(!strings.Contains(rawPath, "*") || strings.HasSuffix(rawPath, "/*"))
+}
+
+// cloudflareSiteInvalidationPaths bounds purge API calls for large site
+// publishes while keeping every compacted path inside the selected site's
+// artifact or index prefix. Cloudflare accepts URL-prefix purges; the retry
+// record continues to store the original exact paths.
+func cloudflareSiteInvalidationPaths(paths []string) []string {
+	counts := make(map[string]map[string]struct{})
+	for _, rawPath := range paths {
+		if !validCloudflareInvalidationPath(rawPath) {
+			continue
+		}
+		prefix := cloudflareSiteInvalidationPrefix(rawPath)
+		if prefix == "" || strings.HasSuffix(rawPath, "/*") {
+			continue
+		}
+		if counts[prefix] == nil {
+			counts[prefix] = make(map[string]struct{})
+		}
+		counts[prefix][rawPath] = struct{}{}
+	}
+	compact := make(map[string]bool, len(counts))
+	for prefix, uniquePaths := range counts {
+		compact[prefix] = len(uniquePaths) > cloudflareExactSiteInvalidationLimit
+	}
+	set := make(map[string]struct{}, len(paths))
+	for _, rawPath := range paths {
+		if !validCloudflareInvalidationPath(rawPath) {
+			set[rawPath] = struct{}{}
+			continue
+		}
+		if prefix := cloudflareSiteInvalidationPrefix(rawPath); compact[prefix] {
+			set[prefix+"*"] = struct{}{}
+			continue
+		}
+		set[rawPath] = struct{}{}
+	}
+	result := make([]string, 0, len(set))
+	for rawPath := range set {
+		result = append(result, rawPath)
+	}
+	sort.Strings(result)
+	return result
+}
+
+func cloudflareSiteInvalidationPrefix(rawPath string) string {
+	var keyPrefix string
+	switch {
+	case strings.HasPrefix(rawPath, "/_artifacts/"):
+		keyPrefix = "/_artifacts/"
+	case strings.HasPrefix(rawPath, "/_indexes/"):
+		keyPrefix = "/_indexes/"
+	default:
+		return ""
+	}
+	parts := strings.SplitN(strings.TrimPrefix(rawPath, keyPrefix), "/", 2)
+	if len(parts) != 2 || validateLockSite(parts[0]) != nil {
+		return ""
+	}
+	return keyPrefix + parts[0] + "/"
 }
 
 func (backend *cloudflareBackend) ValidateInvalidation(paths []string) error {

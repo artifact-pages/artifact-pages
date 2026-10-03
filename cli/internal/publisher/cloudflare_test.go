@@ -130,6 +130,107 @@ func TestCloudflareInvalidateBatchesAtAPIItemLimit(t *testing.T) {
 	}
 }
 
+func TestCloudflareInvalidateCompactsLargeSitePlansToOwnedPrefixes(t *testing.T) {
+	var batches []map[string][]string
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		var body map[string][]string
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+			t.Errorf("decode purge body: %v", err)
+		}
+		batches = append(batches, body)
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(writer, `{"success":true,"result":{"id":"purge-%d"}}`, len(batches))
+	}))
+	defer server.Close()
+
+	paths := []string{"/_indexes/sites.json", "/_artifacts/neighbor/keep.html", "/_previews/sre/catalog.json", "/assets/index-123.js"}
+	for index := 0; index < cloudflareExactSiteInvalidationLimit+1; index++ {
+		paths = append(paths,
+			fmt.Sprintf("/_artifacts/sre/pages/%03d.html", index),
+			fmt.Sprintf("/_indexes/sre/search/leaf-%03d.gz", index),
+		)
+	}
+	backend := cloudflareBackendForTest(server)
+	wantPlan := []string{"/_artifacts/neighbor/keep.html", "/_artifacts/sre/*", "/_indexes/sites.json", "/_indexes/sre/*", "/_previews/sre/catalog.json", "/assets/index-123.js"}
+	if got := backend.PlanInvalidation(paths); !reflect.DeepEqual(got, wantPlan) {
+		t.Fatalf("PlanInvalidation() = %v, want site-scoped compact plan %v", got, wantPlan)
+	}
+	id, err := backend.Invalidate(context.Background(), paths)
+	if err != nil {
+		t.Fatalf("Invalidate() error = %v", err)
+	}
+	if id != "purge-1,purge-2" || len(batches) != 2 {
+		t.Fatalf("Invalidate() = id %q with %d requests, want two bounded requests", id, len(batches))
+	}
+	if got, want := batches[0], map[string][]string{"prefixes": {"pages.example.com/_artifacts/sre/", "pages.example.com/_indexes/sre/"}}; !reflect.DeepEqual(got, want) {
+		t.Errorf("prefix purge body = %#v, want %#v", got, want)
+	}
+	if got, want := batches[1], map[string][]string{"files": {"https://pages.example.com/_artifacts/neighbor/keep.html", "https://pages.example.com/_indexes/sites.json", "https://pages.example.com/_previews/sre/catalog.json", "https://pages.example.com/assets/index-123.js"}}; !reflect.DeepEqual(got, want) {
+		t.Errorf("exact purge body = %#v, want %#v", got, want)
+	}
+}
+
+func TestCloudflareSiteInvalidationThresholdCountsUniquePathsPerOwnedPrefix(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		count      int
+		duplicates bool
+		wantCount  int
+		wantFirst  string
+	}{
+		{name: "at exact URL limit", count: cloudflareExactSiteInvalidationLimit, wantCount: cloudflareExactSiteInvalidationLimit, wantFirst: "/_artifacts/sre/pages/000.html"},
+		{name: "above exact URL limit", count: cloudflareExactSiteInvalidationLimit + 1, wantCount: 1, wantFirst: "/_artifacts/sre/*"},
+		{name: "duplicate exact URLs do not trigger prefix", count: cloudflareExactSiteInvalidationLimit + 1, duplicates: true, wantCount: 1, wantFirst: "/_artifacts/sre/pages/000.html"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			paths := make([]string, 0, test.count)
+			for index := 0; index < test.count; index++ {
+				path := fmt.Sprintf("/_artifacts/sre/pages/%03d.html", index)
+				if test.duplicates {
+					path = "/_artifacts/sre/pages/000.html"
+				}
+				paths = append(paths, path)
+			}
+			got := cloudflareSiteInvalidationPaths(paths)
+			if len(got) != test.wantCount || got[0] != test.wantFirst {
+				t.Fatalf("planned path count/first = %d/%q, want %d/%q", len(got), got[0], test.wantCount, test.wantFirst)
+			}
+		})
+	}
+}
+
+func TestCloudflareInvalidateRejectsMalformedLargePathsBeforeCompaction(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		calls++
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`{"success":true,"result":{"id":"unused"}}`))
+	}))
+	defer server.Close()
+
+	paths := make([]string, cloudflareExactSiteInvalidationLimit+1)
+	for index := range paths {
+		paths[index] = fmt.Sprintf("/_artifacts/sre/pages/%03d.html?cache=%d", index, index)
+	}
+	if _, err := cloudflareBackendForTest(server).Invalidate(context.Background(), paths); err == nil || !strings.Contains(err.Error(), "invalid cache path") {
+		t.Fatalf("Invalidate(malformed large plan) error = %v, want invalid-path error", err)
+	}
+	if calls != 0 {
+		t.Fatalf("purge requests = %d, want no API requests for malformed paths", calls)
+	}
+
+	validAndInvalid := make([]string, 0, cloudflareExactSiteInvalidationLimit+2)
+	for index := 0; index < cloudflareExactSiteInvalidationLimit+1; index++ {
+		validAndInvalid = append(validAndInvalid, fmt.Sprintf("/_artifacts/sre/pages/%03d.html", index))
+	}
+	invalid := "/_artifacts/sre/invalid.html?bad=1"
+	validAndInvalid = append(validAndInvalid, invalid)
+	wantPlan := []string{"/_artifacts/sre/*", invalid}
+	if got := cloudflareSiteInvalidationPaths(validAndInvalid); !reflect.DeepEqual(got, wantPlan) {
+		t.Fatalf("planned paths hid malformed input: got %v, want %v", got, wantPlan)
+	}
+}
+
 func TestCloudflareInvalidateReportsAPIAndTransportFailures(t *testing.T) {
 	t.Run("HTTP failure", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
