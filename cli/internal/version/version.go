@@ -11,7 +11,7 @@ import "runtime/debug"
 // Product is the product version this source tree releases. Between releases it
 // still names the last release, so a development build deploys that release's
 // web bundle unless given --archive.
-const Product = "0.1.0"
+const Product = "0.1.1"
 
 // Build describes the VCS state recorded in the Go build info.
 type Build struct {
