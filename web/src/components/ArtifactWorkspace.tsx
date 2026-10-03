@@ -233,6 +233,17 @@ export function ArtifactWorkspace({
     }
   }, [openPalette, focusTextSearch, toggleSidebar])
 
+  // The frame's window keeps the listener it got on load, so it must call the
+  // latest handler (the page text search client or sidebar state may have
+  // changed since) rather than the closure from that render.
+  const artifactKeyDownRef = useRef(handleArtifactKeyDown)
+  useEffect(() => {
+    artifactKeyDownRef.current = handleArtifactKeyDown
+  }, [handleArtifactKeyDown])
+  const forwardArtifactKeyDown = useCallback((event: KeyboardEvent) => {
+    artifactKeyDownRef.current(event)
+  }, [])
+
   // The page itself (its frame, when it has one) is where a keyboard reader continues reading.
   const focusStage = useCallback(() => {
     const stage = stageRef.current
@@ -534,6 +545,7 @@ export function ArtifactWorkspace({
       // fragment stays a same-document navigation (to the top of the page), so
       // the frame is not reloaded and does not scroll to the first match again.
       frameWindow.location.replace(hash ? frameUrl.href : `${frameUrl.href}#`)
+      scrollFrameToFragment(frameWindow, hash)
     } catch {
       // Cross-origin redirects remain isolated; same-origin artifacts receive the logical fragment.
     }
@@ -777,7 +789,7 @@ export function ArtifactWorkspace({
                 title={currentArtifact.title}
                 style={{ colorScheme: theme }}
                 onLoad={(event) => {
-                  event.currentTarget.contentWindow?.addEventListener('keydown', handleArtifactKeyDown, true)
+                  event.currentTarget.contentWindow?.addEventListener('keydown', forwardArtifactKeyDown, true)
                   syncHtmlFrameLocation(event.currentTarget)
                   highlightFrame(event.currentTarget, committedQueryRef.current, !hash)
                 }}
@@ -871,6 +883,23 @@ export function ArtifactWorkspace({
       {toast ? <div className="toast" role="status" aria-live="polite">{toast}</div> : null}
     </div>
   )
+}
+
+// A same-document fragment navigation scrolls the frame itself, but Chromium
+// can skip that scroll when the navigation lands while the frame is being
+// resized or restored by a history traversal, leaving the reader at the old
+// position. Apply the target position explicitly so the result never depends on it.
+function scrollFrameToFragment(frameWindow: Window, hash: string) {
+  const document = frameWindow.document
+  if (!hash) {
+    frameWindow.scrollTo(0, 0)
+    return
+  }
+  let id = hash.slice(1)
+  try { id = decodeURIComponent(id) } catch { /* keep the raw fragment */ }
+  const target = document.getElementById(id) ?? document.getElementsByName(id)[0]
+  // scrollTo keeps the scroll inside the frame; scrollIntoView would also move the app page.
+  if (target) frameWindow.scrollTo(0, target.getBoundingClientRect().top + frameWindow.scrollY)
 }
 
 function highlightFrame(iframe: HTMLIFrameElement, query: string, scrollToFirst: boolean) {

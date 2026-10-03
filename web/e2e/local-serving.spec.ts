@@ -4782,7 +4782,13 @@ test.describe('page text search', () => {
 
     // From inside an HTML artifact frame as well.
     await page.goto('/textsearch/incidents/checkout-latency/index.html?q=latency')
-    await page.frameLocator('iframe.artifact-frame').locator('body').click()
+    const artifactFrame = page.frameLocator('iframe.artifact-frame')
+    // The app attaches its key handler to the frame's window in the same load
+    // callback that adds the highlight style, so the style means the frame is wired.
+    await expect.poll(() => artifactFrame.locator('body').evaluate((body) => (
+      body.ownerDocument.adoptedStyleSheets.some((sheet) => [...sheet.cssRules].some((rule) => rule.cssText.includes('gap-page-text-search')))
+    ))).toBe(true)
+    await artifactFrame.locator('body').click()
     await page.keyboard.press('ControlOrMeta+Shift+F')
     await expect(field(page)).toBeFocused()
 
