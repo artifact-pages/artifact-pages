@@ -927,7 +927,7 @@ Pre-publish does not immediately delete an older completed revision when a newer
 
 #### Shared Action behavior
 
-These behaviors are properties of the composite Action wrappers (root `action.yml`, `actions/site-publish`, `actions/admin`, `actions/preview-publish`). They live in the wrapper, never in the CLI, so the CLI contract above is unchanged.
+These behaviors are properties of the composite Action wrappers (root `action.yml`, `actions/site-publish`, `actions/admin`, `actions/preview-publish`). They live in the wrapper, never in the CLI, so the CLI contract above is unchanged. The decisions and rejected alternatives are recorded in [TD8](backlog/technical-design/TD8-action-consumer-contract.md).
 
 **Publish condition.** The site-publish (and root) and admin Actions accept an optional `publish-on` input: a newline-separated list of `event` or `event:ref` entries such as `push:refs/heads/main` and `workflow_dispatch`. An entry matches when its event equals `GITHUB_EVENT_NAME` and, if it names a ref, that ref equals the full `GITHUB_REF` (`*` matches any run of characters, so `push:refs/tags/v*` covers tags). A run that matches no entry is passed to the CLI as `--dry-run` and logs a notice saying why. An explicit `dry-run: true` always wins. An empty `publish-on` means no condition, which is the previous behavior. A malformed entry fails the run (exit two, typed failure outputs) instead of silently becoming a dry-run. The preview Action has no `publish-on`: a preview is not a production write, and callers choose when it runs with workflow `on:` and job `if:`.
 
