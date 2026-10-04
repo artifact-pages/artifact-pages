@@ -75,6 +75,7 @@ jobs:
           npm run test:web-packaging
           npm run test:provider-delivery
           npm run test:actions-shared
+          npm run test:cli-release
           npm run test:actions-parity
           npm run test:app-cache-rollback
           node scripts/test-clean-room-adoption.mjs

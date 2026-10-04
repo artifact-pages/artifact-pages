@@ -25,6 +25,7 @@
     "test:aws-deployment": "node --test terraform/modules/aws/routes.test.js terraform/modules/aws/deployment.test.js terraform/modules/aws/artifact-csp.test.js",
     "test:provider-delivery": "node --test terraform/modules/aws/routes.test.js terraform/modules/aws/deployment.test.js terraform/modules/aws/artifact-csp.test.js terraform/modules/cloudflare/delivery/main.test.js",
     "test:actions-shared": "node --test actions/shared/*.test.mjs",
+    "test:cli-release": "node --test scripts/package-cli-release.test.mjs",
     "test:actions-parity": "node scripts/test-actions-parity.mjs",
     "test:app-cache-rollback": "node scripts/test-app-deploy-rollback.mjs",
     "pretest:e2e": "npm run build",

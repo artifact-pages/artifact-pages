@@ -85,7 +85,16 @@ runs:
       with:
         fetch-depth: ${{ inputs.fetch-depth }}
         persist-credentials: false
+    - name: Install the released CLI when the Action ref is a release tag
+      id: prebuilt
+      shell: bash
+      env:
+        ARTIFACT_PAGES_ACTION_REF: ${{ github.action_ref }}
+        ARTIFACT_PAGES_ACTION_REPOSITORY: ${{ github.action_repository }}
+        ARTIFACT_PAGES_TOKEN: ${{ github.token }}
+      run: node "$GITHUB_ACTION_PATH/actions/shared/prebuilt-cli.mjs" --source-root "${{ github.action_path }}"
     - name: Set up Go from the pinned component source
+      if: ${{ steps.prebuilt.outputs.used != 'true' }}
       uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
         go-version-file: ${{ github.action_path }}/go.mod
@@ -95,6 +104,7 @@ runs:
       env:
         GOTOOLCHAIN: auto
     - name: Restore the Go build cache
+      if: ${{ steps.prebuilt.outputs.used != 'true' }}
       id: go-cache
       shell: bash
       working-directory: ${{ github.action_path }}
@@ -109,11 +119,13 @@ runs:
           echo "key=artifact-pages-go-$RUNNER_OS-$RUNNER_ARCH-$source_hash"
         } >> "$GITHUB_OUTPUT"
     - name: Cache Go modules and build output
+      if: ${{ steps.prebuilt.outputs.used != 'true' }}
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ steps.go-cache.outputs.paths }}
         key: ${{ steps.go-cache.outputs.key }}
     - name: Build the shared artifact-pages CLI
+      if: ${{ steps.prebuilt.outputs.used != 'true' }}
       shell: bash
       working-directory: ${{ github.action_path }}
       run: go build -trimpath -o "$RUNNER_TEMP/artifact-pages" ./cli/cmd/artifact-pages

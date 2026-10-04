@@ -94,6 +94,7 @@ async function assertRootActionMatchesSitePublish() {
   const siteBody = site.slice(site.indexOf('\ninputs:\n'))
     .replace('${{ github.action_path }}/../../go.mod', '${{ github.action_path }}/go.mod')
     .replaceAll('working-directory: ${{ github.action_path }}/../..', 'working-directory: ${{ github.action_path }}')
+    .replaceAll('--source-root "${{ github.action_path }}/../.."', '--source-root "${{ github.action_path }}"')
     .replaceAll('$GITHUB_ACTION_PATH/../shared/', '$GITHUB_ACTION_PATH/actions/shared/')
   assert.equal(rootBody, siteBody, 'root Action inputs, outputs and steps must match actions/site-publish apart from root-relative paths')
   assert.equal(
@@ -153,6 +154,14 @@ async function assertCompositeActionWiring() {
       return [name, expression]
     }))
     assert.deepEqual(outputMappings, expectedOutputMappings, `${kind} Action outputs must relay the shared CLI step outputs`)
+
+    // Prebuilt CLI: a release-tag ref installs the released binary; every Go step is skipped then.
+    assert.match(source, /ARTIFACT_PAGES_ACTION_REF: \$\{\{ github\.action_ref \}\}/, `${kind} Action must decide on the Action ref`)
+    assert.match(source, /ARTIFACT_PAGES_ACTION_REPOSITORY: \$\{\{ github\.action_repository \}\}/, `${kind} Action must download from its own repository`)
+    assert.match(source, /ARTIFACT_PAGES_TOKEN: \$\{\{ github\.token \}\}/, `${kind} Action must use the workflow token, not the private-config token, for release downloads`)
+    assert.equal((source.match(/if: \$\{\{ steps\.prebuilt\.outputs\.used != 'true' \}\}/g) ?? []).length, 4, `${kind} Action must skip setup-go, the cache steps and the build when the released binary is used`)
+    assert.ok(source.indexOf('id: prebuilt') < source.indexOf('uses: actions/setup-go@'), `${kind} Action must try the released binary before Go setup`)
+    if (kind === 'preview') assert.ok(source.indexOf('verify-preview-pr.mjs') < source.indexOf('id: prebuilt'), 'preview trust preflight must precede the CLI download')
 
     // Go build cache (IMP-46 slice 3): actions/cache keyed on the pinned source, because setup-go cannot hash a go.sum outside the workspace.
     assert.match(source, /^      uses: actions\/cache@[0-9a-f]{40} # v\d+\.\d+\.\d+$/m, `${kind} Action must pin actions/cache to a full SHA`)
