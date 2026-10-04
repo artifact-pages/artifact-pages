@@ -16,4 +16,4 @@ Each ticket records one independently verifiable contract or measurement. Status
 | [T17](T17-local-preview-retirement-e2e.md) | Done | Local preview deletion and main-publish reconciliation E2E |
 | [T18](T18-publish-scale-baseline.md) | Done | Publisher scale baseline and state-manifest comparison |
 | [T19](T19-publish-state-layout-cost.md) | Done | Publish-state layout and provider-cost comparison |
-| [T20](T20-publish-state-v2.md) | In progress | Fused publish-state recovery and candidate validation |
+| [T20](T20-publish-state-and-candidate.md) | In progress | Fused publish-state recovery and candidate validation |

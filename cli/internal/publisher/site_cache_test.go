@@ -242,23 +242,23 @@ func TestSiteCachePathsEncodeSpecialFilenamesAndStaySiteScoped(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, p := range []string{"/*", "/_artifacts/other/file.html", "/_artifacts/sre/../other/file.html", "/_artifacts/sre/%2E%2E/file.html"} {
-		seedMemoryObject(b, siteCacheRetryKey("sre"), []byte(`{"schemaVersion":2,"site":"sre","paths":["`+p+`"]}`))
+		seedMemoryObject(b, siteCacheRetryKey("sre"), []byte(`{"schemaVersion":1,"site":"sre","paths":["`+p+`"]}`))
 		if _, _, err := readSiteCacheRetry(t.Context(), b, "sre"); err == nil {
 			t.Fatalf("accepted unsafe pending path %q", p)
 		}
 	}
 }
 
-func TestSiteCacheRetryRejectsSchemaOneWithScopedResetGuidance(t *testing.T) {
+func TestSiteCacheRetryRejectsOldSchemaOneShapeWithScopedResetGuidance(t *testing.T) {
 	b := newLockMemoryBackend()
 	seedMemoryObject(b, siteCacheRetryKey("sre"), []byte(`{"schemaVersion":1,"paths":["/_artifacts/sre/old.html"]}`))
 	_, _, err := readSiteCacheRetry(t.Context(), b, "sre")
 	if err == nil {
-		t.Fatal("schema-one site cache record was accepted")
+		t.Fatal("old schema-one cache-retry shape was accepted")
 	}
 	for _, exactKey := range []string{sitePublishStateKey("sre"), siteCacheRetryKey("sre")} {
 		if !strings.Contains(err.Error(), exactKey) {
-			t.Fatalf("schema-one cache retry error = %v; want target-scoped reset guidance including %s", err, exactKey)
+			t.Fatalf("old schema-one cache retry error = %v; want target-scoped reset guidance including %s", err, exactKey)
 		}
 	}
 }

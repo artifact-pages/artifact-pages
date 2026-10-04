@@ -3,8 +3,8 @@
 - Status: Done
 - Phase: Provider-neutral publisher contract
 - Decided: 2026-10-04
-- Related implementation: [IMP-49](../implementation/IMP-49-publish-state-v2-transaction-journal.md)
-- Related verification: [T20](../verification/T20-publish-state-v2.md), [T19](../verification/T19-publish-state-layout-cost.md)
+- Related implementation: [IMP-49](../implementation/IMP-49-fused-publish-state-journal.md)
+- Related verification: [T20](../verification/T20-publish-state-and-candidate.md), [T19](../verification/T19-publish-state-layout-cost.md)
 - Product contract: [Specification §5.3](../../specification.md#per-site-publish-state-and-reconciliation)
 
 ## Decision
@@ -15,9 +15,9 @@ Do not add directory nodes, shards, or a second diff engine. T19 found their spa
 
 ## Records
 
-The private root remains `_control/publish-state/<site>.json.gz`. Version 2 contains the site ID, committed input fingerprint, last committed origin transaction generation, and sorted object rows. Rows bind in-scope object keys to SHA-256, byte size, and the complete HTTP representation metadata (`Content-Type`, `Content-Encoding`, `Content-Disposition`, `Cache-Control`). The compressed body is deterministic and bounded. Object metadata binds the schema, input root, generation, site, digest and the non-pending state.
+The private root remains `_control/publish-state/<site>.json.gz`. Schema 1 contains the site ID, committed input fingerprint, last committed origin transaction generation, and sorted object rows. Rows bind in-scope object keys to SHA-256, byte size, and the complete HTTP representation metadata (`Content-Type`, `Content-Encoding`, `Content-Disposition`, `Cache-Control`). The compressed body is deterministic and bounded. Object metadata binds the schema, input root, generation, site, digest and the non-pending state.
 
-The existing `_control/site-cache/<site>.json` record becomes the transaction journal. Its version-2 form contains sorted invalidation paths and, for an in-flight origin transaction, a random transaction ID, its base committed generation, and the sorted union of every projection key that may have been written or removed. A record without a transaction may still carry cache-only work. The prerelease reader accepts schema 2 only; it rejects older schemas with target-scoped reset guidance and never silently inventories or deletes an unreadable record.
+The existing `_control/site-cache/<site>.json` record becomes the transaction journal. Its schema-1 form contains sorted invalidation paths and, for an in-flight origin transaction, a random transaction ID, its base committed generation, and the sorted union of every projection key that may have been written or removed. A record without a transaction may still carry cache-only work. The prerelease reader accepts the current schema-1 shape only; an earlier shape with the same schema integer fails closed with target-scoped reset guidance and is never silently inventoried or deleted.
 
 ## Publish and recovery sequence
 
@@ -29,4 +29,4 @@ Dry-run is read-only and may plan recovery; it does not rewrite records, mutate 
 
 ## Release boundary
 
-This is a private CLI control-format change. Public registry, metadata, index, preview, full-text and browser behavior remain unchanged. The `v0.2.0` pre-release intentionally does not preserve private-control compatibility; see TD2 for the owner-approved exception.
+This changes private CLI control records only. Public registry, metadata, index, preview, full-text and browser behavior remain unchanged. The pre-release stream has no promised private-control compatibility; reset only the selected site's two private control keys after backing them up and confirming there is no publish or cache retry in progress. This CLI never performs that reset automatically. The product candidate version is tracked separately from the private record schema.

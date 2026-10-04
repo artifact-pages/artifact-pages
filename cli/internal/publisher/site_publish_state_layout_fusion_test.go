@@ -136,7 +136,7 @@ func TestSitePublishStateLayoutFusion(t *testing.T) {
 		Limitations: []string{
 			"Counts cover only state and site cache-retry control objects plus source/index projection writes; registry, preview, build, CDN invalidation and provider latency are excluded.",
 			"GET-only reads and decodes the complete state body on no-op. It derives trusted metadata from the same GET response and removes the separate HEAD/GET generation race check.",
-			"The prototype uses its own schema-version-2 state envelope and cache journal; the production state codec and cache-retry reader currently accept schema version 1 only.",
+			"The prototype uses test-local schema-2 state and journal codecs to compare transaction designs; production uses the separate current schema-1 codec.",
 			"Initial committed state and origin objects are preseeded outside per-step counters. The report omits cold bootstrap cost; see the separate state-layout sweep for bootstrap evidence.",
 			"The same-projection input-root case changes only the serialized root to isolate generation semantics; it is not a separate Build invocation.",
 			"The journal-only interruption is injected after journal PUT; the separate layout's pending-state CAS gates projection writes. Origin/cache failures are model injections; ETag preconditions are local comparisons, not provider-side CAS races or lost-response tests.",
@@ -594,10 +594,18 @@ func fusionValidatePersistedState(site string, state fusionPersistedState) error
 	if state.SchemaVersion != 2 || state.Site != site || !sitePublishStateHashPattern.MatchString(state.Committed.Generation) {
 		return errors.New("fusion state schema, site, or committed generation is invalid")
 	}
-	projection := sitePublishState{SchemaVersion: sitePublishStateSchemaVersion, Site: site,
-		Committed: sitePublishCommitted{InputRoot: state.Committed.InputRoot, Generation: state.Committed.Generation, Objects: state.Committed.Objects}}
-	if err := validateSitePublishState(projection, site); err != nil {
-		return err
+	if !sitePublishStateHashPattern.MatchString(state.Committed.InputRoot) || state.Committed.Objects == nil {
+		return errors.New("fusion committed input root or object rows are invalid")
+	}
+	previous := ""
+	for index, row := range state.Committed.Objects {
+		if err := validateSitePublishRow(site, row); err != nil {
+			return fmt.Errorf("fusion object %d: %w", index, err)
+		}
+		if index > 0 && row.Key <= previous {
+			return errors.New("fusion object rows must be sorted by unique key")
+		}
+		previous = row.Key
 	}
 	if state.Pending != nil {
 		pending := state.Pending

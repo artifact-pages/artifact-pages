@@ -2,13 +2,13 @@
 
 - Status: In progress
 - Phase: Local verification and isolated Cloudflare verification target
-- Related implementation: [IMP-49](../implementation/IMP-49-publish-state-v2-transaction-journal.md)
-- Related design: [TD6](../technical-design/TD6-publish-state-v2.md)
+- Related implementation: [IMP-49](../implementation/IMP-49-fused-publish-state-journal.md)
+- Related design: [TD6](../technical-design/TD6-fused-publish-state.md)
 - Related baseline: [T19](T19-publish-state-layout-cost.md)
 
 ## Proof needed
 
-- [x] Verify schema-1 private control records fail closed with exact-site reset guidance; fresh v2 state bootstraps only when the state key is absent.
+- [x] Verify older private-control shapes fail closed with exact-site reset guidance; current schema-1 state bootstraps only when the state key is absent.
 - [x] Simulate journal and final-root conditional writes that persist but return errors; create a fresh publisher wrapper and prove retry classifies the persisted records correctly.
 - [ ] Verify pending journal monotonicity across changed/reverted desired inputs, stale deletions, newly added keys, cache invalidation retry, journal cleanup, and dry-run.
 - [ ] Verify Cloudflare R2 state GET returns all HTTP metadata needed for decoding with no state HEAD; preserve AWS HEAD+GET and ETag behavior.

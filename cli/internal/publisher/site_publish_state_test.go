@@ -43,7 +43,7 @@ func TestSitePublishStateCodecRoundTripDeterministic(t *testing.T) {
 	if object.ContentType != "application/octet-stream" || object.ContentEncoding != "" || object.ContentDisposition != "" || object.Cache != "no-store" {
 		t.Fatalf("unexpected object HTTP policy: %+v", object)
 	}
-	if len(object.Metadata) != 6 || object.Metadata["artifact-pages-publish-state-schema"] != "2" ||
+	if len(object.Metadata) != 6 || object.Metadata["artifact-pages-publish-state-schema"] != "1" ||
 		object.Metadata["artifact-pages-publish-input-root"] != state.Committed.InputRoot ||
 		object.Metadata["artifact-pages-publish-generation"] != state.Committed.Generation ||
 		object.Metadata["artifact-pages-publish-pending"] != "false" ||
@@ -63,23 +63,31 @@ func TestSitePublishStateCodecRoundTripDeterministic(t *testing.T) {
 	}
 }
 
-func TestSitePublishStateRejectsSchemaOneWithScopedResetGuidance(t *testing.T) {
+func TestSitePublishStateRejectsOldSchemaOneShapeWithScopedResetGuidance(t *testing.T) {
+	inputRoot := strings.Repeat("b", 64)
+	generation := strings.Repeat("d", 64)
+	plain := []byte(`{"schemaVersion":1,"site":"sre","committed":{"inputRoot":"` + inputRoot + `","objects":[]}}`)
+	compressed := gzipForTest(t, plain)
+	info := stateInfoForBytes(compressed, "sre", inputRoot, generation)
+	_, err := decodeSitePublishState("sre", info, compressed)
+	for _, exactKey := range []string{sitePublishStateKey("sre"), siteCacheRetryKey("sre")} {
+		if err == nil || !strings.Contains(err.Error(), exactKey) {
+			t.Fatalf("old schema-one shape error = %v; want target-scoped reset guidance including %s", err, exactKey)
+		}
+	}
+}
+
+func TestSitePublishStateHeadRejectsOldSchemaOneMetadataMissingGeneration(t *testing.T) {
 	state := validSitePublishState()
-	state.SchemaVersion = 1
-	plain, err := json.Marshal(state)
+	object, err := buildSitePublishStateObject(state.Site, state)
 	if err != nil {
 		t.Fatal(err)
 	}
-	compressed := gzipForTest(t, plain)
-	info := ObjectInfo{ETag: `"old-state-etag"`, Size: int64(len(compressed)), ContentType: "application/octet-stream", ContentDisposition: "inline", CacheControl: sitePublishStateCacheControl,
-		Metadata: map[string]string{"artifact-pages-publish-state-schema": "1", "artifact-pages-publish-input-root": state.Committed.InputRoot,
-			"artifact-pages-publish-generation": state.Committed.Generation, "artifact-pages-publish-pending": "false",
-			"artifact-pages-site": state.Site, "artifact-pages-sha256": sha256Hex(compressed)}}
-	_, err = decodeSitePublishState(state.Site, info, compressed)
-	for _, exactKey := range []string{sitePublishStateKey("sre"), siteCacheRetryKey("sre")} {
-		if err == nil || !strings.Contains(err.Error(), exactKey) {
-			t.Fatalf("schema-one error = %v; want target-scoped reset guidance including %s", err, exactKey)
-		}
+	info := sitePublishStateInfo(object, `"missing-generation"`)
+	delete(info.Metadata, "artifact-pages-publish-generation")
+	if err := validateSitePublishStateHead(state.Site, info); err == nil ||
+		!strings.Contains(err.Error(), sitePublishStateKey(state.Site)) || !strings.Contains(err.Error(), siteCacheRetryKey(state.Site)) {
+		t.Fatalf("old schema-one HEAD shape error = %v; want selected-site reset guidance", err)
 	}
 }
 
@@ -184,13 +192,13 @@ func TestDecodeSitePublishStateStrictJSONAndBounds(t *testing.T) {
 	if _, err := decodePlainStateForTest(state.Site, objectInfoForState(object), unsupported); err == nil || !strings.Contains(err.Error(), "unsupported site publish state schema version 99") {
 		t.Fatalf("unsupported schema was not rejected before other fields: %v", err)
 	}
-	if _, err := decodePlainStateForTest(state.Site, objectInfoForState(object), []byte(`{"schemaVersion":2,"schemaVersion":2}`)); err == nil || !strings.Contains(err.Error(), "duplicate") {
+	if _, err := decodePlainStateForTest(state.Site, objectInfoForState(object), []byte(`{"schemaVersion":1,"schemaVersion":1}`)); err == nil || !strings.Contains(err.Error(), "duplicate") {
 		t.Fatalf("duplicate schema key error = %v", err)
 	}
 	if _, err := decodePlainStateForTest(state.Site, objectInfoForState(object), bytes.Repeat([]byte("x"), maxSitePublishStateJSONBytes+1)); err == nil {
 		t.Fatal("oversize decompressed JSON was accepted")
 	}
-	missingObjects := []byte(`{"schemaVersion":2,"site":"sre","committed":{"inputRoot":"` + strings.Repeat("b", 64) + `","generation":"` + strings.Repeat("d", 64) + `"}}`)
+	missingObjects := []byte(`{"schemaVersion":1,"site":"sre","committed":{"inputRoot":"` + strings.Repeat("b", 64) + `","generation":"` + strings.Repeat("d", 64) + `"}}`)
 	if _, err := decodePlainStateForTest(state.Site, objectInfoForState(object), missingObjects); err == nil {
 		t.Fatal("missing required objects array was accepted")
 	}
@@ -239,7 +247,7 @@ func TestDecodeSitePublishStateRejectsBodyAndGzipDrift(t *testing.T) {
 func TestDecodeSitePublishStateRejectsOversizeCompressedAndDecompressedState(t *testing.T) {
 	// The encoded representation expands beyond the 64 MiB JSON ceiling while
 	// staying highly compressible, so this checks the decompression bomb bound.
-	tooLargeJSON := []byte(`{"schemaVersion":2,"site":"sre","committed":{"inputRoot":"` + strings.Repeat("b", 64) + `","generation":"` + strings.Repeat("d", 64) + `","objects":[]},"padding":"` + strings.Repeat("x", maxSitePublishStateJSONBytes+1) + `"}`)
+	tooLargeJSON := []byte(`{"schemaVersion":1,"site":"sre","committed":{"inputRoot":"` + strings.Repeat("b", 64) + `","generation":"` + strings.Repeat("d", 64) + `","objects":[]},"padding":"` + strings.Repeat("x", maxSitePublishStateJSONBytes+1) + `"}`)
 	compressed := gzipForTest(t, tooLargeJSON)
 	if len(compressed) > maxSitePublishStateGzipBytes {
 		t.Fatalf("test gzip unexpectedly exceeds compressed limit: %d", len(compressed))
@@ -321,7 +329,7 @@ func stateInfoForBytes(compressed []byte, site, root, generation string) ObjectI
 		ETag: `"state-etag"`, Size: int64(len(compressed)), ContentType: "application/octet-stream",
 		ContentDisposition: "inline", CacheControl: sitePublishStateCacheControl,
 		Metadata: map[string]string{
-			"artifact-pages-publish-state-schema": "2", "artifact-pages-publish-input-root": root,
+			"artifact-pages-publish-state-schema": "1", "artifact-pages-publish-input-root": root,
 			"artifact-pages-publish-generation": generation, "artifact-pages-publish-pending": "false",
 			"artifact-pages-sha256": sha256Hex(compressed), "artifact-pages-site": site,
 		},

@@ -29,7 +29,7 @@ type sitePublishTransaction struct {
 }
 
 const (
-	siteCacheRetrySchemaVersion = 2
+	siteCacheRetrySchemaVersion = 1
 	maxSiteCacheRetryBytes      = 16 << 20
 )
 
@@ -98,16 +98,13 @@ func readSiteCacheRetry(ctx context.Context, backend ConditionalObjectBackend, s
 		return siteCacheRetry{}, "", errors.New("site cache retry record has an invalid schemaVersion")
 	}
 	if version != siteCacheRetrySchemaVersion {
-		if version == 1 {
-			return siteCacheRetry{}, "", sitePrivateControlSchemaResetError(site, "cache-retry record", version)
-		}
 		return siteCacheRetry{}, "", compat.CheckSchemaVersion("site cache retry record", object.Bytes, siteCacheRetrySchemaVersion)
 	}
 	if rawPaths, ok := envelope["paths"]; !ok || !rawJSONKind(rawPaths, "array") {
 		return siteCacheRetry{}, "", errors.New("site cache retry record paths must be an array")
 	}
 	if rawSite, ok := envelope["site"]; !ok || !rawJSONKind(rawSite, "string") {
-		return siteCacheRetry{}, "", errors.New("site cache retry record site must be a string")
+		return siteCacheRetry{}, "", sitePrivateControlFormatResetError(site, "cache-retry record", "missing selected-site field")
 	}
 	var recordedSite string
 	if err := json.Unmarshal(envelope["site"], &recordedSite); err != nil || recordedSite != site {

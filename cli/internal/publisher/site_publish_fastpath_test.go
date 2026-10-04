@@ -298,7 +298,7 @@ func TestPublishSiteFinalStateCASFailureRecoversRevertedTouchedKeys(t *testing.T
 	}
 	pending, err := decodeSitePublishState("sre", stateInfo, stateObject.Bytes)
 	if err != nil || pending.SchemaVersion != sitePublishStateSchemaVersion {
-		t.Fatalf("state after final CAS failure = %+v, err=%v; want unchanged committed v2 state", pending, err)
+		t.Fatalf("state after final CAS failure = %+v, err=%v; want unchanged committed state", pending, err)
 	}
 	journal, _, err := readSiteCacheRetry(context.Background(), backend, "sre")
 	if err != nil || journal.Transaction == nil || len(journal.Transaction.TouchedKeys) == 0 {

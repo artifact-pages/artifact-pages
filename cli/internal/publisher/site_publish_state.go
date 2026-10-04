@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	sitePublishStateSchemaVersion = 2
+	sitePublishStateSchemaVersion = 1
 	maxSitePublishStateGzipBytes  = 16 << 20
 	maxSitePublishStateJSONBytes  = 64 << 20
 	sitePublishStateCacheControl  = "no-store"
@@ -122,20 +122,25 @@ func validateSitePublishStateHead(site string, info ObjectInfo) error {
 		return fmt.Errorf("site publish state HEAD has an unsupported schema %q", metadata["artifact-pages-publish-state-schema"])
 	}
 	if version != sitePublishStateSchemaVersion {
-		if version == 1 {
-			return sitePrivateControlSchemaResetError(site, "publish-state", version)
-		}
 		return fmt.Errorf("site publish state HEAD has unsupported schema %q; this CLI reads schema %d", versionToken, sitePublishStateSchemaVersion)
 	}
 	if metadata["artifact-pages-site"] != site {
 		return errors.New("site publish state HEAD site does not match the selected site")
 	}
 	root := metadata["artifact-pages-publish-input-root"]
+	if root == "" {
+		return sitePrivateControlFormatResetError(site, "publish-state", "missing committed input root")
+	}
 	if !sitePublishStateHashPattern.MatchString(root) {
 		return errors.New("site publish state HEAD has an invalid input root")
 	}
-	if pending := metadata["artifact-pages-publish-pending"]; pending != "false" {
+	if pending := metadata["artifact-pages-publish-pending"]; pending == "true" {
+		return sitePrivateControlFormatResetError(site, "publish-state", "obsolete inline pending field")
+	} else if pending != "false" {
 		return errors.New("site publish state HEAD has an invalid pending flag")
+	}
+	if metadata["artifact-pages-publish-generation"] == "" {
+		return sitePrivateControlFormatResetError(site, "publish-state", "missing committed generation")
 	}
 	if !sitePublishStateHashPattern.MatchString(metadata["artifact-pages-publish-generation"]) {
 		return errors.New("site publish state HEAD has an invalid committed generation")
@@ -196,9 +201,6 @@ func decodeSitePublishState(site string, info ObjectInfo, body []byte) (sitePubl
 		return sitePublishState{}, errors.New("site publish state has an invalid schemaVersion")
 	}
 	if version != sitePublishStateSchemaVersion {
-		if version == 1 {
-			return sitePublishState{}, sitePrivateControlSchemaResetError(site, "publish-state", version)
-		}
 		return sitePublishState{}, fmt.Errorf("unsupported site publish state schema version %d; this CLI reads schema %d", version, sitePublishStateSchemaVersion)
 	}
 	if err := requireStateJSONFields(envelope, map[string]string{
@@ -206,11 +208,18 @@ func decodeSitePublishState(site string, info ObjectInfo, body []byte) (sitePubl
 	}); err != nil {
 		return sitePublishState{}, err
 	}
+	if _, exists := envelope["pending"]; exists {
+		return sitePublishState{}, sitePrivateControlFormatResetError(site, "publish-state", "obsolete inline pending field")
+	}
+	var committedEnvelope map[string]json.RawMessage
+	if err := json.Unmarshal(envelope["committed"], &committedEnvelope); err != nil || committedEnvelope == nil {
+		return sitePublishState{}, errors.New("site publish state committed field must be an object")
+	}
+	if _, exists := committedEnvelope["generation"]; !exists {
+		return sitePublishState{}, sitePrivateControlFormatResetError(site, "publish-state", "missing committed generation")
+	}
 	if err := requireCommittedJSONFields(envelope["committed"]); err != nil {
 		return sitePublishState{}, err
-	}
-	if _, exists := envelope["pending"]; exists {
-		return sitePublishState{}, errors.New("site publish state v2 must not contain a pending journal")
 	}
 	if err := requireStateObjectRows(envelope["committed"]); err != nil {
 		return sitePublishState{}, err
@@ -304,9 +313,9 @@ func validateSitePublishState(state sitePublishState, site string) error {
 	return nil
 }
 
-func sitePrivateControlSchemaResetError(site, record string, version int) error {
-	return fmt.Errorf("site %q %s schema %d is unsupported by this prerelease CLI; after backing up and confirming no publish or cache retry is in progress, reset only %s and %s, then retry (this command will not delete control records)",
-		site, record, version, sitePublishStateKey(site), siteCacheRetryKey(site))
+func sitePrivateControlFormatResetError(site, record, detail string) error {
+	return fmt.Errorf("site %q %s is not in the current prerelease control format (%s); after backing up and confirming no publish or cache retry is in progress, reset only %s and %s, then retry (this command will not delete control records)",
+		site, record, detail, sitePublishStateKey(site), siteCacheRetryKey(site))
 }
 
 func validateSitePublishRow(site string, row sitePublishObject) error {
