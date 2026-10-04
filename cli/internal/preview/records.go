@@ -51,10 +51,23 @@ type PreviewFile struct {
 	ContentType string `json:"contentType"`
 }
 
+// Document reasons record why a document is part of a preview.
+const (
+	ReasonChanged    = "changed"
+	ReasonDependency = "dependency"
+)
+
 type Document struct {
 	Path   string `json:"path"`
 	Title  string `json:"title"`
 	Format string `json:"format"`
+	// Reason is "changed" for added or modified documents and "dependency" for
+	// unchanged documents whose rendering resources changed. Manifests written
+	// before the field existed omit it and read as "changed".
+	Reason string `json:"reason,omitempty"`
+	// ChangedResources lists, sorted, the changed resources that pulled a
+	// dependency document into the preview.
+	ChangedResources []string `json:"changedResources,omitempty"`
 }
 
 var (
@@ -290,6 +303,20 @@ func validateDocuments(documents []Document) error {
 		seen[document.Path] = struct{}{}
 		if strings.TrimSpace(document.Title) == "" {
 			return fmt.Errorf("preview document %q has no title", document.Path)
+		}
+		switch document.Reason {
+		case "", ReasonChanged:
+			if len(document.ChangedResources) > 0 {
+				return fmt.Errorf("preview document %q lists changed resources but is not a dependency document", document.Path)
+			}
+		case ReasonDependency:
+			for _, resource := range document.ChangedResources {
+				if err := validateSourcePath(resource); err != nil {
+					return fmt.Errorf("preview document %q changed resource: %w", document.Path, err)
+				}
+			}
+		default:
+			return fmt.Errorf("preview document %q has invalid reason %q", document.Path, document.Reason)
 		}
 		expectedFormat := documentFormat(document.Path)
 		if expectedFormat == "" || document.Format != expectedFormat {

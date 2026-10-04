@@ -183,3 +183,26 @@ test('very long document lists are truncated', () => {
   const body = renderPublishedComment({ site: 'sre', result: { ...published, documents } })
   assert.match(body, /and 30 more changed pages/)
 })
+
+test('dependency-affected pages are listed separately with the changed resource', () => {
+  const documents = [
+    { path: 'a.html', title: 'Page A', url: 'https://pages.example.test/a', reason: 'dependency', changedResources: ['assets/site.css'] },
+    { path: 'b.md', title: 'Page B', url: 'https://pages.example.test/b', reason: 'changed' },
+  ]
+  const body = renderPublishedComment({ site: 'sre', result: { ...published, documents } })
+  assert.match(body, /\*\*Changed pages\*\*/)
+  assert.match(body, /\*\*Affected by a resource change\*\*/)
+  assert.ok(body.indexOf('Page B') < body.indexOf('Page A'))
+  assert.match(body, /\| \[Page A\]\(https:\/\/pages\.example\.test\/a\) \| `a\.html` \| `assets\/site\.css` \|/)
+})
+
+test('the row cap is shared and counts omitted affected pages', () => {
+  const documents = [
+    ...Array.from({ length: 40 }, (_, index) => ({ path: `c${index}.md`, title: `C ${index}`, url: `https://pages.example.test/c${index}`, reason: 'changed' })),
+    ...Array.from({ length: 30 }, (_, index) => ({ path: `d${index}.html`, title: `D ${index}`, url: `https://pages.example.test/d${index}`, reason: 'dependency', changedResources: ['x.css'] })),
+  ]
+  const body = renderPublishedComment({ site: 'sre', result: { ...published, documents } })
+  const rows = body.split('\n').filter((line) => line.startsWith('| [') )
+  assert.equal(rows.length, 50)
+  assert.match(body, /and 20 more affected pages/)
+})

@@ -170,7 +170,12 @@ function parseDocument(value: unknown): PreviewDocument {
   const extension = value.path.slice(value.path.lastIndexOf('.')).toLowerCase()
   const expectedFormat = extension === '.md' ? 'markdown' : ['.html', '.htm'].includes(extension) ? 'html' : ''
   if (!expectedFormat || value.format !== expectedFormat) throw new PreviewLoadError(`Invalid document format for ${value.path}`, '')
-  return { path: value.path, title: value.title, format: expectedFormat }
+  const document: PreviewDocument = { path: value.path, title: value.title, format: expectedFormat }
+  if (value.reason === 'changed' || value.reason === 'dependency') document.reason = value.reason
+  if (document.reason === 'dependency' && Array.isArray(value.changedResources)) {
+    document.changedResources = value.changedResources.filter((resource): resource is string => isSafeSourcePath(resource))
+  }
+  return document
 }
 
 function isCanonicalPullUrl(value: string, expectedNumber: string) {

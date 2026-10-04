@@ -84,6 +84,22 @@ artifact-pages site publish \
 
 The deployed registry remains the source of publication eligibility. The remote config locator is deployment input, not an authorization boundary. The object-level reader credential keeps registry reads separate from the satellite's scoped write credential; R2 path restrictions still apply to a single bucket and permission scope per credential.
 
+### Preview-only publisher role
+
+A job that only runs `preview publish` (for example a pull-request workflow) can use a narrower role than a production publisher. It needs these environment variables and no others: `CF_R2_ACCESS_KEY_ID` and `CF_R2_SECRET_ACCESS_KEY` (plus `CF_R2_SESSION_TOKEN` for temporary credentials), or the optional registry-reader pair described above for the one registry read. `CF_API_TOKEN` is not needed, because preview publication never requests cache invalidation.
+
+The paths below come from the CLI code (`cli/internal/preview`, the `ObjectPreviewStore` adapter and the site lock manager in `cli/internal/publisher`). A real publish uses only object `GET` and `PUT` (including conditional `PUT`); it never lists the bucket and never deletes objects.
+
+| Object | Access | Why |
+| --- | --- | --- |
+| `_indexes/sites.json` | read | Confirms the site is registered and its source matches. Through the registry-reader credential when one is configured. |
+| `_control/locks/sites/<site>.json` | read and write | The per-site publication lock: conditional create, acquire, release, and the pre-write ownership check before a catalog replacement. |
+| `_previews/<site>/catalog.json` | read and write | The preview catalog, replaced under the lock. |
+| `_previews/<site>/revisions/<head-sha>/manifest.json` | read and write | Immutable revision manifest, created once; also read for other groups when the catalog is pruned of revisions whose manifest is gone. |
+| `_previews/<site>/revisions/<head-sha>/files/*` | read and write | Immutable preview bundle files, created once and compared byte-for-byte when a head is published again. |
+
+A role scoped to the exact registry object, the exact lock object, and the `_previews/<site>/` prefix is therefore sufficient; a `--dry-run` needs only the read side, takes no lock, and writes nothing. No production prefix is written: `_artifacts/`, `_indexes/<site>/`, `_control/site-cache/`, the application files, and the registry are never modified, and `_indexes/sites.json` is read only. Because the preview role can write the lock object, grant it per site so that a pull-request job cannot take the lock of another site. As with the delegated publisher above, the object-level scope is enforced by R2, not by the CLI.
+
 ## 3. Deploy the app and register sites
 
 From the admin repository, configure the Terraform provider token for infrastructure changes and then deploy the application bundle and reconcile the complete site registration set:

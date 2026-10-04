@@ -291,7 +291,7 @@ func upsertPlannedGroup(catalog *Catalog, group Group) bool {
 		if existing.ID != group.ID {
 			continue
 		}
-		if existing.HeadSHA == group.HeadSHA && reflect.DeepEqual(existing.Documents, group.Documents) && existing.PRURL == group.PRURL {
+		if existing.HeadSHA == group.HeadSHA && reflect.DeepEqual(normalizeReasons(existing.Documents), normalizeReasons(group.Documents)) && existing.PRURL == group.PRURL {
 			group.UpdatedAt = existing.UpdatedAt
 		}
 		if reflect.DeepEqual(existing, group) {
@@ -557,7 +557,17 @@ func installImmutableRevision(ctx context.Context, store PreviewStore, result Bu
 func sameImmutableProjection(left, right RevisionManifest) bool {
 	return left.SchemaVersion == right.SchemaVersion && left.Site == right.Site && left.HeadSHA == right.HeadSHA &&
 		left.MergeBase == right.MergeBase && left.BundleDigest == right.BundleDigest &&
-		reflect.DeepEqual(left.Files, right.Files) && reflect.DeepEqual(left.Documents, right.Documents)
+		reflect.DeepEqual(left.Files, right.Files) && reflect.DeepEqual(normalizeReasons(left.Documents), normalizeReasons(right.Documents))
+}
+
+func normalizeReasons(documents []Document) []Document {
+	result := append([]Document(nil), documents...)
+	for index := range result {
+		if result[index].Reason == "" {
+			result[index].Reason = ReasonChanged
+		}
+	}
+	return result
 }
 
 func upsertGroup(ctx context.Context, store PreviewStore, site string, group Group) error {
@@ -573,7 +583,7 @@ func upsertGroup(ctx context.Context, store PreviewStore, site string, group Gro
 		if existing.ID != group.ID {
 			continue
 		}
-		if existing.HeadSHA == group.HeadSHA && reflect.DeepEqual(existing.Documents, group.Documents) && existing.PRURL == group.PRURL {
+		if existing.HeadSHA == group.HeadSHA && reflect.DeepEqual(normalizeReasons(existing.Documents), normalizeReasons(group.Documents)) && existing.PRURL == group.PRURL {
 			group.UpdatedAt = existing.UpdatedAt
 		}
 		catalog.Groups[index] = group

@@ -79,7 +79,7 @@ export function PreviewListPage({ route, navigate, siteTitle }: {
         }}>← {siteName}</a>
         <p className="eyebrow">{siteName} · Previews</p>
         <h1>{route.groupId ? 'Preview link' : 'Previews'}</h1>
-        <p className="preview-page-lede">Review changed documents from a specific source revision.</p>
+        <p className="preview-page-lede">Review changed documents, and documents affected by changed resources, from a specific source revision.</p>
       </header>
 
       {state.status === 'loading' ? <p role="status">Loading previews…</p> : null}
@@ -125,25 +125,60 @@ export function PreviewListPage({ route, navigate, siteTitle }: {
                 {group.prUrl ? <a className="preview-external-link" href={group.prUrl} target="_blank" rel="noreferrer noopener">Open PR ↗</a> : null}
               </div>
               {availability === 'unknown' ? <p className="preview-availability" role="status">Availability could not be checked. Direct document links may still work.</p> : null}
-              <ul className="preview-document-list">
-                {group.documents.map((document) => (
-                  <li key={document.path}>
-                    <a href={previewRouteHref(route.siteId, group.headSha, document.path, group.id)} onClick={(event) => {
-                      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-                      event.preventDefault()
-                      navigate(previewRouteHref(route.siteId, group.headSha, document.path, group.id))
-                    }}>
-                      <span>{document.title}</span>
-                      <code>{document.path}</code>
-                    </a>
-                  </li>
-                ))}
-              </ul>
+              <PreviewDocumentList
+                documents={group.documents.filter(({ reason }) => reason !== 'dependency')}
+                siteId={route.siteId}
+                group={group}
+                navigate={navigate}
+              />
+              {group.documents.some(({ reason }) => reason === 'dependency') ? (
+                <div className="preview-dependency-section" role="group" aria-label="Affected by resource change">
+                  <h3 className="preview-dependency-heading">Affected by resource change</h3>
+                  <p className="preview-dependency-note">These pages did not change, but a stylesheet, script, image, or other resource they use did.</p>
+                  <PreviewDocumentList
+                    documents={group.documents.filter(({ reason }) => reason === 'dependency')}
+                    siteId={route.siteId}
+                    group={group}
+                    navigate={navigate}
+                  />
+                </div>
+              ) : null}
             </section>
           ))}
         </div>
       ) : null}
     </main>
+  )
+}
+
+function PreviewDocumentList({ documents, siteId, group, navigate }: {
+  documents: PreviewGroup['documents']
+  siteId: string
+  group: PreviewGroup
+  navigate: (href: string) => void
+}) {
+  if (documents.length === 0) return null
+  return (
+    <ul className="preview-document-list">
+      {documents.map((document) => {
+        const href = previewRouteHref(siteId, group.headSha, document.path, group.id)
+        return (
+          <li key={document.path}>
+            <a href={href} onClick={(event) => {
+              if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+              event.preventDefault()
+              navigate(href)
+            }}>
+              <span>{document.title}</span>
+              <code>{document.path}</code>
+              {document.reason === 'dependency' && document.changedResources?.length ? (
+                <span className="preview-document-trigger">Uses changed {document.changedResources.join(', ')}</span>
+              ) : null}
+            </a>
+          </li>
+        )
+      })}
+    </ul>
   )
 }
 

@@ -19,9 +19,11 @@ import (
 )
 
 type previewDocumentURL struct {
-	Path  string `json:"path"`
-	Title string `json:"title"`
-	URL   string `json:"url"`
+	Path             string   `json:"path"`
+	Title            string   `json:"title"`
+	URL              string   `json:"url"`
+	Reason           string   `json:"reason"`
+	ChangedResources []string `json:"changedResources,omitempty"`
 }
 
 type previewPublishOutput struct {
@@ -185,7 +187,11 @@ func makePreviewPublishOutput(publicOrigin string, result preview.BuildResult, p
 		if err != nil {
 			return previewPublishOutput{}, err
 		}
-		output.Documents = append(output.Documents, previewDocumentURL{Path: document.Path, Title: document.Title, URL: documentURL})
+		reason := document.Reason
+		if reason == "" {
+			reason = preview.ReasonChanged
+		}
+		output.Documents = append(output.Documents, previewDocumentURL{Path: document.Path, Title: document.Title, URL: documentURL, Reason: reason, ChangedResources: document.ChangedResources})
 	}
 	if result.Outcome == preview.OutcomeNoPreview {
 		output.Outcome = string(preview.OutcomeNoPreview)
@@ -252,7 +258,11 @@ func printPreviewPublishReport(writer io.Writer, output previewPublishOutput, re
 				fmt.Fprintf(writer, "    … %d more; use --format json for all URLs.\n", len(output.Documents)-i)
 				break
 			}
-			fmt.Fprintf(writer, "    %s\n    %s\n", reportText(document.Path), reportText(document.URL))
+			label := ""
+			if document.Reason == preview.ReasonDependency {
+				label = " (affected by resource change)"
+			}
+			fmt.Fprintf(writer, "    %s%s\n    %s\n", reportText(document.Path), label, reportText(document.URL))
 		}
 	}
 	objects := make([]publisher.Change, 0, len(output.Objects))
