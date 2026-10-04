@@ -2988,6 +2988,38 @@ test('a failed known-site index load stays distinct from an unknown site', async
 
 const previewHeadSha = '0123456789abcdef0123456789abcdef01234567'
 
+test('preview list separates documents affected by a resource change', async ({ page }) => {
+  const changed = { path: 'guides/changed.md', title: 'Changed guide', format: 'markdown', reason: 'changed' }
+  const affected = { path: 'guides/affected.html', title: 'Affected page', format: 'html', reason: 'dependency', changedResources: ['assets/site.css'] }
+  const documents = [affected, changed]
+  await page.route('**/_previews/showcase/catalog.json', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ schemaVersion: 1, site: 'showcase', groups: [{
+      id: 'pr:702', kind: 'pull-request', headSha: previewHeadSha,
+      prUrl: 'https://github.com/acme/showcase/pull/702', updatedAt: '2026-09-27T00:00:00Z', documents,
+    }] }),
+  }))
+  await page.route(`**/_previews/showcase/revisions/${previewHeadSha}/manifest.json`, (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      schemaVersion: 1, site: 'showcase', headSha: previewHeadSha,
+      defaultHeadSha: '1111111111111111111111111111111111111111', mergeBaseSha: '2222222222222222222222222222222222222222',
+      createdAt: '2026-09-27T00:00:00Z', bundleDigest: `sha256:${'0'.repeat(64)}`,
+      files: documents.map(({ path }) => ({ path, sha256: 'a'.repeat(64), contentType: 'text/plain' })),
+      documents,
+    }),
+  }))
+  await page.goto('/showcase/_previews')
+  const group = page.getByRole('region', { name: 'Preview pr:702' })
+  await expect(group.getByRole('link', { name: /Changed guide/ })).toBeVisible()
+  const section = group.getByRole('group', { name: 'Affected by resource change' })
+  await expect(section.getByRole('link', { name: /Affected page/ })).toBeVisible()
+  await expect(section).toContainText('Uses changed assets/site.css')
+  await expect(section).not.toContainText('Changed guide')
+})
+
 test('published preview documents stay out of production browsing and the site-home link opens previews', async ({ page }) => {
   const previewOnlyTitle = 'Preview-only rollout note'
   const previewOnlyDocument = { path: 'guides/preview-only.md', title: previewOnlyTitle, format: 'markdown' }

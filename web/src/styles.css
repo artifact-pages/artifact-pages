@@ -2186,6 +2186,30 @@ mark {
   font-size: 10px;
 }
 
+.preview-dependency-section {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.preview-dependency-heading {
+  margin: 0;
+  color: var(--text-secondary, var(--text));
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.preview-dependency-note {
+  margin: 4px 0 0;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.preview-document-trigger {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
 .preview-reader {
   display: flex;
   width: 100%;

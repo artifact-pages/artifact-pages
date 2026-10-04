@@ -47,14 +47,33 @@ export function renderPublishedComment({ site, result }) {
   const listURL = safeURL(result.groupListUrl)
   lines.push(listURL ? `[Open the preview list for this pull request](${listURL})` : 'Preview published.')
   const documents = Array.isArray(result.documents) ? result.documents : []
-  if (documents.length > 0) {
-    lines.push('', '| Page | Path |', '| --- | --- |')
-    for (const document of documents.slice(0, maxListedDocuments)) {
-      const url = safeURL(document.url)
-      const title = escapeMarkdown(document.title || document.path)
-      lines.push(`| ${url ? `[${title}](${url})` : title} | ${codeSpan(document.path)} |`)
+  const changed = documents.filter((document) => document?.reason !== 'dependency')
+  const affected = documents.filter((document) => document?.reason === 'dependency')
+  // One shared cap across both groups; changed pages are listed first.
+  const listedChanged = changed.slice(0, maxListedDocuments)
+  const listedAffected = affected.slice(0, maxListedDocuments - listedChanged.length)
+  const row = (document) => {
+    const url = safeURL(document.url)
+    const title = escapeMarkdown(document.title || document.path)
+    return `| ${url ? `[${title}](${url})` : title} | ${codeSpan(document.path)} |`
+  }
+  if (listedChanged.length > 0) {
+    if (affected.length > 0) lines.push('', '**Changed pages**')
+    lines.push('', '| Page | Path |', '| --- | --- |', ...listedChanged.map(row))
+  }
+  if (listedAffected.length > 0) {
+    lines.push('', '**Affected by a resource change** (these pages did not change, but a stylesheet, script, image, or other resource they use did)')
+    lines.push('', '| Page | Path | Changed resource |', '| --- | --- | --- |')
+    for (const document of listedAffected) {
+      const resources = Array.isArray(document.changedResources) ? document.changedResources.slice(0, 3).map(codeSpan).join(', ') : ''
+      lines.push(`${row(document)} ${resources} |`)
     }
-    if (documents.length > maxListedDocuments) lines.push('', `…and ${documents.length - maxListedDocuments} more changed pages (see the preview list).`)
+  }
+  const omittedChanged = changed.length - listedChanged.length
+  const omittedAffected = affected.length - listedAffected.length
+  if (omittedChanged + omittedAffected > 0) {
+    const noun = omittedAffected === 0 ? 'changed pages' : omittedChanged === 0 ? 'affected pages' : 'pages'
+    lines.push('', `…and ${omittedChanged + omittedAffected} more ${noun} (see the preview list).`)
   }
   lines.push('', `_Latest preview${head ? ` for commit ${codeSpan(head)}` : ''}. This comment is updated in place on each push._`)
   return lines.join('\n')
