@@ -385,7 +385,7 @@ async function runAction(kind, operation, cliArgs, inputs, workspace, binaryPath
         GITHUB_EVENT_PATH: eventPath,
       },
     })
-    assert.equal(trustCheck.explicit, false, 'omitted pull-request input must remain a manual preview even during a same-repository PR event')
+    assert.equal(trustCheck.explicit, false, 'pull-request none must remain a manual preview even during a same-repository PR event')
   }
 
   const execution = spawnSync('node', [actionRunner], {
@@ -441,9 +441,25 @@ async function assertPreviewPreflight(repositoryDirectory, scratchRoot) {
     head: { repo: { full_name: repository }, sha: headSHA },
   }
 
-  const manual = await verifyPreviewTrust({ env: baseEnvironment, event: sameRepositoryEvent, fetchImpl: responseFor(metadata) })
-  assert.deepEqual(manual, { explicit: false }, 'missing PR input should not infer PR provenance')
+  const manual = await verifyPreviewTrust({ env: { ...baseEnvironment, ARTIFACT_PAGES_INPUT_PULL_REQUEST: 'none' }, event: sameRepositoryEvent, fetchImpl: responseFor(metadata) })
+  assert.deepEqual(manual, { explicit: false }, 'pull-request none must force a manual preview')
   assert.equal(apiCalls, 0, 'manual preview preflight should not look up a PR')
+  const nonPullRequestEvent = await verifyPreviewTrust({ env: { ...baseEnvironment, GITHUB_EVENT_NAME: 'workflow_dispatch' }, event: sameRepositoryEvent, fetchImpl: responseFor(metadata) })
+  assert.deepEqual(nonPullRequestEvent, { explicit: false }, 'only a pull_request event defaults the PR number')
+  assert.equal(apiCalls, 0, 'a non-PR event must not look up a PR')
+  const defaulted = await verifyPreviewTrust({ env: baseEnvironment, event: sameRepositoryEvent, fetchImpl: responseFor(metadata) })
+  assert.deepEqual(defaulted, { explicit: true, pullRequestURL: metadata.html_url, headSHA }, 'the event PR number goes through the same verification as an explicit one')
+  assert.equal(apiCalls, 1, 'a defaulted PR number is verified through the GitHub API')
+  apiCalls = 0
+  await assert.rejects(
+    verifyPreviewTrust({ env: baseEnvironment, event: sameRepositoryEvent, fetchImpl: responseFor({ ...metadata, head: { repo: { full_name: 'contributor/satellite' }, sha: headSHA } }) }),
+    /must originate from workflow repository/,
+  )
+  await assert.rejects(
+    verifyPreviewTrust({ env: baseEnvironment, event: sameRepositoryEvent, fetchImpl: responseFor({ ...metadata, head: { repo: { full_name: repository }, sha: 'f'.repeat(40) } }) }),
+    /no longer matches/,
+  )
+  apiCalls = 0
 
   const forkEvent = structuredClone(sameRepositoryEvent)
   forkEvent.pull_request.head.repo.full_name = 'contributor/satellite'
@@ -804,7 +820,7 @@ async function main() {
       source: 'docs/artifacts',
       head: previewBranch,
       'default-ref': 'main',
-      'pull-request': '',
+      'pull-request': 'none',
       include: '\n  extra data.json  \r\n',
       'base-url': 'https://pages.example.test',
       config: '.artifact-pages-action.yaml',
@@ -823,8 +839,8 @@ async function main() {
     })
     assertActionParity(directPreviewDryRun, actionPreviewDryRun, 'preview publish dry-run')
     assert.equal(directPreviewDryRun.result.outcome, 'planned', 'preview dry-run should report a plan')
-    assert.match(directPreviewDryRun.result.groupId, /^head:/, 'omitted PR input in a PR event should create a manual group')
-    assert.equal(directPreviewDryRun.result.pullRequestUrl ?? '', '', 'omitted PR input must not infer PR provenance from the event')
+    assert.match(directPreviewDryRun.result.groupId, /^head:/, 'pull-request none in a PR event should create a manual group')
+    assert.equal(directPreviewDryRun.result.pullRequestUrl ?? '', '', 'pull-request none must not carry PR provenance from the event')
     assert.equal(directPreviewDryRun.result.documents.length, 1, 'preview result should expose the changed document URL')
     assert.ok(directPreviewDryRun.result.objects.some((object) => object.path === 'extra data.json'), 'newline include input should be expanded to a repeated CLI include flag')
     assert.doesNotMatch(directPreviewDryRun.result.documents[0].url, /[?&]group=/, 'manual preview document URL should not claim PR group context')

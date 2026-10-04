@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { appendFile } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
-import { assertPreviewRefsReachable, resolvePreviewRefs } from './preview-refs.mjs'
+import { assertPreviewRefsReachable, resolvePreviewRefs, resolvePullRequestReference } from './preview-refs.mjs'
 import { writeSummary } from './summary.mjs'
 
 const shaPattern = /^[0-9a-f]{40}$/i
@@ -128,11 +128,11 @@ export async function verifyPreviewTrust(options = {}) {
   const env = options.env ?? process.env
   const repository = repositoryName(options.repository ?? env.GITHUB_REPOSITORY, 'GITHUB_REPOSITORY')
   const eventName = options.eventName ?? env.GITHUB_EVENT_NAME ?? ''
-  const explicitReference = String(options.pullRequest ?? env.ARTIFACT_PAGES_INPUT_PULL_REQUEST ?? '').trim()
   const event = options.event ?? (env.GITHUB_EVENT_PATH
     ? JSON.parse(await (await import('node:fs/promises')).readFile(env.GITHUB_EVENT_PATH, 'utf8'))
     : {})
   const eventPullRequest = readPullRequestEvent(eventName, event)
+  const explicitReference = resolvePullRequestReference({ env, eventName, event, pullRequest: options.pullRequest }).reference
 
   if (eventPullRequest) {
     const baseRepository = normalizeFullName(eventPullRequest.base?.repo?.full_name, 'event pull-request base repository')
@@ -150,7 +150,7 @@ export async function verifyPreviewTrust(options = {}) {
   }
 
   if (!explicitReference) {
-    // PR event metadata is used only as a trust gate. Omitted input is always a manual preview.
+    // No PR number was given or defaulted (non-PR event, or `none`): a manual preview.
     return { explicit: false }
   }
 

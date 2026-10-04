@@ -76,3 +76,22 @@ export function assertPreviewRefsReachable(cwd, refs) {
   }
   return { headSHA: head, defaultRefSHA: base, mergeBaseSHA: mergeBase.stdout }
 }
+
+// Resolves the Action's `pull-request` input. An explicit value always wins and
+// `none` forces a manual preview. When the input is empty, only a `pull_request`
+// event supplies the PR number from its payload (never pull_request_target, never
+// a lookup by branch or commit). The CLI itself stays explicit-only; the returned
+// reference is verified by the same trust preflight as an explicit one.
+export function resolvePullRequestReference(options = {}) {
+  const env = options.env ?? process.env
+  const explicit = String(options.pullRequest ?? env.ARTIFACT_PAGES_INPUT_PULL_REQUEST ?? '').trim()
+  const eventName = options.eventName ?? env.GITHUB_EVENT_NAME ?? ''
+  if (explicit.toLowerCase() === 'none') return { reference: '', source: 'none' }
+  if (explicit) return { reference: explicit, source: 'input' }
+  if (eventName !== 'pull_request') return { reference: '', source: 'default' }
+  const number = (options.event ?? readEvent(env.GITHUB_EVENT_PATH))?.pull_request?.number
+  if (!Number.isSafeInteger(number) || number < 1) {
+    throw new Error('pull_request event is missing a valid pull request number; pass the pull-request input explicitly or use "none" for a manual preview')
+  }
+  return { reference: String(number), source: 'event' }
+}

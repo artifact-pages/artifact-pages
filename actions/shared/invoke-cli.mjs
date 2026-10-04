@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { appendFile } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
-import { resolvePreviewRefs } from './preview-refs.mjs'
+import { resolvePreviewRefs, resolvePullRequestReference } from './preview-refs.mjs'
 import { evaluatePublishOn } from './publish-on.mjs'
 import { writeSummary } from './summary.mjs'
 
@@ -67,7 +67,7 @@ function buildArguments() {
     const refs = resolvePreviewRefs()
     flag(args, 'head', refs.head)
     flag(args, 'default-ref', refs.defaultRef)
-    flag(args, 'pull-request', input('pull-request').trim())
+    flag(args, 'pull-request', resolvePullRequestReference().reference)
     flag(args, 'base-url', input('base-url').trim())
     flag(args, 'config', input('config').trim())
     for (const line of input('include').split(/\r?\n/)) {

@@ -17,7 +17,7 @@ inputs:
     required: false
     default: ""
   pull-request:
-    description: Explicit positive PR number or canonical GitHub pull URL; omitted means manual preview.
+    description: Positive PR number or canonical GitHub pull URL. When empty, a pull_request event supplies its own PR number (verified like an explicit one); any other event is a manual preview. Use none to force a manual preview.
     required: false
     default: ""
   include:
@@ -41,7 +41,7 @@ inputs:
     required: false
     default: "false"
   comment:
-    description: When true and an explicit pull-request is given, create or update one PR comment per site with the preview links. Needs pull-requests:write. Comment problems never fail the publish.
+    description: When true and a pull request is resolved, create or update one PR comment per site with the preview links. Works on pull_request events without an explicit pull-request. Needs pull-requests:write. Comment problems never fail the publish.
     required: false
     default: "false"
   summary:
