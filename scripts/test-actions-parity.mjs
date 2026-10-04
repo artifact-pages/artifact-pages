@@ -14,17 +14,17 @@ const expectedActionContracts = {
   admin: {
     directory: path.join(projectRoot, 'actions', 'admin'),
     inputs: ['operation', 'config', 'github-token', 'site', 'archive', 'repository', 'dry-run'],
-    outputs: ['operation', 'outcome', 'site', 'registry_updated', 'changes_json', 'preview_changes_json', 'result_json', 'exit_code', 'error'],
+    outputs: ['operation', 'outcome', 'site', 'registry-updated', 'changes', 'preview-changes', 'result', 'exit-code', 'error'],
   },
   site: {
     directory: path.join(projectRoot, 'actions', 'site-publish'),
     inputs: ['site', 'source', 'config', 'github-token', 'fulltext', 'dry-run'],
-    outputs: ['operation', 'outcome', 'site', 'registry_updated', 'changes_json', 'preview_changes_json', 'result_json', 'exit_code', 'error'],
+    outputs: ['operation', 'outcome', 'site', 'registry-updated', 'changes', 'preview-changes', 'result', 'exit-code', 'error'],
   },
   preview: {
     directory: path.join(projectRoot, 'actions', 'preview-publish'),
     inputs: ['site', 'source', 'head', 'default-ref', 'pull-request', 'include', 'base-url', 'config', 'github-token', 'dry-run'],
-    outputs: ['operation', 'outcome', 'site', 'group-list-url', 'documents', 'result', 'exit_code', 'error'],
+    outputs: ['operation', 'outcome', 'site', 'group-list-url', 'documents', 'result', 'exit-code', 'error'],
   },
 }
 
@@ -320,7 +320,7 @@ function assertActionParity(direct, action, label) {
   assert.equal(action.stdout, direct.stdout, `${label}: Action stdout differs from direct CLI`)
 
   const outputs = action.outputs
-  assert.equal(Number(outputs.exit_code), direct.exitCode, `${label}: typed exit_code output`)
+  assert.equal(Number(outputs['exit-code']), direct.exitCode, `${label}: typed exit-code output`)
   assert.equal(outputs.operation, direct.result.operation, `${label}: operation output`)
   assert.equal(outputs.outcome, direct.result.outcome, `${label}: outcome output`)
   assert.equal(outputs.site ?? '', direct.result.site ?? '', `${label}: site output`)
@@ -329,12 +329,12 @@ function assertActionParity(direct, action, label) {
     assert.deepEqual(JSON.parse(outputs.documents), direct.result.documents ?? [], `${label}: documents JSON output`)
     assert.deepEqual(JSON.parse(outputs.result), direct.result, `${label}: complete result output`)
   } else {
-    assert.deepEqual(JSON.parse(outputs.changes_json), direct.result.changes ?? [], `${label}: changes_json output`)
-    assert.deepEqual(JSON.parse(outputs.preview_changes_json), direct.result.previewChanges ?? [], `${label}: preview_changes_json output`)
-    assert.deepEqual(JSON.parse(outputs.result_json), direct.result, `${label}: result_json output`)
+    assert.deepEqual(JSON.parse(outputs.changes), direct.result.changes ?? [], `${label}: changes output`)
+    assert.deepEqual(JSON.parse(outputs['preview-changes']), direct.result.previewChanges ?? [], `${label}: preview-changes output`)
+    assert.deepEqual(JSON.parse(outputs.result), direct.result, `${label}: result output`)
   }
   if (typeof direct.result.registryUpdated === 'boolean') {
-    assert.equal(outputs.registry_updated, String(direct.result.registryUpdated), `${label}: registry_updated boolean output`)
+    assert.equal(outputs['registry-updated'], String(direct.result.registryUpdated), `${label}: registry-updated boolean output`)
   }
   assert.equal(outputs.error ?? '', direct.result.error ?? '', `${label}: error output`)
 }
@@ -379,7 +379,7 @@ async function runAction(kind, operation, cliArgs, inputs, workspace, binaryPath
   if (execution.error) throw execution.error
   const directResult = parseCliResult({ status: execution.status, stdout: execution.stdout, stderr: execution.stderr }, 'Action')
   const outputs = parseActionOutputs(await fs.readFile(outputPath, 'utf8'))
-  const actionResult = JSON.parse(outputs.result_json)
+  const actionResult = JSON.parse(outputs.result)
   assert.deepEqual(actionResult, directResult.result, 'GitHub outputs did not preserve the CLI JSON object')
   return {
     exitCode: execution.status,

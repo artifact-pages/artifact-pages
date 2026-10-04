@@ -39,21 +39,21 @@ outputs:
   site:
     description: Explicit site ID selected for this operation.
     value: ${{ steps.cli.outputs.site }}
-  registry_updated:
+  registry-updated:
     description: JSON boolean rendered as true or false when present.
-    value: ${{ steps.cli.outputs.registry_updated }}
-  changes_json:
+    value: ${{ steps.cli.outputs['registry-updated'] }}
+  changes:
     description: JSON array of per-path production changes.
-    value: ${{ steps.cli.outputs.changes_json }}
-  preview_changes_json:
+    value: ${{ steps.cli.outputs.changes }}
+  preview-changes:
     description: JSON array of preview catalog dispositions.
-    value: ${{ steps.cli.outputs.preview_changes_json }}
-  result_json:
+    value: ${{ steps.cli.outputs['preview-changes'] }}
+  result:
     description: Complete CLI JSON result object.
-    value: ${{ steps.cli.outputs.result_json }}
-  exit_code:
+    value: ${{ steps.cli.outputs.result }}
+  exit-code:
     description: Original artifact-pages CLI exit code as an integer string.
-    value: ${{ steps.cli.outputs.exit_code }}
+    value: ${{ steps.cli.outputs['exit-code'] }}
   error:
     description: CLI error text when the operation failed.
     value: ${{ steps.cli.outputs.error }}

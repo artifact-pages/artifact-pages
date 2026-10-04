@@ -65,7 +65,7 @@ jobs:
           GROUP_LIST_URL: ${{ steps.publish-preview.outputs['group-list-url'] }}
           DOCUMENTS_JSON: ${{ steps.publish-preview.outputs.documents }}
           RESULT_JSON: ${{ steps.publish-preview.outputs.result }}
-          EXIT_CODE: ${{ steps.publish-preview.outputs.exit_code }}
+          EXIT_CODE: ${{ steps.publish-preview.outputs['exit-code'] }}
         run: |
-          printf 'outcome=%s exit_code=%s\n' "$OUTCOME" "$EXIT_CODE"
+          printf 'outcome=%s exit-code=%s\n' "$OUTCOME" "$EXIT_CODE"
           printf 'preview_list=%s\ndocuments=%s\n' "$GROUP_LIST_URL" "$DOCUMENTS_JSON"

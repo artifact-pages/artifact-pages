@@ -100,17 +100,16 @@ async function writeOutputs(result, exitCode, fallbackSite) {
     operation: result.operation ?? '',
     outcome: result.outcome ?? 'failed',
     site: result.site ?? fallbackSite ?? '',
-    registry_updated: typeof result.registryUpdated === 'boolean' ? String(result.registryUpdated) : '',
-    changes_json: JSON.stringify(result.changes ?? []),
-    preview_changes_json: JSON.stringify(result.previewChanges ?? []),
-    result_json: JSON.stringify(result),
-    exit_code: String(exitCode),
+    'registry-updated': typeof result.registryUpdated === 'boolean' ? String(result.registryUpdated) : '',
+    changes: JSON.stringify(result.changes ?? []),
+    'preview-changes': JSON.stringify(result.previewChanges ?? []),
+    result: JSON.stringify(result),
+    'exit-code': String(exitCode),
     error: result.error ?? '',
   }
   if (result.operation === 'preview publish') {
     values['group-list-url'] = result.groupListUrl ?? ''
     values.documents = JSON.stringify(result.documents ?? [])
-    values.result = JSON.stringify(result)
   }
   const delimiter = `ARTIFACT_PAGES_${randomUUID().replaceAll('-', '')}`
   const content = Object.entries(values)

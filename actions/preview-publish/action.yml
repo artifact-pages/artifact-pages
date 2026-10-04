@@ -57,9 +57,9 @@ outputs:
   result:
     description: Complete typed CLI result or trust-preflight failure envelope.
     value: ${{ steps.cli.outputs.result || steps.preflight.outputs.result }}
-  exit_code:
+  exit-code:
     description: CLI or trust-preflight exit code as an integer string.
-    value: ${{ steps.cli.outputs.exit_code || steps.preflight.outputs.exit_code }}
+    value: ${{ steps.cli.outputs['exit-code'] || steps.preflight.outputs['exit-code'] }}
   error:
     description: CLI error text when the operation failed.
     value: ${{ steps.cli.outputs.error || steps.preflight.outputs.error }}

@@ -132,9 +132,9 @@ jobs:
           config: ${{ steps.prep.outputs.config }}
       - name: Assert registry and app outputs
         env:
-          REGISTER_EXIT: ${{ steps.register.outputs.exit_code }}
-          REGISTRY_UPDATED: ${{ steps.register.outputs.registry_updated }}
-          APP_EXIT: ${{ steps.app.outputs.exit_code }}
+          REGISTER_EXIT: ${{ steps.register.outputs['exit-code'] }}
+          REGISTRY_UPDATED: ${{ steps.register.outputs['registry-updated'] }}
+          APP_EXIT: ${{ steps.app.outputs['exit-code'] }}
           STORAGE: ${{ steps.prep.outputs.storage }}
         run: |
           test "$REGISTER_EXIT" = 0
@@ -158,7 +158,7 @@ jobs:
       - name: Assert the site dry-run planned without writes
         env:
           OUTCOME: ${{ steps.site-plan.outputs.outcome }}
-          CHANGES: ${{ steps.site-plan.outputs.changes_json }}
+          CHANGES: ${{ steps.site-plan.outputs.changes }}
           BEFORE: ${{ steps.before-site-plan.outputs.digest }}
           STORAGE: ${{ steps.prep.outputs.storage }}
         run: |
@@ -190,7 +190,7 @@ jobs:
           config: ${{ steps.prep.outputs.config }}
       - name: Assert the full-text data was withdrawn
         env:
-          EXIT_CODE: ${{ steps.site-withdraw.outputs.exit_code }}
+          EXIT_CODE: ${{ steps.site-withdraw.outputs['exit-code'] }}
           STORAGE: ${{ steps.prep.outputs.storage }}
         run: |
           test "$EXIT_CODE" = 0
@@ -215,10 +215,10 @@ jobs:
       - name: Assert relayed failure classes
         env:
           UNREGISTERED_OUTCOME: ${{ steps.unregistered.outcome }}
-          UNREGISTERED_EXIT: ${{ steps.unregistered.outputs.exit_code }}
+          UNREGISTERED_EXIT: ${{ steps.unregistered.outputs['exit-code'] }}
           UNREGISTERED_ERROR: ${{ steps.unregistered.outputs.error }}
           INVALID_OUTCOME: ${{ steps.invalid.outcome }}
-          INVALID_EXIT: ${{ steps.invalid.outputs.exit_code }}
+          INVALID_EXIT: ${{ steps.invalid.outputs['exit-code'] }}
         run: |
           test "$UNREGISTERED_OUTCOME" = failure
           test "$UNREGISTERED_EXIT" = 1
@@ -249,7 +249,7 @@ jobs:
           config: ${{ steps.prep.outputs.config }}
       - name: Assert the preview outputs
         env:
-          EXIT_CODE: ${{ steps.preview.outputs.exit_code }}
+          EXIT_CODE: ${{ steps.preview.outputs['exit-code'] }}
           DOCUMENTS: ${{ steps.preview.outputs.documents }}
           GROUP_LIST_URL: ${{ steps.preview.outputs.group-list-url }}
         run: |
@@ -283,7 +283,7 @@ jobs:
           config: ${{ steps.prep.outputs.unregister-config }}
       - name: Assert the site was unregistered
         env:
-          EXIT_CODE: ${{ steps.unregister.outputs.exit_code }}
+          EXIT_CODE: ${{ steps.unregister.outputs['exit-code'] }}
           STORAGE: ${{ steps.prep.outputs.storage }}
         run: |
           test "$EXIT_CODE" = 0

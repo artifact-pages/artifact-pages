@@ -215,7 +215,7 @@ async function writePreflightFailure(error) {
     'group-list-url': result.groupListUrl,
     documents: JSON.stringify(result.documents),
     result: JSON.stringify(result),
-    exit_code: '1',
+    'exit-code': '1',
     error: result.error,
   }
   const delimiter = `ARTIFACT_PAGES_${randomUUID().replaceAll('-', '')}`
