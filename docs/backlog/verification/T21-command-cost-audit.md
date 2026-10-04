@@ -112,7 +112,7 @@ A local `httptest` server returned fixed repository/commit/content responses. Re
 | [TD8 — index-only input capture](../technical-design/TD8-index-only-input-capture.md) | standalone index build の不要な resource-byte capture を省けるか。 |
 | [TD9 — app archive digest reuse](../technical-design/TD9-app-archive-digest-reuse.md) | archive validation の digest/size を同じ immutable bytes の diff/upload で再利用できるか。 |
 | [TD10 — preview Git read batching](../technical-design/TD10-preview-git-read-batching.md) | 完了: build 内の同一 blob 再利用を採用。batch 読取は未比較のため対象外。 |
-| [TD11 — lock call reduction](../technical-design/TD11-lock-call-reduction.md) | cold/warm lock request を CAS/owner 契約を保って減らせるか。 |
+| [TD11 — lock call reduction](../technical-design/TD11-lock-call-reduction.md) | 完了: absent cold の held create と captured-ETag release を採用。cold 1 GET/2 PUT、warm 1/2。 |
 
 Cache purge failure の correctness gap は新しい設計項目に分割せず、完了記録 [T22](T22-cache-purge-retry.md) に移した。
 
