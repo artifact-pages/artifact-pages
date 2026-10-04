@@ -11,10 +11,10 @@ import (
 	"testing"
 )
 
-// sitePublishV2RecoveryBackend keeps the object store across wrapper instances
+// sitePublishRecoveryBackend keeps the object store across wrapper instances
 // while allowing tests to model a response lost after a conditional write was
 // durably applied. A new wrapper represents a process restart.
-type sitePublishV2RecoveryBackend struct {
+type sitePublishRecoveryBackend struct {
 	*sitePublishScaleBackend
 
 	mu sync.Mutex
@@ -27,14 +27,14 @@ type sitePublishV2RecoveryBackend struct {
 	projectionWrites     []string
 }
 
-func newSitePublishV2RecoveryBackend(store *sitePublishScaleBackend) *sitePublishV2RecoveryBackend {
-	return &sitePublishV2RecoveryBackend{
+func newSitePublishRecoveryBackend(store *sitePublishScaleBackend) *sitePublishRecoveryBackend {
+	return &sitePublishRecoveryBackend{
 		sitePublishScaleBackend: store,
 		conditionalWrites:       make(map[string]int),
 	}
 }
 
-func (backend *sitePublishV2RecoveryBackend) PutObjectConditional(ctx context.Context, key string, object Object, condition ObjectCondition) (string, error) {
+func (backend *sitePublishRecoveryBackend) PutObjectConditional(ctx context.Context, key string, object Object, condition ObjectCondition) (string, error) {
 	backend.mu.Lock()
 	backend.conditionalWrites[key]++
 	attempt := backend.conditionalWrites[key]
@@ -55,8 +55,8 @@ func (backend *sitePublishV2RecoveryBackend) PutObjectConditional(ctx context.Co
 	return etag, nil
 }
 
-func (backend *sitePublishV2RecoveryBackend) PutObject(ctx context.Context, key string, object Object) error {
-	if !sitePublishV2RecoveryProjectionKey(key) {
+func (backend *sitePublishRecoveryBackend) PutObject(ctx context.Context, key string, object Object) error {
+	if !sitePublishRecoveryProjectionKey(key) {
 		return backend.sitePublishScaleBackend.PutObject(ctx, key, object)
 	}
 
@@ -72,9 +72,9 @@ func (backend *sitePublishV2RecoveryBackend) PutObject(ctx context.Context, key 
 	return nil
 }
 
-func (backend *sitePublishV2RecoveryBackend) DeleteObjects(ctx context.Context, keys []string) error {
+func (backend *sitePublishRecoveryBackend) DeleteObjects(ctx context.Context, keys []string) error {
 	for _, key := range keys {
-		if sitePublishV2RecoveryProjectionKey(key) {
+		if sitePublishRecoveryProjectionKey(key) {
 			backend.mu.Lock()
 			backend.projectionAttempts = append(backend.projectionAttempts, "delete:"+key)
 			backend.mu.Unlock()
@@ -85,7 +85,7 @@ func (backend *sitePublishV2RecoveryBackend) DeleteObjects(ctx context.Context, 
 	}
 	backend.mu.Lock()
 	for _, key := range keys {
-		if sitePublishV2RecoveryProjectionKey(key) {
+		if sitePublishRecoveryProjectionKey(key) {
 			backend.projectionWrites = append(backend.projectionWrites, "delete:"+key)
 		}
 	}
@@ -93,35 +93,35 @@ func (backend *sitePublishV2RecoveryBackend) DeleteObjects(ctx context.Context, 
 	return nil
 }
 
-func (backend *sitePublishV2RecoveryBackend) projectionWriteSnapshot() (attempts, writes []string) {
+func (backend *sitePublishRecoveryBackend) projectionWriteSnapshot() (attempts, writes []string) {
 	backend.mu.Lock()
 	defer backend.mu.Unlock()
 	return append([]string(nil), backend.projectionAttempts...), append([]string(nil), backend.projectionWrites...)
 }
 
-func sitePublishV2RecoveryProjectionKey(key string) bool {
+func sitePublishRecoveryProjectionKey(key string) bool {
 	return strings.HasPrefix(key, "_artifacts/sre/") || strings.HasPrefix(key, "_indexes/sre/")
 }
 
-func sitePublishV2RecoveryFixture(t *testing.T) (string, *sitePublishScaleBackend, SitePublishOptions) {
+func sitePublishRecoveryFixture(t *testing.T) (string, *sitePublishScaleBackend, SitePublishOptions) {
 	t.Helper()
 	root := createPublisherCheckout(t, "git@github.com:acme/sre.git")
 	store := newSitePublishScaleBackend()
 	seedPublisherRegistry(t, store.lockMemoryBackend, registeredSREManifest)
 	options := SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts"}
-	backend := newSitePublishV2RecoveryBackend(store)
+	backend := newSitePublishRecoveryBackend(store)
 	result, err := PublishSite(context.Background(), backend, options)
 	if err != nil || result.Outcome != "published" {
 		t.Fatalf("initial PublishSite() = %+v, err=%v", result, err)
 	}
-	state, _, _ := sitePublishV2RecoveryReadState(t, store)
+	state, _, _ := sitePublishRecoveryReadState(t, store)
 	if state.SchemaVersion != sitePublishStateSchemaVersion {
 		t.Fatalf("initial state schema = %d, want v%d", state.SchemaVersion, sitePublishStateSchemaVersion)
 	}
 	return root, store, options
 }
 
-func sitePublishV2RecoveryReadState(t *testing.T, store *sitePublishScaleBackend) (sitePublishState, Object, ObjectInfo) {
+func sitePublishRecoveryReadState(t *testing.T, store *sitePublishScaleBackend) (sitePublishState, Object, ObjectInfo) {
 	t.Helper()
 	key := sitePublishStateKey("sre")
 	object, etag, err := store.lockMemoryBackend.GetObject(context.Background(), key)
@@ -142,7 +142,7 @@ func sitePublishV2RecoveryReadState(t *testing.T, store *sitePublishScaleBackend
 	return state, object, info
 }
 
-func sitePublishV2RecoveryReadCache(t *testing.T, store *sitePublishScaleBackend) (siteCacheRetry, string) {
+func sitePublishRecoveryReadCache(t *testing.T, store *sitePublishScaleBackend) (siteCacheRetry, string) {
 	t.Helper()
 	record, etag, err := readSiteCacheRetry(context.Background(), store.lockMemoryBackend, "sre")
 	if err != nil {
@@ -151,7 +151,7 @@ func sitePublishV2RecoveryReadCache(t *testing.T, store *sitePublishScaleBackend
 	return record, etag
 }
 
-func sitePublishV2RecoveryChangePage(t *testing.T, root, contents string) {
+func sitePublishRecoveryChangePage(t *testing.T, root, contents string) {
 	t.Helper()
 	page := filepath.Join(root, "docs", "artifacts", "report.html")
 	if err := os.WriteFile(page, []byte(contents), 0o600); err != nil {
@@ -160,19 +160,19 @@ func sitePublishV2RecoveryChangePage(t *testing.T, root, contents string) {
 }
 
 func TestPublishSitePersistedJournalErrorRecoversAfterFreshWrapper(t *testing.T) {
-	root, store, options := sitePublishV2RecoveryFixture(t)
-	committed, _, _ := sitePublishV2RecoveryReadState(t, store)
+	root, store, options := sitePublishRecoveryFixture(t)
+	committed, _, _ := sitePublishRecoveryReadState(t, store)
 	before := sitePublishProjectionBytes(store.lockMemoryBackend, "sre")
-	sitePublishV2RecoveryChangePage(t, root, "<title>Journal recovery</title><h1>Retry after durable intent</h1>")
+	sitePublishRecoveryChangePage(t, root, "<title>Journal recovery</title><h1>Retry after durable intent</h1>")
 
-	first := newSitePublishV2RecoveryBackend(store)
+	first := newSitePublishRecoveryBackend(store)
 	first.persistThenErrorKey = siteCacheRetryKey("sre")
 	first.persistThenErrorAt = 1
 	if _, err := PublishSite(context.Background(), first, options); err == nil || !strings.Contains(err.Error(), "save site cache retry record") {
 		t.Fatalf("publish with persisted journal response error = %v; want journal save error", err)
 	}
-	stateAfterError, _, _ := sitePublishV2RecoveryReadState(t, store)
-	journal, _ := sitePublishV2RecoveryReadCache(t, store)
+	stateAfterError, _, _ := sitePublishRecoveryReadState(t, store)
+	journal, _ := sitePublishRecoveryReadCache(t, store)
 	if stateAfterError.Committed.Generation != committed.Committed.Generation || journal.Transaction == nil || journal.Transaction.BaseGeneration != committed.Committed.Generation {
 		t.Fatalf("state/journal after persisted journal error = generation %q journal %+v; want old committed generation and durable based transaction", stateAfterError.Committed.Generation, journal.Transaction)
 	}
@@ -183,16 +183,16 @@ func TestPublishSitePersistedJournalErrorRecoversAfterFreshWrapper(t *testing.T)
 		t.Fatalf("first wrapper projection attempts/writes = %v/%v; want none before durable intent is acknowledged", attempts, writes)
 	}
 
-	// A fresh wrapper over the same object storage observes the durable v2
+	// A fresh wrapper over the same object storage observes the durable current schema
 	// journal and resumes the original transaction.
-	restarted := newSitePublishV2RecoveryBackend(store)
+	restarted := newSitePublishRecoveryBackend(store)
 	result, err := PublishSite(context.Background(), restarted, options)
 	if err != nil || result.Outcome != "published" {
 		t.Fatalf("fresh-wrapper journal retry = %+v, err=%v", result, err)
 	}
-	finalState, _, _ := sitePublishV2RecoveryReadState(t, store)
+	finalState, _, _ := sitePublishRecoveryReadState(t, store)
 	if finalState.SchemaVersion != sitePublishStateSchemaVersion || finalState.Committed.Generation != journal.Transaction.ID {
-		t.Fatalf("state after fresh-wrapper journal recovery = %+v; want committed v2 original transaction", finalState)
+		t.Fatalf("state after fresh-wrapper journal recovery = %+v; want the original transaction committed", finalState)
 	}
 	if got := store.objectBytes("_artifacts/sre/report.html"); !strings.Contains(got, "Retry after durable intent") {
 		t.Fatalf("recovered page = %q; want latest source", got)
@@ -206,17 +206,17 @@ func TestPublishSitePersistedJournalErrorRecoversAfterFreshWrapper(t *testing.T)
 }
 
 func TestPublishSitePersistedFinalStateErrorRetriesCacheOnlyAfterFreshWrapper(t *testing.T) {
-	root, store, options := sitePublishV2RecoveryFixture(t)
-	sitePublishV2RecoveryChangePage(t, root, "<title>Final state recovery</title><h1>Committed with lost response</h1>")
+	root, store, options := sitePublishRecoveryFixture(t)
+	sitePublishRecoveryChangePage(t, root, "<title>Final state recovery</title><h1>Committed with lost response</h1>")
 
-	first := newSitePublishV2RecoveryBackend(store)
+	first := newSitePublishRecoveryBackend(store)
 	first.persistThenErrorKey = sitePublishStateKey("sre")
 	first.persistThenErrorAt = 1
 	if _, err := PublishSite(context.Background(), first, options); err == nil || !strings.Contains(err.Error(), "commit site publish state after origin projection") {
 		t.Fatalf("publish with persisted final-state response error = %v; want final commit error", err)
 	}
-	committedAfterError, _, _ := sitePublishV2RecoveryReadState(t, store)
-	journal, _ := sitePublishV2RecoveryReadCache(t, store)
+	committedAfterError, _, _ := sitePublishRecoveryReadState(t, store)
+	journal, _ := sitePublishRecoveryReadCache(t, store)
 	if journal.Transaction == nil || committedAfterError.Committed.Generation != journal.Transaction.ID {
 		t.Fatalf("state/journal after persisted final-state error = generation %q transaction %+v; want transaction committed with retry marker", committedAfterError.Committed.Generation, journal.Transaction)
 	}
@@ -224,7 +224,7 @@ func TestPublishSitePersistedFinalStateErrorRetriesCacheOnlyAfterFreshWrapper(t 
 		t.Fatalf("first-wrapper projection attempts/writes = %v/%v; want completed origin projection", attempts, writes)
 	}
 
-	restarted := newSitePublishV2RecoveryBackend(store)
+	restarted := newSitePublishRecoveryBackend(store)
 	result, err := PublishSite(context.Background(), restarted, options)
 	if err != nil || result.Outcome != "published" || !result.BuildSkipped {
 		t.Fatalf("fresh-wrapper cache-only retry = %+v, err=%v; want published BuildSkipped result", result, err)
@@ -232,7 +232,7 @@ func TestPublishSitePersistedFinalStateErrorRetriesCacheOnlyAfterFreshWrapper(t 
 	if attempts, writes := restarted.projectionWriteSnapshot(); len(attempts) != 0 || len(writes) != 0 {
 		t.Fatalf("cache-only retry projection attempts/writes = %v/%v; want none", attempts, writes)
 	}
-	finalState, _, _ := sitePublishV2RecoveryReadState(t, store)
+	finalState, _, _ := sitePublishRecoveryReadState(t, store)
 	if finalState.Committed.Generation != journal.Transaction.ID || finalState.SchemaVersion != sitePublishStateSchemaVersion {
 		t.Fatalf("cache-only retry changed committed state = %+v; want existing transaction generation", finalState.Committed)
 	}

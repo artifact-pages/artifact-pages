@@ -24,18 +24,18 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
-type sitePublishV2CostStoredObject struct {
+type sitePublishCostStoredObject struct {
 	object Object
 	etag   string
 }
 
-// sitePublishV2CostS3 counts the real S3-compatible adapter requests by key
+// sitePublishCostS3 counts the real S3-compatible adapter requests by key
 // category while storing objects in memory. The publisher, AWS/R2 adapters,
 // CAS conditions, and cache paths remain the production implementations.
-type sitePublishV2CostS3 struct {
+type sitePublishCostS3 struct {
 	mu sync.Mutex
 
-	objects   map[string]sitePublishV2CostStoredObject
+	objects   map[string]sitePublishCostStoredObject
 	nextETag  int
 	requests  map[string]int
 	readByte  map[string]int64
@@ -43,34 +43,34 @@ type sitePublishV2CostS3 struct {
 	events    []string
 }
 
-func newSitePublishV2CostS3() *sitePublishV2CostS3 {
-	return &sitePublishV2CostS3{
-		objects: make(map[string]sitePublishV2CostStoredObject), requests: make(map[string]int),
+func newSitePublishCostS3() *sitePublishCostS3 {
+	return &sitePublishCostS3{
+		objects: make(map[string]sitePublishCostStoredObject), requests: make(map[string]int),
 		readByte: make(map[string]int64), writeByte: make(map[string]int64),
 	}
 }
 
-func (client *sitePublishV2CostS3) seed(key string, object Object) {
+func (client *sitePublishCostS3) seed(key string, object Object) {
 	client.mu.Lock()
 	defer client.mu.Unlock()
-	client.objects[key] = sitePublishV2CostStoredObject{object: sitePublishV2CostCloneObject(object), etag: `"seed-` + key + `"`}
+	client.objects[key] = sitePublishCostStoredObject{object: sitePublishCostCloneObject(object), etag: `"seed-` + key + `"`}
 }
 
-func (client *sitePublishV2CostS3) copyPersistentObjectsFrom(source *sitePublishV2CostS3) {
+func (client *sitePublishCostS3) copyPersistentObjectsFrom(source *sitePublishCostS3) {
 	source.mu.Lock()
 	defer source.mu.Unlock()
 	client.mu.Lock()
 	defer client.mu.Unlock()
-	client.objects = make(map[string]sitePublishV2CostStoredObject, len(source.objects))
+	client.objects = make(map[string]sitePublishCostStoredObject, len(source.objects))
 	for key, stored := range source.objects {
-		client.objects[key] = sitePublishV2CostStoredObject{
-			object: sitePublishV2CostCloneObject(stored.object), etag: stored.etag,
+		client.objects[key] = sitePublishCostStoredObject{
+			object: sitePublishCostCloneObject(stored.object), etag: stored.etag,
 		}
 	}
 	client.nextETag = source.nextETag
 }
 
-func (client *sitePublishV2CostS3) resetCounts() {
+func (client *sitePublishCostS3) resetCounts() {
 	client.mu.Lock()
 	defer client.mu.Unlock()
 	client.requests = make(map[string]int)
@@ -79,8 +79,8 @@ func (client *sitePublishV2CostS3) resetCounts() {
 	client.events = nil
 }
 
-func (client *sitePublishV2CostS3) recordLocked(operation, key string, readBytes, writtenBytes int64) {
-	category := sitePublishV2CostCategory(key)
+func (client *sitePublishCostS3) recordLocked(operation, key string, readBytes, writtenBytes int64) {
+	category := sitePublishCostCategory(key)
 	client.requests[operation+"."+category]++
 	client.requests[operation+".total"]++
 	client.readByte[category] += readBytes
@@ -88,11 +88,11 @@ func (client *sitePublishV2CostS3) recordLocked(operation, key string, readBytes
 	client.events = append(client.events, operation+"."+category)
 }
 
-func (client *sitePublishV2CostS3) recordDeleteLocked(keys []string) {
+func (client *sitePublishCostS3) recordDeleteLocked(keys []string) {
 	client.requests["DELETE.total"]++
 	categories := make(map[string]struct{})
 	for _, key := range keys {
-		categories[sitePublishV2CostCategory(key)] = struct{}{}
+		categories[sitePublishCostCategory(key)] = struct{}{}
 	}
 	for category := range categories {
 		client.requests["DELETE."+category]++
@@ -100,7 +100,7 @@ func (client *sitePublishV2CostS3) recordDeleteLocked(keys []string) {
 	}
 }
 
-func (client *sitePublishV2CostS3) PutObject(ctx context.Context, input *s3.PutObjectInput, _ ...func(*s3.Options)) (*s3.PutObjectOutput, error) {
+func (client *sitePublishCostS3) PutObject(ctx context.Context, input *s3.PutObjectInput, _ ...func(*s3.Options)) (*s3.PutObjectOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -115,7 +115,7 @@ func (client *sitePublishV2CostS3) PutObject(ctx context.Context, input *s3.PutO
 	object := Object{
 		Bytes: body, ContentType: aws.ToString(input.ContentType), ContentDisposition: aws.ToString(input.ContentDisposition),
 		ContentEncoding: aws.ToString(input.ContentEncoding), Cache: aws.ToString(input.CacheControl),
-		Metadata: sitePublishV2CostCloneMetadata(input.Metadata),
+		Metadata: sitePublishCostCloneMetadata(input.Metadata),
 	}
 	etag, err := client.put(aws.ToString(input.Key), object, aws.ToString(input.IfMatch), aws.ToString(input.IfNoneMatch))
 	if err != nil {
@@ -124,7 +124,7 @@ func (client *sitePublishV2CostS3) PutObject(ctx context.Context, input *s3.PutO
 	return &s3.PutObjectOutput{ETag: aws.String(etag)}, nil
 }
 
-func (client *sitePublishV2CostS3) put(key string, object Object, ifMatch, ifNoneMatch string) (string, error) {
+func (client *sitePublishCostS3) put(key string, object Object, ifMatch, ifNoneMatch string) (string, error) {
 	client.mu.Lock()
 	client.recordLocked("PUT", key, 0, int64(len(object.Bytes)))
 	current, exists := client.objects[key]
@@ -134,12 +134,12 @@ func (client *sitePublishV2CostS3) put(key string, object Object, ifMatch, ifNon
 	}
 	client.nextETag++
 	etag := fmt.Sprintf(`"cost-%08d"`, client.nextETag)
-	client.objects[key] = sitePublishV2CostStoredObject{object: sitePublishV2CostCloneObject(object), etag: etag}
+	client.objects[key] = sitePublishCostStoredObject{object: sitePublishCostCloneObject(object), etag: etag}
 	client.mu.Unlock()
 	return etag, nil
 }
 
-func (client *sitePublishV2CostS3) GetObject(ctx context.Context, input *s3.GetObjectInput, _ ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
+func (client *sitePublishCostS3) GetObject(ctx context.Context, input *s3.GetObjectInput, _ ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -155,7 +155,7 @@ func (client *sitePublishV2CostS3) GetObject(ctx context.Context, input *s3.GetO
 	if !exists {
 		return nil, s3ResponseError(http.StatusNotFound, "NoSuchKey")
 	}
-	object := sitePublishV2CostCloneObject(stored.object)
+	object := sitePublishCostCloneObject(stored.object)
 	return &s3.GetObjectOutput{
 		Body: io.NopCloser(bytes.NewReader(object.Bytes)), ETag: aws.String(stored.etag), ContentLength: aws.Int64(int64(len(object.Bytes))),
 		ContentType: aws.String(object.ContentType), ContentDisposition: aws.String(object.ContentDisposition),
@@ -163,7 +163,7 @@ func (client *sitePublishV2CostS3) GetObject(ctx context.Context, input *s3.GetO
 	}, nil
 }
 
-func (client *sitePublishV2CostS3) HeadObject(ctx context.Context, input *s3.HeadObjectInput, _ ...func(*s3.Options)) (*s3.HeadObjectOutput, error) {
+func (client *sitePublishCostS3) HeadObject(ctx context.Context, input *s3.HeadObjectInput, _ ...func(*s3.Options)) (*s3.HeadObjectOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -180,11 +180,11 @@ func (client *sitePublishV2CostS3) HeadObject(ctx context.Context, input *s3.Hea
 		ETag: aws.String(stored.etag), ContentLength: aws.Int64(int64(len(object.Bytes))),
 		ContentType: aws.String(object.ContentType), ContentDisposition: aws.String(object.ContentDisposition),
 		ContentEncoding: aws.String(object.ContentEncoding), CacheControl: aws.String(object.Cache),
-		Metadata: sitePublishV2CostCloneMetadata(object.Metadata),
+		Metadata: sitePublishCostCloneMetadata(object.Metadata),
 	}, nil
 }
 
-func (client *sitePublishV2CostS3) ListObjectsV2(ctx context.Context, input *s3.ListObjectsV2Input, _ ...func(*s3.Options)) (*s3.ListObjectsV2Output, error) {
+func (client *sitePublishCostS3) ListObjectsV2(ctx context.Context, input *s3.ListObjectsV2Input, _ ...func(*s3.Options)) (*s3.ListObjectsV2Output, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -206,7 +206,7 @@ func (client *sitePublishV2CostS3) ListObjectsV2(ctx context.Context, input *s3.
 	return &s3.ListObjectsV2Output{Contents: contents, IsTruncated: aws.Bool(false), KeyCount: aws.Int32(int32(len(contents)))}, nil
 }
 
-func (client *sitePublishV2CostS3) DeleteObjects(ctx context.Context, input *s3.DeleteObjectsInput, _ ...func(*s3.Options)) (*s3.DeleteObjectsOutput, error) {
+func (client *sitePublishCostS3) DeleteObjects(ctx context.Context, input *s3.DeleteObjectsInput, _ ...func(*s3.Options)) (*s3.DeleteObjectsOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -225,10 +225,10 @@ func (client *sitePublishV2CostS3) DeleteObjects(ctx context.Context, input *s3.
 	return &s3.DeleteObjectsOutput{}, nil
 }
 
-func (client *sitePublishV2CostS3) snapshot() sitePublishV2CostSnapshot {
+func (client *sitePublishCostS3) snapshot() sitePublishCostSnapshot {
 	client.mu.Lock()
 	defer client.mu.Unlock()
-	result := sitePublishV2CostSnapshot{
+	result := sitePublishCostSnapshot{
 		Requests: make(map[string]int, len(client.requests)), ReadBytes: make(map[string]int64, len(client.readByte)),
 		WriteBytes: make(map[string]int64, len(client.writeByte)), Events: append([]string(nil), client.events...),
 	}
@@ -244,7 +244,7 @@ func (client *sitePublishV2CostS3) snapshot() sitePublishV2CostSnapshot {
 	return result
 }
 
-func sitePublishV2CostCategory(key string) string {
+func sitePublishCostCategory(key string) string {
 	switch {
 	case key == sitePublishStateKey("sre"):
 		return "state"
@@ -263,13 +263,13 @@ func sitePublishV2CostCategory(key string) string {
 	}
 }
 
-func sitePublishV2CostCloneObject(object Object) Object {
+func sitePublishCostCloneObject(object Object) Object {
 	object.Bytes = append([]byte(nil), object.Bytes...)
-	object.Metadata = sitePublishV2CostCloneMetadata(object.Metadata)
+	object.Metadata = sitePublishCostCloneMetadata(object.Metadata)
 	return object
 }
 
-func sitePublishV2CostCloneMetadata(metadata map[string]string) map[string]string {
+func sitePublishCostCloneMetadata(metadata map[string]string) map[string]string {
 	if metadata == nil {
 		return nil
 	}
@@ -280,14 +280,14 @@ func sitePublishV2CostCloneMetadata(metadata map[string]string) map[string]strin
 	return clone
 }
 
-type sitePublishV2CostSnapshot struct {
+type sitePublishCostSnapshot struct {
 	Requests   map[string]int
 	ReadBytes  map[string]int64
 	WriteBytes map[string]int64
 	Events     []string
 }
 
-type sitePublishV2CostReport struct {
+type sitePublishCostReport struct {
 	Provider                string         `json:"provider"`
 	Scenario                string         `json:"scenario"`
 	ObjectRequests          map[string]int `json:"objectRequests"`
@@ -308,8 +308,8 @@ type sitePublishV2CostReport struct {
 	Events                  []string       `json:"events"`
 }
 
-func sitePublishV2CostMakeReport(provider, scenario string, snapshot sitePublishV2CostSnapshot, cdnCalls int) sitePublishV2CostReport {
-	report := sitePublishV2CostReport{
+func sitePublishCostMakeReport(provider, scenario string, snapshot sitePublishCostSnapshot, cdnCalls int) sitePublishCostReport {
+	report := sitePublishCostReport{
 		Provider: provider, Scenario: scenario, ObjectRequests: snapshot.Requests,
 		StateBodyReadBytes: snapshot.ReadBytes["state"], StateBodyWrittenBytes: snapshot.WriteBytes["state"],
 		JournalBodyReadBytes: snapshot.ReadBytes["journal"], JournalBodyWrittenBytes: snapshot.WriteBytes["journal"],
@@ -346,7 +346,7 @@ func sitePublishV2CostMakeReport(provider, scenario string, snapshot sitePublish
 	return report
 }
 
-func sitePublishV2CostLogReport(t *testing.T, report sitePublishV2CostReport) {
+func sitePublishCostLogReport(t *testing.T, report sitePublishCostReport) {
 	t.Helper()
 	data, err := json.Marshal(report)
 	if err != nil {
@@ -367,8 +367,8 @@ func TestPublishSiteWholeControlRequestsCompareR2GetOnlyAndAWSHeadThenGet(t *tes
 	options := SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts"}
 	ctx := context.Background()
 
-	r2Store := newSitePublishV2CostS3()
-	awsStore := newSitePublishV2CostS3()
+	r2Store := newSitePublishCostS3()
+	awsStore := newSitePublishCostS3()
 	registryBytes, _, err := testRegistryBuild(t, []byte(registeredSREManifest))
 	if err != nil {
 		t.Fatal(err)
@@ -377,8 +377,8 @@ func TestPublishSiteWholeControlRequestsCompareR2GetOnlyAndAWSHeadThenGet(t *tes
 	r2Store.seed("_indexes/sites.json", registryObject)
 	awsStore.seed("_indexes/sites.json", registryObject)
 
-	r2Backend, r2CDN := sitePublishV2CostCloudflare(t, r2Store)
-	awsCDN := &sitePublishV2CostCloudFront{}
+	r2Backend, r2CDN := sitePublishCostCloudflare(t, r2Store)
+	awsCDN := &sitePublishCostCloudFront{}
 	awsBackend, err := newAWSBackend(awsClients{s3: awsStore, cloudFront: awsCDN}, AWSOptions{Bucket: "cost-test", DistributionID: "E123COST"})
 	if err != nil {
 		t.Fatalf("newAWSBackend() error = %v", err)
@@ -412,10 +412,10 @@ func TestPublishSiteWholeControlRequestsCompareR2GetOnlyAndAWSHeadThenGet(t *tes
 	if err != nil || awsNoOp.Outcome != "no-op" || !awsNoOp.BuildSkipped {
 		t.Fatalf("AWS no-op = %+v, err=%v", awsNoOp, err)
 	}
-	r2NoOpReport := sitePublishV2CostMakeReport("R2", "no-op", r2Store.snapshot(), r2CDN.calls())
-	awsNoOpReport := sitePublishV2CostMakeReport("AWS", "no-op", awsStore.snapshot(), awsCDN.calls())
-	sitePublishV2CostLogReport(t, r2NoOpReport)
-	sitePublishV2CostLogReport(t, awsNoOpReport)
+	r2NoOpReport := sitePublishCostMakeReport("R2", "no-op", r2Store.snapshot(), r2CDN.calls())
+	awsNoOpReport := sitePublishCostMakeReport("AWS", "no-op", awsStore.snapshot(), awsCDN.calls())
+	sitePublishCostLogReport(t, r2NoOpReport)
+	sitePublishCostLogReport(t, awsNoOpReport)
 	if r2NoOpReport.ObjectRequests["GET.state"] != 1 || r2NoOpReport.ObjectRequests["HEAD.state"] != 0 || r2NoOpReport.ObjectRequests["PUT.state"] != 0 {
 		t.Fatalf("R2 no-op state requests = %v; want GET=1 HEAD=0 PUT=0", r2NoOpReport.ObjectRequests)
 	}
@@ -428,7 +428,7 @@ func TestPublishSiteWholeControlRequestsCompareR2GetOnlyAndAWSHeadThenGet(t *tes
 	if r2NoOpReport.CDNInvalidationRequests != 0 || awsNoOpReport.CDNInvalidationRequests != 0 {
 		t.Fatalf("no-op CDN requests R2/AWS = %d/%d; want none", r2NoOpReport.CDNInvalidationRequests, awsNoOpReport.CDNInvalidationRequests)
 	}
-	if err := sitePublishV2CostRequireSameNonStateRequests(r2NoOpReport.ObjectRequests, awsNoOpReport.ObjectRequests); err != nil {
+	if err := sitePublishCostRequireSameNonStateRequests(r2NoOpReport.ObjectRequests, awsNoOpReport.ObjectRequests); err != nil {
 		t.Fatal(err)
 	}
 
@@ -448,10 +448,10 @@ func TestPublishSiteWholeControlRequestsCompareR2GetOnlyAndAWSHeadThenGet(t *tes
 		t.Fatalf("AWS changed-resource publish = %+v, err=%v", awsChanged, err)
 	}
 	r2ChangedSnapshot, awsChangedSnapshot := r2Store.snapshot(), awsStore.snapshot()
-	r2ChangedReport := sitePublishV2CostMakeReport("R2", "one changed resource", r2ChangedSnapshot, r2CDN.calls())
-	awsChangedReport := sitePublishV2CostMakeReport("AWS", "one changed resource", awsChangedSnapshot, awsCDN.calls())
-	sitePublishV2CostLogReport(t, r2ChangedReport)
-	sitePublishV2CostLogReport(t, awsChangedReport)
+	r2ChangedReport := sitePublishCostMakeReport("R2", "one changed resource", r2ChangedSnapshot, r2CDN.calls())
+	awsChangedReport := sitePublishCostMakeReport("AWS", "one changed resource", awsChangedSnapshot, awsCDN.calls())
+	sitePublishCostLogReport(t, r2ChangedReport)
+	sitePublishCostLogReport(t, awsChangedReport)
 	if r2ChangedReport.ObjectRequests["GET.state"] != 1 || r2ChangedReport.ObjectRequests["HEAD.state"] != 0 || r2ChangedReport.ObjectRequests["PUT.state"] != 1 {
 		t.Fatalf("R2 changed state requests = %v; want GET=1 HEAD=0 and one final state PUT", r2ChangedReport.ObjectRequests)
 	}
@@ -473,7 +473,7 @@ func TestPublishSiteWholeControlRequestsCompareR2GetOnlyAndAWSHeadThenGet(t *tes
 	// reads those two prior objects before deciding whether to retain their
 	// deployed bytes. Count these as projection reads; they are independent of
 	// the state-read policy being compared.
-	for _, report := range []sitePublishV2CostReport{r2ChangedReport, awsChangedReport} {
+	for _, report := range []sitePublishCostReport{r2ChangedReport, awsChangedReport} {
 		generatedAtReads := report.ObjectRequests["GET.projection"]
 		if generatedAtReads != 0 && generatedAtReads != 2 {
 			t.Fatalf("%s changed flow made %d projection GETs; want 0 or the two generatedAt preservation reads", report.Provider, generatedAtReads)
@@ -486,21 +486,21 @@ func TestPublishSiteWholeControlRequestsCompareR2GetOnlyAndAWSHeadThenGet(t *tes
 		r2ChangedReport.ObjectRequests["DELETE.journal"] != 1 || awsChangedReport.ObjectRequests["DELETE.journal"] != 1 {
 		t.Fatalf("changed journal requests R2=%v AWS=%v; want one durable journal write and clear each", r2ChangedReport.ObjectRequests, awsChangedReport.ObjectRequests)
 	}
-	if err := sitePublishV2CostRequireSameNonStateRequests(r2ChangedReport.ObjectRequests, awsChangedReport.ObjectRequests); err != nil {
+	if err := sitePublishCostRequireSameNonStateRequests(r2ChangedReport.ObjectRequests, awsChangedReport.ObjectRequests); err != nil {
 		t.Fatal(err)
 	}
 	if r2ChangedReport.CDNInvalidationRequests != 1 || awsChangedReport.CDNInvalidationRequests != 1 {
 		t.Fatalf("changed CDN requests R2/AWS = %d/%d; want one revalidation call each, separately from object request classes", r2ChangedReport.CDNInvalidationRequests, awsChangedReport.CDNInvalidationRequests)
 	}
-	if err := sitePublishV2CostAssertWriteOrdering(r2ChangedSnapshot.Events); err != nil {
+	if err := sitePublishCostAssertWriteOrdering(r2ChangedSnapshot.Events); err != nil {
 		t.Fatalf("R2 write ordering: %v", err)
 	}
-	if err := sitePublishV2CostAssertWriteOrdering(awsChangedSnapshot.Events); err != nil {
+	if err := sitePublishCostAssertWriteOrdering(awsChangedSnapshot.Events); err != nil {
 		t.Fatalf("AWS write ordering: %v", err)
 	}
 }
 
-func sitePublishV2CostRequireSameNonStateRequests(left, right map[string]int) error {
+func sitePublishCostRequireSameNonStateRequests(left, right map[string]int) error {
 	keys := make(map[string]struct{}, len(left)+len(right))
 	for key := range left {
 		keys[key] = struct{}{}
@@ -519,7 +519,7 @@ func sitePublishV2CostRequireSameNonStateRequests(left, right map[string]int) er
 	return nil
 }
 
-func sitePublishV2CostAssertWriteOrdering(events []string) error {
+func sitePublishCostAssertWriteOrdering(events []string) error {
 	journalPut, firstProjectionWrite, lastProjectionWrite, statePut := -1, -1, -1, -1
 	statePutCount := 0
 	for index, event := range events {
@@ -547,9 +547,9 @@ func sitePublishV2CostAssertWriteOrdering(events []string) error {
 	return nil
 }
 
-func sitePublishV2CostCloudflare(t *testing.T, client *sitePublishV2CostS3) (*cloudflareBackend, *sitePublishV2CostPurgeCounter) {
+func sitePublishCostCloudflare(t *testing.T, client *sitePublishCostS3) (*cloudflareBackend, *sitePublishCostPurgeCounter) {
 	t.Helper()
-	counter := &sitePublishV2CostPurgeCounter{}
+	counter := &sitePublishCostPurgeCounter{}
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		counter.mu.Lock()
 		counter.callCount++
@@ -572,29 +572,29 @@ func sitePublishV2CostCloudflare(t *testing.T, client *sitePublishV2CostS3) (*cl
 	}, counter
 }
 
-type sitePublishV2CostPurgeCounter struct {
+type sitePublishCostPurgeCounter struct {
 	mu        sync.Mutex
 	callCount int
 }
 
-func (counter *sitePublishV2CostPurgeCounter) reset() {
+func (counter *sitePublishCostPurgeCounter) reset() {
 	counter.mu.Lock()
 	counter.callCount = 0
 	counter.mu.Unlock()
 }
 
-func (counter *sitePublishV2CostPurgeCounter) calls() int {
+func (counter *sitePublishCostPurgeCounter) calls() int {
 	counter.mu.Lock()
 	defer counter.mu.Unlock()
 	return counter.callCount
 }
 
-type sitePublishV2CostCloudFront struct {
+type sitePublishCostCloudFront struct {
 	mu        sync.Mutex
 	callCount int
 }
 
-func (client *sitePublishV2CostCloudFront) CreateInvalidation(_ context.Context, _ *cloudfront.CreateInvalidationInput, _ ...func(*cloudfront.Options)) (*cloudfront.CreateInvalidationOutput, error) {
+func (client *sitePublishCostCloudFront) CreateInvalidation(_ context.Context, _ *cloudfront.CreateInvalidationInput, _ ...func(*cloudfront.Options)) (*cloudfront.CreateInvalidationOutput, error) {
 	client.mu.Lock()
 	client.callCount++
 	index := client.callCount
@@ -602,37 +602,37 @@ func (client *sitePublishV2CostCloudFront) CreateInvalidation(_ context.Context,
 	return &cloudfront.CreateInvalidationOutput{Invalidation: &cloudfronttypes.Invalidation{Id: aws.String(fmt.Sprintf("aws-cost-%d", index))}}, nil
 }
 
-func (client *sitePublishV2CostCloudFront) reset() {
+func (client *sitePublishCostCloudFront) reset() {
 	client.mu.Lock()
 	client.callCount = 0
 	client.mu.Unlock()
 }
 
-func (client *sitePublishV2CostCloudFront) calls() int {
+func (client *sitePublishCostCloudFront) calls() int {
 	client.mu.Lock()
 	defer client.mu.Unlock()
 	return client.callCount
 }
 
-type sitePublishV2CostCacheFailureBackend struct {
-	*sitePublishV2RecoveryBackend
+type sitePublishCostCacheFailureBackend struct {
+	*sitePublishRecoveryBackend
 	failInvalidateOnce bool
 }
 
-func (backend *sitePublishV2CostCacheFailureBackend) Invalidate(ctx context.Context, paths []string) (string, error) {
+func (backend *sitePublishCostCacheFailureBackend) Invalidate(ctx context.Context, paths []string) (string, error) {
 	if backend.failInvalidateOnce {
 		backend.failInvalidateOnce = false
 		return "", errors.New("injected cache invalidation failure after origin commit")
 	}
-	return backend.sitePublishV2RecoveryBackend.sitePublishScaleBackend.Invalidate(ctx, paths)
+	return backend.sitePublishRecoveryBackend.sitePublishScaleBackend.Invalidate(ctx, paths)
 }
 
-type sitePublishV2CostJournalCaptureBackend struct {
-	*sitePublishV2RecoveryBackend
+type sitePublishCostJournalCaptureBackend struct {
+	*sitePublishRecoveryBackend
 	journalWrites []siteCacheRetry
 }
 
-func (backend *sitePublishV2CostJournalCaptureBackend) PutObjectConditional(ctx context.Context, key string, object Object, condition ObjectCondition) (string, error) {
+func (backend *sitePublishCostJournalCaptureBackend) PutObjectConditional(ctx context.Context, key string, object Object, condition ObjectCondition) (string, error) {
 	if key == siteCacheRetryKey("sre") {
 		var record siteCacheRetry
 		if err := json.Unmarshal(object.Bytes, &record); err != nil {
@@ -640,11 +640,11 @@ func (backend *sitePublishV2CostJournalCaptureBackend) PutObjectConditional(ctx 
 		}
 		backend.journalWrites = append(backend.journalWrites, record)
 	}
-	return backend.sitePublishV2RecoveryBackend.PutObjectConditional(ctx, key, object, condition)
+	return backend.sitePublishRecoveryBackend.PutObjectConditional(ctx, key, object, condition)
 }
 
 func TestPublishSiteCompletedCacheFailureStartsNewTransactionAndUnionsPaths(t *testing.T) {
-	root, store, options := sitePublishV2RecoveryFixture(t)
+	root, store, options := sitePublishRecoveryFixture(t)
 	failedPath := filepath.Join(root, "docs", "artifacts", "assets", "attempt-only.css")
 	if err := os.MkdirAll(filepath.Dir(failedPath), 0o755); err != nil {
 		t.Fatal(err)
@@ -652,13 +652,13 @@ func TestPublishSiteCompletedCacheFailureStartsNewTransactionAndUnionsPaths(t *t
 	if err := os.WriteFile(failedPath, []byte("body{--attempt-only:1}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	firstStoreWrapper := newSitePublishV2RecoveryBackend(store)
-	first := &sitePublishV2CostCacheFailureBackend{sitePublishV2RecoveryBackend: firstStoreWrapper, failInvalidateOnce: true}
+	firstStoreWrapper := newSitePublishRecoveryBackend(store)
+	first := &sitePublishCostCacheFailureBackend{sitePublishRecoveryBackend: firstStoreWrapper, failInvalidateOnce: true}
 	if _, err := PublishSite(context.Background(), first, options); err == nil || !strings.Contains(err.Error(), "cache revalidation failed") {
 		t.Fatalf("first publish cache failure = %v; want post-commit invalidation failure", err)
 	}
-	stateAfterFailure, _, _ := sitePublishV2RecoveryReadState(t, store)
-	firstJournal, _ := sitePublishV2RecoveryReadCache(t, store)
+	stateAfterFailure, _, _ := sitePublishRecoveryReadState(t, store)
+	firstJournal, _ := sitePublishRecoveryReadCache(t, store)
 	if firstJournal.Transaction == nil || stateAfterFailure.Committed.Generation != firstJournal.Transaction.ID {
 		t.Fatalf("completed generation/journal after cache failure = %q/%+v; want completed transaction retained for cache retry", stateAfterFailure.Committed.Generation, firstJournal.Transaction)
 	}
@@ -680,7 +680,7 @@ func TestPublishSiteCompletedCacheFailureStartsNewTransactionAndUnionsPaths(t *t
 	if err := os.WriteFile(latestPath, []byte("body{--latest:1}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	restarted := &sitePublishV2CostJournalCaptureBackend{sitePublishV2RecoveryBackend: newSitePublishV2RecoveryBackend(store)}
+	restarted := &sitePublishCostJournalCaptureBackend{sitePublishRecoveryBackend: newSitePublishRecoveryBackend(store)}
 	result, err := PublishSite(context.Background(), restarted, options)
 	if err != nil || result.Outcome != "published" {
 		t.Fatalf("fresh-wrapper changed/reverted retry = %+v, err=%v", result, err)
@@ -702,7 +702,7 @@ func TestPublishSiteCompletedCacheFailureStartsNewTransactionAndUnionsPaths(t *t
 		!containsString(secondJournal.Transaction.TouchedKeys, "_artifacts/sre/assets/latest.css") {
 		t.Errorf("new transaction touched keys = %v; want reverted and latest resource keys", secondJournal.Transaction.TouchedKeys)
 	}
-	finalState, _, _ := sitePublishV2RecoveryReadState(t, store)
+	finalState, _, _ := sitePublishRecoveryReadState(t, store)
 	if finalState.Committed.Generation != secondJournal.Transaction.ID {
 		t.Fatalf("final state generation = %q; want new retry transaction %q", finalState.Committed.Generation, secondJournal.Transaction.ID)
 	}
