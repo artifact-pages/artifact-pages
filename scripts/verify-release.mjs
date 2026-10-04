@@ -62,7 +62,12 @@ try {
     return entry.isDirectory() ? walk(root, next) : [next]
   })
   const archived = walk(extracted).sort()
-  const deployed = walk(target).sort()
+  if (archived.some((file) => file.startsWith('_control/'))) throw new Error('release archive contains private control objects')
+  // Local deployment keeps locking and publish-state bookkeeping alongside
+  // the public projection. Those private files are deliberately not part of
+  // the web archive and therefore do not participate in the public byte
+  // comparison below.
+  const deployed = walk(target).filter((file) => !file.startsWith('_control/')).sort()
   if (JSON.stringify(archived) !== JSON.stringify([...manifest.files].sort())) throw new Error('archive contents do not match the release manifest')
   if (JSON.stringify(deployed) !== JSON.stringify(archived)) throw new Error(`deployed files differ from the archive: deployed=${deployed.length} archive=${archived.length}`)
   for (const file of archived) {
