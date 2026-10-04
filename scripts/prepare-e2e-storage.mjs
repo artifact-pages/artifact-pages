@@ -1,7 +1,7 @@
 // Builds the storage root served during `npm run test:e2e`.
 //
 // The committed fixtures are copied unchanged, and one extra site, `textsearch`,
-// is generated with the Go builder's `--fulltext` option so page text search is
+// is generated with the Go builder (which always emits page text search data) so it is
 // exercised against a real projection. The extra site is not listed in the
 // copied sites.json, so the committed registry and every fixture site keep their
 // metadata-only behavior; tests that need the site register it by routing
@@ -102,7 +102,6 @@ function buildTextSearchIndex(root, source, storage) {
     '--repository', 'example/text-search',
     '--repository-url', 'https://github.com/example/text-search',
     '--ref', 'main',
-    '--fulltext',
   ], { cwd: root, stdio: 'inherit' })
   if (result.error) throw result.error
   if (result.status !== 0) throw new Error(`index build for ${TEXT_SEARCH_SITE_ID} exited with status ${result.status}`)

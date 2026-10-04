@@ -47,7 +47,6 @@ function buildArguments() {
     args.push('site', 'publish', '--site', required('site'))
     flag(args, 'source', input('source'))
     flag(args, 'config', input('config'))
-    if (boolInput('fulltext')) args.push('--fulltext')
     if (boolInput('dry-run')) args.push('--dry-run')
   } else if (kind === 'preview' && operation === 'publish') {
     args.push('preview', 'publish', '--site', required('site'))

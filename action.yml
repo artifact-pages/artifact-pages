@@ -21,10 +21,6 @@ inputs:
     description: Optional token with read-only access to a separate private admin config repository; otherwise uses this workflow's GITHUB_TOKEN.
     required: false
     default: ""
-  fulltext:
-    description: Build and publish the site's page text search data (passes --fulltext). Publishing without it withdraws existing search data.
-    required: false
-    default: "false"
   dry-run:
     description: Calculate and report the origin changes without writes.
     required: false
@@ -84,7 +80,6 @@ runs:
         ARTIFACT_PAGES_INPUT_SITE: ${{ inputs.site }}
         ARTIFACT_PAGES_INPUT_SOURCE: ${{ inputs.source }}
         ARTIFACT_PAGES_INPUT_CONFIG: ${{ inputs.config }}
-        ARTIFACT_PAGES_INPUT_FULLTEXT: ${{ inputs.fulltext }}
         ARTIFACT_PAGES_INPUT_DRY_RUN: ${{ inputs.dry-run }}
         GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
       run: node "$GITHUB_ACTION_PATH/actions/shared/invoke-cli.mjs"

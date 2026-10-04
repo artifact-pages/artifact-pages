@@ -259,7 +259,7 @@ class Operator {
   publish(tree, name, site) {
     git(this.fixtures.satellite, ['checkout', 'main'])
     return this.cli(tree, this.fixtures.satellite, [
-      'site', 'publish', '--site', site, '--source', `sites/${site}`, '--fulltext',
+      'site', 'publish', '--site', site, '--source', `sites/${site}`,
       '--config', path.relative(this.fixtures.satellite, this.config(name)), '--format', 'json',
     ], `site publish ${site} -> ${name}`)
   }
