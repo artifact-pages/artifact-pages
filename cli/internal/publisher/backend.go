@@ -68,6 +68,28 @@ type ConditionalObjectBackend interface {
 	PutObjectConditional(context.Context, string, Object, ObjectCondition) (string, error)
 }
 
+// publishStateReadMode is an explicit adapter capability for the private site
+// state object. The default keeps the HEAD-first fast path and uses GET only
+// when a body is needed. An adapter may select GET-only when its provider's
+// pricing and complete GET response metadata make that the chosen policy.
+type publishStateReadMode uint8
+
+const (
+	publishStateReadHeadThenGet publishStateReadMode = iota
+	publishStateReadGetOnly
+)
+
+type publishStateReadPolicy interface {
+	publishStateReadMode() publishStateReadMode
+}
+
+func selectedPublishStateReadMode(backend DeploymentBackend) publishStateReadMode {
+	if policy, ok := backend.(publishStateReadPolicy); ok && policy.publishStateReadMode() == publishStateReadGetOnly {
+		return publishStateReadGetOnly
+	}
+	return publishStateReadHeadThenGet
+}
+
 // InvalidationValidator checks local provider credentials/configuration for a
 // non-empty cache invalidation request before a workflow mutates origin data.
 // Providers without this optional capability keep their existing behavior.
