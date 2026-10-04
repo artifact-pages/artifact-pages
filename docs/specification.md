@@ -925,6 +925,12 @@ Pre-publish shares the cooperative per-site storage lock with production publish
 
 Pre-publish does not immediately delete an older completed revision when a newer one replaces it in the catalog. Early deletion would break previously shared direct URLs and could leave a cached catalog pointing at missing content. Preview lifetime is delegated entirely to the provider's administrator-defined lifecycle policy: the application does not compute, store, display, or enforce its own expiry timestamp. Catalog entries are discovery candidates, not proof that their manifests still exist. The local Previews list checks fixture or local manifests when opened; registered-site production publish also removes confirmed-missing references from the `_previews` prefix in its configured target after a successful production projection. That core reconciliation is exercised with the local backend. Real provider-origin behavior, provider-backed availability checks, lifecycle and shared-cache behavior remain separate verification work. Any viewer access gate is independently configured and verified by the operator at the edge.
 
+#### Shared Action behavior
+
+These behaviors are properties of the composite Action wrappers (root `action.yml`, `actions/site-publish`, `actions/admin`, `actions/preview-publish`). They live in the wrapper, never in the CLI, so the CLI contract above is unchanged.
+
+**Publish condition.** The site-publish (and root) and admin Actions accept an optional `publish-on` input: a newline-separated list of `event` or `event:ref` entries such as `push:refs/heads/main` and `workflow_dispatch`. An entry matches when its event equals `GITHUB_EVENT_NAME` and, if it names a ref, that ref equals the full `GITHUB_REF` (`*` matches any run of characters, so `push:refs/tags/v*` covers tags). A run that matches no entry is passed to the CLI as `--dry-run` and logs a notice saying why. An explicit `dry-run: true` always wins. An empty `publish-on` means no condition, which is the previous behavior. A malformed entry fails the run (exit two, typed failure outputs) instead of silently becoming a dry-run. The preview Action has no `publish-on`: a preview is not a production write, and callers choose when it runs with workflow `on:` and job `if:`.
+
 ## 20. Non-goals for the MVP
 
 - server-side rendering

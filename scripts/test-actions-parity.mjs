@@ -13,12 +13,12 @@ const actionRunner = path.join(projectRoot, 'actions', 'shared', 'invoke-cli.mjs
 const expectedActionContracts = {
   admin: {
     directory: path.join(projectRoot, 'actions', 'admin'),
-    inputs: ['operation', 'config', 'github-token', 'site', 'archive', 'repository', 'dry-run'],
+    inputs: ['operation', 'config', 'github-token', 'site', 'archive', 'repository', 'dry-run', 'publish-on'],
     outputs: ['operation', 'outcome', 'site', 'registry-updated', 'changes', 'preview-changes', 'result', 'exit-code', 'error'],
   },
   site: {
     directory: path.join(projectRoot, 'actions', 'site-publish'),
-    inputs: ['site', 'source', 'config', 'github-token', 'dry-run'],
+    inputs: ['site', 'source', 'config', 'github-token', 'dry-run', 'publish-on'],
     outputs: ['operation', 'outcome', 'site', 'registry-updated', 'changes', 'preview-changes', 'result', 'exit-code', 'error'],
   },
   preview: {
@@ -356,7 +356,7 @@ function assertActionParity(direct, action, label) {
   assert.equal(outputs.error ?? '', direct.result.error ?? '', `${label}: error output`)
 }
 
-async function runAction(kind, operation, cliArgs, inputs, workspace, binaryPath, scratchRoot, preflight = undefined) {
+async function runAction(kind, operation, cliArgs, inputs, workspace, binaryPath, scratchRoot, preflight = undefined, extraEnv = {}) {
   const outputPath = path.join(scratchRoot, `github-output-${kind}-${operation}-${Date.now()}.txt`)
   await fs.writeFile(outputPath, '')
   const actionEnvironment = {
@@ -366,6 +366,7 @@ async function runAction(kind, operation, cliArgs, inputs, workspace, binaryPath
     ARTIFACT_PAGES_CLI: binaryPath,
     ARTIFACT_PAGES_ACTION_KIND: kind,
     ARTIFACT_PAGES_INPUT_OPERATION: operation,
+    ...extraEnv,
     ...Object.fromEntries(Object.entries(inputs).map(([name, value]) => [
       `ARTIFACT_PAGES_INPUT_${name.toUpperCase().replaceAll('-', '_')}`,
       value,
@@ -733,6 +734,18 @@ async function main() {
     }, satelliteRoot, binaryPath, scratchRoot)
     assertActionParity(directSite, actionSite, 'site publish dry-run')
     assert.deepEqual(await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)]), siteStorageBeforeDryRun, 'site publish dry-run changed local storage')
+
+    // publish-on: a run outside the condition is a dry-run, so a real-looking invocation changes nothing.
+    const gatedSite = await runAction('site', 'publish', siteArgs.filter((arg) => arg !== '--dry-run'), {
+      site: 'sre', source: 'docs/artifacts', config: '.artifact-pages-action.yaml', 'publish-on': 'push:refs/heads/main\nworkflow_dispatch',
+    }, satelliteRoot, binaryPath, scratchRoot, undefined, { GITHUB_EVENT_NAME: 'pull_request', GITHUB_REF: 'refs/pull/1/merge' })
+    assertActionParity(directSite, gatedSite, 'site publish gated by publish-on')
+    assert.match(gatedSite.stderr, /::notice title=Artifact Pages dry-run::publish-on does not match event pull_request/, 'publish-on dry-run must be announced')
+    assert.deepEqual(await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)]), siteStorageBeforeDryRun, 'publish-on dry-run changed local storage')
+    const badPublishOn = await runAction('site', 'publish', siteArgs, {
+      site: 'sre', source: 'docs/artifacts', config: '.artifact-pages-action.yaml', 'publish-on': 'push:main',
+    }, satelliteRoot, binaryPath, scratchRoot).catch((error) => error)
+    assert.ok(badPublishOn instanceof Error || badPublishOn.exitCode === 2, 'a malformed publish-on must fail')
 
     const failingSiteArgs = ['site', 'publish', '--site', 'not-registered', '--source', 'docs/artifacts', '--config', 'artifact-pages.yaml', '--dry-run', '--format', 'json']
     const directFailure = runDirect(binaryPath, satelliteRoot, failingSiteArgs, 'direct unregistered-site dry-run')

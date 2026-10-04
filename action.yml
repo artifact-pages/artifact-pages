@@ -25,6 +25,10 @@ inputs:
     description: Calculate and report the origin changes without writes.
     required: false
     default: "false"
+  publish-on:
+    description: "Optional newline-separated list of `event` or `event:ref` entries (for example `push:refs/heads/main`, `workflow_dispatch`). A run that matches none of them becomes a dry-run. An explicit `dry-run: true` always wins; empty means no condition."
+    required: false
+    default: ""
 outputs:
   operation:
     description: CLI operation name.
@@ -81,5 +85,6 @@ runs:
         ARTIFACT_PAGES_INPUT_SOURCE: ${{ inputs.source }}
         ARTIFACT_PAGES_INPUT_CONFIG: ${{ inputs.config }}
         ARTIFACT_PAGES_INPUT_DRY_RUN: ${{ inputs.dry-run }}
+        ARTIFACT_PAGES_INPUT_PUBLISH_ON: ${{ inputs.publish-on }}
         GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
       run: node "$GITHUB_ACTION_PATH/actions/shared/invoke-cli.mjs"
