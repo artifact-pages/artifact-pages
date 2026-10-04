@@ -18,6 +18,8 @@ Verification environment, 2026-10-03:
 
 Code: in `cli/internal/publisher/registry_apply.go`, `catalogInvalidationPending` comes only from `registryChanged` or a cleanup record. An add-only change writes no record before `backend.Invalidate`, so a failed purge leaves nothing to retry.
 
+Additional reproducible local fake evidence is recorded in [T21](../verification/T21-command-cost-audit.md); the audit does not change this issue's status or acceptance criteria.
+
 ## Expected outcome
 
 A failed purge after a successful origin write is retried on the next run of the same command, as `site publish` does.

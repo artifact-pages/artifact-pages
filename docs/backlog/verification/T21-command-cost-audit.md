@@ -94,6 +94,19 @@ A local `httptest` server returned fixed repository/commit/content responses. Re
 6. **registry cleanup と config read は現状維持を基本とする。** Unregister の prefix inventory は manifest 外 drift を消すために必要。Remote config の SHA pin は既に少ない request path であり、cross-invocation cache は freshness 契約を変える。
 7. **help/version/set-default は軽量。** Help/version は provider reads を行わず、`set-default` は atomic local save を行う。現時点の測定で変更候補にしない。
 
+## Technical-design follow-up
+
+監査は完了しており、以下は比較判断を後続で独立して閉じる backlog 項目である。ここで実装や採用を決めたものではない。
+
+| 項目 | 次の判断 |
+| --- | --- |
+| [TD8 — index-only input capture](../technical-design/TD8-index-only-input-capture.md) | standalone index build の不要な resource-byte capture を省けるか。 |
+| [TD9 — app archive digest reuse](../technical-design/TD9-app-archive-digest-reuse.md) | archive validation の digest/size を同じ immutable bytes の diff/upload で再利用できるか。 |
+| [TD10 — preview Git read batching](../technical-design/TD10-preview-git-read-batching.md) | Git blob reads と dependency scan を契約を保って集約できるか。 |
+| [TD11 — lock call reduction](../technical-design/TD11-lock-call-reduction.md) | cold/warm lock request を CAS/owner 契約を保って減らせるか。 |
+
+Cache purge failure の correctness gap は新しい設計項目に分割せず、既存 [ISSUE-066](../issues/ISSUE-066-registry-app-deploy-lose-failed-purge.md) の範囲に残す。
+
 ## 再実行
 
 Repository root から以下を実行する。出力はテスト log に入り、テストの一時 source/output は `.local/` に作って cleanup する。
