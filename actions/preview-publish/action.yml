@@ -69,7 +69,7 @@ outputs:
     value: ${{ steps.cli.outputs.error || steps.preflight.outputs.error }}
   comment-url:
     description: URL of the PR comment written by this run; empty when no comment was written.
-    value: ${{ steps.comment.outputs.comment-url }}
+    value: ${{ steps.comment.outputs['comment-url'] }}
 runs:
   using: composite
   steps:

@@ -60,7 +60,7 @@ test('creates one marker comment when none exists', async () => {
 
 test('updates the existing marker comment in place, searching later pages', async () => {
   const filler = Array.from({ length: 100 }, (_, index) => ({ id: index + 1, body: `chat ${index}` }))
-  const api = fakeApi({ existing: [...filler, { id: 4242, body: `${marker}\nold` }] })
+  const api = fakeApi({ existing: [...filler, { id: 4242, user: { type: 'Bot' }, body: `${marker}\nold` }] })
   const result = await runPreviewComment({ env: environment(), fetchImpl: api.fetchImpl })
   assert.equal(result.action, 'updated')
   assert.deepEqual(api.calls.filter((call) => call.method === 'GET').map((call) => call.page), ['1', '2'])
@@ -69,8 +69,15 @@ test('updates the existing marker comment in place, searching later pages', asyn
   assert.equal(api.calls.some((call) => call.method === 'POST'), false)
 })
 
+test('a human-authored marker comment is ignored and a new comment is created', async () => {
+  const api = fakeApi({ existing: [{ id: 3, user: { type: 'User' }, body: `${marker}\nhijack` }] })
+  const result = await runPreviewComment({ env: environment(), fetchImpl: api.fetchImpl })
+  assert.equal(result.action, 'created')
+  assert.equal(api.calls.some((call) => call.method === 'PATCH'), false)
+})
+
 test('a marker for another site is not matched', async () => {
-  const api = fakeApi({ existing: [{ id: 5, body: '<!-- artifact-pages-preview:site=other -->\nx' }] })
+  const api = fakeApi({ existing: [{ id: 5, user: { type: 'Bot' }, body: '<!-- artifact-pages-preview:site=other -->\nx' }] })
   const result = await runPreviewComment({ env: environment(), fetchImpl: api.fetchImpl })
   assert.equal(result.action, 'created')
 })
@@ -97,10 +104,10 @@ test('no-preview and failure only update an existing comment', async () => {
     assert.equal((await runPreviewComment({ env: environment(overrides), fetchImpl: none.fetchImpl })).action, 'none')
     assert.equal(none.calls.some((call) => call.method !== 'GET'), false)
 
-    const some = fakeApi({ existing: [{ id: 9, body: `${marker}\nold` }] })
+    const some = fakeApi({ existing: [{ id: 9, user: { type: 'Bot' }, body: `${marker}\nold` }] })
     assert.equal((await runPreviewComment({ env: environment(overrides), fetchImpl: some.fetchImpl })).action, 'updated')
   }
-  const some = fakeApi({ existing: [{ id: 9, body: `${marker}\nold` }] })
+  const some = fakeApi({ existing: [{ id: 9, user: { type: 'Bot' }, body: `${marker}\nold` }] })
   await runPreviewComment({ env: environment(failure), fetchImpl: some.fetchImpl })
   const body = some.calls.find((call) => call.method === 'PATCH').body
   assert.match(body, /failed/)
@@ -109,7 +116,7 @@ test('no-preview and failure only update an existing comment', async () => {
 })
 
 test('a non-zero exit code counts as failure even with a published-looking result', async () => {
-  const api = fakeApi({ existing: [{ id: 9, body: `${marker}\nold` }] })
+  const api = fakeApi({ existing: [{ id: 9, user: { type: 'Bot' }, body: `${marker}\nold` }] })
   await runPreviewComment({ env: environment({ ARTIFACT_PAGES_COMMENT_EXIT_CODE: '1' }), fetchImpl: api.fetchImpl })
   assert.match(api.calls.find((call) => call.method === 'PATCH').body, /failed/)
 })

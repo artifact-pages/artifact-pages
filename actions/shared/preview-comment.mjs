@@ -114,7 +114,7 @@ async function findMarkerComment({ fetchImpl, base, repository, number, token, m
     const url = `${base}/repos/${repository}/issues/${number}/comments?per_page=100&page=${page}`
     const comments = await call(fetchImpl, url, { method: 'GET', headers: apiHeaders(token) })
     if (!Array.isArray(comments)) throw new CommentApiError('GitHub returned an unexpected comment list', 0)
-    const match = comments.find((comment) => typeof comment?.body === 'string' && comment.body.startsWith(marker))
+    const match = comments.find((comment) => typeof comment?.body === 'string' && comment.body.startsWith(marker) && comment.user?.type === 'Bot')
     if (match) return match
     if (comments.length < 100) return undefined
   }

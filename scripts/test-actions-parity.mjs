@@ -146,7 +146,7 @@ async function assertCompositeActionWiring() {
     const expectedOutputMappings = Object.fromEntries(contract.outputs.map((name) => {
       const outputKey = name.includes('-') ? `['${name}']` : `.${name}`
       const expression = kind === 'preview' && name === 'comment-url'
-        ? '${{ steps.comment.outputs.comment-url }}'
+        ? "${{ steps.comment.outputs['comment-url'] }}"
         : kind === 'preview'
         ? `\${{ steps.cli.outputs${outputKey} || steps.preflight.outputs${outputKey} }}`
         : `\${{ steps.cli.outputs${outputKey} }}`
