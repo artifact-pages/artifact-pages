@@ -206,3 +206,22 @@ test('the row cap is shared and counts omitted affected pages', () => {
   assert.equal(rows.length, 50)
   assert.match(body, /and 20 more affected pages/)
 })
+
+test('comment works without an explicit pull-request on a pull_request event, but not with none', async () => {
+  const event = { pull_request: { number: 7 } }
+  const api = fakeApi()
+  const created = await runPreviewComment({ env: environment({ ARTIFACT_PAGES_INPUT_PULL_REQUEST: '', GITHUB_EVENT_NAME: 'pull_request' }), event, fetchImpl: api.fetchImpl })
+  assert.equal(created.action, 'created')
+  assert.equal(api.calls.find((call) => call.method === 'POST').path, '/repos/example/satellite/issues/7/comments')
+
+  for (const overrides of [
+    { ARTIFACT_PAGES_INPUT_PULL_REQUEST: 'none', GITHUB_EVENT_NAME: 'pull_request' },
+    { ARTIFACT_PAGES_INPUT_PULL_REQUEST: '', GITHUB_EVENT_NAME: 'push' },
+    { ARTIFACT_PAGES_INPUT_PULL_REQUEST: '', GITHUB_EVENT_NAME: 'pull_request_target' },
+  ]) {
+    const quiet = fakeApi()
+    const result = await runPreviewComment({ env: environment(overrides), event, fetchImpl: quiet.fetchImpl })
+    assert.equal(result.reason, 'no-pull-request', JSON.stringify(overrides))
+    assert.equal(quiet.calls.length, 0)
+  }
+})

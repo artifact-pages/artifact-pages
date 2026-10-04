@@ -14,7 +14,7 @@
 
 ## License (unchanged)
 
-The project owner selected MIT on 2026-09-28. The root `LICENSE` uses `Copyright (c) 2026 tasuku43` and covers first-party work; dependencies keep their upstream licenses. `npm run package:web` copies `LICENSE` and generates `THIRD_PARTY_NOTICES.txt` from the installed production dependency graph and fails when a required license text is missing. No standalone CLI binary is distributed; if one is added, its Go dependency notices must accompany it.
+The project owner selected MIT on 2026-09-28. The root `LICENSE` uses `Copyright (c) 2026 tasuku43` and covers first-party work; dependencies keep their upstream licenses. `npm run package:web` copies `LICENSE` and generates `THIRD_PARTY_NOTICES.txt` from the installed production dependency graph and fails when a required license text is missing. No standalone CLI binary was distributed at first. Amended 2026-10-05 ([TD4](TD4-action-marketplace-distribution.md)): each release attaches per-platform CLI binaries for the composite Actions, with a checksums file and `THIRD_PARTY_NOTICES` for the linked Go modules, so the dependency-notice rule is met by the same release.
 
 ## Why the policy changed
 

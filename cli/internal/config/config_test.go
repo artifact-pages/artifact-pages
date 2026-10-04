@@ -767,3 +767,65 @@ func TestParseConfigLayerPartialRejectsDuplicatesAndAliases(t *testing.T) {
 		t.Fatalf("parseConfigLayer(sites only) error = %v", err)
 	}
 }
+
+func TestEffectivePublicBaseURL(t *testing.T) {
+	const aws = "schemaVersion: 1\nprovider: aws\naws:\n  region: us-east-1\n  bucket: pages\n"
+	const cf = "schemaVersion: 1\nprovider: cloudflare\ncloudflare:\n  accountId: 0123456789abcdef0123456789abcdef\n  zoneId: abcdef0123456789abcdef0123456789\n  publicBaseURL: https://pages.example.com\n"
+	cases := []struct {
+		name, config, want, wantErr string
+	}{
+		{"aws without field", aws, "", ""},
+		{"aws top-level", aws + "publicBaseURL: https://docs.example.com/\n", "https://docs.example.com", ""},
+		{"local loopback http", "schemaVersion: 1\nprovider: local\nlocal:\n  root: .local\npublicBaseURL: http://localhost:8080\n", "http://localhost:8080", ""},
+		{"aws http non-loopback", aws + "publicBaseURL: http://docs.example.com\n", "", "publicBaseURL: must be an HTTPS origin"},
+		{"aws path", aws + "publicBaseURL: https://docs.example.com/x\n", "", "publicBaseURL"},
+		{"empty", aws + "publicBaseURL: ''\n", "", "publicBaseURL must not be empty"},
+		{"cloudflare legacy only", cf, "https://pages.example.com", ""},
+		{"cloudflare both equal", cf + "publicBaseURL: https://pages.example.com/\n", "https://pages.example.com", ""},
+		{"cloudflare both differ", cf + "publicBaseURL: https://other.example.com\n", "", "must equal cloudflare.publicBaseURL"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			config, err := Parse([]byte(tc.config))
+			if tc.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("Parse error = %v, want %q", err, tc.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := config.EffectivePublicBaseURL(); got != tc.want {
+				t.Fatalf("EffectivePublicBaseURL = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestParseLayersPublicBaseURLBelongsToTheTargetUnit(t *testing.T) {
+	const base = "schemaVersion: 1\nsites: {}\n"
+	const aws = "schemaVersion: 1\nprovider: aws\naws:\n  region: us-east-1\n  bucket: pages\npublicBaseURL: https://docs.example.com\n"
+	const local = "schemaVersion: 1\nprovider: local\nlocal:\n  root: .local\n"
+	const override = "schemaVersion: 1\npublicBaseURL: https://override.example.com\n"
+	got := func(layers ...string) string {
+		var contents [][]byte
+		for _, layer := range layers {
+			contents = append(contents, []byte(layer))
+		}
+		config, err := ParseLayers(contents)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return config.EffectivePublicBaseURL()
+	}
+	if value := got(base, aws); value != "https://docs.example.com" {
+		t.Fatalf("target layer value = %q", value)
+	}
+	if value := got(base, aws, override); value != "https://override.example.com" {
+		t.Fatalf("override layer value = %q", value)
+	}
+	if value := got(base, aws, local); value != "" {
+		t.Fatalf("a later target layer must replace the field as a unit, got %q", value)
+	}
+}

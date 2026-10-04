@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { appendFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
+import { resolvePullRequestReference } from './preview-refs.mjs'
 import { parsePullRequestReference } from './verify-preview-pr.mjs'
 
 const siteIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
@@ -179,9 +180,15 @@ export async function runPreviewComment(options = {}) {
     warning('input "comment" must be true or false; skipping the PR comment.')
     return none('invalid-input')
   }
-  const pullRequestInput = String(env.ARTIFACT_PAGES_INPUT_PULL_REQUEST ?? '').trim()
+  let pullRequestInput
+  try {
+    pullRequestInput = resolvePullRequestReference({ env, event: options.event }).reference
+  } catch (error) {
+    warning(`skipping the PR comment: ${error.message}`)
+    return none('invalid-input')
+  }
   if (!pullRequestInput) {
-    warning('comment is true but no explicit pull-request input was given; skipping the PR comment. The Action never infers the pull request.')
+    warning('comment is true but this run has no pull request (the event is not pull_request and no pull-request input was given, or pull-request is none); skipping the PR comment.')
     return none('no-pull-request')
   }
 

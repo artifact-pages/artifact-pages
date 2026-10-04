@@ -55,11 +55,11 @@ func runPreviewPublish(ctx context.Context, args []string, stdout, stderr io.Wri
 	flags.SetOutput(stderr)
 	flags.Usage = func() { writePreviewPublishUsage(stderr) }
 	siteID := flags.String("site", "", "registered site identifier")
-	sourcePath := flags.String("source", "", "registered source directory relative to the current Git repository")
+	sourcePath := flags.String("source", "", "source directory relative to the current Git repository; defaults to the site's registered source path")
 	headRef := flags.String("head", "HEAD", "source Git head whose committed files form the preview")
 	defaultRef := flags.String("default-ref", "origin/HEAD", "current default-branch ref used for merge-base selection")
 	pullRequest := flags.String("pull-request", "", "explicit pull request number or canonical GitHub URL; omitted means manual preview")
-	baseURL := flags.String("base-url", "", "public application origin used to build preview URLs")
+	baseURL := flags.String("base-url", "", "public application origin used to build preview URLs; defaults to publicBaseURL from the deployment config")
 	var configLocators stringSliceFlag
 	flags.Var(&configLocators, "config", "deployment config path or github:// locator (repeatable; later layers override earlier ones)")
 	dryRun := flags.Bool("dry-run", false, "show source, object, and catalog changes without writes, deletes, lock recovery, or cache changes")
@@ -81,17 +81,27 @@ func runPreviewPublish(ctx context.Context, args []string, stdout, stderr io.Wri
 	if err := registry.ValidateSiteID(*siteID); err != nil {
 		return withExitCode(err, 2)
 	}
-	if *sourcePath == "" {
-		return withExitCode(errors.New("--source is required and must match the registered source path"), 2)
-	}
 	if *format != "text" && *format != "json" {
 		return withExitCode(errors.New("--format must be text or json"), 2)
 	}
-	publicOrigin, err := validatePreviewPublicOrigin(*baseURL)
+	if *baseURL != "" {
+		if _, err := validatePreviewPublicOrigin(*baseURL); err != nil {
+			return withExitCode(err, 2)
+		}
+	}
+	resolved, err := (deploymentconfig.Resolver{}).ResolveLayers(ctx, configLocators)
 	if err != nil {
 		return withExitCode(err, 2)
 	}
-	resolved, err := (deploymentconfig.Resolver{}).ResolveLayers(ctx, configLocators)
+	// An explicit --base-url wins; otherwise the deployment config supplies it.
+	originSource := *baseURL
+	if originSource == "" {
+		originSource = resolved.Config.EffectivePublicBaseURL()
+		if originSource == "" {
+			return withExitCode(errors.New("--base-url is required to produce review URLs: pass it or set publicBaseURL in the deployment config"), 2)
+		}
+	}
+	publicOrigin, err := validatePreviewPublicOrigin(originSource)
 	if err != nil {
 		return withExitCode(err, 2)
 	}
@@ -295,18 +305,18 @@ func writePreviewUsage(writer io.Writer) {
 
 func writePreviewPublishUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "Usage:")
-	fmt.Fprintln(writer, "  artifact-pages preview publish --site ID --source DIR --base-url ORIGIN [options]")
+	fmt.Fprintln(writer, "  artifact-pages preview publish --site ID [--source DIR] [--base-url ORIGIN] [options]")
 	fmt.Fprintln(writer, "")
 	fmt.Fprintln(writer, "Build only changed documents from a Git head and publish their immutable preview revision.")
 	fmt.Fprintln(writer, "")
 	fmt.Fprintln(writer, "Options:")
 	fmt.Fprintln(writer, "  --site ID               required registered site identifier")
-	fmt.Fprintln(writer, "  --source DIR            required registered source directory in the current checkout")
+	fmt.Fprintln(writer, "  --source DIR            source directory in the current checkout (default: the site's registered source path; an explicit value must match it)")
 	fmt.Fprintln(writer, "  --head REF              preview source Git head (default HEAD)")
 	fmt.Fprintln(writer, "  --default-ref REF       default-branch ref for merge-base selection (default origin/HEAD)")
 	fmt.Fprintln(writer, "  --pull-request REF      explicit PR number or canonical GitHub URL; omitted means manual")
 	fmt.Fprintln(writer, "  --include PATH          extra source-relative resource path or path.Match pattern (repeatable)")
-	fmt.Fprintln(writer, "  --base-url ORIGIN       public application origin for returned review URLs")
+	fmt.Fprintln(writer, "  --base-url ORIGIN       public application origin for returned review URLs (default: publicBaseURL from the deployment config)")
 	fmt.Fprintln(writer, "  --config LOCATOR        deployment config path or github:// locator (repeatable; later layers override earlier ones)")
 	fmt.Fprintln(writer, "  --dry-run               show document/resource and catalog changes without provider writes")
 	fmt.Fprintln(writer, "  --format text|json      output a human-readable result or typed JSON")

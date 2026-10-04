@@ -78,12 +78,15 @@ type GCSLocalTarget struct {
 }
 
 type DeploymentConfig struct {
-	SchemaVersion int                      `yaml:"schemaVersion"`
-	Provider      string                   `yaml:"provider"`
-	Local         *LocalTarget             `yaml:"local"`
-	AWS           *AWSTarget               `yaml:"aws"`
-	Cloudflare    *CloudflareTarget        `yaml:"cloudflare"`
-	GCSLocal      *GCSLocalTarget          `yaml:"gcpLocal"`
+	SchemaVersion int               `yaml:"schemaVersion"`
+	Provider      string            `yaml:"provider"`
+	Local         *LocalTarget      `yaml:"local"`
+	AWS           *AWSTarget        `yaml:"aws"`
+	Cloudflare    *CloudflareTarget `yaml:"cloudflare"`
+	GCSLocal      *GCSLocalTarget   `yaml:"gcpLocal"`
+	// PublicBaseURL is the optional provider-neutral public application origin.
+	// It is part of the target unit: a layer that sets provider replaces it.
+	PublicBaseURL string                   `yaml:"publicBaseURL,omitempty"`
 	Sites         map[string]registry.Site `yaml:"sites,omitempty"`
 }
 
@@ -164,6 +167,9 @@ func ParseLayers(contents [][]byte) (DeploymentConfig, error) {
 			config.AWS = layer.AWS
 			config.Cloudflare = layer.Cloudflare
 			config.GCSLocal = layer.GCSLocal
+			config.PublicBaseURL = layer.PublicBaseURL
+		} else if layer.PublicBaseURL != "" {
+			config.PublicBaseURL = layer.PublicBaseURL
 		}
 		if layer.Sites != nil {
 			config.Sites = cloneSites(layer.Sites)
@@ -392,6 +398,15 @@ func (config DeploymentConfig) Validate() error {
 	default:
 		return fmt.Errorf("unsupported deployment provider %q", config.Provider)
 	}
+	if config.PublicBaseURL != "" {
+		if err := validateTopLevelPublicBaseURL(config.PublicBaseURL); err != nil {
+			return fmt.Errorf("publicBaseURL: %w", err)
+		}
+		if config.Provider == "cloudflare" && config.Cloudflare != nil &&
+			normalizeOrigin(config.PublicBaseURL) != normalizeOrigin(config.Cloudflare.PublicBaseURL) {
+			return errors.New("publicBaseURL must equal cloudflare.publicBaseURL when both are set")
+		}
+	}
 	if config.Sites != nil {
 		if _, err := registry.ProjectSites(config.Sites); err != nil {
 			return err
@@ -429,6 +444,14 @@ func validateConfigNode(document *yaml.Node, allowPartial bool) error {
 	}
 	if provider != nil && (provider.Kind != yaml.ScalarNode || provider.ShortTag() != "!!str") {
 		return errors.New("provider must be a string")
+	}
+	if node := nodeMappingValue(root, "publicBaseURL"); node != nil {
+		if node.Kind != yaml.ScalarNode || node.ShortTag() != "!!str" {
+			return errors.New("publicBaseURL must be a string")
+		}
+		if strings.TrimSpace(node.Value) == "" {
+			return errors.New("publicBaseURL must not be empty when set")
+		}
 	}
 	if allowPartial {
 		targetBlocks := 0
@@ -557,6 +580,43 @@ func nodeMappingValue(mapping *yaml.Node, key string) *yaml.Node {
 		}
 	}
 	return nil
+}
+
+// EffectivePublicBaseURL returns the public application origin declared by the
+// config, or "" when none is declared. Cloudflare's required
+// cloudflare.publicBaseURL counts as declared; the provider-neutral top-level
+// publicBaseURL serves every provider and must agree with it when both are set.
+func (config DeploymentConfig) EffectivePublicBaseURL() string {
+	if config.PublicBaseURL != "" {
+		return normalizeOrigin(config.PublicBaseURL)
+	}
+	if config.Provider == "cloudflare" && config.Cloudflare != nil {
+		return normalizeOrigin(config.Cloudflare.PublicBaseURL)
+	}
+	return ""
+}
+
+func normalizeOrigin(raw string) string {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Host == "" {
+		return raw
+	}
+	return parsed.Scheme + "://" + parsed.Host
+}
+
+// validateTopLevelPublicBaseURL accepts an HTTPS origin, or an HTTP loopback
+// origin for local development.
+func validateTopLevelPublicBaseURL(raw string) error {
+	if strings.TrimSpace(raw) != raw {
+		return errors.New("must not contain surrounding whitespace")
+	}
+	if parsed, err := url.Parse(raw); err == nil && parsed.Scheme == "http" {
+		if err := validateLocalHTTPOrigin(raw, false); err != nil {
+			return errors.New("must be an HTTPS origin, or an HTTP loopback origin, without credentials, path, query, or fragment")
+		}
+		return nil
+	}
+	return validatePublicBaseURL(raw)
 }
 
 func validatePublicBaseURL(raw string) error {

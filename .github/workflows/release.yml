@@ -78,6 +78,16 @@ jobs:
             echo "::error::the web bundle was not built from the tagged commit"
             exit 1
           fi
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Build the CLI binaries, checksums and Go dependency notices
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          node scripts/package-cli-release.mjs --version "$version" --out .local/cli-release
+          (cd .local/cli-release && sha256sum --check "artifact-pages_v${version}_checksums.txt")
       - name: Generate release notes
         env:
           VERDICT_JSON: ${{ needs.verify.outputs.compat_report }}
@@ -101,7 +111,7 @@ jobs:
           set -euo pipefail
           version="${RELEASE_TAG#v}"
           base=".local/releases/artifact-pages-web-v${version}.tar.gz"
-          gh release create "$RELEASE_TAG" "$base" "$base.json" "$base.sha256" \
+          gh release create "$RELEASE_TAG" "$base" "$base.json" "$base.sha256" .local/cli-release/artifact-pages_v"${version}"_* \
             --verify-tag --prerelease --title "Artifact Pages $RELEASE_TAG" --notes-file "$RUNNER_TEMP/notes.md"
 
   verify-published:
@@ -131,5 +141,17 @@ jobs:
         run: go build -o "$RUNNER_TEMP/artifact-pages" ./cli/cmd/artifact-pages
       - name: Download the published assets
         run: gh release download "$RELEASE_TAG" --dir "$RUNNER_TEMP/assets"
+      - name: Published CLI binaries match their checksums and report the tag version
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          cd "$RUNNER_TEMP/assets"
+          for platform in linux_amd64 linux_arm64 darwin_amd64 darwin_arm64; do
+            test -f "artifact-pages_v${version}_${platform}"
+          done
+          test -s "artifact-pages_v${version}_THIRD_PARTY_NOTICES.txt"
+          sha256sum --check "artifact-pages_v${version}_checksums.txt"
+          chmod +x "artifact-pages_v${version}_linux_amd64"
+          test "$("./artifact-pages_v${version}_linux_amd64" version --format json | jq -r .version)" = "$version"
       - name: Deploy with no flags beyond --config and compare bytes
         run: node scripts/verify-release.mjs --cli "$RUNNER_TEMP/artifact-pages" --assets "$RUNNER_TEMP/assets" --version "${RELEASE_TAG#v}"

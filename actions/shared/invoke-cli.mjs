@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import { appendFile } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
-import { resolvePreviewRefs } from './preview-refs.mjs'
+import { resolvePreviewRefs, resolvePullRequestReference } from './preview-refs.mjs'
+import { evaluatePublishOn } from './publish-on.mjs'
+import { writeSummary } from './summary.mjs'
 
 function input(name) {
   return process.env[`ARTIFACT_PAGES_INPUT_${name.toUpperCase().replaceAll('-', '_')}`] ?? ''
@@ -24,38 +26,49 @@ function boolInput(name) {
   throw new Error(`input "${name}" must be true or false`)
 }
 
+// site and admin runs honor `publish-on`: a run outside the condition is a dry-run.
+function effectiveDryRun() {
+  return evaluatePublishOn({ dryRun: boolInput('dry-run') })
+}
+
 function buildArguments() {
   const kind = process.env.ARTIFACT_PAGES_ACTION_KIND
   const operation = input('operation') || (kind === 'site' ? 'publish' : 'registry-register')
   const args = []
+  let dryRunReason = ''
+  const publishDryRun = () => {
+    const decision = effectiveDryRun()
+    dryRunReason = decision.reason
+    if (decision.dryRun) args.push('--dry-run')
+  }
 
   if (kind === 'admin' && operation === 'registry-register') {
     args.push('registry', 'register')
     flag(args, 'config', input('config'))
-    if (boolInput('dry-run')) args.push('--dry-run')
+    publishDryRun()
   } else if (kind === 'admin' && operation === 'registry-unregister') {
     args.push('registry', 'unregister', '--site', required('site'))
     flag(args, 'config', input('config'))
-    if (boolInput('dry-run')) args.push('--dry-run')
+    publishDryRun()
   } else if (kind === 'admin' && operation === 'app-deploy') {
     args.push('app', 'deploy')
     flag(args, 'archive', input('archive').trim())
     flag(args, 'repository', input('repository') || 'tasuku43/git-artifact-pages')
     flag(args, 'config', input('config'))
-    if (boolInput('dry-run')) args.push('--dry-run')
+    publishDryRun()
   } else if (kind === 'site' && operation === 'publish') {
     args.push('site', 'publish', '--site', required('site'))
     flag(args, 'source', input('source'))
     flag(args, 'config', input('config'))
-    if (boolInput('dry-run')) args.push('--dry-run')
+    publishDryRun()
   } else if (kind === 'preview' && operation === 'publish') {
     args.push('preview', 'publish', '--site', required('site'))
-    flag(args, 'source', required('source').trim())
+    flag(args, 'source', input('source').trim())
     const refs = resolvePreviewRefs()
     flag(args, 'head', refs.head)
     flag(args, 'default-ref', refs.defaultRef)
-    flag(args, 'pull-request', input('pull-request').trim())
-    flag(args, 'base-url', required('base-url').trim())
+    flag(args, 'pull-request', resolvePullRequestReference().reference)
+    flag(args, 'base-url', input('base-url').trim())
     flag(args, 'config', input('config').trim())
     for (const line of input('include').split(/\r?\n/)) {
       const include = line.trim()
@@ -67,7 +80,7 @@ function buildArguments() {
   }
 
   args.push('--format', 'json')
-  return { kind, operation, args }
+  return { kind, operation, args, dryRunReason }
 }
 
 function cliOperationName(kind, operation) {
@@ -135,6 +148,9 @@ async function main() {
       maxBuffer: 16 * 1024 * 1024,
     })
     if (child.error) throw child.error
+    if (built.dryRunReason && built.dryRunReason !== 'dry-run input is true') {
+      process.stderr.write(`::notice title=Artifact Pages dry-run::${built.dryRunReason}; running as a dry-run.\n`)
+    }
   } catch (error) {
     const operation = cliOperationName(
       built?.kind ?? process.env.ARTIFACT_PAGES_ACTION_KIND,
@@ -150,6 +166,7 @@ async function main() {
     }
     process.stdout.write(`${JSON.stringify(result)}\n`)
     await writeOutputs(result, exitCode, fallbackSite)
+    await writeSummary({ kind: built?.kind ?? process.env.ARTIFACT_PAGES_ACTION_KIND, operation, result, exitCode })
     process.exitCode = exitCode
     return
   }
@@ -159,6 +176,14 @@ async function main() {
   process.stdout.write(child.stdout ?? '')
   process.stderr.write(child.stderr ?? '')
   await writeOutputs(result, exitCode, fallbackSite)
+  await writeSummary({
+    kind: built.kind,
+    operation: cliOperationName(built.kind, built.operation),
+    result,
+    exitCode,
+    dryRun: built.args.includes('--dry-run'),
+    dryRunReason: built.dryRunReason,
+  })
   process.exitCode = exitCode
 }
 

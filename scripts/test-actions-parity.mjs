@@ -13,17 +13,17 @@ const actionRunner = path.join(projectRoot, 'actions', 'shared', 'invoke-cli.mjs
 const expectedActionContracts = {
   admin: {
     directory: path.join(projectRoot, 'actions', 'admin'),
-    inputs: ['operation', 'config', 'github-token', 'site', 'archive', 'repository', 'dry-run'],
+    inputs: ['operation', 'config', 'github-token', 'site', 'archive', 'repository', 'dry-run', 'publish-on', 'summary', 'checkout', 'fetch-depth'],
     outputs: ['operation', 'outcome', 'site', 'registry-updated', 'changes', 'preview-changes', 'result', 'exit-code', 'error'],
   },
   site: {
     directory: path.join(projectRoot, 'actions', 'site-publish'),
-    inputs: ['site', 'source', 'config', 'github-token', 'dry-run'],
+    inputs: ['site', 'source', 'config', 'github-token', 'dry-run', 'publish-on', 'summary', 'checkout', 'fetch-depth'],
     outputs: ['operation', 'outcome', 'site', 'registry-updated', 'changes', 'preview-changes', 'result', 'exit-code', 'error'],
   },
   preview: {
     directory: path.join(projectRoot, 'actions', 'preview-publish'),
-    inputs: ['site', 'source', 'head', 'default-ref', 'pull-request', 'include', 'base-url', 'config', 'github-token', 'dry-run', 'comment'],
+    inputs: ['site', 'source', 'head', 'default-ref', 'pull-request', 'include', 'base-url', 'config', 'github-token', 'dry-run', 'comment', 'summary', 'checkout', 'fetch-depth'],
     outputs: ['operation', 'outcome', 'site', 'group-list-url', 'documents', 'result', 'exit-code', 'error', 'comment-url'],
   },
 }
@@ -93,8 +93,9 @@ async function assertRootActionMatchesSitePublish() {
   const rootBody = root.slice(root.indexOf('\ninputs:\n'))
   const siteBody = site.slice(site.indexOf('\ninputs:\n'))
     .replace('${{ github.action_path }}/../../go.mod', '${{ github.action_path }}/go.mod')
-    .replace('working-directory: ${{ github.action_path }}/../..', 'working-directory: ${{ github.action_path }}')
-    .replace('$GITHUB_ACTION_PATH/../shared/invoke-cli.mjs', '$GITHUB_ACTION_PATH/actions/shared/invoke-cli.mjs')
+    .replaceAll('working-directory: ${{ github.action_path }}/../..', 'working-directory: ${{ github.action_path }}')
+    .replaceAll('--source-root "${{ github.action_path }}/../.."', '--source-root "${{ github.action_path }}"')
+    .replaceAll('$GITHUB_ACTION_PATH/../shared/', '$GITHUB_ACTION_PATH/actions/shared/')
   assert.equal(rootBody, siteBody, 'root Action inputs, outputs and steps must match actions/site-publish apart from root-relative paths')
   assert.equal(
     await fs.realpath(path.join(projectRoot, 'actions', 'shared', 'invoke-cli.mjs')),
@@ -131,7 +132,7 @@ async function assertCompositeActionWiring() {
     if (kind === 'site') expectedEnv.ARTIFACT_PAGES_INPUT_OPERATION = 'publish'
     if (kind === 'preview') expectedEnv.ARTIFACT_PAGES_INPUT_OPERATION = 'publish'
     // The comment input belongs to the separate comment step, not the CLI invocation.
-    for (const inputName of contract.inputs.filter((name) => name !== 'github-token' && !(kind === 'preview' && name === 'comment'))) {
+    for (const inputName of contract.inputs.filter((name) => name !== 'github-token' && name !== 'checkout' && name !== 'fetch-depth' && !(kind === 'preview' && name === 'comment'))) {
       const envName = `ARTIFACT_PAGES_INPUT_${inputName.toUpperCase().replaceAll('-', '_')}`
       if (envName !== 'ARTIFACT_PAGES_INPUT_OPERATION' || kind !== 'site') {
         expectedEnv[envName] = `\${{ inputs.${inputName} }}`
@@ -153,6 +154,38 @@ async function assertCompositeActionWiring() {
       return [name, expression]
     }))
     assert.deepEqual(outputMappings, expectedOutputMappings, `${kind} Action outputs must relay the shared CLI step outputs`)
+
+    // Prebuilt CLI: a release-tag ref installs the released binary; every Go step is skipped then.
+    assert.match(source, /ARTIFACT_PAGES_ACTION_REF: \$\{\{ github\.action_ref \}\}/, `${kind} Action must decide on the Action ref`)
+    assert.match(source, /ARTIFACT_PAGES_ACTION_REPOSITORY: \$\{\{ github\.action_repository \}\}/, `${kind} Action must download from its own repository`)
+    assert.match(source, /ARTIFACT_PAGES_TOKEN: \$\{\{ github\.token \}\}/, `${kind} Action must use the workflow token, not the private-config token, for release downloads`)
+    assert.equal((source.match(/if: \$\{\{ steps\.prebuilt\.outputs\.used != 'true' \}\}/g) ?? []).length, 4, `${kind} Action must skip setup-go, the cache steps and the build when the released binary is used`)
+    assert.ok(source.indexOf('id: prebuilt') < source.indexOf('uses: actions/setup-go@'), `${kind} Action must try the released binary before Go setup`)
+    if (kind === 'preview') assert.ok(source.indexOf('verify-preview-pr.mjs') < source.indexOf('id: prebuilt'), 'preview trust preflight must precede the CLI download')
+
+    // Go build cache (IMP-46 slice 3): actions/cache keyed on the pinned source, because setup-go cannot hash a go.sum outside the workspace.
+    assert.match(source, /^      uses: actions\/cache@[0-9a-f]{40} # v\d+\.\d+\.\d+$/m, `${kind} Action must pin actions/cache to a full SHA`)
+    assert.match(source, /^        key: \$\{\{ steps\.go-cache\.outputs\.key \}\}$/m, `${kind} Action must key the Go cache on the pinned source`)
+    assert.match(source, /cat go\.mod go\.sum/, `${kind} Action Go cache key must hash go.mod and go.sum`)
+    assert.ok(source.indexOf('uses: actions/setup-go@') < source.indexOf('id: go-cache') && source.indexOf('uses: actions/cache@') < source.indexOf('go build -trimpath'), `${kind} Action must restore the Go cache after Go setup and before the build`)
+
+    // Own checkout (decision 2): pinned, workflow token only, no persisted credentials, before anything else.
+    assert.match(source, new RegExp(`ARTIFACT_PAGES_INPUT_CHECKOUT: \\$\\{\\{ inputs\\.checkout \\}\\}`), `${kind} Action must pass the checkout input to the decision step`)
+    assert.equal(sectionProperties(source, 'inputs', 'checkout').default, 'auto', `${kind} checkout must default to auto`)
+    assert.equal(sectionProperties(source, 'inputs', 'fetch-depth').default, '"0"', `${kind} fetch-depth must default to 0`)
+    assert.match(source, /^      uses: actions\/checkout@[0-9a-f]{40} # v\d+\.\d+\.\d+$/m, `${kind} checkout must be pinned to a full SHA with a version comment`)
+    assert.match(source, /^      if: \$\{\{ steps\.checkout-mode\.outputs\.checkout == 'true' \}\}$/m, `${kind} checkout must follow the decision step`)
+    assert.match(source, /^        fetch-depth: \$\{\{ inputs\.fetch-depth \}\}$/m, `${kind} checkout must use the fetch-depth input`)
+    assert.match(source, /^        persist-credentials: false$/m, `${kind} checkout must not persist credentials`)
+    assert.doesNotMatch(source.slice(source.indexOf('uses: actions/checkout@'), source.indexOf('uses: actions/checkout@') + 400), /token:/, `${kind} checkout must use the workflow token, not the github-token input`)
+    assert.ok(source.indexOf('checkout-mode.mjs') < source.indexOf('uses: actions/setup-go@'), `${kind} checkout must precede Go setup`)
+    if (kind === 'preview') {
+      assert.match(source, /^        ref: \$\{\{ github\.event\.pull_request\.base\.ref \}\}$/m, 'preview checkout must use the base ref, never the pull-request head')
+      assert.ok(source.indexOf('uses: actions/checkout@') < source.indexOf('verify-preview-pr.mjs'), 'preview checkout must precede the preflight that reads Git refs')
+      assert.doesNotMatch(source, /pull_request\.head\.(ref|sha)/, 'preview Action must not reference the pull-request head for checkout')
+    } else {
+      assert.doesNotMatch(source, /\n        ref:/, `${kind} checkout must use the event's default ref`)
+    }
 
     if (kind === 'preview') {
       const preflightLine = source.indexOf('run: node "$GITHUB_ACTION_PATH/../shared/verify-preview-pr.mjs"')
@@ -356,7 +389,7 @@ function assertActionParity(direct, action, label) {
   assert.equal(outputs.error ?? '', direct.result.error ?? '', `${label}: error output`)
 }
 
-async function runAction(kind, operation, cliArgs, inputs, workspace, binaryPath, scratchRoot, preflight = undefined) {
+async function runAction(kind, operation, cliArgs, inputs, workspace, binaryPath, scratchRoot, preflight = undefined, extraEnv = {}) {
   const outputPath = path.join(scratchRoot, `github-output-${kind}-${operation}-${Date.now()}.txt`)
   await fs.writeFile(outputPath, '')
   const actionEnvironment = {
@@ -366,6 +399,7 @@ async function runAction(kind, operation, cliArgs, inputs, workspace, binaryPath
     ARTIFACT_PAGES_CLI: binaryPath,
     ARTIFACT_PAGES_ACTION_KIND: kind,
     ARTIFACT_PAGES_INPUT_OPERATION: operation,
+    ...extraEnv,
     ...Object.fromEntries(Object.entries(inputs).map(([name, value]) => [
       `ARTIFACT_PAGES_INPUT_${name.toUpperCase().replaceAll('-', '_')}`,
       value,
@@ -384,7 +418,7 @@ async function runAction(kind, operation, cliArgs, inputs, workspace, binaryPath
         GITHUB_EVENT_PATH: eventPath,
       },
     })
-    assert.equal(trustCheck.explicit, false, 'omitted pull-request input must remain a manual preview even during a same-repository PR event')
+    assert.equal(trustCheck.explicit, false, 'pull-request none must remain a manual preview even during a same-repository PR event')
   }
 
   const execution = spawnSync('node', [actionRunner], {
@@ -440,9 +474,25 @@ async function assertPreviewPreflight(repositoryDirectory, scratchRoot) {
     head: { repo: { full_name: repository }, sha: headSHA },
   }
 
-  const manual = await verifyPreviewTrust({ env: baseEnvironment, event: sameRepositoryEvent, fetchImpl: responseFor(metadata) })
-  assert.deepEqual(manual, { explicit: false }, 'missing PR input should not infer PR provenance')
+  const manual = await verifyPreviewTrust({ env: { ...baseEnvironment, ARTIFACT_PAGES_INPUT_PULL_REQUEST: 'none' }, event: sameRepositoryEvent, fetchImpl: responseFor(metadata) })
+  assert.deepEqual(manual, { explicit: false }, 'pull-request none must force a manual preview')
   assert.equal(apiCalls, 0, 'manual preview preflight should not look up a PR')
+  const nonPullRequestEvent = await verifyPreviewTrust({ env: { ...baseEnvironment, GITHUB_EVENT_NAME: 'workflow_dispatch' }, event: sameRepositoryEvent, fetchImpl: responseFor(metadata) })
+  assert.deepEqual(nonPullRequestEvent, { explicit: false }, 'only a pull_request event defaults the PR number')
+  assert.equal(apiCalls, 0, 'a non-PR event must not look up a PR')
+  const defaulted = await verifyPreviewTrust({ env: baseEnvironment, event: sameRepositoryEvent, fetchImpl: responseFor(metadata) })
+  assert.deepEqual(defaulted, { explicit: true, pullRequestURL: metadata.html_url, headSHA }, 'the event PR number goes through the same verification as an explicit one')
+  assert.equal(apiCalls, 1, 'a defaulted PR number is verified through the GitHub API')
+  apiCalls = 0
+  await assert.rejects(
+    verifyPreviewTrust({ env: baseEnvironment, event: sameRepositoryEvent, fetchImpl: responseFor({ ...metadata, head: { repo: { full_name: 'contributor/satellite' }, sha: headSHA } }) }),
+    /must originate from workflow repository/,
+  )
+  await assert.rejects(
+    verifyPreviewTrust({ env: baseEnvironment, event: sameRepositoryEvent, fetchImpl: responseFor({ ...metadata, head: { repo: { full_name: repository }, sha: 'f'.repeat(40) } }) }),
+    /no longer matches/,
+  )
+  apiCalls = 0
 
   const forkEvent = structuredClone(sameRepositoryEvent)
   forkEvent.pull_request.head.repo.full_name = 'contributor/satellite'
@@ -734,6 +784,39 @@ async function main() {
     assertActionParity(directSite, actionSite, 'site publish dry-run')
     assert.deepEqual(await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)]), siteStorageBeforeDryRun, 'site publish dry-run changed local storage')
 
+    // publish-on: a run outside the condition is a dry-run, so a real-looking invocation changes nothing.
+    const gatedSite = await runAction('site', 'publish', siteArgs.filter((arg) => arg !== '--dry-run'), {
+      site: 'sre', source: 'docs/artifacts', config: '.artifact-pages-action.yaml', 'publish-on': 'push:refs/heads/main\nworkflow_dispatch',
+    }, satelliteRoot, binaryPath, scratchRoot, undefined, { GITHUB_EVENT_NAME: 'pull_request', GITHUB_REF: 'refs/pull/1/merge' })
+    assertActionParity(directSite, gatedSite, 'site publish gated by publish-on')
+    assert.match(gatedSite.stderr, /::notice title=Artifact Pages dry-run::publish-on does not match event pull_request/, 'publish-on dry-run must be announced')
+    assert.deepEqual(await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)]), siteStorageBeforeDryRun, 'publish-on dry-run changed local storage')
+    const badPublishOn = await runAction('site', 'publish', siteArgs, {
+      site: 'sre', source: 'docs/artifacts', config: '.artifact-pages-action.yaml', 'publish-on': 'push:main',
+    }, satelliteRoot, binaryPath, scratchRoot).catch((error) => error)
+    assert.ok(badPublishOn instanceof Error || badPublishOn.exitCode === 2, 'a malformed publish-on must fail')
+
+    // Job Summary: written after the outputs, also on failure, and suppressed by summary: false.
+    const summaryPath = path.join(scratchRoot, 'step-summary.md')
+    await fs.writeFile(summaryPath, '')
+    await runAction('site', 'publish', siteArgs, {
+      site: 'sre', source: 'docs/artifacts', config: '.artifact-pages-action.yaml', 'dry-run': 'true',
+    }, satelliteRoot, binaryPath, scratchRoot, undefined, { GITHUB_STEP_SUMMARY: summaryPath })
+    const siteSummary = await fs.readFile(summaryPath, 'utf8')
+    assert.match(siteSummary, /^### Artifact Pages: site publish \(planned\)/, 'site publish summary heading')
+    assert.match(siteSummary, /- \*\*Mode:\*\* dry-run/, 'site publish summary shows dry-run')
+    assert.match(siteSummary, /- \*\*Changes:\*\* \d+/, 'site publish summary shows the change count')
+    await fs.writeFile(summaryPath, '')
+    await runAction('site', 'publish', siteArgs, {
+      site: 'sre', source: 'docs/artifacts', config: '.artifact-pages-action.yaml', 'dry-run': 'true', summary: 'false',
+    }, satelliteRoot, binaryPath, scratchRoot, undefined, { GITHUB_STEP_SUMMARY: summaryPath })
+    assert.equal(await fs.readFile(summaryPath, 'utf8'), '', 'summary: false must write nothing')
+    await fs.writeFile(summaryPath, '')
+    await runAction('site', 'publish', ['site', 'publish', '--site', 'not-registered', '--source', 'docs/artifacts', '--config', 'artifact-pages.yaml', '--dry-run', '--format', 'json'], {
+      site: 'not-registered', source: 'docs/artifacts', config: '.artifact-pages-action.yaml', 'dry-run': 'true',
+    }, satelliteRoot, binaryPath, scratchRoot, undefined, { GITHUB_STEP_SUMMARY: summaryPath })
+    assert.match(await fs.readFile(summaryPath, 'utf8'), /\(failed\)[\s\S]*> \*\*Error \(exit 1\):\*\*/, 'failure summary shows the error')
+
     const failingSiteArgs = ['site', 'publish', '--site', 'not-registered', '--source', 'docs/artifacts', '--config', 'artifact-pages.yaml', '--dry-run', '--format', 'json']
     const directFailure = runDirect(binaryPath, satelliteRoot, failingSiteArgs, 'direct unregistered-site dry-run')
     assert.equal(directFailure.exitCode, 1, 'direct unregistered-site dry-run should preserve provider/eligibility exit class')
@@ -770,7 +853,7 @@ async function main() {
       source: 'docs/artifacts',
       head: previewBranch,
       'default-ref': 'main',
-      'pull-request': '',
+      'pull-request': 'none',
       include: '\n  extra data.json  \r\n',
       'base-url': 'https://pages.example.test',
       config: '.artifact-pages-action.yaml',
@@ -789,8 +872,8 @@ async function main() {
     })
     assertActionParity(directPreviewDryRun, actionPreviewDryRun, 'preview publish dry-run')
     assert.equal(directPreviewDryRun.result.outcome, 'planned', 'preview dry-run should report a plan')
-    assert.match(directPreviewDryRun.result.groupId, /^head:/, 'omitted PR input in a PR event should create a manual group')
-    assert.equal(directPreviewDryRun.result.pullRequestUrl ?? '', '', 'omitted PR input must not infer PR provenance from the event')
+    assert.match(directPreviewDryRun.result.groupId, /^head:/, 'pull-request none in a PR event should create a manual group')
+    assert.equal(directPreviewDryRun.result.pullRequestUrl ?? '', '', 'pull-request none must not carry PR provenance from the event')
     assert.equal(directPreviewDryRun.result.documents.length, 1, 'preview result should expose the changed document URL')
     assert.ok(directPreviewDryRun.result.objects.some((object) => object.path === 'extra data.json'), 'newline include input should be expanded to a repeated CLI include flag')
     assert.doesNotMatch(directPreviewDryRun.result.documents[0].url, /[?&]group=/, 'manual preview document URL should not claim PR group context')

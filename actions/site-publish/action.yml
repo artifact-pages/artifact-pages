@@ -20,6 +20,22 @@ inputs:
     description: Calculate and report the origin changes without writes.
     required: false
     default: "false"
+  publish-on:
+    description: "Optional newline-separated list of `event` or `event:ref` entries (for example `push:refs/heads/main`, `workflow_dispatch`). A run that matches none of them becomes a dry-run. An explicit `dry-run: true` always wins; empty means no condition."
+    required: false
+    default: ""
+  summary:
+    description: When true (the default), append an operation summary to the GitHub Job Summary, also on failure. The Markdown format is a documented contract.
+    required: false
+    default: "true"
+  checkout:
+    description: "auto (default): run actions/checkout when the workspace is not already a Git checkout. true: always check out. false: never.  Uses the workflow token with persist-credentials: false, never the github-token input."
+    required: false
+    default: auto
+  fetch-depth:
+    description: fetch-depth for the Action's own checkout. 0 (the default) fetches full history, which per-document updatedAt and last committer need. Ignored when no checkout runs.
+    required: false
+    default: "0"
 outputs:
   operation:
     description: CLI operation name.
@@ -51,7 +67,29 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Decide whether to check out the repository
+      id: checkout-mode
+      shell: bash
+      env:
+        ARTIFACT_PAGES_INPUT_CHECKOUT: ${{ inputs.checkout }}
+        ARTIFACT_PAGES_INPUT_FETCH_DEPTH: ${{ inputs.fetch-depth }}
+      run: node "$GITHUB_ACTION_PATH/../shared/checkout-mode.mjs"
+    - name: Check out the repository
+      if: ${{ steps.checkout-mode.outputs.checkout == 'true' }}
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        fetch-depth: ${{ inputs.fetch-depth }}
+        persist-credentials: false
+    - name: Install the released CLI when the Action ref is a release tag
+      id: prebuilt
+      shell: bash
+      env:
+        ARTIFACT_PAGES_ACTION_REF: ${{ github.action_ref }}
+        ARTIFACT_PAGES_ACTION_REPOSITORY: ${{ github.action_repository }}
+        ARTIFACT_PAGES_TOKEN: ${{ github.token }}
+      run: node "$GITHUB_ACTION_PATH/../shared/prebuilt-cli.mjs" --source-root "${{ github.action_path }}/../.."
     - name: Set up Go from the pinned component source
+      if: ${{ steps.prebuilt.outputs.used != 'true' }}
       uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
         go-version-file: ${{ github.action_path }}/../../go.mod
@@ -60,7 +98,29 @@ runs:
       # same job ignore go.mod's toolchain line; auto lets each Action honor it.
       env:
         GOTOOLCHAIN: auto
+    - name: Restore the Go build cache
+      if: ${{ steps.prebuilt.outputs.used != 'true' }}
+      id: go-cache
+      shell: bash
+      working-directory: ${{ github.action_path }}/../..
+      # setup-go's own cache cannot hash this go.sum: it lives outside the adopter's
+      # workspace and setup-go ignores such files. Key on the pinned source instead.
+      run: |
+        {
+          echo "paths<<ARTIFACT_PAGES_EOF"
+          go env GOMODCACHE GOCACHE
+          echo "ARTIFACT_PAGES_EOF"
+          source_hash="$( (cat go.mod go.sum; go env GOVERSION) | (sha256sum 2>/dev/null || shasum -a 256) | cut -d' ' -f1 )"
+          echo "key=artifact-pages-go-$RUNNER_OS-$RUNNER_ARCH-$source_hash"
+        } >> "$GITHUB_OUTPUT"
+    - name: Cache Go modules and build output
+      if: ${{ steps.prebuilt.outputs.used != 'true' }}
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.go-cache.outputs.paths }}
+        key: ${{ steps.go-cache.outputs.key }}
     - name: Build the shared artifact-pages CLI
+      if: ${{ steps.prebuilt.outputs.used != 'true' }}
       shell: bash
       working-directory: ${{ github.action_path }}/../..
       run: go build -trimpath -o "$RUNNER_TEMP/artifact-pages" ./cli/cmd/artifact-pages
@@ -76,5 +136,7 @@ runs:
         ARTIFACT_PAGES_INPUT_SOURCE: ${{ inputs.source }}
         ARTIFACT_PAGES_INPUT_CONFIG: ${{ inputs.config }}
         ARTIFACT_PAGES_INPUT_DRY_RUN: ${{ inputs.dry-run }}
+        ARTIFACT_PAGES_INPUT_SUMMARY: ${{ inputs.summary }}
+        ARTIFACT_PAGES_INPUT_PUBLISH_ON: ${{ inputs.publish-on }}
         GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
       run: node "$GITHUB_ACTION_PATH/../shared/invoke-cli.mjs"

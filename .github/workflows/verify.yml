@@ -75,6 +75,7 @@ jobs:
           npm run test:web-packaging
           npm run test:provider-delivery
           npm run test:actions-shared
+          npm run test:cli-release
           npm run test:actions-parity
           npm run test:app-cache-rollback
           node scripts/test-clean-room-adoption.mjs
@@ -239,6 +240,8 @@ jobs:
           source: fixtures/actions-smoke/site
           # The smoke test previews its local commit, not the pull_request event head.
           head: HEAD
+          # Manual preview: do not bind to the pull_request event's PR.
+          pull-request: none
           default-ref: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || 'origin/main' }}
           base-url: http://localhost:4179
           config: ${{ steps.prep.outputs.config }}

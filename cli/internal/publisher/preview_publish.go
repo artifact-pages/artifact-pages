@@ -40,6 +40,19 @@ func BuildAndPlanPreview(ctx context.Context, backend DeploymentBackend, options
 	if err := ctx.Err(); err != nil {
 		return preview.BuildResult{}, preview.PublicationPlan{}, err
 	}
+	if strings.TrimSpace(options.SourcePath) == "" {
+		// An omitted source defaults to the site's registered source path. The
+		// registry is read again, and the path validated exactly, before any write.
+		projection, err := loadOriginRegistry(ctx, conditional)
+		if err != nil {
+			return preview.BuildResult{}, preview.PublicationPlan{}, err
+		}
+		entry, ok := registrySite(projection, options.SiteID)
+		if !ok {
+			return preview.BuildResult{}, preview.PublicationPlan{}, siteNotRegistered(projection, options.SiteID)
+		}
+		options.SourcePath = entry.SourcePath
+	}
 	result, err := preview.BuildFromGit(ctx, options)
 	if err != nil {
 		return preview.BuildResult{}, preview.PublicationPlan{}, err
