@@ -4,7 +4,7 @@
 - Lanes: Actions
 - Execution: Agent-led.
 - Depends on: [IMP-34](IMP-34-actions.md), [IMP-13](IMP-13-action.md)
-- Related design: [TD8](../technical-design/TD8-action-consumer-contract.md)
+- Related design: [TD12](../technical-design/TD12-action-consumer-contract.md)
 
 ## Goal
 

@@ -1,4 +1,4 @@
-# TD8 — Action consumer contract: summary, checkout, defaults, publish condition
+# TD12 — Action consumer contract: summary, checkout, defaults, publish condition
 
 - Status: Done
 - Phase: Reusable distribution

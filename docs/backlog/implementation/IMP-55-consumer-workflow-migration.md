@@ -3,8 +3,8 @@
 - Status: Open
 - Lanes: Docs / Adoption
 - Execution: Owner-approved consumer repository edits after the release. This item records the plan only; nothing here has been executed.
-- Depends on: [IMP-50](IMP-50-preview-defaults.md) through [IMP-54](IMP-54-action-checkout.md) shipped in one release, and [TD8](../technical-design/TD8-action-consumer-contract.md)
-- Related design: [TD8](../technical-design/TD8-action-consumer-contract.md)
+- Depends on: [IMP-50](IMP-50-preview-defaults.md) through [IMP-54](IMP-54-action-checkout.md) shipped in one release, and [TD12](../technical-design/TD12-action-consumer-contract.md)
+- Related design: [TD12](../technical-design/TD12-action-consumer-contract.md)
 
 ## Why after the release, and why together
 

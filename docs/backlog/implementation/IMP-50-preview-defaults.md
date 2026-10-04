@@ -4,7 +4,7 @@
 - Lanes: CLI, Actions
 - Execution: Agent-led.
 - Depends on: [IMP-11](IMP-11-cli.md), [IMP-13](IMP-13-action.md), [IMP-40](IMP-40-unified-deployment-config.md)
-- Related design: [TD8](../technical-design/TD8-action-consumer-contract.md)
+- Related design: [TD12](../technical-design/TD12-action-consumer-contract.md)
 
 ## Goal
 
