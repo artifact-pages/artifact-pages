@@ -458,11 +458,26 @@ func TestPublishSiteWholeControlRequestsCompareR2GetOnlyAndAWSHeadThenGet(t *tes
 	if awsChangedReport.ObjectRequests["HEAD.state"] != 1 || awsChangedReport.ObjectRequests["GET.state"] != 1 || awsChangedReport.ObjectRequests["PUT.state"] != 1 {
 		t.Fatalf("AWS changed state requests = %v; want HEAD=1 GET=1 and one final state PUT", awsChangedReport.ObjectRequests)
 	}
-	if awsChangedReport.ClassB != r2ChangedReport.ClassB+1 || awsChangedReport.ControlClassB != r2ChangedReport.ControlClassB+1 {
-		t.Fatalf("changed Class B / control Class B R2=%d/%d AWS=%d/%d; want one fewer R2 control request", r2ChangedReport.ClassB, r2ChangedReport.ControlClassB, awsChangedReport.ClassB, awsChangedReport.ControlClassB)
+	if awsChangedReport.ControlClassB != r2ChangedReport.ControlClassB+1 {
+		t.Fatalf("changed control Class B R2/AWS = %d/%d; want one fewer R2 state/control request", r2ChangedReport.ControlClassB, awsChangedReport.ControlClassB)
 	}
 	if r2ChangedReport.ClassA != awsChangedReport.ClassA || r2ChangedReport.DeleteRequests != awsChangedReport.DeleteRequests {
 		t.Fatalf("changed Class A/deletes R2=%d/%d AWS=%d/%d; want matching projection and control requests", r2ChangedReport.ClassA, r2ChangedReport.DeleteRequests, awsChangedReport.ClassA, awsChangedReport.DeleteRequests)
+	}
+	if r2ChangedReport.ObjectRequests["PUT.projection"] != awsChangedReport.ObjectRequests["PUT.projection"] ||
+		r2ChangedReport.ObjectRequests["DELETE.projection"] != awsChangedReport.ObjectRequests["DELETE.projection"] {
+		t.Fatalf("changed projection writes/deletes R2=%d/%d AWS=%d/%d; want matching artifact/index mutations", r2ChangedReport.ObjectRequests["PUT.projection"], r2ChangedReport.ObjectRequests["DELETE.projection"], awsChangedReport.ObjectRequests["PUT.projection"], awsChangedReport.ObjectRequests["DELETE.projection"])
+	}
+	// The generated index and metadata include a volatile generatedAt value.
+	// When sequential provider runs cross an RFC3339 second, preserveGeneratedAt
+	// reads those two prior objects before deciding whether to retain their
+	// deployed bytes. Count these as projection reads; they are independent of
+	// the state-read policy being compared.
+	for _, report := range []sitePublishV2CostReport{r2ChangedReport, awsChangedReport} {
+		generatedAtReads := report.ObjectRequests["GET.projection"]
+		if generatedAtReads != 0 && generatedAtReads != 2 {
+			t.Fatalf("%s changed flow made %d projection GETs; want 0 or the two generatedAt preservation reads", report.Provider, generatedAtReads)
+		}
 	}
 	if r2ChangedReport.StateBodyReadBytes <= 0 || awsChangedReport.StateBodyReadBytes <= 0 {
 		t.Fatalf("changed state body bytes R2/AWS = %d/%d; want both state GETs to read bytes", r2ChangedReport.StateBodyReadBytes, awsChangedReport.StateBodyReadBytes)
@@ -494,7 +509,7 @@ func sitePublishV2CostRequireSameNonStateRequests(left, right map[string]int) er
 		keys[key] = struct{}{}
 	}
 	for key := range keys {
-		if strings.HasSuffix(key, ".state") || strings.HasSuffix(key, ".total") {
+		if strings.HasSuffix(key, ".state") || strings.HasSuffix(key, ".projection") || strings.HasSuffix(key, ".total") {
 			continue
 		}
 		if left[key] != right[key] {
