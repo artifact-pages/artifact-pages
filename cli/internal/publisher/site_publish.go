@@ -115,6 +115,7 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 			return Result{}, err
 		}
 		preparedOptions := sitePublishBuildOptions(options.SiteID, entry.Name, entry.Description, sourceDir, identity)
+		preparedOptions.PriorState = sitePriorStateLoader(conditional, options.SiteID)
 		prepared, err := indexer.PrepareBuild(operationCtx, preparedOptions)
 		if err != nil {
 			return Result{}, fmt.Errorf("prepare site publish inputs: %w", err)

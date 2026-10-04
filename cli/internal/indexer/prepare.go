@@ -207,7 +207,7 @@ func prepareBuild(ctx context.Context, options BuildOptions, captureMode sourceC
 	if err := ValidateUTF8RelativePath(relativeSource); err != nil {
 		return nil, fmt.Errorf("source path %w", err)
 	}
-	gitUpdates, err := artifactGitUpdates(ctx, repositoryRoot, relativeSource, artifacts)
+	gitUpdates, err := resolveGitUpdates(ctx, repositoryRoot, relativeSource, artifacts, files, options.PriorState)
 	if err != nil {
 		return nil, err
 	}

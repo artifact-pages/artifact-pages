@@ -55,6 +55,10 @@ type BuildOptions struct {
 	InputPolicy    string
 	RejectSymlinks bool
 	Now            func() time.Time
+	// PriorState, when set, lets a shallow checkout carry forward Git
+	// metadata from the currently deployed site instead of fetching full
+	// history. It is consulted only for shallow repositories.
+	PriorState PriorStateLoader
 }
 
 type BuildResult struct {
@@ -800,31 +804,57 @@ func normalizedText(node *html.Node) string {
 }
 
 func artifactGitUpdates(ctx context.Context, repositoryRoot, sourcePath string, artifacts []discoveredArtifact) (map[string]artifactGitUpdate, error) {
+	history, err := readArtifactGitHistory(ctx, repositoryRoot, sourcePath, artifacts, nil)
+	if err != nil {
+		return nil, err
+	}
+	return history.latest, nil
+}
+
+// artifactGitHistory is the per-document result of one `git log` pass. latest
+// is the contract value for a full clone. The remaining fields let shallow
+// callers tell a real last-touching commit from a shallow boundary commit,
+// which Git reports as having added every file in its tree.
+type artifactGitHistory struct {
+	latest map[string]artifactGitUpdate
+	// visible is the latest touching commit that is not a shallow boundary.
+	visible map[string]artifactGitUpdate
+	// boundaryTime is the newest boundary commit touching each document.
+	boundaryTime map[string]time.Time
+}
+
+func readArtifactGitHistory(ctx context.Context, repositoryRoot, sourcePath string, artifacts []discoveredArtifact, boundaries map[string]struct{}) (artifactGitHistory, error) {
 	artifactDirectories, artifactFiles := artifactPathLookup(artifacts)
 
 	pathspec := sourcePath
 	if pathspec == "" {
 		pathspec = "."
 	}
-	command := exec.CommandContext(ctx, "git", "log", "-z", "--format=%ct%x1f%cn", "--name-only", "--no-renames", "--", filepath.FromSlash(pathspec))
+	command := exec.CommandContext(ctx, "git", "log", "-z", "--format=%ct%x1f%cn%x1f%H", "--name-only", "--no-renames", "--", filepath.FromSlash(pathspec))
 	command.Dir = repositoryRoot
 	output, err := command.CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("read Git history for source directory: %w: %s", err, strings.TrimSpace(string(output)))
+		return artifactGitHistory{}, fmt.Errorf("read Git history for source directory: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 
-	latestByArtifact := make(map[string]artifactGitUpdate, len(artifacts))
+	result := artifactGitHistory{
+		latest:       make(map[string]artifactGitUpdate, len(artifacts)),
+		visible:      make(map[string]artifactGitUpdate),
+		boundaryTime: make(map[string]time.Time),
+	}
 	documentHistory := make(map[string]struct{}, len(artifactFiles))
 	parts := bytes.Split(output, []byte{0})
 	var currentCommitTime time.Time
 	var currentCommitter string
+	currentBoundary := false
 	for index, part := range parts {
 		value := string(part)
 		header := bytes.Split(part, []byte{0x1f})
-		if len(header) == 2 && len(parts) > index+1 && bytes.HasPrefix(parts[index+1], []byte{'\n'}) {
+		if len(header) == 3 && len(parts) > index+1 && bytes.HasPrefix(parts[index+1], []byte{'\n'}) {
 			if seconds, parseErr := strconv.ParseInt(string(header[0]), 10, 64); parseErr == nil {
 				currentCommitTime = time.Unix(seconds, 0).UTC()
 				currentCommitter = string(header[1])
+				_, currentBoundary = boundaries[strings.TrimSpace(string(header[2]))]
 			}
 			continue
 		}
@@ -847,20 +877,29 @@ func artifactGitUpdates(ctx context.Context, repositoryRoot, sourcePath string, 
 			documentHistory[artifactPath] = struct{}{}
 		}
 		for _, artifactPath := range artifactPathsForFile(relativeFile, artifactDirectories, artifactFiles) {
-			update := latestByArtifact[artifactPath]
+			update := result.latest[artifactPath]
 			if currentCommitTime.After(update.updatedAt) {
 				update.updatedAt = currentCommitTime
 				update.lastCommitter = currentCommitter
-				latestByArtifact[artifactPath] = update
+				result.latest[artifactPath] = update
+			}
+			if currentBoundary {
+				if currentCommitTime.After(result.boundaryTime[artifactPath]) {
+					result.boundaryTime[artifactPath] = currentCommitTime
+				}
+			} else if visible := result.visible[artifactPath]; currentCommitTime.After(visible.updatedAt) {
+				result.visible[artifactPath] = artifactGitUpdate{updatedAt: currentCommitTime, lastCommitter: currentCommitter}
 			}
 		}
 	}
 	for _, artifact := range artifacts {
 		if _, hasDocumentHistory := documentHistory[artifact.relative]; !hasDocumentHistory {
-			delete(latestByArtifact, artifact.relative)
+			delete(result.latest, artifact.relative)
+			delete(result.visible, artifact.relative)
+			delete(result.boundaryTime, artifact.relative)
 		}
 	}
-	return latestByArtifact, nil
+	return result, nil
 }
 
 func artifactWorkingTreeUpdates(ctx context.Context, repositoryRoot, sourcePath string, artifacts []discoveredArtifact, deletedAt time.Time) (map[string]time.Time, error) {

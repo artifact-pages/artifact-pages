@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/tasuku43/git-artifact-pages/cli/internal/gitdepth"
 	"net/url"
 	"os/exec"
 	"path"
@@ -202,9 +203,19 @@ func buildFromGit(ctx context.Context, options BuildOptions, reuseBlobBodies boo
 	repoRoot := strings.TrimSpace(string(repoRootOutput))
 	defaultHead, err := resolveCommit(ctx, repoRoot, options.DefaultRef)
 	if err != nil {
+		if fetchErr := fetchMissingDefaultRef(ctx, repoRoot, options.DefaultRef); fetchErr == nil {
+			defaultHead, err = resolveCommit(ctx, repoRoot, options.DefaultRef)
+		}
+	}
+	if err != nil {
 		return BuildResult{}, fmt.Errorf("resolve default-branch HEAD: %w", err)
 	}
 	head, err := resolveCommit(ctx, repoRoot, options.HeadRef)
+	if err != nil && shaPattern.MatchString(options.HeadRef) {
+		if fetchErr := fetchMissingCommit(ctx, repoRoot, options.HeadRef); fetchErr == nil {
+			head, err = resolveCommit(ctx, repoRoot, options.HeadRef)
+		}
+	}
 	if err != nil {
 		return BuildResult{}, fmt.Errorf("resolve preview source head: %w", err)
 	}
@@ -218,11 +229,10 @@ func buildFromGit(ctx context.Context, options BuildOptions, reuseBlobBodies boo
 	}
 	updatedAtText := updatedAt.Format(time.RFC3339)
 	group := Group{ID: groupID, Kind: groupKind, HeadSHA: head, PRURL: prURL, UpdatedAt: updatedAtText, Documents: []Document{}}
-	mergeBaseBytes, err := gitOutput(ctx, repoRoot, "merge-base", defaultHead, head)
+	mergeBase, err := gitdepth.EnsureMergeBase(ctx, repoRoot, defaultHead, head)
 	if err != nil {
 		return BuildResult{}, fmt.Errorf("find comparison merge-base: %w", err)
 	}
-	mergeBase := strings.TrimSpace(string(mergeBaseBytes))
 	if !shaPattern.MatchString(mergeBase) {
 		return BuildResult{}, fmt.Errorf("git returned an invalid merge-base %q", mergeBase)
 	}
@@ -470,6 +480,30 @@ func sourcePathspec(sourcePath string) string {
 		return "."
 	}
 	return ":(literal)" + sourcePath
+}
+
+// fetchMissingDefaultRef fetches an `origin/NAME` default ref that a shallow
+// checkout does not contain. It does nothing in a complete checkout, where a
+// missing ref is a configuration error the caller should see.
+func fetchMissingDefaultRef(ctx context.Context, repoRoot, ref string) error {
+	shallow, err := gitdepth.IsShallow(ctx, repoRoot)
+	if err != nil || !shallow {
+		return errors.New("not a shallow checkout")
+	}
+	name := strings.TrimPrefix(ref, "refs/remotes/")
+	if !strings.HasPrefix(name, "origin/") || name == "origin/HEAD" || strings.ContainsAny(name, " :^~?*[\\") || strings.Contains(name, "..") {
+		return errors.New("default ref is not an origin branch")
+	}
+	branch := strings.TrimPrefix(name, "origin/")
+	return gitdepth.FetchShallowRef(ctx, repoRoot, "+refs/heads/"+branch+":refs/remotes/origin/"+branch)
+}
+
+func fetchMissingCommit(ctx context.Context, repoRoot, sha string) error {
+	shallow, err := gitdepth.IsShallow(ctx, repoRoot)
+	if err != nil || !shallow {
+		return errors.New("not a shallow checkout")
+	}
+	return gitdepth.FetchShallowRef(ctx, repoRoot, sha)
 }
 
 func resolveCommit(ctx context.Context, repoRoot, ref string) (string, error) {
