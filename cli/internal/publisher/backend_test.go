@@ -9,14 +9,45 @@ import (
 
 type memoryDeploymentBackend struct {
 	objects       map[string]Object
+	etags         map[string]string
 	puts          []string
 	invalidations [][]string
 }
 
 func (backend *memoryDeploymentBackend) PutObject(_ context.Context, key string, object Object) error {
 	backend.objects[key] = object
+	backend.ensureETags()
+	backend.etags[key] = `"` + sha256Hex(object.Bytes) + `"`
 	backend.puts = append(backend.puts, key)
 	return nil
+}
+
+func (backend *memoryDeploymentBackend) GetObject(_ context.Context, key string) (Object, string, error) {
+	object, exists := backend.objects[key]
+	if !exists {
+		return Object{}, "", ErrObjectNotFound
+	}
+	backend.ensureETags()
+	if backend.etags[key] == "" {
+		backend.etags[key] = `"` + sha256Hex(object.Bytes) + `"`
+	}
+	return object, backend.etags[key], nil
+}
+
+func (backend *memoryDeploymentBackend) PutObjectConditional(_ context.Context, key string, object Object, condition ObjectCondition) (string, error) {
+	backend.ensureETags()
+	_, exists := backend.objects[key]
+	if condition.IfNoneMatch && (exists || condition.IfMatchETag != "") {
+		return "", ErrPreconditionFailed
+	}
+	if condition.IfMatchETag != "" && (!exists || backend.etags[key] != condition.IfMatchETag) {
+		return "", ErrPreconditionFailed
+	}
+	object.Bytes = append([]byte(nil), object.Bytes...)
+	backend.objects[key] = object
+	etag := `"` + sha256Hex(object.Bytes) + `"`
+	backend.etags[key] = etag
+	return etag, nil
 }
 
 func (backend *memoryDeploymentBackend) ListKeys(_ context.Context, prefix string) ([]string, error) {
@@ -33,6 +64,9 @@ func (backend *memoryDeploymentBackend) ListKeys(_ context.Context, prefix strin
 func (backend *memoryDeploymentBackend) DeleteObjects(_ context.Context, keys []string) error {
 	for _, key := range keys {
 		delete(backend.objects, key)
+		if backend.etags != nil {
+			delete(backend.etags, key)
+		}
 	}
 	return nil
 }
@@ -54,11 +88,46 @@ func (backend *memoryDeploymentBackend) HeadObject(_ context.Context, key string
 	if metadata["artifact-pages-sha256"] == "" {
 		metadata["artifact-pages-sha256"] = sha256Hex(object.Bytes)
 	}
+	backend.ensureETags()
+	if backend.etags[key] == "" {
+		backend.etags[key] = `"` + sha256Hex(object.Bytes) + `"`
+	}
 	return ObjectInfo{
-		Size: int64(len(object.Bytes)), ContentType: object.ContentType,
+		ETag: backend.etags[key], Size: int64(len(object.Bytes)), ContentType: object.ContentType,
 		ContentDisposition: object.ContentDisposition, ContentEncoding: object.ContentEncoding,
 		CacheControl: object.Cache, Metadata: metadata,
 	}, nil
+}
+
+var _ ConditionalObjectBackend = (*memoryDeploymentBackend)(nil)
+
+func (backend *memoryDeploymentBackend) ensureETags() {
+	if backend.etags == nil {
+		backend.etags = make(map[string]string)
+		for key, object := range backend.objects {
+			backend.etags[key] = `"` + sha256Hex(object.Bytes) + `"`
+		}
+	}
+}
+
+func publicApplicationPuts(puts []string) []string {
+	result := make([]string, 0, len(puts))
+	for _, key := range puts {
+		if !strings.HasPrefix(key, "_control/") {
+			result = append(result, key)
+		}
+	}
+	return result
+}
+
+func publicApplicationObjects(objects map[string]Object) map[string]Object {
+	result := make(map[string]Object)
+	for key, object := range objects {
+		if !strings.HasPrefix(key, "_control/") {
+			result[key] = object
+		}
+	}
+	return result
 }
 
 func TestDeployAppUsesProviderNeutralBackend(t *testing.T) {
@@ -76,8 +145,9 @@ func TestDeployAppUsesProviderNeutralBackend(t *testing.T) {
 	if result.FilesPublished != 3 || result.InvalidationID != "memory-revalidation" {
 		t.Fatalf("DeployApp() = %+v, want three files and provider-neutral revalidation result", result)
 	}
-	if len(backend.puts) != 3 || backend.puts[len(backend.puts)-1] != "index.html" {
-		t.Fatalf("upload order = %v, want index.html last", backend.puts)
+	appPuts := publicApplicationPuts(backend.puts)
+	if len(appPuts) != 3 || appPuts[len(appPuts)-1] != "index.html" {
+		t.Fatalf("upload order = %v, want index.html last", appPuts)
 	}
 	if got := backend.objects["assets/app-AbC123xY.js"].Cache; got != immutableCache {
 		t.Errorf("hashed asset Cache-Control = %q, want %q", got, immutableCache)

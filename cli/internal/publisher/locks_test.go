@@ -109,6 +109,81 @@ func TestSiteLocksAllowIndependentSitesConcurrently(t *testing.T) {
 	}
 }
 
+func TestApplicationLockHasFixedIdentityAndGuardedRecovery(t *testing.T) {
+	backend := newLockMemoryBackend()
+	manager := SiteLockManager{Backend: backend, WaitLimit: time.Second, PollPeriod: time.Millisecond}
+
+	initial, err := manager.InspectApplication(context.Background())
+	if err != nil || initial.Site != "application" || initial.State != "uninitialized" {
+		t.Fatalf("InspectApplication() = %+v, %v; want uninitialized application lock", initial, err)
+	}
+	held, release, err := manager.AcquireApplication(context.Background())
+	if err != nil {
+		t.Fatalf("AcquireApplication() error = %v", err)
+	}
+	if held.Site != "application" || held.State != "held" || held.ETag == "" {
+		t.Fatalf("application lock snapshot = %+v; want held application lock", held)
+	}
+	if _, _, err := backend.GetObject(context.Background(), "_control/locks/application.json"); err != nil {
+		t.Fatalf("application lock key missing: %v", err)
+	}
+	if _, _, err := backend.GetObject(context.Background(), siteLockKey("application")); !errors.Is(err, ErrObjectNotFound) {
+		t.Fatalf("application scope collided with site ID key: %v", err)
+	}
+
+	if err := manager.RecoverApplication(context.Background(), "stale-etag"); !errors.Is(err, ErrPreconditionFailed) {
+		t.Fatalf("RecoverApplication(stale ETag) = %v; want conditional conflict", err)
+	}
+	if err := manager.RecoverApplication(context.Background(), held.ETag); err != nil {
+		t.Fatalf("RecoverApplication(observed ETag) error = %v", err)
+	}
+	free, err := manager.InspectApplication(context.Background())
+	if err != nil || free.Site != "application" || free.State != "free" || free.ETag == held.ETag {
+		t.Fatalf("application lock after recovery = %+v, %v; want free with new ETag", free, err)
+	}
+	if err := release(); !errors.Is(err, ErrPreconditionFailed) {
+		t.Fatalf("old owner release after guarded recovery = %v; want fencing conflict", err)
+	}
+}
+
+func TestLockAcquireRejectsExistingRecordWithoutETag(t *testing.T) {
+	inner := newLockMemoryBackend()
+	freeBytes, err := marshalLockRecord(lockRecord{SchemaVersion: 1, Site: "application", State: "free"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := inner.PutObjectConditional(context.Background(), "_control/locks/application.json", Object{Bytes: freeBytes}, ObjectCondition{IfNoneMatch: true}); err != nil {
+		t.Fatalf("seed application lock: %v", err)
+	}
+	backend := &blankETagLockBackend{lockMemoryBackend: inner}
+	if _, release, err := (SiteLockManager{Backend: backend}).AcquireApplication(context.Background()); err == nil {
+		if release != nil {
+			_ = release()
+		}
+		t.Fatal("AcquireApplication() succeeded with an existing object and blank ETag")
+	} else if !strings.Contains(err.Error(), "no ETag") {
+		t.Fatalf("AcquireApplication() error = %v; want fail-closed ETag error", err)
+	}
+	inner.mu.Lock()
+	defer inner.mu.Unlock()
+	var record lockRecord
+	if err := json.Unmarshal(inner.objects["_control/locks/application.json"].Bytes, &record); err != nil || record.State != "free" {
+		t.Fatalf("lock after blank-ETag refusal = %+v, %v; want unchanged free state", record, err)
+	}
+}
+
+type blankETagLockBackend struct {
+	*lockMemoryBackend
+}
+
+func (backend *blankETagLockBackend) GetObject(ctx context.Context, key string) (Object, string, error) {
+	object, _, err := backend.lockMemoryBackend.GetObject(ctx, key)
+	if err != nil {
+		return Object{}, "", err
+	}
+	return object, "  ", nil
+}
+
 func TestLockCASConflictsRespectWaitLimitForSiteAndRegistry(t *testing.T) {
 	const waitLimit = 60 * time.Millisecond
 	const pollPeriod = 10 * time.Millisecond

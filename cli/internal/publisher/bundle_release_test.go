@@ -112,11 +112,12 @@ func TestDeployAppDownloadsPublishedVersionOverHTTPS(t *testing.T) {
 		"assets/app.js":    []byte("console.log('release')"),
 		"assets/theme.css": []byte("body { color: #123; }"),
 	}
-	if len(backend.objects) != len(wantFiles) {
-		t.Fatalf("deployed object keys = %#v, want %d files", backend.objects, len(wantFiles))
+	appObjects := publicApplicationObjects(backend.objects)
+	if len(appObjects) != len(wantFiles) {
+		t.Fatalf("deployed application object keys = %#v, want %d files", appObjects, len(wantFiles))
 	}
 	for key, want := range wantFiles {
-		object, ok := backend.objects[key]
+		object, ok := appObjects[key]
 		if !ok {
 			t.Errorf("DeployApp() did not publish resolved file %q", key)
 			continue

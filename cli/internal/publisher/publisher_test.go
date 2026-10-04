@@ -2,6 +2,7 @@ package publisher
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
@@ -25,6 +26,7 @@ import (
 
 type uploadedObject struct {
 	body               []byte
+	etag               string
 	contentType        string
 	contentDisposition string
 	contentEncoding    string
@@ -47,7 +49,14 @@ func (f *fakeS3) PutObject(_ context.Context, input *s3.PutObjectInput, _ ...fun
 		return nil, err
 	}
 	key := aws.ToString(input.Key)
-	f.objects[key] = uploadedObject{
+	previous, exists := f.objects[key]
+	if input.IfNoneMatch != nil && exists {
+		return nil, ErrPreconditionFailed
+	}
+	if input.IfMatch != nil && (!exists || aws.ToString(input.IfMatch) != previous.etag) {
+		return nil, ErrPreconditionFailed
+	}
+	object := uploadedObject{
 		body:               body,
 		contentType:        aws.ToString(input.ContentType),
 		contentDisposition: aws.ToString(input.ContentDisposition),
@@ -55,8 +64,22 @@ func (f *fakeS3) PutObject(_ context.Context, input *s3.PutObjectInput, _ ...fun
 		cache:              aws.ToString(input.CacheControl),
 		metadata:           input.Metadata,
 	}
+	object.etag = `"` + sha256Hex(body) + `"`
+	f.objects[key] = object
 	f.puts = append(f.puts, key)
-	return &s3.PutObjectOutput{}, nil
+	return &s3.PutObjectOutput{ETag: aws.String(object.etag)}, nil
+}
+
+func (f *fakeS3) GetObject(_ context.Context, input *s3.GetObjectInput, _ ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
+	object, exists := f.objects[aws.ToString(input.Key)]
+	if !exists {
+		return nil, ErrObjectNotFound
+	}
+	return &s3.GetObjectOutput{
+		Body: io.NopCloser(bytes.NewReader(object.body)), ETag: aws.String(object.etag),
+		ContentType: aws.String(object.contentType), ContentDisposition: aws.String(object.contentDisposition),
+		ContentEncoding: aws.String(object.contentEncoding), CacheControl: aws.String(object.cache), Metadata: object.metadata,
+	}, nil
 }
 
 func (f *fakeS3) HeadObject(_ context.Context, input *s3.HeadObjectInput, _ ...func(*s3.Options)) (*s3.HeadObjectOutput, error) {
@@ -65,6 +88,7 @@ func (f *fakeS3) HeadObject(_ context.Context, input *s3.HeadObjectInput, _ ...f
 		return nil, ErrObjectNotFound
 	}
 	return &s3.HeadObjectOutput{
+		ETag:          aws.String(object.etag),
 		ContentLength: aws.Int64(int64(len(object.body))), ContentType: aws.String(object.contentType),
 		ContentDisposition: aws.String(object.contentDisposition), ContentEncoding: aws.String(object.contentEncoding),
 		CacheControl: aws.String(object.cache), Metadata: object.metadata,
@@ -181,8 +205,9 @@ func TestDeployAppVerifiesAndPublishesBundle(t *testing.T) {
 	if len(cloudFront.invalidations) != 1 || strings.Join(cloudFront.invalidations[0], ",") != "/index.html" {
 		t.Errorf("CloudFront invalidations = %#v, want only /index.html", cloudFront.invalidations)
 	}
-	if len(s3Client.puts) == 0 || s3Client.puts[len(s3Client.puts)-1] != "index.html" {
-		t.Errorf("index.html should be published after its assets; upload order = %#v", s3Client.puts)
+	appPuts := publicApplicationPuts(s3Client.puts)
+	if len(appPuts) == 0 || appPuts[len(appPuts)-1] != "index.html" {
+		t.Errorf("index.html should be published after its assets; upload order = %#v", appPuts)
 	}
 	s3Client.puts = nil
 	cloudFront.invalidations = nil
@@ -190,8 +215,8 @@ func TestDeployAppVerifiesAndPublishesBundle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DeployApp() unchanged bundle error = %v", err)
 	}
-	if unchanged.Outcome != "no-op" || unchanged.FilesPublished != 0 || len(s3Client.puts) != 0 || len(cloudFront.invalidations) != 0 {
-		t.Errorf("DeployApp() unchanged result = %+v, puts=%v invalidations=%v; want no-op without provider writes", unchanged, s3Client.puts, cloudFront.invalidations)
+	if unchanged.Outcome != "no-op" || unchanged.FilesPublished != 0 || len(publicApplicationPuts(s3Client.puts)) != 0 || len(cloudFront.invalidations) != 0 {
+		t.Errorf("DeployApp() unchanged result = %+v, puts=%v invalidations=%v; want no-op without application-object writes", unchanged, s3Client.puts, cloudFront.invalidations)
 	}
 }
 
@@ -317,8 +342,9 @@ func TestDeployAppRepairsStaleFixedAssetCachePolicy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DeployApp() after stale cache metadata error = %v", err)
 	}
-	if result.Outcome != "deployed" || result.FilesPublished != 1 || !reflect.DeepEqual(s3Client.puts, []string{"assets/app.js"}) {
-		t.Fatalf("DeployApp() = %+v, puts=%v; want cache-policy-only repair for the fixed asset", result, s3Client.puts)
+	appPuts := publicApplicationPuts(s3Client.puts)
+	if result.Outcome != "deployed" || result.FilesPublished != 1 || !reflect.DeepEqual(appPuts, []string{"assets/app.js"}) {
+		t.Fatalf("DeployApp() = %+v, puts=%v; want cache-policy-only repair for the fixed asset", result, appPuts)
 	}
 	if got := s3Client.objects["assets/app.js"].cache; got != appShellCache {
 		t.Errorf("repaired fixed asset Cache-Control = %q, want %q", got, appShellCache)

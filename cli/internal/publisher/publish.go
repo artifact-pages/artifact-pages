@@ -67,6 +67,10 @@ func DeployApp(ctx context.Context, backend DeploymentBackend, options AppDeploy
 	if options.Version != "" && options.Version != bundle.manifest.Version {
 		return Result{}, fmt.Errorf("downloaded release version %q does not match this CLI's pinned version %q", bundle.manifest.Version, options.Version)
 	}
+	conditional, ok := backend.(ConditionalObjectBackend)
+	if !ok {
+		return Result{}, errors.New("deployment backend does not support conditional object reads and writes")
+	}
 	metadataBackend, ok := backend.(ObjectMetadataBackend)
 	if !ok {
 		return Result{}, errors.New("deployment backend does not support object metadata reads")
@@ -82,62 +86,129 @@ func DeployApp(ctx context.Context, backend DeploymentBackend, options AppDeploy
 		}
 		return files[i].path < files[j].path
 	})
-	changed := make([]bundleFile, 0, len(files))
-	plan := make([]Change, 0, len(files))
-	for _, file := range files {
-		info, err := metadataBackend.HeadObject(ctx, file.path)
-		if errors.Is(err, ErrObjectNotFound) {
-			changed = append(changed, file)
-			plan = append(plan, Change{Action: "create", Path: file.path})
-			continue
-		}
+	operation := func() (Result, error) {
+		retry, retryETag, err := readAppCacheRetry(ctx, conditional)
 		if err != nil {
-			return Result{}, fmt.Errorf("inspect application object %s: %w", file.path, err)
-		}
-		if !appObjectMatchesBundle(info, file, bundle.manifest) {
-			changed = append(changed, file)
-			plan = append(plan, Change{Action: "update", Path: file.path})
-		}
-	}
-
-	if len(changed) == 0 {
-		return Result{
-			Operation: "app deploy", Outcome: "no-op", Changes: []Change{},
-			Version: bundle.manifest.Version, SourceDirty: bundle.manifest.SourceDirty,
-		}, nil
-	}
-	if options.DryRun {
-		return Result{
-			Operation: "app deploy", Outcome: "planned", Changes: plan,
-			Version: bundle.manifest.Version, FilesPublished: len(changed), SourceDirty: bundle.manifest.SourceDirty,
-		}, nil
-	}
-	if err := validateInvalidation(backend, []string{"/index.html"}); err != nil {
-		return Result{}, err
-	}
-
-	for _, file := range changed {
-		fileDigest := sha256Hex(file.data)
-		if err := backend.PutObject(ctx, file.path, Object{
-			Bytes: file.data, ContentType: contentType(file.path), Cache: appFileCacheControl(file.path), Metadata: map[string]string{
-				"artifact-pages-version":       bundle.manifest.Version,
-				"artifact-pages-source-commit": bundle.manifest.SourceCommit,
-				"artifact-pages-sha256":        fileDigest,
-			},
-		}); err != nil {
 			return Result{}, err
 		}
+
+		changed := make([]bundleFile, 0, len(files))
+		plan := make([]Change, 0, len(files))
+		for _, file := range files {
+			info, err := metadataBackend.HeadObject(ctx, file.path)
+			if errors.Is(err, ErrObjectNotFound) {
+				changed = append(changed, file)
+				plan = append(plan, Change{Action: "create", Path: file.path})
+				continue
+			}
+			if err != nil {
+				return Result{}, fmt.Errorf("inspect application object %s: %w", file.path, err)
+			}
+			if !appObjectMatchesBundle(info, file, bundle.manifest) {
+				changed = append(changed, file)
+				plan = append(plan, Change{Action: "update", Path: file.path})
+			}
+		}
+
+		needsInvalidation := len(changed) > 0 || len(retry.Paths) > 0
+		invalidationPaths := []string(nil)
+		if needsInvalidation {
+			invalidationPaths = []string{"/index.html"}
+		}
+		plannedPaths := plannedInvalidationPaths(backend, invalidationPaths)
+		result := Result{
+			Operation: "app deploy", Changes: []Change{},
+			Version: bundle.manifest.Version, SourceDirty: bundle.manifest.SourceDirty,
+		}
+		if options.DryRun {
+			result.Changes = plan
+			result.FilesPublished = len(changed)
+			result.InvalidationPaths = plannedPaths
+			if needsInvalidation {
+				result.Outcome = "planned"
+			} else {
+				result.Outcome = "no-op"
+			}
+			return result, nil
+		}
+		if !needsInvalidation {
+			result.Outcome = "no-op"
+			return result, nil
+		}
+		if err := validateInvalidation(backend, invalidationPaths); err != nil {
+			return result, err
+		}
+
+		// Persist the retry intent before the first application-object write.
+		// A response lost after this conditional write leaves a safe cache-only
+		// retry for the next invocation.
+		journal := retry
+		if len(changed) > 0 {
+			journal = appCacheRetry{
+				SchemaVersion: appCacheRetrySchema, Paths: invalidationPaths,
+			}
+			if _, err := writeAppCacheRetry(ctx, conditional, journal, retryETag); err != nil {
+				return result, err
+			}
+			for _, file := range changed {
+				fileDigest := sha256Hex(file.data)
+				if err := backend.PutObject(ctx, file.path, Object{
+					Bytes: file.data, ContentType: contentType(file.path), Cache: appFileCacheControl(file.path), Metadata: map[string]string{
+						"artifact-pages-version":       bundle.manifest.Version,
+						"artifact-pages-source-commit": bundle.manifest.SourceCommit,
+						"artifact-pages-sha256":        fileDigest,
+					},
+				}); err != nil {
+					return result, fmt.Errorf("publish application object %s: %w", file.path, err)
+				}
+			}
+		}
+
+		invalidationID, err := backend.Invalidate(ctx, invalidationPaths)
+		if err != nil {
+			return result, fmt.Errorf("application objects may be updated but cache revalidation failed; retry app deploy: %w", err)
+		}
+		if err := clearAppCacheRetry(ctx, backend); err != nil {
+			// DeleteObjects has no compare-and-swap contract, so a reported
+			// failure may still have removed the record. Recreate it if absent;
+			// an If-None-Match conflict means the retry intent is still present.
+			_, restoreErr := writeAppCacheRetry(ctx, conditional, journal, "")
+			if errors.Is(restoreErr, ErrPreconditionFailed) {
+				restoreErr = nil
+			}
+			clearErr := fmt.Errorf("application cache was revalidated but its retry record could not be cleared; retry journal retained: %w", err)
+			if restoreErr != nil {
+				return result, errors.Join(clearErr, fmt.Errorf("restore application cache retry record: %w", restoreErr))
+			}
+			return result, clearErr
+		}
+		result.Outcome = "deployed"
+		result.FilesPublished = len(changed)
+		result.InvalidationID = invalidationID
+		result.InvalidationPaths = plannedPaths
+		return result, nil
 	}
 
-	invalidationID, err := backend.Invalidate(ctx, []string{"/index.html"})
+	if options.DryRun {
+		return operation()
+	}
+	_, release, err := (SiteLockManager{Backend: conditional}).AcquireApplication(ctx)
 	if err != nil {
 		return Result{}, err
 	}
-	return Result{
-		Operation: "app deploy", Outcome: "deployed", Changes: []Change{},
-		Version: bundle.manifest.Version, FilesPublished: len(changed), InvalidationID: invalidationID,
-		SourceDirty: bundle.manifest.SourceDirty,
-	}, nil
+	result, operationErr := operation()
+	if release != nil {
+		releaseErr := release()
+		if operationErr == nil && releaseErr != nil {
+			operationErr = fmt.Errorf("application deployment completed but lock release failed: %w", releaseErr)
+		} else if operationErr != nil && releaseErr != nil {
+			operationErr = errors.Join(operationErr, fmt.Errorf("release application lock: %w", releaseErr))
+		}
+	}
+	if operationErr != nil {
+		return result, operationErr
+	}
+	return result, nil
 }
 
 func appObjectMatchesBundle(info ObjectInfo, file bundleFile, manifest releaseManifest) bool {

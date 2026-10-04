@@ -179,6 +179,12 @@ test('admin and satellite OIDC roles have separate exact-subject trust and scope
   assert.match(adminStatements, /"cloudfront:CreateInvalidation"/u)
   assert.match(adminStatements, /"_control\/locks\/\*"/u)
   assert.match(adminStatements, /"_control\/registry-cleanup\.json"/u)
+  assert.match(adminStatements, /"\$\{local\.bucket_arn\}\/_control\/app-cache\/retry\.json"/u)
+  const adminList = localStatement(adminStatements, 'ListProjectionPrefixes')
+  assert.doesNotMatch(adminList, /_control\/app-cache/u, 'the fixed retry object does not require ListBucket')
+  for (const statementName of ['ReadRegistryAppAndControlState', 'WriteApplicationRegistryAndControlState', 'DeleteUnregisteredProjectionObjects']) {
+    assert.match(localStatement(adminStatements, statementName), /_control\/app-cache\/retry\.json/u, `${statementName} must cover the exact app retry object`)
+  }
   assert.doesNotMatch(adminStatements, /Action\s*=\s*"\*"/u)
   assert.doesNotMatch(adminStatements, /"s3:\*"/u)
 
@@ -202,7 +208,8 @@ test('admin and satellite OIDC roles have separate exact-subject trust and scope
   const satelliteDelete = satellitePolicy.slice(satelliteDeleteStart)
   assert.match(satelliteDelete, /"s3:DeleteObject"/u)
   assert.match(satelliteDelete, /_artifacts\/\$\{each\.key\}\/\*/u)
-  assert.doesNotMatch(satelliteDelete, /_indexes|_previews|_control\/locks/u)
+  assert.match(satelliteDelete, /_indexes\/\$\{each\.key\}\/\*/u, 'stale generated indexes and search objects are site-owned cleanup')
+  assert.doesNotMatch(satelliteDelete, /_indexes\/sites\.json|_indexes\/\$\{each\.key\}\/\*\*|_previews|_control\/locks/u)
   assert.match(satelliteDelete, /_control\/site-cache\/\$\{each\.key\}\.json/u)
   assert.match(satelliteWrite, /_control\/site-cache\/\$\{each\.key\}\.json/u)
   assert.match(satellitePolicy, /Sid\s*=\s*"RevalidateSelectedSiteDistribution"[\s\S]*?Resource\s*=\s*aws_cloudfront_distribution\.site\.arn/u)

@@ -1277,6 +1277,62 @@ func TestLockCLIInspectsAndRecoversUsingObservedETag(t *testing.T) {
 	}
 }
 
+func TestLockCLIInspectsAndRecoversApplicationScope(t *testing.T) {
+	root := t.TempDir()
+	storageRoot := filepath.Join(root, "storage")
+	backend, err := publisher.NewDirectoryBackend(storageRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager := publisher.SiteLockManager{Backend: backend}
+	held, _, err := manager.AcquireApplication(t.Context())
+	if err != nil {
+		t.Fatalf("prepare held application lock: %v", err)
+	}
+	configPath := filepath.Join(root, "deployment.yaml")
+	configContents := fmt.Sprintf("schemaVersion: 1\nprovider: local\nlocal:\n  root: %q\n", storageRoot)
+	if err := os.WriteFile(configPath, []byte(configContents), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	type cliResult struct {
+		Operation string                 `json:"operation"`
+		Outcome   string                 `json:"outcome"`
+		Site      string                 `json:"site"`
+		Lock      publisher.LockSnapshot `json:"lock"`
+	}
+	var stdout, stderr bytes.Buffer
+	if err := run(t.Context(), []string{"lock", "inspect", "--scope", "application", "--config", configPath, "--format", "json"}, &stdout, &stderr); err != nil {
+		t.Fatalf("application lock inspect error = %v; stderr=%s", err, stderr.String())
+	}
+	var inspected cliResult
+	if err := json.Unmarshal(stdout.Bytes(), &inspected); err != nil {
+		t.Fatalf("decode application lock inspect: %v; output=%s", err, stdout.String())
+	}
+	if inspected.Operation != "lock inspect" || inspected.Site != "application" || inspected.Lock.Site != "application" || inspected.Lock.State != "held" || inspected.Lock.ETag != held.ETag {
+		t.Fatalf("application lock inspect result = %+v; want held application scope", inspected)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	args := []string{"lock", "recover", "--scope", "application", "--observed-etag", inspected.Lock.ETag, "--config", configPath, "--format", "json"}
+	if err := run(t.Context(), args, &stdout, &stderr); err != nil {
+		t.Fatalf("application lock recover error = %v; stderr=%s", err, stderr.String())
+	}
+	var recovered cliResult
+	if err := json.Unmarshal(stdout.Bytes(), &recovered); err != nil {
+		t.Fatalf("decode application lock recover: %v; output=%s", err, stdout.String())
+	}
+	if recovered.Operation != "lock recover" || recovered.Site != "application" || recovered.Lock.Site != "application" || recovered.Outcome != "recovered" || recovered.Lock.State != "free" {
+		t.Fatalf("application lock recover result = %+v; want recovered free lock", recovered)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := run(t.Context(), []string{"lock", "inspect", "--scope", "application", "--site", "sre", "--config", configPath}, &stdout, &stderr); err == nil {
+		t.Fatal("application lock scope accepted --site; want input error")
+	}
+}
+
 func runGitCommand(workingDirectory string, args ...string) error {
 	command := exec.Command("git", args...)
 	command.Dir = workingDirectory

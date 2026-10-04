@@ -8,9 +8,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/tasuku43/git-artifact-pages/cli/internal/compat"
 	"regexp"
+	"strings"
 	"time"
+
+	"github.com/tasuku43/git-artifact-pages/cli/internal/compat"
 )
 
 const defaultLockWait = 10 * time.Second
@@ -60,6 +62,15 @@ func (manager SiteLockManager) InspectRegistry(ctx context.Context) (LockSnapsho
 	return manager.inspect(ctx, "registry", "_control/locks/registry.json")
 }
 
+// InspectApplication reads the retained lock that serializes application
+// bundle deployments. It uses a fixed control identity, not a site ID.
+func (manager SiteLockManager) InspectApplication(ctx context.Context) (LockSnapshot, error) {
+	if manager.Backend == nil {
+		return LockSnapshot{}, errors.New("conditional deployment backend is required")
+	}
+	return manager.inspect(ctx, "application", "_control/locks/application.json")
+}
+
 func (manager SiteLockManager) inspect(ctx context.Context, siteID, key string) (LockSnapshot, error) {
 	object, etag, err := manager.Backend.GetObject(ctx, key)
 	if errors.Is(err, ErrObjectNotFound) {
@@ -92,6 +103,14 @@ func (manager SiteLockManager) AcquireRegistry(ctx context.Context) (LockSnapsho
 		return LockSnapshot{}, nil, errors.New("conditional deployment backend is required")
 	}
 	return manager.acquire(ctx, "registry", "_control/locks/registry.json")
+}
+
+// AcquireApplication serializes application deployments across processes.
+func (manager SiteLockManager) AcquireApplication(ctx context.Context) (LockSnapshot, func() error, error) {
+	if manager.Backend == nil {
+		return LockSnapshot{}, nil, errors.New("conditional deployment backend is required")
+	}
+	return manager.acquire(ctx, "application", "_control/locks/application.json")
 }
 
 func (manager SiteLockManager) acquire(ctx context.Context, siteID, key string) (LockSnapshot, func() error, error) {
@@ -142,6 +161,9 @@ func (manager SiteLockManager) acquire(ctx context.Context, siteID, key string) 
 		if readErr != nil {
 			return LockSnapshot{}, nil, fmt.Errorf("read site lock: %w", readErr)
 		}
+		if strings.TrimSpace(etag) == "" {
+			return LockSnapshot{}, nil, fmt.Errorf("site lock %q has no ETag for compare-and-swap", siteID)
+		}
 		record, decodeErr := decodeLockRecord(object.Bytes, siteID)
 		if decodeErr != nil {
 			return LockSnapshot{}, nil, decodeErr
@@ -170,6 +192,9 @@ func (manager SiteLockManager) acquire(ctx context.Context, siteID, key string) 
 			}
 			if putErr != nil {
 				return LockSnapshot{}, nil, fmt.Errorf("acquire site lock: %w", putErr)
+			}
+			if strings.TrimSpace(newETag) == "" {
+				return LockSnapshot{}, nil, fmt.Errorf("acquire site lock %q: conditional write returned no ETag; inspect the lock and recover it after confirming no operation is active", siteID)
 			}
 			snapshot := snapshotFromRecord(record, newETag)
 			return snapshot, func() error {
@@ -245,6 +270,15 @@ func (manager SiteLockManager) RecoverRegistry(ctx context.Context, observedETag
 	return manager.recover(ctx, "registry", "_control/locks/registry.json", observedETag)
 }
 
+// RecoverApplication frees a stale application deployment lock only when the
+// ETag still matches the operator's inspection.
+func (manager SiteLockManager) RecoverApplication(ctx context.Context, observedETag string) error {
+	if manager.Backend == nil {
+		return errors.New("conditional deployment backend is required")
+	}
+	return manager.recover(ctx, "application", "_control/locks/application.json", observedETag)
+}
+
 func (manager SiteLockManager) recover(ctx context.Context, siteID, key, observedETag string) error {
 	if observedETag == "" {
 		return errors.New("observed lock ETag is required")
@@ -281,6 +315,9 @@ func (manager SiteLockManager) release(ctx context.Context, key, siteID, owner, 
 	object, currentETag, err := manager.Backend.GetObject(ctx, key)
 	if err != nil {
 		return fmt.Errorf("read site lock before release: %w", err)
+	}
+	if strings.TrimSpace(currentETag) == "" {
+		return fmt.Errorf("site lock %q has no ETag for compare-and-swap release", siteID)
 	}
 	if currentETag != etag {
 		return ErrPreconditionFailed

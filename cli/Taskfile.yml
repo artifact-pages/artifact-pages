@@ -163,7 +163,7 @@ tasks:
       - ./artifact-pages config set-default {{.LOCATOR | shellQuote}}
 
   lock:inspect: &inspect
-    desc: Inspect a site or registry lock (SITE or SCOPE=registry, optional CONFIG)
+    desc: Inspect a site, registry, or application lock (SITE or SCOPE=registry|application, optional CONFIG)
     dir: '{{.REPO_ROOT}}'
     vars:
       CONFIG_FLAGS: '{{if .CONFIG}}--config {{.CONFIG | shellQuote}}{{end}}'
@@ -171,29 +171,29 @@ tasks:
     requires:
       vars:
         - name: SCOPE
-          enum: ['site', 'registry']
+          enum: ['site', 'registry', 'application']
     preconditions:
-      - sh: '{{if eq .SCOPE "registry"}}{{if .SITE}}false{{else}}true{{end}}{{else}}{{if .SITE}}true{{else}}false{{end}}{{end}}'
-        msg: Specify SITE for a site lock, or SCOPE=registry without SITE.
+      - sh: '{{if eq .SCOPE "site"}}{{if .SITE}}true{{else}}false{{end}}{{else}}{{if .SITE}}false{{else}}true{{end}}{{end}}'
+        msg: Specify SITE for SCOPE=site, or use registry/application without SITE.
     cmds:
       - task: build
       - ./artifact-pages lock inspect --scope {{.SCOPE | shellQuote}} {{if .SITE}}--site {{.SITE | shellQuote}}{{end}} {{.CONFIG_FLAGS}}
 
   lock:inspect:cloudflare:
     <<: *inspect
-    desc: Inspect a Cloudflare site or registry lock (SITE or SCOPE=registry)
+    desc: Inspect a Cloudflare site, registry, or application lock
     vars:
       CONFIG_FLAGS: --config artifact-pages.yaml --config artifact-pages.cloudflare.yaml
       SCOPE: '{{.SCOPE | default "site"}}'
 
   lock:recover: &recover
     <<: *inspect
-    desc: Recover a confirmed stale lock (SITE or SCOPE=registry, OBSERVED_ETAG, optional CONFIG; no dry-run)
+    desc: Recover a confirmed stale lock (SITE or SCOPE=registry|application, OBSERVED_ETAG, optional CONFIG; no dry-run)
     requires:
       vars:
         - OBSERVED_ETAG
         - name: SCOPE
-          enum: ['site', 'registry']
+          enum: ['site', 'registry', 'application']
         - name: DRY_RUN
           enum: ['false']
     cmds:
@@ -202,7 +202,7 @@ tasks:
 
   lock:recover:cloudflare:
     <<: *recover
-    desc: Recover a confirmed stale Cloudflare lock (SITE or SCOPE=registry, OBSERVED_ETAG; no dry-run)
+    desc: Recover a confirmed stale Cloudflare lock (SITE or SCOPE=registry|application, OBSERVED_ETAG; no dry-run)
     vars:
       CONFIG_FLAGS: --config artifact-pages.yaml --config artifact-pages.cloudflare.yaml
       SCOPE: '{{.SCOPE | default "site"}}'

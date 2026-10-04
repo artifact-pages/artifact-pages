@@ -538,7 +538,7 @@ func runLockCommand(ctx context.Context, command string, args []string, stdout, 
 	flags.SetOutput(stderr)
 	flags.Usage = func() { writeLockCommandUsage(stderr, command) }
 	siteID := flags.String("site", "", "site identifier")
-	scope := flags.String("scope", "site", "lock scope: site or registry")
+	scope := flags.String("scope", "site", "lock scope: site, registry, or application")
 	observedETag := flags.String("observed-etag", "", "ETag returned by lock inspect")
 	var configLocators stringSliceFlag
 	flags.Var(&configLocators, "config", "deployment config path or github:// locator (repeatable; later layers override earlier ones)")
@@ -552,14 +552,14 @@ func runLockCommand(ctx context.Context, command string, args []string, stdout, 
 	if flags.NArg() != 0 {
 		return withExitCode(fmt.Errorf("unexpected arguments: %v", flags.Args()), 2)
 	}
-	if *scope != "site" && *scope != "registry" {
-		return withExitCode(errors.New("--scope must be site or registry"), 2)
+	if *scope != "site" && *scope != "registry" && *scope != "application" {
+		return withExitCode(errors.New("--scope must be site, registry, or application"), 2)
 	}
 	if *scope == "site" && *siteID == "" {
 		return withExitCode(errors.New("--site is required for site lock scope"), 2)
 	}
-	if *scope == "registry" && *siteID != "" {
-		return withExitCode(errors.New("--site cannot be combined with --scope registry"), 2)
+	if *scope != "site" && *siteID != "" {
+		return withExitCode(fmt.Errorf("--site cannot be combined with --scope %s", *scope), 2)
 	}
 	if command == "recover" && *observedETag == "" {
 		return withExitCode(errors.New("--observed-etag is required"), 2)
@@ -581,14 +581,16 @@ func runLockCommand(ctx context.Context, command string, args []string, stdout, 
 	}
 	manager := publisher.SiteLockManager{Backend: conditional}
 	lockName := *siteID
-	if *scope == "registry" {
-		lockName = "registry"
+	if *scope != "site" {
+		lockName = *scope
 	}
 	result := publisher.Result{Operation: "lock " + command, Site: lockName, Changes: []publisher.Change{}}
 	if command == "inspect" {
 		var snapshot publisher.LockSnapshot
 		if *scope == "registry" {
 			snapshot, err = manager.InspectRegistry(ctx)
+		} else if *scope == "application" {
+			snapshot, err = manager.InspectApplication(ctx)
 		} else {
 			snapshot, err = manager.Inspect(ctx, *siteID)
 		}
@@ -600,6 +602,8 @@ func runLockCommand(ctx context.Context, command string, args []string, stdout, 
 		var recoverErr error
 		if *scope == "registry" {
 			recoverErr = manager.RecoverRegistry(ctx, *observedETag)
+		} else if *scope == "application" {
+			recoverErr = manager.RecoverApplication(ctx, *observedETag)
 		} else {
 			recoverErr = manager.Recover(ctx, *siteID, *observedETag)
 		}
@@ -609,6 +613,8 @@ func runLockCommand(ctx context.Context, command string, args []string, stdout, 
 		var snapshot publisher.LockSnapshot
 		if *scope == "registry" {
 			snapshot, err = manager.InspectRegistry(ctx)
+		} else if *scope == "application" {
+			snapshot, err = manager.InspectApplication(ctx)
 		} else {
 			snapshot, err = manager.Inspect(ctx, *siteID)
 		}
@@ -884,7 +890,7 @@ func writeRootUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  registry register  Reconcile the Git-owned site registrations")
 	fmt.Fprintln(writer, "  registry unregister  Remove a site's registration and stored projection")
 	fmt.Fprintln(writer, "  config set-default  Save the user's default deployment config locator")
-	fmt.Fprintln(writer, "  lock inspect|recover  Inspect or guardedly recover a site lock")
+	fmt.Fprintln(writer, "  lock inspect|recover  Inspect or guardedly recover a site, registry, or application lock")
 	fmt.Fprintln(writer, "  version       Print the product version and build revision")
 	fmt.Fprintln(writer, "")
 	fmt.Fprintln(writer, "Run a command with --help for options.")
@@ -893,18 +899,18 @@ func writeRootUsage(writer io.Writer) {
 
 func writeLockUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "Usage:")
-	fmt.Fprintln(writer, "  artifact-pages lock inspect --site ID|--scope registry [--config LOCATOR ...] [--format text|json]")
-	fmt.Fprintln(writer, "  artifact-pages lock recover --site ID|--scope registry --observed-etag ETAG [--config LOCATOR ...] [--format text|json]")
+	fmt.Fprintln(writer, "  artifact-pages lock inspect --site ID|--scope registry|application [--config LOCATOR ...] [--format text|json]")
+	fmt.Fprintln(writer, "  artifact-pages lock recover --site ID|--scope registry|application --observed-etag ETAG [--config LOCATOR ...] [--format text|json]")
 	fmt.Fprintln(writer, "")
-	fmt.Fprintln(writer, "Inspect a retained site lock or compare-and-swap a confirmed stale lock to free.")
+	fmt.Fprintln(writer, "Inspect a retained site, registry, or application lock or compare-and-swap a confirmed stale lock to free.")
 }
 
 func writeLockCommandUsage(writer io.Writer, command string) {
 	if command == "inspect" {
-		fmt.Fprintln(writer, "Usage: artifact-pages lock inspect --site ID|--scope registry [--config LOCATOR ...] [--format text|json]")
+		fmt.Fprintln(writer, "Usage: artifact-pages lock inspect --site ID|--scope registry|application [--config LOCATOR ...] [--format text|json]")
 		return
 	}
-	fmt.Fprintln(writer, "Usage: artifact-pages lock recover --site ID|--scope registry --observed-etag ETAG [--config LOCATOR ...] [--format text|json]")
+	fmt.Fprintln(writer, "Usage: artifact-pages lock recover --site ID|--scope registry|application --observed-etag ETAG [--config LOCATOR ...] [--format text|json]")
 }
 
 func writeIndexUsage(writer io.Writer) {

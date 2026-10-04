@@ -36,7 +36,7 @@ func TestControlRecordReadersIgnoreUnknownFieldsAndNameUnsupportedSchemas(t *tes
 		t.Errorf("lock record v2 error = %v", err)
 	}
 
-	writeControlRecord(t, root, registryCleanupKey, `{"schemaVersion":1,"sites":["a"],"future":true}`)
+	writeControlRecord(t, root, registryCleanupKey, `{"schemaVersion":1,"sites":["a"],"paths":["/_artifacts/a/*","/_indexes/a/*","/_indexes/sites.json","/_previews/a/*","/a","/a/*"],"future":true}`)
 	if _, _, err := readRegistryCleanup(ctx, backend); err != nil {
 		t.Errorf("cleanup record with an unknown field: %v", err)
 	}

@@ -79,6 +79,7 @@ locals {
         "${local.bucket_arn}/_control/site-cache/*",
         "${local.bucket_arn}/_control/publish-state/*",
         "${local.bucket_arn}/_control/registry-cleanup.json",
+        "${local.bucket_arn}/_control/app-cache/retry.json",
         "${local.bucket_arn}/index.html",
         "${local.bucket_arn}/preview-bridge.js",
         "${local.bucket_arn}/LICENSE",
@@ -101,6 +102,7 @@ locals {
         "${local.bucket_arn}/_control/site-cache/*",
         "${local.bucket_arn}/_control/publish-state/*",
         "${local.bucket_arn}/_control/registry-cleanup.json",
+        "${local.bucket_arn}/_control/app-cache/retry.json",
       ]
     },
     {
@@ -114,6 +116,7 @@ locals {
         "${local.bucket_arn}/_control/registry-cleanup.json",
         "${local.bucket_arn}/_control/site-cache/*",
         "${local.bucket_arn}/_control/publish-state/*",
+        "${local.bucket_arn}/_control/app-cache/retry.json",
       ]
     },
     {
