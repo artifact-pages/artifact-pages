@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { appendFile } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
+import { resolvePreviewRefs } from './preview-refs.mjs'
 
 function input(name) {
   return process.env[`ARTIFACT_PAGES_INPUT_${name.toUpperCase().replaceAll('-', '_')}`] ?? ''
@@ -51,8 +52,9 @@ function buildArguments() {
   } else if (kind === 'preview' && operation === 'publish') {
     args.push('preview', 'publish', '--site', required('site'))
     flag(args, 'source', required('source').trim())
-    flag(args, 'head', input('head').trim())
-    flag(args, 'default-ref', input('default-ref').trim())
+    const refs = resolvePreviewRefs()
+    flag(args, 'head', refs.head)
+    flag(args, 'default-ref', refs.defaultRef)
     flag(args, 'pull-request', input('pull-request').trim())
     flag(args, 'base-url', required('base-url').trim())
     flag(args, 'config', input('config').trim())

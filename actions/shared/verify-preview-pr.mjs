@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { appendFile } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
+import { assertPreviewRefsReachable, resolvePreviewRefs } from './preview-refs.mjs'
 
 const shaPattern = /^[0-9a-f]{40}$/i
 
@@ -14,7 +15,7 @@ function repositoryName(value, label) {
   return `${parts[0]}/${parts[1]}`
 }
 
-function parsePullRequestReference(repository, reference) {
+export function parsePullRequestReference(repository, reference) {
   const input = String(reference ?? '').trim()
   if (/^[1-9][0-9]*$/.test(input)) {
     const number = Number(input)
@@ -188,8 +189,21 @@ async function main() {
     } else {
       process.stdout.write('Preview trust preflight passed; no pull-request provenance was requested.\n')
     }
+    if (process.env.ARTIFACT_PAGES_ACTION_KIND === 'preview') {
+      await appendStepOutputs({ trusted: 'true' })
+      let refs
+      let reachable
+      try {
+        refs = resolvePreviewRefs()
+        reachable = assertPreviewRefsReachable(process.env.GITHUB_WORKSPACE || process.cwd(), refs)
+      } catch (error) {
+        error.label = 'Preview Git ref check failed'
+        throw error
+      }
+      process.stdout.write(`Preview head ${refs.head} (${refs.headSource}) -> ${reachable.headSHA}; default ref ${refs.defaultRef} (${refs.defaultRefSource}) -> ${reachable.defaultRefSHA}; merge base ${reachable.mergeBaseSHA}.\n`)
+    }
   } catch (error) {
-    process.stderr.write(`Preview trust preflight failed: ${error.message}\n`)
+    process.stderr.write(`${error.label ?? 'Preview trust preflight failed'}: ${error.message}\n`)
     await writePreflightFailure(error)
     process.exitCode = 1
   }
@@ -218,6 +232,12 @@ async function writePreflightFailure(error) {
     'exit-code': '1',
     error: result.error,
   }
+  await appendStepOutputs(values)
+}
+
+async function appendStepOutputs(values) {
+  const outputPath = process.env.GITHUB_OUTPUT
+  if (!outputPath) return
   const delimiter = `ARTIFACT_PAGES_${randomUUID().replaceAll('-', '')}`
   const content = Object.entries(values)
     .map(([name, value]) => `${name}<<${delimiter}\n${value}\n${delimiter}\n`)
