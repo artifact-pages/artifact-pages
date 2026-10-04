@@ -86,7 +86,9 @@ func (backend *appCachePublishBackend) PutObjectConditional(ctx context.Context,
 	if err != nil {
 		return etag, err
 	}
-	if key == "_control/locks/application.json" && condition.IfMatchETag != "" && backend.emptyApplicationLockETag {
+	var lock lockRecord
+	_ = json.Unmarshal(object.Bytes, &lock)
+	if key == "_control/locks/application.json" && lock.State == "held" && backend.emptyApplicationLockETag {
 		backend.emptyApplicationLockETag = false
 		return "", nil
 	}

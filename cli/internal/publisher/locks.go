@@ -137,14 +137,21 @@ func (manager SiteLockManager) acquire(ctx context.Context, siteID, key string) 
 		}
 		object, etag, readErr := manager.Backend.GetObject(ctx, key)
 		if errors.Is(readErr, ErrObjectNotFound) {
-			freeBytes, marshalErr := marshalLockRecord(lockRecord{SchemaVersion: 1, Site: siteID, State: "free"})
+			record := lockRecord{
+				SchemaVersion: 1,
+				Site:          siteID,
+				State:         "held",
+				Owner:         owner,
+				AcquiredAt:    manager.now().UTC(),
+			}
+			contents, marshalErr := marshalLockRecord(record)
 			if marshalErr != nil {
 				return LockSnapshot{}, nil, marshalErr
 			}
 			if lockWaitDeadlineReached(deadline.C) {
 				return LockSnapshot{}, nil, fmt.Errorf("timed out waiting for site %q lock", siteID)
 			}
-			_, putErr := manager.Backend.PutObjectConditional(ctx, key, Object{Bytes: freeBytes, ContentType: "application/json; charset=utf-8"}, ObjectCondition{IfNoneMatch: true})
+			newETag, putErr := manager.Backend.PutObjectConditional(ctx, key, Object{Bytes: contents, ContentType: "application/json; charset=utf-8"}, ObjectCondition{IfNoneMatch: true})
 			if errors.Is(putErr, ErrPreconditionFailed) {
 				timedOut, waitErr := waitForLockRetry(ctx, deadline.C, pollPeriod)
 				if waitErr != nil {
@@ -153,10 +160,18 @@ func (manager SiteLockManager) acquire(ctx context.Context, siteID, key string) 
 				if timedOut {
 					return LockSnapshot{}, nil, fmt.Errorf("timed out waiting for site %q lock", siteID)
 				}
+				continue
 			} else if putErr != nil {
-				return LockSnapshot{}, nil, fmt.Errorf("initialize site lock: %w", putErr)
+				return LockSnapshot{}, nil, fmt.Errorf("acquire site lock: %w", putErr)
 			}
-			continue
+			if strings.TrimSpace(newETag) == "" {
+				return LockSnapshot{}, nil, fmt.Errorf("acquire site lock %q: conditional write returned no ETag; inspect the lock and recover it after confirming no operation is active", siteID)
+			}
+			return snapshotFromRecord(record, newETag), func() error {
+				releaseCtx, cancel := context.WithTimeout(context.Background(), defaultLockWait)
+				defer cancel()
+				return manager.release(releaseCtx, key, siteID, record, newETag)
+			}, nil
 		}
 		if readErr != nil {
 			return LockSnapshot{}, nil, fmt.Errorf("read site lock: %w", readErr)
@@ -196,11 +211,10 @@ func (manager SiteLockManager) acquire(ctx context.Context, siteID, key string) 
 			if strings.TrimSpace(newETag) == "" {
 				return LockSnapshot{}, nil, fmt.Errorf("acquire site lock %q: conditional write returned no ETag; inspect the lock and recover it after confirming no operation is active", siteID)
 			}
-			snapshot := snapshotFromRecord(record, newETag)
-			return snapshot, func() error {
+			return snapshotFromRecord(record, newETag), func() error {
 				releaseCtx, cancel := context.WithTimeout(context.Background(), defaultLockWait)
 				defer cancel()
-				return manager.release(releaseCtx, key, siteID, owner, newETag)
+				return manager.release(releaseCtx, key, siteID, record, newETag)
 			}, nil
 		}
 		if record.State != "held" {
@@ -311,26 +325,16 @@ func (manager SiteLockManager) recover(ctx context.Context, siteID, key, observe
 	return nil
 }
 
-func (manager SiteLockManager) release(ctx context.Context, key, siteID, owner, etag string) error {
-	object, currentETag, err := manager.Backend.GetObject(ctx, key)
-	if err != nil {
-		return fmt.Errorf("read site lock before release: %w", err)
-	}
-	if strings.TrimSpace(currentETag) == "" {
+func (manager SiteLockManager) release(ctx context.Context, key, siteID string, held lockRecord, etag string) error {
+	if strings.TrimSpace(etag) == "" {
 		return fmt.Errorf("site lock %q has no ETag for compare-and-swap release", siteID)
 	}
-	if currentETag != etag {
-		return ErrPreconditionFailed
-	}
-	record, err := decodeLockRecord(object.Bytes, siteID)
-	if err != nil {
-		return err
-	}
-	if record.State != "held" || record.Owner != owner {
+	if held.Site != siteID || held.State != "held" || held.Owner == "" || held.AcquiredAt.IsZero() {
 		return errors.New("site lock ownership changed before release")
 	}
-	record.State, record.Owner, record.AcquiredAt = "free", "", time.Time{}
-	contents, err := marshalLockRecord(record)
+	free := held
+	free.State, free.Owner, free.AcquiredAt = "free", "", time.Time{}
+	contents, err := marshalLockRecord(free)
 	if err != nil {
 		return err
 	}
