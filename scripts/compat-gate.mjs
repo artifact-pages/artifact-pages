@@ -14,6 +14,10 @@
 //               control-only breaks preserve public browser compatibility and
 //               verify that the candidate CLI upgrades legacy storage.
 //
+// Before 1.0.0, cross-version compatibility is not promised and the gate skips
+// after checking the candidate source version. From 1.0.0, the gate compares
+// releases as described below.
+//
 // Usage:
 //   node scripts/compat-gate.mjs [--baseline REF] [--candidate REF|worktree|DIR]
 //                                [--tag vX.Y.Z] [--out FILE] [--keep]
@@ -22,8 +26,8 @@
 //                --tag; with no release the gate exits 0 with "skipped").
 //   --candidate  worktree (default: the current working tree), a git ref, or an
 //                existing source directory.
-//   --tag        version check mode: also fail when the verdict is breaking and
-//                the version does not increase MAJOR (MINOR while 0.x).
+//   --tag        version check mode: require an increasing version; for stable
+//                breaking changes the version must increase MAJOR.
 //   --baseline-version  override the baseline's product version (for local proofs
 //                when the baseline ref predates cli/internal/version).
 //   --out        also write the JSON verdict to FILE.
@@ -139,6 +143,45 @@ function productVersionAt(tree) {
 function productVersionAtRef(sha) {
   const result = sh('git', ['show', `${sha}:cli/internal/version/version.go`], { allowFail: true })
   return result.status === 0 ? /const Product = "([^"]+)"/.exec(result.stdout)?.[1] : undefined
+}
+
+function inspectCandidate(spec) {
+  if (spec === 'worktree') {
+    const sha = git(projectRoot, ['rev-parse', 'HEAD'])
+    return {
+      description: { kind: 'worktree', ref: `${sha}+worktree` },
+      version: productVersionAt(projectRoot),
+    }
+  }
+  if (existsSync(spec) && statSync(spec).isDirectory()) {
+    const dir = path.resolve(spec)
+    return { description: { kind: 'directory', ref: dir }, version: productVersionAt(dir) }
+  }
+  const sha = resolveCommit(spec)
+  return { description: { kind: 'ref', ref: spec, commit: sha }, version: productVersionAtRef(sha) }
+}
+
+function compatibilityPolicy({ productVersion, tag }) {
+  const source = productVersion ? parseSemver(productVersion) : undefined
+  const tagged = tag ? parseSemver(tag) : undefined
+  if (source && tagged && compareSemver(source, tagged) !== 0) {
+    return {
+      action: 'fail',
+      reasonCode: 'candidate-tag-version-mismatch',
+      reason: `candidate product version ${source.text} does not match tag ${tag}`,
+    }
+  }
+  // The CLI source is authoritative. A tag is checked for consistency above,
+  // but never used to make an unknown or 0.x candidate look stable.
+  const effective = source ?? tagged
+  if (effective?.major === 0) {
+    return {
+      action: 'skip',
+      reasonCode: 'pre-1.0-compatibility-not-guaranteed',
+      reason: 'cross-version compatibility is not guaranteed before 1.0.0',
+    }
+  }
+  return { action: 'run' }
 }
 
 const cleanups = []
@@ -589,14 +632,12 @@ function checkVersion({ tag, baselineVersion, verdict }) {
   if (compareSemver(candidate, baseline) <= 0) {
     return { status: 'failed', tag, baseline: baseline.text, reason: `${tag} does not increase the version above ${baseline.text}` }
   }
-  if (verdict === 'breaking') {
-    const increasesBreakingPosition = baseline.major === 0
-      ? candidate.major > 0 || candidate.minor > baseline.minor
-      : candidate.major > baseline.major
-    if (!increasesBreakingPosition) {
-      const needed = baseline.major === 0 ? `MINOR (0.${baseline.minor + 1}.0 or later) while the product is 0.x` : `MAJOR (${baseline.major + 1}.0.0 or later)`
-      return { status: 'failed', tag, baseline: baseline.text, reason: `the data formats changed (breaking), so ${tag} must increase ${needed}` }
-    }
+  if (verdict === 'breaking' && baseline.major > 0 && candidate.major <= baseline.major) {
+    const needed = `MAJOR (${baseline.major + 1}.0.0 or later)`
+    return { status: 'failed', tag, baseline: baseline.text, reason: `the data formats changed (breaking), so ${tag} must increase ${needed}` }
+  }
+  if (verdict === 'skipped') {
+    return { status: 'passed', tag, baseline: baseline.text, reason: 'version increases; compatibility checks are skipped for 0.x' }
   }
   return { status: 'passed', tag, baseline: baseline.text, reason: verdict === 'breaking' ? 'breaking change with the required version increase' : 'compatible change; version increases' }
 }
@@ -606,9 +647,67 @@ async function main() {
   const options = parseArguments(process.argv.slice(2))
   const upperBound = options.tag ? parseSemver(options.tag) : undefined
   const baselineSpec = options.baseline ?? latestReleaseTag(upperBound)
+
+  // A 0.x candidate has no cross-version compatibility promise. Decide this
+  // from the candidate's Product constant before creating worktrees or building
+  // either CLI, but retain tag/source and increasing-version checks.
+  const candidateInfo = inspectCandidate(options.candidate)
+  const policy = compatibilityPolicy({ productVersion: candidateInfo.version, tag: options.tag })
+  if (policy.action === 'fail') {
+    const report = {
+      verdict: 'failed',
+      result: 'failed',
+      reasonCode: policy.reasonCode,
+      reason: policy.reason,
+      candidate: { ...candidateInfo.description, version: candidateInfo.version },
+      combinations: [],
+      checks: [],
+    }
+    log(policy.reason)
+    console.log(JSON.stringify(report, null, 2))
+    writeVerdictFile(options.out, report)
+    return 1
+  }
+  if (policy.action === 'skip') {
+    let baseline
+    if (baselineSpec) {
+      const baselineSHA = resolveCommit(baselineSpec)
+      baseline = {
+        kind: 'ref',
+        ref: baselineSpec,
+        commit: baselineSHA,
+        version: options.baselineVersion ?? productVersionAtRef(baselineSHA) ?? parseSemver(baselineSpec)?.text,
+      }
+    }
+    const versionCheck = options.tag && baseline
+      ? checkVersion({ tag: options.tag, baselineVersion: baseline.version, verdict: 'skipped' })
+      : undefined
+    const report = {
+      verdict: 'skipped',
+      result: versionCheck?.status === 'failed' ? 'failed' : 'skipped',
+      reasonCode: policy.reasonCode,
+      reason: policy.reason,
+      ...(baseline ? { baseline } : {}),
+      candidate: { ...candidateInfo.description, version: candidateInfo.version },
+      combinations: [],
+      checks: [],
+      ...(versionCheck ? { versionCheck } : {}),
+    }
+    log(`skipped: ${policy.reason}`)
+    if (versionCheck) log(`version check: ${versionCheck.status}: ${versionCheck.reason}`)
+    console.log(JSON.stringify(report, null, 2))
+    writeVerdictFile(options.out, report)
+    return report.result === 'failed' ? 1 : 0
+  }
   if (!baselineSpec) {
-    console.log('compat-gate: skipped: no release')
-    writeVerdictFile(options.out, { verdict: 'skipped', reason: 'no release tag exists to compare against' })
+    const report = {
+      verdict: 'skipped',
+      result: 'skipped',
+      reasonCode: 'no-baseline',
+      reason: 'no release tag exists to compare against',
+    }
+    console.log(`compat-gate: skipped: ${report.reason}`)
+    writeVerdictFile(options.out, report)
     return 0
   }
   mkdirSync(localRoot, { recursive: true })
@@ -816,4 +915,4 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   })
 }
 
-export { assertRequiredPublishStateRoots, checkVersion, classifyFormats, collectFormatVersions, compareFormats, formatOf }
+export { assertRequiredPublishStateRoots, checkVersion, classifyFormats, collectFormatVersions, compareFormats, compatibilityPolicy, formatOf }

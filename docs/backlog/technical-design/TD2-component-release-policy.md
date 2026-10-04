@@ -2,7 +2,7 @@
 
 - Status: Done
 - Phase: Reusable distribution
-- Revised: 2026-10-04 — records the private control-format pre-release exception; replaces the earlier web-only SemVer / CLI-by-SHA policy (2026-09-28) with one product version, a CLI-pinned web bundle, a compatibility contract and automated release gates.
+- Revised: 2026-10-05 — records that compatibility is not guaranteed while the product is 0.x and the cross-version gate skips those candidates; replaces the earlier web-only SemVer / CLI-by-SHA policy (2026-09-28) with one product version, a CLI-pinned web bundle, a compatibility contract and automated release gates.
 - Related implementation: [IMP-45](../implementation/IMP-45-unified-release-and-compatibility.md), [IMP-31](../implementation/IMP-31-app-distribution.md), [IMP-34](../implementation/IMP-34-actions.md), [IMP-35](../implementation/IMP-35-external-adoption.md), [IMP-38](../implementation/IMP-38-terraform-registry-publication.md)
 - Related verification: [T16](../verification/T16-external-adoption.md)
 
@@ -67,11 +67,11 @@ Satellite repositories pin their own CLI refs, so one storage normally contains 
 | MINOR | Additive only; no `schemaVersion` change | Within the major version, any web reads data from any CLI, newer or older; any CLI reads and updates data written by any other. | None. Republish a site to use a new feature. |
 | PATCH | No format change | Fully compatible fixes. | None. Run `app deploy` when the notes say the web bundle changed. |
 
-While the product is `0.x`, the MINOR position acts as MAJOR and PATCH as MINOR/PATCH: `0.1.x → 0.2.0` may break formats; releases within `0.1.x` must stay compatible. From `1.0.0` the table applies as written.
+While the product is `0.x`, no cross-version compatibility is promised: any `0.x` release may change published formats, including a patch release. Version tags must still be valid SemVer and increase over the previous release. Starting with `1.0.0`, the table above applies and the compatibility gate checks a candidate against the previous release. The gate does not infer compatibility from a version number.
 
 ### Automated release and compatibility gates
 
-Breaking versus compatible is decided by the data, not by a person waiving a red check. The gate builds the CLI at the previous release tag (the baseline) and at the candidate, runs both on the same fixture sources, and compares the `schemaVersion` of every format each produces.
+For candidates at or above `1.0.0`, breaking versus compatible is decided by the data, not by a person waiving a red check. The gate builds the CLI at the previous release tag (the baseline) and at the candidate, runs both on the same fixture sources, and compares the `schemaVersion` of every format each produces. A candidate below `1.0.0` skips this cross-version comparison before building either CLI; its report records `verdict: skipped`, `result: skipped`, and that no 0.x compatibility guarantee applies. This does not skip the ordinary Go, type, browser, Action, or release-preflight checks.
 
 - **Compatible** (no `schemaVersion` changed): the mixed-version suite must pass —
   - candidate web reading baseline-written data (app deployed before satellites upgrade);
@@ -81,12 +81,12 @@ Breaking versus compatible is decided by the data, not by a person waiving a red
   Each combination runs a browser smoke: site picker, HTML and Markdown artifacts, page text search on a search-enabled site, preview list and document.
 - **Breaking** (some `schemaVersion` changed): the suite switches to upgrade checks — the candidate web shows "needs to be republished" for baseline data without crashing, and the documented upgrade procedure converges to a fully working storage.
 - A required control-only format added by the candidate is also a breaking format change, even when no public web schema changes. The gate recognizes `/_control/publish-state/<site>.json.gz` as a private publisher format; a required format present only in the candidate cannot be treated as optional.
-- **Version consistency** on a tag: a breaking result requires a MAJOR increase (MINOR while `0.x`); a MAJOR increase without a format change is allowed; any other mismatch fails the release.
+- **Version consistency** on a tag: every tag must match the CLI version constant and increase over the previous release. For `0.x`, the compatibility skip waives format-position rules only; it does not waive those version checks. From `1.0.0`, a breaking result requires a MAJOR increase; a MAJOR increase without a format change is allowed.
 
 Two GitHub Actions workflows implement this:
 
-1. **Pull requests and pushes to `main`:** unit, type and browser tests plus the gate against the latest release, so a compatibility break is found when it is introduced. Skipped while no release exists.
-2. **Tag push `v*`:** checks that the tag equals the CLI version constant and points at a commit on `main`; runs the full test suite and the gate; packages the web bundle from the tagged commit; creates the GitHub release with the three assets and generated notes (web changed or unchanged, compatibility mode, upgrade procedure for breaking releases); then verifies the published assets by running `app deploy` with the tagged CLI into a clean local target and comparing bytes. Releases are marked pre-release until [T16](../verification/T16-external-adoption.md) establishes adoption readiness. Pushing the tag is the owner's release approval.
+1. **Pull requests and pushes to `main`:** unit, type and browser tests plus the gate against the latest release. The gate reports skipped when there is no baseline release or the candidate is `0.x`; ordinary candidate tests still run.
+2. **Tag push `v*`:** checks that the tag equals the CLI version constant and points at a commit on `main`; runs the full test suite and the gate (including its explicit 0.x skip report); packages the web bundle from the tagged commit; creates the GitHub release with the three assets and generated notes (web changed or unchanged, compatibility result, and an upgrade procedure when required by a breaking result); then verifies the published assets by running `app deploy` with the tagged CLI into a clean local target and comparing bytes. Releases are marked pre-release until [T16](../verification/T16-external-adoption.md) establishes adoption readiness. Pushing the tag is the owner's release approval.
 
 The release commit (version constant bump) is prepared locally and reviewed like any change; the workflow never edits the repository.
 
@@ -102,11 +102,11 @@ The release commit (version constant bump) is prepared locally and reviewed like
 ## Known gate limits and release runbook
 
 - The gate classifies formats from what a completed run leaves in storage. Control records that a successful run removes or never writes (locks after release and registry-cleanup records) are not compared. It recognizes required per-site publish-state roots as a private control format; adding or removing that required format is breaking even when public formats are unchanged. Other transient control-record changes still require explicit review. Compatible-mode cross-CLI checks cover republish, preview and `lock inspect`, not `lock recover`.
-- **Pre-release exception (2026-10-04):** the owner authorized the `v0.2.0` prerelease to replace private publish-state controls without legacy compatibility proof; no public data format changes.
+- **Historical pre-release decision (2026-10-04):** the owner authorized `v0.2.0` to replace private publish-state controls without legacy compatibility proof. On 2026-10-05, the policy was broadened: compatibility is not promised for any `0.x` release, and the cross-version gate skips those candidates. The earlier decision is retained as historical evidence, not a one-off current exception.
 - Each web build is smoke-tested with the compatibility spec from its own tree, so the spec's environment contract (`PLAYWRIGHT_BASE_URL`, `COMPAT_MODE`, `COMPAT_SITES`, `COMPAT_EXPECT`) must stay stable across releases.
 - If the tag workflow fails after the release was created (post-publication verification), the release stays published. While no consumer can have used it (minutes after creation, still a pre-release), delete the release and tag, fix, and push the tag again; otherwise leave it, mark it superseded in its notes, and ship a new patch version.
 
-The `v0.2.0` prerelease exception for private publish-state controls is recorded above; it does not establish a compatibility promise for future full releases.
+The 0.x skip applies only to cross-version compatibility checking. It does not disable the candidate's normal test suite, version/tag preflight, release packaging checks, or post-package verification. From 1.0.0, the cross-version gate is active.
 
 ## Supply chain
 

@@ -23,9 +23,9 @@ Implement TD2's one-version product release: the CLI knows and deploys its own w
    - Script that builds the CLI at the baseline (latest release tag) and the candidate, produces data from the same fixture sources with each, compares `schemaVersion` per format and reports `compatible` or `breaking`.
    - Compatible mode: mixed-version suite (candidate web × baseline data, baseline web × candidate data, mixed storage, cross-CLI republish/preview/lock/recovery) with a browser smoke per combination.
    - Breaking mode: candidate web shows the republish state for baseline data; the documented upgrade procedure converges.
-   - Tag consistency: breaking requires a MAJOR increase (MINOR while `0.x`).
+   - Tag consistency: all tags match the CLI constant and increase over the preceding release; stable breaking changes require a MAJOR increase.
 4. **Workflows**
-   - PR / `main` workflow: Go, type, text-highlight and browser tests plus the gate (skipped while no release exists).
+   - PR / `main` workflow: Go, type, text-highlight and browser tests plus the gate (skipped when no release exists or the candidate is `0.x`).
    - Tag `v*` workflow: tag equals the version constant and is on `main`; full tests and gate; package the web bundle; create the pre-release with the three assets and generated notes (web changed/unchanged, compatibility mode, upgrade procedure when breaking); verify by `app deploy` from the tagged CLI into a clean local target with byte comparison. Third-party Actions pinned by full SHA; minimal token permissions (`contents: write` only on the release job).
 5. **Re-release `v0.1.0`** through the tag workflow after the owner pushes the tag, and record the evidence in TD2 and [release readiness](../release-readiness.md).
 
@@ -34,7 +34,7 @@ Implement TD2's one-version product release: the CLI knows and deploys its own w
 - [x] `artifact-pages version` prints the constant and revision; `app deploy` takes no `--version` and deploys the pinned bundle; `--archive` still works; Action parity and clean-room tests pass.
 - [x] Web and CLI readers ignore unknown fields and handle unknown `schemaVersion` as specified, with tests.
 - [x] The gate classifies a fixture change correctly in both directions (an additive field stays compatible; a bumped `schemaVersion` is breaking) and the mixed-version suite runs against a real baseline tag.
-- [x] A tag whose version does not match the constant, or a breaking change without the required version increase, fails the tag workflow before any release is created.
+- [x] A tag whose version does not match the constant, or a stable breaking change without the required major increase, fails the tag workflow before any release is created. All tags must increase over the previous release.
 - [x] `v0.1.0` is published by the workflow, with release notes, assets and post-publication verification recorded.
 
 ## Implementation status (2026-10-03)
@@ -45,6 +45,10 @@ Slices 1-4 are implemented locally and uncommitted for review; slice 5 needs the
 - Slice 2: web `data/schema.ts` (supported-version checks, `UnsupportedSchemaError`), republish states for site, registry, previews and search; CLI `cli/internal/compat` and removal of `DisallowUnknownFields` from published-data and control-record readers. Specification section 5.3.
 - Slice 3: `scripts/compat-gate.mjs`, `web/e2e/compat-smoke.spec.ts`, `web/playwright.compat.config.ts`. Proven locally with `--baseline HEAD` (compatible) and a scratch candidate with bumped `meta`/`index` versions (breaking, upgrade converges, version check fails for `v0.1.1`). Not yet run against a real release tag, so the criterion about a real baseline tag stays open.
 - Slice 4: `.github/workflows/{ci,verify,release}.yml`, `scripts/release-preflight.mjs`, `scripts/release-notes.mjs`, `scripts/verify-release.mjs`; linted with actionlint. No workflow has run on GitHub yet, so the tag-mismatch acceptance criterion is verified only by `release-preflight.mjs` locally.
+
+## Compatibility policy update (2026-10-05)
+
+No cross-version compatibility is promised before `1.0.0`. The gate now reports a reasoned skip for a `0.x` candidate without building a baseline/candidate pair; normal candidate tests and tag preflight still run. A skipped release note distinguishes this policy from the absence of an earlier release. The historical `v0.1.0`–`v0.1.2` compatibility runs below remain factual evidence of those runs, not a promise for future `0.x` releases. See [TD2](../technical-design/TD2-component-release-policy.md) for the current policy.
 
 ## Release evidence (2026-10-03)
 

@@ -61,8 +61,14 @@ export function buildNotes({ version, bundle, previousTag, verdict }) {
     }
   }
   lines.push('', '## Compatibility', '')
-  if (!verdict || verdict.verdict === 'skipped') {
+  if (!verdict) {
     lines.push('No earlier release exists, so there is nothing to be compatible with.')
+  } else if (verdict.verdict === 'skipped' && verdict.reasonCode === 'pre-1.0-compatibility-not-guaranteed') {
+    lines.push('Cross-version compatibility is not guaranteed before 1.0.0, so the compatibility gate was skipped. The candidate still passed the normal release verification suite.')
+  } else if (verdict.verdict === 'skipped' && verdict.reasonCode === 'no-baseline') {
+    lines.push('No earlier release exists, so there is nothing to be compatible with.')
+  } else if (verdict.verdict === 'skipped') {
+    lines.push(`Compatibility checks were skipped: ${verdict.reason ?? 'no comparison was available'}.`)
   } else if (verdict.verdict === 'compatible') {
     lines.push(`**Compatible** with ${verdict.baseline?.ref ?? previousTag}: no published data format changed its \`schemaVersion\`. The mixed-version suite passed: this release's web reads data written by the previous CLI, the previous web reads data written by this CLI, and one storage written by both CLIs works, including republish, preview and lock operations over each other's output.`, '', 'No operator action is required. Republish a site to use a new feature.')
   } else {

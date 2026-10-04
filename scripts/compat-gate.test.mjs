@@ -1,18 +1,32 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import { gzipSync } from 'node:zlib'
+import { fileURLToPath } from 'node:url'
 
 import {
   assertRequiredPublishStateRoots,
   checkVersion,
   classifyFormats,
   collectFormatVersions,
+  compatibilityPolicy,
   compareFormats,
   formatOf,
 } from './compat-gate.mjs'
+
+const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+
+function candidateTree(t, version) {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'compat-candidate-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const file = path.join(root, 'cli/internal/version/version.go')
+  mkdirSync(path.dirname(file), { recursive: true })
+  writeFileSync(file, `package version\n\nconst Product = "${version}"\n`)
+  return root
+}
 
 function storageWithState(t, bytes) {
   const root = mkdtempSync(path.join(os.tmpdir(), 'compat-gate-test-'))
@@ -137,11 +151,79 @@ test('keeps optional public-only additions compatible and detects public schema 
   assert.equal(schemaChange.mode, 'public-breaking')
 })
 
-test('accepts the control-format upgrade from 0.1.2 to 0.2.0', () => {
-  assert.deepEqual(checkVersion({ tag: 'v0.2.0', baselineVersion: '0.1.2', verdict: 'breaking' }), {
-    status: 'passed',
-    tag: 'v0.2.0',
-    baseline: '0.1.2',
-    reason: 'breaking change with the required version increase',
+test('skips cross-version checks for a 0.x candidate but keeps the source version authoritative', () => {
+  assert.deepEqual(compatibilityPolicy({ productVersion: '0.2.0', tag: 'v0.2.0' }), {
+    action: 'skip',
+    reasonCode: 'pre-1.0-compatibility-not-guaranteed',
+    reason: 'cross-version compatibility is not guaranteed before 1.0.0',
   })
+  assert.equal(compatibilityPolicy({ productVersion: '1.0.0', tag: 'v1.0.0' }).action, 'run')
+  assert.equal(compatibilityPolicy({ productVersion: '0.2.0', tag: 'v1.0.0' }).action, 'fail')
+  assert.equal(compatibilityPolicy({ productVersion: '1.0.0', tag: 'v1.0.0' }).reasonCode, undefined)
+})
+
+test('the CLI writes an explicit 0.x skip report without building baseline or candidate', (t) => {
+  const candidate = candidateTree(t, '0.2.1')
+  const output = path.join(candidate, 'verdict.json')
+  const result = spawnSync(process.execPath, [
+    path.join(projectRoot, 'scripts/compat-gate.mjs'),
+    '--candidate', candidate,
+    '--baseline', 'HEAD',
+    '--tag', 'v0.2.1',
+    '--out', output,
+  ], { cwd: projectRoot, encoding: 'utf8' })
+  assert.equal(result.status, 0, result.stderr)
+  assert.doesNotMatch(result.stderr, /building baseline CLI|building candidate CLI/)
+  const report = JSON.parse(readFileSync(output, 'utf8'))
+  assert.equal(report.verdict, 'skipped')
+  assert.equal(report.result, 'skipped')
+  assert.equal(report.reasonCode, 'pre-1.0-compatibility-not-guaranteed')
+  assert.equal(report.candidate.version, '0.2.1')
+  assert.equal(report.baseline.ref, 'HEAD')
+  assert.equal(report.versionCheck.status, 'passed')
+})
+
+test('the CLI still rejects a repeated 0.x tag even though format compatibility is skipped', (t) => {
+  const candidate = candidateTree(t, '0.2.0')
+  const output = path.join(candidate, 'verdict.json')
+  const result = spawnSync(process.execPath, [
+    path.join(projectRoot, 'scripts/compat-gate.mjs'),
+    '--candidate', candidate,
+    '--baseline', 'HEAD',
+    '--tag', 'v0.2.0',
+    '--out', output,
+  ], { cwd: projectRoot, encoding: 'utf8' })
+  assert.equal(result.status, 1)
+  const report = JSON.parse(readFileSync(output, 'utf8'))
+  assert.equal(report.verdict, 'skipped')
+  assert.equal(report.result, 'failed')
+  assert.equal(report.versionCheck.status, 'failed')
+  assert.match(report.versionCheck.reason, /does not increase the version/)
+})
+
+test('the CLI does not let a mismatched 1.x tag bypass candidate version detection', (t) => {
+  const candidate = candidateTree(t, '0.2.1')
+  const output = path.join(candidate, 'verdict.json')
+  const result = spawnSync(process.execPath, [
+    path.join(projectRoot, 'scripts/compat-gate.mjs'),
+    '--candidate', candidate,
+    '--tag', 'v1.0.0',
+    '--out', output,
+  ], { cwd: projectRoot, encoding: 'utf8' })
+  assert.equal(result.status, 1)
+  const report = JSON.parse(readFileSync(output, 'utf8'))
+  assert.equal(report.verdict, 'failed')
+  assert.equal(report.reasonCode, 'candidate-tag-version-mismatch')
+})
+
+test('0.x skip keeps version tags strictly increasing without requiring a compatibility-position bump', () => {
+  assert.deepEqual(checkVersion({ tag: 'v0.2.1', baselineVersion: '0.2.0', verdict: 'skipped' }), {
+    status: 'passed',
+    tag: 'v0.2.1',
+    baseline: '0.2.0',
+    reason: 'version increases; compatibility checks are skipped for 0.x',
+  })
+  assert.equal(checkVersion({ tag: 'v0.2.0', baselineVersion: '0.2.0', verdict: 'skipped' }).status, 'failed')
+  assert.equal(checkVersion({ tag: 'v1.1.0', baselineVersion: '1.0.0', verdict: 'breaking' }).status, 'failed')
+  assert.equal(checkVersion({ tag: 'v2.0.0', baselineVersion: '1.0.0', verdict: 'breaking' }).status, 'passed')
 })

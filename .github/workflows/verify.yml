@@ -68,6 +68,7 @@ jobs:
         run: npx tsc -b web/tsconfig.json
       - name: Fast Node tests
         run: |
+          npm run test:compatibility-policy
           npm run test:text-highlight
           npm run test:fulltext
           npm run test:third-party-notices

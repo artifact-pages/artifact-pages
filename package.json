@@ -9,6 +9,7 @@
     "build-storybook": "storybook build --config-dir web/.storybook --output-dir web/storybook-static",
     "build": "tsc -b web/tsconfig.json && vite build --config web/vite.config.ts",
     "test:third-party-notices": "node --test scripts/generate-third-party-notices.test.mjs",
+    "test:compatibility-policy": "node --test scripts/compat-gate.test.mjs scripts/release-notes.test.mjs",
     "test:docs-assets": "node --test scripts/sync-docs-site-assets.test.mjs",
     "test:vite-malformed-url": "node --test scripts/vite-malformed-url.test.mjs",
     "test:web-packaging": "node --test scripts/package-web-release.test.mjs",

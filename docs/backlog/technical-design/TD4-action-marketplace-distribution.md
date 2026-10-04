@@ -32,7 +32,7 @@ The docs list no ban on workflow files in the repository. They recommend that th
    - Primary category **Publishing**, secondary **Deployment**. The Action publishes a site's documents; it does not deploy an application.
 3. **References for adopters — decided 2026-10-03.**
    - Guides and examples use the exact release tag, for example `@v0.1.0`. They also show full-SHA pinning with a `# v0.1.0` comment as the hardened form, for adopters who want to rule out tag deletion.
-   - No moving major tag while the product is `0.x`. Under TD2, a `0.x` MINOR step can be breaking, so a `v0` alias would deliver breaking changes. Revisit a `v1` alias as a plain Git tag at `1.0.0`; that would require a TD2 amendment.
+   - No moving major tag while the product is `0.x`. TD2 makes no cross-version compatibility promise before `1.0.0`, so a `v0` alias could silently move adopters to a different contract. Revisit a `v1` alias as a plain Git tag at `1.0.0`; that would require a TD2 amendment.
    - Enable GitHub's immutable releases on this repository once IMP-45's first release is out. It enforces TD2's "tags and assets are never moved or replaced" and does not block later plain alias tags.
    - T16 changes from "full commit SHA" to "the documented reference form".
 4. **Pre-releases — decided 2026-10-03.** List nothing while releases are marked pre-release. The first Marketplace listing is the first full release after [T16](../verification/T16-external-adoption.md) passes. T16 and the hosted-runner check use the tag directly and do not need Marketplace. As a result, the docs' silence on pre-release listing stops mattering, and Marketplace never advertises a version that has not passed adoption proof.
@@ -54,7 +54,7 @@ The docs list no ban on workflow files in the repository. They recommend that th
 - [x] Record the listing shape (this repository's root `action.yml`; sub-folder Actions unlisted).
 - [x] Record the root Action's content (`site-publish`).
 - [x] Record the name, branding and category.
-- [x] Record the adopter reference policy. No moving tag in `0.x`, so TD2 is unchanged.
+- [x] Record the adopter reference policy. No moving tag in `0.x`, consistent with TD2's no-compatibility-guarantee policy.
 - [x] Record the owner's listing step. Pre-releases are not listed, so their behavior no longer matters; [IMP-46](../implementation/IMP-46-action-marketplace-release.md) checks at the first full release that a workflow-created release can be listed.
 - [x] Record the build model: build from source with a dependency cache. TD2 is unchanged.
 - [x] Update the specification (§22) and hand implementation to [IMP-46](../implementation/IMP-46-action-marketplace-release.md).
