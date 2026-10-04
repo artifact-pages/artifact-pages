@@ -109,12 +109,25 @@ async function call(fetchImpl, url, init) {
   return response.json()
 }
 
+// A personal token authenticates as a user, whose login identifies our comments. The workflow
+// token and app tokens cannot read /user (401/403); their comments are authored by a Bot.
+async function tokenLogin({ fetchImpl, base, token }) {
+  try {
+    const user = await call(fetchImpl, `${base}/user`, { method: 'GET', headers: apiHeaders(token) })
+    return typeof user?.login === 'string' && user.login ? user.login : ''
+  } catch {
+    return ''
+  }
+}
+
 async function findMarkerComment({ fetchImpl, base, repository, number, token, marker }) {
+  const login = await tokenLogin({ fetchImpl, base, token })
+  const ours = (comment) => (login ? comment.user?.login === login : comment.user?.type === 'Bot')
   for (let page = 1; page <= maxCommentPages; page += 1) {
     const url = `${base}/repos/${repository}/issues/${number}/comments?per_page=100&page=${page}`
     const comments = await call(fetchImpl, url, { method: 'GET', headers: apiHeaders(token) })
     if (!Array.isArray(comments)) throw new CommentApiError('GitHub returned an unexpected comment list', 0)
-    const match = comments.find((comment) => typeof comment?.body === 'string' && comment.body.startsWith(marker) && comment.user?.type === 'Bot')
+    const match = comments.find((comment) => typeof comment?.body === 'string' && comment.body.startsWith(marker) && ours(comment))
     if (match) return match
     if (comments.length < 100) return undefined
   }

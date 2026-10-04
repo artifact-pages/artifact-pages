@@ -28,12 +28,13 @@ function environment(overrides = {}) {
 }
 
 // A fake GitHub issue-comments API. `pages` holds existing comments split by page.
-function fakeApi({ existing = [], status } = {}) {
+function fakeApi({ existing = [], status, login } = {}) {
   const calls = []
   const fetchImpl = async (url, init) => {
     const parsed = new URL(url)
     calls.push({ method: init.method, path: parsed.pathname, page: parsed.searchParams.get('page'), body: init.body ? JSON.parse(init.body).body : undefined, auth: init.headers.Authorization })
     const json = (value, code = 200) => ({ ok: code < 400, status: code, json: async () => value })
+    if (parsed.pathname === '/user') return login ? json({ login }) : json({}, 403)
     if (status) return json({}, status)
     if (init.method === 'GET') {
       const page = Number(parsed.searchParams.get('page'))
@@ -63,7 +64,7 @@ test('updates the existing marker comment in place, searching later pages', asyn
   const api = fakeApi({ existing: [...filler, { id: 4242, user: { type: 'Bot' }, body: `${marker}\nold` }] })
   const result = await runPreviewComment({ env: environment(), fetchImpl: api.fetchImpl })
   assert.equal(result.action, 'updated')
-  assert.deepEqual(api.calls.filter((call) => call.method === 'GET').map((call) => call.page), ['1', '2'])
+  assert.deepEqual(api.calls.filter((call) => call.method === 'GET' && call.page).map((call) => call.page), ['1', '2'])
   const patch = api.calls.find((call) => call.method === 'PATCH')
   assert.equal(patch.path, '/repos/example/satellite/issues/comments/4242')
   assert.equal(api.calls.some((call) => call.method === 'POST'), false)
@@ -74,6 +75,34 @@ test('a human-authored marker comment is ignored and a new comment is created', 
   const result = await runPreviewComment({ env: environment(), fetchImpl: api.fetchImpl })
   assert.equal(result.action, 'created')
   assert.equal(api.calls.some((call) => call.method === 'PATCH'), false)
+})
+
+test('with a personal token, only comments by that login are matched', async () => {
+  const api = fakeApi({
+    login: 'octo-pat',
+    existing: [
+      { id: 3, user: { type: 'User', login: 'someone-else' }, body: `${marker}\nhijack` },
+      { id: 4, user: { type: 'User', login: 'octo-pat' }, body: `${marker}\nmine` },
+    ],
+  })
+  const result = await runPreviewComment({ env: environment(), fetchImpl: api.fetchImpl })
+  assert.equal(result.action, 'updated')
+  assert.equal(api.calls.find((call) => call.method === 'PATCH').path, '/repos/example/satellite/issues/comments/4')
+  const noOwn = fakeApi({ login: 'octo-pat', existing: [{ id: 3, user: { type: 'Bot', login: 'github-actions[bot]' }, body: `${marker}\nbot` }] })
+  assert.equal((await runPreviewComment({ env: environment(), fetchImpl: noOwn.fetchImpl })).action, 'created')
+})
+
+test('when /user is denied, falls back to Bot-authored comments', async () => {
+  const api = fakeApi({
+    existing: [
+      { id: 3, user: { type: 'User', login: 'someone-else' }, body: `${marker}\nhijack` },
+      { id: 4, user: { type: 'Bot', login: 'github-actions[bot]' }, body: `${marker}\nbot` },
+    ],
+  })
+  const result = await runPreviewComment({ env: environment(), fetchImpl: api.fetchImpl })
+  assert.equal(result.action, 'updated')
+  assert.equal(api.calls.find((call) => call.method === 'GET' && call.path === '/user').path, '/user')
+  assert.equal(api.calls.find((call) => call.method === 'PATCH').path, '/repos/example/satellite/issues/comments/4')
 })
 
 test('a marker for another site is not matched', async () => {

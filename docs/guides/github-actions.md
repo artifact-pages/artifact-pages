@@ -31,7 +31,7 @@ The preview compares the head with the default branch through their merge base, 
 
 Set `comment: true` to have the Action post the review links. It does so only when `pull-request` is also given; otherwise it warns and writes nothing. The job needs `pull-requests: write`, and the comment uses `github-token` or the workflow token.
 
-- The Action keeps one comment per site per PR, marked with a hidden `<!-- artifact-pages-preview:site=SITE -->` line. It creates the comment once and updates it in place on later pushes.
+- The Action keeps one comment per site per PR, marked with a hidden `<!-- artifact-pages-preview:site=SITE -->` line. It creates the comment once and updates it in place on later pushes. It updates only its own comment: with a personal `github-token` it matches comments by that token's login, and with the workflow token or an app token (which cannot read `/user`) it matches Bot-authored comments. A marker comment posted by anyone else is ignored.
 - After `published` or `no-op`, the comment lists the preview list URL, each changed page (title, path, fixed revision URL), and the head short SHA. A dry run writes nothing.
 - When a later push leaves no changed pages, or a later run fails, the Action only updates an existing comment (to say so, with a link to the workflow run). It never creates a comment for those outcomes.
 - The comment step runs even when the publish failed, and the Action still fails in that case.
