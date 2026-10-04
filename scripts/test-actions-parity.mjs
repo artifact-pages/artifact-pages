@@ -93,7 +93,7 @@ async function assertRootActionMatchesSitePublish() {
   const rootBody = root.slice(root.indexOf('\ninputs:\n'))
   const siteBody = site.slice(site.indexOf('\ninputs:\n'))
     .replace('${{ github.action_path }}/../../go.mod', '${{ github.action_path }}/go.mod')
-    .replace('working-directory: ${{ github.action_path }}/../..', 'working-directory: ${{ github.action_path }}')
+    .replaceAll('working-directory: ${{ github.action_path }}/../..', 'working-directory: ${{ github.action_path }}')
     .replaceAll('$GITHUB_ACTION_PATH/../shared/', '$GITHUB_ACTION_PATH/actions/shared/')
   assert.equal(rootBody, siteBody, 'root Action inputs, outputs and steps must match actions/site-publish apart from root-relative paths')
   assert.equal(
@@ -153,6 +153,12 @@ async function assertCompositeActionWiring() {
       return [name, expression]
     }))
     assert.deepEqual(outputMappings, expectedOutputMappings, `${kind} Action outputs must relay the shared CLI step outputs`)
+
+    // Go build cache (IMP-46 slice 3): actions/cache keyed on the pinned source, because setup-go cannot hash a go.sum outside the workspace.
+    assert.match(source, /^      uses: actions\/cache@[0-9a-f]{40} # v\d+\.\d+\.\d+$/m, `${kind} Action must pin actions/cache to a full SHA`)
+    assert.match(source, /^        key: \$\{\{ steps\.go-cache\.outputs\.key \}\}$/m, `${kind} Action must key the Go cache on the pinned source`)
+    assert.match(source, /cat go\.mod go\.sum/, `${kind} Action Go cache key must hash go.mod and go.sum`)
+    assert.ok(source.indexOf('uses: actions/setup-go@') < source.indexOf('id: go-cache') && source.indexOf('uses: actions/cache@') < source.indexOf('go build -trimpath'), `${kind} Action must restore the Go cache after Go setup and before the build`)
 
     // Own checkout (decision 2): pinned, workflow token only, no persisted credentials, before anything else.
     assert.match(source, new RegExp(`ARTIFACT_PAGES_INPUT_CHECKOUT: \\$\\{\\{ inputs\\.checkout \\}\\}`), `${kind} Action must pass the checkout input to the decision step`)

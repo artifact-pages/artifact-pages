@@ -9,7 +9,7 @@
 
 ## Problem
 
-IMP-13 and IMP-34 built five composite Actions under `actions/` (`admin`, `site-publish`, `preview-preflight`, `preview-publish`, plus `shared` helpers), and TD2 versions them with the product tag series. Nothing yet decides how adopters find and reference them. The workflow examples still use `<FULL_REVIEWED_ACTION_COMMIT_SHA>`, and no Action has run on a GitHub-hosted runner.
+IMP-13 and IMP-34 built the composite Actions under `actions/` (`admin`, `site-publish`, `preview-publish`, plus `shared` helpers; the standalone `preview-preflight` Action was later folded into `preview-publish`), and TD2 versions them with the product tag series. Nothing yet decides how adopters find and reference them. The workflow examples still use `<FULL_REVIEWED_ACTION_COMMIT_SHA>`, and no Action has run on a GitHub-hosted runner.
 
 ## Marketplace constraints (GitHub docs, checked 2026-10-03)
 
@@ -45,6 +45,7 @@ The docs list no ban on workflow files in the repository. They recommend that th
    - Use `actions/setup-go` with `cache: true` and `cache-dependency-path` set to the Action's `go.sum`. The cache lives in the adopting repository.
    - IMP-46 measures cold and warm run times on a GitHub-hosted runner and records them in this TD.
    - Revisit prebuilt CLI assets only if the measured warm overhead is unacceptable. That would amend TD2's "no standalone CLI binary" and add per-platform builds, checksums and Go dependency notices.
+   - Amended 2026-10-05 (implementation finding, not yet measured on a hosted runner): `setup-go`'s `cache: true` with `cache-dependency-path` pointing at the Action's `go.sum` cannot work. The Action source lives under the runner's `_actions` directory, outside `GITHUB_WORKSPACE`, and `@actions/glob`'s `hashFiles` skips files outside the workspace, so `setup-go` finds no dependency file and fails with "unable to cache dependencies". The Actions instead keep `cache: false` on `setup-go` and restore `GOMODCACHE` and `GOCACHE` with a SHA-pinned `actions/cache` step whose key hashes the pinned `go.mod`, `go.sum` and Go version (`artifact-pages-go-<os>-<arch>-<hash>`). The cache still lives in the adopting repository. The measurement requirement is unchanged.
    - Building from source keeps one supply-chain path: the tagged source the adopter pinned.
 
 ## Exit criteria

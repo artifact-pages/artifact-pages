@@ -19,7 +19,7 @@ A workflow in this repository calls each Action with `uses: ./actions/<name>` (a
 1. **Workflow.** Add `.github/workflows/actions-smoke.yml`, reusable from `verify.yml`. Prepare a temporary registry and site in the workspace with a local deployment config, as the parity script does.
 2. **Admin.** Run registry register (dry-run, then apply), app deploy with `--archive` of a packaged test bundle, and registry unregister.
 3. **Site publish.** Run `actions/site-publish` and the root Action in dry-run and apply. Assert the outputs (`operation`, `outcome`, `changes_json`, `exit_code`), the written objects and no writes in dry-run.
-4. **Preview.** On `pull_request` from this repository, run `preview-preflight` and then `preview-publish`. Assert the typed URLs and outputs. Cover the rejection path with an explicit mismatched `pull-request` input, and assert that the step fails before any provider operation.
+4. **Preview.** On `pull_request` from this repository, run `preview-publish`, which verifies trust itself. Assert the typed URLs and outputs. Cover the rejection path with an explicit mismatched `pull-request` input, and assert that the step fails before any provider operation.
 5. **Failure classes.** Run one invalid-input case and one unregistered-site case. Assert the relayed exit codes and `error` output.
 
 ## Acceptance criteria
