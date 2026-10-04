@@ -33,6 +33,7 @@ Use the [delegation index](../delegation.md) for work modes and owner boundaries
 | [IMP-51](IMP-51-job-summary.md) | Done | Actions | Built-in, documented Job Summary (`summary` input) for every Action, also on failure. |
 | [IMP-52](IMP-52-preview-pull-request-default.md) | Done | Actions | Preview Action defaults `pull-request` from the `pull_request` event payload (`none` forces manual); the CLI stays explicit-only. |
 | [IMP-53](IMP-53-action-checkout.md) | Done | Actions | `checkout: auto` and `fetch-depth` inputs: the Action checks out when the workspace is not a Git checkout (preview: base ref only). |
+| [IMP-54](IMP-54-consumer-workflow-migration.md) | Open | Docs / Adoption | After the release carrying IMP-49–53: remove Summarize and checkout steps, redundant `source`/`config`, unify pins, adopt `publish-on`, drop preview `base-url` and `pull-request` in the consumer repositories. |
 
 These are operator-owned Terraform capabilities, not application authorization. Rule schemas and composition are intentionally left to the assigned designer; live changes need separate approval.
 
