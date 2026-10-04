@@ -41,9 +41,9 @@ jobs:
         env:
           SITE: ${{ steps.publish-sre.outputs.site }}
           OUTCOME: ${{ steps.publish-sre.outputs.outcome }}
-          EXIT_CODE: ${{ steps.publish-sre.outputs.exit_code }}
-          CHANGES_JSON: ${{ steps.publish-sre.outputs.changes_json }}
-          PREVIEW_CHANGES_JSON: ${{ steps.publish-sre.outputs.preview_changes_json }}
+          EXIT_CODE: ${{ steps.publish-sre.outputs['exit-code'] }}
+          CHANGES_JSON: ${{ steps.publish-sre.outputs.changes }}
+          PREVIEW_CHANGES_JSON: ${{ steps.publish-sre.outputs['preview-changes'] }}
         run: |
-          printf 'site=%s outcome=%s exit_code=%s\n' "$SITE" "$OUTCOME" "$EXIT_CODE"
+          printf 'site=%s outcome=%s exit-code=%s\n' "$SITE" "$OUTCOME" "$EXIT_CODE"
           printf 'changes=%s\npreview_changes=%s\n' "$CHANGES_JSON" "$PREVIEW_CHANGES_JSON"

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { appendFile } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
+import { resolvePreviewRefs } from './preview-refs.mjs'
 
 function input(name) {
   return process.env[`ARTIFACT_PAGES_INPUT_${name.toUpperCase().replaceAll('-', '_')}`] ?? ''
@@ -51,8 +52,9 @@ function buildArguments() {
   } else if (kind === 'preview' && operation === 'publish') {
     args.push('preview', 'publish', '--site', required('site'))
     flag(args, 'source', required('source').trim())
-    flag(args, 'head', input('head').trim())
-    flag(args, 'default-ref', input('default-ref').trim())
+    const refs = resolvePreviewRefs()
+    flag(args, 'head', refs.head)
+    flag(args, 'default-ref', refs.defaultRef)
     flag(args, 'pull-request', input('pull-request').trim())
     flag(args, 'base-url', required('base-url').trim())
     flag(args, 'config', input('config').trim())
@@ -100,17 +102,16 @@ async function writeOutputs(result, exitCode, fallbackSite) {
     operation: result.operation ?? '',
     outcome: result.outcome ?? 'failed',
     site: result.site ?? fallbackSite ?? '',
-    registry_updated: typeof result.registryUpdated === 'boolean' ? String(result.registryUpdated) : '',
-    changes_json: JSON.stringify(result.changes ?? []),
-    preview_changes_json: JSON.stringify(result.previewChanges ?? []),
-    result_json: JSON.stringify(result),
-    exit_code: String(exitCode),
+    'registry-updated': typeof result.registryUpdated === 'boolean' ? String(result.registryUpdated) : '',
+    changes: JSON.stringify(result.changes ?? []),
+    'preview-changes': JSON.stringify(result.previewChanges ?? []),
+    result: JSON.stringify(result),
+    'exit-code': String(exitCode),
     error: result.error ?? '',
   }
   if (result.operation === 'preview publish') {
     values['group-list-url'] = result.groupListUrl ?? ''
     values.documents = JSON.stringify(result.documents ?? [])
-    values.result = JSON.stringify(result)
   }
   const delimiter = `ARTIFACT_PAGES_${randomUUID().replaceAll('-', '')}`
   const content = Object.entries(values)

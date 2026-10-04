@@ -14,17 +14,17 @@ const expectedActionContracts = {
   admin: {
     directory: path.join(projectRoot, 'actions', 'admin'),
     inputs: ['operation', 'config', 'github-token', 'site', 'archive', 'repository', 'dry-run'],
-    outputs: ['operation', 'outcome', 'site', 'registry_updated', 'changes_json', 'preview_changes_json', 'result_json', 'exit_code', 'error'],
+    outputs: ['operation', 'outcome', 'site', 'registry-updated', 'changes', 'preview-changes', 'result', 'exit-code', 'error'],
   },
   site: {
     directory: path.join(projectRoot, 'actions', 'site-publish'),
     inputs: ['site', 'source', 'config', 'github-token', 'fulltext', 'dry-run'],
-    outputs: ['operation', 'outcome', 'site', 'registry_updated', 'changes_json', 'preview_changes_json', 'result_json', 'exit_code', 'error'],
+    outputs: ['operation', 'outcome', 'site', 'registry-updated', 'changes', 'preview-changes', 'result', 'exit-code', 'error'],
   },
   preview: {
     directory: path.join(projectRoot, 'actions', 'preview-publish'),
-    inputs: ['site', 'source', 'head', 'default-ref', 'pull-request', 'include', 'base-url', 'config', 'github-token', 'dry-run'],
-    outputs: ['operation', 'outcome', 'site', 'group-list-url', 'documents', 'result', 'exit_code', 'error'],
+    inputs: ['site', 'source', 'head', 'default-ref', 'pull-request', 'include', 'base-url', 'config', 'github-token', 'dry-run', 'comment'],
+    outputs: ['operation', 'outcome', 'site', 'group-list-url', 'documents', 'result', 'exit-code', 'error', 'comment-url'],
   },
 }
 
@@ -130,7 +130,8 @@ async function assertCompositeActionWiring() {
     }
     if (kind === 'site') expectedEnv.ARTIFACT_PAGES_INPUT_OPERATION = 'publish'
     if (kind === 'preview') expectedEnv.ARTIFACT_PAGES_INPUT_OPERATION = 'publish'
-    for (const inputName of contract.inputs.filter((name) => name !== 'github-token')) {
+    // The comment input belongs to the separate comment step, not the CLI invocation.
+    for (const inputName of contract.inputs.filter((name) => name !== 'github-token' && !(kind === 'preview' && name === 'comment'))) {
       const envName = `ARTIFACT_PAGES_INPUT_${inputName.toUpperCase().replaceAll('-', '_')}`
       if (envName !== 'ARTIFACT_PAGES_INPUT_OPERATION' || kind !== 'site') {
         expectedEnv[envName] = `\${{ inputs.${inputName} }}`
@@ -143,10 +144,12 @@ async function assertCompositeActionWiring() {
       sectionProperties(source, 'outputs', name).value,
     ]))
     const expectedOutputMappings = Object.fromEntries(contract.outputs.map((name) => {
-      const outputKey = name === 'group-list-url' ? "['group-list-url']" : `.${name}`
-      const expression = kind === 'preview'
+      const outputKey = name.includes('-') ? `['${name}']` : `.${name}`
+      const expression = kind === 'preview' && name === 'comment-url'
+        ? "${{ steps.comment.outputs['comment-url'] }}"
+        : kind === 'preview'
         ? `\${{ steps.cli.outputs${outputKey} || steps.preflight.outputs${outputKey} }}`
-        : name === 'group-list-url' ? "${{ steps.cli.outputs['group-list-url'] }}" : `\${{ steps.cli.outputs.${name} }}`
+        : `\${{ steps.cli.outputs${outputKey} }}`
       return [name, expression]
     }))
     assert.deepEqual(outputMappings, expectedOutputMappings, `${kind} Action outputs must relay the shared CLI step outputs`)
@@ -158,16 +161,19 @@ async function assertCompositeActionWiring() {
       assert.ok(preflightLine >= 0 && setupGoLine > preflightLine && cliLine > setupGoLine, 'preview trust preflight must run before CLI build and provider-backed invocation')
       assert.match(source, /ARTIFACT_PAGES_INPUT_PULL_REQUEST: \$\{\{ inputs\.pull-request \}\}/, 'preview Action must pass only the explicit pull-request input to preflight')
       assert.match(source, /ARTIFACT_PAGES_INPUT_HEAD: \$\{\{ inputs\.head \}\}/, 'preview Action must verify the selected head when PR provenance is explicit')
-      assert.match(source, /ARTIFACT_PAGES_ACTION_KIND: preview/, 'preview Action must let preflight return a typed failure envelope')
+      assert.match(source, /ARTIFACT_PAGES_INPUT_DEFAULT_REF: \$\{\{ inputs\.default-ref \}\}/, 'preview Action must give preflight the same default-ref input as the CLI')
+      assert.equal(sectionProperties(source, 'inputs', 'head').default, '""', 'preview head must default to empty so runtime resolution applies')
+      assert.equal(sectionProperties(source, 'inputs', 'default-ref').default, '""', 'preview default-ref must default to empty so runtime resolution applies')
+      assert.equal(sectionProperties(source, 'inputs', 'comment').default, '"false"', 'preview comment must be opt-in')
+      const commentLine = source.indexOf('run: node "$GITHUB_ACTION_PATH/../shared/preview-comment.mjs"')
+      assert.ok(commentLine > cliLine, 'preview comment must run after the CLI step')
+      assert.match(source, /if: \$\{\{ always\(\) && inputs\.comment == 'true' && steps\.preflight\.outputs\.trusted == 'true' \}\}/, 'preview comment must run even after a CLI failure, but only once trust preflight passed')
     }
   }
 
   await assertRootActionMatchesSitePublish()
 
-  const preflightAction = await fs.readFile(path.join(projectRoot, 'actions', 'preview-preflight', 'action.yml'), 'utf8')
-  assert.deepEqual(sectionKeys(preflightAction, 'inputs').sort(), ['github-token', 'pull-request'])
-  assert.match(preflightAction, /run: node "\$GITHUB_ACTION_PATH\/\.\.\/shared\/verify-preview-pr\.mjs"/)
-  assert.doesNotMatch(preflightAction, /id-token: write|actions\/checkout|configure-aws-credentials/, 'standalone preview preflight must not checkout content or request publisher credentials')
+  await assert.rejects(fs.access(path.join(projectRoot, 'actions', 'preview-preflight')), 'the standalone preview-preflight Action was removed; preview-publish runs the trust verification itself')
 
   assert.equal(await fs.realpath(path.resolve(expectedActionContracts.admin.directory, '../../go.mod')), await fs.realpath(path.join(projectRoot, 'go.mod')), 'admin Action source path must resolve to this repository go.mod')
   assert.equal(await fs.realpath(path.resolve(expectedActionContracts.site.directory, '../../go.mod')), await fs.realpath(path.join(projectRoot, 'go.mod')), 'site Action source path must resolve to this repository go.mod')
@@ -183,6 +189,7 @@ async function assertWorkflowExamples() {
   assert.deepEqual(examples, [
     'admin-app-deploy.yml',
     'admin-registry-register.yml',
+    'satellite-preview-label.yml',
     'satellite-preview.yml',
     'satellite-publish.yml',
   ], 'workflow examples must name the public operations they invoke')
@@ -194,8 +201,8 @@ async function assertWorkflowExamples() {
     for (const [, revision] of thirdPartyRefs) {
       assert.match(revision, /^[0-9a-f]{40}$/, `${name} has an unpinned third-party Action: ${revision}`)
     }
-    assert.match(source, /uses: tasuku43\/git-artifact-pages\/actions\/(?:admin|site-publish|preview-publish|preview-preflight)@<FULL_REVIEWED_ACTION_COMMIT_SHA>/, `${name} should make the unpublished component release pin explicit`)
-    if (name !== 'satellite-preview.yml') {
+    assert.match(source, /uses: tasuku43\/git-artifact-pages\/actions\/(?:admin|site-publish|preview-publish)@<FULL_REVIEWED_ACTION_COMMIT_SHA>/, `${name} should make the unpublished component release pin explicit`)
+    if (!name.startsWith('satellite-preview')) {
       assert.match(source, /^permissions:\n  contents: read\n  id-token: write$/m, `${name} should request only repository read and OIDC token permissions`)
     }
     assert.match(source, /persist-credentials: false/, `${name} should not persist checkout credentials`)
@@ -213,17 +220,27 @@ async function assertWorkflowExamples() {
 
   const preview = await fs.readFile(path.join(exampleDirectory, 'satellite-preview.yml'), 'utf8')
   assert.match(preview, /^\s+if: github\.event\.pull_request\.head\.repo\.full_name == github\.repository$/m, 'preview jobs must skip fork-origin PRs before any step runs')
-  assert.match(preview, /needs: preview-preflight/, 'provider job must depend on the credential-free PR preflight job')
-  assert.match(preview, /needs\.preview-preflight\.result == 'success'/, 'provider job must require successful trust preflight')
+  assert.doesNotMatch(preview, /preview-preflight|needs:/, 'preview example is a single job; preview-publish verifies trust itself')
   assert.doesNotMatch(preview, /pull_request_target/, 'preview workflow must not use privileged pull_request_target')
   assert.match(preview, /ref: \$\{\{ github\.event\.pull_request\.base\.ref \}\}/, 'checkout may load only the registered repository base branch')
   assert.doesNotMatch(preview, /ref: \$\{\{ github\.event\.pull_request\.head\.sha \}\}/, 'workflow must not check out PR head content')
-  assert.ok(preview.indexOf('actions/preview-preflight@') < preview.indexOf('configure-aws-credentials@'), 'same-repository preflight must complete before AWS credentials are assumed')
   assert.ok(preview.indexOf('configure-aws-credentials@') < preview.indexOf('actions/preview-publish@'), 'provider credentials must be configured before the provider-backed preview Action')
   assert.match(preview, /pull-request: \$\{\{ github\.event\.pull_request\.number \}\}/, 'workflow must pass PR provenance explicitly')
-  assert.match(preview, /head: \$\{\{ github\.event\.pull_request\.head\.sha \}\}/, 'workflow must select the event head SHA without checking it out')
-  assert.match(preview, /pull-requests: read/, 'preflight must have read-only PR API access')
+  assert.doesNotMatch(preview, /^\s+(?:head|default-ref):/m, 'workflow should rely on the pull_request defaults for head and default-ref')
+  assert.match(preview, /^\s+comment: true$/m, 'workflow should opt in to the preview comment')
+  assert.match(preview, /pull-requests: write/, 'the publish job needs pull-requests: write to comment')
+  assert.match(preview, /fetch-depth: 0/, 'workflow must fetch full history for merge-base selection')
   assert.match(preview, /id-token: write/, 'only the provider job should request OIDC permission')
+
+  const labeled = await fs.readFile(path.join(exampleDirectory, 'satellite-preview-label.yml'), 'utf8')
+  assert.match(labeled, /types: \[labeled, synchronize, reopened\]/, 'label example must react to label, push, and reopen events')
+  assert.match(labeled, /^    paths:$/m, 'label example must filter by paths')
+  assert.match(labeled, /github\.event\.label\.name == 'preview'/, 'label example must check the label')
+  assert.match(labeled, /github\.event\.label\.name != 'preview' && format\('-unrelated-\{0\}', github\.run_id\)/, 'label example must isolate unrelated-label events from the preview concurrency group')
+  assert.doesNotMatch(labeled, /pull_request_target/, 'label example must not use pull_request_target')
+  assert.doesNotMatch(labeled, /preview-preflight/, 'label example must not reference the removed preflight Action')
+  assert.match(labeled, /github\.event\.pull_request\.head\.repo\.full_name == github\.repository/, 'label example must skip fork-origin PRs')
+  assert.ok(labeled.indexOf('configure-aws-credentials@') < labeled.indexOf('actions/preview-publish@'), 'label example must configure credentials before publishing')
 }
 
 function run(command, args, { cwd = projectRoot, env = process.env } = {}) {
@@ -320,7 +337,7 @@ function assertActionParity(direct, action, label) {
   assert.equal(action.stdout, direct.stdout, `${label}: Action stdout differs from direct CLI`)
 
   const outputs = action.outputs
-  assert.equal(Number(outputs.exit_code), direct.exitCode, `${label}: typed exit_code output`)
+  assert.equal(Number(outputs['exit-code']), direct.exitCode, `${label}: typed exit-code output`)
   assert.equal(outputs.operation, direct.result.operation, `${label}: operation output`)
   assert.equal(outputs.outcome, direct.result.outcome, `${label}: outcome output`)
   assert.equal(outputs.site ?? '', direct.result.site ?? '', `${label}: site output`)
@@ -329,12 +346,12 @@ function assertActionParity(direct, action, label) {
     assert.deepEqual(JSON.parse(outputs.documents), direct.result.documents ?? [], `${label}: documents JSON output`)
     assert.deepEqual(JSON.parse(outputs.result), direct.result, `${label}: complete result output`)
   } else {
-    assert.deepEqual(JSON.parse(outputs.changes_json), direct.result.changes ?? [], `${label}: changes_json output`)
-    assert.deepEqual(JSON.parse(outputs.preview_changes_json), direct.result.previewChanges ?? [], `${label}: preview_changes_json output`)
-    assert.deepEqual(JSON.parse(outputs.result_json), direct.result, `${label}: result_json output`)
+    assert.deepEqual(JSON.parse(outputs.changes), direct.result.changes ?? [], `${label}: changes output`)
+    assert.deepEqual(JSON.parse(outputs['preview-changes']), direct.result.previewChanges ?? [], `${label}: preview-changes output`)
+    assert.deepEqual(JSON.parse(outputs.result), direct.result, `${label}: result output`)
   }
   if (typeof direct.result.registryUpdated === 'boolean') {
-    assert.equal(outputs.registry_updated, String(direct.result.registryUpdated), `${label}: registry_updated boolean output`)
+    assert.equal(outputs['registry-updated'], String(direct.result.registryUpdated), `${label}: registry-updated boolean output`)
   }
   assert.equal(outputs.error ?? '', direct.result.error ?? '', `${label}: error output`)
 }
@@ -379,7 +396,7 @@ async function runAction(kind, operation, cliArgs, inputs, workspace, binaryPath
   if (execution.error) throw execution.error
   const directResult = parseCliResult({ status: execution.status, stdout: execution.stdout, stderr: execution.stderr }, 'Action')
   const outputs = parseActionOutputs(await fs.readFile(outputPath, 'utf8'))
-  const actionResult = JSON.parse(outputs.result_json)
+  const actionResult = JSON.parse(outputs.result)
   assert.deepEqual(actionResult, directResult.result, 'GitHub outputs did not preserve the CLI JSON object')
   return {
     exitCode: execution.status,
@@ -448,7 +465,6 @@ async function assertPreviewPreflight(repositoryDirectory, scratchRoot) {
       GITHUB_EVENT_PATH: forkEventPath,
       GITHUB_WORKSPACE: repositoryDirectory,
       GITHUB_OUTPUT: preflightOutputPath,
-      ARTIFACT_PAGES_ACTION_KIND: 'preview',
       ARTIFACT_PAGES_INPUT_SITE: 'sre',
       ARTIFACT_PAGES_INPUT_PULL_REQUEST: '',
     },
@@ -461,6 +477,32 @@ async function assertPreviewPreflight(repositoryDirectory, scratchRoot) {
   assert.equal(preflightOutputs.error.includes('fork-origin'), true, 'composite preflight should expose the fork rejection reason')
   assert.deepEqual(JSON.parse(preflightOutputs.documents), [], 'preflight failure should return an empty typed document array')
   assert.equal(JSON.parse(preflightOutputs.result).error, preflightOutputs.error, 'preflight failure result should preserve its error output')
+
+  // A manual preview whose default ref is not fetched fails early with typed outputs and guidance.
+  const refsOutputPath = path.join(scratchRoot, 'refs-preview-preflight-output.txt')
+  await fs.writeFile(refsOutputPath, '')
+  const refsPreflight = spawnSync('node', [path.join(projectRoot, 'actions', 'shared', 'verify-preview-pr.mjs')], {
+    cwd: repositoryDirectory,
+    env: {
+      ...process.env,
+      GITHUB_REPOSITORY: repository,
+      GITHUB_EVENT_NAME: 'workflow_dispatch',
+      GITHUB_WORKSPACE: repositoryDirectory,
+      GITHUB_OUTPUT: refsOutputPath,
+      ARTIFACT_PAGES_INPUT_SITE: 'sre',
+      ARTIFACT_PAGES_INPUT_PULL_REQUEST: '',
+      ARTIFACT_PAGES_INPUT_HEAD: 'HEAD',
+      ARTIFACT_PAGES_INPUT_DEFAULT_REF: 'origin/not-fetched',
+    },
+    encoding: 'utf8',
+  })
+  assert.equal(refsPreflight.status, 1, 'unreachable default ref must fail the Action before the CLI runs')
+  const refsOutputs = parseActionOutputs(await fs.readFile(refsOutputPath, 'utf8'))
+  assert.equal(refsOutputs.trusted, 'true', 'trust verification precedes the ref check')
+  assert.equal(refsOutputs.outcome, 'failed')
+  assert.equal(refsOutputs['exit-code'], '1')
+  assert.match(refsOutputs.error, /fetch-depth: 0/, 'ref failure must tell the caller how to fix the checkout')
+  assert.equal(JSON.parse(refsOutputs.result).error, refsOutputs.error)
 
   await assert.rejects(
     verifyPreviewTrust({ env: { ...baseEnvironment, GITHUB_EVENT_NAME: 'pull_request_target' }, event: sameRepositoryEvent, fetchImpl: responseFor(metadata) }),
