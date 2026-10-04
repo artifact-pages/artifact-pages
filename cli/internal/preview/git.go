@@ -27,8 +27,6 @@ const (
 )
 
 var (
-	ErrNoChanges                 = errors.New("source head has no changes from its comparison base")
-	ErrNoPreviewableDocuments    = errors.New("source changes contain no added or modified HTML or Markdown documents")
 	ErrImmutableRevisionMismatch = errors.New("the same preview head already has a different immutable projection")
 )
 
@@ -128,46 +126,62 @@ func BuildFromGit(ctx context.Context, options BuildOptions) (BuildResult, error
 		return BuildResult{}, err
 	}
 	if len(changes) == 0 {
-		return BuildResult{}, ErrNoChanges
+		return BuildResult{Site: options.SiteID, Outcome: OutcomeNoPreview, Group: group}, nil
 	}
 
 	selected := make([]string, 0)
-	documentDeletions := 0
-	nonDocumentChanges := false
+	changedResources := make([]string, 0)
+	deletedResources := make(map[string]bool)
 	for _, change := range changes {
 		if change.Status == "D" && isDocumentPath(change.Path) {
-			documentDeletions++
 			continue
 		}
-		if change.Status == "R" && isDocumentPath(change.OldPath) && !isDocumentPath(change.NewPath) {
-			documentDeletions++
-			if !isDocumentPath(change.NewPath) {
-				nonDocumentChanges = true
+		if change.Status == "D" {
+			deletedResources[change.Path] = true
+			continue
+		}
+		if change.Status == "R" && change.OldPath != "" && !isDocumentPath(change.OldPath) {
+			deletedResources[change.OldPath] = true
+		}
+		if change.NewPath == "" {
+			continue
+		}
+		if isDocumentPath(change.NewPath) {
+			if change.Status == "A" || change.Status == "M" || change.Status == "R" || change.Status == "C" || change.Status == "T" {
+				selected = append(selected, change.NewPath)
 			}
 			continue
 		}
-		if change.NewPath != "" && isDocumentPath(change.NewPath) && (change.Status == "A" || change.Status == "M" || change.Status == "R" || change.Status == "C" || change.Status == "T") {
-			selected = append(selected, change.NewPath)
-			continue
-		}
-		nonDocumentChanges = true
-	}
-	if len(selected) == 0 {
-		if documentDeletions > 0 {
-			return BuildResult{Site: options.SiteID, Outcome: OutcomeNoPreview, Group: group}, nil
-		}
-		if !nonDocumentChanges {
-			return BuildResult{}, ErrNoChanges
-		}
-		return BuildResult{}, ErrNoPreviewableDocuments
+		changedResources = append(changedResources, change.NewPath)
 	}
 	sort.Strings(selected)
 	selected = uniqueStrings(selected)
+	sort.Strings(changedResources)
+	changedResources = uniqueStrings(changedResources)
 
 	tree, err := listTree(ctx, repoRoot, head, sourcePath)
 	if err != nil {
 		return BuildResult{}, err
 	}
+	reasons := make(map[string]Document, len(selected))
+	for _, relativePath := range selected {
+		reasons[relativePath] = Document{Reason: ReasonChanged}
+	}
+	if len(changedResources) > 0 || len(deletedResources) > 0 {
+		affected, err := findDependencyDocuments(ctx, repoRoot, tree, changedResources, deletedResources, reasons)
+		if err != nil {
+			return BuildResult{}, err
+		}
+		for relativePath, resources := range affected {
+			reasons[relativePath] = Document{Reason: ReasonDependency, ChangedResources: resources}
+			selected = append(selected, relativePath)
+		}
+		sort.Strings(selected)
+	}
+	if len(selected) == 0 {
+		return BuildResult{Site: options.SiteID, Outcome: OutcomeNoPreview, Group: group}, nil
+	}
+
 	files := make(map[string][]byte)
 	documents := make([]Document, 0, len(selected))
 	queue := make([]string, 0)
@@ -185,7 +199,10 @@ func BuildFromGit(ctx context.Context, options BuildOptions) (BuildResult, error
 		}
 		files[relativePath] = content
 		queue = append(queue, relativePath)
-		documents = append(documents, extractDocument(relativePath, content))
+		document := extractDocument(relativePath, content)
+		document.Reason = reasons[relativePath].Reason
+		document.ChangedResources = reasons[relativePath].ChangedResources
+		documents = append(documents, document)
 	}
 
 	explicitResources, err := expandResourcePatterns(tree, options.ExplicitResources)

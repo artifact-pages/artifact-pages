@@ -1186,3 +1186,101 @@ func uniqueStrings(values []string) []string {
 	}
 	return result
 }
+
+// findDependencyDocuments returns, for every unchanged document in the head
+// tree whose statically resolvable local resource closure contains a changed
+// resource, the sorted changed resources that triggered it. It reuses
+// localReferences and resolveLocalResource, the same forward collection that
+// builds the preview bundle. Documents already in alreadySelected are skipped.
+//
+// A reference to a path deleted by the change set is an error, matching how a
+// changed document with a missing resource fails. Other unresolvable
+// references in unchanged documents are ignored because they are not caused by
+// this change.
+func findDependencyDocuments(ctx context.Context, repoRoot string, tree map[string]treeEntry, changedResources []string, deletedResources map[string]bool, alreadySelected map[string]Document) (map[string][]string, error) {
+	changed := make(map[string]bool, len(changedResources))
+	for _, resource := range changedResources {
+		changed[resource] = true
+	}
+	type node struct {
+		targets []string
+		err     error
+	}
+	graph := make(map[string]node)
+	targetsOf := func(current string) ([]string, error) {
+		if cached, ok := graph[current]; ok {
+			return cached.targets, cached.err
+		}
+		entry := tree[current]
+		content, err := readTreeBlob(ctx, repoRoot, entry)
+		var targets []string
+		if err == nil {
+			for _, reference := range localReferences(current, content) {
+				target, ok, resolveErr := resolveLocalResource(current, reference)
+				if resolveErr != nil {
+					err = resolveErr
+					targets = nil
+					break
+				}
+				if ok {
+					targets = append(targets, target)
+				}
+			}
+		}
+		graph[current] = node{targets: targets, err: err}
+		return targets, err
+	}
+
+	candidates := make([]string, 0)
+	for candidate := range tree {
+		if _, selected := alreadySelected[candidate]; !selected && isDocumentPath(candidate) {
+			candidates = append(candidates, candidate)
+		}
+	}
+	sort.Strings(candidates)
+
+	affected := make(map[string][]string)
+	for _, document := range candidates {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		hits := make(map[string]bool)
+		visited := map[string]bool{document: true}
+		queue := []string{document}
+		for len(queue) > 0 {
+			current := queue[0]
+			queue = queue[1:]
+			targets, err := targetsOf(current)
+			if err != nil {
+				// An unreadable or malformed unchanged file cannot be analysed;
+				// it is not made worse by this change.
+				continue
+			}
+			for _, target := range targets {
+				if visited[target] || isDocumentPath(target) {
+					continue
+				}
+				visited[target] = true
+				if _, exists := tree[target]; !exists {
+					if deletedResources[target] {
+						return nil, fmt.Errorf("preview resource %q is missing from the source head tree (referenced by %q)", target, current)
+					}
+					continue
+				}
+				if changed[target] {
+					hits[target] = true
+				}
+				queue = append(queue, target)
+			}
+		}
+		if len(hits) > 0 {
+			resources := make([]string, 0, len(hits))
+			for resource := range hits {
+				resources = append(resources, resource)
+			}
+			sort.Strings(resources)
+			affected[document] = resources
+		}
+	}
+	return affected, nil
+}

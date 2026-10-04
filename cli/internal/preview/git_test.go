@@ -284,7 +284,7 @@ func TestBuildFromGitDeletionRemovesPRCatalogGroup(t *testing.T) {
 	}
 }
 
-func TestBuildFromGitRejectsChangesWithoutPreviewableDocuments(t *testing.T) {
+func TestBuildFromGitResourceWithoutDependentsIsNoPreview(t *testing.T) {
 	repo := newTestRepository(t)
 	writeTestFile(t, repo, "site/docs/report.md", "# Report\n")
 	gitTest(t, repo, "add", ".")
@@ -294,11 +294,140 @@ func TestBuildFromGitRejectsChangesWithoutPreviewableDocuments(t *testing.T) {
 	writeTestFile(t, repo, "site/assets/data.json", "{}\n")
 	gitTest(t, repo, "add", ".")
 	gitTest(t, repo, "commit", "-m", "resource only")
-	_, err := BuildFromGit(context.Background(), BuildOptions{
+	result, err := BuildFromGit(context.Background(), BuildOptions{
 		RepositoryDir: repo, SiteID: "sre", SourcePath: "site", DefaultRef: "main", HeadRef: "preview",
 	})
-	if !errors.Is(err, ErrNoPreviewableDocuments) {
-		t.Fatalf("BuildFromGit() error = %v, want %v", err, ErrNoPreviewableDocuments)
+	if err != nil || result.Outcome != OutcomeNoPreview {
+		t.Fatalf("BuildFromGit() = %#v, %v; want no-preview", result.Outcome, err)
+	}
+}
+
+func dependencyOptions(repo string) BuildOptions {
+	return BuildOptions{RepositoryDir: repo, SiteID: "sre", SourcePath: "site", DefaultRef: "main", HeadRef: "preview"}
+}
+
+func newDependencyRepository(t *testing.T) string {
+	t.Helper()
+	repo := newTestRepository(t)
+	writeTestFile(t, repo, "site/a.html", "<html><head><title>A</title><link rel=\"stylesheet\" href=\"assets/site.css\"></head></html>\n")
+	writeTestFile(t, repo, "site/b.html", "<html><head><title>B</title><link rel=\"stylesheet\" href=\"assets/theme.css\"></head></html>\n")
+	writeTestFile(t, repo, "site/c.md", "# C\n\n![pic](img/pic.png)\n")
+	writeTestFile(t, repo, "site/d.md", "# D\n\nNo resources.\n")
+	writeTestFile(t, repo, "site/assets/site.css", "body{color:red}\n")
+	writeTestFile(t, repo, "site/assets/theme.css", "@import \"base.css\";\n")
+	writeTestFile(t, repo, "site/assets/base.css", "p{margin:0}\n")
+	writeTestFile(t, repo, "site/img/pic.png", "png-v1")
+	gitTest(t, repo, "add", ".")
+	gitTest(t, repo, "commit", "-m", "base")
+	gitTest(t, repo, "branch", "preview")
+	gitTest(t, repo, "checkout", "preview")
+	return repo
+}
+
+func documentReasons(result BuildResult) map[string]string {
+	reasons := map[string]string{}
+	for _, document := range result.Group.Documents {
+		reasons[document.Path] = document.Reason
+	}
+	return reasons
+}
+
+func TestBuildFromGitCSSChangePreviewsDependentDocuments(t *testing.T) {
+	repo := newDependencyRepository(t)
+	writeTestFile(t, repo, "site/assets/site.css", "body{color:blue}\n")
+	gitTest(t, repo, "commit", "-am", "css")
+	result, err := BuildFromGit(context.Background(), dependencyOptions(repo))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Outcome != OutcomePublished || len(result.Group.Documents) != 1 {
+		t.Fatalf("unexpected result: %#v", result.Group.Documents)
+	}
+	document := result.Group.Documents[0]
+	if document.Path != "a.html" || document.Reason != ReasonDependency || len(document.ChangedResources) != 1 || document.ChangedResources[0] != "assets/site.css" {
+		t.Fatalf("document = %#v", document)
+	}
+	if _, ok := result.Files["assets/site.css"]; !ok {
+		t.Fatal("changed stylesheet missing from bundle")
+	}
+	if err := ValidateManifest(result.Manifest); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestBuildFromGitTransitiveCSSImportAffectsDocument(t *testing.T) {
+	repo := newDependencyRepository(t)
+	writeTestFile(t, repo, "site/assets/base.css", "p{margin:1px}\n")
+	gitTest(t, repo, "commit", "-am", "imported css")
+	result, err := BuildFromGit(context.Background(), dependencyOptions(repo))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reasons := documentReasons(result)
+	if len(reasons) != 1 || reasons["b.html"] != ReasonDependency {
+		t.Fatalf("reasons = %#v", reasons)
+	}
+	if got := result.Group.Documents[0].ChangedResources; len(got) != 1 || got[0] != "assets/base.css" {
+		t.Fatalf("changedResources = %#v", got)
+	}
+}
+
+func TestBuildFromGitImageChangeAffectsMarkdown(t *testing.T) {
+	repo := newDependencyRepository(t)
+	writeTestFile(t, repo, "site/img/pic.png", "png-v2")
+	gitTest(t, repo, "commit", "-am", "image")
+	result, err := BuildFromGit(context.Background(), dependencyOptions(repo))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reasons := documentReasons(result)
+	if len(reasons) != 1 || reasons["c.md"] != ReasonDependency {
+		t.Fatalf("reasons = %#v", reasons)
+	}
+}
+
+func TestBuildFromGitMixedChangedAndDependencyDocumentsAreSorted(t *testing.T) {
+	repo := newDependencyRepository(t)
+	writeTestFile(t, repo, "site/assets/site.css", "body{color:blue}\n")
+	writeTestFile(t, repo, "site/img/pic.png", "png-v2")
+	writeTestFile(t, repo, "site/d.md", "# D\n\nEdited.\n")
+	gitTest(t, repo, "commit", "-am", "mixed")
+	result, err := BuildFromGit(context.Background(), dependencyOptions(repo))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Document{{Path: "a.html", Reason: ReasonDependency}, {Path: "c.md", Reason: ReasonDependency}, {Path: "d.md", Reason: ReasonChanged}}
+	if len(result.Group.Documents) != len(want) {
+		t.Fatalf("documents = %#v", result.Group.Documents)
+	}
+	for index, document := range result.Group.Documents {
+		if document.Path != want[index].Path || document.Reason != want[index].Reason {
+			t.Fatalf("documents[%d] = %#v, want %#v", index, document, want[index])
+		}
+	}
+	if result.Group.Documents[2].ChangedResources != nil {
+		t.Fatalf("changed document lists resources: %#v", result.Group.Documents[2])
+	}
+}
+
+func TestBuildFromGitDeletedReferencedResourceIsStillAnError(t *testing.T) {
+	repo := newDependencyRepository(t)
+	gitTest(t, repo, "rm", "-q", "site/assets/site.css")
+	gitTest(t, repo, "commit", "-m", "delete css")
+	_, err := BuildFromGit(context.Background(), dependencyOptions(repo))
+	if err == nil || !strings.Contains(err.Error(), "assets/site.css") || !strings.Contains(err.Error(), "missing") {
+		t.Fatalf("BuildFromGit() error = %v, want missing resource error", err)
+	}
+}
+
+func TestBuildFromGitNoChangesUnderSourceIsNoPreview(t *testing.T) {
+	repo := newDependencyRepository(t)
+	writeTestFile(t, repo, "other/file.txt", "x")
+	gitTest(t, repo, "add", ".")
+	gitTest(t, repo, "commit", "-m", "elsewhere")
+	result, err := BuildFromGit(context.Background(), dependencyOptions(repo))
+	if err != nil || result.Outcome != OutcomeNoPreview {
+		t.Fatalf("BuildFromGit() = %#v, %v; want no-preview", result.Outcome, err)
 	}
 }
 
@@ -334,8 +463,8 @@ func TestBuildAndPublishLeavesCatalogUntouchedWhenChangesAreNotPreviewable(t *te
 	gitTest(t, repo, "add", "site/assets/data.json")
 	gitTest(t, repo, "commit", "-m", "resource only")
 	baseOptions.HeadRef = "preview-resources"
-	if _, err := BuildAndPublish(context.Background(), store, baseOptions); !errors.Is(err, ErrNoPreviewableDocuments) {
-		t.Fatalf("BuildAndPublish(resource-only change) error = %v, want %v", err, ErrNoPreviewableDocuments)
+	if _, err := BuildAndPublish(context.Background(), store, baseOptions); err != nil {
+		t.Fatalf("BuildAndPublish(resource-only change) error = %v", err)
 	}
 	catalogAfter, err := store.ReadObject(context.Background(), catalogKey)
 	if err != nil || !bytes.Equal(catalogAfter, catalogBefore) {

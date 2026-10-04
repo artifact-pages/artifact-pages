@@ -263,9 +263,11 @@ func TestRunPreviewPublishDistinguishesDeletionOnlyFromResourceOnlyChanges(t *te
 	stdout.Reset()
 	stderr.Reset()
 	args = append(append([]string(nil), baseArgs...), "--head", "preview-resource")
-	err = run(context.Background(), args, &stdout, &stderr)
-	if !errors.Is(err, preview.ErrNoPreviewableDocuments) {
-		t.Fatalf("resource-only dry-run error = %v; want %v", err, preview.ErrNoPreviewableDocuments)
+	if err := run(context.Background(), args, &stdout, &stderr); err != nil {
+		t.Fatalf("resource-only dry-run error = %v; stderr=%s", err, stderr.String())
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil || result.Outcome != "no-preview" {
+		t.Fatalf("resource-only result = %+v err=%v", result, err)
 	}
 	if after := snapshotFiles(t, storageRoot); !equalByteMaps(before, after) {
 		t.Fatalf("rejected resource-only dry-run changed provider storage: before=%v after=%v", before, after)
