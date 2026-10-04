@@ -4,7 +4,7 @@
 - Scope: 10 個の production CLI operation、help/alias/bare dispatch、developer 用 `preview-local`
 - Source baseline: `2f9e41cf68161c1e3aa6642f3e018da036418213` (`main`)
 - Probe harness commit: `cad12d4a926cfc07e15df1f4345b4f8b33e32cac` (test/script only; no production code changed)
-- Related: [ISSUE-062](../issues/ISSUE-062-config-set-default-help-saved.md), [ISSUE-066](../issues/ISSUE-066-registry-app-deploy-lose-failed-purge.md), [T18](T18-publish-scale-baseline.md), [T19](T19-publish-state-layout-cost.md), [T20](T20-publish-state-and-candidate.md)
+- Related: [ISSUE-062](../issues/ISSUE-062-config-set-default-help-saved.md), [T18](T18-publish-scale-baseline.md), [T19](T19-publish-state-layout-cost.md), [T20](T20-publish-state-and-candidate.md), [T22 — cache purge retry verification](T22-cache-purge-retry.md)
 
 ## 確認したこと
 
@@ -44,7 +44,16 @@ root の bare/help (`help`, `-h`, `--help`) は usage を表示し、各 namespa
 | App changed 2-file archive; injected invalidation failure, then identical retry | First: HEAD 2, PUT 2, invalidation fails. Retry: HEAD 2, PUT 0, no second invalidation. |
 | Registry add-only change; injected invalidation failure, then identical retry | First: GET 5, conditional PUT 4, invalidation fails. Retry: GET 4, conditional PUT 2, no second invalidation; no cleanup journal is present. |
 
-最後の2行は既存の [ISSUE-066](../issues/ISSUE-066-registry-app-deploy-lose-failed-purge.md) を再現する。tagged probe は現状の結果を記録するだけで、retry を失う挙動を正しい契約として固定しない。T21 では修正を実装しない。
+この表は T21 の pre-fix source baseline における観測値を保持している。最後の2行は registry/app の invalidation failure が retry に残らない不具合の再現であり、修正後の結果は [T22](T22-cache-purge-retry.md) に別記する。tagged probe の pre-fix 観測を望ましい挙動として固定しない。
+
+### ISSUE-066 修正後の同じ fake probe
+
+同じ tagged publisher probe を修正後の source commit `0707f2915dc86f25583819b28e1f29fa6fca6d7c` で再実行した。registry は最初の purge failure 後に retry で invalidation を再送し、app は pending `/index.html` を再送した。表の `conditionalPUT` / S3 `PUT` は lock・retry-control と projection/object write を含む fake SDK 呼出しであり、個別 billing request 数ではない。app の再実行で application-object PUT が0件だったことは T22 の専用回帰テストで確認する。
+
+| Scenario | First attempt | Retry | Result |
+| --- | --- | --- | --- |
+| Registry add-only registration; purge fails | GET 5, conditional PUT 5, invalidation attempt 1, error | GET 4, conditional PUT 2, invalidation attempt 1, journal absent | `registered`; pending path is purged and intent clears |
+| App deploy of the same two-file bundle; purge fails | HEAD 2, aggregate S3 PUT 6, invalidation attempt 1, error | HEAD 2, aggregate S3 PUT 2, total invalidations 2 | `deployed`; no application-object rewrite on retry |
 
 ### Site publish and preview fake calls
 
@@ -86,7 +95,7 @@ A local `httptest` server returned fixed repository/commit/content responses. Re
 
 ## 優先候補と判断
 
-1. **正しさの修復: ISSUE-066。** `registry register` add-only と `app deploy` は origin write 後の invalidation failure を次回へ durable に持ち越さない。既存の issue に再現と acceptance があり、この監査では implementation を変更しない。
+1. **正しさの修復: ISSUE-066。** T21 の baseline では `registry register` add-only と `app deploy` が origin write 後の invalidation failure を次回へ durable に持ち越さなかった。修正と acceptance の検証は [T22](T22-cache-purge-retry.md) に記録した。
 2. **index-only snapshot の分離を検討。** 100 MiB asset で prepared snapshot が約100 MiBの live heap を保持した一方、index output は完全一致した。document text、Git/history と resource timestamp/symlink validation を守る lightweight capture が可能か別設計・比較で証明する。Publisher は captured resource bytes と fingerprint に依存するため同じ省略を流用しない。
 3. **app archive digest 再利用を検討。** bundle validation 時に digest/size を計算して immutable in-memory file record に結び付け、publish 側の同じ bytes 再 hash を省ける可能性がある。毎 run の HEAD drift check、upload order、purge retry は別の保証なので残す。
 4. **preview Git subprocess の集約を測る。** 100 docs の shared/unique resource fixture では変更範囲により 6–204 `cat-file` process が観測された。Batch Git reads / same-commit result reuse を experiment する候補だが、merge-base、selected dependency closure、delete behavior を保持する。
@@ -105,7 +114,7 @@ A local `httptest` server returned fixed repository/commit/content responses. Re
 | [TD10 — preview Git read batching](../technical-design/TD10-preview-git-read-batching.md) | Git blob reads と dependency scan を契約を保って集約できるか。 |
 | [TD11 — lock call reduction](../technical-design/TD11-lock-call-reduction.md) | cold/warm lock request を CAS/owner 契約を保って減らせるか。 |
 
-Cache purge failure の correctness gap は新しい設計項目に分割せず、既存 [ISSUE-066](../issues/ISSUE-066-registry-app-deploy-lose-failed-purge.md) の範囲に残す。
+Cache purge failure の correctness gap は新しい設計項目に分割せず、完了記録 [T22](T22-cache-purge-retry.md) に移した。
 
 ## 再実行
 

@@ -2,7 +2,7 @@
 
 - Status: Open
 - Phase: CLI app deployment
-- Related verification: [T21](../verification/T21-command-cost-audit.md), [ISSUE-066](../issues/ISSUE-066-registry-app-deploy-lose-failed-purge.md)
+- Related verification: [T21](../verification/T21-command-cost-audit.md), [T22](../verification/T22-cache-purge-retry.md)
 - Product contract: [Specification](../../specification.md)
 
 ## Decision to make
@@ -23,8 +23,8 @@ T21 の2-file fake bundle は changed dry-run で HEAD 2 / PUT 0、apply で HEA
 
 ## 守る契約と範囲
 
-archive、adjacent manifest、checksum の整合性検証、path/type/size/duplicate 検査、完全な HTTP policy、release provenance、全 object の毎回 HEAD による drift repair、`index.html` を最後に書く順序を守る。No-op 時の remote HEAD 省略、historical hashed asset の削除、cache retry の代替実装は対象外。Purge failure の retry は既存 [ISSUE-066](../issues/ISSUE-066-registry-app-deploy-lose-failed-purge.md) が扱う。
+archive、adjacent manifest、checksum の整合性検証、path/type/size/duplicate 検査、完全な HTTP policy、release provenance、全 object の毎回 HEAD による drift repair、`index.html` を最後に書く順序を守る。No-op 時の remote HEAD 省略、historical hashed asset の削除、cache retry の代替実装は対象外。Purge failure の retry は [T22](../verification/T22-cache-purge-retry.md) で検証済み。
 
 ## Done / 次の handoff
 
-小・中・大 archive と sparse/dense changed files で hash bytes/回数、CPU、live/peak memory、全 operation を比較し、same captured bytes・metadata・origin key/HTTP policy を検証する。ISSUE-066 の失敗・retry 条件を悪化させないことも確認し、採用または現状維持を決める。採用時のみ独立 implementation/verification handoff を作る。
+小・中・大 archive と sparse/dense changed files で hash bytes/回数、CPU、live/peak memory、全 operation を比較し、same captured bytes・metadata・origin key/HTTP policy を検証する。T22 の失敗・retry 条件を悪化させないことも確認し、採用または現状維持を決める。採用時のみ独立 implementation/verification handoff を作る。
