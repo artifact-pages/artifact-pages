@@ -247,6 +247,13 @@ function addSecondRevision(satellite) {
   git(satellite, ['checkout', 'main'])
 }
 
+/** A further source change so the candidate can commit new state after v1 data. */
+function addThirdRevision(satellite) {
+  git(satellite, ['checkout', 'main'])
+  for (const site of SITES) write(satellite, 'sites/' + site.id + '/revision-three.md', '# Revision three ' + site.id + '\n\nA third lighthouse revision.\n')
+  commit(satellite, 'third revision')
+}
+
 class Operator {
   constructor(fixtures) { this.fixtures = fixtures }
 
@@ -326,28 +333,48 @@ function collectFormatVersions(storage) {
     const format = formatOf(relative)
     if (!format) continue
     let payload
-    try {
-      const bytes = readFileSync(path.join(storage, relative))
-      if (format === 'control-publish-state' && bytes.length > (16 << 20)) {
-        throw new Error('compressed body exceeds 16 MiB')
-      }
-      const body = format === 'control-publish-state' ? gunzipSync(bytes, { maxOutputLength: 64 << 20 }) : bytes
-      const text = format === 'control-publish-state' ? new TextDecoder('utf-8', { fatal: true }).decode(body) : body.toString('utf8')
-      if (format === 'control-publish-state') assertUniqueJSONKeys(text)
-      payload = JSON.parse(text)
-    } catch (error) {
-      if (format === 'control-publish-state') {
-        throw new Error('cannot read recognized control publish state ' + relative + ': ' + error.message)
-      }
-      continue
+    if (format === 'control-publish-state') {
+      payload = readPublishStatePayload(storage, relative)
+    } else {
+      try { payload = JSON.parse(readFileSync(path.join(storage, relative), 'utf8')) } catch { continue }
     }
-    if (format === 'control-publish-state') validatePublishStateEnvelope(payload, relative)
     // The full-text manifest names its field `version` until its next breaking change.
     const value = payload.schemaVersion ?? (format === 'full-text-manifest' ? payload.version : undefined)
     ;(versions[format] ??= new Set()).add(value === undefined ? 'missing' : value)
   }
   return Object.fromEntries(Object.entries(versions).map(([format, set]) => [format, [...set].sort()]))
 }
+
+function readPublishStatePayload(storage, relative) {
+  let payload
+  try {
+    const bytes = readFileSync(path.join(storage, relative))
+    if (bytes.length > (16 << 20)) throw new Error('compressed body exceeds 16 MiB')
+    const body = gunzipSync(bytes, { maxOutputLength: 64 << 20 })
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(body)
+    assertUniqueJSONKeys(text)
+    payload = JSON.parse(text)
+  } catch (error) {
+    throw new Error('cannot read recognized control publish state ' + relative + ': ' + error.message)
+  }
+  validatePublishStateEnvelope(payload, relative)
+  return payload
+}
+
+function assertRequiredPublishStateRoots(storage, sites) {
+  for (const site of sites) {
+    const relative = '_control/publish-state/' + site + '.json.gz'
+    if (!existsSync(path.join(storage, relative))) {
+      throw new Error('storage is missing required control publish state for site ' + site)
+    }
+    const state = readPublishStatePayload(storage, relative)
+    if (!/^[0-9a-f]{64}$/.test(state.committed.inputRoot)) {
+      throw new Error('required control publish state for site ' + site + ' has no valid input root')
+    }
+  }
+}
+
+const PUBLISH_STATE_HASH = /^[0-9a-f]{64}$/
 
 function validatePublishStateEnvelope(payload, relative) {
   const site = path.posix.basename(relative, '.json.gz')
@@ -365,22 +392,54 @@ function validatePublishStateEnvelope(payload, relative) {
     typeof committed.inputRoot !== 'string' || !Array.isArray(committed.objects)) {
     throw new Error('recognized control publish state ' + relative + ' has an invalid committed snapshot')
   }
-  if (payload.schemaVersion === 2 && (typeof committed.generation !== 'string' || Object.hasOwn(payload, 'pending'))) {
+  if (committed.inputRoot !== '' && !PUBLISH_STATE_HASH.test(committed.inputRoot)) {
+    throw new Error('recognized control publish state ' + relative + ' has an invalid input root')
+  }
+  if (payload.schemaVersion >= 2 && !PUBLISH_STATE_HASH.test(committed.inputRoot)) {
+    throw new Error('recognized control publish state ' + relative + ' has no valid input root')
+  }
+  if (payload.schemaVersion === 2 && (!PUBLISH_STATE_HASH.test(committed.generation) || Object.hasOwn(payload, 'pending'))) {
     throw new Error('recognized control publish state ' + relative + ' has an invalid schemaVersion 2 snapshot')
   }
   if (payload.schemaVersion === 1 && Object.hasOwn(payload, 'pending') &&
-    (!payload.pending || typeof payload.pending !== 'object' || Array.isArray(payload.pending) || !Array.isArray(payload.pending.touchedKeys))) {
+    (!payload.pending || typeof payload.pending !== 'object' || Array.isArray(payload.pending) ||
+      !Array.isArray(payload.pending.touchedKeys) || payload.pending.touchedKeys.length === 0 ||
+      payload.pending.touchedKeys.some((key) => !isPublishStateOwnedKey(site, key)))) {
     throw new Error('recognized control publish state ' + relative + ' has an invalid pending journal')
   }
+  if (payload.schemaVersion === 1 && payload.pending) {
+    for (let index = 1; index < payload.pending.touchedKeys.length; index += 1) {
+      if (Buffer.compare(Buffer.from(payload.pending.touchedKeys[index - 1]), Buffer.from(payload.pending.touchedKeys[index])) >= 0) {
+        throw new Error('recognized control publish state ' + relative + ' has unsorted pending keys')
+      }
+    }
+  }
+  let previousKey
   for (const row of committed.objects) {
     if (!row || typeof row !== 'object' || Array.isArray(row) ||
-      typeof row.key !== 'string' || typeof row.sha256 !== 'string' ||
+      typeof row.key !== 'string' || !isPublishStateOwnedKey(site, row.key) ||
+      !PUBLISH_STATE_HASH.test(row.sha256) ||
       !Number.isSafeInteger(row.size) || row.size < 0 ||
       typeof row.contentType !== 'string' || typeof row.contentEncoding !== 'string' ||
       typeof row.contentDisposition !== 'string' || typeof row.cacheControl !== 'string') {
       throw new Error('recognized control publish state ' + relative + ' has an invalid committed object')
     }
+    if (previousKey !== undefined && Buffer.compare(Buffer.from(previousKey), Buffer.from(row.key)) >= 0) {
+      throw new Error('recognized control publish state ' + relative + ' has unsorted or duplicate object keys')
+    }
+    previousKey = row.key
   }
+}
+
+function isPublishStateOwnedKey(site, key) {
+  if (typeof key !== 'string' || key === '' || key.startsWith('/') || key.includes('\\') || key.includes('\0')) return false
+  const prefixes = ['_artifacts/' + site + '/', '_indexes/' + site + '/']
+  const prefix = prefixes.find((value) => key.startsWith(value))
+  if (!prefix) return false
+  const relative = key.slice(prefix.length)
+  const segments = relative.split('/')
+  return relative !== '' && path.posix.normalize(relative) === relative &&
+    segments.every((segment) => segment !== '' && segment !== '.' && segment !== '..')
 }
 
 // JSON.parse accepts duplicate keys by keeping the last value. The publisher's
@@ -459,7 +518,7 @@ const PUBLIC_FORMATS = new Set([
 /** Additions are compatible except for the required per-site publisher state. */
 function classifyFormats(formats) {
   const breakingFormats = formats.filter((entry) => entry.status === 'changed' ||
-    (entry.format === 'control-publish-state' && entry.status === 'only-in-candidate'))
+    (entry.format === 'control-publish-state' && ['only-in-candidate', 'only-in-baseline'].includes(entry.status)))
   const publicBreakingFormats = breakingFormats.filter((entry) => PUBLIC_FORMATS.has(entry.format))
   const controlBreakingFormats = breakingFormats.filter((entry) => entry.format.startsWith('control-'))
   return {
@@ -578,7 +637,13 @@ async function main() {
     log('generating storage with the candidate CLI')
     operator.generate('storage-candidate', candidate, each(candidate), each(candidate))
 
-    const formats = compareFormats(collectFormatVersions(storages['storage-baseline']), collectFormatVersions(storages['storage-candidate']))
+    const baselineFormats = collectFormatVersions(storages['storage-baseline'])
+    const candidateFormats = collectFormatVersions(storages['storage-candidate'])
+    if (baselineFormats['control-publish-state']) assertRequiredPublishStateRoots(storages['storage-baseline'], SITES.map((site) => site.id))
+    if (candidateFormats['control-publish-state'] || !baselineFormats['control-publish-state']) {
+      assertRequiredPublishStateRoots(storages['storage-candidate'], SITES.map((site) => site.id))
+    }
+    const formats = compareFormats(baselineFormats, candidateFormats)
     const schemaChanges = formats.filter((entry) => entry.status === 'changed')
     const classification = classifyFormats(formats)
     const verdict = classification.verdict
@@ -626,12 +691,33 @@ async function main() {
       record(await serveAndSmoke('candidate web x mixed data', { web: candidate.web, storage: storages[mixedName] }, runRoot))
       record(await serveAndSmoke('baseline web x mixed data', { web: baseline.web, storage: storages[mixedName], specTree: baseline.dir }, runRoot))
     } else {
+      let upgradeSourceName = 'storage-baseline'
       if (classification.mode === 'control-breaking') {
         // The old browser and candidate browser must both keep reading the
         // unchanged public projection. The legacy CLI is deliberately not run
         // against candidate-written control state: old publishers ignore it.
         record(await serveAndSmoke('candidate web x baseline public data', { web: candidate.web, storage: storages['storage-baseline'] }, runRoot))
         record(await serveAndSmoke('baseline web x candidate public data', { web: baseline.web, storage: storages['storage-candidate'], specTree: baseline.dir }, runRoot))
+        const mixedName = 'storage-mixed'
+        upgradeSourceName = mixedName
+        log('building mixed public data with the baseline and candidate CLIs')
+        try {
+          operator.register(baseline, mixedName)
+          operator.publish(baseline, mixedName, 'docs')
+          addSecondRevision(fixtures.satellite)
+          operator.publish(baseline, mixedName, 'docs')
+          operator.preview(baseline, mixedName, 'docs', 'preview-1')
+          operator.publish(candidate, mixedName, 'notes')
+          operator.preview(candidate, mixedName, 'notes', 'preview-1')
+          operator.register(candidate, mixedName)
+          record({ name: 'baseline and candidate CLIs publish separate sites into mixed storage', mode: 'operations', status: 'passed' })
+        } catch (error) {
+          record({ name: 'baseline and candidate CLIs publish separate sites into mixed storage', mode: 'operations', status: 'failed', detail: error.message })
+        }
+        report.mixedFormats = collectFormatVersions(storages[mixedName])
+        record(await serveAndSmoke('candidate web x mixed public data', { web: candidate.web, storage: storages[mixedName] }, runRoot))
+        record(await serveAndSmoke('baseline web x mixed public data', { web: baseline.web, storage: storages[mixedName], specTree: baseline.dir }, runRoot))
+        addThirdRevision(fixtures.satellite)
       } else {
         const expect = {
           registry: schemaChanges.some((entry) => entry.format === 'registry'),
@@ -643,7 +729,7 @@ async function main() {
         ? 'running candidate CLI upgrade from legacy storage'
         : 'running the upgrade procedure: registry register, app deploy --archive, republish every site')
       try {
-        cpSync(storages['storage-baseline'], storages['storage-upgrade'], { recursive: true })
+        cpSync(storages[upgradeSourceName], storages['storage-upgrade'], { recursive: true })
         const upgradeName = 'storage-upgrade'
         operator.register(candidate, upgradeName)
         const archive = packageCandidateWeb(candidate, runRoot)
@@ -652,6 +738,7 @@ async function main() {
         if (!existsSync(path.join(storages[upgradeName], 'index.html'))) throw new Error('app deploy did not write index.html to the target')
         for (const site of SITES) operator.publish(candidate, upgradeName, site.id)
         for (const site of SITES) operator.preview(candidate, upgradeName, site.id, 'preview-1')
+        assertRequiredPublishStateRoots(storages[upgradeName], SITES.map((site) => site.id))
         const upgraded = compareFormats(collectFormatVersions(storages['storage-candidate']), collectFormatVersions(storages[upgradeName]))
           .filter((entry) => entry.status !== 'same')
         if (upgraded.length > 0) throw new Error(`upgraded storage still differs from candidate-written formats: ${JSON.stringify(upgraded)}`)
@@ -673,6 +760,13 @@ async function main() {
         { web: candidate.web, storage: storages['storage-upgrade'] },
         runRoot,
       ))
+      if (classification.mode === 'control-breaking') {
+        record(await serveAndSmoke(
+          'baseline web reads upgraded storage',
+          { web: baseline.web, storage: storages['storage-upgrade'], specTree: baseline.dir },
+          runRoot,
+        ))
+      }
     }
 
     if (options.tag) {
@@ -722,4 +816,4 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   })
 }
 
-export { checkVersion, classifyFormats, collectFormatVersions, compareFormats, formatOf }
+export { assertRequiredPublishStateRoots, checkVersion, classifyFormats, collectFormatVersions, compareFormats, formatOf }

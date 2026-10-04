@@ -5,7 +5,14 @@ import path from 'node:path'
 import test from 'node:test'
 import { gzipSync } from 'node:zlib'
 
-import { checkVersion, classifyFormats, collectFormatVersions, compareFormats, formatOf } from './compat-gate.mjs'
+import {
+  assertRequiredPublishStateRoots,
+  checkVersion,
+  classifyFormats,
+  collectFormatVersions,
+  compareFormats,
+  formatOf,
+} from './compat-gate.mjs'
 
 function storageWithState(t, bytes) {
   const root = mkdtempSync(path.join(os.tmpdir(), 'compat-gate-test-'))
@@ -47,11 +54,45 @@ test('fails closed when a recognized publish-state envelope is malformed', (t) =
     { schemaVersion: 2, site: 'docs', committed: { inputRoot: '', objects: [] } },
     { schemaVersion: 0, site: 'docs', committed: { objects: [] } },
     { schemaVersion: 2, site: 'another-site', committed: { objects: [] } },
+    validState({ committed: { ...validState().committed, generation: 'not-a-hash' } }),
+    validState({
+      committed: {
+        ...validState().committed,
+        objects: [{
+          key: '_indexes/docs/index.json',
+          sha256: 'not-a-hash',
+          size: 1,
+          contentType: 'application/json; charset=utf-8',
+          contentEncoding: '',
+          contentDisposition: 'inline',
+          cacheControl: 'no-cache',
+        }],
+      },
+    }),
+    validState({
+      committed: {
+        ...validState().committed,
+        objects: [{
+          key: '_artifacts/notes/page.html',
+          sha256: 'c'.repeat(64),
+          size: 1,
+          contentType: 'text/html',
+          contentEncoding: '',
+          contentDisposition: 'inline',
+          cacheControl: 'no-cache',
+        }],
+      },
+    }),
   ]
   for (const state of malformed) {
     const root = storageWithState(t, gzipSync(Buffer.from(JSON.stringify(state))))
     assert.throws(() => collectFormatVersions(root), /recognized control publish state/)
   }
+})
+
+test('requires a valid publish-state root for every site', (t) => {
+  const root = storageWithState(t, gzipSync(Buffer.from(JSON.stringify(validState()))))
+  assert.throws(() => assertRequiredPublishStateRoots(root, ['docs', 'notes']), /missing required control publish state for site notes/)
 })
 
 test('fails closed when a recognized publish-state body has duplicate JSON keys', (t) => {
@@ -77,6 +118,10 @@ test('classifies required control-state additions and control schema changes as 
   const stateSchemaChange = classifyFormats(compareFormats({ 'control-publish-state': [1] }, { 'control-publish-state': [2] }))
   assert.equal(stateSchemaChange.verdict, 'breaking')
   assert.equal(stateSchemaChange.mode, 'control-breaking')
+
+  const removedState = classifyFormats(compareFormats({ 'control-publish-state': [2] }, {}))
+  assert.equal(removedState.verdict, 'breaking')
+  assert.equal(removedState.mode, 'control-breaking')
 })
 
 test('keeps optional public-only additions compatible and detects public schema breaks', () => {
