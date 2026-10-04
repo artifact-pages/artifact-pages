@@ -42,7 +42,6 @@ func ValidateUTF8RelativePath(relative string) error {
 }
 
 type BuildOptions struct {
-	FullText        bool
 	SiteID          string
 	SiteTitle       string
 	SiteDescription string
@@ -250,7 +249,7 @@ func Build(ctx context.Context, options BuildOptions) (BuildResult, error) {
 	modTimeByDirectory := make(map[string]time.Time)
 	searchRecords := make([]fulltext.Record, 0)
 	for _, artifact := range artifacts {
-		metadata, searchText, err := readArtifactWithSearch(artifact.file, artifact.filename, options.FullText)
+		metadata, searchText, err := readArtifactWithSearch(artifact.file, artifact.filename)
 		if err != nil {
 			return BuildResult{}, fmt.Errorf("parse artifact %q: %w", artifact.relative, err)
 		}
@@ -302,9 +301,7 @@ func Build(ctx context.Context, options BuildOptions) (BuildResult, error) {
 			}
 		}
 		index.Artifacts = append(index.Artifacts, entry)
-		if options.FullText {
-			searchRecords = append(searchRecords, fulltext.Record{Path: entry.Path, Text: entry.Title + " " + searchText})
-		}
+		searchRecords = append(searchRecords, fulltext.Record{Path: entry.Path, Text: entry.Title + " " + searchText})
 	}
 	sort.Slice(index.Artifacts, func(i, j int) bool {
 		return index.Artifacts[i].ID < index.Artifacts[j].ID
@@ -316,27 +313,25 @@ func Build(ctx context.Context, options BuildOptions) (BuildResult, error) {
 
 	var searchFiles []string
 	searchBytes := 0
-	if options.FullText {
-		projection, err := fulltext.Build(ctx, options.SiteID, searchRecords)
-		if err != nil {
-			return BuildResult{}, fmt.Errorf("build full-text index: %w", err)
+	projection, err := fulltext.Build(ctx, options.SiteID, searchRecords)
+	if err != nil {
+		return BuildResult{}, fmt.Errorf("build full-text index: %w", err)
+	}
+	// Publish all immutable bytes locally before exposing the manifest.
+	for name := range projection.Files {
+		if name != "manifest.json" {
+			searchFiles = append(searchFiles, name)
 		}
-		// Publish all immutable bytes locally before exposing the manifest.
-		for name := range projection.Files {
-			if name != "manifest.json" {
-				searchFiles = append(searchFiles, name)
-			}
+	}
+	sort.Strings(searchFiles)
+	searchFiles = append(searchFiles, "manifest.json")
+	for i, name := range searchFiles {
+		filename := filepath.Join(outputRoot, "_indexes", options.SiteID, "search", name)
+		if err := writeAtomically(filename, projection.Files[name]); err != nil {
+			return BuildResult{}, fmt.Errorf("write full-text index: %w", err)
 		}
-		sort.Strings(searchFiles)
-		searchFiles = append(searchFiles, "manifest.json")
-		for i, name := range searchFiles {
-			filename := filepath.Join(outputRoot, "_indexes", options.SiteID, "search", name)
-			if err := writeAtomically(filename, projection.Files[name]); err != nil {
-				return BuildResult{}, fmt.Errorf("write full-text index: %w", err)
-			}
-			searchBytes += len(projection.Files[name])
-			searchFiles[i] = filename
-		}
+		searchBytes += len(projection.Files[name])
+		searchFiles[i] = filename
 	}
 	serialized, err := json.MarshalIndent(index, "", "  ")
 	if err != nil {
@@ -354,9 +349,7 @@ func Build(ctx context.Context, options BuildOptions) (BuildResult, error) {
 		ArtifactCount:    len(index.Artifacts),
 		ArtifactIndexURL: siteIndexURL(options.SiteID),
 	}
-	if options.FullText {
-		metadata.FullTextURL = "/_indexes/" + options.SiteID + "/search/manifest.json"
-	}
+	metadata.FullTextURL = "/_indexes/" + options.SiteID + "/search/manifest.json"
 	metadataBytes, err := json.MarshalIndent(metadata, "", "  ")
 	if err != nil {
 		return BuildResult{}, fmt.Errorf("encode site discovery metadata: %w", err)
@@ -623,11 +616,7 @@ func readArtifactMetadata(filename, basename string) (artifactHTMLMetadata, erro
 	return metadata, nil
 }
 
-func readArtifactWithSearch(filename, basename string, enabled bool) (artifactHTMLMetadata, string, error) {
-	if !enabled {
-		metadata, err := readArtifactMetadata(filename, basename)
-		return metadata, "", err
-	}
+func readArtifactWithSearch(filename, basename string) (artifactHTMLMetadata, string, error) {
 	source, err := os.ReadFile(filename)
 	if err != nil {
 		return artifactHTMLMetadata{}, "", err

@@ -9,14 +9,14 @@ import (
 	"github.com/tasuku43/git-artifact-pages/cli/internal/fulltext"
 )
 
-func TestFullTextPublishOrderNoOpUpdateAndDisable(t *testing.T) {
+func TestFullTextPublishOrderNoOpUpdate(t *testing.T) {
 	root := createPublisherCheckout(t, "git@github.com:acme/sre.git")
 	writePublisherFixture(t, root, "docs/artifacts/second.md", []byte("# Second\n\ncache retry 再試行"))
 	writePublisherFixture(t, root, "docs/artifacts/report.html", []byte("<title>First</title><p>cache retry</p>"))
 	backend := newSiteReconcileBackend()
 	seedPublisherRegistry(t, backend.lockMemoryBackend, registeredSREManifest)
 	seedMemoryObject(backend.lockMemoryBackend, "_indexes/other/search/keep.gz", []byte("neighbor"))
-	opts := SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts", FullText: true}
+	opts := SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts"}
 	result, err := PublishSite(context.Background(), backend, opts)
 	if err != nil || result.Outcome != "published" {
 		t.Fatalf("publish = %+v, %v", result, err)
@@ -88,21 +88,12 @@ func TestFullTextPublishOrderNoOpUpdateAndDisable(t *testing.T) {
 	if _, _, err := backend.GetObject(context.Background(), oldRoot); err == nil {
 		t.Fatal("stale root retained")
 	}
-	opts.FullText = false
-	result, err = PublishSite(context.Background(), backend, opts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	keys, err := backend.ListKeys(context.Background(), "_indexes/sre/search/")
-	if err != nil || len(keys) != 0 {
-		t.Fatalf("disabled search objects: %v, %v", keys, err)
-	}
 	metadata, _, err := backend.GetObject(context.Background(), "_indexes/sre/meta.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(metadata.Bytes), "fullTextUrl") {
-		t.Fatal("disabled metadata retains search pointer")
+	if !strings.Contains(string(metadata.Bytes), "fullTextUrl") {
+		t.Fatal("metadata lacks search pointer")
 	}
 	if _, _, err := backend.GetObject(context.Background(), "_indexes/other/search/keep.gz"); err != nil {
 		t.Fatal("neighbor removed")

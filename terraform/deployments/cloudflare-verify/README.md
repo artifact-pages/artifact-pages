@@ -41,7 +41,7 @@ Run the CLI from the repository root:
 set -a; source ~/.config/artifact-pages/verify.env; set +a
 artifact-pages registry register --config artifact-pages.verify.yaml
 artifact-pages app deploy --config artifact-pages.verify.yaml
-artifact-pages site publish --site smoke --config artifact-pages.verify.yaml --fulltext
+artifact-pages site publish --site smoke --config artifact-pages.verify.yaml
 artifact-pages preview publish --site smoke --source fixtures/actions-smoke/site \
   --default-ref origin/main --base-url https://artifact-pages.stream --config artifact-pages.verify.yaml
 ```

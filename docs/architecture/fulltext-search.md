@@ -6,15 +6,17 @@ Implemented in [IMP-41](../backlog/implementation/IMP-41-fulltext-search-core.md
 
 ```sh
 go run ./cli/cmd/artifact-pages index build \
-  --site sre --source docs/artifacts --out .local/storage --fulltext
+  --site sre --source docs/artifacts --out .local/storage
 
 # The existing registered-site publisher builds and reconciles the same data.
-go run ./cli/cmd/artifact-pages site publish --site sre --fulltext
+go run ./cli/cmd/artifact-pages site publish --site sre
 ```
 
-`--fulltext` defaults to false. Pass it on every publication that should retain full-text search. Publishing without it withdraws `meta.json.fullTextUrl` and removes that site's search objects. An ordinary metadata-only build remains supported. This is an option on existing operations, not a separate search service or a requirement to install Node for the Go publisher. Deployment config and Actions do not yet expose a persistent enablement setting.
+Both operations always generate the site's full-text data, and `site publish` always publishes it; there is no option to omit it. The retired `--fulltext` flag and the Action `fulltext` input are not accepted (the CLI rejects the flag as an unknown flag, exit code 2). A site that has no extractable text or no documents still publishes a valid, empty manifest. This is part of the existing operations, not a separate search service or a requirement to install Node for the Go publisher.
 
-Enabled discovery metadata includes:
+A site can still lack `fullTextUrl`, for example one published by an earlier version or whose publish failed before the manifest was written. The reader treats such a site as having no page text search. A per-site opt-out set once by the administrator is recorded as a deferred decision in [TD7](../backlog/technical-design/TD7-per-site-fulltext-opt-out.md).
+
+Discovery metadata includes:
 
 ```json
 { "fullTextUrl": "/_indexes/sre/search/manifest.json" }

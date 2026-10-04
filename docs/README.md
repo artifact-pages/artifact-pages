@@ -4,7 +4,7 @@ Start with the [thesis](thesis.md) for the product's purpose, the [specification
 
 ## Repository and product architecture
 
-- [Static full-text search core](architecture/fulltext-search.md) — optional build/publish, callable browser API and versioned format; detailed palette UX deferred.
+- [Static full-text search core](architecture/fulltext-search.md) — always-on build/publish, callable browser API and versioned format; detailed palette UX deferred.
 - [Repository layout](architecture/repository-layout.md) — component ownership, entry commands, local output paths, and Terraform module boundaries.
 
 ## Domain and publishing

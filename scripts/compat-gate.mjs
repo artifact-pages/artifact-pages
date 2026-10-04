@@ -172,6 +172,10 @@ function buildTree(tree, runRoot) {
   mkdirSync(path.dirname(tree.cli), { recursive: true })
   log(`building ${tree.label} CLI (${tree.description.ref})`)
   sh('go', ['build', '-o', tree.cli, './cli/cmd/artifact-pages'], { cwd: tree.dir })
+  // Releases before page text search became always-on only publish its data with
+  // --fulltext. Newer CLIs reject the flag, so probe the help text per tree.
+  const help = sh(tree.cli, ['site', 'publish', '--help'], { allowFail: true, cwd: tree.dir })
+  tree.needsFullTextFlag = /--fulltext/.test(`${help.stdout}\n${help.stderr}`)
   tree.web = path.join(runRoot, `web-${tree.label}`)
   log(`building ${tree.label} web`)
   sh(process.execPath, [path.join(projectRoot, 'node_modules/vite/bin/vite.js'), 'build', '--config', 'web/vite.config.ts', '--outDir', tree.web, '--emptyOutDir'], { cwd: tree.dir })
@@ -259,7 +263,7 @@ class Operator {
   publish(tree, name, site) {
     git(this.fixtures.satellite, ['checkout', 'main'])
     return this.cli(tree, this.fixtures.satellite, [
-      'site', 'publish', '--site', site, '--source', `sites/${site}`, '--fulltext',
+      'site', 'publish', '--site', site, '--source', `sites/${site}`, ...(tree.needsFullTextFlag ? ['--fulltext'] : []),
       '--config', path.relative(this.fixtures.satellite, this.config(name)), '--format', 'json',
     ], `site publish ${site} -> ${name}`)
   }

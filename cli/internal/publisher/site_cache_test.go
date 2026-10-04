@@ -48,7 +48,7 @@ func TestSitePublishSendsChangedURLsThroughCloudflarePurgeAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"https://pages.example.com/_artifacts/sre/report.html", "https://pages.example.com/_artifacts/sre/theme.css", "https://pages.example.com/_indexes/sre/index.json", "https://pages.example.com/_indexes/sre/meta.json"}
+	want := []string{"https://pages.example.com/_artifacts/sre/report.html", "https://pages.example.com/_artifacts/sre/theme.css", "https://pages.example.com/_indexes/sre/index.json", "https://pages.example.com/_indexes/sre/meta.json", "https://pages.example.com/_indexes/sre/search/manifest.json", "https://pages.example.com/_indexes/sre/search/root-cf5183cfaf5039411cc19f752b0871c26892c185ac628400997f347085e3da90.gz"}
 	if result.InvalidationID != "site-purge-123" || !reflect.DeepEqual(files, want) {
 		t.Fatalf("Cloudflare site purge = %v, %+v", files, result)
 	}
@@ -118,7 +118,7 @@ func TestSitePublishCacheRequestsAndRetry(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := []string{"/_artifacts/sre/deleted.css", "/_artifacts/sre/report.html", "/_indexes/sre/index.json", "/_indexes/sre/meta.json"}
+			want := []string{"/_artifacts/sre/deleted.css", "/_artifacts/sre/report.html", "/_indexes/sre/index.json", "/_indexes/sre/meta.json", "/_indexes/sre/search/manifest.json", "/_indexes/sre/search/root-cf5183cfaf5039411cc19f752b0871c26892c185ac628400997f347085e3da90.gz"}
 			if !reflect.DeepEqual(plan.InvalidationPaths, want) || len(b.requests) != 0 {
 				t.Fatalf("dry run = %+v, requests=%v", plan, b.requests)
 			}

@@ -166,13 +166,12 @@ jobs:
           test "$OUTCOME" = planned
           test "$(jq length <<<"$CHANGES")" -gt 0
           test "$BEFORE" = "$(cd "$STORAGE" && find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)"
-      - name: Root Action publish with full-text search
+      - name: Root Action site publish
         id: site-fulltext
         uses: ./
         with:
           site: smoke
           config: ${{ steps.prep.outputs.config }}
-          fulltext: "true"
       - name: Assert the publish and its full-text data
         env:
           OUTCOME: ${{ steps.site-fulltext.outputs.outcome }}
@@ -183,19 +182,19 @@ jobs:
           test "$SITE" = smoke
           jq -e '.fullTextUrl' "$STORAGE/_indexes/smoke/meta.json"
           test -f "$STORAGE/_artifacts/smoke/overview.html"
-      - name: Site publish without full-text search
-        id: site-withdraw
+      - name: Repeat the site publish
+        id: site-repeat
         uses: ./actions/site-publish
         with:
           site: smoke
           config: ${{ steps.prep.outputs.config }}
-      - name: Assert the full-text data was withdrawn
+      - name: Assert the full-text data is still advertised
         env:
-          EXIT_CODE: ${{ steps.site-withdraw.outputs['exit-code'] }}
+          EXIT_CODE: ${{ steps.site-repeat.outputs['exit-code'] }}
           STORAGE: ${{ steps.prep.outputs.storage }}
         run: |
           test "$EXIT_CODE" = 0
-          jq -e 'has("fullTextUrl") | not' "$STORAGE/_indexes/smoke/meta.json"
+          jq -e '.fullTextUrl' "$STORAGE/_indexes/smoke/meta.json"
 
       - name: Site publish for an unregistered site
         id: unregistered

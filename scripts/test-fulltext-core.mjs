@@ -12,7 +12,7 @@ const source = path.join(runRoot, 'source'), storage = path.join(runRoot, 'stora
 mkdirSync(source, { recursive: true })
 const binary = path.join(runRoot, 'artifact-pages')
 execFileSync('go', ['build', '-o', binary, './cli/cmd/artifact-pages'], { cwd: repository })
-const build = (site, source, enabled = true) => execFileSync(binary, ['index', 'build', '--site', site, '--source', source, '--out', storage, ...(enabled ? ['--fulltext'] : [])], { cwd: repository, encoding: 'utf8' })
+const build = (site, source) => execFileSync(binary, ['index', 'build', '--site', site, '--source', source, '--out', storage], { cwd: repository, encoding: 'utf8' })
 const records = []
 for (let i = 0; i < 40; i++) {
   const filename = i === 0 ? 'a #?%+ 日本.html' : i === 1 ? 'b\\literal.html' : `page-${String(i).padStart(6, '0')}.${i === 10 ? 'md' : 'html'}`
@@ -198,10 +198,11 @@ try {
     ]
   })
   assert(malformed.every(Boolean))
-  build('core-one', source, false)
-  assert.equal(metadata('core-one').fullTextUrl, undefined)
-  assert.equal(readdirSync(searchDir).length, 0)
-  console.log('Full-text core: extraction, Unicode, AND/substring, paging, lazy fetch, cache, integrity, cancellation, site scope, update recovery, empty/disabled and malformed data checks passed.')
+  // Data is always built: a plain build (no flag) advertises it, even for an empty site.
+  assert.equal(metadata('core-one').fullTextUrl, '/_indexes/core-one/search/manifest.json')
+  assert(readdirSync(searchDir).includes('manifest.json'))
+  assert.equal(metadata('core-empty').fullTextUrl, '/_indexes/core-empty/search/manifest.json')
+  console.log('Full-text core: extraction, Unicode, AND/substring, paging, lazy fetch, cache, integrity, cancellation, site scope, update recovery, empty-site, always-on and malformed data checks passed.')
 
   const scaleArg = process.argv.indexOf('--scale-source')
   if (scaleArg >= 0) {

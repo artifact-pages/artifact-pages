@@ -18,7 +18,7 @@ const expectedActionContracts = {
   },
   site: {
     directory: path.join(projectRoot, 'actions', 'site-publish'),
-    inputs: ['site', 'source', 'config', 'github-token', 'fulltext', 'dry-run'],
+    inputs: ['site', 'source', 'config', 'github-token', 'dry-run'],
     outputs: ['operation', 'outcome', 'site', 'registry-updated', 'changes', 'preview-changes', 'result', 'exit-code', 'error'],
   },
   preview: {
@@ -873,27 +873,16 @@ async function main() {
       assert.deepEqual(catalog.groups, [], `${label} should remove the stale catalog reference`)
     }
 
-    const fullTextArgs = ['site', 'publish', '--site', 'sre', '--source', 'docs/artifacts', '--config', 'artifact-pages.yaml', '--fulltext', '--format', 'json']
-    const directFullText = runDirect(binaryPath, satelliteRoot, fullTextArgs, 'direct full-text site publish')
+    const fullTextArgs = ['site', 'publish', '--site', 'sre', '--source', 'docs/artifacts', '--config', 'artifact-pages.yaml', '--format', 'json']
+    const directFullText = runDirect(binaryPath, satelliteRoot, fullTextArgs, 'direct site publish with full-text data')
     const actionFullText = await runAction('site', 'publish', fullTextArgs, {
-      site: 'sre', source: 'docs/artifacts', config: '.artifact-pages-action.yaml', fulltext: 'true',
+      site: 'sre', source: 'docs/artifacts', config: '.artifact-pages-action.yaml',
     }, satelliteRoot, binaryPath, scratchRoot)
-    assertActionParity(directFullText, actionFullText, 'site publish with fulltext')
+    assertActionParity(directFullText, actionFullText, 'site publish (full-text data always published)')
     assert.equal(directFullText.exitCode, 0, `full-text site publish failed: ${JSON.stringify(directFullText.result)}`)
     for (const [label, root] of [['direct CLI', storageRoot], ['shared Action', actionStorageRoot]]) {
       const meta = JSON.parse(await fs.readFile(path.join(root, '_indexes', 'sre', 'meta.json'), 'utf8'))
       assert.ok(meta.fullTextUrl, `${label} full-text publish should advertise fullTextUrl`)
-    }
-
-    const withdrawArgs = ['site', 'publish', '--site', 'sre', '--source', 'docs/artifacts', '--config', 'artifact-pages.yaml', '--format', 'json']
-    const directWithdraw = runDirect(binaryPath, satelliteRoot, withdrawArgs, 'direct site publish without fulltext')
-    const actionWithdraw = await runAction('site', 'publish', withdrawArgs, {
-      site: 'sre', source: 'docs/artifacts', config: '.artifact-pages-action.yaml', fulltext: 'false',
-    }, satelliteRoot, binaryPath, scratchRoot)
-    assertActionParity(directWithdraw, actionWithdraw, 'site publish without fulltext')
-    for (const [label, root] of [['direct CLI', storageRoot], ['shared Action', actionStorageRoot]]) {
-      const meta = JSON.parse(await fs.readFile(path.join(root, '_indexes', 'sre', 'meta.json'), 'utf8'))
-      assert.equal(meta.fullTextUrl, undefined, `${label} publish without fulltext should withdraw fullTextUrl`)
     }
 
     const appArchive = await makeTestBundle(scratchRoot)

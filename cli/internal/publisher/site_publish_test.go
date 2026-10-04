@@ -272,8 +272,8 @@ func TestPublishSiteDryRunChecksRegistrationWithoutMutatingStorage(t *testing.T)
 	if err != nil {
 		t.Fatalf("PublishSite(dry-run) error = %v", err)
 	}
-	if result.Outcome != "planned" || result.FilesPublished != 3 {
-		t.Fatalf("PublishSite(dry-run) = %+v, want a three-file plan", result)
+	if result.Outcome != "planned" || result.FilesPublished != 5 {
+		t.Fatalf("PublishSite(dry-run) = %+v, want a five-file plan (document, index, metadata, search manifest and root blob)", result)
 	}
 	for _, operation := range backend.operationSnapshot() {
 		if strings.HasPrefix(operation, "lock-held:") {
@@ -300,7 +300,7 @@ func TestPublishSiteUsesOriginRegistryAfterSiteLockAndIgnoresBranch(t *testing.T
 	if err != nil {
 		t.Fatalf("PublishSite() error = %v", err)
 	}
-	if result.Outcome != "published" || result.Site != "sre" || result.FilesPublished != 3 {
+	if result.Outcome != "published" || result.Site != "sre" || result.FilesPublished != 5 {
 		t.Fatalf("PublishSite() = %+v, want a successful publish independent of branch", result)
 	}
 	operations := backend.operationSnapshot()
