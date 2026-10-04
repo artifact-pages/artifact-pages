@@ -931,6 +931,19 @@ These behaviors are properties of the composite Action wrappers (root `action.ym
 
 **Publish condition.** The site-publish (and root) and admin Actions accept an optional `publish-on` input: a newline-separated list of `event` or `event:ref` entries such as `push:refs/heads/main` and `workflow_dispatch`. An entry matches when its event equals `GITHUB_EVENT_NAME` and, if it names a ref, that ref equals the full `GITHUB_REF` (`*` matches any run of characters, so `push:refs/tags/v*` covers tags). A run that matches no entry is passed to the CLI as `--dry-run` and logs a notice saying why. An explicit `dry-run: true` always wins. An empty `publish-on` means no condition, which is the previous behavior. A malformed entry fails the run (exit two, typed failure outputs) instead of silently becoming a dry-run. The preview Action has no `publish-on`: a preview is not a production write, and callers choose when it runs with workflow `on:` and job `if:`.
 
+**Job Summary.** Every Action accepts `summary` (default `true`). After writing its step outputs, the Action appends one Markdown block to `GITHUB_STEP_SUMMARY`; it does so also when the operation failed, and `summary: false` writes nothing. A problem writing the summary is a warning, never a failure, and the summary never changes outputs or the exit code. The block is rendered only from the typed CLI result, so it does not depend on the caller. The format is a stable contract: the heading is `### Artifact Pages: <operation> (<outcome>)`, followed by a bullet list whose lines appear in this order when they apply:
+
+- `- **Site:** \`ID\``, whenever the result names a site.
+- `- **Mode:** dry-run`, with the reason in parentheses when `publish-on` caused it, when the CLI ran with `--dry-run`.
+- Site publish: `- **Changes:** N` with a per-action breakdown such as `(create 2, update 1)`, then `- **Pruned previews:** N`, the number of preview-catalog `remove` changes.
+- Registry register: `- **Registered:** ...` (sites created or updated in the registry), `- **Removed:** ...` (sites removed), each a comma-separated list of IDs or `none`, then `- **Registry updated:** true|false`. Registry unregister: `- **Removed:** \`ID\``, then `- **Registry updated:**`.
+- App deploy: `- **Object changes:** N`, then `- **Version:**` when known.
+- Preview publish: `- **Preview list:** URL` (the group-list URL), `- **Documents:** N`, then a table with the columns Document (linked title), Path and Reason, capped at 50 rows with an `... and N more` line.
+- On failure, a blockquote `> **Error (exit CODE):** text` with the error collapsed to one line.
+- Except for preview and unregister, a collapsed `<details>` list of the individual changes (`action path`), capped at 100 lines.
+
+Within one release line the heading, the bold labels and their order do not change; additional lines may be appended after existing ones. The preview Action also writes its summary when its trust or Git-ref preflight fails.
+
 ## 20. Non-goals for the MVP
 
 - server-side rendering

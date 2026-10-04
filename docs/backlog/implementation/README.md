@@ -30,6 +30,7 @@ Use the [delegation index](../delegation.md) for work modes and owner boundaries
 | [IMP-48](IMP-48-operator-repository-split.md) | Open | Infra, Docs | Per [TD5](../technical-design/TD5-verification-environment-and-operator-repositories.md): verification on `artifact-pages.stream` here, production `artifact-pages.dev` moved to `artifact-pages-admin` and `artifact-pages-docs`. |
 | [IMP-49](IMP-49-preview-defaults.md) | Done | CLI, Actions | Preview `--source` and `--base-url` default from the deployed registry and deployment config (provider-neutral `publicBaseURL`). |
 | [IMP-50](IMP-50-publish-condition.md) | Done | Actions | `publish-on` input: runs outside the declared event/ref condition become dry-runs. |
+| [IMP-51](IMP-51-job-summary.md) | Done | Actions | Built-in, documented Job Summary (`summary` input) for every Action, also on failure. |
 
 These are operator-owned Terraform capabilities, not application authorization. Rule schemas and composition are intentionally left to the assigned designer; live changes need separate approval.
 

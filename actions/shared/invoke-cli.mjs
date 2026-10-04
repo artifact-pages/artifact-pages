@@ -3,6 +3,7 @@ import { appendFile } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { resolvePreviewRefs } from './preview-refs.mjs'
 import { evaluatePublishOn } from './publish-on.mjs'
+import { writeSummary } from './summary.mjs'
 
 function input(name) {
   return process.env[`ARTIFACT_PAGES_INPUT_${name.toUpperCase().replaceAll('-', '_')}`] ?? ''
@@ -165,6 +166,7 @@ async function main() {
     }
     process.stdout.write(`${JSON.stringify(result)}\n`)
     await writeOutputs(result, exitCode, fallbackSite)
+    await writeSummary({ kind: built?.kind ?? process.env.ARTIFACT_PAGES_ACTION_KIND, operation, result, exitCode })
     process.exitCode = exitCode
     return
   }
@@ -174,6 +176,14 @@ async function main() {
   process.stdout.write(child.stdout ?? '')
   process.stderr.write(child.stderr ?? '')
   await writeOutputs(result, exitCode, fallbackSite)
+  await writeSummary({
+    kind: built.kind,
+    operation: cliOperationName(built.kind, built.operation),
+    result,
+    exitCode,
+    dryRun: built.args.includes('--dry-run'),
+    dryRunReason: built.dryRunReason,
+  })
   process.exitCode = exitCode
 }
 

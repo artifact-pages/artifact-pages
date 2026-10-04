@@ -44,6 +44,10 @@ inputs:
     description: When true and an explicit pull-request is given, create or update one PR comment per site with the preview links. Needs pull-requests:write. Comment problems never fail the publish.
     required: false
     default: "false"
+  summary:
+    description: When true (the default), append an operation summary to the GitHub Job Summary, also on failure. The Markdown format is a documented contract.
+    required: false
+    default: "true"
 outputs:
   operation:
     description: CLI operation name.
@@ -84,6 +88,7 @@ runs:
         ARTIFACT_PAGES_INPUT_PULL_REQUEST: ${{ inputs.pull-request }}
         ARTIFACT_PAGES_INPUT_HEAD: ${{ inputs.head }}
         ARTIFACT_PAGES_INPUT_DEFAULT_REF: ${{ inputs.default-ref }}
+        ARTIFACT_PAGES_INPUT_SUMMARY: ${{ inputs.summary }}
         GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
       run: node "$GITHUB_ACTION_PATH/../shared/verify-preview-pr.mjs"
     - name: Set up Go from the pinned component source
@@ -116,6 +121,7 @@ runs:
         ARTIFACT_PAGES_INPUT_BASE_URL: ${{ inputs.base-url }}
         ARTIFACT_PAGES_INPUT_CONFIG: ${{ inputs.config }}
         ARTIFACT_PAGES_INPUT_DRY_RUN: ${{ inputs.dry-run }}
+        ARTIFACT_PAGES_INPUT_SUMMARY: ${{ inputs.summary }}
         GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
       run: node "$GITHUB_ACTION_PATH/../shared/invoke-cli.mjs"
     - name: Create or update the preview pull-request comment

@@ -33,6 +33,10 @@ inputs:
     description: "Optional newline-separated list of `event` or `event:ref` entries (for example `push:refs/heads/main`, `workflow_dispatch`). A run that matches none of them becomes a dry-run. An explicit `dry-run: true` always wins; empty means no condition."
     required: false
     default: ""
+  summary:
+    description: When true (the default), append an operation summary to the GitHub Job Summary, also on failure. The Markdown format is a documented contract.
+    required: false
+    default: "true"
 outputs:
   operation:
     description: CLI operation name.
@@ -90,6 +94,7 @@ runs:
         ARTIFACT_PAGES_INPUT_ARCHIVE: ${{ inputs.archive }}
         ARTIFACT_PAGES_INPUT_REPOSITORY: ${{ inputs.repository }}
         ARTIFACT_PAGES_INPUT_DRY_RUN: ${{ inputs.dry-run }}
+        ARTIFACT_PAGES_INPUT_SUMMARY: ${{ inputs.summary }}
         ARTIFACT_PAGES_INPUT_PUBLISH_ON: ${{ inputs.publish-on }}
         GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
       run: node "$GITHUB_ACTION_PATH/../shared/invoke-cli.mjs"

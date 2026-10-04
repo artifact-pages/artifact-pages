@@ -3,6 +3,7 @@ import { appendFile } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 import { assertPreviewRefsReachable, resolvePreviewRefs } from './preview-refs.mjs'
+import { writeSummary } from './summary.mjs'
 
 const shaPattern = /^[0-9a-f]{40}$/i
 
@@ -231,6 +232,7 @@ async function writePreflightFailure(error) {
     error: result.error,
   }
   await appendStepOutputs(values)
+  await writeSummary({ kind: 'preview', operation: 'preview publish', result, exitCode: 1 })
 }
 
 async function appendStepOutputs(values) {

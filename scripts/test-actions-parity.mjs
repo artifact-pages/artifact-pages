@@ -13,17 +13,17 @@ const actionRunner = path.join(projectRoot, 'actions', 'shared', 'invoke-cli.mjs
 const expectedActionContracts = {
   admin: {
     directory: path.join(projectRoot, 'actions', 'admin'),
-    inputs: ['operation', 'config', 'github-token', 'site', 'archive', 'repository', 'dry-run', 'publish-on'],
+    inputs: ['operation', 'config', 'github-token', 'site', 'archive', 'repository', 'dry-run', 'publish-on', 'summary'],
     outputs: ['operation', 'outcome', 'site', 'registry-updated', 'changes', 'preview-changes', 'result', 'exit-code', 'error'],
   },
   site: {
     directory: path.join(projectRoot, 'actions', 'site-publish'),
-    inputs: ['site', 'source', 'config', 'github-token', 'dry-run', 'publish-on'],
+    inputs: ['site', 'source', 'config', 'github-token', 'dry-run', 'publish-on', 'summary'],
     outputs: ['operation', 'outcome', 'site', 'registry-updated', 'changes', 'preview-changes', 'result', 'exit-code', 'error'],
   },
   preview: {
     directory: path.join(projectRoot, 'actions', 'preview-publish'),
-    inputs: ['site', 'source', 'head', 'default-ref', 'pull-request', 'include', 'base-url', 'config', 'github-token', 'dry-run', 'comment'],
+    inputs: ['site', 'source', 'head', 'default-ref', 'pull-request', 'include', 'base-url', 'config', 'github-token', 'dry-run', 'comment', 'summary'],
     outputs: ['operation', 'outcome', 'site', 'group-list-url', 'documents', 'result', 'exit-code', 'error', 'comment-url'],
   },
 }
@@ -746,6 +746,27 @@ async function main() {
       site: 'sre', source: 'docs/artifacts', config: '.artifact-pages-action.yaml', 'publish-on': 'push:main',
     }, satelliteRoot, binaryPath, scratchRoot).catch((error) => error)
     assert.ok(badPublishOn instanceof Error || badPublishOn.exitCode === 2, 'a malformed publish-on must fail')
+
+    // Job Summary: written after the outputs, also on failure, and suppressed by summary: false.
+    const summaryPath = path.join(scratchRoot, 'step-summary.md')
+    await fs.writeFile(summaryPath, '')
+    await runAction('site', 'publish', siteArgs, {
+      site: 'sre', source: 'docs/artifacts', config: '.artifact-pages-action.yaml', 'dry-run': 'true',
+    }, satelliteRoot, binaryPath, scratchRoot, undefined, { GITHUB_STEP_SUMMARY: summaryPath })
+    const siteSummary = await fs.readFile(summaryPath, 'utf8')
+    assert.match(siteSummary, /^### Artifact Pages: site publish \(planned\)/, 'site publish summary heading')
+    assert.match(siteSummary, /- \*\*Mode:\*\* dry-run/, 'site publish summary shows dry-run')
+    assert.match(siteSummary, /- \*\*Changes:\*\* \d+/, 'site publish summary shows the change count')
+    await fs.writeFile(summaryPath, '')
+    await runAction('site', 'publish', siteArgs, {
+      site: 'sre', source: 'docs/artifacts', config: '.artifact-pages-action.yaml', 'dry-run': 'true', summary: 'false',
+    }, satelliteRoot, binaryPath, scratchRoot, undefined, { GITHUB_STEP_SUMMARY: summaryPath })
+    assert.equal(await fs.readFile(summaryPath, 'utf8'), '', 'summary: false must write nothing')
+    await fs.writeFile(summaryPath, '')
+    await runAction('site', 'publish', ['site', 'publish', '--site', 'not-registered', '--source', 'docs/artifacts', '--config', 'artifact-pages.yaml', '--dry-run', '--format', 'json'], {
+      site: 'not-registered', source: 'docs/artifacts', config: '.artifact-pages-action.yaml', 'dry-run': 'true',
+    }, satelliteRoot, binaryPath, scratchRoot, undefined, { GITHUB_STEP_SUMMARY: summaryPath })
+    assert.match(await fs.readFile(summaryPath, 'utf8'), /\(failed\)[\s\S]*> \*\*Error \(exit 1\):\*\*/, 'failure summary shows the error')
 
     const failingSiteArgs = ['site', 'publish', '--site', 'not-registered', '--source', 'docs/artifacts', '--config', 'artifact-pages.yaml', '--dry-run', '--format', 'json']
     const directFailure = runDirect(binaryPath, satelliteRoot, failingSiteArgs, 'direct unregistered-site dry-run')
