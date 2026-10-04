@@ -190,7 +190,7 @@ func TestDirectoryBackendReportsSearchBlobMetadataAsPublished(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Without this, every --fulltext publish re-uploads all search blobs to local storage.
+	// Without this, every site publish re-uploads all search blobs to local storage.
 	if !siteObjectMetadataMatches(info, desired) {
 		t.Fatalf("HeadObject(search blob) = type %q cache %q, want it to match the published object", info.ContentType, info.CacheControl)
 	}

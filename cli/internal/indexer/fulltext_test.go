@@ -16,7 +16,7 @@ func TestBuildFullTextPointerSharedParseAndLocalCleanup(t *testing.T) {
 	writeFixtureFile(t, root, "artifacts/日本 #?.html", "<title>Only title</title><p>bodymarker re<span>try</span></p><script>runtime</script>")
 	writeFixtureFile(t, root, "artifacts/guide.md", "# Guide\n\nBody 再試行\n")
 	commitFixture(t, root, "search fixtures", time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC))
-	opts := BuildOptions{SiteID: "sre", SourceDir: "artifacts", OutputDir: ".local/storage", FullText: true}
+	opts := BuildOptions{SiteID: "sre", SourceDir: "artifacts", OutputDir: ".local/storage"}
 	first, err := Build(context.Background(), opts)
 	if err != nil {
 		t.Fatal(err)
@@ -57,17 +57,16 @@ func TestBuildFullTextPointerSharedParseAndLocalCleanup(t *testing.T) {
 	if _, err := os.Stat(oldRoot); !os.IsNotExist(err) {
 		t.Fatalf("stale blob was retained: %v", err)
 	}
-	opts.FullText = false
-	last, err := Build(context.Background(), opts)
-	if err != nil {
-		t.Fatal(err)
-	}
 	readMeta()
-	if meta.FullTextURL != "" || last.SearchBytes != 0 || len(last.SearchFiles) != 0 {
-		t.Fatal("disabled build retains search pointer or metrics")
+	if meta.FullTextURL == "" {
+		t.Fatal("rebuild dropped the search pointer")
 	}
 	entries, err := os.ReadDir(searchDir)
-	if err != nil || len(entries) != 1 || entries[0].Name() != "caller-owned.txt" {
+	caller := false
+	for _, e := range entries {
+		caller = caller || e.Name() == "caller-owned.txt"
+	}
+	if err != nil || !caller {
 		t.Fatalf("cleanup affected caller files: %v, %v", entries, err)
 	}
 }
@@ -78,7 +77,7 @@ func TestBuildWritesWorldReadableProjectionFiles(t *testing.T) {
 	defer restore()
 	writeFixtureFile(t, root, "artifacts/guide.md", "# Guide\n\nReadable by the web server\n")
 	commitFixture(t, root, "readable fixtures", time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC))
-	result, err := Build(context.Background(), BuildOptions{SiteID: "readable", SourceDir: "artifacts", OutputDir: ".local/storage", FullText: true})
+	result, err := Build(context.Background(), BuildOptions{SiteID: "readable", SourceDir: "artifacts", OutputDir: ".local/storage"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,5 +90,28 @@ func TestBuildWritesWorldReadableProjectionFiles(t *testing.T) {
 		if mode := info.Mode().Perm(); mode != 0o644 {
 			t.Errorf("%s mode = %o, want 644", file, mode)
 		}
+	}
+}
+
+func TestBuildAlwaysWritesFullTextData(t *testing.T) {
+	root := initializeGitRepository(t)
+	restore := chdirForTest(t, root)
+	defer restore()
+	writeFixtureFile(t, root, "artifacts/a.md", "# A\n\nbody\n")
+	commitFixture(t, root, "always", time.Date(2026, 10, 3, 0, 0, 0, 0, time.UTC))
+	result, err := Build(context.Background(), BuildOptions{SiteID: "always", SourceDir: "artifacts", OutputDir: ".local/storage"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(result.MetadataPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var meta SiteDiscoveryMetadata
+	if err := json.Unmarshal(data, &meta); err != nil {
+		t.Fatal(err)
+	}
+	if meta.FullTextURL != "/_indexes/always/search/manifest.json" || len(result.SearchFiles) == 0 || result.SearchBytes == 0 {
+		t.Fatalf("full-text data not produced by default: %+v %+v", meta, result)
 	}
 }

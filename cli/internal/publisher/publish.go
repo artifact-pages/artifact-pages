@@ -26,7 +26,6 @@ type AppDeployOptions struct {
 }
 
 type SitePublishOptions struct {
-	FullText  bool
 	SiteID    string
 	SourceDir string
 	DryRun    bool

@@ -114,7 +114,7 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 		if err := rejectLocalSourceOverlap(conditional, sourceDir); err != nil {
 			return Result{}, err
 		}
-		plan, stale, desired, err := buildSitePlan(operationCtx, conditional, options.SiteID, entry.Name, entry.Description, sourceDir, identity, options.FullText)
+		plan, stale, desired, err := buildSitePlan(operationCtx, conditional, options.SiteID, entry.Name, entry.Description, sourceDir, identity)
 		if err != nil {
 			return Result{}, err
 		}
@@ -240,7 +240,7 @@ func registrySite(projection registry.Projection, siteID string) (registry.Entry
 	return registry.Entry{}, false
 }
 
-func buildSitePlan(ctx context.Context, backend ConditionalObjectBackend, siteID, title, description, sourceDir string, identity indexer.GitSourceIdentity, fullText bool) ([]Change, []string, []desiredSiteObject, error) {
+func buildSitePlan(ctx context.Context, backend ConditionalObjectBackend, siteID, title, description, sourceDir string, identity indexer.GitSourceIdentity) ([]Change, []string, []desiredSiteObject, error) {
 	artifactPrefix := "_artifacts/" + siteID + "/"
 	indexPrefix := "_indexes/" + siteID + "/"
 	artifacts, err := collectSiteArtifacts(sourceDir, artifactPrefix, siteID)
@@ -254,7 +254,7 @@ func buildSitePlan(ctx context.Context, backend ConditionalObjectBackend, siteID
 	defer os.RemoveAll(buildDir)
 	build, err := indexer.Build(ctx, indexer.BuildOptions{
 		SiteID: siteID, SiteTitle: title, SiteDescription: description, SourceDir: sourceDir, OutputDir: buildDir,
-		Repository: identity.Repository, RepositoryURL: identity.RepositoryURL, FullText: fullText,
+		Repository: identity.Repository, RepositoryURL: identity.RepositoryURL,
 	})
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("build site index: %w", err)

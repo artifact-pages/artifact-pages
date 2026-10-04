@@ -85,8 +85,8 @@ func TestPublishSitePreservesFilesMetadataOrderAndPrefixBoundaries(t *testing.T)
 	if err != nil {
 		t.Fatalf("PublishSite() error = %v", err)
 	}
-	if result.Outcome != "published" || result.FilesPublished != len(files)+3 || result.FilesRemoved != 1 {
-		t.Fatalf("PublishSite() = %+v, want published files=%d removed=1", result, len(files)+3)
+	if result.Outcome != "published" || result.FilesPublished != len(files)+6 || result.FilesRemoved != 1 {
+		t.Fatalf("PublishSite() = %+v, want published files=%d removed=1", result, len(files)+6)
 	}
 
 	wantSourceKeys := make([]string, 0, len(files)+1)
@@ -95,7 +95,6 @@ func TestPublishSitePreservesFilesMetadataOrderAndPrefixBoundaries(t *testing.T)
 		wantSourceKeys = append(wantSourceKeys, "_artifacts/sre/"+filepath.ToSlash(relative))
 	}
 	sort.Strings(wantSourceKeys)
-	wantPuts := append(append([]string(nil), wantSourceKeys...), "_indexes/sre/index.json", "_indexes/sre/meta.json")
 	events := backend.eventSnapshot()
 	var putOrder []string
 	firstPut, deleteIndex, lastPut := -1, -1, -1
@@ -121,6 +120,15 @@ func TestPublishSitePreservesFilesMetadataOrderAndPrefixBoundaries(t *testing.T)
 			}
 		}
 	}
+	// Search blobs are content-addressed: expect them after the sources and
+	// before index.json, then the manifest, with discovery metadata last.
+	wantPuts := append([]string(nil), wantSourceKeys...)
+	for _, key := range putOrder {
+		if strings.HasPrefix(key, "_indexes/sre/search/") && key != "_indexes/sre/search/manifest.json" {
+			wantPuts = append(wantPuts, key)
+		}
+	}
+	wantPuts = append(wantPuts, "_indexes/sre/index.json", "_indexes/sre/search/manifest.json", "_indexes/sre/meta.json")
 	if strings.Join(putOrder, "\n") != strings.Join(wantPuts, "\n") {
 		t.Fatalf("site put order = %v, want %v; events=%v", putOrder, wantPuts, events)
 	}
@@ -387,8 +395,8 @@ func TestPublishSiteRepairsHTTPMetadataWhenBytesAlreadyMatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PublishSite() error = %v", err)
 	}
-	if result.FilesPublished != 3 {
-		t.Fatalf("PublishSite() filesPublished = %d, want artifact plus index/meta metadata repair", result.FilesPublished)
+	if result.FilesPublished != 5 {
+		t.Fatalf("PublishSite() filesPublished = %d, want artifact plus index/meta metadata repair and search data", result.FilesPublished)
 	}
 	object := backend.lockMemoryBackend.objects["_artifacts/sre/report.html"]
 	if object.ContentType != "text/html; charset=utf-8" || object.ContentDisposition != "inline" || object.ContentEncoding != "" || object.Cache != artifactCacheControl || string(object.Bytes) != string(contents) {

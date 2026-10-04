@@ -391,8 +391,10 @@ func TestRunSitePublishDryRunAndNoOpAreMachineReadable(t *testing.T) {
 		{Action: "remove", Path: "_artifacts/sre/stale.html"},
 		{Action: "create", Path: "_indexes/sre/index.json"},
 		{Action: "create", Path: "_indexes/sre/meta.json"},
+		{Action: "create", Path: "_indexes/sre/search/manifest.json"},
+		{Action: "create", Path: "_indexes/sre/search/root-a9b445d38284b9a0f4995534afe000d1e3e8ee30b2c66db9866be64b37f1e0c7.gz"},
 	}
-	if planned.Operation != "site publish" || planned.Outcome != "planned" || planned.Site != "sre" || planned.FilesPublished != 3 || planned.FilesRemoved != 1 || !reflect.DeepEqual(planned.Changes, wantChanges) {
+	if planned.Operation != "site publish" || planned.Outcome != "planned" || planned.Site != "sre" || planned.FilesPublished != 5 || planned.FilesRemoved != 1 || !reflect.DeepEqual(planned.Changes, wantChanges) {
 		t.Fatalf("site publish dry-run result = %+v, want planned creates %+v", planned, wantChanges)
 	}
 	wantPreviewChanges := []struct {
@@ -421,7 +423,7 @@ func TestRunSitePublishDryRunAndNoOpAreMachineReadable(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &published); err != nil {
 		t.Fatalf("decode site publish JSON: %v; output=%s", err, stdout)
 	}
-	if published.Operation != "site publish" || published.Outcome != "published" || published.Site != "sre" || published.FilesPublished != 3 || published.FilesRemoved != 1 || !reflect.DeepEqual(published.Changes, wantChanges) {
+	if published.Operation != "site publish" || published.Outcome != "published" || published.Site != "sre" || published.FilesPublished != 5 || published.FilesRemoved != 1 || !reflect.DeepEqual(published.Changes, wantChanges) {
 		t.Fatalf("site publish result = %+v, want published result with changes %+v", published, wantChanges)
 	}
 	artifact, err := os.ReadFile(filepath.Join(storageRoot, "_artifacts", "sre", "overview.html"))
@@ -1360,5 +1362,18 @@ func TestAppDeployNoLongerAcceptsVersionFlag(t *testing.T) {
 	}
 	if pinnedVersion("") != version.Product || pinnedVersion("x.tar.gz") != "" {
 		t.Fatalf("pinnedVersion() does not follow the CLI constant")
+	}
+}
+
+func TestFullTextFlagIsRemoved(t *testing.T) {
+	for _, args := range [][]string{
+		{"site", "publish", "--site", "sre", "--source", "docs/artifacts", "--fulltext"},
+		{"index", "build", "--site", "sre", "--source", "docs/artifacts", "--fulltext"},
+	} {
+		var stdout, stderr bytes.Buffer
+		err := run(t.Context(), args, &stdout, &stderr)
+		if err == nil || commandExitCode(err) != 2 {
+			t.Fatalf("%v: err = %v, want exit code 2 for unknown flag", args, err)
+		}
 	}
 }
