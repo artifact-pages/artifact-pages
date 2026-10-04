@@ -1,6 +1,6 @@
 # Registry register and app deploy forget a failed cache purge
 
-- Status: Open
+- Status: In progress
 - Priority: P2
 - Area: CLI registry register, app deploy
 
