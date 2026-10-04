@@ -933,10 +933,10 @@ These behaviors are properties of the composite Action wrappers (root `action.ym
 
 **Job Summary.** Every Action accepts `summary` (default `true`). After writing its step outputs, the Action appends one Markdown block to `GITHUB_STEP_SUMMARY`; it does so also when the operation failed, and `summary: false` writes nothing. A problem writing the summary is a warning, never a failure, and the summary never changes outputs or the exit code. The block is rendered only from the typed CLI result, so it does not depend on the caller. The format is a stable contract: the heading is `### Artifact Pages: <operation> (<outcome>)`, followed by a bullet list whose lines appear in this order when they apply:
 
-- `- **Site:** \`ID\``, whenever the result names a site.
+- `` - **Site:** `ID` ``, whenever the result names a site.
 - `- **Mode:** dry-run`, with the reason in parentheses when `publish-on` caused it, when the CLI ran with `--dry-run`.
 - Site publish: `- **Changes:** N` with a per-action breakdown such as `(create 2, update 1)`, then `- **Pruned previews:** N`, the number of preview-catalog `remove` changes.
-- Registry register: `- **Registered:** ...` (sites created or updated in the registry), `- **Removed:** ...` (sites removed), each a comma-separated list of IDs or `none`, then `- **Registry updated:** true|false`. Registry unregister: `- **Removed:** \`ID\``, then `- **Registry updated:**`.
+- Registry register: `- **Registered:** ...` (sites created or updated in the registry), `- **Removed:** ...` (sites removed), each a comma-separated list of IDs or `none`, then `- **Registry updated:** true|false`. Registry unregister: `` - **Removed:** `ID` ``, then `- **Registry updated:**`.
 - App deploy: `- **Object changes:** N`, then `- **Version:**` when known.
 - Preview publish: `- **Preview list:** URL` (the group-list URL), `- **Documents:** N`, then a table with the columns Document (linked title), Path and Reason, capped at 50 rows with an `... and N more` line.
 - On failure, a blockquote `> **Error (exit CODE):** text` with the error collapsed to one line.
