@@ -151,12 +151,11 @@ func DeployApp(ctx context.Context, backend DeploymentBackend, options AppDeploy
 				return result, err
 			}
 			for _, file := range changed {
-				fileDigest := sha256Hex(file.data)
 				if err := backend.PutObject(ctx, file.path, Object{
 					Bytes: file.data, ContentType: contentType(file.path), Cache: appFileCacheControl(file.path), Metadata: map[string]string{
 						"artifact-pages-version":       bundle.manifest.Version,
 						"artifact-pages-source-commit": bundle.manifest.SourceCommit,
-						"artifact-pages-sha256":        fileDigest,
+						"artifact-pages-sha256":        file.sha256,
 					},
 				}); err != nil {
 					return result, fmt.Errorf("publish application object %s: %w", file.path, err)
@@ -212,8 +211,7 @@ func DeployApp(ctx context.Context, backend DeploymentBackend, options AppDeploy
 }
 
 func appObjectMatchesBundle(info ObjectInfo, file bundleFile, manifest releaseManifest) bool {
-	digest := sha256Hex(file.data)
-	if info.Size != int64(len(file.data)) || info.Metadata["artifact-pages-sha256"] != digest ||
+	if info.Size != int64(len(file.data)) || info.Metadata["artifact-pages-sha256"] != file.sha256 ||
 		info.ContentType != contentType(file.path) || info.CacheControl != appFileCacheControl(file.path) || info.ContentEncoding != "" ||
 		(info.ContentDisposition != "" && info.ContentDisposition != "inline") {
 		return false

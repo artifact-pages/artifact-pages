@@ -47,8 +47,9 @@ type releaseManifest struct {
 }
 
 type bundleFile struct {
-	path string
-	data []byte
+	path   string
+	data   []byte
+	sha256 string
 }
 
 type appBundle struct {
@@ -160,7 +161,7 @@ func loadAppBundle(archivePath string) (appBundle, error) {
 		if int64(len(contents)) != header.Size {
 			return appBundle{}, fmt.Errorf("application archive file has an invalid size: %s", relative)
 		}
-		files = append(files, bundleFile{path: relative, data: contents})
+		files = append(files, bundleFile{path: relative, data: contents, sha256: sha256Hex(contents)})
 	}
 
 	actualPaths := make([]string, 0, len(files))
