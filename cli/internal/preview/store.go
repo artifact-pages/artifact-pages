@@ -1,6 +1,7 @@
 package preview
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -82,6 +83,33 @@ type PublicationPlan struct {
 	writeCatalog   bool
 }
 
+// publicationReadCache reuses origin observations made while building one
+// publication plan. Planning can inspect the target manifest while pruning
+// catalog groups and then inspect it again as the requested revision. The
+// second lookup must use the same origin result; callers build a fresh cache
+// for every plan, including the locked plan that governs a publication.
+type publicationReadCache struct {
+	PreviewStore
+	observed map[string]publicationReadResult
+}
+
+type publicationReadResult struct {
+	contents []byte
+	err      error
+}
+
+func (store *publicationReadCache) ReadObject(ctx context.Context, key string) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if result, ok := store.observed[key]; ok {
+		return bytes.Clone(result.contents), result.err
+	}
+	contents, err := store.PreviewStore.ReadObject(ctx, key)
+	store.observed[key] = publicationReadResult{contents: bytes.Clone(contents), err: err}
+	return contents, err
+}
+
 const (
 	catalogManifestPresentReason     = "manifest-present"
 	catalogManifestMissingReason     = "manifest-missing"
@@ -113,7 +141,7 @@ func PublishWithPlan(ctx context.Context, store PreviewStore, result BuildResult
 		}
 		appliedPlan = plan
 		if result.Outcome == OutcomePublished {
-			if err := installImmutableRevision(lockedContext, store, result); err != nil {
+			if err := applyImmutableRevisionPlan(lockedContext, store, result, plan); err != nil {
 				return err
 			}
 		}
@@ -133,12 +161,13 @@ func PlanPublication(ctx context.Context, store PreviewStore, result BuildResult
 		return PublicationPlan{}, err
 	}
 	plan := PublicationPlan{Outcome: result.Outcome, Objects: []PublicationObjectChange{}, CatalogChanges: []PublicationCatalogChange{}}
-	catalog, err := readCatalog(ctx, store, result.Site)
+	reads := &publicationReadCache{PreviewStore: store, observed: make(map[string]publicationReadResult)}
+	catalog, err := readCatalog(ctx, reads, result.Site)
 	if err != nil {
 		return plan, err
 	}
 	catalogBefore := catalog
-	catalog, pruned, err := pruneMissingGroups(ctx, store, result.Site, catalog)
+	catalog, pruned, err := pruneMissingGroups(ctx, reads, result.Site, catalog)
 	if err != nil {
 		return plan, err
 	}
@@ -178,7 +207,7 @@ func PlanPublication(ctx context.Context, store PreviewStore, result BuildResult
 	if err != nil {
 		return PublicationPlan{}, err
 	}
-	manifestBytes, manifestErr := store.ReadObject(ctx, manifestKey)
+	manifestBytes, manifestErr := reads.ReadObject(ctx, manifestKey)
 	manifestAction := "create"
 	if manifestErr == nil {
 		existing, decodeErr := DecodeManifest(manifestBytes)
@@ -202,7 +231,7 @@ func PlanPublication(ctx context.Context, store PreviewStore, result BuildResult
 		if keyErr != nil {
 			return PublicationPlan{}, keyErr
 		}
-		existing, readErr := store.ReadObject(ctx, key)
+		existing, readErr := reads.ReadObject(ctx, key)
 		action := "create"
 		if readErr == nil {
 			if !reflect.DeepEqual(existing, result.Files[filePath]) {
@@ -499,57 +528,57 @@ func validateBuildResult(result BuildResult) error {
 	return nil
 }
 
-func installImmutableRevision(ctx context.Context, store PreviewStore, result BuildResult) error {
+func applyImmutableRevisionPlan(ctx context.Context, store PreviewStore, result BuildResult, plan PublicationPlan) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if len(plan.Objects) == 0 || plan.Objects[len(plan.Objects)-1].Path != "manifest.json" {
+		return errors.New("preview publication plan has no final manifest object")
+	}
 	manifestKey, err := ManifestKey(result.Manifest.Site, result.Manifest.HeadSHA)
 	if err != nil {
 		return err
 	}
-	if contents, readErr := store.ReadObject(ctx, manifestKey); readErr == nil {
-		existing, decodeErr := DecodeManifest(contents)
-		if decodeErr != nil {
-			return fmt.Errorf("existing immutable preview manifest is invalid: %w", decodeErr)
+	manifestAction := ""
+	for index, object := range plan.Objects {
+		if err := ctx.Err(); err != nil {
+			return err
 		}
-		if !sameImmutableProjection(existing, result.Manifest) {
-			return fmt.Errorf("preview %s/%s: %w", result.Manifest.Site, result.Manifest.HeadSHA, ErrImmutableRevisionMismatch)
+		if index == len(plan.Objects)-1 {
+			if object.Path != "manifest.json" {
+				return errors.New("preview publication plan ends with a bundle file instead of the manifest")
+			}
+			manifestAction = object.Action
+			continue
 		}
-		for _, file := range existing.Files {
-			fileKey, keyErr := FileKey(result.Manifest.Site, result.Manifest.HeadSHA, file.Path)
-			if keyErr != nil {
-				return keyErr
-			}
-			actual, fileErr := store.ReadObject(ctx, fileKey)
-			if fileErr != nil {
-				return fmt.Errorf("existing immutable preview file %q is unavailable: %w", file.Path, fileErr)
-			}
-			if !reflect.DeepEqual(actual, result.Files[file.Path]) {
-				return fmt.Errorf("existing immutable preview file %q differs from its recorded bytes", file.Path)
-			}
+		if object.Action == "retain" {
+			continue
 		}
-		return nil
-	} else if !errors.Is(readErr, ErrObjectNotFound) {
-		return fmt.Errorf("read existing preview manifest: %w", readErr)
-	}
-
-	paths := make([]string, 0, len(result.Files))
-	for filePath := range result.Files {
-		paths = append(paths, filePath)
-	}
-	sort.Strings(paths)
-	for _, filePath := range paths {
-		key, keyErr := FileKey(result.Manifest.Site, result.Manifest.HeadSHA, filePath)
+		if object.Action != "create" {
+			return fmt.Errorf("preview publication plan has unknown action %q for %q", object.Action, object.Path)
+		}
+		contents, exists := result.Files[object.Path]
+		if !exists {
+			return fmt.Errorf("preview publication plan requests missing bundle file %q", object.Path)
+		}
+		key, keyErr := FileKey(result.Manifest.Site, result.Manifest.HeadSHA, object.Path)
 		if keyErr != nil {
 			return keyErr
 		}
-		if err := store.CreateImmutableObject(ctx, key, result.Files[filePath]); err != nil {
-			return fmt.Errorf("write preview file %q: %w", filePath, err)
+		if err := store.CreateImmutableObject(ctx, key, contents); err != nil {
+			return fmt.Errorf("write preview file %q: %w", object.Path, err)
 		}
 	}
-	encoded, err := EncodeManifest(result.Manifest)
-	if err != nil {
-		return err
-	}
-	if err := store.CreateImmutableObject(ctx, manifestKey, encoded); err != nil {
-		return fmt.Errorf("write preview manifest: %w", err)
+	if manifestAction == "create" {
+		encoded, err := EncodeManifest(result.Manifest)
+		if err != nil {
+			return err
+		}
+		if err := store.CreateImmutableObject(ctx, manifestKey, encoded); err != nil {
+			return fmt.Errorf("write preview manifest: %w", err)
+		}
+	} else if manifestAction != "retain" {
+		return fmt.Errorf("preview publication plan has unknown manifest action %q", manifestAction)
 	}
 	return nil
 }

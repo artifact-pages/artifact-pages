@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -54,6 +55,17 @@ type memoryPreviewStore struct {
 	createFailures map[string]error
 	writeFailures  map[string]error
 	createCalls    map[string]int
+	readCalls      map[string]int
+	replaceCalls   map[string]int
+	lockCalls      int
+	lockDepth      int
+	events         []previewStoreEvent
+}
+
+type previewStoreEvent struct {
+	kind   string
+	key    string
+	locked bool
 }
 
 // concurrentPublishGate ensures both publishers reach the storage boundary
@@ -90,6 +102,8 @@ func newMemoryPreviewStore() *memoryPreviewStore {
 		createFailures: make(map[string]error),
 		writeFailures:  make(map[string]error),
 		createCalls:    make(map[string]int),
+		readCalls:      make(map[string]int),
+		replaceCalls:   make(map[string]int),
 	}
 }
 
@@ -102,7 +116,18 @@ func (store *memoryPreviewStore) WithSiteLock(ctx context.Context, site string, 
 	}
 	store.locksMu.Unlock()
 	lock.Lock()
-	defer lock.Unlock()
+	store.mu.Lock()
+	store.lockCalls++
+	store.lockDepth++
+	store.events = append(store.events, previewStoreEvent{kind: "lock", key: site, locked: true})
+	store.mu.Unlock()
+	defer func() {
+		store.mu.Lock()
+		store.lockDepth--
+		store.events = append(store.events, previewStoreEvent{kind: "unlock", key: site, locked: false})
+		store.mu.Unlock()
+		lock.Unlock()
+	}()
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -115,6 +140,8 @@ func (store *memoryPreviewStore) ReadObject(ctx context.Context, key string) ([]
 	}
 	store.mu.Lock()
 	defer store.mu.Unlock()
+	store.readCalls[key]++
+	store.events = append(store.events, previewStoreEvent{kind: "read", key: key, locked: store.lockDepth > 0})
 	if err := store.readFailures[key]; err != nil {
 		return nil, err
 	}
@@ -132,6 +159,7 @@ func (store *memoryPreviewStore) CreateImmutableObject(ctx context.Context, key 
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	store.createCalls[key]++
+	store.events = append(store.events, previewStoreEvent{kind: "create", key: key, locked: store.lockDepth > 0})
 	if err := store.createFailures[key]; err != nil {
 		return err
 	}
@@ -151,6 +179,8 @@ func (store *memoryPreviewStore) ReplaceMutableObject(ctx context.Context, key s
 	}
 	store.mu.Lock()
 	defer store.mu.Unlock()
+	store.replaceCalls[key]++
+	store.events = append(store.events, previewStoreEvent{kind: "replace", key: key, locked: store.lockDepth > 0})
 	if err := store.writeFailures[key]; err != nil {
 		return err
 	}
@@ -188,6 +218,30 @@ func (store *memoryPreviewStore) createCallCount(key string) int {
 	return store.createCalls[key]
 }
 
+func (store *memoryPreviewStore) readCallCount(key string) int {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	return store.readCalls[key]
+}
+
+func (store *memoryPreviewStore) replaceCallCount(key string) int {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	return store.replaceCalls[key]
+}
+
+func (store *memoryPreviewStore) eventSnapshot() []previewStoreEvent {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	return append([]previewStoreEvent(nil), store.events...)
+}
+
+func (store *memoryPreviewStore) lockedCallCount() int {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	return store.lockCalls
+}
+
 func testPreviewResult(site, prNumber, headSHA string) BuildResult {
 	files := map[string][]byte{
 		"assets/report.css": []byte("body { color: #123; }\n"),
@@ -222,6 +276,9 @@ func TestPlanPublicationIsReadOnlyAndMatchesTheNextPublish(t *testing.T) {
 	if !reflect.DeepEqual(plan.CatalogChanges, []PublicationCatalogChange{{Action: "create", GroupID: result.Group.ID, HeadSHA: result.Group.HeadSHA}}) {
 		t.Fatalf("initial catalog plan = %+v", plan.CatalogChanges)
 	}
+	if got := store.lockedCallCount(); got != 0 {
+		t.Fatalf("read-only PlanPublication acquired the site lock %d times", got)
+	}
 	store.mu.Lock()
 	if len(store.objects) != 0 {
 		store.mu.Unlock()
@@ -231,6 +288,9 @@ func TestPlanPublicationIsReadOnlyAndMatchesTheNextPublish(t *testing.T) {
 
 	if err := Publish(context.Background(), store, result); err != nil {
 		t.Fatalf("Publish() error = %v", err)
+	}
+	if got := store.lockedCallCount(); got != 1 {
+		t.Fatalf("Publish() site lock calls = %d, want 1", got)
 	}
 	catalogKey, _ := CatalogKey("project")
 	catalogBefore, err := store.ReadObject(context.Background(), catalogKey)
@@ -260,6 +320,9 @@ func TestPlanPublicationIsReadOnlyAndMatchesTheNextPublish(t *testing.T) {
 	if err := Publish(context.Background(), store, result); err != nil {
 		t.Fatalf("same-head Publish() error = %v", err)
 	}
+	if got := store.lockedCallCount(); got != 2 {
+		t.Fatalf("same-head Publish() site lock calls = %d, want 2 total", got)
+	}
 	catalogAfter, err := store.ReadObject(context.Background(), catalogKey)
 	if err != nil || !bytes.Equal(catalogBefore, catalogAfter) {
 		t.Fatalf("same-head publish rewrote an unchanged catalog: equal=%t err=%v", bytes.Equal(catalogBefore, catalogAfter), err)
@@ -268,6 +331,143 @@ func TestPlanPublicationIsReadOnlyAndMatchesTheNextPublish(t *testing.T) {
 	defer store.mu.Unlock()
 	if !reflect.DeepEqual(store.createCalls, createCallsBefore) {
 		t.Fatalf("same-head publish re-created immutable objects: before=%v after=%v", createCallsBefore, store.createCalls)
+	}
+}
+
+func TestPublishAppliesFreshLockedPlanWithoutDuplicateTargetReads(t *testing.T) {
+	store := newMemoryPreviewStore()
+	result := testPreviewResult("project", "42", "0123456789abcdef0123456789abcdef01234567")
+	catalogKey, _ := CatalogKey(result.Site)
+	manifestKey, _ := ManifestKey(result.Site, result.Manifest.HeadSHA)
+	fileKeys := make(map[string]string, len(result.Files))
+	paths := make([]string, 0, len(result.Files))
+	for filePath := range result.Files {
+		key, err := FileKey(result.Site, result.Manifest.HeadSHA, filePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fileKeys[filePath] = key
+		paths = append(paths, filePath)
+	}
+	sort.Strings(paths)
+
+	eventStart := len(store.eventSnapshot())
+	plan, err := PublishWithPlan(context.Background(), store, result)
+	if err != nil {
+		t.Fatalf("initial PublishWithPlan() error = %v", err)
+	}
+	if len(plan.Objects) != len(paths)+1 || plan.Objects[len(plan.Objects)-1].Path != "manifest.json" {
+		t.Fatalf("applied object plan = %+v; want files followed by manifest", plan.Objects)
+	}
+	if got := store.readCallCount(catalogKey); got != 1 {
+		t.Errorf("initial catalog origin reads = %d, want 1", got)
+	}
+	if got := store.readCallCount(manifestKey); got != 1 {
+		t.Errorf("initial manifest origin reads = %d, want 1", got)
+	}
+	for _, filePath := range paths {
+		if got := store.readCallCount(fileKeys[filePath]); got != 1 {
+			t.Errorf("initial file %q origin reads = %d, want 1", filePath, got)
+		}
+	}
+	var writes []string
+	for _, event := range store.eventSnapshot()[eventStart:] {
+		if event.kind == "create" || event.kind == "replace" {
+			if !event.locked {
+				t.Errorf("publication write %s %q occurred outside the site lock", event.kind, event.key)
+			}
+			writes = append(writes, event.kind+":"+event.key)
+		}
+		if event.kind == "read" && !event.locked {
+			t.Errorf("publication origin read %q occurred outside the site lock", event.key)
+		}
+	}
+	wantWrites := make([]string, 0, len(paths)+2)
+	for _, filePath := range paths {
+		wantWrites = append(wantWrites, "create:"+fileKeys[filePath])
+	}
+	wantWrites = append(wantWrites, "create:"+manifestKey, "replace:"+catalogKey)
+	if !reflect.DeepEqual(writes, wantWrites) {
+		t.Errorf("publication write order = %v; want files, manifest, then catalog: %v", writes, wantWrites)
+	}
+
+	// A same-head plan sees the manifest once while pruning the catalog, then
+	// reuses that observation for revision validation. Every file is still read
+	// and compared byte-for-byte before the plan retains it.
+	readCountsBefore := map[string]int{catalogKey: store.readCallCount(catalogKey), manifestKey: store.readCallCount(manifestKey)}
+	for _, key := range fileKeys {
+		readCountsBefore[key] = store.readCallCount(key)
+	}
+	createCallsBefore := make(map[string]int, len(paths)+1)
+	for _, key := range fileKeys {
+		createCallsBefore[key] = store.createCallCount(key)
+	}
+	createCallsBefore[manifestKey] = store.createCallCount(manifestKey)
+	replaceCallsBefore := store.replaceCallCount(catalogKey)
+
+	retryPlan, err := PublishWithPlan(context.Background(), store, result)
+	if err != nil {
+		t.Fatalf("same-head PublishWithPlan() error = %v", err)
+	}
+	if len(retryPlan.CatalogChanges) != 0 {
+		t.Errorf("same-head catalog changes = %+v; want none", retryPlan.CatalogChanges)
+	}
+	for _, object := range retryPlan.Objects {
+		if object.Action != "retain" {
+			t.Errorf("same-head object plan = %+v; want every immutable object retained", retryPlan.Objects)
+			break
+		}
+	}
+	if got := store.readCallCount(catalogKey) - readCountsBefore[catalogKey]; got != 1 {
+		t.Errorf("same-head catalog origin reads = %d, want 1", got)
+	}
+	if got := store.readCallCount(manifestKey) - readCountsBefore[manifestKey]; got != 1 {
+		t.Errorf("same-head manifest origin reads = %d, want 1 across pruning and revision checks", got)
+	}
+	for _, key := range fileKeys {
+		if got := store.readCallCount(key) - readCountsBefore[key]; got != 1 {
+			t.Errorf("same-head file %q origin reads = %d, want 1 full-byte verification", key, got)
+		}
+		if got := store.createCallCount(key); got != createCallsBefore[key] {
+			t.Errorf("same-head publish attempted to recreate file %q", key)
+		}
+	}
+	if got := store.createCallCount(manifestKey); got != createCallsBefore[manifestKey] {
+		t.Errorf("same-head publish attempted to recreate the manifest")
+	}
+	if got := store.replaceCallCount(catalogKey); got != replaceCallsBefore {
+		t.Errorf("same-head publish rewrote an unchanged catalog")
+	}
+}
+
+func TestPublishAllowsBundleFileNamedManifestJSON(t *testing.T) {
+	store := newMemoryPreviewStore()
+	result := testPreviewResult("project", "42", "0123456789abcdef0123456789abcdef01234567")
+	result.Files["manifest.json"] = []byte("this is a source bundle file\n")
+	result.Manifest.Files = describeFiles(result.Files)
+	result.Manifest.BundleDigest = digestBundle(result.Files)
+	if err := Publish(context.Background(), store, result); err != nil {
+		t.Fatalf("Publish() with a root manifest.json source file error = %v", err)
+	}
+	fileKey, err := FileKey(result.Site, result.Manifest.HeadSHA, "manifest.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fileBytes, err := store.ReadObject(context.Background(), fileKey)
+	if err != nil || !bytes.Equal(fileBytes, result.Files["manifest.json"]) {
+		t.Fatalf("root manifest.json bundle bytes = %q, err=%v", fileBytes, err)
+	}
+	manifestKey, err := ManifestKey(result.Site, result.Manifest.HeadSHA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifestBytes, err := store.ReadObject(context.Background(), manifestKey)
+	if err != nil {
+		t.Fatalf("read completion manifest: %v", err)
+	}
+	manifest, err := DecodeManifest(manifestBytes)
+	if err != nil || !sameImmutableProjection(manifest, result.Manifest) {
+		t.Fatalf("completion manifest = %+v, err=%v", manifest, err)
 	}
 }
 
@@ -454,6 +654,7 @@ func TestPublishFailureAndRetryNeverAdvertiseIncompleteRevision(t *testing.T) {
 	t.Run("partial bundle upload", func(t *testing.T) {
 		store := newMemoryPreviewStore()
 		result := testPreviewResult("project", "42", headSHA)
+		completedFileKey, _ := FileKey("project", headSHA, "assets/report.css")
 		failedFileKey, _ := FileKey("project", headSHA, "docs/report.md")
 		store.setCreateFailure(failedFileKey, errors.New("injected file upload failure"))
 		if err := Publish(context.Background(), store, result); err == nil {
@@ -466,9 +667,33 @@ func TestPublishFailureAndRetryNeverAdvertiseIncompleteRevision(t *testing.T) {
 		if len(readTestCatalog(t, store, "project").Groups) != 0 {
 			t.Fatal("partial revision became discoverable")
 		}
+		completedCreateCalls := store.createCallCount(completedFileKey)
+		failedCreateCalls := store.createCallCount(failedFileKey)
+		manifestCreateCalls := store.createCallCount(manifestKey)
+		eventStart := len(store.eventSnapshot())
 		store.setCreateFailure(failedFileKey, nil)
 		if err := Publish(context.Background(), store, result); err != nil {
 			t.Fatalf("retry after partial upload failed: %v", err)
+		}
+		if got := store.createCallCount(completedFileKey); got != completedCreateCalls {
+			t.Errorf("retry recreated completed file: calls=%d before retry=%d", got, completedCreateCalls)
+		}
+		if got := store.createCallCount(failedFileKey); got != failedCreateCalls+1 {
+			t.Errorf("retry create calls for missing file = %d, want %d", got, failedCreateCalls+1)
+		}
+		if got := store.createCallCount(manifestKey); got != manifestCreateCalls+1 {
+			t.Errorf("retry manifest create calls = %d, want %d", got, manifestCreateCalls+1)
+		}
+		var writes []string
+		for _, event := range store.eventSnapshot()[eventStart:] {
+			if event.kind == "create" || event.kind == "replace" {
+				writes = append(writes, event.kind+":"+event.key)
+			}
+		}
+		catalogKey, _ := CatalogKey("project")
+		wantWrites := []string{"create:" + failedFileKey, "create:" + manifestKey, "replace:" + catalogKey}
+		if !reflect.DeepEqual(writes, wantWrites) {
+			t.Errorf("partial retry write order = %v; want missing file, manifest, then catalog %v", writes, wantWrites)
 		}
 		if len(readTestCatalog(t, store, "project").Groups) != 1 {
 			t.Fatal("successful retry did not advertise the completed revision")
@@ -732,5 +957,15 @@ func TestPublishAdvancesOnlyTheNamedCatalogGroup(t *testing.T) {
 	oldManifestKey, _ := ManifestKey("project", first.Manifest.HeadSHA)
 	if _, err := store.ReadObject(context.Background(), oldManifestKey); err != nil {
 		t.Fatalf("advancing discovery deleted the old fixed revision: %v", err)
+	}
+	oldFileKey, _ := FileKey("project", first.Manifest.HeadSHA, "docs/report.md")
+	newFileKey, _ := FileKey("project", nextRevision.Manifest.HeadSHA, "docs/report.md")
+	if oldFileKey == newFileKey {
+		t.Fatal("distinct preview heads resolved to the same immutable file key")
+	}
+	oldFile, oldErr := store.ReadObject(context.Background(), oldFileKey)
+	newFile, newErr := store.ReadObject(context.Background(), newFileKey)
+	if oldErr != nil || newErr != nil || !bytes.Equal(oldFile, first.Files["docs/report.md"]) || !bytes.Equal(newFile, nextRevision.Files["docs/report.md"]) {
+		t.Fatalf("same-byte distinct-head file revisions were not retained independently: oldErr=%v newErr=%v", oldErr, newErr)
 	}
 }
