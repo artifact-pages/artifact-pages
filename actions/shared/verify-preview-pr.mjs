@@ -189,19 +189,17 @@ async function main() {
     } else {
       process.stdout.write('Preview trust preflight passed; no pull-request provenance was requested.\n')
     }
-    if (process.env.ARTIFACT_PAGES_ACTION_KIND === 'preview') {
-      await appendStepOutputs({ trusted: 'true' })
-      let refs
-      let reachable
-      try {
-        refs = resolvePreviewRefs()
-        reachable = assertPreviewRefsReachable(process.env.GITHUB_WORKSPACE || process.cwd(), refs)
-      } catch (error) {
-        error.label = 'Preview Git ref check failed'
-        throw error
-      }
-      process.stdout.write(`Preview head ${refs.head} (${refs.headSource}) -> ${reachable.headSHA}; default ref ${refs.defaultRef} (${refs.defaultRefSource}) -> ${reachable.defaultRefSHA}; merge base ${reachable.mergeBaseSHA}.\n`)
+    await appendStepOutputs({ trusted: 'true' })
+    let refs
+    let reachable
+    try {
+      refs = resolvePreviewRefs()
+      reachable = assertPreviewRefsReachable(process.env.GITHUB_WORKSPACE || process.cwd(), refs)
+    } catch (error) {
+      error.label = 'Preview Git ref check failed'
+      throw error
     }
+    process.stdout.write(`Preview head ${refs.head} (${refs.headSource}) -> ${reachable.headSHA}; default ref ${refs.defaultRef} (${refs.defaultRefSource}) -> ${reachable.defaultRefSHA}; merge base ${reachable.mergeBaseSHA}.\n`)
   } catch (error) {
     process.stderr.write(`${error.label ?? 'Preview trust preflight failed'}: ${error.message}\n`)
     await writePreflightFailure(error)
@@ -211,7 +209,7 @@ async function main() {
 
 async function writePreflightFailure(error) {
   const outputPath = process.env.GITHUB_OUTPUT
-  if (!outputPath || process.env.ARTIFACT_PAGES_ACTION_KIND !== 'preview') return
+  if (!outputPath) return
   const result = {
     operation: 'preview publish',
     outcome: 'failed',

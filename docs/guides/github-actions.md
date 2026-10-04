@@ -5,7 +5,7 @@ Artifact Pages provides these optional composite Action entry points:
 - The repository root (`tasuku43/git-artifact-pages@<ref>`) is the GitHub Marketplace entry point. It is the same Action as `actions/site-publish`.
 - `actions/admin` wraps `artifact-pages registry register`, `registry unregister`, and `app deploy`.
 - `actions/site-publish` wraps `artifact-pages site publish` for one required, explicit site ID.
-- `actions/preview-preflight` and `actions/preview-publish` verify pull-request trust and publish pre-merge previews.
+- `actions/preview-publish` verifies pull-request trust and publishes pre-merge previews.
 
 They build the CLI from the same pinned Action source and invoke the command with `--format json`. They do not implement site publication, registry reconciliation, preview cleanup, or event timing. No repository has a required reusable workflow; adopters choose their own triggers and approval rules. Neither Action infers a site from the repository, discovers PRs, or adds a separate preview cleanup workflow.
 
@@ -19,7 +19,18 @@ Output names are hyphen-case in every Action. The earlier underscore names (`res
 
 ## Pre-merge previews
 
-`actions/preview-publish` publishes one site's changed documents for a pull request or a manual run. It runs the same trust preflight as `actions/preview-preflight` first, so `preview-publish` alone is enough for most workflows. Add `preview-preflight` as a separate earlier step or job only when you obtain provider credentials before the publish step (for example an OIDC role assumption), or when you want to reject untrusted pull requests before an environment approval gate.
+`actions/preview-publish` publishes one site's changed documents for a pull request or a manual run. There is no separate preflight Action.
+
+### Trust model
+
+Preview publication on pull requests rests on four layers:
+
+1. The job's `if: github.event.pull_request.head.repo.full_name == github.repository` skips fork-origin pull requests before any step runs.
+2. GitHub withholds secrets and OIDC tokens from workflow runs triggered by fork pull requests, so those runs cannot obtain provider credentials.
+3. As its first step, before any Go setup, CLI call or provider access, `preview-publish` verifies that the event's head repository is the workflow repository. When `pull-request` is given, it also checks the PR through the GitHub API (base and head repository, head SHA). It rejects `pull_request_target`.
+4. The provider trust policy should restrict which repository, workflow and ref can assume the publisher role (for AWS, the OIDC role's trust conditions).
+
+Configure provider credentials in a step before `preview-publish`; layers 1 and 2 keep untrusted runs away from them, and layer 3 runs before the provider is used.
 
 ### Git refs and the checkout
 
@@ -62,7 +73,7 @@ The config and storage provider remain independent. Registry Actions use the sel
 
 The files under [`examples/github-actions`](../../examples/github-actions) are templates. They pin the third-party checkout, Go setup, and AWS credential Actions by full commit SHA. The Artifact Pages Action itself has not been published as a release in this checkout; replace `<FULL_REVIEWED_ACTION_COMMIT_SHA>` with the full 40-character commit SHA of the reviewed release that contains the action files before adopting a template. The satellite template also uses a full commit SHA for the admin config locator.
 
-The templates show registering the desired site set, application deploy of the web bundle pinned by the Action ref, satellite publish for the explicit `sre` site, and pull-request previews (`satellite-preview.yml`, always on pull requests; `satellite-preview-label.yml`, only with a label). The preview templates run the preflight before assuming the AWS role and opt in to `comment: true` with `pull-requests: write`. The admin Action's `registry-register` operation value maps to the `registry register` CLI command. For pull-request planning, use the same operation with `dry-run: true` and a read-only provider role. Decide which PRs may receive read-only cloud credentials in the adopting repository's trust policy. A merge or another selected event can run the write operation; the Action does not choose one.
+The templates show registering the desired site set, application deploy of the web bundle pinned by the Action ref, satellite publish for the explicit `sre` site, and pull-request previews (`satellite-preview.yml`, always on pull requests; `satellite-preview-label.yml`, only with a label). The preview templates are a single job guarded by the same-repository `if:`, assume the AWS role, then run `preview-publish`, and opt in to `comment: true` with `pull-requests: write`. The admin Action's `registry-register` operation value maps to the `registry register` CLI command. For pull-request planning, use the same operation with `dry-run: true` and a read-only provider role. Decide which PRs may receive read-only cloud credentials in the adopting repository's trust policy. A merge or another selected event can run the write operation; the Action does not choose one.
 
 The component uses `actions/setup-go` pinned to commit `b7ad1dad31e06c5925ef5d2fc7ad053ef454303e` (v7.0.0) and reads the Go version from this repository's `go.mod`. The consuming workflow's checkout should also disable persisted credentials unless later steps need Git authentication.
 

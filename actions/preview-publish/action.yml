@@ -1,5 +1,5 @@
 name: Artifact Pages preview publish
-description: Optional thin wrapper for one site's pre-merge preview. Gate PR jobs as same-repository only and run preview-preflight before caller-owned provider credential steps.
+description: Optional thin wrapper for one site's pre-merge preview. Verifies the head repository and any explicit PR before CLI or provider access. Gate PR jobs as same-repository only and configure provider credentials in a step before this Action.
 inputs:
   site:
     description: Explicit registered site ID; never inferred from repository identity.
@@ -78,7 +78,6 @@ runs:
       shell: bash
       working-directory: ${{ github.workspace }}
       env:
-        ARTIFACT_PAGES_ACTION_KIND: preview
         ARTIFACT_PAGES_INPUT_SITE: ${{ inputs.site }}
         ARTIFACT_PAGES_INPUT_PULL_REQUEST: ${{ inputs.pull-request }}
         ARTIFACT_PAGES_INPUT_HEAD: ${{ inputs.head }}

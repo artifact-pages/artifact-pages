@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
-      pull-requests: write # read for trust verification, write for the preview comment
+      pull-requests: write # read for PR verification, write for the preview comment
       id-token: write
     steps:
       - name: Check out the registered repository with full history
@@ -33,12 +33,6 @@ jobs:
           ref: ${{ github.event.pull_request.base.ref }}
           fetch-depth: 0
           persist-credentials: false
-
-      # Provider credentials are requested below, so verify trust first.
-      - name: Verify the pull request before requesting publisher credentials
-        uses: tasuku43/git-artifact-pages/actions/preview-preflight@<FULL_REVIEWED_ACTION_COMMIT_SHA>
-        with:
-          pull-request: ${{ github.event.pull_request.number }}
 
       - name: Assume the SRE preview publisher role
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0

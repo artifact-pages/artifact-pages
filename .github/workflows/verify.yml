@@ -232,13 +232,6 @@ jobs:
           git switch -c actions-smoke-preview
           printf '<p>Preview change from run %s.</p>\n' "$GITHUB_RUN_ID" >> fixtures/actions-smoke/site/overview.html
           git -c user.name=actions-smoke -c user.email=actions-smoke@users.noreply.github.com commit -qam "Actions smoke preview change"
-      - name: Preview trust preflight (manual preview)
-        uses: ./actions/preview-preflight
-      - name: Preview trust preflight with an explicit pull request
-        if: github.event_name == 'pull_request'
-        uses: ./actions/preview-preflight
-        with:
-          pull-request: ${{ github.event.pull_request.number }}
       - name: Preview publish
         id: preview
         uses: ./actions/preview-publish

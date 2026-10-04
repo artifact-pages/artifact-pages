@@ -5,27 +5,15 @@ on:
     types: [opened, synchronize, reopened]
 
 jobs:
-  preview-preflight:
-    # Fork jobs are skipped before any Action or shell step can run.
-    if: github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-      pull-requests: read
-    steps:
-      - name: Verify the pull request before requesting publisher credentials
-        uses: tasuku43/git-artifact-pages/actions/preview-preflight@<FULL_REVIEWED_ACTION_COMMIT_SHA>
-        with:
-          pull-request: ${{ github.event.pull_request.number }}
-
   publish-preview:
-    needs: preview-preflight
-    if: needs.preview-preflight.result == 'success' && github.event.pull_request.head.repo.full_name == github.repository
+    # Fork jobs are skipped before any step runs. preview-publish verifies the head
+    # repository and the explicit PR again before it touches the CLI or the provider.
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     environment: artifact-pages-preview
     permissions:
       contents: read
-      pull-requests: write # lets the Action post its preview comment
+      pull-requests: write # read for PR verification, write for the preview comment
       id-token: write
     steps:
       - name: Check out the registered repository without checking out the pull-request head
@@ -70,5 +58,5 @@ jobs:
           COMMENT_URL: ${{ steps.publish-preview.outputs['comment-url'] }}
           EXIT_CODE: ${{ steps.publish-preview.outputs['exit-code'] }}
         run: |
-          printf 'outcome=%s exit-code=%s\n' "$OUTCOME" "$EXIT_CODE"
+          printf 'outcome=%s exit_code=%s\n' "$OUTCOME" "$EXIT_CODE"
           printf 'preview_list=%s\ndocuments=%s\ncomment=%s\n' "$GROUP_LIST_URL" "$DOCUMENTS_JSON" "$COMMENT_URL"
