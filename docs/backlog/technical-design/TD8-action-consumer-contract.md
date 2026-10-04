@@ -28,10 +28,12 @@ Consumer workflows repeat the same steps around each Action call: a checkout, a 
 7. **Go build cache.** Recorded in [TD4](TD4-action-marketplace-distribution.md) question 6 and [IMP-46](../implementation/IMP-46-action-marketplace-release.md): `setup-go` cannot hash the Action's `go.sum` from outside the workspace, so `actions/cache` is keyed on the pinned source.
 8. **Migration ordering (delegated to the agent).** The next release already renames outputs to hyphen-case. Ship the built-in summary in the same release, so consumers delete their Summarize steps rather than port them. Consumer cleanup follows the release and is tracked in [IMP-55](../implementation/IMP-55-consumer-workflow-migration.md).
 
+9. **Prebuilt CLI (owner, 2026-10-05).** Recorded in [TD4](TD4-action-marketplace-distribution.md) and [IMP-56](../implementation/IMP-56-prebuilt-cli-binaries.md): a release-tag ref installs a verified released binary instead of building.
+
 Reusable workflows remain out of scope.
 
 ## Exit criteria
 
-- [x] Record decisions 1 to 8 as a settled contract.
+- [x] Record decisions 1 to 9 as a settled contract.
 - [x] Update the specification (§19 "Shared Action behavior", the preview paragraphs, §22 `publicBaseURL`) and the preview decision P6.
 - [x] Hand implementation to IMP-50 through IMP-54 and the post-release migration to IMP-55.
