@@ -49,7 +49,7 @@ func TestControlRecordReadersIgnoreUnknownFieldsAndNameUnsupportedSchemas(t *tes
 	if _, _, err := readSiteCacheRetry(ctx, backend, "sre"); err != nil {
 		t.Errorf("cache retry record with an unknown field: %v", err)
 	}
-	writeControlRecord(t, root, siteCacheRetryKey("sre"), `{"schemaVersion":2,"paths":[]}`)
+	writeControlRecord(t, root, siteCacheRetryKey("sre"), `{"schemaVersion":3,"site":"sre","paths":["/_indexes/sre/index.json"]}`)
 	if _, _, err := readSiteCacheRetry(ctx, backend, "sre"); !compat.Is(err) {
 		t.Errorf("cache retry record v2 error = %v", err)
 	}

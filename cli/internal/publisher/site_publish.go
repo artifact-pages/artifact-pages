@@ -119,7 +119,14 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 		if err != nil {
 			return Result{}, fmt.Errorf("prepare site publish inputs: %w", err)
 		}
-		snapshot, err := loadSitePublishSnapshot(operationCtx, conditional, options.SiteID, prepared, options.Reconcile)
+		// Read the durable cache/transaction journal before examining the state
+		// fingerprint. Its generation binding decides whether touched keys must
+		// be replayed, and a completed transaction may still need invalidation.
+		pending, pendingETag, err := readSiteCacheRetry(operationCtx, conditional, options.SiteID)
+		if err != nil {
+			return Result{}, err
+		}
+		snapshot, err := loadSitePublishSnapshot(operationCtx, conditional, options.SiteID, prepared, options.Reconcile, pending, pendingETag)
 		if err != nil {
 			return Result{}, err
 		}
@@ -139,10 +146,6 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 			return result, fmt.Errorf("plan preview catalog reconciliation: %w", err)
 		}
 		result.PreviewChanges = &previewPlan.Changes
-		pending, pendingETag, err := readSiteCacheRetry(operationCtx, conditional, options.SiteID)
-		if err != nil {
-			return result, err
-		}
 		paths := siteCachePaths(options.SiteID, diff.changes, result.PreviewChanges, pending.Paths)
 		result.InvalidationPaths = plannedInvalidationPaths(backend, paths)
 		if options.DryRun {
@@ -158,21 +161,26 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 		if err := validateInvalidation(backend, paths); err != nil {
 			return result, err
 		}
-		// Save before origin writes: partial uploads/deletes and failed cache
-		// requests must remain retryable even when the next origin plan is empty.
+		// Persist the transaction id and monotone touched-key union before the
+		// first origin mutation. The old state remains the commit point until
+		// every projection write/delete has completed.
+		var retryNext siteCacheRetry
+		writeRetry := false
 		if len(paths) > 0 {
-			if err := writeSiteCacheRetry(operationCtx, conditional, options.SiteID, paths, pendingETag); err != nil {
-				return result, err
+			retryNext = siteCacheRetry{SchemaVersion: siteCacheRetrySchemaVersion, Site: options.SiteID, Paths: paths, Transaction: diff.transaction}
+			if retryNext.Transaction == nil && pending.Transaction != nil {
+				// Keep a completed generation marker while its cache work remains.
+				retryNext.Transaction = pending.Transaction
+			}
+			writeRetry = siteCacheRetryNeedsWrite(pending, retryNext, pendingETag != "")
+			if writeRetry {
+				pendingETag, err = writeSiteCacheRetryRecord(operationCtx, conditional, options.SiteID, retryNext, pendingETag)
+				if err != nil {
+					return result, err
+				}
 			}
 		}
 		filesPublished, filesRemoved := 0, 0
-		stateETag := diff.stateETag
-		if diff.needsPending {
-			stateETag, err = writeSitePublishState(operationCtx, conditional, options.SiteID, diff.pending, diff.stateExists, diff.stateETag)
-			if err != nil {
-				return result, fmt.Errorf("write pending site publish state: %w", err)
-			}
-		}
 		if len(diff.changes) > 0 {
 			filesPublished, filesRemoved, err = applySitePlan(operationCtx, backend, diff.desired, diff.changes, diff.stale)
 			if err != nil {
@@ -180,12 +188,7 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 			}
 		}
 		if diff.needsCommit {
-			finalExists := diff.stateExists || diff.needsPending
-			stateConditionETag := diff.stateETag
-			if diff.needsPending {
-				stateConditionETag = stateETag
-			}
-			if _, err := writeSitePublishState(operationCtx, conditional, options.SiteID, diff.committedNext, finalExists, stateConditionETag); err != nil {
+			if _, err := writeSitePublishState(operationCtx, conditional, options.SiteID, diff.committedNext, diff.stateExists, diff.stateETag); err != nil {
 				return result, fmt.Errorf("commit site publish state after origin projection: %w", err)
 			}
 		}

@@ -1807,7 +1807,7 @@ func (store *stateLayoutStore) writeCommitted(projection layoutProjection) error
 
 func (store *stateLayoutStore) encodeFlat(inputRoot string, rows []sitePublishObject, pending *sitePublishPending) ([]byte, error) {
 	if store.variant.codec == "named-http-row-v1" {
-		return encodeSitePublishState(sitePublishState{SchemaVersion: sitePublishStateSchemaVersion, Site: store.site,
+		return encodeSitePublishState(sitePublishState{SchemaVersion: sitePublishStateLegacySchemaVersion, Site: store.site,
 			Committed: sitePublishCommitted{InputRoot: inputRoot, Objects: append([]sitePublishObject(nil), rows...)}, Pending: pending})
 	}
 	profiles, compactRows := layoutCompactRows(rows, true)

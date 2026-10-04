@@ -43,8 +43,9 @@ func TestSitePublishStateCodecRoundTripDeterministic(t *testing.T) {
 	if object.ContentType != "application/octet-stream" || object.ContentEncoding != "" || object.ContentDisposition != "" || object.Cache != "no-store" {
 		t.Fatalf("unexpected object HTTP policy: %+v", object)
 	}
-	if len(object.Metadata) != 5 || object.Metadata["artifact-pages-publish-state-schema"] != "1" ||
+	if len(object.Metadata) != 6 || object.Metadata["artifact-pages-publish-state-schema"] != "2" ||
 		object.Metadata["artifact-pages-publish-input-root"] != state.Committed.InputRoot ||
+		object.Metadata["artifact-pages-publish-generation"] != state.Committed.Generation ||
 		object.Metadata["artifact-pages-publish-pending"] != "false" ||
 		object.Metadata["artifact-pages-site"] != state.Site ||
 		object.Metadata["artifact-pages-sha256"] != sha256Hex(object.Bytes) {
@@ -64,18 +65,21 @@ func TestSitePublishStateCodecRoundTripDeterministic(t *testing.T) {
 
 func TestSitePublishStatePendingRoundTrip(t *testing.T) {
 	state := validSitePublishState()
+	state.SchemaVersion = sitePublishStateLegacySchemaVersion
+	state.Committed.Generation = ""
 	state.Pending = &sitePublishPending{TouchedKeys: []string{"_artifacts/sre/docs/start.md", "_indexes/sre/index.json"}}
-	object, err := buildSitePublishStateObject(state.Site, state)
+	compressed, err := encodeSitePublishState(state)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if object.Metadata["artifact-pages-publish-pending"] != "true" {
-		t.Fatalf("pending metadata = %q", object.Metadata["artifact-pages-publish-pending"])
-	}
-	decoded, err := decodeSitePublishState(state.Site, objectInfoForState(object), object.Bytes)
+	info := ObjectInfo{ETag: `"legacy-state-etag"`, Size: int64(len(compressed)), ContentType: "application/octet-stream", ContentDisposition: "inline", CacheControl: sitePublishStateCacheControl,
+		Metadata: map[string]string{"artifact-pages-publish-state-schema": "1", "artifact-pages-publish-input-root": state.Committed.InputRoot,
+			"artifact-pages-publish-pending": "true", "artifact-pages-site": state.Site, "artifact-pages-sha256": sha256Hex(compressed)}}
+	decoded, err := decodeSitePublishState(state.Site, info, compressed)
 	if err != nil {
 		t.Fatal(err)
 	}
+	state.Committed.Generation = legacySitePublishGeneration(state.Site, info.Metadata["artifact-pages-sha256"])
 	if !reflect.DeepEqual(decoded, state) {
 		t.Fatalf("decoded pending state differs\n got: %#v\nwant: %#v", decoded, state)
 	}
@@ -99,8 +103,8 @@ func TestValidateSitePublishStateHead(t *testing.T) {
 		{name: "wrong cache", edit: func(info *ObjectInfo) { info.CacheControl = "public" }},
 		{name: "wrong disposition", edit: func(info *ObjectInfo) { info.ContentDisposition = "attachment" }},
 		{name: "missing metadata", edit: func(info *ObjectInfo) { delete(info.Metadata, "artifact-pages-site") }},
-		{name: "unknown metadata", edit: func(info *ObjectInfo) { info.Metadata["other"] = "x" }},
-		{name: "bad schema", edit: func(info *ObjectInfo) { info.Metadata["artifact-pages-publish-state-schema"] = "2" }},
+		{name: "bad schema", edit: func(info *ObjectInfo) { info.Metadata["artifact-pages-publish-state-schema"] = "3" }},
+		{name: "bad generation", edit: func(info *ObjectInfo) { info.Metadata["artifact-pages-publish-generation"] = "ABC" }},
 		{name: "wrong site", edit: func(info *ObjectInfo) { info.Metadata["artifact-pages-site"] = "other" }},
 		{name: "bad input root", edit: func(info *ObjectInfo) { info.Metadata["artifact-pages-publish-input-root"] = "ABC" }},
 		{name: "bad pending", edit: func(info *ObjectInfo) { info.Metadata["artifact-pages-publish-pending"] = "yes" }},
@@ -118,6 +122,11 @@ func TestValidateSitePublishStateHead(t *testing.T) {
 	if err := validateSitePublishStateHead("sre", base); err != nil {
 		t.Fatalf("valid HEAD rejected: %v", err)
 	}
+	withAdditiveMetadata := cloneStateInfo(base)
+	withAdditiveMetadata.Metadata["provider-added-field"] = "ignored"
+	if err := validateSitePublishStateHead("sre", withAdditiveMetadata); err != nil {
+		t.Fatalf("unknown additive state metadata was rejected: %v", err)
+	}
 }
 
 func TestEncodeSitePublishStateRejectsInvalidRowsAndPendingKeys(t *testing.T) {
@@ -126,7 +135,7 @@ func TestEncodeSitePublishStateRejectsInvalidRowsAndPendingKeys(t *testing.T) {
 		name   string
 		mutate func(*sitePublishState)
 	}{
-		{name: "wrong schema", mutate: func(state *sitePublishState) { state.SchemaVersion = 2 }},
+		{name: "wrong schema", mutate: func(state *sitePublishState) { state.SchemaVersion = 3 }},
 		{name: "wrong site", mutate: func(state *sitePublishState) { state.Site = "other" }},
 		{name: "bad root", mutate: func(state *sitePublishState) { state.Committed.InputRoot = "not-a-hash" }},
 		{name: "nil object list", mutate: func(state *sitePublishState) { state.Committed.Objects = nil }},
@@ -195,6 +204,8 @@ func TestDecodeSitePublishStateStrictJSONAndBounds(t *testing.T) {
 	}
 	missing := []byte(`{"schemaVersion":1,"site":"sre","committed":{"inputRoot":"","objects":[]}}`)
 	emptyRootInfo := cloneStateInfo(objectInfoForState(object))
+	emptyRootInfo.Metadata["artifact-pages-publish-state-schema"] = "1"
+	delete(emptyRootInfo.Metadata, "artifact-pages-publish-generation")
 	emptyRootInfo.Metadata["artifact-pages-publish-input-root"] = ""
 	if _, err := decodePlainStateForTest(state.Site, emptyRootInfo, missing); err != nil {
 		t.Fatalf("valid empty legacy state was rejected: %v", err)
@@ -268,7 +279,8 @@ func validSitePublishState() sitePublishState {
 		SchemaVersion: sitePublishStateSchemaVersion,
 		Site:          "sre",
 		Committed: sitePublishCommitted{
-			InputRoot: strings.Repeat("b", 64),
+			InputRoot:  strings.Repeat("b", 64),
+			Generation: strings.Repeat("d", 64),
 			Objects: []sitePublishObject{
 				{
 					Key: "_artifacts/sre/docs/start.md", SHA256: strings.Repeat("a", 64), Size: 17,

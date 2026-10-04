@@ -2,11 +2,14 @@ package publisher
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/tasuku43/git-artifact-pages/cli/internal/indexer"
@@ -15,14 +18,20 @@ import (
 const sitePublishInputPolicy = "publisher-site-projection-v1;http-policy-v1;index-schema-v1;fulltext-policy-v1"
 
 type sitePublishSnapshot struct {
-	state      sitePublishState
-	head       ObjectInfo
-	etag       string
-	exists     bool
-	fastPath   bool
-	legacyKeys []string
-	actual     map[string]sitePublishObject
-	actualKeys []string
+	state         sitePublishState
+	head          ObjectInfo
+	etag          string
+	exists        bool
+	fastPath      bool
+	legacyKeys    []string
+	actual        map[string]sitePublishObject
+	actualKeys    []string
+	generation    string
+	retry         siteCacheRetry
+	retryETag     string
+	retryExists   bool
+	activeTx      *sitePublishTransaction
+	activeTouched []string
 }
 
 type sitePublishDiff struct {
@@ -30,12 +39,11 @@ type sitePublishDiff struct {
 	stale         []string
 	desired       []desiredSiteObject
 	committedNext sitePublishState
-	pending       sitePublishState
 	stateExists   bool
 	stateETag     string
 	needsCommit   bool
-	needsPending  bool
 	buildSkipped  bool
+	transaction   *sitePublishTransaction
 }
 
 func sitePublishBuildOptions(siteID, title, description, sourceDir string, identity indexer.GitSourceIdentity) indexer.BuildOptions {
@@ -46,43 +54,84 @@ func sitePublishBuildOptions(siteID, title, description, sourceDir string, ident
 	}
 }
 
-func loadSitePublishSnapshot(ctx context.Context, backend ConditionalObjectBackend, siteID string, prepared *indexer.PreparedBuild, reconcile bool) (sitePublishSnapshot, error) {
+func loadSitePublishSnapshot(ctx context.Context, backend ConditionalObjectBackend, siteID string, prepared *indexer.PreparedBuild, reconcile bool, retry siteCacheRetry, retryETag string) (sitePublishSnapshot, error) {
 	key := sitePublishStateKey(siteID)
-	info, err := backend.HeadObject(ctx, key)
-	if errors.Is(err, ErrObjectNotFound) {
-		rows, keys, inventoryErr := inventorySiteObjects(ctx, backend, siteID)
-		if inventoryErr != nil {
-			return sitePublishSnapshot{}, inventoryErr
+	snapshot := sitePublishSnapshot{retry: retry, retryETag: retryETag, retryExists: retryETag != ""}
+	var info ObjectInfo
+	var stateObject Object
+	var getETag string
+	stateReadMode := selectedPublishStateReadMode(backend)
+	if stateReadMode == publishStateReadGetOnly {
+		var err error
+		stateObject, getETag, err = backend.GetObject(ctx, key)
+		if errors.Is(err, ErrObjectNotFound) {
+			return loadMissingSitePublishSnapshot(ctx, backend, siteID, retry, retryETag)
 		}
-		return sitePublishSnapshot{
-			state:      sitePublishState{SchemaVersion: sitePublishStateSchemaVersion, Site: siteID, Committed: sitePublishCommitted{Objects: rows}},
-			legacyKeys: keys, actual: rowsMap(rows), actualKeys: keys,
-		}, nil
-	}
-	if err != nil {
-		return sitePublishSnapshot{}, fmt.Errorf("inspect site publish state: %w", err)
+		if err != nil {
+			return sitePublishSnapshot{}, fmt.Errorf("read site publish state: %w", err)
+		}
+		info = sitePublishStateInfo(stateObject, getETag)
+		snapshot.exists = true
+		snapshot.etag = getETag
+		snapshot.head = info
+	} else {
+		var err error
+		info, err = backend.HeadObject(ctx, key)
+		if errors.Is(err, ErrObjectNotFound) {
+			return loadMissingSitePublishSnapshot(ctx, backend, siteID, retry, retryETag)
+		}
+		if err != nil {
+			return sitePublishSnapshot{}, fmt.Errorf("inspect site publish state: %w", err)
+		}
+		snapshot.exists = true
+		snapshot.etag = info.ETag
+		snapshot.head = info
 	}
 	if err := validateSitePublishStateHead(siteID, info); err != nil {
 		return sitePublishSnapshot{}, fmt.Errorf("validate site publish state HEAD: %w", err)
 	}
-	snapshot := sitePublishSnapshot{head: info, etag: info.ETag, exists: true}
-	pending := info.Metadata["artifact-pages-publish-pending"] == "true"
-	if !reconcile && prepared.Reusable() && !pending && info.Metadata["artifact-pages-publish-input-root"] == prepared.InputRoot() {
+	version, _ := strconv.Atoi(info.Metadata["artifact-pages-publish-state-schema"])
+	snapshot.generation = sitePublishGenerationFromHead(siteID, info)
+	if err := classifySitePublishTransaction(&snapshot); err != nil {
+		return sitePublishSnapshot{}, err
+	}
+	if stateReadMode == publishStateReadGetOnly {
+		state, err := decodeSitePublishState(siteID, info, stateObject.Bytes)
+		if err != nil {
+			return sitePublishSnapshot{}, fmt.Errorf("validate site publish state: %w", err)
+		}
+		snapshot.state = state
+	} else if !reconcile && prepared.Reusable() && info.Metadata["artifact-pages-publish-pending"] == "false" &&
+		info.Metadata["artifact-pages-publish-input-root"] == prepared.InputRoot() && snapshot.activeTx == nil {
+		// The trusted state HEAD supplies both the fingerprint and transaction
+		// generation, so ordinary no-ops can skip the state body and full build.
+		snapshot.state = sitePublishState{
+			SchemaVersion: version, Site: siteID,
+			Committed: sitePublishCommitted{InputRoot: prepared.InputRoot(), Generation: snapshot.generation, Objects: []sitePublishObject{}},
+		}
 		snapshot.fastPath = true
 		return snapshot, nil
 	}
-	stateObject, getETag, err := backend.GetObject(ctx, key)
-	if err != nil {
-		return sitePublishSnapshot{}, fmt.Errorf("read site publish state: %w", err)
+	if stateReadMode == publishStateReadHeadThenGet {
+		var err error
+		stateObject, getETag, err = backend.GetObject(ctx, key)
+		if err != nil {
+			return sitePublishSnapshot{}, fmt.Errorf("read site publish state: %w", err)
+		}
+		if getETag != info.ETag {
+			return sitePublishSnapshot{}, errors.New("site publish state changed between HEAD and GET; retry site publish")
+		}
+		state, err := decodeSitePublishState(siteID, info, stateObject.Bytes)
+		if err != nil {
+			return sitePublishSnapshot{}, fmt.Errorf("validate site publish state: %w", err)
+		}
+		snapshot.state = state
 	}
-	if getETag != info.ETag {
-		return sitePublishSnapshot{}, errors.New("site publish state changed between HEAD and GET; retry site publish")
+	if !reconcile && prepared.Reusable() && snapshot.state.Pending == nil &&
+		snapshot.state.Committed.InputRoot == prepared.InputRoot() && snapshot.activeTx == nil {
+		snapshot.fastPath = true
+		return snapshot, nil
 	}
-	state, err := decodeSitePublishState(siteID, info, stateObject.Bytes)
-	if err != nil {
-		return sitePublishSnapshot{}, fmt.Errorf("validate site publish state: %w", err)
-	}
-	snapshot.state = state
 	if reconcile {
 		rows, keys, inventoryErr := inventorySiteObjects(ctx, backend, siteID)
 		if inventoryErr != nil {
@@ -90,6 +139,60 @@ func loadSitePublishSnapshot(ctx context.Context, backend ConditionalObjectBacke
 		}
 		snapshot.actual = rowsMap(rows)
 		snapshot.actualKeys = keys
+	}
+	return snapshot, nil
+}
+
+func sitePublishStateInfo(object Object, etag string) ObjectInfo {
+	return ObjectInfo{ETag: etag, Size: int64(len(object.Bytes)), ContentType: object.ContentType,
+		ContentDisposition: object.ContentDisposition, ContentEncoding: object.ContentEncoding,
+		CacheControl: object.Cache, Metadata: object.Metadata}
+}
+
+func sitePublishGenerationFromHead(site string, info ObjectInfo) string {
+	if info.Metadata["artifact-pages-publish-state-schema"] == fmt.Sprint(sitePublishStateSchemaVersion) {
+		return info.Metadata["artifact-pages-publish-generation"]
+	}
+	return legacySitePublishGeneration(site, info.Metadata["artifact-pages-sha256"])
+}
+
+func classifySitePublishTransaction(snapshot *sitePublishSnapshot) error {
+	tx := snapshot.retry.Transaction
+	if tx == nil {
+		return nil
+	}
+	if !snapshot.exists {
+		if tx.BaseGeneration != snapshot.generation {
+			return errors.New("site cache retry transaction does not match the absent publish state generation")
+		}
+		snapshot.activeTx = tx
+		snapshot.activeTouched = append([]string(nil), tx.TouchedKeys...)
+		return nil
+	}
+	if tx.ID == snapshot.generation {
+		return nil
+	}
+	if tx.BaseGeneration != snapshot.generation {
+		return errors.New("site cache retry transaction matches neither the committed nor pending publish state generation")
+	}
+	snapshot.activeTx = tx
+	snapshot.activeTouched = append([]string(nil), tx.TouchedKeys...)
+	return nil
+}
+
+func loadMissingSitePublishSnapshot(ctx context.Context, backend ConditionalObjectBackend, siteID string, retry siteCacheRetry, retryETag string) (sitePublishSnapshot, error) {
+	rows, keys, err := inventorySiteObjects(ctx, backend, siteID)
+	if err != nil {
+		return sitePublishSnapshot{}, err
+	}
+	snapshot := sitePublishSnapshot{
+		state: sitePublishState{SchemaVersion: sitePublishStateLegacySchemaVersion, Site: siteID,
+			Committed: sitePublishCommitted{Generation: absentSitePublishGeneration(siteID), Objects: rows}},
+		generation: absentSitePublishGeneration(siteID), legacyKeys: keys, actual: rowsMap(rows), actualKeys: keys,
+		retry: retry, retryETag: retryETag, retryExists: retryETag != "",
+	}
+	if err := classifySitePublishTransaction(&snapshot); err != nil {
+		return sitePublishSnapshot{}, err
 	}
 	return snapshot, nil
 }
@@ -166,6 +269,9 @@ func buildSitePublishDiff(ctx context.Context, backend ConditionalObjectBackend,
 			touched[key] = struct{}{}
 		}
 	}
+	for _, key := range snapshot.activeTouched {
+		touched[key] = struct{}{}
+	}
 	for _, key := range unionRowKeys(oldMap, desiredMap) {
 		if !equalSitePublishObject(oldMap[key], desiredMap[key]) {
 			touched[key] = struct{}{}
@@ -207,18 +313,29 @@ func buildSitePublishDiff(ctx context.Context, backend ConditionalObjectBackend,
 			stale = append(stale, key)
 		}
 	}
+	projectionChanges := len(changes) > 0
+	var transaction *sitePublishTransaction
+	if projectionChanges {
+		if snapshot.activeTx != nil {
+			transaction = &sitePublishTransaction{ID: snapshot.activeTx.ID, BaseGeneration: snapshot.activeTx.BaseGeneration,
+				TouchedKeys: sortedUnique(append(append([]string(nil), snapshot.activeTx.TouchedKeys...), touchedKeys...))}
+		} else {
+			id, err := newSitePublishTransactionID(snapshot.generation)
+			if err != nil {
+				return sitePublishDiff{}, err
+			}
+			transaction = &sitePublishTransaction{ID: id, BaseGeneration: snapshot.generation, TouchedKeys: touchedKeys}
+		}
+	}
+	generation := snapshot.generation
+	if transaction != nil {
+		generation = transaction.ID
+	}
 	state := sitePublishState{
 		SchemaVersion: sitePublishStateSchemaVersion, Site: siteID,
-		Committed: sitePublishCommitted{InputRoot: prepared.InputRoot(), Objects: desiredRows},
+		Committed: sitePublishCommitted{InputRoot: prepared.InputRoot(), Generation: generation, Objects: desiredRows},
 	}
-	pendingState := sitePublishState{
-		SchemaVersion: sitePublishStateSchemaVersion, Site: siteID,
-		Committed: snapshot.state.Committed,
-		Pending:   &sitePublishPending{TouchedKeys: touchedKeys},
-	}
-	projectionChanges := len(changes) > 0
-	needsCommit := !snapshot.exists || snapshot.state.Committed.InputRoot != prepared.InputRoot() || projectionChanges || snapshot.state.Pending != nil
-	needsPending := projectionChanges
+	needsCommit := !snapshot.exists || snapshot.state.Committed.InputRoot != prepared.InputRoot() || projectionChanges
 	// A true managed-state no-op must avoid writes. Reconcile with no drift and
 	// a matching fingerprint falls through here with no change either.
 	if snapshot.exists && !projectionChanges && snapshot.state.Committed.InputRoot == prepared.InputRoot() && snapshot.state.Pending == nil {
@@ -227,13 +344,24 @@ func buildSitePublishDiff(ctx context.Context, backend ConditionalObjectBackend,
 	if !snapshot.exists && !needsCommit {
 		needsCommit = true
 	}
-	if !needsPending {
-		pendingState = sitePublishState{}
-	}
 	return sitePublishDiff{
-		changes: changes, stale: stale, desired: desired, committedNext: state, pending: pendingState,
-		stateExists: snapshot.exists, stateETag: snapshot.etag, needsCommit: needsCommit, needsPending: needsPending,
+		changes: changes, stale: stale, desired: desired, committedNext: state,
+		stateExists: snapshot.exists, stateETag: snapshot.etag, needsCommit: needsCommit, transaction: transaction,
 	}, nil
+}
+
+func newSitePublishTransactionID(base string) (string, error) {
+	for attempt := 0; attempt < 4; attempt++ {
+		var raw [32]byte
+		if _, err := rand.Read(raw[:]); err != nil {
+			return "", fmt.Errorf("generate site publish transaction id: %w", err)
+		}
+		id := hex.EncodeToString(raw[:])
+		if id != base {
+			return id, nil
+		}
+	}
+	return "", errors.New("could not generate a site publish transaction id distinct from its base")
 }
 
 func preparedSiteObjects(prepared *indexer.PreparedBuild, siteID string) ([]desiredSiteObject, error) {

@@ -20,11 +20,19 @@ type sitePublishProbeBackend struct {
 	projectionLists      int
 	projectionWrites     []string
 	failStateWriteAt     int
+	journalWrites        int
+	failJournalWriteAt   int
 	mismatchStateGetETag bool
 }
 
 func newSitePublishProbeBackend() *sitePublishProbeBackend {
 	return &sitePublishProbeBackend{sitePublishScaleBackend: newSitePublishScaleBackend()}
+}
+
+type sitePublishGetOnlyProbeBackend struct{ *sitePublishProbeBackend }
+
+func (*sitePublishGetOnlyProbeBackend) publishStateReadMode() publishStateReadMode {
+	return publishStateReadGetOnly
 }
 
 func (backend *sitePublishProbeBackend) resetProbe() {
@@ -36,6 +44,8 @@ func (backend *sitePublishProbeBackend) resetProbe() {
 	backend.projectionLists = 0
 	backend.projectionWrites = nil
 	backend.failStateWriteAt = 0
+	backend.journalWrites = 0
+	backend.failJournalWriteAt = 0
 	backend.mismatchStateGetETag = false
 	backend.probeMu.Unlock()
 	backend.sitePublishScaleBackend.resetCounts()
@@ -83,6 +93,12 @@ func (backend *sitePublishProbeBackend) PutObjectConditional(ctx context.Context
 		if backend.failStateWriteAt > 0 && backend.stateWrites == backend.failStateWriteAt {
 			backend.probeMu.Unlock()
 			return "", errors.New("injected site publish state CAS failure")
+		}
+	} else if key == siteCacheRetryKey("sre") {
+		backend.journalWrites++
+		if backend.failJournalWriteAt > 0 && backend.journalWrites == backend.failJournalWriteAt {
+			backend.probeMu.Unlock()
+			return "", errors.New("injected site publish journal CAS failure")
 		}
 	}
 	backend.probeMu.Unlock()
@@ -140,6 +156,47 @@ func TestPublishSiteNoOpSkipsBuildManifestAndProjectionInventory(t *testing.T) {
 	}
 }
 
+func TestPublishSiteGetOnlyStatePolicyUsesCompleteGetMetadata(t *testing.T) {
+	root := createPublisherCheckout(t, "git@github.com:acme/sre.git")
+	probe := newSitePublishProbeBackend()
+	backend := &sitePublishGetOnlyProbeBackend{sitePublishProbeBackend: probe}
+	seedPublisherRegistry(t, probe.lockMemoryBackend, registeredSREManifest)
+	options := SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts"}
+	initial, err := PublishSite(context.Background(), backend, options)
+	if err != nil || initial.Outcome != "published" {
+		t.Fatalf("initial GET-only PublishSite() = %+v, err=%v", initial, err)
+	}
+
+	probe.resetProbe()
+	noop, err := PublishSite(context.Background(), backend, options)
+	if err != nil || !noop.BuildSkipped || noop.Outcome != "no-op" {
+		t.Fatalf("GET-only no-op = %+v, err=%v", noop, err)
+	}
+	probe.probeMu.Lock()
+	stateHeads, stateGets, stateWrites := probe.stateHeads, probe.stateGets, probe.stateWrites
+	projectionWrites := len(probe.projectionWrites)
+	probe.probeMu.Unlock()
+	if stateHeads != 0 || stateGets != 1 || stateWrites != 0 || projectionWrites != 0 {
+		t.Fatalf("GET-only state HEAD/GET/PUT=%d/%d/%d projectionWrites=%d; want 0/1/0 and zero", stateHeads, stateGets, stateWrites, projectionWrites)
+	}
+
+	page := filepath.Join(root, "docs", "artifacts", "report.html")
+	if err := os.WriteFile(page, []byte("<title>GET-only change</title><h1>changed</h1>"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	probe.resetProbe()
+	changed, err := PublishSite(context.Background(), backend, options)
+	if err != nil || changed.Outcome != "published" {
+		t.Fatalf("GET-only changed publish = %+v, err=%v", changed, err)
+	}
+	probe.probeMu.Lock()
+	stateHeads, stateGets, stateWrites = probe.stateHeads, probe.stateGets, probe.stateWrites
+	probe.probeMu.Unlock()
+	if stateHeads != 0 || stateGets != 1 || stateWrites != 1 {
+		t.Fatalf("GET-only changed state HEAD/GET/PUT=%d/%d/%d; want 0/1/1", stateHeads, stateGets, stateWrites)
+	}
+}
+
 func TestPublishSiteChangedStateETagBetweenHeadAndGetFailsBeforeProjectionWrites(t *testing.T) {
 	root := createPublisherCheckout(t, "git@github.com:acme/sre.git")
 	backend := newSitePublishProbeBackend()
@@ -170,7 +227,7 @@ func TestPublishSiteChangedStateETagBetweenHeadAndGetFailsBeforeProjectionWrites
 	}
 }
 
-func TestPublishSitePendingStateCASFailurePreventsProjectionWrites(t *testing.T) {
+func TestPublishSitePendingJournalCASFailurePreventsProjectionWrites(t *testing.T) {
 	root := createPublisherCheckout(t, "git@github.com:acme/sre.git")
 	backend := newSitePublishProbeBackend()
 	seedPublisherRegistry(t, backend.lockMemoryBackend, registeredSREManifest)
@@ -184,17 +241,17 @@ func TestPublishSitePendingStateCASFailurePreventsProjectionWrites(t *testing.T)
 		t.Fatal(err)
 	}
 	backend.resetProbe()
-	backend.failStateWriteAt = 1
+	backend.failJournalWriteAt = 1
 	_, err := PublishSite(context.Background(), backend, options)
-	if err == nil || !strings.Contains(err.Error(), "write pending site publish state") {
-		t.Fatalf("PublishSite() error = %v, want pending state CAS failure", err)
+	if err == nil || !strings.Contains(err.Error(), "save site cache retry record") {
+		t.Fatalf("PublishSite() error = %v, want pending journal CAS failure", err)
 	}
 	backend.probeMu.Lock()
-	stateWrites := backend.stateWrites
+	stateWrites, journalWrites := backend.stateWrites, backend.journalWrites
 	projectionWrites := append([]string(nil), backend.projectionWrites...)
 	backend.probeMu.Unlock()
-	if stateWrites != 1 || len(projectionWrites) != 0 {
-		t.Fatalf("pending state writes=%d projection writes=%v, want one failed state write and no origin writes", stateWrites, projectionWrites)
+	if stateWrites != 0 || journalWrites != 1 || len(projectionWrites) != 0 {
+		t.Fatalf("state/journal writes=%d/%d projection writes=%v, want one failed journal write and no state/origin writes", stateWrites, journalWrites, projectionWrites)
 	}
 	if after := sitePublishProjectionBytes(backend.lockMemoryBackend, "sre"); !equalProjectionBytes(before, after) {
 		t.Fatal("projection changed after pending state CAS failed")
@@ -226,7 +283,7 @@ func TestPublishSiteFinalStateCASFailureRecoversRevertedTouchedKeys(t *testing.T
 		t.Fatal(err)
 	}
 	backend.resetProbe()
-	backend.failStateWriteAt = 2 // pending journal succeeds; final commit fails.
+	backend.failStateWriteAt = 1 // transaction journal succeeds; final commit fails.
 	if _, err := PublishSite(context.Background(), backend, options); err == nil || !strings.Contains(err.Error(), "commit site publish state") {
 		t.Fatalf("publish with final state CAS failure error = %v", err)
 	}
@@ -240,8 +297,12 @@ func TestPublishSiteFinalStateCASFailureRecoversRevertedTouchedKeys(t *testing.T
 		t.Fatal(err)
 	}
 	pending, err := decodeSitePublishState("sre", stateInfo, stateObject.Bytes)
-	if err != nil || pending.Pending == nil {
-		t.Fatalf("state after final CAS failure = %+v, err=%v; want durable pending journal", pending, err)
+	if err != nil || pending.SchemaVersion != sitePublishStateSchemaVersion || pending.Pending != nil {
+		t.Fatalf("state after final CAS failure = %+v, err=%v; want unchanged committed v2 state", pending, err)
+	}
+	journal, _, err := readSiteCacheRetry(context.Background(), backend, "sre")
+	if err != nil || journal.Transaction == nil || len(journal.Transaction.TouchedKeys) == 0 {
+		t.Fatalf("journal after final CAS failure = %+v, err=%v; want durable touched-key intent", journal, err)
 	}
 
 	// Revert a touched page, remove an object introduced by the failed run,
