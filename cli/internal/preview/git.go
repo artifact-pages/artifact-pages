@@ -1,6 +1,7 @@
 package preview
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
@@ -67,7 +68,119 @@ type diffEntry struct {
 	Document bool
 }
 
+type blobReuseStats struct {
+	MaxReusableCacheBytes           int64
+	CacheBytesAtAssemblyStart       int64
+	CacheBytesAfterAssembly         int64
+	GitBodyBytesAvoided             int64
+	SelectedFileBytes               int64
+	MaxExplicitBlobBufferBytes      int64
+	selectedFileBytesDuringAssembly int64
+}
+
+// buildBlobReuse is scoped to one BuildFromGit call. Its bodies are exact Git
+// blobs keyed by Git's content SHA; it is never retained across builds.
+type buildBlobReuse struct {
+	bodies map[string][]byte
+	stats  *blobReuseStats
+}
+
+func (reuse *buildBlobReuse) bodyBytes() int64 {
+	if reuse == nil {
+		return 0
+	}
+	var total int64
+	for _, body := range reuse.bodies {
+		total += int64(len(body))
+	}
+	return total
+}
+
+func (reuse *buildBlobReuse) observeCacheAndScratch(scratch map[string][]byte) {
+	if reuse == nil || reuse.stats == nil {
+		return
+	}
+	cacheBytes := reuse.bodyBytes()
+	scratchBytes := int64(0)
+	for _, body := range scratch {
+		scratchBytes += int64(len(body))
+	}
+	if cacheBytes > reuse.stats.MaxReusableCacheBytes {
+		reuse.stats.MaxReusableCacheBytes = cacheBytes
+	}
+	if current := cacheBytes + scratchBytes; current > reuse.stats.MaxExplicitBlobBufferBytes {
+		reuse.stats.MaxExplicitBlobBufferBytes = current
+	}
+}
+
+func (reuse *buildBlobReuse) retainScratch(scratch map[string][]byte) {
+	if reuse == nil {
+		return
+	}
+	for sha, body := range scratch {
+		if _, alreadyRetained := reuse.bodies[sha]; !alreadyRetained {
+			reuse.bodies[sha] = body
+		}
+	}
+	reuse.observeCacheAndScratch(nil)
+}
+
+func (reuse *buildBlobReuse) readForBundle(ctx context.Context, repoRoot string, entry treeEntry, selectedBySHA map[string][]byte) ([]byte, error) {
+	if err := validateTreeBlobEntry(entry); err != nil {
+		return nil, err
+	}
+	var body []byte
+	if selectedBySHA != nil {
+		if previous, ok := selectedBySHA[entry.SHA]; ok {
+			body = bytes.Clone(previous)
+			if reuse != nil && reuse.stats != nil {
+				reuse.stats.GitBodyBytesAvoided += int64(len(body))
+			}
+		} else if cached, ok := reuse.bodies[entry.SHA]; ok {
+			body = cached
+			delete(reuse.bodies, entry.SHA)
+			selectedBySHA[entry.SHA] = body
+			if reuse.stats != nil {
+				reuse.stats.GitBodyBytesAvoided += int64(len(body))
+			}
+		} else {
+			var err error
+			body, err = readTreeBlob(ctx, repoRoot, entry)
+			if err != nil {
+				return nil, err
+			}
+			selectedBySHA[entry.SHA] = body
+		}
+	} else {
+		var err error
+		body, err = readTreeBlob(ctx, repoRoot, entry)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if reuse != nil && reuse.stats != nil {
+		reuse.stats.selectedFileBytesDuringAssembly += int64(len(body))
+		if current := reuse.bodyBytes() + reuse.stats.selectedFileBytesDuringAssembly; current > reuse.stats.MaxExplicitBlobBufferBytes {
+			reuse.stats.MaxExplicitBlobBufferBytes = current
+		}
+	}
+	return body, nil
+}
+
+func readTreeBlobForBundle(ctx context.Context, repoRoot string, entry treeEntry, reuse *buildBlobReuse, selectedBySHA map[string][]byte) ([]byte, error) {
+	if reuse != nil {
+		return reuse.readForBundle(ctx, repoRoot, entry, selectedBySHA)
+	}
+	return readTreeBlob(ctx, repoRoot, entry)
+}
+
 func BuildFromGit(ctx context.Context, options BuildOptions) (BuildResult, error) {
+	return buildFromGit(ctx, options, true, nil)
+}
+
+// buildFromGit keeps the prior read path available to the tagged cost probe;
+// normal callers always use the per-build same-blob reuse path.
+func buildFromGit(ctx context.Context, options BuildOptions, reuseBlobBodies bool, stats *blobReuseStats) (BuildResult, error) {
 	if !validSiteID(options.SiteID) {
 		return BuildResult{}, fmt.Errorf("invalid preview site identifier %q", options.SiteID)
 	}
@@ -167,8 +280,12 @@ func BuildFromGit(ctx context.Context, options BuildOptions) (BuildResult, error
 	for _, relativePath := range selected {
 		reasons[relativePath] = Document{Reason: ReasonChanged}
 	}
+	var reusableBlobs *buildBlobReuse
+	if reuseBlobBodies {
+		reusableBlobs = &buildBlobReuse{bodies: make(map[string][]byte), stats: stats}
+	}
 	if len(changedResources) > 0 || len(deletedResources) > 0 {
-		affected, err := findDependencyDocuments(ctx, repoRoot, tree, changedResources, deletedResources, reasons)
+		affected, err := findDependencyDocuments(ctx, repoRoot, tree, changedResources, deletedResources, reasons, reusableBlobs)
 		if err != nil {
 			return BuildResult{}, err
 		}
@@ -183,6 +300,13 @@ func BuildFromGit(ctx context.Context, options BuildOptions) (BuildResult, error
 	}
 
 	files := make(map[string][]byte)
+	var selectedBySHA map[string][]byte
+	if reusableBlobs != nil {
+		selectedBySHA = make(map[string][]byte)
+		if stats != nil {
+			stats.CacheBytesAtAssemblyStart = reusableBlobs.bodyBytes()
+		}
+	}
 	documents := make([]Document, 0, len(selected))
 	queue := make([]string, 0)
 	for _, relativePath := range selected {
@@ -193,7 +317,7 @@ func BuildFromGit(ctx context.Context, options BuildOptions) (BuildResult, error
 		if !ok {
 			return BuildResult{}, fmt.Errorf("changed document %q is missing from the source head tree", relativePath)
 		}
-		content, err := readTreeBlob(ctx, repoRoot, entry)
+		content, err := readTreeBlobForBundle(ctx, repoRoot, entry, reusableBlobs, selectedBySHA)
 		if err != nil {
 			return BuildResult{}, err
 		}
@@ -210,8 +334,14 @@ func BuildFromGit(ctx context.Context, options BuildOptions) (BuildResult, error
 		return BuildResult{}, err
 	}
 	queue = append(queue, explicitResources...)
-	if err := collectResources(ctx, repoRoot, tree, files, queue); err != nil {
+	if err := collectResources(ctx, repoRoot, tree, files, queue, reusableBlobs, selectedBySHA); err != nil {
 		return BuildResult{}, err
+	}
+	if stats != nil {
+		stats.SelectedFileBytes = sumFileBytes(files)
+		if reusableBlobs != nil {
+			stats.CacheBytesAfterAssembly = reusableBlobs.bodyBytes()
+		}
 	}
 
 	sortDocuments(documents)
@@ -458,14 +588,21 @@ func makeChangesSourceRelative(changes []diffEntry, sourcePath string) ([]diffEn
 }
 
 func readTreeBlob(ctx context.Context, repoRoot string, entry treeEntry) ([]byte, error) {
-	if entry.Type != "blob" || (entry.Mode != "100644" && entry.Mode != "100755") {
-		return nil, fmt.Errorf("preview source %q is not a regular file (mode %s)", entry.Path, entry.Mode)
+	if err := validateTreeBlobEntry(entry); err != nil {
+		return nil, err
 	}
 	content, err := gitOutput(ctx, repoRoot, "cat-file", "blob", entry.SHA)
 	if err != nil {
 		return nil, fmt.Errorf("read head snapshot file %q: %w", entry.Path, err)
 	}
 	return content, nil
+}
+
+func validateTreeBlobEntry(entry treeEntry) error {
+	if entry.Type != "blob" || (entry.Mode != "100644" && entry.Mode != "100755") {
+		return fmt.Errorf("preview source %q is not a regular file (mode %s)", entry.Path, entry.Mode)
+	}
+	return nil
 }
 
 func gitOutput(ctx context.Context, repoDir string, args ...string) ([]byte, error) {
@@ -502,6 +639,14 @@ func digestBundle(files map[string][]byte) string {
 		_, _ = hasher.Write(content)
 	}
 	return "sha256:" + hex.EncodeToString(hasher.Sum(nil))
+}
+
+func sumFileBytes(files map[string][]byte) int64 {
+	var total int64
+	for _, body := range files {
+		total += int64(len(body))
+	}
+	return total
 }
 
 func describeFiles(files map[string][]byte) []PreviewFile {

@@ -30,7 +30,7 @@ var (
 
 func isDocumentPath(value string) bool { return documentFormat(value) != "" }
 
-func collectResources(ctx context.Context, repoRoot string, tree map[string]treeEntry, files map[string][]byte, initial []string) error {
+func collectResources(ctx context.Context, repoRoot string, tree map[string]treeEntry, files map[string][]byte, initial []string, reusableBlobs *buildBlobReuse, selectedBySHA map[string][]byte) error {
 	queue := append([]string(nil), initial...)
 	sort.Strings(queue)
 	queued := make(map[string]bool, len(queue))
@@ -55,7 +55,7 @@ func collectResources(ctx context.Context, repoRoot string, tree map[string]tree
 				return fmt.Errorf("preview resource %q is a document; unchanged documents cannot be included as resources", current)
 			}
 			var err error
-			content, err = readTreeBlob(ctx, repoRoot, entry)
+			content, err = readTreeBlobForBundle(ctx, repoRoot, entry, reusableBlobs, selectedBySHA)
 			if err != nil {
 				return err
 			}
@@ -1197,7 +1197,7 @@ func uniqueStrings(values []string) []string {
 // changed document with a missing resource fails. Other unresolvable
 // references in unchanged documents are ignored because they are not caused by
 // this change.
-func findDependencyDocuments(ctx context.Context, repoRoot string, tree map[string]treeEntry, changedResources []string, deletedResources map[string]bool, alreadySelected map[string]Document) (map[string][]string, error) {
+func findDependencyDocuments(ctx context.Context, repoRoot string, tree map[string]treeEntry, changedResources []string, deletedResources map[string]bool, alreadySelected map[string]Document, reusableBlobs *buildBlobReuse) (map[string][]string, error) {
 	changed := make(map[string]bool, len(changedResources))
 	for _, resource := range changedResources {
 		changed[resource] = true
@@ -1207,12 +1207,40 @@ func findDependencyDocuments(ctx context.Context, repoRoot string, tree map[stri
 		err     error
 	}
 	graph := make(map[string]node)
-	targetsOf := func(current string) ([]string, error) {
+	targetsOf := func(current string, scratch map[string][]byte) ([]string, error) {
 		if cached, ok := graph[current]; ok {
 			return cached.targets, cached.err
 		}
 		entry := tree[current]
-		content, err := readTreeBlob(ctx, repoRoot, entry)
+		if err := validateTreeBlobEntry(entry); err != nil {
+			graph[current] = node{err: err}
+			return nil, err
+		}
+		var content []byte
+		contentLoaded := false
+		if body, ok := scratch[entry.SHA]; ok {
+			content = body
+			contentLoaded = true
+			if reusableBlobs != nil && reusableBlobs.stats != nil {
+				reusableBlobs.stats.GitBodyBytesAvoided += int64(len(body))
+			}
+		} else if reusableBlobs != nil {
+			if body, ok := reusableBlobs.bodies[entry.SHA]; ok {
+				content = body
+				contentLoaded = true
+				if reusableBlobs.stats != nil {
+					reusableBlobs.stats.GitBodyBytesAvoided += int64(len(body))
+				}
+			}
+		}
+		var err error
+		if !contentLoaded {
+			content, err = readTreeBlob(ctx, repoRoot, entry)
+			if err == nil && reusableBlobs != nil {
+				scratch[entry.SHA] = content
+				reusableBlobs.observeCacheAndScratch(scratch)
+			}
+		}
 		var targets []string
 		if err == nil {
 			for _, reference := range localReferences(current, content) {
@@ -1245,12 +1273,16 @@ func findDependencyDocuments(ctx context.Context, repoRoot string, tree map[stri
 			return nil, err
 		}
 		hits := make(map[string]bool)
+		var scratch map[string][]byte
+		if reusableBlobs != nil {
+			scratch = make(map[string][]byte)
+		}
 		visited := map[string]bool{document: true}
 		queue := []string{document}
 		for len(queue) > 0 {
 			current := queue[0]
 			queue = queue[1:]
-			targets, err := targetsOf(current)
+			targets, err := targetsOf(current, scratch)
 			if err != nil {
 				// An unreadable or malformed unchanged file cannot be analysed;
 				// it is not made worse by this change.
@@ -1280,6 +1312,9 @@ func findDependencyDocuments(ctx context.Context, repoRoot string, tree map[stri
 			}
 			sort.Strings(resources)
 			affected[document] = resources
+			if reusableBlobs != nil {
+				reusableBlobs.retainScratch(scratch)
+			}
 		}
 	}
 	return affected, nil
