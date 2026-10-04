@@ -128,7 +128,11 @@ func (backend *s3CompatibleBackend) GetObject(ctx context.Context, key string) (
 	if err != nil {
 		return Object{}, "", fmt.Errorf("read s3://%s/%s: %w", backend.bucket, key, err)
 	}
-	object := Object{Bytes: contents, ContentType: aws.ToString(result.ContentType), Cache: aws.ToString(result.CacheControl), Metadata: result.Metadata}
+	object := Object{
+		Bytes: contents, ContentType: aws.ToString(result.ContentType),
+		ContentDisposition: aws.ToString(result.ContentDisposition), ContentEncoding: aws.ToString(result.ContentEncoding),
+		Cache: aws.ToString(result.CacheControl), Metadata: result.Metadata,
+	}
 	return object, aws.ToString(result.ETag), nil
 }
 

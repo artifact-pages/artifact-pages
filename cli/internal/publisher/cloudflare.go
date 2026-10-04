@@ -138,6 +138,10 @@ func (backend *cloudflareBackend) GetObject(ctx context.Context, key string) (Ob
 	return backend.objects.GetObject(ctx, key)
 }
 
+func (*cloudflareBackend) publishStateReadMode() publishStateReadMode {
+	return publishStateReadGetOnly
+}
+
 func (backend *cloudflareBackend) HeadObject(ctx context.Context, key string) (ObjectInfo, error) {
 	return backend.objects.HeadObject(ctx, key)
 }
