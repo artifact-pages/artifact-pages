@@ -17,3 +17,4 @@ Each ticket records one independently verifiable contract or measurement. Status
 | [T18](T18-publish-scale-baseline.md) | Done | Publisher scale baseline and state-manifest comparison |
 | [T19](T19-publish-state-layout-cost.md) | Done | Publish-state layout and provider-cost comparison |
 | [T20](T20-publish-state-and-candidate.md) | Done | Fused publish-state recovery and candidate validation |
+| [T21](T21-command-cost-audit.md) | Done | CLI command and workflow cost audit |
