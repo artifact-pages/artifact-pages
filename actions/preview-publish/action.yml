@@ -8,13 +8,13 @@ inputs:
     description: Registered source directory inside the checked-out Git repository.
     required: true
   head:
-    description: Git ref whose committed tree forms the preview; defaults to HEAD.
+    description: Git ref whose committed tree forms the preview. When empty, a pull_request event uses its recorded head SHA; any other event uses HEAD. Never infers PR provenance.
     required: false
-    default: HEAD
+    default: ""
   default-ref:
-    description: Default-branch ref used for merge-base selection; defaults to origin/HEAD.
+    description: Default-branch ref used for merge-base selection. When empty, a pull_request event uses origin/<base ref>; any other event uses origin/HEAD. The checkout must have fetched it (fetch-depth 0).
     required: false
-    default: origin/HEAD
+    default: ""
   pull-request:
     description: Explicit positive PR number or canonical GitHub pull URL; omitted means manual preview.
     required: false
@@ -36,6 +36,10 @@ inputs:
     default: ""
   dry-run:
     description: Calculate changes without provider writes, lock acquisition, deletes, or cache changes.
+    required: false
+    default: "false"
+  comment:
+    description: When true and an explicit pull-request is given, create or update one PR comment per site with the preview links. Needs pull-requests:write. Comment problems never fail the publish.
     required: false
     default: "false"
 outputs:
@@ -63,6 +67,9 @@ outputs:
   error:
     description: CLI error text when the operation failed.
     value: ${{ steps.cli.outputs.error || steps.preflight.outputs.error }}
+  comment-url:
+    description: URL of the PR comment written by this run; empty when no comment was written.
+    value: ${{ steps.comment.outputs.comment-url }}
 runs:
   using: composite
   steps:
@@ -75,6 +82,7 @@ runs:
         ARTIFACT_PAGES_INPUT_SITE: ${{ inputs.site }}
         ARTIFACT_PAGES_INPUT_PULL_REQUEST: ${{ inputs.pull-request }}
         ARTIFACT_PAGES_INPUT_HEAD: ${{ inputs.head }}
+        ARTIFACT_PAGES_INPUT_DEFAULT_REF: ${{ inputs.default-ref }}
         GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
       run: node "$GITHUB_ACTION_PATH/../shared/verify-preview-pr.mjs"
     - name: Set up Go from the pinned component source
@@ -109,3 +117,16 @@ runs:
         ARTIFACT_PAGES_INPUT_DRY_RUN: ${{ inputs.dry-run }}
         GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
       run: node "$GITHUB_ACTION_PATH/../shared/invoke-cli.mjs"
+    - name: Create or update the preview pull-request comment
+      id: comment
+      if: ${{ always() && inputs.comment == 'true' && steps.preflight.outputs.trusted == 'true' }}
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        ARTIFACT_PAGES_INPUT_COMMENT: ${{ inputs.comment }}
+        ARTIFACT_PAGES_INPUT_SITE: ${{ inputs.site }}
+        ARTIFACT_PAGES_INPUT_PULL_REQUEST: ${{ inputs.pull-request }}
+        ARTIFACT_PAGES_COMMENT_RESULT: ${{ steps.cli.outputs.result || steps.preflight.outputs.result }}
+        ARTIFACT_PAGES_COMMENT_EXIT_CODE: ${{ steps.cli.outputs['exit-code'] || steps.preflight.outputs['exit-code'] }}
+        GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
+      run: node "$GITHUB_ACTION_PATH/../shared/preview-comment.mjs"
