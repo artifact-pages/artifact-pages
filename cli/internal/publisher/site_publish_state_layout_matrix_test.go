@@ -685,7 +685,7 @@ func layoutBuildProjection(ctx context.Context, t *testing.T, root, work, source
 	buildOptions := indexer.BuildOptions{
 		SiteID: site, SiteTitle: options.Title, SiteDescription: options.Description,
 		SourceDir: source, OutputDir: output, Repository: options.Repository,
-		RepositoryURL: options.RepositoryURL, Ref: options.Ref, FullText: options.FullText,
+		RepositoryURL: options.RepositoryURL, Ref: options.Ref,
 		InputPolicy: options.InputPolicy, RejectSymlinks: true,
 		Now: func() time.Time { return time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC) },
 	}
@@ -705,14 +705,47 @@ func layoutBuildProjection(ctx context.Context, t *testing.T, root, work, source
 	if err != nil {
 		return layoutProjection{}, err
 	}
-	generated := []struct{ filename, name string }{{build.OutputPath, "index.json"}, {build.MetadataPath, "meta.json"}}
-	for _, filename := range build.SearchFiles {
-		generated = append(generated, struct{ filename, name string }{filename, "search/" + filepath.Base(filename)})
-	}
-	for _, item := range generated {
-		data, err := os.ReadFile(item.filename)
+	generated := []struct {
+		filename string
+		name     string
+		data     []byte
+	}{{filename: build.OutputPath, name: "index.json"}, {filename: build.MetadataPath, name: "meta.json"}}
+	if options.FullText {
+		for _, filename := range build.SearchFiles {
+			generated = append(generated, struct {
+				filename string
+				name     string
+				data     []byte
+			}{filename: filename, name: "search/" + filepath.Base(filename)})
+		}
+	} else {
+		// T19 records a historical no-full-text projection, but the current
+		// indexer always emits full-text data. Keep that old measurement model
+		// local to this test: remove the search objects and the metadata link
+		// after the real build instead of restoring a retired production option.
+		var metadata indexer.SiteDiscoveryMetadata
+		metadataBytes, err := os.ReadFile(build.MetadataPath)
 		if err != nil {
 			return layoutProjection{}, err
+		}
+		if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
+			return layoutProjection{}, err
+		}
+		metadata.FullTextURL = ""
+		metadataBytes, err = json.MarshalIndent(metadata, "", "  ")
+		if err != nil {
+			return layoutProjection{}, err
+		}
+		generated[1].data = append(metadataBytes, '\n')
+	}
+	for _, item := range generated {
+		data := item.data
+		if data == nil {
+			var err error
+			data, err = os.ReadFile(item.filename)
+			if err != nil {
+				return layoutProjection{}, err
+			}
 		}
 		contentType, cache := "application/json; charset=utf-8", indexCacheControl
 		if strings.HasSuffix(item.name, ".gz") {
@@ -735,7 +768,10 @@ func layoutBuildProjection(ctx context.Context, t *testing.T, root, work, source
 		object.Metadata["artifact-pages-sha256"] = item.digest
 		objects[item.key] = object
 	}
-	return layoutProjection{InputRoot: prepared.InputRoot(), Rows: rows, Objects: objects,
+	// Distinguish the T19 historical projection modes without changing the
+	// production input-root policy, which is always full-text-on now.
+	historicalInputRoot := sha256Hex([]byte(fmt.Sprintf("T19 historical projection\x00%s\x00fulltext=%t", prepared.InputRoot(), options.FullText)))
+	return layoutProjection{InputRoot: historicalInputRoot, Rows: rows, Objects: objects,
 		PrepareBuildMS: prepareMS, BuildPreparedMS: buildMS}, nil
 }
 

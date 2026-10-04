@@ -55,8 +55,11 @@ func TestPublishSiteAllowsEmptyDocumentsAndRetriesPartialStaleDeletion(t *testin
 	if err != nil {
 		t.Fatalf("retry empty-site PublishSite() error = %v", err)
 	}
-	if result.Outcome != "published" || result.FilesPublished != 2 || result.FilesRemoved != 2 {
-		t.Fatalf("retry empty-site PublishSite() = %+v, want touched index/meta replays and both uncertain stale deletes", result)
+	// The current builder always publishes its full-text projection. Emptying
+	// the indexed document set changes the search manifest/root blob too, in
+	// addition to the index/meta rows and the two uncertain stale artifacts.
+	if result.Outcome != "published" || result.FilesPublished != 4 || result.FilesRemoved != 3 {
+		t.Fatalf("retry empty-site PublishSite() = %+v, want index/meta/search updates and all uncertain stale deletes", result)
 	}
 
 	indexObject, _, err := backend.lockMemoryBackend.GetObject(context.Background(), "_indexes/sre/index.json")

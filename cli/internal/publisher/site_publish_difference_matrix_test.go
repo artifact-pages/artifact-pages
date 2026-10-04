@@ -111,11 +111,7 @@ func TestSitePublishDifferenceMatrix(t *testing.T) {
 			Name: "Scale Matrix " + fmt.Sprint(size), Description: "Deterministic publisher verification site",
 			Repository: identity.Repository, SourcePath: identity.SourcePath,
 		}
-		baselineOff := matrixPublishBaseline(t, ctx, siteID, copyDir, site)
-		var baselineOn *matrixBackend
-		if size == 1000 {
-			baselineOn = matrixPublishBaseline(t, ctx, siteID, copyDir, site, true)
-		}
+		baseline := matrixPublishBaseline(t, ctx, siteID, copyDir, site)
 		report.Datasets = append(report.Datasets, matrixDatasetReport{
 			FixtureSite: fixtureID, Site: siteID, SourceFiles: profile.SourceFiles,
 			Pages: profile.Pages, Resources: profile.Resources,
@@ -131,24 +127,15 @@ func TestSitePublishDifferenceMatrix(t *testing.T) {
 			scenarios = append(scenarios,
 				matrixScenarioSpec{Name: "resource-only-10-percent", Kind: "resource-only", RateLabels: []string{"10%"}, Distribution: "uniform-scattered", Count: int(math.Round(float64(size) * 0.10))},
 				matrixScenarioSpec{Name: "page-mixed-10-percent", Kind: "page-mixed", RateLabels: []string{"10%"}, Distribution: "uniform-scattered", Count: int(math.Round(float64(size) * 0.10))},
-				matrixScenarioSpec{Name: "fulltext-off-to-on", Kind: "fulltext-toggle", RateLabels: []string{"fulltext-off-to-on"}, Distribution: "not-applicable", BaseFullText: false, FullText: true},
-				matrixScenarioSpec{Name: "fulltext-on-to-off", Kind: "fulltext-toggle", RateLabels: []string{"fulltext-on-to-off"}, Distribution: "not-applicable", BaseFullText: true, FullText: false},
 				matrixScenarioSpec{Name: "reconcile-missing-object", Kind: "origin-drift", RateLabels: []string{"0%"}, Distribution: "not-applicable", Reconcile: true, DeleteOriginObject: true},
 			)
 		}
 		for _, spec := range scenarios {
-			base := baselineOff
-			if spec.BaseFullText {
-				base = baselineOn
-			}
-			if base == nil {
-				t.Fatalf("scenario %q requires a full-text baseline that was not prepared", spec.Name)
-			}
 			changedPaths, oldBytes, newBytes, changedTypes, err := matrixMutateSources(copyDir, sources, spec, size)
 			if err != nil {
 				t.Fatalf("prepare scenario %s/%s: %v", siteID, spec.Name, err)
 			}
-			backend := matrixCloneBackend(base)
+			backend := matrixCloneBackend(baseline)
 			beforeProjection := matrixProjectionSnapshot(backend, siteID)
 			stableObjects := matrixStableObjectsSnapshot(backend)
 			driftKeys := []string(nil)
@@ -161,9 +148,7 @@ func TestSitePublishDifferenceMatrix(t *testing.T) {
 				driftKeys = []string{key}
 			}
 			backend.resetMetrics()
-			options := SitePublishOptions{
-				SiteID: siteID, SourceDir: copyDir, FullText: spec.FullText,
-			}
+			options := SitePublishOptions{SiteID: siteID, SourceDir: copyDir}
 			reconcileAvailable := matrixSetReconcile(&options, spec.Reconcile)
 			wallStart := time.Now()
 			result, publishErr := PublishSite(ctx, backend, options)
@@ -176,7 +161,7 @@ func TestSitePublishDifferenceMatrix(t *testing.T) {
 				t.Fatalf("read generatedAt after %s: %v", spec.Name, err)
 			}
 			afterProjection := matrixProjectionSnapshot(backend, siteID)
-			oracleProjection, stageTimes, err := matrixBuildDesiredProjection(ctx, t, oracle, root, work, copyDir, siteID, site, identity, spec.FullText, generatedAt, afterProjection)
+			oracleProjection, stageTimes, err := matrixBuildDesiredProjection(ctx, t, oracle, root, work, copyDir, siteID, site, identity, generatedAt, afterProjection)
 			if err != nil {
 				t.Fatalf("fresh desired projection for %s: %v", spec.Name, err)
 			}
@@ -256,8 +241,6 @@ type matrixScenarioSpec struct {
 	RateLabels         []string
 	Distribution       string
 	Count              int
-	BaseFullText       bool
-	FullText           bool
 	Reconcile          bool
 	DeleteOriginObject bool
 }
@@ -369,9 +352,8 @@ func matrixEmptyCallReport() matrixCallReport {
 	return matrixCallReport{Counts: make(map[string]int)}
 }
 
-func matrixPublishBaseline(t *testing.T, ctx context.Context, siteID, sourceDir string, site registry.Site, fullText ...bool) *matrixBackend {
+func matrixPublishBaseline(t *testing.T, ctx context.Context, siteID, sourceDir string, site registry.Site) *matrixBackend {
 	t.Helper()
-	useFullText := len(fullText) > 0 && fullText[0]
 	backend := matrixNewBackend(siteID)
 	projection, err := registry.ProjectSites(map[string]registry.Site{siteID: site})
 	if err != nil {
@@ -394,12 +376,12 @@ func matrixPublishBaseline(t *testing.T, ctx context.Context, siteID, sourceDir 
 		t.Fatal(err)
 	}
 	backend.resetMetrics()
-	result, err := PublishSite(ctx, backend, SitePublishOptions{SiteID: siteID, SourceDir: sourceDir, FullText: useFullText})
+	result, err := PublishSite(ctx, backend, SitePublishOptions{SiteID: siteID, SourceDir: sourceDir})
 	if err != nil {
-		t.Fatalf("seed matrix baseline %s fulltext=%t: %v", siteID, useFullText, err)
+		t.Fatalf("seed matrix baseline %s: %v", siteID, err)
 	}
 	if result.Outcome != "published" {
-		t.Fatalf("seed matrix baseline %s fulltext=%t outcome=%q, want published", siteID, useFullText, result.Outcome)
+		t.Fatalf("seed matrix baseline %s outcome=%q, want published", siteID, result.Outcome)
 	}
 	return backend
 }
@@ -1250,7 +1232,6 @@ type request struct {
 	OutputDir string ` + "`json:\"outputDir\"`" + `
 	Repository string ` + "`json:\"repository\"`" + `
 	RepositoryURL string ` + "`json:\"repositoryUrl\"`" + `
-	FullText bool ` + "`json:\"fullText\"`" + `
 	GeneratedAt string ` + "`json:\"generatedAt\"`" + `
 }
 
@@ -1268,7 +1249,7 @@ func main() {
 	options := indexer.BuildOptions{
 		SiteID: input.SiteID, SiteTitle: input.Title, SiteDescription: input.Description,
 		SourceDir: input.SourceDir, OutputDir: input.OutputDir,
-		Repository: input.Repository, RepositoryURL: input.RepositoryURL, FullText: input.FullText,
+		Repository: input.Repository, RepositoryURL: input.RepositoryURL,
 		Now: func() time.Time { return now },
 	}
 	prepareStart := time.Now()
@@ -1317,7 +1298,7 @@ func matrixBuildOracleForRevision(t *testing.T, root, work string) (matrixOracle
 	return matrixOracleBuilder{binary: binaryPath, timingMode: "prepared-stage-split"}, nil
 }
 
-func matrixBuildDesiredProjection(ctx context.Context, t *testing.T, oracle matrixOracleBuilder, root, work, sourceDir, siteID string, site registry.Site, identity indexer.GitSourceIdentity, fullText bool, generatedAt time.Time, actual map[string]Object) (map[string]Object, matrixStageTimes, error) {
+func matrixBuildDesiredProjection(ctx context.Context, t *testing.T, oracle matrixOracleBuilder, root, work, sourceDir, siteID string, site registry.Site, identity indexer.GitSourceIdentity, generatedAt time.Time, actual map[string]Object) (map[string]Object, matrixStageTimes, error) {
 	t.Helper()
 	outputDir, err := os.MkdirTemp(work, "desired-projection-")
 	if err != nil {
@@ -1325,7 +1306,7 @@ func matrixBuildDesiredProjection(ctx context.Context, t *testing.T, oracle matr
 	}
 	defer os.RemoveAll(outputDir)
 	options := indexer.BuildOptions{
-		FullText: fullText, SiteID: siteID, SiteTitle: site.Name, SiteDescription: site.Description,
+		SiteID: siteID, SiteTitle: site.Name, SiteDescription: site.Description,
 		SourceDir: sourceDir, OutputDir: outputDir, Repository: identity.Repository,
 		RepositoryURL: identity.RepositoryURL, Now: func() time.Time { return generatedAt },
 	}
@@ -1335,7 +1316,7 @@ func matrixBuildDesiredProjection(ctx context.Context, t *testing.T, oracle matr
 			"siteId": siteID, "title": site.Name, "description": site.Description,
 			"sourceDir": sourceDir, "outputDir": outputDir,
 			"repository": identity.Repository, "repositoryUrl": identity.RepositoryURL,
-			"fullText": fullText, "generatedAt": generatedAt.UTC().Format(time.RFC3339),
+			"generatedAt": generatedAt.UTC().Format(time.RFC3339),
 		}
 		input, err := json.Marshal(request)
 		if err != nil {

@@ -470,13 +470,13 @@ func TestPublishSiteWholeControlRequestsCompareR2GetOnlyAndAWSHeadThenGet(t *tes
 	}
 	// The generated index and metadata include a volatile generatedAt value.
 	// When sequential provider runs cross an RFC3339 second, preserveGeneratedAt
-	// reads those two prior objects before deciding whether to retain their
-	// deployed bytes. Count these as projection reads; they are independent of
-	// the state-read policy being compared.
+	// reads prior index/metadata objects whose generatedAt-bearing bytes differ
+	// before deciding whether to retain their deployed bytes. Count these as
+	// projection reads; they are independent of the state-read policy compared.
 	for _, report := range []sitePublishCostReport{r2ChangedReport, awsChangedReport} {
 		generatedAtReads := report.ObjectRequests["GET.projection"]
-		if generatedAtReads != 0 && generatedAtReads != 2 {
-			t.Fatalf("%s changed flow made %d projection GETs; want 0 or the two generatedAt preservation reads", report.Provider, generatedAtReads)
+		if generatedAtReads < 0 || generatedAtReads > 2 {
+			t.Fatalf("%s changed flow made %d projection GETs; want at most the generatedAt index/meta reads", report.Provider, generatedAtReads)
 		}
 	}
 	if r2ChangedReport.StateBodyReadBytes <= 0 || awsChangedReport.StateBodyReadBytes <= 0 {
