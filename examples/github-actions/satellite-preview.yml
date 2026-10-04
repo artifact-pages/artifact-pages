@@ -25,7 +25,7 @@ jobs:
     environment: artifact-pages-preview
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write # lets the Action post its preview comment
       id-token: write
     steps:
       - name: Check out the registered repository without checking out the pull-request head
@@ -48,24 +48,27 @@ jobs:
         with:
           site: sre
           source: docs/artifacts
-          head: ${{ github.event.pull_request.head.sha }}
-          default-ref: origin/${{ github.event.pull_request.base.ref }}
+          # On pull_request events head and default-ref default to the event's head SHA
+          # and origin/<base branch>, which the full-history checkout above provides.
           pull-request: ${{ github.event.pull_request.number }}
           base-url: ${{ vars.ARTIFACT_PAGES_BASE_URL }}
           config: github://example/platform-admin/artifact-pages.yaml?ref=<FULL_ADMIN_CONFIG_COMMIT_SHA>
+          # One comment per site per PR, updated in place on every push.
+          comment: true
           # Additional non-document resources may be listed one per line:
           # include: |
           #   review-data.json
           #   assets/generated-chart.svg
 
-      - name: Use the typed preview URLs
+      - name: Use the typed preview outputs
         if: always()
         env:
           OUTCOME: ${{ steps.publish-preview.outputs.outcome }}
           GROUP_LIST_URL: ${{ steps.publish-preview.outputs['group-list-url'] }}
           DOCUMENTS_JSON: ${{ steps.publish-preview.outputs.documents }}
           RESULT_JSON: ${{ steps.publish-preview.outputs.result }}
+          COMMENT_URL: ${{ steps.publish-preview.outputs['comment-url'] }}
           EXIT_CODE: ${{ steps.publish-preview.outputs['exit-code'] }}
         run: |
           printf 'outcome=%s exit-code=%s\n' "$OUTCOME" "$EXIT_CODE"
-          printf 'preview_list=%s\ndocuments=%s\n' "$GROUP_LIST_URL" "$DOCUMENTS_JSON"
+          printf 'preview_list=%s\ndocuments=%s\ncomment=%s\n' "$GROUP_LIST_URL" "$DOCUMENTS_JSON" "$COMMENT_URL"
