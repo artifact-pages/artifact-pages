@@ -32,6 +32,7 @@ Use the [delegation index](../delegation.md) for work modes and owner boundaries
 | [IMP-50](IMP-50-publish-condition.md) | Done | Actions | `publish-on` input: runs outside the declared event/ref condition become dry-runs. |
 | [IMP-51](IMP-51-job-summary.md) | Done | Actions | Built-in, documented Job Summary (`summary` input) for every Action, also on failure. |
 | [IMP-52](IMP-52-preview-pull-request-default.md) | Done | Actions | Preview Action defaults `pull-request` from the `pull_request` event payload (`none` forces manual); the CLI stays explicit-only. |
+| [IMP-53](IMP-53-action-checkout.md) | Done | Actions | `checkout: auto` and `fetch-depth` inputs: the Action checks out when the workspace is not a Git checkout (preview: base ref only). |
 
 These are operator-owned Terraform capabilities, not application authorization. Rule schemas and composition are intentionally left to the assigned designer; live changes need separate approval.
 

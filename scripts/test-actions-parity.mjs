@@ -13,17 +13,17 @@ const actionRunner = path.join(projectRoot, 'actions', 'shared', 'invoke-cli.mjs
 const expectedActionContracts = {
   admin: {
     directory: path.join(projectRoot, 'actions', 'admin'),
-    inputs: ['operation', 'config', 'github-token', 'site', 'archive', 'repository', 'dry-run', 'publish-on', 'summary'],
+    inputs: ['operation', 'config', 'github-token', 'site', 'archive', 'repository', 'dry-run', 'publish-on', 'summary', 'checkout', 'fetch-depth'],
     outputs: ['operation', 'outcome', 'site', 'registry-updated', 'changes', 'preview-changes', 'result', 'exit-code', 'error'],
   },
   site: {
     directory: path.join(projectRoot, 'actions', 'site-publish'),
-    inputs: ['site', 'source', 'config', 'github-token', 'dry-run', 'publish-on', 'summary'],
+    inputs: ['site', 'source', 'config', 'github-token', 'dry-run', 'publish-on', 'summary', 'checkout', 'fetch-depth'],
     outputs: ['operation', 'outcome', 'site', 'registry-updated', 'changes', 'preview-changes', 'result', 'exit-code', 'error'],
   },
   preview: {
     directory: path.join(projectRoot, 'actions', 'preview-publish'),
-    inputs: ['site', 'source', 'head', 'default-ref', 'pull-request', 'include', 'base-url', 'config', 'github-token', 'dry-run', 'comment', 'summary'],
+    inputs: ['site', 'source', 'head', 'default-ref', 'pull-request', 'include', 'base-url', 'config', 'github-token', 'dry-run', 'comment', 'summary', 'checkout', 'fetch-depth'],
     outputs: ['operation', 'outcome', 'site', 'group-list-url', 'documents', 'result', 'exit-code', 'error', 'comment-url'],
   },
 }
@@ -94,7 +94,7 @@ async function assertRootActionMatchesSitePublish() {
   const siteBody = site.slice(site.indexOf('\ninputs:\n'))
     .replace('${{ github.action_path }}/../../go.mod', '${{ github.action_path }}/go.mod')
     .replace('working-directory: ${{ github.action_path }}/../..', 'working-directory: ${{ github.action_path }}')
-    .replace('$GITHUB_ACTION_PATH/../shared/invoke-cli.mjs', '$GITHUB_ACTION_PATH/actions/shared/invoke-cli.mjs')
+    .replaceAll('$GITHUB_ACTION_PATH/../shared/', '$GITHUB_ACTION_PATH/actions/shared/')
   assert.equal(rootBody, siteBody, 'root Action inputs, outputs and steps must match actions/site-publish apart from root-relative paths')
   assert.equal(
     await fs.realpath(path.join(projectRoot, 'actions', 'shared', 'invoke-cli.mjs')),
@@ -131,7 +131,7 @@ async function assertCompositeActionWiring() {
     if (kind === 'site') expectedEnv.ARTIFACT_PAGES_INPUT_OPERATION = 'publish'
     if (kind === 'preview') expectedEnv.ARTIFACT_PAGES_INPUT_OPERATION = 'publish'
     // The comment input belongs to the separate comment step, not the CLI invocation.
-    for (const inputName of contract.inputs.filter((name) => name !== 'github-token' && !(kind === 'preview' && name === 'comment'))) {
+    for (const inputName of contract.inputs.filter((name) => name !== 'github-token' && name !== 'checkout' && name !== 'fetch-depth' && !(kind === 'preview' && name === 'comment'))) {
       const envName = `ARTIFACT_PAGES_INPUT_${inputName.toUpperCase().replaceAll('-', '_')}`
       if (envName !== 'ARTIFACT_PAGES_INPUT_OPERATION' || kind !== 'site') {
         expectedEnv[envName] = `\${{ inputs.${inputName} }}`
@@ -153,6 +153,24 @@ async function assertCompositeActionWiring() {
       return [name, expression]
     }))
     assert.deepEqual(outputMappings, expectedOutputMappings, `${kind} Action outputs must relay the shared CLI step outputs`)
+
+    // Own checkout (decision 2): pinned, workflow token only, no persisted credentials, before anything else.
+    assert.match(source, new RegExp(`ARTIFACT_PAGES_INPUT_CHECKOUT: \\$\\{\\{ inputs\\.checkout \\}\\}`), `${kind} Action must pass the checkout input to the decision step`)
+    assert.equal(sectionProperties(source, 'inputs', 'checkout').default, 'auto', `${kind} checkout must default to auto`)
+    assert.equal(sectionProperties(source, 'inputs', 'fetch-depth').default, '"0"', `${kind} fetch-depth must default to 0`)
+    assert.match(source, /^      uses: actions\/checkout@[0-9a-f]{40} # v\d+\.\d+\.\d+$/m, `${kind} checkout must be pinned to a full SHA with a version comment`)
+    assert.match(source, /^      if: \$\{\{ steps\.checkout-mode\.outputs\.checkout == 'true' \}\}$/m, `${kind} checkout must follow the decision step`)
+    assert.match(source, /^        fetch-depth: \$\{\{ inputs\.fetch-depth \}\}$/m, `${kind} checkout must use the fetch-depth input`)
+    assert.match(source, /^        persist-credentials: false$/m, `${kind} checkout must not persist credentials`)
+    assert.doesNotMatch(source.slice(source.indexOf('uses: actions/checkout@'), source.indexOf('uses: actions/checkout@') + 400), /token:/, `${kind} checkout must use the workflow token, not the github-token input`)
+    assert.ok(source.indexOf('checkout-mode.mjs') < source.indexOf('uses: actions/setup-go@'), `${kind} checkout must precede Go setup`)
+    if (kind === 'preview') {
+      assert.match(source, /^        ref: \$\{\{ github\.event\.pull_request\.base\.ref \}\}$/m, 'preview checkout must use the base ref, never the pull-request head')
+      assert.ok(source.indexOf('uses: actions/checkout@') < source.indexOf('verify-preview-pr.mjs'), 'preview checkout must precede the preflight that reads Git refs')
+      assert.doesNotMatch(source, /pull_request\.head\.(ref|sha)/, 'preview Action must not reference the pull-request head for checkout')
+    } else {
+      assert.doesNotMatch(source, /\n        ref:/, `${kind} checkout must use the event's default ref`)
+    }
 
     if (kind === 'preview') {
       const preflightLine = source.indexOf('run: node "$GITHUB_ACTION_PATH/../shared/verify-preview-pr.mjs"')
