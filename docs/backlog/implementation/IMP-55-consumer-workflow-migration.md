@@ -1,9 +1,9 @@
-# IMP-54 — Migrate consumer workflows to the slimmed Actions
+# IMP-55 — Migrate consumer workflows to the slimmed Actions
 
 - Status: Open
 - Lanes: Docs / Adoption
 - Execution: Owner-approved consumer repository edits after the release. This item records the plan only; nothing here has been executed.
-- Depends on: [IMP-49](IMP-49-preview-defaults.md) through [IMP-53](IMP-53-action-checkout.md) shipped in one release, and [TD8](../technical-design/TD8-action-consumer-contract.md)
+- Depends on: [IMP-50](IMP-50-preview-defaults.md) through [IMP-54](IMP-54-action-checkout.md) shipped in one release, and [TD8](../technical-design/TD8-action-consumer-contract.md)
 - Related design: [TD8](../technical-design/TD8-action-consumer-contract.md)
 
 ## Why after the release, and why together
@@ -112,7 +112,7 @@ Keep the preview job gated with `if: github.event.pull_request.head.repo.full_na
 
 ## Acceptance criteria
 
-- [ ] The release containing IMP-49 through IMP-53 is published, and its notes mention the hyphen-case output rename and the built-in summary.
+- [ ] The release containing IMP-50 through IMP-54 is published, and its notes mention the hyphen-case output rename and the built-in summary.
 - [ ] The owner approves editing `artifact-pages-docs` and `artifact-pages-admin`.
 - [ ] Both repositories use the release tag, have no Summarize or redundant checkout steps, and their PR dry-runs and main publishes show the built-in summary in a hosted run.
 - [ ] `examples/github-actions/*.yml` and the GitHub Actions guide use the slimmed form once the release exists (with IMP-46 slice 4).

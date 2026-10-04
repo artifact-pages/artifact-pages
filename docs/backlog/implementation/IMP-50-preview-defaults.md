@@ -1,4 +1,4 @@
-# IMP-49 — Preview defaults from registry and deployment config
+# IMP-50 — Preview defaults from registry and deployment config
 
 - Status: Done
 - Lanes: CLI, Actions

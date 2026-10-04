@@ -4,7 +4,7 @@
 - Phase: Reusable distribution
 - Decision: The owner decided on 2026-10-04, after an analysis of the consumer workflows in `artifact-pages-docs` and `artifact-pages-admin`, that the composite Actions absorb the boilerplate those workflows repeat. The decisions below are accepted. The owner also delegated the migration ordering (decision 8) and added the `pull-request` default (decision 6) the same day. The accepted behavior is in [specification §19 "Shared Action behavior"](../../specification.md#shared-action-behavior) and §22.
 - Related design: [T2](T2-cli-action-interface.md), [T11](T11-command-surface.md), [TD4](TD4-action-marketplace-distribution.md)
-- Related implementation: [IMP-49](../implementation/IMP-49-preview-defaults.md), [IMP-50](../implementation/IMP-50-publish-condition.md), [IMP-51](../implementation/IMP-51-job-summary.md), [IMP-52](../implementation/IMP-52-preview-pull-request-default.md), [IMP-53](../implementation/IMP-53-action-checkout.md), [IMP-54](../implementation/IMP-54-consumer-workflow-migration.md)
+- Related implementation: [IMP-50](../implementation/IMP-50-preview-defaults.md), [IMP-51](../implementation/IMP-51-publish-condition.md), [IMP-52](../implementation/IMP-52-job-summary.md), [IMP-53](../implementation/IMP-53-preview-pull-request-default.md), [IMP-54](../implementation/IMP-54-action-checkout.md), [IMP-55](../implementation/IMP-55-consumer-workflow-migration.md)
 
 ## Problem
 
@@ -26,7 +26,7 @@ Consumer workflows repeat the same steps around each Action call: a checkout, a 
    - Considered and rejected: a boolean expression language (more surface than the two shapes callers need), `branches:` and `events:` as separate inputs (cannot express "push on main or manual dispatch" without a cross product), and adding it to the preview Action. A preview is not a production write and has no dry-run versus real split to automate; callers gate it with workflow `on:` and job `if:`.
 6. **Preview `pull-request` defaults from the `pull_request` event.** When empty, only a `pull_request` event supplies `pull_request.number`; `none` forces a manual preview and an explicit value wins. The number is verified by exactly the same trust preflight (base repository, same-repository head, head SHA). Never from `pull_request_target`, a branch, a commit or another event. The CLI stays explicit-only, and `comment: true` now works on pull-request events without the input. This replaces the earlier rule that the Action never infers the PR from the event; the specification and decision P6 are updated.
 7. **Go build cache.** Recorded in [TD4](TD4-action-marketplace-distribution.md) question 6 and [IMP-46](../implementation/IMP-46-action-marketplace-release.md): `setup-go` cannot hash the Action's `go.sum` from outside the workspace, so `actions/cache` is keyed on the pinned source.
-8. **Migration ordering (delegated to the agent).** The next release already renames outputs to hyphen-case. Ship the built-in summary in the same release, so consumers delete their Summarize steps rather than port them. Consumer cleanup follows the release and is tracked in [IMP-54](../implementation/IMP-54-consumer-workflow-migration.md).
+8. **Migration ordering (delegated to the agent).** The next release already renames outputs to hyphen-case. Ship the built-in summary in the same release, so consumers delete their Summarize steps rather than port them. Consumer cleanup follows the release and is tracked in [IMP-55](../implementation/IMP-55-consumer-workflow-migration.md).
 
 Reusable workflows remain out of scope.
 
@@ -34,4 +34,4 @@ Reusable workflows remain out of scope.
 
 - [x] Record decisions 1 to 8 as a settled contract.
 - [x] Update the specification (§19 "Shared Action behavior", the preview paragraphs, §22 `publicBaseURL`) and the preview decision P6.
-- [x] Hand implementation to IMP-49 through IMP-53 and the post-release migration to IMP-54.
+- [x] Hand implementation to IMP-50 through IMP-54 and the post-release migration to IMP-55.

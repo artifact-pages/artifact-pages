@@ -1,4 +1,4 @@
-# IMP-52 — Preview `pull-request` defaults from the pull_request event
+# IMP-53 — Preview `pull-request` defaults from the pull_request event
 
 - Status: Done
 - Lanes: Actions

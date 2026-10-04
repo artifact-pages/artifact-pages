@@ -1,4 +1,4 @@
-# IMP-53 — Action-owned checkout (`checkout`, `fetch-depth`)
+# IMP-54 — Action-owned checkout (`checkout`, `fetch-depth`)
 
 - Status: Done
 - Lanes: Actions

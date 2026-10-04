@@ -28,12 +28,12 @@ Use the [delegation index](../delegation.md) for work modes and owner boundaries
 | [IMP-46](IMP-46-action-marketplace-release.md) | Open | CLI / release, Docs | After IMP-45, per settled [TD4](../technical-design/TD4-action-marketplace-distribution.md): root `site-publish` Action, parity, build cache, released references in examples and guides, hosted-runner run and owner-approved listing. |
 | [IMP-47](IMP-47-actions-hosted-smoke.md) | Done | CLI / release | Run every composite Action through `uses:` on GitHub-hosted runners against a runner-local target, on PRs, `main` and before release. |
 | [IMP-48](IMP-48-operator-repository-split.md) | Open | Infra, Docs | Per [TD5](../technical-design/TD5-verification-environment-and-operator-repositories.md): verification on `artifact-pages.stream` here, production `artifact-pages.dev` moved to `artifact-pages-admin` and `artifact-pages-docs`. |
-| [IMP-49](IMP-49-preview-defaults.md) | Done | CLI, Actions | Preview `--source` and `--base-url` default from the deployed registry and deployment config (provider-neutral `publicBaseURL`). |
-| [IMP-50](IMP-50-publish-condition.md) | Done | Actions | `publish-on` input: runs outside the declared event/ref condition become dry-runs. |
-| [IMP-51](IMP-51-job-summary.md) | Done | Actions | Built-in, documented Job Summary (`summary` input) for every Action, also on failure. |
-| [IMP-52](IMP-52-preview-pull-request-default.md) | Done | Actions | Preview Action defaults `pull-request` from the `pull_request` event payload (`none` forces manual); the CLI stays explicit-only. |
-| [IMP-53](IMP-53-action-checkout.md) | Done | Actions | `checkout: auto` and `fetch-depth` inputs: the Action checks out when the workspace is not a Git checkout (preview: base ref only). |
-| [IMP-54](IMP-54-consumer-workflow-migration.md) | Open | Docs / Adoption | After the release carrying IMP-49–53: remove Summarize and checkout steps, redundant `source`/`config`, unify pins, adopt `publish-on`, drop preview `base-url` and `pull-request` in the consumer repositories. |
+| [IMP-50](IMP-50-preview-defaults.md) | Done | CLI, Actions | Preview `--source` and `--base-url` default from the deployed registry and deployment config (provider-neutral `publicBaseURL`). |
+| [IMP-51](IMP-51-publish-condition.md) | Done | Actions | `publish-on` input: runs outside the declared event/ref condition become dry-runs. |
+| [IMP-52](IMP-52-job-summary.md) | Done | Actions | Built-in, documented Job Summary (`summary` input) for every Action, also on failure. |
+| [IMP-53](IMP-53-preview-pull-request-default.md) | Done | Actions | Preview Action defaults `pull-request` from the `pull_request` event payload (`none` forces manual); the CLI stays explicit-only. |
+| [IMP-54](IMP-54-action-checkout.md) | Done | Actions | `checkout: auto` and `fetch-depth` inputs: the Action checks out when the workspace is not a Git checkout (preview: base ref only). |
+| [IMP-55](IMP-55-consumer-workflow-migration.md) | Open | Docs / Adoption | After the release carrying IMP-50–54: remove Summarize and checkout steps, redundant `source`/`config`, unify pins, adopt `publish-on`, drop preview `base-url` and `pull-request` in the consumer repositories. |
 
 These are operator-owned Terraform capabilities, not application authorization. Rule schemas and composition are intentionally left to the assigned designer; live changes need separate approval.
 
