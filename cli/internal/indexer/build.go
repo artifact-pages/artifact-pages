@@ -152,8 +152,18 @@ type artifactGitUpdate struct {
 }
 
 func Build(ctx context.Context, options BuildOptions) (BuildResult, error) {
+	return buildWithReader(ctx, options, nil)
+}
+
+// buildWithReader lets tests observe exactly which source files standalone
+// Build captures without replacing the process-wide filesystem behavior.
+func buildWithReader(ctx context.Context, options BuildOptions, readFile sourceFileReader) (BuildResult, error) {
+	return buildWithSourceHooks(ctx, options, readFile, nil)
+}
+
+func buildWithSourceHooks(ctx context.Context, options BuildOptions, readFile sourceFileReader, openFile sourceFileOpener) (BuildResult, error) {
 	startedAt := time.Now()
-	prepared, err := PrepareBuild(ctx, options)
+	prepared, err := prepareBuild(ctx, options, sourceCaptureMode{indexOnly: true, readFile: readFile, openFile: openFile})
 	if err != nil {
 		return BuildResult{}, err
 	}
@@ -164,10 +174,11 @@ func Build(ctx context.Context, options BuildOptions) (BuildResult, error) {
 	return result, err
 }
 
-// BuildPrepared generates the index and search projection from the
-// exact files and Git metadata captured by PrepareBuild. outputDir may differ
-// from the preparation default, but the source snapshot and build options are
-// fixed.
+// BuildPrepared generates the index and search projection from the exact
+// document bytes and Git metadata captured during preparation. Publisher
+// callers use PrepareBuild's complete immutable snapshot; standalone Build
+// uses its private index-only capture. outputDir may differ from the
+// preparation default, but the prepared documents and build options are fixed.
 func BuildPrepared(ctx context.Context, prepared *PreparedBuild, outputDir string) (BuildResult, error) {
 	startedAt := time.Now()
 	if prepared == nil {

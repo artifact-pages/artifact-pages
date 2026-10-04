@@ -116,10 +116,26 @@ type fingerprintDocument struct {
 	LastCommitter string `json:"lastCommitter,omitempty"`
 }
 
+type sourceFileReader func(string) ([]byte, error)
+type sourceFileOpener func(string) (*os.File, error)
+
+type sourceCaptureMode struct {
+	indexOnly bool
+	readFile  sourceFileReader
+	openFile  sourceFileOpener
+}
+
 // PrepareBuild snapshots every regular file once, resolves the same Git and
 // filesystem timestamps used by Build, and computes a deterministic root
 // before parsing documents or constructing full-text search data.
 func PrepareBuild(ctx context.Context, options BuildOptions) (*PreparedBuild, error) {
+	return prepareBuild(ctx, options, sourceCaptureMode{})
+}
+
+// prepareBuild is shared by the public full-snapshot API and standalone index
+// builds. The latter captures document bytes and all source metadata, but skips
+// resource bodies and the publisher input fingerprint.
+func prepareBuild(ctx context.Context, options BuildOptions, captureMode sourceCaptureMode) (*PreparedBuild, error) {
 	if !siteIDPattern.MatchString(options.SiteID) {
 		return nil, fmt.Errorf("invalid site identifier %q: use lowercase letters, numbers, and internal hyphens", options.SiteID)
 	}
@@ -179,7 +195,7 @@ func PrepareBuild(ctx context.Context, options BuildOptions) (*PreparedBuild, er
 		return nil, errors.New("output directory cannot be the artifact source directory")
 	}
 
-	files, artifacts, scannedFiles, latestByDirectory, err := snapshotSourceTree(sourcePath, outputRoot, options.RejectSymlinks)
+	files, artifacts, scannedFiles, latestByDirectory, err := captureSourceTree(sourcePath, outputRoot, options.RejectSymlinks, captureMode)
 	if err != nil {
 		return nil, err
 	}
@@ -225,6 +241,9 @@ func PrepareBuild(ctx context.Context, options BuildOptions) (*PreparedBuild, er
 		indexTime:      indexTime,
 	}
 	for _, file := range files {
+		if captureMode.indexOnly && !isDocumentPath(file.RelativePath) {
+			continue
+		}
 		prepared.fileByRelative[file.RelativePath] = file
 	}
 	for _, artifact := range artifacts {
@@ -243,18 +262,28 @@ func PrepareBuild(ctx context.Context, options BuildOptions) (*PreparedBuild, er
 		}
 		prepared.documents = append(prepared.documents, preparedDocument{artifact: artifact, updatedAt: updatedAt, lastCommitter: gitUpdate.lastCommitter})
 	}
-	prepared.inputRoot, err = fingerprintPreparedBuild(prepared)
-	if err != nil {
-		return nil, fmt.Errorf("fingerprint site build inputs: %w", err)
+	if !captureMode.indexOnly {
+		prepared.inputRoot, err = fingerprintPreparedBuild(prepared)
+		if err != nil {
+			return nil, fmt.Errorf("fingerprint site build inputs: %w", err)
+		}
 	}
 	return prepared, nil
 }
 
-func snapshotSourceTree(sourcePath, outputRoot string, rejectSymlinks bool) ([]SourceFileSnapshot, []discoveredArtifact, int, map[string]time.Time, error) {
+func captureSourceTree(sourcePath, outputRoot string, rejectSymlinks bool, captureMode sourceCaptureMode) ([]SourceFileSnapshot, []discoveredArtifact, int, map[string]time.Time, error) {
 	var files []SourceFileSnapshot
 	var artifacts []discoveredArtifact
 	latestByDirectory := make(map[string]time.Time)
 	scannedFiles := 0
+	readFile := captureMode.readFile
+	if readFile == nil {
+		readFile = os.ReadFile
+	}
+	openFile := captureMode.openFile
+	if openFile == nil {
+		openFile = os.Open
+	}
 	err := filepath.WalkDir(sourcePath, func(currentPath string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -296,6 +325,7 @@ func snapshotSourceTree(sourcePath, outputRoot string, rejectSymlinks bool) ([]S
 		if !isSymlink && !info.Mode().IsRegular() {
 			return fmt.Errorf("unsupported filesystem entry in site source: %s", currentPath)
 		}
+		isDocument := isDocumentPath(entry.Name())
 		relative, err := filepath.Rel(sourcePath, currentPath)
 		if err != nil {
 			return fmt.Errorf("resolve site path %q: %w", currentPath, err)
@@ -304,22 +334,68 @@ func snapshotSourceTree(sourcePath, outputRoot string, rejectSymlinks bool) ([]S
 		if err := ValidateUTF8RelativePath(relative); err != nil {
 			return fmt.Errorf("site source %w", err)
 		}
-		data, err := os.ReadFile(currentPath)
-		if err != nil {
-			return fmt.Errorf("read source file %s: %w", relative, err)
+		var symlinkTargetInfo fs.FileInfo
+		if isSymlink && !isDocument {
+			symlinkTargetInfo, err = os.Stat(currentPath)
+			if err != nil {
+				return fmt.Errorf("read source file %s: %w", relative, err)
+			}
+			if !symlinkTargetInfo.Mode().IsRegular() {
+				return fmt.Errorf("unsupported filesystem entry in site source: %s", currentPath)
+			}
+		}
+		if captureMode.indexOnly && !isDocument {
+			readableInfo := info
+			if isSymlink {
+				readableInfo = symlinkTargetInfo
+			}
+			if err := verifyResourceReadable(currentPath, relative, readableInfo, openFile); err != nil {
+				return err
+			}
+		}
+		var data []byte
+		captureBytes := !captureMode.indexOnly || isDocument
+		if captureBytes {
+			data, err = readFile(currentPath)
+			if err != nil {
+				return fmt.Errorf("read source file %s: %w", relative, err)
+			}
 		}
 		afterInfo, err := os.Lstat(currentPath)
 		if err != nil {
 			return fmt.Errorf("verify source file %s after read: %w", relative, err)
 		}
-		if afterInfo.Size() != info.Size() || !afterInfo.ModTime().Equal(info.ModTime()) || afterInfo.Mode().Type() != info.Mode().Type() || (!isSymlink && int64(len(data)) != afterInfo.Size()) {
+		if afterInfo.Size() != info.Size() || !afterInfo.ModTime().Equal(info.ModTime()) || afterInfo.Mode().Type() != info.Mode().Type() || (captureBytes && !isSymlink && int64(len(data)) != afterInfo.Size()) {
 			return errors.New("site source changed while preparing publish; retry with a stable working tree")
 		}
-		digest := sha256.Sum256(data)
+		if isSymlink && !isDocument {
+			afterTargetInfo, statErr := os.Stat(currentPath)
+			if statErr != nil {
+				return fmt.Errorf("read source file %s: %w", relative, statErr)
+			}
+			if !afterTargetInfo.Mode().IsRegular() {
+				return fmt.Errorf("unsupported filesystem entry in site source: %s", currentPath)
+			}
+			if afterTargetInfo.Size() != symlinkTargetInfo.Size() || !afterTargetInfo.ModTime().Equal(symlinkTargetInfo.ModTime()) || afterTargetInfo.Mode().Type() != symlinkTargetInfo.Mode().Type() {
+				return errors.New("site source changed while preparing publish; retry with a stable working tree")
+			}
+		}
+		fileSize := info.Size()
+		if isSymlink && !isDocument {
+			fileSize = symlinkTargetInfo.Size()
+		}
+		if captureBytes {
+			fileSize = int64(len(data))
+		}
+		digestHex := ""
+		if !captureMode.indexOnly {
+			digest := sha256.Sum256(data)
+			digestHex = hex.EncodeToString(digest[:])
+		}
 		file := SourceFileSnapshot{
 			RelativePath: relative,
-			SHA256:       hex.EncodeToString(digest[:]),
-			Size:         int64(len(data)),
+			SHA256:       digestHex,
+			Size:         fileSize,
 			ModTime:      info.ModTime(),
 			bytes:        data,
 		}
@@ -328,7 +404,7 @@ func snapshotSourceTree(sourcePath, outputRoot string, rejectSymlinks bool) ([]S
 		if file.ModTime.After(latestByDirectory[directory]) {
 			latestByDirectory[directory] = file.ModTime
 		}
-		if isHTMLDocument(entry.Name()) || isMarkdownDocument(entry.Name()) {
+		if isDocument {
 			fileRelative := relative
 			artifacts = append(artifacts, discoveredArtifact{
 				directory:         filepath.Join(sourcePath, filepath.FromSlash(directory)),
@@ -361,6 +437,33 @@ func snapshotSourceTree(sourcePath, outputRoot string, rejectSymlinks bool) ([]S
 		}
 	}
 	return files, artifacts, scannedFiles, latestByDirectory, nil
+}
+
+func isDocumentPath(name string) bool {
+	name = path.Base(filepath.ToSlash(name))
+	return isHTMLDocument(name) || isMarkdownDocument(name)
+}
+
+func verifyResourceReadable(filename, relative string, expected fs.FileInfo, openFile sourceFileOpener) error {
+	file, err := openFile(filename)
+	if err != nil {
+		return fmt.Errorf("read source file %s: %w", relative, err)
+	}
+	openedInfo, statErr := file.Stat()
+	closeErr := file.Close()
+	if statErr != nil {
+		return fmt.Errorf("stat source file %s: %w", relative, statErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("close source file %s: %w", relative, closeErr)
+	}
+	if !openedInfo.Mode().IsRegular() {
+		return fmt.Errorf("unsupported filesystem entry in site source: %s", filename)
+	}
+	if openedInfo.Size() != expected.Size() || !openedInfo.ModTime().Equal(expected.ModTime()) || openedInfo.Mode().Type() != expected.Mode().Type() {
+		return errors.New("site source changed while preparing publish; retry with a stable working tree")
+	}
+	return nil
 }
 
 func artifactWorkingTreeUpdatesFromSnapshot(ctx context.Context, repositoryRoot, sourcePath string, artifacts []discoveredArtifact, files []SourceFileSnapshot, deletedAt time.Time) (map[string]time.Time, map[string]struct{}, error) {
