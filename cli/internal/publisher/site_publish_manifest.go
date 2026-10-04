@@ -23,7 +23,6 @@ type sitePublishSnapshot struct {
 	etag          string
 	exists        bool
 	fastPath      bool
-	legacyKeys    []string
 	actual        map[string]sitePublishObject
 	actualKeys    []string
 	generation    string
@@ -127,7 +126,7 @@ func loadSitePublishSnapshot(ctx context.Context, backend ConditionalObjectBacke
 		}
 		snapshot.state = state
 	}
-	if !reconcile && prepared.Reusable() && snapshot.state.Pending == nil &&
+	if !reconcile && prepared.Reusable() &&
 		snapshot.state.Committed.InputRoot == prepared.InputRoot() && snapshot.activeTx == nil {
 		snapshot.fastPath = true
 		return snapshot, nil
@@ -150,10 +149,7 @@ func sitePublishStateInfo(object Object, etag string) ObjectInfo {
 }
 
 func sitePublishGenerationFromHead(site string, info ObjectInfo) string {
-	if info.Metadata["artifact-pages-publish-state-schema"] == fmt.Sprint(sitePublishStateSchemaVersion) {
-		return info.Metadata["artifact-pages-publish-generation"]
-	}
-	return legacySitePublishGeneration(site, info.Metadata["artifact-pages-sha256"])
+	return info.Metadata["artifact-pages-publish-generation"]
 }
 
 func classifySitePublishTransaction(snapshot *sitePublishSnapshot) error {
@@ -186,9 +182,9 @@ func loadMissingSitePublishSnapshot(ctx context.Context, backend ConditionalObje
 		return sitePublishSnapshot{}, err
 	}
 	snapshot := sitePublishSnapshot{
-		state: sitePublishState{SchemaVersion: sitePublishStateLegacySchemaVersion, Site: siteID,
+		state: sitePublishState{SchemaVersion: sitePublishStateSchemaVersion, Site: siteID,
 			Committed: sitePublishCommitted{Generation: absentSitePublishGeneration(siteID), Objects: rows}},
-		generation: absentSitePublishGeneration(siteID), legacyKeys: keys, actual: rowsMap(rows), actualKeys: keys,
+		generation: absentSitePublishGeneration(siteID), actual: rowsMap(rows), actualKeys: keys,
 		retry: retry, retryETag: retryETag, retryExists: retryETag != "",
 	}
 	if err := classifySitePublishTransaction(&snapshot); err != nil {
@@ -264,11 +260,6 @@ func buildSitePublishDiff(ctx context.Context, backend ConditionalObjectBackend,
 	desiredRows := rowsFromDesired(desired)
 	desiredMap := rowsMap(desiredRows)
 	touched := make(map[string]struct{})
-	if snapshot.state.Pending != nil {
-		for _, key := range snapshot.state.Pending.TouchedKeys {
-			touched[key] = struct{}{}
-		}
-	}
 	for _, key := range snapshot.activeTouched {
 		touched[key] = struct{}{}
 	}
@@ -338,7 +329,7 @@ func buildSitePublishDiff(ctx context.Context, backend ConditionalObjectBackend,
 	needsCommit := !snapshot.exists || snapshot.state.Committed.InputRoot != prepared.InputRoot() || projectionChanges
 	// A true managed-state no-op must avoid writes. Reconcile with no drift and
 	// a matching fingerprint falls through here with no change either.
-	if snapshot.exists && !projectionChanges && snapshot.state.Committed.InputRoot == prepared.InputRoot() && snapshot.state.Pending == nil {
+	if snapshot.exists && !projectionChanges && snapshot.state.Committed.InputRoot == prepared.InputRoot() {
 		needsCommit = false
 	}
 	if !snapshot.exists && !needsCommit {

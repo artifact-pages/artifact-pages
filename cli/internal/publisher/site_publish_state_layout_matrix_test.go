@@ -806,12 +806,33 @@ type layoutPolicyEntry struct {
 
 type layoutCompactRow [4]any
 
+// layoutFlatStateV1 preserves the original flat-state experiment locally so
+// the verification report remains reproducible without retaining a production
+// schema-1 reader.
+type layoutFlatStateV1 struct {
+	SchemaVersion int                 `json:"schemaVersion"`
+	Site          string              `json:"site"`
+	Committed     layoutFlatCommitted `json:"committed"`
+	Pending       *layoutPending      `json:"pending,omitempty"`
+}
+
+type layoutFlatCommitted struct {
+	InputRoot string              `json:"inputRoot"`
+	Objects   []sitePublishObject `json:"objects"`
+}
+
+type layoutPending struct {
+	TouchedKeys []string `json:"touchedKeys"`
+}
+
+type layoutFlatDecodedState = layoutFlatStateV1
+
 type layoutCompactState struct {
 	SchemaVersion int                    `json:"schemaVersion"`
 	CodecVersion  int                    `json:"codecVersion"`
 	Site          string                 `json:"site"`
 	Committed     layoutCompactCommitted `json:"committed"`
-	Pending       *sitePublishPending    `json:"pending,omitempty"`
+	Pending       *layoutPending         `json:"pending,omitempty"`
 }
 
 type layoutCompactCommitted struct {
@@ -838,7 +859,7 @@ type layoutCoordinator struct {
 	Site          string                    `json:"site"`
 	Layout        string                    `json:"layout"`
 	InputRoot     string                    `json:"inputRoot"`
-	Pending       *sitePublishPending       `json:"pending,omitempty"`
+	Pending       *layoutPending            `json:"pending,omitempty"`
 	SourceRoot    *layoutNodeRef            `json:"sourceRoot,omitempty"`
 	GeneratedRoot *layoutNodeRef            `json:"generatedRoot,omitempty"`
 	Buckets       []layoutCoordinatorBucket `json:"buckets,omitempty"`
@@ -1675,7 +1696,7 @@ func (store *stateLayoutStore) writePending(before layoutProjection, touched []s
 	if store.headPending && reflect.DeepEqual(oldPending, touched) {
 		return nil
 	}
-	pending := &sitePublishPending{TouchedKeys: touched}
+	pending := &layoutPending{TouchedKeys: touched}
 	switch store.variant.layout {
 	case "flat":
 		committed, err := store.readFlatState()
@@ -1805,10 +1826,14 @@ func (store *stateLayoutStore) writeCommitted(projection layoutProjection) error
 	return nil
 }
 
-func (store *stateLayoutStore) encodeFlat(inputRoot string, rows []sitePublishObject, pending *sitePublishPending) ([]byte, error) {
+func (store *stateLayoutStore) encodeFlat(inputRoot string, rows []sitePublishObject, pending *layoutPending) ([]byte, error) {
 	if store.variant.codec == "named-http-row-v1" {
-		return encodeSitePublishState(sitePublishState{SchemaVersion: sitePublishStateLegacySchemaVersion, Site: store.site,
-			Committed: sitePublishCommitted{InputRoot: inputRoot, Objects: append([]sitePublishObject(nil), rows...)}, Pending: pending})
+		plain, err := json.Marshal(layoutFlatStateV1{SchemaVersion: 1, Site: store.site,
+			Committed: layoutFlatCommitted{InputRoot: inputRoot, Objects: append([]sitePublishObject(nil), rows...)}, Pending: pending})
+		if err != nil {
+			return nil, err
+		}
+		return stateLayoutDeterministicGzip(plain)
 	}
 	profiles, compactRows := layoutCompactRows(rows, true)
 	state := layoutCompactState{SchemaVersion: 1, CodecVersion: 1, Site: store.site,
@@ -1820,7 +1845,7 @@ func (store *stateLayoutStore) encodeFlat(inputRoot string, rows []sitePublishOb
 	return stateLayoutDeterministicGzip(plain)
 }
 
-func (store *stateLayoutStore) encodeCoordinator(inputRoot string, pending *sitePublishPending, sourceRef, generatedRef *layoutNodeRef, buckets []layoutCoordinatorBucket, generatedRows []layoutEncodedRow) ([]byte, error) {
+func (store *stateLayoutStore) encodeCoordinator(inputRoot string, pending *layoutPending, sourceRef, generatedRef *layoutNodeRef, buckets []layoutCoordinatorBucket, generatedRows []layoutEncodedRow) ([]byte, error) {
 	coordinator := layoutCoordinator{SchemaVersion: 1, CodecVersion: 1, Site: store.site, Layout: store.variant.layout,
 		InputRoot: inputRoot, Pending: pending, SourceRoot: sourceRef, GeneratedRoot: generatedRef,
 		Buckets: append([]layoutCoordinatorBucket(nil), buckets...), GeneratedRows: append([]layoutEncodedRow(nil), generatedRows...)}
@@ -1905,44 +1930,74 @@ func (store *stateLayoutStore) pendingTouchedKeys() ([]string, error) {
 	return append([]string(nil), state.Pending.TouchedKeys...), nil
 }
 
-func (store *stateLayoutStore) readFlatState() (sitePublishState, error) {
+func (store *stateLayoutStore) readFlatState() (layoutFlatDecodedState, error) {
 	plain, err := layoutGunzipBounded(store.root)
 	if err != nil {
-		return sitePublishState{}, err
+		return layoutFlatDecodedState{}, err
 	}
 	if err := validateNoDuplicateJSONKeys(plain); err != nil {
-		return sitePublishState{}, err
+		return layoutFlatDecodedState{}, err
 	}
 	if store.variant.codec == "named-http-row-v1" {
-		var state sitePublishState
+		var state layoutFlatDecodedState
 		if err := json.Unmarshal(plain, &state); err != nil {
-			return sitePublishState{}, err
+			return layoutFlatDecodedState{}, err
 		}
-		if err := validateSitePublishState(state, store.site); err != nil {
-			return sitePublishState{}, err
+		if err := validateLayoutFlatState(state, store.site); err != nil {
+			return layoutFlatDecodedState{}, err
 		}
 		if state.Committed.InputRoot != store.headInputRoot || (state.Pending != nil) != store.headPending {
-			return sitePublishState{}, fmt.Errorf("flat body disagrees with HEAD state metadata")
+			return layoutFlatDecodedState{}, fmt.Errorf("flat body disagrees with HEAD state metadata")
 		}
 		return state, nil
 	}
 	var compact layoutCompactState
 	if err := json.Unmarshal(plain, &compact); err != nil {
-		return sitePublishState{}, err
+		return layoutFlatDecodedState{}, err
 	}
 	if compact.SchemaVersion != 1 || compact.CodecVersion != 1 || compact.Site != store.site || compact.Committed.InputRoot != store.headInputRoot || (compact.Pending != nil) != store.headPending {
-		return sitePublishState{}, fmt.Errorf("profile-factored flat state disagrees with HEAD or schema")
+		return layoutFlatDecodedState{}, fmt.Errorf("profile-factored flat state disagrees with HEAD or schema")
 	}
 	rows, err := layoutDecodeCompactRows(store.site, compact.Committed.HTTPProfiles, compact.Committed.Objects, true)
 	if err != nil {
-		return sitePublishState{}, err
+		return layoutFlatDecodedState{}, err
 	}
-	state := sitePublishState{SchemaVersion: 1, Site: compact.Site,
-		Committed: sitePublishCommitted{InputRoot: compact.Committed.InputRoot, Objects: rows}, Pending: compact.Pending}
-	if err := validateSitePublishState(state, store.site); err != nil {
-		return sitePublishState{}, err
+	state := layoutFlatDecodedState{SchemaVersion: 1, Site: compact.Site,
+		Committed: layoutFlatCommitted{InputRoot: compact.Committed.InputRoot, Objects: rows}, Pending: compact.Pending}
+	if err := validateLayoutFlatState(state, store.site); err != nil {
+		return layoutFlatDecodedState{}, err
 	}
 	return state, nil
+}
+
+func validateLayoutFlatState(state layoutFlatDecodedState, site string) error {
+	if state.SchemaVersion != 1 || state.Site != site || !sitePublishStateHashPattern.MatchString(state.Committed.InputRoot) || state.Committed.Objects == nil {
+		return fmt.Errorf("historical flat state has an invalid schema, site, root, or object list")
+	}
+	previous := ""
+	for index, row := range state.Committed.Objects {
+		if err := validateSitePublishRow(site, row); err != nil {
+			return fmt.Errorf("historical flat row %d: %w", index, err)
+		}
+		if index > 0 && row.Key <= previous {
+			return fmt.Errorf("historical flat rows are not sorted and unique")
+		}
+		previous = row.Key
+	}
+	if state.Pending != nil {
+		if len(state.Pending.TouchedKeys) == 0 || !sort.StringsAreSorted(state.Pending.TouchedKeys) {
+			return fmt.Errorf("historical flat pending keys are empty or unsorted")
+		}
+		for index, key := range state.Pending.TouchedKeys {
+			if index > 0 && state.Pending.TouchedKeys[index-1] == key {
+				return fmt.Errorf("historical flat pending keys contain duplicates")
+			}
+			if !managedSitePublishKey(site, key) {
+				return fmt.Errorf("historical flat pending key %q is outside site ownership", key)
+			}
+		}
+	}
+	return nil
 }
 
 func (store *stateLayoutStore) decodeProjectionRows() ([]sitePublishObject, error) {
@@ -1955,35 +2010,11 @@ func (store *stateLayoutStore) decodeProjectionRows() ([]sitePublishObject, erro
 	}
 	switch store.variant.layout {
 	case "flat":
-		if store.variant.codec == "named-http-row-v1" {
-			var state sitePublishState
-			if err := json.Unmarshal(plain, &state); err != nil {
-				return nil, err
-			}
-			if err := validateSitePublishState(state, store.site); err != nil {
-				return nil, err
-			}
-			if state.Committed.InputRoot != store.headInputRoot || (state.Pending != nil) != store.headPending {
-				return nil, fmt.Errorf("flat body disagrees with HEAD state metadata")
-			}
-			return append([]sitePublishObject(nil), state.Committed.Objects...), nil
-		}
-		var compact layoutCompactState
-		if err := json.Unmarshal(plain, &compact); err != nil {
-			return nil, err
-		}
-		if compact.SchemaVersion != 1 || compact.CodecVersion != 1 || compact.Site != store.site || compact.Committed.InputRoot != store.headInputRoot || (compact.Pending != nil) != store.headPending {
-			return nil, fmt.Errorf("profile-factored flat state disagrees with HEAD or schema")
-		}
-		rows, err := layoutDecodeCompactRows(store.site, compact.Committed.HTTPProfiles, compact.Committed.Objects, true)
+		state, err := store.readFlatState()
 		if err != nil {
 			return nil, err
 		}
-		state := sitePublishState{SchemaVersion: 1, Site: compact.Site, Committed: sitePublishCommitted{InputRoot: compact.Committed.InputRoot, Objects: rows}, Pending: compact.Pending}
-		if err := validateSitePublishState(state, store.site); err != nil {
-			return nil, err
-		}
-		return rows, nil
+		return append([]sitePublishObject(nil), state.Committed.Objects...), nil
 	case "directory-two-slot", "fixed-two-slot", "hybrid-fixed-two-slot":
 		var coordinator layoutCoordinator
 		if err := json.Unmarshal(plain, &coordinator); err != nil {

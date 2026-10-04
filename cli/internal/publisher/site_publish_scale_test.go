@@ -148,13 +148,13 @@ func TestSitePublishScaleProbe(t *testing.T) {
 	phases = append(phases, runSitePublishScalePhase(t, backend, "retry-with-different-source", options, false))
 
 	// Recreate the pre-state manifestless condition while keeping the published
-	// projection. This exercises legacy inventory migration before/after the
+	// projection. This exercises missing-state inventory bootstrap before/after the
 	// manifest optimization without changing the source corpus.
 	backend.mu.Lock()
 	delete(backend.objects, sitePublishScaleStateKey(siteID))
 	delete(backend.etags, sitePublishScaleStateKey(siteID))
 	backend.mu.Unlock()
-	phases = append(phases, runSitePublishScalePhase(t, backend, "legacy-migration", options, false))
+	phases = append(phases, runSitePublishScalePhase(t, backend, "missing-state-bootstrap", options, false))
 
 	stateRaw, stateGzip := scaleStateSizes(backend, siteID)
 	finalObjects := backend.siteProjectionSnapshot(siteID)

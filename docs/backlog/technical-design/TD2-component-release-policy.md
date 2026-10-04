@@ -102,11 +102,11 @@ The release commit (version constant bump) is prepared locally and reviewed like
 ## Known gate limits and release runbook
 
 - The gate classifies formats from what a completed run leaves in storage. Control records that a successful run removes or never writes (locks after release and registry-cleanup records) are not compared. It recognizes required per-site publish-state roots as a private control format; adding or removing that required format is breaking even when public formats are unchanged. Other transient control-record changes still require explicit review. Compatible-mode cross-CLI checks cover republish, preview and `lock inspect`, not `lock recover`.
-- **Pre-release exception (2026-10-04):** the owner authorized a `v0.2.0` candidate that changes only the private per-site publish-state protocol. No legacy-writer or mixed-CLI compatibility proof is a candidate blocker, and this exception does not change the policy for a future full release. The released `v0.1.2` predates this state record and can ignore it; before a full release uses schema 2, its operator procedure must require every writer for an affected site to use a schema-2-capable CLI. The candidate has no public data-format change and does not require a public-data republish solely for this control change.
+- **Pre-release exception (2026-10-04):** the owner authorized the `v0.2.0` prerelease to replace private publish-state controls without legacy compatibility proof; no public data format changes.
 - Each web build is smoke-tested with the compatibility spec from its own tree, so the spec's environment contract (`PLAYWRIGHT_BASE_URL`, `COMPAT_MODE`, `COMPAT_SITES`, `COMPAT_EXPECT`) must stay stable across releases.
 - If the tag workflow fails after the release was created (post-publication verification), the release stays published. While no consumer can have used it (minutes after creation, still a pre-release), delete the release and tag, fix, and push the tag again; otherwise leave it, mark it superseded in its notes, and ship a new patch version.
 
-The `v0.2.0` private-state candidate is a pre-release exception authorized on 2026-10-04: no old-writer compatibility proof is required before candidate preparation, and no browser-facing schema changes. Before any full release writes schema 2, its operator procedure must upgrade every publisher that can write each affected site. The published `v0.1.2` predates the private state key and may ignore it; it is not a safe rollback writer after schema-2 state has been created.
+The `v0.2.0` prerelease exception for private publish-state controls is recorded above; it does not establish a compatibility promise for future full releases.
 
 ## Supply chain
 

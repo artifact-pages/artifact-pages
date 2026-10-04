@@ -10,7 +10,7 @@ Replace the duplicated full-manifest pending write with a compact transaction re
 
 ## Acceptance criteria
 
-- [x] Schema-2 root and journal are bounded, validated, site-scoped, and bound to their HTTP metadata and conditional ETags. Schema-1 records remain readable.
+- [x] Schema-2 root and journal are bounded, validated, site-scoped, and bound to their HTTP metadata and conditional ETags. Older schemas fail closed with target-scoped reset guidance; no automatic migration is performed.
 - [x] Every origin mutation follows durable journal intent; origin state commits only after ordered projection writes and stale deletes succeed.
 - [x] Transaction generations distinguish pending replay from an origin commit whose response was lost. Touched-key and cache-path unions survive changed/reverted retries.
 - [x] Cloudflare R2 uses one complete state GET; AWS/default adapters retain HEAD then GET and ETag agreement.

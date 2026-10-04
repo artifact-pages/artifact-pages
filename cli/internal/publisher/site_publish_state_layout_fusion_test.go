@@ -594,12 +594,9 @@ func fusionValidatePersistedState(site string, state fusionPersistedState) error
 	if state.SchemaVersion != 2 || state.Site != site || !sitePublishStateHashPattern.MatchString(state.Committed.Generation) {
 		return errors.New("fusion state schema, site, or committed generation is invalid")
 	}
-	legacy := sitePublishState{SchemaVersion: sitePublishStateLegacySchemaVersion, Site: site,
-		Committed: sitePublishCommitted{InputRoot: state.Committed.InputRoot, Objects: state.Committed.Objects}}
-	if state.Pending != nil {
-		legacy.Pending = &sitePublishPending{TouchedKeys: append([]string(nil), state.Pending.TouchedKeys...)}
-	}
-	if err := validateSitePublishState(legacy, site); err != nil {
+	projection := sitePublishState{SchemaVersion: sitePublishStateSchemaVersion, Site: site,
+		Committed: sitePublishCommitted{InputRoot: state.Committed.InputRoot, Generation: state.Committed.Generation, Objects: state.Committed.Objects}}
+	if err := validateSitePublishState(projection, site); err != nil {
 		return err
 	}
 	if state.Pending != nil {

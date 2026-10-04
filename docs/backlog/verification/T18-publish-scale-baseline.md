@@ -9,12 +9,12 @@
 - [x] Measure the unmodified shared `PublishSite` flow against deterministic, committed multi-site fixtures.
 - [x] Implement state-assisted reconciliation and repeat the same matrix at the same fixture revision.
 - [x] Verify unchanged local inputs can avoid unnecessary build/index work without skipping registry, lock, cache-retry, pending-journal or preview duties.
-- [x] Prove state migration, interruption recovery, dry-run, malformed-state failure, explicit repair, unregister cleanup and neighboring-site isolation.
+- [x] Prove missing-state inventory bootstrap, interruption recovery, dry-run, malformed-state failure, explicit repair, unregister cleanup and neighboring-site isolation.
 - [x] Record final request, byte, manifest-size and local-time results without presenting the local fake backend as a cloud benchmark.
 
 ## Baseline method
 
-The opt-in [`TestSitePublishScaleProbe`](../../../cli/internal/publisher/site_publish_scale_test.go) exercises the production `PublishSite` implementation with a deterministic in-memory `ConditionalObjectBackend`, seeded deployed registry, neighboring-site object and private control sentinel. It publishes an initial site, repeats a no-op, runs a dry-run, applies a small add/update/removal, changes registry metadata, enables and disables full text, injects a partial artifact-upload failure followed by a different desired source, and exercises a manifestless legacy state. Each run copies the tracked fixture into ignored `.local/` and retains source modification times.
+The opt-in [`TestSitePublishScaleProbe`](../../../cli/internal/publisher/site_publish_scale_test.go) exercises the production `PublishSite` implementation with a deterministic in-memory `ConditionalObjectBackend`, seeded deployed registry, neighboring-site object and private control sentinel. It publishes an initial site, repeats a no-op, runs a dry-run, applies a small add/update/removal, changes registry metadata, enables and disables full text, injects a partial artifact-upload failure followed by a different desired source, and exercises an absent-state inventory bootstrap. Each run copies the tracked fixture into ignored `.local/` and retains source modification times.
 
 Run from the repository root:
 
@@ -106,7 +106,7 @@ The preflight and publication command forms were `artifact-pages registry regist
 
 ## Candidate state-assisted measurements
 
-The candidate local flow probe ran at revision `437f37f9482771ea0c52f354191bd498ca3b7f9c` against the 10,000-file fixture. It confirmed that a normal no-op does one publish-state `HEAD`, skips the build, reads no state body or projection objects, and makes no `LIST` calls. The observed logical calls were `HEAD=1`, `GET=5`, `PUT=2` (the two lock writes), with 569 GET-body bytes and no state body reads or writes. A dry-run no-op made `HEAD=1`, `GET=3`, and no mutations. The regular initial publication used the legacy-inventory path because the fake origin began without state: `LIST=2`, `HEAD=1`, `PUT=10,008`; it published 10,000 source files plus generated projection and private state objects.
+The candidate local flow probe ran at revision `437f37f9482771ea0c52f354191bd498ca3b7f9c` against the 10,000-file fixture. It confirmed that a normal no-op does one publish-state `HEAD`, skips the build, reads no state body or projection objects, and makes no `LIST` calls. The observed logical calls were `HEAD=1`, `GET=5`, `PUT=2` (the two lock writes), with 569 GET-body bytes and no state body reads or writes. A dry-run no-op made `HEAD=1`, `GET=3`, and no mutations. The regular initial publication used missing-state inventory bootstrap because the fake origin began without a state key: `LIST=2`, `HEAD=1`, `PUT=10,008`; it published 10,000 source files plus generated projection and private state objects.
 
 The same probe captured the actual gzip state object and decompressed it for size reporting. With full text off, the final 10,000-file state after the add/update/remove and retry phases was 3,366,962 uncompressed bytes / 396,752 compressed bytes. The state captured after enabling full text for that same changed source set was 3,410,920 / 402,226 bytes. These are measured state bodies from the in-memory backend, not estimates of an R2 transfer. The raw probe output is retained under ignored `.local/publish-scale-cloud-after/final-scale-probe.log`.
 
@@ -132,4 +132,4 @@ Public checks after all five site publishes confirmed that the registry containe
 
 ## Final evidence
 
-The pinned before/after matrix records local interface counts, body bytes, source mutations, generated object deltas, fresh-projection stage timings and actual `PublishSite` wall times. Focused publisher tests cover no-op duties, migration, malformed state, pending-state and final-state failure boundaries, changed-source retry after partial PUT/DELETE, dry-run, repair, unregister cleanup and neighboring-site isolation. `go test ./...`, `go test -race ./cli/internal/publisher`, and the five-site fixture generator check passed for the final implementation. Local fake-backend timings and counts are not remote request measurements.
+The pinned before/after matrix records local interface counts, body bytes, source mutations, generated object deltas, fresh-projection stage timings and actual `PublishSite` wall times. Focused publisher tests cover no-op duties, missing-state bootstrap, malformed state, pending-journal and final-state failure boundaries, changed-source retry after partial PUT/DELETE, dry-run, repair, unregister cleanup and neighboring-site isolation. `go test ./...`, `go test -race ./cli/internal/publisher`, and the five-site fixture generator check passed for the implementation at that time. Local fake-backend timings and counts are not remote request measurements.

@@ -297,7 +297,7 @@ func TestPublishSiteFinalStateCASFailureRecoversRevertedTouchedKeys(t *testing.T
 		t.Fatal(err)
 	}
 	pending, err := decodeSitePublishState("sre", stateInfo, stateObject.Bytes)
-	if err != nil || pending.SchemaVersion != sitePublishStateSchemaVersion || pending.Pending != nil {
+	if err != nil || pending.SchemaVersion != sitePublishStateSchemaVersion {
 		t.Fatalf("state after final CAS failure = %+v, err=%v; want unchanged committed v2 state", pending, err)
 	}
 	journal, _, err := readSiteCacheRetry(context.Background(), backend, "sre")
@@ -352,8 +352,8 @@ func TestPublishSiteFinalStateCASFailureRecoversRevertedTouchedKeys(t *testing.T
 		t.Fatal(err)
 	}
 	finalState, err := decodeSitePublishState("sre", finalInfo, finalObject.Bytes)
-	if err != nil || finalState.Pending != nil {
-		t.Fatalf("final state = %+v, err=%v; want committed state without pending journal", finalState, err)
+	if err != nil {
+		t.Fatalf("final state = %+v, err=%v; want committed state", finalState, err)
 	}
 	if _, _, err := backend.lockMemoryBackend.GetObject(context.Background(), siteCacheRetryKey("sre")); !errors.Is(err, ErrObjectNotFound) {
 		t.Errorf("cache retry record after successful recovery = %v, want cleared", err)

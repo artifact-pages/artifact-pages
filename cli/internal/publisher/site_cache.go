@@ -29,9 +29,8 @@ type sitePublishTransaction struct {
 }
 
 const (
-	siteCacheRetryLegacySchemaVersion = 1
-	siteCacheRetrySchemaVersion       = 2
-	maxSiteCacheRetryBytes            = 16 << 20
+	siteCacheRetrySchemaVersion = 2
+	maxSiteCacheRetryBytes      = 16 << 20
 )
 
 func siteCacheRetryKey(site string) string { return "_control/site-cache/" + site + ".json" }
@@ -98,23 +97,24 @@ func readSiteCacheRetry(ctx context.Context, backend ConditionalObjectBackend, s
 	if err := json.Unmarshal(versionRaw, &version); err != nil {
 		return siteCacheRetry{}, "", errors.New("site cache retry record has an invalid schemaVersion")
 	}
-	if version != siteCacheRetryLegacySchemaVersion && version != siteCacheRetrySchemaVersion {
+	if version != siteCacheRetrySchemaVersion {
+		if version == 1 {
+			return siteCacheRetry{}, "", sitePrivateControlSchemaResetError(site, "cache-retry record", version)
+		}
 		return siteCacheRetry{}, "", compat.CheckSchemaVersion("site cache retry record", object.Bytes, siteCacheRetrySchemaVersion)
 	}
 	if rawPaths, ok := envelope["paths"]; !ok || !rawJSONKind(rawPaths, "array") {
 		return siteCacheRetry{}, "", errors.New("site cache retry record paths must be an array")
 	}
-	if version == siteCacheRetrySchemaVersion {
-		if rawSite, ok := envelope["site"]; !ok || !rawJSONKind(rawSite, "string") {
-			return siteCacheRetry{}, "", errors.New("site cache retry record site must be a string")
-		}
-		var recordedSite string
-		if err := json.Unmarshal(envelope["site"], &recordedSite); err != nil || recordedSite != site {
-			return siteCacheRetry{}, "", errors.New("site cache retry record does not match the selected site")
-		}
-		if transaction, ok := envelope["transaction"]; ok && !bytes.Equal(bytes.TrimSpace(transaction), []byte("null")) && !rawJSONKind(transaction, "object") {
-			return siteCacheRetry{}, "", errors.New("site cache retry transaction must be an object")
-		}
+	if rawSite, ok := envelope["site"]; !ok || !rawJSONKind(rawSite, "string") {
+		return siteCacheRetry{}, "", errors.New("site cache retry record site must be a string")
+	}
+	var recordedSite string
+	if err := json.Unmarshal(envelope["site"], &recordedSite); err != nil || recordedSite != site {
+		return siteCacheRetry{}, "", errors.New("site cache retry record does not match the selected site")
+	}
+	if transaction, ok := envelope["transaction"]; ok && !bytes.Equal(bytes.TrimSpace(transaction), []byte("null")) && !rawJSONKind(transaction, "object") {
+		return siteCacheRetry{}, "", errors.New("site cache retry transaction must be an object")
 	}
 	decoder := json.NewDecoder(bytes.NewReader(object.Bytes))
 	var record siteCacheRetry
@@ -127,14 +127,11 @@ func readSiteCacheRetry(ctx context.Context, backend ConditionalObjectBackend, s
 	if record.SchemaVersion != version {
 		return record, "", errors.New("site cache retry schemaVersion changed while decoding")
 	}
-	if version == siteCacheRetrySchemaVersion && record.Site != site {
+	if record.Site != site {
 		return record, "", errors.New("site cache retry record does not match the selected site")
 	}
 	if len(record.Paths) == 0 {
 		return record, "", errors.New("invalid site cache retry record: paths must be non-empty")
-	}
-	if version == siteCacheRetryLegacySchemaVersion && record.Transaction != nil {
-		return record, "", errors.New("legacy site cache retry record cannot contain a transaction")
 	}
 	for i, p := range record.Paths {
 		decoded, err := url.PathUnescape(p)
@@ -211,9 +208,6 @@ func validateSitePublishTransaction(site string, transaction sitePublishTransact
 func siteCacheRetryNeedsWrite(current, next siteCacheRetry, exists bool) bool {
 	if !exists {
 		return true
-	}
-	if current.SchemaVersion == siteCacheRetryLegacySchemaVersion && next.Transaction == nil && sameStringSlice(current.Paths, next.Paths) {
-		return false
 	}
 	if current.SchemaVersion != next.SchemaVersion || current.Site != next.Site || !sameStringSlice(current.Paths, next.Paths) {
 		return true

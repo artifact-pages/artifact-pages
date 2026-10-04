@@ -83,7 +83,7 @@ func TestSitePublishStateLayoutSweep(t *testing.T) {
 		Pricing:        stateLayoutSweepPricingSnapshot(),
 		ProviderNotes: []string{
 			"State-only operations are isolated from common artifact/index projection deltas; request counters are prototype-store logical operations.",
-			"emptyPrefixCommittedSnapshot reports the exact serialized private-state body PUT count/bytes needed to seed one already-committed snapshot. It is not the complete first-publish transaction: it excludes the pending-state CAS, the common cache-retry journal, projection uploads, registry/preview work, and legacy migration's two LISTs plus HEADs for listed objects.",
+			"emptyPrefixCommittedSnapshot reports the exact serialized private-state body PUT count/bytes needed to seed one already-committed snapshot. It is not the complete first-publish transaction: it excludes the pending-state CAS, the common cache-retry journal, projection uploads, registry/preview work, and missing-state inventory's two LISTs plus HEADs for listed objects.",
 			"InputRootMatches is a prepared-fingerprint eligibility result in this harness, not a captured PublishSite.BuildSkipped field; no-op counters assert one HEAD and no state-body or mutation calls.",
 			"ListWireRequests models one charged list request per 1,000 listed keys; no HTTP headers, TLS bytes, or unobserved adapter calls are inferred.",
 			"Per-scenario stored-GB-month costs assume the measured final state remains stored for a full month; the monthly replay instead measures R2's average daily persistent-storage peak.",

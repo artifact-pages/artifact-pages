@@ -18,11 +18,10 @@ import (
 )
 
 const (
-	sitePublishStateLegacySchemaVersion = 1
-	sitePublishStateSchemaVersion       = 2
-	maxSitePublishStateGzipBytes        = 16 << 20
-	maxSitePublishStateJSONBytes        = 64 << 20
-	sitePublishStateCacheControl        = "no-store"
+	sitePublishStateSchemaVersion = 2
+	maxSitePublishStateGzipBytes  = 16 << 20
+	maxSitePublishStateJSONBytes  = 64 << 20
+	sitePublishStateCacheControl  = "no-store"
 )
 
 var (
@@ -36,7 +35,6 @@ type sitePublishState struct {
 	SchemaVersion int                  `json:"schemaVersion"`
 	Site          string               `json:"site"`
 	Committed     sitePublishCommitted `json:"committed"`
-	Pending       *sitePublishPending  `json:"pending,omitempty"`
 }
 
 type sitePublishCommitted struct {
@@ -55,18 +53,10 @@ type sitePublishObject struct {
 	CacheControl       string `json:"cacheControl"`
 }
 
-type sitePublishPending struct {
-	TouchedKeys []string `json:"touchedKeys"`
-}
-
 // sitePublishStateKey is intentionally a single mutable key per site. The
 // leading underscore keeps publisher coordination objects outside user routes.
 func sitePublishStateKey(site string) string {
 	return "_control/publish-state/" + site + ".json.gz"
-}
-
-func legacySitePublishGeneration(site, compressedSHA256 string) string {
-	return sha256Hex([]byte("artifact-pages-publish-state-v1\x00" + site + "\x00" + compressedSHA256))
 }
 
 func absentSitePublishGeneration(site string) string {
@@ -126,31 +116,29 @@ func validateSitePublishStateHead(site string, info ObjectInfo) error {
 		return errors.New("site publish state HEAD has unexpected HTTP metadata")
 	}
 	metadata := info.Metadata
-	version, err := strconv.Atoi(metadata["artifact-pages-publish-state-schema"])
-	if err != nil || metadata["artifact-pages-publish-state-schema"] != strconv.Itoa(version) ||
-		(version != sitePublishStateLegacySchemaVersion && version != sitePublishStateSchemaVersion) {
+	versionToken := metadata["artifact-pages-publish-state-schema"]
+	version, err := strconv.Atoi(versionToken)
+	if err != nil || versionToken != strconv.Itoa(version) {
 		return fmt.Errorf("site publish state HEAD has an unsupported schema %q", metadata["artifact-pages-publish-state-schema"])
+	}
+	if version != sitePublishStateSchemaVersion {
+		if version == 1 {
+			return sitePrivateControlSchemaResetError(site, "publish-state", version)
+		}
+		return fmt.Errorf("site publish state HEAD has unsupported schema %q; this CLI reads schema %d", versionToken, sitePublishStateSchemaVersion)
 	}
 	if metadata["artifact-pages-site"] != site {
 		return errors.New("site publish state HEAD site does not match the selected site")
 	}
 	root := metadata["artifact-pages-publish-input-root"]
-	if version == sitePublishStateSchemaVersion && !sitePublishStateHashPattern.MatchString(root) {
+	if !sitePublishStateHashPattern.MatchString(root) {
 		return errors.New("site publish state HEAD has an invalid input root")
 	}
-	if root != "" && !sitePublishStateHashPattern.MatchString(root) {
-		return errors.New("site publish state HEAD has an invalid input root")
-	}
-	if pending := metadata["artifact-pages-publish-pending"]; pending != "true" && pending != "false" {
+	if pending := metadata["artifact-pages-publish-pending"]; pending != "false" {
 		return errors.New("site publish state HEAD has an invalid pending flag")
 	}
-	if version == sitePublishStateSchemaVersion {
-		if metadata["artifact-pages-publish-pending"] != "false" {
-			return errors.New("site publish state v2 cannot be pending")
-		}
-		if !sitePublishStateHashPattern.MatchString(metadata["artifact-pages-publish-generation"]) {
-			return errors.New("site publish state HEAD has an invalid committed generation")
-		}
+	if !sitePublishStateHashPattern.MatchString(metadata["artifact-pages-publish-generation"]) {
+		return errors.New("site publish state HEAD has an invalid committed generation")
 	}
 	if !sitePublishStateHashPattern.MatchString(metadata["artifact-pages-sha256"]) {
 		return errors.New("site publish state HEAD has an invalid compressed SHA256")
@@ -207,22 +195,21 @@ func decodeSitePublishState(site string, info ObjectInfo, body []byte) (sitePubl
 	if err := json.Unmarshal(versionRaw, &version); err != nil {
 		return sitePublishState{}, errors.New("site publish state has an invalid schemaVersion")
 	}
-	if version != sitePublishStateLegacySchemaVersion && version != sitePublishStateSchemaVersion {
-		return sitePublishState{}, fmt.Errorf("unsupported site publish state schema version %d", version)
+	if version != sitePublishStateSchemaVersion {
+		if version == 1 {
+			return sitePublishState{}, sitePrivateControlSchemaResetError(site, "publish-state", version)
+		}
+		return sitePublishState{}, fmt.Errorf("unsupported site publish state schema version %d; this CLI reads schema %d", version, sitePublishStateSchemaVersion)
 	}
 	if err := requireStateJSONFields(envelope, map[string]string{
 		"site": "string", "committed": "object",
 	}); err != nil {
 		return sitePublishState{}, err
 	}
-	if err := requireCommittedJSONFields(envelope["committed"], version); err != nil {
+	if err := requireCommittedJSONFields(envelope["committed"]); err != nil {
 		return sitePublishState{}, err
 	}
-	if pendingRaw, exists := envelope["pending"]; exists && version == sitePublishStateLegacySchemaVersion {
-		if err := requirePendingJSONFields(pendingRaw); err != nil {
-			return sitePublishState{}, err
-		}
-	} else if exists {
+	if _, exists := envelope["pending"]; exists {
 		return sitePublishState{}, errors.New("site publish state v2 must not contain a pending journal")
 	}
 	if err := requireStateObjectRows(envelope["committed"]); err != nil {
@@ -232,9 +219,6 @@ func decodeSitePublishState(site string, info ObjectInfo, body []byte) (sitePubl
 	if err := json.Unmarshal(plain, &state); err != nil {
 		return sitePublishState{}, fmt.Errorf("decode site publish state: %w", err)
 	}
-	if version == sitePublishStateLegacySchemaVersion {
-		state.Committed.Generation = legacySitePublishGeneration(site, info.Metadata["artifact-pages-sha256"])
-	}
 	if err := validateSitePublishState(state, site); err != nil {
 		return sitePublishState{}, err
 	}
@@ -242,8 +226,7 @@ func decodeSitePublishState(site string, info ObjectInfo, body []byte) (sitePubl
 	headerVersion, _ := strconv.Atoi(metadata["artifact-pages-publish-state-schema"])
 	if state.SchemaVersion != version || state.SchemaVersion != headerVersion || state.Site != site ||
 		state.Committed.InputRoot != metadata["artifact-pages-publish-input-root"] ||
-		(version == sitePublishStateSchemaVersion && state.Committed.Generation != metadata["artifact-pages-publish-generation"]) ||
-		(version == sitePublishStateLegacySchemaVersion && (state.Pending != nil) != (metadata["artifact-pages-publish-pending"] == "true")) {
+		state.Committed.Generation != metadata["artifact-pages-publish-generation"] {
 		return sitePublishState{}, errors.New("site publish state body does not match HEAD metadata")
 	}
 	return state, nil
@@ -265,10 +248,6 @@ func buildSitePublishStateObject(site string, state sitePublishState) (Object, e
 	if err != nil {
 		return Object{}, err
 	}
-	pending := "false"
-	if state.Pending != nil {
-		pending = "true"
-	}
 	return Object{
 		Bytes:              compressed,
 		ContentType:        "application/octet-stream",
@@ -279,7 +258,7 @@ func buildSitePublishStateObject(site string, state sitePublishState) (Object, e
 			"artifact-pages-publish-state-schema": fmt.Sprint(sitePublishStateSchemaVersion),
 			"artifact-pages-publish-input-root":   state.Committed.InputRoot,
 			"artifact-pages-publish-generation":   state.Committed.Generation,
-			"artifact-pages-publish-pending":      pending,
+			"artifact-pages-publish-pending":      "false",
 			"artifact-pages-sha256":               sha256Hex(compressed),
 			"artifact-pages-site":                 site,
 		},
@@ -297,25 +276,17 @@ func validateSitePublishState(state sitePublishState, site string) error {
 	if err := validateStateSite(site); err != nil {
 		return err
 	}
-	if state.SchemaVersion != sitePublishStateLegacySchemaVersion && state.SchemaVersion != sitePublishStateSchemaVersion {
-		return fmt.Errorf("unsupported site publish state schema version %d", state.SchemaVersion)
+	if state.SchemaVersion != sitePublishStateSchemaVersion {
+		return fmt.Errorf("unsupported site publish state schema version %d; writer requires schema %d", state.SchemaVersion, sitePublishStateSchemaVersion)
 	}
 	if state.Site != site {
 		return errors.New("site publish state site does not match the selected site")
 	}
-	if state.Committed.InputRoot != "" && !sitePublishStateHashPattern.MatchString(state.Committed.InputRoot) {
+	if !sitePublishStateHashPattern.MatchString(state.Committed.InputRoot) {
 		return errors.New("site publish state has an invalid committed input root")
 	}
-	if state.SchemaVersion == sitePublishStateSchemaVersion {
-		if !sitePublishStateHashPattern.MatchString(state.Committed.InputRoot) {
-			return errors.New("site publish state v2 has an invalid committed input root")
-		}
-		if !sitePublishStateHashPattern.MatchString(state.Committed.Generation) {
-			return errors.New("site publish state v2 has an invalid committed generation")
-		}
-		if state.Pending != nil {
-			return errors.New("site publish state v2 must not contain a pending journal")
-		}
+	if !sitePublishStateHashPattern.MatchString(state.Committed.Generation) {
+		return errors.New("site publish state has an invalid committed generation")
 	}
 	if state.Committed.Objects == nil {
 		return errors.New("site publish state committed objects must be an array")
@@ -330,22 +301,12 @@ func validateSitePublishState(state sitePublishState, site string) error {
 		}
 		previous = row.Key
 	}
-	if state.Pending != nil {
-		if state.Pending.TouchedKeys == nil || len(state.Pending.TouchedKeys) == 0 {
-			return errors.New("site publish state pending touchedKeys must be a non-empty array")
-		}
-		previous = ""
-		for i, key := range state.Pending.TouchedKeys {
-			if err := validateSitePublishOwnedKey(site, key); err != nil {
-				return fmt.Errorf("site publish state pending key %d: %w", i, err)
-			}
-			if i > 0 && key <= previous {
-				return errors.New("site publish state pending touchedKeys must be sorted and unique")
-			}
-			previous = key
-		}
-	}
 	return nil
+}
+
+func sitePrivateControlSchemaResetError(site, record string, version int) error {
+	return fmt.Errorf("site %q %s schema %d is unsupported by this prerelease CLI; after backing up and confirming no publish or cache retry is in progress, reset only %s and %s, then retry (this command will not delete control records)",
+		site, record, version, sitePublishStateKey(site), siteCacheRetryKey(site))
 }
 
 func validateSitePublishRow(site string, row sitePublishObject) error {
@@ -523,27 +484,12 @@ func requireStateJSONFields(value map[string]json.RawMessage, fields map[string]
 	return nil
 }
 
-func requireCommittedJSONFields(raw json.RawMessage, version int) error {
+func requireCommittedJSONFields(raw json.RawMessage) error {
 	var committed map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &committed); err != nil || committed == nil {
 		return errors.New("site publish state committed field must be an object")
 	}
-	fields := map[string]string{"inputRoot": "string", "objects": "array"}
-	if version == sitePublishStateSchemaVersion {
-		fields["generation"] = "string"
-	}
-	if err := requireStateJSONFields(committed, fields); err != nil {
-		return err
-	}
-	return nil
-}
-
-func requirePendingJSONFields(raw json.RawMessage) error {
-	var pending map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &pending); err != nil || pending == nil {
-		return errors.New("site publish state pending field must be an object")
-	}
-	return requireStateJSONFields(pending, map[string]string{"touchedKeys": "array"})
+	return requireStateJSONFields(committed, map[string]string{"inputRoot": "string", "generation": "string", "objects": "array"})
 }
 
 func requireStateObjectRows(raw json.RawMessage) error {

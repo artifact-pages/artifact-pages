@@ -8,7 +8,7 @@
 
 ## Proof needed
 
-- [x] Verify v1 no-op and next-change migration, including inline pending state merging into the transaction journal before origin mutation.
+- [x] Verify schema-1 private control records fail closed with exact-site reset guidance; fresh v2 state bootstraps only when the state key is absent.
 - [x] Simulate journal and final-root conditional writes that persist but return errors; create a fresh publisher wrapper and prove retry classifies the persisted records correctly.
 - [ ] Verify pending journal monotonicity across changed/reverted desired inputs, stale deletions, newly added keys, cache invalidation retry, journal cleanup, and dry-run.
 - [ ] Verify Cloudflare R2 state GET returns all HTTP metadata needed for decoding with no state HEAD; preserve AWS HEAD+GET and ETag behavior.
