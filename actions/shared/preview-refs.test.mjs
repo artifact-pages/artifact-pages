@@ -93,21 +93,39 @@ test('reachable refs report their commits and merge base', () => {
   }
 })
 
-test('unreachable refs fail with fetch-depth guidance and never fetch', () => {
+test('refs the CLI can fetch pass the check without being present locally', () => {
   const scratch = mkdtempSync(path.join(tmpdir(), 'preview-refs-'))
   try {
     const root = repository(path.join(scratch, 'repo'))
-    assert.throws(
-      () => assertPreviewRefsReachable(root, { head: sha, defaultRef: 'origin/main', headSource: 'event' }),
-      (error) => /head SHA must be fetched/.test(error.message) && /fetch-depth: 0/.test(error.message),
-    )
-    assert.throws(() => assertPreviewRefsReachable(root, { head: 'topic', defaultRef: 'origin/missing', headSource: 'input' }), /default ref "origin\/missing".*fetch-depth: 0/)
-
+    // A full-SHA head and an origin/<branch> default ref that a depth-1 checkout lacks.
+    const result = assertPreviewRefsReachable(root, { head: sha, defaultRef: 'origin/missing', headSource: 'event' })
+    assert.equal(result.headSHA, '')
+    assert.equal(result.defaultRefSHA, '')
+    assert.equal(result.mergeBaseSHA, '')
+    // An unrelated history is no longer rejected here; the CLI reports "no merge base".
     git(root, 'switch', '-q', '--orphan', 'unrelated')
     writeFileSync(path.join(root, 'c.txt'), 'c')
     git(root, 'add', 'c.txt')
     git(root, 'commit', '-qm', 'orphan')
-    assert.throws(() => assertPreviewRefsReachable(root, { head: 'unrelated', defaultRef: 'origin/main', headSource: 'input' }), /no merge base.*fetch-depth: 0/)
+    assert.doesNotThrow(() => assertPreviewRefsReachable(root, { head: 'unrelated', defaultRef: 'origin/main', headSource: 'input' }))
+  } finally {
+    rmSync(scratch, { recursive: true, force: true })
+  }
+})
+
+test('genuinely unresolvable refs fail with an actionable message and never fetch', () => {
+  const scratch = mkdtempSync(path.join(tmpdir(), 'preview-refs-'))
+  try {
+    const root = repository(path.join(scratch, 'repo'))
+    assert.throws(
+      () => assertPreviewRefsReachable(root, { head: 'feature-branch', defaultRef: 'origin/main', headSource: 'input' }),
+      /head "feature-branch".*not a full commit SHA.*fetch-depth: 0/s,
+    )
+    assert.throws(
+      () => assertPreviewRefsReachable(root, { head: 'topic', defaultRef: 'upstream/main', headSource: 'input' }),
+      /default ref "upstream\/main".*not an origin\/<branch> ref.*fetch-depth: 0/s,
+    )
+    assert.throws(() => assertPreviewRefsReachable(root, { head: 'topic', defaultRef: 'origin/HEAD', headSource: 'default' }), /origin\/HEAD/)
   } finally {
     rmSync(scratch, { recursive: true, force: true })
   }

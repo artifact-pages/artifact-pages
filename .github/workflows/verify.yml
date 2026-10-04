@@ -95,11 +95,18 @@ jobs:
       contents: read
       pull-requests: read
     steps:
-      - name: Check out the repository with its branches
+      # Depth 1 and no persisted credential: the Actions must deepen from origin with the
+      # workflow token (IMP-58), as an adopter's default checkout would.
+      - name: Check out the repository at depth 1
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
+          fetch-depth: 1
           persist-credentials: false
+      - name: Assert the checkout is shallow and holds no credential
+        run: |
+          test "$(git rev-parse --is-shallow-repository)" = true
+          test "$(git rev-list --count HEAD)" = 1
+          test -z "$(git config --get-regexp extraheader || true)"
       - name: Prepare the runner-local target
         id: prep
         env:
@@ -146,6 +153,63 @@ jobs:
           jq -e '.sites | map(.id) | index("smoke")' "$STORAGE/_indexes/sites.json"
           test -f "$STORAGE/index.html"
 
+      # Runs before any site publish: the first publish unshallows the checkout, and the
+      # preview must start from the depth-1 checkout to prove the fetch and deepen path.
+      - name: Commit a document change to preview
+        run: |
+          git switch -c actions-smoke-preview
+          printf '<p>Preview change from run %s.</p>\n' "$GITHUB_RUN_ID" >> fixtures/actions-smoke/site/overview.html
+          git -c user.name=actions-smoke -c user.email=actions-smoke@users.noreply.github.com commit -qam "Actions smoke preview change"
+      - name: Preview publish
+        id: preview
+        uses: ./actions/preview-publish
+        with:
+          site: smoke
+          source: fixtures/actions-smoke/site
+          # The smoke test previews its local commit, not the pull_request event head.
+          head: HEAD
+          # Manual preview: do not bind to the pull_request event's PR.
+          pull-request: none
+          default-ref: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || 'origin/main' }}
+          base-url: http://localhost:4179
+          config: ${{ steps.prep.outputs.config }}
+      - name: Assert the preview outputs
+        env:
+          EXIT_CODE: ${{ steps.preview.outputs['exit-code'] }}
+          DOCUMENTS: ${{ steps.preview.outputs.documents }}
+          GROUP_LIST_URL: ${{ steps.preview.outputs.group-list-url }}
+        run: |
+          test "$EXIT_CODE" = 0
+          jq -e 'map(tostring) | any(test("overview"))' <<<"$DOCUMENTS"
+          test -n "$GROUP_LIST_URL"
+      - name: Assert the preview deepened the shallow checkout to the merge base
+        env:
+          DEFAULT_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || 'origin/main' }}
+        run: |
+          # The depth-1 checkout held neither the base ref nor its history; the CLI fetched them.
+          git rev-parse --verify "$DEFAULT_REF^{commit}"
+          git merge-base HEAD "$DEFAULT_REF"
+      - name: Preview publish with a mismatched pull request
+        id: preview-rejected
+        continue-on-error: true
+        uses: ./actions/preview-publish
+        with:
+          site: smoke
+          source: fixtures/actions-smoke/site
+          pull-request: "999999"
+          base-url: http://localhost:4179
+          config: ${{ steps.prep.outputs.config }}
+      - name: Assert the mismatched preview was rejected before the CLI
+        env:
+          OUTCOME: ${{ steps.preview-rejected.outcome }}
+          ERROR: ${{ steps.preview-rejected.outputs.error }}
+        run: |
+          test "$OUTCOME" = failure
+          test -n "$ERROR"
+
+      - name: Return to the checked-out commit
+        run: git switch -q --detach "$GITHUB_SHA"
+
       - name: Snapshot storage before the site dry-run
         id: before-site-plan
         env:
@@ -184,6 +248,16 @@ jobs:
           test "$SITE" = smoke
           jq -e '.fullTextUrl' "$STORAGE/_indexes/smoke/meta.json"
           test -f "$STORAGE/_artifacts/smoke/overview.html"
+      - name: Assert Git metadata from the depth-1 checkout equals the full history
+        env:
+          STORAGE: ${{ steps.prep.outputs.storage }}
+        run: |
+          # The publish deepened the checkout; compare with what the complete history says.
+          test "$(git rev-parse --is-shallow-repository)" = false
+          expected="$(git log -1 --format=%ct -- fixtures/actions-smoke/site/overview.html)"
+          actual="$(date -u -d "$(jq -r '.artifacts[] | select(.path == "overview.html") | .updatedAt' "$STORAGE/_indexes/smoke/index.json")" +%s)"
+          test "$expected" = "$actual"
+          test "$(git log -1 --format=%cn -- fixtures/actions-smoke/site/overview.html)" = "$(jq -r '.artifacts[] | select(.path == "overview.html") | .lastCommitter.name' "$STORAGE/_indexes/smoke/index.json")"
       - name: Repeat the site publish
         id: site-repeat
         uses: ./actions/site-publish
@@ -227,51 +301,6 @@ jobs:
           test -n "$UNREGISTERED_ERROR"
           test "$INVALID_OUTCOME" = failure
           test "$INVALID_EXIT" = 2
-
-      - name: Commit a document change to preview
-        run: |
-          git switch -c actions-smoke-preview
-          printf '<p>Preview change from run %s.</p>\n' "$GITHUB_RUN_ID" >> fixtures/actions-smoke/site/overview.html
-          git -c user.name=actions-smoke -c user.email=actions-smoke@users.noreply.github.com commit -qam "Actions smoke preview change"
-      - name: Preview publish
-        id: preview
-        uses: ./actions/preview-publish
-        with:
-          site: smoke
-          source: fixtures/actions-smoke/site
-          # The smoke test previews its local commit, not the pull_request event head.
-          head: HEAD
-          # Manual preview: do not bind to the pull_request event's PR.
-          pull-request: none
-          default-ref: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || 'origin/main' }}
-          base-url: http://localhost:4179
-          config: ${{ steps.prep.outputs.config }}
-      - name: Assert the preview outputs
-        env:
-          EXIT_CODE: ${{ steps.preview.outputs['exit-code'] }}
-          DOCUMENTS: ${{ steps.preview.outputs.documents }}
-          GROUP_LIST_URL: ${{ steps.preview.outputs.group-list-url }}
-        run: |
-          test "$EXIT_CODE" = 0
-          jq -e 'map(tostring) | any(test("overview"))' <<<"$DOCUMENTS"
-          test -n "$GROUP_LIST_URL"
-      - name: Preview publish with a mismatched pull request
-        id: preview-rejected
-        continue-on-error: true
-        uses: ./actions/preview-publish
-        with:
-          site: smoke
-          source: fixtures/actions-smoke/site
-          pull-request: "999999"
-          base-url: http://localhost:4179
-          config: ${{ steps.prep.outputs.config }}
-      - name: Assert the mismatched preview was rejected before the CLI
-        env:
-          OUTCOME: ${{ steps.preview-rejected.outcome }}
-          ERROR: ${{ steps.preview-rejected.outputs.error }}
-        run: |
-          test "$OUTCOME" = failure
-          test -n "$ERROR"
 
       - name: Admin registry unregister
         id: unregister

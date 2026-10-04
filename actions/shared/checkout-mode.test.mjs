@@ -20,6 +20,11 @@ test('auto (and empty) checks out only when the workspace is not a Git checkout'
   }
 })
 
+test('fetch-depth defaults to a shallow checkout and 0 stays valid', () => {
+  assert.doesNotThrow(() => decideCheckout({ env: { ARTIFACT_PAGES_INPUT_FETCH_DEPTH: '0' }, isCheckout: () => true }))
+  assert.doesNotThrow(() => decideCheckout({ env: {}, isCheckout: () => true }))
+})
+
 test('invalid checkout and fetch-depth values are errors', () => {
   assert.throws(() => decideCheckout({ env: { ARTIFACT_PAGES_INPUT_CHECKOUT: 'yes' } }), /auto, true or false/)
   for (const depth of ['-1', '1.5', 'all', '0; rm']) {

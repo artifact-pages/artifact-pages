@@ -136,7 +136,12 @@ func AuthEnv(environ []string, remote string, hasExtraHeader bool) ([]string, []
 		}
 		return ""
 	}
-	token := strings.TrimSpace(lookup("GITHUB_TOKEN"))
+	// ARTIFACT_PAGES_FETCH_TOKEN wins: the Actions set it to the workflow token
+	// because GITHUB_TOKEN may carry a token scoped to a separate config repository.
+	token := strings.TrimSpace(lookup("ARTIFACT_PAGES_FETCH_TOKEN"))
+	if token == "" {
+		token = strings.TrimSpace(lookup("GITHUB_TOKEN"))
+	}
 	if token == "" {
 		token = strings.TrimSpace(lookup("GH_TOKEN"))
 	}

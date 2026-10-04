@@ -172,11 +172,14 @@ async function assertCompositeActionWiring() {
     // Own checkout (decision 2): pinned, workflow token only, no persisted credentials, before anything else.
     assert.match(source, new RegExp(`ARTIFACT_PAGES_INPUT_CHECKOUT: \\$\\{\\{ inputs\\.checkout \\}\\}`), `${kind} Action must pass the checkout input to the decision step`)
     assert.equal(sectionProperties(source, 'inputs', 'checkout').default, 'auto', `${kind} checkout must default to auto`)
-    assert.equal(sectionProperties(source, 'inputs', 'fetch-depth').default, '"0"', `${kind} fetch-depth must default to 0`)
+    assert.equal(sectionProperties(source, 'inputs', 'fetch-depth').default, '"1"', `${kind} fetch-depth must default to 1 (shallow)`)
     assert.match(source, /^      uses: actions\/checkout@[0-9a-f]{40} # v\d+\.\d+\.\d+$/m, `${kind} checkout must be pinned to a full SHA with a version comment`)
     assert.match(source, /^      if: \$\{\{ steps\.checkout-mode\.outputs\.checkout == 'true' \}\}$/m, `${kind} checkout must follow the decision step`)
     assert.match(source, /^        fetch-depth: \$\{\{ inputs\.fetch-depth \}\}$/m, `${kind} checkout must use the fetch-depth input`)
     assert.match(source, /^        persist-credentials: false$/m, `${kind} checkout must not persist credentials`)
+    if (kind !== 'admin') {
+      assert.match(source, /^        ARTIFACT_PAGES_FETCH_TOKEN: \$\{\{ github\.token \}\}$/m, `${kind} Action must give the CLI the workflow token (not the github-token input) to deepen a shallow checkout`)
+    }
     assert.doesNotMatch(source.slice(source.indexOf('uses: actions/checkout@'), source.indexOf('uses: actions/checkout@') + 400), /token:/, `${kind} checkout must use the workflow token, not the github-token input`)
     assert.ok(source.indexOf('checkout-mode.mjs') < source.indexOf('uses: actions/setup-go@'), `${kind} checkout must precede Go setup`)
     if (kind === 'preview') {
@@ -262,7 +265,7 @@ async function assertWorkflowExamples() {
   assert.doesNotMatch(preview, /^\s+(?:head|default-ref):/m, 'workflow should rely on the pull_request defaults for head and default-ref')
   assert.match(preview, /^\s+comment: true$/m, 'workflow should opt in to the preview comment')
   assert.match(preview, /pull-requests: write/, 'the publish job needs pull-requests: write to comment')
-  assert.match(preview, /fetch-depth: 0/, 'workflow must fetch full history for merge-base selection')
+  assert.doesNotMatch(preview, /fetch-depth: 0/, 'preview example must not demand full history; the CLI deepens a shallow checkout')
   assert.match(preview, /id-token: write/, 'only the provider job should request OIDC permission')
 
   const labeled = await fs.readFile(path.join(exampleDirectory, 'satellite-preview-label.yml'), 'utf8')
@@ -528,7 +531,7 @@ async function assertPreviewPreflight(repositoryDirectory, scratchRoot) {
   assert.deepEqual(JSON.parse(preflightOutputs.documents), [], 'preflight failure should return an empty typed document array')
   assert.equal(JSON.parse(preflightOutputs.result).error, preflightOutputs.error, 'preflight failure result should preserve its error output')
 
-  // A manual preview whose default ref is not fetched fails early with typed outputs and guidance.
+  // A manual preview whose default ref the CLI could not fetch (not origin/<branch>) fails early with typed outputs and guidance.
   const refsOutputPath = path.join(scratchRoot, 'refs-preview-preflight-output.txt')
   await fs.writeFile(refsOutputPath, '')
   const refsPreflight = spawnSync('node', [path.join(projectRoot, 'actions', 'shared', 'verify-preview-pr.mjs')], {
@@ -542,7 +545,7 @@ async function assertPreviewPreflight(repositoryDirectory, scratchRoot) {
       ARTIFACT_PAGES_INPUT_SITE: 'sre',
       ARTIFACT_PAGES_INPUT_PULL_REQUEST: '',
       ARTIFACT_PAGES_INPUT_HEAD: 'HEAD',
-      ARTIFACT_PAGES_INPUT_DEFAULT_REF: 'origin/not-fetched',
+      ARTIFACT_PAGES_INPUT_DEFAULT_REF: 'upstream/main',
     },
     encoding: 'utf8',
   })
@@ -567,6 +570,16 @@ async function assertPreviewPreflight(repositoryDirectory, scratchRoot) {
   })
   assert.deepEqual(verified, { explicit: true, pullRequestURL: metadata.html_url, headSHA })
   assert.equal(apiCalls, 1, 'explicit PR input should be resolved through the read-only GitHub API')
+
+  // A full-SHA head is verified against GitHub's metadata without local objects, so a
+  // depth-1 base-ref checkout that lacks the head commit still passes the preflight.
+  const verifiedWithoutObjects = await verifyPreviewTrust({
+    env: { ...baseEnvironment, ARTIFACT_PAGES_INPUT_HEAD: headSHA, ARTIFACT_PAGES_INPUT_PULL_REQUEST: '42' },
+    event: sameRepositoryEvent,
+    fetchImpl: responseFor(metadata),
+    repositoryDirectory: path.join(scratchRoot, 'no-such-checkout'),
+  })
+  assert.deepEqual(verifiedWithoutObjects, { explicit: true, pullRequestURL: metadata.html_url, headSHA })
 
   await assert.rejects(
     verifyPreviewTrust({

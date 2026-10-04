@@ -13,7 +13,7 @@ That release renames Action outputs to hyphen-case (`changes_json` becomes `chan
 ## Cleanup per consumer
 
 - Remove every Summarize step (`artifact-pages-docs` publish, `artifact-pages-admin` registry and app-deploy).
-- Remove the `actions/checkout` steps (the Action's `checkout: auto` covers them, with `fetch-depth: 0` and `persist-credentials: false`). Keep one only when the job needs the checkout before the Action for another reason.
+- Remove the `actions/checkout` steps (the Action's `checkout: auto` covers them, with `fetch-depth: 1` since IMP-58, and `persist-credentials: false`). Keep one only when the job needs the checkout before the Action for another reason.
 - Remove the redundant `source: sites/${{ matrix.site }}` in `artifact-pages-docs` publish when it equals the registered source path.
 - Remove the redundant `config: artifact-pages.yaml` in `artifact-pages-admin` (`artifact-pages.yaml` in the working directory is the implicit default).
 - Unify every Action pin to the release tag (`artifact-pages-docs` pins a `main` commit, `artifact-pages-admin` pins `@v0.1.2`).
@@ -28,7 +28,7 @@ That release renames Action outputs to hyphen-case (`changes_json` becomes `chan
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
+          fetch-depth: 0  # IMP-58: removable; the Action defaults to a shallow checkout
           persist-credentials: false
       - name: Publish ${{ matrix.site }}
         id: publish

@@ -2,6 +2,7 @@ package gitdepth
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -146,5 +147,16 @@ func TestFetchFailureIsActionableAndRedacted(t *testing.T) {
 	err := Deepen(context.Background(), clone, 1, git(t, clone, "rev-parse", "HEAD"))
 	if err == nil || !strings.Contains(err.Error(), "fetch-depth: 0") {
 		t.Fatalf("error = %v, want guidance naming fetch-depth: 0", err)
+	}
+}
+
+func TestAuthEnvPrefersTheDedicatedFetchToken(t *testing.T) {
+	env, secrets := AuthEnv([]string{"GITHUB_TOKEN=config-repo-token", "ARTIFACT_PAGES_FETCH_TOKEN=workflow-token"}, "https://github.com/acme/repo", false)
+	if len(secrets) != 2 || secrets[0] != "workflow-token" {
+		t.Fatalf("fetch token should win, secrets = %v", secrets)
+	}
+	want := "AUTHORIZATION: basic " + base64.StdEncoding.EncodeToString([]byte("x-access-token:workflow-token"))
+	if !strings.Contains(strings.Join(env, "\n"), "GIT_CONFIG_VALUE_0="+want) {
+		t.Fatalf("header should carry the fetch token: %v", env)
 	}
 }
