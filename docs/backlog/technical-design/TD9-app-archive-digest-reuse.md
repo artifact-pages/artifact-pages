@@ -1,30 +1,34 @@
 # TD9 — App deploy archive digest reuse
 
-- Status: Open
+- Status: Done
 - Phase: CLI app deployment
 - Related verification: [T21](../verification/T21-command-cost-audit.md), [T22](../verification/T22-cache-purge-retry.md)
 - Product contract: [Specification](../../specification.md)
 
-## Decision to make
+## Decision
 
-`app deploy` が archive 検証中に得た per-file digest/size を immutable bundle record に保持し、changed object upload 時の同じ byte slice の再 hash を省くべきかを比較する。origin の全 object を毎回調べる現在の drift-repair 保証を弱めずに得られる効果が対象。
+`app deploy` stores each per-file SHA-256 beside the exact immutable byte slice captured during archive validation. HEAD comparison and changed-object PUT metadata reuse that digest. The compressed archive checksum remains separate. This does not skip per-object HEAD or change drift repair.
 
 ## Evidence
 
-T21 の2-file fake bundle は changed dry-run で HEAD 2 / PUT 0、apply で HEAD 2 / PUT 2 を観測した。大きな archive の CPU/heap 時間や hash 処理時間は測っていない。Source review では `loadAppBundle` が archive/checksum を検証して bytes を `bundleFile` に保持し、`appObjectMatchesBundle` が per-file SHA-256 を計算する。差分で upload する file は `DeployApp` が PUT metadata 用に同じ bytes を再度 SHA-256 する。archive-level digest と per-file digest は別の値・用途である。
+The paired probe used baseline `d2a4aa7a` and implementation commit `bf5be85a`, with five files per bundle and 1 / 8 / 32 MiB payloads. Each size covered initial deployment, no-op, one-file sparse update, and dense update, three times each. The legacy counts below are source-derived from the previous call sites; candidate per-file counts are one captured-byte hash per bundle entry. They are not hash-runtime instrumentation.
 
-したがって hash reuse は測定前の候補にすぎず、T21 は savings を示していない。object HEAD が存在し、size、SHA metadata、Content-Type、Cache-Control、Content-Encoding/Disposition と release provenance を照合する現在の境界は維持する。
+| Payload | Captured file bytes | Initial/no-op calls and bytes, old→new | Sparse calls and bytes, old→new | Dense calls and bytes, old→new |
+| --- | ---: | --- | --- | --- |
+| 1 MiB | 1,048,628 | 5→5 calls; 1,048,628→1,048,628 bytes | 6→5; 1,310,772→1,048,628 bytes | 10→5; 2,097,256→1,048,628 bytes |
+| 8 MiB | 8,388,660 | 5→5 calls; 8,388,660→8,388,660 bytes | 6→5; 10,485,812→8,388,660 bytes | 10→5; 16,777,320→8,388,660 bytes |
+| 32 MiB | 33,554,484 | 5→5 calls; 33,554,484→33,554,484 bytes | 6→5; 41,943,092→33,554,484 bytes | 10→5; 67,108,968→33,554,484 bytes |
 
-## 比較する候補
+Initial deployment hashes each file once for PUT metadata in the old path; no-op hashes each file once during HEAD comparison, so neither case saves per-file work. Sparse updates remove the changed file's second pass. Dense updates halve the number of per-file hash passes. The archive checksum remains one separate SHA-256 over the compressed archive (1,049,501 / 8,391,771 / 33,565,279 bytes).
 
-- bundle validation 時に per-file digest/size/HTTP policy を計算し、検証済みの captured bytes と同じ immutable entry に保持して diff と PUT が共有する。
-- 現行どおり diff と changed PUT で digest を別々に計算する。
-- 明確な benefit がなければ manifest/cache/root など persistent state を加えず現状維持する。
+The local fake observed 4 control GETs (3 lock reads and 1 retry-journal read), 3 lock conditional PUTs, and 5 application HEADs in every row. Application PUTs were 5 / 0 / 1 / 5 for initial / no-op / sparse / dense. Retry-journal conditional PUT, delete, and invalidation were each 1 for changed rows and 0 for no-op. Final keys, bodies, HTTP policy, release provenance, and SHA metadata matched the previous upload rule in all 12 rows. These are logical fake-backend calls, not provider HTTP or billing measurements.
 
-## 守る契約と範囲
+Candidate-only local `DeployApp` medians are recorded in `.local/td9-audit/digest-reuse-probe.log`; they do not compare against an old implementation and do not establish an end-to-end wall-time gain. This probe uses five files, so it does not measure many-small-file overhead. Peak/RSS and memory were not measured, and there was no live provider operation. Reproduce with `cd cli && go test -tags td9audit ./internal/publisher -run '^TestTD9ProbeAppDigestReuseAcrossBundleAndChangeShapes$' -count=1 -v`.
 
-archive、adjacent manifest、checksum の整合性検証、path/type/size/duplicate 検査、完全な HTTP policy、release provenance、全 object の毎回 HEAD による drift repair、`index.html` を最後に書く順序を守る。No-op 時の remote HEAD 省略、historical hashed asset の削除、cache retry の代替実装は対象外。Purge failure の retry は [T22](../verification/T22-cache-purge-retry.md) で検証済み。
+## Preserved contracts and scope
 
-## Done / 次の handoff
+Archive, adjacent manifest, and checksum validation; path/type/size/duplicate checks; full HTTP policy and release provenance; every object's HEAD-based drift repair; `index.html` last; and T22's cache retry behavior remain unchanged. No persistent state, remote operation, invalidation path, or cache-key change is introduced. No-op HEAD omission and historical hashed-asset deletion remain out of scope.
 
-小・中・大 archive と sparse/dense changed files で hash bytes/回数、CPU、live/peak memory、全 operation を比較し、same captured bytes・metadata・origin key/HTTP policy を検証する。T22 の失敗・retry 条件を悪化させないことも確認し、採用または現状維持を決める。採用時のみ独立 implementation/verification handoff を作る。
+## Done
+
+Adopt the same-entry digest reuse. It saves a redundant per-file SHA pass for existing changed objects—one file on the sparse fixture and all five files on the dense fixture—while initial/no-op hash counts, every HEAD, and provider-operation counts remain unchanged. Verification: `go test ./...`, `go test ./internal/publisher`, the focused digest test, the tagged 12-row probe, `go test -race ./internal/publisher`, and independent Luna max review PASS. This establishes reduced local hash work, not reduced remote calls or measured overall latency.
