@@ -306,3 +306,51 @@ func equalByteMaps(left, right map[string][]byte) bool {
 	}
 	return true
 }
+
+func TestRunPreviewPublishDefaultsSourceAndBaseURLFromRegistryAndConfig(t *testing.T) {
+	createLocalSitePublishCheckout(t, registeredLocalSiteManifest+"publicBaseURL: http://localhost:8080\n")
+	run1 := func(args ...string) (previewPublishOutput, error) {
+		var stdout, stderr bytes.Buffer
+		full := append([]string{"preview", "publish", "--site", "sre", "--default-ref", "HEAD", "--config", "artifact-pages.yaml", "--dry-run", "--format", "json"}, args...)
+		err := run(context.Background(), full, &stdout, &stderr)
+		var out previewPublishOutput
+		if err == nil {
+			if decodeErr := json.Unmarshal(stdout.Bytes(), &out); decodeErr != nil {
+				t.Fatalf("decode %q: %v", stdout.String(), decodeErr)
+			}
+		}
+		return out, err
+	}
+
+	out, err := run1()
+	if err != nil {
+		t.Fatalf("omitted --source and --base-url should default: %v", err)
+	}
+	if !strings.HasPrefix(out.GroupListURL, "http://localhost:8080/sre/_previews?group=") {
+		t.Errorf("group-list URL = %q, want the config public base URL", out.GroupListURL)
+	}
+
+	out, err = run1("--base-url", "https://explicit.example.test")
+	if err != nil || !strings.HasPrefix(out.GroupListURL, "https://explicit.example.test/sre/") {
+		t.Errorf("explicit --base-url must win: %q, %v", out.GroupListURL, err)
+	}
+
+	if _, err = run1("--source", "docs/other"); err == nil || !strings.Contains(err.Error(), "registered to acme/sre:docs/artifacts") {
+		t.Errorf("an explicit non-matching --source must still fail, got %v", err)
+	}
+	if _, err = run1("--source", "docs/artifacts"); err != nil {
+		t.Errorf("an explicit matching --source must work: %v", err)
+	}
+}
+
+func TestRunPreviewPublishRequiresBaseURLWhenConfigHasNone(t *testing.T) {
+	createLocalSitePublishCheckout(t, registeredLocalSiteManifest)
+	var stdout, stderr bytes.Buffer
+	err := run(context.Background(), []string{"preview", "publish", "--site", "sre", "--default-ref", "HEAD", "--config", "artifact-pages.yaml", "--dry-run", "--format", "json"}, &stdout, &stderr)
+	if err == nil || !strings.Contains(err.Error(), "--base-url is required") || !strings.Contains(err.Error(), "publicBaseURL") {
+		t.Fatalf("error = %v", err)
+	}
+	if code := commandExitCode(err); code != 2 {
+		t.Errorf("exit code = %d, want 2", code)
+	}
+}

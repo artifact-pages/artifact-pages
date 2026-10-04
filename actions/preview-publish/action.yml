@@ -5,8 +5,9 @@ inputs:
     description: Explicit registered site ID; never inferred from repository identity.
     required: true
   source:
-    description: Registered source directory inside the checked-out Git repository.
-    required: true
+    description: Source directory inside the checked-out Git repository. When empty, the site's registered source path is used; an explicit value must still match it exactly.
+    required: false
+    default: ""
   head:
     description: Git ref whose committed tree forms the preview. When empty, a pull_request event uses its recorded head SHA; any other event uses HEAD. Never infers PR provenance.
     required: false
@@ -24,8 +25,9 @@ inputs:
     required: false
     default: ""
   base-url:
-    description: Public application origin used to build review URLs.
-    required: true
+    description: Public application origin used to build review URLs. When empty, the deployment config's publicBaseURL is used (Cloudflare's cloudflare.publicBaseURL or the provider-neutral top-level publicBaseURL); the run fails if neither is available.
+    required: false
+    default: ""
   config:
     description: Optional deployment config path or github:// config locator.
     required: false

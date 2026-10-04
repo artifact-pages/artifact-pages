@@ -28,6 +28,7 @@ Use the [delegation index](../delegation.md) for work modes and owner boundaries
 | [IMP-46](IMP-46-action-marketplace-release.md) | Open | CLI / release, Docs | After IMP-45, per settled [TD4](../technical-design/TD4-action-marketplace-distribution.md): root `site-publish` Action, parity, build cache, released references in examples and guides, hosted-runner run and owner-approved listing. |
 | [IMP-47](IMP-47-actions-hosted-smoke.md) | Done | CLI / release | Run every composite Action through `uses:` on GitHub-hosted runners against a runner-local target, on PRs, `main` and before release. |
 | [IMP-48](IMP-48-operator-repository-split.md) | Open | Infra, Docs | Per [TD5](../technical-design/TD5-verification-environment-and-operator-repositories.md): verification on `artifact-pages.stream` here, production `artifact-pages.dev` moved to `artifact-pages-admin` and `artifact-pages-docs`. |
+| [IMP-49](IMP-49-preview-defaults.md) | Done | CLI, Actions | Preview `--source` and `--base-url` default from the deployed registry and deployment config (provider-neutral `publicBaseURL`). |
 
 These are operator-owned Terraform capabilities, not application authorization. Rule schemas and composition are intentionally left to the assigned designer; live changes need separate approval.
 

@@ -50,12 +50,12 @@ function buildArguments() {
     if (boolInput('dry-run')) args.push('--dry-run')
   } else if (kind === 'preview' && operation === 'publish') {
     args.push('preview', 'publish', '--site', required('site'))
-    flag(args, 'source', required('source').trim())
+    flag(args, 'source', input('source').trim())
     const refs = resolvePreviewRefs()
     flag(args, 'head', refs.head)
     flag(args, 'default-ref', refs.defaultRef)
     flag(args, 'pull-request', input('pull-request').trim())
-    flag(args, 'base-url', required('base-url').trim())
+    flag(args, 'base-url', input('base-url').trim())
     flag(args, 'config', input('config').trim())
     for (const line of input('include').split(/\r?\n/)) {
       const include = line.trim()
