@@ -2,7 +2,7 @@
 
 - Status: Done
 - Phase: Reusable distribution
-- Revised: 2026-10-03 — replaces the earlier web-only SemVer / CLI-by-SHA policy (2026-09-28) with one product version, a CLI-pinned web bundle, a compatibility contract and automated release gates.
+- Revised: 2026-10-04 — records the private control-format pre-release exception; replaces the earlier web-only SemVer / CLI-by-SHA policy (2026-09-28) with one product version, a CLI-pinned web bundle, a compatibility contract and automated release gates.
 - Related implementation: [IMP-45](../implementation/IMP-45-unified-release-and-compatibility.md), [IMP-31](../implementation/IMP-31-app-distribution.md), [IMP-34](../implementation/IMP-34-actions.md), [IMP-35](../implementation/IMP-35-external-adoption.md), [IMP-38](../implementation/IMP-38-terraform-registry-publication.md)
 - Related verification: [T16](../verification/T16-external-adoption.md)
 
@@ -80,6 +80,7 @@ Breaking versus compatible is decided by the data, not by a person waiving a red
   - each CLI republishing, previewing, locking and recovering over the other's output.
   Each combination runs a browser smoke: site picker, HTML and Markdown artifacts, page text search on a search-enabled site, preview list and document.
 - **Breaking** (some `schemaVersion` changed): the suite switches to upgrade checks — the candidate web shows "needs to be republished" for baseline data without crashing, and the documented upgrade procedure converges to a fully working storage.
+- A required control-only format added by the candidate is also a breaking format change, even when no public web schema changes. The gate recognizes `/_control/publish-state/<site>.json.gz` as a private publisher format; a required format present only in the candidate cannot be treated as optional.
 - **Version consistency** on a tag: a breaking result requires a MAJOR increase (MINOR while `0.x`); a MAJOR increase without a format change is allowed; any other mismatch fails the release.
 
 Two GitHub Actions workflows implement this:
@@ -100,9 +101,12 @@ The release commit (version constant bump) is prepared locally and reviewed like
 
 ## Known gate limits and release runbook
 
-- The gate classifies formats from what a completed run leaves in storage. Control records that a successful run removes or never writes (locks after release, registry cleanup and cache-retry records) are not compared; a change to their `schemaVersion` must be declared as breaking by the author and reviewed. `only-in-baseline` / `only-in-candidate` formats are reported but do not change the verdict. Cross-CLI checks cover republish, preview and `lock inspect`, not `lock recover`. In breaking mode only registry and site formats have explicit republish-state assertions.
+- The gate classifies formats from what a completed run leaves in storage. Control records that a successful run removes or never writes (locks after release and registry-cleanup records) are not compared. It recognizes required per-site publish-state roots as a private control format; adding or removing that required format is breaking even when public formats are unchanged. Other transient control-record changes still require explicit review. Compatible-mode cross-CLI checks cover republish, preview and `lock inspect`, not `lock recover`.
+- **Pre-release exception (2026-10-04):** the owner authorized a `v0.2.0` candidate that changes only the private per-site publish-state protocol. No legacy-writer or mixed-CLI compatibility proof is a candidate blocker, and this exception does not change the policy for a future full release. The released `v0.1.2` predates this state record and can ignore it; before a full release uses schema 2, its operator procedure must require every writer for an affected site to use a schema-2-capable CLI. The candidate has no public data-format change and does not require a public-data republish solely for this control change.
 - Each web build is smoke-tested with the compatibility spec from its own tree, so the spec's environment contract (`PLAYWRIGHT_BASE_URL`, `COMPAT_MODE`, `COMPAT_SITES`, `COMPAT_EXPECT`) must stay stable across releases.
 - If the tag workflow fails after the release was created (post-publication verification), the release stays published. While no consumer can have used it (minutes after creation, still a pre-release), delete the release and tag, fix, and push the tag again; otherwise leave it, mark it superseded in its notes, and ship a new patch version.
+
+The `v0.2.0` private-state candidate is a pre-release exception authorized on 2026-10-04: no old-writer compatibility proof is required before candidate preparation, and no browser-facing schema changes. Before any full release writes schema 2, its operator procedure must upgrade every publisher that can write each affected site. The published `v0.1.2` predates the private state key and may ignore it; it is not a safe rollback writer after schema-2 state has been created.
 
 ## Supply chain
 
