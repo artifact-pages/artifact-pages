@@ -35,8 +35,8 @@ Run in order. Each step names its owner; steps that mutate production or the rel
 4. Append the IMP-55 wording with `gh release edit v0.2.0` (do not change the notes generator): Action outputs were renamed to hyphen-case (for example `changes_json` is now `changes`); the Job Summary is built in; consumers delete their Summarize steps in the same change as the pin bump; private-repository depth-1 deepen is known-unverified ([T23](verification/T23-private-repository-topology.md)).
 5. Close the two release-dependent criteria of [IMP-56](implementation/IMP-56-prebuilt-cli-binaries.md) with the run evidence.
 6. [IMP-55](implementation/IMP-55-consumer-workflow-migration.md) migration:
-   - `artifact-pages-admin`: pin to v0.2.0 and remove the Summarize steps in the same change; `registry register` dry-run then real; `app deploy` dry-run then real.
-   - `artifact-pages-docs`: pin to v0.2.0 and remove Summarize steps; publish the guide and architecture pages; the second publish must be a no-op; re-run the open pull-request previews.
+   - `artifact-pages/admin` (then `tasuku43/artifact-pages-admin`): pin to v0.2.0 and remove the Summarize steps in the same change; `registry register` dry-run then real; `app deploy` dry-run then real.
+   - `artifact-pages/docs` (then `tasuku43/artifact-pages-docs`): pin to v0.2.0 and remove Summarize steps; publish the guide and architecture pages; the second publish must be a no-op; re-run the open pull-request previews.
 7. Browser check of `artifact-pages.dev` (library, a site, a preview, search) after the deploy.
 8. Record results in IMP-55, IMP-56 and T16, then update the indexes. The Marketplace listing stays open until the first non-pre-release.
 9. After v0.2.0, follow the [T23](verification/T23-private-repository-topology.md) steps: move the docs/admin secrets to repository scope with the IMP-55 workflow edits, add the fine-grained PAT, make both repositories private, then run the private-repository checks.
