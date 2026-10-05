@@ -217,14 +217,39 @@ func EnsureMergeBase(ctx context.Context, dir, first, second string) (string, er
 			return base, nil
 		}
 		if step < len(DeepenSteps) {
-			err = Deepen(ctx, dir, DeepenSteps[step], first, second)
+			err = eachTipFallback(first, second, func(tips ...string) error {
+				return Deepen(ctx, dir, DeepenSteps[step], tips...)
+			})
 		} else {
-			err = Unshallow(ctx, dir, first, second)
+			err = eachTipFallback(first, second, func(tips ...string) error {
+				return Unshallow(ctx, dir, tips...)
+			})
 		}
 		if err != nil {
 			return "", err
 		}
 	}
+}
+
+// eachTipFallback runs fetch with both tips. A tip that origin does not have
+// (a preview head that exists only in the local checkout) makes git reject the
+// whole fetch, so on failure each tip is tried alone and the call succeeds when
+// at least one of them could be fetched.
+func eachTipFallback(first, second string, fetch func(tips ...string) error) error {
+	err := fetch(first, second)
+	if err == nil {
+		return nil
+	}
+	succeeded := false
+	for _, tip := range []string{first, second} {
+		if fetch(tip) == nil {
+			succeeded = true
+		}
+	}
+	if succeeded {
+		return nil
+	}
+	return err
 }
 
 func mergeBase(ctx context.Context, dir, first, second string) (string, error) {

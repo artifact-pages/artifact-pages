@@ -160,3 +160,22 @@ func TestAuthEnvPrefersTheDedicatedFetchToken(t *testing.T) {
 		t.Fatalf("header should carry the fetch token: %v", env)
 	}
 }
+
+func TestEnsureMergeBaseToleratesAHeadThatOriginDoesNotHave(t *testing.T) {
+	origin, mainTip, featureTip := historyWithMerge(t)
+	want := git(t, origin, "merge-base", mainTip, featureTip)
+	clone := filepath.Join(t.TempDir(), "clone")
+	git(t, ".", "clone", "--quiet", "--no-local", "--depth=1", "--branch", "feature", "file://"+origin, clone)
+	if err := FetchShallowRef(context.Background(), clone, mainTip); err != nil {
+		t.Fatal(err)
+	}
+	commit(t, clone, "local only")
+	localHead := git(t, clone, "rev-parse", "HEAD")
+	got, err := EnsureMergeBase(context.Background(), clone, mainTip, localHead)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("merge-base with a local-only head = %s, want %s", got, want)
+	}
+}
