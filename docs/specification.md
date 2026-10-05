@@ -1,6 +1,6 @@
 # Git Artifact Pages — Specification
 
-Status: **Phase 1 local product; implementation-aligned, evolving**
+Status: **Phases 1 and 2 (local product and local production projection builder) are in place; work now spans Phase 3 (provider-backed deployments) and Phase 4 (reusable distribution), see [roadmap](roadmap.md); implementation-aligned, evolving**
 
 This document records the current local product contract and identifies decisions intentionally deferred until measurements or a concrete deployment use case justify them.
 
