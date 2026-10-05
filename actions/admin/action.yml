@@ -97,8 +97,14 @@ runs:
         ARTIFACT_PAGES_ACTION_REPOSITORY: ${{ github.action_repository }}
         ARTIFACT_PAGES_TOKEN: ${{ github.token }}
       run: node "$GITHUB_ACTION_PATH/../shared/prebuilt-cli.mjs" --source-root "${{ github.action_path }}/../.."
+    - name: Decide whether this job still has to build the CLI
+      id: build-plan
+      shell: bash
+      env:
+        ARTIFACT_PAGES_PREBUILT_USED: ${{ steps.prebuilt.outputs.used }}
+      run: node "$GITHUB_ACTION_PATH/../shared/build-once.mjs" plan --source-root "${{ github.action_path }}/../.."
     - name: Set up Go from the pinned component source
-      if: ${{ steps.prebuilt.outputs.used != 'true' }}
+      if: ${{ steps.build-plan.outputs.build == 'true' }}
       uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
         go-version-file: ${{ github.action_path }}/../../go.mod
@@ -108,7 +114,7 @@ runs:
       env:
         GOTOOLCHAIN: auto
     - name: Restore the Go build cache
-      if: ${{ steps.prebuilt.outputs.used != 'true' }}
+      if: ${{ steps.build-plan.outputs.build == 'true' }}
       id: go-cache
       shell: bash
       working-directory: ${{ github.action_path }}/../..
@@ -123,16 +129,18 @@ runs:
           echo "key=artifact-pages-go-$RUNNER_OS-$RUNNER_ARCH-$source_hash"
         } >> "$GITHUB_OUTPUT"
     - name: Cache Go modules and build output
-      if: ${{ steps.prebuilt.outputs.used != 'true' }}
+      if: ${{ steps.build-plan.outputs.build == 'true' }}
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ steps.go-cache.outputs.paths }}
         key: ${{ steps.go-cache.outputs.key }}
     - name: Build the shared artifact-pages CLI
-      if: ${{ steps.prebuilt.outputs.used != 'true' }}
+      if: ${{ steps.build-plan.outputs.build == 'true' }}
       shell: bash
       working-directory: ${{ github.action_path }}/../..
-      run: go build -trimpath -o "$RUNNER_TEMP/artifact-pages" ./cli/cmd/artifact-pages
+      run: |
+        go build -trimpath -o "$RUNNER_TEMP/artifact-pages" ./cli/cmd/artifact-pages
+        node "$GITHUB_ACTION_PATH/../shared/build-once.mjs" record --source-root "${{ github.action_path }}/../.."
     - name: Run the selected registry or app CLI operation
       id: cli
       shell: bash

@@ -120,7 +120,7 @@ async function assertCompositeActionWiring() {
     assert.match(source, /^  using: composite$/m, `${kind} Action must remain an optional composite wrapper`)
     assert.match(source, /^        go-version-file: \$\{\{ github\.action_path \}\}\/\.\.\/\.\.\/go\.mod$/m, `${kind} Action must read go.mod relative to its own source`)
     assert.match(source, /^      working-directory: \$\{\{ github\.action_path \}\}\/\.\.\/\.\.$/m, `${kind} Action must build from its own repository root`)
-    assert.match(source, /^      run: go build -trimpath -o "\$RUNNER_TEMP\/artifact-pages" \.\/cli\/cmd\/artifact-pages$/m, `${kind} Action must build the shared CLI binary`)
+    assert.match(source, /^        go build -trimpath -o "\$RUNNER_TEMP\/artifact-pages" \.\/cli\/cmd\/artifact-pages$/m, `${kind} Action must build the shared CLI binary`)
     assert.ok(step.lines.includes('      working-directory: ${{ github.workspace }}'), `${kind} CLI invocation must run from the adopter's workspace`)
     assert.ok(step.lines.includes('      run: node "$GITHUB_ACTION_PATH/../shared/invoke-cli.mjs"'), `${kind} Action must invoke the shared CLI wrapper from action_path`)
 
@@ -159,7 +159,12 @@ async function assertCompositeActionWiring() {
     assert.match(source, /ARTIFACT_PAGES_ACTION_REF: \$\{\{ github\.action_ref \}\}/, `${kind} Action must decide on the Action ref`)
     assert.match(source, /ARTIFACT_PAGES_ACTION_REPOSITORY: \$\{\{ github\.action_repository \}\}/, `${kind} Action must download from its own repository`)
     assert.match(source, /ARTIFACT_PAGES_TOKEN: \$\{\{ github\.token \}\}/, `${kind} Action must use the workflow token, not the private-config token, for release downloads`)
-    assert.equal((source.match(/if: \$\{\{ steps\.prebuilt\.outputs\.used != 'true' \}\}/g) ?? []).length, 4, `${kind} Action must skip setup-go, the cache steps and the build when the released binary is used`)
+    assert.equal((source.match(/if: \$\{\{ steps\.build-plan\.outputs\.build == 'true' \}\}/g) ?? []).length, 4, `${kind} Action must skip setup-go, the cache steps and the build when the released binary is used or the CLI is already built in this job`)
+    assert.match(source, /ARTIFACT_PAGES_PREBUILT_USED: \$\{\{ steps\.prebuilt\.outputs\.used \}\}/, `${kind} build plan must see whether the released binary is installed`)
+    assert.equal((source.match(/build-once\.mjs" plan --source-root/g) ?? []).length, 1, `${kind} Action must plan the build once`)
+    assert.equal((source.match(/build-once\.mjs" record --source-root/g) ?? []).length, 1, `${kind} Action must record the build marker after go build`)
+    assert.ok(source.indexOf('id: prebuilt') < source.indexOf('id: build-plan') && source.indexOf('id: build-plan') < source.indexOf('uses: actions/setup-go@'), `${kind} Action must plan the build after the released-binary step and before Go setup`)
+    assert.equal((source.match(/uses: actions\/cache@/g) ?? []).length, 1, `${kind} Action must restore the Go cache in one conditional step so only the first Action's post step saves it`)
     assert.ok(source.indexOf('id: prebuilt') < source.indexOf('uses: actions/setup-go@'), `${kind} Action must try the released binary before Go setup`)
     if (kind === 'preview') assert.ok(source.indexOf('verify-preview-pr.mjs') < source.indexOf('id: prebuilt'), 'preview trust preflight must precede the CLI download')
 
