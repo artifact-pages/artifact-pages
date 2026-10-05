@@ -22,3 +22,4 @@ Implement [TD14](../technical-design/TD14-one-repository-per-action.md): four Ac
 ## Results
 
 - 2026-10-06: implemented in the PR that moves the product to the `artifact-pages` organization. The first live sync happens when `v0.1.0` is tagged; see [release readiness](../release-readiness.md).
+- 2026-10-06: live cut-over complete: `v0.1.0` tagged and synced to the four Action repositories, consumers re-pinned, and the registry, publish and app-deploy (dry-run) runs used the `v0.1.0` CLI binary. See [release readiness](../release-readiness.md#organization-v010-cut-over-2026-10-06).
