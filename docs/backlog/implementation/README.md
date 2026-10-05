@@ -33,8 +33,8 @@ Use the [delegation index](../delegation.md) for work modes and owner boundaries
 | [IMP-52](IMP-52-job-summary.md) | Done | Actions | Built-in, documented Job Summary (`summary` input) for every Action, also on failure. |
 | [IMP-53](IMP-53-preview-pull-request-default.md) | Done | Actions | Preview Action defaults `pull-request` from the `pull_request` event payload (`none` forces manual); the CLI stays explicit-only. |
 | [IMP-54](IMP-54-action-checkout.md) | Done | Actions | `checkout: auto` and `fetch-depth` inputs: the Action checks out when the workspace is not a Git checkout (preview: base ref only). |
-| [IMP-55](IMP-55-consumer-workflow-migration.md) | Open | Docs / Adoption | After the release carrying IMP-50–54: remove Summarize and checkout steps, redundant `source`/`config`, unify pins, adopt `publish-on`, drop preview `base-url` and `pull-request` in the consumer repositories. |
-| [IMP-56](IMP-56-prebuilt-cli-binaries.md) | In progress | CLI / release, Actions | Release attaches per-platform CLI binaries, checksums and Go notices; Actions pinned to a release tag install and verify the binary instead of building. |
+| [IMP-55](IMP-55-consumer-workflow-migration.md) | Done | Docs / Adoption | After the release carrying IMP-50–54: remove Summarize and checkout steps, redundant `source`/`config`, unify pins, adopt `publish-on`, drop preview `base-url` and `pull-request` in the consumer repositories. |
+| [IMP-56](IMP-56-prebuilt-cli-binaries.md) | Done | CLI / release, Actions | Release attaches per-platform CLI binaries, checksums and Go notices; Actions pinned to a release tag install and verify the binary instead of building. |
 
 These are operator-owned Terraform capabilities, not application authorization. Rule schemas and composition are intentionally left to the assigned designer; live changes need separate approval.
 

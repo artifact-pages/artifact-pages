@@ -1,6 +1,6 @@
 # IMP-56 — Prebuilt CLI binaries for the composite Actions
 
-- Status: In progress
+- Status: Done
 - Lanes: CLI / release, Actions
 - Execution: Agent-led. Creating the release and tag stays an owner step (TD2).
 - Depends on: [IMP-45](IMP-45-unified-release-and-compatibility.md), [IMP-46](IMP-46-action-marketplace-release.md) slice 3
@@ -22,5 +22,15 @@ An adopter pinned to a release tag skips setup-go and `go build` on every run. A
 - [x] The packaging script builds all four platforms, writes checksums, and the notices cover the linked Go modules and fail on a missing license (`scripts/package-cli-release.test.mjs`; a local run produced four binaries, the checksums file and a notices file, and the darwin/arm64 binary reported the product version).
 - [x] Every Action's wiring is checked: ref and repository inputs, workflow token, four Go steps conditional, download before Go setup and after the preview preflight (`scripts/test-actions-parity.mjs`).
 - [x] The specification "Shared Action behavior", TD4 and TD2 describe the behavior.
-- [ ] A release created by the owner's tag push attaches the binaries, checksums and notices, and its published-release verification passes (not run: no release or tag was created).
-- [ ] A workflow on a GitHub-hosted runner using the release tag logs "using the released binary" and publishes successfully, and a SHA-pinned run logs a source build (not run).
+- [x] A release created by the owner's tag push attaches the binaries, checksums and notices, and its published-release verification passes. `v0.2.0` (tag at `aa05dddc`) was released as a pre-release by [`release.yml` run 37291796170](https://github.com/tasuku43/git-artifact-pages/actions/runs/37291796170) with every job successful; assets are four CLI binaries, the checksums file, the notices and the web bundle (2026-10-05).
+- [x] A workflow on a GitHub-hosted runner using the release tag logs "using the released binary" and publishes successfully (2026-10-05). The logs read `using the released binary (artifact-pages_v0.2.0_linux_amd64 verified against artifact-pages_v0.2.0_checksums.txt)` in `artifact-pages-admin` [Registry run 37313258386](https://github.com/tasuku43/artifact-pages-admin/actions/runs/37313258386), [App deploy runs 37313326368 and 37313488062](https://github.com/tasuku43/artifact-pages-admin/actions/runs/37313488062), and in `artifact-pages-docs` [Publish run 37314143880](https://github.com/tasuku43/artifact-pages-docs/actions/runs/37314143880) and [Preview run 37319833962](https://github.com/tasuku43/artifact-pages-docs/actions/runs/37319833962). The Go setup and cache steps were skipped in the publish run. The SHA-pinned source-build path is covered by the earlier `af75645` consumer runs (build step logged, 129 s total publish step) and by `prebuilt-cli.test.mjs`; no new SHA-pinned hosted run was made.
+
+## Results
+
+Per-site publish step time in `artifact-pages-docs` (hosted runner, 2026-10-04 and 2026-10-05):
+
+| Pin | Run | Step time |
+| --- | --- | --- |
+| `af75645` SHA, source build | before | 129 s (checkout 1 s, setup-go 9 s, go build 27 s, CLI 93 s) |
+| `v0.2.0`, first publish with state bootstrap | after | 54-59 s |
+| `v0.2.0`, subsequent no-op publish | after | 9-10 s |
