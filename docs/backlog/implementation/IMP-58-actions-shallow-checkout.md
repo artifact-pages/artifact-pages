@@ -1,8 +1,8 @@
 # IMP-58 — Actions default to a shallow checkout
 
-- Status: Open
+- Status: In progress
 - Phase: Actions
-- Depends on: IMP-57, and the Action consumer slimming pull request (branch `action-consumer-slimming`, IMP-50 through IMP-56 and TD12) merged first. This item edits the same Action wrappers, `actions/shared/preview-refs.mjs` and parity test that pull request changes, so it must start from its merged result and must not be implemented before it lands
+- Depends on: IMP-57 and the Action consumer slimming pull request (IMP-50 through IMP-56, TD12); both are merged
 - Design: [TD13](../technical-design/TD13-shallow-clone-publish-and-preview.md)
 
 The CLI now handles shallow checkouts. The Actions and their documented examples still demand full history.
@@ -20,3 +20,10 @@ The CLI now handles shallow checkouts. The Actions and their documented examples
 - [ ] `site-publish` and `preview-publish` run from `fetch-depth: 1` on a hosted runner against a private repository and match the results of a `fetch-depth: 0` run.
 - [ ] The token never appears in logs or in `.git/config`.
 - [ ] Guides and examples no longer require `fetch-depth: 0`.
+
+## Decisions
+
+- **Token.** The CLI step gets `ARTIFACT_PAGES_FETCH_TOKEN: ${{ github.token }}` (site-publish, root and preview-publish; the admin Action reads no history). `github-token` stays `GITHUB_TOKEN` for private-config reads, but it may be a token for a different repository that cannot read the source repository, and the CLI would otherwise prefer `GITHUB_TOKEN` for the fetch. `gitdepth.AuthEnv` therefore prefers `ARTIFACT_PAGES_FETCH_TOKEN`, then `GITHUB_TOKEN`, then `GH_TOKEN`. The token reaches only the fetch subprocess through `GIT_CONFIG_*`, never `.git/config`, and `permissions: contents: read` suffices.
+- **Preview preflight under depth 1.** The trust preflight still runs before any provider access and never needed local objects for the event path (it compares the event head SHA with GitHub's pull-request metadata). An explicit full-SHA `head` input is now compared with that metadata directly instead of through `git rev-parse`, because a depth-1 base-ref checkout lacks the head commit. A non-SHA `head` is still resolved locally. The Git-ref check keeps only the cases the CLI cannot repair: a head that is neither local nor a full SHA, and a default ref that is neither local nor `origin/<branch>`. The merge base is no longer checked there; the CLI fetches and deepens and reports `no merge base`.
+- **Smoke.** The `actions-smoke` job checks out at depth 1. The preview step moved before the first site publish, because the first publish (no deployed state) unshallows the checkout; the smoke asserts the checkout is shallow and holds no `extraheader`, that the preview fetched `origin/<base>` and a merge base exists, and that `updatedAt` and `lastCommitter` of the published document equal the complete history.
+- The public repository cannot exercise a private-repository fetch on a hosted runner; the first acceptance criterion needs a private-repository run before this item is Done.

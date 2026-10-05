@@ -172,8 +172,10 @@ export async function verifyPreviewTrust(options = {}) {
 
   const selectedHead = String(options.head ?? env.ARTIFACT_PAGES_INPUT_HEAD ?? '').trim()
   if (selectedHead) {
+    // A full SHA is compared directly: a shallow base-ref checkout does not contain
+    // the head commit, and the comparison needs no local objects (TD13, IMP-58).
     const checkout = options.repositoryDirectory ?? env.GITHUB_WORKSPACE ?? process.cwd()
-    const selectedHeadSHA = resolveGitHead(checkout, selectedHead)
+    const selectedHeadSHA = shaPattern.test(selectedHead) ? selectedHead : resolveGitHead(checkout, selectedHead)
     if (selectedHeadSHA.toLowerCase() !== metadata.headSha.toLowerCase()) {
       throw new Error(`selected preview head does not match same-repository pull request #${reference.number}`)
     }
@@ -200,7 +202,8 @@ async function main() {
       error.label = 'Preview Git ref check failed'
       throw error
     }
-    process.stdout.write(`Preview head ${refs.head} (${refs.headSource}) -> ${reachable.headSHA}; default ref ${refs.defaultRef} (${refs.defaultRefSource}) -> ${reachable.defaultRefSHA}; merge base ${reachable.mergeBaseSHA}.\n`)
+    const known = (sha) => sha || 'fetched by the CLI'
+    process.stdout.write(`Preview head ${refs.head} (${refs.headSource}) -> ${known(reachable.headSHA)}; default ref ${refs.defaultRef} (${refs.defaultRefSource}) -> ${known(reachable.defaultRefSHA)}; the CLI deepens a shallow checkout to the exact merge base.\n`)
   } catch (error) {
     process.stderr.write(`${error.label ?? 'Preview trust preflight failed'}: ${error.message}\n`)
     await writePreflightFailure(error)

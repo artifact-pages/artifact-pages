@@ -2,6 +2,7 @@ package gitdepth
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -146,5 +147,38 @@ func TestFetchFailureIsActionableAndRedacted(t *testing.T) {
 	err := Deepen(context.Background(), clone, 1, git(t, clone, "rev-parse", "HEAD"))
 	if err == nil || !strings.Contains(err.Error(), "fetch-depth: 0") {
 		t.Fatalf("error = %v, want guidance naming fetch-depth: 0", err)
+	}
+}
+
+func TestAuthEnvPrefersTheDedicatedFetchToken(t *testing.T) {
+	env, secrets := AuthEnv([]string{"GITHUB_TOKEN=config-repo-token", "ARTIFACT_PAGES_FETCH_TOKEN=workflow-token"}, "https://github.com/acme/repo", false)
+	if len(secrets) != 2 || secrets[0] != "workflow-token" {
+		t.Fatalf("fetch token should win, secrets = %v", secrets)
+	}
+	want := "AUTHORIZATION: basic " + base64.StdEncoding.EncodeToString([]byte("x-access-token:workflow-token"))
+	if !strings.Contains(strings.Join(env, "\n"), "GIT_CONFIG_VALUE_0="+want) {
+		t.Fatalf("header should carry the fetch token: %v", env)
+	}
+}
+
+func TestEnsureMergeBaseToleratesAHeadThatOriginDoesNotHave(t *testing.T) {
+	origin, mainTip, featureTip := historyWithMerge(t)
+	want := git(t, origin, "merge-base", mainTip, featureTip)
+	clone := filepath.Join(t.TempDir(), "clone")
+	git(t, ".", "clone", "--quiet", "--no-local", "--depth=1", "--branch", "feature", "file://"+origin, clone)
+	// Background maintenance after a fetch can race with TempDir cleanup.
+	git(t, clone, "config", "gc.auto", "0")
+	git(t, clone, "config", "maintenance.auto", "false")
+	if err := FetchShallowRef(context.Background(), clone, mainTip); err != nil {
+		t.Fatal(err)
+	}
+	commit(t, clone, "local only")
+	localHead := git(t, clone, "rev-parse", "HEAD")
+	got, err := EnsureMergeBase(context.Background(), clone, mainTip, localHead)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("merge-base with a local-only head = %s, want %s", got, want)
 	}
 }

@@ -55,26 +55,30 @@ function resolveCommit(cwd, ref) {
   return result.status === 0 && shaPattern.test(result.stdout) ? result.stdout : ''
 }
 
-// Fails early, with an actionable message, when the checkout cannot supply the
-// head, the default ref, or their merge base. It never fetches anything.
+// Fails early, with an actionable message, only for refs the CLI cannot make
+// resolvable itself. It never fetches anything and no longer needs full history:
+// the CLI fetches a missing `origin/<branch>` default ref or a missing full-SHA
+// head at depth 1 and deepens both to the exact merge base (TD13). A ref that is
+// absent locally and that the CLI could not fetch (a head that is not a full SHA,
+// a default ref that is not `origin/<branch>`) is genuinely unresolvable. Whether
+// a fetchable ref exists on the remote is left to the CLI, so the merge base is
+// not required here either.
 export function assertPreviewRefsReachable(cwd, refs) {
-  const checkoutHint = 'Check out the repository with actions/checkout using `fetch-depth: 0` so the full history and the default branch are available.'
+  const fetchHint = 'The checkout may be shallow (`fetch-depth: 1`); the CLI fetches a missing full-SHA head or `origin/<branch>` default ref itself, but cannot fetch any other ref.'
   const head = resolveCommit(cwd, refs.head)
-  if (!head) {
-    const prHint = refs.headSource === 'event'
-      ? ` The pull_request head SHA must be fetched; the default merge-commit checkout does not contain it unless the full history is fetched.`
-      : ''
-    throw new Error(`preview head ${JSON.stringify(refs.head)} does not resolve to a commit in the checkout.${prHint} ${checkoutHint}`)
+  if (!head && !shaPattern.test(refs.head)) {
+    throw new Error(`preview head ${JSON.stringify(refs.head)} does not resolve to a commit in the checkout and is not a full commit SHA, so it cannot be fetched. Pass the head input as a full commit SHA, or check out the repository with \`fetch-depth: 0\`. ${fetchHint}`)
   }
   const base = resolveCommit(cwd, refs.defaultRef)
-  if (!base) {
-    throw new Error(`default ref ${JSON.stringify(refs.defaultRef)} does not resolve to a commit in the checkout. ${checkoutHint} Pass default-ref explicitly if the default branch is fetched under another name.`)
+  if (!base && !fetchableDefaultRef(refs.defaultRef)) {
+    throw new Error(`default ref ${JSON.stringify(refs.defaultRef)} does not resolve to a commit in the checkout and is not an origin/<branch> ref, so it cannot be fetched. Pass default-ref as origin/<branch>, or check out the repository with \`fetch-depth: 0\`. ${fetchHint}`)
   }
-  const mergeBase = git(cwd, ['merge-base', head, base])
-  if (mergeBase.status !== 0 || !shaPattern.test(mergeBase.stdout)) {
-    throw new Error(`no merge base exists between preview head ${JSON.stringify(refs.head)} and default ref ${JSON.stringify(refs.defaultRef)}. ${checkoutHint}`)
-  }
-  return { headSHA: head, defaultRefSHA: base, mergeBaseSHA: mergeBase.stdout }
+  return { headSHA: head, defaultRefSHA: base, mergeBaseSHA: head && base ? git(cwd, ['merge-base', head, base]).stdout : '' }
+}
+
+function fetchableDefaultRef(ref) {
+  const name = String(ref).replace(/^refs\/remotes\//, '')
+  return name.startsWith('origin/') && name !== 'origin/HEAD' && !/[\s:^~?*[\\]/.test(name) && !name.includes('..')
 }
 
 // Resolves the Action's `pull-request` input. An explicit value always wins and

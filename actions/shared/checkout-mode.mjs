@@ -24,7 +24,7 @@ export function decideCheckout(options = {}) {
   if (!['auto', 'true', 'false'].includes(mode)) {
     throw new Error('input "checkout" must be auto, true or false')
   }
-  const depth = String(env.ARTIFACT_PAGES_INPUT_FETCH_DEPTH ?? '').trim() || '0'
+  const depth = String(env.ARTIFACT_PAGES_INPUT_FETCH_DEPTH ?? '').trim() || '1'
   if (!/^[0-9]+$/.test(depth)) throw new Error('input "fetch-depth" must be a non-negative integer')
   if (mode === 'true') return { checkout: true, reason: 'checkout is true' }
   if (mode === 'false') return { checkout: false, reason: 'checkout is false' }

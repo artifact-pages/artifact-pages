@@ -13,7 +13,7 @@ inputs:
     required: false
     default: ""
   default-ref:
-    description: Default-branch ref used for merge-base selection. When empty, a pull_request event uses origin/<base ref>; any other event uses origin/HEAD. The checkout must have fetched it (fetch-depth 0).
+    description: Default-branch ref used for merge-base selection. When empty, a pull_request event uses origin/<base ref>; any other event uses origin/HEAD. A shallow checkout is enough, because the CLI fetches a missing origin/<branch> at depth 1 and deepens to the merge base.
     required: false
     default: ""
   pull-request:
@@ -53,9 +53,9 @@ inputs:
     required: false
     default: auto
   fetch-depth:
-    description: fetch-depth for the Action's own checkout. 0 (the default) fetches full history, which per-document updatedAt and last committer need and preview merge-base selection. Ignored when no checkout runs.
+    description: "fetch-depth for the Action's own checkout. 1 (the default) is a shallow checkout: the CLI deepens it from origin on demand, so per-document updatedAt and last committer and preview merge-base selection match a full clone, with the byte-identical-commit limit in the specification. 0 fetches full history. Ignored when no checkout runs."
     required: false
-    default: "0"
+    default: "1"
 outputs:
   operation:
     description: CLI operation name.
@@ -176,6 +176,8 @@ runs:
         ARTIFACT_PAGES_INPUT_DRY_RUN: ${{ inputs.dry-run }}
         ARTIFACT_PAGES_INPUT_SUMMARY: ${{ inputs.summary }}
         GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
+        # Used only by the CLI to deepen a shallow checkout from this repository; never the github-token input, which may be scoped to a separate config repository.
+        ARTIFACT_PAGES_FETCH_TOKEN: ${{ github.token }}
       run: node "$GITHUB_ACTION_PATH/../shared/invoke-cli.mjs"
     - name: Create or update the preview pull-request comment
       id: comment

@@ -58,6 +58,7 @@ Batch of 2026-10-02: DOC-02 (reading-features revision), DOC-04–07 and DOC-08�
 | 11 | [DOC-11](DOC-11-architecture-previews.md) | architecture | `previews.html` | In progress |
 | 12 | [DOC-12](DOC-12-architecture-trust-model.md) | architecture | `trust-model.html` | In progress |
 | 13 | [DOC-13](DOC-13-architecture-search.md) | architecture | `search.html` — name search and page text search | In progress |
+| 14 | [DOC-15](DOC-15-guide-shallow-checkout-dates.md) | guide | `publishing.html` revision — shallow checkouts and document dates | Open |
 
 ## Product observations from this work
 
