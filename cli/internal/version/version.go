@@ -11,9 +11,12 @@ import (
 	"runtime/debug"
 )
 
-// Product is the product version this source tree releases. Between releases it
-// still names the last release, so a development build deploys that release's
-// web bundle unless given --archive.
+// Product is the product version this source tree releases. It is set in the
+// release commit, so the tree already names the version being prepared. The
+// version is also the web bundle pin: without --archive, `app deploy` downloads
+// the release assets tagged v<Product>. A build from a tree whose tag has not
+// been published yet therefore fails to download those assets; pass --archive
+// with a locally packaged bundle until the release exists.
 const Product = "0.2.0"
 
 // Build describes the VCS state recorded in the Go build info.
