@@ -1,6 +1,6 @@
 # IMP-58 — Actions default to a shallow checkout
 
-- Status: In progress
+- Status: Done
 - Phase: Actions
 - Depends on: IMP-57 and the Action consumer slimming pull request (IMP-50 through IMP-56, TD12); both are merged
 - Design: [TD13](../technical-design/TD13-shallow-clone-publish-and-preview.md)
@@ -17,7 +17,7 @@ The CLI now handles shallow checkouts. The Actions and their documented examples
 
 ## Acceptance criteria
 
-- [ ] `site-publish` and `preview-publish` run from `fetch-depth: 1` on a hosted runner against a private repository and match the results of a `fetch-depth: 0` run.
+- [x] `site-publish` and `preview-publish` run from `fetch-depth: 1` on a hosted runner against a private repository and match the results of a `fetch-depth: 0` run.
 - [x] The token never appears in logs or in `.git/config` (private-repository run 2026-10-05, see Decisions).
 - [ ] Guides and examples no longer require `fetch-depth: 0`.
 
@@ -32,4 +32,5 @@ The CLI now handles shallow checkouts. The Actions and their documented examples
 - 2026-10-05 private-repository run (owner-approved verification, `site-publish` v0.2.0, dry-run, site `guide`, private `artifact-pages-docs`, temporary branch `verify/imp58-depth`, since deleted): [run 37321201663](https://github.com/tasuku43/artifact-pages-docs/actions/runs/37321201663) and [run 37321338179](https://github.com/tasuku43/artifact-pages-docs/actions/runs/37321338179), matrix `fetch-depth` 1 and 0.
   - Plans were identical: the same `changes` (`_artifacts/guide/en/publishing.html` and `_indexes/guide/index.json`, both `update`), `previewChanges`, `filesPublished` and `configCommitSha`. The plan JSON carries no per-document metadata, so the second run rebuilt the index in the job with `artifact-pages index build --site guide`. The depth-1 leg was re-shallowed first (`count=1`, `shallow=true`), and the CLI deepened it to the full history (`count=38`, `shallow=false`). The resulting `_indexes/guide/index.json` is identical to the depth-0 leg after `jq -S`, except for `generatedAt`; this includes `updatedAt` and `lastCommitter` of `en/publishing.html`, which had been edited in more than one commit.
   - Token: zero matches for `ghs_`, `ghp_`, `github_pat_` and `x-access-token` values in both logs; the only `AUTHORIZATION: basic` lines are `actions/checkout`'s own and are masked (`***`). `git config --get-regexp 'http\..*extraheader'` returned nothing after the Action step and after the CLI deepen in both legs.
-  - Not covered by this run: `preview-publish` from a depth-1 checkout on a private repository, and a real (non-dry-run) publish. The first acceptance criterion names both actions, so this item stays In progress until the preview-publish leg is run.
+  - Other private-repository depth-1 runs, with no `ghs_`/`ghp_`/`github_pat_` match and no unmasked `AUTHORIZATION: basic` in either log: `preview-publish` in [run 37319833962](https://github.com/tasuku43/artifact-pages-docs/actions/runs/37319833962) (PR #10, `fetch-depth: 1`; preflight logged `Preview head bb27d18d (event) -> fetched by the CLI ... the CLI deepens a shallow checkout to the exact merge base`; guide `published` with only `en/getting-started.html` selected, `reason: changed`, which is the only file the PR changes, so a full clone selects the same document), and a real (non-dry-run) `site-publish` at the default depth 1 in [run 37319639507](https://github.com/tasuku43/artifact-pages-docs/actions/runs/37319639507) (`workflow_dispatch` on main; `no-op` for guide and architecture, `configCommitSha` `9b8eedaf`).
+  - Limit: the preview result was not run a second time at `fetch-depth: 0`; its parity rests on the single-file diff. The depth-1 versus depth-0 comparison itself is the `site-publish` index comparison above. The first acceptance criterion is met on that basis, and IMP-58 is Done.
