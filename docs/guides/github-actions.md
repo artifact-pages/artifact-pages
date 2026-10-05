@@ -63,6 +63,8 @@ Caveat: every `labeled` event of a PR belongs to the same concurrency group as t
 
 For config in another private repository, the default token is this workflow's `GITHUB_TOKEN`. Give that workflow `contents: read` and ensure its token can read the admin repository; if repository-scoped `GITHUB_TOKEN` access is insufficient, pass a GitHub App installation token or fine-grained token with read-only contents access to that one repository through `github-token`. The config locator's `ref` should be a full commit SHA so one run uses a stable target config.
 
+If the config cannot be read, the error names the locator and the cause: `cannot read deployment config github://OWNER/REPO/FILE: ...`. GitHub answers 404 (not 403) for a private repository the token cannot access, so a 404 with no token, or with a token lacking `contents: read` on that repository, means `github-token` must be set to a token that has it. A 401 means the token is invalid or expired; a 403 means missing permission or an exhausted rate limit.
+
 ## Credential boundaries
 
 The examples use AWS OIDC with separate role ARNs. Grant only the workflow permissions `contents: read` and, when assuming an AWS role, `id-token: write`. Restrict each AWS role trust policy to the intended repository, branch or protected environment, and audience. Storage permissions belong to those provider roles, not the GitHub token.

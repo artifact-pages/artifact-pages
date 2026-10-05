@@ -810,24 +810,24 @@ func (resolver Resolver) readRemoteConfig(ctx context.Context, rawLocator string
 	ref := locator.Ref
 	if ref == "" {
 		var repository githubRepository
-		status, readErr := resolver.getGitHubJSON(ctx, client, baseURL, "/repos/"+url.PathEscape(locator.Owner)+"/"+url.PathEscape(locator.Repo), nil, &repository)
+		status, meta, readErr := resolver.getGitHubJSON(ctx, client, baseURL, "/repos/"+url.PathEscape(locator.Owner)+"/"+url.PathEscape(locator.Repo), nil, &repository)
 		if readErr != nil {
 			return nil, "", "", readErr
 		}
 		if status != http.StatusOK || repository.DefaultBranch == "" {
-			return nil, "", "", fmt.Errorf("GitHub repository metadata request failed (HTTP %d)", status)
+			return nil, "", "", remoteConfigAccessError(rawLocator, locator, "repository metadata", status, meta)
 		}
 		ref = repository.DefaultBranch
 	}
 	commitSHA := ref
 	if !commitPattern.MatchString(ref) {
 		var commit githubCommit
-		status, readErr := resolver.getGitHubJSON(ctx, client, baseURL, "/repos/"+url.PathEscape(locator.Owner)+"/"+url.PathEscape(locator.Repo)+"/commits/"+url.PathEscape(ref), nil, &commit)
+		status, meta, readErr := resolver.getGitHubJSON(ctx, client, baseURL, "/repos/"+url.PathEscape(locator.Owner)+"/"+url.PathEscape(locator.Repo)+"/commits/"+url.PathEscape(ref), nil, &commit)
 		if readErr != nil {
 			return nil, "", "", readErr
 		}
 		if status != http.StatusOK || !commitPattern.MatchString(commit.SHA) {
-			return nil, "", "", fmt.Errorf("GitHub ref could not be resolved to a commit (HTTP %d)", status)
+			return nil, "", "", remoteConfigAccessError(rawLocator, locator, "ref", status, meta)
 		}
 		commitSHA = strings.ToLower(commit.SHA)
 	}
@@ -839,12 +839,12 @@ func (resolver Resolver) readRemoteConfig(ctx context.Context, rawLocator string
 		var content githubContent
 		query := url.Values{"ref": []string{commitSHA}}
 		endpoint := "/repos/" + url.PathEscape(locator.Owner) + "/" + url.PathEscape(locator.Repo) + "/contents/" + escapeGitHubPath(file)
-		status, readErr := resolver.getGitHubJSON(ctx, client, baseURL, endpoint, query, &content)
+		status, meta, readErr := resolver.getGitHubJSON(ctx, client, baseURL, endpoint, query, &content)
 		if readErr != nil {
 			return nil, "", "", readErr
 		}
 		if status != http.StatusOK {
-			return nil, "", "", fmt.Errorf("GitHub config fetch failed for %s (HTTP %d)", file, status)
+			return nil, "", "", remoteConfigAccessError(rawLocator, locator, "contents", status, meta)
 		}
 		if content.Type != "file" || content.Encoding != "base64" {
 			return nil, "", "", errors.New("GitHub config response is not a base64-encoded file")
@@ -862,14 +862,15 @@ func (resolver Resolver) readRemoteConfig(ctx context.Context, rawLocator string
 	return nil, "", "", errors.New("remote deployment config was not found")
 }
 
-func (resolver Resolver) getGitHubJSON(ctx context.Context, client *http.Client, baseURL, endpoint string, query url.Values, output any) (int, error) {
+func (resolver Resolver) getGitHubJSON(ctx context.Context, client *http.Client, baseURL, endpoint string, query url.Values, output any) (int, githubResponseMeta, error) {
+	var meta githubResponseMeta
 	requestURL := strings.TrimSuffix(baseURL, "/") + endpoint
 	if len(query) > 0 {
 		requestURL += "?" + query.Encode()
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
-		return 0, errors.New("create GitHub API request")
+		return 0, meta, errors.New("create GitHub API request")
 	}
 	request.Header.Set("Accept", "application/vnd.github+json")
 	request.Header.Set("X-GitHub-Api-Version", "2022-11-28")
@@ -879,30 +880,62 @@ func (resolver Resolver) getGitHubJSON(ctx context.Context, client *http.Client,
 		token = resolver.getenv("GH_TOKEN")
 	}
 	if token != "" {
+		meta.TokenSent = true
 		request.Header.Set("Authorization", "Bearer "+token)
 	}
 	response, err := client.Do(request)
 	if err != nil {
-		return 0, errors.New("GitHub config request failed")
+		return 0, meta, errors.New("GitHub config request failed")
 	}
 	defer response.Body.Close()
+	meta.RateLimitExhausted = strings.TrimSpace(response.Header.Get("X-RateLimit-Remaining")) == "0"
 	if response.Request == nil || response.Request.URL == nil || response.Request.URL.Host != request.URL.Host || response.Request.URL.Scheme != "https" && resolver.GitHubAPIBaseURL == "" {
-		return 0, errors.New("GitHub config request left the expected HTTPS origin")
+		return 0, meta, errors.New("GitHub config request left the expected HTTPS origin")
 	}
 	contents, err := io.ReadAll(io.LimitReader(response.Body, maxAPIResponseSize+1))
 	if err != nil {
-		return response.StatusCode, errors.New("read GitHub API response")
+		return response.StatusCode, meta, errors.New("read GitHub API response")
 	}
 	if len(contents) > maxAPIResponseSize {
-		return response.StatusCode, errors.New("GitHub API response is too large")
+		return response.StatusCode, meta, errors.New("GitHub API response is too large")
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return response.StatusCode, nil
+		return response.StatusCode, meta, nil
 	}
 	if err := json.Unmarshal(contents, output); err != nil {
-		return response.StatusCode, errors.New("GitHub API response is malformed")
+		return response.StatusCode, meta, errors.New("GitHub API response is malformed")
 	}
-	return response.StatusCode, nil
+	return response.StatusCode, meta, nil
+}
+
+type githubResponseMeta struct {
+	TokenSent          bool
+	RateLimitExhausted bool
+}
+
+// remoteConfigAccessError explains a non-success GitHub API status while
+// reading a github:// deployment config. It never includes the token.
+func remoteConfigAccessError(rawLocator string, locator remoteLocator, step string, status int, meta githubResponseMeta) error {
+	repo := locator.Owner + "/" + locator.Repo
+	prefix := "cannot read deployment config " + rawLocator + ": "
+	switch status {
+	case http.StatusUnauthorized:
+		return errors.New(prefix + "GitHub rejected the token (HTTP 401); it is invalid or expired. Pass a valid token with contents:read on " + repo + ".")
+	case http.StatusForbidden:
+		if meta.RateLimitExhausted {
+			return errors.New(prefix + "GitHub denied access (HTTP 403) because the API rate limit is exhausted. Wait for the limit to reset or pass a token with a higher limit and contents:read on " + repo + ".")
+		}
+		return errors.New(prefix + "GitHub denied access (HTTP 403); the token lacks permission. Grant it contents:read on " + repo + ".")
+	case http.StatusNotFound:
+		if step == "contents" {
+			return errors.New(prefix + "the config path or ref does not exist in " + repo + " (HTTP 404). Check the locator.")
+		}
+		if !meta.TokenSent {
+			return errors.New(prefix + "GitHub returned HTTP 404; " + repo + " may be private and no token was provided. Set GITHUB_TOKEN or GH_TOKEN (in GitHub Actions, the github-token input) to a token with contents:read on " + repo + ".")
+		}
+		return errors.New(prefix + "GitHub returned HTTP 404, which it uses both for missing repositories and for private repositories the token cannot access. Check the locator, and that the token (for example a GitHub App installation or fine-grained PAT) has contents:read on " + repo + ".")
+	}
+	return fmt.Errorf("%sGitHub %s request failed (HTTP %d)", prefix, step, status)
 }
 
 func (resolver Resolver) httpClient() *http.Client {
