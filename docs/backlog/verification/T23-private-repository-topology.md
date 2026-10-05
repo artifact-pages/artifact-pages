@@ -9,6 +9,8 @@
 
 Every hosted-runner run so far used public repositories. Record actual runs, never inferred results, and never print tokens.
 
+> **Update 2026-10-06:** `artifact-pages/admin` and `artifact-pages/docs` (transferred from `tasuku43/artifact-pages-admin` and `-docs`) are public in the organization, use `production`/`preview` environments for secrets, and read the admin config with the workflow token; the personal GitHub App is no longer used by them. The text below records the private-repository period as run on 2026-10-05. The private-config path (App or token through `github-token`) is still a supported consumer topology and is to be covered by a CI regression check against a fixture set up separately.
+
 ## Constraint and decided approach
 
 The owner is on GitHub Free, which does not offer environment secrets or deployment branch policies for private repositories. Both production operator repositories (`artifact-pages-docs`, `artifact-pages-admin`) currently use environment-scoped secrets.

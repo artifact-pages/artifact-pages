@@ -16,7 +16,7 @@ Shipped and in scope, per their tickets and technical designs:
 - thin composite GitHub Actions under `actions/` and caller-owned workflow examples (TD4)
 - Terraform reference modules for Cloudflare and AWS
 - release and CI workflows (`.github/workflows/`, the compatibility gate and release scripts)
-- operator repositories (`artifact-pages-admin`, `artifact-pages-docs`) and a verification environment on `artifact-pages.stream` (TD5)
+- operator repositories ([`artifact-pages/admin`](https://github.com/artifact-pages/admin), [`artifact-pages/docs`](https://github.com/artifact-pages/docs)) and a verification environment on `artifact-pages.stream` (TD5)
 
 Still require explicit owner approval: tagging or publishing a release, Terraform Registry or Marketplace publication, real-account apply, and anything that spends or mutates production. Do not add a general-purpose CLI surface, a new provider, or a backend service unless the roadmap, a technical design, or the owner asks for it. A listed later-phase ticket does not authorize implementing it on its own.
 

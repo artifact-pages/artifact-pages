@@ -18,8 +18,8 @@ This repository holds reusable packages (CLI, web bundle, composite Actions, Ter
 | Repository | Role | Holds | Consumes |
 | --- | --- | --- | --- |
 | `tasuku43/git-artifact-pages` (this) | Packages and their verification | CLI, web, `actions/`, Terraform modules until IMP-38 moves them, fixtures, specification, backlog, verification environment | Its own working tree |
-| `tasuku43/artifact-pages-admin` | Production admin for `artifact-pages.dev` | Production deployment config and registry `sites`, Terraform caller, app-deploy and registry workflows | Released CLI/Actions by exact tag; the Registry module by exact version |
-| `tasuku43/artifact-pages-docs` | Satellite publishing the public sites | `guide` and `architecture` sources and shared assets, a local preview config, site-publish workflows | The released root Action by exact tag |
+| `artifact-pages/admin` (public; transferred from `tasuku43/artifact-pages-admin` on 2026-10-06) | Production admin for `artifact-pages.dev` | Production deployment config and registry `sites`, Terraform caller, app-deploy and registry workflows | Released CLI/Actions by exact tag; the Registry module by exact version |
+| `artifact-pages/docs` (public; transferred from `tasuku43/artifact-pages-docs` on 2026-10-06) | Satellite publishing the public sites | `guide` and `architecture` sources and shared assets, a local preview config, site-publish workflows | The released root Action by exact tag |
 
 Content moves by plain copy; history stays in this repository. The production site IDs and URLs do not change.
 
