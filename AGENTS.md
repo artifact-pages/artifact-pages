@@ -8,11 +8,17 @@ Read these before making architectural changes:
 
 ## Current phase
 
-The repository is in **Phase 1: local product**.
+Phases 1 and 2 (local product and local production projection builder) are in place. Work now spans **Phase 3, provider-backed deployments**, and **Phase 4, reusable distribution**, as laid out in `docs/roadmap.md`. Cloudflare (R2 and Cache) is the first provider and has live evidence; AWS is independently gated and `gcp-local` stays emulator-only. `docs/backlog/release-readiness.md` records the release execution order and what has shipped.
 
-Do not implement AWS infrastructure, Terraform, GitHub Actions publishing, or a general-purpose CLI unless explicitly requested. First prove the browser product and local serving contract.
+Shipped and in scope, per their tickets and technical designs:
 
-Note: release and CI workflows (`.github/workflows/`, the compatibility gate and release scripts) were requested on 2026-10-03 (TD2 / IMP-45).
+- the `artifact-pages` CLI with prebuilt binaries attached to pre-releases (v0.x; no cross-version compatibility promise before 1.0.0, see TD2)
+- thin composite GitHub Actions under `actions/` and caller-owned workflow examples (TD4)
+- Terraform reference modules for Cloudflare and AWS
+- release and CI workflows (`.github/workflows/`, the compatibility gate and release scripts)
+- operator repositories (`artifact-pages-admin`, `artifact-pages-docs`) and a verification environment on `artifact-pages.stream` (TD5)
+
+Still require explicit owner approval: tagging or publishing a release, Terraform Registry or Marketplace publication, real-account apply, and anything that spends or mutates production. Do not add a general-purpose CLI surface, a new provider, or a backend service unless the roadmap, a technical design, or the owner asks for it. A listed later-phase ticket does not authorize implementing it on its own.
 
 ## Backlog and issue tracking
 
@@ -60,12 +66,12 @@ grep -rH -m1 '^- Status:' --include='*.md' --exclude=_template.md docs/backlog |
 
 ## Current implementation direction
 
-- Vite + React + TypeScript
-- nginx behind Docker Compose as the local analogue of CloudFront routing
-- committed fixtures model the future object-storage projection
-- generated local output, when introduced, belongs under .local/ and stays untracked
-- artifacts should be rendered in an iframe rather than injected into the SPA DOM
-- the SPA should consume per-site index metadata; local discovery may use the nginx directory listing for `/_indexes/`
+- Vite + React + TypeScript SPA, served as a static application with no backend service
+- nginx behind Docker Compose remains the local analogue of the CDN routing; the Cloudflare and AWS deployments serve the same projection from object storage
+- committed fixtures model the object-storage projection; generated local output belongs under .local/ and stays untracked
+- the Go CLI and the composite Actions publish through a provider-neutral publisher/storage contract; provider credentials, storage, locking and cache calls stay inside each adapter
+- artifacts are rendered in an iframe rather than injected into the SPA DOM
+- the SPA consumes per-site index metadata (`/_indexes/*`); local discovery may use the nginx directory listing for `/_indexes/`
 
 ## Product boundaries
 
