@@ -13,7 +13,7 @@ inputs:
     required: false
     default: ""
   default-ref:
-    description: Default-branch ref used for merge-base selection. When empty, a pull_request event uses origin/<base ref>; any other event uses origin/HEAD. A shallow checkout is enough: the CLI fetches a missing origin/<branch> at depth 1 and deepens to the merge base.
+    description: Default-branch ref used for merge-base selection. When empty, a pull_request event uses origin/<base ref>; any other event uses origin/HEAD. A shallow checkout is enough, because the CLI fetches a missing origin/<branch> at depth 1 and deepens to the merge base.
     required: false
     default: ""
   pull-request:
