@@ -37,6 +37,7 @@ Run in order. Each step names its owner; steps that mutate production or the rel
    - `artifact-pages-docs`: pin to v0.2.0 and remove Summarize steps; publish the guide and architecture pages; the second publish must be a no-op; re-run the open pull-request previews.
 7. Browser check of `artifact-pages.dev` (library, a site, a preview, search) after the deploy.
 8. Record results in IMP-55, IMP-56 and T16, then update the indexes. The Marketplace listing stays open until the first non-pre-release.
+9. After v0.2.0, follow the [T23](verification/T23-private-repository-topology.md) steps: move the docs/admin secrets to repository scope with the IMP-55 workflow edits, add the fine-grained PAT, make both repositories private, then run the private-repository checks.
 
 ## Work that can advance without another routine decision
 
