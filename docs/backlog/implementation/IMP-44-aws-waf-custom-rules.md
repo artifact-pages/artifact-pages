@@ -204,3 +204,12 @@ Final checks:
 The 89 tests comprise 16 existing source/routing/browser-policy contracts and 73 WAF console/source cases, including null/default mode, all supported statement kinds and fields, heterogeneous rules/group overrides, a computed caller reference without a plan, canonical CIDRs, malformed/unknown keys and types, ordering/default guards, response bodies/headers, protocol/ARN diagnostics and byte limits. They do not evaluate provider resource changes or lifecycle preconditions in a plan. Scalar malformed containers may stop Terraform expansion before the detailed guard; they never silently disable WAF.
 
 This completes the authorized pre-plan slice. **No Terraform plan (real or mocked), refresh, apply, state migration/import, cloud resource operation, subscription, paid resource creation, push, tag or publication was performed.** The broader script's mocked account/CLI plans were deliberately not executed at this boundary. Evaluated native blocks, actual plan-stopping preconditions, account guards, drift/no-op/update behavior and retirement ordering remain for the next authorized plan stage; live delivery/propagation/cost/rollback proof remains in T15. Ticket remains In progress rather than claiming the whole implementation acceptance criteria are established.
+
+
+### Local main integration — October 6, 2026
+
+The owner requested main integration. The authoritative AWS module implementation is committed on local `main` as `dd0fcde` (`feat(waf): add optional AWS-native viewer rules and presets`). The 19-file commit contains only this ticket's implementation, examples, tests and policy documentation; generated local outputs remain untracked.
+
+Formatting and staged diff checks passed. Revalidation with Terraform 1.9.8 and the locked AWS provider 6.66.0 passed after backend-free, readonly-lock initialization in a fresh local provider cache; the earlier shared cache had a checksum mismatch. The dependency lock was not changed. The October 2 current/floor 89/89 test results and independent review remain the implementation evidence; no source change was made during this integration.
+
+The tracking repository was fast-forwarded to its current `origin/main` before recording this evidence. This step commits to local main only; remote pushes, tags, publication, Terraform plans and applies were not performed. IMP-44 remains In progress for the previously recorded plan-stage acceptance criteria and T15 delivery proof.
