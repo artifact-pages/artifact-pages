@@ -1,8 +1,8 @@
 # IMP-55 — Migrate consumer workflows to the slimmed Actions
 
-- Status: Open
+- Status: Done
 - Lanes: Docs / Adoption
-- Execution: Owner-approved consumer repository edits after the release. This item records the plan only; nothing here has been executed.
+- Execution: Owner-approved consumer repository edits after the release. Executed on 2026-10-05; see Results.
 - Depends on: [IMP-50](IMP-50-preview-defaults.md) through [IMP-54](IMP-54-action-checkout.md) shipped in one release, and [TD12](../technical-design/TD12-action-consumer-contract.md)
 - Related design: [TD12](../technical-design/TD12-action-consumer-contract.md)
 
@@ -112,7 +112,17 @@ Keep the preview job gated with `if: github.event.pull_request.head.repo.full_na
 
 ## Acceptance criteria
 
-- [ ] The release containing IMP-50 through IMP-54 is published, and its notes mention the hyphen-case output rename and the built-in summary.
-- [ ] The owner approves editing `artifact-pages-docs` and `artifact-pages-admin`.
-- [ ] Both repositories use the release tag, have no Summarize or redundant checkout steps, and their PR dry-runs and main publishes show the built-in summary in a hosted run.
+- [x] The release containing IMP-50 through IMP-54 is published, and its notes mention the hyphen-case output rename and the built-in summary. `v0.2.0` ([release run](https://github.com/tasuku43/git-artifact-pages/actions/runs/37291796170)); its notes received an "Upgrading from v0.1.2" section covering the output rename, the built-in summary and the Summarize-step removal.
+- [x] The owner approves editing `artifact-pages-docs` and `artifact-pages-admin`.
+- [x] Both repositories use the release tag, have no Summarize or redundant checkout steps, and their PR dry-runs and main publishes ran in hosted runs (see Results). The built-in summary was not separately inspected in this recording.
 - [ ] `examples/github-actions/*.yml` and the GitHub Actions guide use the slimmed form once the release exists (with IMP-46 slice 4).
+
+## Results
+
+Recorded 2026-10-05.
+
+- `artifact-pages-admin` [PR #3](https://github.com/tasuku43/artifact-pages-admin/pull/3) and `artifact-pages-docs` [PR #9](https://github.com/tasuku43/artifact-pages-docs/pull/9) are merged and pin `v0.2.0`.
+- Workflow sizes on `main` (lines): `registry.yml` 49 to 35, `app-deploy.yml` 44 to 32, docs `publish.yml` 56 to 58 (it gained the App-token step and a `publish-on` list while losing checkout and Summarize steps), docs `preview.yml` 73.
+- Credentials: `artifact-pages-docs` reads the private admin config with a GitHub App token (App `artifact-pages-private`, id 5197457, installed only on `artifact-pages-admin` and `artifact-pages-docs`, Contents read, Pull requests write, Metadata read). Tokens are minted per job with `actions/create-github-app-token` v3.2.0, scoped to the repositories that job needs. This replaces the fine-grained personal access token planned in [T23](../verification/T23-private-repository-topology.md).
+- Production: Registry run ([37313258386](https://github.com/tasuku43/artifact-pages-admin/actions/runs/37313258386)) was a no-op. App deploy dry-run ([37313326368](https://github.com/tasuku43/artifact-pages-admin/actions/runs/37313326368)) planned 81 create, 20 update and 0 delete; the real deploy ([37313488062](https://github.com/tasuku43/artifact-pages-admin/actions/runs/37313488062)) succeeded. Docs publish after the merge ([push run 37313818261](https://github.com/tasuku43/artifact-pages-docs/actions/runs/37313818261), guide and architecture) was a no-op, and a second publish ([37314143880](https://github.com/tasuku43/artifact-pages-docs/actions/runs/37314143880)) was also a no-op. `https://artifact-pages.dev/`, `/guide` and `/_indexes/sites.json` return 200.
+- Not done here: the open pull-request previews were not re-run (none were open besides the T23 verification pull request); the browser check of library, preview and search from the release checklist is not recorded in this item.
