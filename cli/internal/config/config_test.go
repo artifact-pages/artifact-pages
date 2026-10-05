@@ -679,7 +679,7 @@ func TestResolveRemoteConfigPinsCanonicalDefaultWithoutHiddenFallback(t *testing
 	requests = nil
 	defaultMissing = true
 	_, err = resolver.Resolve(t.Context(), "github://acme/admin")
-	if err == nil || !strings.Contains(err.Error(), "GitHub config fetch failed for artifact-pages.yaml (HTTP 404)") {
+	if err == nil || !strings.Contains(err.Error(), "path or ref does not exist in acme/admin (HTTP 404)") {
 		t.Fatalf("Resolve(missing remote default) error = %v, want canonical file's 404 without hidden fallback", err)
 	}
 	if len(requests) != 3 || requests[2] != "/repos/acme/admin/contents/artifact-pages.yaml?ref="+sha {

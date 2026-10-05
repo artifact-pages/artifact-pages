@@ -1,6 +1,6 @@
 # A private deployment config the token cannot read fails with an unactionable HTTP status
 
-- Status: Open
+- Status: Done
 - Priority: P2
 - Area: `github://` config locator resolution (CLI and the Actions wrapper)
 
@@ -36,7 +36,9 @@ Apply the same prefix to the ref-resolution and contents-fetch failures. Never p
 
 ## Acceptance criteria
 
-- [ ] Each failing status (401, 403, 404) at each of the three requests names the locator or `<owner>/<repo>` and states the authentication or authorization cause and the action to take.
-- [ ] The message distinguishes "no token set" from "a token was sent".
-- [ ] Unit tests cover the messages with a stub GitHub API, and assert that the token value never appears in the error.
-- [ ] The Actions README or specification mentions that a private config repository needs `github-token` with `contents: read` on it.
+- [x] Each failing status (401, 403, 404) at each of the three requests names the locator or `<owner>/<repo>` and states the authentication or authorization cause and the action to take.
+- [x] The message distinguishes "no token set" from "a token was sent".
+- [x] Unit tests cover the messages with a stub GitHub API, and assert that the token value never appears in the error.
+- [x] The Actions README or specification mentions that a private config repository needs `github-token` with `contents: read` on it.
+
+Verified 2026-10-05: `cli/internal/config/remote_access_error_test.go` (`TestRemoteConfigAccessErrors`: no-token 404, token 404, 401, 403 rate limited, 403 permission, contents 404 after metadata, ref 401; asserts the token never appears) and `cd cli && go vet ./... && go test ./... -count=1` pass. Specification (config locator section) and `docs/guides/github-actions.md` updated.
