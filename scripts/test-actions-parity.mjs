@@ -107,6 +107,11 @@ async function assertCompositeActionWiring() {
     assert.match(source, /^author: artifact-pages$/m, `${kind} Action author`)
     assert.match(source, /^branding:\n  icon: [a-z-]+\n  color: blue$/m, `${kind} Action branding`)
 
+    // GitHub's manifest parser rejects `: ` inside a plain scalar; quote such descriptions.
+    for (const match of source.matchAll(/^ +(?:description|default): ([^"'|>\n][^\n]*)$/gm)) {
+      assert.ok(!match[1].includes(': ') && !match[1].includes(' #'), `${kind} action.yml has an unquoted scalar that is not valid YAML: ${match[1]}`)
+    }
+
     const step = parseCliStep(source)
     assert.match(source, /^  using: composite$/m, `${kind} Action must remain a composite wrapper`)
     assert.ok(step.lines.includes('      working-directory: ${{ github.workspace }}'), `${kind} CLI invocation must run from the adopter's workspace`)

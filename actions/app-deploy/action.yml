@@ -46,7 +46,7 @@ outputs:
     description: CLI operation name.
     value: ${{ steps.cli.outputs.operation }}
   outcome:
-    description: CLI outcome string: planned, deployed, no-op, or failed.
+    description: "CLI outcome string: planned, deployed, no-op, or failed."
     value: ${{ steps.cli.outputs.outcome }}
   changes:
     description: JSON array of per-path application object changes.

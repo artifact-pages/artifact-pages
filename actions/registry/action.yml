@@ -38,7 +38,7 @@ outputs:
     description: CLI operation name.
     value: ${{ steps.cli.outputs.operation }}
   outcome:
-    description: CLI outcome string: planned, registered, no-op, or failed.
+    description: "CLI outcome string: planned, registered, no-op, or failed."
     value: ${{ steps.cli.outputs.outcome }}
   registry-updated:
     description: JSON boolean rendered as true or false when present.
