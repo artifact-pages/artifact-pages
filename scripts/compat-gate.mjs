@@ -828,7 +828,7 @@ async function main() {
         ? 'running candidate CLI upgrade from legacy storage'
         : 'running the upgrade procedure: registry register, app deploy --archive, republish every site')
       try {
-        cpSync(storages[upgradeSourceName], storages['storage-upgrade'], { recursive: true })
+        copyStorage(storages[upgradeSourceName], storages['storage-upgrade'])
         const upgradeName = 'storage-upgrade'
         operator.register(candidate, upgradeName)
         const archive = packageCandidateWeb(candidate, runRoot)
@@ -887,6 +887,16 @@ async function main() {
   }
 }
 
+// The local directory backend keeps HTTP metadata (content type, cache control,
+// user metadata) in the sibling directory `<root>.metadata`, outside the storage
+// root. A storage is the root plus that sibling, so copy them as one unit; copying
+// only the root yields objects without metadata, which the CLI rejects.
+function copyStorage(source, destination) {
+  cpSync(source, destination, { recursive: true })
+  const metadata = `${source}.metadata`
+  if (existsSync(metadata)) cpSync(metadata, `${destination}.metadata`, { recursive: true })
+}
+
 function packageCandidateWeb(candidate, runRoot) {
   const label = `gate-${path.basename(runRoot).slice(-8)}`
   sh(process.execPath, [path.join(candidate.dir, 'scripts/package-web.mjs'), '--version', label], { cwd: candidate.dir })
@@ -915,4 +925,4 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   })
 }
 
-export { assertRequiredPublishStateRoots, checkVersion, classifyFormats, collectFormatVersions, compareFormats, compatibilityPolicy, formatOf }
+export { assertRequiredPublishStateRoots, checkVersion, classifyFormats, collectFormatVersions, compareFormats, compatibilityPolicy, copyStorage, formatOf }
