@@ -1,6 +1,6 @@
 # IMP-60 — Restore the Go cache and build the CLI once per job
 
-- Status: In progress
+- Status: Done
 - Lanes: Actions
 - Depends on: [IMP-46](IMP-46-action-marketplace-release.md) (slice 3, the Go build cache), [IMP-56](IMP-56-prebuilt-cli-binaries.md)
 - Found: 2026-10-06, while measuring the IMP-46 build cache
@@ -26,12 +26,20 @@ In all four `action.yml` files (root, `actions/site-publish`, `actions/admin`, `
 
 - [x] `actions/shared/build-once.test.mjs` covers first build, reuse, changed source, changed binary, corrupt marker and the released-binary path (`npm run test:actions-shared`).
 - [x] `scripts/test-actions-parity.mjs` asserts the plan step, the four guarded steps, one cache step and the marker record in every Action, and passes.
-- [ ] In the `Composite Actions smoke` job, only the first Action runs `setup-go`, the cache restore and `go build`; no `tar: File exists` is logged; the post step saves the cache once. Timings before and after are recorded below.
+- [x] In the `Composite Actions smoke` job, only the first Action runs `setup-go`, the cache restore and `go build`; no `tar: File exists` is logged; the post step saves the cache once. Timings before and after are recorded below.
 - [x] The released-binary path is unchanged.
 
 ## Evidence
 
-Before (main at `b36b4d79`-era runs, `Composite Actions smoke`, 10 Action invocations, parsed from the job logs): see Progress.
+`Composite Actions smoke`, 10 Action invocations, step times summed from the job logs (cache key hit in all three runs):
+
+| Run | Job | `setup-go` | cache step | `go build` | `tar: File exists` / `Failed to restore` |
+| --- | --- | --- | --- | --- | --- |
+| Before: [37329984151](https://github.com/tasuku43/git-artifact-pages/actions/runs/37329984151) | 59 s | 10.2 s (x10) | 15.9 s (x10) | 4.8 s (x10) | 34,740 lines / 9 |
+| Before: [37329758840](https://github.com/tasuku43/git-artifact-pages/actions/runs/37329758840) | 79 s | 9.9 s (x10) | 30.4 s (x10) | 4.8 s (x10) | 34,740 lines / 9 |
+| After: [37331040685](https://github.com/tasuku43/git-artifact-pages/actions/runs/37331040685) | 39 s | 8.6 s (x1) | 2.8 s (x1) | 2.1 s (x1) | 0 / 0 |
+
+The nine later Actions each log `skipping (reusing the CLI built earlier in this job from the same source)` and spend about 0.1 s in the plan step. The cache hit in the after run means its post step had nothing to save; with a miss the first Action's post step is the only one that exists, because the later `actions/cache` steps never run.
 
 ## Progress
 

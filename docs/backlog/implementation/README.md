@@ -49,7 +49,7 @@ These are operator-owned Terraform capabilities, not application authorization. 
 | [IMP-57](IMP-57-shallow-clone-publish-and-preview.md) | Done | CLI publish and preview work from shallow clones with full-clone-identical metadata and selection | IMP-49, TD6 | [TD13](../technical-design/TD13-shallow-clone-publish-and-preview.md) | Real temporary repositories: shallow equals full for carry-forward, multi-commit, shared resource, rename, deletion, first publish, end-to-end publish, and preview merge-base deepening |
 | [IMP-58](IMP-58-actions-shallow-checkout.md) | Done | Actions default to `fetch-depth: 1`, pass the fetch token, and relax the preview `fetch-depth: 0` error | IMP-57, Action consumer slimming PR (IMP-50–56, TD12) merged | [TD13](../technical-design/TD13-shallow-clone-publish-and-preview.md) | Hosted-runner parity from a depth-1 checkout; private-repository run in [T23](../verification/T23-private-repository-topology.md) |
 | [IMP-59](IMP-59-compat-gate-upgrade-copy.md) | Done | Compatibility gate upgrade copy drops sibling HTTP metadata (fix before 1.0) | IMP-45 | — | Reproduction, regression test and a real-baseline upgrade run |
-| [IMP-60](IMP-60-build-cli-once-per-job.md) | In progress | Actions | Restore the Go cache and build the CLI once per job: later Actions reuse the binary built from the same source; the prebuilt path is unchanged. |
+| [IMP-60](IMP-60-build-cli-once-per-job.md) | Done | Actions | Restore the Go cache and build the CLI once per job: later Actions reuse the binary built from the same source; the prebuilt path is unchanged. |
 
 The reviewed site-description hierarchy is implemented in the production picker and site search. IMP-037/038/039 and all provider-infrastructure work remain outside this Phase 1 slice.
 
