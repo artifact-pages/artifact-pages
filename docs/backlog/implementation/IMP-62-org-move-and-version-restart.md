@@ -18,3 +18,4 @@ Move references from `tasuku43/git-artifact-pages` to `artifact-pages/artifact-p
 ## Results
 
 - 2026-10-06: done with IMP-61. Deleting the old releases and tags, tagging `v0.1.0` and re-pinning consumers are owner steps in [release readiness](../release-readiness.md).
+- 2026-10-06: live cut-over complete: `v0.1.0` tagged and synced to the four Action repositories, consumers re-pinned, and the registry, publish and app-deploy (dry-run) runs used the `v0.1.0` CLI binary. See [release readiness](../release-readiness.md#organization-v010-cut-over-2026-10-06).
