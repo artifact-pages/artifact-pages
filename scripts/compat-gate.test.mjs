@@ -19,6 +19,13 @@ import {
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
+// The tests use `--baseline HEAD`, so derive versions from the checked-out
+// tree instead of hard-coding the release being prepared.
+const headVersion = /const Product = "(\d+\.\d+\.\d+)"/.exec(
+  readFileSync(path.join(projectRoot, 'cli/internal/version/version.go'), 'utf8'),
+)[1]
+const nextPatchVersion = headVersion.replace(/\d+$/, (patch) => String(Number(patch) + 1))
+
 function candidateTree(t, version) {
   const root = mkdtempSync(path.join(os.tmpdir(), 'compat-candidate-'))
   t.after(() => rmSync(root, { recursive: true, force: true }))
@@ -163,13 +170,13 @@ test('skips cross-version checks for a 0.x candidate but keeps the source versio
 })
 
 test('the CLI writes an explicit 0.x skip report without building baseline or candidate', (t) => {
-  const candidate = candidateTree(t, '0.2.1')
+  const candidate = candidateTree(t, nextPatchVersion)
   const output = path.join(candidate, 'verdict.json')
   const result = spawnSync(process.execPath, [
     path.join(projectRoot, 'scripts/compat-gate.mjs'),
     '--candidate', candidate,
     '--baseline', 'HEAD',
-    '--tag', 'v0.2.1',
+    '--tag', `v${nextPatchVersion}`,
     '--out', output,
   ], { cwd: projectRoot, encoding: 'utf8' })
   assert.equal(result.status, 0, result.stderr)
@@ -178,19 +185,19 @@ test('the CLI writes an explicit 0.x skip report without building baseline or ca
   assert.equal(report.verdict, 'skipped')
   assert.equal(report.result, 'skipped')
   assert.equal(report.reasonCode, 'pre-1.0-compatibility-not-guaranteed')
-  assert.equal(report.candidate.version, '0.2.1')
+  assert.equal(report.candidate.version, nextPatchVersion)
   assert.equal(report.baseline.ref, 'HEAD')
   assert.equal(report.versionCheck.status, 'passed')
 })
 
 test('the CLI still rejects a repeated 0.x tag even though format compatibility is skipped', (t) => {
-  const candidate = candidateTree(t, '0.2.0')
+  const candidate = candidateTree(t, headVersion)
   const output = path.join(candidate, 'verdict.json')
   const result = spawnSync(process.execPath, [
     path.join(projectRoot, 'scripts/compat-gate.mjs'),
     '--candidate', candidate,
     '--baseline', 'HEAD',
-    '--tag', 'v0.2.0',
+    '--tag', `v${headVersion}`,
     '--out', output,
   ], { cwd: projectRoot, encoding: 'utf8' })
   assert.equal(result.status, 1)
