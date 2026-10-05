@@ -1,6 +1,7 @@
 # TD4 — GitHub Actions distribution and Marketplace listing
 
 - Status: Done
+- Superseded in part: the listing shape (question 1) and the build model (question 6) were replaced on 2026-10-06 by [TD14](TD14-one-repository-per-action.md): one repository per Action, thin Actions that install the released CLI. Questions 2-5 still apply, per Action repository. The text below is the record of the 2026-10-03 decision.
 - Phase: Reusable distribution
 - Decision: The owner decided on 2026-10-03 to list Artifact Pages on GitHub Marketplace and to keep the listed Action, `site-publish`, at this repository's root, with the other Actions as unlisted sub-folder Actions. The owner accepted the decisions for questions 2–6 the same day.
 - Related design: [TD2](TD2-component-release-policy.md), [T2](T2-cli-action-interface.md), [T11](T11-command-surface.md)

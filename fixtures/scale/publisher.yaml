@@ -6,30 +6,30 @@ sites:
   smoke:
     name: Actions smoke
     description: Verification fixture published from the OSS repository.
-    repository: tasuku43/git-artifact-pages
+    repository: artifact-pages/artifact-pages
     sourcePath: fixtures/actions-smoke/site
   verify-scale-10:
     name: Scale verification · 10 files
     description: Deterministic publisher fixture.
-    repository: tasuku43/git-artifact-pages
+    repository: artifact-pages/artifact-pages
     sourcePath: fixtures/scale/sites/verify-scale-10/source
   verify-scale-100:
     name: Scale verification · 100 files
     description: Deterministic publisher fixture.
-    repository: tasuku43/git-artifact-pages
+    repository: artifact-pages/artifact-pages
     sourcePath: fixtures/scale/sites/verify-scale-100/source
   verify-scale-1000:
     name: Scale verification · 1,000 files
     description: Deterministic publisher fixture.
-    repository: tasuku43/git-artifact-pages
+    repository: artifact-pages/artifact-pages
     sourcePath: fixtures/scale/sites/verify-scale-1000/source
   verify-scale-5000:
     name: Scale verification · 5,000 files
     description: Deterministic publisher fixture.
-    repository: tasuku43/git-artifact-pages
+    repository: artifact-pages/artifact-pages
     sourcePath: fixtures/scale/sites/verify-scale-5000/source
   verify-scale-10000:
     name: Scale verification · 10,000 files
     description: Deterministic publisher fixture.
-    repository: tasuku43/git-artifact-pages
+    repository: artifact-pages/artifact-pages
     sourcePath: fixtures/scale/sites/verify-scale-10000/source

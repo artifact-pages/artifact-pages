@@ -27,7 +27,6 @@ jobs:
       # The Action ref below pins the CLI, and the CLI deploys the web bundle of
       # its own version. Updating the pinned ref is the application upgrade.
       - name: Deploy the web application pinned by the Action version
-        uses: tasuku43/git-artifact-pages/actions/admin@<FULL_REVIEWED_ACTION_COMMIT_SHA>
+        uses: artifact-pages/app-deploy-action@v0.1.0
         with:
-          operation: app-deploy
           config: artifact-pages.yaml

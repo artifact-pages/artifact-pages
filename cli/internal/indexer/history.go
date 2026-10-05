@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tasuku43/git-artifact-pages/cli/internal/gitdepth"
+	"github.com/artifact-pages/artifact-pages/cli/internal/gitdepth"
 )
 
 // PriorSiteState is the deployed site's committed state as far as Git metadata

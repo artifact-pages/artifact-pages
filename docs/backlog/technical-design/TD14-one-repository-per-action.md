@@ -1,0 +1,34 @@
+# TD14 — One repository per Action, thin published Actions and a restarted version series
+
+- Status: Done
+- Phase: Reusable distribution
+- Decision: The owner decided on 2026-10-06, after moving the product to the GitHub organization `artifact-pages`, to publish each Action from its own repository, to make the published Actions thin, and to restart the version series at `v0.1.0`. The specification is updated ("Released CLI", "Action repositories").
+- Supersedes: the listing shape of [TD4](TD4-action-marketplace-distribution.md) design question 1 (one listed root Action plus unlisted sub-folder Actions) and the build model of question 6 (source build with cache, prebuilt binaries as a shortcut). TD4's name, category, reference and pre-release decisions still apply, now per Action repository.
+- Related design: [TD2](TD2-component-release-policy.md), [TD4](TD4-action-marketplace-distribution.md), [TD12](TD12-action-consumer-contract.md)
+- Related implementation: [IMP-61](../implementation/IMP-61-per-action-repositories.md), [IMP-62](../implementation/IMP-62-org-move-and-version-restart.md), [IMP-46](../implementation/IMP-46-action-marketplace-release.md)
+
+## Decisions
+
+1. **Repositories.** `artifact-pages/publish-action` (`site publish`), `artifact-pages/preview-action` (`preview publish`), `artifact-pages/registry-action` (`registry register`) and `artifact-pages/app-deploy-action` (`app deploy`). Each is a Marketplace-eligible repository with `action.yml` and a README at its root. Marketplace requires one listed Action per repository, which TD4 worked around with a root Action; per-Action repositories remove the workaround and let every Action be listed with a unique `name` and branding.
+2. **Source of truth.** `actions/<name>/` (`publish`, `preview`, `registry`, `app-deploy`) and `actions/shared/` in this repository. The Action repositories are generated copies. A release is one tag in this repository, which keeps TD2's single product version; each Action repository gets the same `vX.Y.Z`.
+3. **No `operation` input, and the registry Action.** The old `admin` Action switched on `operation: registry-register | registry-unregister | app-deploy`. Each Action now runs exactly one CLI operation and its inputs describe only that operation. Registry has two CLI operations, `register` and `unregister`. Only `register` gets an Action (`registry-action`, inputs: `config`, `github-token`, `dry-run`, `publish-on`, `summary`, `checkout`, `fetch-depth`; outputs: `operation`, `outcome`, `registry-updated`, `changes`, `result`, `exit-code`, `error`). Reasons: `registry register` reconciles the complete desired set and already removes omitted sites and cleans their content, so the declarative path needs no second Action; `unregister` is a per-site cleanup retry after a failed cleanup (it requires the config to omit the site already), an operator action that needs a `--site` input and different semantics; a `site` input that switches `register` into `unregister` would be the mode switch this decision removes; and the only consumers (`artifact-pages-admin`, the CI smoke) use `register` and `app deploy`. `unregister` stays available through the CLI, which a workflow can run directly; if repeated demand appears, a separate `unregister-action` is the compatible extension.
+4. **Thin published Actions.** A published Action downloads the CLI of its own version from the matching release of `artifact-pages/artifact-pages` and verifies it against the release checksums. There is no source build, Go setup, Go cache or build-once logic, and no fallback when the release cannot be read; it fails. The Action's generated `release.json` (`version`, `repository`) names the release, so the Action version decides the CLI (and `app deploy` application) version also under a full-SHA pin; the ref is no longer consulted. Windows runners are not supported (the release has no Windows binary).
+5. **Testing unreleased code.** Source Actions in this repository have no `release.json`. They run only when `ARTIFACT_PAGES_TEST_CLI` names a built binary, which CI builds from the same commit and exports through `GITHUB_ENV` before using `./actions/<name>`. A published Action ignores the variable (it logs a notice). Rejected: an input (it would become public interface), and keeping a source-build branch (it is the code this decision removes).
+6. **Sync mechanism.** `release.yml` gains a job after `verify-published` (so the CLI release assets exist and match their checksums). It runs `scripts/build-action-repos.mjs` and `scripts/sync-action-repos.sh`: each repository's `main` is replaced by the generated content, committed and tagged `vX.Y.Z`, and the four are pushed. The token comes from the organization-owned GitHub App `artifact-pages-release` through `actions/create-github-app-token` (variable `RELEASE_APP_ID`, secret `RELEASE_APP_PRIVATE_KEY`, `contents: write` on the four repositories only). An existing tag is never moved: a re-run with identical content is a no-op, any difference fails. This repository's `GITHUB_TOKEN` stays `contents: read` for that job.
+7. **Version restart.** The previous releases `v0.1.0` to `v0.2.1` belonged to the personal repository and are deleted by the owner. The first organization release is `v0.1.0` and `cli/internal/version.Product` is `0.1.0`. Release preflight, release notes and the compatibility gate already treat "no earlier release" as the first release; tests cover it.
+8. **Module path and references.** The Go module path is `github.com/artifact-pages/artifact-pages`; the default release repository of `app deploy` is `artifact-pages/artifact-pages`.
+9. **Marketplace.** Listing is per Action repository and still waits for the first non-pre-release and [T16](../verification/T16-external-adoption.md) ([IMP-46](../implementation/IMP-46-action-marketplace-release.md)). Per-repository releases for listing are created by the owner at that time; the sync creates tags only.
+
+## Consequences
+
+- The repository root is no longer an Action; `actions/admin`, `actions/site-publish` and `actions/preview-publish` are gone. Consumers move from `tasuku43/git-artifact-pages/actions/admin@vX` to the new repositories at `v0.1.0`.
+- Published Actions have no build time cost (IMP-46 slice 3 and [IMP-60](../implementation/IMP-60-build-cli-once-per-job.md) become historical).
+- A broken release cannot be repaired by moving a tag; the fix is the next patch release.
+
+## Exit criteria
+
+- [x] Record the repositories, source of truth and release model.
+- [x] Record the registry Action decision and why `unregister` has no Action.
+- [x] Record the thin-Action and test-CLI design.
+- [x] Record the sync mechanism and its credential.
+- [x] Update the specification.

@@ -17,7 +17,7 @@ import (
 // the release assets tagged v<Product>. A build from a tree whose tag has not
 // been published yet therefore fails to download those assets; pass --archive
 // with a locally packaged bundle until the release exists.
-const Product = "0.2.1"
+const Product = "0.1.0"
 
 // Build describes the VCS state recorded in the Go build info.
 type Build struct {

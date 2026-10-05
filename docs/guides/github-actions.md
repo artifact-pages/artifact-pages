@@ -1,25 +1,29 @@
 # Optional GitHub Actions
 
-Artifact Pages provides these optional composite Action entry points:
+Artifact Pages provides four optional composite Actions, one repository each:
 
-- The repository root (`tasuku43/git-artifact-pages@<ref>`) is the GitHub Marketplace entry point. It is the same Action as `actions/site-publish`.
-- `actions/admin` wraps `artifact-pages registry register`, `registry unregister`, and `app deploy`.
-- `actions/site-publish` wraps `artifact-pages site publish` for one required, explicit site ID.
-- `actions/preview-publish` verifies pull-request trust and publishes pre-merge previews.
+| Action | Runs | Source in this repository |
+| --- | --- | --- |
+| [`artifact-pages/publish-action`](https://github.com/artifact-pages/publish-action) | `artifact-pages site publish` for one required, explicit site ID | `actions/publish` |
+| [`artifact-pages/preview-action`](https://github.com/artifact-pages/preview-action) | pull-request trust checks, then `preview publish` | `actions/preview` |
+| [`artifact-pages/registry-action`](https://github.com/artifact-pages/registry-action) | `registry register` | `actions/registry` |
+| [`artifact-pages/app-deploy-action`](https://github.com/artifact-pages/app-deploy-action) | `app deploy` | `actions/app-deploy` |
 
-They build the CLI from the same pinned Action source and invoke the command with `--format json`. They do not implement site publication, registry reconciliation, preview cleanup, or event timing. No repository has a required reusable workflow; adopters choose their own triggers and approval rules. Neither Action infers a site from the repository, discovers PRs, or adds a separate preview cleanup workflow.
+Each Action runs one CLI operation, so none has an `operation` input. `registry unregister` has no Action: `registry register` already removes the sites that the config omits and cleans their content, and `unregister` is the per-site retry for a cleanup that stopped part-way, which an operator runs with the CLI.
+
+The Action repositories are generated from `actions/<name>/` here on every release and carry the same version as the product (`@v0.1.0`). A published Action never builds anything: it downloads the CLI of its own version from the matching release of this repository, verifies the checksum, and fails if it cannot. The Action version therefore decides the CLI version, also under a full-SHA pin. Linux and macOS runners (x64, arm64) are supported; Windows runners are not. The Actions invoke the command with `--format json`. They do not implement site publication, registry reconciliation, preview cleanup, or event timing. No repository has a required reusable workflow; adopters choose their own triggers and approval rules. No Action infers a site from the repository, discovers PRs, or adds a separate preview cleanup workflow.
 
 ## Inputs and typed outputs
 
-The admin Action accepts `operation: registry-register | registry-unregister | app-deploy`. All three operations accept `dry-run`; `registry-unregister` requires `site`, and `app-deploy` deploys the web bundle that matches the pinned Action's CLI version, or a local `archive` when given (there is no `version` input; the pinned Action ref selects the CLI and therefore the web bundle; `repository` overrides the release source). The site Action requires `site` and accepts `source`, `config`, and `dry-run`. Every publish builds and publishes the site's page text search data; there is no `fulltext` input.
+Every Action accepts `config`, `github-token`, `dry-run`, `publish-on` (not the preview Action), `summary`, `checkout` and `fetch-depth`. The publish Action also requires `site` and accepts `source`. The registry Action has no further input. The app-deploy Action deploys the web bundle that matches the Action's own version, or a local `archive` when given (there is no `version` input; the pinned Action selects the CLI and therefore the web bundle; `repository` overrides the release source). Every publish builds and publishes the site's page text search data; there is no `fulltext` input.
 
-The admin and site Actions expose the original CLI result through `result` and preserve its process status through `exit-code`. They also expose `operation`, `outcome`, `site`, `changes`, `preview-changes`, and `error`; registry operations expose `registry-updated`. The preview Action exposes `operation`, `outcome`, `site`, `group-list-url`, `documents`, `result`, `exit-code`, `error`, and `comment-url`. GitHub Action outputs are strings, so JSON arrays and objects are compact JSON text, `registry-updated` is `true`/`false`, and `exit-code` is an integer string. The invoke step writes outputs before returning a non-zero CLI exit code.
+The publish Action exposes `operation`, `outcome`, `site`, `changes`, `preview-changes`, `result`, `exit-code` and `error`. The registry Action exposes `operation`, `outcome`, `registry-updated`, `changes`, `result`, `exit-code` and `error`, and app-deploy the same without `registry-updated`. The preview Action exposes `operation`, `outcome`, `site`, `group-list-url`, `documents`, `result`, `exit-code`, `error`, and `comment-url`. `result` is the original CLI result and `exit-code` its process status. GitHub Action outputs are strings, so JSON arrays and objects are compact JSON text, `registry-updated` is `true`/`false`, and `exit-code` is an integer string. The invoke step writes outputs before returning a non-zero CLI exit code.
 
 Output names are hyphen-case in every Action. The earlier underscore names (`result_json`, `changes_json`, `preview_changes_json`, `registry_updated`, `exit_code`) were renamed to `result`, `changes`, `preview-changes`, `registry-updated`, and `exit-code` without aliases. Update workflows that read the old names when moving to a release that contains this change.
 
 ## Pre-merge previews
 
-`actions/preview-publish` publishes one site's changed documents for a pull request or a manual run. There is no separate preflight Action.
+`artifact-pages/preview-action` publishes one site's changed documents for a pull request or a manual run. There is no separate preflight Action.
 
 ### Trust model
 
@@ -27,10 +31,10 @@ Preview publication on pull requests rests on four layers:
 
 1. The job's `if: github.event.pull_request.head.repo.full_name == github.repository` skips fork-origin pull requests before any step runs.
 2. GitHub withholds secrets and OIDC tokens from workflow runs triggered by fork pull requests, so those runs cannot obtain provider credentials.
-3. After its optional checkout and before any Go setup, CLI call or provider access, `preview-publish` verifies that the event's head repository is the workflow repository. When a pull request is resolved (the `pull-request` input, or on a `pull_request` event the event's own PR number), it also checks the PR through the GitHub API (base and head repository, head SHA). It rejects `pull_request_target`.
+3. After its optional checkout and before the CLI download, any CLI call or provider access, `preview-action` verifies that the event's head repository is the workflow repository. When a pull request is resolved (the `pull-request` input, or on a `pull_request` event the event's own PR number), it also checks the PR through the GitHub API (base and head repository, head SHA). It rejects `pull_request_target`.
 4. The provider trust policy should restrict which repository, workflow and ref can assume the publisher role (for AWS, the OIDC role's trust conditions).
 
-Configure provider credentials in a step before `preview-publish`; layers 1 and 2 keep untrusted runs away from them, and layer 3 runs before the provider is used.
+Configure provider credentials in a step before `preview-action`; layers 1 and 2 keep untrusted runs away from them, and layer 3 runs before the provider is used.
 
 ### Git refs and the checkout
 
@@ -77,11 +81,11 @@ The config and storage provider remain independent. Registry Actions use the sel
 
 ## Workflow templates
 
-The files under [`examples/github-actions`](../../examples/github-actions) are templates. They pin the third-party checkout, Go setup, and AWS credential Actions by full commit SHA. The Artifact Pages Action itself has not been published as a release in this checkout; replace `<FULL_REVIEWED_ACTION_COMMIT_SHA>` with the full 40-character commit SHA of the reviewed release that contains the action files before adopting a template. The satellite template also uses a full commit SHA for the admin config locator.
+The files under [`examples/github-actions`](../../examples/github-actions) are templates. They pin the third-party checkout and AWS credential Actions by full commit SHA and reference the Artifact Pages Actions by exact release tag (`artifact-pages/publish-action@v0.1.0`). For the strictest pin, use the full commit SHA of that tag with the tag in a comment (`@<sha> # v0.1.0`); because the Action's `release.json` is part of that commit, the CLI version is fixed as well. No moving major tag exists while the product is `0.x`. The satellite template also uses a full commit SHA for the admin config locator.
 
-The templates show registering the desired site set, application deploy of the web bundle pinned by the Action ref, satellite publish for the explicit `sre` site, and pull-request previews (`satellite-preview.yml`, always on pull requests; `satellite-preview-label.yml`, only with a label). The preview templates are a single job guarded by the same-repository `if:`, assume the AWS role, then run `preview-publish`, and opt in to `comment: true` with `pull-requests: write`. The admin Action's `registry-register` operation value maps to the `registry register` CLI command. For pull-request planning, use the same operation with `dry-run: true` and a read-only provider role. Decide which PRs may receive read-only cloud credentials in the adopting repository's trust policy. A merge or another selected event can run the write operation; the Action does not choose one.
+The templates show registering the desired site set (`registry-action`), application deploy of the web bundle pinned by the Action version (`app-deploy-action`), satellite publish for the explicit `sre` site (`publish-action`), and pull-request previews (`satellite-preview.yml`, always on pull requests; `satellite-preview-label.yml`, only with a label). The preview templates are a single job guarded by the same-repository `if:`, assume the AWS role, then run `preview-action`, and opt in to `comment: true` with `pull-requests: write`. For pull-request planning, run the registry Action with `dry-run: true` and a read-only provider role. Decide which PRs may receive read-only cloud credentials in the adopting repository's trust policy. A merge or another selected event can run the write operation; the Action does not choose one.
 
-The component uses `actions/setup-go` pinned to commit `b7ad1dad31e06c5925ef5d2fc7ad053ef454303e` (v7.0.0) and reads the Go version from this repository's `go.mod`. The consuming workflow's checkout should also disable persisted credentials unless later steps need Git authentication.
+Each Action runs `actions/checkout` (when `checkout` allows) pinned to a full SHA. The consuming workflow's checkout should also disable persisted credentials unless later steps need Git authentication.
 
 ## Check CLI parity locally
 
@@ -91,4 +95,8 @@ Run:
 node scripts/test-actions-parity.mjs
 ```
 
-The smoke test builds the CLI, creates separate temporary admin and satellite Git repositories with independent local targets for direct CLI and Action invocations, then compares the exact JSON results, typed outputs, stdout, and exit codes. It covers registering the complete config `sites` set and unregistering a site in dry-run and apply modes; explicit-site publish in dry-run and apply modes; site publish that always advertises full-text data; app deploy in dry-run and apply modes; missing-`sites` and unregistered-site failures; and a stale preview reference whose missing completion manifest is planned without writes and then pruned on apply. It also checks the composite input/output wiring, workflow example names, scoped GitHub permissions, explicit site selection, separate registry/app/satellite role variables, and full-SHA pins for third-party Actions. The parity test exercises the shared Action invocation script used by the composites. Unit tests for the Git-ref resolution and the PR comment logic run with `npm run test:actions-shared`. The `actions-smoke` job in `.github/workflows/verify.yml` runs every Action, including the root entry point, through `uses:` on a GitHub-hosted runner against a runner-local target, on every pull request, on `main`, and before a release. It does not need provider credentials and does not assume OIDC roles or prove live AWS/Cloudflare behavior.
+The parity test builds the CLI, creates separate temporary admin and satellite Git repositories with independent local targets for direct CLI and Action invocations, then compares the exact JSON results, typed outputs, stdout, and exit codes. It covers registering the complete config `sites` set in dry-run and apply modes (unregistering a site is checked CLI-only, since it has no Action); explicit-site publish in dry-run and apply modes; site publish that always advertises full-text data; app deploy in dry-run and apply modes; missing-`sites` and unregistered-site failures; and a stale preview reference whose missing completion manifest is planned without writes and then pruned on apply. It also checks the composite input/output wiring, workflow example names, scoped GitHub permissions, explicit site selection, separate registry/app/satellite role variables, and full-SHA pins for third-party Actions. It also asserts that no Action builds from source and that none has an `operation` input. The parity test exercises the shared Action invocation script used by the composites. Unit tests for the Git-ref resolution and the PR comment logic run with `npm run test:actions-shared`. The `actions-smoke` job in `.github/workflows/verify.yml` runs every Action by local path (`uses: ./actions/<name>`) on a GitHub-hosted runner, with the CLI built from the same commit and handed over through `ARTIFACT_PAGES_TEST_CLI` (unreleased source names no release; a published Action ignores that variable) against a runner-local target, on every pull request, on `main`, and before a release. It does not need provider credentials and does not assume OIDC roles or prove live AWS/Cloudflare behavior.
+
+## Generating the Action repositories locally
+
+`node scripts/build-action-repos.mjs --out .local/action-repos` writes the content of the four Action repositories for the current product version; `npm run test:action-repos` checks the generated layout and rehearses `scripts/sync-action-repos.sh` against local bare repositories. The release workflow runs the same two scripts after the release assets are published, using the organization's release GitHub App (`RELEASE_APP_ID` variable, `RELEASE_APP_PRIVATE_KEY` secret, `contents: write` on the four Action repositories only).

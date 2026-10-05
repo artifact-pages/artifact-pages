@@ -74,7 +74,7 @@ export function buildNotes({ version, bundle, previousTag, verdict }) {
   } else {
     lines.push(`**Breaking** relative to ${verdict.baseline?.ref ?? previousTag}: the \`schemaVersion\` changed for ${(verdict.changedFormats ?? []).map((format) => `\`${format}\``).join(', ')}.`, '', 'The new web shows "This site needs to be republished" for data written by the previous version until the upgrade below is done. The upgrade procedure was exercised by the release gate and converged to a fully working storage.', '', '### Upgrade procedure', '', `1. Move your CLI (or the pinned Action ref) to v${version}.`, '2. `artifact-pages registry register` (admin repository).', '3. `artifact-pages app deploy` (admin repository).', '4. Republish every site with the new CLI: `artifact-pages site publish --site ID` and, for sites with previews, `artifact-pages preview publish`.')
   }
-  lines.push('', '## Assets', '', `- \`artifact-pages-web-v${version}.tar.gz\` with its \`.json\` manifest and \`.sha256\` checksum, built from the tagged commit.`, '- Go CLI: `go install github.com/tasuku43/git-artifact-pages/cli/cmd/artifact-pages@v' + version + '`.')
+  lines.push('', '## Assets', '', `- \`artifact-pages-web-v${version}.tar.gz\` with its \`.json\` manifest and \`.sha256\` checksum, built from the tagged commit.`, '- Go CLI: `go install github.com/artifact-pages/artifact-pages/cli/cmd/artifact-pages@v' + version + '`.')
   return `${lines.join('\n')}\n`
 }
 

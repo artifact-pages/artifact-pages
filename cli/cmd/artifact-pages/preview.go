@@ -11,11 +11,11 @@ import (
 	"os"
 	"strings"
 
-	deploymentconfig "github.com/tasuku43/git-artifact-pages/cli/internal/config"
-	"github.com/tasuku43/git-artifact-pages/cli/internal/indexer"
-	"github.com/tasuku43/git-artifact-pages/cli/internal/preview"
-	"github.com/tasuku43/git-artifact-pages/cli/internal/publisher"
-	"github.com/tasuku43/git-artifact-pages/cli/internal/registry"
+	deploymentconfig "github.com/artifact-pages/artifact-pages/cli/internal/config"
+	"github.com/artifact-pages/artifact-pages/cli/internal/indexer"
+	"github.com/artifact-pages/artifact-pages/cli/internal/preview"
+	"github.com/artifact-pages/artifact-pages/cli/internal/publisher"
+	"github.com/artifact-pages/artifact-pages/cli/internal/registry"
 )
 
 type previewDocumentURL struct {

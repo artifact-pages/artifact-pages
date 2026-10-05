@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tasuku43/git-artifact-pages/cli/internal/indexer"
-	"github.com/tasuku43/git-artifact-pages/cli/internal/registry"
+	"github.com/artifact-pages/artifact-pages/cli/internal/indexer"
+	"github.com/artifact-pages/artifact-pages/cli/internal/registry"
 )
 
 // TestSitePublishScaleProbe is an opt-in measurement harness for the real

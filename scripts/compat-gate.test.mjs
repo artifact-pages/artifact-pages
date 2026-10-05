@@ -16,6 +16,7 @@ import {
   compareFormats,
   copyStorage,
   formatOf,
+  latestReleaseTag,
 } from './compat-gate.mjs'
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -258,4 +259,13 @@ test('copyStorage works for a storage that has no metadata sibling', (t) => {
   writeFileSync(path.join(source, 'a'), 'x')
   copyStorage(source, path.join(base, 'destination'))
   assert.equal(existsSync(path.join(base, 'destination.metadata')), false)
+})
+
+test('the baseline is the newest release tag strictly below the candidate, and absent for a first release', () => {
+  const v = (text) => ({ text, major: Number(text.split('.')[0]), minor: Number(text.split('.')[1]), patch: Number(text.split('.')[2]) })
+  assert.equal(latestReleaseTag(v('0.1.0'), []), undefined)
+  assert.equal(latestReleaseTag(v('0.1.0'), ['v0.1.0']), undefined, 'the tag being released is not its own baseline')
+  assert.equal(latestReleaseTag(v('0.1.0'), ['v0.1.0', 'not-a-release', 'v0.1.0-rc1']), undefined)
+  assert.equal(latestReleaseTag(v('0.1.1'), ['v0.1.0', 'v0.1.1']), 'v0.1.0')
+  assert.equal(latestReleaseTag(undefined, ['v0.1.0', 'v0.2.0']), 'v0.2.0')
 })

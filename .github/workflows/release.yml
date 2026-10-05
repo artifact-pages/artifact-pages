@@ -1,6 +1,10 @@
 # Pushing a vMAJOR.MINOR.PATCH tag is the owner's release approval (TD2). The
-# workflow never edits the repository; any failure before "Create the GitHub
-# pre-release" stops the release.
+# workflow never edits this repository; any failure before "Create the GitHub
+# pre-release" stops the release. After the release assets are published and verified,
+# "Sync the Action repositories" copies each actions/<name> into artifact-pages/<name>-action
+# and tags it with the same version (TD14). That job needs the org's release GitHub App:
+# variable RELEASE_APP_ID and secret RELEASE_APP_PRIVATE_KEY, with contents:write on
+# publish-action, preview-action, registry-action and app-deploy-action only.
 name: Release
 
 on:
@@ -155,3 +159,45 @@ jobs:
           test "$("./artifact-pages_v${version}_linux_amd64" version --format json | jq -r .version)" = "$version"
       - name: Deploy with no flags beyond --config and compare bytes
         run: node scripts/verify-release.mjs --cli "$RUNNER_TEMP/artifact-pages" --assets "$RUNNER_TEMP/assets" --version "${RELEASE_TAG#v}"
+
+  # The published Actions download this release's CLI, so they are synced only after
+  # the assets exist and match their checksums. A re-run completes a partial sync and
+  # never moves a tag that already exists.
+  sync-actions:
+    name: Sync the Action repositories
+    needs: verify-published
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - name: Check out the tagged commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: Generate the Action repositories
+        run: node scripts/build-action-repos.mjs --version "${RELEASE_TAG#v}" --out "$RUNNER_TEMP/action-repos"
+      - name: Create a token for the four Action repositories
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: |
+            publish-action
+            preview-action
+            registry-action
+            app-deploy-action
+          permission-contents: write
+      - name: Publish the content and tag each repository
+        env:
+          ACTION_REPO_TOKEN: ${{ steps.app-token.outputs.token }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: scripts/sync-action-repos.sh "$RUNNER_TEMP/action-repos" "${RELEASE_TAG#v}"

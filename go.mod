@@ -1,4 +1,4 @@
-module github.com/tasuku43/git-artifact-pages
+module github.com/artifact-pages/artifact-pages
 
 go 1.26.0
 

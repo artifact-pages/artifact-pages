@@ -29,3 +29,13 @@ test('release notes keep the no-baseline skip distinct', () => {
   assert.match(notes, /No earlier release exists/)
   assert.doesNotMatch(notes, /compatibility is not guaranteed before 1\.0\.0/i)
 })
+
+test('the first 0.x release of a series has no previous web bundle and no baseline', () => {
+  const notes = buildNotes({
+    version: '0.1.0',
+    bundle: undefined,
+    verdict: { verdict: 'skipped', result: 'skipped', reasonCode: 'pre-1.0', reason: 'cross-version compatibility is not guaranteed before 1.0.0' },
+  })
+  assert.match(notes, /First release: there is no previous web bundle/)
+  assert.doesNotMatch(notes, /undefined/)
+})

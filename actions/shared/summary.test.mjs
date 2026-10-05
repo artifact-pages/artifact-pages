@@ -44,8 +44,7 @@ test('registry register lists registered and removed sites', () => {
   assert.match(renderSummary({ result: { operation: 'registry register', outcome: 'no-op', registryUpdated: false, changes: [] } }), /- \*\*Registered:\*\* none\n- \*\*Removed:\*\* none/)
 })
 
-test('registry unregister and app deploy', () => {
-  assert.match(renderSummary({ result: { operation: 'registry unregister', outcome: 'unregistered', site: 'old', registryUpdated: true, changes: [] } }), /- \*\*Removed:\*\* `old`/)
+test('app deploy', () => {
   const deploy = renderSummary({ result: { operation: 'app deploy', outcome: 'deployed', version: '0.2.0', changes: [{ action: 'create', path: 'index.html' }] } })
   assert.match(deploy, /- \*\*Object changes:\*\* 1/)
   assert.match(deploy, /- \*\*Version:\*\* `0\.2\.0`/)

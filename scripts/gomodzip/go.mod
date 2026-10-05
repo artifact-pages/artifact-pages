@@ -1,4 +1,4 @@
-module github.com/tasuku43/git-artifact-pages/scripts/gomodzip
+module github.com/artifact-pages/artifact-pages/scripts/gomodzip
 
 go 1.26.0
 

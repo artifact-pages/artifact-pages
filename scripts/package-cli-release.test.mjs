@@ -47,6 +47,6 @@ test('the linked module list covers the real CLI dependencies for every platform
   for (const platform of [{ os: 'linux', arch: 'amd64' }, { os: 'darwin', arch: 'arm64' }]) {
     const paths = linkedModules(platform).map((module) => module.path)
     assert.ok(paths.includes('github.com/aws/aws-sdk-go-v2/service/s3'), `${platform.os}/${platform.arch}`)
-    assert.ok(!paths.includes('github.com/tasuku43/git-artifact-pages'), 'the main module is not a third-party notice')
+    assert.ok(!paths.includes('github.com/artifact-pages/artifact-pages'), 'the main module is not a third-party notice')
   }
 })

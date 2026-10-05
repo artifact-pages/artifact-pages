@@ -65,9 +65,6 @@ export function renderSummary({ kind, operation, result, exitCode = 0, dryRun = 
     lines.push(`- **Registered:** ${idList(siteIDsFromRegistryChanges(changes, ['create', 'update']))}`)
     lines.push(`- **Removed:** ${idList(siteIDsFromRegistryChanges(changes, ['remove']))}`)
     if (typeof result?.registryUpdated === 'boolean') lines.push(`- **Registry updated:** ${result.registryUpdated}`)
-  } else if (name === 'registry unregister') {
-    lines.push(`- **Removed:** ${result?.site ? code(result.site) : 'none'}`)
-    if (typeof result?.registryUpdated === 'boolean') lines.push(`- **Registry updated:** ${result.registryUpdated}`)
   } else if (name === 'app deploy') {
     lines.push(`- **Object changes:** ${changes.length}`)
     if (result?.version) lines.push(`- **Version:** ${code(result.version)}`)
@@ -89,7 +86,7 @@ export function renderSummary({ kind, operation, result, exitCode = 0, dryRun = 
   if (failed) {
     lines.push('', `> **Error (exit ${exitCode}):** ${oneLine(result?.error || 'the operation failed without an error message')}`)
   }
-  if (name !== 'preview publish' && name !== 'registry unregister') lines.push(...changeList(changes))
+  if (name !== 'preview publish') lines.push(...changeList(changes))
   return `${lines.join('\n')}\n`
 }
 

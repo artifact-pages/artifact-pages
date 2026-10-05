@@ -20,8 +20,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tasuku43/git-artifact-pages/cli/internal/githubrepo"
-	"github.com/tasuku43/git-artifact-pages/cli/internal/registry"
+	"github.com/artifact-pages/artifact-pages/cli/internal/githubrepo"
+	"github.com/artifact-pages/artifact-pages/cli/internal/registry"
 	"go.yaml.in/yaml/v3"
 )
 

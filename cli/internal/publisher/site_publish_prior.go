@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tasuku43/git-artifact-pages/cli/internal/indexer"
+	"github.com/artifact-pages/artifact-pages/cli/internal/indexer"
 )
 
 // sitePriorStateLoader supplies the deployed site's committed per-file

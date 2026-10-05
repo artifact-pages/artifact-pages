@@ -120,8 +120,9 @@ async function waitForServer(url) {
 }
 
 // ------------------------------------------------- baseline / candidate trees
-function latestReleaseTag(upperBound) {
-  const tags = git(projectRoot, ['tag', '--list', 'v[0-9]*']).split('\n').filter(Boolean)
+// The newest release tag strictly below upperBound (any when undefined), or
+// undefined when none exists: the first release of a series has no baseline.
+function latestReleaseTag(upperBound, tags = git(projectRoot, ['tag', '--list', 'v[0-9]*']).split('\n').filter(Boolean)) {
   const releases = tags.map((tag) => ({ tag, version: parseSemver(tag) })).filter((entry) => entry.version && entry.tag === `v${entry.version.text}`)
   const eligible = upperBound ? releases.filter((entry) => compareSemver(entry.version, upperBound) < 0) : releases
   eligible.sort((left, right) => compareSemver(right.version, left.version))
@@ -925,4 +926,4 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   })
 }
 
-export { assertRequiredPublishStateRoots, checkVersion, classifyFormats, collectFormatVersions, compareFormats, compatibilityPolicy, copyStorage, formatOf }
+export { assertRequiredPublishStateRoots, checkVersion, classifyFormats, collectFormatVersions, compareFormats, compatibilityPolicy, copyStorage, formatOf, latestReleaseTag }

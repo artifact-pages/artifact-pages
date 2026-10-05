@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	deploymentconfig "github.com/tasuku43/git-artifact-pages/cli/internal/config"
-	"github.com/tasuku43/git-artifact-pages/cli/internal/registry"
+	deploymentconfig "github.com/artifact-pages/artifact-pages/cli/internal/config"
+	"github.com/artifact-pages/artifact-pages/cli/internal/registry"
 )
 
 const currentAdminManifest = `schemaVersion: 1

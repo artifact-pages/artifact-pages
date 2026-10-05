@@ -27,9 +27,8 @@ jobs:
 
       - name: Register the committed sites
         id: register-sites
-        uses: tasuku43/git-artifact-pages/actions/admin@<FULL_REVIEWED_ACTION_COMMIT_SHA>
+        uses: artifact-pages/registry-action@v0.1.0
         with:
-          operation: registry-register
           config: artifact-pages.yaml
 
       - name: Use the typed CLI result

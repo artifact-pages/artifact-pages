@@ -8,7 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/tasuku43/git-artifact-pages/cli/internal/gitdepth"
+	"github.com/artifact-pages/artifact-pages/cli/internal/gitdepth"
 	"net/url"
 	"os/exec"
 	"path"
@@ -18,7 +18,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/tasuku43/git-artifact-pages/cli/internal/githubrepo"
+	"github.com/artifact-pages/artifact-pages/cli/internal/githubrepo"
 )
 
 type Outcome string

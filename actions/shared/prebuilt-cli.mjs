@@ -1,14 +1,20 @@
 import { createHash } from 'node:crypto'
-import { appendFileSync, chmodSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-// Prebuilt CLI selection for the composite Actions (TD4, specification "Shared
-// Action behavior"). An Action uses a released binary only when its ref is the
-// release tag of the source tree it runs from; every other case builds from source.
+// CLI installation for the published composite Actions (TD14). A published Action
+// repository carries a generated `release.json` naming the product version and the
+// repository whose release holds the CLI. The Action always installs exactly that
+// CLI, checksum-verified, so the Action version (also under a SHA pin) decides the
+// CLI version. There is no source build and no fallback.
+//
+// Unreleased source (this monorepo's actions/<name>, no release.json) cannot name a
+// release. CI exercises it with a CLI built in the job, passed as
+// ARTIFACT_PAGES_TEST_CLI; that variable is ignored by every published Action.
 
 // Platforms the release workflow builds and the Actions can run. Windows is not
-// built: the Actions build from source there.
+// built, so the Actions do not support Windows runners.
 export const platforms = [
   { os: 'linux', arch: 'amd64' },
   { os: 'linux', arch: 'arm64' },
@@ -31,25 +37,33 @@ export function noticesName(version) {
   return `artifact-pages_v${version}_THIRD_PARTY_NOTICES.txt`
 }
 
-export function readProductVersion(sourceRoot) {
-  const source = readFileSync(path.join(sourceRoot, 'cli', 'internal', 'version', 'version.go'), 'utf8')
-  const match = /const Product = "([^"]+)"/.exec(source)
-  if (!match) throw new Error('cli/internal/version/version.go does not define the Product constant')
-  return match[1]
+// Reads the generated release.json. Returns undefined when the Action runs from
+// unreleased source. A present but malformed file is an error: it must never degrade
+// into the unreleased path.
+export function readRelease(actionRoot) {
+  let text
+  try {
+    text = readFileSync(path.join(actionRoot, 'release.json'), 'utf8')
+  } catch (error) {
+    if (error.code === 'ENOENT') return undefined
+    throw error
+  }
+  const release = JSON.parse(text)
+  if (release.schemaVersion !== 1 || !/^\d+\.\d+\.\d+$/.test(release.version ?? '')) throw new Error('release.json does not name a release version')
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(release.repository ?? '') || release.repository.split('/').some((part) => part === '.' || part === '..')) throw new Error('release.json does not name a release repository')
+  return { version: release.version, repository: release.repository }
 }
 
-// Returns { use: true, version, asset, ... } or { use: false, reason }.
-export function selectPrebuilt({ actionRef, product, repository, runnerOs, runnerArch: arch }) {
+// Returns { version, tag, repository, asset, ... }; throws for an unsupported runner.
+export function selectPrebuilt({ release, runnerOs, runnerArch: arch }) {
   const os = runnerOS[runnerOs]
   const cpu = runnerArch[arch]
-  if (!os || !cpu) return { use: false, reason: `no prebuilt CLI for runner ${runnerOs || '(unknown)'}/${arch || '(unknown)'}` }
-  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository ?? '') || (repository ?? '').split('/').some((part) => part === '.' || part === '..')) return { use: false, reason: 'the Action repository is unknown' }
-  const tag = /^v(\d+\.\d+\.\d+)$/.exec(actionRef ?? '')
-  if (!tag) return { use: false, reason: `the Action ref ${JSON.stringify(actionRef ?? '')} is not a release tag` }
-  if (tag[1] !== product) return { use: false, reason: `the Action ref ${actionRef} does not match the source version v${product}` }
-  const base = `https://github.com/${repository}/releases/download/${actionRef}/`
-  const asset = assetName(product, os, cpu)
-  return { use: true, version: product, tag: actionRef, repository, asset, checksums: checksumsName(product), assetUrl: base + asset, checksumsUrl: base + checksumsName(product) }
+  if (!os || !cpu) throw new Error(`no released CLI for runner ${runnerOs || '(unknown)'}/${arch || '(unknown)'}; use a Linux or macOS runner`)
+  const { version, repository } = release
+  const tag = `v${version}`
+  const base = `https://github.com/${repository}/releases/download/${tag}/`
+  const asset = assetName(version, os, cpu)
+  return { version, tag, repository, asset, checksums: checksumsName(version), assetUrl: base + asset, checksumsUrl: base + checksumsName(version) }
 }
 
 export function parseChecksums(text) {
@@ -88,23 +102,21 @@ async function download(url, { fetchImpl, token }) {
   throw error
 }
 
-// Downloads, verifies and installs the binary at `destination`. Resolves to
-// { used: false, reason } when the source build should be used instead (no
-// matching release, unsupported platform, missing asset or checksum entry).
-// A checksum mismatch throws: it is never papered over with a fallback.
+// Downloads, verifies and installs the binary at `destination`. Any failure (no
+// release, missing asset or checksum entry, mismatch) throws: the Action must not
+// run a CLI it could not verify.
 export async function installPrebuilt(options) {
   const selection = selectPrebuilt(options)
-  if (!selection.use) return { used: false, reason: selection.reason }
   const fetchImpl = options.fetchImpl ?? fetch
   const token = options.token ?? ''
-  let binary
   let checksums
+  let binary
   try {
     checksums = parseChecksums((await download(selection.checksumsUrl, { fetchImpl, token })).toString('utf8'))
-    if (!checksums.has(selection.asset)) return { used: false, reason: `${selection.checksums} has no entry for ${selection.asset}` }
+    if (!checksums.has(selection.asset)) throw new Error(`${selection.checksums} has no entry for ${selection.asset}`)
     binary = await download(selection.assetUrl, { fetchImpl, token })
   } catch (error) {
-    return { used: false, reason: `release asset unavailable: ${String(error.message).replace(token || '\u0000', '***')}` }
+    throw new Error(`release ${selection.tag} of ${selection.repository} is unavailable: ${String(error.message).replace(token || '\u0000', '***')}`)
   }
   const actual = sha256(binary)
   if (actual !== checksums.get(selection.asset)) {
@@ -112,28 +124,33 @@ export async function installPrebuilt(options) {
   }
   writeFileSync(options.destination, binary)
   chmodSync(options.destination, 0o755)
-  return { used: true, reason: `${selection.asset} verified against ${selection.checksums}`, version: selection.version }
+  return { reason: `${selection.asset} verified against ${selection.checksums}`, version: selection.version }
+}
+
+// Unreleased source only: installs the CLI that CI built from the same commit.
+export function installTestCli({ testCli, destination }) {
+  if (!testCli || !existsSync(testCli)) throw new Error('unreleased Action source needs ARTIFACT_PAGES_TEST_CLI to name a built artifact-pages binary')
+  copyFileSync(testCli, destination)
+  chmodSync(destination, 0o755)
+  return { reason: `unreleased source; using the CLI built by this workflow (${path.basename(testCli)})` }
 }
 
 async function main() {
   const env = process.env
-  const sourceRootIndex = process.argv.indexOf('--source-root')
-  const sourceRoot = sourceRootIndex >= 0 ? process.argv[sourceRootIndex + 1] : ''
-  const output = (used, reason) => {
-    process.stdout.write(`Artifact Pages CLI: ${used ? 'using the released binary' : 'building from source'} (${reason}).\n`)
-    if (env.GITHUB_OUTPUT) appendFileSync(env.GITHUB_OUTPUT, `used=${used}\n`)
-  }
+  const rootIndex = process.argv.indexOf('--action-root')
+  const actionRoot = rootIndex >= 0 ? process.argv[rootIndex + 1] : ''
+  const destination = path.join(env.RUNNER_TEMP, 'artifact-pages')
   try {
-    const result = await installPrebuilt({
-      actionRef: env.ARTIFACT_PAGES_ACTION_REF,
-      repository: env.ARTIFACT_PAGES_ACTION_REPOSITORY,
-      product: readProductVersion(sourceRoot),
-      runnerOs: env.RUNNER_OS,
-      runnerArch: env.RUNNER_ARCH,
-      destination: path.join(env.RUNNER_TEMP, 'artifact-pages'),
-      token: env.ARTIFACT_PAGES_TOKEN ?? '',
-    })
-    output(result.used, result.reason)
+    const release = readRelease(actionRoot)
+    let result
+    if (release) {
+      if (env.ARTIFACT_PAGES_TEST_CLI) process.stdout.write('::notice title=Artifact Pages CLI::ARTIFACT_PAGES_TEST_CLI is ignored by a published Action.\n')
+      result = await installPrebuilt({ release, runnerOs: env.RUNNER_OS, runnerArch: env.RUNNER_ARCH, destination, token: env.ARTIFACT_PAGES_TOKEN ?? '' })
+      process.stdout.write(`Artifact Pages CLI v${result.version}: ${result.reason}.\n`)
+    } else {
+      result = installTestCli({ testCli: env.ARTIFACT_PAGES_TEST_CLI, destination })
+      process.stdout.write(`Artifact Pages CLI: ${result.reason}.\n`)
+    }
   } catch (error) {
     process.stderr.write(`::error title=Artifact Pages CLI::${String(error.message).replace(env.ARTIFACT_PAGES_TOKEN || '\u0000', '***')}\n`)
     process.exitCode = 1

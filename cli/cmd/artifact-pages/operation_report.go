@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	deploymentconfig "github.com/tasuku43/git-artifact-pages/cli/internal/config"
-	"github.com/tasuku43/git-artifact-pages/cli/internal/indexer"
-	"github.com/tasuku43/git-artifact-pages/cli/internal/publisher"
+	deploymentconfig "github.com/artifact-pages/artifact-pages/cli/internal/config"
+	"github.com/artifact-pages/artifact-pages/cli/internal/indexer"
+	"github.com/artifact-pages/artifact-pages/cli/internal/publisher"
 )
 
 func reportHeader(w io.Writer, operation, outcome string, dry bool) {

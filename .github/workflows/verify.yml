@@ -76,6 +76,7 @@ jobs:
           npm run test:web-packaging
           npm run test:provider-delivery
           npm run test:actions-shared
+          npm run test:action-repos
           npm run test:cli-release
           npm run test:actions-parity
           npm run test:app-cache-rollback
@@ -85,8 +86,14 @@ jobs:
 
   # Runs every composite Action through `uses:` on a GitHub-hosted runner against a
   # runner-local target (IMP-47). The parity script covers the shared wrapper logic;
-  # this job covers the composite runtime: expressions, action_path resolution,
-  # setup-go and go build, and the output mapping. No credentials are used.
+  # this job covers the composite runtime: expressions, action_path resolution and the
+  # output mapping. No credentials are used.
+  #
+  # The published Actions download the released CLI of their own version (TD14), which
+  # does not exist for unreleased code. This job therefore runs the source Actions by
+  # local path (`./actions/<name>`, which carries no release.json) and gives them the CLI
+  # it built from the same commit through ARTIFACT_PAGES_TEST_CLI; a published Action
+  # ignores that variable.
   actions-smoke:
     name: Composite Actions smoke
     runs-on: ubuntu-24.04
@@ -107,17 +114,25 @@ jobs:
           test "$(git rev-parse --is-shallow-repository)" = true
           test "$(git rev-list --count HEAD)" = 1
           test -z "$(git config --get-regexp extraheader || true)"
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Build the CLI that the unreleased Actions will use
+        run: |
+          set -euo pipefail
+          go build -trimpath -o "$RUNNER_TEMP/test-cli/artifact-pages" ./cli/cmd/artifact-pages
+          echo "ARTIFACT_PAGES_TEST_CLI=$RUNNER_TEMP/test-cli/artifact-pages" >> "$GITHUB_ENV"
       - name: Prepare the runner-local target
         id: prep
         env:
           SMOKE_ROOT: ${{ runner.temp }}/actions-smoke
         run: node scripts/actions-smoke-prepare.mjs
 
-      - name: Admin registry register (dry-run)
+      - name: Registry register (dry-run)
         id: register-plan
-        uses: ./actions/admin
+        uses: ./actions/registry
         with:
-          operation: registry-register
           config: ${{ steps.prep.outputs.config }}
           dry-run: "true"
       - name: Assert the dry-run planned without writes
@@ -127,17 +142,15 @@ jobs:
         run: |
           test "$OUTCOME" = planned
           test -z "$(find "$STORAGE" -type f)"
-      - name: Admin registry register
+      - name: Registry register
         id: register
-        uses: ./actions/admin
+        uses: ./actions/registry
         with:
-          operation: registry-register
           config: ${{ steps.prep.outputs.config }}
-      - name: Admin app deploy from a packaged archive
+      - name: App deploy from a packaged archive
         id: app
-        uses: ./actions/admin
+        uses: ./actions/app-deploy
         with:
-          operation: app-deploy
           archive: ${{ steps.prep.outputs.archive }}
           config: ${{ steps.prep.outputs.config }}
       - name: Assert registry and app outputs
@@ -162,7 +175,7 @@ jobs:
           git -c user.name=actions-smoke -c user.email=actions-smoke@users.noreply.github.com commit -qam "Actions smoke preview change"
       - name: Preview publish
         id: preview
-        uses: ./actions/preview-publish
+        uses: ./actions/preview
         with:
           site: smoke
           source: fixtures/actions-smoke/site
@@ -192,7 +205,7 @@ jobs:
       - name: Preview publish with a mismatched pull request
         id: preview-rejected
         continue-on-error: true
-        uses: ./actions/preview-publish
+        uses: ./actions/preview
         with:
           site: smoke
           source: fixtures/actions-smoke/site
@@ -217,7 +230,7 @@ jobs:
         run: echo "digest=$(cd "$STORAGE" && find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
       - name: Site publish (dry-run)
         id: site-plan
-        uses: ./actions/site-publish
+        uses: ./actions/publish
         with:
           site: smoke
           config: ${{ steps.prep.outputs.config }}
@@ -232,9 +245,9 @@ jobs:
           test "$OUTCOME" = planned
           test "$(jq length <<<"$CHANGES")" -gt 0
           test "$BEFORE" = "$(cd "$STORAGE" && find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)"
-      - name: Root Action site publish
+      - name: Site publish
         id: site-fulltext
-        uses: ./
+        uses: ./actions/publish
         with:
           site: smoke
           config: ${{ steps.prep.outputs.config }}
@@ -260,7 +273,7 @@ jobs:
           test "$(git log -1 --format=%cn -- fixtures/actions-smoke/site/overview.html)" = "$(jq -r '.artifacts[] | select(.path == "overview.html") | .lastCommitter.name' "$STORAGE/_indexes/smoke/index.json")"
       - name: Repeat the site publish
         id: site-repeat
-        uses: ./actions/site-publish
+        uses: ./actions/publish
         with:
           site: smoke
           config: ${{ steps.prep.outputs.config }}
@@ -275,7 +288,7 @@ jobs:
       - name: Site publish for an unregistered site
         id: unregistered
         continue-on-error: true
-        uses: ./actions/site-publish
+        uses: ./actions/publish
         with:
           site: not-registered
           config: ${{ steps.prep.outputs.config }}
@@ -283,7 +296,7 @@ jobs:
       - name: Site publish with an invalid input
         id: invalid
         continue-on-error: true
-        uses: ./actions/site-publish
+        uses: ./actions/publish
         with:
           site: smoke
           config: ${{ steps.prep.outputs.config }}
@@ -302,13 +315,15 @@ jobs:
           test "$INVALID_OUTCOME" = failure
           test "$INVALID_EXIT" = 2
 
-      - name: Admin registry unregister
+      # `registry unregister` has no Action (TD14); the CLI built above runs it.
+      - name: Registry unregister (CLI)
         id: unregister
-        uses: ./actions/admin
-        with:
-          operation: registry-unregister
-          site: smoke
-          config: ${{ steps.prep.outputs.unregister-config }}
+        env:
+          CONFIG: ${{ steps.prep.outputs.unregister-config }}
+        run: |
+          set -euo pipefail
+          "$ARTIFACT_PAGES_TEST_CLI" registry unregister --site smoke --config "$CONFIG" --format json | tee "$RUNNER_TEMP/unregister.json"
+          echo "exit-code=0" >> "$GITHUB_OUTPUT"
       - name: Assert the site was unregistered
         env:
           EXIT_CODE: ${{ steps.unregister.outputs['exit-code'] }}

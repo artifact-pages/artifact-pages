@@ -58,3 +58,19 @@ The [October 1 distribution preflight](distribution-preflight.md) records comple
 - Review of reader-facing documentation drafts already governed by the documentation queue.
 
 At each handoff, continue other local preparation and report the exact prepared artifact and next action. Do not mark the parent verification tickets Done from a subset of live HTTP checks.
+
+## Organization v0.1.0 cut-over (2026-10-06)
+
+The product moved to `artifact-pages/artifact-pages` and restarts at `v0.1.0` ([TD14](technical-design/TD14-one-repository-per-action.md), [IMP-61](implementation/IMP-61-per-action-repositories.md), [IMP-62](implementation/IMP-62-org-move-and-version-restart.md)). The earlier releases `v0.1.0` to `v0.2.1` belonged to the personal repository. Order:
+
+1. [x] Owner creates the organization release GitHub App `artifact-pages-release` (id 5199677; Contents read/write, Metadata read), installed only on the four Action repositories.
+2. [x] Repository variable `RELEASE_APP_ID` and secret `RELEASE_APP_PRIVATE_KEY` exist in `artifact-pages/artifact-pages`. `release.yml` mints its token with `actions/create-github-app-token` (owner `artifact-pages`, the four repositories, `permission-contents: write`).
+3. [x] The four empty public repositories exist: `publish-action`, `preview-action`, `registry-action`, `app-deploy-action`.
+4. [ ] Merge the cut-over pull request.
+5. [ ] Owner deletes the old releases and tags `v0.1.0`-`v0.2.1` (releases and remote tags) in `artifact-pages/artifact-pages`. Until then the compatibility gate would compare against an old tag only for a candidate above it; the first release has none.
+6. [ ] Owner pushes tag `v0.1.0` from `main`; watch `release.yml` including `Sync the Action repositories`.
+7. [ ] Verify each Action repository has the generated content on `main` and the tag `v0.1.0` (`gh api repos/artifact-pages/<name>-action/git/ref/tags/v0.1.0`), and that `release.json` names `0.1.0`.
+8. [ ] Re-pin the consumers (owner-approved edits): `artifact-pages-docs` to `artifact-pages/publish-action@v0.1.0` and `artifact-pages/preview-action@v0.1.0`; `artifact-pages-admin` to `artifact-pages/registry-action@v0.1.0` and `artifact-pages/app-deploy-action@v0.1.0` (drop `operation:`); move the admin Terraform module sources to `artifact-pages/terraform-{cloudflare,aws}-artifact-pages`; the `github://` config locators stay with the repository owner that holds them.
+9. [ ] Owner archives `tasuku43/artifact-pages-example`.
+10. [ ] Update local clone remotes (`git remote set-url origin git@github.com:artifact-pages/artifact-pages.git`; the same for the Terraform module checkouts).
+11. [ ] Marketplace listing per Action repository waits for the first non-pre-release ([IMP-46](implementation/IMP-46-action-marketplace-release.md)).

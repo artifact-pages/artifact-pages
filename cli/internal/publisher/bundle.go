@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tasuku43/git-artifact-pages/cli/internal/githubrepo"
+	"github.com/artifact-pages/artifact-pages/cli/internal/githubrepo"
 )
 
 const (
@@ -194,7 +194,7 @@ func resolveAppArchive(ctx context.Context, options AppDeployOptions) (string, f
 	}
 	repository := options.Repository
 	if repository == "" {
-		repository = "tasuku43/git-artifact-pages"
+		repository = "artifact-pages/artifact-pages"
 	}
 	if !validReleaseRepository(repository) {
 		return "", nil, errors.New("release repository must use owner/repository format")
