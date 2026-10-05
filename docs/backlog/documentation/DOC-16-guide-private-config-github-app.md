@@ -1,6 +1,6 @@
 # DOC-16 — Guide: GitHub App for private configuration repositories
 
-- Status: Open
+- Status: Done
 - Site: `guide`
 - Page: addition to `ja/` and `en/` `configuration.html` or `access-and-trust.html` (choose when drafting); optional pointer from `publishing.html`
 - Audience: Adopters whose admin (config) repository is private and whose site repositories publish through `github://` config locators
@@ -21,6 +21,12 @@ Show how a site workflow reads a private admin configuration: a site repository'
 
 ## Acceptance criteria
 
-- [ ] `ja` and `en` pages describe the pattern with a workflow excerpt matching the `artifact-pages-docs` workflows.
-- [ ] Every statement matches T23 results; nothing is claimed about the unverified error case.
-- [ ] Renders in light and dark themes and at ~400px width; published locally with `site publish --dry-run` then `site publish`.
+- [x] `ja` and `en` pages describe the pattern with a workflow excerpt matching the `artifact-pages-docs` workflows.
+- [x] Every statement matches T23 results; nothing is claimed about the unverified error case.
+- [x] Renders in light and dark themes and at ~400px width; published locally with `site publish --dry-run` then `site publish`.
+
+## Result
+
+Published on 2026-10-05 after owner approval. Pages: [`configuration.html#remote-private`](https://artifact-pages.dev/guide/en/configuration.html#remote-private) (ja: `/guide/ja/configuration.html`){extra}. Docs PR: https://github.com/tasuku43/artifact-pages-docs/pull/12. Publish run on main (guide `published`, architecture `no-op`): https://github.com/tasuku43/artifact-pages-docs/actions/runs/37327799565. Example workflows pin `@v0.2.1`.
+
+The 404 error text for a private repository the token cannot access was verified on a hosted runner with v0.2.1 and is quoted in the page, so the earlier "do not describe the error" restriction no longer applies.

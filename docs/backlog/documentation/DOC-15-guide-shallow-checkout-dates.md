@@ -1,6 +1,6 @@
 # DOC-15 — Guide: shallow checkouts and document dates
 
-- Status: Open
+- Status: Done
 - Site: `guide`
 - Page: revision of `ja/publishing.html` and `en/publishing.html` (the "Dates and committers" section and the example workflow that currently sets `fetch-depth: 0`). Optional one-paragraph pointer in `architecture` `publishing-model.html`.
 - Audience: Adopters writing their publish workflow and deciding between a shallow checkout and a full clone
@@ -33,9 +33,13 @@ Tell adopters what the default shallow checkout does to per-document `updatedAt`
 
 ## Acceptance criteria
 
-- [ ] `ja/publishing.html` and `en/publishing.html` state the default shallow checkout, the carry-forward-by-content rule, the byte-identical-commit limitation with at least the revert and no-op rewrite examples, and the effect of switching depth later.
-- [ ] The example workflow no longer implies that full history is required.
-- [ ] Every statement matches the specification and TD13; the page introduces no behavior they do not state.
-- [ ] Renders correctly in light and dark themes and at ~400px width without horizontal scrolling.
-- [ ] Published locally with `site publish --dry-run` then `site publish`, and opened in the local reader.
-- [ ] The owner reviewed and approved the page.
+- [x] `ja/publishing.html` and `en/publishing.html` state the default shallow checkout, the carry-forward-by-content rule, the byte-identical-commit limitation with at least the revert and no-op rewrite examples, and the effect of switching depth later.
+- [x] The example workflow no longer implies that full history is required.
+- [x] Every statement matches the specification and TD13; the page introduces no behavior they do not state.
+- [x] Renders correctly in light and dark themes and at ~400px width without horizontal scrolling.
+- [x] Published locally with `site publish --dry-run` then `site publish`, and opened in the local reader.
+- [x] The owner reviewed and approved the page.
+
+## Result
+
+Published on 2026-10-05 after owner approval. Pages: [`publishing.html#shallow`](https://artifact-pages.dev/guide/en/publishing.html#shallow) (ja: `/guide/ja/publishing.html`){extra}. Docs PR: https://github.com/tasuku43/artifact-pages-docs/pull/12. Publish run on main (guide `published`, architecture `no-op`): https://github.com/tasuku43/artifact-pages-docs/actions/runs/37327799565. Example workflows pin `@v0.2.1`.
