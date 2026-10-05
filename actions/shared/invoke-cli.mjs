@@ -26,15 +26,24 @@ function boolInput(name) {
   throw new Error(`input "${name}" must be true or false`)
 }
 
-// site and admin runs honor `publish-on`: a run outside the condition is a dry-run.
+// publish, registry and app-deploy runs honor `publish-on`: a run outside the condition is a dry-run.
 function effectiveDryRun() {
   return evaluatePublishOn({ dryRun: boolInput('dry-run') })
 }
 
+// Each Action selects exactly one CLI operation; there is no operation input.
+const operations = {
+  publish: 'site publish',
+  preview: 'preview publish',
+  registry: 'registry register',
+  'app-deploy': 'app deploy',
+}
+
 function buildArguments() {
   const kind = process.env.ARTIFACT_PAGES_ACTION_KIND
-  const operation = input('operation') || (kind === 'site' ? 'publish' : 'registry-register')
-  const args = []
+  const operation = operations[kind]
+  if (!operation) throw new Error(`unsupported Action kind: ${kind || '(missing kind)'}`)
+  const args = operation.split(' ')
   let dryRunReason = ''
   const publishDryRun = () => {
     const decision = effectiveDryRun()
@@ -42,27 +51,21 @@ function buildArguments() {
     if (decision.dryRun) args.push('--dry-run')
   }
 
-  if (kind === 'admin' && operation === 'registry-register') {
-    args.push('registry', 'register')
+  if (kind === 'registry') {
     flag(args, 'config', input('config'))
     publishDryRun()
-  } else if (kind === 'admin' && operation === 'registry-unregister') {
-    args.push('registry', 'unregister', '--site', required('site'))
-    flag(args, 'config', input('config'))
-    publishDryRun()
-  } else if (kind === 'admin' && operation === 'app-deploy') {
-    args.push('app', 'deploy')
+  } else if (kind === 'app-deploy') {
     flag(args, 'archive', input('archive').trim())
-    flag(args, 'repository', input('repository') || 'tasuku43/git-artifact-pages')
+    flag(args, 'repository', input('repository') || 'artifact-pages/artifact-pages')
     flag(args, 'config', input('config'))
     publishDryRun()
-  } else if (kind === 'site' && operation === 'publish') {
-    args.push('site', 'publish', '--site', required('site'))
+  } else if (kind === 'publish') {
+    args.push('--site', required('site'))
     flag(args, 'source', input('source'))
     flag(args, 'config', input('config'))
     publishDryRun()
-  } else if (kind === 'preview' && operation === 'publish') {
-    args.push('preview', 'publish', '--site', required('site'))
+  } else {
+    args.push('--site', required('site'))
     flag(args, 'source', input('source').trim())
     const refs = resolvePreviewRefs()
     flag(args, 'head', refs.head)
@@ -75,21 +78,14 @@ function buildArguments() {
       if (include) flag(args, 'include', include)
     }
     if (boolInput('dry-run')) args.push('--dry-run')
-  } else {
-    throw new Error(`unsupported Action operation: ${kind || '(missing kind)'} ${operation}`)
   }
 
   args.push('--format', 'json')
   return { kind, operation, args, dryRunReason }
 }
 
-function cliOperationName(kind, operation) {
-  if (kind === 'preview') return 'preview publish'
-  if (kind === 'site') return 'site publish'
-  if (kind === 'admin' && operation === 'app-deploy') return 'app deploy'
-  if (kind === 'admin' && operation === 'registry-unregister') return 'registry unregister'
-  if (kind === 'admin') return 'registry register'
-  return 'artifact-pages'
+function cliOperationName(kind) {
+  return operations[kind] ?? 'artifact-pages'
 }
 
 function compactResult(raw, fallbackOperation, fallbackSite, exitCode, stderr) {
@@ -152,10 +148,7 @@ async function main() {
       process.stderr.write(`::notice title=Artifact Pages dry-run::${built.dryRunReason}; running as a dry-run.\n`)
     }
   } catch (error) {
-    const operation = cliOperationName(
-      built?.kind ?? process.env.ARTIFACT_PAGES_ACTION_KIND,
-      built?.operation ?? input('operation'),
-    )
+    const operation = cliOperationName(built?.kind ?? process.env.ARTIFACT_PAGES_ACTION_KIND)
     const exitCode = 2
     const result = {
       operation,
@@ -172,13 +165,13 @@ async function main() {
   }
 
   const exitCode = Number.isInteger(child.status) ? child.status : 1
-  const result = compactResult(child.stdout ?? '', cliOperationName(built.kind, built.operation), fallbackSite, exitCode, child.stderr ?? '')
+  const result = compactResult(child.stdout ?? '', cliOperationName(built.kind), fallbackSite, exitCode, child.stderr ?? '')
   process.stdout.write(child.stdout ?? '')
   process.stderr.write(child.stderr ?? '')
   await writeOutputs(result, exitCode, fallbackSite)
   await writeSummary({
     kind: built.kind,
-    operation: cliOperationName(built.kind, built.operation),
+    operation: cliOperationName(built.kind),
     result,
     exitCode,
     dryRun: built.args.includes('--dry-run'),

@@ -14,7 +14,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/tasuku43/git-artifact-pages/cli/internal/registry"
+	"github.com/artifact-pages/artifact-pages/cli/internal/registry"
 )
 
 const (

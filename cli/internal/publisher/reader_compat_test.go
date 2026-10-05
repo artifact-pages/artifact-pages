@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tasuku43/git-artifact-pages/cli/internal/compat"
+	"github.com/artifact-pages/artifact-pages/cli/internal/compat"
 )
 
 func writeControlRecord(t *testing.T, root, key, body string) {

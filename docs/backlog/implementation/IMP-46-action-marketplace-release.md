@@ -1,6 +1,7 @@
 # IMP-46 — Marketplace-listed Action and released references
 
 - Status: Open
+- Update 2026-10-06 ([TD14](../technical-design/TD14-one-repository-per-action.md)): there is no root Action any more. Each of `artifact-pages/publish-action`, `preview-action`, `registry-action` and `app-deploy-action` is its own Marketplace listing with its own `name`, branding and README. Slice 1 (root Action) is historical; slice 3 (Go build cache) is historical because published Actions no longer build; slices 4-6 apply per Action repository (released references use `artifact-pages/<name>-action@v0.1.0`; immutable releases are enabled on each Action repository; the owner lists each repository from a release of that repository at the first non-pre-release).
 - Remaining: slices 4-6 only (released references, immutable releases, Marketplace listing). Revisit at the first non-pre-release and T16.
 - Lanes: CLI / release, Docs / Adoption
 - Execution: Agent-led within the settled [TD4](../technical-design/TD4-action-marketplace-distribution.md). Accepting the Marketplace Developer Agreement, creating any new repository and ticking the Marketplace publish box are owner steps.

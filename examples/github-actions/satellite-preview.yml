@@ -6,7 +6,7 @@ on:
 
 jobs:
   publish-preview:
-    # Fork jobs are skipped before any step runs. preview-publish verifies the head
+    # Fork jobs are skipped before any step runs. preview-action verifies the head
     # repository and the explicit PR again before it touches the CLI or the provider.
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
@@ -31,7 +31,7 @@ jobs:
 
       - name: Publish the explicitly selected pull-request preview
         id: publish-preview
-        uses: tasuku43/git-artifact-pages/actions/preview-publish@<FULL_REVIEWED_ACTION_COMMIT_SHA>
+        uses: artifact-pages/preview-action@v0.1.0
         with:
           site: sre
           source: docs/artifacts

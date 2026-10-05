@@ -41,7 +41,7 @@ func TestDeployAppDownloadsPublishedVersionOverHTTPS(t *testing.T) {
 		if err != nil {
 			t.Fatalf("read release fixture %s: %v", suffix, err)
 		}
-		assets["/tasuku43/git-artifact-pages/releases/download/vtest-1/"+archiveName+suffix] = contents
+		assets["/artifact-pages/artifact-pages/releases/download/vtest-1/"+archiveName+suffix] = contents
 	}
 
 	var serverMu sync.Mutex
@@ -78,7 +78,7 @@ func TestDeployAppDownloadsPublishedVersionOverHTTPS(t *testing.T) {
 	backend := &memoryDeploymentBackend{objects: make(map[string]Object)}
 	result, err := DeployApp(context.Background(), backend, AppDeployOptions{
 		Version:    "test-1",
-		Repository: "tasuku43/git-artifact-pages",
+		Repository: "artifact-pages/artifact-pages",
 	})
 	if err != nil {
 		t.Fatalf("DeployApp() published version error = %v", err)
@@ -88,17 +88,17 @@ func TestDeployAppDownloadsPublishedVersionOverHTTPS(t *testing.T) {
 	}
 
 	wantURLs := []string{
-		"https://github.com/tasuku43/git-artifact-pages/releases/download/vtest-1/" + archiveName,
-		"https://github.com/tasuku43/git-artifact-pages/releases/download/vtest-1/" + archiveName + ".json",
-		"https://github.com/tasuku43/git-artifact-pages/releases/download/vtest-1/" + archiveName + ".sha256",
+		"https://github.com/artifact-pages/artifact-pages/releases/download/vtest-1/" + archiveName,
+		"https://github.com/artifact-pages/artifact-pages/releases/download/vtest-1/" + archiveName + ".json",
+		"https://github.com/artifact-pages/artifact-pages/releases/download/vtest-1/" + archiveName + ".sha256",
 	}
 	if got := router.requestURLs(); !reflect.DeepEqual(got, wantURLs) {
 		t.Fatalf("release asset URLs = %#v, want %#v", got, wantURLs)
 	}
 	wantPaths := []string{
-		"/tasuku43/git-artifact-pages/releases/download/vtest-1/" + archiveName,
-		"/tasuku43/git-artifact-pages/releases/download/vtest-1/" + archiveName + ".json",
-		"/tasuku43/git-artifact-pages/releases/download/vtest-1/" + archiveName + ".sha256",
+		"/artifact-pages/artifact-pages/releases/download/vtest-1/" + archiveName,
+		"/artifact-pages/artifact-pages/releases/download/vtest-1/" + archiveName + ".json",
+		"/artifact-pages/artifact-pages/releases/download/vtest-1/" + archiveName + ".sha256",
 	}
 	serverMu.Lock()
 	gotPaths := append([]string(nil), servedPaths...)

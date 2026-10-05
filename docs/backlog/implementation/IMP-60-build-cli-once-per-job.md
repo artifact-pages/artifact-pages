@@ -1,6 +1,7 @@
 # IMP-60 — Restore the Go cache and build the CLI once per job
 
 - Status: Done
+- Historical: the source-build path, the Go cache and build-once logic were removed from the Actions by [TD14](../technical-design/TD14-one-repository-per-action.md) / [IMP-61](IMP-61-per-action-repositories.md) on 2026-10-06.
 - Lanes: Actions
 - Depends on: [IMP-46](IMP-46-action-marketplace-release.md) (slice 3, the Go build cache), [IMP-56](IMP-56-prebuilt-cli-binaries.md)
 - Found: 2026-10-06, while measuring the IMP-46 build cache

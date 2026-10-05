@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/tasuku43/git-artifact-pages/cli/internal/preview"
+	"github.com/artifact-pages/artifact-pages/cli/internal/preview"
 )
 
 func TestPublishSiteAllowsEmptyDocumentsAndRetriesPartialStaleDeletion(t *testing.T) {

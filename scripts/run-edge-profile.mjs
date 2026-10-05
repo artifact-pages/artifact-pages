@@ -11,25 +11,25 @@ const registryProbeSites = [
   {
     id: 'frontend',
     name: 'Frontend',
-    repository: 'tasuku43/git-artifact-pages',
+    repository: 'artifact-pages/artifact-pages',
     sourcePath: 'fixtures/storage/_artifacts/frontend',
   },
   {
     id: 'showcase',
     name: 'HTML Showcase',
-    repository: 'tasuku43/git-artifact-pages',
+    repository: 'artifact-pages/artifact-pages',
     sourcePath: 'fixtures/storage/_artifacts/showcase',
   },
   {
     id: 'sre',
     name: 'SRE',
-    repository: 'tasuku43/git-artifact-pages',
+    repository: 'artifact-pages/artifact-pages',
     sourcePath: 'fixtures/storage/_artifacts/sre',
   },
   {
     id: 'edge-probe',
     name: 'Edge Probe',
-    repository: 'tasuku43/git-artifact-pages',
+    repository: 'artifact-pages/artifact-pages',
     sourcePath: 'fixtures/storage/_artifacts/sre/edge-probe',
   },
 ]
@@ -453,7 +453,7 @@ async function main() {
     }
     const indexResponse = await fetch(`http://127.0.0.1:${ports.edge}/_indexes/sre/index.json`)
     const index = await indexResponse.json().catch(() => null)
-    if (!indexResponse.ok || !index?.artifacts?.some((artifact) => artifact.source?.repository === 'tasuku43/git-artifact-pages')) {
+    if (!indexResponse.ok || !index?.artifacts?.some((artifact) => artifact.source?.repository === 'artifact-pages/artifact-pages')) {
       throw new Error(`Edge did not serve the newly published site index from the object API (HTTP ${indexResponse.status}).`)
     }
     const artifactProbe = await fetch(`http://127.0.0.1:${ports.edge}/_artifacts/sre/incidents/checkout-latency/index.html`)

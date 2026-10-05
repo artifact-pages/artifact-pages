@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tasuku43/git-artifact-pages/cli/internal/preview"
-	"github.com/tasuku43/git-artifact-pages/cli/internal/registry"
+	"github.com/artifact-pages/artifact-pages/cli/internal/preview"
+	"github.com/artifact-pages/artifact-pages/cli/internal/registry"
 )
 
 const registeredSREManifest = `schemaVersion: 1

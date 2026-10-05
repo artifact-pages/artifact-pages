@@ -20,7 +20,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/tasuku43/git-artifact-pages/cli/internal/fulltext"
+	"github.com/artifact-pages/artifact-pages/cli/internal/fulltext"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"

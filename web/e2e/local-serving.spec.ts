@@ -702,7 +702,7 @@ test('single-site switcher selects its only destination so Enter opens the curre
       sites: [{
         id: 'sre',
         name: 'SRE',
-        repository: 'tasuku43/git-artifact-pages',
+        repository: 'artifact-pages/artifact-pages',
         sourcePath: 'fixtures/storage/_artifacts/sre',
       }],
     }),
@@ -735,7 +735,7 @@ test('site switcher names its count in the tooltip and accessible name', async (
     contentType: 'application/json',
     body: JSON.stringify({
       schemaVersion: 1,
-      sites: [{ id: 'sre', name: 'SRE', repository: 'tasuku43/git-artifact-pages', sourcePath: 'fixtures/storage/_artifacts/sre' }],
+      sites: [{ id: 'sre', name: 'SRE', repository: 'artifact-pages/artifact-pages', sourcePath: 'fixtures/storage/_artifacts/sre' }],
     }),
   }))
   await page.goto('/sre/reports/latency-retrospective.md')

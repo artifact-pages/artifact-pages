@@ -9,7 +9,8 @@ import { copyFileSync, mkdirSync, readFileSync, readdirSync, writeFileSync } fro
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { assetName, checksumsName, noticesName, platforms, readProductVersion, sha256 } from '../actions/shared/prebuilt-cli.mjs'
+import { assetName, checksumsName, noticesName, platforms, sha256 } from '../actions/shared/prebuilt-cli.mjs'
+import { readProductVersion } from './build-action-repos.mjs'
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const licensePattern = /^(licen[cs]e|copying|notice)([.-].*)?$/i

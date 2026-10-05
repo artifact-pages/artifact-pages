@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tasuku43/git-artifact-pages/cli/internal/fulltext"
+	"github.com/artifact-pages/artifact-pages/cli/internal/fulltext"
 )
 
 func TestFullTextPublishOrderNoOpUpdate(t *testing.T) {

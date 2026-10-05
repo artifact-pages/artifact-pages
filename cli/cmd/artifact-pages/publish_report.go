@@ -8,8 +8,8 @@ import (
 	"strings"
 	"unicode"
 
-	deploymentconfig "github.com/tasuku43/git-artifact-pages/cli/internal/config"
-	"github.com/tasuku43/git-artifact-pages/cli/internal/publisher"
+	deploymentconfig "github.com/artifact-pages/artifact-pages/cli/internal/config"
+	"github.com/artifact-pages/artifact-pages/cli/internal/publisher"
 )
 
 // Keep terminal output bounded; the JSON result always retains the complete list.

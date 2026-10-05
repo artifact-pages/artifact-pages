@@ -42,7 +42,7 @@ jobs:
 
       - name: Publish the explicitly selected pull-request preview
         id: publish-preview
-        uses: tasuku43/git-artifact-pages/actions/preview-publish@<FULL_REVIEWED_ACTION_COMMIT_SHA>
+        uses: artifact-pages/preview-action@v0.1.0
         with:
           site: sre
           source: docs/artifacts

@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/tasuku43/git-artifact-pages/cli/internal/indexer"
-	"github.com/tasuku43/git-artifact-pages/cli/internal/preview"
+	"github.com/artifact-pages/artifact-pages/cli/internal/indexer"
+	"github.com/artifact-pages/artifact-pages/cli/internal/preview"
 )
 
 // BuildAndPublishPreview builds a preview from Git and publishes it only while

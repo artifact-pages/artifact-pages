@@ -6,7 +6,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/tasuku43/git-artifact-pages/cli/internal/publisher"
+	"github.com/artifact-pages/artifact-pages/cli/internal/publisher"
 )
 
 func requestedDryRun(args []string) bool {

@@ -6,12 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/tasuku43/git-artifact-pages/cli/internal/compat"
+	"github.com/artifact-pages/artifact-pages/cli/internal/compat"
 	"io"
 	"sort"
 	"strings"
 
-	"github.com/tasuku43/git-artifact-pages/cli/internal/registry"
+	"github.com/artifact-pages/artifact-pages/cli/internal/registry"
 )
 
 // RegisterSites reconciles the complete desired registration set from the

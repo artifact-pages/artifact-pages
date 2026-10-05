@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/tasuku43/git-artifact-pages/cli/internal/compat"
+	"github.com/artifact-pages/artifact-pages/cli/internal/compat"
 	"io"
 	"net/url"
 	"path"

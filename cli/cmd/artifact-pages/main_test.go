@@ -18,11 +18,11 @@ import (
 	"strings"
 	"testing"
 
-	deploymentconfig "github.com/tasuku43/git-artifact-pages/cli/internal/config"
-	previewrecords "github.com/tasuku43/git-artifact-pages/cli/internal/preview"
-	"github.com/tasuku43/git-artifact-pages/cli/internal/publisher"
-	"github.com/tasuku43/git-artifact-pages/cli/internal/registry"
-	"github.com/tasuku43/git-artifact-pages/cli/internal/version"
+	deploymentconfig "github.com/artifact-pages/artifact-pages/cli/internal/config"
+	previewrecords "github.com/artifact-pages/artifact-pages/cli/internal/preview"
+	"github.com/artifact-pages/artifact-pages/cli/internal/publisher"
+	"github.com/artifact-pages/artifact-pages/cli/internal/registry"
+	"github.com/artifact-pages/artifact-pages/cli/internal/version"
 )
 
 const (
@@ -61,28 +61,28 @@ func expectedVerificationSites() map[string]registry.Site {
 		"smoke": {
 			Name:        "Actions smoke",
 			Description: "Verification fixture published from the OSS repository.",
-			Repository:  "tasuku43/git-artifact-pages",
+			Repository:  "artifact-pages/artifact-pages",
 			SourcePath:  "fixtures/actions-smoke/site",
 		},
 		"verify-scale-10": {
 			Name: "Scale verification · 10 files", Description: "Deterministic publisher fixture.",
-			Repository: "tasuku43/git-artifact-pages", SourcePath: "fixtures/scale/sites/verify-scale-10/source",
+			Repository: "artifact-pages/artifact-pages", SourcePath: "fixtures/scale/sites/verify-scale-10/source",
 		},
 		"verify-scale-100": {
 			Name: "Scale verification · 100 files", Description: "Deterministic publisher fixture.",
-			Repository: "tasuku43/git-artifact-pages", SourcePath: "fixtures/scale/sites/verify-scale-100/source",
+			Repository: "artifact-pages/artifact-pages", SourcePath: "fixtures/scale/sites/verify-scale-100/source",
 		},
 		"verify-scale-1000": {
 			Name: "Scale verification · 1,000 files", Description: "Deterministic publisher fixture.",
-			Repository: "tasuku43/git-artifact-pages", SourcePath: "fixtures/scale/sites/verify-scale-1000/source",
+			Repository: "artifact-pages/artifact-pages", SourcePath: "fixtures/scale/sites/verify-scale-1000/source",
 		},
 		"verify-scale-5000": {
 			Name: "Scale verification · 5,000 files", Description: "Deterministic publisher fixture.",
-			Repository: "tasuku43/git-artifact-pages", SourcePath: "fixtures/scale/sites/verify-scale-5000/source",
+			Repository: "artifact-pages/artifact-pages", SourcePath: "fixtures/scale/sites/verify-scale-5000/source",
 		},
 		"verify-scale-10000": {
 			Name: "Scale verification · 10,000 files", Description: "Deterministic publisher fixture.",
-			Repository: "tasuku43/git-artifact-pages", SourcePath: "fixtures/scale/sites/verify-scale-10000/source",
+			Repository: "artifact-pages/artifact-pages", SourcePath: "fixtures/scale/sites/verify-scale-10000/source",
 		},
 	}
 }
@@ -365,7 +365,7 @@ sites:
   en:
     name: English
     description: Product documentation
-    repository: tasuku43/git-artifact-pages
+    repository: artifact-pages/artifact-pages
     sourcePath: docs/public/sites/en
 `
 	target := `schemaVersion: 1

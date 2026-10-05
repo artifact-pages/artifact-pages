@@ -27,7 +27,7 @@ jobs:
 
       - name: Publish the explicitly selected site
         id: publish-sre
-        uses: tasuku43/git-artifact-pages/actions/site-publish@<FULL_REVIEWED_ACTION_COMMIT_SHA>
+        uses: artifact-pages/publish-action@v0.1.0
         with:
           site: sre
           source: docs/artifacts

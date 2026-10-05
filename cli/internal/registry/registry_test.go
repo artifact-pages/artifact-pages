@@ -3,7 +3,7 @@ package registry
 import (
 	"encoding/json"
 	"errors"
-	"github.com/tasuku43/git-artifact-pages/cli/internal/compat"
+	"github.com/artifact-pages/artifact-pages/cli/internal/compat"
 	"strings"
 	"testing"
 )

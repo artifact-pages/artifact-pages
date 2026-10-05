@@ -11,12 +11,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	deploymentconfig "github.com/tasuku43/git-artifact-pages/cli/internal/config"
-	"github.com/tasuku43/git-artifact-pages/cli/internal/indexer"
-	"github.com/tasuku43/git-artifact-pages/cli/internal/preview"
-	"github.com/tasuku43/git-artifact-pages/cli/internal/publisher"
-	"github.com/tasuku43/git-artifact-pages/cli/internal/registry"
-	"github.com/tasuku43/git-artifact-pages/cli/internal/version"
+	deploymentconfig "github.com/artifact-pages/artifact-pages/cli/internal/config"
+	"github.com/artifact-pages/artifact-pages/cli/internal/indexer"
+	"github.com/artifact-pages/artifact-pages/cli/internal/preview"
+	"github.com/artifact-pages/artifact-pages/cli/internal/publisher"
+	"github.com/artifact-pages/artifact-pages/cli/internal/registry"
+	"github.com/artifact-pages/artifact-pages/cli/internal/version"
 )
 
 func main() {
@@ -635,7 +635,7 @@ func runAppDeploy(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	flags.SetOutput(stderr)
 	flags.Usage = func() { writeAppDeployUsage(stderr) }
 	archive := flags.String("archive", "", "local web release archive (.tar.gz) with adjacent manifest and checksum files")
-	repository := flags.String("repository", "tasuku43/git-artifact-pages", "GitHub repository that publishes the web release")
+	repository := flags.String("repository", "artifact-pages/artifact-pages", "GitHub repository that publishes the web release")
 	var configLocators stringSliceFlag
 	flags.Var(&configLocators, "config", "deployment config path or github:// locator (repeatable; later layers override earlier ones)")
 	dryRun := flags.Bool("dry-run", false, "show planned changes without writes, deletes, lock recovery, or cache changes")
@@ -947,7 +947,7 @@ func writeAppDeployUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "")
 	fmt.Fprintln(writer, "Options:")
 	fmt.Fprintln(writer, "  --archive FILE          verified local web release archive (.tar.gz)")
-	fmt.Fprintln(writer, "  --repository OWNER/REPO GitHub release repository for the pinned download (default tasuku43/git-artifact-pages)")
+	fmt.Fprintln(writer, "  --repository OWNER/REPO GitHub release repository for the pinned download (default artifact-pages/artifact-pages)")
 	fmt.Fprintln(writer, "  --config LOCATOR        deployment config path or github:// locator (repeatable; later layers override earlier ones)")
 	fmt.Fprintln(writer, "  --dry-run               show planned changes without writes, deletes, lock recovery, or cache changes")
 	fmt.Fprintln(writer, "  --format text|json      output a human-readable result or stable JSON")

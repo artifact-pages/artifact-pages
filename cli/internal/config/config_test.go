@@ -42,7 +42,7 @@ sites:
   en:
     name: English
     description: Product documentation
-    repository: tasuku43/git-artifact-pages
+    repository: artifact-pages/artifact-pages
     sourcePath: docs/public/sites/en
   sre:
     name: SRE
@@ -86,7 +86,7 @@ aws:
 sites:
   en:
     name: English
-    repository: tasuku43/git-artifact-pages
+    repository: artifact-pages/artifact-pages
     sourcePath: docs/public/sites/en
 `)
 	resolved, err = ParseLayers([][]byte{base, local, replacement})
@@ -423,7 +423,7 @@ sites:
   en:
     name: English
     description: Public product docs
-    repository: tasuku43/git-artifact-pages
+    repository: artifact-pages/artifact-pages
     sourcePath: docs/public/sites/en
 `
 	target := `schemaVersion: 1

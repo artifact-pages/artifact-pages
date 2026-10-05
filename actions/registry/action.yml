@@ -1,0 +1,92 @@
+name: Artifact Pages registry
+description: Reconcile the Artifact Pages site registry with the sites declared in the admin deployment config.
+author: artifact-pages
+branding:
+  icon: list
+  color: blue
+inputs:
+  config:
+    description: Optional deployment config path or github:// config locator.
+    required: false
+    default: ""
+  github-token:
+    description: Optional token with read-only access to a separate private admin config repository; otherwise uses this workflow's GITHUB_TOKEN.
+    required: false
+    default: ""
+  dry-run:
+    description: Plan changes without provider object writes or cache changes.
+    required: false
+    default: "false"
+  publish-on:
+    description: "Optional newline-separated list of `event` or `event:ref` entries (for example `push:refs/heads/main`, `workflow_dispatch`). A run that matches none of them becomes a dry-run. An explicit `dry-run: true` always wins; empty means no condition."
+    required: false
+    default: ""
+  summary:
+    description: When true (the default), append an operation summary to the GitHub Job Summary, also on failure. The Markdown format is a documented contract.
+    required: false
+    default: "true"
+  checkout:
+    description: "auto (default): run actions/checkout when the workspace is not already a Git checkout. true: always check out. false: never.  Uses the workflow token with persist-credentials: false, never the github-token input."
+    required: false
+    default: auto
+  fetch-depth:
+    description: "fetch-depth for the Action's own checkout. 1 (the default) is a shallow checkout; `registry register` reads no Git history. Ignored when no checkout runs."
+    required: false
+    default: "1"
+outputs:
+  operation:
+    description: CLI operation name.
+    value: ${{ steps.cli.outputs.operation }}
+  outcome:
+    description: CLI outcome string: planned, registered, no-op, or failed.
+    value: ${{ steps.cli.outputs.outcome }}
+  registry-updated:
+    description: JSON boolean rendered as true or false when present.
+    value: ${{ steps.cli.outputs['registry-updated'] }}
+  changes:
+    description: JSON array of per-path registry changes.
+    value: ${{ steps.cli.outputs.changes }}
+  result:
+    description: Complete CLI JSON result object.
+    value: ${{ steps.cli.outputs.result }}
+  exit-code:
+    description: Original artifact-pages CLI exit code as an integer string.
+    value: ${{ steps.cli.outputs['exit-code'] }}
+  error:
+    description: CLI error text when the operation failed.
+    value: ${{ steps.cli.outputs.error }}
+runs:
+  using: composite
+  steps:
+    - name: Decide whether to check out the repository
+      id: checkout-mode
+      shell: bash
+      env:
+        ARTIFACT_PAGES_INPUT_CHECKOUT: ${{ inputs.checkout }}
+        ARTIFACT_PAGES_INPUT_FETCH_DEPTH: ${{ inputs.fetch-depth }}
+      run: node "$GITHUB_ACTION_PATH/../shared/checkout-mode.mjs"
+    - name: Check out the repository
+      if: ${{ steps.checkout-mode.outputs.checkout == 'true' }}
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        fetch-depth: ${{ inputs.fetch-depth }}
+        persist-credentials: false
+    - name: Install the CLI that matches this Action version
+      id: install
+      shell: bash
+      env:
+        ARTIFACT_PAGES_TOKEN: ${{ github.token }}
+      run: node "$GITHUB_ACTION_PATH/../shared/prebuilt-cli.mjs" --action-root "$GITHUB_ACTION_PATH"
+    - name: Register the configured sites
+      id: cli
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        ARTIFACT_PAGES_CLI: ${{ runner.temp }}/artifact-pages
+        ARTIFACT_PAGES_ACTION_KIND: registry
+        ARTIFACT_PAGES_INPUT_CONFIG: ${{ inputs.config }}
+        ARTIFACT_PAGES_INPUT_DRY_RUN: ${{ inputs.dry-run }}
+        ARTIFACT_PAGES_INPUT_SUMMARY: ${{ inputs.summary }}
+        ARTIFACT_PAGES_INPUT_PUBLISH_ON: ${{ inputs.publish-on }}
+        GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
+      run: node "$GITHUB_ACTION_PATH/../shared/invoke-cli.mjs"
