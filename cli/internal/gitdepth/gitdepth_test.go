@@ -166,6 +166,9 @@ func TestEnsureMergeBaseToleratesAHeadThatOriginDoesNotHave(t *testing.T) {
 	want := git(t, origin, "merge-base", mainTip, featureTip)
 	clone := filepath.Join(t.TempDir(), "clone")
 	git(t, ".", "clone", "--quiet", "--no-local", "--depth=1", "--branch", "feature", "file://"+origin, clone)
+	// Background maintenance after a fetch can race with TempDir cleanup.
+	git(t, clone, "config", "gc.auto", "0")
+	git(t, clone, "config", "maintenance.auto", "false")
 	if err := FetchShallowRef(context.Background(), clone, mainTip); err != nil {
 		t.Fatal(err)
 	}
