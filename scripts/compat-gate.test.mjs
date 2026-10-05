@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import os from 'node:os'
 import path from 'node:path'
@@ -14,6 +14,7 @@ import {
   collectFormatVersions,
   compatibilityPolicy,
   compareFormats,
+  copyStorage,
   formatOf,
 } from './compat-gate.mjs'
 
@@ -233,4 +234,28 @@ test('0.x skip keeps version tags strictly increasing without requiring a compat
   assert.equal(checkVersion({ tag: 'v0.2.0', baselineVersion: '0.2.0', verdict: 'skipped' }).status, 'failed')
   assert.equal(checkVersion({ tag: 'v1.1.0', baselineVersion: '1.0.0', verdict: 'breaking' }).status, 'failed')
   assert.equal(checkVersion({ tag: 'v2.0.0', baselineVersion: '1.0.0', verdict: 'breaking' }).status, 'passed')
+})
+
+test('copyStorage carries the sibling .metadata directory with the storage root', (t) => {
+  const base = mkdtempSync(path.join(os.tmpdir(), 'compat-gate-copy-'))
+  t.after(() => rmSync(base, { recursive: true, force: true }))
+  const source = path.join(base, 'source')
+  const destination = path.join(base, 'destination')
+  mkdirSync(path.join(source, '_control'), { recursive: true })
+  mkdirSync(`${source}.metadata`)
+  writeFileSync(path.join(source, '_control', 'state.json.gz'), 'body')
+  writeFileSync(path.join(`${source}.metadata`, 'abc.json'), '{"contentType":"application/gzip"}')
+  copyStorage(source, destination)
+  assert.equal(readFileSync(path.join(destination, '_control', 'state.json.gz'), 'utf8'), 'body')
+  assert.equal(readFileSync(path.join(`${destination}.metadata`, 'abc.json'), 'utf8'), '{"contentType":"application/gzip"}')
+})
+
+test('copyStorage works for a storage that has no metadata sibling', (t) => {
+  const base = mkdtempSync(path.join(os.tmpdir(), 'compat-gate-copy-'))
+  t.after(() => rmSync(base, { recursive: true, force: true }))
+  const source = path.join(base, 'source')
+  mkdirSync(source)
+  writeFileSync(path.join(source, 'a'), 'x')
+  copyStorage(source, path.join(base, 'destination'))
+  assert.equal(existsSync(path.join(base, 'destination.metadata')), false)
 })
