@@ -1,6 +1,6 @@
 # IMP-49 — Publish state and fused transaction journal
 
-- Status: In progress
+- Status: Done
 - Phase: Provider-neutral publisher
 - Design: [TD6](../technical-design/TD6-fused-publish-state.md)
 - Product contract: [Specification §5.3](../../specification.md#per-site-publish-state-and-reconciliation)
@@ -15,6 +15,6 @@ Replace the duplicated full-manifest pending write with a compact transaction re
 - [x] Transaction generations distinguish pending replay from an origin commit whose response was lost. Touched-key and cache-path unions survive changed/reverted retries.
 - [x] Cloudflare R2 uses one complete state GET; AWS/default adapters retain HEAD then GET and ETag agreement.
 - [x] Existing publish behavior remains provider-neutral: lock/registry validation, dry-run, source ordering, cache retry, preview reconciliation, explicit repair and unregister cleanup remain in the shared publisher.
-- [ ] Dedicated failure-boundary tests, package/race suites, compatibility/package preflight and verification-target R2 publish/no-op evidence are recorded in T20.
+- [x] Dedicated failure-boundary tests, package/race suites, compatibility/package preflight and verification-target R2 publish/no-op evidence are recorded in T20 (Done; see its Results: lost-response recovery suites, `go test ./...` and race runs, `compat-gate` unit tests, web packaging and `verify-release.mjs` preflight, and the `artifact-pages-verify` publish/no-op/restore round trip).
 
-The implementation is local and does not publish a tag, release asset, or infrastructure change.
+The implementation does not itself publish a tag, release asset, or infrastructure change. Remote ancestry of the candidate and release execution are tracked in [release readiness](../release-readiness.md), not here. The full baseline-versus-candidate compatibility gate is skipped for `0.x` and has a separate defect: [IMP-59](IMP-59-compat-gate-upgrade-copy.md).
