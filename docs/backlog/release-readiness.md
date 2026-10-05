@@ -2,7 +2,7 @@
 
 [Component lanes and dependencies](workstreams.md) · [Delegation and owner handoffs](delegation.md)
 
-Checked on October 4, 2026 (JST). This is an execution order and handoff map, not a second specification or ticket queue. Linked tickets own their acceptance criteria and status. Public demo deployment is already live; general release/adoption readiness is not yet proven. AWS is independently gated, and GCP remains emulator-only.
+Checked on October 5, 2026 (JST). This is an execution order and handoff map, not a second specification or ticket queue. Linked tickets own their acceptance criteria and status. Public demo deployment is already live; general release/adoption readiness is not yet proven. AWS is independently gated, and GCP remains emulator-only.
 
 | Order | Outcome required | Existing records | Current evidence / next action |
 | --- | --- | --- | --- |
@@ -16,12 +16,27 @@ Checked on October 4, 2026 (JST). This is an execution order and handoff map, no
 ## Current position — October 4
 
 - **Product releases (October 3):** one product version with a CLI-pinned web bundle ([TD2](technical-design/TD2-component-release-policy.md)). The tag workflow published pre-releases [`v0.1.0`](https://github.com/tasuku43/git-artifact-pages/releases/tag/v0.1.0), `v0.1.1` and [`v0.1.2`](https://github.com/tasuku43/git-artifact-pages/releases/tag/v0.1.2); use `v0.1.2` (earlier ones are marked superseded). Evidence is in [IMP-45](implementation/IMP-45-unified-release-and-compatibility.md). The public Cloudflare demo still runs the earlier smoke archive; deploying a release there and T16 adoption remain separate steps.
-- **Publish-state candidate:** TD6/IMP-49 prepare the current schema-1 state/journal and a local `v0.2.0` candidate. The user authorized candidate validation on the isolated `artifact-pages-verify` target only; no production publish, infrastructure apply, push, tag, or public release follows from that scope. See [T20](verification/T20-publish-state-and-candidate.md) for evidence and remaining gates.
+- **v0.2.0 (pre-release, not yet tagged):** the source tree names `0.2.0` ([IMP-49](implementation/IMP-49-fused-publish-state-journal.md) Done; evidence in [T20](verification/T20-publish-state-and-candidate.md)). The tag, the release and the consumer migration have not happened. Owner decisions of October 5: ship as a pre-release; the Marketplace listing (IMP-46) waits for the first non-pre-release; private-repository behavior ([T23](verification/T23-private-repository-topology.md), [IMP-58](implementation/IMP-58-actions-shallow-checkout.md) first criterion) ships recorded as known-unverified; the compatibility-gate copy defect ([IMP-59](implementation/IMP-59-compat-gate-upgrade-copy.md)) is fixed before 1.0, and the gate is skipped for `0.x` meanwhile. The v0.2.0 checklist follows this list.
 - **Cloudflare public demo and sampled publishing:** live. Delegated R2 reader/writer checks and simulated deletion → main publish → browser withdrawal passed. The [one-day lifecycle probe](cloudflare-preview-lifecycle-proof.md) remains intentionally present and is monitored; actual natural deletion is not yet proved. Its catalog is also covered by the deployed lifecycle rule.
 - **Repeatable local regression:** [T17](verification/T17-local-preview-retirement-e2e.md) is Done: the actual CLI → isolated JSON object API deletion → main publish → warm browser/nginx regression passed, including independent review and existing regressions. `npm run test:preview-retirement` repeats this local proof without cloud credentials; it does not replace provider-specific gates.
 - **Distribution preparation:** the clean local candidate/package/module checks in [distribution preflight](distribution-preflight.md) passed. Final pins must include the selected reviewed repairs; no official release or Registry publication follows from these smoke candidates.
 - **Next external handoff:** complete the remaining advertised Cloudflare proofs, then select/approve exact source pins and component versions, publish artifacts/module, and run [T16](verification/T16-external-adoption.md) from the actually obtainable components. Minimum public adoption documentation advances alongside this path under its review gates.
 - **Separate later scope:** live AWS evidence and any AWS support announcement remain independently gated. GCP remains emulator-only; neither blocks a scoped Cloudflare-first release.
+
+## v0.2.0 checklist
+
+Run in order. Each step names its owner; steps that mutate production or the release are owner approved individually.
+
+1. (Optional, read-only) Check production `_control/site-cache/<site>.json` for stale v0.1.2 retry records. They lack the `site` field and fail closed in the v0.2.0 reader (`cli/internal/publisher/site_cache.go`). If one exists, hold the site lock, back the record up under `cli/.local/remote-control-backups/<site>/<UTC timestamp>/`, delete only that key, purge the site's cache prefixes, and re-run publish, as in the [T20](verification/T20-publish-state-and-candidate.md) reset. Delete nothing else.
+2. Owner pushes tag `v0.2.0` from `main` (the pre-release flag is set by the release workflow for `0.x`).
+3. Watch `release.yml` to completion: preflight, tests, binaries, checksums, notices, pre-release creation and its post-publication verification.
+4. Append the IMP-55 wording with `gh release edit v0.2.0` (do not change the notes generator): Action outputs were renamed to hyphen-case (for example `changes_json` is now `changes`); the Job Summary is built in; consumers delete their Summarize steps in the same change as the pin bump; private-repository depth-1 deepen is known-unverified ([T23](verification/T23-private-repository-topology.md)).
+5. Close the two release-dependent criteria of [IMP-56](implementation/IMP-56-prebuilt-cli-binaries.md) with the run evidence.
+6. [IMP-55](implementation/IMP-55-consumer-workflow-migration.md) migration:
+   - `artifact-pages-admin`: pin to v0.2.0 and remove the Summarize steps in the same change; `registry register` dry-run then real; `app deploy` dry-run then real.
+   - `artifact-pages-docs`: pin to v0.2.0 and remove Summarize steps; publish the guide and architecture pages; the second publish must be a no-op; re-run the open pull-request previews.
+7. Browser check of `artifact-pages.dev` (library, a site, a preview, search) after the deploy.
+8. Record results in IMP-55, IMP-56 and T16, then update the indexes. The Marketplace listing stays open until the first non-pre-release.
 
 ## Work that can advance without another routine decision
 
