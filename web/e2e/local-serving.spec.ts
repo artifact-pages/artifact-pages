@@ -86,6 +86,24 @@ async function registerManySites(page: Page) {
   await registerExtraSites(page, PLACEHOLDER_SITES)
 }
 
+/**
+ * A tab opened by a modified or middle click can be reported with a stale
+ * `about:blank` URL and no load event (Playwright misses the main-frame
+ * navigation), so `tab.waitForURL` can hang. Read the location from the page.
+ */
+async function expectTabLocation(tab: Page, pathname: string, search = '') {
+  await tab.waitForFunction(
+    (expected) => location.pathname + location.search === expected,
+    pathname + search,
+  )
+}
+
+// Route handlers use route.fetch(); let in-flight ones finish before the
+// fixture closes the context, which would dispose their responses.
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: 'wait' })
+})
+
 /** Page text search data of any site, so a site without search cannot fetch some by mistake. */
 function isSearchDataRequest(url: string) {
   return /^\/_indexes\/[^/]+\/search\//.test(new URL(url).pathname)
@@ -3056,6 +3074,7 @@ test('breadcrumb sibling menus stay within narrow screens and scroll long lists'
   await expect(page).toHaveURL(/\/showcase\/reports\/cloud-spend-review\/follow-up-28\.html$/)
   await expect(reopenedMenu).toHaveCount(0)
   await expect(page.getByRole('navigation', { name: 'Artifact path' }).locator('.breadcrumb-current')).toHaveText('Follow-up 28')
+  await page.unrouteAll({ behavior: 'wait' })
   await page.close()
 })
 
@@ -3959,7 +3978,7 @@ test('preview HTML raw resources use native frame navigation and preserve downlo
   await waitForPreviewBridge(page)
   await page.frameLocator('iframe[title="Local preview HTML"]').getByRole('link', { name: 'Open the preview SVG in a new tab' }).click()
   const targetPopup = await targetPopupPromise
-  await expect(targetPopup).toHaveURL(`${new URL(parentUrl).origin}${filesPrefix}/assets/mark.svg?target=tab`)
+  await expectTabLocation(targetPopup, `${filesPrefix}/assets/mark.svg`, '?target=tab')
   await expect(targetPopup.locator('svg')).toBeVisible()
   expect(page.url()).toBe(parentUrl)
   await targetPopup.close()
@@ -3968,10 +3987,16 @@ test('preview HTML raw resources use native frame navigation and preserve downlo
   await waitForPreviewBridge(page)
   await page.frameLocator('iframe[title="Local preview HTML"]').getByRole('link', { name: 'Open the preview SVG with a modifier' }).click({ modifiers: ['ControlOrMeta'] })
   const modifiedResourceUrl = `${new URL(parentUrl).origin}${filesPrefix}/assets/mark.svg?modifier=tab`
-  await expect.poll(() => (
-    page.frames().some((candidate) => candidate.url() === modifiedResourceUrl) ||
-    page.context().pages().some((candidate) => candidate !== page && candidate.url() === modifiedResourceUrl)
-  )).toBe(true)
+  await expect.poll(async () => {
+    if (page.frames().some((candidate) => candidate.url() === modifiedResourceUrl)) return true
+    for (const candidate of page.context().pages()) {
+      if (candidate === page) continue
+      // Read the location from inside the tab: its Playwright-side URL can be stale.
+      const href = await candidate.evaluate(() => location.href).catch(() => undefined)
+      if (href === modifiedResourceUrl) return true
+    }
+    return false
+  }).toBe(true)
   expect(page.url()).toBe(parentUrl)
 
   await page.goto(previewUrl)
@@ -5159,7 +5184,7 @@ test.describe('page text search', () => {
       context.waitForEvent('page'),
       hit.click({ modifiers: ['ControlOrMeta'] }),
     ])
-    await tab.waitForURL('**/textsearch/bulk/note-01.md?q=lighthouse')
+    await expectTabLocation(tab, '/textsearch/bulk/note-01.md', '?q=lighthouse')
     await tab.close()
     await expect(page).toHaveURL(/\/long\/scroll-target\.md\?q=lighthouse$/)
     await hit.click()
@@ -5201,6 +5226,7 @@ test.describe('page text search', () => {
     await expect(badge).toBeVisible()
     const box = await badge.boundingBox()
     expect(box!.x + box!.width).toBeLessThanOrEqual(390)
+    await page.unrouteAll({ behavior: 'wait' })
     await page.close()
   })
 
@@ -5309,14 +5335,14 @@ test.describe('release UX fixes', () => {
       context.waitForEvent('page'),
       page.getByRole('link', { name: /SRE/ }).click({ modifiers: ['ControlOrMeta'] }),
     ])
-    await newTab.waitForURL(/\/sre$/)
+    await expectTabLocation(newTab, '/sre')
     await newTab.close()
     await expect(page).toHaveURL(/\/$/)
     const [middleTab] = await Promise.all([
       context.waitForEvent('page'),
       page.getByRole('link', { name: /SRE/ }).click({ button: 'middle' }),
     ])
-    await middleTab.waitForURL(/\/sre$/)
+    await expectTabLocation(middleTab, '/sre')
     await middleTab.close()
 
     // A plain click stays inside the app (no document reload).
@@ -5337,7 +5363,7 @@ test.describe('release UX fixes', () => {
       context.waitForEvent('page'),
       browseRow.click({ modifiers: ['ControlOrMeta'] }),
     ])
-    await rowTab.waitForURL(`**${checkoutPath}`)
+    await expectTabLocation(rowTab, checkoutPath)
     await rowTab.close()
     await page.getByRole('button', { name: 'Pin Checkout latency incident review' }).click()
     await expect(page.locator('.pinned-tree a.tree-artifact')).toHaveAttribute('href', checkoutPath)
