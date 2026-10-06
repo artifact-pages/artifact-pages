@@ -19,4 +19,4 @@ Each ticket records one independently verifiable contract or measurement. Status
 | [T20](T20-publish-state-and-candidate.md) | Done | Fused publish-state recovery and candidate validation |
 | [T21](T21-command-cost-audit.md) | Done | CLI command and workflow cost audit |
 | [T22](T22-cache-purge-retry.md) | Done | Registry and app deploy cache purge retry |
-| [T23](T23-private-repository-topology.md) | Done | Private-repository deepen fetch, private admin config token, preview checks and plan limits |
+| [T23](T23-private-repository-topology.md) | Done | Private-repository deepen fetch, private admin config token (with a CI regression check), preview checks and plan limits |
