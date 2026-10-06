@@ -33,5 +33,14 @@ The Terraform module owns an `http_config_settings` rule scoped to the Artifact 
 
 - [ ] The module change (terraform-cloudflare-artifact-pages PR #1) is merged and applied to the verification zone, then production. Merged and applied to production on 2026-10-06 (the token needed only Zone Settings edit); the verification-zone apply is still pending.
 - [x] With the zone-wide dashboard setting restored to its default, `guide/en/publishing.html` served from production hashes equal to the Git blob and contains no `__cf_email__` or `/cdn-cgi/` script.
-- [ ] A raw preview HTML object on production also hashes equal to its published bytes. Not yet checked; the 2026-10-06 evidence covers only `_artifacts/` pages.
+- [x] A raw preview HTML object on production also hashes equal to its published bytes. Verified 2026-10-06, see Preview verification. Not yet checked; the 2026-10-06 evidence covers only `_artifacts/` pages.
 - [x] `docs/specification.md` states the unchanged-delivery contract (stated in the delivery section).
+
+## Preview verification (2026-10-06)
+
+With the host-scoped `unchanged_delivery` Config Rule applied on production and zone-wide Email Obfuscation back ON, a throwaway docs PR (artifact-pages/docs#15, closed without merging) added an HTML comment and a visible `verify-069@example.com` line to `sites/guide/en/getting-started.html` and was previewed through the Preview workflow (head `248560cc17a4b774926c3f593c0db143e5c6f3a9`).
+
+- Reader URL: `https://artifact-pages.dev/guide/_previews/248560cc17a4b774926c3f593c0db143e5c6f3a9/en/getting-started.html?group=pr%3A15`
+- Raw object: `https://artifact-pages.dev/_previews/guide/revisions/248560cc17a4b774926c3f593c0db143e5c6f3a9/files/en/getting-started.html` (HTTP 200, `text/html; charset=utf-8`)
+- SHA-256 of the served bytes and of the Git blob at the head SHA: `75ee479557813a89e424fa9be13752a4b9699c9d32a0bd4e5667dc1c18c21796` (`cmp` identical).
+- `__cf_email__` count 0, `/cdn-cgi/` count 0; the visible address and the comment remain literal.
