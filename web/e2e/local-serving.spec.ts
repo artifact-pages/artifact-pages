@@ -1379,6 +1379,7 @@ test.describe('mobile viewport', () => {
     expect(box!.height).toBeGreaterThanOrEqual(44)
     // Select another row (hover) so the Enter hint is shown, and keep it clear of the title.
     const other = palette.getByRole('option', { name: /Checkout latency incident review/ })
+    await other.hover()
     await expect(other.locator('.palette-entry-enter')).toBeVisible()
     for (const row of [other, current]) {
       const rowTitle = await row.locator('.palette-entry-title').boundingBox()

@@ -1856,12 +1856,11 @@ mark {
   min-width: 0;
   align-items: center;
   gap: 12px;
-  padding: 8px 12px;
+  position: relative;
+  padding: 8px 34px 8px 12px;
   border-radius: 8px;
   color: var(--text-secondary);
   text-align: left;
-  position: relative;
-  padding-right: 34px;
 }
 
 .palette-entry:hover,
