@@ -1,6 +1,6 @@
 # パレットで文書を探す目的が見出し・コマンドの候補に埋もれる
 
-- Status: Open
+- Status: In progress
 - Priority: P2
 - Area: Command palette / Document discovery
 
@@ -41,3 +41,7 @@
 - ISSUE-039（完了記録は Git 履歴に保存） は検索入口の役割と Enter 操作の整合性を扱う。本件はパレット内の候補の見せ方を扱う。
 - ISSUE-042（完了記録は Git 履歴に保存） のゼロ件回復案を重複実装しない。
 - 文書検索を主役にする方向のみ選択済み。具体的な候補グループ・順位・コマンド入口の見せ方は、実装前に比較できる案として確認する。完了済み ISSUE-038–047 の修正とは独立して扱う。
+
+## Implementation status
+
+- Implemented on branch `issue-048-document-first-palette`: the blank palette lists Pinned, then Recently read, then a hint (no Commands section); the open page is marked "Current page" and is never preselected; a typed plain query lists Pages and Page text, with headings and commands only when no page matches; the 390px layout puts the badge under the title. Covered by `npm run test:palette-sections`, the e2e cases in `web/e2e/local-serving.spec.ts` and Storybook stories. Owner verification at normal and 390px width with realistic titles, pins and history is still pending, so no criterion is checked off.
