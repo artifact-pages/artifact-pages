@@ -1845,9 +1845,9 @@ mark {
 
 .palette-section-title {
   padding: 10px 12px 5px;
-  color: var(--text-tertiary);
-  font-size: 11px;
-  font-weight: 550;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .palette-entry {
@@ -1856,7 +1856,8 @@ mark {
   min-width: 0;
   align-items: center;
   gap: 12px;
-  padding: 8px 12px;
+  position: relative;
+  padding: 8px 34px 8px 12px;
   border-radius: 8px;
   color: var(--text-secondary);
   text-align: left;
@@ -1866,6 +1867,21 @@ mark {
 .palette-entry.is-selected {
   color: var(--text);
   background: var(--active);
+}
+
+/* The selected row shows an Enter hint; space is reserved on every row so nothing shifts. */
+.palette-entry-enter {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  background: transparent;
+  font-size: 11px;
+  line-height: 18px;
+  transform: translateY(-50%);
 }
 
 .palette-entry-icon {
@@ -1951,6 +1967,24 @@ mark {
   white-space: nowrap;
 }
 
+.palette-entry--current .palette-entry-badge {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* The open document: a dot before the badge, not color alone (the badge text and aria-current carry it). */
+.palette-entry--current .palette-entry-badge::before {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--palette-match);
+  content: '';
+  vertical-align: middle;
+}
+
 .palette-entry.is-selected .palette-entry-subtitle {
   color: var(--text-secondary);
 }
@@ -1971,6 +2005,15 @@ mark {
   line-height: 1.5;
 }
 
+.palette-hint {
+  padding: 8px 14px;
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.palette-hint code,
 .palette-empty code,
 .palette-footer code {
   color: var(--text-secondary);
@@ -2692,6 +2735,25 @@ mark {
     gap: 7px 10px;
     padding-right: 10px;
     padding-left: 10px;
+  }
+
+  /* The badge moves under the title so a long title is not squeezed by "Current page". */
+  .palette-entry {
+    min-height: 44px;
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+
+  .palette-entry-title {
+    max-width: calc(100% - 30px);
+    flex: 0 1 auto;
+  }
+
+  .palette-entry-badge {
+    order: 3;
+    flex-basis: 100%;
+    /* Icon column (18px) plus the 12px gap, so the badge lines up under the title. */
+    padding-left: 30px;
   }
 }
 

@@ -1,6 +1,6 @@
 # パレットで文書を探す目的が見出し・コマンドの候補に埋もれる
 
-- Status: Open
+- Status: Done
 - Priority: P2
 - Area: Command palette / Document discovery
 
@@ -29,11 +29,11 @@
 
 ## Acceptance criteria
 
-- [ ] 空欄のパレットから、最近読んだ文書・ピン留め文書を発見して開ける。履歴・ピンがない場合も探し始め方が明確。
-- [ ] 普通の文字列で文書を探したとき、文書候補が主役になり、見出し・コマンドの結果と取り違えない。
-- [ ] 現在の文書を表示する場合は閲覧中だと分かる。
-- [ ] 見出し検索・コマンド実行・サイト切替の機能を維持し、普通の検索はアクティブサイト内に留まる。
-- [ ] 通常幅と390px幅で、候補の種類と選択対象が分かり、キーボードとポインターで文書を開ける。
+- [x] 空欄のパレットから、最近読んだ文書・ピン留め文書を発見して開ける。履歴・ピンがない場合も探し始め方が明確。
+- [x] 普通の文字列で文書を探したとき、文書候補が主役になり、見出し・コマンドの結果と取り違えない。
+- [x] 現在の文書を表示する場合は閲覧中だと分かる。
+- [x] 見出し検索・コマンド実行・サイト切替の機能を維持し、普通の検索はアクティブサイト内に留まる。
+- [x] 通常幅と390px幅で、候補の種類と選択対象が分かり、キーボードとポインターで文書を開ける。
 
 ## Related issues and scope
 
@@ -41,3 +41,9 @@
 - ISSUE-039（完了記録は Git 履歴に保存） は検索入口の役割と Enter 操作の整合性を扱う。本件はパレット内の候補の見せ方を扱う。
 - ISSUE-042（完了記録は Git 履歴に保存） のゼロ件回復案を重複実装しない。
 - 文書検索を主役にする方向のみ選択済み。具体的な候補グループ・順位・コマンド入口の見せ方は、実装前に比較できる案として確認する。完了済み ISSUE-038–047 の修正とは独立して扱う。
+
+## Verification (2026-10-07)
+
+- Implemented in PR #34. The palette's blank state lists Pinned, then Recently read, then a hint (no Commands section); the open page is marked "Current page" (dot, `aria-current="page"`) and is never preselected, so the first Enter opens the most recent other page; the selected row shows a fill and an Enter hint; a typed plain query lists Pages (and Page text) with headings and commands only when no page matches. Prefix modes (`#`, `>`, `@`) and site-scoped search are unchanged. Accepted behavior is in `docs/specification.md`.
+- The owner verified the palette in Storybook on 2026-10-07 at normal width, at 390px and with long titles.
+- Unit tests (`npm run test:palette-sections`, 9 cases) cover selection, section building, the empty-history flag, the typed fallback, the current-page flag and arrow-key movement. New e2e cases in `web/e2e/local-serving.spec.ts`: "blank palette: first Enter opens the most recent other page, not the current one", "blank palette marks the current page and does not select it", "blank palette with a pinned current page keeps it once under Pinned, unselected, and selects the next page", "blank palette with no history shows guidance and ranked pages", "blank palette lists no Commands section and hints at > # @", "typing a page name lists only Pages (and Page text), not headings or commands", "typing text that matches no page falls back to labeled Headings and Commands groups", "prefix modes still reach headings, commands, and sites", "plain search stays in the active site" and the two 390px "palette at 390px" cases. `CI=1 npm run test:e2e` passed 157/157.

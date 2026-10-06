@@ -35,7 +35,7 @@ ISSUE-038–047 come from the 2026-10-01 beginner UX review in the Codex in-app 
 
 Work one issue at a time: mark it In progress, reproduce it, add a regression, implement, verify its acceptance criteria, then commit that concern and move on. Keep the parent summary synchronized. Retain completed records in Git history under the existing removal policy; do not remove an issue before its criteria are verified.
 
-ISSUE-038–047 were repaired individually by Luna max agents and reviewed by separate Luna max agents. The final local e2e suite passed 77/77 on 2026-10-01. Their verified completion records were removed under the backlog policy and remain in Git history through `670dd87`. The initial UX review used the Codex in-app browser; final follow-up visual checks were limited to automated browser tests because the in-app browser was unavailable. ISSUE-048 is the remaining owner-selected document-first palette direction; prepare inspectable concepts before implementation. ISSUE-049–058 record a second beginner review on 2026-10-01 in Chrome (Claude in Chrome) at about 1568×568 with one site and four HTML documents; narrow widths were not exercised. Four of them follow up on residual behavior after ISSUE-039, ISSUE-046, ISSUE-047, and ISSUE-042, and each names the related issue. Work ISSUE-049 and ISSUE-050 first because they share the search-entry concern.
+ISSUE-038–047 were repaired individually by Luna max agents and reviewed by separate Luna max agents. The final local e2e suite passed 77/77 on 2026-10-01. Their verified completion records were removed under the backlog policy and remain in Git history through `670dd87`. The initial UX review used the Codex in-app browser; final follow-up visual checks were limited to automated browser tests because the in-app browser was unavailable. ISSUE-048, the owner-selected document-first palette direction, was implemented and verified on 2026-10-07; its record stays in the issue file. ISSUE-049–058 record a second beginner review on 2026-10-01 in Chrome (Claude in Chrome) at about 1568×568 with one site and four HTML documents; narrow widths were not exercised. Four of them follow up on residual behavior after ISSUE-039, ISSUE-046, ISSUE-047, and ISSUE-042, and each names the related issue. Work ISSUE-049 and ISSUE-050 first because they share the search-entry concern.
 
 This is the default repair queue, not authorization to operate cloud accounts or release publicly. Complete review defects before claiming readiness, or record an explicit approved deferral with impact. Actual provider and clean-consumer proofs remain separate gates in the [release execution order](../release-readiness.md).
 
@@ -43,7 +43,7 @@ This is the default repair queue, not authorization to operate cloud accounts or
 
 | Issue | Status | Priority | Problem |
 | --- | --- | --- | --- |
-| [ISSUE-048](ISSUE-048-document-first-palette.md) | Open | P2 | Document discovery is obscured by mixed palette candidates. |
+| [ISSUE-048](ISSUE-048-document-first-palette.md) | Done | P2 | Document discovery is obscured by mixed palette candidates. |
 | [ISSUE-049](ISSUE-049-home-search-arrow-keys.md) | Done | P2 | The down arrow does not move from site-home search into its results. |
 | [ISSUE-050](ISSUE-050-search-field-shortcut-badges.md) | Done | P2 | ⌘K badges on the search fields suggest shortcuts that open the palette instead. |
 | [ISSUE-051](ISSUE-051-empty-preview-entry-control.md) | Done | P3 | The empty-preview entry looks clickable, does nothing, and previews are unexplained. |
