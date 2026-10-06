@@ -2,7 +2,7 @@
 
 - Status: Open
 - Lanes: Operations
-- Depends on: [IMP-63](IMP-63-consolidate-terraform-modules.md), [IMP-64](IMP-64-generate-sync-terraform-packages.md) (first synced release), and operations items [OPS-003](../../../../ops/OPS-003) and OPS-001 (workspace `ops/`, outside this repository) finishing, so that the production state and the pending ISSUE-069 apply are settled first
+- Depends on: [IMP-63](IMP-63-consolidate-terraform-modules.md), [IMP-64](IMP-64-generate-sync-terraform-packages.md) (first synced release), and operations items OPS-003 and OPS-001 (workspace `ops/`, outside this repository) finishing, so that the production state and the pending ISSUE-069 apply are settled first
 - Related: [TD15](../technical-design/TD15-terraform-module-source-of-truth.md), [IMP-38](IMP-38-terraform-registry-publication.md)
 
 ## Goal
