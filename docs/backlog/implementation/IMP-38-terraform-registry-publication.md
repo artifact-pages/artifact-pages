@@ -4,6 +4,7 @@
 - Phase: Reusable distribution
 - Execution: Collaborative; local packaging and release preparation are agent-led.
 - Depends on: [IMP-37](IMP-37-cloudflare-entry-module.md) for the Cloudflare entry point; [T15](../verification/T15-provider-delivery.md) evidence for the provider advertised by the initial release.
+- Blocked on decision: [TD15](../technical-design/TD15-terraform-module-source-of-truth.md) (source of truth for the module copies; owner decision pending). Registry publication should not proceed until it is settled.
 - Related: [TD2](../technical-design/TD2-component-release-policy.md), [T16](../verification/T16-external-adoption.md), [delegation guide](../delegation.md).
 
 ## Background
