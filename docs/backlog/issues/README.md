@@ -59,7 +59,7 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-061](ISSUE-061-early-preview-click-escapes-reader.md) | Open | P3 | A click right after a preview loads can open the raw file outside the reader. |
 | [ISSUE-062](ISSUE-062-config-set-default-help-saved.md) | Open | P2 | `config set-default --help` saves "--help" as the user's default config instead of printing help. |
 | [ISSUE-063](ISSUE-063-actions-missing-fulltext.md) | Done | P1 | The site-publish Action could not pass `--fulltext`, so publishing through it withdrew page text search. |
-| [ISSUE-064](ISSUE-064-r2-uses-shared-aws-config.md) | Open | P2 | The Cloudflare R2 path loads the shared AWS configuration, so AWS profiles and environment variables can affect R2 publishing. |
+| [ISSUE-064](ISSUE-064-r2-uses-shared-aws-config.md) | Done | P2 | The Cloudflare R2 path loads the shared AWS configuration, so AWS profiles and environment variables can affect R2 publishing. |
 | [ISSUE-065](ISSUE-065-registry-dry-run-says-unchanged.md) | Open | P3 | `registry register --dry-run` text says "unchanged" while planning to create the registry. |
 | [ISSUE-067](ISSUE-067-single-cloudflare-publisher-token.md) | Open | P3 | Cloudflare publishing needs three secrets that one token can provide. |
 | [ISSUE-068](ISSUE-068-bare-apply-commands-print-help.md) | Done | P1 | Bare `app deploy`, `registry register|unregister`, `site publish` and `preview publish` printed help and exited 0 instead of running. |

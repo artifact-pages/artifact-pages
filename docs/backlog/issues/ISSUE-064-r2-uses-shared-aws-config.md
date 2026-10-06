@@ -1,6 +1,6 @@
 # The Cloudflare R2 path loads the shared AWS configuration
 
-- Status: Open
+- Status: Done
 - Priority: P2
 - Area: CLI — Cloudflare R2 publishing (`cli/internal/publisher/cloudflare.go`)
 
@@ -20,7 +20,15 @@ R2 publishing behaves identically regardless of the user's AWS profiles and AWS 
 
 ## Acceptance criteria
 
-- [ ] The R2 `aws.Config` is built directly from the deployment config and the named credential variables (candidate: explicit static credentials, region `auto`, an explicit retryer and HTTP client), without `config.LoadDefaultConfig`.
-- [ ] A test sets a nonexistent `AWS_PROFILE` and a malformed `AWS_CONFIG_FILE` and shows an R2 publish still succeeds.
-- [ ] The Cloudflare preview integration test that failed under the naive removal passes, with the retry behavior it needs made explicit.
-- [ ] The AWS provider path is unchanged and still uses the shared AWS configuration.
+- [x] The R2 `aws.Config` is built directly from the deployment config and the named credential variables (candidate: explicit static credentials, region `auto`, an explicit retryer and HTTP client), without `config.LoadDefaultConfig`.
+- [x] A test sets a nonexistent `AWS_PROFILE` and a malformed `AWS_CONFIG_FILE` and shows an R2 publish still succeeds.
+- [x] The Cloudflare preview integration test that failed under the naive removal passes, with the retry behavior it needs made explicit.
+- [x] The AWS provider path is unchanged and still uses the shared AWS configuration.
+
+## Resolution
+
+`newCloudflareObjectBackend` now builds the `aws.Config` directly: region `auto`, the static R2 credentials, `awshttp.NewBuildableClient()` and an explicit standard retryer (3 attempts, package variable `cloudflareRetryMaxAttempts`). `config.LoadDefaultConfig` is no longer called on the R2 path, so `~/.aws/*`, `AWS_PROFILE`, `AWS_REGION`, `AWS_CA_BUNDLE`, `AWS_ENDPOINT_URL*` and `AWS_MAX_ATTEMPTS` have no effect. The AWS provider (`newAWSClients`) is unchanged.
+
+The Cloudflare preview integration test previously forced a single attempt with `AWS_MAX_ATTEMPTS=1`; it now sets `cloudflareRetryMaxAttempts = 1` instead, which makes the retry behavior explicit.
+
+Verified with `cd cli && go vet ./... && go test ./... -count=1` (all packages pass), including `TestCloudflareR2IgnoresSharedAWSConfiguration` (malformed `AWS_CONFIG_FILE` and credentials file, nonexistent `AWS_PROFILE`, AWS region, credentials, CA bundle and endpoint variables set; the R2 PutObject still succeeds, signed with the R2 key and region `auto`) and the unchanged Cloudflare preview integration tests.

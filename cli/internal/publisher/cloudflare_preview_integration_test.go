@@ -318,7 +318,9 @@ func newCloudflarePreviewIntegrationBackend(t *testing.T) (*cloudflareBackend, *
 	t.Helper()
 	// Keep a 5xx injected by this endpoint visible as an interrupted object write
 	// instead of allowing the AWS SDK's normal retryer to heal it inside one call.
-	t.Setenv("AWS_MAX_ATTEMPTS", "1")
+	previousAttempts := cloudflareRetryMaxAttempts
+	cloudflareRetryMaxAttempts = 1
+	t.Cleanup(func() { cloudflareRetryMaxAttempts = previousAttempts })
 	endpoint := newCloudflarePreviewS3Endpoint()
 	server := httptest.NewServer(endpoint)
 	t.Cleanup(server.Close)
