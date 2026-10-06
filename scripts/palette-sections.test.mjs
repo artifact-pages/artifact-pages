@@ -18,7 +18,7 @@ export async function resolve(specifier, context, nextResolve) {
 }
 `), import.meta.url)
 
-const { buildSections, defaultSelectionIndex } = await import('../web/src/domain/palette-sections.ts')
+const { buildSections, defaultSelectionIndex, nextSelectionIndex } = await import('../web/src/domain/palette-sections.ts')
 
 const artifact = (id, title, extra = {}) => ({
   id,
@@ -126,4 +126,25 @@ test('current page entry is flagged and badge text is Current page only', () => 
   const typed = entriesOf(build({ term: 'overview', currentArtifact: current, pinnedArtifactIds: ['overview'], recentReads: [{ artifactId: 'overview', viewedAt: Date.now() }] }))
   const hit = typed.find((entry) => entry.kind === 'artifact')
   assert.deepEqual([hit.current, hit.badge], [true, 'Current page'])
+})
+
+test('arrow from no selection skips the current page', () => {
+  const entries = [{ kind: 'artifact', current: true }, { kind: 'artifact' }, { kind: 'artifact' }, { kind: 'artifact', current: true }]
+  assert.equal(nextSelectionIndex(entries, -1, 1), 1)
+  assert.equal(nextSelectionIndex(entries, -1, -1), 2)
+})
+
+test('arrow from no selection with only the current page keeps nothing selected', () => {
+  const entries = [{ kind: 'artifact', current: true }]
+  assert.equal(nextSelectionIndex(entries, -1, 1), -1)
+  assert.equal(nextSelectionIndex(entries, -1, -1), -1)
+  assert.equal(nextSelectionIndex([], -1, 1), -1)
+})
+
+test('arrow from a valid index keeps clamped movement', () => {
+  const entries = [{ kind: 'artifact' }, { kind: 'artifact', current: true }, { kind: 'artifact' }]
+  assert.equal(nextSelectionIndex(entries, 0, 1), 1)
+  assert.equal(nextSelectionIndex(entries, 2, 1), 2)
+  assert.equal(nextSelectionIndex(entries, 0, -1), 0)
+  assert.equal(nextSelectionIndex(entries, 2, -1), 1)
 })

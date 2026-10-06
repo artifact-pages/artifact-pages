@@ -64,6 +64,17 @@ type PageSearchCache = {
 const preparedArtifactText = new WeakMap<ArtifactIndexEntry, PreparedArtifactText>()
 const pageSearchCache = new WeakMap<SiteIndex, PageSearchCache>()
 
+// Arrow-key movement. From no selection it lands on the first (down) or last (up) row that is
+// not the open page; from a valid row it moves one step, clamped to the list.
+export function nextSelectionIndex(entries: PaletteEntry[], currentIndex: number, delta: 1 | -1): number {
+  if (currentIndex < 0) {
+    const candidates = entries.flatMap((entry, index) => (entry.current === true ? [] : [index]))
+    if (candidates.length === 0) return -1
+    return delta > 0 ? candidates[0] : candidates[candidates.length - 1]
+  }
+  return Math.min(Math.max(currentIndex + delta, 0), Math.max(entries.length - 1, 0))
+}
+
 export type PaletteBuild = {
   sections: PaletteSection[]
   /** Blank in-site palette with no pins and no reads: the list shows ranked pages and guidance. */

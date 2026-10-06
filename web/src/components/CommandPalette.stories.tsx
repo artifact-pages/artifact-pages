@@ -97,7 +97,7 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-export const RecentAndCommands: Story = {}
+export const RecentReads: Story = {}
 
 export const RootSiteSelection: Story = {
   args: { context: 'sites' },

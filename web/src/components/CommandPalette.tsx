@@ -13,6 +13,7 @@ import {
   defaultSelectionIndex,
   EMPTY_HISTORY_HINT,
   getEmptyMessage,
+  nextSelectionIndex,
   paletteMode,
   type PaletteCommand,
   type PaletteContext,
@@ -148,11 +149,11 @@ export function CommandPalette({
     if (moveDown) {
       event.preventDefault()
       if (event.ctrlKey) event.stopPropagation()
-      setSelectedIndex((current) => Math.min(current + 1, Math.max(entries.length - 1, 0)))
+      setSelectedIndex((current) => nextSelectionIndex(entries, current, 1))
     } else if (moveUp) {
       event.preventDefault()
       if (event.ctrlKey) event.stopPropagation()
-      setSelectedIndex((current) => Math.max(current - 1, 0))
+      setSelectedIndex((current) => nextSelectionIndex(entries, current, -1))
     } else if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229)) {
       // Confirming an IME conversion is not a selection.
     } else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && onSearchPageText && mode === 'search' && term) {
