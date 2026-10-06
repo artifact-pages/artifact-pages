@@ -55,4 +55,4 @@ The operator repositories are public, so the private-config path is now covered 
 - Positive: a token minted with `actions/create-github-app-token` (scoped to the fixture, `contents: read`) resolves the config and the output carries a `configCommitSha`.
 - Negative (closes the previously unrun missing-token case): the workflow's own `GITHUB_TOKEN` cannot see the fixture; the CLI exits 2 with `cannot read deployment config github://artifact-pages/fixture-private-config/artifact-pages.yaml: GitHub returned HTTP 404` (ISSUE-071 wording).
 - Without the App credentials (fork pull requests) the job emits a notice and skips.
-- Evidence: RUN_LINK_PLACEHOLDER
+- Evidence: [Private config run 37476253385](https://github.com/artifact-pages/artifact-pages/actions/runs/37476253385) passed both assertions on pull request #25.
