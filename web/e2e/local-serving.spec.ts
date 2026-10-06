@@ -98,6 +98,12 @@ async function expectTabLocation(tab: Page, pathname: string, search = '') {
   )
 }
 
+// Route handlers use route.fetch(); let in-flight ones finish before the
+// fixture closes the context, which would dispose their responses.
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: 'wait' })
+})
+
 /** Page text search data of any site, so a site without search cannot fetch some by mistake. */
 function isSearchDataRequest(url: string) {
   return /^\/_indexes\/[^/]+\/search\//.test(new URL(url).pathname)
@@ -3068,6 +3074,7 @@ test('breadcrumb sibling menus stay within narrow screens and scroll long lists'
   await expect(page).toHaveURL(/\/showcase\/reports\/cloud-spend-review\/follow-up-28\.html$/)
   await expect(reopenedMenu).toHaveCount(0)
   await expect(page.getByRole('navigation', { name: 'Artifact path' }).locator('.breadcrumb-current')).toHaveText('Follow-up 28')
+  await page.unrouteAll({ behavior: 'wait' })
   await page.close()
 })
 
@@ -5219,6 +5226,7 @@ test.describe('page text search', () => {
     await expect(badge).toBeVisible()
     const box = await badge.boundingBox()
     expect(box!.x + box!.width).toBeLessThanOrEqual(390)
+    await page.unrouteAll({ behavior: 'wait' })
     await page.close()
   })
 
