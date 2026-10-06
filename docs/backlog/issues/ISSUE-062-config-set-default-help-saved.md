@@ -23,3 +23,9 @@ Asking for help on `config set-default` does not print help. The CLI treats `--h
 - [ ] `config set-default --help` and `config set-default -h` print usage, exit 0, and do not create or modify the default-config file.
 - [ ] `config set-default` with any other argument starting with `-` exits 2 with a usage error and writes nothing.
 - [ ] A regression test covers both cases in `cli/cmd/artifact-pages`.
+
+## Resolution
+
+`config set-default` now handles `--help`/`-h` as its third argument by printing usage on stdout, and rejects any locator starting with `-` with a usage error (exit 2) before `SetDefault` runs. Sibling commands (`lock`, `registry`, `site`, `app`, `preview`, `index`) already handle help, through the `flag` package or explicit checks, and were left unchanged.
+
+Verified with `cd cli && go vet ./... && go test ./... -count=1` (all packages pass), including `TestConfigSetDefaultHelpAndFlagLikeLocatorWriteNothing` in `cli/cmd/artifact-pages/main_test.go`, which asserts usage output, exit code 2 for `--dry-run`, `-x` and `--config=foo`, and that no file is written under the user config directory.
