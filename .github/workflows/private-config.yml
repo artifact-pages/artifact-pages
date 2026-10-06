@@ -68,7 +68,7 @@ jobs:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           out="$("$RUNNER_TEMP/artifact-pages" lock inspect --scope registry --config "$FIXTURE_LOCATOR" --format json)"
-          echo "$out" | grep -q '"state"' || { echo "::error::Unexpected output from lock inspect"; exit 1; }
+          echo "$out" | grep -Eq '"configCommitSha":"[0-9a-f]{40}"' || { echo "::error::Unexpected output from lock inspect"; exit 1; }
           echo "Private config resolved with the App installation token."
       - name: Token without access gets the clear 404 error
         if: steps.gate.outputs.available == 'true'
