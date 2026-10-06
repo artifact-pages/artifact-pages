@@ -16,7 +16,8 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
+	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
@@ -112,13 +113,24 @@ func NewCloudflareBackend(ctx context.Context, options CloudflareOptions) (Deplo
 	}, nil
 }
 
-func newCloudflareObjectBackend(ctx context.Context, endpoint, bucket, accessKeyID, secretKey, sessionToken string) (*s3CompatibleBackend, error) {
-	cfg, err := config.LoadDefaultConfig(ctx,
-		config.WithRegion("auto"),
-		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKeyID, secretKey, sessionToken)),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("load R2 client configuration: %w", err)
+// cloudflareRetryMaxAttempts is the total attempt count (first try included) for
+// R2 requests. It is a variable so tests can make an injected 5xx visible.
+var cloudflareRetryMaxAttempts = 3
+
+func newCloudflareObjectBackend(_ context.Context, endpoint, bucket, accessKeyID, secretKey, sessionToken string) (*s3CompatibleBackend, error) {
+	// R2 depends only on the deployment config and the named credential
+	// variables. Build the aws.Config directly instead of config.LoadDefaultConfig,
+	// which would also read ~/.aws/*, AWS_PROFILE, AWS_CA_BUNDLE, AWS_ENDPOINT_URL*,
+	// AWS_MAX_ATTEMPTS and similar settings meant for AWS. Retry and HTTP behavior
+	// are explicit so they no longer come from the machine's AWS environment.
+	cfg := aws.Config{
+		Region:           "auto",
+		Credentials:      credentials.NewStaticCredentialsProvider(accessKeyID, secretKey, sessionToken),
+		HTTPClient:       awshttp.NewBuildableClient(),
+		RetryMaxAttempts: cloudflareRetryMaxAttempts,
+		Retryer: func() aws.Retryer {
+			return retry.NewStandard(func(options *retry.StandardOptions) { options.MaxAttempts = cloudflareRetryMaxAttempts })
+		},
 	}
 	client := s3.NewFromConfig(cfg, func(serviceOptions *s3.Options) {
 		serviceOptions.BaseEndpoint = aws.String(endpoint)
