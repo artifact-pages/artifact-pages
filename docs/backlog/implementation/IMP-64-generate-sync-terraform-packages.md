@@ -4,7 +4,7 @@
 - Lanes: CLI / release, Terraform
 - Depends on: [IMP-63](IMP-63-consolidate-terraform-modules.md), [TD15](../technical-design/TD15-terraform-module-source-of-truth.md) (re-scoped 2026-10-07), [TD14](../technical-design/TD14-one-repository-per-action.md) (mechanism to reuse)
 - Blocks: [IMP-65](IMP-65-admin-module-source-switch.md), [IMP-38](IMP-38-terraform-registry-publication.md)
-- Related: [IMP-66](IMP-66-widen-aws-publisher-control-iam.md) (precondition for decoupled AWS releases, not for this slice)
+- Related: [IMP-66](IMP-66-per-site-control-prefix-and-aws-iam.md) (precondition for decoupled AWS releases, not for this slice)
 
 ## Goal
 
@@ -17,11 +17,12 @@ When a module tag `terraform-cloudflare/vX.Y.Z` or `terraform-aws/vX.Y.Z` is pus
 - `.github/workflows/release-terraform.yml`, separate from `release.yml` (which stays unchanged and keeps triggering on `v*` only), triggered by `terraform-cloudflare/v*` and `terraform-aws/v*`: validates the tag is SemVer and on `main`, builds and validates the tree, then syncs. Token from `actions/create-github-app-token` (`RELEASE_APP_ID`, `RELEASE_APP_PRIVATE_KEY`) scoped to the one package repository; the repository's own `GITHUB_TOKEN` stays `contents: read`. A `workflow_dispatch` dry-run mode prints the plan without pushing.
 - No-op guard: refuse (or no-op) when the generated tree equals the previous release's tree, so an unchanged module cannot receive a new version by accident.
 - Package repositories get a generated notice and a pull-request auto-close workflow (comment pointing to `artifact-pages/artifact-pages`), as for the Action repositories, shipped as part of the generated tree so the sync keeps them in place.
-- Resolve the TD15 open points that belong here (lock files, validation of the generated tree before tagging, initial versions).
+- Resolve the TD15 open points that belong here (lock files, validation of the generated tree before tagging). Initial versions are decided: both modules start at `0.1.0`, and `release.json` records `version`, `repository`, the source tag and the source commit SHA.
 - Owner step (not an agent step): install the App `artifact-pages-release` on the two package repositories with Contents write (and Pull requests write if the auto-close workflow uses the App token; otherwise the workflow's own `GITHUB_TOKEN` suffices). It currently has Contents write only on the four Action repositories.
 
 ## Acceptance criteria
 
+- [ ] The first releases are `terraform-cloudflare/v0.1.0` and `terraform-aws/v0.1.0`.
 - [ ] Generator tests cover the layout, the example rewrite, determinism (two runs produce identical trees), refusal on a missing module file, and that the generated `release.json` carries the module version and source tag.
 - [ ] CI validates the generated trees (`terraform fmt -check`, `init -backend=false`, `validate`, and the module tests) without network writes.
 - [ ] Pushing `terraform-<provider>/vX.Y.Z` syncs only the matching package repository and tags plain `vX.Y.Z` there; a product tag `vX.Y.Z` does not run the Terraform sync, and a module tag does not trigger `release.yml`.
