@@ -13,7 +13,7 @@ Use the [priority-ordered, one-at-a-time repair queue](../issues/README.md#repai
 | Order | Ticket | Status | Execution | Outcome / handoff |
 | --- | --- | --- | --- | --- |
 | 1 | [IMP-37](IMP-37-cloudflare-entry-module.md) | In progress | Agent-led | One Cloudflare entry module creates the bucket and composes delivery/retention; local acceptance hands off real-account proof to T15. |
-| 2 | [IMP-38](IMP-38-terraform-registry-publication.md) | In progress | Collaborative | Prepare the package in parallel; owner-approved publication follows Cloudflare proof, then exact-version retrieval feeds T16. Blocked on [TD15](../technical-design/TD15-terraform-module-source-of-truth.md): the monorepo modules and the package repositories have diverged (owner decision pending). |
+| 2 | [IMP-38](IMP-38-terraform-registry-publication.md) | In progress | Collaborative | Prepare the package in parallel; owner-approved publication follows Cloudflare proof, then exact-version retrieval feeds T16. Depends on [IMP-63](IMP-63-consolidate-terraform-modules.md), [IMP-64](IMP-64-generate-sync-terraform-packages.md) and [IMP-65](IMP-65-admin-module-source-switch.md) ([TD15](../technical-design/TD15-terraform-module-source-of-truth.md) option 1: monorepo is the source, package repositories are generated). |
 | AWS parallel/follow-up | [IMP-39](IMP-39-aws-cloudflare-dns-acm.md) | In progress | Agent-led | Compose DNS-only Cloudflare records and ACM in us-east-1 with CloudFront; keep Cloudflare publication independent and hand AWS live evidence to T15. |
 
 Use the [delegation index](../delegation.md) for work modes and owner boundaries. Existing review repairs remain the active repair queue; these new tickets are not an instruction to interrupt it. IMP-33 remains Done for its existing-bucket implementation, not as evidence for the new root module or Registry publication.
@@ -52,6 +52,9 @@ These are operator-owned Terraform capabilities, not application authorization. 
 | [IMP-60](IMP-60-build-cli-once-per-job.md) | Done (historical, [TD14](../technical-design/TD14-one-repository-per-action.md)) | Actions | Restore the Go cache and build the CLI once per job: later Actions reuse the binary built from the same source; the prebuilt path is unchanged. |
 | [IMP-61](IMP-61-per-action-repositories.md) | Done | Actions, CLI / release | One repository per Action, thin Actions that install the released CLI, and release sync, per [TD14](../technical-design/TD14-one-repository-per-action.md). | Parity, shared and generator tests; CI smoke |
 | [IMP-62](IMP-62-org-move-and-version-restart.md) | Done | CLI / release, Docs | Move to the `artifact-pages` organization and restart the version series at `0.1.0`. | Go and release-tool tests |
+| [IMP-63](IMP-63-consolidate-terraform-modules.md) | Open | Terraform | Reconcile both package repositories back into `terraform/modules/` (ISSUE-069 `unchanged_delivery`, AWS WAF, DNS/ACM, tests), per [TD15](../technical-design/TD15-terraform-module-source-of-truth.md). | Terraform validate/tests, Node tests |
+| [IMP-64](IMP-64-generate-sync-terraform-packages.md) | Open | CLI / release, Terraform | Generate the Registry-shaped package trees and sync them to the two package repositories on release. | Generator tests; release dry-run |
+| [IMP-65](IMP-65-admin-module-source-switch.md) | Open | Operations | Point `admin` at the synced package tag instead of commit `208abf5`. | Plan shows no change |
 
 The reviewed site-description hierarchy is implemented in the production picker and site search. IMP-037/038/039 and all provider-infrastructure work remain outside this Phase 1 slice.
 
