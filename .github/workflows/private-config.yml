@@ -1,0 +1,90 @@
+# Regression check for the private deployment-config path (T23): a github://
+# locator in a private repository is readable with a GitHub App installation
+# token, and a token without access fails with the clear ISSUE-071 404 error.
+name: Private config
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: private-config-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  FIXTURE_LOCATOR: github://artifact-pages/fixture-private-config/artifact-pages.yaml
+
+jobs:
+  private-config:
+    name: Private config read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check fixture credentials are available
+        id: gate
+        env:
+          APP_ID: ${{ vars.FIXTURE_APP_ID }}
+          APP_KEY: ${{ secrets.FIXTURE_APP_PRIVATE_KEY }}
+        run: |
+          if [ -n "$APP_ID" ] && [ -n "$APP_KEY" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Private config check skipped::Fixture App credentials are unavailable (fork pull request or missing configuration)."
+          fi
+      - name: Check out the repository
+        if: steps.gate.outputs.available == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        if: steps.gate.outputs.available == 'true'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Build the CLI from this commit
+        if: steps.gate.outputs.available == 'true'
+        run: go build -o "$RUNNER_TEMP/artifact-pages" ./cli/cmd/artifact-pages
+      - name: Mint a token scoped to the private fixture
+        if: steps.gate.outputs.available == 'true'
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ vars.FIXTURE_APP_ID }}
+          private-key: ${{ secrets.FIXTURE_APP_PRIVATE_KEY }}
+          owner: artifact-pages
+          repositories: fixture-private-config
+          permission-contents: read
+      - name: App token reads the private config
+        if: steps.gate.outputs.available == 'true'
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          out="$("$RUNNER_TEMP/artifact-pages" lock inspect --scope registry --config "$FIXTURE_LOCATOR" --format json)"
+          echo "$out" | grep -q '"state"' || { echo "::error::Unexpected output from lock inspect"; exit 1; }
+          echo "Private config resolved with the App installation token."
+      - name: Token without access gets the clear 404 error
+        if: steps.gate.outputs.available == 'true'
+        env:
+          # The workflow token cannot see the private fixture repository.
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          err="$("$RUNNER_TEMP/artifact-pages" lock inspect --scope registry --config "$FIXTURE_LOCATOR" 2>&1)"
+          code=$?
+          set -e
+          if [ "$code" -ne 2 ]; then
+            echo "::error::Expected exit code 2, got $code"; exit 1
+          fi
+          want="cannot read deployment config $FIXTURE_LOCATOR: GitHub returned HTTP 404"
+          if ! printf '%s\n' "$err" | grep -qF "$want"; then
+            echo "::error::Missing expected error text: $want"; exit 1
+          fi
+          echo "Token without access failed as documented (exit 2, HTTP 404)."
