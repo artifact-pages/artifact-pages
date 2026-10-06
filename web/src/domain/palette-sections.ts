@@ -75,6 +75,21 @@ export function nextSelectionIndex(entries: PaletteEntry[], currentIndex: number
   return Math.min(Math.max(currentIndex + delta, 0), Math.max(entries.length - 1, 0))
 }
 
+// The selection that applies to the current render. A stored selection belongs to the key it was
+// made under (context, site, query and, where the list drives the default, the entry sequence);
+// under any other key, or past the end of the list, the current default applies. Deriving this
+// during render keeps Enter from pairing new entries with a stale index.
+export function resolveSelectedIndex(
+  stored: { key: string; index: number },
+  key: string,
+  defaultIndex: number,
+  length: number,
+): number {
+  if (stored.key !== key) return defaultIndex
+  if (stored.index >= length) return defaultIndex < length ? defaultIndex : -1
+  return stored.index
+}
+
 export type PaletteBuild = {
   sections: PaletteSection[]
   /** Blank in-site palette with no pins and no reads: the list shows ranked pages and guidance. */

@@ -11,6 +11,7 @@ import type { FuzzyMatch } from '../domain/fuzzy-search'
 import {
   buildSections,
   defaultSelectionIndex,
+  resolveSelectedIndex,
   EMPTY_HISTORY_HINT,
   getEmptyMessage,
   nextSelectionIndex,
@@ -114,7 +115,6 @@ export function CommandPalette({
     () => defaultSelectionIndex(query, context, currentIndex, sites.length, entries),
     [query, context, currentIndex, sites.length, entries],
   )
-  const [selectedIndex, setSelectedIndex] = useState(defaultIndex)
   const isBlank = query.trim() === ''
   // The default row follows the list while the query is blank or an unfiltered @; typed queries reset on each change.
   const entrySequence = mode === 'site' || isBlank ? JSON.stringify(entries.map(({ id }) => id)) : ''
@@ -125,17 +125,12 @@ export function CommandPalette({
     inputRef.current?.focus()
   }, [])
 
-  useEffect(() => {
-    setSelectedIndex(defaultIndex)
-    // Only a new query, context or site resets the selection; list changes are handled below.
-  }, [query, context, currentIndex, sites.length])
-
-  const previousEntrySequence = useRef(entrySequence)
-  useEffect(() => {
-    if (previousEntrySequence.current === entrySequence) return
-    previousEntrySequence.current = entrySequence
-    setSelectedIndex(defaultIndex)
-  }, [entrySequence])
+  // A selection is valid only for the context, site, query and (where the list drives the default)
+  // entry sequence it was made under; anything else falls back to the current default during render.
+  const selectionKey = `${context}|${currentIndex?.site.id ?? ''}|${currentIndex?.generatedAt ?? ''}|${sites.length}|${query}|${entrySequence}`
+  const [selection, setSelection] = useState({ key: selectionKey, index: defaultIndex })
+  const selectedIndex = resolveSelectedIndex(selection, selectionKey, defaultIndex, entries.length)
+  const selectIndex = (index: number) => setSelection({ key: selectionKey, index })
 
   useEffect(() => {
     document.querySelector<HTMLElement>('[data-palette-selected="true"]')
@@ -149,11 +144,11 @@ export function CommandPalette({
     if (moveDown) {
       event.preventDefault()
       if (event.ctrlKey) event.stopPropagation()
-      setSelectedIndex((current) => nextSelectionIndex(entries, current, 1))
+      selectIndex(nextSelectionIndex(entries, selectedIndex, 1))
     } else if (moveUp) {
       event.preventDefault()
       if (event.ctrlKey) event.stopPropagation()
-      setSelectedIndex((current) => nextSelectionIndex(entries, current, -1))
+      selectIndex(nextSelectionIndex(entries, selectedIndex, -1))
     } else if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229)) {
       // Confirming an IME conversion is not a selection.
     } else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && onSearchPageText && mode === 'search' && term) {
@@ -243,7 +238,7 @@ export function CommandPalette({
                       aria-current={entry.current ? 'page' : undefined}
                       data-palette-current={entry.current ? 'true' : undefined}
                       data-palette-selected={selected ? 'true' : undefined}
-                      onMouseEnter={() => setSelectedIndex(index)}
+                      onMouseEnter={() => selectIndex(index)}
                       onClick={() => {
                         onClose()
                         entry.onSelect()
