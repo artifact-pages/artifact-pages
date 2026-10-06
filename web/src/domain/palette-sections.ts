@@ -42,6 +42,8 @@ export type PaletteEntry = {
   siteStatus?: string
   subtitle?: string
   badge?: string
+  /** The document open in the viewer; flagged so the list can show where the reader is. */
+  current?: boolean
   shortcut?: string
   titleMatch?: FuzzyMatch
   descriptionMatch?: FuzzyMatch
@@ -62,9 +64,33 @@ type PageSearchCache = {
 const preparedArtifactText = new WeakMap<ArtifactIndexEntry, PreparedArtifactText>()
 const pageSearchCache = new WeakMap<SiteIndex, PageSearchCache>()
 
-export function defaultSelectionIndex(query: string, context: PaletteContext, currentIndex: SiteIndex | undefined, siteCount: number) {
+export type PaletteBuild = {
+  sections: PaletteSection[]
+  /** Blank in-site palette with no pins and no reads: the list shows ranked pages and guidance. */
+  emptyHistory: boolean
+  /** Blank in-site palette whose only document is the one already open. */
+  onlyCurrent: boolean
+}
+
+export const EMPTY_HISTORY_HINT = 'Type a page title or path to find it. Pin pages or open a few and they will show up here.'
+
+const CURRENT_PAGE_BADGE = 'Current page'
+
+// Which row starts selected. A blank in-site palette skips the open document (Enter on it
+// would be a no-op) and selects nothing when it is the only document listed.
+export function defaultSelectionIndex(
+  query: string,
+  context: PaletteContext,
+  currentIndex: SiteIndex | undefined,
+  siteCount: number,
+  entries: PaletteEntry[],
+) {
   const isUnfilteredSiteSwitch = query.trim().normalize('NFKC') === '@' && context !== 'sites' && currentIndex !== undefined
-  return isUnfilteredSiteSwitch && siteCount !== 1 ? -1 : 0
+  if (isUnfilteredSiteSwitch) return siteCount !== 1 ? -1 : 0
+  if (query.trim() === '' && context !== 'sites') {
+    return entries.findIndex((entry) => entry.kind === 'artifact' && !entry.current)
+  }
+  return 0
 }
 
 export function getEmptyMessage({
@@ -72,11 +98,13 @@ export function getEmptyMessage({
   context,
   currentArtifact,
   siteCount,
+  blank = false,
 }: {
   mode: PaletteMode
   context: PaletteContext
   currentArtifact?: ArtifactIndexEntry
   siteCount: number
+  blank?: boolean
 }): string {
   if (mode === 'heading') {
     if (!currentArtifact) return 'Open an artifact first to search its headings.'
@@ -90,6 +118,7 @@ export function getEmptyMessage({
   }
   if (mode === 'command') return 'No commands match. Change or clear your search.'
   if (context === 'sites') return 'No sites or commands match. Pages are searched after you choose a site.'
+  if (blank) return EMPTY_HISTORY_HINT
   return currentArtifact
     ? 'Nothing matches. Try > for commands, @ for sites, or # for headings.'
     : 'Nothing matches. Try > for commands or @ for sites.'
@@ -131,22 +160,23 @@ export function buildSections({
   scoringExperiment?: PaletteScoringExperiment
   productionScorer?: PaletteProductionScorer
   onSearchPageText?: (query: string) => void
-}): PaletteSection[] {
+}): PaletteBuild {
+  const plain = (sections: PaletteSection[]): PaletteBuild => ({ sections, emptyHistory: false, onlyCurrent: false })
   if (mode === 'site') {
     const entries = buildSiteEntries(sites, term, onNavigate)
-    return entries.length ? [{ title: 'Sites', entries }] : []
+    return plain(entries.length ? [{ title: 'Sites', entries }] : [])
   }
 
   if (mode === 'command') {
     const entries = buildCommandEntries(commands, term)
-    return entries.length ? [{ title: 'Commands', entries }] : []
+    return plain(entries.length ? [{ title: 'Commands', entries }] : [])
   }
 
   if (mode === 'heading') {
     const headings = buildHeadingEntries(currentArtifact, term, onJumpToHeading)
-    return headings.length
+    return plain(headings.length
       ? [{ title: `In ${currentArtifact?.title ?? 'this artifact'}`, entries: headings }]
-      : []
+      : [])
   }
 
   if (context === 'sites') {
@@ -154,15 +184,19 @@ export function buildSections({
     const siteSection = siteEntries.length ? [{ title: 'Sites', entries: siteEntries }] : []
     const commandEntries = buildCommandEntries(commands, term)
     const commandSection = commandEntries.length ? [{ title: 'Commands', entries: commandEntries }] : []
-    return [...siteSection, ...commandSection]
+    return plain([...siteSection, ...commandSection])
   }
 
-  if (!currentIndex) return []
-  const allCommandEntries = buildCommandEntries(commands, term)
-  if (!term.trim()) {
+  if (!currentIndex) return plain([])
+  const blank = !term.trim()
+  // A blank palette is about returning to documents; commands stay behind ">".
+  if (blank) {
     const returnSections = buildReturnSections(currentIndex, currentArtifact, recentReads, pinnedArtifactIds, onNavigate)
-    const commandSection = allCommandEntries.length ? [{ title: 'Commands', entries: allCommandEntries.slice(0, 3) }] : []
-    if (returnSections.length) return [...returnSections, ...commandSection]
+    const emptyHistory = returnSections.length === 0
+    const sections = emptyHistory
+      ? buildPageSections(currentIndex, term, onNavigate, recentReads, pinnedArtifactIds, currentArtifact, scoringExperiment, productionScorer)
+      : returnSections
+    return { sections, emptyHistory, onlyCurrent: hasOnlyCurrentPage(sections) }
   }
   const pageSections = buildPageSections(
     currentIndex,
@@ -174,14 +208,16 @@ export function buildSections({
     scoringExperiment,
     productionScorer,
   )
-  const headingEntries = term.trim() && context === 'artifact'
-    ? buildHeadingEntries(currentArtifact, term, onJumpToHeading)
+  // Headings and commands compete with documents, so they appear only when no page matches.
+  const fallback = pageSections.length === 0
+  const headingEntries = fallback && context === 'artifact'
+    ? buildHeadingEntries(currentArtifact, term, onJumpToHeading, true)
     : []
   const headingSection = headingEntries.length
-    ? [{ title: `In ${currentArtifact?.title ?? 'this artifact'}`, entries: headingEntries }]
+    ? [{ title: 'Headings in this page', entries: headingEntries }]
     : []
   // Listed after page matches, it becomes the default selection when no page name matches.
-  const pageTextSection: PaletteSection[] = onSearchPageText && term.trim()
+  const pageTextSection: PaletteSection[] = onSearchPageText
     ? [{
         title: 'Page text',
         entries: [{
@@ -193,15 +229,21 @@ export function buildSections({
         }],
       }]
     : []
-  const commandEntries = term.trim() ? allCommandEntries : allCommandEntries.slice(0, 3)
+  const commandEntries = fallback ? buildCommandEntries(commands, term) : []
   const commandSection = commandEntries.length ? [{ title: 'Commands', entries: commandEntries }] : []
 
-  return [
+  return plain([
     ...pageSections,
     ...pageTextSection,
     ...headingSection,
     ...commandSection,
-  ]
+  ])
+}
+
+// True when the list holds the open document and no other document.
+function hasOnlyCurrentPage(sections: PaletteSection[]): boolean {
+  const documents = sections.flatMap((section) => section.entries).filter((entry) => entry.kind === 'artifact')
+  return documents.length > 0 && documents.every((entry) => entry.current)
 }
 
 // A blank palette is where readers return from: pinned pages first, then their own recent reads.
@@ -214,18 +256,19 @@ function buildReturnSections(
 ): PaletteSection[] {
   const artifactsById = new Map(index.artifacts.map((artifact) => [artifact.id, artifact]))
   const pinnedIds = new Set(pinnedArtifactIds)
-  const currentBadge = (artifact: ArtifactIndexEntry) => artifact.id === currentArtifact?.id ? 'Current page' : undefined
+  const isCurrent = (artifact: ArtifactIndexEntry) => artifact.id === currentArtifact?.id
   const pinned = pinnedArtifactIds.flatMap((id) => {
     const artifact = artifactsById.get(id)
-    return artifact ? [artifactEntry(index, artifact, onNavigate, undefined, undefined, currentBadge(artifact))] : []
+    return artifact ? [artifactEntry(index, artifact, onNavigate, undefined, undefined, undefined, isCurrent(artifact))] : []
   })
   const recent = [...recentReads]
     .sort((left, right) => right.viewedAt - left.viewedAt)
     .flatMap((read) => {
       const artifact = artifactsById.get(read.artifactId)
       if (!artifact || pinnedIds.has(artifact.id)) return []
-      const badge = [currentBadge(artifact), formatRecentRead(read.viewedAt)].filter(Boolean).join(' · ')
-      return [artifactEntry(index, artifact, onNavigate, undefined, undefined, badge)]
+      const current = isCurrent(artifact)
+      // "Read just now" says nothing about the page that is already open.
+      return [artifactEntry(index, artifact, onNavigate, undefined, undefined, current ? undefined : formatRecentRead(read.viewedAt), current)]
     })
     .slice(0, 8)
   return [
@@ -307,11 +350,12 @@ function buildHeadingEntries(
   currentArtifact: ArtifactIndexEntry | undefined,
   term: string,
   onJumpToHeading: (headingId: string) => void,
+  fallback = false,
 ): PaletteEntry[] {
   return (currentArtifact?.toc ?? []).flatMap((heading) => {
     const titleMatch = fuzzyMatch(heading.text, term)
     if (term.trim() && !titleMatch) return []
-    return [headingEntry(heading, currentArtifact, onJumpToHeading, titleMatch)]
+    return [headingEntry(heading, currentArtifact, onJumpToHeading, titleMatch, fallback)]
   }).sort((left, right) => (right.titleMatch?.score ?? 0) - (left.titleMatch?.score ?? 0))
 }
 
@@ -340,7 +384,7 @@ function buildPageSections(
     candidateOrdinals = previousSearch.candidateOrdinals
   }
   const candidateCount = candidateOrdinals?.length ?? currentIndex.artifacts.length
-  const entries: Array<{ artifact: ArtifactIndexEntry; score: number; badge?: string }> = []
+  const entries: Array<{ artifact: ArtifactIndexEntry; score: number; badge?: string; current: boolean }> = []
   const matchingOrdinals: number[] = []
   for (let candidateIndex = 0; candidateIndex < candidateCount; candidateIndex += 1) {
     const ordinal = candidateOrdinals ? candidateOrdinals[candidateIndex] : candidateIndex
@@ -373,15 +417,16 @@ function buildPageSections(
       productionScorer,
       ordinal,
     })
-    const badge = [
-      isCurrent ? 'Current page' : undefined,
-      isPinned ? 'Pinned' : undefined,
-      read ? formatRecentRead(read.viewedAt) : undefined,
-    ].filter(Boolean).join(' · ') || undefined
+    const badge = isCurrent
+      ? CURRENT_PAGE_BADGE
+      : [
+        isPinned ? 'Pinned' : undefined,
+        read ? formatRecentRead(read.viewedAt) : undefined,
+      ].filter(Boolean).join(' · ') || undefined
     let position = 0
     while (position < entries.length && entries[position].score >= score) position += 1
     if (position < 8) {
-      entries.splice(position, 0, { artifact, score, badge })
+      entries.splice(position, 0, { artifact, score, badge, current: isCurrent })
       if (entries.length > 8) entries.pop()
     }
   }
@@ -392,7 +437,7 @@ function buildPageSections(
   if (!entries.length) return []
   return [{
     title: 'Pages',
-    entries: entries.slice(0, 8).map(({ artifact, badge }) => (
+    entries: entries.slice(0, 8).map(({ artifact, badge, current }) => (
       artifactEntry(
         currentIndex,
         artifact,
@@ -400,6 +445,7 @@ function buildPageSections(
         fuzzyMatch(artifact.title, term),
         fuzzyMatch(artifact.path, term),
         badge,
+        current,
       )
     )),
   }]
@@ -445,7 +491,8 @@ function artifactEntry(
   onNavigate: (href: string) => void,
   titleMatch?: FuzzyMatch,
   pathMatch?: FuzzyMatch,
-  recentReadLabel?: string,
+  badge?: string,
+  current = false,
 ): PaletteEntry {
   return {
     id: `artifact:${index.site.id}:${artifact.id}`,
@@ -454,7 +501,8 @@ function artifactEntry(
     subtitle: artifact.path,
     titleMatch,
     subtitleMatch: pathMatch,
-    badge: recentReadLabel,
+    badge: current ? CURRENT_PAGE_BADGE : badge,
+    current: current || undefined,
     onSelect: () => onNavigate(artifactRouteHref(index.site.id, artifact.path)),
   }
 }
@@ -474,12 +522,14 @@ function headingEntry(
   artifact: ArtifactIndexEntry | undefined,
   onJumpToHeading: (headingId: string) => void,
   titleMatch?: FuzzyMatch,
+  fallback = false,
 ): PaletteEntry {
+  const label = heading.level > 1 ? `Heading ${heading.level}` : 'Heading'
   return {
     id: `heading:${heading.id}`,
     kind: 'heading',
     title: heading.text,
-    subtitle: heading.level > 1 ? `Heading ${heading.level}` : 'Heading',
+    subtitle: fallback ? `${label} · this page` : label,
     titleMatch,
     onSelect: () => {
       if (artifact) onJumpToHeading(heading.id)

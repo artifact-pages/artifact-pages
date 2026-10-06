@@ -11,6 +11,7 @@ import type { FuzzyMatch } from '../domain/fuzzy-search'
 import {
   buildSections,
   defaultSelectionIndex,
+  EMPTY_HISTORY_HINT,
   getEmptyMessage,
   paletteMode,
   type PaletteCommand,
@@ -54,7 +55,6 @@ export function CommandPalette({
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState(seed)
-  const [selectedIndex, setSelectedIndex] = useState(() => defaultSelectionIndex(seed, context, currentIndex, sites.length))
   const scoringConfig = paletteScoringExperimentConfig(window.location.search)
   const mode = paletteMode(query)
   const hasScopePrefix = mode !== 'search'
@@ -100,30 +100,41 @@ export function CommandPalette({
         ? 'Search headings in this artifact...'
         : context === 'sites'
           ? 'Search sites...'
-          : 'Jump to a page, heading, or command...'
+          : context === 'artifact'
+            ? 'Search pages... (> commands, # headings, @ sites)'
+            : 'Search pages... (> commands, @ sites)'
 
-  const sections = useMemo(
+  const { sections, emptyHistory, onlyCurrent } = useMemo(
     () => buildSections({ mode, context, term, sites, currentIndex, currentArtifact, recentReads, pinnedArtifactIds, commands, onNavigate, onJumpToHeading, scoringExperiment, productionScorer, onSearchPageText }),
     [mode, context, term, sites, currentIndex, currentArtifact, recentReads, pinnedArtifactIds, commands, onNavigate, onJumpToHeading, scoringExperiment, productionScorer, onSearchPageText],
   )
-  const entries = sections.flatMap((section) => section.entries)
-  const entrySequence = mode === 'site' ? JSON.stringify(entries.map(({ id }) => id)) : ''
-  const emptyMessage = getEmptyMessage({ mode, context, currentArtifact, siteCount: sites.length })
+  const entries = useMemo(() => sections.flatMap((section) => section.entries), [sections])
+  const defaultIndex = useMemo(
+    () => defaultSelectionIndex(query, context, currentIndex, sites.length, entries),
+    [query, context, currentIndex, sites.length, entries],
+  )
+  const [selectedIndex, setSelectedIndex] = useState(defaultIndex)
+  const isBlank = query.trim() === ''
+  // The default row follows the list while the query is blank or an unfiltered @; typed queries reset on each change.
+  const entrySequence = mode === 'site' || isBlank ? JSON.stringify(entries.map(({ id }) => id)) : ''
+  const blankInSite = isBlank && context !== 'sites' && currentIndex !== undefined
+  const emptyMessage = getEmptyMessage({ mode, context, currentArtifact, siteCount: sites.length, blank: blankInSite })
 
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
 
   useEffect(() => {
-    setSelectedIndex(defaultSelectionIndex(query, context, currentIndex, sites.length))
+    setSelectedIndex(defaultIndex)
+    // Only a new query, context or site resets the selection; list changes are handled below.
   }, [query, context, currentIndex, sites.length])
 
   const previousEntrySequence = useRef(entrySequence)
   useEffect(() => {
     if (previousEntrySequence.current === entrySequence) return
     previousEntrySequence.current = entrySequence
-    setSelectedIndex(defaultSelectionIndex(query, context, currentIndex, sites.length))
-  }, [entrySequence, query, context, currentIndex, sites.length])
+    setSelectedIndex(defaultIndex)
+  }, [entrySequence])
 
   useEffect(() => {
     document.querySelector<HTMLElement>('[data-palette-selected="true"]')
@@ -207,6 +218,8 @@ export function CommandPalette({
           </button>
         </div>
 
+        {emptyHistory && sections.length > 0 ? <p className="palette-hint">{EMPTY_HISTORY_HINT}</p> : null}
+
         <div className="palette-results" role="listbox" aria-label="Search results">
           {sections.length === 0 ? (
             <p className="palette-empty">
@@ -221,11 +234,13 @@ export function CommandPalette({
                   const selected = index === selectedIndex
                   return (
                     <button
-                      className={`palette-entry${entry.kind === 'site' ? ' palette-entry--site' : ''}${entry.kind === 'page-text' ? ' palette-entry--page-text' : ''}${selected ? ' is-selected' : ''}`}
+                      className={`palette-entry${entry.current ? ' palette-entry--current' : ''}${entry.kind === 'site' ? ' palette-entry--site' : ''}${entry.kind === 'page-text' ? ' palette-entry--page-text' : ''}${selected ? ' is-selected' : ''}`}
                       key={entry.id}
                       role="option"
                       data-palette-entry-id={entry.id}
                       aria-selected={selected}
+                      aria-current={entry.current ? 'page' : undefined}
+                      data-palette-current={entry.current ? 'true' : undefined}
                       data-palette-selected={selected ? 'true' : undefined}
                       onMouseEnter={() => setSelectedIndex(index)}
                       onClick={() => {
@@ -273,6 +288,17 @@ export function CommandPalette({
             ))
           )}
         </div>
+
+        {blankInSite ? (
+          <p className="palette-hint">
+            {currentArtifact ? (
+              <>Type <code>&gt;</code> for commands, <code>#</code> for headings in this page, <code>@</code> to switch sites.</>
+            ) : (
+              <>Type <code>&gt;</code> for commands or <code>@</code> to switch sites.</>
+            )}
+            {onlyCurrent ? ' Open another page to build your recent list.' : ''}
+          </p>
+        ) : null}
 
         {loading ? <p className="palette-loading" role="status">Loading site information…</p> : null}
 
