@@ -85,7 +85,7 @@ flowchart LR
 
 Module packaging, web packaging, Action pin preparation and documentation drafts can progress in parallel. The diagram groups owner approvals with their publication step; it does not grant that approval. Public guide finalization must describe the tested, obtainable components, but drafting need not wait for publication.
 
-CLI/Actions use an immutable source SHA; web bundles have their own versions; Registry modules have independent provider-module versions when published ([TD2](technical-design/TD2-component-release-policy.md), [IMP-38](implementation/IMP-38-terraform-registry-publication.md)). There is no umbrella version or automatic app redeployment for a CLI-only change.
+CLI/Actions use an immutable source SHA; web bundles have their own versions; Terraform modules have independent per-module SemVer, released by per-module tags and synced to generated package repositories ([TD15](technical-design/TD15-terraform-module-source-of-truth.md), [TD2](technical-design/TD2-component-release-policy.md), [IMP-38](implementation/IMP-38-terraform-registry-publication.md)). There is no umbrella version or automatic app redeployment for a CLI-only change.
 
 AWS composition/proof is a separate Infra branch. It does not block a scoped Cloudflare-first release. GCP remains emulator-only. IMP-42 can advance in the Frontend lane independently; this map does not newly designate it or unrelated UI polish an initial-release gate.
 
