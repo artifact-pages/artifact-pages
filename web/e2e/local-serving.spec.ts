@@ -1290,6 +1290,32 @@ test('typing then pressing Enter at once opens the first match even when the bla
   await expect(page).toHaveURL(new RegExp(`/sre/${CHECKOUT_PATH.replaceAll('/', '\\/')}$`))
 })
 
+test('a resting pointer under the palette does not steal the typed match', async ({ page }) => {
+  await page.goto(`/sre/${CHECKOUT_PATH}`)
+  await expect(page.locator('iframe.artifact-frame')).toBeVisible()
+  await page.goto(`/sre/${TOPOLOGY_PATH}`)
+  await expect(page.locator('iframe.artifact-frame')).toBeVisible()
+
+  // Rest the pointer on the second blank-palette row; the typed query's second row is another page.
+  let palette = await openPaletteWithShortcut(page)
+  const secondRow = palette.getByRole('option').nth(1)
+  await expect(secondRow).toContainText('Checkout latency incident review')
+  const box = await secondRow.boundingBox()
+  if (!box) throw new Error('palette row has no bounding box')
+  await page.keyboard.press('Escape')
+  await expect(palette).toHaveCount(0)
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+
+  palette = await openPaletteWithShortcut(page)
+  const search = palette.getByRole('textbox', { name: PALETTE_SEARCH_LABEL })
+  await search.fill('latency')
+  // Two rows match; Chromium reports the pointer as entering the row that now sits under it.
+  await expect(palette.getByRole('option')).toHaveCount(2)
+  await expect(palette.getByRole('option').first()).toContainText('Checkout latency incident review')
+  await search.press('Enter')
+  await expect(page).toHaveURL(new RegExp(`/sre/${CHECKOUT_PATH.replaceAll('/', '\\/')}$`))
+})
+
 test('blank palette with no history shows guidance and ranked pages', async ({ page }) => {
   await page.goto('/sre')
   await page.getByRole('button', { name: 'Jump to a page in SRE' }).click()

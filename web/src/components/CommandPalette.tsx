@@ -238,7 +238,7 @@ export function CommandPalette({
                       aria-current={entry.current ? 'page' : undefined}
                       data-palette-current={entry.current ? 'true' : undefined}
                       data-palette-selected={selected ? 'true' : undefined}
-                      onMouseEnter={() => selectIndex(index)}
+                      onMouseMove={() => { if (index !== selectedIndex) selectIndex(index) }}
                       onClick={() => {
                         onClose()
                         entry.onSelect()
