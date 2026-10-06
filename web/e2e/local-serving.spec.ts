@@ -1117,23 +1117,27 @@ test('a blank palette returns to recently read pages across reloads, and typing 
   await search.press('Enter')
   await expect(page).toHaveURL(/\/sre\/incidents\/checkout-latency\/index\.html$/)
 
-  // No scope tabs: the blank palette lists the reader's own recent reads, then commands.
+  // No scope tabs: the blank palette lists the reader's own recent reads; commands stay behind ">".
   palette = await openPalette()
   search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
   await expect(palette.getByRole('group', { name: 'Filter site results' })).toHaveCount(0)
-  await expect(palette.locator('.palette-section-title')).toHaveText(['Recently read', 'Commands'])
+  await expect(palette.locator('.palette-section-title')).toHaveText(['Recently read'])
   const recentOptions = palette.locator('.palette-section', { hasText: 'Recently read' }).getByRole('option')
   await expect(recentOptions).toHaveCount(2)
   const checkout = recentOptions.filter({ hasText: 'Checkout latency incident review' })
   await expect(recentOptions.first()).toContainText('Checkout latency incident review')
   await expect(checkout.locator('.palette-entry-badge')).toContainText('Current page')
   await expect(recentOptions.nth(1)).toContainText('Platform topology')
+  // The open page is marked but never preselected; the first Enter goes to the next page.
+  await expect(checkout).toHaveAttribute('aria-current', 'page')
+  await expect(checkout).toHaveAttribute('aria-selected', 'false')
+  await expect(recentOptions.nth(1)).toHaveAttribute('aria-selected', 'true')
 
   await page.keyboard.press('Escape')
   await page.reload()
   palette = await openPalette()
   search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
-  await expect(palette.locator('.palette-section-title')).toHaveText(['Recently read', 'Commands'])
+  await expect(palette.locator('.palette-section-title')).toHaveText(['Recently read'])
   await expect(palette.getByRole('option', { name: /Platform topology/ })).toBeVisible()
 
   await search.fill('platform')
@@ -1160,7 +1164,11 @@ test('a blank palette lists the pinned current page once, before recent reads, a
   await expect(palette.locator('.palette-section-title').first()).toHaveText('Pinned')
   await expect(currentResult).toHaveCount(1)
   await expect(palette.locator('.palette-section', { hasText: 'Pinned' }).getByRole('option')).toHaveCount(1)
-  await expect(currentResult.locator('.palette-entry-badge')).toContainText('Current page')
+  await expect(currentResult.locator('.palette-entry-badge')).toHaveText('Current page')
+  // It is the only page listed and is already open, so nothing is preselected.
+  await expect(currentResult).toHaveAttribute('aria-current', 'page')
+  await expect(palette.locator('[aria-selected="true"]')).toHaveCount(0)
+  await expect(palette.locator('.palette-hint').last()).toContainText('Open another page to build your recent list.')
 
   await search.fill('Platform topology')
   await expect(currentResult).toBeVisible()
@@ -1173,7 +1181,7 @@ test('normal page search stays on the current site while @ and > select explicit
 
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
-  await expect(search).toHaveAttribute('placeholder', 'Jump to a page, heading, or command...')
+  await expect(search).toHaveAttribute('placeholder', 'Search pages... (> commands, @ sites)')
   await expect(palette.locator('.palette-scope')).toHaveText('SRE only')
 
   await search.fill('incident')
@@ -1195,6 +1203,194 @@ test('normal page search stays on the current site while @ and > select explicit
   await expect(palette.getByRole('option', { name: 'Use dark theme' })).toBeVisible()
   await expect(palette.getByRole('option', { name: 'Use system theme' })).toBeVisible()
   await expect(palette.getByRole('option')).toHaveCount(3)
+})
+
+const PALETTE_SEARCH_LABEL = 'Search artifacts, sites, commands, and headings'
+const TOPOLOGY_PATH = 'architecture/platform-topology/index.html'
+const CHECKOUT_PATH = 'incidents/checkout-latency/index.html'
+const EMPTY_HISTORY_HINT = 'Type a page title or path to find it. Pin pages or open a few and they will show up here.'
+
+async function openPaletteWithShortcut(page: Page) {
+  await page.keyboard.press('Control+k')
+  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  await expect(palette).toBeVisible()
+  return palette
+}
+
+test('blank palette: first Enter opens the most recent other page, not the current one', async ({ page }) => {
+  await page.goto(`/sre/${TOPOLOGY_PATH}`)
+  await expect(page.locator('iframe.artifact-frame')).toBeVisible()
+  await page.goto(`/sre/${CHECKOUT_PATH}`)
+  await expect(page.locator('iframe.artifact-frame')).toBeVisible()
+
+  const palette = await openPaletteWithShortcut(page)
+  await expect(palette.getByRole('option', { name: /Platform topology/ })).toHaveAttribute('aria-selected', 'true')
+  await palette.getByRole('textbox', { name: PALETTE_SEARCH_LABEL }).press('Enter')
+  await expect(palette).toBeHidden()
+  await expect(page).toHaveURL(new RegExp(`/sre/${TOPOLOGY_PATH.replaceAll('/', '\\/')}$`))
+})
+
+test('blank palette marks the current page and does not select it', async ({ page }) => {
+  await page.goto(`/sre/${TOPOLOGY_PATH}`)
+  await expect(page.locator('iframe.artifact-frame')).toBeVisible()
+  await page.goto(`/sre/${CHECKOUT_PATH}`)
+  await expect(page.locator('iframe.artifact-frame')).toBeVisible()
+
+  const palette = await openPaletteWithShortcut(page)
+  const current = palette.getByRole('option', { name: /Checkout latency incident review/ })
+  await expect(current).toHaveAttribute('aria-current', 'page')
+  await expect(current).toHaveAttribute('aria-selected', 'false')
+  await expect(current.locator('.palette-entry-badge')).toHaveText('Current page')
+  const selected = palette.locator('[aria-selected="true"]')
+  await expect(selected).toHaveCount(1)
+  await expect(selected).not.toHaveAttribute('aria-current', 'page')
+})
+
+test('blank palette with a pinned current page keeps it once under Pinned, unselected, and selects the next page', async ({ page }) => {
+  await page.goto(`/sre/${CHECKOUT_PATH}`)
+  await expect(page.locator('iframe.artifact-frame')).toBeVisible()
+  await page.goto(`/sre/${TOPOLOGY_PATH}`)
+  const currentRow = page.locator(`.browse-tree .tree-artifact[data-tree-path="${TOPOLOGY_PATH}"][aria-current="page"]`).locator('xpath=..')
+  await currentRow.getByRole('button', { name: 'Actions for Platform topology' }).click()
+  await page.getByRole('menu', { name: 'Platform topology actions' }).getByRole('menuitem', { name: 'Pin' }).click()
+  await page.reload()
+  await expect(page.locator('.pinned-tree .tree-artifact')).toContainText('Platform topology')
+
+  const palette = await openPaletteWithShortcut(page)
+  await expect(palette.locator('.palette-section-title')).toHaveText(['Pinned', 'Recently read'])
+  const pinnedCurrent = palette.getByRole('option', { name: /Platform topology/ })
+  await expect(pinnedCurrent).toHaveCount(1)
+  await expect(palette.locator('.palette-section', { hasText: 'Pinned' }).getByRole('option')).toHaveCount(1)
+  await expect(pinnedCurrent).toHaveAttribute('aria-current', 'page')
+  await expect(pinnedCurrent).toHaveAttribute('aria-selected', 'false')
+  await expect(palette.getByRole('option', { name: /Checkout latency incident review/ })).toHaveAttribute('aria-selected', 'true')
+})
+
+test('blank palette with no history shows guidance and ranked pages', async ({ page }) => {
+  await page.goto('/sre')
+  await page.getByRole('button', { name: 'Jump to a page in SRE' }).click()
+  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  await expect(palette.locator('.palette-hint').first()).toHaveText(EMPTY_HISTORY_HINT)
+  await expect(palette.locator('.palette-section-title')).toHaveText(['Pages'])
+  expect(await palette.getByRole('option').count()).toBeGreaterThan(1)
+  await expect(palette.locator('.palette-entry--current')).toHaveCount(0)
+})
+
+test('blank palette lists no Commands section and hints at > # @', async ({ page }) => {
+  await page.goto(`/sre/${CHECKOUT_PATH}`)
+  await expect(page.locator('iframe.artifact-frame')).toBeVisible()
+  const palette = await openPaletteWithShortcut(page)
+  await expect(palette.locator('.palette-section-title')).not.toContainText(['Commands'])
+  await expect(palette.getByRole('option', { name: 'Toggle sidebar' })).toHaveCount(0)
+  await expect(palette.locator('.palette-hint')).toContainText('Type > for commands, # for headings in this page, @ to switch sites.')
+  await expect(palette.getByRole('textbox', { name: PALETTE_SEARCH_LABEL }))
+    .toHaveAttribute('placeholder', 'Search pages... (> commands, # headings, @ sites)')
+})
+
+test('typing a page name lists only Pages (and Page text), not headings or commands', async ({ page }) => {
+  // The open page has a heading "Topology" that also matches the query.
+  await page.goto(`/sre/${TOPOLOGY_PATH}`)
+  await expect(page.locator('iframe.artifact-frame')).toBeVisible()
+  const palette = await openPaletteWithShortcut(page)
+  await palette.getByRole('textbox', { name: PALETTE_SEARCH_LABEL }).fill('topology')
+  await expect(palette.getByRole('option', { name: /Platform topology/ })).toBeVisible()
+  await expect(palette.locator('.palette-section-title')).toHaveText(['Pages'])
+  await expect(palette.locator('.palette-entry-subtitle', { hasText: /^Heading/ })).toHaveCount(0)
+})
+
+test('typing text that matches no page falls back to labeled Headings and Commands groups', async ({ page }) => {
+  await page.goto(`/sre/${CHECKOUT_PATH}`)
+  await expect(page.locator('iframe.artifact-frame')).toBeVisible()
+  const palette = await openPaletteWithShortcut(page)
+  const search = palette.getByRole('textbox', { name: PALETTE_SEARCH_LABEL })
+
+  await search.fill('root cause')
+  await expect(palette.locator('.palette-section-title')).toHaveText(['Headings in this page'])
+  await expect(palette.getByRole('option', { name: /Root cause/ })).toContainText('Heading 2 · this page')
+
+  await search.fill('light theme')
+  await expect(palette.locator('.palette-section-title')).toHaveText(['Commands'])
+  await expect(palette.getByRole('option', { name: 'Use light theme' })).toBeVisible()
+})
+
+test('prefix modes still reach headings, commands, and sites', async ({ page }) => {
+  await page.goto(`/sre/${CHECKOUT_PATH}`)
+  await expect(page.locator('iframe.artifact-frame')).toBeVisible()
+  const palette = await openPaletteWithShortcut(page)
+  const search = palette.getByRole('textbox', { name: PALETTE_SEARCH_LABEL })
+
+  await search.fill('#root')
+  await expect(palette.locator('.palette-section-title')).toHaveText(['In Checkout latency incident review'])
+  await expect(palette.getByRole('option', { name: /Root cause/ })).toBeVisible()
+  await search.fill('>theme')
+  await expect(palette.locator('.palette-section-title')).toHaveText(['Commands'])
+  await expect(palette.getByRole('option')).toHaveCount(3)
+  await search.fill('@front')
+  await expect(palette.locator('.palette-section-title')).toHaveText(['Sites'])
+  await expect(palette.getByRole('option', { name: /Frontend/ })).toBeVisible()
+})
+
+test('plain search stays in the active site', async ({ page }) => {
+  await page.goto('/sre')
+  const palette = await (async () => {
+    await page.getByRole('button', { name: 'Jump to a page in SRE' }).click()
+    return page.getByRole('dialog', { name: 'Command palette' })
+  })()
+  const search = palette.getByRole('textbox', { name: PALETTE_SEARCH_LABEL })
+  // "Button guidelines" is a Frontend page; it is only reachable by switching sites.
+  await search.fill('Button guidelines')
+  await expect(palette.getByRole('option', { name: /Button guidelines/ })).toHaveCount(0)
+  await search.fill('platform')
+  await expect(palette.getByRole('option', { name: /Platform topology/ })).toBeVisible()
+  await expect(palette.locator('.palette-section-title')).toHaveText(['Pages'])
+})
+
+test.describe('mobile viewport', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true })
+
+  async function visit(page: Page, paths: string[]) {
+    for (const path of paths) {
+      await page.goto(`/sre/${path}`)
+      await expect(page.locator('iframe.artifact-frame, .markdown-scroll').first()).toBeVisible()
+    }
+  }
+
+  test('palette at 390px: current badge and title do not overlap, option height >= 44px, tap opens a page', async ({ page }) => {
+    await visit(page, [CHECKOUT_PATH, TOPOLOGY_PATH])
+    const palette = await openPaletteWithShortcut(page)
+    const current = palette.getByRole('option', { name: /Platform topology/ })
+    await expect(current).toHaveAttribute('aria-current', 'page')
+
+    const title = await current.locator('.palette-entry-title').boundingBox()
+    const badge = await current.locator('.palette-entry-badge').boundingBox()
+    const box = await current.boundingBox()
+    expect(title && badge && box).toBeTruthy()
+    expect(badge!.y).toBeGreaterThanOrEqual(title!.y + title!.height - 1)
+    expect(box!.height).toBeGreaterThanOrEqual(44)
+    const overflow = await palette.locator('.palette-results').evaluate((element) => element.scrollWidth <= element.clientWidth)
+    expect(overflow).toBe(true)
+
+    await palette.getByRole('option', { name: /Checkout latency incident review/ }).click()
+    await expect(palette).toBeHidden()
+    await expect(page).toHaveURL(new RegExp(`/sre/${CHECKOUT_PATH.replaceAll('/', '\\/')}$`))
+  })
+
+  test('palette at 390px opens a page by tap and by keyboard Enter after ArrowDown', async ({ page }) => {
+    await visit(page, ['runbooks/service-recovery.md', CHECKOUT_PATH, TOPOLOGY_PATH])
+    let palette = await openPaletteWithShortcut(page)
+    const search = palette.getByRole('textbox', { name: PALETTE_SEARCH_LABEL })
+    await expect(palette.getByRole('option', { name: /Checkout latency incident review/ })).toHaveAttribute('aria-selected', 'true')
+    await search.press('ArrowDown')
+    await expect(palette.getByRole('option', { name: /Service recovery/ })).toHaveAttribute('aria-selected', 'true')
+    await search.press('Enter')
+    await expect(palette).toBeHidden()
+    await expect(page).toHaveURL(/\/sre\/runbooks\/service-recovery\.md$/)
+
+    palette = await openPaletteWithShortcut(page)
+    await palette.getByRole('option', { name: /Platform topology/ }).tap()
+    await expect(palette).toBeHidden()
+    await expect(page).toHaveURL(new RegExp(`/sre/${TOPOLOGY_PATH.replaceAll('/', '\\/')}$`))
+  })
 })
 
 test('explicit palette scopes give recovery guidance for their own results', async ({ page }) => {
