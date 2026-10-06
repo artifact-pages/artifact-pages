@@ -28,8 +28,24 @@ const currentWithOverlappingHeading: ArtifactIndexEntry = {
   toc: [...(currentArtifact.toc ?? []), { id: 'gateway-timeout-notes', text: 'Gateway timeout notes', level: 2 }],
 }
 
+// Long, unbreakable titles and deep paths on the current, pinned and recently read pages (390px wrap check).
+const longTitle = (label: string) => `${label}CapacityPlanningAndIncidentReviewForTheCheckoutPlatformMigrationWithoutBreaks`
+const longTitleIds = new Set([currentArtifact.id, ...pinnedArtifactIds, ...recentReads.slice(0, 1).map(({ artifactId }) => artifactId)])
+const longTitleIndex: SiteIndex = {
+  ...currentIndex,
+  artifacts: currentIndex.artifacts.map((artifact, order) =>
+    longTitleIds.has(artifact.id)
+      ? {
+          ...artifact,
+          title: longTitle(`Page${order}`),
+          path: `docs/platform/operations/runbooks/2026/long-path-segment-for-wrapping-check/${artifact.path}`,
+        }
+      : artifact,
+  ),
+}
+
 type PaletteHistory = 'default' | 'none' | 'only-current' | 'current-pinned'
-type PaletteStoryArgs = { seed: string; context: PaletteContext; history?: PaletteHistory; overlappingHeading?: boolean }
+type PaletteStoryArgs = { seed: string; context: PaletteContext; history?: PaletteHistory; overlappingHeading?: boolean; longTitles?: boolean }
 
 function historyFor(history: PaletteHistory) {
   if (history === 'none') return { reads: [], pinned: [] as string[] }
@@ -40,9 +56,11 @@ function historyFor(history: PaletteHistory) {
 
 const phone390 = { name: 'Phone 390', styles: { width: '390px', height: '844px' }, type: 'mobile' as const }
 
-function PaletteStory({ seed, context, history = 'default', overlappingHeading = false }: PaletteStoryArgs) {
+function PaletteStory({ seed, context, history = 'default', overlappingHeading = false, longTitles = false }: PaletteStoryArgs) {
+  const storyIndex = longTitles ? longTitleIndex : currentIndex
   const { reads, pinned } = historyFor(history)
-  const openArtifact = overlappingHeading ? currentWithOverlappingHeading : currentArtifact
+  const baseArtifact = storyIndex.artifacts.find(({ id }) => id === currentArtifact.id) ?? currentArtifact
+  const openArtifact = overlappingHeading ? { ...currentWithOverlappingHeading, title: baseArtifact.title, path: baseArtifact.path } : baseArtifact
   const [isOpen, setIsOpen] = useState(true)
   const commands: PaletteCommand[] = [
     { title: 'Toggle sidebar', shortcut: '⌘ B', onSelect: () => undefined },
@@ -58,7 +76,7 @@ function PaletteStory({ seed, context, history = 'default', overlappingHeading =
       seed={seed}
       context={context}
       sites={sites}
-      currentIndex={currentIndex}
+      currentIndex={storyIndex}
       currentArtifact={openArtifact}
       recentReads={reads}
       pinnedArtifactIds={pinned}
@@ -156,6 +174,12 @@ export const TypedNoPageMatchFallback: Story = {
 
 export const Phone390Blank: Story = {
   args: { context: 'artifact' },
+  parameters: { viewport: { options: { phone390 } } },
+  globals: { viewport: { value: 'phone390', isRotated: false } },
+}
+
+export const Phone390LongTitle: Story = {
+  args: { context: 'artifact', longTitles: true },
   parameters: { viewport: { options: { phone390 } } },
   globals: { viewport: { value: 'phone390', isRotated: false } },
 }
