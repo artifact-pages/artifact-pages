@@ -16,6 +16,9 @@ On production (`artifact-pages.dev`) the Cloudflare-proxied hostname altered pub
 4. `/cdn-cgi/l/email-protection` returned 404 on the hostname, so the obfuscated address could not be decoded by a link either.
 5. The owner turned Email Address Obfuscation off zone-wide in the dashboard on 2026-10-03 as a stopgap. Hashes now match. The setting is unmanaged and zone-wide, so it can regress and affects other hostnames in the zone.
 
+6. Checked 2026-10-06: all 24 guide and architecture HTML pages served from `https://artifact-pages.dev/_artifacts/` hash equal to the sources in `artifact-pages/docs`, with no `__cf_email__` or `/cdn-cgi/` markup. This holds because of the dashboard stopgap, not the module: the admin pin is still `208abf5`, so the fix is not applied (admin PR #7 bumps it to `80b2198`, the merge of module PR #1).
+7. The monorepo `terraform/modules/cloudflare` does not contain the `http_config_settings` fix; it exists only in the published package repository, which `admin` consumes by git ref. Port it to the monorepo module or retire the monorepo copy so the two cannot diverge.
+
 Confirmed: email obfuscation rewrote the body. Not yet confirmed on production: whether the other features rewrite artifact bodies today; the module disables them as a precaution.
 
 ## Expected outcome
