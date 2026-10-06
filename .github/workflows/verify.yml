@@ -70,6 +70,7 @@ jobs:
         run: |
           npm run test:compatibility-policy
           npm run test:text-highlight
+          npm run test:palette-sections
           npm run test:fulltext
           npm run test:third-party-notices
           npm run test:vite-malformed-url
