@@ -1270,6 +1270,26 @@ test('blank palette with a pinned current page keeps it once under Pinned, unsel
   await expect(palette.getByRole('option', { name: /Checkout latency incident review/ })).toHaveAttribute('aria-selected', 'true')
 })
 
+test('typing then pressing Enter at once opens the first match even when the blank default is not the first row', async ({ page }) => {
+  // The only listed page is the open (pinned) one, so the blank default selection is -1.
+  await page.goto(`/sre/${TOPOLOGY_PATH}`)
+  const currentRow = page.locator(`.browse-tree .tree-artifact[data-tree-path="${TOPOLOGY_PATH}"][aria-current="page"]`).locator('xpath=..')
+  await currentRow.getByRole('button', { name: 'Actions for Platform topology' }).click()
+  await page.getByRole('menu', { name: 'Platform topology actions' }).getByRole('menuitem', { name: 'Pin' }).click()
+  await page.reload()
+  await expect(page.locator('.pinned-tree .tree-artifact')).toContainText('Platform topology')
+
+  const palette = await openPaletteWithShortcut(page)
+  await expect(palette.getByRole('option', { name: /Platform topology/ })).toHaveAttribute('aria-current', 'page')
+  await expect(palette.locator('[aria-selected="true"]')).toHaveCount(0)
+
+  // No waits: the new query's entries must pair with the new query's default selection.
+  const search = palette.getByRole('textbox', { name: PALETTE_SEARCH_LABEL })
+  await search.fill('Checkout latency')
+  await search.press('Enter')
+  await expect(page).toHaveURL(new RegExp(`/sre/${CHECKOUT_PATH.replaceAll('/', '\\/')}$`))
+})
+
 test('blank palette with no history shows guidance and ranked pages', async ({ page }) => {
   await page.goto('/sre')
   await page.getByRole('button', { name: 'Jump to a page in SRE' }).click()
