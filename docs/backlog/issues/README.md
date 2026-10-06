@@ -63,7 +63,7 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-065](ISSUE-065-registry-dry-run-says-unchanged.md) | Open | P3 | `registry register --dry-run` text says "unchanged" while planning to create the registry. |
 | [ISSUE-067](ISSUE-067-single-cloudflare-publisher-token.md) | Open | P3 | Cloudflare publishing needs three secrets that one token can provide. |
 | [ISSUE-068](ISSUE-068-bare-apply-commands-print-help.md) | Done | P1 | Bare `app deploy`, `registry register|unregister`, `site publish` and `preview publish` printed help and exited 0 instead of running. |
-| [ISSUE-069](ISSUE-069-cloudflare-edge-rewrites-artifact-html.md) | In progress | P1 | Cloudflare edge features (email obfuscation and similar) rewrite delivered artifact HTML; the module must disable them for the hostname. |
+| [ISSUE-069](ISSUE-069-cloudflare-edge-rewrites-artifact-html.md) | Done | P1 | Cloudflare edge features (email obfuscation and similar) rewrite delivered artifact HTML; the module must disable them for the hostname. |
 | [ISSUE-070](ISSUE-070-pr-dry-run-source-ref-noise.md) | Open | P3 | PR dry-run of site publish always reports index.json updates because `source.ref` follows the checkout branch. |
 | [ISSUE-071](ISSUE-071-remote-config-auth-error-unclear.md) | Done | P2 | A private deployment config the token cannot read fails with an unactionable HTTP status. |
 
