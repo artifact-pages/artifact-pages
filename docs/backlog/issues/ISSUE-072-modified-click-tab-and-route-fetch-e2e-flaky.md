@@ -12,7 +12,7 @@ Three e2e tests fail intermittently when run in parallel, so full runs need reru
 - `release UX fixes › navigation rows are real links that keep modified clicks for the browser`
 - `reader compatibility rules › unknown fields in every published format are ignored`
 
-There is no product impact; the failures are test-harness races.
+There is no product impact; the failures are test-harness races. The fix also covers latent cases of the same patterns: the "result links keep ?q=" new-tab test and the preview raw-resource popup test.
 
 ## Evidence and reproduction
 
@@ -30,11 +30,11 @@ Playwright 1.63.0, Chromium, nginx e2e stack, origin/main aef55718. Subset recip
 - Site: the `mutateJson` helper, `await response.json()` after `route.fetch()`. One real failure in 200 runs at `--workers=12`: `apiResponse.json: Response has been disposed`.
 - The test's last assertions do not wait for the data its handlers fetch, so the test can end while a `route.fetch()` is in flight; fixture teardown then closes the context and disposes the response. A probe of the same flow had a handler in flight at the end of the test in 201 of 240 runs and hit `disposed` in 105 of 240; with `page.unrouteAll({ behavior: 'wait' })` before teardown both were 0 of 240. The same hazard exists for every other `route.fetch()` handler in the file.
 
-### A3. Residual: the new tab is sometimes not delivered to the test at all (confirmed, not fixed)
+### A3. Residual: the context `page` event is sometimes not delivered for a Ctrl-click tab (loss confirmed, cause unconfirmed, not fixed)
 
 After the A1 fix, "navigation rows are real links" still failed intermittently at 8 workers, at an earlier step: `context.waitForEvent('page')` for the first Ctrl-click tab timed out. The trace shows the click completed and a second page with its own network requests (including `GET /sre` and `/_indexes/sre/*`), so the tab opened and loaded, but the context `page` event never reached the test.
 
-A bounded experiment replaced `Promise.all([context.waitForEvent('page'), click])` at all four sites with a helper that snapshots `context.pages()`, clicks, and polls `context.pages()` for a new page (15 s). It failed more often: 2 of 400 in each of two 400-run batches. The traces again show the new page loading `/sre`, yet `context.pages()` never contained it within 15 s. So the event and `pages()` are both sometimes missing for a Ctrl-click tab under 8-worker load, and the experiment was reverted. Cause is inside Playwright/Chromium target tracking and is not understood.
+A bounded experiment replaced `Promise.all([context.waitForEvent('page'), click])` at all four sites with a helper that snapshots `context.pages()`, clicks, and polls `context.pages()` for a new page (15 s). It failed more often: 2 of 400 in each of two 400-run batches. The traces again show the new page loading `/sre`, yet `context.pages()` never contained it within 15 s. So the event and `pages()` are both sometimes missing for a Ctrl-click tab under 8-worker load, and the experiment was reverted. The loss of the context `page` event is confirmed. Its cause is unconfirmed; it looks like a Playwright/Chromium target-tracking issue (inferred).
 
 Measured residual rate with the shipped fix: "navigation rows are real links" 2 of about 800 runs at 8 workers (0.25%, about 20 times lower than the 5% baseline); "sidebar Browse rows, Pinned" 0 of about 700; "result links keep" 0 of about 700.
 
@@ -49,7 +49,7 @@ The three tests no longer fail from the two root causes above, and the remaining
 - [x] Route-mock handlers cannot outlive the test: a file-wide `test.afterEach` calls `page.unrouteAll({ behavior: 'wait' })`, and the two tests that create their own page and register `route.fetch` handlers call it before closing the page.
 - [ ] Verification with `--workers=8`: `-g "sidebar Browse rows, Pinned|navigation rows are real links|result links keep|unknown fields in every published format" --repeat-each=100` reports 0 failures. Result: 1 failure in the first 400-run batch and 0 in the second (the A3 residual). Not reliably met.
 - [x] `-g "reader compatibility" --repeat-each=40 --workers=12`: 400 passed, 0 failed.
-- [ ] `CI=1 npm run test:e2e` passes 3 consecutive times with 0 failed and 0 flaky. Result: 0 failed in all three runs, but run 1 and run 3 each had one flaky test in code this issue does not touch (see Verification).
+- [ ] `CI=1 npm run test:e2e` passes 3 consecutive times with 0 failed and 0 flaky. Result: 0 failed in all three runs, but run 1 and run 3 each had one flaky test in code this issue does not touch (see Verification). The two palette flakes seen during the 3x full runs (`page text search › results group by folder, open from the keyboard…` at :4429 and `the collapsed rail searches artifacts and switches sites` at :2653) are a separate product race introduced by the selection logic of PR #34, tracked in ISSUE-073.
 - [x] The `PLAYWRIGHT_BASE_URL` subset-run recipe is recorded.
 - [ ] The residual new-tab-event failure is documented with its measured rate (at most 1 in 400 at 8 workers). Documented in A3, but the measured rate is about 1 in 400 for the shipped fix and 1 in 200 for the reverted experiment; the owner should decide whether that meets the criterion.
 
