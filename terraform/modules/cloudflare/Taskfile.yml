@@ -1,0 +1,49 @@
+version: '3'
+
+tasks:
+  tf:fmt:
+    desc: Format this module's Terraform source
+    dir: '{{.TASKFILE_DIR}}'
+    cmds:
+      - terraform fmt -recursive
+
+  check:
+    desc: Run the full offline module validation (fmt, validate, terraform test, contract and Node tests; Terraform 1.9.8)
+    dir: '{{.TASKFILE_DIR}}'
+    cmds:
+      - ./scripts/validate.sh
+
+  tf:init: &target
+    desc: Initialize an explicit consumer deployment directory (TF_DIR)
+    dir: '{{.TASKFILE_DIR}}'
+    requires:
+      vars: [TF_DIR]
+    preconditions:
+      - sh: 'test -d {{.TF_DIR | shellQuote}}'
+        msg: TF_DIR must point to an existing consumer deployment directory.
+    cmds:
+      - terraform -chdir={{.TF_DIR | shellQuote}} init
+
+  tf:validate:
+    <<: *target
+    desc: Validate an initialized consumer directory (TF_DIR)
+    cmds:
+      - terraform -chdir={{.TF_DIR | shellQuote}} validate
+
+  tf:plan:
+    <<: *target
+    desc: Plan changes in a consumer directory (TF_DIR)
+    cmds:
+      - terraform -chdir={{.TF_DIR | shellQuote}} plan
+
+  tf:apply:
+    <<: *target
+    desc: Apply in a consumer directory with Terraform's normal confirmation (TF_DIR)
+    cmds:
+      - terraform -chdir={{.TF_DIR | shellQuote}} apply
+
+  tf:output:
+    <<: *target
+    desc: Read outputs from a consumer directory (TF_DIR)
+    cmds:
+      - terraform -chdir={{.TF_DIR | shellQuote}} output

@@ -3,3 +3,4 @@ version: '3'
 includes:
   cli: ./cli/Taskfile.yml
   web: ./web/Taskfile.yml
+  cloudflare-module: ./terraform/modules/cloudflare/Taskfile.yml

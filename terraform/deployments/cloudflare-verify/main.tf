@@ -13,7 +13,7 @@ data "cloudflare_zone" "target" {
 }
 
 module "artifact_pages" {
-  source = "../../../../terraform-cloudflare-artifact-pages"
+  source = "../../modules/cloudflare"
 
   account_id             = var.cloudflare_account_id
   zone_id                = data.cloudflare_zone.target.zone_id

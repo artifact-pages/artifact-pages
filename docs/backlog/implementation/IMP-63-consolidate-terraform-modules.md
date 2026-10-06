@@ -1,6 +1,6 @@
 # IMP-63 — Consolidate the Terraform package contents into the monorepo
 
-- Status: Open
+- Status: In progress
 - Lanes: Terraform
 - Depends on: [TD15](../technical-design/TD15-terraform-module-source-of-truth.md) (decided 2026-10-06, option 1)
 - Blocks: [IMP-64](IMP-64-generate-sync-terraform-packages.md), [IMP-38](IMP-38-terraform-registry-publication.md)
@@ -37,4 +37,38 @@ AWS (package `terraform-aws-artifact-pages` main `dd0fcde` vs `terraform/modules
 
 ## Results
 
-Not started.
+Cloudflare half done in this slice (2026-10-07). AWS is deferred to a follow-up PR that starts after the `cli-sync-remove` work lands, because that work edits `terraform/modules/aws/**`; the AWS acceptance criteria and the AWS diffs listed above stay open.
+
+### Cloudflare: taken, dropped, deferred
+
+Base: package `80b2198` (includes `208abf5` WAF and `20fe2a2` unchanged delivery) copied into `terraform/modules/cloudflare` in Registry layout. Existing `delivery/` and `retention/` were moved with `git mv` to `modules/delivery` and `modules/retention`, then merged.
+
+| Diff | Decision |
+| --- | --- |
+| ISSUE-069 `unchanged_delivery` (`http_config_settings`), `existing_config_rules`, `config_ruleset_name`, tests | Taken. |
+| Hostname-scoped WAF custom rules and presets (`waf_custom_rules`, `https_only`, `ip_allowlist`, `208abf5`), `waf_custom_rules.tftest.hcl`, `modules/delivery/tests/waf_custom_rules.tftest.hcl`, prevent-destroy fixture | Taken. |
+| Ruleset name inputs (`transform_ruleset_name`, `cache_ruleset_name`, `response_header_ruleset_name`) | Taken (package). |
+| Trusted HTML CSP as `cloudflare_ruleset.trusted_html_resource_policy` (artifact and raw preview, static `https://` source) | Taken. The monorepo-only `artifact_response_policy` (scheme-following CSP, artifacts only) is dropped: the deployed state and addresses are the package's, and the package also covers raw previews. |
+| Monorepo-only `control_boundary` firewall ruleset, `existing_firewall_rules`, `/_control` route exclusions | Dropped. The owner accepted control-to-SPA fallback instead of an edge block (T15) and the package removed the block in `0ca5eea`; the `http_request_firewall_custom` phase now belongs to the optional `waf_custom_rules`. `main.test.js` asserts the fallback. |
+| Monorepo-only `cloudflare_r2_managed_domain.development` (disables `r2.dev`) | Dropped. Not in the deployed state; the package leaves `r2.dev` unmanaged and documents verifying it by hand. Open for the owner: re-adding it would be a state-changing decision. |
+| Retention convergence (`lifecycle_rules_by_id`, `additional_lifecycle_rules`, `01a7473`) | Taken. The monorepo's separate `abort-preview-multipart-uploads` rule is merged into the single `expire-preview-objects` rule as in the package (same 7-day abort behaviour). The ID stays reserved by the `additional_lifecycle_rules` validation. A separate rule would diverge from the applied state and re-introduce the provider 5.26.0 read-back diff the package fixed. Owner to confirm. |
+| `versions.tf` provider constraint | Taken: `>= 5.24.0, < 6.0.0` in every module; deployments keep the exact provider through their lock files (root `.terraform.lock.hcl` pins 5.26.0). |
+| Root entry module, registry-reader outputs (`d52a312`), `examples/`, `tests/`, `scripts/validate.sh`, `scripts/check-package.py`, `Taskfile.yml`, `README.md`, `RELEASE.md`, `LICENSE`, `.gitignore` | Taken, with monorepo adaptations below. |
+| `delivery/main.test.js` | Kept at `modules/delivery/main.test.js`, rewritten for the merged module (CSP, config rule, no control block, example composition) and passing. It reads `examples/cloudflare/` outside the module directory, so IMP-64's generator must exclude it from the package. |
+| `retention/.terraform.lock.hcl` | Dropped. It pinned `= 5.24.0`, which no longer matches the constraint, and a submodule lock file is not used by consumers. |
+| Callers: `examples/cloudflare/terraform`, `terraform/deployments/cloudflare`, `terraform/deployments/cloudflare-verify`, `docs/guides/cloudflare-deployment.md`, `docs/architecture/repository-layout.md`, root `package.json` (`test:provider-delivery`), root `Taskfile.yml` (`cloudflare-module:check`), `.github/workflows/verify.yml` (new `terraform-cloudflare` job) | Updated. Resource addresses did not change; no `moved` blocks were needed. |
+
+Monorepo adaptations of package scripts: `scripts/validate.sh` defaults the Artifact Pages checkout to the repository root (override with `ARTIFACT_PAGES_APPREPO_DIR`); `tests/cli-contract/validator.go` imports `github.com/artifact-pages/artifact-pages/cli/internal/config`, uses `go.yaml.in/yaml/v3` and carries `//go:build ignore` so `go vet ./...` skips it (the script strips the constraint when copying it into the CLI tree); `scripts/check-package.py` handles a module that is a repository subdirectory. `RELEASE.md` and the Registry-address text in `README.md` are copied unchanged and left for IMP-64/IMP-38 to reconcile (module versions are independent of the product version, as RELEASE.md already states).
+
+### Cloudflare verification
+
+- `scripts/validate.sh` under Terraform 1.9.8 (fmt, init and validate of root and local example, root `terraform test` 9/9, `tests/cli-contract` 3/3, delivery submodule `terraform test` 19/19, prevent-destroy and lifecycle round-trip fixtures, `node --test tests/*.test.js` 12/12, module-address migration fixture with no changes): passed.
+- `npm run test:provider-delivery` (AWS tests plus the Cloudflare module and delivery tests): 34/34.
+- Read-only plan of `terraform/deployments/cloudflare-verify` (module now `../../modules/cloudflare`, Terraform 1.16.4, a copy of the verification state, no lock, no apply): `No changes`. This is stricter than the "expected additions" in the acceptance criteria because the verification zone was last applied from `80b2198`.
+- File-level superset check against `80b2198` (all 51 package files): every file is present at the same relative path under `terraform/modules/cloudflare/`, byte-identical except for these deliberate differences: `scripts/validate.sh`, `scripts/check-package.py`, `tests/cli-contract/validator.go`, `tests/cli-validation-layout.test.js`, `README.md` (two validation sentences), `Taskfile.yml` (added `check`). Monorepo-only addition: `modules/delivery/main.test.js`. Nothing from the package is missing; the only monorepo-only content dropped is listed in the table above.
+
+### Still open
+
+- AWS (all AWS diffs and acceptance criteria): follow-up PR after `cli-sync-remove` lands.
+- The Cloudflare criterion "plan shows only the expected additions" is met as no changes against the verification state; production was not planned here.
+- Generator (IMP-64) must exclude monorepo-only files (`modules/delivery/main.test.js`) and rewrite the Registry address if the namespace changes.

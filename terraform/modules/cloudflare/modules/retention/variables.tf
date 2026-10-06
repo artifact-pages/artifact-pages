@@ -27,3 +27,22 @@ variable "preview_retention_days" {
     error_message = "preview_retention_days must be a whole number from 1 to 36500."
   }
 }
+
+variable "additional_lifecycle_rules" {
+  description = "All existing non-module lifecycle rules to preserve in the bucket's complete lifecycle configuration. This provider resource cannot import or destroy the API lifecycle configuration."
+  type        = list(any)
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for rule in var.additional_lifecycle_rules : try(
+        trimspace(rule.id) != "" && !contains([
+          "expire-preview-objects",
+          "abort-preview-multipart-uploads",
+        ], rule.id),
+        false,
+      )
+    ]) && length(distinct([for rule in var.additional_lifecycle_rules : try(rule.id, null)])) == length(var.additional_lifecycle_rules)
+    error_message = "additional_lifecycle_rules must have unique non-empty IDs and must not reuse module-owned preview rule IDs."
+  }
+}
