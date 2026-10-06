@@ -1316,6 +1316,29 @@ test('a resting pointer under the palette does not steal the typed match', async
   await expect(page).toHaveURL(new RegExp(`/sre/${CHECKOUT_PATH.replaceAll('/', '\\/')}$`))
 })
 
+test('arrow keys win over a resting pointer while the list scrolls', async ({ page }) => {
+  // The fixtures list at most 8 rows, so a short viewport is what makes the list scroll.
+  await page.setViewportSize({ width: 1280, height: 360 })
+  await page.goto('/textsearch')
+  await page.getByRole('button', { name: /^Jump to a page in/ }).click()
+  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  const options = palette.getByRole('option')
+  await expect(options).toHaveCount(8)
+  await expect(options.nth(0)).toHaveAttribute('aria-selected', 'true')
+  const results = palette.locator('.palette-results')
+  expect(await results.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true)
+  const box = await options.nth(2).boundingBox()
+  if (!box) throw new Error('palette row has no bounding box')
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  for (let step = 1; step <= 7; step += 1) {
+    await page.keyboard.press('ArrowDown')
+    await expect(options.nth(step)).toHaveAttribute('aria-selected', 'true')
+    await expect(palette.locator('[aria-selected="true"]')).toHaveCount(1)
+  }
+  expect(await results.evaluate((el) => el.scrollTop)).toBeGreaterThan(0)
+})
+
 test('blank palette with no history shows guidance and ranked pages', async ({ page }) => {
   await page.goto('/sre')
   await page.getByRole('button', { name: 'Jump to a page in SRE' }).click()
