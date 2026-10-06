@@ -1,6 +1,6 @@
 # Cloudflare edge features rewrite delivered artifact HTML
 
-- Status: In progress
+- Status: Done
 - Priority: P1
 - Area: Cloudflare delivery, Terraform module
 
@@ -21,7 +21,7 @@ On production (`artifact-pages.dev`) the Cloudflare-proxied hostname altered pub
 
 8. Applied 2026-10-06: admin PR #7 merged (module pin `80b2198`, module PR #1). A production `terraform apply` from `admin/terraform` created `cloudflare_ruleset.unchanged_delivery` (phase `http_config_settings`, ruleset id `b0f6d6c4b6f74f658e7e3aac8b9e4208`, scoped to the `artifact-pages.dev` host) which disables email obfuscation, Rocket Loader, Automatic HTTPS Rewrites, Fonts, RUM, Zaraz, Content Converter and Polish, plus the semantically unchanged R2 lifecycle. A re-plan reported no changes. The token needed only Zone Settings edit, not a separate Config Rules permission.
 9. With the rule in place, zone-wide Email Obfuscation was switched back on and the cache purged. All 24 guide and architecture HTML files fetched from `https://artifact-pages.dev/_artifacts/` were byte-identical (SHA-256) to the sources in `artifact-pages/docs`, with 0 occurrences of `__cf_email__` or `/cdn-cgi/`.
-10. Not yet applied to the verification zone `artifact-pages.stream`: its plan still shows `unchanged_delivery` pending.
+10. Applied 2026-10-06 to the verification zone `artifact-pages.stream` (zone `b647a1ef28dde558fa8b80b50ad0c040`): `terraform apply` in `terraform/deployments/cloudflare-verify` created `cloudflare_ruleset.unchanged_delivery` (id `d09e028ab0d040769b38879b8ed3a527`, expression `lower(http.host) eq "artifact-pages.stream"`) and the R2 lifecycle. A re-plan reported no changes and the state was backed up. The monorepo `terraform/modules/cloudflare` copy still lacks the fix until IMP-63 lands.
 
 Confirmed: email obfuscation rewrote the body. Not yet confirmed on production: whether the other features rewrite artifact bodies today; the module disables them as a precaution.
 
@@ -31,9 +31,9 @@ The Terraform module owns an `http_config_settings` rule scoped to the Artifact 
 
 ## Acceptance criteria
 
-- [ ] The module change (terraform-cloudflare-artifact-pages PR #1) is merged and applied to the verification zone, then production. Merged and applied to production on 2026-10-06 (the token needed only Zone Settings edit); the verification-zone apply is still pending.
+- [x] The module change (terraform-cloudflare-artifact-pages PR #1) is merged and applied to the verification zone, then production. Merged and applied to production on 2026-10-06 (the token needed only Zone Settings edit) and to the verification zone on 2026-10-06 (item 10).
 - [x] With the zone-wide dashboard setting restored to its default, `guide/en/publishing.html` served from production hashes equal to the Git blob and contains no `__cf_email__` or `/cdn-cgi/` script.
-- [x] A raw preview HTML object on production also hashes equal to its published bytes. Verified 2026-10-06, see Preview verification. Not yet checked; the 2026-10-06 evidence covers only `_artifacts/` pages.
+- [x] A raw preview HTML object on production also hashes equal to its published bytes. Verified 2026-10-06, see Preview verification.
 - [x] `docs/specification.md` states the unchanged-delivery contract (stated in the delivery section).
 
 ## Preview verification (2026-10-06)
