@@ -1270,6 +1270,75 @@ test('blank palette with a pinned current page keeps it once under Pinned, unsel
   await expect(palette.getByRole('option', { name: /Checkout latency incident review/ })).toHaveAttribute('aria-selected', 'true')
 })
 
+test('typing then pressing Enter at once opens the first match even when the blank default is not the first row', async ({ page }) => {
+  // The only listed page is the open (pinned) one, so the blank default selection is -1.
+  await page.goto(`/sre/${TOPOLOGY_PATH}`)
+  const currentRow = page.locator(`.browse-tree .tree-artifact[data-tree-path="${TOPOLOGY_PATH}"][aria-current="page"]`).locator('xpath=..')
+  await currentRow.getByRole('button', { name: 'Actions for Platform topology' }).click()
+  await page.getByRole('menu', { name: 'Platform topology actions' }).getByRole('menuitem', { name: 'Pin' }).click()
+  await page.reload()
+  await expect(page.locator('.pinned-tree .tree-artifact')).toContainText('Platform topology')
+
+  const palette = await openPaletteWithShortcut(page)
+  await expect(palette.getByRole('option', { name: /Platform topology/ })).toHaveAttribute('aria-current', 'page')
+  await expect(palette.locator('[aria-selected="true"]')).toHaveCount(0)
+
+  // No waits: the new query's entries must pair with the new query's default selection.
+  const search = palette.getByRole('textbox', { name: PALETTE_SEARCH_LABEL })
+  await search.fill('Checkout latency')
+  await search.press('Enter')
+  await expect(page).toHaveURL(new RegExp(`/sre/${CHECKOUT_PATH.replaceAll('/', '\\/')}$`))
+})
+
+test('a resting pointer under the palette does not steal the typed match', async ({ page }) => {
+  await page.goto(`/sre/${CHECKOUT_PATH}`)
+  await expect(page.locator('iframe.artifact-frame')).toBeVisible()
+  await page.goto(`/sre/${TOPOLOGY_PATH}`)
+  await expect(page.locator('iframe.artifact-frame')).toBeVisible()
+
+  // Rest the pointer on the second blank-palette row; the typed query's second row is another page.
+  let palette = await openPaletteWithShortcut(page)
+  const secondRow = palette.getByRole('option').nth(1)
+  await expect(secondRow).toContainText('Checkout latency incident review')
+  const box = await secondRow.boundingBox()
+  if (!box) throw new Error('palette row has no bounding box')
+  await page.keyboard.press('Escape')
+  await expect(palette).toHaveCount(0)
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+
+  palette = await openPaletteWithShortcut(page)
+  const search = palette.getByRole('textbox', { name: PALETTE_SEARCH_LABEL })
+  await search.fill('latency')
+  // Two rows match; Chromium reports the pointer as entering the row that now sits under it.
+  await expect(palette.getByRole('option')).toHaveCount(2)
+  await expect(palette.getByRole('option').first()).toContainText('Checkout latency incident review')
+  await search.press('Enter')
+  await expect(page).toHaveURL(new RegExp(`/sre/${CHECKOUT_PATH.replaceAll('/', '\\/')}$`))
+})
+
+test('arrow keys win over a resting pointer while the list scrolls', async ({ page }) => {
+  // The fixtures list at most 8 rows, so a short viewport is what makes the list scroll.
+  await page.setViewportSize({ width: 1280, height: 360 })
+  await page.goto('/textsearch')
+  await page.getByRole('button', { name: /^Jump to a page in/ }).click()
+  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  const options = palette.getByRole('option')
+  await expect(options).toHaveCount(8)
+  await expect(options.nth(0)).toHaveAttribute('aria-selected', 'true')
+  const results = palette.locator('.palette-results')
+  expect(await results.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true)
+  const box = await options.nth(2).boundingBox()
+  if (!box) throw new Error('palette row has no bounding box')
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  for (let step = 1; step <= 7; step += 1) {
+    await page.keyboard.press('ArrowDown')
+    await expect(options.nth(step)).toHaveAttribute('aria-selected', 'true')
+    await expect(palette.locator('[aria-selected="true"]')).toHaveCount(1)
+  }
+  expect(await results.evaluate((el) => el.scrollTop)).toBeGreaterThan(0)
+})
+
 test('blank palette with no history shows guidance and ranked pages', async ({ page }) => {
   await page.goto('/sre')
   await page.getByRole('button', { name: 'Jump to a page in SRE' }).click()

@@ -18,7 +18,7 @@ export async function resolve(specifier, context, nextResolve) {
 }
 `), import.meta.url)
 
-const { buildSections, defaultSelectionIndex, nextSelectionIndex } = await import('../web/src/domain/palette-sections.ts')
+const { buildSections, defaultSelectionIndex, nextSelectionIndex, resolveSelectedIndex } = await import('../web/src/domain/palette-sections.ts')
 
 const artifact = (id, title, extra = {}) => ({
   id,
@@ -147,4 +147,20 @@ test('arrow from a valid index keeps clamped movement', () => {
   assert.equal(nextSelectionIndex(entries, 2, 1), 2)
   assert.equal(nextSelectionIndex(entries, 0, -1), 0)
   assert.equal(nextSelectionIndex(entries, 2, -1), 1)
+})
+
+test('stored selection from another key falls back to the default', () => {
+  assert.equal(resolveSelectedIndex({ key: 'a', index: 3 }, 'b', 1, 5), 1)
+  assert.equal(resolveSelectedIndex({ key: 'a', index: 0 }, 'b', -1, 5), -1)
+})
+
+test('stored selection beyond the entries falls back to the default', () => {
+  assert.equal(resolveSelectedIndex({ key: 'a', index: 4 }, 'a', 0, 2), 0)
+  assert.equal(resolveSelectedIndex({ key: 'a', index: 2 }, 'a', 5, 2), -1)
+  assert.equal(resolveSelectedIndex({ key: 'a', index: 0 }, 'a', -1, 0), -1)
+})
+
+test('stored selection within the entries is kept', () => {
+  assert.equal(resolveSelectedIndex({ key: 'a', index: 1 }, 'a', 0, 3), 1)
+  assert.equal(resolveSelectedIndex({ key: 'a', index: -1 }, 'a', 0, 3), -1)
 })

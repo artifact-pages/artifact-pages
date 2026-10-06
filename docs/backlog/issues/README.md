@@ -66,5 +66,6 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-069](ISSUE-069-cloudflare-edge-rewrites-artifact-html.md) | Done | P1 | Cloudflare edge features (email obfuscation and similar) rewrite delivered artifact HTML; the module must disable them for the hostname. |
 | [ISSUE-070](ISSUE-070-pr-dry-run-source-ref-noise.md) | Open | P3 | PR dry-run of site publish always reports index.json updates because `source.ref` follows the checkout branch. |
 | [ISSUE-071](ISSUE-071-remote-config-auth-error-unclear.md) | Done | P2 | A private deployment config the token cannot read fails with an unactionable HTTP status. |
+| [ISSUE-073](ISSUE-073-palette-enter-uses-stale-selection.md) | Done | P2 | Pressing Enter right after typing in the command palette can do nothing or open the wrong page (regression from #34). |
 
 ISSUE-013's verified completion record is retained in Git history.
