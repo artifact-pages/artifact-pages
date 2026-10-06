@@ -282,6 +282,7 @@ export function CommandPalette({
                       )}
                       {entry.badge ? <span className="palette-entry-badge">{entry.badge}</span> : null}
                       {entry.shortcut ? <kbd>{entry.shortcut}</kbd> : null}
+                      {selected ? <kbd className="palette-entry-enter" aria-hidden="true">↵</kbd> : null}
                     </button>
                   )
                 })}

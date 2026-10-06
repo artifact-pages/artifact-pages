@@ -1860,6 +1860,8 @@ mark {
   border-radius: 8px;
   color: var(--text-secondary);
   text-align: left;
+  position: relative;
+  padding-right: 34px;
 }
 
 .palette-entry:hover,
@@ -1868,17 +1870,19 @@ mark {
   background: var(--active);
 }
 
-/* The open document: a quiet accent bar and a stronger badge, not color alone. */
-.palette-entry--current {
-  box-shadow: inset 2px 0 0 var(--palette-match);
-}
-
-.palette-entry.is-selected {
-  box-shadow: inset 2px 0 0 var(--text);
-}
-
-.palette-entry--current.is-selected {
-  box-shadow: inset 2px 0 0 var(--text), inset 4px 0 0 var(--palette-match);
+/* The selected row shows an Enter hint; space is reserved on every row so nothing shifts. */
+.palette-entry-enter {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  background: transparent;
+  font-size: 11px;
+  line-height: 18px;
+  transform: translateY(-50%);
 }
 
 .palette-entry-icon {
@@ -1968,6 +1972,18 @@ mark {
   color: var(--text);
   font-size: 11px;
   font-weight: 600;
+}
+
+/* The open document: a dot before the badge, not color alone (the badge text and aria-current carry it). */
+.palette-entry--current .palette-entry-badge::before {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--palette-match);
+  content: '';
+  vertical-align: middle;
 }
 
 .palette-entry.is-selected .palette-entry-subtitle {

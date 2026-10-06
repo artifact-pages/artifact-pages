@@ -1244,6 +1244,10 @@ test('blank palette marks the current page and does not select it', async ({ pag
   const selected = palette.locator('[aria-selected="true"]')
   await expect(selected).toHaveCount(1)
   await expect(selected).not.toHaveAttribute('aria-current', 'page')
+  // Only the selected row shows the Enter hint.
+  await expect(selected.locator('.palette-entry-enter')).toBeVisible()
+  await expect(palette.locator('.palette-entry-enter')).toHaveCount(1)
+  await expect(current.locator('.palette-entry-enter')).toHaveCount(0)
 })
 
 test('blank palette with a pinned current page keeps it once under Pinned, unselected, and selects the next page', async ({ page }) => {
@@ -1373,6 +1377,20 @@ test.describe('mobile viewport', () => {
     expect(title && badge && box).toBeTruthy()
     expect(badge!.y).toBeGreaterThanOrEqual(title!.y + title!.height - 1)
     expect(box!.height).toBeGreaterThanOrEqual(44)
+    // Select another row (hover) so the Enter hint is shown, and keep it clear of the title.
+    const other = palette.getByRole('option', { name: /Checkout latency incident review/ })
+    await expect(other.locator('.palette-entry-enter')).toBeVisible()
+    for (const row of [other, current]) {
+      const rowTitle = await row.locator('.palette-entry-title').boundingBox()
+      expect(rowTitle).toBeTruthy()
+      await row.hover()
+      const enter = await row.locator('.palette-entry-enter').boundingBox()
+      expect(enter).toBeTruthy()
+      const apart = enter!.x >= rowTitle!.x + rowTitle!.width || enter!.y >= rowTitle!.y + rowTitle!.height
+        || enter!.x + enter!.width <= rowTitle!.x || enter!.y + enter!.height <= rowTitle!.y
+      expect(apart).toBe(true)
+    }
+    await current.hover()
     const overflow = await palette.locator('.palette-results').evaluate((element) => element.scrollWidth <= element.clientWidth)
     expect(overflow).toBe(true)
 
