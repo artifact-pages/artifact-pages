@@ -9,7 +9,7 @@
 Regression from PR #34 (ISSUE-048), with two manifestations that both make Enter act on a row other than the typed match.
 
 1. Stale selection. `selectedIndex` was reset in a `useEffect` after the render for a new query or new entries, so for one render the new `entries` were paired with the old `selectedIndex`, and `handleKeyDown` read that pair on Enter. Before #34 the default was almost always 0, so the stale value happened to be correct. Since #34, `defaultSelectionIndex` can return -1 or a value above 0 in the blank state (the open page is skipped), so a fast type-then-Enter does nothing (`entries[-1]`) or opens the wrong row.
-2. Hover. `onMouseEnter` selected a row. With the pointer resting where palette rows render, Chromium fires `mouseenter` on the row that appears under it, so the selection moved to the hovered row and Enter opened it instead of the typed match.
+2. Hover. `onMouseEnter` selected a row. With the pointer resting where palette rows render, Chromium appears to fire `mouseenter` on the row that appears under it (inferred from the 37/50 probe below, not observed directly), so the selection moved to the hovered row and Enter opened it instead of the typed match.
 
 ## Evidence and reproduction
 
