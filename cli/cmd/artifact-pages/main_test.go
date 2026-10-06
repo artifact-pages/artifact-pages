@@ -1545,3 +1545,40 @@ func TestFullTextFlagIsRemoved(t *testing.T) {
 		}
 	}
 }
+
+func TestConfigSetDefaultHelpAndFlagLikeLocatorWriteNothing(t *testing.T) {
+	configHome := t.TempDir()
+	t.Setenv("HOME", configHome)
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+	t.Setenv("AppData", configHome)
+	workingDirectory := t.TempDir()
+	t.Chdir(workingDirectory)
+
+	for _, flagArg := range []string{"--help", "-h"} {
+		var stdout, stderr bytes.Buffer
+		if err := run(t.Context(), []string{"config", "set-default", flagArg}, &stdout, &stderr); err != nil {
+			t.Fatalf("run(config set-default %s) error = %v, want nil", flagArg, err)
+		}
+		if !strings.Contains(stdout.String(), "config set-default LOCATOR") {
+			t.Errorf("config set-default %s did not print usage:\n%s", flagArg, stdout.String())
+		}
+	}
+	for _, flagArg := range []string{"--dry-run", "-x", "--config=foo"} {
+		var stdout, stderr bytes.Buffer
+		err := run(t.Context(), []string{"config", "set-default", flagArg}, &stdout, &stderr)
+		var coded *commandError
+		if err == nil || !errors.As(err, &coded) || coded.exitCode != 2 {
+			t.Fatalf("run(config set-default %s) error = %v, want exit code 2", flagArg, err)
+		}
+	}
+	var written []string
+	_ = filepath.WalkDir(configHome, func(path string, entry os.DirEntry, err error) error {
+		if err == nil && !entry.IsDir() {
+			written = append(written, path)
+		}
+		return nil
+	})
+	if len(written) != 0 {
+		t.Errorf("config set-default wrote files %v, want none", written)
+	}
+}

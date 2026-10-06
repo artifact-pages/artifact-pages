@@ -317,7 +317,11 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 			writeConfigUsage(stdout)
 			return nil
 		}
-		if args[1] != "set-default" || len(args) != 3 {
+		if args[1] == "set-default" && len(args) >= 3 && (args[2] == "--help" || args[2] == "-h") {
+			writeConfigUsage(stdout)
+			return nil
+		}
+		if args[1] != "set-default" || len(args) != 3 || strings.HasPrefix(args[2], "-") {
 			writeConfigUsage(stderr)
 			return withExitCode(errors.New("usage: artifact-pages config set-default LOCATOR"), 2)
 		}
