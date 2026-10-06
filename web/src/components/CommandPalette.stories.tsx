@@ -22,9 +22,27 @@ const recentReads = currentIndex.artifacts.slice(1, 4).map((artifact, order) => 
 }))
 const pinnedArtifactIds = currentIndex.artifacts.slice(4, 5).map(({ id }) => id)
 
-type PaletteStoryArgs = { seed: string; context: PaletteContext }
+// The current page with an extra heading that also names another page, so a typed query can match both.
+const currentWithOverlappingHeading: ArtifactIndexEntry = {
+  ...currentArtifact,
+  toc: [...(currentArtifact.toc ?? []), { id: 'gateway-timeout-notes', text: 'Gateway timeout notes', level: 2 }],
+}
 
-function PaletteStory({ seed, context }: PaletteStoryArgs) {
+type PaletteHistory = 'default' | 'none' | 'only-current' | 'current-pinned'
+type PaletteStoryArgs = { seed: string; context: PaletteContext; history?: PaletteHistory; overlappingHeading?: boolean }
+
+function historyFor(history: PaletteHistory) {
+  if (history === 'none') return { reads: [], pinned: [] as string[] }
+  if (history === 'only-current') return { reads: [{ artifactId: currentArtifact.id, viewedAt: now }], pinned: [] as string[] }
+  if (history === 'current-pinned') return { reads: recentReads, pinned: [currentArtifact.id] }
+  return { reads: [{ artifactId: currentArtifact.id, viewedAt: now }, ...recentReads], pinned: pinnedArtifactIds }
+}
+
+const phone390 = { name: 'Phone 390', styles: { width: '390px', height: '844px' }, type: 'mobile' as const }
+
+function PaletteStory({ seed, context, history = 'default', overlappingHeading = false }: PaletteStoryArgs) {
+  const { reads, pinned } = historyFor(history)
+  const openArtifact = overlappingHeading ? currentWithOverlappingHeading : currentArtifact
   const [isOpen, setIsOpen] = useState(true)
   const commands: PaletteCommand[] = [
     { title: 'Toggle sidebar', shortcut: '⌘ B', onSelect: () => undefined },
@@ -41,9 +59,9 @@ function PaletteStory({ seed, context }: PaletteStoryArgs) {
       context={context}
       sites={sites}
       currentIndex={currentIndex}
-      currentArtifact={currentArtifact}
-      recentReads={recentReads}
-      pinnedArtifactIds={pinnedArtifactIds}
+      currentArtifact={openArtifact}
+      recentReads={reads}
+      pinnedArtifactIds={pinned}
       commands={commands}
       loading={false}
       onClose={() => setIsOpen(false)}
@@ -112,4 +130,32 @@ export const Commands: Story = {
 
 export const Headings: Story = {
   args: { context: 'artifact', seed: '#' },
+}
+
+// Blank palette states: the open page is marked and never preselected.
+export const BlankNoHistory: Story = {
+  args: { context: 'artifact', history: 'none' },
+}
+
+export const BlankOnlyCurrent: Story = {
+  args: { context: 'artifact', history: 'only-current' },
+}
+
+export const BlankWithCurrentPinned: Story = {
+  args: { context: 'artifact', history: 'current-pinned' },
+}
+
+// Typed queries: documents lead; headings and commands appear only when no page matches.
+export const TypedWithHeadingMatches: Story = {
+  args: { context: 'artifact', seed: 'timeout', overlappingHeading: true },
+}
+
+export const TypedNoPageMatchFallback: Story = {
+  args: { context: 'artifact', seed: 'root cause' },
+}
+
+export const Phone390Blank: Story = {
+  args: { context: 'artifact' },
+  parameters: { viewport: { options: { phone390 } } },
+  globals: { viewport: { value: 'phone390', isRotated: false } },
 }
