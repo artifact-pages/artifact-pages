@@ -1288,12 +1288,18 @@ test('blank palette lists no Commands section and hints at > # @', async ({ page
 })
 
 test('typing a page name lists only Pages (and Page text), not headings or commands', async ({ page }) => {
-  // The open page has a heading "Topology" that also matches the query.
-  await page.goto(`/sre/${TOPOLOGY_PATH}`)
-  await expect(page.locator('iframe.artifact-frame')).toBeVisible()
+  // "recovery" is the title of the page "Service recovery" and also matches two headings on the open page.
+  await page.goto('/sre/runbooks/service-recovery.md')
+  await expect(page.locator('.markdown-scroll')).toBeVisible()
   const palette = await openPaletteWithShortcut(page)
-  await palette.getByRole('textbox', { name: PALETTE_SEARCH_LABEL }).fill('topology')
-  await expect(palette.getByRole('option', { name: /Platform topology/ })).toBeVisible()
+  const search = palette.getByRole('textbox', { name: PALETTE_SEARCH_LABEL })
+  // Precondition: the same query does find headings when asked for with "#".
+  await search.fill('#recovery')
+  expect(await palette.getByRole('option').count()).toBeGreaterThan(0)
+  await expect(palette.getByRole('option', { name: /Recovery checks/ })).toBeVisible()
+
+  await search.fill('recovery')
+  await expect(palette.getByRole('option', { name: /Service recovery/ })).toBeVisible()
   await expect(palette.locator('.palette-section-title')).toHaveText(['Pages'])
   await expect(palette.locator('.palette-entry-subtitle', { hasText: /^Heading/ })).toHaveCount(0)
 })
