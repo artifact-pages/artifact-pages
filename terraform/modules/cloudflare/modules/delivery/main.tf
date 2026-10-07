@@ -180,6 +180,14 @@ resource "cloudflare_r2_custom_domain" "public" {
   min_tls     = var.minimum_tls_version
 }
 
+# Keep the bucket's r2.dev public development URL disabled. If it were enabled (for example in the
+# dashboard), the whole bucket, including _control/*, would be public and bypass the zone's rules.
+resource "cloudflare_r2_managed_domain" "development" {
+  account_id  = var.account_id
+  bucket_name = var.bucket_name
+  enabled     = false
+}
+
 resource "cloudflare_ruleset" "waf_custom_rules" {
   count = var.waf_custom_rules == null ? 0 : 1
 

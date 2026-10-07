@@ -48,8 +48,8 @@ test('one entry module creates and shares one bucket and one validated retention
   assert.match(outputs, /bucket\s*=\s*cloudflare_r2_bucket\.origin\.name/u)
 })
 
-test('delivery preserves logical routes, cache policy, and opt-in WAF ownership without managing r2.dev', () => {
-  assert.doesNotMatch(delivery, /cloudflare_r2_managed_domain/u)
+test('delivery preserves logical routes, cache policy, and opt-in WAF ownership and keeps r2.dev disabled', () => {
+  assert.match(delivery, /resource\s+"cloudflare_r2_managed_domain"\s+"development"\s*\{[^}]*?enabled\s*=\s*false\s*\}/u)
   assert.match(delivery, /action\s*=\s*"rewrite"[\s\S]*?value\s*=\s*"\/index\.html"/u)
   assert.match(main, /waf_custom_rules\s*=\s*var\.waf_custom_rules/u)
   assert.match(variables, /variable\s+"waf_custom_rules"[\s\S]*?default\s*=\s*null/u)
