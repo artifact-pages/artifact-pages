@@ -1,0 +1,5 @@
+cloudflare_account_id  = "00000000000000000000000000000000"
+cloudflare_zone_id     = "11111111111111111111111111111111"
+r2_bucket_name         = "artifact-pages-example-0001"
+public_hostname        = "artifacts.example.com"
+preview_retention_days = 1

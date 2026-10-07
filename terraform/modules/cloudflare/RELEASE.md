@@ -1,0 +1,32 @@
+# Cloudflare module release procedure
+
+The authoritative implementation lives in this provider repository. Root `main.tf` composes only `./modules/delivery` and `./modules/retention`. Consumers require no Artifact Pages OSS checkout. The optional developer CLI-output integration tests in `scripts/validate.sh` require an explicitly selected OSS checkout via `ARTIFACT_PAGES_APPREPO_DIR`; this is a test dependency, not a Terraform module dependency.
+
+## Local release preparation
+
+Candidate `0.1.0` is proposed, not approved or published. Module versions are independent of the web bundle and CLI/Action source commits. The initial scope includes the root entry, delivery/retention submodules, optional WAF rules, and registry-reader config output. WAF parsing/enforcement and provider lifecycle timing still need separate live evidence; successful initialization does not establish them.
+
+1. Finish and independently review all selected module changes, including optional WAF and retention convergence fixes. Preserve unrelated work. Commit them in this authoritative repository and select the full clean commit SHA; do not tag an earlier smoke pin or an uncommitted working tree.
+2. Record the selected module commit, the OSS CLI commit used for output-contract tests, Terraform version, selected provider versions, and actual results. Run `ARTIFACT_PAGES_APPREPO_DIR=/absolute/clean/oss/checkout ./scripts/validate.sh` under Terraform 1.9.8. Its fixture applies affect only temporary local state and a loopback HTTP server, never a Cloudflare account.
+3. Run `python3 scripts/check-package.py --commit FULL_SHA` under Terraform 1.9.8. Repeat with `--provider-version 5.24.0` to check the declared minimum provider. The check exports the committed package, checks required files and generated-data exclusions, validates the root/local example, and retrieves the exact commit through Terraform's local Git downloader into an isolated consumer. It does not need a sibling OSS checkout. It never plans or applies infrastructure.
+4. Review complete input/output descriptions, MIT license, provider constraints, nested-module paths, examples, ownership/import guidance, and migration notes. Compare the candidate tree to the reviewed tree. Any module change after validation requires a new SHA and affected checks.
+
+A local snapshot commit made for testing an uncommitted shared checkout is evidence only. First land the reviewed changes in this authoritative repository, then rerun the checks at that exact authoritative commit before publication. A snapshot SHA must not be substituted for the owner-approved release SHA.
+
+## Owner-approved first publication
+
+Recheck [HashiCorp publication requirements](https://developer.hashicorp.com/terraform/registry/modules/publish) and [standard module structure](https://developer.hashicorp.com/terraform/language/modules/develop/structure) at publication time. As checked October 2, 2026, the public Registry requires a public GitHub repository named `terraform-<PROVIDER>-<NAME>`, a repository description, standard module structure, and at least one SemVer tag (optional `v` prefix).
+
+Before external actions, obtain explicit approval for the exact release commit, version, source push, immutable tag push, and Registry/GitHub account connection/publication. Confirm that the advertised Cloudflare scope has the required T15 evidence. Local preparation does not authorize these actions.
+
+1. Verify the owner-selected remote is `https://github.com/tasuku43/terraform-cloudflare-artifact-pages`, that it is public, its one-sentence description is suitable, and the signed-in owner can publish in namespace `tasuku43`. Check remote branch/tag state and confirm the selected version is unused. Do not overwrite existing tags.
+2. Push the reviewed release commit to the approved branch. From that commit, create annotated tag `v0.1.0` (or the approved version), verify `git rev-parse v0.1.0^{commit}` equals the approved full SHA, and push that exact tag. No force pushes or moving release tags.
+3. Sign into Terraform Registry with the owner's GitHub account; authorize the required public-repository webhook/email access. Select the existing repository in the Upload/Publish Module flow and publish it. Record the actual module URL, version, source tag/commit, date, and dependency resolutions. Intended URL: `https://registry.terraform.io/modules/tasuku43/artifact-pages/cloudflare/0.1.0`.
+4. In a new temporary directory outside both repositories, copy only `examples/registry-consumer/*.tf`, set the actual approved version, and run `terraform init -backend=false -input=false`, `terraform validate`, and `terraform providers`. Save the generated lockfile and `.terraform/modules/modules.json` as retrieval evidence. Confirm the Registry source/version and nested module resolution; do not apply. Hand this evidence to T16.
+5. Update consumer guides and the OSS TD2 distribution table to the actually obtainable address/version. Separate module selection, fresh plan/apply review, CLI/Action source selection, and explicit app deployment.
+
+## Subsequent releases and upgrades
+
+Repeat review and validation for every exact commit. Push a new immutable SemVer tag; the Registry webhook discovers it. Use Registry Resync only if discovery fails. Keep earlier versions available; never replace their source. Changes to public inputs, outputs, defaults, ownership, or resource addresses require explicit compatibility/migration review when choosing patch/minor/major versions.
+
+For upgrades, callers pin an exact module version, preserve their provider lockfile, back up state securely, review module migration notes, and inspect a fresh plan before any apply. This candidate merges the former two preview lifecycle rules into one and orders rules by ID; existing callers should expect one lifecycle update preserving the configured periods. The module now also owns the `http_config_settings` zone root (unchanged delivery); a zone that already has Configuration Rules must import it and pass its rules through `existing_config_rules`, and the Terraform token needs `Config Rules Edit`. WAF defaults to null; enabling it owns the complete custom-firewall phase root and requires import/preservation of existing rules. Consult root/submodule READMEs before ownership changes. Reverting a module version does not reverse applied Terraform state changes. A module-only release does not require a new web-app version or deploy the app.

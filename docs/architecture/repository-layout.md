@@ -25,11 +25,11 @@ Fixtures remain at `fixtures/storage/`, outside the SPA source and output. nginx
 
 ## Terraform ownership
 
-`terraform/deployments/aws` and `terraform/deployments/cloudflare` are caller roots. They consume the independently versioned sibling module repositories `terraform-aws-artifact-pages` and `terraform-cloudflare-artifact-pages` through local relative paths; the selected source ref is therefore the sibling checkout's current working tree. These directories are not copies of those modules.
+`terraform/deployments/aws` and `terraform/deployments/cloudflare` are caller roots. `terraform/deployments/cloudflare` consumes `terraform/modules/cloudflare` in this repository; `terraform/deployments/aws` still consumes the sibling `terraform-aws-artifact-pages` checkout until IMP-63 covers AWS. These directories are not copies of those modules.
 
-`terraform/modules/aws` is the AWS provider module maintained in this repository. `terraform/modules/cloudflare/delivery` and `terraform/modules/cloudflare/retention` are reusable Cloudflare building blocks, and `examples/cloudflare/terraform` is a local caller for them.
+`terraform/modules/aws` is the AWS provider module maintained in this repository. `terraform/modules/cloudflare` is the Cloudflare module in Registry layout (root entry module, `modules/delivery`, `modules/retention`, `examples/`, `tests/`, `scripts/`) and the source of truth for the `terraform-cloudflare-artifact-pages` package (TD15); `examples/cloudflare/terraform` is a local caller of its submodules.
 
-The deployment roots and in-repository modules are separate source/release boundaries. In particular, `terraform/deployments/aws` consumes the sibling `terraform-aws-artifact-pages` checkout; it does not source `terraform/modules/aws`. Likewise, the Cloudflare deployment root consumes the sibling `terraform-cloudflare-artifact-pages` checkout, while the local example composes the in-repository delivery and retention modules. Similar provider behavior across these paths is intentional: module development/tests and the sibling-repository consumer workflow are independently versioned and one does not update the other. These components remain separately releasable from the web application as described by TD2; this layout does not publish or pin a Registry release.
+The deployment roots and in-repository modules are separate source/release boundaries. In particular, `terraform/deployments/aws` consumes the sibling `terraform-aws-artifact-pages` checkout; it does not source `terraform/modules/aws`. Likewise, the Cloudflare deployment roots and the local example consume the in-repository Cloudflare module. These components remain separately releasable from the web application as described by TD2; this layout does not publish or pin a Registry release.
 
 Tracked `.terraform.lock.hcl` files stay with their Terraform roots, modules, or examples. This move records Darwin arm64 provider checksums alongside the existing hashes without changing locked provider versions.
 
@@ -45,7 +45,7 @@ Before changing paths, the tracked layout had web source/config at the root (`sr
 | `cmd/`, `internal/` | `cli/cmd/`, `cli/internal/` | Keep root Go module and module path; update internal import paths, root `go run`/`go build`, scripts, guides, and Actions build targets. |
 | `terraform/{aws,cloudflare}` | `terraform/deployments/{aws,cloudflare}` | Update sibling-module relative sources, `.local` backend state paths, README commands, and local variable-file paths without moving ignored state or plugin data. |
 | `infra/aws` | `terraform/modules/aws` | Keep the in-repository AWS module and route-contract tests together; update root npm provider-test paths. |
-| `infra/cloudflare/{delivery,retention}` | `terraform/modules/cloudflare/{delivery,retention}` | Update the Cloudflare example caller, provider-test paths, module examples, and documentation links. |
+| `infra/cloudflare/{delivery,retention}` | `terraform/modules/cloudflare/modules/{delivery,retention}` | Update the Cloudflare example caller, provider-test paths, module examples, and documentation links. |
 | Repository-wide runner files and manifests | Remain at root | Continue resolving root `node_modules/`, `.local/`, `go.mod`, fixtures, Actions, Compose, and docs from the repository root. |
 
 The existing ignored `dist/`, `storybook-static/`, `node_modules/`, `.local/`, `test-results/`, and Terraform `.terraform/`/state/variable outputs were present during the inventory. They are generated or machine-local data and were excluded from tracked moves.
