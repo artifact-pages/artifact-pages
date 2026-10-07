@@ -1,10 +1,10 @@
 # TD17 — Config-pinned CLI and web versions, independently versioned components
 
-- Status: In progress
+- Status: Done
 - Assignee: Claude
 - Phase: Reusable distribution
-- Proposed: 2026-10-07 by the owner (draft for decision; nothing below is accepted behavior yet)
-- Would amend: [TD2](TD2-component-release-policy.md) (one product version, CLI-pinned web bundle, immutable tags during 0.x), [TD14](TD14-one-repository-per-action.md) (Action version decides the CLI version), specification §19 "Released CLI" and §22 (`app deploy` bundle selection)
+- Decision: Proposed and decided by the owner on 2026-10-07. Accepted behavior moves to the specification, TD2 and TD14 with the implementation slices below.
+- Amends (when implemented): [TD2](TD2-component-release-policy.md) (one product version, CLI-pinned web bundle, immutable tags during 0.x), [TD14](TD14-one-repository-per-action.md) (Action version decides the CLI version), specification §19 "Released CLI" and §22 (`app deploy` bundle selection)
 - Related design: [TD15](TD15-terraform-module-source-of-truth.md) (per-module tags, the model reused here), [TD12](TD12-action-consumer-contract.md), [T10](T10-config-location.md) (config layers)
 
 ## Problem
@@ -17,7 +17,7 @@ TD2 ties three things to one version: the CLI, the web bundle and the four Actio
 
 The original reason for one series (TD2 "Why the policy changed") was that the root `vX.Y.Z` tag is also the Go module version, so a web-only tag series would publish phantom CLI versions. Prefixed tags, as TD15 introduced for the Terraform modules, remove that reason: if the root series carries only the CLI, the tag and the Go module version mean the same thing again.
 
-## Proposal
+## Design
 
 ### 1. Independent version series
 
@@ -100,19 +100,16 @@ The Action needs `cli.version` before it has a CLI, and the config may be layere
 4. Sites use the new CLI on their next `site sync` or preview.
 5. For a breaking format change, the operator repository runs TD2's order (registry, app, then a republish of every site) from one place.
 
-## Decisions so far (owner, 2026-10-07)
+## Decisions (owner, 2026-10-07)
 
 - The component name is `web` (tag `web/vX.Y.Z`, config key `web`).
 - Storage records the deployed web version and, per site, the writing CLI version and formats; checks compare with storage (section 3).
 - Bump pull requests in operator repositories are the operator's concern, not the product's.
+- Config layers: `cli` and `web` may be set by at most one config layer; a second layer that sets either (even to the same value) is a config error (exit 2). `web` is deployment-wide, and a per-site `cli` layer would only add a persistent way to drift from the operator's choice. Deviating is possible only through the explicit override of section 4 (CLI flag, environment variable or Action input), which is validated and reported.
 - New series start at `0.1.0`.
 - While the product is pre-release (`0.x`), tags and releases may be deleted and re-created freely; TD2's "never moved" rule applies from the first non-pre-release. The Action repositories' existing `v0.1.0` tags (product release) are therefore deleted and re-created as the first per-Action `v0.1.0`; `admin` and `docs` repin in the same rollout.
 
-## Open points
-
-- Config layers: may a later layer (for example a site's local layer) set `cli`/`web`? Proposal: they are replaced as a unit like provider settings, and a site layer that changes `cli.version` is treated as an override (section 4).
-
-## Implementation slices (to file after the decision; owners per the agent split)
+## Implementation slices (to file as IMP items; owners per the agent split)
 
 - CLI: `cli`/`web` config keys, storage version records, compatibility data and `config check`, validation at command start, bootstrap re-exec, `app deploy` by `web.version` (Codex).
 - Release workflows: root tag CLI-only, `web/v*` and per-Action tags, generated-content check (Codex).
