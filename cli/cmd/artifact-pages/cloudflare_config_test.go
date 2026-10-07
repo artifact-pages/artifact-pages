@@ -89,3 +89,56 @@ func TestNewDeploymentBackendDoesNotRequireUnusedCloudflareRegistryReader(t *tes
 		t.Fatalf("registry-reading backend error = %v, want missing configured reader credentials", err)
 	}
 }
+
+func TestNewDeploymentBackendDerivesCloudflareR2CredentialsFromNamedAPIToken(t *testing.T) {
+	const apiToken = "config-token-for-derived-r2"
+	const tokenID = "fedcba9876543210fedcba9876543210"
+	const accountID = "0123456789abcdef0123456789abcdef"
+	var verifyRequests, objectRequests int
+	var verificationAuthorization, objectAuthorization string
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/client/v4/accounts/"+accountID+"/tokens/verify":
+			verifyRequests++
+			verificationAuthorization = request.Header.Get("Authorization")
+			writer.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(writer, `{"success":true,"result":{"id":"`+tokenID+`","status":"active"}}`)
+		case request.Method == http.MethodPut && request.URL.Path == "/artifact-pages/_artifacts/guide/index.html":
+			objectRequests++
+			objectAuthorization = request.Header.Get("Authorization")
+			writer.Header().Set("ETag", `"object-etag"`)
+			writer.WriteHeader(http.StatusOK)
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("CF_R2_ACCESS_KEY_ID", "")
+	t.Setenv("CF_R2_SECRET_ACCESS_KEY", "")
+	t.Setenv("CF_TOKEN_ONLY", apiToken)
+	config := deploymentconfig.DeploymentConfig{
+		SchemaVersion: 1,
+		Provider:      "cloudflare",
+		Cloudflare: &deploymentconfig.CloudflareTarget{
+			AccountID: accountID, Bucket: "artifact-pages", ZoneID: "abcdef0123456789abcdef0123456789",
+			PublicBaseURL: "https://pages.example.test", R2Endpoint: server.URL, APIBaseURL: server.URL + "/client/v4",
+			APITokenEnv: "CF_TOKEN_ONLY",
+		},
+	}
+	backend, err := newDeploymentBackend(context.Background(), config)
+	if err != nil {
+		t.Fatal("newDeploymentBackend() rejected a Cloudflare config with only a named API token")
+	}
+	if verifyRequests != 1 || verificationAuthorization != "Bearer "+apiToken {
+		t.Fatal("newDeploymentBackend() did not verify the token named by apiTokenEnv")
+	}
+	if err := backend.PutObject(context.Background(), "_artifacts/guide/index.html", publisher.Object{
+		Bytes: []byte("page"), ContentType: "text/html; charset=utf-8",
+	}); err != nil {
+		t.Fatal("newDeploymentBackend() did not use the derived R2 credentials")
+	}
+	if objectRequests != 1 || !strings.Contains(objectAuthorization, "Credential="+tokenID+"/") {
+		t.Fatal("newDeploymentBackend() did not sign the R2 request with the verified token ID")
+	}
+}

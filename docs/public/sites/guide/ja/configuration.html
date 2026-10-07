@@ -172,9 +172,9 @@
           <tr><td><code>zoneId</code></td><td><span class="pill on">必須</span></td><td>変更後にキャッシュを消すゾーン（16進数32文字）。</td></tr>
           <tr><td><code>publicBaseURL</code></td><td><span class="pill on">必須</span></td><td>読者が使う公開アドレス（HTTPS、パスなし）。キャッシュを消す依頼はこのアドレスで組み立てます。</td></tr>
           <tr><td><code>bucket</code></td><td><span class="pill">任意</span></td><td>R2のバケット。既定は<code>artifact-pages</code>。</td></tr>
-          <tr><td><code>accessKeyIdEnv</code>、<code>secretAccessKeyEnv</code></td><td><span class="pill">任意</span></td><td>R2のアクセスキーを入れる環境変数の名前。既定は<code>CF_R2_ACCESS_KEY_ID</code>と<code>CF_R2_SECRET_ACCESS_KEY</code>。</td></tr>
-          <tr><td><code>apiTokenEnv</code></td><td><span class="pill">任意</span></td><td>キャッシュを消すときに使うAPIトークンの変数名。既定は<code>CF_API_TOKEN</code>。</td></tr>
-          <tr><td><code>sessionTokenEnv</code></td><td><span class="pill">任意</span></td><td>R2の認証情報が一時的なものの場合に、セッショントークンを入れる変数名。</td></tr>
+          <tr><td><code>accessKeyIdEnv</code>、<code>secretAccessKeyEnv</code></td><td><span class="pill">任意</span></td><td>明示するR2キーの組を入れる環境変数の名前。既定は<code>CF_R2_ACCESS_KEY_ID</code>と<code>CF_R2_SECRET_ACCESS_KEY</code>です。次のCLIリリースでは、指定した環境変数の値が両方とも未設定または空の場合にキーを導出できます。明示する場合は必ず両方を設定してください。</td></tr>
+          <tr><td><code>apiTokenEnv</code></td><td><span class="pill">任意</span></td><td>キャッシュ削除と、次のCLIリリースでR2キーを導出するときに使うAPIトークンの変数名。既定は<code>CF_API_TOKEN</code>です。</td></tr>
+          <tr><td><code>sessionTokenEnv</code></td><td><span class="pill">任意</span></td><td>一時的なR2認証情報のセッショントークンを入れる変数名。明示したアクセスキーとシークレットが必要です。トークンから導出したキーとは組み合わせられません。</td></tr>
           <tr><td><code>registryReaderAccessKeyIdEnv</code>、<code>registryReaderSecretAccessKeyEnv</code>、<code>registryReaderSessionTokenEnv</code></td><td><span class="pill">任意</span></td><td><code>site sync</code>と<code>preview publish</code>が、サイトの登録情報を読むときだけに使う、読み取り専用の別の認証情報。最初の2つは組で設定します。<a href="#credentials">認証情報</a>を参照してください。</td></tr>
         </tbody>
       </table></div>
@@ -188,18 +188,30 @@
         <li><strong>AWS</strong>は、AWSの標準の認証情報の探し方に従います。環境変数、プロファイル、CIで引き受けるロール（GitHub ActionsのOIDCなど）が使えます。</li>
         <li><strong>Cloudflare</strong>は、<code>cloudflare</code>ブロックで名前を指定した環境変数を読みます。コマンドごとに必要なものは次のとおりです。</li>
       </ul>
+      <p>次のCLIリリースでは、アカウント、ゾーン、公開元と、認証情報の環境変数を1つだけ指定できます。</p>
+      <div class="term" aria-label="Cloudflare 1トークン方式の設定">
+        <div class="term-head"><span>artifact-pages.yaml / 1 TOKEN</span></div>
+<pre><span class="k">provider</span>: cloudflare
+<span class="k">cloudflare</span>:
+  <span class="k">accountId</span>: "&lt;32文字のアカウントID&gt;"
+  <span class="k">zoneId</span>: "&lt;32文字のゾーンID&gt;"
+  <span class="k">publicBaseURL</span>: https://docs.example.com
+  <span class="k">apiTokenEnv</span>: CF_PUBLISH_TOKEN</pre>
+      </div>
+      <p class="note">CIのsecret storeには<code>CF_PUBLISH_TOKEN</code>だけを安全に設定します。既定の<code>CF_R2_ACCESS_KEY_ID</code>と<code>CF_R2_SECRET_ACCESS_KEY</code>は設定せず、トークン値をこのファイルに書かないでください。</p>
       <div class="table-wrap"><table>
         <thead><tr><th>コマンド</th><th>R2のアクセスキーとシークレット</th><th>登録情報の読み取り用</th><th>APIトークン</th></tr></thead>
         <tbody>
-          <tr><td><code>site sync</code></td><td><span class="pill on">必須</span></td><td>設定したときだけ使う</td><td>サイトを変える実行と、終わっていないキャッシュ削除をやり直す実行で必要。書き込む前に確認する</td></tr>
-          <tr><td><code>preview publish</code></td><td><span class="pill on">必須</span></td><td>設定したときだけ使う</td><td>不要</td></tr>
-          <tr><td><code>registry sync</code></td><td><span class="pill on">必須</span></td><td>使わない</td><td>登録情報を変える実行、一覧から外したサイトを片付ける実行で必要。書き込む前に確認する</td></tr>
-          <tr><td><code>app deploy</code></td><td><span class="pill on">必須</span></td><td>使わない</td><td>アプリを変える実行ではすべて必要。書き込む前に確認する</td></tr>
-          <tr><td><code>lock inspect</code>、<code>lock recover</code></td><td><span class="pill on">必須</span></td><td>使わない</td><td>不要</td></tr>
+          <tr><td><code>site sync</code></td><td>キーの組が必須。次のCLIリリースでは導出もできます</td><td>設定したときだけ使う</td><td>明示したR2キーの場合はキャッシュ削除に必要です。次のCLIリリースでは、キーを導出する場合に起動時も必要です</td></tr>
+          <tr><td><code>preview publish</code></td><td>キーの組が必須。次のCLIリリースでは導出もできます</td><td>設定したときだけ使う</td><td>明示したR2キーなら不要です。次のCLIリリースでは、キーを導出する場合に起動時も必要です</td></tr>
+          <tr><td><code>registry sync</code></td><td>キーの組が必須。次のCLIリリースでは導出もできます</td><td>使わない</td><td>明示したR2キーの場合はキャッシュ削除に必要です。次のCLIリリースでは、キーを導出する場合に起動時も必要です</td></tr>
+          <tr><td><code>app deploy</code></td><td>キーの組が必須。次のCLIリリースでは導出もできます</td><td>使わない</td><td>明示したR2キーの場合はキャッシュ削除に必要です。次のCLIリリースでは、キーを導出する場合に起動時も必要です</td></tr>
+          <tr><td><code>lock inspect</code>、<code>lock recover</code></td><td>キーの組が必須。次のCLIリリースでは導出もできます</td><td>使わない</td><td>明示したR2キーなら不要です。次のCLIリリースでは、キーを導出する場合に起動時も必要です</td></tr>
           <tr><td><code>index build</code>、<code>config set-default</code></td><td>不要</td><td>使わない</td><td>不要</td></tr>
         </tbody>
       </table></div>
-      <p>APIトークンは、変わったURLのキャッシュ削除をCloudflareに依頼するために使います。内容を変える実行でトークンがないと、何も書き込まずに止まります。ドライランと、変更がない実行では、APIトークンはいりません。チームの公開ジョブに許可するのは、サイトの登録情報の読み取りと、そのサイトのファイルとキャッシュ再試行の記録（<code>_control/site-cache/&lt;site&gt;.json</code>）の読み取り・書き込み・削除、プレビューとロックの読み取り・書き込み、それにCDNへのキャッシュ更新の依頼（AWSではCloudFrontの無効化、Cloudflareではゾーンのキャッシュ削除）だけです。登録情報や閲覧アプリへの書き込みは必要ありません。登録情報の読み取り用の項目を設定すると、登録情報はその別の認証情報で読むので、主な認証情報をそのサイトだけに絞れます。項目を設定したのに値がない場合は、主な認証情報で代用せずに、公開を止めます。</p>
+      <p>明示したR2キーを使う場合、APIトークンは変わったURLのキャッシュ削除をCloudflareに依頼するために使います。削除が必要な実行でトークンがないと、何も書き込まずに止まります。ドライランと、変更がない実行では不要です。1トークン方式は次のCLIリリースから使えます。v0.1.0では引き続きR2のアクセスキーとシークレットが必要です。1トークン方式では、<code>accessKeyIdEnv</code>と<code>secretAccessKeyEnv</code>で指定した環境変数の値が両方とも未設定または空の場合に、CLIが<code>GET /accounts/{accountId}/tokens/verify</code>でアカウントAPIトークンを確認し、返されたトークンIDをR2アクセスキーID、トークン値そのもののSHA-256をR2シークレットとして使います。このトークンには対象バケットの<code>Workers R2 Storage Bucket Item Write</code>と、対象ゾーンの<code>Cache Purge</code>が必要です。ドライランや変更がない実行でも、起動時にトークンを確認します。明示したR2の値を両方設定すると、そちらが優先され、確認リクエストは行いません。片方だけの設定はエラーです。一時的なR2認証情報には明示したキーの組とセッショントークンが必要です。登録情報の読み取り用認証情報は別のままで、変更ありません。</p>
+      <p>チームの公開ジョブに許可するのは、サイトの登録情報の読み取りと、そのサイトのファイルとキャッシュ再試行の記録（<code>_control/site-cache/&lt;site&gt;.json</code>）の読み取り・書き込み・削除、プレビューとロックの読み取り・書き込み、それにCDNへのキャッシュ更新の依頼（AWSではCloudFrontの無効化、Cloudflareではゾーンのキャッシュ削除）だけです。登録情報や閲覧アプリへの書き込みは必要ありません。登録情報の読み取り用の項目を設定すると、登録情報はその別の認証情報で読むので、主な認証情報をそのサイトだけに絞れます。項目を設定したのに値がない場合は、主な認証情報で代用せずに、公開を止めます。</p>
     </section>
 
     <section class="doc-section" aria-labelledby="sites">
