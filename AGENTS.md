@@ -46,6 +46,7 @@ Unfinished work lives in `docs/backlog/`, one item per Markdown file, split into
 - An item's own file is the source of truth for its status; keep its track index in sync when status or priority changes.
 - Keep one independently finishable problem, slice, decision, or proof per file. Do not turn design or verification work into issues.
 - Priorities `P0`–`P3` apply to issues only.
+- Claim an item before working on it: add `- Assignee: <who>` right below `- Status:` (`Claude`, `Codex`, or `Owner`). One assignee per item. Set it when the item moves to `In progress`; keep it on `Done` as a record of who finished it; remove it if you drop the item. Two coding agents work in this repository, so check the field before starting and do not take an item someone else holds.
 - Accepted product behavior belongs in `docs/specification.md`, not in a backlog item.
 
 Derive counts and the active list from the items instead of maintaining them by hand:
@@ -62,6 +63,13 @@ done
 # Every item that is not finished
 grep -rH -m1 '^- Status:' --include='*.md' --exclude=_template.md docs/backlog |
   grep -vE "Status: (Done|Won't fix)$" | sed 's|^docs/backlog/||; s|:- Status: | — |' | sort
+
+# Who holds what (items with an assignee that are not finished)
+for f in $(grep -rl '^- Assignee:' --include='*.md' --exclude=_template.md docs/backlog); do
+  st=$(grep -m1 '^- Status:' "$f" | sed 's/^- Status: //')
+  case "$st" in Done|"Won't fix") continue;; esac
+  printf '%-10s %-12s %s\n' "$(grep -m1 '^- Assignee:' "$f" | sed 's/^- Assignee: //')" "$st" "${f#docs/backlog/}"
+done | sort
 ~~~
 
 ## Current implementation direction
