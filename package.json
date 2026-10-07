@@ -20,6 +20,7 @@
     "test:fulltext": "node scripts/test-fulltext-core.mjs",
     "test:text-highlight": "node --experimental-transform-types --no-warnings --test scripts/text-highlight.test.mjs",
     "test:palette-sections": "node --experimental-transform-types --no-warnings --test scripts/palette-sections.test.mjs",
+    "test:schema-versions": "node --experimental-transform-types --no-warnings --test web/src/data/supported-schema-versions.test.mjs",
     "package:web": "node scripts/package-web.mjs",
     "preview": "vite preview --config web/vite.config.ts",
     "serve:local": "npm run build && docker compose up",

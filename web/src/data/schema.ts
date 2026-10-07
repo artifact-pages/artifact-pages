@@ -5,16 +5,21 @@
  *  - an unknown integer `schemaVersion` is a confirmed but unreadable format,
  *    which is distinct from a network failure or malformed data.
  */
-export type SchemaFormat = 'registry' | 'site-metadata' | 'artifact-index' | 'preview-catalog' | 'preview-manifest' | 'full-text'
+import supported from './supported-schema-versions.json' with { type: 'json' }
+
+/**
+ * The reader's supported-version table lives in supported-schema-versions.json
+ * (plain JSON, so the web packaging script can copy it into the release
+ * manifest as `reads`). Every reader decides acceptance from this table only.
+ */
+export type SchemaFormat = keyof typeof supported.reads
 
 /** The schemaVersion values this build of the web app can read, per format. */
-export const SUPPORTED_SCHEMA_VERSIONS: Readonly<Record<SchemaFormat, readonly number[]>> = {
-  registry: [1],
-  'site-metadata': [1],
-  'artifact-index': [1],
-  'preview-catalog': [1],
-  'preview-manifest': [1],
-  'full-text': [1],
+export const SUPPORTED_SCHEMA_VERSIONS: Readonly<Record<SchemaFormat, readonly number[]>> = supported.reads
+
+/** True when `value` is a schemaVersion (or full-text `version`) this app reads for `format`. */
+export function isSupportedSchema(format: SchemaFormat, value: unknown): boolean {
+  return typeof value === 'number' && SUPPORTED_SCHEMA_VERSIONS[format].includes(value)
 }
 
 export class UnsupportedSchemaError extends Error {

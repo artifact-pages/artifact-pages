@@ -1,4 +1,4 @@
-import { assertSupportedSchema, UnsupportedSchemaError } from './schema'
+import { assertSupportedSchema, isSupportedSchema, UnsupportedSchemaError } from './schema'
 import type { SiteCatalogEntry, SiteDiscoveryMetadata, SiteIndex, SiteRegistryProjection, SiteSummary } from '../domain/index'
 
 const INDEX_ROOT = '/_indexes'
@@ -32,7 +32,7 @@ function parseSiteDiscoveryMetadata(payload: unknown, url: string, expectedSiteI
   assertSupportedSchema(payload, 'site-metadata', url)
   const metadata = payload as Partial<SiteDiscoveryMetadata>
   if (
-    metadata.schemaVersion !== 1 ||
+    !isSupportedSchema('site-metadata', metadata.schemaVersion) ||
     !metadata.site ||
     metadata.site.id !== expectedSiteId ||
     typeof metadata.site.title !== 'string' ||
@@ -86,7 +86,7 @@ function parseSiteIndex(payload: unknown, url: string, expectedSiteId: string): 
   assertSupportedSchema(payload, 'artifact-index', url)
   const index = payload as Partial<SiteIndex>
   if (
-    index.schemaVersion !== 1 ||
+    !isSupportedSchema('artifact-index', index.schemaVersion) ||
     !index.site ||
     index.site.id !== expectedSiteId ||
     typeof index.site.title !== 'string' ||
@@ -168,7 +168,7 @@ function parseSiteRegistry(payload: unknown): SiteRegistryProjection {
   }
   assertSupportedSchema(payload, 'registry', `${INDEX_ROOT}/sites.json`)
   const registry = payload as Partial<SiteRegistryProjection>
-  if (registry.schemaVersion !== 1 || !Array.isArray(registry.sites)) {
+  if (!isSupportedSchema('registry', registry.schemaVersion) || !Array.isArray(registry.sites)) {
     throw new IndexLoadError(`Invalid site registry: ${INDEX_ROOT}/sites.json.`, `${INDEX_ROOT}/sites.json`)
   }
   const seenIDs = new Set<string>()

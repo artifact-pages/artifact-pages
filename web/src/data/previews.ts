@@ -1,6 +1,6 @@
 import type { PreviewCatalog, PreviewDocument, PreviewGroup, PreviewManifest } from '../domain/preview'
 import { isValidSiteId } from './indexes'
-import { assertSupportedSchema, UnsupportedSchemaError } from './schema'
+import { assertSupportedSchema, isSupportedSchema, UnsupportedSchemaError } from './schema'
 
 const FULL_SHA = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u
 const SHA256 = /^[0-9a-f]{64}$/u
@@ -52,7 +52,7 @@ export async function loadPreviewCatalog(siteId: string, fetcher: typeof fetch =
   const url = previewCatalogUrl(siteId)
   const payload = await fetchJson(url, fetcher)
   assertSupportedSchema(payload, 'preview-catalog', url)
-  if (!isRecord(payload) || payload.schemaVersion !== 1 || payload.site !== siteId || !Array.isArray(payload.groups)) {
+  if (!isRecord(payload) || !isSupportedSchema('preview-catalog', payload.schemaVersion) || payload.site !== siteId || !Array.isArray(payload.groups)) {
     throw new PreviewLoadError(`Invalid preview catalog: ${url}`, url)
   }
   const groups = payload.groups.map(parseGroup)
@@ -93,7 +93,7 @@ export async function loadPreviewManifest(siteId: string, headSha: string, fetch
   const payload = await fetchJson(url, fetcher)
   assertSupportedSchema(payload, 'preview-manifest', url)
   if (
-    !isRecord(payload) || payload.schemaVersion !== 1 || payload.site !== siteId || payload.headSha !== headSha ||
+    !isRecord(payload) || !isSupportedSchema('preview-manifest', payload.schemaVersion) || payload.site !== siteId || payload.headSha !== headSha ||
     !isFullSha(payload.defaultHeadSha) || !isFullSha(payload.mergeBaseSha) ||
     !isTimestamp(payload.createdAt) || typeof payload.bundleDigest !== 'string' || !BUNDLE_DIGEST.test(payload.bundleDigest) ||
     !Array.isArray(payload.files) || !Array.isArray(payload.documents)
