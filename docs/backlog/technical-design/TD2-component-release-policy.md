@@ -2,6 +2,7 @@
 
 - Status: Done
 - Phase: Reusable distribution
+- Amended: 2026-10-07 — Terraform modules are versioned independently of the product version and released by per-module tags in the monorepo ([TD15](TD15-terraform-module-source-of-truth.md)); the product tag series is unchanged.
 - Revised: 2026-10-05 — records that compatibility is not guaranteed while the product is 0.x and the cross-version gate skips those candidates; replaces the earlier web-only SemVer / CLI-by-SHA policy (2026-09-28) with one product version, a CLI-pinned web bundle, a compatibility contract and automated release gates.
 - Related implementation: [IMP-45](../implementation/IMP-45-unified-release-and-compatibility.md), [IMP-31](../implementation/IMP-31-app-distribution.md), [IMP-34](../implementation/IMP-34-actions.md), [IMP-35](../implementation/IMP-35-external-adoption.md), [IMP-38](../implementation/IMP-38-terraform-registry-publication.md)
 - Related verification: [T16](../verification/T16-external-adoption.md)
@@ -26,9 +27,9 @@ The owner decided (2026-10-03) to ship one product version in which the CLI know
 
 ### One product version
 
-- A single tag series `vMAJOR.MINOR.PATCH` versions the whole product: the CLI (as the root Go module), the composite Actions in `actions/`, and the web bundle. There are no component-prefixed tags.
+- A single tag series `vMAJOR.MINOR.PATCH` versions the whole product: the CLI (as the root Go module), the composite Actions in `actions/`, and the web bundle. There are no component-prefixed tags for these, with one scoped exception: the Terraform modules (below).
 - The GitHub release for `vX.Y.Z` carries the web archive built from the tagged commit, with its JSON manifest and `.sha256` file (`artifact-pages-web-vX.Y.Z.tar.gz[.json|.sha256]`).
-- Terraform modules live in their own repositories and keep independent provider-module versions ([IMP-38](../implementation/IMP-38-terraform-registry-publication.md)); they are not part of this tag series.
+- **Exception (2026-10-07): Terraform modules.** Each module under `terraform/modules/<provider>/` has its own SemVer series, independent of the product version and of the other module. A per-module monorepo tag (`terraform-cloudflare/vX.Y.Z`, `terraform-aws/vX.Y.Z`) syncs the generated package repository and tags plain `vX.Y.Z` there ([TD15](TD15-terraform-module-source-of-truth.md), [IMP-38](../implementation/IMP-38-terraform-registry-publication.md), [IMP-64](../implementation/IMP-64-generate-sync-terraform-packages.md)). They are not part of the product tag series, a product release does not sync them, and the compatibility gate below does not apply to them: CLI/module compatibility is pinned by contract tests. (TD15 briefly tagged modules with the product version on 2026-10-06; that is withdrawn.)
 - Tags and release assets are never moved or replaced after a release is consumed; corrections ship as a new version. The pre-consumption `v0.1.0` withdrawal above is the only exception.
 
 ### The CLI pins its web bundle

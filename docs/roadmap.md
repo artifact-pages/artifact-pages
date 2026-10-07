@@ -115,6 +115,6 @@ The `gcp-local` profile is an emulator-only contract test. A production GCP adap
 ## Before an OSS release
 
 - [x] Include the selected MIT license and generated third-party notices in web releases; attach dependency notices to any future standalone CLI binary release.
-- [x] Define web-bundle-only SemVer releases, immutable source refs for Actions/CLI and Terraform, and the schema compatibility boundary in [TD2](backlog/technical-design/TD2-component-release-policy.md).
+- [x] Define web-bundle-only SemVer releases, immutable source refs for Actions/CLI and Terraform, and the schema compatibility boundary in [TD2](backlog/technical-design/TD2-component-release-policy.md). Terraform modules are versioned independently per module ([TD15](backlog/technical-design/TD15-terraform-module-source-of-truth.md), 2026-10-07).
 - [ ] Document security assumptions for arbitrary HTML/JavaScript artifacts.
 - [ ] Document upgrade and rollback behavior for each released component.
