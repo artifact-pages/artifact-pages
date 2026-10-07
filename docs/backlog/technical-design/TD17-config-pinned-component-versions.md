@@ -4,7 +4,7 @@
 - Assignee: Claude
 - Phase: Reusable distribution
 - Proposed: 2026-10-07 by the owner (draft for decision; nothing below is accepted behavior yet)
-- Would amend: [TD2](TD2-component-release-policy.md) (one product version, CLI-pinned web bundle), [TD14](TD14-one-repository-per-action.md) (Action version decides the CLI version), specification §19 "Released CLI" and §22 (`app deploy` bundle selection)
+- Would amend: [TD2](TD2-component-release-policy.md) (one product version, CLI-pinned web bundle, immutable tags during 0.x), [TD14](TD14-one-repository-per-action.md) (Action version decides the CLI version), specification §19 "Released CLI" and §22 (`app deploy` bundle selection)
 - Related design: [TD15](TD15-terraform-module-source-of-truth.md) (per-module tags, the model reused here), [TD12](TD12-action-consumer-contract.md), [T10](T10-config-location.md) (config layers)
 
 ## Problem
@@ -106,11 +106,11 @@ The Action needs `cli.version` before it has a CLI, and the config may be layere
 - Storage records the deployed web version and, per site, the writing CLI version and formats; checks compare with storage (section 3).
 - Bump pull requests in operator repositories are the operator's concern, not the product's.
 - New series start at `0.1.0`.
+- While the product is pre-release (`0.x`), tags and releases may be deleted and re-created freely; TD2's "never moved" rule applies from the first non-pre-release. The Action repositories' existing `v0.1.0` tags (product release) are therefore deleted and re-created as the first per-Action `v0.1.0`; `admin` and `docs` repin in the same rollout.
 
 ## Open points
 
 - Config layers: may a later layer (for example a site's local layer) set `cli`/`web`? Proposal: they are replaced as a unit like provider settings, and a site layer that changes `cli.version` is treated as an override (section 4).
-- Action repositories already carry `v0.1.0` from the product release, and tags are never moved (TD2). Starting the per-Action series at `0.1.0` therefore needs either deleting those pre-release tags (the only consumers are `admin`, `docs` and CI) or starting at `0.2.0`. The CLI continues the root series; `web/v0.1.0` has no collision.
 
 ## Implementation slices (to file after the decision; owners per the agent split)
 
