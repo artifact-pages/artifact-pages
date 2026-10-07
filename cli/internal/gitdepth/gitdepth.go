@@ -107,7 +107,10 @@ func fetch(ctx context.Context, dir, depthFlag string, tips []string) error {
 	existingHeader, _ := run(ctx, dir, nil, "config", "--get-urlmatch", "http.extraheader", remote)
 	env, secrets := AuthEnv(os.Environ(), remote, strings.TrimSpace(existingHeader) != "")
 	env = append(env, "GIT_TERMINAL_PROMPT=0")
-	args := append([]string{"fetch", "--quiet", "--no-tags", "--no-recurse-submodules", depthFlag, "origin"}, tips...)
+	// Auto maintenance would start a detached gc after the fetch returns. In a
+	// CI checkout that is wasted work, and it can still be writing into
+	// .git/objects while the caller (or a test) removes the directory.
+	args := append([]string{"-c", "gc.auto=0", "-c", "maintenance.auto=false", "fetch", "--quiet", "--no-tags", "--no-recurse-submodules", depthFlag, "origin"}, tips...)
 	output, err := run(ctx, dir, env, args...)
 	if err != nil {
 		return fmt.Errorf("deepen shallow checkout: git fetch %s failed (%s); %w", depthFlag, redact(output, secrets), errShallowFetch)
