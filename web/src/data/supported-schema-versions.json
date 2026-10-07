@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "reads": {
+    "registry": [1],
+    "site-metadata": [1],
+    "artifact-index": [1],
+    "full-text-manifest": [1],
+    "preview-catalog": [1],
+    "preview-manifest": [1]
+  }
+}

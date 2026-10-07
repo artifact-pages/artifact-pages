@@ -1,6 +1,7 @@
 # IMP-67 — Web release declares the formats it reads
 
-- Status: Open
+- Status: In progress
+- Assignee: Claude
 - Lanes: Web, CLI / release
 - Owner: Claude (web constants), Codex (packaging script); two PRs, one per agent's directories, web constants first
 - Depends on: [TD17](../technical-design/TD17-config-pinned-component-versions.md)
@@ -20,3 +21,25 @@ The web app declares, per published format, the `schemaVersion`s it reads, and `
 - [ ] Manifest of a packaged bundle lists `reads` for every published format.
 - [ ] Reader and manifest cannot disagree (test).
 - [ ] Existing browser and compatibility-gate tests pass.
+
+## Handoff to the packaging half
+
+The web half is in place. The single source of truth is `web/src/data/supported-schema-versions.json`:
+
+```json
+{
+  "schemaVersion": 1,
+  "reads": {
+    "registry": [1],
+    "site-metadata": [1],
+    "artifact-index": [1],
+    "full-text-manifest": [1],
+    "preview-catalog": [1],
+    "preview-manifest": [1]
+  }
+}
+```
+
+- `npm run package:web` can copy the `reads` object verbatim into the web release manifest as `reads`. The format names match the compatibility gate (`PUBLIC_FORMATS` in `scripts/compat-gate.mjs`).
+- Readers decide acceptance only from this file (`isSupportedSchema` in `web/src/data/schema.ts`); no reader hard-codes a version.
+- The reader-versus-table test is `web/src/data/supported-schema-versions.test.mjs`. Run it with `node --experimental-transform-types --no-warnings --test web/src/data/supported-schema-versions.test.mjs`; adding an npm script and a `verify.yml` step for it is left to the script owner (`package.json` and `.github/` are outside the web lane).

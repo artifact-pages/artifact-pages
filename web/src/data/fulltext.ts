@@ -1,7 +1,7 @@
 import type { SiteDiscoveryMetadata } from '../domain/index'
 import type { Leaf, Root } from '../domain/fulltext-codec'
 import { isValidSiteId } from './indexes'
-import { assertSupportedSchema, UnsupportedSchemaError } from './schema'
+import { assertSupportedSchema, isSupportedSchema, UnsupportedSchemaError } from './schema'
 
 export type FullTextHit = { id: string; path: string; href: string }
 export type FullTextResult = {
@@ -29,13 +29,13 @@ function parseManifest(payload: unknown, site: string): Manifest {
   if (!payload || typeof payload !== 'object') return fail()
   // The manifest's version field is named `version` (TD2 renames it to
   // schemaVersion in its next breaking change); an unknown value needs a republish.
-  try { assertSupportedSchema(payload, 'full-text', `/_indexes/${site}/search/manifest.json`, 'version') }
+  try { assertSupportedSchema(payload, 'full-text-manifest', `/_indexes/${site}/search/manifest.json`, 'version') }
   catch (cause) {
     if (cause instanceof UnsupportedSchemaError) throw new FullTextSearchError('needs-republish', 'Search data needs to be republished', undefined, { cause })
     throw cause
   }
   const m = payload as Manifest
-  if (m.version !== 1 || !/^[a-f0-9]{64}$/.test(m.generation) || m.site !== site || !Number.isSafeInteger(m.documents) || m.documents < 0 || !Array.isArray(m.shards) || m.shards.length !== 128) return fail()
+  if (!isSupportedSchema('full-text-manifest', m.version) || !/^[a-f0-9]{64}$/.test(m.generation) || m.site !== site || !Number.isSafeInteger(m.documents) || m.documents < 0 || !Array.isArray(m.shards) || m.shards.length !== 128) return fail()
   const validRef = (r: ObjectRef, kind: string) => r && /^[a-f0-9]{64}$/.test(r.sha256) &&
     r.url === `/_indexes/${site}/search/${kind}-${r.sha256}.gz` &&
     Number.isSafeInteger(r.bytes) && r.bytes > 0 && Number.isSafeInteger(r.rawBytes) && r.rawBytes > 0
