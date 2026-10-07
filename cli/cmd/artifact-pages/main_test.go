@@ -454,8 +454,8 @@ func TestPublishCommandHelpIsProviderNeutral(t *testing.T) {
 	if err := run(t.Context(), []string{"site", "sync", "--help"}, &stdout, &stderr); err != nil {
 		t.Fatalf("run(site sync --help) error = %v", err)
 	}
-	if help := stdout.String() + stderr.String(); !strings.Contains(help, "stale preview references") {
-		t.Errorf("site sync dry-run help does not mention stale preview references:\n%s", help)
+	if help := stdout.String() + stderr.String(); !strings.Contains(help, "stale preview references") || !strings.Contains(help, "--ref REF") {
+		t.Errorf("site sync help is missing dry-run or metadata-ref guidance:\n%s", help)
 	}
 	stdout.Reset()
 	stderr.Reset()

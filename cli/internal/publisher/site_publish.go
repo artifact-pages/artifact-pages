@@ -119,7 +119,7 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 		if err := rejectLocalSourceOverlap(conditional, sourceDir); err != nil {
 			return Result{}, err
 		}
-		preparedOptions := sitePublishBuildOptions(options.SiteID, entry.Name, entry.Description, sourceDir, identity)
+		preparedOptions := sitePublishBuildOptions(options.SiteID, entry.Name, entry.Description, sourceDir, options.Ref, identity)
 		preparedOptions.PriorState = sitePriorStateLoader(conditional, options.SiteID)
 		prepared, err := indexer.PrepareBuild(operationCtx, preparedOptions)
 		if err != nil {

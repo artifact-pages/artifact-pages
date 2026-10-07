@@ -749,6 +749,7 @@ func runSiteSync(ctx context.Context, args []string, stdout, stderr io.Writer) e
 	flags.Usage = func() { writeSiteSyncUsage(stderr) }
 	siteID := flags.String("site", "", "site identifier (for example: sre)")
 	source := flags.String("source", "", "publishable static content directory inside the current Git working tree")
+	ref := flags.String("ref", "", "source metadata ref to record (defaults to the current branch or commit)")
 	var configLocators stringSliceFlag
 	flags.Var(&configLocators, "config", "deployment config path or github:// locator (repeatable; later layers override earlier ones)")
 	reconcile := flags.Bool("reconcile", false, "list the selected site origin and repair missing, stale, or metadata-drifted objects")
@@ -780,6 +781,7 @@ func runSiteSync(ctx context.Context, args []string, stdout, stderr io.Writer) e
 	result, err := publisher.PublishSite(ctx, backend, publisher.SitePublishOptions{
 		SiteID:    *siteID,
 		SourceDir: *source,
+		Ref:       *ref,
 		DryRun:    *dryRun,
 		Reconcile: *reconcile,
 	})
@@ -967,6 +969,7 @@ func writeSiteSyncUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  --reconcile             list this site's origin and repair missing, stale, or metadata-drifted objects")
 	fmt.Fprintln(writer, "  --site ID               required site identifier")
 	fmt.Fprintln(writer, "  --source DIR            desired publishable static content directory (defaults to the registered sourcePath)")
+	fmt.Fprintln(writer, "  --ref REF               source metadata ref to record; does not select the checkout or source content")
 	fmt.Fprintln(writer, "  --config LOCATOR        deployment config path or github:// locator (repeatable; later layers override earlier ones)")
 	fmt.Fprintln(writer, "  --dry-run               show origin changes and stale preview references without writes, deletes, lock recovery, or cache changes")
 	fmt.Fprintln(writer, "  --format text|json      output a human-readable result or stable JSON")

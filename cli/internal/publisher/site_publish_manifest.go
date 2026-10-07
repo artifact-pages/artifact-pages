@@ -45,10 +45,10 @@ type sitePublishDiff struct {
 	transaction   *sitePublishTransaction
 }
 
-func sitePublishBuildOptions(siteID, title, description, sourceDir string, identity indexer.GitSourceIdentity) indexer.BuildOptions {
+func sitePublishBuildOptions(siteID, title, description, sourceDir, ref string, identity indexer.GitSourceIdentity) indexer.BuildOptions {
 	return indexer.BuildOptions{
 		SiteID: siteID, SiteTitle: title, SiteDescription: description, SourceDir: sourceDir,
-		Repository: identity.Repository, RepositoryURL: identity.RepositoryURL,
+		Repository: identity.Repository, RepositoryURL: identity.RepositoryURL, Ref: ref,
 		RejectSymlinks: true, InputPolicy: sitePublishInputPolicy,
 	}
 }

@@ -12,6 +12,10 @@ inputs:
     description: Publishable source directory inside the checked-out Git repository.
     required: false
     default: ""
+  ref:
+    description: Source metadata ref to record in the site index; does not select the checkout or source content.
+    required: false
+    default: ""
   config:
     description: Optional deployment config path or github:// config locator.
     required: false
@@ -96,6 +100,7 @@ runs:
         ARTIFACT_PAGES_ACTION_KIND: publish
         ARTIFACT_PAGES_INPUT_SITE: ${{ inputs.site }}
         ARTIFACT_PAGES_INPUT_SOURCE: ${{ inputs.source }}
+        ARTIFACT_PAGES_INPUT_REF: ${{ inputs.ref }}
         ARTIFACT_PAGES_INPUT_CONFIG: ${{ inputs.config }}
         ARTIFACT_PAGES_INPUT_DRY_RUN: ${{ inputs.dry-run }}
         ARTIFACT_PAGES_INPUT_SUMMARY: ${{ inputs.summary }}

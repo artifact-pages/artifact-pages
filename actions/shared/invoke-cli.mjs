@@ -62,6 +62,7 @@ function buildArguments() {
   } else if (kind === 'publish') {
     args.push('--site', required('site'))
     flag(args, 'source', input('source'))
+    flag(args, 'ref', input('ref').trim())
     flag(args, 'config', input('config'))
     publishDryRun()
   } else {
