@@ -108,6 +108,10 @@ async function packageVersion(version) {
 
       assertWebBundlePathsMatchDeploymentContract(files)
 
+      const { reads } = JSON.parse(await fs.readFile(
+        path.join(projectRoot, 'web', 'src', 'data', 'supported-schema-versions.json'),
+        'utf8',
+      ))
       const commit = gitOutput(['rev-parse', 'HEAD'])
       const sourceDirty = gitOutput(['status', '--porcelain', '--untracked-files=all']) !== ''
       const manifestName = `${archiveName}.json`
@@ -141,6 +145,7 @@ async function packageVersion(version) {
           product: 'artifact-pages',
           component: 'web',
           version,
+          reads,
           archive: archiveName,
           archiveSha256,
           sourceCommit: commit,
