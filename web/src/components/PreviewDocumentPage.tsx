@@ -186,20 +186,31 @@ function PreviewHtmlDocument({
   }, [syncFrameHash])
 
   // Shared by the bridge message and the early-click safety net: both end as a reader navigation (history push).
-  const followFrameDestination = useCallback((href: string) => {
+  const resolveFrameDestination = useCallback((href: string) => {
     let frameDestination: URL
     try {
       frameDestination = new URL(href)
     } catch {
-      return false
+      return null
     }
-    if (frameDestination.origin !== new URL(artifactUrl, window.location.origin).origin) return false
+    if (frameDestination.origin !== new URL(artifactUrl, window.location.origin).origin) return null
     const destination = new URL(`${frameDestination.pathname}${frameDestination.search}${frameDestination.hash}`, window.location.origin)
-    const logicalRoute = resolveLogicalDocumentLink({ url: destination, route, manifest, productionIndex })
+    return resolveLogicalDocumentLink({ url: destination, route, manifest, productionIndex })
+  }, [artifactUrl, manifest, productionIndex, route])
+
+  const followFrameDestination = useCallback((href: string) => {
+    const logicalRoute = resolveFrameDestination(href)
     if (!logicalRoute) return false
     navigate(logicalRoute)
     return true
-  }, [artifactUrl, manifest, navigate, productionIndex, route])
+  }, [navigate, resolveFrameDestination])
+
+  // Joint history length as of the last reader render; a longer history at onLoad means the frame's own navigation added an entry.
+  const knownHistoryLengthRef = useRef(window.history.length)
+  const pendingRouteRef = useRef<string | null>(null)
+  useEffect(() => {
+    knownHistoryLengthRef.current = window.history.length
+  })
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent<unknown>) => {
@@ -231,7 +242,21 @@ function PreviewHtmlDocument({
           if (!isCurrentPreviewDocument(iframeRef.current, artifactUrl)) {
             // A click before the bridge ran moved the frame itself to another raw file; follow it as a reader navigation.
             const frameHref = readFrameHref(iframeRef.current)
-            if (frameHref) followFrameDestination(frameHref)
+            const logicalRoute = frameHref ? resolveFrameDestination(frameHref) : null
+            if (!logicalRoute) return
+            if (window.history.length > knownHistoryLengthRef.current) {
+              // The frame's navigation added a joint-history entry. Undo it first so the reader push below leaves a single Back step.
+              pendingRouteRef.current = logicalRoute
+              window.history.go(-1)
+            } else {
+              navigate(logicalRoute)
+            }
+            return
+          }
+          if (pendingRouteRef.current) {
+            const pendingRoute = pendingRouteRef.current
+            pendingRouteRef.current = null
+            navigate(pendingRoute)
             return
           }
           syncFrameHash()

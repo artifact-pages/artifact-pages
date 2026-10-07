@@ -3962,6 +3962,7 @@ test('preview HTML link clicked before the reader bridge runs still navigates th
     await route.continue().catch(() => undefined)
   })
 
+  await page.goto('/sre')
   await page.goto(previewUrl)
   const frame = page.frameLocator('iframe[title="Local preview HTML"]')
   const link = frame.getByRole('link', { name: 'Open a changed HTML document with fragment' })
@@ -3975,6 +3976,23 @@ test('preview HTML link clicked before the reader bridge runs still navigates th
   await expect(page.frameLocator('iframe[title="Preview fragment target"]').getByRole('heading', { name: 'Changed HTML target' })).toBeVisible()
   await expect(page.locator('iframe')).toHaveCount(1)
   releaseBridge?.()
+
+  // The frame's own early navigation must not leave a dead Back step: one Back is the previous document, the next leaves the preview.
+  const targetUrl = `/sre/_previews/${previewHeadSha}/guides/preview-target.html?group=pr%3A42&source=fixture#changed-target`
+  await page.goBack()
+  await expect(page).toHaveURL(previewUrl)
+  await expect(page.locator('.preview-reader-header h1')).toHaveText('Local preview HTML')
+  await expect(page.frameLocator('iframe[title="Local preview HTML"]').getByRole('link', { name: 'Open a changed HTML document with fragment' })).toBeVisible()
+  await expect(page.locator('iframe')).toHaveCount(1)
+  await page.goBack()
+  await expect(page).toHaveURL('/sre')
+  await page.goForward()
+  await expect(page).toHaveURL(previewUrl)
+  await expect(page.locator('.preview-reader-header h1')).toHaveText('Local preview HTML')
+  await page.goForward()
+  await expect(page).toHaveURL(targetUrl)
+  await expect(page.locator('.preview-reader-header h1')).toHaveText('Preview fragment target')
+  await expect(page.frameLocator('iframe[title="Preview fragment target"]').getByRole('heading', { name: 'Changed HTML target' })).toBeVisible()
 })
 
 test('preview HTML raw resources use native frame navigation and preserve download, target, and modifier intent', async ({ page }) => {
