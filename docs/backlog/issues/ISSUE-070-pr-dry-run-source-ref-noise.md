@@ -1,12 +1,13 @@
 # PR dry-run of site publish always reports index.json updates from source.ref
 
-- Status: Open
+- Status: Done
+- Assignee: Codex
 - Priority: P3
 - Area: site publish dry-run in pull request workflows
 
 ## Problem
 
-Each artifact entry in `_indexes/<site>/index.json` carries `source.ref`. The CLI takes it from the current checkout's branch, or from `--ref`. Production is published from `main`, while a pull request dry-run builds on the PR ref, so every entry's `source.ref` differs from the deployed index. A `site publish --dry-run` on a pull request therefore always plans an `update` of `index.json`, even when the PR changes no site content. Reviewers cannot tell real index changes from ref noise, and the summary counts mislead.
+Each artifact entry in `_indexes/<site>/index.json` carries `source.ref`. At filing time, the index builder inferred it from the current checkout's branch, while only `index build` exposed a `--ref` override; provider-backed `site publish` did not. Production was published from `main`, while a pull request dry-run built on the PR ref, so every entry's `source.ref` differed from the deployed index. A `site publish --dry-run` on a pull request therefore planned an `update` of `index.json`, even when the PR changed no site content. Reviewers could not tell real index changes from ref noise, and the summary counts misled.
 
 ## Evidence and reproduction
 
@@ -20,19 +21,28 @@ Source of the value:
 - `cli/internal/indexer/build.go:1015-1022` (`resolveGitMetadata`) falls back to `git symbolic-ref --short HEAD`, then to `git rev-parse --short HEAD`.
 - `cli/internal/indexer/build.go:299` writes it into each entry as `Ref: gitInfo.ref` (field declared at `build.go:120`).
 
-Confirmed: the cause above. Not decided: which fix is right.
+Confirmed: the cause above. The fix direction was open when this issue was filed; the selected behavior is recorded below.
 
-## Expected outcome
+## Chosen behavior
 
-A dry-run on a pull request for a workflow-only change, against an up-to-date site, reports `no-op`, or the documentation states exactly how to get that result.
-
-## Candidate directions (not decided)
-
-- Document passing `--ref <default branch>`, or add an Action input for it, in PR dry-runs.
-- Have a dry-run on a non-default ref compare while ignoring `source.ref`.
-- Derive `source.ref` from the configured default branch instead of the checkout.
+Add an explicit metadata-ref override to `site sync` and the publish Action. The override controls only the `source.ref` value written into the site index; it does not select a Git checkout, commit, or document content. When a PR dry-run should compare with production metadata, the caller supplies the same ref that the production publish uses. Empty input preserves the current inferred checkout ref.
 
 ## Acceptance criteria
 
-- [ ] A workflow-only PR dry-run against an up-to-date site reports `no-op`, or the documentation states exactly how to obtain that result.
-- [ ] A test covers the chosen behavior (for example a different checkout ref producing a no-op plan against an index built from the default branch).
+- [x] `artifact-pages site sync --ref REF` records `REF` in `source.ref` without changing the checked-out source revision or document bytes; an empty value preserves inferred metadata.
+- [x] The publish Action has an optional `ref` input that forwards to `site sync --ref`; the new input is documented as available after the next Action release, and the README does not imply that `v0.1.0` supports it.
+- [x] A workflow-only PR branch produces an `index.json` ref-only dry-run update without an override and a `no-op` when given the production ref; an actual document edit remains planned with that same override.
+- [x] Changing the explicit metadata ref invalidates the publish fingerprint and updates the published `source.ref`.
+
+## Resolution
+
+`site sync --ref` now overrides only the `source.ref` value generated for the artifact index. The publish Action's optional `ref` input forwards to that CLI flag; empty input preserves inferred metadata. The Action README says the input first becomes available in the release after `v0.1.0`, which does not accept it. The regression `TestPublishSiteRefOverrideIsMetadataOnlyAndPartOfFingerprint` covers a default-branch publish, a workflow-only PR branch, the ref-only dry-run update, the production-ref no-op, a changed ref updating the published index, and a document edit that remains planned and published from the current checkout.
+
+## Verification
+
+- `go test ./internal/publisher -run TestPublishSiteRefOverrideIsMetadataOnlyAndPartOfFingerprint -count=1`
+- `go test ./... -count=1`
+- `go vet ./...`
+- `node scripts/test-actions-parity.mjs`
+- `git diff --check`
+- Independent Luna max review passed with no findings on implementation commit `370c3b224501f8100b65a53e3669f28ddbeebdf5`.

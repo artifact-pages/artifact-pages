@@ -18,12 +18,26 @@ steps:
 
 The site ID is always explicit; it is never inferred from the repository.
 
+## Pull request dry-runs
+
+The `ref` input controls only the `source.ref` metadata written to the site index. It does not change the checkout or the files that `site sync` evaluates. Leave it empty to use the checkout's current branch or commit. To avoid ref-only index changes in a pull request dry-run, pass the same metadata ref used by production, for example `github.event.repository.default_branch` when production publishes that branch. In a workflow using the release after `v0.1.0`, add:
+
+```yaml
+with:
+  site: docs
+  ref: ${{ github.event.repository.default_branch }}
+  dry-run: true
+```
+
+This input first becomes available in the Action release after `v0.1.0`; the `v0.1.0` tag does not accept it.
+
 ## Inputs
 
 | Input | Default | Description |
 | --- | --- | --- |
 | `site` | required | Registered site ID. |
 | `source` | registered source path | Publishable source directory inside the checkout. |
+| `ref` | empty | Override the `source.ref` value recorded in the index; does not select the checkout. |
 | `config` | empty | Deployment config path or `github://` locator; empty uses `artifact-pages.yaml` in the workspace. |
 | `github-token` | `github.token` | Read-only token for a separate private config repository. |
 | `dry-run` | `false` | Plan without writes. |

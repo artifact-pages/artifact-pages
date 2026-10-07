@@ -29,6 +29,7 @@ type SitePublishOptions struct {
 	Reconcile bool
 	SiteID    string
 	SourceDir string
+	Ref       string
 	DryRun    bool
 }
 

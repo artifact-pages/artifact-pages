@@ -17,7 +17,7 @@ const commonInputs = ['config', 'github-token', 'dry-run', 'publish-on', 'summar
 const expectedActionContracts = {
   publish: {
     directory: path.join(projectRoot, 'actions', 'publish'),
-    inputs: ['site', 'source', ...commonInputs],
+    inputs: ['site', 'source', 'ref', ...commonInputs],
     outputs: [...runOutputs, 'site', 'preview-changes'],
   },
   preview: {
@@ -812,6 +812,24 @@ async function main() {
       site: 'sre', source: 'docs/artifacts', config: '.artifact-pages-action.yaml',
     }, satelliteRoot, binaryPath, scratchRoot)
     assertActionParity(initialSite, actionInitialSite, 'site sync')
+
+    const siteNoOpArgs = ['site', 'sync', '--site', 'sre', '--source', 'docs/artifacts', '--config', 'artifact-pages.yaml', '--dry-run', '--format', 'json']
+    const directSiteNoOp = runDirect(binaryPath, satelliteRoot, siteNoOpArgs, 'site sync default-ref no-op')
+    const actionSiteNoOp = await runAction('publish', siteNoOpArgs, {
+      site: 'sre', source: 'docs/artifacts', ref: '', config: '.artifact-pages-action.yaml', 'dry-run': 'true',
+    }, satelliteRoot, binaryPath, scratchRoot)
+    assertActionParity(directSiteNoOp, actionSiteNoOp, 'site sync empty ref input')
+    assert.equal(actionSiteNoOp.result.outcome, 'no-op', 'an empty ref input must preserve the inferred checkout metadata ref')
+
+    const explicitMetadataRef = 'production-metadata-ref'
+    const siteRefArgs = [...siteNoOpArgs.slice(0, -2), '--ref', explicitMetadataRef, ...siteNoOpArgs.slice(-2)]
+    const directSiteRef = runDirect(binaryPath, satelliteRoot, siteRefArgs, 'site sync explicit ref dry-run')
+    const actionSiteRef = await runAction('publish', siteRefArgs, {
+      site: 'sre', source: 'docs/artifacts', ref: explicitMetadataRef, config: '.artifact-pages-action.yaml', 'dry-run': 'true',
+    }, satelliteRoot, binaryPath, scratchRoot)
+    assertActionParity(directSiteRef, actionSiteRef, 'site sync explicit ref input')
+    assert.equal(actionSiteRef.result.outcome, 'planned', 'an explicit different metadata ref must plan an index update')
+    assert.deepEqual(actionSiteRef.result.changes.map((change) => change.path), ['_indexes/sre/index.json'], 'a ref-only change must update only the site index')
 
     const previewBranch = 'preview-action-fixture'
     git(satelliteRoot, 'checkout', '-b', previewBranch)
