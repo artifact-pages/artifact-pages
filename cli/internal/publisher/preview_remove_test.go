@@ -228,7 +228,7 @@ func TestRemovePreviewGroupDryRunDoesNotAcquireLockOrRecoverPendingCleanup(t *te
 	if len(backend.puts) != before {
 		t.Fatalf("dry-run wrote provider objects: before puts=%d after=%d", before, len(backend.puts))
 	}
-	if keys, err := backend.ListKeys(context.Background(), "_control/locks/sites/sre.json"); err != nil || len(keys) != 0 {
+	if keys, err := backend.ListKeys(context.Background(), siteLockKey("sre")); err != nil || len(keys) != 0 {
 		t.Fatalf("dry-run site lock objects = %v, %v", keys, err)
 	}
 }

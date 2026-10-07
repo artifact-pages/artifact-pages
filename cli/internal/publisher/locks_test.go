@@ -14,7 +14,7 @@ import (
 
 func TestSiteLockConcurrentFirstCreationAndSameSiteExclusion(t *testing.T) {
 	backend := newLockMemoryBackend()
-	const key = "_control/locks/sites/sre.json"
+	key := siteLockKey("sre")
 	initialReads := newLockReadBarrier(2)
 	backend.onMissingRead = func(readKey string) {
 		if readKey == key {
@@ -81,7 +81,7 @@ func TestSiteLockConcurrentFirstCreationAndSameSiteExclusion(t *testing.T) {
 		t.Fatalf("second release() error = %v", err)
 	}
 
-	keys, err := backend.ListKeys(context.Background(), "_control/locks/")
+	keys, err := backend.ListKeys(context.Background(), "_control/sites/")
 	if err != nil || len(keys) != 1 || keys[0] != key {
 		t.Fatalf("retained lock keys = %v, err=%v", keys, err)
 	}
@@ -103,7 +103,7 @@ func TestSiteLocksAllowIndependentSitesConcurrently(t *testing.T) {
 	if first.State != "held" || second.State != "held" || first.Owner == second.Owner || first.ETag == second.ETag {
 		t.Fatalf("independent lock snapshots = %+v and %+v", first, second)
 	}
-	keys, err := backend.ListKeys(context.Background(), "_control/locks/sites/")
+	keys, err := backend.ListKeys(context.Background(), "_control/sites/")
 	if err != nil || len(keys) != 2 || keys[0] == keys[1] {
 		t.Fatalf("per-site lock keys = %v, err=%v", keys, err)
 	}

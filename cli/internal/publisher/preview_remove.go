@@ -409,10 +409,8 @@ func validatePreviewRevisionObjectKey(siteID, headSHA, key string) error {
 	return nil
 }
 
-func previewCleanupKey(siteID string) string { return "_control/preview-cleanup/" + siteID + ".json" }
-
 func readPreviewCleanup(ctx context.Context, backend ConditionalObjectBackend, siteID string) (*previewCleanupRecord, string, error) {
-	object, etag, err := backend.GetObject(ctx, previewCleanupKey(siteID))
+	object, etag, err := getSiteControl(ctx, backend, siteID, previewCleanupKey(siteID))
 	if errors.Is(err, ErrObjectNotFound) {
 		return nil, "", nil
 	}

@@ -1,9 +1,10 @@
 # IMP-66 — Per-site control prefix and prefix-level AWS IAM
 
-- Status: Open
+- Status: In progress
+- Assignee: Claude
 - Lanes: CLI, Terraform / AWS
 - Depends on: design check below; owner decision recorded 2026-10-07 (option c)
-- Sequencing: land **after** the `cli-sync-remove` change (in flight, touches `terraform/modules/aws/main.tf` and `deployment.test.js` for the same `_control/*` reason) to avoid conflicts, and rebase on [IMP-63](IMP-63-consolidate-terraform-modules.md) if that merges first (it rewrites the same file)
+- Sequencing: `cli-sync-remove` and [IMP-63](IMP-63-consolidate-terraform-modules.md) (AWS half) have merged; this change builds on both
 - Related: [TD15](../technical-design/TD15-terraform-module-source-of-truth.md) (decision 2026-10-07: independent module versions), [IMP-64](IMP-64-generate-sync-terraform-packages.md), [IMP-44](IMP-44-aws-waf-custom-rules.md)
 
 ## Goal
@@ -84,13 +85,56 @@ No other role touches the bucket: CloudFront reads only through the OAC bucket p
 ## Acceptance criteria
 
 - [x] The owner chose option (c), per-site control prefix (2026-10-07), recorded above.
-- [ ] Admin policy grants `_control/*` by prefix; its enumerated `_control` entries are gone; `cli-sync-remove`'s additions are covered without further module edits.
-- [ ] Per-site records live under `_control/sites/<site>/`; each satellite role is limited to that prefix; a test proves a site role cannot touch another site's control records or the registry/application locks.
-- [ ] The migration (read-old-write-new fallback or one-shot move) is implemented and tested, including a stale old-key lock and state, and the release ordering is documented in the release notes.
-- [ ] A test enumerates every `_control/` key the CLI uses and asserts which role may read, write, delete and list it.
-- [ ] `terraform validate`/tests and the Node tests pass; the plan against the AWS verification deployment shows only in-place IAM policy updates (reviewed, no apply).
+- [x] Admin policy grants `_control/*` by prefix; its enumerated `_control` entries are gone; `cli-sync-remove`'s additions are covered without further module edits.
+- [x] Per-site records live under `_control/sites/<site>/`; each satellite role is limited to that prefix; a test proves a site role cannot touch another site's control records or the registry/application locks.
+- [x] The migration (read-old-write-new fallback or one-shot move) is implemented and tested, including a stale old-key lock and state; the release ordering is documented here and must be copied into the release notes of the CLI release that carries it.
+- [x] A test enumerates every `_control/` key the CLI uses and asserts which role may read, write, delete and list it.
+- [x] `terraform validate`/tests and the Node tests pass; the plan against the AWS verification deployment shows only in-place IAM policy updates (reviewed, no apply). The module tests and validate pass; the verification plan is an owner step and remains open.
 - [ ] [TD15](../technical-design/TD15-terraform-module-source-of-truth.md) and the specification are updated: AWS is decoupled from CLI releases once this item is Done.
 
 ## Results
 
-Design check and owner decision (option c) recorded 2026-10-07; implementation not started.
+Design check and owner decision (option c) recorded 2026-10-07. Steps 1 and 2 of the ordering (CLI with fallback, module granting both layouts) landed together in one change on 2026-10-07; step 3 is open.
+
+### Key layout (old to new)
+
+| Record | Old key | New key |
+| --- | --- | --- |
+| Site lock | `_control/locks/sites/<site>.json` | `_control/sites/<site>/lock.json` |
+| Site cache-retry / transaction journal | `_control/site-cache/<site>.json` | `_control/sites/<site>/site-cache.json` |
+| Publish state | `_control/publish-state/<site>.json.gz` | `_control/sites/<site>/publish-state.json.gz` |
+| Preview cleanup journal | `_control/preview-cleanup/<site>.json` | `_control/sites/<site>/preview-cleanup.json` |
+| Registry lock, application lock, registry cleanup, app-cache retry | unchanged (admin only) | unchanged |
+
+The CLI has no other `_control` record (the local backend's `_control/transactions/` mutex directory is local filesystem only). `terraform/modules/aws/tests/fixtures/control-keys.json` lists every key with the operations the CLI needs; `cli/internal/publisher/control_keys_test.go` pins the CLI to it (including a scan of `"_control/..."` literals), and `terraform/modules/aws/tests/control-keys-coverage.test.js` evaluates the admin and satellite policies against it, including negative cases (other sites, `alpha` vs `alpha-beta`, global records). Site identifiers match `^[a-z0-9]+(-[a-z0-9]+)*$`, so they cannot contain `/` or dot segments.
+
+### Migration: read-old-write-new, adopted once per site under the lock
+
+The fallback was chosen over a one-shot `registry sync` move because it needs no operator step.
+
+- A site's lock record gets a `legacyAdopted` flag. The first time a new CLI claims a lock record without it (including a freshly created one), it runs the adoption step before claiming; later acquisitions skip it, so steady-state publishes cost no extra requests. A site with no legacy lock costs one extra GET once.
+- Adoption: if the legacy lock exists and is live, take it with the normal compare-and-swap protocol (waiting for an older CLI that holds it, with the usual lock-wait timeout; a stale legacy lock is recovered by ETag with `locks recover`, which now also inspects and clears the legacy record). Then copy each legacy site-cache, preview-cleanup and publish-state record to its new key with create-if-absent and delete the legacy key (publish state moves last), then overwrite the held legacy lock with a `schemaVersion` 2 tombstone.
+- Lock rule: a new CLI never holds only the new lock while a live legacy lock could be taken by an older CLI, because the tombstone makes the legacy lock unobtainable. An older CLI that reads the tombstone fails with the standard "written by a newer major version, upgrade the CLI" error; one that held the legacy lock first is waited for. So two CLI versions never both believe they hold the site lock. A site no older CLI ever locked has no legacy record and nothing to fence; the (unsupported) case of an older CLI first-locking an already-adopted site is covered by the tombstone only for sites that had a legacy lock.
+- Stale old keys cannot override newer state: the new key always wins on read, and an existing new key makes the create-if-absent copy fail, after which the stale legacy key is deleted rather than adopted. After adoption the new CLI never touches legacy keys, so there is no resurrection path after a later delete.
+- Dry-runs (no lock) read through to the legacy keys and write nothing, so they plan against the state a real run would adopt.
+- Unregister cleanup lists both layouts. A 403/AccessDenied on a legacy probe counts as absent, so the module can drop the old grants later without breaking the CLI.
+- Tests: adoption (all records moved, legacy deleted, tombstone refused by older lock decoding, warm acquisition skips legacy), held legacy lock blocks adoption and is recoverable, stale legacy state with a newer key, dry-run read-through, and an end-to-end `PublishSite` over an old-layout bucket that ends as a no-op.
+
+### IAM (AWS module), before and after
+
+| Role | Before | After (transition) |
+| --- | --- | --- |
+| Admin | Enumerated `_control/locks/*`, `site-cache/*`, `publish-state/*`, `registry-cleanup.json`, `app-cache/retry.json`, `preview-cleanup/*` in List, Get, Put, Delete (no Delete on locks) | `_control/*` in List, Get, Put, Delete (new capability: Delete on `_control/locks/*`) |
+| Satellite `<site>` | Exact old keys for the four per-site records | `_control/sites/<site>/*` in Get, List, Put, Delete, plus the old exact keys (Get/List/Put for lock, publish-state, site-cache; Delete for site-cache, publish-state, preview-cleanup; preview-cleanup Get/Put) |
+
+CloudFront OAC and the bucket policy are unchanged; `/_control/*` still has no behavior.
+
+### Cloudflare
+
+Nothing on the Cloudflare side scopes `_control` keys: the module's R2 credentials are bucket-level and the delivery config only keeps `/_control` out of the exclusions (tests unchanged). Operators who hand-roll prefix- or object-scoped R2 temporary credentials (see the Cloudflare deployment guide) must allow `_control/sites/<site>/` before upgrading the CLI.
+
+### Release ordering
+
+1. Release and apply the AWS module version carrying this change (grants both layouts).
+2. Release the CLI with this change and use it for every site (one CLI version per site while adoption happens). Releasing the CLI first fails with AccessDenied on the new keys.
+3. Remaining slice (open): a later module release drops the old exact keys from the satellite role and flips `TRANSITIONAL_LEGACY_GRANTS` in `control-keys-coverage.test.js`. Trigger: a CLI release containing this change is in use by the operator repositories for every site and the legacy keys are gone or migrated (the legacy lock records remain as tombstones, which no role needs to touch). This item stays In progress until then, plus the owner-reviewed AWS verification plan and the TD15 statement that AWS is decoupled.

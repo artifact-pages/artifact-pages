@@ -62,7 +62,7 @@ func loadSitePublishSnapshot(ctx context.Context, backend ConditionalObjectBacke
 	stateReadMode := selectedPublishStateReadMode(backend)
 	if stateReadMode == publishStateReadGetOnly {
 		var err error
-		stateObject, getETag, err = backend.GetObject(ctx, key)
+		stateObject, getETag, err = getSiteControl(ctx, backend, siteID, key)
 		if errors.Is(err, ErrObjectNotFound) {
 			return loadMissingSitePublishSnapshot(ctx, backend, siteID, retry, retryETag)
 		}
@@ -75,7 +75,7 @@ func loadSitePublishSnapshot(ctx context.Context, backend ConditionalObjectBacke
 		snapshot.head = info
 	} else {
 		var err error
-		info, err = backend.HeadObject(ctx, key)
+		info, err = headSiteControl(ctx, backend, siteID, key)
 		if errors.Is(err, ErrObjectNotFound) {
 			return loadMissingSitePublishSnapshot(ctx, backend, siteID, retry, retryETag)
 		}
@@ -113,7 +113,7 @@ func loadSitePublishSnapshot(ctx context.Context, backend ConditionalObjectBacke
 	}
 	if stateReadMode == publishStateReadHeadThenGet {
 		var err error
-		stateObject, getETag, err = backend.GetObject(ctx, key)
+		stateObject, getETag, err = getSiteControl(ctx, backend, siteID, key)
 		if err != nil {
 			return sitePublishSnapshot{}, fmt.Errorf("read site publish state: %w", err)
 		}

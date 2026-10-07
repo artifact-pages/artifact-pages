@@ -73,7 +73,7 @@ func TestPublishSiteStopsWhenS3ArtifactListingContinuationFails(t *testing.T) {
 		t.Errorf("site registry changed after failed listing")
 	}
 	for _, key := range client.putKeys {
-		if !strings.HasPrefix(key, "_control/locks/") {
+		if !strings.HasPrefix(key, siteControlRoot) || !strings.HasSuffix(key, "/lock.json") {
 			t.Errorf("content-plane PutObject %q occurred before listing completed", key)
 		}
 	}

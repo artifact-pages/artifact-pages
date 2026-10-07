@@ -352,7 +352,7 @@ func (backend *DirectoryBackend) readStoredObjectMetadata(key string, body []byt
 		selected, matches = *record.Previous, true
 	}
 	if !matches {
-		if record.Pending || strings.HasPrefix(key, "_control/publish-state/") {
+		if record.Pending || (strings.HasPrefix(key, "_control/publish-state/") || (strings.HasPrefix(key, siteControlRoot) && strings.HasSuffix(key, "/publish-state.json.gz"))) {
 			return localStoredObjectMetadata{}, fmt.Errorf("local metadata journal for %s matches neither current nor previous object bytes", key)
 		}
 		// Ordinary local object edits are an out-of-band drift that explicit

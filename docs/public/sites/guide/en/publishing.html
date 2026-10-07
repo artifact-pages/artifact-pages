@@ -139,7 +139,7 @@
           </div></div></li>
       </ol>
       <ul>
-        <li><strong>Credentials</strong> stay in the CI secret store, never in the config file. A publishing job needs to read the site registry, to read and write only this site's files, its previews, its lock, and its cache-retry record (<code>_control/site-cache/&lt;site&gt;.json</code>), and to request a CDN cache refresh. See <a href="configuration.html#credentials">Configuration</a>.</li>
+        <li><strong>Credentials</strong> stay in the CI secret store, never in the config file. A publishing job needs to read the site registry, to read and write only this site's files, its previews, its lock, and its cache-retry record (<code>_control/sites/&lt;site&gt;/site-cache.json</code>), and to request a CDN cache refresh. See <a href="configuration.html#credentials">Configuration</a>.</li>
         <li><strong>No copy of the admin config.</strong> The job can point <code>--config</code> at the admin repository's file with a <code>github://</code> locator pinned to a commit; see <a href="configuration.html#remote">remote config</a>. Eligibility is still checked against the registry on the delivery target.</li>
         <li><strong>GitHub Actions.</strong> The repository also contains an optional Action that wraps this command.</li>
       </ul>

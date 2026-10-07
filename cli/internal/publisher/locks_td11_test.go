@@ -93,8 +93,10 @@ func TestTD11ColdAndWarmLockCallCounts(t *testing.T) {
 		t.Fatalf("cold lock snapshot = %+v; want held record with owner and ETag", cold)
 	}
 	coldAcquireGets, coldAcquirePuts := backend.callCounts()
-	if coldAcquireGets != 1 || len(coldAcquirePuts) != 1 {
-		t.Fatalf("cold Acquire() calls = GET %d / conditional PUT %d; want 1 / 1", coldAcquireGets, len(coldAcquirePuts))
+	// The cold path adds one GET: the legacy per-site lock probe that adopts
+	// pre-IMP-66 records (absent here, so nothing else is read or written).
+	if coldAcquireGets != 2 || len(coldAcquirePuts) != 1 {
+		t.Fatalf("cold Acquire() calls = GET %d / conditional PUT %d; want 2 / 1", coldAcquireGets, len(coldAcquirePuts))
 	}
 	if err := releaseCold(); err != nil {
 		t.Fatalf("cold release() error = %v", err)
@@ -103,8 +105,8 @@ func TestTD11ColdAndWarmLockCallCounts(t *testing.T) {
 	if gets-coldAcquireGets != 0 || len(puts)-len(coldAcquirePuts) != 1 {
 		t.Fatalf("cold release() delta = GET %+d / conditional PUT %+d; want 0 / 1", gets-coldAcquireGets, len(puts)-len(coldAcquirePuts))
 	}
-	if gets != 1 || len(puts) != 2 {
-		t.Fatalf("cold Acquire()+release() calls = GET %d / conditional PUT %d; want 1 / 2", gets, len(puts))
+	if gets != 2 || len(puts) != 2 {
+		t.Fatalf("cold Acquire()+release() calls = GET %d / conditional PUT %d; want 2 / 2", gets, len(puts))
 	}
 	if puts[0].key != siteLockKey("td11") || puts[0].state != "held" || !puts[0].condition.IfNoneMatch || puts[0].condition.IfMatchETag != "" || puts[0].err != nil {
 		t.Fatalf("cold create call = %+v; want successful held If-None-Match on the site key", puts[0])
@@ -145,7 +147,7 @@ func TestTD11ColdAndWarmLockCallCounts(t *testing.T) {
 
 func TestTD11ConcurrentColdCreateHasOneWinner(t *testing.T) {
 	backend := newTD11CountingLockBackend()
-	const key = "_control/locks/sites/sre.json"
+	key := siteLockKey("sre")
 	barrier := newLockReadBarrier(2)
 	backend.onMissingRead = func(readKey string) {
 		if readKey == key {
@@ -278,8 +280,8 @@ func TestTD11BlankETagsFailClosed(t *testing.T) {
 			t.Fatalf("Acquire() = release nil %t, err %v; want fail-closed blank ETag and no release closure", release == nil, err)
 		}
 		gets, puts := backend.callCounts()
-		if gets != 1 || len(puts) != 1 || !puts[0].condition.IfNoneMatch {
-			t.Fatalf("blank-create path calls = GET %d / PUT %+v; want one absent GET and one create only", gets, puts)
+		if gets != 2 || len(puts) != 1 || !puts[0].condition.IfNoneMatch {
+			t.Fatalf("blank-create path calls = GET %d / PUT %+v; want an absent GET, the legacy probe and one create only", gets, puts)
 		}
 		inspected, inspectErr := manager.Inspect(context.Background(), "sre")
 		if inspectErr != nil || inspected.State != "held" || inspected.ETag == "" {

@@ -1,0 +1,21 @@
+{
+  "comment": "Every _control/ key the CLI reads or writes, with the object operations it needs. cli/internal/publisher/control_keys_test.go proves the CLI produces exactly these keys; terraform/modules/aws/tests/control-keys-coverage.test.js proves the AWS IAM policies cover them. Add a row here when the CLI gains a control record.",
+  "site": [
+    { "id": "site-lock", "key": "_control/sites/{site}/lock.json", "ops": ["get", "put"] },
+    { "id": "site-cache", "key": "_control/sites/{site}/site-cache.json", "ops": ["get", "put", "delete"] },
+    { "id": "publish-state", "key": "_control/sites/{site}/publish-state.json.gz", "ops": ["get", "put", "delete", "list"] },
+    { "id": "preview-cleanup", "key": "_control/sites/{site}/preview-cleanup.json", "ops": ["get", "put", "delete"] }
+  ],
+  "global": [
+    { "id": "registry-lock", "key": "_control/locks/registry.json", "ops": ["get", "put"] },
+    { "id": "application-lock", "key": "_control/locks/application.json", "ops": ["get", "put"] },
+    { "id": "registry-cleanup", "key": "_control/registry-cleanup.json", "ops": ["get", "put", "delete"] },
+    { "id": "app-cache-retry", "key": "_control/app-cache/retry.json", "ops": ["get", "put", "delete"] }
+  ],
+  "legacySite": [
+    { "id": "site-lock", "key": "_control/locks/sites/{site}.json", "ops": ["get", "put"] },
+    { "id": "site-cache", "key": "_control/site-cache/{site}.json", "ops": ["get", "put", "delete"] },
+    { "id": "publish-state", "key": "_control/publish-state/{site}.json.gz", "ops": ["get", "put", "delete", "list"] },
+    { "id": "preview-cleanup", "key": "_control/preview-cleanup/{site}.json", "ops": ["get", "put", "delete"] }
+  ]
+}

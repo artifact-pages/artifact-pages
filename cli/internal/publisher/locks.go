@@ -25,6 +25,9 @@ type lockRecord struct {
 	State         string    `json:"state"`
 	Owner         string    `json:"owner,omitempty"`
 	AcquiredAt    time.Time `json:"acquiredAt,omitempty"`
+	// LegacyAdopted is set once the pre-IMP-66 per-site records and lock were
+	// adopted for this site (see adoptLegacySite). Absent means "not yet".
+	LegacyAdopted bool `json:"legacyAdopted,omitempty"`
 }
 
 // LockSnapshot is a provider-neutral view of a retained per-site control lock.
@@ -52,14 +55,24 @@ func (manager SiteLockManager) Inspect(ctx context.Context, siteID string) (Lock
 	if err := validateLockSite(siteID); err != nil {
 		return LockSnapshot{}, err
 	}
-	return manager.inspect(ctx, siteID, siteLockKey(siteID))
+	snapshot, err := manager.inspect(ctx, siteID, siteLockKey(siteID))
+	if err != nil || snapshot.State == "held" {
+		return snapshot, err
+	}
+	// A pre-IMP-66 CLI may still hold the legacy lock record. Report it so an
+	// operator can see and recover it with the same ETag workflow.
+	legacy, legacyErr := manager.inspect(ctx, siteID, legacySiteLockKey(siteID))
+	if legacyErr == nil && legacy.State == "held" {
+		return legacy, nil
+	}
+	return snapshot, nil
 }
 
 func (manager SiteLockManager) InspectRegistry(ctx context.Context) (LockSnapshot, error) {
 	if manager.Backend == nil {
 		return LockSnapshot{}, errors.New("conditional deployment backend is required")
 	}
-	return manager.inspect(ctx, "registry", "_control/locks/registry.json")
+	return manager.inspect(ctx, "registry", registryLockKey)
 }
 
 // InspectApplication reads the retained lock that serializes application
@@ -68,7 +81,7 @@ func (manager SiteLockManager) InspectApplication(ctx context.Context) (LockSnap
 	if manager.Backend == nil {
 		return LockSnapshot{}, errors.New("conditional deployment backend is required")
 	}
-	return manager.inspect(ctx, "application", "_control/locks/application.json")
+	return manager.inspect(ctx, "application", applicationLockKey)
 }
 
 func (manager SiteLockManager) inspect(ctx context.Context, siteID, key string) (LockSnapshot, error) {
@@ -93,7 +106,7 @@ func (manager SiteLockManager) Acquire(ctx context.Context, siteID string) (Lock
 	if err := validateLockSite(siteID); err != nil {
 		return LockSnapshot{}, nil, err
 	}
-	return manager.acquire(ctx, siteID, siteLockKey(siteID))
+	return manager.acquireWith(ctx, siteID, siteLockKey(siteID), manager.adoptLegacySite)
 }
 
 // AcquireRegistry serializes whole-registry updates separately from per-site
@@ -102,7 +115,7 @@ func (manager SiteLockManager) AcquireRegistry(ctx context.Context) (LockSnapsho
 	if manager.Backend == nil {
 		return LockSnapshot{}, nil, errors.New("conditional deployment backend is required")
 	}
-	return manager.acquire(ctx, "registry", "_control/locks/registry.json")
+	return manager.acquire(ctx, "registry", registryLockKey)
 }
 
 // AcquireApplication serializes application deployments across processes.
@@ -110,10 +123,18 @@ func (manager SiteLockManager) AcquireApplication(ctx context.Context) (LockSnap
 	if manager.Backend == nil {
 		return LockSnapshot{}, nil, errors.New("conditional deployment backend is required")
 	}
-	return manager.acquire(ctx, "application", "_control/locks/application.json")
+	return manager.acquire(ctx, "application", applicationLockKey)
 }
 
 func (manager SiteLockManager) acquire(ctx context.Context, siteID, key string) (LockSnapshot, func() error, error) {
+	return manager.acquireWith(ctx, siteID, key, nil)
+}
+
+// acquireWith is acquire plus an optional adoption step. When adopt is set and
+// the lock record does not yet say LegacyAdopted, adopt runs after the record
+// is seen free (or absent) and before it is claimed, and the claiming write
+// records LegacyAdopted so later acquisitions skip the step entirely.
+func (manager SiteLockManager) acquireWith(ctx context.Context, siteID, key string, adopt func(context.Context, string) error) (LockSnapshot, func() error, error) {
 	waitLimit := manager.WaitLimit
 	if waitLimit <= 0 {
 		waitLimit = defaultLockWait
@@ -143,6 +164,12 @@ func (manager SiteLockManager) acquire(ctx context.Context, siteID, key string) 
 				State:         "held",
 				Owner:         owner,
 				AcquiredAt:    manager.now().UTC(),
+			}
+			if adopt != nil {
+				if err := adopt(ctx, siteID); err != nil {
+					return LockSnapshot{}, nil, err
+				}
+				record.LegacyAdopted = true
 			}
 			contents, marshalErr := marshalLockRecord(record)
 			if marshalErr != nil {
@@ -184,6 +211,12 @@ func (manager SiteLockManager) acquire(ctx context.Context, siteID, key string) 
 			return LockSnapshot{}, nil, decodeErr
 		}
 		if record.State == "free" {
+			if adopt != nil && !record.LegacyAdopted {
+				if err := adopt(ctx, siteID); err != nil {
+					return LockSnapshot{}, nil, err
+				}
+				record.LegacyAdopted = true
+			}
 			record.State = "held"
 			record.Owner = owner
 			record.AcquiredAt = manager.now().UTC()
@@ -274,14 +307,24 @@ func (manager SiteLockManager) Recover(ctx context.Context, siteID, observedETag
 	if err := validateLockSite(siteID); err != nil {
 		return err
 	}
-	return manager.recover(ctx, siteID, siteLockKey(siteID), observedETag)
+	err := manager.recover(ctx, siteID, siteLockKey(siteID), observedETag)
+	if err == nil {
+		return nil
+	}
+	// The inspected snapshot may have come from the legacy record.
+	if _, _, legacyReadErr := manager.Backend.GetObject(ctx, legacySiteLockKey(siteID)); legacyReadErr == nil {
+		if legacyErr := manager.recover(ctx, siteID, legacySiteLockKey(siteID), observedETag); legacyErr == nil {
+			return nil
+		}
+	}
+	return err
 }
 
 func (manager SiteLockManager) RecoverRegistry(ctx context.Context, observedETag string) error {
 	if manager.Backend == nil {
 		return errors.New("conditional deployment backend is required")
 	}
-	return manager.recover(ctx, "registry", "_control/locks/registry.json", observedETag)
+	return manager.recover(ctx, "registry", registryLockKey, observedETag)
 }
 
 // RecoverApplication frees a stale application deployment lock only when the
@@ -290,7 +333,7 @@ func (manager SiteLockManager) RecoverApplication(ctx context.Context, observedE
 	if manager.Backend == nil {
 		return errors.New("conditional deployment backend is required")
 	}
-	return manager.recover(ctx, "application", "_control/locks/application.json", observedETag)
+	return manager.recover(ctx, "application", applicationLockKey, observedETag)
 }
 
 func (manager SiteLockManager) recover(ctx context.Context, siteID, key, observedETag string) error {
@@ -351,8 +394,6 @@ func (manager SiteLockManager) now() time.Time {
 	return time.Now()
 }
 
-func siteLockKey(siteID string) string { return "_control/locks/sites/" + siteID + ".json" }
-
 func validateLockSite(siteID string) error {
 	if !lockSiteIDPattern.MatchString(siteID) || siteID == "assets" {
 		return fmt.Errorf("invalid site identifier %q", siteID)
@@ -389,4 +430,66 @@ func decodeLockRecord(contents []byte, siteID string) (lockRecord, error) {
 
 func snapshotFromRecord(record lockRecord, etag string) LockSnapshot {
 	return LockSnapshot{Site: record.Site, State: record.State, Owner: record.Owner, AcquiredAt: record.AcquiredAt, ETag: etag}
+}
+
+// legacyLockMovedState marks a legacy lock record that a post-IMP-66 CLI has
+// retired. Its schemaVersion is 2, so an older CLI that still reads the
+// legacy key fails with the standard "written by a newer major version,
+// upgrade the CLI" message instead of publishing against state it no longer
+// finds.
+const legacyLockMovedState = "moved"
+
+type legacyLockTombstone struct {
+	SchemaVersion int    `json:"schemaVersion"`
+	Site          string `json:"site"`
+	State         string `json:"state"`
+	MovedTo       string `json:"movedTo"`
+}
+
+// Lock transition rule (IMP-66). The first time a post-IMP-66 CLI claims a
+// site's current lock record, it first retires the site's legacy lock:
+//
+//  1. No legacy lock record: the site was never locked by an older CLI, so
+//     there is nothing to wait for or move. Done.
+//  2. A live (schemaVersion 1) legacy record: take it with the ordinary
+//     compare-and-swap protocol, waiting for an older CLI that holds it, so
+//     no older publish is in flight while records move.
+//  3. Move the per-site records (migrateLegacySiteControl).
+//  4. Overwrite the held legacy lock with a schemaVersion 2 tombstone. An
+//     older CLI that reads the legacy key then fails ("written by a newer
+//     major version, upgrade the CLI") and cannot take the legacy lock, so
+//     two CLI versions never both believe they hold the site lock.
+//  5. The caller's claim of the current lock records LegacyAdopted, so
+//     steady-state acquisitions cost nothing extra.
+//
+// A legacy key the credential may not access (the module dropped the old
+// grants, so no older CLI can run either) counts as absent.
+func (manager SiteLockManager) adoptLegacySite(ctx context.Context, siteID string) error {
+	key := legacySiteLockKey(siteID)
+	object, _, err := manager.Backend.GetObject(ctx, key)
+	if err != nil {
+		if legacyProbeAbsent(err) {
+			return nil
+		}
+		return fmt.Errorf("read legacy site lock: %w", err)
+	}
+	if compat.CheckSchemaVersion("site lock record", object.Bytes, 1) != nil {
+		// Retired by an earlier adoption that did not finish recording it.
+		return migrateLegacySiteControl(ctx, manager.Backend, siteID)
+	}
+	held, release, err := manager.acquire(ctx, siteID, key)
+	if err != nil {
+		return fmt.Errorf("acquire legacy site lock (an older CLI may still be publishing; recover the lock by ETag if it is stale): %w", err)
+	}
+	if err := migrateLegacySiteControl(ctx, manager.Backend, siteID); err != nil {
+		return errors.Join(err, release())
+	}
+	tombstone, err := json.Marshal(legacyLockTombstone{SchemaVersion: 2, Site: siteID, State: legacyLockMovedState, MovedTo: siteLockKey(siteID)})
+	if err != nil {
+		return errors.Join(err, release())
+	}
+	if _, err := manager.Backend.PutObjectConditional(ctx, key, Object{Bytes: tombstone, ContentType: "application/json; charset=utf-8"}, ObjectCondition{IfMatchETag: held.ETag}); err != nil {
+		return errors.Join(fmt.Errorf("retire legacy site lock: %w", err), release())
+	}
+	return nil
 }

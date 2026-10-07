@@ -139,7 +139,7 @@
           </div></div></li>
       </ol>
       <ul>
-        <li><strong>認証情報</strong>はCIのシークレットに置き、設定ファイルには書きません。公開のジョブに必要なのは、サイトの登録情報の読み取りと、このサイトのファイル・プレビュー・ロック・キャッシュ再試行の記録（<code>_control/site-cache/&lt;site&gt;.json</code>）の読み書き、それにCDNのキャッシュ更新の依頼だけです。「<a href="configuration.html#credentials">設定ファイル</a>」を参照してください。</li>
+        <li><strong>認証情報</strong>はCIのシークレットに置き、設定ファイルには書きません。公開のジョブに必要なのは、サイトの登録情報の読み取りと、このサイトのファイル・プレビュー・ロック・キャッシュ再試行の記録（<code>_control/sites/&lt;site&gt;/site-cache.json</code>）の読み書き、それにCDNのキャッシュ更新の依頼だけです。「<a href="configuration.html#credentials">設定ファイル</a>」を参照してください。</li>
         <li><strong>管理者の設定ファイルを写す必要はありません。</strong><code>--config</code>に、コミットを固定した<code>github://</code>の指定で管理リポジトリのファイルを渡せます（<a href="configuration.html#remote">リモートの設定ファイル</a>）。公開してよいかどうかは、その場合も配信先にある登録情報で確認します。</li>
         <li><strong>GitHub Actions。</strong>このリポジトリには、同じコマンドを包む任意のActionもあります。</li>
       </ul>

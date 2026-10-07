@@ -530,7 +530,7 @@ func (client *awsPreviewIntegrationS3) PutObject(ctx context.Context, input *s3.
 		Metadata:           awsPreviewIntegrationCloneMetadata(input.Metadata),
 	}
 	client.objects[key] = awsPreviewIntegrationObject{Object: object, etag: etag}
-	if strings.HasPrefix(key, "_control/locks/sites/") {
+	if strings.HasPrefix(key, siteControlRoot) && strings.HasSuffix(key, "/lock.json") {
 		var record lockRecord
 		if json.Unmarshal(contents, &record) == nil && record.State == "held" {
 			client.operations = append(client.operations, "lock-held:"+key)

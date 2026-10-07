@@ -576,23 +576,31 @@ func listSiteKeys(ctx context.Context, backend DeploymentBackend, siteID string)
 	}
 	keys := append(append(artifacts, indexes...), previews...)
 	if conditional, ok := backend.(ConditionalObjectBackend); ok {
-		if _, _, err := conditional.GetObject(ctx, siteCacheRetryKey(siteID)); err == nil {
-			keys = append(keys, siteCacheRetryKey(siteID))
-		} else if !errors.Is(err, ErrObjectNotFound) {
-			return nil, fmt.Errorf("read site cache retry record for cleanup: %w", err)
+		// Cover both layouts: a site never touched by a post-IMP-66 CLI still
+		// holds its records at the legacy keys, and unregister must clear them.
+		for _, retryKey := range []string{siteCacheRetryKey(siteID), legacySiteCacheRetryKey(siteID)} {
+			if _, _, err := conditional.GetObject(ctx, retryKey); err == nil {
+				keys = append(keys, retryKey)
+			} else if !errors.Is(err, ErrObjectNotFound) && (retryKey == siteCacheRetryKey(siteID) || !legacyProbeAbsent(err)) {
+				return nil, fmt.Errorf("read site cache retry record for cleanup: %w", err)
+			}
 		}
 		// Check only the exact fixed key prefix, without reading or decoding it,
 		// so unregister can clean malformed or crash-interrupted state while
 		// keeping FilesRemoved accurate for an already-absent state object.
-		stateKey := sitePublishStateKey(siteID)
-		stateKeys, err := backend.ListKeys(ctx, stateKey)
-		if err != nil {
-			return nil, fmt.Errorf("list site publish state for cleanup: %w", err)
-		}
-		for _, key := range stateKeys {
-			if key == stateKey {
-				keys = append(keys, key)
-				break
+		for _, stateKey := range []string{sitePublishStateKey(siteID), legacySitePublishStateKey(siteID)} {
+			stateKeys, err := backend.ListKeys(ctx, stateKey)
+			if err != nil {
+				if stateKey != sitePublishStateKey(siteID) && legacyProbeAbsent(err) {
+					continue
+				}
+				return nil, fmt.Errorf("list site publish state for cleanup: %w", err)
+			}
+			for _, key := range stateKeys {
+				if key == stateKey {
+					keys = append(keys, key)
+					break
+				}
 			}
 		}
 	}

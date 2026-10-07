@@ -58,7 +58,7 @@ func TestSitePublishStateCodecRoundTripDeterministic(t *testing.T) {
 	if !reflect.DeepEqual(decoded, state) {
 		t.Fatalf("decoded state differs\n got: %#v\nwant: %#v", decoded, state)
 	}
-	if got := sitePublishStateKey("sre"); got != "_control/publish-state/sre.json.gz" {
+	if got := sitePublishStateKey("sre"); got != "_control/sites/sre/publish-state.json.gz" {
 		t.Fatalf("state key = %q", got)
 	}
 }

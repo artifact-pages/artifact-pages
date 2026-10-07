@@ -25,7 +25,7 @@
     "serve:local": "npm run build && docker compose up",
     "test:aws-routes": "node --test terraform/modules/aws/routes.test.js",
     "test:aws-deployment": "node --test terraform/modules/aws/routes.test.js terraform/modules/aws/deployment.test.js terraform/modules/aws/artifact-csp.test.js terraform/modules/aws/tests/aws-contract.test.js",
-    "test:provider-delivery": "node --test terraform/modules/aws/routes.test.js terraform/modules/aws/deployment.test.js terraform/modules/aws/artifact-csp.test.js terraform/modules/aws/tests/aws-contract.test.js terraform/modules/aws/tests/cli-validation-layout.test.js terraform/modules/cloudflare/modules/delivery/main.test.js terraform/modules/cloudflare/tests/*.test.js",
+    "test:provider-delivery": "node --test terraform/modules/aws/routes.test.js terraform/modules/aws/deployment.test.js terraform/modules/aws/artifact-csp.test.js terraform/modules/aws/tests/aws-contract.test.js terraform/modules/aws/tests/control-keys-coverage.test.js terraform/modules/aws/tests/cli-validation-layout.test.js terraform/modules/cloudflare/modules/delivery/main.test.js terraform/modules/cloudflare/tests/*.test.js",
     "test:actions-shared": "node --test actions/shared/*.test.mjs",
     "test:action-repos": "node --test scripts/build-action-repos.test.mjs",
     "test:cli-release": "node --test scripts/package-cli-release.test.mjs",
