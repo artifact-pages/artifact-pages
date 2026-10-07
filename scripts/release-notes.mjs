@@ -47,8 +47,15 @@ export function compareBundles(previous, next) {
 
 const list = (files) => files.slice(0, 12).map((file) => `  - \`${file}\``).join('\n') + (files.length > 12 ? `\n  - ... and ${files.length - 12} more` : '')
 
-export function buildNotes({ version, bundle, previousTag, verdict }) {
-  const lines = [`Artifact Pages v${version} (pre-release)`, '', 'One product version: the CLI, the composite Actions and the web bundle ship together. The CLI deploys the web bundle of its own version (`artifact-pages app deploy`).', '']
+export function buildNotes({ version, bundle, previousTag, verdict, component = 'web' }) {
+  const lines = [`Artifact Pages ${component} v${version} (pre-release)`, '', `This release contains only the ${component} component. CLI, web and Actions have independent release series.`, '']
+  if (component === 'cli') {
+    lines.push('## Compatibility', '', verdict?.reasonCode === 'pre-1.0-compatibility-not-guaranteed'
+      ? 'Cross-version compatibility is not guaranteed before 1.0.0, so the compatibility gate was skipped. The candidate still passed the normal release verification suite.'
+      : `Compatibility verdict: ${verdict?.verdict ?? 'no earlier CLI release'}.`, '', '## Assets', '', `Per-platform binaries, checksums, Go dependency notices and \`artifact-pages_v${version}_compatibility.json\`.`, '', `Install: \`go install github.com/artifact-pages/artifact-pages/cli/cmd/artifact-pages@v${version}\`.`)
+    if (verdict?.verdict === 'breaking') lines.push('', '## Upgrade procedure', '', 'Update the deployment config to compatible CLI and web releases; run `artifact-pages config check`, then `artifact-pages registry sync --accept-breaking`, `artifact-pages app deploy --accept-breaking`, and republish every site and preview. Read the changed-format report before upgrading:', '', (verdict.changedFormats ?? []).map((format) => `- \`${format}\``).join('\n'))
+    return `${lines.join('\n')}\n`
+  }
   lines.push('## Web bundle', '')
   if (!bundle) {
     lines.push('First release: there is no previous web bundle to compare with.')
@@ -70,11 +77,11 @@ export function buildNotes({ version, bundle, previousTag, verdict }) {
   } else if (verdict.verdict === 'skipped') {
     lines.push(`Compatibility checks were skipped: ${verdict.reason ?? 'no comparison was available'}.`)
   } else if (verdict.verdict === 'compatible') {
-    lines.push(`**Compatible** with ${verdict.baseline?.ref ?? previousTag}: no published data format changed its \`schemaVersion\`. The mixed-version suite passed: this release's web reads data written by the previous CLI, the previous web reads data written by this CLI, and one storage written by both CLIs works, including republish, preview and lock operations over each other's output.`, '', 'No operator action is required. Republish a site to use a new feature.')
+    lines.push(`**Compatible** with ${verdict.baseline?.ref ?? previousTag}: The reader manifest preserves every format version accepted by the previous web release.`, '', 'No operator action is required. Republish a site to use a new feature.')
   } else {
-    lines.push(`**Breaking** relative to ${verdict.baseline?.ref ?? previousTag}: the \`schemaVersion\` changed for ${(verdict.changedFormats ?? []).map((format) => `\`${format}\``).join(', ')}.`, '', 'The new web shows "This site needs to be republished" for data written by the previous version until the upgrade below is done. The upgrade procedure was exercised by the release gate and converged to a fully working storage.', '', '### Upgrade procedure', '', `1. Move your CLI (or the pinned Action ref) to v${version}.`, '2. `artifact-pages registry sync` (admin repository).', '3. `artifact-pages app deploy` (admin repository).', '4. Sync every site with the new CLI: `artifact-pages site sync --site ID` and, for sites with previews, `artifact-pages preview publish`.')
+    lines.push(`**Breaking** relative to ${verdict.baseline?.ref ?? previousTag}: reader support was removed for ${(verdict.changedFormats ?? []).map((format) => `\`${format}\``).join(', ')}.`, '', 'The new web shows "This site needs to be republished" for data written by the previous version until the upgrade below is done. The reader manifest no longer accepts every format version accepted by the previous web release.', '', '### Upgrade procedure', '', `1. Update the deployment config to the required CLI and web releases.`, '2. `artifact-pages registry sync --accept-breaking` (admin repository).', '3. `artifact-pages app deploy --accept-breaking` (admin repository).', '4. Sync every site with the new CLI: `artifact-pages site sync --site ID` and, for sites with previews, `artifact-pages preview publish`.')
   }
-  lines.push('', '## Assets', '', `- \`artifact-pages-web-v${version}.tar.gz\` with its \`.json\` manifest and \`.sha256\` checksum, built from the tagged commit.`, '- Go CLI: `go install github.com/artifact-pages/artifact-pages/cli/cmd/artifact-pages@v' + version + '`.')
+  lines.push('', '## Assets', '', `- \`artifact-pages-web-v${version}.tar.gz\` with its \`.json\` manifest and \`.sha256\` checksum, built from the tagged commit.`)
   return `${lines.join('\n')}\n`
 }
 
@@ -82,7 +89,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const version = option('version')
   const archive = option('archive')
   const out = option('out')
-  if (!version || !archive || !out) {
+  if (!version || !out || (option('component') !== 'cli' && !archive)) {
     console.error('usage: release-notes.mjs --version X.Y.Z --archive NEW.tar.gz [--previous-archive OLD --previous-tag vA.B.C] [--verdict FILE] --out FILE')
     process.exit(2)
   }
@@ -91,6 +98,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const verdictFile = option('verdict')
   const verdict = verdictFile ? JSON.parse(readFileSync(verdictFile, 'utf8')) : undefined
   mkdirSync(path.dirname(path.resolve(out)), { recursive: true })
-  writeFileSync(out, buildNotes({ version, bundle, previousTag: option('previous-tag'), verdict }))
+  writeFileSync(out, buildNotes({ version, bundle, previousTag: option('previous-tag'), verdict, component: option('component') ?? 'web' }))
   console.log(`wrote ${out}${bundle ? ` (web bundle ${bundle.unchanged ? 'unchanged' : 'changed'})` : ''}`)
 }

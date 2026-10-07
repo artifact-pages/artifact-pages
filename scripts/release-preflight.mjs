@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { releaseSeries } from './release-series.mjs'
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -23,13 +24,14 @@ function fail(message) {
 
 const tag = option('tag')
 if (!tag) fail('--tag is required')
-const match = /^v(\d+\.\d+\.\d+)$/.exec(tag)
-if (!match) fail(`tag ${tag} must look like vMAJOR.MINOR.PATCH (no pre-release suffix, no component prefix)`)
-
-const source = readFileSync(path.join(projectRoot, 'cli/internal/version/version.go'), 'utf8')
-const constant = /const Product = "([^"]+)"/.exec(source)?.[1]
-if (!constant) fail('cannot find the product version constant in cli/internal/version/version.go')
-if (constant !== match[1]) fail(`tag ${tag} does not equal the CLI version constant ${constant}; the release commit must set cli/internal/version.Product to ${match[1]}`)
+let series
+try { series = releaseSeries(tag) } catch (error) { fail(error.message) }
+if (series.component === 'cli') {
+  const source = readFileSync(path.join(projectRoot, 'cli/internal/version/version.go'), 'utf8')
+  const constant = /const Product = "([^"]+)"/.exec(source)?.[1]
+  if (!constant) fail('cannot find the CLI version constant')
+  if (constant !== series.version) fail(`tag ${tag} does not equal the CLI version constant ${constant}`)
+}
 
 const git = (args) => spawnSync('git', args, { cwd: projectRoot, encoding: 'utf8' })
 const sha = option('sha') ?? git(['rev-parse', 'HEAD']).stdout.trim()
@@ -38,4 +40,4 @@ const resolved = git(['rev-parse', '--verify', `${mainRef}^{commit}`])
 if (resolved.status !== 0) fail(`cannot resolve ${mainRef}; fetch main before running the preflight`)
 if (git(['merge-base', '--is-ancestor', sha, mainRef]).status !== 0) fail(`commit ${sha} is not on ${mainRef}; tag a commit that has been merged to main`)
 
-console.log(`release preflight passed: ${tag} equals the CLI constant and ${sha} is on ${mainRef}`)
+console.log(`release preflight passed: ${tag} selects ${series.component} and ${sha} is on ${mainRef}`)

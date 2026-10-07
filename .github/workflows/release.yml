@@ -1,38 +1,49 @@
-# Pushing a vMAJOR.MINOR.PATCH tag is the owner's release approval (TD2). The
-# workflow never edits this repository; any failure before "Create the GitHub
-# pre-release" stops the release. After the release assets are published and verified,
-# "Sync the Action repositories" copies each actions/<name> into artifact-pages/<name>-action
-# and tags it with the same version (TD14). That job needs the org's release GitHub App:
-# variable RELEASE_APP_ID and secret RELEASE_APP_PRIVATE_KEY, with contents:write on
-# publish-action, preview-action, registry-action and app-deploy-action only.
+# Each approved component tag publishes only its own series (TD17).
 name: Release
-
 on:
   push:
-    tags: ["v*"]
-
+    tags: ["v*", "web/v*", "publish-action/v*", "preview-action/v*", "registry-action/v*", "app-deploy-action/v*"]
 permissions:
   contents: read
-
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
-
 jobs:
   preflight:
-    name: Tag preflight
+    name: Component tag preflight
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    outputs:
+      component: ${{ steps.series.outputs.component }}
+      version: ${{ steps.series.outputs.version }}
+      action: ${{ steps.series.outputs.action }}
+      previous: ${{ steps.series.outputs.previous }}
+      compat_tag: ${{ steps.series.outputs.compat_tag }}
     steps:
-      - name: Check out the tagged commit with full history
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Tag equals the CLI version constant and the commit is on main
+      - name: Verify the tag and main ancestry
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: node scripts/release-preflight.mjs --tag "$RELEASE_TAG" --sha "$GITHUB_SHA" --main-ref origin/main
+      - name: Resolve component and previous release
+        id: series
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          node --input-type=module <<'JS' >> "$GITHUB_OUTPUT"
+          import { execFileSync } from 'node:child_process'
+          import { releaseSeries, previousRelease } from './scripts/release-series.mjs'
+          const tag = process.env.RELEASE_TAG, series = releaseSeries(tag)
+          const tags = execFileSync('git', ['tag', '--list'], { encoding: 'utf8' }).trim().split('\n')
+          for (const [name, value] of Object.entries({ component: series.component, version: series.version, action: series.action ?? '', previous: previousRelease(tags, tag) ?? '', compat_tag: series.action ? '' : tag })) console.log(`${name}=${value}`)
+          JS
+      - name: Reject unchanged tagged Actions and warn about pending Action releases
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: node scripts/check-action-releases.mjs --tag "$RELEASE_TAG"
 
   verify:
     name: Verify
@@ -40,164 +51,170 @@ jobs:
     uses: ./.github/workflows/verify.yml
     permissions:
       contents: read
-      # The composite Actions smoke verifies an explicit pull request through the API.
       pull-requests: read
     with:
-      tag: ${{ github.ref_name }}
+      tag: ${{ needs.preflight.outputs.compat_tag }}
 
   release:
-    name: Create the GitHub pre-release
-    needs: verify
+    name: Publish component assets
+    if: needs.preflight.outputs.component == 'cli' || needs.preflight.outputs.component == 'web'
+    needs: [preflight, verify]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: write
     env:
       RELEASE_TAG: ${{ github.ref_name }}
+      RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
+      COMPONENT: ${{ needs.preflight.outputs.component }}
+      PREVIOUS_TAG: ${{ needs.preflight.outputs.previous }}
+      VERDICT_JSON: ${{ needs.verify.outputs.compat_report }}
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Check out the tagged commit with release tags
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           cache: npm
-      - name: Install dependencies
-        run: npm ci
-      - name: Package the web bundle from the tagged commit
-        run: |
-          set -euo pipefail
-          version="${RELEASE_TAG#v}"
-          npm run package:web -- --version "$version"
-          manifest=".local/releases/artifact-pages-web-v${version}.tar.gz.json"
-          if [ "$(jq -r .sourceDirty "$manifest")" != "false" ]; then
-            echo "::error::the web bundle was built from a dirty source tree"
-            exit 1
-          fi
-          if [ "$(jq -r .sourceCommit "$manifest")" != "$GITHUB_SHA" ]; then
-            echo "::error::the web bundle was not built from the tagged commit"
-            exit 1
-          fi
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - name: Build the CLI binaries, checksums and Go dependency notices
+      - run: npm ci
+        if: env.COMPONENT == 'web'
+      - name: Package web archive and verify provenance
+        if: env.COMPONENT == 'web'
         run: |
           set -euo pipefail
-          version="${RELEASE_TAG#v}"
-          node scripts/package-cli-release.mjs --version "$version" --out .local/cli-release
-          (cd .local/cli-release && sha256sum --check "artifact-pages_v${version}_checksums.txt")
-      - name: Generate release notes
-        env:
-          VERDICT_JSON: ${{ needs.verify.outputs.compat_report }}
+          npm run package:web -- --version "$RELEASE_VERSION"
+          manifest=".local/releases/artifact-pages-web-v${RELEASE_VERSION}.tar.gz.json"
+          jq -e --arg sha "$GITHUB_SHA" '.sourceDirty == false and .sourceCommit == $sha' "$manifest"
+      - name: Package CLI binaries, notices and compatibility contract
+        if: env.COMPONENT == 'cli'
         run: |
           set -euo pipefail
-          version="${RELEASE_TAG#v}"
-          args=(--version "$version" --archive ".local/releases/artifact-pages-web-v${version}.tar.gz" --out "$RUNNER_TEMP/notes.md")
+          node scripts/package-cli-release.mjs --version "$RELEASE_VERSION" --out .local/cli-release
+          (cd .local/cli-release && sha256sum --check "artifact-pages_v${RELEASE_VERSION}_checksums.txt")
+      - name: Generate component release notes
+        run: |
+          set -euo pipefail
+          args=(--version "$RELEASE_VERSION" --component "$COMPONENT" --out "$RUNNER_TEMP/notes.md")
           if [ -n "$VERDICT_JSON" ]; then
             printf '%s' "$VERDICT_JSON" > "$RUNNER_TEMP/verdict.json"
             args+=(--verdict "$RUNNER_TEMP/verdict.json")
           fi
-          previous="$(node -e 'const f=process.argv[1];try{const v=JSON.parse(require("fs").readFileSync(f,"utf8"));if(v.baseline&&/^v\d/.test(v.baseline.ref))console.log(v.baseline.ref)}catch{}' "$RUNNER_TEMP/verdict.json" 2>/dev/null || true)"
-          if [ -n "$previous" ]; then
-            mkdir -p "$RUNNER_TEMP/previous"
-            gh release download "$previous" --pattern '*.tar.gz' --dir "$RUNNER_TEMP/previous"
-            args+=(--previous-archive "$(ls "$RUNNER_TEMP"/previous/*.tar.gz)" --previous-tag "$previous")
+          if [ "$COMPONENT" = web ]; then
+            args+=(--archive ".local/releases/artifact-pages-web-v${RELEASE_VERSION}.tar.gz")
+            if [ -n "$PREVIOUS_TAG" ]; then
+              mkdir -p "$RUNNER_TEMP/previous"
+              gh release download "$PREVIOUS_TAG" --pattern 'artifact-pages-web-*.tar.gz' --dir "$RUNNER_TEMP/previous"
+              previous=("$RUNNER_TEMP"/previous/*.tar.gz)
+              test "${#previous[@]}" = 1
+              args+=(--previous-archive "${previous[0]}" --previous-tag "$PREVIOUS_TAG")
+            fi
           fi
           node scripts/release-notes.mjs "${args[@]}"
-      - name: Create the GitHub pre-release
+      - name: Publish only the selected component assets
         run: |
           set -euo pipefail
-          version="${RELEASE_TAG#v}"
-          base=".local/releases/artifact-pages-web-v${version}.tar.gz"
-          gh release create "$RELEASE_TAG" "$base" "$base.json" "$base.sha256" .local/cli-release/artifact-pages_v"${version}"_* \
-            --verify-tag --prerelease --title "Artifact Pages $RELEASE_TAG" --notes-file "$RUNNER_TEMP/notes.md"
+          if [ "$COMPONENT" = cli ]; then
+            assets=(.local/cli-release/artifact-pages_v"${RELEASE_VERSION}"_*)
+            latest=true
+          else
+            base=".local/releases/artifact-pages-web-v${RELEASE_VERSION}.tar.gz"
+            assets=("$base" "$base.json" "$base.sha256")
+            latest=false
+          fi
+          gh release create "$RELEASE_TAG" "${assets[@]}" --verify-tag --prerelease --latest="$latest" --title "Artifact Pages $RELEASE_TAG" --notes-file "$RUNNER_TEMP/notes.md"
 
   verify-published:
-    name: Verify the published release
-    needs: release
+    name: Verify published component
+    needs: [preflight, release]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    permissions:
-      contents: read
     env:
       RELEASE_TAG: ${{ github.ref_name }}
+      RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
+      COMPONENT: ${{ needs.preflight.outputs.component }}
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Check out the tag
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-      - name: Build the CLI at the tag
-        run: go build -o "$RUNNER_TEMP/artifact-pages" ./cli/cmd/artifact-pages
-      - name: Download the published assets
+      - name: Download assets
         run: gh release download "$RELEASE_TAG" --dir "$RUNNER_TEMP/assets"
-      - name: Published CLI binaries match their checksums and report the tag version
+      - name: Verify CLI checksums, binaries, notices and compatibility asset
+        if: env.COMPONENT == 'cli'
         run: |
           set -euo pipefail
-          version="${RELEASE_TAG#v}"
           cd "$RUNNER_TEMP/assets"
-          for platform in linux_amd64 linux_arm64 darwin_amd64 darwin_arm64; do
-            test -f "artifact-pages_v${version}_${platform}"
-          done
-          test -s "artifact-pages_v${version}_THIRD_PARTY_NOTICES.txt"
-          sha256sum --check "artifact-pages_v${version}_checksums.txt"
-          chmod +x "artifact-pages_v${version}_linux_amd64"
-          test "$("./artifact-pages_v${version}_linux_amd64" version --format json | jq -r .version)" = "$version"
-      - name: Deploy with no flags beyond --config and compare bytes
-        run: node scripts/verify-release.mjs --cli "$RUNNER_TEMP/artifact-pages" --assets "$RUNNER_TEMP/assets" --version "${RELEASE_TAG#v}"
+          for platform in linux_amd64 linux_arm64 darwin_amd64 darwin_arm64; do test -f "artifact-pages_v${RELEASE_VERSION}_${platform}"; done
+          test -s "artifact-pages_v${RELEASE_VERSION}_THIRD_PARTY_NOTICES.txt"
+          sha256sum --check "artifact-pages_v${RELEASE_VERSION}_checksums.txt"
+          binary="./artifact-pages_v${RELEASE_VERSION}_linux_amd64"
+          chmod +x "$binary"
+          test "$("$binary" version --format json | jq -r .version)" = "$RELEASE_VERSION"
+          "$binary" compatibility --format json > "$RUNNER_TEMP/compatibility.json"
+          diff <(jq -S . "$RUNNER_TEMP/compatibility.json") <(jq -S . "artifact-pages_v${RELEASE_VERSION}_compatibility.json")
+      - name: Deploy the config-pinned web bundle and compare bytes
+        if: env.COMPONENT == 'web'
+        run: |
+          go build -o "$RUNNER_TEMP/artifact-pages" ./cli/cmd/artifact-pages
+          node scripts/verify-release.mjs --cli "$RUNNER_TEMP/artifact-pages" --assets "$RUNNER_TEMP/assets" --version "$RELEASE_VERSION"
 
-  # The published Actions download this release's CLI, so they are synced only after
-  # the assets exist and match their checksums. A re-run completes a partial sync and
-  # never moves a tag that already exists.
-  sync-actions:
-    name: Sync the Action repositories
-    needs: verify-published
+  sync-action:
+    name: Sync selected Action repository
+    if: needs.preflight.outputs.action != ''
+    needs: [preflight, verify]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
-      contents: read
+      contents: write
     env:
       RELEASE_TAG: ${{ github.ref_name }}
+      RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
+      RELEASE_ACTION: ${{ needs.preflight.outputs.action }}
+      GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Check out the tagged commit
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-      - name: Generate the Action repositories
-        run: node scripts/build-action-repos.mjs --version "${RELEASE_TAG#v}" --out "$RUNNER_TEMP/action-repos"
-      - name: Create a token for the four Action repositories
+      - name: Generate only the selected Action repository
+        run: node scripts/build-action-repos.mjs --action "$RELEASE_ACTION" --version "$RELEASE_VERSION" --out "$RUNNER_TEMP/action-repos"
+      - name: Verify the CLI assets pinned by the generated Action exist
+        run: |
+          set -euo pipefail
+          cli_version="$(jq -r .version "$RUNNER_TEMP/action-repos/$RELEASE_ACTION-action/release.json")"
+          mkdir -p "$RUNNER_TEMP/cli-assets"
+          gh release download "v$cli_version" --pattern "artifact-pages_v${cli_version}_*" --dir "$RUNNER_TEMP/cli-assets"
+          cd "$RUNNER_TEMP/cli-assets"
+          for platform in linux_amd64 linux_arm64 darwin_amd64 darwin_arm64; do test -f "artifact-pages_v${cli_version}_${platform}"; done
+          test -s "artifact-pages_v${cli_version}_THIRD_PARTY_NOTICES.txt"
+          sha256sum --check "artifact-pages_v${cli_version}_checksums.txt"
+      - name: Create a token scoped to the selected Action repository
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ vars.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
-          repositories: |
-            publish-action
-            preview-action
-            registry-action
-            app-deploy-action
+          repositories: ${{ needs.preflight.outputs.action }}-action
           permission-contents: write
-      - name: Publish the content and tag each repository
+      - name: Sync the generated content and plain Action tag
         env:
           ACTION_REPO_TOKEN: ${{ steps.app-token.outputs.token }}
           SOURCE_SHA: ${{ github.sha }}
-        run: scripts/sync-action-repos.sh "$RUNNER_TEMP/action-repos" "${RELEASE_TAG#v}"
+        run: scripts/sync-action-repos.sh "$RUNNER_TEMP/action-repos" "$RELEASE_VERSION"
+      - name: Record the Action release without marking it latest
+        run: gh release create "$RELEASE_TAG" --verify-tag --prerelease --latest=false --title "$RELEASE_TAG" --notes "Generated $RELEASE_ACTION-action; published as v$RELEASE_VERSION in its repository."

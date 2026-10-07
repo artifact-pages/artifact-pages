@@ -6,7 +6,7 @@ on:
   workflow_call:
     inputs:
       tag:
-        description: Release tag (vX.Y.Z) to run the gate's version check for; empty outside releases.
+        description: CLI or web release tag (vX.Y.Z or web/vX.Y.Z) to run the gate's version check for; empty outside releases.
         required: false
         type: string
         default: ""

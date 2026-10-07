@@ -39,3 +39,13 @@ test('the first 0.x release of a series has no previous web bundle and no baseli
   assert.match(notes, /First release: there is no previous web bundle/)
   assert.doesNotMatch(notes, /undefined/)
 })
+
+test('CLI and web release notes name only their own assets', () => {
+  const cli = buildNotes({ version: '0.1.0', component: 'cli', verdict: { verdict: 'skipped', reasonCode: 'pre-1.0-compatibility-not-guaranteed' } })
+  assert.match(cli, /artifact-pages_v0\.1\.0_compatibility\.json/)
+  assert.doesNotMatch(cli, /artifact-pages-web|## Web bundle/)
+  const web = buildNotes({ version: '0.1.0', component: 'web', previousTag: 'web/v0.0.1', bundle: { unchanged: true, added: [], modified: [], removed: [] } })
+  assert.match(web, /artifact-pages-web-v0\.1\.0\.tar\.gz/)
+  assert.match(web, /Unchanged.*web\/v0\.0\.1/)
+  assert.doesNotMatch(web, /go install|One product version|ship together/)
+})

@@ -7,6 +7,7 @@
 //   action.yml     the source action.yml with shared script paths made repository-relative
 //   scripts/       the shared scripts the Action runs (import closure, no tests)
 //   release.json   {schemaVersion, version, repository}: the CLI release the Action installs
+// The component version tags the generated repository independently from that CLI pin.
 //   README.md      actions/<name>/README.md behind a "generated" notice
 //   LICENSE        the product license
 // The output is deterministic, so a re-run for the same commit changes nothing.
@@ -56,12 +57,12 @@ export function repositoryActionYml(actionYml) {
   return rewritten
 }
 
-export function buildActionRepos({ sourceRoot = projectRoot, out, version, repository = productRepository }) {
+export function buildActionRepos({ sourceRoot = projectRoot, out, version, repository = productRepository, names = actionNames }) {
   const product = readProductVersion(sourceRoot)
   if (!/^\d+\.\d+\.\d+$/.test(version ?? '')) throw new Error(`version must look like X.Y.Z, got ${version}`)
-  if (version !== product) throw new Error(`version ${version} does not equal the CLI version constant ${product}`)
+  if (names.some((name) => !actionNames.includes(name))) throw new Error('unknown Action name')
   const built = []
-  for (const name of actionNames) {
+  for (const name of names) {
     const source = path.join(sourceRoot, 'actions', name)
     const target = path.join(out, repositoryName(name))
     rmSync(target, { recursive: true, force: true })
@@ -70,9 +71,9 @@ export function buildActionRepos({ sourceRoot = projectRoot, out, version, repos
     writeFileSync(path.join(target, 'action.yml'), repositoryActionYml(actionYml))
     const scripts = scriptClosure(actionYml, path.join(sourceRoot, 'actions', 'shared'))
     for (const script of scripts) cpSync(path.join(sourceRoot, 'actions', 'shared', script), path.join(target, 'scripts', script))
-    writeFileSync(path.join(target, 'release.json'), `${JSON.stringify({ schemaVersion: 1, version, repository }, null, 2)}\n`)
+    writeFileSync(path.join(target, 'release.json'), `${JSON.stringify({ schemaVersion: 1, version: product, repository }, null, 2)}\n`)
     const readme = readFileSync(path.join(source, 'README.md'), 'utf8')
-    writeFileSync(path.join(target, 'README.md'), `> This repository is generated from [${productRepository}](https://github.com/${productRepository}) (\`actions/${name}\`) on every release. Open issues and pull requests there.\n\n${readme}`)
+    writeFileSync(path.join(target, 'README.md'), `> This repository is generated from [${productRepository}](https://github.com/${productRepository}) (\`actions/${name}\`) on its component release. Open issues and pull requests there.\n\n${readme}`)
     cpSync(path.join(sourceRoot, 'LICENSE'), path.join(target, 'LICENSE'))
     built.push({ name, repository: repositoryName(name), directory: target, scripts })
   }
@@ -88,7 +89,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   try {
     const out = path.resolve(option('out') ?? path.join(projectRoot, '.local', 'action-repos'))
     const version = option('version') ?? readProductVersion()
-    const built = buildActionRepos({ out, version, repository: option('repository') ?? productRepository })
+    const built = buildActionRepos({ out, version, repository: option('repository') ?? productRepository, names: option('action') ? [option('action')] : actionNames })
     for (const entry of built) console.log(`${entry.repository}: ${entry.directory} (${entry.scripts.join(', ')})`)
   } catch (error) {
     console.error(`build-action-repos failed: ${error.message}`)

@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
+
+import { checkActionChanges } from './check-action-releases.mjs'
+import { releaseSeries, previousRelease } from './release-series.mjs'
 
 import { actionNames, buildActionRepos, readProductVersion, repositoryActionYml, repositoryName } from './build-action-repos.mjs'
 
@@ -48,14 +51,16 @@ test('each Action repository is self-contained and carries the CLI release recor
   assert.deepEqual(actionNames.map(repositoryName), built.map((entry) => entry.repository))
 })
 
-test('generation is deterministic and refuses a version that is not the CLI constant', (t) => {
+test('generation is deterministic and Action versions are independent of the CLI pin', (t) => {
   const first = scratch(t)
   const second = scratch(t)
   buildActionRepos({ out: first, version })
   buildActionRepos({ out: second, version })
   const diff = spawnSync('diff', ['-r', first, second], { encoding: 'utf8' })
   assert.equal(diff.status, 0, diff.stdout)
-  assert.throws(() => buildActionRepos({ out: first, version: '9.9.9' }), /does not equal the CLI version constant/)
+  const independent = buildActionRepos({ out: first, version: '9.9.9', names: ['publish'] })
+  assert.equal(independent.length, 1)
+  assert.equal(JSON.parse(readFileSync(path.join(independent[0].directory, 'release.json'), 'utf8')).version, version)
   assert.throws(() => buildActionRepos({ out: first, version: 'v0.1.0' }), /must look like X\.Y\.Z/)
   assert.throws(() => repositoryActionYml('run: ../x'), /parent directory/)
 })
@@ -66,14 +71,14 @@ function git(cwd, ...args) {
   return result.stdout.trim()
 }
 
-function sync(built, base, extra = {}) {
-  return spawnSync('bash', [path.join(projectRoot, 'scripts', 'sync-action-repos.sh'), built, version], {
+function sync(built, base, extra = {}, releaseVersion = version) {
+  return spawnSync('bash', [path.join(projectRoot, 'scripts', 'sync-action-repos.sh'), built, releaseVersion], {
     encoding: 'utf8',
     env: { ...process.env, ACTION_REPO_URL_BASE: base, SOURCE_SHA: 'abc1234', ...extra },
   })
 }
 
-test('the sync publishes content and a tag once, repeats as a no-op and never moves a tag', (t) => {
+test('the 0.x sync publishes content and a tag, repeats as a no-op and replaces a changed pre-release tag', (t) => {
   const root = scratch(t)
   const remotes = path.join(root, 'remotes')
   mkdirSync(remotes)
@@ -98,9 +103,9 @@ test('the sync publishes content and a tag once, repeats as a no-op and never mo
 
   writeFileSync(path.join(built, 'publish-action', 'README.md'), 'changed\n')
   const moved = sync(built, base)
-  assert.notEqual(moved.status, 0)
-  assert.match(moved.stderr, /already exists with different content; tags are never moved/)
-  assert.equal(git(publishRemote, 'rev-parse', `v${version}^{commit}`), head)
+  assert.equal(moved.status, 0, moved.stderr)
+  assert.notEqual(git(publishRemote, 'rev-parse', `v${version}^{commit}`), head)
+  assert.equal(git(publishRemote, 'show', `v${version}:README.md`), 'changed')
 })
 
 test('a partially failed sync is completed by a re-run', (t) => {
@@ -119,4 +124,72 @@ test('a partially failed sync is completed by a re-run', (t) => {
   assert.equal(rerun.status, 0, rerun.stderr)
   assert.match(rerun.stdout, /already published with identical content/)
   for (const name of actionNames) assert.match(git(path.join(remotes, repositoryName(name)), 'tag', '--list'), /^v\d/)
+})
+
+
+test('stable Action tags refuse replacement', (t) => {
+  const root = scratch(t), remotes = path.join(root, 'remotes'), built = path.join(root, 'built')
+  mkdirSync(remotes)
+  git(root, 'init', '--quiet', '--bare', '--initial-branch=main', path.join(remotes, 'publish-action'))
+  buildActionRepos({ out: built, version: '1.0.0', names: ['publish'] })
+  const base = `file://${remotes}`
+  assert.equal(sync(built, base, {}, '1.0.0').status, 0)
+  const head = git(path.join(remotes, 'publish-action'), 'rev-parse', 'v1.0.0^{commit}')
+  writeFileSync(path.join(built, 'publish-action', 'README.md'), 'changed\n')
+  const rejected = sync(built, base, {}, '1.0.0')
+  assert.notEqual(rejected.status, 0)
+  assert.match(rejected.stderr, /stable tags are never moved/)
+  assert.equal(git(path.join(remotes, 'publish-action'), 'rev-parse', 'v1.0.0^{commit}'), head)
+})
+
+test('all release patterns select only their component and CLI alone is latest', (t) => {
+  assert.deepEqual(releaseSeries('v0.1.0'), { component: 'cli', version: '0.1.0', prefix: '', action: undefined, makeLatest: true })
+  assert.equal(releaseSeries('web/v0.1.0').component, 'web')
+  assert.equal(releaseSeries('web/v0.1.0').makeLatest, false)
+  for (const name of actionNames) {
+    const series = releaseSeries(`${name}-action/v0.1.0`)
+    assert.equal(series.action, name)
+    assert.equal(series.makeLatest, false)
+    const built = buildActionRepos({ out: scratch(t), version: series.version, names: [series.action] })
+    assert.deepEqual(built.map((entry) => entry.repository), [`${name}-action`])
+  }
+  for (const tag of ['v01.0.0', 'web/v1.2.3-beta', 'unknown-action/v1.0.0', 'terraform-aws/v1.0.0']) assert.throws(() => releaseSeries(tag))
+  const tags = ['v0.2.0', 'v0.1.0', 'web/v0.1.0', 'web/v0.3.0', 'publish-action/v0.2.0']
+  assert.equal(previousRelease(tags, 'v0.3.0'), 'v0.2.0')
+  assert.equal(previousRelease(tags, 'web/v0.2.0'), 'web/v0.1.0')
+  assert.equal(previousRelease(tags, 'preview-action/v0.3.0'), undefined)
+})
+
+test('generated-content checks reject unchanged tags and shared changes warn for every untagged affected Action', (t) => {
+  const current = scratch(t), baseline = scratch(t)
+  for (const directory of [current, baseline]) {
+    cpSync(path.join(projectRoot, 'actions'), path.join(directory, 'actions'), { recursive: true })
+    mkdirSync(path.join(directory, 'cli/internal/version'), { recursive: true })
+    cpSync(path.join(projectRoot, 'cli/internal/version/version.go'), path.join(directory, 'cli/internal/version/version.go'))
+    cpSync(path.join(projectRoot, 'LICENSE'), path.join(directory, 'LICENSE'))
+  }
+  const args = { sourceRoot: current, tags: actionNames.map((name) => `${name}-action/v0.1.0`), selected: 'publish', currentTag: 'publish-action/v0.2.0', baselineRoot: () => baseline }
+  let report = checkActionChanges(args)
+  assert.equal(report.find((row) => row.action === 'publish').level, 'error')
+  const shared = path.join(current, 'actions/shared/prebuilt-cli.mjs')
+  writeFileSync(shared, readFileSync(shared, 'utf8') + '\n// Shared behavior update.\n')
+  report = checkActionChanges(args)
+  assert.ok(report.every((row) => row.changed))
+  assert.equal(report.find((row) => row.action === 'publish').level, 'ok')
+  assert.equal(report.filter((row) => row.level === 'warning').length, 3)
+  cpSync(path.join(baseline, 'actions/shared/prebuilt-cli.mjs'), shared)
+  // A version-only Action bump is excluded; a different pinned CLI is real content.
+  writeFileSync(path.join(current, 'cli/internal/version/version.go'), 'package version\nconst Product = "0.9.0"\n')
+  assert.ok(checkActionChanges(args).every((row) => row.changed))
+})
+
+
+test('release preflight accepts all prefixed tags independently and rejects a mismatched root CLI tag', () => {
+  for (const tag of ['web/v0.1.0', ...actionNames.map((name) => `${name}-action/v0.1.0`), `v${version}`]) {
+    const result = spawnSync(process.execPath, [path.join(projectRoot, 'scripts/release-preflight.mjs'), '--tag', tag, '--main-ref', 'HEAD'], { encoding: 'utf8' })
+    assert.equal(result.status, 0, `${tag}: ${result.stderr}`)
+  }
+  const invalid = spawnSync(process.execPath, [path.join(projectRoot, 'scripts/release-preflight.mjs'), '--tag', 'v9.9.9', '--main-ref', 'HEAD'], { encoding: 'utf8' })
+  assert.notEqual(invalid.status, 0)
+  assert.match(invalid.stderr, /does not equal the CLI version constant/)
 })

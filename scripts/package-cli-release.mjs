@@ -73,6 +73,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     go(['build', '-trimpath', '-o', path.join(path.resolve(out), asset), './cli/cmd/artifact-pages'], { GOOS: platform.os, GOARCH: platform.arch, CGO_ENABLED: '0' })
     lines.push(`${sha256(readFileSync(path.join(out, asset)))}  ${asset}`)
   }
+  // Publish the exact contract embedded in this CLI, not a duplicate script map.
+  const compatibilityName = `artifact-pages_v${version}_compatibility.json`
+  const compatibility = go(['run', './cli/cmd/artifact-pages', 'compatibility', '--format', 'json'])
+  const contract = JSON.parse(compatibility)
+  if (contract.cliVersion !== version || contract.schemaVersion !== 1) fail('embedded compatibility contract does not match the release')
+  writeFileSync(path.join(out, compatibilityName), compatibility)
+  lines.push(`${sha256(readFileSync(path.join(out, compatibilityName)))}  ${compatibilityName}`)
   writeFileSync(path.join(out, checksumsName(version)), `${lines.join('\n')}\n`)
   const modules = selected.flatMap((platform) => linkedModules(platform))
   writeFileSync(path.join(out, noticesName(version)), renderNotices(modules, readFileSync(path.join(projectRoot, 'LICENSE'), 'utf8')))
