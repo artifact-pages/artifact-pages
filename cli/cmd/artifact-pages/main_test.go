@@ -174,7 +174,7 @@ func TestRunRootHelp(t *testing.T) {
 		t.Fatalf("run(--help) error = %v", err)
 	}
 	help := stdout.String()
-	if !strings.Contains(help, "artifact-pages <command>") {
+	if !strings.Contains(help, "artifact-pages [--cli-version MAJOR.MINOR.PATCH] <command>") {
 		t.Errorf("root help does not show the standalone CLI usage:\n%s", stdout.String())
 	}
 	for _, expected := range []string{"registry sync", "site sync", "app deploy", "app remove", "lock inspect|recover"} {

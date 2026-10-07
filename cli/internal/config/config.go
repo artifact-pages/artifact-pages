@@ -657,6 +657,15 @@ func (resolver Resolver) Resolve(ctx context.Context, explicitLocator string) (R
 // supported for remote configs; remote/local stacks are rejected so each
 // invocation has one unambiguous remote provenance.
 func (resolver Resolver) ResolveLayers(ctx context.Context, explicitLocators []string) (ResolvedConfig, error) {
+	return resolver.resolveLayers(ctx, explicitLocators, func(layers [][]byte, remote bool) (DeploymentConfig, error) {
+		if remote {
+			return Parse(layers[0])
+		}
+		return ParseLayers(layers)
+	})
+}
+
+func (resolver Resolver) resolveLayers(ctx context.Context, explicitLocators []string, parse func([][]byte, bool) (DeploymentConfig, error)) (ResolvedConfig, error) {
 	if err := ctx.Err(); err != nil {
 		return ResolvedConfig{}, err
 	}
@@ -680,8 +689,12 @@ func (resolver Resolver) ResolveLayers(ctx context.Context, explicitLocators []s
 	if len(locators) == 0 {
 		localPath := filepath.Join(workingDir, defaultConfigName)
 		info, statErr := os.Stat(localPath)
+		if resolver.getenv(TrustedConfigRefEnvironment) != "" {
+			_, statErr = resolver.readLocalConfig(ctx, localPath, workingDir)
+			info = nil
+		}
 		if statErr == nil {
-			if !info.Mode().IsRegular() {
+			if info != nil && !info.Mode().IsRegular() {
 				return ResolvedConfig{}, fmt.Errorf("repository config %s is not a regular file", localPath)
 			}
 			locators = append(locators, localPath)
@@ -713,7 +726,7 @@ func (resolver Resolver) ResolveLayers(ctx context.Context, explicitLocators []s
 		if remoteErr != nil {
 			return ResolvedConfig{}, remoteErr
 		}
-		config, parseErr := Parse(contents)
+		config, parseErr := parse([][]byte{contents}, true)
 		if parseErr != nil {
 			return ResolvedConfig{}, fmt.Errorf("parse remote deployment config at commit %s: %w", commitSHA, parseErr)
 		}
@@ -732,7 +745,7 @@ func (resolver Resolver) ResolveLayers(ctx context.Context, explicitLocators []s
 		if err != nil {
 			return ResolvedConfig{}, err
 		}
-		contents, err := os.ReadFile(localPath)
+		contents, err := resolver.readLocalConfig(ctx, localPath, workingDir)
 		if err != nil {
 			return ResolvedConfig{}, fmt.Errorf("read deployment config %s: %w", localPath, err)
 		}
@@ -743,7 +756,7 @@ func (resolver Resolver) ResolveLayers(ctx context.Context, explicitLocators []s
 		layers = append(layers, contents)
 		resolvedPaths = append(resolvedPaths, localPath)
 	}
-	config, err := ParseLayers(layers)
+	config, err := parse(layers, false)
 	if err != nil {
 		return ResolvedConfig{}, fmt.Errorf("parse deployment config layers: %w", err)
 	}
