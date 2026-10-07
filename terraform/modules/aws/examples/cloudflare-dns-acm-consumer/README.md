@@ -1,0 +1,7 @@
+# Optional Cloudflare DNS + ACM consumer example
+
+This clean caller demonstrates the optional composition for a non-apex AWS hostname. It uses `aws.example.com` beneath `example.com` as reserved example names; the generic module itself accepts caller-selected names. The account ID, Cloudflare zone ID, OIDC subject, bucket override, and other values are placeholders. Omit `bucket_name` to use the deterministic `artifact-pages-<AWS provider account ID>-<AWS region>` default. The validation suite uses mocked AWS and Cloudflare providers, including the AWS identity data source; it never contacts a provider API or applies the example. Do not apply this configuration as written.
+
+The caller configures its AWS provider in `aws_region`, an `aws.us_east_1` alias for CloudFront's ACM viewer certificate, and Cloudflare credentials through `CLOUDFLARE_API_TOKEN`. Both AWS providers must target the account in `github_oidc_provider_arn`; the composition checks their read-only caller identities during planning. The example uses the minimum accepted whole-day setting, `preview_retention_days = 1`. S3 lifecycle expiration is asynchronous, so this is not an exact one-day or hours-scale deletion guarantee.
+
+Review the [composition module guide](../../modules/cloudflare-dns-acm/README.md) before configuring real values. The root AWS module can still be used on its own with the default CloudFront hostname, or with caller-managed DNS and a caller-managed `us-east-1` ACM certificate.

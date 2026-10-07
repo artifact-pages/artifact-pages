@@ -1,5 +1,5 @@
 module "artifact_pages" {
-  source = "../../../../terraform-aws-artifact-pages"
+  source = "../../modules/aws"
 
   name_prefix               = var.name_prefix
   aws_region                = var.aws_region
@@ -10,6 +10,9 @@ module "artifact_pages" {
   satellite_github_subjects = var.satellite_github_subjects
   aliases                   = var.aliases
   acm_certificate_arn       = var.acm_certificate_arn
+  web_acl_arn               = var.web_acl_arn
+  waf_custom_rules          = var.waf_custom_rules
+  viewer_protocol_policy    = var.viewer_protocol_policy
   price_class               = var.price_class
   tags                      = var.tags
 }

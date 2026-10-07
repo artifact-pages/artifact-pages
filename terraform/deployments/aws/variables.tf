@@ -48,6 +48,24 @@ variable "acm_certificate_arn" {
   default     = null
 }
 
+variable "web_acl_arn" {
+  description = "Optional caller-owned global WAFv2 web ACL ARN (us-east-1); exclusive with waf_custom_rules."
+  type        = string
+  default     = null
+}
+
+variable "waf_custom_rules" {
+  description = "Optional module-owned WAF policy (ip_allowlist preset and AWS-native rules); see terraform/modules/aws/docs/waf.md."
+  type        = any
+  default     = null
+}
+
+variable "viewer_protocol_policy" {
+  description = "redirect-to-https (default) or https-only on every CloudFront behavior."
+  type        = string
+  default     = "redirect-to-https"
+}
+
 variable "price_class" {
   description = "CloudFront edge location class."
   type        = string

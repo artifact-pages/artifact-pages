@@ -25,11 +25,11 @@ Fixtures remain at `fixtures/storage/`, outside the SPA source and output. nginx
 
 ## Terraform ownership
 
-`terraform/deployments/aws` and `terraform/deployments/cloudflare` are caller roots. `terraform/deployments/cloudflare` consumes `terraform/modules/cloudflare` in this repository; `terraform/deployments/aws` still consumes the sibling `terraform-aws-artifact-pages` checkout until IMP-63 covers AWS. These directories are not copies of those modules.
+`terraform/deployments/aws` and `terraform/deployments/cloudflare` are caller roots. Both consume the in-repository modules (`terraform/modules/cloudflare` and `terraform/modules/aws`). These directories are not copies of those modules.
 
-`terraform/modules/aws` is the AWS provider module maintained in this repository. `terraform/modules/cloudflare` is the Cloudflare module in Registry layout (root entry module, `modules/delivery`, `modules/retention`, `examples/`, `tests/`, `scripts/`) and the source of truth for the `terraform-cloudflare-artifact-pages` package (TD15); `examples/cloudflare/terraform` is a local caller of its submodules.
+`terraform/modules/aws` is the AWS module in Registry layout (root module, `modules/cloudflare-dns-acm`, `examples/`, `tests/`, `scripts/`, `docs/waf.md`) and the source of truth for the `terraform-aws-artifact-pages` package (TD15). `terraform/modules/cloudflare` is the Cloudflare module in Registry layout (root entry module, `modules/delivery`, `modules/retention`, `examples/`, `tests/`, `scripts/`) and the source of truth for the `terraform-cloudflare-artifact-pages` package (TD15); `examples/cloudflare/terraform` is a local caller of its submodules.
 
-The deployment roots and in-repository modules are separate source/release boundaries. In particular, `terraform/deployments/aws` consumes the sibling `terraform-aws-artifact-pages` checkout; it does not source `terraform/modules/aws`. Likewise, the Cloudflare deployment roots and the local example consume the in-repository Cloudflare module. These components remain separately releasable from the web application as described by TD2; this layout does not publish or pin a Registry release.
+The deployment roots and in-repository modules are separate source/release boundaries. The deployment roots and the local examples consume the in-repository modules by relative path; the AWS module declares no `provider` block, so the AWS provider configuration lives in `terraform/deployments/aws` and in the examples. These components remain separately releasable from the web application as described by TD2; this layout does not publish or pin a Registry release.
 
 Tracked `.terraform.lock.hcl` files stay with their Terraform roots, modules, or examples. This move records Darwin arm64 provider checksums alongside the existing hashes without changing locked provider versions.
 

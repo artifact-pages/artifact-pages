@@ -1,0 +1,12 @@
+name_prefix                = "artifact-pages"
+aws_region                 = "us-west-2"
+bucket_name                = "artifact-pages-example-0001"
+preview_retention_days     = 30
+github_oidc_provider_arn   = "arn:aws:iam::000000000000:oidc-provider/token.actions.githubusercontent.com"
+admin_github_subjects     = ["repo:example/platform-admin:ref:refs/heads/main"]
+satellite_github_subjects = { sre = ["repo:example/sre:ref:refs/heads/main"] }
+aliases                    = []
+acm_certificate_arn        = null
+web_acl_arn                = null
+price_class                = "PriceClass_100"
+tags                       = { application = "artifact-pages" }
