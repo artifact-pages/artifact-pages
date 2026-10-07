@@ -69,7 +69,7 @@ export async function previewRetirement({ projectRoot, localRoot, run, git, init
     const result = run(binary, [...args, '--config', cwd === admin ? 'artifact-pages.yaml' : '../admin/artifact-pages.yaml', '--format', 'json'], { cwd, env: commandEnv })
     return JSON.parse(result.stdout)
   }
-  const publish = (extra = []) => cli(satellite, ['site', 'publish', '--site', 'sre', '--source', 'sites/sre/content', ...extra])
+  const publish = (extra = []) => cli(satellite, ['site', 'sync', '--site', 'sre', '--source', 'sites/sre/content', ...extra])
   let browser
   let context
   let cleanupPromise
@@ -113,9 +113,9 @@ export async function previewRetirement({ projectRoot, localRoot, run, git, init
     await ready(`${baseURL}/health`, 204)
     const inspection = JSON.parse(run('docker', ['inspect', run('docker', [...composeArgs, 'ps', '-q', 'edge-gcp'], { env: composeEnv }).stdout.trim()]).stdout)[0]
     assert(inspection.Mounts.length === 2 && inspection.Mounts.every((mount) => ['/usr/share/nginx/html', '/etc/nginx/conf.d/default.conf'].includes(mount.Destination)), 'edge has unexpected dynamic storage mount')
-    assert(cli(admin, ['registry', 'register']).outcome === 'registered', 'registry did not register')
-    assert(cli(satellite, ['site', 'publish', '--site', 'neighbor', '--source', 'sites/neighbor/content']).outcome === 'published', 'neighbor did not publish')
-    assert(publish().outcome === 'published', 'production did not publish')
+    assert(cli(admin, ['registry', 'sync']).outcome === 'synced', 'registry did not sync')
+    assert(cli(satellite, ['site', 'sync', '--site', 'neighbor', '--source', 'sites/neighbor/content']).outcome === 'synced', 'neighbor did not sync')
+    assert(publish().outcome === 'synced', 'production site did not sync')
     const previews = []
     for (const [branch, title] of [['retire', 'Retired review'], ['live', 'Live review']]) {
       git(satellite, ['checkout', '-b', branch, 'main'])

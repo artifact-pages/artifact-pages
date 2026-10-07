@@ -79,6 +79,9 @@ func writeDeploymentReport(w io.Writer, result publisher.Result, resolved deploy
 	if result.Version != "" {
 		operation += " " + result.Version
 	}
+	if result.GroupID != "" {
+		operation += " " + result.GroupID
+	}
 	reportHeader(w, operation, result.Outcome, dry)
 	reportTarget(w, resolved)
 	if result.Lock != nil {
@@ -112,7 +115,14 @@ func writeDeploymentReport(w io.Writer, result publisher.Result, resolved deploy
 	groups := map[string][]publisher.Change{}
 	for _, change := range result.Changes {
 		label := "Application files"
-		if strings.HasPrefix(result.Operation, "registry ") {
+		if result.Operation == "preview remove" {
+			switch {
+			case change.Action == "invalidate":
+				label = "Cache revalidation"
+			default:
+				label = "Preview group removal"
+			}
+		} else if strings.HasPrefix(result.Operation, "registry ") {
 			switch {
 			case change.Action == "invalidate":
 				label = "Cache revalidation"
@@ -151,6 +161,10 @@ func writeDeploymentReport(w io.Writer, result publisher.Result, resolved deploy
 		fmt.Fprintln(w, "\n  Everything is up to date.")
 	case result.Operation == "app deploy":
 		fmt.Fprintf(w, "\n  Deployed %d application files.\n", result.FilesPublished)
+	case result.Operation == "app remove":
+		fmt.Fprintf(w, "\n  Removed %d application files.\n", result.FilesRemoved)
+	case result.Operation == "preview remove":
+		fmt.Fprintf(w, "\n  Removed %d exclusive preview objects.\n", result.FilesRemoved)
 	default:
 		fmt.Fprintf(w, "\n  Registry reconciliation complete · %d objects removed.\n", result.FilesRemoved)
 	}

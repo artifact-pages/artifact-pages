@@ -27,7 +27,7 @@ func RegisterSites(ctx context.Context, backend DeploymentBackend, desired regis
 	if err != nil {
 		return Result{}, err
 	}
-	return applyRegistryProjection(ctx, backend, desiredBytes, desired, dryRun, nil, "registry register")
+	return applyRegistryProjection(ctx, backend, desiredBytes, desired, dryRun, nil, "registry sync")
 }
 
 // UnregisterSite requires the selected site to have been removed from the
@@ -49,7 +49,7 @@ func UnregisterSite(ctx context.Context, backend DeploymentBackend, desired regi
 	if _, exists := registrySite(desired, siteID); exists {
 		return result, fmt.Errorf("site %q is still present in config sites; remove it before unregistering", siteID)
 	}
-	result, err = applyRegistryProjection(ctx, backend, desiredBytes, desired, dryRun, []string{siteID}, "registry unregister")
+	result, err = applyRegistryProjection(ctx, backend, desiredBytes, desired, dryRun, []string{siteID}, "registry sync")
 	result.Site = siteID
 	return result, err
 }
@@ -193,6 +193,18 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 				return result, fmt.Errorf("registry updated; acquire removed site locks: %w", err)
 			}
 			locks = append(locks, cleanupLocks...)
+			previewStore, err := NewObjectPreviewStore(conditional)
+			if err != nil {
+				return result, err
+			}
+			for _, lock := range cleanupLocks {
+				lockContext := context.WithValue(ctx, previewSiteLockContextKey{}, previewSiteLock{
+					site: lock.Snapshot.Site, owner: lock.Snapshot.Owner, etag: lock.Snapshot.ETag,
+				})
+				if _, _, err := resumePreviewCleanup(lockContext, backend, conditional, previewStore); err != nil {
+					return result, fmt.Errorf("registry updated; resume preview cleanup for removed site %q: %w", lock.SiteID, err)
+				}
+			}
 		}
 		if err := appendCleanupPlan(); err != nil {
 			return result, err
@@ -213,11 +225,7 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 				return result, fmt.Errorf("registry and site cleanup completed; clear retry record: %w", err)
 			}
 		}
-		if operationName == "registry unregister" {
-			result.Outcome = "unregistered"
-		} else {
-			result.Outcome = "registered"
-		}
+		result.Outcome = "synced"
 		return result, nil
 	}
 	result, operationErr := operation()
@@ -366,8 +374,9 @@ func uniqueChanges(changes []Change) []Change {
 }
 
 type heldSiteLock struct {
-	SiteID  string
-	Release func() error
+	SiteID   string
+	Snapshot LockSnapshot
+	Release  func() error
 }
 
 const registryCleanupKey = "_control/registry-cleanup.json"
@@ -529,14 +538,14 @@ func clearRegistryCleanup(ctx context.Context, backend DeploymentBackend) error 
 func acquireSiteLocks(ctx context.Context, manager SiteLockManager, siteIDs []string) ([]heldSiteLock, error) {
 	locks := make([]heldSiteLock, 0, len(siteIDs))
 	for _, siteID := range siteIDs {
-		if _, release, err := manager.Acquire(ctx, siteID); err != nil {
+		if snapshot, release, err := manager.Acquire(ctx, siteID); err != nil {
 			releaseErr := releaseLocks(locks)
 			if releaseErr != nil {
 				err = errors.Join(err, fmt.Errorf("release previously acquired site locks: %w", releaseErr))
 			}
 			return nil, fmt.Errorf("acquire site %q lock for registry update: %w", siteID, err)
 		} else {
-			locks = append(locks, heldSiteLock{SiteID: siteID, Release: release})
+			locks = append(locks, heldSiteLock{SiteID: siteID, Snapshot: snapshot, Release: release})
 		}
 	}
 	return locks, nil

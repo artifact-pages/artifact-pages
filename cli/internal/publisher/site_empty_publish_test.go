@@ -27,7 +27,7 @@ func TestPublishSiteAllowsEmptyDocumentsAndRetriesPartialStaleDeletion(t *testin
 	if err != nil {
 		t.Fatalf("initial PublishSite() error = %v", err)
 	}
-	if initial.Outcome != "published" {
+	if initial.Outcome != "synced" {
 		t.Fatalf("initial PublishSite() = %+v, want published", initial)
 	}
 
@@ -58,7 +58,7 @@ func TestPublishSiteAllowsEmptyDocumentsAndRetriesPartialStaleDeletion(t *testin
 	// The current builder always publishes its full-text projection. Emptying
 	// the indexed document set changes the search manifest/root blob too, in
 	// addition to the index/meta rows and the two uncertain stale artifacts.
-	if result.Outcome != "published" || result.FilesPublished != 4 || result.FilesRemoved != 3 {
+	if result.Outcome != "synced" || result.FilesPublished != 4 || result.FilesRemoved != 3 {
 		t.Fatalf("retry empty-site PublishSite() = %+v, want index/meta/search updates and all uncertain stale deletes", result)
 	}
 

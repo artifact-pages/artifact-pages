@@ -22,12 +22,12 @@ Run these commands from the repository root to regenerate or verify the committe
 
 The generator only writes under `fixtures/scale/sites/<site-id>/source/`. The fixture module and its generator stay under `fixtures/`; `fixtures/storage` and `fixtures/actions-smoke` remain separate.
 
-To exercise the publisher against its isolated local projection, register the fixture sites once, then publish the smoke site with full-text enabled or disabled. Omitting `--fulltext` disables and removes that site's full-text projection on the next publish.
+To exercise the publisher against its isolated local projection, sync the complete fixture registry, then run site sync for the smoke site. Full-text data is generated on every sync; there is no flag to disable it.
 
 ```sh
-go run ./cli/cmd/artifact-pages registry register --config fixtures/scale/publisher.yaml
-go run ./cli/cmd/artifact-pages site publish --site verify-scale-10 --config fixtures/scale/publisher.yaml --fulltext
-go run ./cli/cmd/artifact-pages site publish --site verify-scale-10 --config fixtures/scale/publisher.yaml
+go run ./cli/cmd/artifact-pages registry sync --config fixtures/scale/publisher.yaml
+go run ./cli/cmd/artifact-pages site sync --site verify-scale-10 --config fixtures/scale/publisher.yaml
+go run ./cli/cmd/artifact-pages site sync --site verify-scale-10 --config fixtures/scale/publisher.yaml
 ```
 
 `publisher.yaml` points at `.local/scale-fixtures/storage`, separate from the local product projection. Use any of the five site IDs to select a larger dataset. These fixtures define test inputs; performance measurements and thresholds are tracked separately.
@@ -37,8 +37,8 @@ The tracked root `artifact-pages.yaml` is the complete local verification config
 For the Cloudflare verification target, layer the configs in this order so the target inherits the complete root `sites` mapping:
 
 ```sh
-go run ./cli/cmd/artifact-pages registry register --config artifact-pages.yaml --config artifact-pages.cloudflare.yaml --dry-run
-go run ./cli/cmd/artifact-pages site publish --site verify-scale-10 --config artifact-pages.yaml --config artifact-pages.cloudflare.yaml --fulltext --dry-run
+go run ./cli/cmd/artifact-pages registry sync --config artifact-pages.yaml --config artifact-pages.cloudflare.yaml --dry-run
+go run ./cli/cmd/artifact-pages site sync --site verify-scale-10 --config artifact-pages.yaml --config artifact-pages.cloudflare.yaml --dry-run
 ```
 
 `artifact-pages.cloudflare.yaml` is a target-only overlay for bucket `artifact-pages-verify` at `https://artifact-pages.stream`; it reads credentials through `CF_VERIFY_R2_ACCESS_KEY_ID`, `CF_VERIFY_R2_SECRET_ACCESS_KEY`, and `CF_VERIFY_API_TOKEN`. `artifact-pages.verify.yaml` is the complete single-file compatibility config with its own full `sites` mapping. Select it alone with one `--config` argument; do not combine it with the layered pair. Neither config points at the production `artifact-pages` bucket or `artifact-pages.dev` hostname.

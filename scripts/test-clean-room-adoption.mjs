@@ -304,32 +304,32 @@ async function main() {
     run('go', ['build', '-trimpath', '-o', binaryPath, './cli/cmd/artifact-pages'])
 
     const registryPlan = cli(binaryPath, [
-      'registry', 'register', '--config', 'artifact-pages.yaml', '--dry-run',
+      'registry', 'sync', '--config', 'artifact-pages.yaml', '--dry-run',
     ], adminRoot)
-    assertCLI(registryPlan, 'registry register', 'planned', 'plan admin registry register with explicit config')
+    assertCLI(registryPlan, 'registry sync', 'planned', 'plan admin registry sync with explicit config')
     assert(!(await fs.stat(storageRoot).then(() => true, () => false)), 'registry dry-run created the local object target')
 
     // The apply omits --config on purpose: the committed admin checkout config is discovered.
-    const registryApply = cli(binaryPath, ['registry', 'register'], adminRoot)
-    assertCLI(registryApply, 'registry register', 'registered', 'register sites from admin checkout config')
+    const registryApply = cli(binaryPath, ['registry', 'sync'], adminRoot)
+    assertCLI(registryApply, 'registry sync', 'synced', 'sync sites from admin checkout config')
     assert((await fs.readFile(path.join(storageRoot, '_indexes/sites.json'), 'utf8')).includes('acme/sre-docs'), 'registry projection does not contain the satellite repository identity')
 
     const beforeSitePlan = await snapshotTree(storageRoot)
     const satellitePlan = cli(binaryPath, [
-      'site', 'publish', '--site', 'sre', '--source', 'sites/sre/content', '--config', satelliteConfig, '--dry-run',
+      'site', 'sync', '--site', 'sre', '--source', 'sites/sre/content', '--config', satelliteConfig, '--dry-run',
     ], satelliteRoot)
-    assertCLI(satellitePlan, 'site publish', 'planned', 'plan explicit satellite site with shared admin config')
+    assertCLI(satellitePlan, 'site sync', 'planned', 'plan explicit satellite site with shared admin config')
     assert((await snapshotTree(storageRoot)).length > 0, 'registry apply did not create any objects')
-    assertSnapshotEqual(beforeSitePlan, await snapshotTree(storageRoot), 'site publish dry-run')
+    assertSnapshotEqual(beforeSitePlan, await snapshotTree(storageRoot), 'site sync dry-run')
 
     const neighborPublish = cli(binaryPath, [
-      'site', 'publish', '--site', 'neighbor', '--source', 'sites/neighbor/content', '--config', satelliteConfig,
+      'site', 'sync', '--site', 'neighbor', '--source', 'sites/neighbor/content', '--config', satelliteConfig,
     ], satelliteRoot)
-    assertCLI(neighborPublish, 'site publish', 'published', 'publish neighbor site explicitly')
+    assertCLI(neighborPublish, 'site sync', 'synced', 'sync neighbor site explicitly')
     const initialSitePublish = cli(binaryPath, [
-      'site', 'publish', '--site', 'sre', '--source', 'sites/sre/content', '--config', satelliteConfig,
+      'site', 'sync', '--site', 'sre', '--source', 'sites/sre/content', '--config', satelliteConfig,
     ], satelliteRoot)
-    assertCLI(initialSitePublish, 'site publish', 'published', 'publish SRE site explicitly')
+    assertCLI(initialSitePublish, 'site sync', 'synced', 'sync SRE site explicitly')
 
     const neighborArtifactsBefore = await snapshotTree(path.join(storageRoot, '_artifacts/neighbor'))
     const neighborIndexBefore = await snapshotTree(path.join(storageRoot, '_indexes/neighbor'))
@@ -337,9 +337,9 @@ async function main() {
 
     await exerciseLockRecovery(binaryPath, satelliteRoot, satelliteConfig, storageRoot, scratchRoot)
     const recoveredPublish = cli(binaryPath, [
-      'site', 'publish', '--site', 'sre', '--source', 'sites/sre/content', '--config', satelliteConfig,
+      'site', 'sync', '--site', 'sre', '--source', 'sites/sre/content', '--config', satelliteConfig,
     ], satelliteRoot)
-    assertCLI(recoveredPublish, 'site publish', 'no-op', 'publish after stale-lock recovery')
+    assertCLI(recoveredPublish, 'site sync', 'no-op', 'sync after stale-lock recovery')
 
     // Build two local fixture releases with unique bytes. app deploy verifies each archive,
     // manifest, and checksum; the fixtures do not represent public release assets.
@@ -395,14 +395,14 @@ async function main() {
     commit(satelliteRoot, 'Update registered SRE site and remove stale artifact')
     const targetBeforeUpdatePlan = await snapshotTree(storageRoot)
     const updatePlan = cli(binaryPath, [
-      'site', 'publish', '--site', 'sre', '--source', 'sites/sre/content', '--config', satelliteConfig, '--dry-run',
+      'site', 'sync', '--site', 'sre', '--source', 'sites/sre/content', '--config', satelliteConfig, '--dry-run',
     ], satelliteRoot)
-    assertCLI(updatePlan, 'site publish', 'planned', 'plan site update')
+    assertCLI(updatePlan, 'site sync', 'planned', 'plan site update')
     assertSnapshotEqual(targetBeforeUpdatePlan, await snapshotTree(storageRoot), 'site update dry-run')
     const updateApply = cli(binaryPath, [
-      'site', 'publish', '--site', 'sre', '--source', 'sites/sre/content', '--config', satelliteConfig,
+      'site', 'sync', '--site', 'sre', '--source', 'sites/sre/content', '--config', satelliteConfig,
     ], satelliteRoot)
-    assertCLI(updateApply, 'site publish', 'published', 'apply site update')
+    assertCLI(updateApply, 'site sync', 'synced', 'apply site update')
     assert((await fs.readFile(path.join(storageRoot, '_artifacts/sre/reports/recovery.html'), 'utf8')).includes('revision two'), 'updated site HTML was not published')
     assert(!(await fs.stat(path.join(storageRoot, '_artifacts/sre/stale.html')).then(() => true, () => false)), 'site update did not remove a stale artifact')
     assertSnapshotEqual(neighborArtifactsBefore, await snapshotTree(path.join(storageRoot, '_artifacts/neighbor')), 'updating SRE changed the neighbor artifacts')
@@ -418,14 +418,14 @@ async function main() {
     commit(adminRoot, 'Remove SRE from the desired registry')
     const beforeUnregisterPlan = await snapshotTree(storageRoot)
     const unregisterPlan = cli(binaryPath, [
-      'registry', 'unregister', '--site', 'sre', '--config', 'artifact-pages.yaml', '--dry-run',
+      'registry', 'sync', '--config', 'artifact-pages.yaml', '--dry-run',
     ], adminRoot)
-    assertCLI(unregisterPlan, 'registry unregister', 'planned', 'plan explicit SRE unregister')
+    assertCLI(unregisterPlan, 'registry sync', 'planned', 'plan desired registry without SRE')
     assertSnapshotEqual(beforeUnregisterPlan, await snapshotTree(storageRoot), 'unregister dry-run')
     const unregisterApply = cli(binaryPath, [
-      'registry', 'unregister', '--site', 'sre', '--config', 'artifact-pages.yaml',
+      'registry', 'sync', '--config', 'artifact-pages.yaml',
     ], adminRoot)
-    assertCLI(unregisterApply, 'registry unregister', 'unregistered', 'unregister SRE explicitly')
+    assertCLI(unregisterApply, 'registry sync', 'synced', 'sync desired registry without SRE')
 
     const registry = JSON.parse(await fs.readFile(path.join(storageRoot, '_indexes/sites.json'), 'utf8'))
     assert(registry.sites.map((site) => site.id).join(',') === 'neighbor', 'unregister did not retain only the neighbor registration')

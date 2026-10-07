@@ -5,15 +5,15 @@ import path from 'node:path'
 import test from 'node:test'
 import { renderSummary, summaryEnabled, writeSummary } from './summary.mjs'
 
-test('site publish reports outcome, change breakdown and pruned previews', () => {
+test('site sync reports outcome, change breakdown and pruned previews', () => {
   const text = renderSummary({
     result: {
-      operation: 'site publish', outcome: 'published', site: 'sre',
+      operation: 'site sync', outcome: 'synced', site: 'sre',
       changes: [{ action: 'create', path: 'a' }, { action: 'update', path: 'b' }, { action: 'create', path: 'c' }],
       previewChanges: [{ action: 'remove', groupId: 'pr:1', headSha: 'x', reason: 'manifest-missing' }, { action: 'keep' }],
     },
   })
-  assert.match(text, /^### Artifact Pages: site publish \(published\)\n/)
+  assert.match(text, /^### Artifact Pages: site sync \(synced\)\n/)
   assert.match(text, /- \*\*Site:\*\* `sre`/)
   assert.match(text, /- \*\*Changes:\*\* 3 \(create 2, update 1\)/)
   assert.match(text, /- \*\*Pruned previews:\*\* 1/)
@@ -22,16 +22,16 @@ test('site publish reports outcome, change breakdown and pruned previews', () =>
 })
 
 test('dry-run mode and its reason are shown', () => {
-  const text = renderSummary({ result: { operation: 'site publish', outcome: 'planned', site: 's', changes: [] }, dryRun: true, dryRunReason: 'publish-on does not match event pull_request at refs/pull/1/merge' })
+  const text = renderSummary({ result: { operation: 'site sync', outcome: 'planned', site: 's', changes: [] }, dryRun: true, dryRunReason: 'publish-on does not match event pull_request at refs/pull/1/merge' })
   assert.match(text, /- \*\*Mode:\*\* dry-run \(publish-on does not match event pull_request/)
   assert.match(text, /- \*\*Changes:\*\* 0\n/)
-  assert.doesNotMatch(renderSummary({ result: { operation: 'site publish', outcome: 'planned', changes: [] }, dryRun: true, dryRunReason: 'dry-run input is true' }), /\(dry-run input/)
+  assert.doesNotMatch(renderSummary({ result: { operation: 'site sync', outcome: 'planned', changes: [] }, dryRun: true, dryRunReason: 'dry-run input is true' }), /\(dry-run input/)
 })
 
-test('registry register lists registered and removed sites', () => {
+test('registry sync lists added and removed sites', () => {
   const text = renderSummary({
     result: {
-      operation: 'registry register', outcome: 'registered', registryUpdated: true,
+      operation: 'registry sync', outcome: 'synced', registryUpdated: true,
       changes: [
         { action: 'create', path: '_indexes/sites.json#sites/docs' }, { action: 'update', path: '_indexes/sites.json#sites/sre' },
         { action: 'remove', path: '_indexes/sites.json#sites/legacy' }, { action: 'update', path: '_indexes/sites.json' },
@@ -41,7 +41,7 @@ test('registry register lists registered and removed sites', () => {
   assert.match(text, /- \*\*Registered:\*\* `docs`, `sre`/)
   assert.match(text, /- \*\*Removed:\*\* `legacy`/)
   assert.match(text, /- \*\*Registry updated:\*\* true/)
-  assert.match(renderSummary({ result: { operation: 'registry register', outcome: 'no-op', registryUpdated: false, changes: [] } }), /- \*\*Registered:\*\* none\n- \*\*Removed:\*\* none/)
+  assert.match(renderSummary({ result: { operation: 'registry sync', outcome: 'no-op', registryUpdated: false, changes: [] } }), /- \*\*Registered:\*\* none\n- \*\*Removed:\*\* none/)
 })
 
 test('app deploy', () => {
@@ -62,9 +62,9 @@ test('preview lists the group URL and a document table, capped', () => {
 })
 
 test('failures show the error on one line, including without a result', () => {
-  const text = renderSummary({ result: { operation: 'site publish', outcome: 'failed', site: 's', changes: [], error: 'line one\nline two' }, exitCode: 1 })
+  const text = renderSummary({ result: { operation: 'site sync', outcome: 'failed', site: 's', changes: [], error: 'line one\nline two' }, exitCode: 1 })
   assert.match(text, /> \*\*Error \(exit 1\):\*\* line one line two/)
-  assert.match(renderSummary({ operation: 'registry register', result: { outcome: 'failed', error: 'boom' }, exitCode: 2 }), /### Artifact Pages: registry register \(failed\)[\s\S]*Error \(exit 2\):\*\* boom/)
+  assert.match(renderSummary({ operation: 'registry sync', result: { outcome: 'failed', error: 'boom' }, exitCode: 2 }), /### Artifact Pages: registry sync \(failed\)[\s\S]*Error \(exit 2\):\*\* boom/)
 })
 
 test('summary input validation and file writing', async () => {

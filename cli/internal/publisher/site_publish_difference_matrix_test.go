@@ -380,7 +380,7 @@ func matrixPublishBaseline(t *testing.T, ctx context.Context, siteID, sourceDir 
 	if err != nil {
 		t.Fatalf("seed matrix baseline %s: %v", siteID, err)
 	}
-	if result.Outcome != "published" {
+	if result.Outcome != "synced" {
 		t.Fatalf("seed matrix baseline %s outcome=%q, want published", siteID, result.Outcome)
 	}
 	return backend

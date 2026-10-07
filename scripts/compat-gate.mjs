@@ -220,7 +220,11 @@ function buildTree(tree, runRoot) {
   sh('go', ['build', '-o', tree.cli, './cli/cmd/artifact-pages'], { cwd: tree.dir })
   // Releases before page text search became always-on only publish its data with
   // --fulltext. Newer CLIs reject the flag, so probe the help text per tree.
-  const help = sh(tree.cli, ['site', 'publish', '--help'], { allowFail: true, cwd: tree.dir })
+  const siteSyncHelp = sh(tree.cli, ['site', 'sync', '--help'], { allowFail: true, cwd: tree.dir })
+  tree.siteOperation = siteSyncHelp.status === 0 ? 'sync' : 'publish'
+  const registrySyncHelp = sh(tree.cli, ['registry', 'sync', '--help'], { allowFail: true, cwd: tree.dir })
+  tree.registryOperation = registrySyncHelp.status === 0 ? 'sync' : 'register'
+  const help = sh(tree.cli, ['site', tree.siteOperation, '--help'], { allowFail: true, cwd: tree.dir })
   tree.needsFullTextFlag = /--fulltext/.test(`${help.stdout}\n${help.stderr}`)
   tree.web = path.join(runRoot, `web-${tree.label}`)
   log(`building ${tree.label} web`)
@@ -309,16 +313,16 @@ class Operator {
 
   config(name) { return path.join(this.fixtures.admin, `${name}.yaml`) }
 
-  register(tree, name) {
-    return this.cli(tree, this.fixtures.admin, ['registry', 'register', '--config', `${name}.yaml`, '--format', 'json'], `registry register ${name}`)
+  syncRegistry(tree, name) {
+    return this.cli(tree, this.fixtures.admin, ['registry', tree.registryOperation, '--config', `${name}.yaml`, '--format', 'json'], `registry ${tree.registryOperation} ${name}`)
   }
 
   publish(tree, name, site) {
     git(this.fixtures.satellite, ['checkout', 'main'])
     return this.cli(tree, this.fixtures.satellite, [
-      'site', 'publish', '--site', site, '--source', `sites/${site}`, ...(tree.needsFullTextFlag ? ['--fulltext'] : []),
+      'site', tree.siteOperation, '--site', site, '--source', `sites/${site}`, ...(tree.needsFullTextFlag ? ['--fulltext'] : []),
       '--config', path.relative(this.fixtures.satellite, this.config(name)), '--format', 'json',
-    ], `site publish ${site} -> ${name}`)
+    ], `site ${tree.siteOperation} ${site} -> ${name}`)
   }
 
   preview(tree, name, site, branch) {
@@ -338,9 +342,9 @@ class Operator {
     return this.cli(tree, this.fixtures.admin, ['lock', 'inspect', '--site', site, '--config', `${name}.yaml`, '--format', 'json'], `lock inspect ${site} ${name}`)
   }
 
-  /** Register the sites, then publish and preview each with the CLI chosen per site. */
+  /** Sync the sites, then sync and preview each with the CLI chosen per site. */
   generate(name, registrar, publishers, previewers) {
-    this.register(registrar, name)
+    this.syncRegistry(registrar, name)
     for (const site of SITES) this.publish(publishers[site.id], name, site.id)
     for (const site of SITES) this.preview(previewers[site.id], name, site.id, 'preview-1')
   }
@@ -764,26 +768,26 @@ async function main() {
       const mixedName = 'storage-mixed'
       log('building the mixed storage and exercising cross-CLI operations')
       try {
-        operator.register(baseline, mixedName)
+        operator.syncRegistry(baseline, mixedName)
         operator.publish(baseline, mixedName, 'docs')
         operator.publish(candidate, mixedName, 'notes')
         operator.preview(baseline, mixedName, 'docs', 'preview-1')
         operator.preview(candidate, mixedName, 'notes', 'preview-1')
         addSecondRevision(fixtures.satellite)
-        // Each CLI republishes, previews, registers and inspects locks over the other's output.
+        // Each CLI syncs, previews, reconciles and inspects locks over the other's output.
         operator.publish(candidate, mixedName, 'docs')
         operator.publish(baseline, mixedName, 'notes')
         operator.preview(candidate, mixedName, 'docs', 'preview-2')
         operator.preview(baseline, mixedName, 'notes', 'preview-2')
-        operator.register(candidate, mixedName)
-        operator.register(baseline, mixedName)
+        operator.syncRegistry(candidate, mixedName)
+        operator.syncRegistry(baseline, mixedName)
         for (const site of SITES) {
           operator.lockInspect(candidate, mixedName, site.id)
           operator.lockInspect(baseline, mixedName, site.id)
         }
-        record({ name: 'cross-CLI republish, preview, register and lock inspect over the other CLI output', mode: 'operations', status: 'passed' })
+        record({ name: 'cross-CLI sync, preview, registry sync and lock inspect over the other CLI output', mode: 'operations', status: 'passed' })
       } catch (error) {
-        record({ name: 'cross-CLI republish, preview, register and lock inspect over the other CLI output', mode: 'operations', status: 'failed', detail: error.message })
+        record({ name: 'cross-CLI sync, preview, registry sync and lock inspect over the other CLI output', mode: 'operations', status: 'failed', detail: error.message })
       }
       report.mixedFormats = collectFormatVersions(storages[mixedName])
       record(await serveAndSmoke('candidate web x baseline data', { web: candidate.web, storage: storages['storage-baseline'] }, runRoot))
@@ -802,14 +806,14 @@ async function main() {
         upgradeSourceName = mixedName
         log('building mixed public data with the baseline and candidate CLIs')
         try {
-          operator.register(baseline, mixedName)
+          operator.syncRegistry(baseline, mixedName)
           operator.publish(baseline, mixedName, 'docs')
           addSecondRevision(fixtures.satellite)
           operator.publish(baseline, mixedName, 'docs')
           operator.preview(baseline, mixedName, 'docs', 'preview-1')
           operator.publish(candidate, mixedName, 'notes')
           operator.preview(candidate, mixedName, 'notes', 'preview-1')
-          operator.register(candidate, mixedName)
+          operator.syncRegistry(candidate, mixedName)
           record({ name: 'baseline and candidate CLIs publish separate sites into mixed storage', mode: 'operations', status: 'passed' })
         } catch (error) {
           record({ name: 'baseline and candidate CLIs publish separate sites into mixed storage', mode: 'operations', status: 'failed', detail: error.message })
@@ -827,11 +831,11 @@ async function main() {
       }
       log(classification.mode === 'control-breaking'
         ? 'running candidate CLI upgrade from legacy storage'
-        : 'running the upgrade procedure: registry register, app deploy --archive, republish every site')
+        : 'running the upgrade procedure: registry sync, app deploy --archive, sync every site')
       try {
         copyStorage(storages[upgradeSourceName], storages['storage-upgrade'])
         const upgradeName = 'storage-upgrade'
-        operator.register(candidate, upgradeName)
+        operator.syncRegistry(candidate, upgradeName)
         const archive = packageCandidateWeb(candidate, runRoot)
         const deployed = operator.cli(candidate, fixtures.admin, ['app', 'deploy', '--archive', archive, '--config', `${upgradeName}.yaml`, '--format', 'json'], 'app deploy --archive')
         if (!['deployed', 'no-op'].includes(deployed.outcome)) throw new Error(`app deploy outcome was ${deployed.outcome}`)

@@ -23,7 +23,7 @@ func TestSitePublishReportStates(t *testing.T) {
 	}{
 		{"dry run", "planned", "DRY RUN", "Dry run complete. No writes.", true},
 		{"dry run no-op", "no-op", "DRY RUN", "Dry run complete. No writes.", true},
-		{"published", "published", "PUBLISHED", "Synced 2 files · removed 1 stale files.", false},
+		{"synced", "synced", "SYNCED", "Synced 2 files · removed 1 stale files.", false},
 		{"no-op", "no-op", "UP TO DATE", "Everything is up to date.", false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -38,9 +38,9 @@ func TestSitePublishReportStates(t *testing.T) {
 			}
 			original := append([]publisher.Change(nil), result.Changes...)
 			var output bytes.Buffer
-			writeSitePublishReport(&output, result, resolved, test.dry, false)
+			writeSiteSyncReport(&output, result, resolved, test.dry, false)
 			text := output.String()
-			for _, expected := range []string{"site publish ja  " + test.status, "Target    local · .local/public-site/storage", test.footer} {
+			for _, expected := range []string{"site sync ja  " + test.status, "Target    local · .local/public-site/storage", test.footer} {
 				if !strings.Contains(text, expected) {
 					t.Errorf("missing %q in:\n%s", expected, text)
 				}
@@ -72,7 +72,7 @@ func TestSitePublishReportBoundedAndSafe(t *testing.T) {
 	previewChanges := []preview.CatalogReconciliationChange{{Action: "remove"}, {Action: "keep"}}
 	result.PreviewChanges = &previewChanges
 	var output bytes.Buffer
-	writeSitePublishReport(&output, result, deploymentconfig.ResolvedConfig{}, true, false)
+	writeSiteSyncReport(&output, result, deploymentconfig.ResolvedConfig{}, true, false)
 	text := output.String()
 	for _, expected := range []string{"+ 100 create", "88 more; use --format json", "meta.json", "1 stale references to prune · 1 groups retained"} {
 		if !strings.Contains(text, expected) {
@@ -90,13 +90,13 @@ func TestSitePublishReportBoundedAndSafe(t *testing.T) {
 func TestSitePublishReportCacheOnlyRetry(t *testing.T) {
 	for _, dry := range []bool{true, false} {
 		var output bytes.Buffer
-		result := publisher.Result{Site: "guide", Outcome: "published", InvalidationPaths: []string{"/_artifacts/guide/report.html"}}
+		result := publisher.Result{Site: "guide", Outcome: "synced", InvalidationPaths: []string{"/_artifacts/guide/report.html"}}
 		verb := "planned"
 		if !dry {
 			verb = "requested"
 			result.InvalidationID = "purge-request-123"
 		}
-		writeSitePublishReport(&output, result, deploymentconfig.ResolvedConfig{}, dry, false)
+		writeSiteSyncReport(&output, result, deploymentconfig.ResolvedConfig{}, dry, false)
 		if !strings.Contains(output.String(), "Cache revalidation: 1 paths "+verb) || strings.Contains(output.String(), "Everything is up to date") {
 			t.Fatalf("cache-only report = %s", output.String())
 		}

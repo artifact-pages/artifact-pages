@@ -4,10 +4,12 @@ All operational commands use the same low-chroma text report: operation and resu
 
 | Command | Details shown |
 | --- | --- |
-| `registry register` / `unregister` | Registration changes, registry projection, cleanup scopes and objects, cache revalidation, and whether the registry changes |
-| `site publish` | Artifact and index changes, nonempty preview reconciliation counts, synced and removed file counts, cache paths and request ID |
+| `registry sync` | Registration changes, registry projection, cleanup scopes and objects, cache revalidation, and whether the registry changes |
+| `site sync` | Artifact and index changes, nonempty preview reconciliation counts, synced and removed file counts, cache paths and request ID |
 | `app deploy` | Version, application file changes, cache revalidation request, and source-dirty warning |
+| `app remove` | Removed application files and cache revalidation request |
 | `preview publish` | Head SHA, optional explicit PR link, preview-list link, document URLs, object and catalog changes |
+| `preview remove` | Selected group, exact revision/object cleanup, and preview cache revalidation |
 | `index build` | Artifact/file counts, elapsed time, output paths and byte sizes; no artifacts are copied or published |
 | `config set-default` | Selected locator and local saved-locator path; no deployment changes |
 | `lock inspect` / `recover` | Scope, state, exact ETag, optional owner and acquisition time; inspection never performs recovery |
@@ -19,7 +21,7 @@ Color appears only on terminal output and follows `NO_COLOR`; redirected output 
 Registry paths containing `#sites/<id>` identify logical registration changes, not separately stored objects. Cleanup scope entries such as `/<site>/*` are shown separately from concrete object keys. Cache revalidation is a requested action; displaying its request ID does not claim CDN propagation has completed.
 
 ~~~text
-registry register  DRY RUN
+registry sync  DRY RUN
 
   Target    Cloudflare R2 bucket artifact-pages (account ...)
 

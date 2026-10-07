@@ -55,14 +55,14 @@ func reportTone(value, kind string, color bool) string {
 	return "\x1b[38;2;" + rgb + "m" + value + "\x1b[0m"
 }
 
-func writeSitePublishReport(writer io.Writer, result publisher.Result, resolved deploymentconfig.ResolvedConfig, dryRun, color bool) {
-	status, tone := "PUBLISHED", "create"
+func writeSiteSyncReport(writer io.Writer, result publisher.Result, resolved deploymentconfig.ResolvedConfig, dryRun, color bool) {
+	status, tone := "SYNCED", "create"
 	if dryRun {
 		status, tone = "DRY RUN", "dry"
 	} else if result.Outcome == "no-op" {
 		status = "UP TO DATE"
 	}
-	fmt.Fprintf(writer, "site publish %s  %s\n\n", reportText(result.Site), reportTone(status, tone, color))
+	fmt.Fprintf(writer, "site sync %s  %s\n\n", reportText(result.Site), reportTone(status, tone, color))
 	target := formatDeploymentTarget(resolved.Config)
 	if resolved.Config.Provider == "local" && resolved.Config.Local != nil {
 		target = "local · " + resolved.Config.Local.Root

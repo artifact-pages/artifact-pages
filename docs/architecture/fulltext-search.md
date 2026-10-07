@@ -8,11 +8,11 @@ Implemented in [IMP-41](../backlog/implementation/IMP-41-fulltext-search-core.md
 go run ./cli/cmd/artifact-pages index build \
   --site sre --source docs/artifacts --out .local/storage
 
-# The existing registered-site publisher builds and reconciles the same data.
-go run ./cli/cmd/artifact-pages site publish --site sre
+# The existing registered-site syncer builds and reconciles the same data.
+go run ./cli/cmd/artifact-pages site sync --site sre
 ```
 
-Both operations always generate the site's full-text data, and `site publish` always publishes it; there is no option to omit it. The retired `--fulltext` flag and the Action `fulltext` input are not accepted (the CLI rejects the flag as an unknown flag, exit code 2). A site that has no extractable text or no documents still publishes a valid, empty manifest. This is part of the existing operations, not a separate search service or a requirement to install Node for the Go publisher.
+Both operations always generate the site's full-text data, and `site sync` always publishes it; there is no option to omit it. The retired `--fulltext` flag and the Action `fulltext` input are not accepted (the CLI rejects the flag as an unknown flag, exit code 2). A site that has no extractable text or no documents still publishes a valid, empty manifest. This is part of the existing operations, not a separate search service or a requirement to install Node for the Go publisher.
 
 A site can still lack `fullTextUrl`, for example one published by an earlier version or whose publish failed before the manifest was written. The reader treats such a site as having no page text search. A per-site opt-out set once by the administrator is recorded as a deferred decision in [TD7](../backlog/technical-design/TD7-per-site-fulltext-opt-out.md).
 

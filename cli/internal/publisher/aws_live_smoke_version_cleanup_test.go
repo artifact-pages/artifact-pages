@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/artifact-pages/artifact-pages/cli/internal/registry"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-	"github.com/artifact-pages/artifact-pages/cli/internal/registry"
 )
 
 // awsLiveSmokeVersionAPI is deliberately narrower than the production S3

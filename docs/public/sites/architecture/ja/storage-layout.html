@@ -105,16 +105,16 @@
           <g class="ad-mq">
             <text x="450" y="92">app deploy</text>
             <text x="450" y="116">app deploy</text>
-            <text x="450" y="164">registry register</text>
-            <text x="450" y="212">site publish</text>
-            <text x="450" y="236">site publish</text>
-            <text x="450" y="260">site publish --fulltext</text>
-            <text x="450" y="380">site publish</text>
-            <text x="450" y="404">site publish</text>
+            <text x="450" y="164">registry sync</text>
+            <text x="450" y="212">site sync</text>
+            <text x="450" y="236">site sync</text>
+            <text x="450" y="260">site sync</text>
+            <text x="450" y="380">site sync</text>
+            <text x="450" y="404">site sync</text>
             <text x="450" y="452">preview publish</text>
             <text x="450" y="476">preview publish</text>
-            <text x="450" y="524">publish, unregister</text>
-            <text x="450" y="548">site publish</text>
+            <text x="450" y="524">site sync, registry sync</text>
+            <text x="450" y="548">site sync</text>
           </g>
           <g class="ad-s">
             <text x="618" y="92">毎回再検証</text>
@@ -139,7 +139,7 @@
         <summary>図の内容を文章で読む</summary>
         <ul>
           <li>アプリケーションプレーン：<code>/index.html</code>（アプリのシェル、毎回再検証）と<code>/assets/&lt;name&gt;-&lt;hash&gt;.*</code>（1年キャッシュ）。<code>app deploy</code>が書き込みます。</li>
-          <li>コンテンツプレーン：<code>registry register</code>が書く<code>/_indexes/sites.json</code>。<code>site publish</code>が書く<code>/_indexes/checkout/meta.json</code>、<code>index.json</code>、<code>--fulltext</code>を付けた場合の<code>search/manifest.json</code>・<code>root-&lt;sha256&gt;.gz</code>・<code>leaf-&lt;sha256&gt;.gz</code>。サイトのファイル一式は<code>/_artifacts/checkout/</code>、<code>preview publish</code>が書くプレビューは<code>/_previews/checkout/</code>にあります。</li>
+          <li>コンテンツプレーン：<code>registry sync</code>が書く<code>/_indexes/sites.json</code>。<code>site sync</code>が書く<code>/_indexes/checkout/meta.json</code>、<code>index.json</code>、毎回の同期で生成する<code>search/manifest.json</code>・<code>root-&lt;sha256&gt;.gz</code>・<code>leaf-&lt;sha256&gt;.gz</code>。サイトのファイル一式は<code>/_artifacts/checkout/</code>、<code>preview publish</code>が書くプレビューは<code>/_previews/checkout/</code>にあります。</li>
           <li>非公開の領域：<code>/_control/locks/sites/checkout.json</code>と<code>/_control/site-cache/checkout.json</code>。読者には返しません。</li>
           <li>共有キャッシュは、JSONのインデックスとプレビューの一覧を最大60秒、成果物とプレビューのファイルを最大300秒、内容のハッシュを名前に持つアプリと検索のファイルを1年保持できます。</li>
         </ul>
@@ -148,7 +148,7 @@
 
     <section class="doc-section" aria-labelledby="registry">
       <h2 id="registry">サイトの登録情報：<code>sites.json</code></h2>
-      <p>サイトの一覧は、管理者が<code>artifact-pages.yaml</code>の<code>sites</code>に書き、Gitでレビューします。<code>registry register</code>がそれを検証して<code>/_indexes/sites.json</code>を書きます。中身はサイトIDで並べた配列なので、同じ内容のYAMLからは常に同じJSONができます。JSONを手で編集することはありません。</p>
+      <p>サイトの一覧は、管理者が<code>artifact-pages.yaml</code>の<code>sites</code>に書き、Gitでレビューします。<code>registry sync</code>がそれを検証して<code>/_indexes/sites.json</code>を書きます。中身はサイトIDで並べた配列なので、同じ内容のYAMLからは常に同じJSONができます。JSONを手で編集することはありません。</p>
       <div class="term" aria-label="sites.jsonの例">
         <div class="term-head"><span>/_indexes/sites.json</span></div>
 <pre>{
@@ -164,7 +164,7 @@
   ]
 }</pre>
       </div>
-      <p>このファイルには読み手が2つあります。<strong>ブラウザ</strong>はID、名前、説明を使ってサイトを並べます。<strong>公開コマンド</strong>は<code>repository</code>と<code>sourcePath</code>を使い、公開しようとしているチェックアウトが登録どおりのソースかを確かめます。このファイルが変わるのはサイトの登録と登録解除のときだけで、公開では変わりません。値は説明用の例です。</p>
+      <p>このファイルには読み手が2つあります。<strong>ブラウザ</strong>はID、名前、説明を使ってサイトを並べます。<strong>公開コマンド</strong>は<code>repository</code>と<code>sourcePath</code>を使い、公開しようとしているチェックアウトが登録どおりのソースかを確かめます。このファイルが変わるのはサイトの登録とregistry syncによるサイト削除のときだけで、公開では変わりません。値は説明用の例です。</p>
     </section>
 
     <section class="doc-section" aria-labelledby="per-site">
@@ -236,7 +236,7 @@
             <circle class="ad-num" cx="36" cy="382" r="11"/><text class="ad-num-t" x="36" y="386" text-anchor="middle">5</text>
             <text class="ad-t" x="60" y="386">本文検索でEnterを押す</text>
             <text class="ad-m" x="60" y="408">GET search/manifest.json → root-&lt;sha256&gt;.gz → 必要なleafだけ</text>
-            <text class="ad-q" x="60" y="426">入力中は何も取得しません。--fulltext付きで公開したサイトだけです。</text>
+            <text class="ad-q" x="60" y="426">入力中は何も取得しません。検索を送信したときだけ取得します。</text>
 
             <circle class="ad-num" cx="36" cy="472" r="11"/><text class="ad-num-t" x="36" y="476" text-anchor="middle">6</text>
             <text class="ad-t" x="60" y="476">プレビューの一覧を開く</text>
@@ -286,7 +286,7 @@
           <tr><td>プレビューの<code>catalog.json</code> /リビジョンのファイル</td><td><code>s-maxage=60</code> / <code>s-maxage=300</code>（どちらも<code>max-age=0, must-revalidate</code>）</td></tr>
         </tbody>
       </table></div>
-      <p>上限のある鮮度は、あくまで最後の守りです。<code>site publish</code>はオリジンを更新したあと、変わったURLだけをCDNに無効化させ、その依頼が成功するまで再試行の記録を残します（<a href="publishing-model.html#cache-retry">公開の仕組み</a>を参照）。依頼が成功しても、すべてのエッジが更新済みとは限らず、すでにページを開いている読者の画面も更新されません。</p>
+      <p>上限のある鮮度は、あくまで最後の守りです。<code>site sync</code>はオリジンを更新したあと、変わったURLだけをCDNに無効化させ、その依頼が成功するまで再試行の記録を残します（<a href="publishing-model.html#cache-retry">公開の仕組み</a>を参照）。依頼が成功しても、すべてのエッジが更新済みとは限らず、すでにページを開いている読者の画面も更新されません。</p>
       <p class="note">ローカルのnginxは、開発中の変更がすぐ見えるように<code>/_indexes/*</code>を<code>no-store</code>で返します。上の表は、公開時に各オブジェクトへ保存する値と、プロバイダーの配信が守るべき値です。稼働中のCloudflareでは、抜き取ったインデックスと成果物の応答がこの値と一致しました（T15）。AWSの実際のヘッダーはまだ確認していません。</p>
     </section>
 
@@ -296,7 +296,7 @@
       <div class="table-wrap"><table>
         <thead><tr><th>キー</th><th>用途</th></tr></thead>
         <tbody>
-          <tr><td><code>_control/locks/sites/&lt;site&gt;.json</code></td><td>サイトの公開、プレビューの公開、登録解除が共有するサイトごとのロック。登録解除のあとも（<code>free</code>の状態で）残します。</td></tr>
+          <tr><td><code>_control/locks/sites/&lt;site&gt;.json</code></td><td>サイトの公開、プレビューの公開、registry syncによるサイト削除が共有するサイトごとのロック。registry syncによるサイト削除のあとも（<code>free</code>の状態で）残します。</td></tr>
           <tr><td><code>_control/locks/registry.json</code></td><td>サイトの登録情報の更新を1つずつ順に行うためのロック。</td></tr>
           <tr><td><code>_control/site-cache/&lt;site&gt;.json</code></td><td>失敗した公開のあと、まだ済んでいないキャッシュ無効化のパス。</td></tr>
           <tr><td><code>_control/registry-cleanup.json</code></td><td>サイトの登録情報から外したサイトについて、まだ済んでいない片付け。</td></tr>

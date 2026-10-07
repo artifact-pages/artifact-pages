@@ -163,7 +163,7 @@ func TestSitePublishStateLayoutFusion(t *testing.T) {
 		}
 		variantReport.Steps = append(variantReport.Steps, step)
 		step, err = engine.Apply(a, 0)
-		if err != nil || step.Outcome != "published" {
+		if err != nil || step.Outcome != "synced" {
 			t.Fatalf("%s sparse change: %+v, %v", variant.Name, step, err)
 		}
 		step.Name = "sparse-change"
@@ -211,7 +211,7 @@ func TestSitePublishStateLayoutFusion(t *testing.T) {
 		variantReport.Steps = append(variantReport.Steps, step)
 		engine = engine.RestartProcess()
 		step, err = engine.Apply(a, 0)
-		if err != nil || step.Outcome != "published" {
+		if err != nil || step.Outcome != "synced" {
 			t.Fatalf("%s reverted retry: %+v, %v", variant.Name, step, err)
 		}
 		committedAfterRetry, err := engine.persistedState()
@@ -1362,7 +1362,7 @@ func runFusionJournalOnlyFailureSequence(t *testing.T, site string, variant fusi
 
 	engine = engine.RestartProcess()
 	step, err = engine.Apply(desired, 0)
-	if err != nil || step.Outcome != "published" {
+	if err != nil || step.Outcome != "synced" {
 		t.Fatalf("%s cold restart did not resume journal-only intent: %+v, %v", variant.Name, step, err)
 	}
 	step.Name = "cold-restart-resumed-transaction"

@@ -370,7 +370,7 @@ func buildFromGit(ctx context.Context, options BuildOptions, reuseBlobBodies boo
 		return BuildResult{}, err
 	}
 	group.Documents = append([]Document(nil), documents...)
-	if err := ValidateCatalog(Catalog{SchemaVersion: SchemaVersion, Site: options.SiteID, Groups: []Group{group}}); err != nil {
+	if err := validateGroup(group); err != nil {
 		return BuildResult{}, err
 	}
 	return BuildResult{Site: options.SiteID, Outcome: OutcomePublished, Group: group, Manifest: manifest, Files: files}, nil

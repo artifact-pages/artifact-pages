@@ -177,7 +177,7 @@ func TestRunRootHelp(t *testing.T) {
 	if !strings.Contains(help, "artifact-pages <command>") {
 		t.Errorf("root help does not show the standalone CLI usage:\n%s", stdout.String())
 	}
-	for _, expected := range []string{"registry register", "registry unregister", "site publish", "app deploy", "lock inspect|recover"} {
+	for _, expected := range []string{"registry sync", "site sync", "app deploy", "app remove", "lock inspect|recover"} {
 		if !strings.Contains(help, expected) {
 			t.Errorf("root help is missing %q:\n%s", expected, help)
 		}
@@ -198,6 +198,20 @@ func TestRunRegistryPublishCommandNameIsRejected(t *testing.T) {
 	err := run(t.Context(), []string{"registry", "publish"}, &stdout, &stderr)
 	if err == nil || !strings.Contains(err.Error(), `unknown registry command "publish"`) {
 		t.Fatalf("run(registry publish) error = %v, want an unknown-command error", err)
+	}
+}
+
+func TestRemovedOperationAliasesAreRejected(t *testing.T) {
+	for _, args := range [][]string{
+		{"registry", "register"},
+		{"registry", "unregister"},
+		{"site", "publish"},
+	} {
+		var stdout, stderr bytes.Buffer
+		err := run(t.Context(), args, &stdout, &stderr)
+		if err == nil || !strings.Contains(err.Error(), "unknown") {
+			t.Errorf("run(%v) error = %v, want an unknown-command error", args, err)
+		}
 	}
 }
 
@@ -234,21 +248,21 @@ func TestRunRegistryBuildIsNotAPublicCommand(t *testing.T) {
 
 func TestRunRegistryRegisterHelpExplainsConfigReconciliation(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	if err := run(t.Context(), []string{"registry", "register", "--help"}, &stdout, &stderr); err != nil {
-		t.Fatalf("run(registry register --help) error = %v", err)
+	if err := run(t.Context(), []string{"registry", "sync", "--help"}, &stdout, &stderr); err != nil {
+		t.Fatalf("run(registry sync --help) error = %v", err)
 	}
 	help := stdout.String() + stderr.String()
 	for _, expected := range []string{
-		"artifact-pages registry register",
-		"Reconcile the sites mapping in the selected config",
-		"sites omitted from it are unregistered and cleaned on apply",
+		"artifact-pages registry sync",
+		"Reconcile the complete sites mapping",
+		"omitted sites are removed from discovery and their projection is cleaned on apply",
 	} {
 		if !strings.Contains(help, expected) {
-			t.Errorf("registry register help is missing %q:\n%s", expected, help)
+			t.Errorf("registry sync help is missing %q:\n%s", expected, help)
 		}
 	}
 	if strings.Contains(help, "registry publish") || strings.Contains(help, "publish that projection") {
-		t.Errorf("registry register help still describes registration as publication:\n%s", help)
+		t.Errorf("registry sync help still describes registration as publication:\n%s", help)
 	}
 }
 
@@ -266,10 +280,10 @@ func TestRunRegistryRegisterReadsSelectedConfigAndDryRunDoesNotCreateStorage(t *
 	if err := os.WriteFile("deployment.yaml", []byte(config), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	args := []string{"registry", "register", "--config", "deployment.yaml", "--format", "json"}
+	args := []string{"registry", "sync", "--config", "deployment.yaml", "--format", "json"}
 	var stdout, stderr bytes.Buffer
 	if err := run(t.Context(), append(args, "--dry-run"), &stdout, &stderr); err != nil {
-		t.Fatalf("registry register dry-run error = %v; stderr=%s", err, stderr.String())
+		t.Fatalf("registry sync dry-run error = %v; stderr=%s", err, stderr.String())
 	}
 	var planned struct {
 		Operation       string             `json:"operation"`
@@ -278,10 +292,10 @@ func TestRunRegistryRegisterReadsSelectedConfigAndDryRunDoesNotCreateStorage(t *
 		RegistryUpdated *bool              `json:"registryUpdated"`
 	}
 	if err := json.Unmarshal(stdout.Bytes(), &planned); err != nil {
-		t.Fatalf("decode registry register dry-run JSON: %v; output=%s", err, stdout.String())
+		t.Fatalf("decode registry sync dry-run JSON: %v; output=%s", err, stdout.String())
 	}
-	if planned.Operation != "registry register" || planned.Outcome != "planned" || planned.RegistryUpdated == nil || *planned.RegistryUpdated {
-		t.Fatalf("registry register dry-run result = %+v, want a plan with registryUpdated=false", planned)
+	if planned.Operation != "registry sync" || planned.Outcome != "planned" || planned.RegistryUpdated == nil || *planned.RegistryUpdated {
+		t.Fatalf("registry sync dry-run result = %+v, want a plan with registryUpdated=false", planned)
 	}
 	wantChanges := []publisher.Change{
 		{Action: "invalidate", Path: "/_indexes/sites.json"},
@@ -289,7 +303,7 @@ func TestRunRegistryRegisterReadsSelectedConfigAndDryRunDoesNotCreateStorage(t *
 		{Action: "create", Path: "_indexes/sites.json#sites/sre"},
 	}
 	if !reflect.DeepEqual(planned.Changes, wantChanges) {
-		t.Fatalf("registry register dry-run changes = %+v, want %+v", planned.Changes, wantChanges)
+		t.Fatalf("registry sync dry-run changes = %+v, want %+v", planned.Changes, wantChanges)
 	}
 	if _, err := os.Stat(filepath.Join(root, ".local", "storage")); !os.IsNotExist(err) {
 		t.Fatalf("dry-run created local storage: stat error = %v", err)
@@ -298,7 +312,7 @@ func TestRunRegistryRegisterReadsSelectedConfigAndDryRunDoesNotCreateStorage(t *
 	stdout.Reset()
 	stderr.Reset()
 	if err := run(t.Context(), args, &stdout, &stderr); err != nil {
-		t.Fatalf("registry register error = %v; stderr=%s", err, stderr.String())
+		t.Fatalf("registry sync error = %v; stderr=%s", err, stderr.String())
 	}
 	var applied struct {
 		Operation       string `json:"operation"`
@@ -306,10 +320,10 @@ func TestRunRegistryRegisterReadsSelectedConfigAndDryRunDoesNotCreateStorage(t *
 		RegistryUpdated *bool  `json:"registryUpdated"`
 	}
 	if err := json.Unmarshal(stdout.Bytes(), &applied); err != nil {
-		t.Fatalf("decode registry register JSON: %v; output=%s", err, stdout.String())
+		t.Fatalf("decode registry sync JSON: %v; output=%s", err, stdout.String())
 	}
-	if applied.Operation != "registry register" || applied.Outcome != "registered" || applied.RegistryUpdated == nil || !*applied.RegistryUpdated {
-		t.Fatalf("registry register result = %+v, want registered and registryUpdated=true", applied)
+	if applied.Operation != "registry sync" || applied.Outcome != "synced" || applied.RegistryUpdated == nil || !*applied.RegistryUpdated {
+		t.Fatalf("registry sync result = %+v, want registered and registryUpdated=true", applied)
 	}
 	projection, err := os.ReadFile(filepath.Join(root, ".local", "storage", "_indexes", "sites.json"))
 	if err != nil || !strings.Contains(string(projection), `"id": "sre"`) {
@@ -325,8 +339,7 @@ func TestRegistryCommandsRequireSitesMapping(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, args := range [][]string{
-		{"registry", "register", "--config", "deployment.yaml", "--format", "json"},
-		{"registry", "unregister", "--site", "sre", "--config", "deployment.yaml", "--format", "json"},
+		{"registry", "sync", "--config", "deployment.yaml", "--format", "json"},
 	} {
 		stdout, stderr, exitCode := runCLIProcess(t, root, args)
 		var failure struct {
@@ -348,13 +361,13 @@ func TestRegistryCommandsRequireSitesMapping(t *testing.T) {
 	if err := os.WriteFile(configPath, []byte(emptyConfig), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	stdout, stderr, exitCode := runCLIProcess(t, root, []string{"registry", "register", "--config", "deployment.yaml", "--dry-run", "--format", "json"})
+	stdout, stderr, exitCode := runCLIProcess(t, root, []string{"registry", "sync", "--config", "deployment.yaml", "--dry-run", "--format", "json"})
 	var emptyResult publisher.Result
 	if err := json.Unmarshal([]byte(stdout), &emptyResult); err != nil {
 		t.Fatalf("decode empty-sites dry-run: %v; stdout=%s", err, stdout)
 	}
 	if exitCode != 0 || emptyResult.Outcome != "planned" {
-		t.Fatalf("registry register with explicit empty sites = exit %d; stdout=%s stderr=%s, want a valid dry-run", exitCode, stdout, stderr)
+		t.Fatalf("registry sync with explicit empty sites = exit %d; stdout=%s stderr=%s, want a valid dry-run", exitCode, stdout, stderr)
 	}
 }
 
@@ -380,7 +393,7 @@ local:
 		t.Fatal(err)
 	}
 	stdout, stderr, exitCode := runCLIProcess(t, root, []string{
-		"registry", "register",
+		"registry", "sync",
 		"--config", "artifact-pages.yaml",
 		"--config", "artifact-pages.local.yaml",
 		"--dry-run", "--format", "json",
@@ -389,7 +402,7 @@ local:
 	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
 		t.Fatalf("decode layered config result: %v; stdout=%s stderr=%s", err, stdout, stderr)
 	}
-	if exitCode != 0 || result.Operation != "registry register" || result.Outcome != "planned" || len(result.Changes) != 3 {
+	if exitCode != 0 || result.Operation != "registry sync" || result.Outcome != "planned" || len(result.Changes) != 3 {
 		t.Fatalf("layered registry dry-run = exit %d, %+v; stderr=%s, want inherited site and local target", exitCode, result, stderr)
 	}
 	if _, err := os.Stat(filepath.Join(root, ".local", "storage")); !os.IsNotExist(err) {
@@ -398,7 +411,7 @@ local:
 }
 
 func TestPublishCommandHelpIsProviderNeutral(t *testing.T) {
-	for _, args := range [][]string{{"site", "publish", "--help"}, {"app", "deploy", "--help"}} {
+	for _, args := range [][]string{{"site", "sync", "--help"}, {"app", "deploy", "--help"}} {
 		var stdout, stderr bytes.Buffer
 		if err := run(t.Context(), args, &stdout, &stderr); err != nil {
 			t.Fatalf("run(%v) error = %v", args, err)
@@ -409,11 +422,11 @@ func TestPublishCommandHelpIsProviderNeutral(t *testing.T) {
 		}
 	}
 	var stdout, stderr bytes.Buffer
-	if err := run(t.Context(), []string{"site", "publish", "--help"}, &stdout, &stderr); err != nil {
-		t.Fatalf("run(site publish --help) error = %v", err)
+	if err := run(t.Context(), []string{"site", "sync", "--help"}, &stdout, &stderr); err != nil {
+		t.Fatalf("run(site sync --help) error = %v", err)
 	}
 	if help := stdout.String() + stderr.String(); !strings.Contains(help, "stale preview references") {
-		t.Errorf("site publish dry-run help does not mention stale preview references:\n%s", help)
+		t.Errorf("site sync dry-run help does not mention stale preview references:\n%s", help)
 	}
 	stdout.Reset()
 	stderr.Reset()
@@ -428,8 +441,8 @@ func TestPublishCommandHelpIsProviderNeutral(t *testing.T) {
 func TestRunSitePublishUsesLocalConfiguredBackend(t *testing.T) {
 	root := createLocalSitePublishCheckout(t, registeredLocalSiteManifest)
 	var stdout, stderr bytes.Buffer
-	if err := run(t.Context(), []string{"site", "publish", "--site", "sre", "--source", "docs/artifacts"}, &stdout, &stderr); err != nil {
-		t.Fatalf("run(site publish) error = %v; stderr=%s", err, stderr.String())
+	if err := run(t.Context(), []string{"site", "sync", "--site", "sre", "--source", "docs/artifacts"}, &stdout, &stderr); err != nil {
+		t.Fatalf("run(site sync) error = %v; stderr=%s", err, stderr.String())
 	}
 	artifact, err := os.ReadFile(filepath.Join(root, ".local", "storage", "_artifacts", "sre", "overview.html"))
 	if err != nil || string(artifact) != "<title>Overview</title><h1>Overview</h1>" {
@@ -451,6 +464,9 @@ func TestRunSitePublishDryRunAndNoOpAreMachineReadable(t *testing.T) {
 			ID: "pr:42", Kind: "pull-request", HeadSHA: staleHeadSHA,
 			PRURL: "https://github.com/acme/sre/pull/42", UpdatedAt: "2026-09-27T00:00:00Z",
 			Documents: []previewrecords.Document{{Path: "review.html", Title: "Review", Format: "html"}},
+		}},
+		RevisionHistory: []previewrecords.GroupRevisionHistory{{
+			GroupID: "pr:42", Revisions: []previewrecords.RevisionOwnership{{HeadSHA: staleHeadSHA, Files: []string{"review.html"}}},
 		}},
 	})
 	if err != nil {
@@ -476,10 +492,10 @@ func TestRunSitePublishDryRunAndNoOpAreMachineReadable(t *testing.T) {
 	}
 	beforeDryRun := snapshotFiles(t, storageRoot)
 
-	args := []string{"site", "publish", "--site", "sre", "--source", "docs/artifacts", "--dry-run", "--format", "json"}
+	args := []string{"site", "sync", "--site", "sre", "--source", "docs/artifacts", "--dry-run", "--format", "json"}
 	stdout, stderr, exitCode := runCLIProcess(t, root, args)
 	if exitCode != 0 {
-		t.Fatalf("site publish dry-run exit code = %d, want 0; stdout=%s stderr=%s", exitCode, stdout, stderr)
+		t.Fatalf("site sync dry-run exit code = %d, want 0; stdout=%s stderr=%s", exitCode, stdout, stderr)
 	}
 	var planned struct {
 		Operation      string             `json:"operation"`
@@ -496,7 +512,7 @@ func TestRunSitePublishDryRunAndNoOpAreMachineReadable(t *testing.T) {
 		} `json:"previewChanges"`
 	}
 	if err := json.Unmarshal([]byte(stdout), &planned); err != nil {
-		t.Fatalf("decode site publish dry-run JSON: %v; output=%s", err, stdout)
+		t.Fatalf("decode site sync dry-run JSON: %v; output=%s", err, stdout)
 	}
 	wantChanges := []publisher.Change{
 		{Action: "update", Path: "_artifacts/sre/overview.html"},
@@ -506,8 +522,8 @@ func TestRunSitePublishDryRunAndNoOpAreMachineReadable(t *testing.T) {
 		{Action: "create", Path: "_indexes/sre/search/manifest.json"},
 		{Action: "create", Path: "_indexes/sre/search/root-a9b445d38284b9a0f4995534afe000d1e3e8ee30b2c66db9866be64b37f1e0c7.gz"},
 	}
-	if planned.Operation != "site publish" || planned.Outcome != "planned" || planned.Site != "sre" || planned.FilesPublished != 5 || planned.FilesRemoved != 1 || !reflect.DeepEqual(planned.Changes, wantChanges) {
-		t.Fatalf("site publish dry-run result = %+v, want planned creates %+v", planned, wantChanges)
+	if planned.Operation != "site sync" || planned.Outcome != "planned" || planned.Site != "sre" || planned.FilesPublished != 5 || planned.FilesRemoved != 1 || !reflect.DeepEqual(planned.Changes, wantChanges) {
+		t.Fatalf("site sync dry-run result = %+v, want planned creates %+v", planned, wantChanges)
 	}
 	wantPreviewChanges := []struct {
 		Action  string `json:"action"`
@@ -516,27 +532,27 @@ func TestRunSitePublishDryRunAndNoOpAreMachineReadable(t *testing.T) {
 		Reason  string `json:"reason"`
 	}{{Action: "remove", GroupID: "pr:42", HeadSHA: staleHeadSHA, Reason: "manifest-missing"}}
 	if !reflect.DeepEqual(planned.PreviewChanges, wantPreviewChanges) {
-		t.Fatalf("site publish dry-run previewChanges = %+v, want %+v", planned.PreviewChanges, wantPreviewChanges)
+		t.Fatalf("site sync dry-run previewChanges = %+v, want %+v", planned.PreviewChanges, wantPreviewChanges)
 	}
 	if afterDryRun := snapshotFiles(t, storageRoot); !reflect.DeepEqual(afterDryRun, beforeDryRun) {
-		t.Fatalf("site publish dry-run changed local storage: before=%v after=%v", beforeDryRun, afterDryRun)
+		t.Fatalf("site sync dry-run changed local storage: before=%v after=%v", beforeDryRun, afterDryRun)
 	}
 	unchangedCatalog, err := os.ReadFile(staleCatalogPath)
 	if err != nil || !bytes.Equal(unchangedCatalog, staleCatalog) {
-		t.Fatalf("site publish dry-run changed preview catalog: got=%q err=%v, want original bytes", unchangedCatalog, err)
+		t.Fatalf("site sync dry-run changed preview catalog: got=%q err=%v, want original bytes", unchangedCatalog, err)
 	}
 
-	args = []string{"site", "publish", "--site", "sre", "--source", "docs/artifacts", "--format", "json"}
+	args = []string{"site", "sync", "--site", "sre", "--source", "docs/artifacts", "--format", "json"}
 	stdout, stderr, exitCode = runCLIProcess(t, root, args)
 	if exitCode != 0 {
-		t.Fatalf("site publish exit code = %d, want 0; stdout=%s stderr=%s", exitCode, stdout, stderr)
+		t.Fatalf("site sync exit code = %d, want 0; stdout=%s stderr=%s", exitCode, stdout, stderr)
 	}
 	var published publisher.Result
 	if err := json.Unmarshal([]byte(stdout), &published); err != nil {
-		t.Fatalf("decode site publish JSON: %v; output=%s", err, stdout)
+		t.Fatalf("decode site sync JSON: %v; output=%s", err, stdout)
 	}
-	if published.Operation != "site publish" || published.Outcome != "published" || published.Site != "sre" || published.FilesPublished != 5 || published.FilesRemoved != 1 || !reflect.DeepEqual(published.Changes, wantChanges) {
-		t.Fatalf("site publish result = %+v, want published result with changes %+v", published, wantChanges)
+	if published.Operation != "site sync" || published.Outcome != "synced" || published.Site != "sre" || published.FilesPublished != 5 || published.FilesRemoved != 1 || !reflect.DeepEqual(published.Changes, wantChanges) {
+		t.Fatalf("site sync result = %+v, want published result with changes %+v", published, wantChanges)
 	}
 	artifact, err := os.ReadFile(filepath.Join(storageRoot, "_artifacts", "sre", "overview.html"))
 	if err != nil || string(artifact) != "<title>Overview</title><h1>Overview</h1>" {
@@ -546,110 +562,143 @@ func TestRunSitePublishDryRunAndNoOpAreMachineReadable(t *testing.T) {
 		t.Fatalf("stale local artifact remains after publish: stat error = %v", err)
 	}
 
-	textDryRunArgs := []string{"site", "publish", "--site", "sre", "--source", "docs/artifacts", "--dry-run"}
+	textDryRunArgs := []string{"site", "sync", "--site", "sre", "--source", "docs/artifacts", "--dry-run"}
 	stdout, stderr, exitCode = runCLIProcess(t, root, textDryRunArgs)
 	if exitCode != 0 {
-		t.Fatalf("site publish text dry-run no-op exit code = %d, want 0; stdout=%s stderr=%s", exitCode, stdout, stderr)
+		t.Fatalf("site sync text dry-run no-op exit code = %d, want 0; stdout=%s stderr=%s", exitCode, stdout, stderr)
 	}
 	for _, expected := range []string{
-		"site publish sre  DRY RUN",
+		"site sync sre  DRY RUN",
 		"+ 0 create   ~ 0 update   - 0 remove",
 		"Dry run complete. No writes.",
 	} {
 		if !strings.Contains(stdout, expected) {
-			t.Errorf("site publish text dry-run no-op output is missing %q:\n%s", expected, stdout)
+			t.Errorf("site sync text dry-run no-op output is missing %q:\n%s", expected, stdout)
 		}
 	}
 
 	stdout, stderr, exitCode = runCLIProcess(t, root, args)
 	if exitCode != 0 {
-		t.Fatalf("site publish no-op exit code = %d, want 0; stdout=%s stderr=%s", exitCode, stdout, stderr)
+		t.Fatalf("site sync no-op exit code = %d, want 0; stdout=%s stderr=%s", exitCode, stdout, stderr)
 	}
 	var noOp publisher.Result
 	if err := json.Unmarshal([]byte(stdout), &noOp); err != nil {
-		t.Fatalf("decode site publish no-op JSON: %v; output=%s", err, stdout)
+		t.Fatalf("decode site sync no-op JSON: %v; output=%s", err, stdout)
 	}
-	if noOp.Operation != "site publish" || noOp.Outcome != "no-op" || noOp.Site != "sre" || noOp.Changes == nil || len(noOp.Changes) != 0 || noOp.PreviewChanges == nil || len(*noOp.PreviewChanges) != 0 {
-		t.Fatalf("site publish no-op result = %+v, want an empty machine-readable no-op", noOp)
+	if noOp.Operation != "site sync" || noOp.Outcome != "no-op" || noOp.Site != "sre" || noOp.Changes == nil || len(noOp.Changes) != 0 || noOp.PreviewChanges == nil || len(*noOp.PreviewChanges) != 0 {
+		t.Fatalf("site sync no-op result = %+v, want an empty machine-readable no-op", noOp)
 	}
 	assertEmptyPreviewChangesField(t, stdout)
 }
 
-func TestRegistryUnregisterLocalCLIIsScopedRetryableAndMachineReadable(t *testing.T) {
-	t.Run("help exposes provider-neutral config locator", func(t *testing.T) {
+func TestPreviewRemoveCLIHelpValidationNoOpAndJSONFailure(t *testing.T) {
+	var helpOut, helpErr bytes.Buffer
+	if err := run(t.Context(), []string{"preview", "remove", "--help"}, &helpOut, &helpErr); err != nil || !strings.Contains(helpOut.String(), "--site ID --group ID") {
+		t.Fatalf("preview remove help = %q, %v; stderr=%q", helpOut.String(), err, helpErr.String())
+	}
+	for _, args := range [][]string{
+		{"preview", "remove", "--site", "sre"},
+		{"preview", "remove", "--group", "pr:42"},
+		{"preview", "remove", "--site", "sre", "--group", "feature-branch"},
+	} {
 		var stdout, stderr bytes.Buffer
-		if err := run(t.Context(), []string{"registry", "unregister", "--help"}, &stdout, &stderr); err != nil {
-			t.Fatalf("run(registry unregister --help) error = %v", err)
+		err := run(t.Context(), args, &stdout, &stderr)
+		if err == nil || commandExitCode(err) != 2 {
+			t.Errorf("run(%v) error = %v; want argument validation exit 2", args, err)
 		}
-		help := stdout.String() + stderr.String()
-		for _, expected := range []string{"registry unregister --site ID", "--config LOCATOR", "--dry-run", "--format text|json"} {
-			if !strings.Contains(help, expected) {
-				t.Errorf("registry unregister help is missing %q:\n%s", expected, help)
-			}
-		}
-	})
+	}
 
-	t.Run("dry-run and successful forced cleanup", func(t *testing.T) {
-		root := createLocalUnregisterCheckout(t)
-		storageRoot := filepath.Join(root, ".local", "storage")
-		before := snapshotFiles(t, storageRoot)
-		args := []string{"registry", "unregister", "--site", "sre", "--config", "artifact-pages.yaml", "--dry-run", "--format", "json"}
-		stdout, stderr, exitCode := runCLIProcess(t, root, args)
-		if exitCode != 0 {
-			t.Fatalf("registry unregister dry-run exit code = %d, want 0; stdout=%s stderr=%s", exitCode, stdout, stderr)
-		}
-		var planned publisher.Result
-		if err := json.Unmarshal([]byte(stdout), &planned); err != nil {
-			t.Fatalf("decode registry unregister dry-run JSON: %v; output=%s", err, stdout)
-		}
-		if planned.Operation != "registry unregister" || planned.Outcome != "planned" || planned.Site != "sre" || planned.RegistryUpdated == nil || *planned.RegistryUpdated {
-			t.Fatalf("registry unregister dry-run = %+v; want explicit site and a read-only plan", planned)
-		}
-		for _, expected := range []string{
-			"_artifacts/sre/report.html", "_indexes/sre/index.json", "_previews/sre/catalog.json",
-		} {
-			if !containsChange(planned.Changes, "remove", expected) {
-				t.Errorf("unregister plan does not remove %q: %+v", expected, planned.Changes)
-			}
-		}
-		if after := snapshotFiles(t, storageRoot); !reflect.DeepEqual(after, before) {
-			t.Fatalf("dry-run changed local storage: before=%v after=%v", before, after)
-		}
+	root := createLocalSitePublishCheckout(t, registeredLocalSiteManifest)
+	args := []string{"preview", "remove", "--site", "sre", "--group", "pr:42", "--dry-run", "--format", "json"}
+	stdout, stderr, exitCode := runCLIProcess(t, root, args)
+	if exitCode != 0 {
+		t.Fatalf("preview remove no-op CLI exit=%d stdout=%s stderr=%s", exitCode, stdout, stderr)
+	}
+	var noOp map[string]any
+	if err := json.Unmarshal([]byte(stdout), &noOp); err != nil || noOp["operation"] != "preview remove" || noOp["groupId"] != "pr:42" || noOp["outcome"] != "no-op" {
+		t.Fatalf("preview remove no-op JSON = %#v, err=%v; output=%s", noOp, err, stdout)
+	}
+	lockPath := filepath.Join(root, ".local", "storage", "_control", "locks", "sites", "sre.json")
+	if _, err := os.Stat(lockPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("dry-run created site lock %s: %v", lockPath, err)
+	}
 
-		args = []string{"registry", "unregister", "--site", "sre", "--config", "artifact-pages.yaml", "--format", "json"}
-		stdout, stderr, exitCode = runCLIProcess(t, root, args)
-		if exitCode != 0 {
-			t.Fatalf("registry unregister exit code = %d, want 0; stdout=%s stderr=%s", exitCode, stdout, stderr)
-		}
-		var applied publisher.Result
-		if err := json.Unmarshal([]byte(stdout), &applied); err != nil {
-			t.Fatalf("decode registry unregister JSON: %v; output=%s", err, stdout)
-		}
-		if applied.Operation != "registry unregister" || applied.Outcome != "unregistered" || applied.Site != "sre" || applied.RegistryUpdated == nil || !*applied.RegistryUpdated || applied.FilesRemoved != 6 {
-			t.Fatalf("registry unregister = %+v; want committed registry, selected site, and six existing site objects removed", applied)
-		}
-		if !reflect.DeepEqual(applied.Changes, planned.Changes) {
-			t.Fatalf("registry unregister changes = %+v, dry-run changes = %+v", applied.Changes, planned.Changes)
-		}
-		assertLocalUnregisterResult(t, storageRoot, "sre")
+	legacyCatalogPath := filepath.Join(root, ".local", "storage", "_previews", "sre", "catalog.json")
+	if err := os.MkdirAll(filepath.Dir(legacyCatalogPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(legacyCatalogPath, []byte(`{"schemaVersion":1,"site":"sre","groups":[]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	args = []string{"preview", "remove", "--site", "sre", "--group", "pr:42", "--format", "json"}
+	stdout, stderr, exitCode = runCLIProcess(t, root, args)
+	if exitCode == 0 {
+		t.Fatalf("legacy preview catalog unexpectedly removed successfully: stdout=%s stderr=%s", stdout, stderr)
+	}
+	var failure map[string]any
+	if err := json.Unmarshal([]byte(stdout), &failure); err != nil || failure["operation"] != "preview remove" || failure["outcome"] != "failed" || failure["groupId"] != "pr:42" || failure["error"] == "" {
+		t.Fatalf("preview remove failure JSON = %#v, err=%v; stdout=%s stderr=%s", failure, err, stdout, stderr)
+	}
+}
 
-		// Repeating the explicit cleanup after withdrawal must still succeed,
-		// revalidate the target, and leave the retained control locks intact.
-		stdout, stderr, exitCode = runCLIProcess(t, root, args)
-		if exitCode != 0 {
-			t.Fatalf("repeated registry unregister exit code = %d, want 0; stdout=%s stderr=%s", exitCode, stdout, stderr)
+func TestRegistrySyncReconcilesOmittedSitesAndRetriesCleanup(t *testing.T) {
+	root := createLocalUnregisterCheckout(t)
+	storageRoot := filepath.Join(root, ".local", "storage")
+	before := snapshotFiles(t, storageRoot)
+	args := []string{"registry", "sync", "--config", "artifact-pages.yaml", "--dry-run", "--format", "json"}
+	stdout, stderr, exitCode := runCLIProcess(t, root, args)
+	if exitCode != 0 {
+		t.Fatalf("registry sync dry-run exit code = %d, want 0; stdout=%s stderr=%s", exitCode, stdout, stderr)
+	}
+	var planned publisher.Result
+	if err := json.Unmarshal([]byte(stdout), &planned); err != nil {
+		t.Fatalf("decode registry sync dry-run JSON: %v; output=%s", err, stdout)
+	}
+	if planned.Operation != "registry sync" || planned.Outcome != "planned" || planned.RegistryUpdated == nil || *planned.RegistryUpdated {
+		t.Fatalf("registry sync dry-run = %+v; want a read-only complete desired-state plan", planned)
+	}
+	for _, expected := range []string{
+		"_artifacts/sre/report.html", "_indexes/sre/index.json", "_previews/sre/catalog.json",
+	} {
+		if !containsChange(planned.Changes, "remove", expected) {
+			t.Errorf("sync plan does not remove omitted site's %q: %+v", expected, planned.Changes)
 		}
-		var retried publisher.Result
-		if err := json.Unmarshal([]byte(stdout), &retried); err != nil {
-			t.Fatalf("decode repeated registry unregister JSON: %v; output=%s", err, stdout)
-		}
-		if retried.Operation != "registry unregister" || retried.Outcome != "unregistered" || retried.Site != "sre" || retried.RegistryUpdated == nil || *retried.RegistryUpdated || retried.FilesRemoved != 0 {
-			t.Fatalf("repeated registry unregister = %+v; want idempotent forced cleanup with no registry rewrite", retried)
-		}
-		assertLocalUnregisterResult(t, storageRoot, "sre")
-	})
+	}
+	if after := snapshotFiles(t, storageRoot); !reflect.DeepEqual(after, before) {
+		t.Fatalf("dry-run changed local storage: before=%v after=%v", before, after)
+	}
 
-	t.Run("listing failure after withdrawal retries from the retained record", func(t *testing.T) {
+	args = []string{"registry", "sync", "--config", "artifact-pages.yaml", "--format", "json"}
+	stdout, stderr, exitCode = runCLIProcess(t, root, args)
+	if exitCode != 0 {
+		t.Fatalf("registry sync exit code = %d, want 0; stdout=%s stderr=%s", exitCode, stdout, stderr)
+	}
+	var applied publisher.Result
+	if err := json.Unmarshal([]byte(stdout), &applied); err != nil {
+		t.Fatalf("decode registry sync JSON: %v; output=%s", err, stdout)
+	}
+	if applied.Operation != "registry sync" || applied.Outcome != "synced" || applied.RegistryUpdated == nil || !*applied.RegistryUpdated || applied.FilesRemoved != 6 {
+		t.Fatalf("registry sync = %+v; want complete projection and six omitted-site objects removed", applied)
+	}
+	if !reflect.DeepEqual(applied.Changes, planned.Changes) {
+		t.Fatalf("registry sync changes = %+v, dry-run changes = %+v", applied.Changes, planned.Changes)
+	}
+	assertLocalUnregisterResult(t, storageRoot, "sre")
+
+	// Repeating the complete desired-state sync is idempotent.
+	stdout, stderr, exitCode = runCLIProcess(t, root, args)
+	if exitCode != 0 {
+		t.Fatalf("repeated registry sync exit code = %d, want 0; stdout=%s stderr=%s", exitCode, stdout, stderr)
+	}
+	var repeated publisher.Result
+	if err := json.Unmarshal([]byte(stdout), &repeated); err != nil {
+		t.Fatalf("decode repeated registry sync JSON: %v; output=%s", err, stdout)
+	}
+	if repeated.Outcome != "no-op" || repeated.RegistryUpdated == nil || *repeated.RegistryUpdated || repeated.FilesRemoved != 0 {
+		t.Fatalf("repeated registry sync = %+v; want an idempotent unchanged projection", repeated)
+	}
+
+	t.Run("cleanup failure retries after config has omitted the site", func(t *testing.T) {
 		root := createLocalUnregisterCheckout(t)
 		storageRoot := filepath.Join(root, ".local", "storage")
 		artifactPrefix := filepath.Join(storageRoot, "_artifacts", "sre")
@@ -659,87 +708,44 @@ func TestRegistryUnregisterLocalCLIIsScopedRetryableAndMachineReadable(t *testin
 		if err := os.WriteFile(artifactPrefix, []byte("block the listing directory"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		args := []string{"registry", "unregister", "--site", "sre", "--format", "json"}
+		args := []string{"registry", "sync", "--config", "artifact-pages.yaml", "--format", "json"}
 		stdout, stderr, exitCode := runCLIProcess(t, root, args)
 		if exitCode != 1 {
-			t.Fatalf("registry unregister listing failure exit code = %d, want 1; stdout=%s stderr=%s", exitCode, stdout, stderr)
+			t.Fatalf("registry sync cleanup failure exit code = %d, want 1; stdout=%s stderr=%s", exitCode, stdout, stderr)
 		}
 		var failure struct {
 			publisher.Result
 			Error string `json:"error"`
 		}
 		if err := json.Unmarshal([]byte(stdout), &failure); err != nil {
-			t.Fatalf("decode registry unregister failure JSON: %v; output=%s", err, stdout)
+			t.Fatalf("decode registry sync failure JSON: %v; output=%s", err, stdout)
 		}
-		if failure.Operation != "registry unregister" || failure.Outcome != "failed" || failure.Site != "sre" || failure.RegistryUpdated == nil || !*failure.RegistryUpdated || !strings.Contains(failure.Error, "list site \"sre\" for cleanup") {
-			t.Fatalf("registry unregister failure = %+v; want committed withdrawal and retryable listing error", failure)
+		if failure.Operation != "registry sync" || failure.Outcome != "failed" || failure.RegistryUpdated == nil || !*failure.RegistryUpdated || !strings.Contains(failure.Error, "list site \"sre\" for cleanup") {
+			t.Fatalf("registry sync failure = %+v; want committed projection and retryable cleanup error", failure)
 		}
 		cleanupRecord, err := os.ReadFile(filepath.Join(storageRoot, "_control", "registry-cleanup.json"))
 		if err != nil || !strings.Contains(string(cleanupRecord), "sre") {
 			t.Fatalf("cleanup retry record = %q, err=%v; want explicit sre target", cleanupRecord, err)
 		}
-
 		if err := os.Remove(artifactPrefix); err != nil {
 			t.Fatal(err)
 		}
 		writeLocalUnregisterObject(t, storageRoot, "_artifacts/sre/report.html", []byte("restored artifact"))
 		stdout, stderr, exitCode = runCLIProcess(t, root, args)
 		if exitCode != 0 {
-			t.Fatalf("registry unregister retry exit code = %d, want 0; stdout=%s stderr=%s", exitCode, stdout, stderr)
+			t.Fatalf("registry sync retry exit code = %d, want 0; stdout=%s stderr=%s", exitCode, stdout, stderr)
 		}
 		var retried publisher.Result
 		if err := json.Unmarshal([]byte(stdout), &retried); err != nil {
-			t.Fatalf("decode registry unregister retry JSON: %v; output=%s", err, stdout)
+			t.Fatalf("decode registry sync retry JSON: %v; output=%s", err, stdout)
 		}
-		if retried.Outcome != "unregistered" || retried.Site != "sre" || retried.RegistryUpdated == nil || *retried.RegistryUpdated || retried.FilesRemoved != 6 {
-			t.Fatalf("registry unregister retry = %+v; want completed cleanup without a second registry write", retried)
+		if retried.Outcome != "synced" || retried.RegistryUpdated == nil || *retried.RegistryUpdated || retried.FilesRemoved != 6 {
+			t.Fatalf("registry sync retry = %+v; want completed cleanup without a second registry write", retried)
 		}
 		if _, err := os.Stat(filepath.Join(storageRoot, "_control", "registry-cleanup.json")); !os.IsNotExist(err) {
 			t.Fatalf("registry cleanup record remains after retry: stat err=%v", err)
 		}
 		assertLocalUnregisterResult(t, storageRoot, "sre")
-	})
-
-	t.Run("invalid site ID and config entry are argument errors", func(t *testing.T) {
-		root := createLocalUnregisterCheckout(t)
-		for _, test := range []struct {
-			name     string
-			siteID   string
-			config   string
-			wantText string
-		}{
-			{name: "invalid site ID", siteID: "../sre", config: localUnregisterManifest, wantText: "invalid site ID"},
-			{name: "site still registered in config", siteID: "sre", config: localRegistryBeforeUnregister, wantText: "still present in config sites"},
-		} {
-			t.Run(test.name, func(t *testing.T) {
-				configPath := filepath.Join(root, "artifact-pages.yaml")
-				if err := os.WriteFile(configPath, []byte(test.config), 0o600); err != nil {
-					t.Fatal(err)
-				}
-				before := snapshotFiles(t, filepath.Join(root, ".local", "storage"))
-				args := []string{"registry", "unregister", "--site", test.siteID, "--config", "artifact-pages.yaml", "--format", "json"}
-				stdout, stderr, exitCode := runCLIProcess(t, root, args)
-				if exitCode != 2 {
-					t.Fatalf("registry unregister argument error exit code = %d, want 2; stdout=%s stderr=%s", exitCode, stdout, stderr)
-				}
-				var failure struct {
-					publisher.Result
-					Error string `json:"error"`
-				}
-				if err := json.Unmarshal([]byte(stdout), &failure); err != nil {
-					t.Fatalf("decode registry unregister argument error JSON: %v; output=%s", err, stdout)
-				}
-				if failure.Operation != "registry unregister" || failure.Outcome != "failed" || failure.Site != test.siteID || failure.Changes == nil || failure.Error == "" {
-					t.Fatalf("registry unregister argument error result = %+v; want operation/site/failed outcome and an empty change list", failure)
-				}
-				if !strings.Contains(failure.Error, test.wantText) {
-					t.Fatalf("registry unregister error %q does not contain %q", failure.Error, test.wantText)
-				}
-				if after := snapshotFiles(t, filepath.Join(root, ".local", "storage")); !reflect.DeepEqual(after, before) {
-					t.Fatalf("argument error changed storage: before=%v after=%v", before, after)
-				}
-			})
-		}
 	})
 }
 
@@ -836,9 +842,9 @@ func TestSitePublishFailureJSONAndExitCodes(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		stdout, stderr, exitCode := runCLIProcess(t, root, []string{"site", "publish", "--site", "sre", "--config", "deployment.yaml", "--format", "json"})
+		stdout, stderr, exitCode := runCLIProcess(t, root, []string{"site", "sync", "--site", "sre", "--config", "deployment.yaml", "--format", "json"})
 		if exitCode != 2 {
-			t.Fatalf("site publish malformed-config exit code = %d, want 2; stdout=%s stderr=%s", exitCode, stdout, stderr)
+			t.Fatalf("site sync malformed-config exit code = %d, want 2; stdout=%s stderr=%s", exitCode, stdout, stderr)
 		}
 		var failure struct {
 			Operation string             `json:"operation"`
@@ -850,7 +856,7 @@ func TestSitePublishFailureJSONAndExitCodes(t *testing.T) {
 		if err := json.Unmarshal([]byte(stdout), &failure); err != nil {
 			t.Fatalf("decode malformed-config failure JSON: %v; output=%s; stderr=%s", err, stdout, stderr)
 		}
-		if failure.Operation != "site publish" || failure.Outcome != "failed" || failure.Site != "sre" || failure.Changes == nil || !strings.Contains(failure.Error, "apiToken") {
+		if failure.Operation != "site sync" || failure.Outcome != "failed" || failure.Site != "sre" || failure.Changes == nil || !strings.Contains(failure.Error, "apiToken") {
 			t.Fatalf("malformed-config failure result = %+v, want stable failure envelope", failure)
 		}
 		assertEmptyPreviewChangesField(t, stdout)
@@ -865,9 +871,9 @@ func TestSitePublishFailureJSONAndExitCodes(t *testing.T) {
 	t.Run("unregistered site", func(t *testing.T) {
 		const unrelatedSiteManifest = "schemaVersion: 1\nprovider: local\nlocal:\n  root: .local/storage\nsites:\n  frontend:\n    name: Frontend\n    repository: acme/frontend\n    sourcePath: docs/artifacts\n"
 		root := createLocalSitePublishCheckout(t, unrelatedSiteManifest)
-		stdout, stderr, exitCode := runCLIProcess(t, root, []string{"site", "publish", "--site", "sre", "--source", "docs/artifacts", "--config", "artifact-pages.yaml", "--format", "json"})
+		stdout, stderr, exitCode := runCLIProcess(t, root, []string{"site", "sync", "--site", "sre", "--source", "docs/artifacts", "--config", "artifact-pages.yaml", "--format", "json"})
 		if exitCode != 1 {
-			t.Fatalf("site publish unregistered-site exit code = %d, want 1; stdout=%s stderr=%s", exitCode, stdout, stderr)
+			t.Fatalf("site sync unregistered-site exit code = %d, want 1; stdout=%s stderr=%s", exitCode, stdout, stderr)
 		}
 		var failure struct {
 			Operation string             `json:"operation"`
@@ -879,13 +885,13 @@ func TestSitePublishFailureJSONAndExitCodes(t *testing.T) {
 		if err := json.Unmarshal([]byte(stdout), &failure); err != nil {
 			t.Fatalf("decode unregistered-site failure JSON: %v; output=%s; stderr=%s", err, stdout, stderr)
 		}
-		if failure.Operation != "site publish" || failure.Outcome != "failed" || failure.Site != "sre" || failure.Changes == nil || !strings.Contains(failure.Error, "is not registered") {
+		if failure.Operation != "site sync" || failure.Outcome != "failed" || failure.Site != "sre" || failure.Changes == nil || !strings.Contains(failure.Error, "is not registered") {
 			t.Fatalf("unregistered-site failure result = %+v, want stable failure envelope", failure)
 		}
 		assertEmptyPreviewChangesField(t, stdout)
-		textArgs := []string{"site", "publish", "--site", "sre", "--dry-run"}
+		textArgs := []string{"site", "sync", "--site", "sre", "--dry-run"}
 		textOut, textErr, textExit := runCLIProcess(t, root, textArgs)
-		if textExit != 1 || textOut != "" || !strings.Contains(textErr, "site publish sre  DRY RUN FAILED") || !strings.Contains(textErr, "Registered sites: frontend") || strings.Contains(textErr, "\x1b") {
+		if textExit != 1 || textOut != "" || !strings.Contains(textErr, "site sync sre  DRY RUN FAILED") || !strings.Contains(textErr, "Registered sites: frontend") || strings.Contains(textErr, "\x1b") {
 			t.Fatalf("unregistered text report: exit=%d stdout=%q stderr=%q", textExit, textOut, textErr)
 		}
 		for _, key := range []string{
@@ -912,9 +918,9 @@ func TestSitePublishFailureJSONAndExitCodes(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		stdout, stderr, exitCode := runCLIProcess(t, root, []string{"site", "publish", "--site", "sre", "--source", "docs/artifacts", "--format", "json"})
+		stdout, stderr, exitCode := runCLIProcess(t, root, []string{"site", "sync", "--site", "sre", "--source", "docs/artifacts", "--format", "json"})
 		if exitCode != 1 {
-			t.Fatalf("site publish provider-read exit code = %d, want 1; stdout=%s stderr=%s", exitCode, stdout, stderr)
+			t.Fatalf("site sync provider-read exit code = %d, want 1; stdout=%s stderr=%s", exitCode, stdout, stderr)
 		}
 		var failure struct {
 			Operation      string             `json:"operation"`
@@ -927,7 +933,7 @@ func TestSitePublishFailureJSONAndExitCodes(t *testing.T) {
 		if err := json.Unmarshal([]byte(stdout), &failure); err != nil {
 			t.Fatalf("decode provider-read failure JSON: %v; output=%s; stderr=%s", err, stdout, stderr)
 		}
-		if failure.Operation != "site publish" || failure.Outcome != "failed" || failure.Site != "sre" || failure.Changes == nil || failure.PreviewChanges == nil || !strings.Contains(failure.Error, "read deployed site registry") {
+		if failure.Operation != "site sync" || failure.Outcome != "failed" || failure.Site != "sre" || failure.Changes == nil || failure.PreviewChanges == nil || !strings.Contains(failure.Error, "read deployed site registry") {
 			t.Fatalf("provider-read failure result = %+v, want stable site-publish failure envelope", failure)
 		}
 		assertEmptyPreviewChangesField(t, stdout)
@@ -938,11 +944,11 @@ func assertEmptyPreviewChangesField(t *testing.T, output string) {
 	t.Helper()
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(output), &fields); err != nil {
-		t.Fatalf("decode site publish JSON fields: %v; output=%s", err, output)
+		t.Fatalf("decode site sync JSON fields: %v; output=%s", err, output)
 	}
 	previewChanges, exists := fields["previewChanges"]
 	if !exists || string(previewChanges) != "[]" {
-		t.Fatalf("site publish previewChanges JSON = %q (present=%t), want []", previewChanges, exists)
+		t.Fatalf("site sync previewChanges JSON = %q (present=%t), want []", previewChanges, exists)
 	}
 }
 
@@ -969,7 +975,7 @@ func TestDeploymentResultReportsResolvedRemoteConfigCommit(t *testing.T) {
 			AWS:      &deploymentconfig.AWSTarget{AccountID: "123456789012", Region: "us-east-1", Bucket: "artifact-pages-123456789012-us-east-1"},
 		},
 	}
-	result := publisher.Result{Operation: "site publish", Outcome: "planned", Changes: []publisher.Change{}}
+	result := publisher.Result{Operation: "site sync", Outcome: "planned", Changes: []publisher.Change{}}
 
 	var jsonOutput bytes.Buffer
 	if err := encodeDeploymentResult(&jsonOutput, result, resolved); err != nil {
@@ -983,7 +989,7 @@ func TestDeploymentResultReportsResolvedRemoteConfigCommit(t *testing.T) {
 	if !ok || target["provider"] != "aws" || target["bucket"] != "artifact-pages-123456789012-us-east-1" || target["region"] != "us-east-1" || target["accountId"] != "123456789012" {
 		t.Fatalf("JSON target = %v, want effective AWS target", encoded["target"])
 	}
-	if encoded["configCommitSha"] != sha || encoded["operation"] != "site publish" {
+	if encoded["configCommitSha"] != sha || encoded["operation"] != "site sync" {
 		t.Fatalf("JSON result = %v, want operation, target, and resolved config SHA", encoded)
 	}
 	if _, nested := encoded["Result"]; nested {
@@ -1011,7 +1017,7 @@ cloudflare:
 	}
 	resolved := deploymentconfig.ResolvedConfig{Config: config}
 	var output bytes.Buffer
-	if err := encodeDeploymentResult(&output, publisher.Result{Operation: "registry register", Outcome: "planned", Changes: []publisher.Change{}}, resolved); err != nil {
+	if err := encodeDeploymentResult(&output, publisher.Result{Operation: "registry sync", Outcome: "planned", Changes: []publisher.Change{}}, resolved); err != nil {
 		t.Fatalf("encodeDeploymentResult(): %v", err)
 	}
 	var encoded map[string]any
@@ -1051,9 +1057,9 @@ func TestSitePublishRejectsMalformedConfigBeforeCreatingLocalBackend(t *testing.
 	}
 
 	var stdout, stderr bytes.Buffer
-	err = run(t.Context(), []string{"site", "publish", "--site", "sre", "--source", "docs", "--config", configPath}, &stdout, &stderr)
+	err = run(t.Context(), []string{"site", "sync", "--site", "sre", "--source", "docs", "--config", configPath}, &stdout, &stderr)
 	if err == nil {
-		t.Fatal("run(site publish) succeeded with malformed config")
+		t.Fatal("run(site sync) succeeded with malformed config")
 	}
 	if strings.Contains(err.Error(), credential) {
 		t.Fatalf("config error exposed credential value: %v", err)
@@ -1535,7 +1541,7 @@ func TestAppDeployNoLongerAcceptsVersionFlag(t *testing.T) {
 
 func TestFullTextFlagIsRemoved(t *testing.T) {
 	for _, args := range [][]string{
-		{"site", "publish", "--site", "sre", "--source", "docs/artifacts", "--fulltext"},
+		{"site", "sync", "--site", "sre", "--source", "docs/artifacts", "--fulltext"},
 		{"index", "build", "--site", "sre", "--source", "docs/artifacts", "--fulltext"},
 	} {
 		var stdout, stderr bytes.Buffer

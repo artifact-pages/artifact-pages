@@ -1,6 +1,6 @@
 # T11 — Registry, site and application command surface
 
-- Status: Done
+- Status: Superseded for current CLI names by [TD16](TD16-cli-sync-and-removal.md)
 - Phase: Provider-backed deployment
 
 ## Settled contract

@@ -55,7 +55,7 @@
           <tr><td><code>schemaVersion</code></td><td><span class="pill on">Required</span></td><td>The integer <code>1</code>.</td></tr>
           <tr><td><code>provider</code></td><td><span class="pill on">Required</span></td><td>The delivery target: <code>local</code>, <code>aws</code>, or <code>cloudflare</code>. A shared base layer may omit it (see <a href="#layers">layers</a>).</td></tr>
           <tr><td><code>local</code> / <code>aws</code> / <code>cloudflare</code></td><td><span class="pill on">Required</span></td><td>Exactly the settings block that matches <code>provider</code>. See <a href="#providers">delivery targets</a>.</td></tr>
-          <tr><td><code>sites</code></td><td><span class="pill">Optional</span></td><td>The sites to register, keyed by site ID. Required by <code>registry register</code> and <code>registry unregister</code>. See <a href="#sites">sites</a>.</td></tr>
+          <tr><td><code>sites</code></td><td><span class="pill">Optional</span></td><td>The complete desired site set, keyed by site ID. Required by <code>registry sync</code>. See <a href="#sites">sites</a>.</td></tr>
         </tbody>
       </table></div>
       <p class="note">The file is checked strictly: unknown or duplicate keys, more than one YAML document, and values of the wrong type are errors rather than being ignored. The example site is illustrative.</p>
@@ -96,7 +96,7 @@
       </div>
       <div class="term" aria-label="Command using two layers">
         <div class="term-head"><span>TERMINAL / ADMIN</span><button class="copy-btn" type="button">Copy</button></div>
-<pre><span class="p">$</span> <span data-copy>artifact-pages <span class="v">registry register</span> --config artifact-pages.yaml --config .local/artifact-pages.local.yaml --dry-run</span></pre>
+<pre><span class="p">$</span> <span data-copy>artifact-pages <span class="v">registry sync</span> --config artifact-pages.yaml --config .local/artifact-pages.local.yaml --dry-run</span></pre>
       </div>
       <ul>
         <li>Every layer has <code>schemaVersion: 1</code>. A layer that sets <code>provider</code> also has exactly the matching block.</li>
@@ -111,7 +111,7 @@
       <p>A team's repository can use the admin repository's file without a copy. Point <code>--config</code> at it with a <code>github://</code> locator, pinned to a commit:</p>
       <div class="term" aria-label="Example remote config locator">
         <div class="term-head"><span>TERMINAL / acme/checkout</span><button class="copy-btn" type="button">Copy</button></div>
-<pre><span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site checkout --source docs/artifacts --config 'github://acme/platform-admin/artifact-pages.yaml?ref=0123456789abcdef0123456789abcdef01234567' --dry-run</span></pre>
+<pre><span class="p">$</span> <span data-copy>artifact-pages <span class="v">site sync</span> --site checkout --source docs/artifacts --config 'github://acme/platform-admin/artifact-pages.yaml?ref=0123456789abcdef0123456789abcdef01234567' --dry-run</span></pre>
       </div>
       <ul>
         <li>The form is <code>github://OWNER/REPO/FILE?ref=REF</code>. Without <code>FILE</code>, <code>artifact-pages.yaml</code> is read. Without <code>ref</code>, the default branch is resolved to one commit for the whole command; pin a full commit SHA in CI so a run cannot change target midway.</li>
@@ -175,7 +175,7 @@
           <tr><td><code>accessKeyIdEnv</code>, <code>secretAccessKeyEnv</code></td><td><span class="pill">Optional</span></td><td>Names of the environment variables holding the R2 access key. Default <code>CF_R2_ACCESS_KEY_ID</code> and <code>CF_R2_SECRET_ACCESS_KEY</code>.</td></tr>
           <tr><td><code>apiTokenEnv</code></td><td><span class="pill">Optional</span></td><td>Name of the variable holding the API token used for cache purges. Default <code>CF_API_TOKEN</code>.</td></tr>
           <tr><td><code>sessionTokenEnv</code></td><td><span class="pill">Optional</span></td><td>Name of a variable holding a session token, when the R2 credential is temporary.</td></tr>
-          <tr><td><code>registryReaderAccessKeyIdEnv</code>, <code>registryReaderSecretAccessKeyEnv</code>, <code>registryReaderSessionTokenEnv</code></td><td><span class="pill">Optional</span></td><td>A separate read-only credential that <code>site publish</code> and <code>preview publish</code> use only to read the site registry. Set the first two together. See <a href="#credentials">credentials</a>.</td></tr>
+          <tr><td><code>registryReaderAccessKeyIdEnv</code>, <code>registryReaderSecretAccessKeyEnv</code>, <code>registryReaderSessionTokenEnv</code></td><td><span class="pill">Optional</span></td><td>A separate read-only credential that <code>site sync</code> and <code>preview publish</code> use only to read the site registry. Set the first two together. See <a href="#credentials">credentials</a>.</td></tr>
         </tbody>
       </table></div>
       <p class="note">The values shown are placeholders. Setting up the bucket, hostname, cache rules, and preview retention is done in Cloudflare or AWS itself (for example with Terraform), not in this file. The command also accepts a <code>gcp-local</code> provider, which is an emulator profile for tests, not a production target.</p>
@@ -191,9 +191,9 @@
       <div class="table-wrap"><table>
         <thead><tr><th>Command</th><th>R2 access key and secret</th><th>Registry reader</th><th>API token</th></tr></thead>
         <tbody>
-          <tr><td><code>site publish</code></td><td><span class="pill on">Required</span></td><td>Used only if configured</td><td>For any run that changes the site or retries an unfinished purge; checked before anything is written</td></tr>
+          <tr><td><code>site sync</code></td><td><span class="pill on">Required</span></td><td>Used only if configured</td><td>For any run that changes the site or retries an unfinished purge; checked before anything is written</td></tr>
           <tr><td><code>preview publish</code></td><td><span class="pill on">Required</span></td><td>Used only if configured</td><td>Not needed</td></tr>
-          <tr><td><code>registry register</code>, <code>registry unregister</code></td><td><span class="pill on">Required</span></td><td>Not used</td><td>For any run that changes the registry or removes a site; checked before anything is written</td></tr>
+          <tr><td><code>registry sync</code></td><td><span class="pill on">Required</span></td><td>Not used</td><td>For any run that changes the registry or cleans an omitted site; checked before anything is written</td></tr>
           <tr><td><code>app deploy</code></td><td><span class="pill on">Required</span></td><td>Not used</td><td>For any run that changes the app; checked before anything is written</td></tr>
           <tr><td><code>lock inspect</code>, <code>lock recover</code></td><td><span class="pill on">Required</span></td><td>Not used</td><td>Not needed</td></tr>
           <tr><td><code>index build</code>, <code>config set-default</code></td><td>Not needed</td><td>Not used</td><td>Not needed</td></tr>
@@ -219,11 +219,11 @@
       <div class="callout warn" role="note">
         <span class="ico">COMPLETE SET</span>
         <div>
-          <p><strong><code>sites</code> lists every site that should exist.</strong> A site missing from it is unregistered by the next <code>registry register</code>, and its published pages, index, and previews are deleted. Always review the dry run.</p>
+          <p><strong><code>sites</code> lists every site that should exist.</strong> A site missing from it is removed from the desired set by the next <code>registry sync</code>; its published pages, index, and previews are deleted. Always review the dry run.</p>
           <p>Leaving <code>sites</code> out is an error for the registry commands, never an empty list. To have no sites, write <code>sites: {}</code>.</p>
         </div>
       </div>
-      <p>Only the registry commands read <code>sites</code>. <code>site publish</code> and <code>preview publish</code> check the registry deployed on the delivery target, so a team's config may contain only the target.</p>
+      <p>Only <code>registry sync</code> reads <code>sites</code>. <code>site sync</code> and <code>preview publish</code> check the registry deployed on the delivery target, so a team's config may contain only the target.</p>
     </section>
 
     <section class="doc-section" aria-labelledby="registry">
@@ -232,15 +232,15 @@
       <div class="term" aria-label="Registry commands">
         <div class="term-head"><span>TERMINAL / ADMIN</span><button class="copy-btn" type="button">Copy</button></div>
 <pre><span class="c"># Add, change, or remove sites to match the file</span>
-<span class="p">$</span> <span data-copy>artifact-pages <span class="v">registry register</span> --dry-run</span>
-<span class="p">$</span> <span data-copy>artifact-pages <span class="v">registry register</span></span>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">registry sync</span> --dry-run</span>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">registry sync</span></span>
 <span class="c"># Or remove one site: delete it from sites first, then</span>
-<span class="p">$</span> <span data-copy>artifact-pages <span class="v">registry unregister</span> --site billing --dry-run</span>
-<span class="p">$</span> <span data-copy>artifact-pages <span class="v">registry unregister</span> --site billing</span></pre>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">registry sync</span> --dry-run</span>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">registry sync</span></span></pre>
       </div>
       <ul>
-        <li><code>registry register</code> makes the deployed registry match the file and cleans up sites that were removed from it.</li>
-        <li><code>registry unregister --site ID</code> requires that the site is already gone from the file. It removes the registration, deletes that site's content and previews, and asks the CDN to refresh. It is safe to run again if it stops partway.</li>
+        <li><code>registry sync</code> makes the deployed registry match the complete <code>sites</code> mapping and cleans sites omitted from it.</li>
+        <li>To remove one site, delete it from the mapping, keep every other desired site, review the dry-run, then run <code>registry sync</code>. A retry resumes cleanup after a partial failure.</li>
         <li>Deleted content can stay in caches for a short time, and pages a reader already opened cannot be recalled.</li>
         <li>If a crashed run leaves a lock, check it with <code>lock inspect --scope registry</code> (or <code>--site ID</code>) and, once you are sure nothing is running, release it with <code>lock recover … --observed-etag ETAG</code> using the value you saw.</li>
       </ul>

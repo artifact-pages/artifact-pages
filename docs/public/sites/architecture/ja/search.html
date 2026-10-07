@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Git Artifact Pagesの検索の仕組み。サイトごとの成果物インデックスで名前から探す検索と、公開時に--fulltextで作る分割済みの静的なインデックスによる本文検索。一致の規則、トレードオフ、計測値、静的にしている理由。">
+  <meta name="description" content="Git Artifact Pagesの検索の仕組み。サイトごとの成果物インデックスで名前から探す検索と、site syncが作る分割済みの静的なインデックスによる本文検索。一致の規則、トレードオフ、計測値、静的にしている理由。">
   <title>検索とインデックス</title>
   <script>
     // 閲覧アプリ（同一オリジンの親）のテーマを描画前に写す。以後の追従は assets/site.js が行う。
@@ -51,7 +51,7 @@
       <div class="fig-frame" role="group" aria-label="図：2つの検索と1つの静的な投影">
         <svg viewBox="0 0 960 420" role="img" aria-labelledby="se-flow-t se-flow-d">
           <title id="se-flow-t">2つの検索と1つの静的な投影</title>
-          <desc id="se-flow-d">名前で探す：site publishがindex.jsonを書き、ブラウザはサイトを開いたときに読み込んで、入力のたびにタイトルとパスをメモリ上で順位付けします。本文検索：--fulltext付きのsite publishが検索のマニフェスト、root、最大128個のleafを書き、meta.jsonで知らせます。ブラウザはEnterまで何も取得せず、Enterでマニフェスト、root、必要なleafだけを取り、パス順の結果を返し、開いたページで検索語を強調します。</desc>
+          <desc id="se-flow-d">名前で探す：site syncがindex.jsonを書き、ブラウザはサイトを開いたときに読み込んで、入力のたびにタイトルとパスをメモリ上で順位付けします。本文検索：site syncが検索のマニフェスト、root、最大128個のleafを書き、meta.jsonで知らせます。ブラウザはEnterまで何も取得せず、Enterでマニフェスト、root、必要なleafだけを取り、パス順の結果を返し、開いたページで検索語を強調します。</desc>
           <defs>
             <marker id="se-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ad-head"/></marker>
           </defs>
@@ -61,7 +61,7 @@
 
           <text class="ad-lab acc" x="16" y="56">名前で探す</text>
           <rect class="ad-box" x="16" y="68" width="200" height="104" rx="8"/>
-          <text class="ad-m acc" x="28" y="92">site publish</text>
+          <text class="ad-m acc" x="28" y="92">site sync</text>
           <text class="ad-s" x="28" y="116">タイトル、パス、見出し、</text>
           <text class="ad-s" x="28" y="134">Gitの日時とコミッター</text>
           <text class="ad-q" x="28" y="156">公開のたびに作る</text>
@@ -79,7 +79,7 @@
 
           <text class="ad-lab acc" x="16" y="212">本文を検索する（任意）</text>
           <rect class="ad-box acc" x="16" y="224" width="200" height="168" rx="8"/>
-          <text class="ad-m acc" x="28" y="248">site publish --fulltext</text>
+          <text class="ad-m acc" x="28" y="248">site sync</text>
           <text class="ad-s" x="28" y="272">タイトルと本文の</text>
           <text class="ad-s" x="28" y="290">静的なテキストを取り出す</text>
           <text class="ad-s" x="28" y="314">正規化：NFKC、小文字、</text>
@@ -114,8 +114,8 @@
       <details class="fig-text">
         <summary>図の内容を文章で読む</summary>
         <ul>
-          <li>名前で探す：<code>site publish</code>が公開のたびに<code>_indexes/&lt;site&gt;/index.json</code>を書きます。ブラウザはサイトを開いたときに1回だけ読み込み、入力のたびにタイトルとパスをメモリ上で順位付けします。ピン留めと最近読んだページは上に来ます。<code>@</code>、<code>#</code>、<code>&gt;</code>でサイト、見出し、コマンドの検索に切り替わります。</li>
-          <li>本文検索：<code>site publish --fulltext</code>が静的なテキストを取り出して正規化し、<code>search/manifest.json</code>、<code>search/root-&lt;sha256&gt;.gz</code>、最大128個の<code>search/leaf-&lt;sha256&gt;.gz</code>を書きます。場所は<code>meta.json</code>の<code>fullTextUrl</code>で知らせます。</li>
+          <li>名前で探す：<code>site sync</code>が公開のたびに<code>_indexes/&lt;site&gt;/index.json</code>を書きます。ブラウザはサイトを開いたときに1回だけ読み込み、入力のたびにタイトルとパスをメモリ上で順位付けします。ピン留めと最近読んだページは上に来ます。<code>@</code>、<code>#</code>、<code>&gt;</code>でサイト、見出し、コマンドの検索に切り替わります。</li>
+          <li>本文検索：<code>site sync</code>が静的なテキストを取り出して正規化し、<code>search/manifest.json</code>、<code>search/root-&lt;sha256&gt;.gz</code>、最大128個の<code>search/leaf-&lt;sha256&gt;.gz</code>を書きます。場所は<code>meta.json</code>の<code>fullTextUrl</code>で知らせます。</li>
           <li>ブラウザでは、入力中は何も取得しません。Enterでマニフェストとrootを取り、必要なleafだけを（同時に6つまで）取って検索語の結果を掛け合わせ、件数とパス順の1ページ分を返します。タイトルは<code>index.json</code>から取り、開いたページでは検索語を強調します。</li>
         </ul>
       </details>
@@ -127,7 +127,7 @@
         <thead><tr><th></th><th>名前で探す</th><th>本文を検索する</th></tr></thead>
         <tbody>
           <tr><td>場所</td><td>コマンドパレット（<kbd>⌘K</kbd> / <kbd>Ctrl K</kbd>）</td><td>サイドバーの入力欄（<kbd>⌘⇧F</kbd> / <kbd>Ctrl ⇧ F</kbd>）</td></tr>
-          <tr><td>使うデータ</td><td>画面の移動のために読み込み済みの<code>index.json</code></td><td><code>search/*</code>。<code>--fulltext</code>付きで公開した場合だけ</td></tr>
+          <tr><td>使うデータ</td><td>画面の移動のために読み込み済みの<code>index.json</code></td><td><code>search/*</code>。毎回のsite syncで生成</td></tr>
           <tr><td>動くとき</td><td>入力のたび</td><td><kbd>Enter</kbd>で検索語を確定したときだけ</td></tr>
           <tr><td>対象</td><td>タイトル、パス、ファイル名</td><td>タイトルと本文の静的なテキスト</td></tr>
           <tr><td>並び順</td><td>順位付け</td><td>パス順。順位付けなし</td></tr>
@@ -152,7 +152,7 @@
     <section class="doc-section" aria-labelledby="page-text">
       <h2 id="page-text">本文検索</h2>
       <h3 id="build">公開時に作るもの</h3>
-      <p>本文検索は<strong>任意</strong>です。<code>site publish --fulltext</code>（ローカルで作るだけなら<code>index build --fulltext</code>）は、各文書から静的なテキストを取り出して正規化し、<code>_indexes/&lt;site&gt;/search/</code>に別の投影として書きます。<code>meta.json</code>の<code>fullTextUrl</code>がその場所を知らせ、<code>index.json</code>は変わりません。検索を残したい公開では、毎回このフラグを付けます。付けずに公開すると<code>fullTextUrl</code>は外れ、サイトの検索オブジェクトも消えます。</p>
+      <p>本文検索は<strong>任意</strong>です。<code>site sync</code>（ローカルで作るだけなら<code>index build</code>）は、各文書から静的なテキストを取り出して正規化し、<code>_indexes/&lt;site&gt;/search/</code>に別の投影として書きます。<code>meta.json</code>の<code>fullTextUrl</code>がその場所を知らせ、<code>index.json</code>は変わりません。検索を残したい公開では、毎回このフラグを付けます。付けずに公開すると<code>fullTextUrl</code>は外れ、サイトの検索オブジェクトも消えます。</p>
       <div class="table-wrap"><table>
         <thead><tr><th>オブジェクト</th><th>中身</th><th>キャッシュ</th></tr></thead>
         <tbody>
@@ -209,9 +209,9 @@
       <h2 id="why-static">静的にしている理由</h2>
       <p>製品の原則は、ファイルとして配れるものは公開時に計算しておくことです。検索もこれに従っています。</p>
       <ul>
-        <li><strong>運用するものが無い。</strong>動かし、増強し、守り、同期を保つ検索クラスタはありません。検索データは、対象のページと同じ<code>site publish</code>が書き込み、ロックし、無効化し、削除します。</li>
+        <li><strong>運用するものが無い。</strong>動かし、増強し、守り、同期を保つ検索クラスタはありません。検索データは、対象のページと同じ<code>site sync</code>が書き込み、ロックし、無効化し、削除します。</li>
         <li><strong>配信の経路もアクセス制御も同じ。</strong>検索のファイルは<code>/_indexes/&lt;site&gt;/</code>にある普通のオブジェクトで、同じCDNから配信され、運用者がエッジでそのパスに設定したアクセス制御がそのまま効きます。</li>
-        <li><strong>使ったときだけ取得する。</strong>サイトを開いただけでは検索データをダウンロードしません。<code>--fulltext</code>を付けずに公開したサイトには検索データがありません。</li>
+        <li><strong>使ったときだけ取得する。</strong>サイトを開いただけでは検索データをダウンロードしません。検索語を送信したときにだけ取得します。</li>
       </ul>
       <p>その代わりに、上に挙げた制約があります。順位付け、抜粋、意味検索を加えるには、保存するデータを増やすか、検索時にモデルを動かす必要があり、いまの契約には含めていません。</p>
     </section>

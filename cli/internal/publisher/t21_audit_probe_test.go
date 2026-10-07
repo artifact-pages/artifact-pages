@@ -209,7 +209,7 @@ func TestT21ProbeRegistryDryRunNoOpAndUnregisterCalls(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("registry unregister one site: outcome=%s GET=%d conditionalPUT=%d LIST=%v DELETEcalls=%d invalidations=%d keysRemoved=%d", cleanup.Outcome, cleanupBackend.gets, cleanupBackend.conditionalWrites, cleanupBackend.lists, cleanupBackend.deleteCalls, len(cleanupBackend.invalidations), cleanup.FilesRemoved)
-	if cleanup.Outcome != "unregistered" || len(cleanupBackend.lists) != 4 || cleanupBackend.deleteCalls != 2 {
+	if cleanup.Outcome != "synced" || len(cleanupBackend.lists) != 4 || cleanupBackend.deleteCalls != 2 {
 		t.Fatalf("unregister counts changed: result=%+v LIST=%v DELETEcalls=%d", cleanup, cleanupBackend.lists, cleanupBackend.deleteCalls)
 	}
 }

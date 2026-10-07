@@ -31,7 +31,7 @@ const elementsDocument = (theme: Theme) => `<!doctype html>
       <h1>Gitにある成果物を、読むための場所へ。</h1>
       <h2>一つずつ置くと、全体が見えてくる。</h2>
       <h3>文書ごとに固定のURL</h3>
-      <p class="lead"><strong>HTMLもMarkdownも、Gitに置いたまま。</strong> 本文のリード文です。<code>site publish</code> や <kbd>⌘K</kbd> を含みます。</p>
+      <p class="lead"><strong>HTMLもMarkdownも、Gitに置いたまま。</strong> 本文のリード文です。<code>site sync</code> や <kbd>⌘K</kbd> を含みます。</p>
       <p class="note">注記：図やコマンドのバージョンは説明用の例です。</p>
     </section>
 
@@ -61,7 +61,7 @@ const elementsDocument = (theme: Theme) => `<!doctype html>
         <div class="term">
           <div class="term-head"><span>TERMINAL / EACH REPOSITORY</span><button class="copy-btn" type="button">コピー</button></div>
 <pre><span class="c"># docs/public/sites/ja を、サイト ja へ</span>
-<span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site ja</span></pre>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">site sync</span> --site ja</span></pre>
         </div>
         <div class="term">
           <div class="term-head"><span>.artifact-pages.yaml / ADMIN</span></div>
@@ -91,7 +91,7 @@ const elementsDocument = (theme: Theme) => `<!doctype html>
     <section class="sb-group sb-stack">
       <p class="eyebrow">Callouts &amp; panes</p>
       <div class="callout"><span class="ico">NOTE</span><div><p><strong>索引は公開時に作られます。</strong> 読者側での処理はありません。</p></div></div>
-      <div class="callout warn"><span class="ico">WARN</span><div><p><strong>sites から外すと削除されます。</strong> 次の registry register で登録解除されます。</p></div></div>
+      <div class="callout warn"><span class="ico">WARN</span><div><p><strong>sites から外すと削除されます。</strong> 次の registry sync で登録が外れ、投影データが削除されます。</p></div></div>
       <div class="split">
         <div class="pane trust"><span class="label">TRUST</span><h3>信頼できる公開元</h3><p>HTMLは公開元の文書として扱います。</p></div>
         <div class="pane access"><span class="label">ACCESS</span><h3>アクセス制御は対象外</h3><p>配信側で設定します。</p></div>
@@ -104,8 +104,8 @@ const elementsDocument = (theme: Theme) => `<!doctype html>
         <thead><tr><th>コマンド</th><th>役割</th><th>書き込む先</th></tr></thead>
         <tbody>
           <tr><td>app deploy</td><td>管理者</td><td><code>/index.html</code>, <code>/assets/*</code></td></tr>
-          <tr><td>registry register</td><td>管理者</td><td><code>/_indexes/sites.json</code></td></tr>
-          <tr><td>site publish</td><td>各リポジトリ</td><td><code>/_indexes/&lt;site&gt;/*</code>, <code>/_artifacts/&lt;site&gt;/*</code></td></tr>
+          <tr><td>registry sync</td><td>管理者</td><td><code>/_indexes/sites.json</code></td></tr>
+          <tr><td>site sync</td><td>各リポジトリ</td><td><code>/_indexes/&lt;site&gt;/*</code>, <code>/_artifacts/&lt;site&gt;/*</code></td></tr>
         </tbody>
       </table></div>
       <div class="two-col">

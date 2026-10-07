@@ -1,5 +1,5 @@
-name: Artifact Pages registry
-description: Reconcile the Artifact Pages site registry with the sites declared in the admin deployment config.
+name: Artifact Pages registry sync
+description: Reconcile the complete Artifact Pages site registry with the admin deployment config.
 author: artifact-pages
 branding:
   icon: list
@@ -30,7 +30,7 @@ inputs:
     required: false
     default: auto
   fetch-depth:
-    description: "fetch-depth for the Action's own checkout. 1 (the default) is a shallow checkout; `registry register` reads no Git history. Ignored when no checkout runs."
+    description: "fetch-depth for the Action's own checkout. 1 (the default) is a shallow checkout; `registry sync` reads no Git history. Ignored when no checkout runs."
     required: false
     default: "1"
 outputs:
@@ -38,7 +38,7 @@ outputs:
     description: CLI operation name.
     value: ${{ steps.cli.outputs.operation }}
   outcome:
-    description: "CLI outcome string: planned, registered, no-op, or failed."
+    description: "CLI outcome string: planned, synced, no-op, or failed."
     value: ${{ steps.cli.outputs.outcome }}
   registry-updated:
     description: JSON boolean rendered as true or false when present.
@@ -77,7 +77,7 @@ runs:
       env:
         ARTIFACT_PAGES_TOKEN: ${{ github.token }}
       run: node "$GITHUB_ACTION_PATH/../shared/prebuilt-cli.mjs" --action-root "$GITHUB_ACTION_PATH"
-    - name: Register the configured sites
+    - name: Sync the configured sites
       id: cli
       shell: bash
       working-directory: ${{ github.workspace }}

@@ -33,9 +33,9 @@ function effectiveDryRun() {
 
 // Each Action selects exactly one CLI operation; there is no operation input.
 const operations = {
-  publish: 'site publish',
+  publish: 'site sync',
   preview: 'preview publish',
-  registry: 'registry register',
+  registry: 'registry sync',
   'app-deploy': 'app deploy',
 }
 

@@ -246,8 +246,12 @@ func PlanPublication(ctx context.Context, store PreviewStore, result BuildResult
 		plan.Objects = append(plan.Objects, PublicationObjectChange{Action: action, Path: filePath, ContentType: contentTypeFor(filePath)})
 	}
 	plan.Objects = append(plan.Objects, PublicationObjectChange{Action: manifestAction, Path: "manifest.json", ContentType: "application/json; charset=utf-8"})
+	historyChanged, err := upsertRevisionHistory(&plan.catalog, result.Group.ID, result.Manifest)
+	if err != nil {
+		return PublicationPlan{}, err
+	}
 	groupChanged := upsertPlannedGroup(&plan.catalog, result.Group)
-	plan.writeCatalog = pruned || groupChanged
+	plan.writeCatalog = pruned || groupChanged || historyChanged
 	if groupChanged {
 		action := "create"
 		for _, existing := range catalog.Groups {
@@ -298,12 +302,47 @@ func validatePublicationArgs(ctx context.Context, store PreviewStore, result Bui
 		return errors.New("preview group and manifest head SHAs do not match")
 	}
 	if result.Outcome == OutcomeNoPreview {
-		return ValidateCatalog(Catalog{SchemaVersion: SchemaVersion, Site: result.Site, Groups: []Group{result.Group}})
+		return validateGroup(result.Group)
 	}
 	if result.Outcome != OutcomePublished {
 		return fmt.Errorf("unknown preview outcome %q", result.Outcome)
 	}
 	return validateBuildResult(result)
+}
+
+func upsertRevisionHistory(catalog *Catalog, groupID string, manifest RevisionManifest) (bool, error) {
+	files := make([]string, 0, len(manifest.Files))
+	for _, file := range manifest.Files {
+		files = append(files, file.Path)
+	}
+	sort.Strings(files)
+	for index := range catalog.RevisionHistory {
+		history := &catalog.RevisionHistory[index]
+		if history.GroupID != groupID {
+			continue
+		}
+		for _, revision := range history.Revisions {
+			if revision.HeadSHA != manifest.HeadSHA {
+				continue
+			}
+			if !equalStrings(revision.Files, files) {
+				return false, fmt.Errorf("preview revision %q has conflicting ownership for group %q", manifest.HeadSHA, groupID)
+			}
+			return false, nil
+		}
+		history.Revisions = append(history.Revisions, RevisionOwnership{HeadSHA: manifest.HeadSHA, Files: files})
+		sort.Slice(history.Revisions, func(i, j int) bool {
+			return history.Revisions[i].HeadSHA < history.Revisions[j].HeadSHA
+		})
+		return true, nil
+	}
+	catalog.RevisionHistory = append(catalog.RevisionHistory, GroupRevisionHistory{
+		GroupID: groupID, Revisions: []RevisionOwnership{{HeadSHA: manifest.HeadSHA, Files: files}},
+	})
+	sort.Slice(catalog.RevisionHistory, func(i, j int) bool {
+		return catalog.RevisionHistory[i].GroupID < catalog.RevisionHistory[j].GroupID
+	})
+	return true, nil
 }
 
 func hasGroup(catalog Catalog, groupID string) bool {
@@ -519,7 +558,7 @@ func validateBuildResult(result BuildResult) error {
 	if result.Manifest.HeadSHA != result.Group.HeadSHA || !reflect.DeepEqual(result.Manifest.Documents, result.Group.Documents) {
 		return errors.New("preview manifest and catalog group must refer to the same head and documents")
 	}
-	if err := ValidateCatalog(Catalog{SchemaVersion: SchemaVersion, Site: result.Manifest.Site, Groups: []Group{result.Group}}); err != nil {
+	if err := validateGroup(result.Group); err != nil {
 		return err
 	}
 	if !reflect.DeepEqual(result.Manifest.Files, describeFiles(result.Files)) || result.Manifest.BundleDigest != digestBundle(result.Files) {
@@ -674,7 +713,7 @@ func readCatalog(ctx context.Context, store PreviewStore, site string) (Catalog,
 	}
 	data, err := store.ReadObject(ctx, key)
 	if errors.Is(err, ErrObjectNotFound) {
-		return Catalog{SchemaVersion: SchemaVersion, Site: site, Groups: []Group{}}, nil
+		return Catalog{SchemaVersion: SchemaVersion, Site: site, Groups: []Group{}, RevisionHistory: []GroupRevisionHistory{}}, nil
 	}
 	if err != nil {
 		return Catalog{}, fmt.Errorf("read preview catalog: %w", err)

@@ -1,6 +1,6 @@
-# Artifact Pages publish
+# Artifact Pages site sync
 
-Publishes one registered site to [Artifact Pages](https://artifact-pages.dev), a searchable static reader for Git-managed documents. It runs `artifact-pages site publish --site ID` and relays the typed result.
+Reconciles one registered site's projection with its publishable source directory in [Artifact Pages](https://artifact-pages.dev), a searchable static reader for Git-managed documents. It runs `artifact-pages site sync --site ID` and relays the typed result.
 
 ## Usage
 
@@ -34,7 +34,7 @@ The site ID is always explicit; it is never inferred from the repository.
 
 ## Outputs
 
-`operation`, `outcome` (`planned`, `published`, `no-op` or `failed`), `site`, `changes` (JSON array), `preview-changes` (JSON array), `result` (the complete CLI JSON), `exit-code` and `error`. Outputs are written before a non-zero CLI exit code fails the step.
+`operation`, `outcome` (`planned`, `synced`, `no-op` or `failed`), `site`, `changes` (JSON array), `preview-changes` (JSON array), `result` (the complete CLI JSON), `exit-code` and `error`. Outputs are written before a non-zero CLI exit code fails the step.
 
 ## Version and runners
 

@@ -17,12 +17,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/artifact-pages/artifact-pages/cli/internal/preview"
+	"github.com/artifact-pages/artifact-pages/cli/internal/registry"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
-	"github.com/artifact-pages/artifact-pages/cli/internal/preview"
-	"github.com/artifact-pages/artifact-pages/cli/internal/registry"
 )
 
 func TestBuildAndPublishPreviewFirstThenUnregisterCleansPreview(t *testing.T) {
@@ -103,7 +103,7 @@ func TestBuildAndPublishPreviewFirstThenUnregisterCleansPreview(t *testing.T) {
 	case outcome := <-unregisterDone:
 		unregisterPending = false
 		awaitOperationCleanup(t, "preview unregister", unregisterStopped)
-		if outcome.err != nil || outcome.result.Outcome != "unregistered" {
+		if outcome.err != nil || outcome.result.Outcome != "synced" {
 			t.Fatalf("preview unregister result = %+v, err=%v", outcome.result, outcome.err)
 		}
 	case <-time.After(5 * time.Second):
@@ -178,7 +178,7 @@ func TestUnregisterFirstRejectsPreviewPublisherAfterLockAndBeforeUpload(t *testi
 	case outcome := <-unregisterDone:
 		unregisterPending = false
 		awaitOperationCleanup(t, "preview unregister", unregisterStopped)
-		if outcome.err != nil || outcome.result.Outcome != "unregistered" {
+		if outcome.err != nil || outcome.result.Outcome != "synced" {
 			t.Fatalf("unregister-first result = %+v, err=%v", outcome.result, outcome.err)
 		}
 	case <-time.After(5 * time.Second):
@@ -232,7 +232,7 @@ func TestUnregisterSiteCleansEveryAWSListingPageWithFakeBackend(t *testing.T) {
 	}
 
 	result, err := UnregisterSite(context.Background(), backend, testRegistryProjection(t, docsOnlyManifest), "sre", false)
-	if err != nil || result.Outcome != "unregistered" {
+	if err != nil || result.Outcome != "synced" {
 		t.Fatalf("UnregisterSite() = %+v, err=%v; want successful cleanup", result, err)
 	}
 	for _, prefix := range []string{"_artifacts/sre/", "_indexes/sre/", "_previews/sre/"} {
@@ -329,7 +329,7 @@ func TestUnregisterSiteRetriesAfterAWSContinuationListingFailure(t *testing.T) {
 	}
 
 	result, err := UnregisterSite(context.Background(), backend, testRegistryProjection(t, docsOnlyManifest), "sre", false)
-	if err != nil || result.Outcome != "unregistered" {
+	if err != nil || result.Outcome != "synced" {
 		t.Fatalf("retry UnregisterSite() = %+v, err=%v; want successful cleanup", result, err)
 	}
 	if client.deleteCalls == 0 {

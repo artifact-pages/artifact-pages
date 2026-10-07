@@ -111,7 +111,7 @@ func sitePublishRecoveryFixture(t *testing.T) (string, *sitePublishScaleBackend,
 	options := SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts"}
 	backend := newSitePublishRecoveryBackend(store)
 	result, err := PublishSite(context.Background(), backend, options)
-	if err != nil || result.Outcome != "published" {
+	if err != nil || result.Outcome != "synced" {
 		t.Fatalf("initial PublishSite() = %+v, err=%v", result, err)
 	}
 	state, _, _ := sitePublishRecoveryReadState(t, store)
@@ -187,7 +187,7 @@ func TestPublishSitePersistedJournalErrorRecoversAfterFreshWrapper(t *testing.T)
 	// journal and resumes the original transaction.
 	restarted := newSitePublishRecoveryBackend(store)
 	result, err := PublishSite(context.Background(), restarted, options)
-	if err != nil || result.Outcome != "published" {
+	if err != nil || result.Outcome != "synced" {
 		t.Fatalf("fresh-wrapper journal retry = %+v, err=%v", result, err)
 	}
 	finalState, _, _ := sitePublishRecoveryReadState(t, store)
@@ -226,7 +226,7 @@ func TestPublishSitePersistedFinalStateErrorRetriesCacheOnlyAfterFreshWrapper(t 
 
 	restarted := newSitePublishRecoveryBackend(store)
 	result, err := PublishSite(context.Background(), restarted, options)
-	if err != nil || result.Outcome != "published" || !result.BuildSkipped {
+	if err != nil || result.Outcome != "synced" || !result.BuildSkipped {
 		t.Fatalf("fresh-wrapper cache-only retry = %+v, err=%v; want published BuildSkipped result", result, err)
 	}
 	if attempts, writes := restarted.projectionWriteSnapshot(); len(attempts) != 0 || len(writes) != 0 {

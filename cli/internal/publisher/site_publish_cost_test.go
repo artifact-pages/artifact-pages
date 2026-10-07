@@ -391,7 +391,7 @@ func TestPublishSiteWholeControlRequestsCompareR2GetOnlyAndAWSHeadThenGet(t *tes
 	}
 
 	result, err := PublishSite(ctx, r2Backend, options)
-	if err != nil || result.Outcome != "published" {
+	if err != nil || result.Outcome != "synced" {
 		t.Fatalf("initial R2 PublishSite() = %+v, err=%v", result, err)
 	}
 	// Start both measured paths from the exact same committed state and origin
@@ -440,11 +440,11 @@ func TestPublishSiteWholeControlRequestsCompareR2GetOnlyAndAWSHeadThenGet(t *tes
 	r2CDN.reset()
 	awsCDN.reset()
 	r2Changed, err := PublishSite(ctx, r2Backend, options)
-	if err != nil || r2Changed.Outcome != "published" {
+	if err != nil || r2Changed.Outcome != "synced" {
 		t.Fatalf("R2 changed-resource publish = %+v, err=%v", r2Changed, err)
 	}
 	awsChanged, err := PublishSite(ctx, awsBackend, options)
-	if err != nil || awsChanged.Outcome != "published" {
+	if err != nil || awsChanged.Outcome != "synced" {
 		t.Fatalf("AWS changed-resource publish = %+v, err=%v", awsChanged, err)
 	}
 	r2ChangedSnapshot, awsChangedSnapshot := r2Store.snapshot(), awsStore.snapshot()
@@ -682,7 +682,7 @@ func TestPublishSiteCompletedCacheFailureStartsNewTransactionAndUnionsPaths(t *t
 	}
 	restarted := &sitePublishCostJournalCaptureBackend{sitePublishRecoveryBackend: newSitePublishRecoveryBackend(store)}
 	result, err := PublishSite(context.Background(), restarted, options)
-	if err != nil || result.Outcome != "published" {
+	if err != nil || result.Outcome != "synced" {
 		t.Fatalf("fresh-wrapper changed/reverted retry = %+v, err=%v", result, err)
 	}
 	if len(restarted.journalWrites) != 1 {

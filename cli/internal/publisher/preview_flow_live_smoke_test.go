@@ -189,7 +189,7 @@ func runPreviewPublicationFlowSmoke(t *testing.T, backend DeploymentBackend, sit
 	if err != nil {
 		t.Fatalf("build preview catalog key: %v", err)
 	}
-	emptyCatalog, err := preview.EncodeCatalog(preview.Catalog{SchemaVersion: preview.SchemaVersion, Site: site, Groups: []preview.Group{}})
+	emptyCatalog, err := preview.EncodeCatalog(preview.Catalog{SchemaVersion: preview.SchemaVersion, Site: site, Groups: []preview.Group{}, RevisionHistory: []preview.GroupRevisionHistory{}})
 	if err != nil {
 		t.Fatalf("encode empty catalog guard fixture: %v", err)
 	}

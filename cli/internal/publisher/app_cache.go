@@ -14,6 +14,14 @@ const (
 	maxAppCacheRetryBytes  = 16 << 10
 )
 
+var appCacheRetryPathAllowlist = map[string]struct{}{
+	"/LICENSE": {},
+	"/THIRD_PARTY_NOTICES.txt": {},
+	"/assets/*": {},
+	"/index.html": {},
+	"/preview-bridge.js": {},
+}
+
 // appCacheRetry records the application URL paths that still need cache
 // invalidation after a deployment attempt.
 type appCacheRetry struct {
@@ -32,7 +40,7 @@ func validateAppCacheRetry(record appCacheRetry) error {
 		if path == "" {
 			return errors.New("app cache retry paths must not contain empty values")
 		}
-		if path != "/index.html" {
+		if _, ok := appCacheRetryPathAllowlist[path]; !ok {
 			return fmt.Errorf("app cache retry path %q is not supported", path)
 		}
 		if index > 0 && record.Paths[index-1] >= path {

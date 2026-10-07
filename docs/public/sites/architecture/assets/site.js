@@ -93,7 +93,7 @@
 
   /* ── 3a. 場面3：各リポジトリが、それぞれのタイミングで公開する ──
      場面3に入ると、リポジトリを中央（checkout）→左（sre）→右（billing）の順に1つずつ出し、そのあとは
-     リポジトリごとに別の周期と位相で「site publish」を繰り返す。矢印を光の点が上り、チップが一瞬光り、
+     リポジトリごとに別の周期と位相で「site sync」を繰り返す。矢印を光の点が上り、チップが一瞬光り、
      そのサイトのカードだけが「公開済み」（2回目からは「更新を公開」）に変わる。全体をまとめるビルドが無いことを示す。
      どの2つの公開も同時には始めない（開始の間隔を MIN_GAP 以上あける）。
      図が画面外か、タブが裏にあるときは止め、場面3に戻ったら最初からやり直す。場面4から戻ったときは、
@@ -215,14 +215,14 @@
     ja: [
       ['Git Artifact Pagesとは', 'ja/what-is-git-artifact-pages.html', '各リポジトリから公開し、ひとつの場所で読む。'],
       ['読者の体験', 'ja/reading.html', 'URL、画面の構成、検索とサイトの切り替え。'],
-      ['サイトの公開', 'ja/publishing.html', '公開するディレクトリ、site publish、CIとプレビュー。'],
+      ['サイトの公開', 'ja/publishing.html', '公開するディレクトリ、site sync、CIとプレビュー。'],
       ['設定ファイル', 'ja/configuration.html', 'artifact-pages.yamlの選ばれ方、配信先、sites。'],
       ['信頼とアクセス制御', 'ja/access-and-trust.html', '公開してよいものと、読める人の制限。'],
     ],
     en: [
       ['What is Git Artifact Pages?', 'en/what-is-git-artifact-pages.html', 'Publish from each repository. Read in one place.'],
       ['Reading', 'en/reading.html', 'URLs, the screen, search, and switching sites.'],
-      ['Publishing', 'en/publishing.html', 'The publishable directory, site publish, CI, and previews.'],
+      ['Publishing', 'en/publishing.html', 'The publishable directory, site sync, CI, and previews.'],
       ['Configuration', 'en/configuration.html', 'How artifact-pages.yaml is selected, delivery targets, and sites.'],
       ['Access and trust', 'en/access-and-trust.html', 'What is safe to publish, and how to limit who can read.'],
     ],

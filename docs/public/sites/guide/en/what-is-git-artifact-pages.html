@@ -40,7 +40,7 @@
 
     <div class="promises" aria-label="What it does">
       <div class="promise"><span class="num">01</span><div><strong>Git is the source</strong><p>Artifacts are reviewed in the repository that made them and published with their Git history. Nothing is edited inside Artifact Pages. HTML and Markdown keep their filenames and extensions, at URLs like <code>/site/file.html</code>.</p></div></div>
-      <div class="promise"><span class="num">02</span><div><strong>Each site publishes on its own</strong><p>One directory in one Git repository becomes one site. Each site publishes only its own scope, from its own repository, when its content changes, without waiting for another site's build or deploy.</p></div></div>
+      <div class="promise"><span class="num">02</span><div><strong>Each site syncs on its own</strong><p>One directory in one Git repository becomes one site. Each site syncs only its own scope, from its own repository, when its content changes, without waiting for another site's build or deploy.</p></div></div>
       <div class="promise"><span class="num">03</span><div><strong>One place to read</strong><p>Published sites share one static delivery target (object storage and a CDN) with no always-on server. Switching sites, search, contents, and links to Git work the same in one reader app on every site.</p></div></div>
     </div>
 
@@ -174,10 +174,10 @@
           </div>
           <div class="term" aria-label="Example site registration commands">
             <div class="term-head"><span>TERMINAL / ADMIN</span><button class="copy-btn" type="button">Copy</button></div>
-<pre><span class="p">$</span> <span data-copy>artifact-pages <span class="v">registry register</span> --dry-run</span>
-<span class="p">$</span> <span data-copy>artifact-pages <span class="v">registry register</span></span></pre>
+<pre><span class="p">$</span> <span data-copy>artifact-pages <span class="v">registry sync</span> --dry-run</span>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">registry sync</span></span></pre>
           </div>
-          <p class="note">The <code>sites</code> mapping is the complete set of sites to register. A site removed from it is unregistered by the next <code>registry register</code>, and its published content is deleted. Delivery target (<code>provider</code>) settings are omitted here.</p>
+          <p class="note">The <code>sites</code> mapping is the complete desired set. A site removed from it is withdrawn by the next <code>registry sync</code>, and its published content is deleted. Delivery target (<code>provider</code>) settings are omitted here.</p>
         </section>
 
         <section class="chapter" id="step-3" data-step="3" aria-labelledby="step-3-title">
@@ -185,11 +185,11 @@
           <h3 id="step-3-title">Publish from each Git repository to its site.</h3>
           <p>Each team's Git repository publishes with an explicit site and source directory. Every publish builds the index and places HTML, Markdown, CSS, and images as they are.</p>
           <p>Publishing is independent per site. No central build assembles every site: each repository publishes only its own site, from its own CI, when its content changes, and never waits for another site to publish.</p>
-          <div class="term" aria-label="Example site publish commands">
+          <div class="term" aria-label="Example site sync commands">
             <div class="term-head"><span>TERMINAL / acme/checkout</span><button class="copy-btn" type="button">Copy</button></div>
 <pre><span class="c"># docs/artifacts to the checkout site</span>
-<span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site checkout --source docs/artifacts --dry-run</span>
-<span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site checkout --source docs/artifacts</span></pre>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">site sync</span> --site checkout --source docs/artifacts --dry-run</span>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">site sync</span> --site checkout --source docs/artifacts</span></pre>
           </div>
           <p class="note">Before writing, the publisher checks that the repository and directory match the registration on the delivery target. It never writes to another site. Running the same command from CI on merge is the expected workflow.</p>
         </section>
@@ -228,7 +228,7 @@
 
             <g class="scene s2">
               <path class="d-arrow" d="M380 272 V238" marker-end="url(#ah)"/>
-              <rect class="d-cmd" x="392" y="240" width="152" height="24" rx="12"/><text class="d-cmd-t" x="404" y="256">registry register</text>
+              <rect class="d-cmd" x="392" y="240" width="152" height="24" rx="12"/><text class="d-cmd-t" x="404" y="256">registry sync</text>
               <rect class="d-panel" x="40" y="272" width="680" height="172" rx="13"/>
               <text class="d-label" x="64" y="300">SITE REGISTRY · REGISTERED SITES</text>
               <text class="d-status" x="696" y="300" text-anchor="end">Built from the admin repository's config</text>
@@ -244,9 +244,9 @@
             </g>
 
             <g class="scene s3">
-              <g class="sat" data-site="sre"><path class="d-arrow" d="M164 522 V428" marker-end="url(#ah)"/><circle class="d-pulse" cx="164" cy="516" r="4.5"/><rect class="d-cmd" x="110" y="464" width="108" height="24" rx="12"/><text class="d-cmd-t" x="122" y="480">site publish</text><rect class="d-card" x="64" y="522" width="200" height="82" rx="8"/><text class="d-repo" x="82" y="553">acme/sre-handbook</text><text class="d-repo-sub" x="82" y="577">docs/public</text></g>
-              <g class="sat" data-site="checkout"><path class="d-arrow" d="M380 522 V428" marker-end="url(#ah)"/><circle class="d-pulse" cx="380" cy="516" r="4.5"/><rect class="d-cmd" x="326" y="464" width="108" height="24" rx="12"/><text class="d-cmd-t" x="338" y="480">site publish</text><rect class="d-card" x="280" y="522" width="200" height="82" rx="8"/><text class="d-repo" x="298" y="553">acme/checkout</text><text class="d-repo-sub" x="298" y="577">docs/artifacts</text></g>
-              <g class="sat" data-site="billing"><path class="d-arrow" d="M596 522 V428" marker-end="url(#ah)"/><circle class="d-pulse" cx="596" cy="516" r="4.5"/><rect class="d-cmd" x="542" y="464" width="108" height="24" rx="12"/><text class="d-cmd-t" x="554" y="480">site publish</text><rect class="d-card" x="496" y="522" width="200" height="82" rx="8"/><text class="d-repo" x="514" y="553">acme/billing</text><text class="d-repo-sub" x="514" y="577">docs/artifacts</text></g>
+              <g class="sat" data-site="sre"><path class="d-arrow" d="M164 522 V428" marker-end="url(#ah)"/><circle class="d-pulse" cx="164" cy="516" r="4.5"/><rect class="d-cmd" x="110" y="464" width="108" height="24" rx="12"/><text class="d-cmd-t" x="122" y="480">site sync</text><rect class="d-card" x="64" y="522" width="200" height="82" rx="8"/><text class="d-repo" x="82" y="553">acme/sre-handbook</text><text class="d-repo-sub" x="82" y="577">docs/public</text></g>
+              <g class="sat" data-site="checkout"><path class="d-arrow" d="M380 522 V428" marker-end="url(#ah)"/><circle class="d-pulse" cx="380" cy="516" r="4.5"/><rect class="d-cmd" x="326" y="464" width="108" height="24" rx="12"/><text class="d-cmd-t" x="338" y="480">site sync</text><rect class="d-card" x="280" y="522" width="200" height="82" rx="8"/><text class="d-repo" x="298" y="553">acme/checkout</text><text class="d-repo-sub" x="298" y="577">docs/artifacts</text></g>
+              <g class="sat" data-site="billing"><path class="d-arrow" d="M596 522 V428" marker-end="url(#ah)"/><circle class="d-pulse" cx="596" cy="516" r="4.5"/><rect class="d-cmd" x="542" y="464" width="108" height="24" rx="12"/><text class="d-cmd-t" x="554" y="480">site sync</text><rect class="d-card" x="496" y="522" width="200" height="82" rx="8"/><text class="d-repo" x="514" y="553">acme/billing</text><text class="d-repo-sub" x="514" y="577">docs/artifacts</text></g>
               <text class="d-note" x="64" y="636">↑ Each team's Git repository. It writes only to its own site.</text>
             </g>
 
@@ -323,10 +323,10 @@
         <div><p class="eyebrow">Where to next</p><h2 id="next-title">Pick the page for your role</h2></div>
       </div>
       <ul class="cards four">
-        <li><a class="card" href="publishing.html"><span class="tag">TEAMS</span><h3>Publishing</h3><p>Choose the directory to publish, run <code>site publish</code>, and automate it in CI.</p><span class="go">Publishing →</span></a></li>
+        <li><a class="card" href="publishing.html"><span class="tag">TEAMS</span><h3>Publishing</h3><p>Choose the directory to publish, run <code>site sync</code>, and automate it in CI.</p><span class="go">Publishing →</span></a></li>
         <li><a class="card" href="configuration.html"><span class="tag">ADMINS</span><h3>Configuration</h3><p>The <code>artifact-pages.yaml</code> file: delivery target, registered sites, and how it is selected.</p><span class="go">Configuration →</span></a></li>
         <li><a class="card" href="access-and-trust.html"><span class="tag">BEFORE YOU PUBLISH</span><h3>Access and trust</h3><p>Published HTML runs as code, and access control belongs at the delivery edge.</p><span class="go">Access and trust →</span></a></li>
-        <li><a class="card" href="/architecture/en/overview.html" target="_top"><span class="tag">HOW IT WORKS</span><h3>Architecture overview</h3><p>Git as the source of truth, independent per-site publishing, and the shared static projection with its application and content planes.</p><span class="go">Architecture overview → <span class="ext">(Architecture site)</span></span></a></li>
+        <li><a class="card" href="/architecture/en/overview.html" target="_top"><span class="tag">HOW IT WORKS</span><h3>Architecture overview</h3><p>Git as the source of truth, independent per-site syncing, and the shared static projection with its application and content planes.</p><span class="go">Architecture overview → <span class="ext">(Architecture site)</span></span></a></li>
       </ul>
     </section>
 

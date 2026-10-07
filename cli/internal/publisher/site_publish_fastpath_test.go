@@ -131,7 +131,7 @@ func TestPublishSiteNoOpSkipsBuildManifestAndProjectionInventory(t *testing.T) {
 	seedPublisherRegistry(t, backend.lockMemoryBackend, registeredSREManifest)
 	options := SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts"}
 	initial, err := PublishSite(context.Background(), backend, options)
-	if err != nil || initial.Outcome != "published" {
+	if err != nil || initial.Outcome != "synced" {
 		t.Fatalf("initial PublishSite() = %+v, err=%v", initial, err)
 	}
 
@@ -163,7 +163,7 @@ func TestPublishSiteGetOnlyStatePolicyUsesCompleteGetMetadata(t *testing.T) {
 	seedPublisherRegistry(t, probe.lockMemoryBackend, registeredSREManifest)
 	options := SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts"}
 	initial, err := PublishSite(context.Background(), backend, options)
-	if err != nil || initial.Outcome != "published" {
+	if err != nil || initial.Outcome != "synced" {
 		t.Fatalf("initial GET-only PublishSite() = %+v, err=%v", initial, err)
 	}
 
@@ -186,7 +186,7 @@ func TestPublishSiteGetOnlyStatePolicyUsesCompleteGetMetadata(t *testing.T) {
 	}
 	probe.resetProbe()
 	changed, err := PublishSite(context.Background(), backend, options)
-	if err != nil || changed.Outcome != "published" {
+	if err != nil || changed.Outcome != "synced" {
 		t.Fatalf("GET-only changed publish = %+v, err=%v", changed, err)
 	}
 	probe.probeMu.Lock()
@@ -324,7 +324,7 @@ func TestPublishSiteFinalStateCASFailureRecoversRevertedTouchedKeys(t *testing.T
 	if err != nil {
 		t.Fatalf("retry with latest source error = %v", err)
 	}
-	if result.Outcome != "published" || !sitePublishHasChange(result.Changes, "update", "_artifacts/sre/report.html") ||
+	if result.Outcome != "synced" || !sitePublishHasChange(result.Changes, "update", "_artifacts/sre/report.html") ||
 		!sitePublishHasChange(result.Changes, "remove", "_artifacts/sre/assets/introduced-a.css") ||
 		!sitePublishHasChange(result.Changes, "create", "_artifacts/sre/assets/latest-b.css") {
 		t.Fatalf("latest retry changes = %+v, want forced revert, removal, and latest addition", result.Changes)

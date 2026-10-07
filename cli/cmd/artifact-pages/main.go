@@ -41,7 +41,7 @@ func main() {
 				}
 			}
 		}
-		if failure.Result.Operation == "site publish" && failure.Result.PreviewChanges == nil {
+		if failure.Result.Operation == "site sync" && failure.Result.PreviewChanges == nil {
 			failure.Result.PreviewChanges = emptyPreviewChanges()
 		}
 		if requestedFormat(args) == "json" {
@@ -222,7 +222,7 @@ func requestedFormat(args []string) string {
 
 func failureResult(args []string, err error) failureEnvelope {
 	result := publisher.Result{Operation: failureEnvelopeOperation(args), Outcome: "failed", Site: failureSite(args), Changes: []publisher.Change{}}
-	if result.Operation == "site publish" {
+	if result.Operation == "site sync" {
 		result.PreviewChanges = emptyPreviewChanges()
 	}
 	return failureEnvelope{
@@ -272,6 +272,13 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 			writeAppUsage(stdout)
 			return nil
 		}
+		if args[1] == "remove" {
+			if len(args) >= 3 && (args[2] == "--help" || args[2] == "-h") {
+				writeAppRemoveUsage(stdout)
+				return nil
+			}
+			return runAppRemove(ctx, args[2:], stdout, stderr)
+		}
 		if args[1] != "deploy" {
 			writeAppUsage(stderr)
 			return withExitCode(fmt.Errorf("unknown app command %q", args[1]), 2)
@@ -286,6 +293,13 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		if len(args) < 2 || args[1] == "--help" || args[1] == "-h" {
 			writePreviewUsage(stdout)
 			return nil
+		}
+		if args[1] == "remove" {
+			if len(args) >= 3 && (args[2] == "--help" || args[2] == "-h") {
+				writePreviewRemoveUsage(stdout)
+				return nil
+			}
+			return runPreviewRemove(ctx, args[2:], stdout, stderr)
 		}
 		if args[1] != "publish" {
 			writePreviewUsage(stderr)
@@ -302,15 +316,15 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 			writeSiteUsage(stdout)
 			return nil
 		}
-		if args[1] != "publish" {
+		if args[1] != "sync" {
 			writeSiteUsage(stderr)
 			return withExitCode(fmt.Errorf("unknown site command %q", args[1]), 2)
 		}
 		if len(args) >= 3 && (args[2] == "--help" || args[2] == "-h") {
-			writeSitePublishUsage(stdout)
+			writeSiteSyncUsage(stdout)
 			return nil
 		}
-		return runSitePublish(ctx, args[2:], stdout, stderr)
+		return runSiteSync(ctx, args[2:], stdout, stderr)
 	}
 	if args[0] == "config" {
 		if len(args) < 2 || args[1] == "--help" || args[1] == "-h" {
@@ -348,19 +362,12 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 			writeRegistryUsage(stdout)
 			return nil
 		}
-		if args[1] == "register" {
+		if args[1] == "sync" {
 			if len(args) >= 3 && (args[2] == "--help" || args[2] == "-h") {
-				writeRegistryRegisterUsage(stdout)
+				writeRegistrySyncUsage(stdout)
 				return nil
 			}
-			return runRegistryRegister(ctx, args[2:], stdout, stderr)
-		}
-		if args[1] == "unregister" {
-			if len(args) >= 3 && (args[2] == "--help" || args[2] == "-h") {
-				writeRegistryUnregisterUsage(stdout)
-				return nil
-			}
-			return runRegistryUnregister(ctx, args[2:], stdout, stderr)
+			return runRegistrySync(ctx, args[2:], stdout, stderr)
 		}
 		writeRegistryUsage(stderr)
 		return withExitCode(fmt.Errorf("unknown registry command %q", args[1]), 2)
@@ -433,10 +440,10 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	return nil
 }
 
-func runRegistryRegister(ctx context.Context, args []string, stdout, stderr io.Writer) error {
-	flags := flag.NewFlagSet("artifact-pages registry register", flag.ContinueOnError)
+func runRegistrySync(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	flags := flag.NewFlagSet("artifact-pages registry sync", flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	flags.Usage = func() { writeRegistryRegisterUsage(stderr) }
+	flags.Usage = func() { writeRegistrySyncUsage(stderr) }
 	var configLocators stringSliceFlag
 	flags.Var(&configLocators, "config", "deployment config path or github:// locator (repeatable; later layers override earlier ones)")
 	dryRun := flags.Bool("dry-run", false, "show planned changes without writes, deletes, lock recovery, or cache changes")
@@ -469,64 +476,6 @@ func runRegistryRegister(ctx context.Context, args []string, stdout, stderr io.W
 		return withResolvedError(err, resolved)
 	}
 	result, err := publisher.RegisterSites(ctx, backend, desired, *dryRun)
-	if err != nil {
-		return withResolvedResult(err, result, resolved)
-	}
-	if *format == "json" {
-		return encodeDeploymentResult(stdout, result, resolved)
-	}
-	writeDeploymentReport(stdout, result, resolved, *dryRun)
-	return nil
-}
-
-func runRegistryUnregister(ctx context.Context, args []string, stdout, stderr io.Writer) error {
-	flags := flag.NewFlagSet("artifact-pages registry unregister", flag.ContinueOnError)
-	flags.SetOutput(stderr)
-	flags.Usage = func() { writeRegistryUnregisterUsage(stderr) }
-	siteID := flags.String("site", "", "site identifier to unregister")
-	var configLocators stringSliceFlag
-	flags.Var(&configLocators, "config", "deployment config path or github:// locator (repeatable; later layers override earlier ones)")
-	dryRun := flags.Bool("dry-run", false, "show planned changes without writes, deletes, lock recovery, or cache changes")
-	format := flags.String("format", "text", "result format: text or json")
-	if err := flags.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			return nil
-		}
-		return withExitCode(err, 2)
-	}
-	if flags.NArg() != 0 {
-		return withExitCode(fmt.Errorf("unexpected arguments: %v", flags.Args()), 2)
-	}
-	if *siteID == "" {
-		return withExitCode(errors.New("--site is required"), 2)
-	}
-	if err := registry.ValidateSiteID(*siteID); err != nil {
-		return withExitCode(err, 2)
-	}
-	if *format != "text" && *format != "json" {
-		return withExitCode(errors.New("--format must be text or json"), 2)
-	}
-	resolved, err := (deploymentconfig.Resolver{}).ResolveLayers(ctx, configLocators)
-	if err != nil {
-		return withExitCode(err, 2)
-	}
-	if resolved.Config.Sites == nil {
-		return withExitCode(errors.New("deployment config must include a sites mapping for registry operations (use sites: {} for an empty registry)"), 2)
-	}
-	desired, err := registry.ProjectSites(resolved.Config.Sites)
-	if err != nil {
-		return withExitCode(err, 2)
-	}
-	for _, entry := range desired.Sites {
-		if entry.ID == *siteID {
-			return withExitCode(fmt.Errorf("site %q is still present in config sites; remove it before unregistering", *siteID), 2)
-		}
-	}
-	backend, err := newDeploymentBackend(ctx, resolved.Config)
-	if err != nil {
-		return withResolvedError(err, resolved)
-	}
-	result, err := publisher.UnregisterSite(ctx, backend, desired, *siteID, *dryRun)
 	if err != nil {
 		return withResolvedResult(err, result, resolved)
 	}
@@ -688,6 +637,45 @@ func runAppDeploy(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	return nil
 }
 
+func runAppRemove(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	flags := flag.NewFlagSet("artifact-pages app remove", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	flags.Usage = func() { writeAppRemoveUsage(stderr) }
+	var configLocators stringSliceFlag
+	flags.Var(&configLocators, "config", "deployment config path or github:// locator (repeatable; later layers override earlier ones)")
+	dryRun := flags.Bool("dry-run", false, "show planned changes without writes, deletes, lock recovery, or cache changes")
+	format := flags.String("format", "text", "result format: text or json")
+	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
+		return withExitCode(err, 2)
+	}
+	if flags.NArg() != 0 {
+		return withExitCode(fmt.Errorf("unexpected arguments: %v", flags.Args()), 2)
+	}
+	if *format != "text" && *format != "json" {
+		return withExitCode(errors.New("--format must be text or json"), 2)
+	}
+	resolved, err := (deploymentconfig.Resolver{}).ResolveLayers(ctx, configLocators)
+	if err != nil {
+		return withExitCode(err, 2)
+	}
+	backend, err := newDeploymentBackend(ctx, resolved.Config)
+	if err != nil {
+		return withResolvedError(err, resolved)
+	}
+	result, err := publisher.RemoveApp(ctx, backend, publisher.AppRemoveOptions{DryRun: *dryRun})
+	if err != nil {
+		return withResolvedResult(err, result, resolved)
+	}
+	if *format == "json" {
+		return encodeDeploymentResult(stdout, result, resolved)
+	}
+	writeDeploymentReport(stdout, result, resolved, *dryRun)
+	return nil
+}
+
 // pinnedVersion is the web release this CLI deploys when no local archive is
 // given: the CLI's own product version.
 func pinnedVersion(archive string) string {
@@ -755,10 +743,10 @@ func writeVersionUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "Print the product version, the module version and sum, the Go version and the VCS revision recorded in the build.")
 }
 
-func runSitePublish(ctx context.Context, args []string, stdout, stderr io.Writer) error {
-	flags := flag.NewFlagSet("artifact-pages site publish", flag.ContinueOnError)
+func runSiteSync(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	flags := flag.NewFlagSet("artifact-pages site sync", flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	flags.Usage = func() { writeSitePublishUsage(stderr) }
+	flags.Usage = func() { writeSiteSyncUsage(stderr) }
 	siteID := flags.String("site", "", "site identifier (for example: sre)")
 	source := flags.String("source", "", "publishable static content directory inside the current Git working tree")
 	var configLocators stringSliceFlag
@@ -801,7 +789,7 @@ func runSitePublish(ctx context.Context, args []string, stdout, stderr io.Writer
 	if *format == "json" {
 		return encodeDeploymentResult(stdout, result, resolved)
 	}
-	writeSitePublishReport(stdout, result, resolved, *dryRun, terminalColor(stdout))
+	writeSiteSyncReport(stdout, result, resolved, *dryRun, terminalColor(stdout))
 	return nil
 }
 
@@ -889,10 +877,10 @@ func writeRootUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "Commands:")
 	fmt.Fprintln(writer, "  index build   Build a site index without copying or publishing artifacts")
 	fmt.Fprintln(writer, "  app deploy    Deploy a versioned SPA bundle to a static hosting origin")
-	fmt.Fprintln(writer, "  site publish  Build and publish one site's artifacts and index")
+	fmt.Fprintln(writer, "  app remove    Remove the deployed application bundle")
+	fmt.Fprintln(writer, "  site sync     Reconcile one site's artifacts and index with its source directory")
 	fmt.Fprintln(writer, "  preview publish  Build and publish one explicit site's review preview")
-	fmt.Fprintln(writer, "  registry register  Reconcile the Git-owned site registrations")
-	fmt.Fprintln(writer, "  registry unregister  Remove a site's registration and stored projection")
+	fmt.Fprintln(writer, "  registry sync  Reconcile the complete Git-owned site set")
 	fmt.Fprintln(writer, "  config set-default  Save the user's default deployment config locator")
 	fmt.Fprintln(writer, "  lock inspect|recover  Inspect or guardedly recover a site, registry, or application lock")
 	fmt.Fprintln(writer, "  version       Print the product version and build revision")
@@ -940,10 +928,17 @@ func writeBuildUsage(writer io.Writer) {
 func writeAppUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "Usage:")
 	fmt.Fprintln(writer, "  artifact-pages app deploy [options]")
+	fmt.Fprintln(writer, "  artifact-pages app remove [options]")
 	fmt.Fprintln(writer, "")
-	fmt.Fprintln(writer, "Deploy the web application using the configured provider target.")
+	fmt.Fprintln(writer, "Reconcile the application plane using the configured provider target.")
 	fmt.Fprintln(writer, "Without --archive this CLI downloads and verifies the web release that matches its own")
 	fmt.Fprintf(writer, "version (v%s).\n", version.Product)
+}
+
+func writeAppRemoveUsage(writer io.Writer) {
+	fmt.Fprintln(writer, "Usage: artifact-pages app remove [--config LOCATOR ...] [--dry-run] [--format text|json]")
+	fmt.Fprintln(writer, "")
+	fmt.Fprintln(writer, "Remove the application-owned root files and assets under the application lock.")
 }
 
 func writeAppDeployUsage(writer io.Writer) {
@@ -959,19 +954,19 @@ func writeAppDeployUsage(writer io.Writer) {
 
 func writeSiteUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "Usage:")
-	fmt.Fprintln(writer, "  artifact-pages site publish [options]")
+	fmt.Fprintln(writer, "  artifact-pages site sync [options]")
 	fmt.Fprintln(writer, "")
-	fmt.Fprintln(writer, "Build the site index and publish one selected site's static projection.")
+	fmt.Fprintln(writer, "Reconcile one selected site's static projection with its publishable source directory.")
 	fmt.Fprintln(writer, "Default deployment config: artifact-pages.yaml (--config and ARTIFACT_PAGES_CONFIG take precedence).")
 }
 
-func writeSitePublishUsage(writer io.Writer) {
+func writeSiteSyncUsage(writer io.Writer) {
 	writeSiteUsage(writer)
 	fmt.Fprintln(writer, "")
 	fmt.Fprintln(writer, "Options:")
 	fmt.Fprintln(writer, "  --reconcile             list this site's origin and repair missing, stale, or metadata-drifted objects")
 	fmt.Fprintln(writer, "  --site ID               required site identifier")
-	fmt.Fprintln(writer, "  --source DIR            publishable static content directory (defaults to the registered sourcePath)")
+	fmt.Fprintln(writer, "  --source DIR            desired publishable static content directory (defaults to the registered sourcePath)")
 	fmt.Fprintln(writer, "  --config LOCATOR        deployment config path or github:// locator (repeatable; later layers override earlier ones)")
 	fmt.Fprintln(writer, "  --dry-run               show origin changes and stale preview references without writes, deletes, lock recovery, or cache changes")
 	fmt.Fprintln(writer, "  --format text|json      output a human-readable result or stable JSON")
@@ -986,22 +981,14 @@ func writeConfigUsage(writer io.Writer) {
 
 func writeRegistryUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "Usage:")
-	fmt.Fprintln(writer, "  artifact-pages registry register [--config LOCATOR ...] [--dry-run] [--format text|json]")
-	fmt.Fprintln(writer, "  artifact-pages registry unregister --site ID [--config LOCATOR ...] [--dry-run] [--format text|json]")
+	fmt.Fprintln(writer, "  artifact-pages registry sync [--config LOCATOR ...] [--dry-run] [--format text|json]")
 	fmt.Fprintln(writer, "")
-	fmt.Fprintln(writer, "Reconcile the complete site set declared in the selected deployment config.")
+	fmt.Fprintln(writer, "Reconcile the complete site set declared in the selected deployment config; omitted sites are cleaned up.")
 }
 
-func writeRegistryRegisterUsage(writer io.Writer) {
+func writeRegistrySyncUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "Usage:")
-	fmt.Fprintln(writer, "  artifact-pages registry register [--config LOCATOR ...] [--dry-run] [--format text|json]")
+	fmt.Fprintln(writer, "  artifact-pages registry sync [--config LOCATOR ...] [--dry-run] [--format text|json]")
 	fmt.Fprintln(writer, "")
-	fmt.Fprintln(writer, "Reconcile the sites mapping in the selected config; sites omitted from it are unregistered and cleaned on apply.")
-}
-
-func writeRegistryUnregisterUsage(writer io.Writer) {
-	fmt.Fprintln(writer, "Usage:")
-	fmt.Fprintln(writer, "  artifact-pages registry unregister --site ID [--config LOCATOR ...] [--dry-run] [--format text|json]")
-	fmt.Fprintln(writer, "")
-	fmt.Fprintln(writer, "Remove the site from the selected config's sites mapping, then clean its deployed prefixes and cache paths.")
+	fmt.Fprintln(writer, "Reconcile the complete sites mapping; omitted sites are removed from discovery and their projection is cleaned on apply.")
 }

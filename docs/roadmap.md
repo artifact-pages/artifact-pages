@@ -2,6 +2,8 @@
 
 The roadmap is intentionally staged. Each phase should prove a stable contract before the next infrastructure layer is added.
 
+The phase narratives below preserve the original implementation sequence. For the current 0.x CLI surface and accepted removal behavior, [specification §22](specification.md#22-deployment-configuration-and-command-interface) and [TD16](backlog/technical-design/TD16-cli-sync-and-removal.md) are authoritative and supersede any earlier command names or deferred-phase wording. Published Action repositories and external consumer pins remain release-gated.
+
 ## Phase 1 — Local product
 
 Build the product locally without AWS.
@@ -29,7 +31,7 @@ Target user experience:
 - An optional right panel switches between indexed contents and artifact details (last committer, update date, and source).
 - Direct navigation and reload restore the same state.
 - Fixture and registered-site discovery use the static `/_indexes/sites.json` catalog plus lightweight per-site metadata; only the active site's artifact index is loaded. Discovery does not depend on nginx autoindex or object-store listing.
-- Local conformance profiles send fixture seeding and `artifact-pages site publish` through object APIs, then serve `/_indexes/*` and `/_artifacts/*` through nginx to the emulator origin. MinIO covers the shared S3 API shape used by AWS and Cloudflare adapter tests; fake-gcs-server covers `gcp-local` JSON API behavior only. These profiles do not claim real-provider equivalence, and GCP remains local-only.
+- Local conformance profiles send fixture seeding and `artifact-pages site sync` through object APIs, then serve `/_indexes/*` and `/_artifacts/*` through nginx to the emulator origin. MinIO covers the shared S3 API shape used by AWS and Cloudflare adapter tests; fake-gcs-server covers `gcp-local` JSON API behavior only. These profiles do not claim real-provider equivalence, and GCP remains local-only.
 - A focused `preview-local` developer command projects changed Git documents under ignored `.local/previews`; nginx and the SPA use the same static preview record and logical-route contract.
 - Preview rendering follows the accepted [TD3](backlog/technical-design/TD3-preview-origin-delivery.md) policy: trusted same-origin HTML in an unsandboxed iframe, sanitized/non-executable Markdown, and no additional preview hostname. The reader/profile migration and local regressions are complete as recorded in T4/T6; live-provider proof remains in T15.
 - Preview projection writes go through a small provider-neutral store interface. The local directory is the Phase 1 adapter; AWS and Cloudflare storage, locking, serving policy, and retention stay in their provider phase.
@@ -82,7 +84,7 @@ Prefer Terraform for the reference infrastructure.
 
 The Cloudflare adapter must preserve the same catalog, manifest, object-key, immutability, publication-order, and per-site lock semantics. Provider-specific credentials, storage APIs, locking, cache, and lifecycle configuration stay within each adapter/deployment boundary. Viewer access remains an operator-managed edge/network policy and is not represented in the site's product or registry model.
 
-The publishing adapter must coordinate satellite publish and `registry unregister` with the shared per-site storage-lock contract in the specification. `registry register` reconciles the complete manifest-driven registration set and cleans content for omitted sites; these whole-registry updates must be serialized. Implement and verify this only when the repository reaches the provider-publishing phase; it is not part of the current local-product implementation.
+The publishing adapter must coordinate satellite publish and `registry sync` with the shared per-site storage-lock contract in the specification. `registry sync` reconciles the complete manifest-driven registration set and cleans content for omitted sites; these whole-registry updates must be serialized. Implement and verify this only when the repository reaches the provider-publishing phase; it is not part of the current local-product implementation.
 
 Provider-publishing release gate: add deterministic concurrency and recovery tests proving both orderings (publish owns the lock first; unregister withdraws the registry first), and verify that the final state is always unregistered with no site objects. Also cover concurrent publishers for different sites, interrupted/partial unregister followed by an idempotent retry, stale-lock recovery losing its ETag compare-and-swap race, and CDN invalidation failure followed by a successful retry. For publish, interrupt after artifact upload, after index/meta replacement, and during stale-object deletion; retrying the same desired source must converge to an index whose artifact references exist, with no stale objects left under the site prefix. Tests should use provider fakes for repeatability, with a small real-provider smoke test validating each adapter's conditional object-write behavior.
 

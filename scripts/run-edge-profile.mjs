@@ -122,7 +122,7 @@ async function publishUnregisterProbe(configPath, commandEnv, siteID, sourceDir,
   await fs.writeFile(sourcePath, `<!doctype html><title>${siteID} unregister probe</title><p>${marker}</p>\n`, { flag: 'wx' })
   try {
     const result = run('go', [
-      'run', './cli/cmd/artifact-pages', 'site', 'publish', '--config', configPath,
+      'run', './cli/cmd/artifact-pages', 'site', 'sync', '--config', configPath,
       '--site', siteID, '--source', sourceDir, '--format=json',
     ], { env: commandEnv, stdio: 'pipe' })
     process.stdout.write(result.stdout)
@@ -131,10 +131,10 @@ async function publishUnregisterProbe(configPath, commandEnv, siteID, sourceDir,
     try {
       published = JSON.parse(result.stdout)
     } catch {
-      throw new Error(`${siteID} site publish did not return JSON: ${result.stdout}`)
+      throw new Error(`${siteID} site sync did not return JSON: ${result.stdout}`)
     }
-    if (published.outcome !== 'published' || published.filesPublished < 1) {
-      throw new Error(`${siteID} site publish did not write its unregister probe through the object API.`)
+    if (published.outcome !== 'synced' || published.filesPublished < 1) {
+      throw new Error(`${siteID} site sync did not write its cleanup probe through the object API.`)
     }
   } finally {
     await fs.rm(sourcePath, { force: true })
@@ -414,7 +414,7 @@ async function main() {
       frontendProbeKey = await publishUnregisterProbe(configPath, sitePublishEnv, 'frontend', 'fixtures/storage/_artifacts/frontend', probeName, `${frontendProbeMarker}-frontend`)
     } else {
       const publish = run('go', [
-      'run', './cli/cmd/artifact-pages', 'site', 'publish', '--config', configPath,
+      'run', './cli/cmd/artifact-pages', 'site', 'sync', '--config', configPath,
         '--site', 'sre', '--source', 'fixtures/storage/_artifacts/sre', '--format=json',
       ], { env: commandEnv, stdio: 'pipe' })
       process.stdout.write(publish.stdout)
@@ -423,15 +423,15 @@ async function main() {
       try {
         publishResult = JSON.parse(publish.stdout)
       } catch {
-        throw new Error(`site publish did not return JSON: ${publish.stdout}`)
+        throw new Error(`site sync did not return JSON: ${publish.stdout}`)
       }
-      if (publishResult.outcome !== 'published' || publishResult.filesPublished < 1) {
-        throw new Error('site publish did not write a changed projection through the object API.')
+      if (publishResult.outcome !== 'synced' || publishResult.filesPublished < 1) {
+        throw new Error('site sync did not write a changed projection through the object API.')
       }
     }
 
     const registryRegister = run('go', [
-      'run', './cli/cmd/artifact-pages', 'registry', 'register', '--config', configPath,
+      'run', './cli/cmd/artifact-pages', 'registry', 'sync', '--config', configPath,
       '--format=json',
     ], { env: commandEnv, stdio: 'pipe' })
     process.stdout.write(registryRegister.stdout)
@@ -440,10 +440,10 @@ async function main() {
     try {
       registryResult = JSON.parse(registryRegister.stdout)
     } catch {
-      throw new Error(`registry register did not return JSON: ${registryRegister.stdout}`)
+      throw new Error(`registry sync did not return JSON: ${registryRegister.stdout}`)
     }
-    if (registryResult.operation !== 'registry register' || registryResult.outcome !== 'registered' || registryResult.registryUpdated !== true) {
-      throw new Error('registry register did not register a changed site catalog through the object API.')
+    if (registryResult.operation !== 'registry sync' || registryResult.outcome !== 'synced' || registryResult.registryUpdated !== true) {
+      throw new Error('registry sync did not update a changed site catalog through the object API.')
     }
 
     const catalogResponse = await fetch(`http://127.0.0.1:${ports.edge}/_indexes/sites.json`)
@@ -506,8 +506,8 @@ async function main() {
 
       await writeDeploymentConfig(profile, configPath, ports, registryProbeSites.filter(({ id }) => id !== 'sre'))
       const unregister = run('go', [
-        'run', './cli/cmd/artifact-pages', 'registry', 'unregister', '--config', configPath,
-        '--site', 'sre', '--format=json',
+        'run', './cli/cmd/artifact-pages', 'registry', 'sync', '--config', configPath,
+        '--format=json',
       ], { env: commandEnv, stdio: 'pipe' })
       process.stdout.write(unregister.stdout)
       if (unregister.stderr) process.stderr.write(unregister.stderr)
@@ -515,11 +515,11 @@ async function main() {
       try {
         unregisterResult = JSON.parse(unregister.stdout)
       } catch {
-        throw new Error(`registry unregister did not return JSON: ${unregister.stdout}`)
+        throw new Error(`registry sync did not return JSON: ${unregister.stdout}`)
       }
-      if (unregisterResult.outcome !== 'unregistered' || unregisterResult.site !== 'sre'
+      if (unregisterResult.operation !== 'registry sync' || unregisterResult.outcome !== 'synced'
         || unregisterResult.registryUpdated !== true || unregisterResult.filesRemoved < 1) {
-        throw new Error(`registry unregister did not withdraw and clean SRE: ${JSON.stringify(unregisterResult)}`)
+        throw new Error(`registry sync did not clean the omitted SRE site: ${JSON.stringify(unregisterResult)}`)
       }
 
       await runCloudflareUnregisterObjectAssertions(profile, env, 'after', frontendProbeKey)
@@ -529,7 +529,7 @@ async function main() {
       const withdrawnCatalog = await withdrawnCatalogResponse.json().catch(() => null)
       if (!withdrawnCatalogResponse.ok || withdrawnCatalog?.sites?.some((site) => site.id === 'sre')
         || !withdrawnCatalog?.sites?.some((site) => site.id === 'frontend')) {
-        throw new Error(`Edge did not preserve the neighboring frontend registration after unregister (HTTP ${withdrawnCatalogResponse.status}).`)
+        throw new Error(`Edge did not preserve the neighboring frontend registration after registry sync (HTTP ${withdrawnCatalogResponse.status}).`)
       }
       for (const removedPath of [
         '/_indexes/sre/index.json',

@@ -247,6 +247,7 @@
   </style>
 </head>
 <body>
+  <p class="notice" style="margin: 1rem auto; max-width: 64rem">Historical design snapshot. The current CLI command and cleanup contracts are in <a href="../specification.md#22-deployment-configuration-and-command-interface">specification §22</a> and <a href="../backlog/technical-design/TD16-cli-sync-and-removal.md">TD16</a>.</p>
   <main>
     <header>
       <div>
@@ -306,7 +307,7 @@
         <div class="object-list">
           <div class="object write-object"><span class="verb write">Write</span><div class="object-detail"><code>/_indexes/sites.json</code><small>Site list and repository / sourcePath mapping for publish validation.</small></div></div>
         </div>
-        <p class="node-sub" style="margin-top:7px"><code>registry register</code> uses all configured <code>sites</code>. Missing <code>sites</code> is an error; <code>sites: {}</code> means an empty set. Site publishing does not modify this object.</p>
+        <p class="node-sub" style="margin-top:7px"><code>registry sync</code> uses all configured <code>sites</code>. Missing <code>sites</code> is an error; <code>sites: {}</code> means an empty set. Site publishing does not modify this object.</p>
       </section>
       <section>
         <p class="node-title">Two readers</p>
@@ -382,7 +383,7 @@
           <tr><td><code>/_indexes/&lt;site&gt;/meta.json</code></td><td>Site publisher</td><td>Browser</td><td>Delete on unregister. Empty-file creation at registration is undecided.</td></tr>
           <tr><td><code>/_indexes/&lt;site&gt;/index.json</code></td><td>Site publisher</td><td>Browser</td><td>Delete on unregister. Empty-file creation at registration is undecided.</td></tr>
           <tr><td><code>/_artifacts/&lt;site&gt;/**</code></td><td>Site publisher</td><td>Browser</td><td>Delete stale objects during sync; remove the entire site prefix on unregister.</td></tr>
-          <tr><td><code>/_control/locks/&lt;site&gt;.json</code></td><td>Site publisher / registry unregister</td><td>Same operation actors</td><td>CAS updates free / held state. Never serve publicly; retain as free after unregister.</td></tr>
+          <tr><td><code>/_control/locks/&lt;site&gt;.json</code></td><td>Site publisher / registry sync</td><td>Same operation actors</td><td>CAS updates free / held state. Never serve publicly; retain as free after unregister.</td></tr>
         </tbody>
       </table>
     </div>

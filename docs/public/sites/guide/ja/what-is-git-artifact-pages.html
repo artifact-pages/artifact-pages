@@ -174,10 +174,10 @@
           </div>
           <div class="term" aria-label="サイト登録コマンド例">
             <div class="term-head"><span>ターミナル / 管理者</span><button class="copy-btn" type="button">コピー</button></div>
-<pre><span class="p">$</span> <span data-copy>artifact-pages <span class="v">registry register</span> --dry-run</span>
-<span class="p">$</span> <span data-copy>artifact-pages <span class="v">registry register</span></span></pre>
+<pre><span class="p">$</span> <span data-copy>artifact-pages <span class="v">registry sync</span> --dry-run</span>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">registry sync</span></span></pre>
           </div>
-          <p class="note"><code>sites</code>に書いたサイトが、登録するサイトのすべてです。ここから外したサイトは、次の<code>registry register</code>で登録解除され、公開済みの内容も削除されます。配信先（<code>provider</code>）の設定は省略しています。</p>
+          <p class="note"><code>sites</code>に書いたサイトが、desired setのすべてです。ここから外したサイトは、次の<code>registry sync</code>で公開対象から外れ、公開済みの内容も削除されます。配信先（<code>provider</code>）の設定は省略しています。</p>
         </section>
 
         <section class="chapter" id="step-3" data-step="3" aria-labelledby="step-3-title">
@@ -188,8 +188,8 @@
           <div class="term" aria-label="サイト公開コマンド例">
             <div class="term-head"><span>ターミナル / acme/checkout</span><button class="copy-btn" type="button">コピー</button></div>
 <pre><span class="c"># docs/artifacts を、サイト checkout へ</span>
-<span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site checkout --source docs/artifacts --dry-run</span>
-<span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site checkout --source docs/artifacts</span></pre>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">site sync</span> --site checkout --source docs/artifacts --dry-run</span>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">site sync</span> --site checkout --source docs/artifacts</span></pre>
           </div>
           <p class="note">書き込む前に、いまのリポジトリとディレクトリが、配信先に登録された内容と一致するかを確認します。他のサイトには書き込みません。マージ時にCIから同じコマンドを実行する運用を想定しています。</p>
         </section>
@@ -228,7 +228,7 @@
 
             <g class="scene s2">
               <path class="d-arrow" d="M380 272 V238" marker-end="url(#ah)"/>
-              <rect class="d-cmd" x="392" y="240" width="152" height="24" rx="12"/><text class="d-cmd-t" x="404" y="256">registry register</text>
+              <rect class="d-cmd" x="392" y="240" width="152" height="24" rx="12"/><text class="d-cmd-t" x="404" y="256">registry sync</text>
               <rect class="d-panel" x="40" y="272" width="680" height="172" rx="13"/>
               <text class="d-label" x="64" y="300">サイトの登録情報 · 登録されたサイト</text>
               <text class="d-status" x="696" y="300" text-anchor="end">管理リポジトリの設定ファイルから作られます</text>
@@ -244,9 +244,9 @@
             </g>
 
             <g class="scene s3">
-              <g class="sat" data-site="sre"><path class="d-arrow" d="M164 522 V428" marker-end="url(#ah)"/><circle class="d-pulse" cx="164" cy="516" r="4.5"/><rect class="d-cmd" x="110" y="464" width="108" height="24" rx="12"/><text class="d-cmd-t" x="122" y="480">site publish</text><rect class="d-card" x="64" y="522" width="200" height="82" rx="8"/><text class="d-repo" x="82" y="553">acme/sre-handbook</text><text class="d-repo-sub" x="82" y="577">docs/public</text></g>
-              <g class="sat" data-site="checkout"><path class="d-arrow" d="M380 522 V428" marker-end="url(#ah)"/><circle class="d-pulse" cx="380" cy="516" r="4.5"/><rect class="d-cmd" x="326" y="464" width="108" height="24" rx="12"/><text class="d-cmd-t" x="338" y="480">site publish</text><rect class="d-card" x="280" y="522" width="200" height="82" rx="8"/><text class="d-repo" x="298" y="553">acme/checkout</text><text class="d-repo-sub" x="298" y="577">docs/artifacts</text></g>
-              <g class="sat" data-site="billing"><path class="d-arrow" d="M596 522 V428" marker-end="url(#ah)"/><circle class="d-pulse" cx="596" cy="516" r="4.5"/><rect class="d-cmd" x="542" y="464" width="108" height="24" rx="12"/><text class="d-cmd-t" x="554" y="480">site publish</text><rect class="d-card" x="496" y="522" width="200" height="82" rx="8"/><text class="d-repo" x="514" y="553">acme/billing</text><text class="d-repo-sub" x="514" y="577">docs/artifacts</text></g>
+              <g class="sat" data-site="sre"><path class="d-arrow" d="M164 522 V428" marker-end="url(#ah)"/><circle class="d-pulse" cx="164" cy="516" r="4.5"/><rect class="d-cmd" x="110" y="464" width="108" height="24" rx="12"/><text class="d-cmd-t" x="122" y="480">site sync</text><rect class="d-card" x="64" y="522" width="200" height="82" rx="8"/><text class="d-repo" x="82" y="553">acme/sre-handbook</text><text class="d-repo-sub" x="82" y="577">docs/public</text></g>
+              <g class="sat" data-site="checkout"><path class="d-arrow" d="M380 522 V428" marker-end="url(#ah)"/><circle class="d-pulse" cx="380" cy="516" r="4.5"/><rect class="d-cmd" x="326" y="464" width="108" height="24" rx="12"/><text class="d-cmd-t" x="338" y="480">site sync</text><rect class="d-card" x="280" y="522" width="200" height="82" rx="8"/><text class="d-repo" x="298" y="553">acme/checkout</text><text class="d-repo-sub" x="298" y="577">docs/artifacts</text></g>
+              <g class="sat" data-site="billing"><path class="d-arrow" d="M596 522 V428" marker-end="url(#ah)"/><circle class="d-pulse" cx="596" cy="516" r="4.5"/><rect class="d-cmd" x="542" y="464" width="108" height="24" rx="12"/><text class="d-cmd-t" x="554" y="480">site sync</text><rect class="d-card" x="496" y="522" width="200" height="82" rx="8"/><text class="d-repo" x="514" y="553">acme/billing</text><text class="d-repo-sub" x="514" y="577">docs/artifacts</text></g>
               <text class="d-note" x="64" y="636">↑ 各チームのGitリポジトリ。自分の担当サイトにだけ書き込みます。</text>
             </g>
 
@@ -323,7 +323,7 @@
         <div><p class="eyebrow">次に読むページ</p><h2 id="next-title">役割に合わせて選ぶ</h2></div>
       </div>
       <ul class="cards four">
-        <li><a class="card" href="publishing.html"><span class="tag">公開するチーム</span><h3>サイトの公開</h3><p>公開するディレクトリを決めて<code>site publish</code>を実行し、CIで自動化します。</p><span class="go">サイトの公開 →</span></a></li>
+        <li><a class="card" href="publishing.html"><span class="tag">公開するチーム</span><h3>サイトの公開</h3><p>公開するディレクトリを決めて<code>site sync</code>を実行し、CIで自動化します。</p><span class="go">サイトの公開 →</span></a></li>
         <li><a class="card" href="configuration.html"><span class="tag">管理者</span><h3>設定ファイル</h3><p><code>artifact-pages.yaml</code>の書き方。配信先、登録するサイト、ファイルの選ばれ方。</p><span class="go">設定ファイル →</span></a></li>
         <li><a class="card" href="access-and-trust.html"><span class="tag">公開する前に</span><h3>信頼とアクセス制御</h3><p>公開したHTMLはコードとして動きます。読める人の制限は配信側で行います。</p><span class="go">信頼とアクセス制御 →</span></a></li>
         <li><a class="card" href="/architecture/ja/overview.html" target="_top"><span class="tag">しくみ</span><h3>アーキテクチャの全体像</h3><p>Gitを正本とする考え方、サイトごとに独立した公開、共通の静的な投影とアプリケーションプレーン・コンテンツプレーン。</p><span class="go">アーキテクチャの全体像 → <span class="ext">（Architectureサイト）</span></span></a></li>

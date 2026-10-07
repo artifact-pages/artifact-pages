@@ -141,7 +141,7 @@ func TestSitePublishCacheRequestsAndRetry(t *testing.T) {
 			b.failInvalidate, b.failClear, options.DryRun = false, false, false
 			b.resetEvents()
 			result, err := PublishSite(t.Context(), b, options)
-			if err != nil || result.Outcome != "published" || result.FilesPublished != 0 || result.InvalidationID == "" {
+			if err != nil || result.Outcome != "synced" || result.FilesPublished != 0 || result.InvalidationID == "" {
 				t.Fatalf("cache-only retry = %+v, %v", result, err)
 			}
 			if !reflect.DeepEqual(b.requests[len(b.requests)-1], want) {

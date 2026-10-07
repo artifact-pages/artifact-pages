@@ -70,6 +70,9 @@ func BuildAndPlanPreview(ctx context.Context, backend DeploymentBackend, options
 	}
 	var plan preview.PublicationPlan
 	err = store.WithSiteLock(ctx, result.Site, func(lockedContext context.Context) error {
+		if _, _, err := resumePreviewCleanup(lockedContext, backend, conditional, store); err != nil {
+			return err
+		}
 		if err := validatePreviewRegistration(lockedContext, conditional, options); err != nil {
 			return err
 		}

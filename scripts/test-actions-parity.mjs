@@ -692,8 +692,8 @@ async function main() {
     ].join('\n')
     await writeFile(adminRoot, 'artifact-pages.yaml', deploymentConfig(storageRoot))
     await writeFile(adminRoot, '.artifact-pages-action.yaml', deploymentConfig(actionStorageRoot))
-    await writeFile(adminRoot, '.artifact-pages-unregister.yaml', deploymentConfig(storageRoot, emptySites))
-    await writeFile(adminRoot, '.artifact-pages-action-unregister.yaml', deploymentConfig(actionStorageRoot, emptySites))
+    await writeFile(adminRoot, '.artifact-pages-empty-sites.yaml', deploymentConfig(storageRoot, emptySites))
+    await writeFile(adminRoot, '.artifact-pages-action-empty-sites.yaml', deploymentConfig(actionStorageRoot, emptySites))
     await writeFile(adminRoot, '.artifact-pages-no-sites.yaml', deploymentConfigWithoutSites(storageRoot))
     await writeFile(adminRoot, '.artifact-pages-action-no-sites.yaml', deploymentConfigWithoutSites(actionStorageRoot))
     commit(adminRoot, 'Add admin registry and local target')
@@ -704,59 +704,50 @@ async function main() {
     commit(satelliteRoot, 'Add SRE artifact')
     run('go', ['build', '-o', binaryPath, './cli/cmd/artifact-pages'])
 
-    const registryApplyArgs = ['registry', 'register', '--config', 'artifact-pages.yaml', '--format', 'json']
-    const initialRegistry = runDirect(binaryPath, adminRoot, registryApplyArgs, 'initial registry register')
-    assert.equal(initialRegistry.exitCode, 0, `initial registry register failed: ${JSON.stringify(initialRegistry.result)}`)
-    assert.equal(initialRegistry.result.operation, 'registry register', 'registry Action must invoke the registry register operation')
-    assert.equal(initialRegistry.result.outcome, 'registered', 'registry register must return the registered outcome')
+    const registryApplyArgs = ['registry', 'sync', '--config', 'artifact-pages.yaml', '--format', 'json']
+    const initialRegistry = runDirect(binaryPath, adminRoot, registryApplyArgs, 'initial registry sync')
+    assert.equal(initialRegistry.exitCode, 0, `initial registry sync failed: ${JSON.stringify(initialRegistry.result)}`)
+    assert.equal(initialRegistry.result.operation, 'registry sync', 'registry Action must invoke registry sync')
+    assert.equal(initialRegistry.result.outcome, 'synced', 'registry sync must return the synced outcome')
     const actionInitialRegistry = await runAction('registry', registryApplyArgs, {
       config: '.artifact-pages-action.yaml',
     }, adminRoot, binaryPath, scratchRoot)
-    assertActionParity(initialRegistry, actionInitialRegistry, 'registry register')
+    assertActionParity(initialRegistry, actionInitialRegistry, 'registry sync')
 
-    const registryArgs = ['registry', 'register', '--config', 'artifact-pages.yaml', '--dry-run', '--format', 'json']
+    const registryArgs = ['registry', 'sync', '--config', 'artifact-pages.yaml', '--dry-run', '--format', 'json']
     const registryStorageBeforeDryRun = await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)])
-    const directRegistry = runDirect(binaryPath, adminRoot, registryArgs, 'direct registry register dry-run')
+    const directRegistry = runDirect(binaryPath, adminRoot, registryArgs, 'direct registry sync dry-run')
     const actionRegistry = await runAction('registry', registryArgs, {
       config: '.artifact-pages-action.yaml', 'dry-run': 'true',
     }, adminRoot, binaryPath, scratchRoot)
-    assertActionParity(directRegistry, actionRegistry, 'registry register dry-run')
-    assert.deepEqual(await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)]), registryStorageBeforeDryRun, 'registry register dry-run changed local storage')
+    assertActionParity(directRegistry, actionRegistry, 'registry sync dry-run')
+    assert.deepEqual(await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)]), registryStorageBeforeDryRun, 'registry sync dry-run changed local storage')
 
-    const invalidRegistryArgs = ['registry', 'register', '--config', '.artifact-pages-no-sites.yaml', '--format', 'json']
+    const invalidRegistryArgs = ['registry', 'sync', '--config', '.artifact-pages-no-sites.yaml', '--format', 'json']
     const invalidRegistryStorageBefore = await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)])
-    const directInvalidRegistry = runDirect(binaryPath, adminRoot, invalidRegistryArgs, 'registry register config without sites')
-    assert.equal(directInvalidRegistry.exitCode, 2, 'registry register without sites in config should preserve the CLI usage/validation exit class')
+    const directInvalidRegistry = runDirect(binaryPath, adminRoot, invalidRegistryArgs, 'registry sync config without sites')
+    assert.equal(directInvalidRegistry.exitCode, 2, 'registry sync without sites in config should preserve the CLI usage/validation exit class')
     const actionInvalidRegistry = await runAction('registry', invalidRegistryArgs, {
       config: '.artifact-pages-action-no-sites.yaml',
     }, adminRoot, binaryPath, scratchRoot)
-    assertActionParity(directInvalidRegistry, actionInvalidRegistry, 'registry register config without sites')
-    assert.deepEqual(await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)]), invalidRegistryStorageBefore, 'registry register config validation changed local storage')
+    assertActionParity(directInvalidRegistry, actionInvalidRegistry, 'registry sync config without sites')
+    assert.deepEqual(await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)]), invalidRegistryStorageBefore, 'registry sync config validation changed local storage')
 
-    const invalidUnregisterArgs = ['registry', 'unregister', '--site', 'sre', '--config', '.artifact-pages-no-sites.yaml', '--format', 'json']
-    const directInvalidUnregister = runDirect(binaryPath, adminRoot, invalidUnregisterArgs, 'registry unregister config without sites')
-    assert.equal(directInvalidUnregister.exitCode, 2, 'registry unregister without sites in config should preserve the CLI usage/validation exit class')
-    // `registry unregister` has no Action (TD14); the action-side storage is advanced with the CLI so both storages stay in step.
-    const actionInvalidUnregister = runDirect(binaryPath, adminRoot, invalidUnregisterArgs.map((arg) => (arg.startsWith('.artifact-pages-') ? arg.replace('.artifact-pages-', '.artifact-pages-action-') : arg)), 'action-side registry unregister config without sites')
-    assert.deepEqual(actionInvalidUnregister.result, directInvalidUnregister.result, 'registry unregister config without sites: both storages produce the same result')
-    assert.equal(actionInvalidUnregister.exitCode, directInvalidUnregister.exitCode, 'registry unregister config without sites: exit status')
-    assert.deepEqual(await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)]), invalidRegistryStorageBefore, 'registry unregister config validation changed local storage')
-
-    const unregisterArgs = ['registry', 'unregister', '--site', 'sre', '--config', '.artifact-pages-unregister.yaml', '--dry-run', '--format', 'json']
+    const unregisterArgs = ['registry', 'sync', '--config', '.artifact-pages-empty-sites.yaml', '--dry-run', '--format', 'json']
     const unregisterStorageBeforeDryRun = await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)])
-    const directUnregister = runDirect(binaryPath, adminRoot, unregisterArgs, 'direct registry unregister dry-run')
-    // `registry unregister` has no Action (TD14); the action-side storage is advanced with the CLI so both storages stay in step.
-    const actionUnregister = runDirect(binaryPath, adminRoot, unregisterArgs.map((arg) => (arg.startsWith('.artifact-pages-') ? arg.replace('.artifact-pages-', '.artifact-pages-action-') : arg)), 'action-side registry unregister dry-run')
-    assert.deepEqual(actionUnregister.result, directUnregister.result, 'registry unregister dry-run: both storages produce the same result')
-    assert.equal(actionUnregister.exitCode, directUnregister.exitCode, 'registry unregister dry-run: exit status')
-    assert.deepEqual(await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)]), unregisterStorageBeforeDryRun, 'registry unregister dry-run changed local storage')
+    const directUnregister = runDirect(binaryPath, adminRoot, unregisterArgs, 'direct registry sync empty-set dry-run')
+    const actionUnregister = await runAction('registry', unregisterArgs, {
+      config: '.artifact-pages-action-empty-sites.yaml', 'dry-run': 'true',
+    }, adminRoot, binaryPath, scratchRoot)
+    assertActionParity(directUnregister, actionUnregister, 'registry sync empty-set dry-run')
+    assert.deepEqual(await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)]), unregisterStorageBeforeDryRun, 'registry sync dry-run changed local storage')
 
-    const unregisterApplyArgs = ['registry', 'unregister', '--site', 'sre', '--config', '.artifact-pages-unregister.yaml', '--format', 'json']
-    const directUnregisterApply = runDirect(binaryPath, adminRoot, unregisterApplyArgs, 'registry unregister')
-    // `registry unregister` has no Action (TD14); the action-side storage is advanced with the CLI so both storages stay in step.
-    const actionUnregisterApply = runDirect(binaryPath, adminRoot, unregisterApplyArgs.map((arg) => (arg.startsWith('.artifact-pages-') ? arg.replace('.artifact-pages-', '.artifact-pages-action-') : arg)), 'action-side registry unregister')
-    assert.deepEqual(actionUnregisterApply.result, directUnregisterApply.result, 'registry unregister: both storages produce the same result')
-    assert.equal(actionUnregisterApply.exitCode, directUnregisterApply.exitCode, 'registry unregister: exit status')
+    const unregisterApplyArgs = ['registry', 'sync', '--config', '.artifact-pages-empty-sites.yaml', '--format', 'json']
+    const directUnregisterApply = runDirect(binaryPath, adminRoot, unregisterApplyArgs, 'registry sync empty-set')
+    const actionUnregisterApply = await runAction('registry', unregisterApplyArgs, {
+      config: '.artifact-pages-action-empty-sites.yaml',
+    }, adminRoot, binaryPath, scratchRoot)
+    assertActionParity(directUnregisterApply, actionUnregisterApply, 'registry sync empty-set')
 
     const reregisterRegistry = runDirect(binaryPath, adminRoot, registryApplyArgs, 'registry reregister')
     const actionReregisterRegistry = await runAction('registry', registryApplyArgs, {
@@ -764,20 +755,20 @@ async function main() {
     }, adminRoot, binaryPath, scratchRoot)
     assertActionParity(reregisterRegistry, actionReregisterRegistry, 'registry reregister')
 
-    const siteArgs = ['site', 'publish', '--site', 'sre', '--source', 'docs/artifacts', '--config', 'artifact-pages.yaml', '--dry-run', '--format', 'json']
+    const siteArgs = ['site', 'sync', '--site', 'sre', '--source', 'docs/artifacts', '--config', 'artifact-pages.yaml', '--dry-run', '--format', 'json']
     const siteStorageBeforeDryRun = await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)])
     const directSite = runDirect(binaryPath, satelliteRoot, siteArgs, 'direct site dry-run')
     const actionSite = await runAction('publish', siteArgs, {
       site: 'sre', source: 'docs/artifacts', config: '.artifact-pages-action.yaml', 'dry-run': 'true',
     }, satelliteRoot, binaryPath, scratchRoot)
-    assertActionParity(directSite, actionSite, 'site publish dry-run')
-    assert.deepEqual(await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)]), siteStorageBeforeDryRun, 'site publish dry-run changed local storage')
+    assertActionParity(directSite, actionSite, 'site sync dry-run')
+    assert.deepEqual(await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)]), siteStorageBeforeDryRun, 'site sync dry-run changed local storage')
 
     // publish-on: a run outside the condition is a dry-run, so a real-looking invocation changes nothing.
     const gatedSite = await runAction('publish', siteArgs.filter((arg) => arg !== '--dry-run'), {
       site: 'sre', source: 'docs/artifacts', config: '.artifact-pages-action.yaml', 'publish-on': 'push:refs/heads/main\nworkflow_dispatch',
     }, satelliteRoot, binaryPath, scratchRoot, undefined, { GITHUB_EVENT_NAME: 'pull_request', GITHUB_REF: 'refs/pull/1/merge' })
-    assertActionParity(directSite, gatedSite, 'site publish gated by publish-on')
+    assertActionParity(directSite, gatedSite, 'site sync gated by publish-on')
     assert.match(gatedSite.stderr, /::notice title=Artifact Pages dry-run::publish-on does not match event pull_request/, 'publish-on dry-run must be announced')
     assert.deepEqual(await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)]), siteStorageBeforeDryRun, 'publish-on dry-run changed local storage')
     const badPublishOn = await runAction('publish', siteArgs, {
@@ -792,35 +783,35 @@ async function main() {
       site: 'sre', source: 'docs/artifacts', config: '.artifact-pages-action.yaml', 'dry-run': 'true',
     }, satelliteRoot, binaryPath, scratchRoot, undefined, { GITHUB_STEP_SUMMARY: summaryPath })
     const siteSummary = await fs.readFile(summaryPath, 'utf8')
-    assert.match(siteSummary, /^### Artifact Pages: site publish \(planned\)/, 'site publish summary heading')
-    assert.match(siteSummary, /- \*\*Mode:\*\* dry-run/, 'site publish summary shows dry-run')
-    assert.match(siteSummary, /- \*\*Changes:\*\* \d+/, 'site publish summary shows the change count')
+    assert.match(siteSummary, /^### Artifact Pages: site sync \(planned\)/, 'site sync summary heading')
+    assert.match(siteSummary, /- \*\*Mode:\*\* dry-run/, 'site sync summary shows dry-run')
+    assert.match(siteSummary, /- \*\*Changes:\*\* \d+/, 'site sync summary shows the change count')
     await fs.writeFile(summaryPath, '')
     await runAction('publish', siteArgs, {
       site: 'sre', source: 'docs/artifacts', config: '.artifact-pages-action.yaml', 'dry-run': 'true', summary: 'false',
     }, satelliteRoot, binaryPath, scratchRoot, undefined, { GITHUB_STEP_SUMMARY: summaryPath })
     assert.equal(await fs.readFile(summaryPath, 'utf8'), '', 'summary: false must write nothing')
     await fs.writeFile(summaryPath, '')
-    await runAction('publish', ['site', 'publish', '--site', 'not-registered', '--source', 'docs/artifacts', '--config', 'artifact-pages.yaml', '--dry-run', '--format', 'json'], {
+    await runAction('publish', ['site', 'sync', '--site', 'not-registered', '--source', 'docs/artifacts', '--config', 'artifact-pages.yaml', '--dry-run', '--format', 'json'], {
       site: 'not-registered', source: 'docs/artifacts', config: '.artifact-pages-action.yaml', 'dry-run': 'true',
     }, satelliteRoot, binaryPath, scratchRoot, undefined, { GITHUB_STEP_SUMMARY: summaryPath })
     assert.match(await fs.readFile(summaryPath, 'utf8'), /\(failed\)[\s\S]*> \*\*Error \(exit 1\):\*\*/, 'failure summary shows the error')
 
-    const failingSiteArgs = ['site', 'publish', '--site', 'not-registered', '--source', 'docs/artifacts', '--config', 'artifact-pages.yaml', '--dry-run', '--format', 'json']
+    const failingSiteArgs = ['site', 'sync', '--site', 'not-registered', '--source', 'docs/artifacts', '--config', 'artifact-pages.yaml', '--dry-run', '--format', 'json']
     const directFailure = runDirect(binaryPath, satelliteRoot, failingSiteArgs, 'direct unregistered-site dry-run')
     assert.equal(directFailure.exitCode, 1, 'direct unregistered-site dry-run should preserve provider/eligibility exit class')
     const actionFailure = await runAction('publish', failingSiteArgs, {
       site: 'not-registered', source: 'docs/artifacts', config: '.artifact-pages-action.yaml', 'dry-run': 'true',
     }, satelliteRoot, binaryPath, scratchRoot)
-    assertActionParity(directFailure, actionFailure, 'site publish failure')
+    assertActionParity(directFailure, actionFailure, 'site sync failure')
 
-    const initialSiteArgs = ['site', 'publish', '--site', 'sre', '--source', 'docs/artifacts', '--config', 'artifact-pages.yaml', '--format', 'json']
-    const initialSite = runDirect(binaryPath, satelliteRoot, initialSiteArgs, 'initial site publish')
-    assert.equal(initialSite.exitCode, 0, `initial site publish failed: ${JSON.stringify(initialSite.result)}`)
+    const initialSiteArgs = ['site', 'sync', '--site', 'sre', '--source', 'docs/artifacts', '--config', 'artifact-pages.yaml', '--format', 'json']
+    const initialSite = runDirect(binaryPath, satelliteRoot, initialSiteArgs, 'initial site sync')
+    assert.equal(initialSite.exitCode, 0, `initial site sync failed: ${JSON.stringify(initialSite.result)}`)
     const actionInitialSite = await runAction('publish', initialSiteArgs, {
       site: 'sre', source: 'docs/artifacts', config: '.artifact-pages-action.yaml',
     }, satelliteRoot, binaryPath, scratchRoot)
-    assertActionParity(initialSite, actionInitialSite, 'site publish')
+    assertActionParity(initialSite, actionInitialSite, 'site sync')
 
     const previewBranch = 'preview-action-fixture'
     git(satelliteRoot, 'checkout', '-b', previewBranch)
@@ -899,6 +890,10 @@ async function main() {
         updatedAt: '2026-09-27T00:00:00Z',
         documents: [{ path: 'overview.html', title: 'Missing preview', format: 'html' }],
       }],
+      revisionHistory: [{
+        groupId: 'pr:42',
+        revisions: [{ headSha: missingHead, files: ['overview.html'] }],
+      }],
     }
     await writeFile(storageRoot, '_previews/sre/catalog.json', `${JSON.stringify(stalePreviewCatalog, null, 2)}\n`)
     await writeFile(actionStorageRoot, '_previews/sre/catalog.json', `${JSON.stringify(stalePreviewCatalog, null, 2)}\n`)
@@ -913,23 +908,23 @@ async function main() {
     }
 
     const previewStorageBeforeDryRun = await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)])
-    const stalePreviewDryRunArgs = ['site', 'publish', '--site', 'sre', '--source', 'docs/artifacts', '--config', 'artifact-pages.yaml', '--dry-run', '--format', 'json']
+    const stalePreviewDryRunArgs = ['site', 'sync', '--site', 'sre', '--source', 'docs/artifacts', '--config', 'artifact-pages.yaml', '--dry-run', '--format', 'json']
     const directStalePreviewDryRun = runDirect(binaryPath, satelliteRoot, stalePreviewDryRunArgs, 'direct stale preview dry-run')
     const actionStalePreviewDryRun = await runAction('publish', stalePreviewDryRunArgs, {
       site: 'sre', source: 'docs/artifacts', config: '.artifact-pages-action.yaml', 'dry-run': 'true',
     }, satelliteRoot, binaryPath, scratchRoot)
-    assertActionParity(directStalePreviewDryRun, actionStalePreviewDryRun, 'site publish stale preview dry-run')
+    assertActionParity(directStalePreviewDryRun, actionStalePreviewDryRun, 'site sync stale preview dry-run')
     assert.deepEqual(directStalePreviewDryRun.result.previewChanges, [{
       action: 'remove', groupId: 'pr:42', headSha: missingHead, reason: 'manifest-missing',
     }], 'site-publish dry-run should plan the confirmed-missing preview removal')
     assert.deepEqual(await Promise.all([treeSnapshot(storageRoot), treeSnapshot(actionStorageRoot)]), previewStorageBeforeDryRun, 'site-publish preview dry-run changed local storage')
 
-    const stalePreviewArgs = ['site', 'publish', '--site', 'sre', '--source', 'docs/artifacts', '--config', 'artifact-pages.yaml', '--format', 'json']
-    const directStalePreview = runDirect(binaryPath, satelliteRoot, stalePreviewArgs, 'direct site publish with stale preview reference')
+    const stalePreviewArgs = ['site', 'sync', '--site', 'sre', '--source', 'docs/artifacts', '--config', 'artifact-pages.yaml', '--format', 'json']
+    const directStalePreview = runDirect(binaryPath, satelliteRoot, stalePreviewArgs, 'direct site sync with stale preview reference')
     const actionStalePreview = await runAction('publish', stalePreviewArgs, {
       site: 'sre', source: 'docs/artifacts', config: '.artifact-pages-action.yaml', 'dry-run': 'false',
     }, satelliteRoot, binaryPath, scratchRoot)
-    assertActionParity(directStalePreview, actionStalePreview, 'site publish stale preview cleanup')
+    assertActionParity(directStalePreview, actionStalePreview, 'site sync stale preview cleanup')
     const expectedStalePreviewDisposition = [{
       action: 'remove',
       groupId: 'pr:42',
@@ -937,7 +932,7 @@ async function main() {
       reason: 'manifest-missing',
     }]
     assert.equal(directStalePreview.exitCode, 0, 'stale preview cleanup should succeed')
-    assert.equal(directStalePreview.result.outcome, 'published', 'stale preview cleanup should publish its reconciliation')
+    assert.equal(directStalePreview.result.outcome, 'synced', 'stale preview cleanup should sync its reconciliation')
     assert.deepEqual(directStalePreview.result.previewChanges, expectedStalePreviewDisposition, 'direct CLI stale preview disposition')
     for (const [label, root] of [['direct CLI', storageRoot], ['shared Action', actionStorageRoot]]) {
       const catalogPath = path.join(root, '_previews', 'sre', 'catalog.json')
@@ -945,13 +940,13 @@ async function main() {
       assert.deepEqual(catalog.groups, [], `${label} should remove the stale catalog reference`)
     }
 
-    const fullTextArgs = ['site', 'publish', '--site', 'sre', '--source', 'docs/artifacts', '--config', 'artifact-pages.yaml', '--format', 'json']
-    const directFullText = runDirect(binaryPath, satelliteRoot, fullTextArgs, 'direct site publish with full-text data')
+    const fullTextArgs = ['site', 'sync', '--site', 'sre', '--source', 'docs/artifacts', '--config', 'artifact-pages.yaml', '--format', 'json']
+    const directFullText = runDirect(binaryPath, satelliteRoot, fullTextArgs, 'direct site sync with full-text data')
     const actionFullText = await runAction('publish', fullTextArgs, {
       site: 'sre', source: 'docs/artifacts', config: '.artifact-pages-action.yaml',
     }, satelliteRoot, binaryPath, scratchRoot)
-    assertActionParity(directFullText, actionFullText, 'site publish (full-text data always published)')
-    assert.equal(directFullText.exitCode, 0, `full-text site publish failed: ${JSON.stringify(directFullText.result)}`)
+    assertActionParity(directFullText, actionFullText, 'site sync (full-text data always synced)')
+    assert.equal(directFullText.exitCode, 0, `full-text site sync failed: ${JSON.stringify(directFullText.result)}`)
     for (const [label, root] of [['direct CLI', storageRoot], ['shared Action', actionStorageRoot]]) {
       const meta = JSON.parse(await fs.readFile(path.join(root, '_indexes', 'sre', 'meta.json'), 'utf8'))
       assert.ok(meta.fullTextUrl, `${label} full-text publish should advertise fullTextUrl`)

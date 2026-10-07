@@ -31,7 +31,7 @@ await fs.writeFile(path.join(configDir, 'config.yaml'), config([
   `    repository: ${repository}`,
   '    sourcePath: fixtures/actions-smoke/site',
 ].join('\n')))
-await fs.writeFile(path.join(configDir, 'config-unregister.yaml'), config('sites: {}'))
+await fs.writeFile(path.join(configDir, 'config-empty-sites.yaml'), config('sites: {}'))
 
 const payload = path.join(scratch, 'app-payload')
 const archiveName = 'artifact-pages-web-vactions-smoke.tar.gz'
@@ -66,7 +66,7 @@ await fs.writeFile(`${archive}.sha256`, `${digest}  ${archiveName}\n`)
 const outputs = [
   `storage=${storage}`,
   'config=.local/actions-smoke/config.yaml',
-  'unregister-config=.local/actions-smoke/config-unregister.yaml',
+  'empty-sites-config=.local/actions-smoke/config-empty-sites.yaml',
   `archive=${archive}`,
 ].join('\n')
 if (process.env.GITHUB_OUTPUT) await fs.appendFile(process.env.GITHUB_OUTPUT, `${outputs}\n`)

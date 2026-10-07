@@ -98,7 +98,7 @@
       <div>
         <p class="eyebrow">Conceptual architecture · Phase 1 direction</p>
         <h1>Domain model</h1>
-        <p class="intro">One product configuration selects the provider and contains the registered Sites. Publishing attaches the current set of readable artifacts to a Site; unregistering it removes the Site from that configuration and withdraws its published set.</p>
+        <p class="intro">One product configuration selects the provider and contains the registered Sites. `site sync` attaches the current set of readable artifacts to a Site; omitting it from the desired `sites` mapping and running `registry sync` removes it from discovery and withdraws its projection.</p>
       </div>
       <p class="phase-note"><strong>Configuration boundary</strong>The provider choice and registered Sites belong to one configuration. Provider-specific delivery behavior stays outside Site identity and user-facing routes.</p>
     </header>
@@ -114,7 +114,7 @@
             <ul class="member-list">
               <li>provider</li><li>sites: Site[]</li>
               <li class="method">+ register(site)</li>
-              <li class="method">+ unregister(id)</li>
+              <li class="method">+ sync(desiredSites)</li>
               <li class="method">+ find(id): Site</li>
               <li class="method">+ list(): Site[]</li>
             </ul>
@@ -152,7 +152,7 @@
         <h2>Objects and boundaries</h2>
         <p class="section-copy">The model describes product concepts independently of the actor or infrastructure that performs an operation.</p>
         <dl class="definition-list">
-          <div><dt>Config</dt><dd>One product configuration selects the delivery provider and contains the complete set of registered Sites. Registration adds a Site to this configuration; unregistering removes it. There is no separate registration entity or paused state.</dd></div>
+          <div><dt>Config</dt><dd>One product configuration selects the delivery provider and contains the complete set of registered Sites. The `sites` mapping is the complete desired set; `registry sync` removes an omitted Site. There is no separate registration entity or paused state.</dd></div>
           <div><dt>Site</dt><dd>One logical publishing scope with a stable URL ID, a display name, an optional user-facing description, and a source repository and path. The description is distinct from the name and technical source details. Different paths in one repository may define different sites.</dd></div>
           <div><dt>Artifact</dt><dd>A currently published HTML or Markdown document. Its source-relative path, filename, and extension are preserved. Supporting files such as CSS, JavaScript, and images are delivered but are not separate indexed artifacts.</dd></div>
           <div><dt>Git source</dt><dd>Remains the source of truth. Unregistering withdraws the published projection; it does not delete or edit source files.</dd></div>
@@ -165,7 +165,7 @@
           <thead><tr><th>Operation</th><th>Effect</th></tr></thead>
           <tbody>
             <tr><td><code>register(site)</code></td><td>Adds a uniquely identified Site, including optional description, to the unified configuration.</td></tr>
-            <tr><td><code>unregister(siteId)</code></td><td>Removes the Site and withdraws its published Artifacts.</td></tr>
+            <tr><td><code>registry sync with site omitted</code></td><td>Removes the Site and withdraws its published Artifacts.</td></tr>
             <tr><td><code>site.publish(artifacts)</code></td><td>Reconciles the registered Site's published content with its source; removed source pages cease to be published.</td></tr>
             <tr><td><code>find / list / search / browse / read</code></td><td>Observes registered Sites and current Artifacts without mutating Git content.</td></tr>
           </tbody>

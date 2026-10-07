@@ -157,10 +157,10 @@
           <text class="edge-label write" x="875" y="1190">remove from registry first</text>
 
           <path class="edge delete" d="M700 1160 V1230 H1355 V605" />
-          <text class="edge-label delete" x="925" y="1245">request invalidation after unregister</text>
+          <text class="edge-label delete" x="925" y="1245">request invalidation after registry omission</text>
 
           <path class="edge delete" d="M50 560 H22 V1090 H410" />
-          <text class="edge-label delete" x="29" y="1020" transform="rotate(-90 29 1020)">unregister from the same admin repository</text>
+          <text class="edge-label delete" x="29" y="1020" transform="rotate(-90 29 1020)">omit from the same admin config</text>
         </g>
 
         <g class="node source">
@@ -265,7 +265,7 @@
           <rect x="820" y="975" width="360" height="115" />
           <text class="eyebrow" x="840" y="1002">SHARED CONTROL OBJECT · NOT SERVED</text>
           <text class="mono" x="840" y="1036">/_control/locks/&lt;site&gt;.json</text>
-          <text class="copy" x="840" y="1065">Publisher / unregister use CAS; retain free record afterward.</text>
+          <text class="copy" x="840" y="1065">Site sync / registry cleanup use CAS; retain free record afterward.</text>
         </g>
 
         <g class="node object-read">
@@ -274,7 +274,7 @@
           <text class="title" x="1278" y="511">CDN</text>
           <text class="copy" x="1278" y="540">cache / revalidate</text>
           <text class="small" x="1278" y="565">No purge for routine publish</text>
-          <text class="small" x="1278" y="586">Invalidate target on unregister</text>
+          <text class="small" x="1278" y="586">Invalidate target on registry omission</text>
         </g>
 
         <g class="node object-read">
@@ -296,7 +296,7 @@
 
     <div class="notes">
       <p>Delivery reads <code>sites.json → meta.json → index.json → artifact</code>. Locally, discovery uses the <code>/_indexes/</code> directory listing.</p>
-      <p>CDN TTL: up to 60 seconds for indexes and 300 seconds for artifacts. Edge updates after unregister are eventually consistent.</p>
+      <p>CDN TTL: up to 60 seconds for indexes and 300 seconds for artifacts. Edge updates after registry omission are eventually consistent.</p>
       <p>Open questions: whether to create empty indexes before the first publish, and when to clean up old hashed application assets.</p>
     </div>
   </main>

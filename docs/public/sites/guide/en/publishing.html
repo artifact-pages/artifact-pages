@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="How a team publishes its Git Artifact Pages site: what goes in the publishable directory, site publish, page text search, when changes appear, CI, and previews.">
+  <meta name="description" content="How a team publishes its Git Artifact Pages site: what goes in the publishable directory, site sync, page text search, when changes appear, CI, and previews.">
   <title>Publishing</title>
   <script>
     // Copy the reader app's theme (same-origin parent) before first paint; assets/site.js keeps it in sync.
@@ -30,7 +30,7 @@
         <p class="eyebrow">For publishing teams</p>
         <h1>Publishing</h1>
       </div>
-      <p class="lead">Each team publishes its own site from one directory in its Git repository. This page covers what goes in that directory, the <code>site publish</code> command, running it from CI, and previews.</p>
+      <p class="lead">Each team publishes its own site from one directory in its Git repository. This page covers what goes in that directory, the <code>site sync</code> command, running it from CI, and previews.</p>
     </header>
 
     <div class="callout" role="note">
@@ -70,16 +70,16 @@
     </section>
 
     <section class="doc-section" aria-labelledby="publish">
-      <h2 id="publish">Publish with <code>site publish</code></h2>
+      <h2 id="publish">Publish with <code>site sync</code></h2>
       <p>Run the command in a checkout of the registered repository. Check the plan with <code>--dry-run</code> first, then publish.</p>
-      <div class="term" aria-label="Example site publish commands">
+      <div class="term" aria-label="Example site sync commands">
         <div class="term-head"><span>TERMINAL / acme/checkout</span><button class="copy-btn" type="button">Copy</button></div>
 <pre><span class="c"># See what would change (writes nothing)</span>
-<span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site checkout --source docs/artifacts --dry-run</span>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">site sync</span> --site checkout --source docs/artifacts --dry-run</span>
 <span class="c"># Publish</span>
-<span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site checkout --source docs/artifacts</span></pre>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">site sync</span> --site checkout --source docs/artifacts</span></pre>
       </div>
-      <ol class="flow" style="--steps: 4" aria-label="What site publish does, in order">
+      <ol class="flow" style="--steps: 4" aria-label="What site sync does, in order">
         <li><strong>Build</strong><p>Reads the directory and builds the site's page index: titles, headings, dates.</p></li>
         <li><strong>Check</strong><p>Reads the site registry from the delivery target. The repository and directory must match the site's registration, or nothing is written.</p></li>
         <li><strong>Sync</strong><p>Uploads new and changed files, replaces the index, then removes files that are no longer in the directory.</p></li>
@@ -91,25 +91,24 @@
         <tbody>
           <tr><td><code>--site ID</code></td><td><span class="pill on">Required</span></td><td>The registered site ID. It is never inferred from the repository.</td></tr>
           <tr><td><code>--source DIR</code></td><td><span class="pill">Optional</span></td><td>The directory to publish. Its path from the repository root must equal the registered <code>sourcePath</code>. Defaults to that registered path.</td></tr>
-          <tr><td><code>--fulltext</code></td><td><span class="pill">Optional</span></td><td>Also publish the data for page text search. Pass it every time (see below).</td></tr>
           <tr><td><code>--config LOCATOR</code></td><td><span class="pill">Optional</span></td><td>The deployment config that names the delivery target. See <a href="configuration.html#precedence">Configuration</a> for how it is chosen when omitted.</td></tr>
           <tr><td><code>--dry-run</code></td><td><span class="pill">Optional</span></td><td>Show the changes without writing, deleting, or requesting a cache refresh.</td></tr>
           <tr><td><code>--format text|json</code></td><td><span class="pill">Optional</span></td><td><code>json</code> returns the complete change list, for CI.</td></tr>
         </tbody>
       </table></div>
-      <p>Text output starts with the result (<code>DRY RUN</code>, <code>PUBLISHED</code>, or <code>UP TO DATE</code>) and lists created, updated, and removed paths, up to 12 per group. The exit code is <code>0</code> for a plan, a publish, or no change; <code>2</code> for invalid options or config; and <code>1</code> when publishing fails.</p>
+      <p>Text output starts with the result (<code>DRY RUN</code>, <code>SYNCED</code>, or <code>UP TO DATE</code>) and lists created, updated, and removed paths, up to 12 per group. The exit code is <code>0</code> for a plan, a publish, or no change; <code>2</code> for invalid options or config; and <code>1</code> when publishing fails.</p>
     </section>
 
     <section class="doc-section" aria-labelledby="page-text-search">
       <h2 id="page-text-search">Page text search</h2>
-      <p>Add <code>--fulltext</code> to publish the data that the reader's page text search uses. Readers of the site then get the search field in the sidebar and <kbd>⌘⇧F</kbd>.</p>
-      <div class="term" aria-label="Example publish with page text search">
+      <p><code>site sync</code> always builds and publishes the static data used by page text search. Readers get the search field in the sidebar and can open search with <kbd>⌘⇧F</kbd>.</p>
+      <div class="term" aria-label="Example site sync with page text search">
         <div class="term-head"><span>TERMINAL / acme/checkout</span><button class="copy-btn" type="button">Copy</button></div>
-<pre><span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site checkout --source docs/artifacts --fulltext</span></pre>
+<pre><span class="p">$</span> <span data-copy>artifact-pages <span class="v">site sync</span> --site checkout --source docs/artifacts</span></pre>
       </div>
       <div class="callout warn" role="note">
-        <span class="ico">EVERY TIME</span>
-        <div><p><strong>Pass <code>--fulltext</code> on every publish.</strong> A publish without it removes the site's search data, and the sidebar shows <strong>Jump to a page…</strong> instead of the search field. There is no config setting that keeps it on, so put the flag in your publish script or CI job.</p></div>
+        <span class="ico">AUTOMATIC</span>
+        <div><p><strong>No extra flag is needed.</strong> Every site sync publishes the search data. If a site was published by an older CLI, sync it with the current CLI to add the search projection.</p></div>
       </div>
       <p>What is searched: an HTML page's title and its static text, and a Markdown page's title and rendered text, including code blocks. Text that scripts create, image <code>alt</code> text, and paths are not searched. Text hidden only with CSS is still searched. To leave out navigation or other repeated text, mark its element with <code>hidden</code>, <code>aria-hidden="true"</code>, or <code>data-search-ignore</code>.</p>
     </section>
@@ -131,12 +130,12 @@
         <li><div><h3>On a pull request: plan</h3><p>Run with <code>--dry-run</code> and read-only credentials. The JSON result lists exactly what would change.</p>
           <div class="term" aria-label="Example CI dry-run command">
             <div class="term-head"><span>CI / PULL REQUEST</span><button class="copy-btn" type="button">Copy</button></div>
-<pre><span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site checkout --source docs/artifacts --fulltext --dry-run --format json</span></pre>
+<pre><span class="p">$</span> <span data-copy>artifact-pages <span class="v">site sync</span> --site checkout --source docs/artifacts --dry-run --format json</span></pre>
           </div></div></li>
         <li><div><h3>After merge: publish</h3><p>Run the same command without <code>--dry-run</code>, using credentials that can write only this site.</p>
           <div class="term" aria-label="Example CI publish command">
             <div class="term-head"><span>CI / DEFAULT BRANCH</span><button class="copy-btn" type="button">Copy</button></div>
-<pre><span class="p">$</span> <span data-copy>artifact-pages <span class="v">site publish</span> --site checkout --source docs/artifacts --fulltext --format json</span></pre>
+<pre><span class="p">$</span> <span data-copy>artifact-pages <span class="v">site sync</span> --site checkout --source docs/artifacts --format json</span></pre>
           </div></div></li>
       </ol>
       <ul>
@@ -170,7 +169,7 @@
       <ul>
         <li><strong>Pull requests.</strong> With <code>--pull-request</code> (a number or the PR's URL), the preview is grouped under that PR and shows a link back to it. The PR must come from the registered repository itself; pull requests from forks are refused. Without the option, the preview is a manual one with no PR link.</li>
         <li><strong>Posting links.</strong> The command returns the preview URLs (use <code>--format json</code>). Whether to comment them on the PR is up to your workflow.</li>
-        <li><strong>Lifetime.</strong> A newer preview for the same PR replaces the older one in the list, but the older URLs keep working until the delivery target's retention rule deletes them. The admin sets that rule in the provider, not in Artifact Pages.</li>
+        <li><strong>Lifetime and removal.</strong> A newer preview for the same PR replaces the older one in the list, but the older URLs remain available until retention removes them. To remove one group and all of its exclusive revisions, run <code>preview remove --site checkout --group pr:42</code>. This never deletes sibling groups' origin objects; its site-preview cache refresh can also refresh cached responses for siblings. The admin sets retention in the provider, not in Artifact Pages.</li>
         <li><strong>Trust.</strong> Preview HTML runs exactly like published HTML, before review is finished. Publish previews only from branches you trust.</li>
       </ul>
     </section>
@@ -183,7 +182,7 @@
           <tr><td>The site is not registered</td><td>The error lists the registered site IDs. Check <code>--site</code> and the delivery target in the config, or ask the admin to register the site.</td></tr>
           <tr><td>“registered to … selected checkout is …”</td><td>The repository or directory differs from the registration. Run in a checkout of the registered repository and pass the registered directory.</td></tr>
           <tr><td>Symbolic links in the source</td><td>Replace them with real files, or move them out of the directory.</td></tr>
-          <tr><td>The site's lock is held</td><td>Another publish or unregister for this site is running; retry later. If a crashed run left the lock behind, the admin checks it with <code>lock inspect --site</code> and releases it with <code>lock recover</code>.</td></tr>
+          <tr><td>The site's lock is held</td><td>Another site sync, preview operation, or registry cleanup for this site is running; retry later. If a crashed run left the lock behind, the admin checks it with <code>lock inspect --site</code> and releases it with <code>lock recover</code>.</td></tr>
           <tr><td>Failed after some changes</td><td>Fix the cause and run the same command again. It completes the remaining changes.</td></tr>
         </tbody>
       </table></div>
