@@ -3,6 +3,8 @@ package publisher
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,6 +25,7 @@ import (
 )
 
 const cloudflareAPIBase = "https://api.cloudflare.com/client/v4"
+const cloudflareTokenVerificationResponseLimit = 1 << 20
 
 var cloudflareIdentifierPattern = regexp.MustCompile(`^[0-9a-fA-F]{32}$`)
 
@@ -61,9 +64,17 @@ var _ ConditionalObjectBackend = (*cloudflareBackend)(nil)
 // the zone cache API for revalidation. Those differences remain inside this
 // provider adapter; site reconciliation uses the same DeploymentBackend.
 func NewCloudflareBackend(ctx context.Context, options CloudflareOptions) (DeploymentBackend, error) {
-	if strings.TrimSpace(options.AccountID) == "" || strings.TrimSpace(options.Bucket) == "" || strings.TrimSpace(options.ZoneID) == "" ||
-		strings.TrimSpace(options.AccessKeyID) == "" || strings.TrimSpace(options.SecretKey) == "" {
+	if strings.TrimSpace(options.AccountID) == "" || strings.TrimSpace(options.Bucket) == "" || strings.TrimSpace(options.ZoneID) == "" {
 		return nil, errors.New("Cloudflare account, bucket, zone, and R2 credentials are required")
+	}
+	accessKeyIDPresent := strings.TrimSpace(options.AccessKeyID) != ""
+	secretKeyPresent := strings.TrimSpace(options.SecretKey) != ""
+	if accessKeyIDPresent != secretKeyPresent {
+		return nil, errors.New("Cloudflare R2 access key ID and secret must be set together")
+	}
+	explicitR2Credentials := accessKeyIDPresent && secretKeyPresent
+	if !explicitR2Credentials && strings.TrimSpace(options.SessionToken) != "" {
+		return nil, errors.New("Cloudflare R2 session token requires an explicit access key ID and secret")
 	}
 	registryReaderConfigured := options.RegistryReaderAccessKeyID != "" || options.RegistryReaderSecretKey != "" || options.RegistryReaderSessionToken != ""
 	if registryReaderConfigured && (strings.TrimSpace(options.RegistryReaderAccessKeyID) == "" || strings.TrimSpace(options.RegistryReaderSecretKey) == "") {
@@ -87,6 +98,25 @@ func NewCloudflareBackend(ctx context.Context, options CloudflareOptions) (Deplo
 	if err != nil || baseURL.Scheme != "https" || baseURL.Host == "" || baseURL.User != nil || baseURL.RawQuery != "" || baseURL.Fragment != "" || (baseURL.Path != "" && baseURL.Path != "/") {
 		return nil, errors.New("Cloudflare public base URL must be an HTTPS origin")
 	}
+	apiBaseURL := cloudflareAPIBase
+	if options.APIBaseURL != "" {
+		apiBaseURL = strings.TrimRight(options.APIBaseURL, "/")
+	}
+	httpClient := &http.Client{Timeout: 20 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	if !explicitR2Credentials {
+		apiToken := options.APIToken
+		if options.APITokenProvider != nil {
+			apiToken = options.APITokenProvider()
+		}
+		if strings.TrimSpace(apiToken) == "" {
+			return nil, errors.New("Cloudflare API token is required to derive R2 credentials")
+		}
+		var err error
+		options.AccessKeyID, options.SecretKey, err = deriveCloudflareR2Credentials(ctx, httpClient, apiBaseURL, options.AccountID, apiToken)
+		if err != nil {
+			return nil, err
+		}
+	}
 	endpoint := options.R2Endpoint
 	if endpoint == "" {
 		endpoint = "https://" + options.AccountID + ".r2.cloudflarestorage.com"
@@ -102,15 +132,57 @@ func NewCloudflareBackend(ctx context.Context, options CloudflareOptions) (Deplo
 			return nil, fmt.Errorf("configure Cloudflare R2 registry reader: %w", err)
 		}
 	}
-	apiBaseURL := cloudflareAPIBase
-	if options.APIBaseURL != "" {
-		apiBaseURL = strings.TrimRight(options.APIBaseURL, "/")
-	}
 	return &cloudflareBackend{
 		objects: objects, registryReader: registryReader, zoneID: options.ZoneID, baseURL: baseURL,
 		apiToken: options.APIToken, apiTokenSource: options.APITokenProvider, apiBaseURL: apiBaseURL,
-		httpClient: &http.Client{Timeout: 20 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }},
+		httpClient: httpClient,
 	}, nil
+}
+
+func deriveCloudflareR2Credentials(ctx context.Context, client *http.Client, apiBaseURL, accountID, apiToken string) (string, string, error) {
+	endpoint := strings.TrimRight(apiBaseURL, "/") + "/accounts/" + url.PathEscape(accountID) + "/tokens/verify"
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return "", "", errors.New("create Cloudflare API token verification request")
+	}
+	request.Header.Set("Authorization", "Bearer "+apiToken)
+	response, err := client.Do(request)
+	if err != nil {
+		switch {
+		case errors.Is(err, context.Canceled):
+			return "", "", errors.New("Cloudflare API token verification was canceled")
+		case errors.Is(err, context.DeadlineExceeded):
+			return "", "", errors.New("Cloudflare API token verification timed out")
+		default:
+			return "", "", errors.New("Cloudflare API token verification request failed")
+		}
+	}
+	defer response.Body.Close()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		return "", "", fmt.Errorf("Cloudflare API token verification failed (HTTP %d)", response.StatusCode)
+	}
+	contents, err := io.ReadAll(io.LimitReader(response.Body, cloudflareTokenVerificationResponseLimit+1))
+	if err != nil {
+		return "", "", fmt.Errorf("read Cloudflare API token verification response (HTTP %d)", response.StatusCode)
+	}
+	if len(contents) > cloudflareTokenVerificationResponseLimit {
+		return "", "", fmt.Errorf("Cloudflare API token verification response is too large (HTTP %d)", response.StatusCode)
+	}
+	var result struct {
+		Success bool `json:"success"`
+		Result  struct {
+			ID     string `json:"id"`
+			Status string `json:"status"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(contents, &result); err != nil {
+		return "", "", fmt.Errorf("Cloudflare API token verification returned an invalid response (HTTP %d)", response.StatusCode)
+	}
+	if !result.Success || result.Result.Status != "active" || !cloudflareIdentifierPattern.MatchString(result.Result.ID) {
+		return "", "", fmt.Errorf("Cloudflare API token verification did not return an active token ID (HTTP %d)", response.StatusCode)
+	}
+	secret := sha256.Sum256([]byte(apiToken))
+	return result.Result.ID, hex.EncodeToString(secret[:]), nil
 }
 
 // cloudflareRetryMaxAttempts is the total attempt count (first try included) for

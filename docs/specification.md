@@ -809,6 +809,12 @@ Artifact paths may later become commit-addressed/immutable, which would allow ag
 
 The user-facing publishing interface is the `artifact-pages` command. Its provider adapter performs the provider API operations; users do not need to invoke raw provider CLIs such as `aws s3` for the product workflow.
 
+### Cloudflare account-token credentials
+
+For CLI versions that support the single-token setup, a Cloudflare config may omit both explicit R2 credential values. When the environment variable values named by `accessKeyIdEnv` and `secretAccessKeyEnv` (defaulting to `CF_R2_ACCESS_KEY_ID` and `CF_R2_SECRET_ACCESS_KEY`) are both absent or empty, the adapter reads the API token named by `apiTokenEnv`, calls `GET /accounts/{accountId}/tokens/verify`, and requires a successful response with an active token and a 32-character hexadecimal token ID. It uses that ID as the R2 access key ID and the SHA-256 of the token's exact bytes as the R2 secret. The account token needs `Workers R2 Storage Bucket Item Write` for the target bucket and `Cache Purge` for the target zone. Verification happens during backend setup, including dry runs and no-op commands. If both explicit R2 credentials are present, they take precedence and no verification request is made; a partial pair fails. `sessionTokenEnv` is valid only with an explicit pair. Registry-reader credentials stay separate and are never derived from or replaced by the publishing token.
+
+When an explicit R2 pair is configured, the API token remains lazy and is needed only when a command requests cache invalidation. This preserves no-token dry runs and no-op operations for that credential mode.
+
 ### Object-prefix reconciliation
 
 `site sync` and `registry sync` omission cleanup must enumerate object prefixes completely before treating the result as the site's current stored state. Adapters follow every listing continuation token/page; they must not assume that one response contains every object. Before deleting stale keys, the command must have successfully completed listings for both `/_artifacts/<site>/` and `/_indexes/<site>/`. A failed or incomplete listing aborts reconciliation rather than risking deletion based on a partial view.

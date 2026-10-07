@@ -172,9 +172,9 @@
           <tr><td><code>zoneId</code></td><td><span class="pill on">Required</span></td><td>The zone whose cache is purged after changes (32 hexadecimal characters).</td></tr>
           <tr><td><code>publicBaseURL</code></td><td><span class="pill on">Required</span></td><td>The public HTTPS origin readers use, without a path. Purge requests are built from it.</td></tr>
           <tr><td><code>bucket</code></td><td><span class="pill">Optional</span></td><td>The R2 bucket. Defaults to <code>artifact-pages</code>.</td></tr>
-          <tr><td><code>accessKeyIdEnv</code>, <code>secretAccessKeyEnv</code></td><td><span class="pill">Optional</span></td><td>Names of the environment variables holding the R2 access key. Default <code>CF_R2_ACCESS_KEY_ID</code> and <code>CF_R2_SECRET_ACCESS_KEY</code>.</td></tr>
-          <tr><td><code>apiTokenEnv</code></td><td><span class="pill">Optional</span></td><td>Name of the variable holding the API token used for cache purges. Default <code>CF_API_TOKEN</code>.</td></tr>
-          <tr><td><code>sessionTokenEnv</code></td><td><span class="pill">Optional</span></td><td>Name of a variable holding a session token, when the R2 credential is temporary.</td></tr>
+          <tr><td><code>accessKeyIdEnv</code>, <code>secretAccessKeyEnv</code></td><td><span class="pill">Optional</span></td><td>Names of the environment variables holding an explicit R2 key pair. Defaults are <code>CF_R2_ACCESS_KEY_ID</code> and <code>CF_R2_SECRET_ACCESS_KEY</code>. The next CLI release can derive the pair when both named environment variable values are absent or empty; set both explicit values together.</td></tr>
+          <tr><td><code>apiTokenEnv</code></td><td><span class="pill">Optional</span></td><td>Name of the variable holding the API token used for cache purges and, in the next CLI release, to derive an absent R2 key pair. Default <code>CF_API_TOKEN</code>.</td></tr>
+          <tr><td><code>sessionTokenEnv</code></td><td><span class="pill">Optional</span></td><td>Name of a variable holding a session token for temporary R2 credentials. It requires an explicit access key and secret; it cannot be combined with token-derived credentials.</td></tr>
           <tr><td><code>registryReaderAccessKeyIdEnv</code>, <code>registryReaderSecretAccessKeyEnv</code>, <code>registryReaderSessionTokenEnv</code></td><td><span class="pill">Optional</span></td><td>A separate read-only credential that <code>site sync</code> and <code>preview publish</code> use only to read the site registry. Set the first two together. See <a href="#credentials">credentials</a>.</td></tr>
         </tbody>
       </table></div>
@@ -188,18 +188,30 @@
         <li><strong>AWS</strong> uses the standard AWS credential chain: environment variables, profiles, or a role assumed in CI (for example through GitHub Actions OIDC).</li>
         <li><strong>Cloudflare</strong> reads the variables named in the <code>cloudflare</code> block. Which ones a command needs:</li>
       </ul>
+      <p>The next CLI release supports this single-token configuration; it names the account, zone, origin, and one credential variable:</p>
+      <div class="term" aria-label="Single-token Cloudflare configuration">
+        <div class="term-head"><span>artifact-pages.yaml / ONE TOKEN</span></div>
+<pre><span class="k">provider</span>: cloudflare
+<span class="k">cloudflare</span>:
+  <span class="k">accountId</span>: "&lt;32-character account ID&gt;"
+  <span class="k">zoneId</span>: "&lt;32-character zone ID&gt;"
+  <span class="k">publicBaseURL</span>: https://docs.example.com
+  <span class="k">apiTokenEnv</span>: CF_PUBLISH_TOKEN</pre>
+      </div>
+      <p class="note">Store only <code>CF_PUBLISH_TOKEN</code> as a CI secret. Leave the default <code>CF_R2_ACCESS_KEY_ID</code> and <code>CF_R2_SECRET_ACCESS_KEY</code> variables unset; never put the token value in this file.</p>
       <div class="table-wrap"><table>
         <thead><tr><th>Command</th><th>R2 access key and secret</th><th>Registry reader</th><th>API token</th></tr></thead>
         <tbody>
-          <tr><td><code>site sync</code></td><td><span class="pill on">Required</span></td><td>Used only if configured</td><td>For any run that changes the site or retries an unfinished purge; checked before anything is written</td></tr>
-          <tr><td><code>preview publish</code></td><td><span class="pill on">Required</span></td><td>Used only if configured</td><td>Not needed</td></tr>
-          <tr><td><code>registry sync</code></td><td><span class="pill on">Required</span></td><td>Not used</td><td>For any run that changes the registry or cleans an omitted site; checked before anything is written</td></tr>
-          <tr><td><code>app deploy</code></td><td><span class="pill on">Required</span></td><td>Not used</td><td>For any run that changes the app; checked before anything is written</td></tr>
-          <tr><td><code>lock inspect</code>, <code>lock recover</code></td><td><span class="pill on">Required</span></td><td>Not used</td><td>Not needed</td></tr>
+          <tr><td><code>site sync</code></td><td>Required as a pair, or derived in the next CLI release</td><td>Used only if configured</td><td>With an explicit R2 pair, needed for cache purges; the next CLI release also needs it at setup if deriving the pair</td></tr>
+          <tr><td><code>preview publish</code></td><td>Required as a pair, or derived in the next CLI release</td><td>Used only if configured</td><td>With an explicit R2 pair, not needed; the next CLI release needs it at setup if deriving the pair</td></tr>
+          <tr><td><code>registry sync</code></td><td>Required as a pair, or derived in the next CLI release</td><td>Not used</td><td>With an explicit R2 pair, needed for cache purges; the next CLI release also needs it at setup if deriving the pair</td></tr>
+          <tr><td><code>app deploy</code></td><td>Required as a pair, or derived in the next CLI release</td><td>Not used</td><td>With an explicit R2 pair, needed for cache purges; the next CLI release also needs it at setup if deriving the pair</td></tr>
+          <tr><td><code>lock inspect</code>, <code>lock recover</code></td><td>Required as a pair, or derived in the next CLI release</td><td>Not used</td><td>With an explicit R2 pair, not needed; the next CLI release needs it at setup if deriving the pair</td></tr>
           <tr><td><code>index build</code>, <code>config set-default</code></td><td>Not needed</td><td>Not used</td><td>Not needed</td></tr>
         </tbody>
       </table></div>
-      <p>The token is what lets the CLI ask Cloudflare to purge the changed URLs, so a run that changes content stops before writing if it is missing. Dry runs and runs with nothing to change never need it. A team's publishing job should be able to read the site registry; read, write, and delete only its own site's files and cache-retry record (<code>_control/site-cache/&lt;site&gt;.json</code>); read and write its previews and lock; and request a cache refresh from the CDN (a CloudFront invalidation on AWS, a zone cache purge on Cloudflare). It never needs to write the registry or the reader app. With the registry-reader fields set, the registry is read with that separate credential, so the main credential can be limited to the site. If those fields are set but their values are missing, the publish stops instead of falling back.</p>
+      <p>With an explicit R2 key pair, the API token lets the CLI purge changed URLs. A run that needs a purge stops before writing if the token is missing; dry runs and runs with nothing to change do not need it. The single-token setup is available in the next CLI release; v0.1.0 still requires an explicit R2 key pair. In the single-token setup, leave both environment variable values named by <code>accessKeyIdEnv</code> and <code>secretAccessKeyEnv</code> empty or unset and the CLI verifies the account token with <code>GET /accounts/{accountId}/tokens/verify</code>, then uses the returned token ID as the R2 access key ID and the SHA-256 of the exact token value as the R2 secret. That setup requires <code>Workers R2 Storage Bucket Item Write</code> for the target bucket and <code>Cache Purge</code> for the target zone. The token is verified during setup even for a dry run or a run with no changes. When both explicit R2 values are present, they take precedence and no verification request is made; a partial pair is rejected. Temporary R2 credentials need an explicit pair and its session token. Registry-reader credentials remain separate and unchanged.</p>
+      <p>A team's publishing job should be able to read the site registry; read, write, and delete only its own site's files and cache-retry record (<code>_control/site-cache/&lt;site&gt;.json</code>); read and write its previews and lock; and request a cache refresh from the CDN (a CloudFront invalidation on AWS, a zone cache purge on Cloudflare). It never needs to write the registry or the reader app. With the registry-reader fields set, the registry is read with that separate credential, so the main credential can be limited to the site. If those fields are set but their values are missing, the publish stops instead of falling back.</p>
     </section>
 
     <section class="doc-section" aria-labelledby="sites">

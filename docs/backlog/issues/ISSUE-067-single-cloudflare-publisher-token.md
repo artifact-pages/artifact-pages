@@ -1,6 +1,7 @@
 # Cloudflare publishers need three secrets for what is one token
 
-- Status: Open
+- Status: In progress
+- Assignee: Codex
 - Priority: P3
 - Area: CLI Cloudflare credentials, adoption
 
@@ -19,6 +20,6 @@ An operator can configure one token environment name for Cloudflare publishing. 
 
 ## Acceptance criteria
 
-- [ ] A Cloudflare config can name only the API token. The CLI resolves the token ID through the verify endpoint and derives the secret, then uses them for R2.
-- [ ] Explicit access-key names still take precedence. Temporary registry-reader credentials are unchanged.
+- [ ] When both R2 credential values are absent, the CLI verifies the account API token and derives the R2 access key ID and secret. A config can name only the API token.
+- [ ] An explicit R2 key pair takes precedence without verification; a partial pair is rejected. A session token requires the explicit pair, and registry-reader credentials remain separate.
 - [ ] The Cloudflare deployment guide documents the single-token setup and its exact permissions.
