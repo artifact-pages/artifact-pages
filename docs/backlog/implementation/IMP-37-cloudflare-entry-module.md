@@ -20,7 +20,7 @@ For the project's first real deployment, the owner selected `artifact-pages.dev`
 ## Scope
 
 - Provide one consumer-facing module entry point at the root of the owner's existing Cloudflare module repository, composing reusable components rather than duplicating their implementation. Keep nested-module paths self-contained; do not require a sibling OSS checkout.
-- Include bucket creation, custom-domain delivery, route/cache rules, and provider-managed preview retention. Leave `r2.dev` unmanaged and rely on Cloudflare's disabled-by-default state for a newly created private bucket.
+- Include bucket creation, custom-domain delivery, route/cache rules, and provider-managed preview retention. Leave `r2.dev` unmanaged and rely on Cloudflare's disabled-by-default state for a newly created private bucket. (Superseded 2026-10-07: the module now manages `cloudflare_r2_managed_domain.development` with `enabled = false`; see [IMP-63](IMP-63-consolidate-terraform-modules.md) and PR #39.)
 - Document required inputs, validations, supported Terraform/provider versions, and non-secret outputs that map to the existing deployment config.
 - Document ownership of the complete zone phase-root rulesets and bucket lifecycle policy. Preserve the existing rules/import guidance; do not overwrite unrelated zone rules silently.
 - Provide a minimal clean-caller example and local validation/contract tests. Keep any existing-bucket path clearly separate from the new-bucket example.
@@ -39,7 +39,7 @@ For the project's first real deployment, the owner selected `artifact-pages.dev`
 - [ ] Bucket identity is shared across delivery and retention. `preview_retention_days` controls Terraform lifecycle only and is not duplicated in the CLI deployment config.
 - [ ] Outputs provide the non-secret information needed for the existing Cloudflare deployment config; secrets remain outside committed examples and outputs.
 - [ ] Source/contract tests retain logical SPA routes, explicit content-path origin behavior, catch-all rewrites (including `/_control/*`) to `/index.html`, cache policy, and provider-owned preview expiration. They do not stand in for live CDN evidence.
-- [ ] Existing zone rules and lifecycle ownership, migration/state handling, destruction limitations, permissions, and potentially billable operations are explicit before apply. Existing-bucket callers are instructed to disable `r2.dev` separately because it bypasses custom-host rewrites. No blanket destructive defaults are introduced.
+- [ ] Existing zone rules and lifecycle ownership, migration/state handling, destruction limitations, permissions, and potentially billable operations are explicit before apply. Existing-bucket callers are instructed to disable `r2.dev` separately because it bypasses custom-host rewrites (superseded 2026-10-07: the delivery module now keeps `r2.dev` disabled for every caller, PR #39). No blanket destructive defaults are introduced.
 - [ ] Formatting, initialization without a backend, validation, and mock/offline plan checks pass with pinned tool/provider versions; invalid required inputs have regression coverage.
 - [ ] An independent review is completed and any findings are addressed. Local evidence and the remaining live-account handoff are recorded separately.
 
