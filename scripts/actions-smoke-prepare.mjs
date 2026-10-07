@@ -60,6 +60,7 @@ await fs.writeFile(`${archive}.json`, JSON.stringify({
   sourceCommit: '0000000000000000000000000000000000000000',
   sourceDirty: false,
   files: Object.keys(files).sort(),
+  reads: JSON.parse(await fs.readFile(path.join(workspace, 'web/src/data/supported-schema-versions.json'), 'utf8')).reads,
 }))
 await fs.writeFile(`${archive}.sha256`, `${digest}  ${archiveName}\n`)
 

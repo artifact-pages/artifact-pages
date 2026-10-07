@@ -58,6 +58,9 @@ func TestCloudflareRegistryReadUsesSeparateReadOnlyIdentity(t *testing.T) {
 	if _, _, err := backend.GetObject(context.Background(), "_indexes/sites.json"); err != nil {
 		t.Fatalf("GetObject(registry): %v", err)
 	}
+	if _, _, err := backend.GetObject(context.Background(), appVersionsKey); err != nil {
+		t.Fatalf("GetObject(deployed app versions): %v", err)
+	}
 	if _, _, err := backend.GetObject(context.Background(), "_indexes/sre/index.json"); err != nil {
 		t.Fatalf("GetObject(site index): %v", err)
 	}
@@ -71,6 +74,7 @@ func TestCloudflareRegistryReadUsesSeparateReadOnlyIdentity(t *testing.T) {
 		key    string
 	}{
 		{http.MethodGet, "/artifact-pages/_indexes/sites.json", "registry-reader"},
+		{http.MethodGet, "/artifact-pages/" + appVersionsKey, "registry-reader"},
 		{http.MethodGet, "/artifact-pages/_indexes/sre/index.json", "site-writer"},
 		{http.MethodPut, "/artifact-pages/_indexes/sites.json", "site-writer"},
 	}
