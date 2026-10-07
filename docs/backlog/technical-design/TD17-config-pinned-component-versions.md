@@ -1,4 +1,4 @@
-# TD17 — Config-pinned CLI and app versions, independently versioned components
+# TD17 — Config-pinned CLI and web versions, independently versioned components
 
 - Status: In progress
 - Assignee: Claude
@@ -24,48 +24,61 @@ The original reason for one series (TD2 "Why the policy changed") was that the r
 | Component | Monorepo tag | Published as |
 | --- | --- | --- |
 | CLI | `vX.Y.Z` (root, the Go module version) | Release with per-platform binaries, checksums, notices (unchanged) |
-| Web app | `app/vX.Y.Z` | Release with the archive, manifest and `.sha256` (no separate repository: consumers download assets, nothing references a repository) |
+| Web app | `web/vX.Y.Z` | Release with the archive, manifest and `.sha256` (no separate repository: consumers download assets, nothing references a repository) |
 | Each Action | `publish-action/vX.Y.Z`, `preview-action/vX.Y.Z`, `registry-action/vX.Y.Z`, `app-deploy-action/vX.Y.Z` | Generated repository `artifact-pages/<name>-action`, tagged plain `vX.Y.Z` (TD14 sync, triggered per Action) |
 | Terraform modules | `terraform-<provider>/vX.Y.Z` | Unchanged (TD15) |
 
 - **Per-Action tags.** Once an Action no longer decides the CLI, its version describes only its own wrapper (inputs, outputs, summary, checkout). A change to one Action releases only that Action. A change under `actions/shared/` releases every Action whose generated content changed; the release workflow compares generated content and fails when a tagged Action is unchanged or warns when a changed Action is left untagged.
-- Only CLI releases are marked "latest" on the monorepo's releases page; app and Action releases set `make_latest: false`.
+- Only CLI releases are marked "latest" on the monorepo's releases page; web and Action releases set `make_latest: false`.
+- The component is called `web` everywhere (tag prefix, config key, asset names `artifact-pages-web-…`). The command `app deploy` and the term "application plane" keep their names.
 
-### 2. The deployment config names the CLI and the app
+### 2. The deployment config names the CLI and the web app
 
 ```yaml
 schemaVersion: 1
 cli:
   version: 0.3.0   # every Action and the CLI itself run this version
-app:
+web:
   version: 0.2.1   # the bundle `app deploy` installs
 provider: cloudflare
 ...
 ```
 
-- The operator's config (the `admin` repository for `artifact-pages.dev`) is the single place that decides which CLI and app a deployment runs. Sites follow it on their next sync or preview without touching their own repositories.
-- Versions are exact SemVer. Ranges and `latest` are rejected: the deployment must be reproducible from the config history, and a rollback is a revert.
-- Download sources are not configurable. The CLI is always fetched from release `vX.Y.Z` of `artifact-pages/artifact-pages`, the app from `app/vX.Y.Z`, both checksum-verified. Whoever can edit the config can therefore choose among official releases only, never an arbitrary binary that would run in every site's CI with that site's credentials.
-- `app deploy` installs `app.version` instead of the bundle of the CLI's own version. `--archive FILE` remains for local and unreleased bundles.
+- The operator's config (the `admin` repository for `artifact-pages.dev`) is the single place that decides which CLI and web app a deployment runs. Sites follow it on their next sync or preview without touching their own repositories.
+- Versions are exact SemVer. Ranges and `latest` are rejected: the deployment must be reproducible from the config history, and a rollback is a revert. Keeping both versions current is the operator repository's own concern (for example a Dependabot-style update); the product does not open those pull requests.
+- Download sources are not configurable. The CLI is always fetched from release `vX.Y.Z` of `artifact-pages/artifact-pages`, the web app from `web/vX.Y.Z`, both checksum-verified. Whoever can edit the config can therefore choose among official releases only, never an arbitrary binary that would run in every site's CI with that site's credentials.
+- `app deploy` installs `web.version` instead of the bundle of the CLI's own version. `--archive FILE` remains for local and unreleased bundles.
 
-### 3. The CLI knows compatibility and validates it
+### 3. Storage records versions; the CLI knows compatibility and validates it
 
 Compatibility data travels with each release; the comparison lives in the CLI.
 
 - **CLI:** the binary embeds the config `schemaVersion`s it reads and, per published format, the `schemaVersion` it writes. The release also publishes this as a small JSON asset.
-- **App:** the web release manifest lists, per published format, the `schemaVersion`s the app reads.
-- **Check:** the CLI loads the app manifest for `app.version` and fails when some format it writes is not readable by that app. It also fails when it cannot read the config's `schemaVersion`.
+- **Web:** the web release manifest lists, per published format, the `schemaVersion`s the web app reads.
 
-The check runs in `config check` (new; for the operator's pull requests that change `cli.version` or `app.version`), at the start of `registry sync` and `app deploy`, and at the start of `site sync` and `preview publish`. Existing data written by a newer CLI is already guarded by the reader rule (an unknown control-record `schemaVersion` makes the CLI fail).
+Storage records what is actually deployed, so checks can compare with reality and not only with the config:
 
-While the product is `0.x` no compatibility is promised, so this data-driven check is the only guard; version numbers are never used to infer compatibility.
+- `app deploy` records the deployed web version and its readable formats in a control record of the application plane.
+- `site sync` and `preview publish` record, per site, the CLI version that last wrote it and the format `schemaVersion`s it wrote. `registry sync` records the same for the registry.
+
+The checks, all failing before any write:
+
+| Command | Checks |
+| --- | --- |
+| `config check` (new; for operator pull requests that change `cli.version` or `web.version`) | The CLI reads the config's `schemaVersion`; `web.version` reads every format this CLI writes; `web.version` reads every format the per-site records say is in storage (sites it cannot read are listed as needing a republish). |
+| `app deploy` | The bundle to deploy reads every format recorded in storage for every registered site and the registry. Otherwise it fails and names the sites, so a web upgrade never silently turns live sites into "needs to be republished"; an explicit flag accepts that outcome for a planned breaking upgrade. |
+| `site sync`, `preview publish`, `registry sync` | The deployed web (from storage) reads every format this CLI writes. This catches the window where the config already names a new CLI but `app deploy` has not run or failed, and a web deployed outside the config. If no web version is recorded yet, the check falls back to `web.version`. |
+
+Existing data written by a newer CLI is still guarded by the reader rule (an unknown control-record `schemaVersion` makes the CLI fail). The per-site records also let the operator see which CLI wrote each site.
+
+While the product is `0.x` no compatibility is promised, so these data-driven checks are the only guard; version numbers are never used to infer compatibility.
 
 ### 4. Overriding the CLI version
 
 An Action input `cli-version` (and the equivalent CLI flag or environment variable) runs a different CLI than the config names, for trying a release in one site or for an emergency. An override never bypasses validation:
 
 - the Action checks the version against the CLI range it supports (below);
-- the overriding CLI runs exactly the checks of section 3 against the same config and `app.version`, and fails the run if any check fails;
+- the overriding CLI runs exactly the checks of section 3 against the same config and the same recorded storage state, and fails the run if any check fails;
 - the job summary always records that an override was used and which version ran.
 
 ### 5. Actions declare the CLI range they support
@@ -81,24 +94,28 @@ The Action needs `cli.version` before it has a CLI, and the config may be layere
 
 ### 7. Upgrade flow for an operator
 
-1. A CLI or app release opens a pull request in the operator repository that bumps `cli.version` or `app.version` (from the release workflow or a scheduled check in the operator repository; open point).
+1. The operator repository gets a pull request that bumps `cli.version` or `web.version` (its own automation, for example Dependabot-style; outside the product).
 2. That pull request's CI runs `config check`.
-3. On merge, `registry sync` runs, and `app deploy` runs when `app.version` changed.
+3. On merge, `registry sync` runs, and `app deploy` runs when `web.version` changed.
 4. Sites use the new CLI on their next `site sync` or preview.
 5. For a breaking format change, the operator repository runs TD2's order (registry, app, then a republish of every site) from one place.
 
+## Decisions so far (owner, 2026-10-07)
+
+- The component name is `web` (tag `web/vX.Y.Z`, config key `web`).
+- Storage records the deployed web version and, per site, the writing CLI version and formats; checks compare with storage (section 3).
+- Bump pull requests in operator repositories are the operator's concern, not the product's.
+- New series start at `0.1.0`.
+
 ## Open points
 
-- Config layers: may a later layer (for example a site's local layer) set `cli`/`app`? Proposal: `cli` and `app` are replaced as a unit like provider settings, and a site layer that changes `cli.version` is treated as an override (section 4).
-- Should validation also compare with the app actually deployed in storage, not only `app.version`? That needs the deployed app to record its version (TD9 already records an archive digest).
-- Who opens the bump pull request in step 7.1, and with which credentials.
-- Naming: tag prefix `app/` versus the current asset name `artifact-pages-web-…`; rename the assets or keep `web`.
-- Migration from `v0.1.x`: the first release under this design (CLI, app and each Action start their own series; Actions likely restart at `v1.0.0` or continue from the product number).
+- Config layers: may a later layer (for example a site's local layer) set `cli`/`web`? Proposal: they are replaced as a unit like provider settings, and a site layer that changes `cli.version` is treated as an override (section 4).
+- Action repositories already carry `v0.1.0` from the product release, and tags are never moved (TD2). Starting the per-Action series at `0.1.0` therefore needs either deleting those pre-release tags (the only consumers are `admin`, `docs` and CI) or starting at `0.2.0`. The CLI continues the root series; `web/v0.1.0` has no collision.
 
 ## Implementation slices (to file after the decision; owners per the agent split)
 
-- CLI: `cli`/`app` config keys, compatibility data and `config check`, validation at command start, bootstrap re-exec, `app deploy` by `app.version` (Codex).
-- Release workflows: root tag CLI-only, `app/v*` and per-Action tags, generated-content check (Codex).
+- CLI: `cli`/`web` config keys, storage version records, compatibility data and `config check`, validation at command start, bootstrap re-exec, `app deploy` by `web.version` (Codex).
+- Release workflows: root tag CLI-only, `web/v*` and per-Action tags, generated-content check (Codex).
 - Actions: `cli-version` input, supported range in `release.json`, summary line for overrides (Codex).
 - Specification §19 and §22, TD2 and TD14 amendments, operator upgrade guide (Claude).
-- Operator repositories: add `cli`/`app` to `admin/artifact-pages.yaml`, bump-PR automation (Codex, owner approval for production).
+- Operator repositories: add `cli`/`web` to `admin/artifact-pages.yaml` (Codex, owner approval for production).
