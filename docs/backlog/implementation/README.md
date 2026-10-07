@@ -18,6 +18,19 @@ Use the [priority-ordered, one-at-a-time repair queue](../issues/README.md#repai
 
 Use the [delegation index](../delegation.md) for work modes and owner boundaries. Existing review repairs remain the active repair queue; these new tickets are not an instruction to interrupt it. IMP-33 remains Done for its existing-bucket implementation, not as evidence for the new root module or Registry publication.
 
+## Config-pinned component versions (TD17)
+
+Decided 2026-10-07 in [TD17](../technical-design/TD17-config-pinned-component-versions.md). Release after all slices land (no `v0.1.1`).
+
+| Ticket | Status | Owner | Outcome |
+| --- | --- | --- | --- |
+| [IMP-67](IMP-67-web-compatibility-manifest.md) | Open | Claude / Codex | Web manifest lists the formats the reader reads. |
+| [IMP-68](IMP-68-release-series-split.md) | Open | Codex | CLI root tag, `web/v*` and per-Action tags release independently. |
+| [IMP-69](IMP-69-config-pins-and-compatibility-checks.md) | Open | Codex | `cli`/`web` config keys, storage version records, compatibility checks, `--accept-breaking`. |
+| [IMP-70](IMP-70-bootstrap-cli-and-override.md) | Open | Codex | Bootstrap re-exec, `release.json` v2, `cli-version` override. |
+| [IMP-71](IMP-71-td17-spec-and-guides.md) | Open | Claude | Spec §19/§22, TD2/TD14 amendments, operator guide. |
+| [IMP-72](IMP-72-td17-first-releases-and-rollout.md) | Open | Codex + owner | First releases of the new series and operator rollout. |
+
 ## Optional operator-managed edge policy
 
 | Ticket | Status | Lane | Execution / next step |

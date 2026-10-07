@@ -122,7 +122,7 @@ The Action needs `cli.version` before it has a CLI, and the config may be layere
 - New series start at `0.1.0`.
 - While the product is pre-release (`0.x`), tags and releases may be deleted and re-created freely; TD2's "never moved" rule and TD14's sync rule ("an existing tag is never moved") apply from the first non-pre-release; until then the Action sync may replace a tag. The Action repositories' existing `v0.1.0` tags (product release) are therefore deleted and re-created as the first per-Action `v0.1.0`; `admin` and `docs` repin in the same rollout.
 
-## Implementation slices (to file as IMP items; owners per the agent split)
+## Implementation slices (filed as [IMP-67](../implementation/IMP-67-web-compatibility-manifest.md) to [IMP-72](../implementation/IMP-72-td17-first-releases-and-rollout.md))
 
 - CLI: `cli`/`web` config keys, storage version records, compatibility data and `config check`, validation at command start, bootstrap re-exec, `app deploy` by `web.version` (Codex).
 - Release workflows: root tag CLI-only, `web/v*` and per-Action tags, generated-content check (Codex).
