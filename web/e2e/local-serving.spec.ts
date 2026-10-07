@@ -3922,6 +3922,61 @@ test('preview HTML fragments reach the frame on direct load, same-document links
   await expect(page.getByRole('link', { name: 'Return to PR #42 ↗' })).toBeVisible()
 })
 
+test('preview HTML link clicked before the reader bridge runs still navigates the reader', async ({ page }) => {
+  const previewUrl = `/sre/_previews/${previewHeadSha}/guides/preview.html?group=pr%3A42`
+  const filesPrefix = `/_previews/sre/revisions/${previewHeadSha}/files`
+  await page.route(`**/_previews/sre/revisions/${previewHeadSha}/manifest.json`, async (route) => {
+    const response = await route.fetch()
+    const manifest = await response.json() as {
+      files: Array<{ path: string; sha256: string; contentType: string }>
+      documents: Array<{ path: string; title: string; format: string }>
+    }
+    manifest.files.push({ path: 'guides/preview-target.html', sha256: 'a'.repeat(64), contentType: 'text/html; charset=utf-8' })
+    manifest.documents.push({ path: 'guides/preview-target.html', title: 'Preview fragment target', format: 'html' })
+    await route.fulfill({ response, body: JSON.stringify(manifest) })
+  })
+  await page.route(`**${filesPrefix}/guides/preview-target.html`, async (route) => {
+    if (route.request().method() === 'HEAD') {
+      await route.fulfill({ status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } })
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/html; charset=utf-8',
+      body: '<!doctype html><html><body><h1 id="changed-target">Changed HTML target</h1></body></html>',
+    })
+  })
+  await page.route(`**${filesPrefix}/guides/preview.html`, async (route) => {
+    const response = await route.fetch()
+    const source = await response.text()
+    await route.fulfill({
+      response,
+      body: source.replace('</main>', '<p><a href="preview-target.html?source=fixture#changed-target">Open a changed HTML document with fragment</a></p></main>'),
+    })
+  })
+  // Hold the bridge script so the click deliberately lands before the bridge is installed.
+  let releaseBridge: (() => void) | undefined
+  const bridgeHeld = new Promise<void>((resolve) => { releaseBridge = resolve })
+  await page.route('**/preview-bridge.js', async (route) => {
+    await bridgeHeld
+    await route.continue().catch(() => undefined)
+  })
+
+  await page.goto(previewUrl)
+  const frame = page.frameLocator('iframe[title="Local preview HTML"]')
+  const link = frame.getByRole('link', { name: 'Open a changed HTML document with fragment' })
+  await expect(link).toBeVisible()
+  await expect(frame.locator('script[data-preview-reader-bridge="ready"]')).toHaveCount(0)
+  await link.click()
+
+  await expect(page).toHaveURL(`/sre/_previews/${previewHeadSha}/guides/preview-target.html?group=pr%3A42&source=fixture#changed-target`)
+  await expect(page.locator('.preview-reader-header h1')).toHaveText('Preview fragment target')
+  await expect(page.locator('.preview-reader-path')).toHaveText('guides/preview-target.html')
+  await expect(page.frameLocator('iframe[title="Preview fragment target"]').getByRole('heading', { name: 'Changed HTML target' })).toBeVisible()
+  await expect(page.locator('iframe')).toHaveCount(1)
+  releaseBridge?.()
+})
+
 test('preview HTML raw resources use native frame navigation and preserve download, target, and modifier intent', async ({ page }) => {
   const previewUrl = `/sre/_previews/${previewHeadSha}/guides/preview.html?group=pr%3A42`
   const filesPrefix = `/_previews/sre/revisions/${previewHeadSha}/files`

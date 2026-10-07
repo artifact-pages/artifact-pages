@@ -185,27 +185,33 @@ function PreviewHtmlDocument({
     syncFrameHash()
   }, [syncFrameHash])
 
+  // Shared by the bridge message and the early-click safety net: both end as a reader navigation (history push).
+  const followFrameDestination = useCallback((href: string) => {
+    let frameDestination: URL
+    try {
+      frameDestination = new URL(href)
+    } catch {
+      return false
+    }
+    if (frameDestination.origin !== new URL(artifactUrl, window.location.origin).origin) return false
+    const destination = new URL(`${frameDestination.pathname}${frameDestination.search}${frameDestination.hash}`, window.location.origin)
+    const logicalRoute = resolveLogicalDocumentLink({ url: destination, route, manifest, productionIndex })
+    if (!logicalRoute) return false
+    navigate(logicalRoute)
+    return true
+  }, [artifactUrl, manifest, navigate, productionIndex, route])
+
   useEffect(() => {
     const handleMessage = (event: MessageEvent<unknown>) => {
       const frame = iframeRef.current
       if (!frame) return
-      const expectedDocumentOrigin = new URL(artifactUrl, window.location.origin).origin
       const expectedFrameOrigin = window.location.origin
       if (event.source !== frame.contentWindow || event.origin !== expectedFrameOrigin || !isPreviewNavigationMessage(event.data)) return
-      let frameDestination: URL
-      try {
-        frameDestination = new URL(event.data.href)
-      } catch {
-        return
-      }
-      if (frameDestination.origin !== expectedDocumentOrigin) return
-      const destination = new URL(`${frameDestination.pathname}${frameDestination.search}${frameDestination.hash}`, window.location.origin)
-      const logicalRoute = resolveLogicalDocumentLink({ url: destination, route, manifest, productionIndex })
-      if (logicalRoute) navigate(logicalRoute)
+      followFrameDestination(event.data.href)
     }
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [artifactUrl, manifest, navigate, productionIndex, route])
+  }, [artifactUrl, followFrameDestination])
 
   if (loadState === 'failed') return <div className="preview-frame-state" role="alert">This HTML preview document could not be loaded.</div>
 
@@ -222,7 +228,12 @@ function PreviewHtmlDocument({
           if (isCurrentPreviewDocument(iframeRef.current, artifactUrl)) setLoadState('failed')
         }}
         onLoad={() => {
-          if (!isCurrentPreviewDocument(iframeRef.current, artifactUrl)) return
+          if (!isCurrentPreviewDocument(iframeRef.current, artifactUrl)) {
+            // A click before the bridge ran moved the frame itself to another raw file; follow it as a reader navigation.
+            const frameHref = readFrameHref(iframeRef.current)
+            if (frameHref) followFrameDestination(frameHref)
+            return
+          }
           syncFrameHash()
           loadCheckRef.current?.abort()
           const controller = new AbortController()
@@ -247,6 +258,14 @@ function PreviewHtmlDocument({
       />
     </>
   )
+}
+
+function readFrameHref(frame: HTMLIFrameElement | null) {
+  try {
+    return frame?.contentWindow?.location.href
+  } catch {
+    return undefined
+  }
 }
 
 function isCurrentPreviewDocument(frame: HTMLIFrameElement | null, artifactUrl: string) {
