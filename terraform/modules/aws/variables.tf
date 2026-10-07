@@ -15,8 +15,14 @@ variable "aws_region" {
 }
 
 variable "bucket_name" {
-  description = "Globally unique name for the private static origin bucket."
+  description = "Optional globally unique S3 bucket name override. Defaults to artifact-pages-<AWS provider account ID>-<AWS region>; availability is not guaranteed."
   type        = string
+  default     = null
+
+  validation {
+    condition     = var.bucket_name == null ? true : trimspace(var.bucket_name) != ""
+    error_message = "bucket_name must be omitted or contain a non-empty S3 bucket name."
+  }
 }
 
 variable "preview_retention_days" {
@@ -30,8 +36,13 @@ variable "preview_retention_days" {
 }
 
 variable "github_oidc_provider_arn" {
-  description = "ARN of the existing GitHub Actions OIDC provider in this AWS account."
+  description = "ARN of the existing GitHub Actions OIDC provider; its account ID must match the AWS provider target account."
   type        = string
+
+  validation {
+    condition     = can(regex("^arn:[^:]+:iam::[0-9]{12}:oidc-provider/.+$", var.github_oidc_provider_arn))
+    error_message = "github_oidc_provider_arn must be an IAM OIDC provider ARN with a 12-digit account ID."
+  }
 }
 
 variable "github_oidc_issuer_url" {
@@ -80,6 +91,11 @@ variable "web_acl_arn" {
   description = "Optional customer-managed WAFv2 web ACL ARN for viewer access policy."
   type        = string
   default     = null
+
+  validation {
+    condition     = var.web_acl_arn == null ? true : can(regex("^arn:[^:]+:wafv2:us-east-1:[0-9]{12}:global/webacl/[A-Za-z0-9_-]+/[A-Za-z0-9-]+$", var.web_acl_arn))
+    error_message = "web_acl_arn must be a global WAFv2 web ACL ARN in us-east-1, or null."
+  }
 }
 
 variable "price_class" {
@@ -104,4 +120,34 @@ check "aliases_require_certificate" {
     condition     = length(var.aliases) == 0 || var.acm_certificate_arn != null
     error_message = "Set acm_certificate_arn in us-east-1 when aliases are configured."
   }
+}
+
+variable "viewer_protocol_policy" {
+  description = "CloudFront viewer transport policy on every behavior: redirect HTTP (default), or reject HTTP with https-only. Independent of WAF."
+  type        = string
+  default     = "redirect-to-https"
+  nullable    = false
+  validation {
+    condition     = contains(["redirect-to-https", "https-only"], var.viewer_protocol_policy)
+    error_message = "viewer_protocol_policy must be redirect-to-https or https-only."
+  }
+}
+
+variable "waf_custom_rules" {
+  description = "Optional module-owned global WAF policy: ip_allowlist preset and validated AWS-native rule blocks. Mutually exclusive with web_acl_arn. See docs/waf.md for the supported subset and retirement procedure."
+  type = object({
+    default_action = optional(any, { allow = {} })
+    presets        = optional(any, {})
+    rules          = optional(any, [])
+    custom_response_bodies = optional(map(object({
+      content      = string
+      content_type = string
+    })), {})
+    visibility_config = optional(object({
+      cloudwatch_metrics_enabled = optional(bool, true)
+      sampled_requests_enabled   = optional(bool, false)
+      metric_name                = optional(string)
+    }), {})
+  })
+  default = null
 }

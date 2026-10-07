@@ -4,3 +4,4 @@ includes:
   cli: ./cli/Taskfile.yml
   web: ./web/Taskfile.yml
   cloudflare-module: ./terraform/modules/cloudflare/Taskfile.yml
+  aws-module: ./terraform/modules/aws/Taskfile.yml

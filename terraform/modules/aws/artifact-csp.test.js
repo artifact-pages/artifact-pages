@@ -25,10 +25,14 @@ test("AWS artifact response policy enforces the trusted HTML resource policy", (
   assert.doesNotMatch(mainTf, /aws_cloudfront_function" "artifact_csp/);
 });
 
-test("AWS attaches the policy to artifact and custom error behaviors over HTTPS", () => {
+test("AWS attaches the policy to artifact, raw preview and custom error behaviors over HTTPS", () => {
   assert.match(
     mainTf,
     /artifacts\s*=\s*\{\s*path_pattern\s*=\s*"\/_artifacts\/\*"/,
+  );
+  assert.match(
+    mainTf,
+    /previews\s*=\s*\{\s*path_pattern\s*=\s*"\/_previews\/\*"/,
   );
   assert.match(
     mainTf,
@@ -36,7 +40,7 @@ test("AWS attaches the policy to artifact and custom error behaviors over HTTPS"
   );
   assert.match(
     mainTf,
-    /response_headers_policy_id\s*=\s*contains\(\["artifacts",\s*"errors"\],\s*ordered_cache_behavior\.key\)\s*\?\s*aws_cloudfront_response_headers_policy\.artifact_csp\.id\s*:\s*null/,
+    /response_headers_policy_id\s*=\s*contains\(\["artifacts",\s*"errors",\s*"previews"\],\s*ordered_cache_behavior\.key\)\s*\?\s*aws_cloudfront_response_headers_policy\.artifact_csp\.id\s*:\s*null/,
   );
 
   const errorResponses = Array.from(
@@ -59,5 +63,5 @@ test("AWS attaches the policy to artifact and custom error behaviors over HTTPS"
     behaviorStart,
     behaviorEnd === -1 ? undefined : behaviorEnd,
   );
-  assert.match(behavior, /viewer_protocol_policy\s*=\s*"redirect-to-https"/);
+  assert.match(behavior, /viewer_protocol_policy\s*=\s*var\.viewer_protocol_policy/);
 });

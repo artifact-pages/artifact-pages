@@ -1,6 +1,6 @@
 # IMP-63 — Consolidate the Terraform package contents into the monorepo
 
-- Status: In progress
+- Status: Done
 - Lanes: Terraform
 - Depends on: [TD15](../technical-design/TD15-terraform-module-source-of-truth.md) (decided 2026-10-06, option 1)
 - Blocks: [IMP-64](IMP-64-generate-sync-terraform-packages.md), [IMP-38](IMP-38-terraform-registry-publication.md)
@@ -28,16 +28,16 @@ AWS (package `terraform-aws-artifact-pages` main `dd0fcde` vs `terraform/modules
 
 ## Acceptance criteria
 
-- [ ] `terraform/modules/cloudflare` contains `unchanged_delivery` and the WAF presets, the retention convergence, the root entry module and the registry-reader outputs; a plan against the verification zone state shows only the expected additions.
-- [ ] `terraform/modules/aws` contains the account guard, DNS/ACM composition, WAF presets and the monorepo `_control/*` IAM scopes and artifact CSP; each diff above is recorded as taken, dropped or deferred in the Results section.
-- [ ] Both module directories have the Registry layout (root files, `modules/`, `examples/`, `tests/`, scripts) and pass the package validation and contract tests from the package repositories, run from the monorepo (Terraform fmt/validate, `terraform test`, Node tests).
-- [ ] `terraform/deployments/*` and the monorepo CI use the new layout; existing monorepo tests still pass.
-- [ ] ISSUE-069's acceptance criteria point at the monorepo module.
-- [ ] The tree is a superset of both package repositories: a file-level comparison against `208abf5`/`80b2198` and `dd0fcde` lists no unexplained missing content.
+- [x] `terraform/modules/cloudflare` contains `unchanged_delivery` and the WAF presets, the retention convergence, the root entry module and the registry-reader outputs; a plan against the verification zone state shows only the expected additions. (Met in the Cloudflare half: `No changes`, see Results.)
+- [x] `terraform/modules/aws` contains the account guard, DNS/ACM composition, WAF presets and the monorepo `_control/*` IAM scopes and artifact CSP; each diff above is recorded as taken, dropped or deferred in the Results section. (There is no AWS deployment, so the verification-zone plan criterion above applies to Cloudflare only; AWS is checked by offline validation and mocked-provider tests.)
+- [x] Both module directories have the Registry layout (root files, `modules/`, `examples/`, `tests/`, scripts) and pass the package validation and contract tests from the package repositories, run from the monorepo (Terraform fmt/validate, `terraform test`, Node tests).
+- [x] `terraform/deployments/*` and the monorepo CI use the new layout; existing monorepo tests still pass.
+- [x] ISSUE-069's acceptance criteria point at the monorepo module.
+- [x] The tree is a superset of both package repositories: a file-level comparison against `208abf5`/`80b2198` and `dd0fcde` lists no unexplained missing content.
 
 ## Results
 
-Cloudflare half done in this slice (2026-10-07). AWS is deferred to a follow-up PR that starts after the `cli-sync-remove` work lands, because that work edits `terraform/modules/aws/**`; the AWS acceptance criteria and the AWS diffs listed above stay open.
+Cloudflare half done in PR #38 (2026-10-07); AWS half done in the follow-up PR (2026-10-07, after `cli-sync-remove` landed as PR #42). Both halves meet the acceptance criteria; the item is Done.
 
 ### Cloudflare: taken, dropped, deferred
 
@@ -71,8 +71,46 @@ Monorepo adaptations of package scripts: `scripts/validate.sh` defaults the Arti
 
 PR: https://github.com/artifact-pages/artifact-pages/pull/39. `modules/delivery/main.tf` manages `cloudflare_r2_managed_domain.development` with `enabled = false`; tests (`modules/delivery/main.test.js`, `tests/cloudflare-contract.test.js`, `modules/delivery/tests/r2_dev_disabled.tftest.hcl`) assert it is managed and disabled. Read-only plan of `terraform/deployments/cloudflare-verify` against a copy of the verification state: `Plan: 1 to add, 0 to change, 0 to destroy.` (only the managed domain). Production receives it when `admin` switches to the monorepo-synced module (IMP-65); applying to the verification zone is an owner-approved step after merge. Applied to the verification zone on 2026-10-07 after owner approval: `Apply complete! Resources: 1 added, 0 changed, 0 destroyed.`, re-plan `No changes`, Cloudflare API reports `enabled: false` for `artifact-pages-verify`; state backups `cloudflare-verify-20261007T140012-pre-r2dev.tfstate` / `...T140137-post-r2dev.tfstate` in `~/.config/artifact-pages/state-backup/`.
 
+### AWS: taken, dropped, deferred
+
+Base: package `dd0fcde` copied into `terraform/modules/aws` in Registry layout. The monorepo files already sat at the Registry root (`main.tf`, `variables.tf`, `outputs.tf`, `versions.tf`, `routes.js`, tests), so no `git mv` was needed; package-only files were added next to them and `main.tf` was merged by hand.
+
+| Diff | Decision |
+| --- | --- |
+| Target account guard (`aws_caller_identity`, `terraform_data.target_account_guard`, `depends_on` on every resource, OIDC provider ARN account match, `github_oidc_provider_arn` validation, default `bucket_name = artifact-pages-<account>-<region>`) | Taken. |
+| `viewer_protocol_policy` variable (`redirect-to-https` / `https-only`) on every behavior | Taken. |
+| WAF presets: `waf.tf`, `waf-validation.tf`, `waf_custom_rules`, `web_acl_arn` validation, `docs/waf.md`, `scripts/generate-waf.py`, `scripts/validate-waf.sh`, `tests/waf-console.test.js` | Taken unchanged. |
+| DNS/ACM composition `modules/cloudflare-dns-acm` (IMP-39) with `examples/cloudflare-dns-acm-consumer` and `tests/cloudflare-dns-acm-account` | Taken unchanged. |
+| `examples/local-consumer`, `examples/registry-consumer`, `Taskfile.yml`, `LICENSE`, `.gitignore`, provider lock files | Taken (Taskfile gains `check`). |
+| Contract tests: `tests/aws-contract.test.js`, `tests/cli-contract`, `tests/cli-contract-mismatch` | Taken. `aws-contract.test.js` was adapted to the merged module (satellite `cloudfront:CreateInvalidation`, selected-site index/preview/control deletes, response headers policy instead of the CloudFront Function). |
+| Outputs: `accountId` in `aws_deployment_config_yaml`, `.bucket` instead of `.id` for bucket outputs | Taken. The CLI config parser accepts `accountId` (checked by `tests/cli-contract`). |
+| `_control/*` IAM scopes (`site-cache`, `publish-state`, `app-cache/retry.json`, `preview-cleanup`, admin app-bundle delete, satellite `_previews/<site>/*` delete and `RevalidateSelectedSiteDistribution`, including those of PR #42) | Kept (monorepo-only). The exact statements are unchanged; moving them to prefix level is IMP-66. |
+| `aws_cloudfront_response_headers_policy.artifact_csp` and `artifact-csp.test.js`, `routes.test.js`, `deployment.test.js` | Kept (monorepo-only), see the CSP decision below. |
+| `aws_cloudfront_function.trusted_html_policy`, `trusted-html-policy.js`, per-behavior `trusted_html` flag | Dropped, replaced by the response headers policy (below). |
+| `provider "aws"` block in `versions.tf` | Dropped from the module (the package already had none); `terraform/deployments/aws` keeps it, and the examples declare their own. |
+| Provider constraint `~> 6.0`, `required_version >= 1.5.0` | Taken from the package (unchanged on both sides). |
+| `README.md` | Package text merged with monorepo content: response headers policy description, `_control` permission paragraph (restored under "Control-state permissions"), app-cache/preview-cleanup/publish-state wording. Registry-address and migration text is copied unchanged and left to IMP-64/IMP-38 (the namespace becomes `artifact-pages/artifact-pages/aws`). |
+| Callers: `terraform/deployments/aws` (now sources `../../modules/aws` instead of the sibling package checkout; new pass-through inputs `web_acl_arn`, `waf_custom_rules`, `viewer_protocol_policy`; README), `docs/architecture/repository-layout.md`, root `package.json` (`test:aws-deployment`, `test:provider-delivery` include `tests/aws-contract.test.js`; `test:provider-delivery` also `tests/cli-validation-layout.test.js`), root `Taskfile.yml` (`aws-module:check`), `.github/workflows/verify.yml` (new `terraform-aws` job "AWS Terraform module") | Updated. No `docs/guides/*` page names the AWS module path. |
+
+**Artifact CSP decision.** The monorepo response headers policy is kept and the package's CloudFront Function is dropped. Reasons:
+
+- The function and the response headers policy emit the same effective policy. The function's extra source `https://<host>/_artifacts/<site>/` is a subset of the `https:` source that both policies contain, and every behavior serves HTTPS only (redirect or reject), so the path source adds nothing; the specification's artifact viewer contract describes `https:` coverage as intended.
+- A response headers policy is declarative (no function code, no per-invocation cost, no viewer-response function to test through `vm`), and `override = true` enforces it on the custom not-found page too, which the function did not cover.
+- `trusted_html` covered one more thing than the monorepo policy did: raw previews (`/_previews/*`). The monorepo policy was attached only to `artifacts` and `errors`, so previews had no CSP on AWS. The policy is now also attached to the `previews` behavior (same trust model as production HTML, specification section on preview HTML), and the policy now sets `X-Content-Type-Options: nosniff` (the function set it, and the Cloudflare rules set it) so the package behavior is fully covered.
+- Both mechanisms cannot sensibly coexist on the same behavior (two writers of one header); keeping one avoids an ordering question. A response headers policy applies to the whole behavior, so it also adds the CSP and `nosniff` headers to non-HTML objects under `/_previews/*` and `/_artifacts/*`; that is harmless. If path-exact scoping to `/_previews/<site>/<rev>/files/` ever matters, it needs a dedicated `/_previews/*/files/*` behavior (ordering by key in `local.cache_behaviors`), not a function.
+- Behavior change to review before a first real apply: raw previews and artifacts now carry `nosniff`; objects must therefore have correct `Content-Type` (the publisher sets it, and the Cloudflare side has done the same since the package line).
+
+### AWS verification
+
+- `terraform/modules/aws/scripts/validate.sh` under Terraform 1.9.8 (fmt, init and validate of root and both examples, `tests/cli-contract` default-bucket and bucket-override tests against the monorepo CLI config parser, mocked account-mismatch plans for the core module and for the DNS/ACM wrapper, `node --test tests/*.test.js` with 90 tests including the WAF console cases): passed, 90/90.
+- `npm run test:provider-delivery` (51/51), `npm run test:aws-deployment` and `npm run test:aws-routes`: passed. `terraform fmt -check` and `validate` of `terraform/deployments/aws`: passed. `go vet ./...` in `cli/`: clean (the contract helper carries `//go:build ignore`).
+- No AWS credentials exist locally and nothing is deployed on AWS, so there is no plan against a real account; AWS behavior (CloudFront routing, headers, IAM, OIDC) stays under T4, T14 and T15 deployment verification.
+- Provider lock files carry hashes for `linux_amd64`, `linux_arm64`, `darwin_amd64` and `darwin_arm64`, because CI runs Linux with a readonly lock.
+- File-level superset check against `dd0fcde` (57 package files): every file is present at the same relative path under `terraform/modules/aws/`, byte-identical except `main.tf` (merged), `README.md` (merged), `Taskfile.yml` (added `check`), `scripts/validate.sh` (monorepo CLI checkout, `cli/.local` helper, `grep -E` instead of `rg`), `tests/cli-contract/validator.go` (monorepo imports, yaml v3, `//go:build ignore`), `tests/aws-contract.test.js` (adapted as above), plus lock files (extra platform hashes). Missing: `trusted-html-policy.js` (dropped, see CSP decision). Monorepo-only additions: `artifact-csp.test.js`, `routes.test.js`, `deployment.test.js`, `tests/cli-validation-layout.test.js`. `deployment.test.js` and `artifact-csp.test.js` read only files inside the module directory.
+
 ### Still open
 
-- AWS (all AWS diffs and acceptance criteria): follow-up PR after `cli-sync-remove` lands.
 - The Cloudflare criterion "plan shows only the expected additions" is met as no changes against the verification state; production was not planned here.
-- Generator (IMP-64) must exclude monorepo-only files (`modules/delivery/main.test.js`) and rewrite the Registry address if the namespace changes.
+- Generator (IMP-64) must exclude monorepo-only files (`terraform/modules/cloudflare/modules/delivery/main.test.js`) and rewrite the Registry addresses (`tasuku43/...` in the copied README and `examples/registry-consumer`) to `artifact-pages/artifact-pages/<provider>`.
+- IMP-66 will move per-site control records under `_control/sites/<site>/` and switch the IAM statements to prefix level; the tests in `tests/aws-contract.test.js` and `deployment.test.js` pin the current exact statements and change with it.
+- Production `admin` keeps its `208abf5` pin until IMP-65; nothing is deployed on AWS.

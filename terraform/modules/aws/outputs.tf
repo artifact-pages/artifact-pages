@@ -1,6 +1,6 @@
 output "bucket_name" {
   description = "Private S3 origin bucket name."
-  value       = aws_s3_bucket.origin.id
+  value       = aws_s3_bucket.origin.bucket
 }
 
 output "distribution_id" {
@@ -29,8 +29,9 @@ output "aws_deployment_config_yaml" {
     schemaVersion = 1
     provider      = "aws"
     aws = {
+      accountId      = local.aws_account_id
       region         = var.aws_region
-      bucket         = aws_s3_bucket.origin.id
+      bucket         = aws_s3_bucket.origin.bucket
       distributionId = aws_cloudfront_distribution.site.id
     }
   })

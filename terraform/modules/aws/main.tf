@@ -1,8 +1,11 @@
 locals {
-  bucket_arn     = "arn:aws:s3:::${var.bucket_name}"
-  bucket_objects = "${local.bucket_arn}/*"
-  origin_id      = "${var.name_prefix}-s3-origin"
-  github_issuer  = trimprefix(var.github_oidc_issuer_url, "https://")
+  aws_account_id                  = data.aws_caller_identity.current.account_id
+  github_oidc_provider_account_id = split(":", var.github_oidc_provider_arn)[4]
+  bucket_name                     = coalesce(var.bucket_name, "artifact-pages-${local.aws_account_id}-${var.aws_region}")
+  bucket_arn                      = "arn:aws:s3:::${local.bucket_name}"
+  bucket_objects                  = "${local.bucket_arn}/*"
+  origin_id                       = "${var.name_prefix}-s3-origin"
+  github_issuer                   = trimprefix(var.github_oidc_issuer_url, "https://")
 
   satellite_role_names = {
     for site_id in keys(var.satellite_github_subjects) :
@@ -136,12 +139,29 @@ locals {
   ]
 }
 
+data "aws_caller_identity" "current" {}
+
+resource "terraform_data" "target_account_guard" {
+  input = local.aws_account_id
+
+  lifecycle {
+    precondition {
+      condition     = local.aws_account_id == local.github_oidc_provider_account_id
+      error_message = "The AWS provider account must match the account ID in github_oidc_provider_arn."
+    }
+  }
+}
+
 resource "aws_s3_bucket" "origin" {
-  bucket = var.bucket_name
+  depends_on = [terraform_data.target_account_guard]
+
+  bucket = local.bucket_name
   tags   = var.tags
 }
 
 resource "aws_s3_bucket_public_access_block" "origin" {
+  depends_on = [terraform_data.target_account_guard]
+
   bucket                  = aws_s3_bucket.origin.id
   block_public_acls       = true
   block_public_policy     = true
@@ -150,6 +170,8 @@ resource "aws_s3_bucket_public_access_block" "origin" {
 }
 
 resource "aws_s3_bucket_ownership_controls" "origin" {
+  depends_on = [terraform_data.target_account_guard]
+
   bucket = aws_s3_bucket.origin.id
 
   rule {
@@ -158,6 +180,8 @@ resource "aws_s3_bucket_ownership_controls" "origin" {
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "origin" {
+  depends_on = [terraform_data.target_account_guard]
+
   bucket = aws_s3_bucket.origin.id
 
   rule {
@@ -168,6 +192,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "origin" {
 }
 
 resource "aws_s3_bucket_versioning" "origin" {
+  depends_on = [terraform_data.target_account_guard]
+
   bucket = aws_s3_bucket.origin.id
 
   versioning_configuration {
@@ -180,7 +206,7 @@ resource "aws_s3_bucket_versioning" "origin" {
 resource "aws_s3_bucket_lifecycle_configuration" "origin" {
   bucket = aws_s3_bucket.origin.id
 
-  depends_on = [aws_s3_bucket_versioning.origin]
+  depends_on = [terraform_data.target_account_guard, aws_s3_bucket_versioning.origin]
 
   rule {
     id     = "expire-preview-projection"
@@ -236,6 +262,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "origin" {
 }
 
 resource "aws_cloudfront_origin_access_control" "origin" {
+  depends_on = [terraform_data.target_account_guard]
+
   name                              = "${var.name_prefix}-s3-oac"
   description                       = "Signed CloudFront access to the private Artifact Pages origin."
   origin_access_control_origin_type = "s3"
@@ -244,6 +272,8 @@ resource "aws_cloudfront_origin_access_control" "origin" {
 }
 
 resource "aws_cloudfront_function" "routes" {
+  depends_on = [terraform_data.target_account_guard]
+
   name    = "${var.name_prefix}-logical-routes"
   runtime = "cloudfront-js-2.0"
   comment = "Keep storage keys private from navigation and send logical routes to the SPA shell."
@@ -252,8 +282,10 @@ resource "aws_cloudfront_function" "routes" {
 }
 
 resource "aws_cloudfront_response_headers_policy" "artifact_csp" {
+  depends_on = [terraform_data.target_account_guard]
+
   name    = "${var.name_prefix}-artifact-csp"
-  comment = "Enforce the trusted-HTML resource policy on artifact responses."
+  comment = "Enforce the trusted-HTML resource policy on artifact, raw preview and error responses."
 
   security_headers_config {
     content_security_policy {
@@ -264,10 +296,16 @@ resource "aws_cloudfront_response_headers_policy" "artifact_csp" {
       ])
       override = true
     }
+
+    content_type_options {
+      override = true
+    }
   }
 }
 
 resource "aws_cloudfront_cache_policy" "no_store" {
+  depends_on = [terraform_data.target_account_guard]
+
   name        = "${var.name_prefix}-no-store"
   comment     = "No shared-cache freshness for the SPA shell and local preview bytes."
   min_ttl     = 0
@@ -291,6 +329,8 @@ resource "aws_cloudfront_cache_policy" "no_store" {
 }
 
 resource "aws_cloudfront_cache_policy" "indexes" {
+  depends_on = [terraform_data.target_account_guard]
+
   name        = "${var.name_prefix}-indexes"
   comment     = "Registry and site indexes have at most 60 seconds of shared-cache freshness."
   min_ttl     = 0
@@ -314,6 +354,8 @@ resource "aws_cloudfront_cache_policy" "indexes" {
 }
 
 resource "aws_cloudfront_cache_policy" "artifacts" {
+  depends_on = [terraform_data.target_account_guard]
+
   name        = "${var.name_prefix}-artifacts"
   comment     = "Artifact objects have at most 300 seconds of shared-cache freshness."
   min_ttl     = 0
@@ -337,6 +379,8 @@ resource "aws_cloudfront_cache_policy" "artifacts" {
 }
 
 resource "aws_cloudfront_cache_policy" "immutable_assets" {
+  depends_on = [terraform_data.target_account_guard]
+
   name        = "${var.name_prefix}-immutable-assets"
   comment     = "Honor application asset Cache-Control; allow hashed assets up to one year."
   min_ttl     = 0
@@ -360,12 +404,14 @@ resource "aws_cloudfront_cache_policy" "immutable_assets" {
 }
 
 resource "aws_cloudfront_distribution" "site" {
+  depends_on = [terraform_data.target_account_guard, terraform_data.waf_guard, aws_wafv2_web_acl.viewer]
+
   enabled         = true
   is_ipv6_enabled = true
   comment         = "${var.name_prefix} static application and content planes"
   aliases         = var.aliases
   price_class     = var.price_class
-  web_acl_id      = var.web_acl_arn
+  web_acl_id      = local.effective_web_acl_arn
 
   origin {
     domain_name              = aws_s3_bucket.origin.bucket_regional_domain_name
@@ -381,7 +427,7 @@ resource "aws_cloudfront_distribution" "site" {
 
   default_cache_behavior {
     target_origin_id       = local.origin_id
-    viewer_protocol_policy = "redirect-to-https"
+    viewer_protocol_policy = var.viewer_protocol_policy
     allowed_methods        = ["GET", "HEAD"]
     cached_methods         = ["GET", "HEAD"]
     cache_policy_id        = aws_cloudfront_cache_policy.no_store.id
@@ -399,17 +445,18 @@ resource "aws_cloudfront_distribution" "site" {
     content {
       path_pattern               = ordered_cache_behavior.value.path_pattern
       target_origin_id           = local.origin_id
-      viewer_protocol_policy     = "redirect-to-https"
+      viewer_protocol_policy     = var.viewer_protocol_policy
       allowed_methods            = ordered_cache_behavior.value.allowed_methods
       cached_methods             = ordered_cache_behavior.value.cached_methods
       cache_policy_id            = ordered_cache_behavior.value.cache_policy_id
       compress                   = true
-      response_headers_policy_id = contains(["artifacts", "errors"], ordered_cache_behavior.key) ? aws_cloudfront_response_headers_policy.artifact_csp.id : null
+      response_headers_policy_id = contains(["artifacts", "errors", "previews"], ordered_cache_behavior.key) ? aws_cloudfront_response_headers_policy.artifact_csp.id : null
 
       function_association {
         event_type   = "viewer-request"
         function_arn = aws_cloudfront_function.routes.arn
       }
+
     }
   }
 
@@ -444,6 +491,8 @@ resource "aws_cloudfront_distribution" "site" {
 }
 
 resource "aws_s3_object" "not_found" {
+  depends_on = [terraform_data.target_account_guard, aws_s3_bucket_public_access_block.origin]
+
   bucket                 = aws_s3_bucket.origin.id
   key                    = "_errors/not-found.html"
   content                = "<!doctype html><meta charset=utf-8><title>Not found</title><p>Not found</p>"
@@ -451,10 +500,11 @@ resource "aws_s3_object" "not_found" {
   cache_control          = "no-store"
   server_side_encryption = "AES256"
 
-  depends_on = [aws_s3_bucket_public_access_block.origin]
 }
 
 resource "aws_s3_bucket_policy" "origin" {
+  depends_on = [terraform_data.target_account_guard, aws_s3_bucket_public_access_block.origin]
+
   bucket = aws_s3_bucket.origin.id
 
   policy = jsonencode({
@@ -469,7 +519,6 @@ resource "aws_s3_bucket_policy" "origin" {
     }]
   })
 
-  depends_on = [aws_s3_bucket_public_access_block.origin]
 }
 
 data "aws_iam_policy_document" "admin_trust" {
@@ -497,12 +546,16 @@ data "aws_iam_policy_document" "admin_trust" {
 }
 
 resource "aws_iam_role" "admin" {
+  depends_on = [terraform_data.target_account_guard]
+
   name               = "${var.name_prefix}-admin-publisher"
   assume_role_policy = data.aws_iam_policy_document.admin_trust.json
   tags               = var.tags
 }
 
 resource "aws_iam_role_policy" "admin" {
+  depends_on = [terraform_data.target_account_guard]
+
   name = "${var.name_prefix}-admin-publisher"
   role = aws_iam_role.admin.id
 
@@ -539,6 +592,8 @@ data "aws_iam_policy_document" "satellite_trust" {
 }
 
 resource "aws_iam_role" "satellite" {
+  depends_on = [terraform_data.target_account_guard]
+
   for_each = var.satellite_github_subjects
 
   name               = local.satellite_role_names[each.key]
@@ -547,6 +602,8 @@ resource "aws_iam_role" "satellite" {
 }
 
 resource "aws_iam_role_policy" "satellite" {
+  depends_on = [terraform_data.target_account_guard]
+
   for_each = var.satellite_github_subjects
 
   name = local.satellite_role_names[each.key]

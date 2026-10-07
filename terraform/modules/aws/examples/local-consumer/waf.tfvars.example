@@ -1,0 +1,17 @@
+# Merge with your existing caller inputs. Documentation IPs are not production policy.
+viewer_protocol_policy = "https-only"
+waf_custom_rules = {
+  presets = { ip_allowlist = ["192.0.2.10/32", "2001:db8::/128"] }
+  rules = [{
+    name     = "limit-viewer-rate"
+    priority = 100
+    statement = {
+      rate_based_statement = {
+        aggregate_key_type    = "IP"
+        limit                 = 2000
+        evaluation_window_sec = 300
+      }
+    }
+    action = { block = { custom_response = { response_code = 403 } } }
+  }]
+}

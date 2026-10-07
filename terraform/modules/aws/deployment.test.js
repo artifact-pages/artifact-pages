@@ -118,7 +118,7 @@ test('AWS deployment maps the logical app and content paths to bounded cache pol
   const distribution = block(main, 'resource "aws_cloudfront_distribution" "site"')
   assert.match(distribution, /cache_policy_id\s*=\s*aws_cloudfront_cache_policy\.no_store\.id/u)
   assert.match(distribution, /for_each\s*=\s*local\.cache_behaviors/u)
-  assert.match(distribution, /viewer_protocol_policy\s*=\s*"redirect-to-https"/u)
+  assert.match(distribution, /viewer_protocol_policy\s*=\s*var\.viewer_protocol_policy/u)
 
   for (const [name, ttl] of [['no_store', 0], ['indexes', 60], ['artifacts', 300], ['immutable_assets', 31536000]]) {
     const cachePolicy = block(main, `resource "aws_cloudfront_cache_policy" "${name}"`)
@@ -270,6 +270,6 @@ test('deployment output remains compatible with the CLI AWS target contract', ()
   assert.match(targetOutput, /provider\s*=\s*"aws"/u)
   assert.doesNotMatch(targetOutput, /previewRetentionDays/u)
   assert.match(targetOutput, /region\s*=\s*var\.aws_region/u)
-  assert.match(targetOutput, /bucket\s*=\s*aws_s3_bucket\.origin\.id/u)
+  assert.match(targetOutput, /bucket\s*=\s*aws_s3_bucket\.origin\.bucket/u)
   assert.match(targetOutput, /distributionId\s*=\s*aws_cloudfront_distribution\.site\.id/u)
 })
