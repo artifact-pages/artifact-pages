@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdtempSync, mkdirSync, realpathSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import os from 'node:os'
 import path from 'node:path'
@@ -268,4 +268,59 @@ test('the baseline is the newest release tag strictly below the candidate, and a
   assert.equal(latestReleaseTag(v('0.1.0'), ['v0.1.0', 'not-a-release', 'v0.1.0-rc1']), undefined)
   assert.equal(latestReleaseTag(v('0.1.1'), ['v0.1.0', 'v0.1.1']), 'v0.1.0')
   assert.equal(latestReleaseTag(undefined, ['v0.1.0', 'v0.2.0']), 'v0.2.0')
+})
+
+
+ test('web read compatibility detects removed versions, removed formats and accepts additions', async () => {
+  const { compareWebReads } = await import('./compat-gate.mjs')
+  assert.deepEqual(compareWebReads({registry:[1], 'artifact-index':[1,2]}, {registry:[1,2], 'artifact-index':[1,2,3]}), [])
+  assert.deepEqual(compareWebReads({registry:[1], 'artifact-index':[1,2]}, {'artifact-index':[2]}), ['artifact-index', 'registry'])
+})
+
+
+test('the first prefixed web release ignores legacy root tags and keeps its own 0.x policy', (t) => {
+  const candidate = candidateTree(t, '9.0.0')
+  const output = path.join(candidate, 'web-verdict.json')
+  const result = spawnSync(process.execPath, [path.join(projectRoot, 'scripts/compat-gate.mjs'), '--candidate', candidate, '--tag', 'web/v0.1.0', '--out', output], { cwd: projectRoot, encoding: 'utf8' })
+  assert.equal(result.status, 0, result.stderr)
+  const report = JSON.parse(readFileSync(output, 'utf8'))
+  assert.equal(report.component, 'web')
+  assert.equal(report.candidate.version, '0.1.0')
+  assert.equal(report.reasonCode, 'pre-1.0-compatibility-not-guaranteed')
+  assert.equal(report.baseline, undefined)
+})
+
+test('stable web gates use previous web tags and reject removed reads without a major bump', (t) => {
+  const fixture = realpathSync(candidateTree(t, '0.1.0'))
+  mkdirSync(path.join(fixture, 'scripts'))
+  for (const script of ['compat-gate.mjs', 'release-series.mjs', 'build-action-repos.mjs']) cpSync(path.join(projectRoot, 'scripts', script), path.join(fixture, 'scripts', script))
+  const declaration = path.join(fixture, 'web/src/data/supported-schema-versions.json')
+  mkdirSync(path.dirname(declaration), { recursive: true })
+  writeFileSync(declaration, JSON.stringify({schemaVersion:1, reads:{registry:[1], 'artifact-index':[1]}}))
+  const git = (...args) => {
+    const result = spawnSync('git', args, { cwd: fixture, encoding: 'utf8' })
+    assert.equal(result.status, 0, result.stderr)
+    return result.stdout
+  }
+  git('init', '--quiet')
+  git('add', '.')
+  git('-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '--quiet', '-m', 'baseline')
+  git('tag', 'v9.0.0')
+  git('tag', 'web/v1.0.0')
+  const run = (tag) => {
+    const output = path.join(fixture, 'verdict.json')
+    const result = spawnSync(process.execPath, [path.join(fixture, 'scripts/compat-gate.mjs'), '--tag', tag, '--out', output], { cwd: fixture, encoding: 'utf8' })
+    assert.ok(existsSync(output), result.stderr + result.stdout)
+    return { result, report: JSON.parse(readFileSync(output, 'utf8')) }
+  }
+  const compatible = run('web/v1.1.0')
+  assert.equal(compatible.result.status, 0, compatible.result.stderr)
+  assert.equal(compatible.report.baseline.ref, 'web/v1.0.0')
+  assert.equal(compatible.report.verdict, 'compatible')
+  writeFileSync(declaration, JSON.stringify({schemaVersion:1, reads:{registry:[2], 'artifact-index':[1]}}))
+  const breaking = run('web/v1.1.0')
+  assert.equal(breaking.result.status, 1)
+  assert.equal(breaking.report.verdict, 'breaking')
+  assert.deepEqual(breaking.report.changedFormats, ['registry'])
+  assert.equal(run('web/v2.0.0').result.status, 0)
 })

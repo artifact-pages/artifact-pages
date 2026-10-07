@@ -42,6 +42,7 @@ import process from 'node:process'
 import { TextDecoder } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { gunzipSync } from 'node:zlib'
+import { releaseSeries, previousRelease } from './release-series.mjs'
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const localRoot = path.join(projectRoot, '.local')
@@ -68,7 +69,7 @@ function parseArguments(argv) {
     else if (argument === '--keep') options.keep = true
     else usage(`unknown argument ${argument}`)
   }
-  if (options.tag !== undefined && !SEMVER.test(options.tag)) usage(`--tag must look like vX.Y.Z, got ${options.tag}`)
+  if (options.tag !== undefined) { try { const series = releaseSeries(options.tag); if (series.action) usage('Action tags have no data-format compatibility gate') } catch (error) { usage(error.message) } }
   return options
 }
 
@@ -647,9 +648,48 @@ function checkVersion({ tag, baselineVersion, verdict }) {
   return { status: 'passed', tag, baseline: baseline.text, reason: verdict === 'breaking' ? 'breaking change with the required version increase' : 'compatible change; version increases' }
 }
 
+// Web releases compare their reader contract with the previous web series.
+// The JSON is checked against the browser decoders by IMP-67's unit suite.
+export function compareWebReads(previous, candidate) {
+  return Object.entries(previous).filter(([format, versions]) => versions.some((version) => !(candidate[format] ?? []).includes(version))).map(([format]) => format).sort()
+}
+async function webGate(options) {
+  const series = releaseSeries(options.tag)
+  const tags = git(projectRoot, ['tag', '--list', 'web/v*']).split('\n')
+  const previous = options.baseline ?? previousRelease(tags, options.tag)
+  const info = inspectCandidate(options.candidate)
+  const report = { component: 'web', candidate: { ...info.description, version: series.version }, combinations: [], checks: [] }
+  if (previous) report.baseline = { kind: 'ref', ref: previous, commit: resolveCommit(previous), version: options.baselineVersion ?? releaseSeries(previous).version }
+  if (series.version.startsWith('0.') || !previous) {
+    report.verdict = 'skipped'
+    report.result = 'skipped'
+    report.reasonCode = series.version.startsWith('0.') ? 'pre-1.0-compatibility-not-guaranteed' : 'no-baseline'
+    report.reason = series.version.startsWith('0.') ? 'cross-version compatibility is not guaranteed before 1.0.0' : 'no previous web release exists'
+  } else {
+    const read = (spec) => {
+      const relative = 'web/src/data/supported-schema-versions.json'
+      if (spec === 'worktree') return JSON.parse(readFileSync(path.join(projectRoot, relative), 'utf8')).reads
+      if (existsSync(spec) && statSync(spec).isDirectory()) return JSON.parse(readFileSync(path.join(spec, relative), 'utf8')).reads
+      return JSON.parse(git(projectRoot, ['show', `${spec}:${relative}`])).reads
+    }
+    report.changedFormats = compareWebReads(read(previous), read(options.candidate))
+    report.verdict = report.changedFormats.length ? 'breaking' : 'compatible'
+    report.result = 'passed'
+    report.checks.push({ name: 'web readers preserve previous supported format versions', status: report.changedFormats.length ? 'breaking' : 'passed' })
+  }
+  if (previous) {
+    report.versionCheck = checkVersion({ tag: `v${series.version}`, baselineVersion: report.baseline.version, verdict: report.verdict })
+    if (report.versionCheck.status === 'failed') report.result = 'failed'
+  }
+  console.log(JSON.stringify(report, null, 2))
+  writeVerdictFile(options.out, report)
+  return report.result === 'failed' ? 1 : 0
+}
+
 // ------------------------------------------------------------------- main
 async function main() {
   const options = parseArguments(process.argv.slice(2))
+  if (options.tag?.startsWith('web/')) return webGate(options)
   const upperBound = options.tag ? parseSemver(options.tag) : undefined
   const baselineSpec = options.baseline ?? latestReleaseTag(upperBound)
 

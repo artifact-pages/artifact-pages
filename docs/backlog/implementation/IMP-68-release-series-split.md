@@ -1,6 +1,7 @@
 # IMP-68 — Split release series: CLI, web and per-Action tags
 
-- Status: Open
+- Status: Done
+- Assignee: Codex
 - Lanes: CLI / release
 - Owner: Codex
 - Depends on: [TD17](../technical-design/TD17-config-pinned-component-versions.md), IMP-67
@@ -21,6 +22,17 @@ Replace the single product release with independent series (TD17 section 1): the
 
 ## Acceptance criteria
 
-- [ ] Each tag pattern releases only its component; dry-run evidence for all three.
-- [ ] Generated-content check covered by tests, including an `actions/shared/` change touching several Actions.
-- [ ] No tag or release is pushed by this slice; the first real releases are IMP-72 (owner approval).
+- [x] Each tag pattern releases only its component; dry-run evidence for all three.
+- [x] Generated-content check covered by tests, including an `actions/shared/` change touching several Actions.
+- [x] No tag or release is pushed by this slice; the first real releases are IMP-72 (owner approval).
+
+## Implementation and local verification (2026-10-08)
+
+- `release.yml` resolves an exact component tag, checks main ancestry and routes to CLI/web asset publication or one generated Action repository. CLI publication contains binaries, checksums, notices and the embedded compatibility asset; web publication retains bundle provenance, archive/manifest/checksum and the previous-web byte comparison. Only stable CLI publication requests latest; all 0.x releases remain prereleases and all web/Action releases opt out of latest.
+- Action generation accepts an independent Action version and selected source directory, retaining the CLI pin until IMP-70 replaces `release.json` with the bootstrap contract. Generation compares the complete published payload and imported shared-script closure against each Action's previous tag. An unchanged selected Action fails; changed other Actions warn.
+- Local bare-repository tests prove idempotent reruns, replacement of changed `v0.x` Action tags, refusal to move stable tags, and recovery after a partial sync. No remote GitHub tag, release or repository was changed.
+- The CLI compatibility gate keeps the previous root CLI baseline and its mixed-version suite. Web releases compare the browser reader declaration against the previous `web/v*` baseline; removing a previously readable format/version is breaking and requires a major step after 1.0. The 0.x skip remains explicit. Legacy root `v0.1.0` does not become the first prefixed web baseline.
+- Local dry-runs: root `v0.1.0`, `web/v0.1.0` and all four Action prefixes passed component/preflight/selected-generation checks; both first CLI/web gates skipped under the 0.x policy. YAML parsed and every release shell step passed `bash -n`. Focused Node suites: **36 passed** (`build-action-repos`, `compat-gate`, `release-notes`, `package-cli-release`). Tests use local fixture tags and file-based remotes only.
+- Independent review passed on the release source and the integration with reviewed IMP-69. Local packaging produced four platform binaries, checksums, notices and `artifact-pages_v0.1.0_compatibility.json` (7 assets); all 5 hashes passed and the native release binary's exported compatibility matched the JSON asset. The real web package contained 101 files, exact canonical `reads`, `sourceDirty: false` and the clean integration commit. The config-pinned archive verifier deployed every file byte-identically and confirmed repeat no-op.
+- Release API policy: `0.x` publishes with `--prerelease` and `make_latest: false`; stable CLI releases omit the prerelease flag and request latest. Web and Action releases never request latest. GitHub [does not allow prereleases to be latest](https://docs.github.com/en/rest/releases/releases#create-a-release); dry-runs execute the actual workflow publication shell steps with a local `gh` stub for all six component patterns in 0.x and stable versions.
+- First real component releases remain IMP-72 and require owner approval. No real tags, releases, deployment or apply were performed.

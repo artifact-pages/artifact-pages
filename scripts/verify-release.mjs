@@ -39,7 +39,11 @@ try {
   const admin = path.join(scratch, 'admin')
   const target = path.join(scratch, 'target')
   mkdirSync(admin, { recursive: true })
-  writeFileSync(path.join(admin, 'artifact-pages.yaml'), `schemaVersion: 1\nprovider: local\nlocal:\n  root: ${JSON.stringify(target)}\n`)
+  const installed = spawnSync(cli, ['version', '--format', 'json'], { encoding: 'utf8' })
+  if (installed.status !== 0) throw new Error('cannot read verifier CLI version')
+  const cliVersion = JSON.parse(installed.stdout).version
+  writeFileSync(path.join(admin, 'artifact-pages.yaml'), `schemaVersion: 1\ncli:\n  version: ${cliVersion}\nweb:\n  version: ${version}\nprovider: local\nlocal:\n  root: ${JSON.stringify(target)}\n`)
+
 
   const deploy = (extra = []) => {
     const result = spawnSync(cli, ['app', 'deploy', '--config', 'artifact-pages.yaml', '--format', 'json', ...extra], { cwd: admin, encoding: 'utf8' })
