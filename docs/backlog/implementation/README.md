@@ -24,7 +24,7 @@ Decided 2026-10-07 in [TD17](../technical-design/TD17-config-pinned-component-ve
 
 | Ticket | Status | Owner | Outcome |
 | --- | --- | --- | --- |
-| [IMP-67](IMP-67-web-compatibility-manifest.md) | Open | Claude / Codex | Web manifest lists the formats the reader reads. |
+| [IMP-67](IMP-67-web-compatibility-manifest.md) | Done | Codex | Web manifest lists the formats the reader reads. |
 | [IMP-68](IMP-68-release-series-split.md) | Open | Codex | CLI root tag, `web/v*` and per-Action tags release independently. |
 | [IMP-69](IMP-69-config-pins-and-compatibility-checks.md) | Open | Codex | `cli`/`web` config keys, storage version records, compatibility checks, `--accept-breaking`. |
 | [IMP-70](IMP-70-bootstrap-cli-and-override.md) | Open | Codex | Bootstrap re-exec, `release.json` v2, `cli-version` override. |

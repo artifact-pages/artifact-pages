@@ -6,6 +6,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
+import { classifyFormats } from './compat-gate.mjs'
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -73,6 +74,12 @@ async function createProject(projectRoot) {
   const scriptsRoot = path.join(projectRoot, 'scripts')
   await fs.mkdir(path.join(projectRoot, 'web', 'dist', 'assets'), { recursive: true })
   await fs.mkdir(scriptsRoot, { recursive: true })
+  const dataRoot = path.join(projectRoot, 'web', 'src', 'data')
+  await fs.mkdir(dataRoot, { recursive: true })
+  await fs.copyFile(
+    path.join(repositoryRoot, 'web', 'src', 'data', 'supported-schema-versions.json'),
+    path.join(dataRoot, 'supported-schema-versions.json'),
+  )
 
   for (const script of [
     'package-web.mjs',
@@ -236,6 +243,14 @@ test('competing public package:web operations cannot mix or replace one immutabl
     const archiveDigest = createHash('sha256').update(publishedBeforeRetry[0]).digest('hex')
     const manifest = JSON.parse(publishedBeforeRetry[1].toString('utf8'))
     const archivedPayload = JSON.parse(publishedBeforeRetry[0].toString('utf8'))
+    const table = JSON.parse(await fs.readFile(
+      path.join(projectRoot, 'web', 'src', 'data', 'supported-schema-versions.json'), 'utf8',
+    ))
+    assert.deepEqual(manifest.reads, table.reads)
+    for (const format of Object.keys(manifest.reads)) {
+      assert.equal(classifyFormats([{ format, status: 'changed' }]).mode, 'public-breaking',
+        `${format} must use the compatibility gate's public format name`)
+    }
     assert.equal(manifest.version, version)
     assert.equal(manifest.archive, archiveName)
     assert.equal(manifest.archiveSha256, archiveDigest)
@@ -345,5 +360,33 @@ test('competing public package:web operations cannot mix or replace one immutabl
       }
     }
     await fs.rm(temporaryRoot, { recursive: true, force: true })
+  }
+})
+
+test('packaging copies every reader version verbatim as the reader table evolves', async () => {
+  const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'artifact-pages-web-reads-'))
+  try {
+    await createProject(projectRoot)
+    const tablePath = path.join(projectRoot, 'web', 'src', 'data', 'supported-schema-versions.json')
+    const table = JSON.parse(await fs.readFile(tablePath, 'utf8'))
+    for (const versions of Object.values(table.reads)) versions.push(3, 2)
+    await fs.writeFile(tablePath, JSON.stringify(table))
+    const scriptsRoot = path.join(projectRoot, 'scripts')
+    run(process.execPath, [path.join(scriptsRoot, 'package-web.mjs'), '--version', 'reads-test'], {
+      cwd: projectRoot,
+      env: {
+        ...process.env,
+        npm_execpath: path.join(scriptsRoot, 'test-npm-cli.mjs'),
+        npm_node_execpath: process.execPath,
+        GAP_PACKAGE_WEB_BUILD_MARKER: path.join(projectRoot, 'build-started'),
+        GAP_PACKAGE_WEB_PAYLOAD: 'reader-versions',
+      },
+    })
+    const manifest = JSON.parse(await fs.readFile(
+      path.join(projectRoot, '.local', 'releases', 'artifact-pages-web-vreads-test.tar.gz.json'), 'utf8',
+    ))
+    assert.deepEqual(manifest.reads, table.reads, 'versions and their order must be copied without inference')
+  } finally {
+    await fs.rm(projectRoot, { recursive: true, force: true })
   }
 })
