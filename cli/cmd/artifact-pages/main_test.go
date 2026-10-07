@@ -281,6 +281,14 @@ func TestRunRegistryRegisterReadsSelectedConfigAndDryRunDoesNotCreateStorage(t *
 		t.Fatal(err)
 	}
 	args := []string{"registry", "sync", "--config", "deployment.yaml", "--format", "json"}
+	textDryRunArgs := []string{"registry", "sync", "--config", "deployment.yaml"}
+	var textStdout, textStderr bytes.Buffer
+	if err := run(t.Context(), append(textDryRunArgs, "--dry-run"), &textStdout, &textStderr); err != nil {
+		t.Fatalf("registry sync text dry-run for missing projection error = %v; stderr=%s", err, textStderr.String())
+	}
+	if !strings.Contains(textStdout.String(), "Registry projection: would create.") {
+		t.Fatalf("registry sync dry-run for missing projection should say it would create the projection: %s", textStdout.String())
+	}
 	var stdout, stderr bytes.Buffer
 	if err := run(t.Context(), append(args, "--dry-run"), &stdout, &stderr); err != nil {
 		t.Fatalf("registry sync dry-run error = %v; stderr=%s", err, stderr.String())
@@ -328,6 +336,27 @@ func TestRunRegistryRegisterReadsSelectedConfigAndDryRunDoesNotCreateStorage(t *
 	projection, err := os.ReadFile(filepath.Join(root, ".local", "storage", "_indexes", "sites.json"))
 	if err != nil || !strings.Contains(string(projection), `"id": "sre"`) {
 		t.Fatalf("config sites were not projected to local storage: contents=%s err=%v", projection, err)
+	}
+
+	textStdout.Reset()
+	textStderr.Reset()
+	if err := run(t.Context(), append(textDryRunArgs, "--dry-run"), &textStdout, &textStderr); err != nil {
+		t.Fatalf("registry sync text dry-run for unchanged projection error = %v; stderr=%s", err, textStderr.String())
+	}
+	if !strings.Contains(textStdout.String(), "Registry projection: unchanged.") {
+		t.Fatalf("registry sync dry-run for unchanged projection should say unchanged: %s", textStdout.String())
+	}
+	changedConfig := strings.Replace(config, "name: SRE & Platform", "name: SRE Platform", 1)
+	if err := os.WriteFile("deployment.yaml", []byte(changedConfig), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	textStdout.Reset()
+	textStderr.Reset()
+	if err := run(t.Context(), append(textDryRunArgs, "--dry-run"), &textStdout, &textStderr); err != nil {
+		t.Fatalf("registry sync text dry-run for changed projection error = %v; stderr=%s", err, textStderr.String())
+	}
+	if !strings.Contains(textStdout.String(), "Registry projection: would update.") {
+		t.Fatalf("registry sync dry-run for changed projection should say it would update: %s", textStdout.String())
 	}
 }
 

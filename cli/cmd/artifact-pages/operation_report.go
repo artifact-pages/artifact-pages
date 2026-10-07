@@ -143,11 +143,10 @@ func writeDeploymentReport(w io.Writer, result publisher.Result, resolved deploy
 	}
 	if result.RegistryUpdated != nil {
 		verb := "unchanged"
-		if *result.RegistryUpdated {
+		if dry {
+			verb = plannedRegistryProjectionVerb(result.Changes)
+		} else if *result.RegistryUpdated {
 			verb = "updated"
-			if dry {
-				verb = "will update"
-			}
 		}
 		fmt.Fprintf(w, "\n  Registry projection: %s.\n", verb)
 	}
@@ -168,6 +167,21 @@ func writeDeploymentReport(w io.Writer, result publisher.Result, resolved deploy
 	default:
 		fmt.Fprintf(w, "\n  Registry reconciliation complete · %d objects removed.\n", result.FilesRemoved)
 	}
+}
+
+func plannedRegistryProjectionVerb(changes []publisher.Change) string {
+	for _, change := range changes {
+		if change.Path != "_indexes/sites.json" {
+			continue
+		}
+		switch change.Action {
+		case "create":
+			return "would create"
+		case "update":
+			return "would update"
+		}
+	}
+	return "unchanged"
 }
 
 func countMarker(action string, counts map[string]int, w io.Writer) string {
