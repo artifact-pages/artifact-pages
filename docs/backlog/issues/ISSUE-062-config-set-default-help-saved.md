@@ -1,6 +1,6 @@
 # `config set-default --help` saves "--help" as the default config
 
-- Status: Open
+- Status: Done
 - Priority: P2
 - Area: CLI — `artifact-pages config set-default`
 
@@ -20,9 +20,9 @@ Asking for help on `config set-default` does not print help. The CLI treats `--h
 
 ## Acceptance criteria
 
-- [ ] `config set-default --help` and `config set-default -h` print usage, exit 0, and do not create or modify the default-config file.
-- [ ] `config set-default` with any other argument starting with `-` exits 2 with a usage error and writes nothing.
-- [ ] A regression test covers both cases in `cli/cmd/artifact-pages`.
+- [x] `config set-default --help` and `config set-default -h` print usage, exit 0, and do not create or modify the default-config file.
+- [x] `config set-default` with any other argument starting with `-` exits 2 with a usage error and writes nothing.
+- [x] A regression test covers both cases in `cli/cmd/artifact-pages`.
 
 ## Resolution
 
