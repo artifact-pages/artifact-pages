@@ -593,7 +593,7 @@ func TestRegistrySyncRetriesForcedCleanupWhenSiteIsAlreadyOmitted(t *testing.T) 
 			preservedBefore := make(map[string][]byte)
 			for _, key := range []string{
 				"_artifacts/docs/neighbor.html", "_indexes/docs/meta.json", "_previews/docs/catalog.json",
-				sitePublishStateKey("docs"), "index.html", "assets/app.js", "_control/private/sentinel", "_control/locks/sites/docs.json",
+				sitePublishStateKey("docs"), "index.html", "assets/app.js", "_control/private/sentinel", siteLockKey("docs"),
 			} {
 				object, _, err := backend.GetObject(context.Background(), key)
 				if err != nil {

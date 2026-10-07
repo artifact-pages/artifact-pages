@@ -3231,7 +3231,7 @@ test('a failed site registry load does not turn a preview list into not-found', 
   await expect(page.getByRole('heading', { name: 'Page not found' })).toHaveCount(0)
 })
 
-for (const path of ['/_control/locks/guide.json', '/%5Fcontrol/locks/guide.json', '/_CONTROL/locks/guide.json', '/unknown-site/nested/missing.html']) {
+for (const path of ['/_control/sites/guide/lock.json', '/%5Fcontrol/sites/guide/lock.json', '/_CONTROL/sites/guide/lock.json', '/unknown-site/nested/missing.html']) {
   test(`unavailable resource ${path} uses generic not-found recovery`, async ({ page }) => {
     if (decodeURIComponent(path).toLowerCase().startsWith('/_control/')) {
       // nginx rejects control paths before React runs. Model the permitted

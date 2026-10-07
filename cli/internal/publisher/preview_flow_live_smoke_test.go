@@ -307,7 +307,10 @@ type previewFlowSmokeBackend struct {
 func (backend *previewFlowSmokeBackend) mapKey(key string) (string, error) {
 	key = strings.TrimPrefix(key, "/")
 	if key == siteLockKey(backend.site) {
-		return backend.namespace + "control/locks/sites/" + backend.site + ".json", nil
+		return backend.namespace + "control/locks/site.json", nil
+	}
+	if key == legacySiteLockKey(backend.site) {
+		return backend.namespace + "control/locks/legacy-site.json", nil
 	}
 	canonicalPrefix := "_previews/" + backend.site + "/"
 	if strings.HasPrefix(key, canonicalPrefix) {
@@ -418,7 +421,7 @@ func (backend *previewFlowSmokeBackend) unmapKey(key string) string {
 	if strings.HasPrefix(key, projectionPrefix) {
 		return "_previews/" + backend.site + "/" + strings.TrimPrefix(key, projectionPrefix)
 	}
-	lockKey := backend.namespace + "control/locks/sites/" + backend.site + ".json"
+	lockKey := backend.namespace + "control/locks/site.json"
 	if key == lockKey {
 		return siteLockKey(backend.site)
 	}

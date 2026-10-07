@@ -283,7 +283,7 @@ func TestPublishSiteDryRunChecksRegistrationWithoutMutatingStorage(t *testing.T)
 	if got := backend.contentMutations.Load(); got != 0 {
 		t.Fatalf("dry-run performed %d content-plane mutations", got)
 	}
-	if keys, err := backend.lockMemoryBackend.ListKeys(context.Background(), "_control/locks/sites/"); err != nil || len(keys) != 0 {
+	if keys, err := backend.lockMemoryBackend.ListKeys(context.Background(), "_control/sites/"); err != nil || len(keys) != 0 {
 		t.Fatalf("dry-run lock objects = %v, err=%v; want no lock writes", keys, err)
 	}
 }

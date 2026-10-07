@@ -777,7 +777,7 @@ func createLocalUnregisterCheckout(t *testing.T) string {
 	}
 	for _, siteID := range []string{"sre", "docs", "registry"} {
 		lockJSON := []byte(`{"schemaVersion":1,"site":"` + siteID + `","state":"free"}`)
-		key := "_control/locks/sites/" + siteID + ".json"
+		key := "_control/sites/" + siteID + "/lock.json"
 		if siteID == "registry" {
 			key = "_control/locks/registry.json"
 		}
@@ -817,7 +817,7 @@ func assertLocalUnregisterResult(t *testing.T, storageRoot, siteID string) {
 			t.Errorf("unrelated object %q = %q, err=%v; want %q", key, contents, err, want)
 		}
 	}
-	for _, key := range []string{"_control/locks/sites/sre.json", "_control/locks/sites/docs.json", "_control/locks/registry.json"} {
+	for _, key := range []string{"_control/sites/sre/lock.json", "_control/sites/docs/lock.json", "_control/locks/registry.json"} {
 		if _, err := os.Stat(filepath.Join(storageRoot, filepath.FromSlash(key))); err != nil {
 			t.Errorf("control lock %q was removed: %v", key, err)
 		}

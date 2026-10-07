@@ -20,7 +20,7 @@ import (
 // digest (an interrupted transaction or out-of-band edit).
 func sitePriorStateLoader(backend ConditionalObjectBackend, siteID string) indexer.PriorStateLoader {
 	return func(ctx context.Context) (*indexer.PriorSiteState, error) {
-		stateObject, etag, err := backend.GetObject(ctx, sitePublishStateKey(siteID))
+		stateObject, etag, err := getSiteControl(ctx, backend, siteID, sitePublishStateKey(siteID))
 		if errors.Is(err, ErrObjectNotFound) {
 			return nil, nil
 		}

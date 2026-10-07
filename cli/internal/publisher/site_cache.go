@@ -33,8 +33,6 @@ const (
 	maxSiteCacheRetryBytes      = 16 << 20
 )
 
-func siteCacheRetryKey(site string) string { return "_control/site-cache/" + site + ".json" }
-
 var siteResourcePathSpellings = strings.NewReplacer("%21", "!", "%27", "'", "%28", "(", "%29", ")", "%3B", ";", "%2C", ",")
 
 func siteCachePaths(site string, changes []Change, previews *[]preview.CatalogReconciliationChange, pending []string) []string {
@@ -69,7 +67,7 @@ func siteCachePaths(site string, changes []Change, previews *[]preview.CatalogRe
 }
 
 func readSiteCacheRetry(ctx context.Context, backend ConditionalObjectBackend, site string) (siteCacheRetry, string, error) {
-	object, etag, err := backend.GetObject(ctx, siteCacheRetryKey(site))
+	object, etag, err := getSiteControl(ctx, backend, site, siteCacheRetryKey(site))
 	if errors.Is(err, ErrObjectNotFound) {
 		return siteCacheRetry{SchemaVersion: siteCacheRetrySchemaVersion, Site: site}, "", nil
 	}

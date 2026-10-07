@@ -53,12 +53,6 @@ type sitePublishObject struct {
 	CacheControl       string `json:"cacheControl"`
 }
 
-// sitePublishStateKey is intentionally a single mutable key per site. The
-// leading underscore keeps publisher coordination objects outside user routes.
-func sitePublishStateKey(site string) string {
-	return "_control/publish-state/" + site + ".json.gz"
-}
-
 func absentSitePublishGeneration(site string) string {
 	return sha256Hex([]byte("artifact-pages-publish-state-absent\x00" + site))
 }

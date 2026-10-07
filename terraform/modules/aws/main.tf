@@ -64,10 +64,7 @@ locals {
             "_artifacts/*",
             "_indexes/*",
             "_previews/*",
-            "_control/locks/*",
-            "_control/site-cache/*",
-            "_control/publish-state/*",
-            "_control/registry-cleanup.json",
+            "_control/*",
           ]
         }
       }
@@ -78,12 +75,7 @@ locals {
       Action = ["s3:GetObject"]
       Resource = [
         "${local.bucket_arn}/_indexes/sites.json",
-        "${local.bucket_arn}/_control/locks/*",
-        "${local.bucket_arn}/_control/site-cache/*",
-        "${local.bucket_arn}/_control/publish-state/*",
-        "${local.bucket_arn}/_control/registry-cleanup.json",
-        "${local.bucket_arn}/_control/app-cache/retry.json",
-        "${local.bucket_arn}/_control/preview-cleanup/*",
+        "${local.bucket_arn}/_control/*",
         "${local.bucket_arn}/index.html",
         "${local.bucket_arn}/preview-bridge.js",
         "${local.bucket_arn}/LICENSE",
@@ -102,12 +94,7 @@ locals {
         "${local.bucket_arn}/THIRD_PARTY_NOTICES.txt",
         "${local.bucket_arn}/assets/*",
         "${local.bucket_arn}/_indexes/sites.json",
-        "${local.bucket_arn}/_control/locks/*",
-        "${local.bucket_arn}/_control/site-cache/*",
-        "${local.bucket_arn}/_control/publish-state/*",
-        "${local.bucket_arn}/_control/registry-cleanup.json",
-        "${local.bucket_arn}/_control/app-cache/retry.json",
-        "${local.bucket_arn}/_control/preview-cleanup/*",
+        "${local.bucket_arn}/_control/*",
       ]
     },
     {
@@ -118,11 +105,7 @@ locals {
         "${local.bucket_arn}/_artifacts/*",
         "${local.bucket_arn}/_indexes/*/*",
         "${local.bucket_arn}/_previews/*",
-        "${local.bucket_arn}/_control/registry-cleanup.json",
-        "${local.bucket_arn}/_control/site-cache/*",
-        "${local.bucket_arn}/_control/publish-state/*",
-        "${local.bucket_arn}/_control/app-cache/retry.json",
-        "${local.bucket_arn}/_control/preview-cleanup/*",
+        "${local.bucket_arn}/_control/*",
         "${local.bucket_arn}/index.html",
         "${local.bucket_arn}/preview-bridge.js",
         "${local.bucket_arn}/LICENSE",
@@ -621,6 +604,8 @@ resource "aws_iam_role_policy" "satellite" {
           "${local.bucket_arn}/_indexes/${each.key}/*",
           "${local.bucket_arn}/_artifacts/${each.key}/*",
           "${local.bucket_arn}/_previews/${each.key}/*",
+          "${local.bucket_arn}/_control/sites/${each.key}/*",
+          # Transitional (IMP-66): exact pre-prefix keys, for CLIs that still use the old layout. Removed in a later module release.
           "${local.bucket_arn}/_control/locks/sites/${each.key}.json",
           "${local.bucket_arn}/_control/site-cache/${each.key}.json",
           "${local.bucket_arn}/_control/publish-state/${each.key}.json.gz",
@@ -638,6 +623,8 @@ resource "aws_iam_role_policy" "satellite" {
               "_indexes/${each.key}/*",
               "_artifacts/${each.key}/*",
               "_previews/${each.key}/*",
+              "_control/sites/${each.key}/*",
+              # Transitional (IMP-66): pre-prefix exact keys.
               "_control/locks/sites/${each.key}.json",
               "_control/site-cache/${each.key}.json",
               "_control/publish-state/${each.key}.json.gz",
@@ -653,6 +640,8 @@ resource "aws_iam_role_policy" "satellite" {
           "${local.bucket_arn}/_indexes/${each.key}/*",
           "${local.bucket_arn}/_artifacts/${each.key}/*",
           "${local.bucket_arn}/_previews/${each.key}/*",
+          "${local.bucket_arn}/_control/sites/${each.key}/*",
+          # Transitional (IMP-66): exact pre-prefix keys, for CLIs that still use the old layout. Removed in a later module release.
           "${local.bucket_arn}/_control/locks/sites/${each.key}.json",
           "${local.bucket_arn}/_control/site-cache/${each.key}.json",
           "${local.bucket_arn}/_control/publish-state/${each.key}.json.gz",
@@ -666,6 +655,8 @@ resource "aws_iam_role_policy" "satellite" {
         Resource = [
           "${local.bucket_arn}/_artifacts/${each.key}/*",
           "${local.bucket_arn}/_indexes/${each.key}/*",
+          "${local.bucket_arn}/_control/sites/${each.key}/*",
+          # Transitional (IMP-66): pre-prefix exact keys. The legacy lock is never deleted.
           "${local.bucket_arn}/_control/site-cache/${each.key}.json",
           "${local.bucket_arn}/_control/publish-state/${each.key}.json.gz",
           "${local.bucket_arn}/_control/preview-cleanup/${each.key}.json",
