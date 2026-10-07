@@ -1,6 +1,6 @@
 # Cloudflare publishers need three secrets for what is one token
 
-- Status: In progress
+- Status: Done
 - Assignee: Codex
 - Priority: P3
 - Area: CLI Cloudflare credentials, adoption
@@ -20,6 +20,12 @@ An operator can configure one token environment name for Cloudflare publishing. 
 
 ## Acceptance criteria
 
-- [ ] When both R2 credential values are absent, the CLI verifies the account API token and derives the R2 access key ID and secret. A config can name only the API token.
-- [ ] An explicit R2 key pair takes precedence without verification; a partial pair is rejected. A session token requires the explicit pair, and registry-reader credentials remain separate.
-- [ ] The Cloudflare deployment guide documents the single-token setup and its exact permissions.
+- [x] When both environment variable values named by `accessKeyIdEnv` and `secretAccessKeyEnv` are absent or empty, the CLI verifies the account API token and derives the R2 access key ID and secret. A config can name only the API token.
+- [x] An explicit R2 key pair takes precedence without verification; a partial pair is rejected. A session token requires the explicit pair, and registry-reader credentials remain separate.
+- [x] The English and Japanese Cloudflare deployment guides document the single-token setup and its exact permissions.
+
+## Resolution
+
+When both R2 credential environment variable values are absent or empty, the CLI reads the token named by `apiTokenEnv`, verifies it through the account-token endpoint, and derives the R2 access key ID from the active token ID and the secret from the SHA-256 of the exact token bytes. The explicit R2 pair still takes precedence without a verification request or eager purge-token read. Partial pairs and session tokens without an explicit pair are rejected; registry-reader credentials remain separate. The guides explain the next-release availability, environment setup, verification behavior during dry runs and no-ops, and required bucket and zone permissions.
+
+Verified with `cd cli && go test ./... -count=1`, `go vet ./...`, `gofmt -d` on the changed Go files, and `git diff --check`. The configuration-level regression test exercises named-token setup and an R2 request signed with the derived credentials. Independent review of commit `b370ccfe1dcb6867f2db83e8535b05a670139f3b` found no issues and independently reran the full Go tests, vet, and diff check.
