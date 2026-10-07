@@ -12,7 +12,7 @@ The in-repository [Cloudflare caller example](../../examples/cloudflare/terrafor
 
 The delivery module owns the complete zone root rulesets for the transform, custom firewall, cache, response-header, and configuration-settings phases. The configuration-settings rule turns off the edge features that rewrite HTML (email obfuscation, Rocket Loader, Automatic HTTPS Rewrites, Fonts, analytics injection, Polish) for the Artifact Pages hostname only, so artifacts and previews are delivered byte-for-byte; a zone that already has Configuration Rules must import that root and pass its rules through `existing_config_rules`. Review existing rules and import/merge them before applying; see its README for the exact resource addresses and preservation inputs. A Terraform apply uses `CLOUDFLARE_API_TOKEN` through the environment or a secret manager, with only the R2 custom/managed domain, R2 lifecycle, and zone Rulesets permissions needed by these modules, which include Transform Rules Edit, Cache Rules Edit, Zone WAF Edit, and Config Rules Edit. This infrastructure credential is separate from runtime CLI credentials. A normal CLI publisher starts with only the primary R2 access key and secret; `CF_API_TOKEN` is an optional runtime zone-scoped credential with cache purge permission for app or registry operations that actually invalidate public URLs. None of these credential values belong in Terraform variables, YAML, or the repository.
 
-`app deploy` and `app remove` serialize through the private `_control/locks/application.json` record and keep pending application URL invalidations in `_control/app-cache/retry.json`. The primary runtime R2 identity needs read/write access to the lock and read/write/delete access to that exact retry record. Keep both paths inside the private control namespace; they are not viewer content.
+`app deploy` and `app remove` serialize through the private `_control/locks/application.json` record and keep pending application URL invalidations in `_control/app-cache/retry.json`. The primary runtime R2 identity needs read/write access to the lock and read/write/delete access to that exact retry record. The admin identity also reads and writes the version records `_control/versions/app.json` and `_control/versions/registry.json`. Keep all of these paths inside the private control namespace; they are not viewer content.
 
 ## 2. Configure the CLI
 
@@ -37,7 +37,7 @@ The CLI defaults to those names, so the deployment YAML and Terraform output omi
 | `app remove` | Required | Not used | Required for a real removal's app cache purge |
 | `registry sync` | Required | Not used | Required only when a real operation requests invalidation |
 | `lock inspect`, `lock recover` | Required | Not used | Not needed |
-If registry-reader env names are present, `site sync` and `preview publish` require the corresponding access key and secret values before making provider requests, and use that identity only for `GetObject("_indexes/sites.json")`. Without those names, these commands read the registry with the primary credential. Other commands ignore configured reader env values. Site sync, registry sync, preview removal, and app removal check the API token before changing origin objects when those operations require a cache purge.
+If registry-reader env names are present, `site sync` and `preview publish` require the corresponding access key and secret values before making provider requests, and use that identity only for `GetObject` of the two exact objects `_indexes/sites.json` and `_control/versions/app.json` (the deployed-web record that writers check before writing). Without those names, these commands read both with the primary credential. Other commands ignore configured reader env values. Site sync, registry sync, preview removal, and app removal check the API token before changing origin objects when those operations require a cache purge.
 
 ### Optional delegated publisher
 
@@ -50,7 +50,7 @@ cloudflare:
   registryReaderSessionTokenEnv: CF_R2_REGISTRY_READER_SESSION_TOKEN # only for temporary reader credentials
 ```
 
-R2 temporary credentials support one bucket-level operation scope (`object-read-only` or `object-read-write`) plus exact object and prefix restrictions. Give the delegated publisher a read-only credential scoped to the exact `_indexes/sites.json` object and a read/write credential scoped to `_indexes/<site>/`, `_artifacts/<site>/`, `_previews/<site>/`, and the exact `_control/sites/<site>/lock.json`, `_control/sites/<site>/site-cache.json`, and `_control/sites/<site>/publish-state.json.gz` objects. The writer must be able to list and read its site prefixes, HEAD/GET/PUT its site objects, and delete stale artifacts and generated index/search objects under those prefixes; `_previews/<site>/*` also needs delete permission for preview removal. The exact cache retry, publish-state, and `_control/sites/<site>/preview-cleanup.json` objects need the operations used to retry and remove the site. The `object-read-write` scope supports read, write, and list; when minting locally with explicit action scopes, allow `ListObjectsV2`, `HeadObject`, `GetObject`, `PutObject`, `DeleteObject`, and `DeleteObjects`. Do not widen this to another site's paths, `/_indexes/sites.json`, or the application plane. The CLI uses the reader only for the registry read and the primary credential for site writes. Do not put the parent R2 secret or the API token used to mint temporary credentials in the satellite repository or workflow. Set the primary credential's session token through `CF_R2_SESSION_TOKEN`; set the reader credential's session token through `CF_R2_REGISTRY_READER_SESSION_TOKEN`. The CLI does not mint or refresh either credential.
+R2 temporary credentials support one bucket-level operation scope (`object-read-only` or `object-read-write`) plus exact object and prefix restrictions. Give the delegated publisher a read-only credential scoped to the two exact objects `_indexes/sites.json` and `_control/versions/app.json`, and a read/write credential scoped to `_indexes/<site>/`, `_artifacts/<site>/`, `_previews/<site>/`, and the exact `_control/sites/<site>/lock.json`, `_control/sites/<site>/site-cache.json`, `_control/sites/<site>/publish-state.json.gz` and `_control/sites/<site>/versions.json` objects (the writer's own version record). The writer must be able to list and read its site prefixes, HEAD/GET/PUT its site objects, and delete stale artifacts and generated index/search objects under those prefixes; `_previews/<site>/*` also needs delete permission for preview removal. The exact cache retry, publish-state, and `_control/sites/<site>/preview-cleanup.json` objects need the operations used to retry and remove the site. The `object-read-write` scope supports read, write, and list; when minting locally with explicit action scopes, allow `ListObjectsV2`, `HeadObject`, `GetObject`, `PutObject`, `DeleteObject`, and `DeleteObjects`. Do not widen this to another site's paths, `/_indexes/sites.json`, `_control/versions/app.json` or the application plane. The CLI uses the reader only for the registry and deployed-web reads and the primary credential for site writes. Do not put the parent R2 secret or the API token used to mint temporary credentials in the satellite repository or workflow. Set the primary credential's session token through `CF_R2_SESSION_TOKEN`; set the reader credential's session token through `CF_R2_REGISTRY_READER_SESSION_TOKEN`. The CLI does not mint or refresh either credential.
 
 ### Publish-state fast path and explicit repair
 
@@ -81,7 +81,7 @@ Make two separate R2 temporary-credential requests. Substitute a registered site
   "parentAccessKeyId": "<parent-r2-access-key-id>",
   "permission": "object-read-only",
   "ttlSeconds": 3600,
-  "objects": ["_indexes/sites.json"]
+  "objects": ["_indexes/sites.json", "_control/versions/app.json"]
 }
 ```
 
@@ -91,7 +91,7 @@ Make two separate R2 temporary-credential requests. Substitute a registered site
   "parentAccessKeyId": "<parent-r2-access-key-id>",
   "permission": "object-read-write",
   "ttlSeconds": 3600,
-  "objects": ["_control/sites/sre/lock.json", "_control/sites/sre/site-cache.json", "_control/sites/sre/publish-state.json.gz"],
+  "objects": ["_control/sites/sre/lock.json", "_control/sites/sre/site-cache.json", "_control/sites/sre/publish-state.json.gz", "_control/sites/sre/versions.json"],
   "prefixes": ["_indexes/sre/", "_artifacts/sre/", "_previews/sre/"]
 }
 ```
@@ -113,17 +113,19 @@ The deployed registry remains the source of publication eligibility. The remote 
 
 A job that only runs `preview publish` (for example a pull-request workflow) can use a narrower role than a production publisher. It needs these environment variables and no others: `CF_R2_ACCESS_KEY_ID` and `CF_R2_SECRET_ACCESS_KEY` (plus `CF_R2_SESSION_TOKEN` for temporary credentials), or the optional registry-reader pair described above for the one registry read. `CF_API_TOKEN` is not needed, because preview publication never requests cache invalidation.
 
-The paths below come from the CLI code (`cli/internal/preview`, the `ObjectPreviewStore` adapter and the site lock manager in `cli/internal/publisher`). A real publish uses only object `GET` and `PUT` (including conditional `PUT`); it never lists the bucket and never deletes objects.
+The paths below come from the CLI code (`cli/internal/preview`, the `ObjectPreviewStore` adapter and the site lock manager in `cli/internal/publisher`). A real publish uses object `GET` and `PUT` (including conditional `PUT`) and lists only the site's `_previews/<site>/revisions/` prefix, to validate retained revision manifests before it certifies the site's preview format; it never deletes objects.
 
 | Object | Access | Why |
 | --- | --- | --- |
 | `_indexes/sites.json` | read | Confirms the site is registered and its source matches. Through the registry-reader credential when one is configured. |
+| `_control/versions/app.json` | read | The deployed web's readable formats, checked before any write. Through the registry-reader credential when one is configured. |
+| `_control/sites/<site>/versions.json` | read and write | The site's version record, staged before and finalized after the catalog write, under the lock. |
 | `_control/sites/<site>/lock.json` | read and write | The per-site publication lock: conditional create, acquire, release, and the pre-write ownership check before a catalog replacement. |
 | `_previews/<site>/catalog.json` | read and write | The preview catalog, replaced under the lock. |
 | `_previews/<site>/revisions/<head-sha>/manifest.json` | read and write | Immutable revision manifest, created once; also read for other groups when the catalog is pruned of revisions whose manifest is gone. |
 | `_previews/<site>/revisions/<head-sha>/files/*` | read and write | Immutable preview bundle files, created once and compared byte-for-byte when a head is published again. |
 
-A role scoped to the exact registry object, the exact lock object, and the `_previews/<site>/` prefix is therefore sufficient; a `--dry-run` needs only the read side, takes no lock, and writes nothing. No production prefix is written: `_artifacts/`, `_indexes/<site>/`, `_control/sites/<site>/site-cache.json`, the application files, and the registry are never modified, and `_indexes/sites.json` is read only. Because the preview role can write the lock object, grant it per site so that a pull-request job cannot take the lock of another site. As with the delegated publisher above, the object-level scope is enforced by R2, not by the CLI.
+A role scoped to the exact registry and app-record objects, the exact lock and version-record objects, and the `_previews/<site>/` prefix (with list on its `revisions/` part) is therefore sufficient; a `--dry-run` needs only the read side, takes no lock, and writes nothing. No production prefix is written: `_artifacts/`, `_indexes/<site>/`, `_control/sites/<site>/site-cache.json`, the application files, and the registry are never modified, and `_indexes/sites.json` and `_control/versions/app.json` are read only. Because the preview role can write the lock object, grant it per site so that a pull-request job cannot take the lock of another site. As with the delegated publisher above, the object-level scope is enforced by R2, not by the CLI.
 
 ## 3. Deploy the app and register sites
 

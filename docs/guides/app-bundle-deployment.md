@@ -35,7 +35,7 @@ web:
   version: 0.1.0
 ```
 
-The value is an exact `MAJOR.MINOR.PATCH`. A config with neither `web` nor `cli` and storage without a deployed-web record keeps the older unpinned flow, which deploys the bundle of the CLI's own version from a root `vX.Y.Z` release; new deployments set `web.version`.
+The value is an exact `MAJOR.MINOR.PATCH`. A config with neither `web` nor `cli` and storage without a deployed-web record keeps the older unpinned flow, which deploys the bundle of the CLI's own version from a root `vX.Y.Z` release. Root releases made after the series split carry no web assets, so this path resolves only for earlier single-series releases. New deployments set `web.version`.
 
 AWS and Cloudflare targets use the same config locator and `artifact-pages app deploy` command. AWS derives an omitted bucket from its explicit account ID and region; Cloudflare defaults to the `artifact-pages` bucket and standard credential environment-variable names. Explicit target and environment-name overrides remain available, while credential values stay outside YAML. See [configuration and command syntax](../specification.md#22-deployment-configuration-and-command-interface) for the provider fields and locator rules.
 
