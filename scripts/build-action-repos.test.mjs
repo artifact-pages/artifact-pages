@@ -142,8 +142,8 @@ test('stable Action tags refuse replacement', (t) => {
   assert.equal(git(path.join(remotes, 'publish-action'), 'rev-parse', 'v1.0.0^{commit}'), head)
 })
 
-test('all release patterns select only their component and CLI alone is latest', (t) => {
-  assert.deepEqual(releaseSeries('v0.1.0'), { component: 'cli', version: '0.1.0', prefix: '', action: undefined, makeLatest: true })
+test('all release patterns select only their component and only stable CLI is latest', (t) => {
+  assert.deepEqual(releaseSeries('v0.1.0'), { component: 'cli', version: '0.1.0', prefix: '', action: undefined, prerelease: true, makeLatest: false })
   assert.equal(releaseSeries('web/v0.1.0').component, 'web')
   assert.equal(releaseSeries('web/v0.1.0').makeLatest, false)
   for (const name of actionNames) {
@@ -192,4 +192,45 @@ test('release preflight accepts all prefixed tags independently and rejects a mi
   const invalid = spawnSync(process.execPath, [path.join(projectRoot, 'scripts/release-preflight.mjs'), '--tag', 'v9.9.9', '--main-ref', 'HEAD'], { encoding: 'utf8' })
   assert.notEqual(invalid.status, 0)
   assert.match(invalid.stderr, /does not equal the CLI version constant/)
+})
+
+
+test('GitHub release policy keeps all 0.x prereleases off latest and only stable CLI becomes latest', () => {
+  for (const prefix of ['', 'web/', ...actionNames.map((name) => `${name}-action/`)]) {
+    const early = releaseSeries(`${prefix}v0.2.0`)
+    assert.equal(early.prerelease, true)
+    assert.equal(early.makeLatest, false)
+    const stable = releaseSeries(`${prefix}v1.0.0`)
+    assert.equal(stable.prerelease, false)
+    assert.equal(stable.makeLatest, prefix === '')
+  }
+})
+
+test('the actual publication workflow passes only component assets and valid GitHub release flags', (t) => {
+  const workflow = readFileSync(path.join(projectRoot, '.github/workflows/release.yml'), 'utf8')
+  const step = workflow.match(/      - name: Publish only the selected component assets\n        run: \|\n([\s\S]*?)(?=\n\n  verify-published:)/)?.[1]
+  assert.ok(step, 'publication step must remain exercised by this dry-run')
+  const actionStep = workflow.match(/      - name: Record the Action release without marking it latest\n        run: \|\n([\s\S]*)$/)?.[1]
+  assert.ok(actionStep, 'Action release step must remain exercised by this dry-run')
+  const tags = ['', 'web/', ...actionNames.map((name) => `${name}-action/`)].flatMap((prefix) => [`${prefix}v0.1.0`, `${prefix}v1.0.0`])
+  for (const tag of tags) {
+    const root = scratch(t), bin = path.join(root, 'bin'), series = releaseSeries(tag)
+    const script = (series.action ? actionStep : step).replace(/^          /gm, '')
+    mkdirSync(bin)
+    writeFileSync(path.join(bin, 'gh'), '#!/bin/sh\nprintf "%s\\n" "$@" > "$RELEASE_TEST_GH_CALL"\n', { mode: 0o755 })
+    mkdirSync(path.join(root, '.local/cli-release'), { recursive: true })
+    mkdirSync(path.join(root, '.local/releases'), { recursive: true })
+    const cliAssets = ['linux_amd64', 'compatibility.json', 'checksums.txt', 'THIRD_PARTY_NOTICES.txt'].map((suffix) => `.local/cli-release/artifact-pages_v${series.version}_${suffix}`)
+    const webBase = `.local/releases/artifact-pages-web-v${series.version}.tar.gz`
+    const webAssets = [webBase, `${webBase}.json`, `${webBase}.sha256`]
+    for (const asset of [...cliAssets, ...webAssets]) writeFileSync(path.join(root, asset), 'local test asset')
+    const calls = path.join(root, 'gh-args.txt')
+    const result = spawnSync('bash', ['-c', script], { cwd: root, encoding: 'utf8', env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, RELEASE_TEST_GH_CALL: calls, RELEASE_TAG: tag, RELEASE_VERSION: series.version, COMPONENT: series.component, RELEASE_ACTION: series.action ?? '', IS_PRERELEASE: String(series.prerelease), MAKE_LATEST: String(series.makeLatest), RUNNER_TEMP: root } })
+    assert.equal(result.status, 0, `${tag}: ${result.stderr}`)
+    const args = readFileSync(calls, 'utf8').trim().split('\n')
+    assert.deepEqual(args.slice(0, 3), ['release', 'create', tag])
+    assert.deepEqual(args.slice(3, args.indexOf('--verify-tag')).sort(), (series.action ? [] : series.component === 'cli' ? cliAssets : webAssets).sort())
+    assert.equal(args.includes('--prerelease'), series.prerelease)
+    assert.ok(args.includes(`--latest=${series.makeLatest}`))
+  }
 })

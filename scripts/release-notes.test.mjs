@@ -49,3 +49,11 @@ test('CLI and web release notes name only their own assets', () => {
   assert.match(web, /Unchanged.*web\/v0\.0\.1/)
   assert.doesNotMatch(web, /go install|One product version|ship together/)
 })
+
+
+test('release notes distinguish 0.x prereleases from stable components', () => {
+  for (const component of ['cli', 'web']) {
+    assert.match(buildNotes({version:'0.1.0',component}).split('\n')[0], /pre-release/)
+    assert.doesNotMatch(buildNotes({version:'1.0.0',component}).split('\n')[0], /pre-release/)
+  }
+})

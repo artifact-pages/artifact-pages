@@ -48,7 +48,8 @@ export function compareBundles(previous, next) {
 const list = (files) => files.slice(0, 12).map((file) => `  - \`${file}\``).join('\n') + (files.length > 12 ? `\n  - ... and ${files.length - 12} more` : '')
 
 export function buildNotes({ version, bundle, previousTag, verdict, component = 'web' }) {
-  const lines = [`Artifact Pages ${component} v${version} (pre-release)`, '', `This release contains only the ${component} component. CLI, web and Actions have independent release series.`, '']
+  const prerelease = version.startsWith('0.')
+  const lines = [`Artifact Pages ${component} v${version}${prerelease ? ' (pre-release)' : ''}`, '', `This release contains only the ${component} component. CLI, web and Actions have independent release series.`, '']
   if (component === 'cli') {
     lines.push('## Compatibility', '', verdict?.reasonCode === 'pre-1.0-compatibility-not-guaranteed'
       ? 'Cross-version compatibility is not guaranteed before 1.0.0, so the compatibility gate was skipped. The candidate still passed the normal release verification suite.'

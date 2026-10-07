@@ -5,7 +5,8 @@ export function releaseSeries(tag) {
   const match = new RegExp(`^(?:(web|${actionNames.map((name) => `${name}-action`).join('|')})/)?v(${exactVersion})$`).exec(tag)
   if (!match) throw new Error(`unsupported release tag ${tag}; use vX.Y.Z, web/vX.Y.Z or <name>-action/vX.Y.Z`)
   const component = match[1] ?? 'cli'
-  return { component, version: match[2], prefix: component === 'cli' ? '' : `${component}/`, action: component.endsWith('-action') ? component.slice(0, -7) : undefined, makeLatest: component === 'cli' }
+  const prerelease = match[2].startsWith('0.')
+  return { component, version: match[2], prefix: component === 'cli' ? '' : `${component}/`, action: component.endsWith('-action') ? component.slice(0, -7) : undefined, prerelease, makeLatest: component === 'cli' && !prerelease }
 }
 export function previousRelease(tags, tag) {
   const current = releaseSeries(tag)

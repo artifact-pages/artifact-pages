@@ -19,6 +19,8 @@ jobs:
       action: ${{ steps.series.outputs.action }}
       previous: ${{ steps.series.outputs.previous }}
       compat_tag: ${{ steps.series.outputs.compat_tag }}
+      prerelease: ${{ steps.series.outputs.prerelease }}
+      make_latest: ${{ steps.series.outputs.make_latest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -38,7 +40,7 @@ jobs:
           import { releaseSeries, previousRelease } from './scripts/release-series.mjs'
           const tag = process.env.RELEASE_TAG, series = releaseSeries(tag)
           const tags = execFileSync('git', ['tag', '--list'], { encoding: 'utf8' }).trim().split('\n')
-          for (const [name, value] of Object.entries({ component: series.component, version: series.version, action: series.action ?? '', previous: previousRelease(tags, tag) ?? '', compat_tag: series.action ? '' : tag })) console.log(`${name}=${value}`)
+          for (const [name, value] of Object.entries({ component: series.component, version: series.version, action: series.action ?? '', previous: previousRelease(tags, tag) ?? '', compat_tag: series.action ? '' : tag, prerelease: series.prerelease, make_latest: series.makeLatest })) console.log(`${name}=${value}`)
           JS
       - name: Reject unchanged tagged Actions and warn about pending Action releases
         env:
@@ -67,6 +69,8 @@ jobs:
       RELEASE_TAG: ${{ github.ref_name }}
       RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
       COMPONENT: ${{ needs.preflight.outputs.component }}
+      IS_PRERELEASE: ${{ needs.preflight.outputs.prerelease }}
+      MAKE_LATEST: ${{ needs.preflight.outputs.make_latest }}
       PREVIOUS_TAG: ${{ needs.preflight.outputs.previous }}
       VERDICT_JSON: ${{ needs.verify.outputs.compat_report }}
       GH_TOKEN: ${{ github.token }}
@@ -121,13 +125,13 @@ jobs:
           set -euo pipefail
           if [ "$COMPONENT" = cli ]; then
             assets=(.local/cli-release/artifact-pages_v"${RELEASE_VERSION}"_*)
-            latest=true
           else
             base=".local/releases/artifact-pages-web-v${RELEASE_VERSION}.tar.gz"
             assets=("$base" "$base.json" "$base.sha256")
-            latest=false
           fi
-          gh release create "$RELEASE_TAG" "${assets[@]}" --verify-tag --prerelease --latest="$latest" --title "Artifact Pages $RELEASE_TAG" --notes-file "$RUNNER_TEMP/notes.md"
+          flags=(--latest="$MAKE_LATEST")
+          if [ "$IS_PRERELEASE" = true ]; then flags+=(--prerelease); fi
+          gh release create "$RELEASE_TAG" "${assets[@]}" --verify-tag "${flags[@]}" --title "Artifact Pages $RELEASE_TAG" --notes-file "$RUNNER_TEMP/notes.md"
 
   verify-published:
     name: Verify published component
@@ -182,6 +186,7 @@ jobs:
       RELEASE_TAG: ${{ github.ref_name }}
       RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
       RELEASE_ACTION: ${{ needs.preflight.outputs.action }}
+      IS_PRERELEASE: ${{ needs.preflight.outputs.prerelease }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -217,4 +222,8 @@ jobs:
           SOURCE_SHA: ${{ github.sha }}
         run: scripts/sync-action-repos.sh "$RUNNER_TEMP/action-repos" "$RELEASE_VERSION"
       - name: Record the Action release without marking it latest
-        run: gh release create "$RELEASE_TAG" --verify-tag --prerelease --latest=false --title "$RELEASE_TAG" --notes "Generated $RELEASE_ACTION-action; published as v$RELEASE_VERSION in its repository."
+        run: |
+          set -euo pipefail
+          flags=(--latest=false)
+          if [ "$IS_PRERELEASE" = true ]; then flags+=(--prerelease); fi
+          gh release create "$RELEASE_TAG" --verify-tag "${flags[@]}" --title "$RELEASE_TAG" --notes "Generated $RELEASE_ACTION-action; published as v$RELEASE_VERSION in its repository."
