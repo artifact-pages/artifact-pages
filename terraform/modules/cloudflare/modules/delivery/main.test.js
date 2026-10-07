@@ -72,12 +72,13 @@ test('Cloudflare enforces the trusted CSP only on artifact and raw preview HTML 
   assert.match(variables, /variable\s+"existing_response_header_rules"[\s\S]*?type\s*=\s*list\(any\)[\s\S]*?default\s*=\s*\[\]/u)
 })
 
-test('Cloudflare custom domain is explicit and the alternate r2.dev domain is not managed here', () => {
+test('Cloudflare custom domain is explicit and the alternate r2.dev domain is managed and always disabled', () => {
   assert.match(source, /resource\s+"cloudflare_r2_custom_domain"\s+"public"\s*\{/u)
   assert.match(source, /domain\s*=\s*lower\(var\.public_hostname\)/u)
   assert.match(source, /enabled\s*=\s*true\s+zone_id\s*=\s*var\.zone_id/su)
   assert.match(source, /min_tls\s*=\s*var\.minimum_tls_version/u)
-  assert.doesNotMatch(source, /cloudflare_r2_managed_domain/u, 'r2.dev is verified and disabled by the operator, not managed by this module')
+  assert.match(source, /resource\s+"cloudflare_r2_managed_domain"\s+"development"\s*\{[^}]*?bucket_name\s*=\s*var\.bucket_name[^}]*?enabled\s*=\s*false\s*\}/u, 'r2.dev must stay managed and disabled')
+  assert.doesNotMatch(variables, /managed_domain|r2_dev/u, 'the r2.dev setting is not configurable')
   assert.match(variables, /variable\s+"connect_custom_domain"/u)
   assert.match(variables, /length\(var\.public_hostname\)\s*<=\s*253/u)
   assert.match(variables, /alltrue\(\[\s*for label in split\("\."\s*,\s*var\.public_hostname\)/u)
