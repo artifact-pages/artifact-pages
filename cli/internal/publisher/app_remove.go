@@ -55,7 +55,14 @@ func RemoveApp(ctx context.Context, backend DeploymentBackend, options AppRemove
 		return result, err
 	}
 
+	if _, _, err := readVersionRecord(ctx, conditional, appVersionsKey); err != nil {
+		return result, err
+	}
 	operation := func() (Result, error) {
+		_, appRecorded, err := readVersionRecord(ctx, conditional, appVersionsKey)
+		if err != nil {
+			return result, err
+		}
 		retry, retryETag, err := readAppCacheRetry(ctx, conditional)
 		if err != nil {
 			return result, err
@@ -63,6 +70,9 @@ func RemoveApp(ctx context.Context, backend DeploymentBackend, options AppRemove
 		keys, err := applicationObjectKeys(ctx, backend, metadata)
 		if err != nil {
 			return result, err
+		}
+		if appRecorded {
+			keys = append(keys, appVersionsKey)
 		}
 		plan := make([]Change, 0, len(keys))
 		for _, key := range keys {

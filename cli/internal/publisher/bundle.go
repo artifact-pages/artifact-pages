@@ -35,15 +35,16 @@ var versionLabel = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$`)
 var releaseRepositoryOwnerPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 
 type releaseManifest struct {
-	SchemaVersion int      `json:"schemaVersion"`
-	Product       string   `json:"product"`
-	Component     string   `json:"component"`
-	Version       string   `json:"version"`
-	Archive       string   `json:"archive"`
-	ArchiveSHA256 string   `json:"archiveSha256"`
-	SourceCommit  string   `json:"sourceCommit"`
-	SourceDirty   bool     `json:"sourceDirty"`
-	Files         []string `json:"files"`
+	Reads         map[string][]int `json:"reads"`
+	SchemaVersion int              `json:"schemaVersion"`
+	Product       string           `json:"product"`
+	Component     string           `json:"component"`
+	Version       string           `json:"version"`
+	Archive       string           `json:"archive"`
+	ArchiveSHA256 string           `json:"archiveSha256"`
+	SourceCommit  string           `json:"sourceCommit"`
+	SourceDirty   bool             `json:"sourceDirty"`
+	Files         []string         `json:"files"`
 }
 
 type bundleFile struct {
@@ -92,6 +93,9 @@ func loadAppBundle(archivePath string) (appBundle, error) {
 		return appBundle{}, errors.New("application release manifest is invalid or does not match the archive")
 	}
 
+	if err := validateWebReads(manifest.Reads); err != nil {
+		return appBundle{}, err
+	}
 	checksumData, err := os.ReadFile(archivePath + ".sha256")
 	if err != nil {
 		return appBundle{}, fmt.Errorf("read application archive checksum: %w", err)
@@ -196,12 +200,19 @@ func resolveAppArchive(ctx context.Context, options AppDeployOptions) (string, f
 	if repository == "" {
 		repository = "artifact-pages/artifact-pages"
 	}
+	if options.IndependentWeb && repository != "artifact-pages/artifact-pages" {
+		return "", nil, errors.New("web.version downloads only official artifact-pages releases")
+	}
 	if !validReleaseRepository(repository) {
 		return "", nil, errors.New("release repository must use owner/repository format")
 	}
 
 	archiveName := "artifact-pages-web-v" + options.Version + ".tar.gz"
-	baseURL := "https://github.com/" + repository + "/releases/download/v" + url.PathEscape(options.Version) + "/"
+	tagPrefix := "v"
+	if options.IndependentWeb {
+		tagPrefix = "web/v"
+	}
+	baseURL := "https://github.com/" + repository + "/releases/download/" + url.PathEscape(tagPrefix+options.Version) + "/"
 	downloadRoot, err := os.MkdirTemp("", "artifact-pages-app-release-")
 	if err != nil {
 		return "", nil, fmt.Errorf("create temporary application download directory: %w", err)
@@ -219,7 +230,7 @@ func resolveAppArchive(ctx context.Context, options AppDeployOptions) (string, f
 		contents, err := downloadReleaseAsset(ctx, baseURL+url.PathEscape(asset.name), asset.limit)
 		if err != nil {
 			cleanup()
-			return "", nil, fmt.Errorf("cannot fetch web release v%s from %s: %w; this CLI deploys the web bundle of its own version, so use a CLI build whose release exists or pass --archive with a bundle from npm run package:web", options.Version, repository, err)
+			return "", nil, fmt.Errorf("cannot fetch web release v%s from %s: %w; choose a published web.version or pass --archive with a bundle from npm run package:web", options.Version, repository, err)
 		}
 		if err := os.WriteFile(filepath.Join(downloadRoot, asset.name), contents, 0o600); err != nil {
 			cleanup()

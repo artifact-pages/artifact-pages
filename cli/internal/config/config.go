@@ -36,6 +36,7 @@ const (
 )
 
 var (
+	exactVersionPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
 	providerNamePattern = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 	environmentPattern  = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 	commitPattern       = regexp.MustCompile(`^[0-9a-fA-F]{40}$`)
@@ -77,7 +78,13 @@ type GCSLocalTarget struct {
 	Bucket   string `yaml:"bucket"`
 }
 
+type ComponentVersion struct {
+	Version string `yaml:"version"`
+}
+
 type DeploymentConfig struct {
+	CLI           *ComponentVersion `yaml:"cli,omitempty"`
+	Web           *ComponentVersion `yaml:"web,omitempty"`
 	SchemaVersion int               `yaml:"schemaVersion"`
 	Provider      string            `yaml:"provider"`
 	Local         *LocalTarget      `yaml:"local"`
@@ -170,6 +177,12 @@ func ParseLayers(contents [][]byte) (DeploymentConfig, error) {
 			config.PublicBaseURL = layer.PublicBaseURL
 		} else if layer.PublicBaseURL != "" {
 			config.PublicBaseURL = layer.PublicBaseURL
+		}
+		if layer.CLI != nil || layer.Web != nil {
+			if config.CLI != nil || config.Web != nil {
+				return DeploymentConfig{}, errors.New("cli and web may be set by at most one config layer")
+			}
+			config.CLI, config.Web = layer.CLI, layer.Web
 		}
 		if layer.Sites != nil {
 			config.Sites = cloneSites(layer.Sites)
@@ -308,6 +321,11 @@ func (config DeploymentConfig) WithDefaults() (DeploymentConfig, error) {
 }
 
 func (config DeploymentConfig) Validate() error {
+	for name, pin := range map[string]*ComponentVersion{"cli": config.CLI, "web": config.Web} {
+		if pin != nil && !exactVersionPattern.MatchString(pin.Version) {
+			return fmt.Errorf("%s.version must be exact MAJOR.MINOR.PATCH", name)
+		}
+	}
 	if config.SchemaVersion != SchemaVersion {
 		return fmt.Errorf("deployment config schemaVersion must be %d", SchemaVersion)
 	}
@@ -473,7 +491,7 @@ func validateConfigNode(document *yaml.Node, allowPartial bool) error {
 			}
 		}
 	}
-	for _, blockName := range []string{"local", "aws", "cloudflare", "gcpLocal"} {
+	for _, blockName := range []string{"local", "aws", "cloudflare", "gcpLocal", "cli", "web"} {
 		block := nodeMappingValue(root, blockName)
 		if block == nil {
 			continue

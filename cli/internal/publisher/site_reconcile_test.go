@@ -96,7 +96,7 @@ func TestPublishSitePreservesFilesMetadataOrderAndPrefixBoundaries(t *testing.T)
 		wantSourceKeys = append(wantSourceKeys, "_artifacts/sre/"+filepath.ToSlash(relative))
 	}
 	sort.Strings(wantSourceKeys)
-	events := backend.eventSnapshot()
+	events := backend.projectionEventSnapshot()
 	var putOrder []string
 	firstPut, deleteIndex, lastPut := -1, -1, -1
 	artifactListed, indexListed := -1, -1
@@ -109,6 +109,8 @@ func TestPublishSitePreservesFilesMetadataOrderAndPrefixBoundaries(t *testing.T)
 			if event == "list:_indexes/sre/" && indexListed < 0 {
 				indexListed = index
 			}
+		case event == "put:"+siteVersionsKey("sre"):
+			continue
 		case strings.HasPrefix(event, "put:"):
 			if firstPut < 0 {
 				firstPut = index
@@ -148,7 +150,7 @@ func TestPublishSitePreservesFilesMetadataOrderAndPrefixBoundaries(t *testing.T)
 	if deleteIndex < 0 || deleteIndex <= lastPut || deleteIndex != len(events)-2 {
 		t.Fatalf("stale deletion must follow all puts: %v", events)
 	}
-	if got := backend.eventSnapshot()[deleteIndex]; got != "delete:_artifacts/sre/stale.txt" {
+	if got := backend.projectionEventSnapshot()[deleteIndex]; got != "delete:_artifacts/sre/stale.txt" {
 		t.Fatalf("delete event = %q, want only the stale artifact key", got)
 	}
 
@@ -222,7 +224,7 @@ func TestPublishSiteAbortsBeforeWritesWhenIndexListingFails(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "list deployed site objects under _indexes/sre/") {
 		t.Fatalf("PublishSite() error = %v, want index-prefix listing failure", err)
 	}
-	events := backend.eventSnapshot()
+	events := backend.projectionEventSnapshot()
 	if strings.Join(events, "\n") != "list:_artifacts/sre/\nlist:_indexes/sre/" {
 		t.Fatalf("operations before failed listing = %v, want both prefix lists and no writes", events)
 	}
@@ -245,7 +247,7 @@ func TestPublishSiteRetriesAfterMetadataUploadFailureBeforeStaleDeletion(t *test
 	if _, exists := backend.lockMemoryBackend.objects["_artifacts/sre/stale.html"]; !exists {
 		t.Fatal("stale artifact was deleted before metadata upload completed")
 	}
-	firstEvents := backend.eventSnapshot()
+	firstEvents := backend.projectionEventSnapshot()
 	if strings.Contains(strings.Join(firstEvents, "\n"), "delete:") {
 		t.Fatalf("first publish deleted stale keys after a failed upload: %v", firstEvents)
 	}
@@ -264,7 +266,7 @@ func TestPublishSiteRetriesAfterMetadataUploadFailureBeforeStaleDeletion(t *test
 	if got := backend.lockMemoryBackend.objects["_indexes/sre/meta.json"].ContentType; got != "application/json; charset=utf-8" {
 		t.Fatalf("meta.json Content-Type = %q", got)
 	}
-	if events := backend.eventSnapshot(); len(events) < 2 || events[len(events)-2] != "delete:_artifacts/sre/stale.html" || events[len(events)-1] != "delete:"+siteCacheRetryKey("sre") {
+	if events := backend.projectionEventSnapshot(); len(events) < 2 || events[len(events)-2] != "delete:_artifacts/sre/stale.html" || events[len(events)-1] != "delete:"+siteCacheRetryKey("sre") {
 		t.Fatalf("retry operations = %v, want stale deletion last", events)
 	}
 }
@@ -302,7 +304,7 @@ func TestPublishSiteRetriesAfterArtifactAndIndexUploadFailures(t *testing.T) {
 			if err == nil || !strings.Contains(err.Error(), "injected object upload failure") {
 				t.Fatalf("first PublishSite() error = %v, want injected failure for %s", err, test.failedKey)
 			}
-			firstEvents := backend.eventSnapshot()
+			firstEvents := backend.projectionEventSnapshot()
 			if !strings.Contains(strings.Join(firstEvents, "\n"), "put:"+test.failedKey) {
 				t.Fatalf("first publish did not attempt the selected replacement: %v", firstEvents)
 			}
@@ -339,7 +341,7 @@ func TestPublishSiteRetriesAfterArtifactAndIndexUploadFailures(t *testing.T) {
 			if _, exists := backend.lockMemoryBackend.objects["_artifacts/sre/stale.html"]; exists {
 				t.Fatal("retry left stale artifact behind")
 			}
-			events := backend.eventSnapshot()
+			events := backend.projectionEventSnapshot()
 			if len(events) < 2 || events[len(events)-2] != "delete:_artifacts/sre/stale.html" || events[len(events)-1] != "delete:"+siteCacheRetryKey("sre") {
 				t.Fatalf("retry operations = %v, want stale deletion last", events)
 			}
@@ -382,9 +384,9 @@ func TestPublishSiteRetriesPartialStaleDeletionToConvergence(t *testing.T) {
 			t.Errorf("retry left stale object %q", key)
 		}
 	}
-	for _, event := range backend.eventSnapshot() {
+	for _, event := range backend.projectionEventSnapshot() {
 		if strings.HasPrefix(event, "put:") {
-			t.Errorf("retry uploaded an already-converged object: %v", backend.eventSnapshot())
+			t.Errorf("retry uploaded an already-converged object: %v", backend.projectionEventSnapshot())
 			break
 		}
 	}
@@ -511,9 +513,9 @@ func TestPublishSiteRejectsSourceSymlinksAndSpecialFilesBeforeWrites(t *testing.
 			if err == nil || !strings.Contains(err.Error(), "site source") {
 				t.Fatalf("PublishSite() error = %v, want source-entry rejection", err)
 			}
-			for _, event := range backend.eventSnapshot() {
+			for _, event := range backend.projectionEventSnapshot() {
 				if strings.HasPrefix(event, "put:") || strings.HasPrefix(event, "delete:") {
-					t.Fatalf("invalid source performed a content mutation: %v", backend.eventSnapshot())
+					t.Fatalf("invalid source performed a content mutation: %v", backend.projectionEventSnapshot())
 				}
 			}
 		})
@@ -537,9 +539,9 @@ func TestPublishSiteRejectsInvalidUTF8Path(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "not valid UTF-8") {
 		t.Fatalf("PublishSite() error = %v, want invalid UTF-8 path rejection", err)
 	}
-	for _, event := range backend.eventSnapshot() {
+	for _, event := range backend.projectionEventSnapshot() {
 		if strings.HasPrefix(event, "put:") || strings.HasPrefix(event, "delete:") {
-			t.Fatalf("invalid path performed a content mutation: %v", backend.eventSnapshot())
+			t.Fatalf("invalid path performed a content mutation: %v", backend.projectionEventSnapshot())
 		}
 	}
 }
@@ -640,4 +642,18 @@ func mustRegistryProjection(t *testing.T) []byte {
 		t.Fatal(err)
 	}
 	return contents
+}
+
+// Projection ordering assertions exclude the separate version control record.
+// compatibility_test.go verifies the version record's staging and recovery.
+func (backend *siteReconcileBackend) projectionEventSnapshot() []string {
+	events := backend.eventSnapshot()
+	result := make([]string, 0, len(events))
+	for _, event := range events {
+		if strings.HasPrefix(event, "put:_control/sites/") && strings.HasSuffix(event, "/versions.json") {
+			continue
+		}
+		result = append(result, event)
+	}
+	return result
 }

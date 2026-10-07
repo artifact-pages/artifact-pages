@@ -70,15 +70,19 @@ func TestBuildAndPublishPreviewFirstThenUnregisterCleansPreview(t *testing.T) {
 		result, err := UnregisterSite(context.Background(), backend, testRegistryProjection(t, docsOnlyManifest), "sre", false)
 		unregisterDone <- unregisterOutcome{result: result, err: err}
 	}()
-	awaitSiteSignal(t, backend.registryWriteReached, "registry withdrawal while preview publisher holds its site lock")
 	awaitSiteSignal(t, backend.siteLockWaitReached, "unregister waiting for preview publisher's site lock")
 	registryObject, _, err := backend.siteUnregisterRaceBackend.lockMemoryBackend.GetObject(context.Background(), "_indexes/sites.json")
 	if err != nil {
 		t.Fatalf("read withdrawn origin registry: %v", err)
 	}
 	projection, err := decodeTestRegistry(registryObject.Bytes)
-	if err != nil || len(projection) != 1 || projection[0] != "docs" {
-		t.Fatalf("registry while preview publisher holds lock = %v, err=%v; want only neighboring registration", projection, err)
+	if err != nil || len(projection) != 2 {
+		t.Fatalf("registry while preview publisher holds lock = %v, err=%v; withdrawal must wait for locked schema validation", projection, err)
+	}
+	select {
+	case <-backend.registryWriteReached:
+		t.Fatal("registry changed before removed-site lock and schema validation")
+	default:
 	}
 	select {
 	case outcome := <-unregisterDone:

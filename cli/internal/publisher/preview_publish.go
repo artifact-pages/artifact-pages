@@ -37,6 +37,16 @@ func BuildAndPlanPreview(ctx context.Context, backend DeploymentBackend, options
 	if !ok {
 		return preview.BuildResult{}, preview.PublicationPlan{}, errors.New("deployment backend does not support origin reads and conditional writes")
 	}
+	if err := validateLockSite(options.SiteID); err != nil {
+		return preview.BuildResult{}, preview.PublicationPlan{}, err
+	}
+	if err := checkWriter(ctx, conditional, compatCurrentWrites()); err != nil {
+		return preview.BuildResult{}, preview.PublicationPlan{}, err
+	}
+	record, err := prepareWriterRecord(ctx, conditional, siteVersionsKey(options.SiteID), writerFormats("preview-catalog", "preview-manifest"))
+	if err != nil {
+		return preview.BuildResult{}, preview.PublicationPlan{}, err
+	}
 	if err := ctx.Err(); err != nil {
 		return preview.BuildResult{}, preview.PublicationPlan{}, err
 	}
@@ -57,6 +67,9 @@ func BuildAndPlanPreview(ctx context.Context, backend DeploymentBackend, options
 	if err != nil {
 		return preview.BuildResult{}, preview.PublicationPlan{}, err
 	}
+	if err := validateRetainedPreviewManifests(ctx, conditional, options.SiteID); err != nil {
+		return result, preview.PublicationPlan{}, err
+	}
 	store, err := NewObjectPreviewStore(conditional)
 	if err != nil {
 		return result, preview.PublicationPlan{}, err
@@ -70,10 +83,23 @@ func BuildAndPlanPreview(ctx context.Context, backend DeploymentBackend, options
 	}
 	var plan preview.PublicationPlan
 	err = store.WithSiteLock(ctx, result.Site, func(lockedContext context.Context) error {
+		if err := validateRetainedPreviewManifests(lockedContext, conditional, options.SiteID); err != nil {
+			return err
+		}
+		record, err = prepareWriterRecord(lockedContext, conditional, siteVersionsKey(options.SiteID), writerFormats("preview-catalog", "preview-manifest"))
+		if err != nil {
+			return err
+		}
+		if err := checkWriter(lockedContext, conditional, compatCurrentWrites()); err != nil {
+			return err
+		}
 		if _, _, err := resumePreviewCleanup(lockedContext, backend, conditional, store); err != nil {
 			return err
 		}
 		if err := validatePreviewRegistration(lockedContext, conditional, options); err != nil {
+			return err
+		}
+		if err := stageVersionRecord(lockedContext, conditional, siteVersionsKey(options.SiteID), record, writerFormats("preview-catalog", "preview-manifest")); err != nil {
 			return err
 		}
 		var publishErr error
@@ -82,7 +108,10 @@ func BuildAndPlanPreview(ctx context.Context, backend DeploymentBackend, options
 			site:         result.Site,
 			ctx:          lockedContext,
 		}, result)
-		return publishErr
+		if publishErr != nil {
+			return publishErr
+		}
+		return writeVersionRecord(lockedContext, backend, siteVersionsKey(options.SiteID), record)
 	})
 	if err != nil {
 		return result, plan, err

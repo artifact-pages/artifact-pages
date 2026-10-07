@@ -19,10 +19,11 @@ const (
 )
 
 type AppDeployOptions struct {
-	ArchivePath string
-	Version     string
-	Repository  string
-	DryRun      bool
+	IndependentWeb bool
+	ArchivePath    string
+	Version        string
+	Repository     string
+	DryRun         bool
 }
 
 type SitePublishOptions struct {
@@ -88,7 +89,35 @@ func DeployApp(ctx context.Context, backend DeploymentBackend, options AppDeploy
 		}
 		return files[i].path < files[j].path
 	})
-	operation := func() (Result, error) {
+	validateCompatibility := func() error {
+		if len(bundle.manifest.Reads) == 0 {
+			if compatibilityOptions(ctx).Pinned {
+				return errors.New("web bundle manifest has no compatibility reads")
+			}
+			if _, present, err := readVersionRecord(ctx, conditional, appVersionsKey); err != nil {
+				return err
+			} else if present {
+				return errors.New("web bundle manifest has no compatibility reads")
+			}
+			return nil
+		}
+		if _, _, err := readVersionRecord(ctx, conditional, appVersionsKey); err != nil {
+			return err
+		}
+		return checkStoredFormats(ctx, conditional, bundle.manifest.Reads, compatibilityOptions(ctx).AcceptBreaking)
+	}
+	if err := validateCompatibility(); err != nil {
+		return Result{}, err
+	}
+	operation := func() (result Result, operationErr error) {
+		defer func() {
+			if operationErr == nil && !options.DryRun && len(bundle.manifest.Reads) > 0 {
+				operationErr = writeVersionRecord(ctx, backend, appVersionsKey, versionRecord{SchemaVersion: 1, WebVersion: bundle.manifest.Version, Reads: bundle.manifest.Reads})
+			}
+		}()
+		if err := validateCompatibility(); err != nil {
+			return Result{}, err
+		}
 		retry, retryETag, err := readAppCacheRetry(ctx, conditional)
 		if err != nil {
 			return Result{}, err
@@ -119,7 +148,7 @@ func DeployApp(ctx context.Context, backend DeploymentBackend, options AppDeploy
 		}
 		invalidationPaths = uniqueSorted(invalidationPaths)
 		plannedPaths := plannedInvalidationPaths(backend, invalidationPaths)
-		result := Result{
+		result = Result{
 			Operation: "app deploy", Changes: []Change{},
 			Version: bundle.manifest.Version, SourceDirty: bundle.manifest.SourceDirty,
 		}
@@ -151,6 +180,11 @@ func DeployApp(ctx context.Context, backend DeploymentBackend, options AppDeploy
 			if _, err := writeAppCacheRetry(ctx, conditional, journal, retryETag); err != nil {
 				return result, err
 			}
+			if len(bundle.manifest.Reads) > 0 {
+				if err := stageVersionRecord(ctx, conditional, appVersionsKey, versionRecord{SchemaVersion: 1, WebVersion: bundle.manifest.Version, Reads: bundle.manifest.Reads}); err != nil {
+					return result, err
+				}
+			}
 			for _, file := range changed {
 				if err := backend.PutObject(ctx, file.path, Object{
 					Bytes: file.data, ContentType: contentType(file.path), Cache: appFileCacheControl(file.path), Metadata: map[string]string{
@@ -164,6 +198,11 @@ func DeployApp(ctx context.Context, backend DeploymentBackend, options AppDeploy
 			}
 		}
 
+		if len(bundle.manifest.Reads) > 0 {
+			if err := writeVersionRecord(ctx, backend, appVersionsKey, versionRecord{SchemaVersion: 1, WebVersion: bundle.manifest.Version, Reads: bundle.manifest.Reads}); err != nil {
+				return result, err
+			}
+		}
 		invalidationID, err := backend.Invalidate(ctx, invalidationPaths)
 		if err != nil {
 			return result, fmt.Errorf("application objects may be updated but cache revalidation failed; retry app deploy: %w", err)
@@ -196,7 +235,39 @@ func DeployApp(ctx context.Context, backend DeploymentBackend, options AppDeploy
 	if err != nil {
 		return Result{}, err
 	}
-	result, operationErr := operation()
+	// A web transition owns the registry and all registered site locks while
+	// validating and replacing the app. Writers therefore either complete
+	// before this snapshot or check the finalized new app after waiting.
+	transitionOperation := func() (result Result, operationErr error) {
+		if len(bundle.manifest.Reads) == 0 && !compatibilityOptions(ctx).Pinned {
+			return operation()
+		}
+		manager := SiteLockManager{Backend: conditional}
+		_, registryRelease, err := manager.AcquireRegistry(ctx)
+		if err != nil {
+			return result, err
+		}
+		defer func() {
+			if registryRelease != nil {
+				operationErr = errors.Join(operationErr, registryRelease())
+			}
+		}()
+		current, _, err := readCurrentRegistry(ctx, conditional)
+		if err != nil {
+			return result, err
+		}
+		ids := make([]string, 0, len(current.Sites))
+		for _, site := range current.Sites {
+			ids = append(ids, site.ID)
+		}
+		locks, err := acquireSiteLocks(ctx, manager, uniqueSorted(ids))
+		if err != nil {
+			return result, err
+		}
+		defer func() { operationErr = errors.Join(operationErr, releaseLocks(locks)) }()
+		return operation()
+	}
+	result, operationErr := transitionOperation()
 	if release != nil {
 		releaseErr := release()
 		if operationErr == nil && releaseErr != nil {

@@ -216,7 +216,7 @@ func (backend *cloudflareBackend) PutObject(ctx context.Context, key string, obj
 }
 
 func (backend *cloudflareBackend) GetObject(ctx context.Context, key string) (Object, string, error) {
-	if key == "_indexes/sites.json" && backend.registryReader != nil {
+	if (key == "_indexes/sites.json" || key == appVersionsKey) && backend.registryReader != nil {
 		return backend.registryReader.GetObject(ctx, key)
 	}
 	return backend.objects.GetObject(ctx, key)

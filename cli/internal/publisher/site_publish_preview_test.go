@@ -306,7 +306,12 @@ func seedPreviewPublishCatalog(t *testing.T, backend *lockMemoryBackend, groups 
 		if err != nil {
 			t.Fatal(err)
 		}
-		seedMemoryObject(backend, strings.TrimPrefix(manifestKey, "/"), []byte("completed preview manifest"))
+		manifest := preview.RevisionManifest{SchemaVersion: preview.SchemaVersion, Site: "sre", HeadSHA: headSHA, DefaultHead: headSHA, MergeBase: headSHA, CreatedAt: "2026-10-08T00:00:00Z", BundleDigest: "sha256:" + strings.Repeat("0", 64), Files: []preview.PreviewFile{}, Documents: []preview.Document{}}
+		contents, err := preview.EncodeManifest(manifest)
+		if err != nil {
+			t.Fatal(err)
+		}
+		seedMemoryObject(backend, strings.TrimPrefix(manifestKey, "/"), contents)
 	}
 }
 

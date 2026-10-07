@@ -601,6 +601,8 @@ resource "aws_iam_role_policy" "satellite" {
         Action = ["s3:GetObject"]
         Resource = [
           "${local.bucket_arn}/_indexes/sites.json",
+          # IMP-69: shared deployed-web compatibility is read-only for satellites.
+          "${local.bucket_arn}/_control/versions/app.json",
           "${local.bucket_arn}/_indexes/${each.key}/*",
           "${local.bucket_arn}/_artifacts/${each.key}/*",
           "${local.bucket_arn}/_previews/${each.key}/*",

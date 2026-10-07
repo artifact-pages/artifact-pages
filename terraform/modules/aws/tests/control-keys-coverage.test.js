@@ -80,7 +80,7 @@ test('a satellite role covers its own site control records and nothing else unde
   }
   for (const row of fixture.global) {
     for (const action of Object.values(ACTIONS)) {
-      assert.ok(!allows(satellitePatterns, action, row.key, 'alpha'), `satellite must not ${action} global record ${row.key}`)
+      assert.equal(allows(satellitePatterns, action, row.key, 'alpha'), (row.satelliteOps ?? []).some((op) => ACTIONS[op] === action), `satellite must not ${action} global record ${row.key}`)
     }
   }
   for (const other of ['beta', 'alpha-beta', 'alph']) {

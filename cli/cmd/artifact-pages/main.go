@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/artifact-pages/artifact-pages/cli/internal/compat"
 	deploymentconfig "github.com/artifact-pages/artifact-pages/cli/internal/config"
 	"github.com/artifact-pages/artifact-pages/cli/internal/indexer"
 	"github.com/artifact-pages/artifact-pages/cli/internal/preview"
@@ -326,7 +327,16 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		}
 		return runSiteSync(ctx, args[2:], stdout, stderr)
 	}
+	if args[0] == "compatibility" {
+		if len(args) != 3 || args[1] != "--format" || args[2] != "json" {
+			return withExitCode(errors.New("usage: artifact-pages compatibility --format json"), 2)
+		}
+		return json.NewEncoder(stdout).Encode(compat.Current())
+	}
 	if args[0] == "config" {
+		if len(args) > 1 && args[1] == "check" {
+			return runConfigCheck(ctx, args[2:], stdout, stderr)
+		}
 		if len(args) < 2 || args[1] == "--help" || args[1] == "-h" {
 			writeConfigUsage(stdout)
 			return nil
@@ -446,6 +456,7 @@ func runRegistrySync(ctx context.Context, args []string, stdout, stderr io.Write
 	flags.Usage = func() { writeRegistrySyncUsage(stderr) }
 	var configLocators stringSliceFlag
 	flags.Var(&configLocators, "config", "deployment config path or github:// locator (repeatable; later layers override earlier ones)")
+	acceptBreaking := flags.Bool("accept-breaking", false, "accept incompatible deployed web for a planned format upgrade")
 	dryRun := flags.Bool("dry-run", false, "show planned changes without writes, deletes, lock recovery, or cache changes")
 	format := flags.String("format", "text", "result format: text or json")
 	if err := flags.Parse(args); err != nil {
@@ -475,6 +486,7 @@ func runRegistrySync(ctx context.Context, args []string, stdout, stderr io.Write
 	if err != nil {
 		return withResolvedError(err, resolved)
 	}
+	ctx = publisher.WithCompatibility(ctx, resolved.Config, *acceptBreaking)
 	result, err := publisher.RegisterSites(ctx, backend, desired, *dryRun)
 	if err != nil {
 		return withResolvedResult(err, result, resolved)
@@ -591,6 +603,7 @@ func runAppDeploy(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	repository := flags.String("repository", "artifact-pages/artifact-pages", "GitHub repository that publishes the web release")
 	var configLocators stringSliceFlag
 	flags.Var(&configLocators, "config", "deployment config path or github:// locator (repeatable; later layers override earlier ones)")
+	acceptBreaking := flags.Bool("accept-breaking", false, "accept unknown or unreadable stored formats for a planned web upgrade")
 	dryRun := flags.Bool("dry-run", false, "show planned changes without writes, deletes, lock recovery, or cache changes")
 	format := flags.String("format", "text", "result format: text or json")
 	for _, arg := range args {
@@ -614,15 +627,26 @@ func runAppDeploy(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	if err != nil {
 		return withExitCode(err, 2)
 	}
+	ctx = publisher.WithCompatibility(ctx, resolved.Config, *acceptBreaking)
+	webVersion := pinnedVersion(*archive)
+	independentWeb := false
+	if *archive == "" && resolved.Config.Web != nil {
+		webVersion = resolved.Config.Web.Version
+		independentWeb = true
+		if *repository != "artifact-pages/artifact-pages" {
+			return withExitCode(errors.New("web.version downloads only official artifact-pages releases"), 2)
+		}
+	}
 	backend, err := newDeploymentBackend(ctx, resolved.Config)
 	if err != nil {
 		return withResolvedError(err, resolved)
 	}
 	result, err := publisher.DeployApp(ctx, backend, publisher.AppDeployOptions{
-		ArchivePath: *archive,
-		Version:     pinnedVersion(*archive),
-		Repository:  *repository,
-		DryRun:      *dryRun,
+		ArchivePath:    *archive,
+		Version:        webVersion,
+		IndependentWeb: independentWeb,
+		Repository:     *repository,
+		DryRun:         *dryRun,
 	})
 	if err != nil {
 		return withResolvedResult(err, result, resolved)
@@ -778,6 +802,7 @@ func runSiteSync(ctx context.Context, args []string, stdout, stderr io.Writer) e
 	if err != nil {
 		return withResolvedError(err, resolved)
 	}
+	ctx = publisher.WithCompatibility(ctx, resolved.Config, false)
 	result, err := publisher.PublishSite(ctx, backend, publisher.SitePublishOptions{
 		SiteID:    *siteID,
 		SourceDir: *source,
@@ -933,8 +958,8 @@ func writeAppUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  artifact-pages app remove [options]")
 	fmt.Fprintln(writer, "")
 	fmt.Fprintln(writer, "Reconcile the application plane using the configured provider target.")
-	fmt.Fprintln(writer, "Without --archive this CLI downloads and verifies the web release that matches its own")
-	fmt.Fprintf(writer, "version (v%s).\n", version.Product)
+	fmt.Fprintln(writer, "Without --archive, download and verify the official web release selected by web.version.")
+	fmt.Fprintf(writer, "Legacy configs without component pins select the original v%s product bundle.\n", version.Product)
 }
 
 func writeAppRemoveUsage(writer io.Writer) {
@@ -947,6 +972,7 @@ func writeAppDeployUsage(writer io.Writer) {
 	writeAppUsage(writer)
 	fmt.Fprintln(writer, "")
 	fmt.Fprintln(writer, "Options:")
+	fmt.Fprintln(writer, "  --accept-breaking      accept unreadable or unknown stored formats for a planned upgrade")
 	fmt.Fprintln(writer, "  --archive FILE          verified local web release archive (.tar.gz)")
 	fmt.Fprintln(writer, "  --repository OWNER/REPO GitHub release repository for the pinned download (default artifact-pages/artifact-pages)")
 	fmt.Fprintln(writer, "  --config LOCATOR        deployment config path or github:// locator (repeatable; later layers override earlier ones)")
@@ -978,6 +1004,7 @@ func writeSiteSyncUsage(writer io.Writer) {
 func writeConfigUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "Usage:")
 	fmt.Fprintln(writer, "  artifact-pages config set-default LOCATOR")
+	fmt.Fprintln(writer, "  artifact-pages config check [--config LOCATOR ...] [--format text|json]")
 	fmt.Fprintln(writer, "")
 	fmt.Fprintln(writer, "Save a local path or github://OWNER/REPO/FILE?ref=REF deployment config locator.")
 }
@@ -993,5 +1020,49 @@ func writeRegistrySyncUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "Usage:")
 	fmt.Fprintln(writer, "  artifact-pages registry sync [--config LOCATOR ...] [--dry-run] [--format text|json]")
 	fmt.Fprintln(writer, "")
+	fmt.Fprintln(writer, "Use --accept-breaking to write formats the deployed web cannot read during a planned upgrade.")
 	fmt.Fprintln(writer, "Reconcile the complete sites mapping; omitted sites are removed from discovery and their projection is cleaned on apply.")
+}
+
+func runConfigCheck(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	flags := flag.NewFlagSet("artifact-pages config check", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	flags.Usage = func() { writeConfigUsage(stderr) }
+	var locators stringSliceFlag
+	flags.Var(&locators, "config", "deployment config layers")
+	format := flags.String("format", "text", "result format: text or json")
+	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
+		return withExitCode(err, 2)
+	}
+	if flags.NArg() != 0 || (*format != "text" && *format != "json") {
+		return withExitCode(errors.New("invalid config check arguments"), 2)
+	}
+	resolved, err := (deploymentconfig.Resolver{}).ResolveLayers(ctx, locators)
+	if err != nil {
+		return withExitCode(err, 2)
+	}
+	if resolved.Config.Web == nil {
+		return withExitCode(errors.New("config check requires web.version"), 2)
+	}
+	backend, err := newDeploymentBackend(ctx, resolved.Config)
+	if err != nil {
+		return withResolvedError(err, resolved)
+	}
+	conditional, ok := backend.(publisher.ConditionalObjectBackend)
+	if !ok {
+		return errors.New("backend does not support compatibility reads")
+	}
+	ctx = publisher.WithCompatibility(ctx, resolved.Config, false)
+	if err := publisher.CheckConfig(ctx, conditional); err != nil {
+		return withResolvedError(err, resolved)
+	}
+	result := publisher.Result{Operation: "config check", Outcome: "checked", Changes: []publisher.Change{}}
+	if *format == "json" {
+		return encodeDeploymentResult(stdout, result, resolved)
+	}
+	fmt.Fprintln(stdout, "Config and stored formats are compatible with web.version.")
+	return nil
 }
