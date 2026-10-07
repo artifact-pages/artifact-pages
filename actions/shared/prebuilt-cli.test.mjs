@@ -5,7 +5,7 @@ import path from 'node:path'
 import test from 'node:test'
 import { assetName, checksumsName, installPrebuilt, parseChecksums, platforms, readRelease, selectPrebuilt, sha256 } from './prebuilt-cli.mjs'
 
-const release0 = { version: '0.2.0', repository: 'artifact-pages/artifact-pages' }
+const release0 = { bootstrapCli: '0.2.0', cliRange: '>=0.1.0 <0.3.0', repository: 'artifact-pages/artifact-pages' }
 const base = { release: release0, runnerOs: 'Linux', runnerArch: 'X64' }
 
 test('the release record alone selects the asset, independent of any Action ref', () => {
@@ -33,8 +33,8 @@ test('release.json is read strictly and its absence means unreleased source', ()
   const scratch = mkdtempSync(path.join(tmpdir(), 'release-json-'))
   try {
     assert.equal(readRelease(scratch), undefined)
-    writeFileSync(path.join(scratch, 'release.json'), JSON.stringify({ schemaVersion: 1, version: '0.1.0', repository: 'artifact-pages/artifact-pages' }))
-    assert.deepEqual(readRelease(scratch), { version: '0.1.0', repository: 'artifact-pages/artifact-pages' })
+    writeFileSync(path.join(scratch, 'release.json'), JSON.stringify({ schemaVersion: 2, actionVersion: '0.5.0', bootstrapCli: '0.1.0', cliRange: '>=0.1.0 <0.2.0', repository: 'artifact-pages/artifact-pages' }))
+    assert.deepEqual(readRelease(scratch), { schemaVersion: 2, actionVersion: '0.5.0', bootstrapCli: '0.1.0', cliRange: '>=0.1.0 <0.2.0', repository: 'artifact-pages/artifact-pages' })
     for (const bad of [{ schemaVersion: 2, version: '0.1.0', repository: 'a/b' }, { schemaVersion: 1, version: 'main', repository: 'a/b' }, { schemaVersion: 1, version: '0.1.0', repository: '../x' }]) {
       writeFileSync(path.join(scratch, 'release.json'), JSON.stringify(bad))
       assert.throws(() => readRelease(scratch))
@@ -149,7 +149,7 @@ test('unreleased source installs only the CLI the workflow built, and a publishe
     await import('node:fs').then((fs) => { fs.mkdirSync(actionRoot); fs.mkdirSync(temp) })
     const testCli = path.join(scratch, 'built-cli')
     writeFileSync(testCli, '#!/bin/sh\necho built\n')
-    const env = { ...process.env, RUNNER_TEMP: temp, RUNNER_OS: 'Linux', RUNNER_ARCH: 'X64', ARTIFACT_PAGES_TOKEN: 'secret-token' }
+    const env = { ...process.env, RUNNER_TEMP: temp, RUNNER_OS: 'Linux', RUNNER_ARCH: 'X64', ARTIFACT_PAGES_DOWNLOAD_TOKEN: 'secret-token' }
     const run = (extra) => spawnSync('node', [script, '--action-root', actionRoot], { encoding: 'utf8', env: { ...env, ...extra } })
 
     const missing = run({ ARTIFACT_PAGES_TEST_CLI: '' })
@@ -163,7 +163,7 @@ test('unreleased source installs only the CLI the workflow built, and a publishe
     assert.equal(statSync(path.join(temp, 'artifact-pages')).mode & 0o111, 0o111)
 
     // With release.json present the override is ignored; the (unreachable) release is required.
-    writeFileSync(path.join(actionRoot, 'release.json'), JSON.stringify({ schemaVersion: 1, version: '0.0.0', repository: 'artifact-pages/artifact-pages' }))
+    writeFileSync(path.join(actionRoot, 'release.json'), JSON.stringify({ schemaVersion: 2, actionVersion: '0.1.0', bootstrapCli: '0.0.0', cliRange: '>=0.0.0 <0.1.0', repository: 'artifact-pages/artifact-pages' }))
     rmSync(path.join(temp, 'artifact-pages'))
     const published = run({ ARTIFACT_PAGES_TEST_CLI: testCli, HTTPS_PROXY: 'http://127.0.0.1:9', NODE_USE_ENV_PROXY: '1' })
     assert.match(published.stdout, /ARTIFACT_PAGES_TEST_CLI is ignored by a published Action/)

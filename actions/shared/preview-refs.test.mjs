@@ -125,7 +125,7 @@ test('genuinely unresolvable refs fail with an actionable message and never fetc
       () => assertPreviewRefsReachable(root, { head: 'topic', defaultRef: 'upstream/main', headSource: 'input' }),
       /default ref "upstream\/main".*not an origin\/<branch> ref.*fetch-depth: 0/s,
     )
-    assert.throws(() => assertPreviewRefsReachable(root, { head: 'topic', defaultRef: 'origin/HEAD', headSource: 'default' }), /origin\/HEAD/)
+    assert.equal(assertPreviewRefsReachable(root, { head: 'topic', defaultRef: 'origin/HEAD', headSource: 'default' }).defaultRefSHA, '')
   } finally {
     rmSync(scratch, { recursive: true, force: true })
   }

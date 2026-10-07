@@ -9,6 +9,10 @@ inputs:
     description: Optional deployment config path or github:// config locator.
     required: false
     default: ""
+  cli-version:
+    description: Override the config CLI pin with an exact supported release; compatibility checks still run.
+    required: false
+    default: ""
   github-token:
     description: Optional token with read-only access to a separate private admin config repository; otherwise uses this workflow's GITHUB_TOKEN.
     required: false
@@ -71,11 +75,14 @@ runs:
       with:
         fetch-depth: ${{ inputs.fetch-depth }}
         persist-credentials: false
-    - name: Install the CLI that matches this Action version
+    - name: Install the bootstrap CLI
       id: install
       shell: bash
       env:
-        ARTIFACT_PAGES_TOKEN: ${{ github.token }}
+        ARTIFACT_PAGES_ACTION_KIND: registry
+        ARTIFACT_PAGES_INPUT_CLI_VERSION: ${{ inputs.cli-version }}
+        ARTIFACT_PAGES_INPUT_SUMMARY: ${{ inputs.summary }}
+        ARTIFACT_PAGES_DOWNLOAD_TOKEN: ${{ github.token }}
       run: node "$GITHUB_ACTION_PATH/../shared/prebuilt-cli.mjs" --action-root "$GITHUB_ACTION_PATH"
     - name: Sync the configured sites
       id: cli
@@ -84,6 +91,8 @@ runs:
       env:
         ARTIFACT_PAGES_CLI: ${{ runner.temp }}/artifact-pages
         ARTIFACT_PAGES_ACTION_KIND: registry
+        ARTIFACT_PAGES_INPUT_CLI_VERSION: ${{ inputs.cli-version }}
+        ARTIFACT_PAGES_DOWNLOAD_TOKEN: ${{ github.token }}
         ARTIFACT_PAGES_INPUT_CONFIG: ${{ inputs.config }}
         ARTIFACT_PAGES_INPUT_DRY_RUN: ${{ inputs.dry-run }}
         ARTIFACT_PAGES_INPUT_SUMMARY: ${{ inputs.summary }}

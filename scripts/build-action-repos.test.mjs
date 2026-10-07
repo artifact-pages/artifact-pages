@@ -28,7 +28,7 @@ test('each Action repository is self-contained and carries the CLI release recor
     const files = readdirSync(entry.directory).sort()
     assert.deepEqual(files, ['LICENSE', 'README.md', 'action.yml', 'release.json', 'scripts'])
     const release = JSON.parse(readFileSync(path.join(entry.directory, 'release.json'), 'utf8'))
-    assert.deepEqual(release, { schemaVersion: 1, version, repository: 'artifact-pages/artifact-pages' })
+    assert.deepEqual(release, { schemaVersion: 2, actionVersion: version, bootstrapCli: version, cliRange: '>=0.1.0 <0.2.0', repository: 'artifact-pages/artifact-pages' })
     const action = readFileSync(path.join(entry.directory, 'action.yml'), 'utf8')
     assert.doesNotMatch(action, /\.\.|\/shared\//, `${entry.repository} must not refer outside its repository`)
     assert.match(action, /^name: Artifact Pages \S/m)
@@ -60,7 +60,7 @@ test('generation is deterministic and Action versions are independent of the CLI
   assert.equal(diff.status, 0, diff.stdout)
   const independent = buildActionRepos({ out: first, version: '9.9.9', names: ['publish'] })
   assert.equal(independent.length, 1)
-  assert.equal(JSON.parse(readFileSync(path.join(independent[0].directory, 'release.json'), 'utf8')).version, version)
+  assert.equal(JSON.parse(readFileSync(path.join(independent[0].directory, 'release.json'), 'utf8')).bootstrapCli, version)
   assert.throws(() => buildActionRepos({ out: first, version: 'v0.1.0' }), /must look like X\.Y\.Z/)
   assert.throws(() => repositoryActionYml('run: ../x'), /parent directory/)
 })
@@ -91,7 +91,7 @@ test('the 0.x sync publishes content and a tag, repeats as a no-op and replaces 
   assert.equal(first.status, 0, first.stderr)
   const publishRemote = path.join(remotes, 'publish-action')
   assert.match(git(publishRemote, 'tag', '--list'), new RegExp(`^v${version.replaceAll('.', '\\.')}$`))
-  assert.equal(JSON.parse(git(publishRemote, 'show', `v${version}:release.json`)).version, version)
+  assert.equal(JSON.parse(git(publishRemote, 'show', `v${version}:release.json`)).bootstrapCli, version)
   const head = git(publishRemote, 'rev-parse', 'main')
   assert.equal(git(publishRemote, 'rev-parse', `v${version}^{commit}`), head)
   assert.match(git(publishRemote, 'log', '-1', '--format=%s', 'main'), /^Sync v.* at abc1234$/)
@@ -127,7 +127,7 @@ test('a partially failed sync is completed by a re-run', (t) => {
 })
 
 
-test('stable Action tags refuse replacement', (t) => {
+test('stable Action tags retry identical content as a no-op and refuse replacement', (t) => {
   const root = scratch(t), remotes = path.join(root, 'remotes'), built = path.join(root, 'built')
   mkdirSync(remotes)
   git(root, 'init', '--quiet', '--bare', '--initial-branch=main', path.join(remotes, 'publish-action'))
@@ -135,6 +135,10 @@ test('stable Action tags refuse replacement', (t) => {
   const base = `file://${remotes}`
   assert.equal(sync(built, base, {}, '1.0.0').status, 0)
   const head = git(path.join(remotes, 'publish-action'), 'rev-parse', 'v1.0.0^{commit}')
+  const repeated = sync(built, base, {}, '1.0.0')
+  assert.equal(repeated.status, 0, repeated.stderr)
+  assert.match(repeated.stdout, /already published with identical content/)
+  assert.equal(git(path.join(remotes, 'publish-action'), 'rev-parse', 'v1.0.0^{commit}'), head)
   writeFileSync(path.join(built, 'publish-action', 'README.md'), 'changed\n')
   const rejected = sync(built, base, {}, '1.0.0')
   assert.notEqual(rejected.status, 0)
@@ -168,7 +172,8 @@ test('generated-content checks reject unchanged tags and shared changes warn for
     cpSync(path.join(projectRoot, 'cli/internal/version/version.go'), path.join(directory, 'cli/internal/version/version.go'))
     cpSync(path.join(projectRoot, 'LICENSE'), path.join(directory, 'LICENSE'))
   }
-  const args = { sourceRoot: current, tags: actionNames.map((name) => `${name}-action/v0.1.0`), selected: 'publish', currentTag: 'publish-action/v0.2.0', baselineRoot: () => baseline }
+  const args = { sourceRoot: current, tags: actionNames.map((name) => `${name}-action/v0.1.0`), selected: 'publish', currentTag: 'publish-action/v0.2.0', baselineRoot: () => baseline, allowFixtureFallback: true }
+  assert.throws(() => checkActionChanges({ ...args, allowFixtureFallback: false }), /no Action repository generator/)
   let report = checkActionChanges(args)
   assert.equal(report.find((row) => row.action === 'publish').level, 'error')
   const shared = path.join(current, 'actions/shared/prebuilt-cli.mjs')
@@ -178,14 +183,24 @@ test('generated-content checks reject unchanged tags and shared changes warn for
   assert.equal(report.find((row) => row.action === 'publish').level, 'ok')
   assert.equal(report.filter((row) => row.level === 'warning').length, 3)
   cpSync(path.join(baseline, 'actions/shared/prebuilt-cli.mjs'), shared)
-  // A version-only Action bump is excluded; a different pinned CLI is real content.
-  writeFileSync(path.join(current, 'cli/internal/version/version.go'), 'package version\nconst Product = "0.9.0"\n')
-  assert.ok(checkActionChanges(args).every((row) => row.changed))
+  // Independent CLI product version bumps do not change the fixed bootstrap or Action payload.
+  writeFileSync(path.join(current, 'cli/internal/version/version.go'), 'package version\nconst Product = "0.1.1"\n')
+  assert.ok(checkActionChanges(args).every((row) => !row.changed))
+  writeFileSync(path.join(current, 'cli/internal/version/version.go'), 'package version\nconst Product = "0.2.0"\n')
+  assert.ok(checkActionChanges(args).every((row) => !row.changed))
+  mkdirSync(path.join(baseline, 'scripts'))
+  const generator = readFileSync(path.join(projectRoot, 'scripts/build-action-repos.mjs'), 'utf8')
+  writeFileSync(path.join(baseline, 'scripts/build-action-repos.mjs'), generator.replace("const bootstrapCli = '0.1.0'", "const bootstrapCli = '0.1.1'"))
+  assert.ok(checkActionChanges(args).every((row) => row.changed), 'historical bootstrap metadata must be preserved')
+  writeFileSync(path.join(baseline, 'scripts/build-action-repos.mjs'), generator.replace("const cliRange = '>=0.1.0 <0.2.0'", "const cliRange = '>=0.1.0 <0.1.9'"))
+  assert.ok(checkActionChanges(args).every((row) => row.changed), 'historical range metadata must be preserved')
+  writeFileSync(path.join(baseline, 'scripts/build-action-repos.mjs'), generator)
+  assert.ok(checkActionChanges(args).every((row) => !row.changed), 'Action-version-only metadata must remain excluded')
 })
 
 
 test('release preflight accepts all prefixed tags independently and rejects a mismatched root CLI tag', () => {
-  for (const tag of ['web/v0.1.0', ...actionNames.map((name) => `${name}-action/v0.1.0`), `v${version}`]) {
+  for (const tag of ['web/v0.1.0', `v${version}`]) {
     const result = spawnSync(process.execPath, [path.join(projectRoot, 'scripts/release-preflight.mjs'), '--tag', tag, '--main-ref', 'HEAD'], { encoding: 'utf8' })
     assert.equal(result.status, 0, `${tag}: ${result.stderr}`)
   }

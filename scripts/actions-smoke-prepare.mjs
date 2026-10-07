@@ -12,7 +12,7 @@ const scratch = process.env.SMOKE_ROOT
 if (!repository || !scratch) throw new Error('GITHUB_REPOSITORY and SMOKE_ROOT are required')
 
 const storage = path.join(scratch, 'storage')
-const configDir = path.join(workspace, '.local', 'actions-smoke')
+const configDir = path.join(scratch, 'operator-config')
 await fs.mkdir(storage, { recursive: true })
 await fs.mkdir(configDir, { recursive: true })
 
@@ -66,8 +66,8 @@ await fs.writeFile(`${archive}.sha256`, `${digest}  ${archiveName}\n`)
 
 const outputs = [
   `storage=${storage}`,
-  'config=.local/actions-smoke/config.yaml',
-  'empty-sites-config=.local/actions-smoke/config-empty-sites.yaml',
+  `config=${path.join(configDir, 'config.yaml')}`,
+  `empty-sites-config=${path.join(configDir, 'config-empty-sites.yaml')}`,
   `archive=${archive}`,
 ].join('\n')
 if (process.env.GITHUB_OUTPUT) await fs.appendFile(process.env.GITHUB_OUTPUT, `${outputs}\n`)

@@ -48,7 +48,7 @@ function idList(ids) {
 }
 
 // Returns the Markdown appended to GITHUB_STEP_SUMMARY.
-export function renderSummary({ kind, operation, result, exitCode = 0, dryRun = false, dryRunReason = '' }) {
+export function renderSummary({ kind, operation, result, exitCode = 0, dryRun = false, dryRunReason = '', cliMetadata, cliExecutionStarted, cliOverrideRequested }) {
   const changes = Array.isArray(result?.changes) ? result.changes : []
   const outcome = result?.outcome ?? 'failed'
   const name = result?.operation || operation || 'artifact-pages'
@@ -89,6 +89,14 @@ export function renderSummary({ kind, operation, result, exitCode = 0, dryRun = 
     lines.push('', `> **Error (exit ${exitCode}):** ${oneLine(result?.error || 'the operation failed without an error message')}`)
   }
   if (name !== 'preview publish') lines.push(...changeList(changes))
+  if (cliExecutionStarted === false) {
+    lines.push('', '- **CLI executed:** none (installation failed)')
+    if (cliOverrideRequested) lines.push(`- **CLI override requested:** ${code(cliOverrideRequested)}`)
+  }
+  if (cliMetadata?.schemaVersion === 1 && cliMetadata.cliVersion) {
+    lines.push('', `- **CLI executed:** ${code(cliMetadata.cliVersion)}`)
+    if (cliMetadata.override) lines.push(`- **CLI override:** ${code(cliMetadata.overrideSource || 'environment')}${cliMetadata.configVersion ? ` (config ${code(cliMetadata.configVersion)})` : ''}`)
+  }
   return `${lines.join('\n')}\n`
 }
 

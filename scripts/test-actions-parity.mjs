@@ -11,7 +11,7 @@ const localRoot = path.join(projectRoot, '.local')
 const actionRunner = path.join(projectRoot, 'actions', 'shared', 'invoke-cli.mjs')
 
 const runOutputs = ['operation', 'outcome', 'changes', 'result', 'exit-code', 'error']
-const commonInputs = ['config', 'github-token', 'dry-run', 'publish-on', 'summary', 'checkout', 'fetch-depth']
+const commonInputs = ['cli-version', 'config', 'github-token', 'dry-run', 'publish-on', 'summary', 'checkout', 'fetch-depth']
 // One Action per CLI operation (TD14): the Action directory, the CLI operation it runs
 // and its typed inputs and outputs. There is no `operation` input anywhere.
 const expectedActionContracts = {
@@ -22,7 +22,7 @@ const expectedActionContracts = {
   },
   preview: {
     directory: path.join(projectRoot, 'actions', 'preview'),
-    inputs: ['site', 'source', 'head', 'default-ref', 'pull-request', 'include', 'base-url', 'config', 'github-token', 'dry-run', 'comment', 'summary', 'checkout', 'fetch-depth'],
+    inputs: ['site', 'source', 'head', 'default-ref', 'pull-request', 'include', 'base-url', 'cli-version', 'config', 'github-token', 'dry-run', 'comment', 'summary', 'checkout', 'fetch-depth'],
     outputs: ['operation', 'outcome', 'site', 'group-list-url', 'documents', 'result', 'exit-code', 'error', 'comment-url'],
   },
   registry: {
@@ -129,6 +129,8 @@ async function assertCompositeActionWiring() {
     if (kind === 'publish' || kind === 'preview') {
       assert.match(source, /^        ARTIFACT_PAGES_FETCH_TOKEN: \$\{\{ github\.token \}\}$/m, `${kind} Action must give the CLI the workflow token (not the github-token input) to deepen a shallow checkout`)
     }
+    expectedEnv.ARTIFACT_PAGES_DOWNLOAD_TOKEN = '${{ github.token }}'
+    if (kind === 'preview') expectedEnv.ARTIFACT_PAGES_TRUSTED_CONFIG_REF = "${{ steps.preflight.outputs['trusted-config-ref'] }}"
     assert.deepEqual(step.env, expectedEnv, `${kind} Action input-to-environment wiring changed`)
 
     const outputMappings = Object.fromEntries(contract.outputs.map((name) => [
@@ -146,10 +148,10 @@ async function assertCompositeActionWiring() {
     }))
     assert.deepEqual(outputMappings, expectedOutputMappings, `${kind} Action outputs must relay the shared CLI step outputs`)
 
-    // Thin Actions (TD14): install the CLI that matches the Action version, never build it.
+    // Thin Actions: install the declared bootstrap CLI, then resolve the config target; never build it.
     assert.doesNotMatch(source, /actions\/setup-go|actions\/cache|go build|build-once|ARTIFACT_PAGES_ACTION_REF|github\.action_ref|github\.action_repository/, `${kind} Action must not build from source or decide on its ref`)
     assert.equal((source.match(/prebuilt-cli\.mjs" --action-root "\$GITHUB_ACTION_PATH"/g) ?? []).length, 1, `${kind} Action must install the CLI once from its own release record`)
-    assert.match(source, /ARTIFACT_PAGES_TOKEN: \$\{\{ github\.token \}\}/, `${kind} Action must use the workflow token, not the private-config token, for release downloads`)
+    assert.match(source, /ARTIFACT_PAGES_DOWNLOAD_TOKEN: \$\{\{ github\.token \}\}/, `${kind} Action must use the workflow token, not the private-config token, for release downloads`)
     assert.ok(source.indexOf('id: install') < source.indexOf('id: cli'), `${kind} Action must install the CLI before running it`)
 
     // Own checkout (decision 2): pinned, workflow token only, no persisted credentials, before anything else.
@@ -398,6 +400,11 @@ async function runAction(kind, cliArgs, inputs, workspace, binaryPath, scratchRo
       },
     })
     assert.equal(trustCheck.explicit, false, 'pull-request none must remain a manual preview even during a same-repository PR event')
+    actionEnvironment.ARTIFACT_PAGES_TRUSTED_CONFIG_REF = git(workspace, 'rev-parse', inputs['default-ref'])
+    const operatorConfig = path.join(scratchRoot, 'preview-operator-config.yaml')
+    await fs.copyFile(path.resolve(workspace, inputs.config), operatorConfig)
+    actionEnvironment.ARTIFACT_PAGES_INPUT_CONFIG = operatorConfig
+
   }
 
   const execution = spawnSync('node', [actionRunner], {
@@ -527,7 +534,7 @@ async function assertPreviewPreflight(repositoryDirectory, scratchRoot) {
   })
   assert.equal(refsPreflight.status, 1, 'unreachable default ref must fail the Action before the CLI runs')
   const refsOutputs = parseActionOutputs(await fs.readFile(refsOutputPath, 'utf8'))
-  assert.equal(refsOutputs.trusted, 'true', 'trust verification precedes the ref check')
+  assert.equal(refsOutputs.trusted, undefined, 'failed preflight must not expose a trusted config ref')
   assert.equal(refsOutputs.outcome, 'failed')
   assert.equal(refsOutputs['exit-code'], '1')
   assert.match(refsOutputs.error, /fetch-depth: 0/, 'ref failure must tell the caller how to fix the checkout')

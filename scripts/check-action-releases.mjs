@@ -2,7 +2,7 @@
 // Compare generated payloads, including the transitive shared-script closure.
 // Action version alone is not content; the CLI pin and all published files are.
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -15,13 +15,22 @@ export function payload(directory) {
     for (const entry of readdirSync(path.join(directory, relative), { withFileTypes: true })) {
       const name = path.join(relative, entry.name)
       if (entry.isDirectory()) walk(name)
-      else rows.push([name, readFileSync(path.join(directory, name)).toString('base64')])
+      else {
+        let bytes = readFileSync(path.join(directory, name))
+        if (name === 'release.json') {
+          const release = JSON.parse(bytes)
+          delete release.actionVersion
+          delete release.version
+          bytes = Buffer.from(JSON.stringify(release))
+        }
+        rows.push([name, bytes.toString('base64')])
+      }
     }
   }
   walk('')
   return JSON.stringify(rows.sort((a, b) => a[0].localeCompare(b[0])))
 }
-export function checkActionChanges({ sourceRoot = root, tags, selected, currentTag, baselineRoot }) {
+export function checkActionChanges({ sourceRoot = root, tags, selected, currentTag, baselineRoot, allowFixtureFallback = false }) {
   const temporary = mkdtempSync(path.join(os.tmpdir(), 'action-release-check-'))
   try {
     const result = []
@@ -32,7 +41,20 @@ export function checkActionChanges({ sourceRoot = root, tags, selected, currentT
       const candidate = buildActionRepos({ sourceRoot, out: path.join(temporary, 'current'), version: '0.1.0', names: [name] })[0]
       let changed = true
       if (previous) {
-        const baseline = buildActionRepos({ sourceRoot: baselineRoot(previous), out: path.join(temporary, 'previous'), version: '0.1.0', names: [name] })[0]
+        const source = baselineRoot(previous)
+        const out = path.join(temporary, 'previous')
+        const historical = path.join(source, 'scripts/build-action-repos.mjs')
+        let baseline
+        if (existsSync(historical)) {
+          const generated = spawnSync(process.execPath, [realpathSync(historical), '--out', out, '--version', '0.1.0', '--action', name], { encoding: 'utf8' })
+          if (generated.status !== 0) throw new Error(`cannot generate historical ${previous}: ${generated.stderr}`)
+          baseline = { directory: path.join(out, `${name}-action`) }
+        } else {
+          if (!allowFixtureFallback) throw new Error(`historical ${previous} has no Action repository generator`)
+          // Small unit fixtures omit scripts/. Real Git archives must carry their
+          // own generator so historical bootstrap/range metadata stays accurate.
+          baseline = buildActionRepos({ sourceRoot: source, out, version: '0.1.0', names: [name] })[0]
+        }
         changed = payload(candidate.directory) !== payload(baseline.directory)
       }
       result.push({ action: name, previous, changed, level: name === selected && !changed ? 'error' : name !== selected && changed ? 'warning' : 'ok' })

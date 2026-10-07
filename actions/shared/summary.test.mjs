@@ -86,3 +86,9 @@ test('summary input validation and file writing', async () => {
     rmSync(scratch, { recursive: true, force: true })
   }
 })
+
+test('installation failures report that no CLI ran and preserve the requested override', () => {
+  const text = renderSummary({operation:'CLI installation',result:{outcome:'failed',error:'unavailable'},exitCode:1,cliExecutionStarted:false,cliOverrideRequested:'0.1.3'})
+  assert.match(text,/CLI executed.*none \(installation failed\)/)
+  assert.match(text,/CLI override requested.*0.1.3/)
+})
