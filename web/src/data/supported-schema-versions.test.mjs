@@ -10,7 +10,7 @@ import test from 'node:test'
 register('data:text/javascript,' + encodeURIComponent(`
 export async function resolve(specifier, context, next) {
   if (/^\\.\\.?\\//.test(specifier) && !/\\.[a-z]+$/.test(specifier)) {
-    try { return await next(specifier + '.ts', context) } catch {}
+    try { return await next(specifier + '.ts', context) } catch (error) { if (error?.code !== 'ERR_MODULE_NOT_FOUND') throw error }
   }
   return next(specifier, context)
 }`))
@@ -84,5 +84,18 @@ for (const format of FORMATS) {
       assert.equal(error.format, format)
       return true
     })
+  })
+}
+
+// A missing or non-integer version is malformed data, not an unreadable newer format: it must
+// never surface as UnsupportedSchemaError ("needs to be republished").
+for (const format of FORMATS) {
+  test(`${format} reader treats non-integer versions as invalid data, not unsupported`, async () => {
+    for (const version of ['1', 1.5, null]) {
+      let error
+      try { await readers[format](version) } catch (caught) { error = caught }
+      assert.ok(!(error instanceof UnsupportedSchemaError), `${format} version ${JSON.stringify(version)} must not be UnsupportedSchemaError`)
+      if (format !== 'full-text-manifest') assert.ok(error, `${format} version ${JSON.stringify(version)} is rejected`)
+    }
   })
 }
