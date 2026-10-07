@@ -69,7 +69,7 @@ Monorepo adaptations of package scripts: `scripts/validate.sh` defaults the Arti
 
 ### Follow-up: r2.dev management re-added (2026-10-07)
 
-PR: PR_URL. `modules/delivery/main.tf` manages `cloudflare_r2_managed_domain.development` with `enabled = false`; tests (`modules/delivery/main.test.js`, `tests/cloudflare-contract.test.js`, `modules/delivery/tests/r2_dev_disabled.tftest.hcl`) assert it is managed and disabled. Read-only plan of `terraform/deployments/cloudflare-verify` against a copy of the verification state: `Plan: 1 to add, 0 to change, 0 to destroy.` (only the managed domain). Production receives it when `admin` switches to the monorepo-synced module (IMP-65); applying to the verification zone is an owner-approved step after merge.
+PR: https://github.com/artifact-pages/artifact-pages/pull/39. `modules/delivery/main.tf` manages `cloudflare_r2_managed_domain.development` with `enabled = false`; tests (`modules/delivery/main.test.js`, `tests/cloudflare-contract.test.js`, `modules/delivery/tests/r2_dev_disabled.tftest.hcl`) assert it is managed and disabled. Read-only plan of `terraform/deployments/cloudflare-verify` against a copy of the verification state: `Plan: 1 to add, 0 to change, 0 to destroy.` (only the managed domain). Production receives it when `admin` switches to the monorepo-synced module (IMP-65); applying to the verification zone is an owner-approved step after merge.
 
 ### Still open
 
