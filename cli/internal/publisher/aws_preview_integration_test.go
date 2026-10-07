@@ -146,7 +146,7 @@ func TestAWSPreviewIntegrationRetriesInterruptedUploadWithoutCrossSiteWrites(t *
 		if strings.HasPrefix(put.key, "_previews/sre/revisions/") {
 			immutableConditions = append(immutableConditions, put)
 		}
-		if put.key != siteLockKey("sre") && !strings.HasPrefix(put.key, "_previews/sre/") {
+		if put.key != siteLockKey("sre") && put.key != siteVersionsKey("sre") && !strings.HasPrefix(put.key, "_previews/sre/") {
 			t.Errorf("SRE preview publication wrote outside its preview and lock scope: %q", put.key)
 		}
 	}
@@ -426,7 +426,7 @@ func assertAWSPreviewIntegrationWritesStayInSite(t *testing.T, puts []awsPreview
 	lockKey := siteLockKey(site)
 	previewPrefix := "_previews/" + site + "/"
 	for _, put := range puts {
-		if put.key != lockKey && !strings.HasPrefix(put.key, previewPrefix) {
+		if put.key != lockKey && put.key != siteVersionsKey(site) && !strings.HasPrefix(put.key, previewPrefix) {
 			t.Errorf("%s preview publication wrote outside its preview and lock scope: %q", site, put.key)
 		}
 	}

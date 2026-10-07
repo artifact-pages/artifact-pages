@@ -645,6 +645,7 @@ async function makeTestBundle(root) {
     sourceCommit: '0000000000000000000000000000000000000000',
     sourceDirty: false,
     files: Object.keys(files).sort(),
+    reads: JSON.parse(await fs.readFile(path.join(projectRoot, 'web/src/data/supported-schema-versions.json'), 'utf8')).reads,
   }))
   await fs.writeFile(`${archivePath}.sha256`, `${digest}  ${archiveName}\n`)
   return archivePath

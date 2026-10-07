@@ -68,6 +68,13 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 	if !ok {
 		return Result{}, errors.New("deployment backend does not support origin reads and conditional writes")
 	}
+	if err := checkWriter(ctx, conditional, compatCurrentWrites()); err != nil {
+		return Result{}, err
+	}
+	record, err := prepareWriterRecord(ctx, conditional, siteVersionsKey(options.SiteID), writerFormats("site-metadata", "artifact-index", "full-text-manifest"))
+	if err != nil {
+		return Result{}, err
+	}
 	previewStore, err := NewObjectPreviewStore(conditional)
 	if err != nil {
 		return Result{}, err
@@ -92,6 +99,13 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 		})
 	}
 	operation := func() (Result, error) {
+		record, err = prepareWriterRecord(ctx, conditional, siteVersionsKey(options.SiteID), writerFormats("site-metadata", "artifact-index", "full-text-manifest"))
+		if err != nil {
+			return Result{}, err
+		}
+		if err := checkWriter(ctx, conditional, compatCurrentWrites()); err != nil {
+			return Result{}, err
+		}
 		if !options.DryRun {
 			if _, _, err := resumePreviewCleanup(operationCtx, backend, conditional, previewStore); err != nil {
 				return Result{}, err
@@ -167,6 +181,9 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 		if err := validateInvalidation(backend, paths); err != nil {
 			return result, err
 		}
+		if err := stageVersionRecord(operationCtx, conditional, siteVersionsKey(options.SiteID), record, writerFormats("site-metadata", "artifact-index", "full-text-manifest")); err != nil {
+			return result, err
+		}
 		// Persist the transaction id and monotone touched-key union before the
 		// first origin mutation. The old state remains the commit point until
 		// every projection write/delete has completed.
@@ -200,6 +217,9 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 		}
 		if err := preview.ApplyCatalogReconciliationUnderSiteLock(operationCtx, previewStore, options.SiteID, previewPlan); err != nil {
 			return result, fmt.Errorf("production projection is committed but preview catalog reconciliation failed: %w", err)
+		}
+		if err := writeVersionRecord(operationCtx, backend, siteVersionsKey(options.SiteID), record); err != nil {
+			return result, err
 		}
 		if len(paths) == 0 {
 			result.Outcome = "no-op"

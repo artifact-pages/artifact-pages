@@ -130,6 +130,7 @@ func runPreviewPublish(ctx context.Context, args []string, stdout, stderr io.Wri
 		buildOptions.PullRequestHeadRepository = pullRequestInfo.HeadRepo
 		buildOptions.PullRequestHeadSHA = pullRequestInfo.HeadSHA
 	}
+	ctx = publisher.WithCompatibility(ctx, resolved.Config, false)
 	buildResult, plan, err := publisher.BuildAndPlanPreview(ctx, backend, buildOptions, *dryRun)
 	if err != nil {
 		failure, outputErr := makePreviewPublishOutput(publicOrigin, buildResult, plan, *dryRun, resolved)

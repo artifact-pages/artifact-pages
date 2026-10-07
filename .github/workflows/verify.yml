@@ -228,16 +228,18 @@ jobs:
         run: |
           test "$OUTCOME" = planned
           test -z "$(find "$STORAGE" -type f)"
-      - name: Registry sync
-        id: register
-        uses: ./actions/registry
-        with:
-          config: ${{ steps.prep.outputs.config }}
+      # Deploy the reader before registering an unpublished site: unknown site
+      # version records must fail app compatibility checks after registration.
       - name: App deploy from a packaged archive
         id: app
         uses: ./actions/app-deploy
         with:
           archive: ${{ steps.prep.outputs.archive }}
+          config: ${{ steps.prep.outputs.config }}
+      - name: Registry sync
+        id: register
+        uses: ./actions/registry
+        with:
           config: ${{ steps.prep.outputs.config }}
       - name: Assert registry and app outputs
         env:

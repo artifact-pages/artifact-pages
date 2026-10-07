@@ -62,9 +62,18 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 	if !ok {
 		return Result{}, errors.New("deployment backend does not support origin reads and conditional writes")
 	}
+	if err := checkWriter(ctx, conditional, compatCurrentWrites()); err != nil {
+		return Result{}, err
+	}
+	record, err := prepareWriterRecord(ctx, conditional, registryVersionsKey, writerFormats("registry"))
+	if err != nil {
+		return Result{}, err
+	}
+	if err := checkRegistrySiteRecordSchemas(ctx, conditional); err != nil {
+		return Result{}, err
+	}
 	manager := SiteLockManager{Backend: conditional}
 	var globalRelease func() error
-	var err error
 	if !dryRun {
 		_, globalRelease, err = manager.AcquireRegistry(ctx)
 		if err != nil {
@@ -72,6 +81,21 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 		}
 	}
 	operation := func() (result Result, operationErr error) {
+		record, err = prepareWriterRecord(ctx, conditional, registryVersionsKey, writerFormats("registry"))
+		if err != nil {
+			return result, err
+		}
+		if err := checkWriter(ctx, conditional, compatCurrentWrites()); err != nil {
+			return result, err
+		}
+		defer func() {
+			if operationErr == nil && !dryRun {
+				operationErr = writeVersionRecord(ctx, backend, registryVersionsKey, record)
+			}
+		}()
+		if err := checkRegistrySiteRecordSchemas(ctx, conditional); err != nil {
+			return result, err
+		}
 		current, currentETag, err := readCurrentRegistry(ctx, conditional)
 		if err != nil {
 			return result, err
@@ -102,13 +126,9 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 		for _, siteID := range cleanupIDs {
 			cleanupSet[siteID] = struct{}{}
 		}
-		preRegistryLockIDs := make([]string, 0, len(changedExisting))
-		for _, siteID := range changedExisting {
-			if _, cleanup := cleanupSet[siteID]; !cleanup {
-				preRegistryLockIDs = append(preRegistryLockIDs, siteID)
-			}
-		}
-		preRegistryLockIDs = uniqueSorted(preRegistryLockIDs)
+		// All affected identities are locked before catalog mutation so their
+		// version records cannot change after the compatibility preflight.
+		preRegistryLockIDs := uniqueSorted(append(append([]string(nil), changedExisting...), cleanupIDs...))
 		var locks []heldSiteLock
 		if !dryRun {
 			locks, err = acquireSiteLocks(ctx, manager, preRegistryLockIDs)
@@ -124,6 +144,11 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 					}
 				}
 			}()
+		}
+		for _, lock := range locks {
+			if _, _, err := readVersionRecord(ctx, conditional, siteVersionsKey(lock.SiteID)); err != nil {
+				return result, err
+			}
 		}
 		cleanupKeys := make([]string, 0)
 		appendCleanupPlan := func() error {
@@ -178,6 +203,9 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 		if currentETag == "" {
 			condition = ObjectCondition{IfNoneMatch: true}
 		}
+		if err := stageVersionRecord(ctx, conditional, registryVersionsKey, record); err != nil {
+			return result, err
+		}
 		if registryChanged {
 			if _, err := conditional.PutObjectConditional(ctx, "_indexes/sites.json", Object{
 				Bytes: desiredBytes, ContentType: "application/json; charset=utf-8", ContentDisposition: "inline",
@@ -188,11 +216,12 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 			*result.RegistryUpdated = true
 		}
 		if len(cleanupIDs) > 0 {
-			cleanupLocks, err := acquireSiteLocks(ctx, manager, cleanupIDs)
-			if err != nil {
-				return result, fmt.Errorf("registry updated; acquire removed site locks: %w", err)
+			cleanupLocks := make([]heldSiteLock, 0, len(cleanupIDs))
+			for _, lock := range locks {
+				if _, cleanup := cleanupSet[lock.SiteID]; cleanup {
+					cleanupLocks = append(cleanupLocks, lock)
+				}
 			}
-			locks = append(locks, cleanupLocks...)
 			previewStore, err := NewObjectPreviewStore(conditional)
 			if err != nil {
 				return result, err
@@ -213,6 +242,9 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 			if err := backend.DeleteObjects(ctx, cleanupKeys); err != nil {
 				return result, fmt.Errorf("registry updated; clean removed site data: %w", err)
 			}
+		}
+		if err := writeVersionRecord(ctx, backend, registryVersionsKey, record); err != nil {
+			return result, err
 		}
 		result.FilesRemoved = len(cleanupKeys)
 		if len(paths) > 0 {
@@ -578,7 +610,7 @@ func listSiteKeys(ctx context.Context, backend DeploymentBackend, siteID string)
 	if conditional, ok := backend.(ConditionalObjectBackend); ok {
 		// Cover both layouts: a site never touched by a post-IMP-66 CLI still
 		// holds its records at the legacy keys, and unregister must clear them.
-		for _, retryKey := range []string{siteCacheRetryKey(siteID), legacySiteCacheRetryKey(siteID)} {
+		for _, retryKey := range []string{siteCacheRetryKey(siteID), legacySiteCacheRetryKey(siteID), siteVersionsKey(siteID)} {
 			if _, _, err := conditional.GetObject(ctx, retryKey); err == nil {
 				keys = append(keys, retryKey)
 			} else if !errors.Is(err, ErrObjectNotFound) && (retryKey == siteCacheRetryKey(siteID) || !legacyProbeAbsent(err)) {

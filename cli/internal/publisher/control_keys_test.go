@@ -49,6 +49,7 @@ func TestControlKeyLayoutMatchesSharedFixture(t *testing.T) {
 	fixture := loadControlKeyFixture(t)
 	const site = "{site}"
 	want := map[string]string{
+		"site-versions": siteVersionsKey(site), "app-versions": appVersionsKey, "registry-versions": registryVersionsKey,
 		"site-lock": siteLockKey(site), "site-cache": siteCacheRetryKey(site),
 		"publish-state": sitePublishStateKey(site), "preview-cleanup": previewCleanupKey(site),
 		"registry-lock": registryLockKey, "application-lock": applicationLockKey,
@@ -83,7 +84,7 @@ func TestControlKeyLayoutMatchesSharedFixture(t *testing.T) {
 			t.Errorf("legacy %s = %q, CLI legacy key = %q", row.ID, row.Key, k)
 		}
 	}
-	if len(legacy) != len(fixture.Site) {
+	if len(legacy) != len(fixture.Site)-1 {
 		t.Errorf("legacy rows = %d, per-site rows = %d", len(legacy), len(fixture.Site))
 	}
 }
