@@ -2,6 +2,7 @@
 
 - Status: Done
 - Phase: Reusable distribution
+- Pending amendment: [TD17](TD17-config-pinned-component-versions.md) (decided 2026-10-07, not yet implemented) gives each Action its own version series and makes the CLI version come from the deployment config instead of the Action version (decisions 2 and 4). Command names `registry register` and `site publish` below are the pre-[TD16](TD16-cli-sync-and-removal.md) names of `registry sync` and `site sync`.
 - Decision: The owner decided on 2026-10-06, after moving the product to the GitHub organization `artifact-pages`, to publish each Action from its own repository, to make the published Actions thin, and to restart the version series at `v0.1.0`. The specification is updated ("Released CLI", "Action repositories").
 - Supersedes: the listing shape of [TD4](TD4-action-marketplace-distribution.md) design question 1 (one listed root Action plus unlisted sub-folder Actions) and the build model of question 6 (source build with cache, prebuilt binaries as a shortcut). TD4's name, category, reference and pre-release decisions still apply, now per Action repository.
 - Related design: [TD2](TD2-component-release-policy.md), [TD4](TD4-action-marketplace-distribution.md), [TD12](TD12-action-consumer-contract.md)

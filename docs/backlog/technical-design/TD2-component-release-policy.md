@@ -2,6 +2,7 @@
 
 - Status: Done
 - Phase: Reusable distribution
+- Pending amendment: [TD17](TD17-config-pinned-component-versions.md) (decided 2026-10-07, not yet implemented) splits the product version into CLI, web and per-Action series and moves the CLI/web choice into the deployment config. This document describes current behavior until its implementation slices land.
 - Amended: 2026-10-07 — Terraform modules are versioned independently of the product version and released by per-module tags in the monorepo ([TD15](TD15-terraform-module-source-of-truth.md)); the product tag series is unchanged.
 - Revised: 2026-10-05 — records that compatibility is not guaranteed while the product is 0.x and the cross-version gate skips those candidates; replaces the earlier web-only SemVer / CLI-by-SHA policy (2026-09-28) with one product version, a CLI-pinned web bundle, a compatibility contract and automated release gates.
 - Related implementation: [IMP-45](../implementation/IMP-45-unified-release-and-compatibility.md), [IMP-31](../implementation/IMP-31-app-distribution.md), [IMP-34](../implementation/IMP-34-actions.md), [IMP-35](../implementation/IMP-35-external-adoption.md), [IMP-38](../implementation/IMP-38-terraform-registry-publication.md)
