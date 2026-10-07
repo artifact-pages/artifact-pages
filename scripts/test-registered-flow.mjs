@@ -197,20 +197,20 @@ async function main() {
     run('go', ['build', '-o', binaryPath, './cli/cmd/artifact-pages'])
 
     const adminDryRun = parseResult(run(binaryPath, [
-      'registry', 'register', '--config', 'artifact-pages.yaml', '--dry-run', '--format', 'json',
-    ], { cwd: adminRoot }), 'registry register dry-run')
-    assert(adminDryRun.operation === 'registry register' && adminDryRun.outcome === 'planned', 'registry register dry-run did not return a planned result')
+      'registry', 'sync', '--config', 'artifact-pages.yaml', '--dry-run', '--format', 'json',
+    ], { cwd: adminRoot }), 'registry sync dry-run')
+    assert(adminDryRun.operation === 'registry sync' && adminDryRun.outcome === 'planned', 'registry sync dry-run did not return a planned result')
     assert(!(await fs.stat(storageRoot).then(() => true, () => false)), 'admin dry-run created the local object root')
     const adminRegister = parseResult(run(binaryPath, [
-      'registry', 'register', '--config', 'artifact-pages.yaml', '--format', 'json',
-    ], { cwd: adminRoot }), 'registry register')
-    assert(adminRegister.operation === 'registry register' && adminRegister.outcome === 'registered', 'registry register did not return a registered result')
+      'registry', 'sync', '--config', 'artifact-pages.yaml', '--format', 'json',
+    ], { cwd: adminRoot }), 'registry sync')
+    assert(adminRegister.operation === 'registry sync' && adminRegister.outcome === 'synced', 'registry sync did not return a synced result')
 
     const satelliteConfig = path.relative(satelliteRoot, configPath)
     const neighborPublish = parseResult(run(binaryPath, [
-      'site', 'publish', '--site', 'neighbor', '--source', 'sites/neighbor/content', '--config', satelliteConfig, '--format', 'json',
+      'site', 'sync', '--site', 'neighbor', '--source', 'sites/neighbor/content', '--config', satelliteConfig, '--format', 'json',
     ], { cwd: satelliteRoot }), 'neighbor initial publish')
-    assert(neighborPublish.outcome === 'published', `neighbor initial publish returned ${neighborPublish.outcome}`)
+    assert(neighborPublish.outcome === 'synced', `neighbor initial site sync returned ${neighborPublish.outcome}`)
 
     const neighborBefore = await treeSnapshot(path.join(storageRoot, '_artifacts', 'neighbor'))
     const neighborIndexBefore = await treeSnapshot(path.join(storageRoot, '_indexes', 'neighbor'))
@@ -246,9 +246,9 @@ async function main() {
     })
 
     const sreInitialPublish = parseResult(run(binaryPath, [
-      'site', 'publish', '--site', 'sre', '--source', 'sites/sre/content', '--config', satelliteConfig, '--format', 'json',
+      'site', 'sync', '--site', 'sre', '--source', 'sites/sre/content', '--config', satelliteConfig, '--format', 'json',
     ], { cwd: satelliteRoot }), 'SRE first publish')
-    assert(sreInitialPublish.outcome === 'published', `SRE first publish returned ${sreInitialPublish.outcome}`)
+    assert(sreInitialPublish.outcome === 'synced', `SRE first site sync returned ${sreInitialPublish.outcome}`)
 
     await writeFile(satelliteRoot, 'sites/sre/content/reports/recovery.html', [
       '<!doctype html>',
@@ -263,15 +263,15 @@ async function main() {
 
     const storageBeforeDryRun = await treeSnapshot(storageRoot)
     const updateDryRun = parseResult(run(binaryPath, [
-      'site', 'publish', '--site', 'sre', '--source', 'sites/sre/content', '--config', satelliteConfig, '--dry-run', '--format', 'json',
-    ], { cwd: satelliteRoot }), 'site publish dry-run')
+      'site', 'sync', '--site', 'sre', '--source', 'sites/sre/content', '--config', satelliteConfig, '--dry-run', '--format', 'json',
+    ], { cwd: satelliteRoot }), 'site sync dry-run')
     assert(updateDryRun.outcome === 'planned', `update dry-run returned ${updateDryRun.outcome}`)
-    assert(JSON.stringify(await treeSnapshot(storageRoot)) === JSON.stringify(storageBeforeDryRun), 'site publish dry-run changed the local object tree')
+    assert(JSON.stringify(await treeSnapshot(storageRoot)) === JSON.stringify(storageBeforeDryRun), 'site sync dry-run changed the local object tree')
 
     const updateResult = parseResult(run(binaryPath, [
-      'site', 'publish', '--site', 'sre', '--source', 'sites/sre/content', '--config', satelliteConfig, '--format', 'json',
-    ], { cwd: satelliteRoot }), 'site publish update')
-    assert(updateResult.outcome === 'published', `site update returned ${updateResult.outcome}`)
+      'site', 'sync', '--site', 'sre', '--source', 'sites/sre/content', '--config', satelliteConfig, '--format', 'json',
+    ], { cwd: satelliteRoot }), 'site sync update')
+    assert(updateResult.outcome === 'synced', `site sync returned ${updateResult.outcome}`)
     assert((await fs.readFile(path.join(storageRoot, '_artifacts/sre/reports/recovery.html'), 'utf8')).includes('revision two'), 'updated HTML bytes were not published')
     assert(!(await fs.stat(path.join(storageRoot, '_artifacts/sre/stale.html')).then(() => true, () => false)), 'stale artifact was not removed')
     assert(JSON.stringify(await treeSnapshot(path.join(storageRoot, '_artifacts/neighbor'))) === JSON.stringify(neighborBefore), 'updating SRE changed neighbor artifact objects')
@@ -327,7 +327,7 @@ async function main() {
 
     run('go', [
       'test', '-race', '-count=1', './cli/internal/publisher',
-      '-run', '^(TestPublishSiteRetriesAfterMetadataUploadFailureBeforeStaleDeletion|TestPublishSiteRetriesPartialStaleDeletionToConvergence|TestUnregisterSiteRetriesForcedCleanupWhenRegistrationIsAlreadyAbsent)$',
+      '-run', '^(TestPublishSiteRetriesAfterMetadataUploadFailureBeforeStaleDeletion|TestPublishSiteRetriesPartialStaleDeletionToConvergence|TestRegistrySyncRetriesForcedCleanupWhenSiteIsAlreadyOmitted)$',
     ])
 
     // Keep these as immutable revision objects rather than catalogs: the flow
@@ -342,12 +342,12 @@ async function main() {
     commit(adminRoot, 'unregister SRE from desired config')
     const storageBeforeUnregisterDryRun = await treeSnapshot(storageRoot)
     const unregisterDryRun = parseResult(run(binaryPath, [
-      'registry', 'unregister', '--site', 'sre', '--config', 'artifact-pages.yaml', '--dry-run', '--format', 'json',
-    ], { cwd: adminRoot }), 'registry unregister dry-run')
+      'registry', 'sync', '--config', 'artifact-pages.yaml', '--dry-run', '--format', 'json',
+    ], { cwd: adminRoot }), 'registry sync without SRE dry-run')
     assert(unregisterDryRun.outcome === 'planned', `unregister dry-run returned ${unregisterDryRun.outcome}`)
-    assert(JSON.stringify(await treeSnapshot(storageRoot)) === JSON.stringify(storageBeforeUnregisterDryRun), 'registry unregister dry-run changed the local object tree')
+    assert(JSON.stringify(await treeSnapshot(storageRoot)) === JSON.stringify(storageBeforeUnregisterDryRun), 'registry sync dry-run changed the local object tree')
     run(binaryPath, [
-      'registry', 'unregister', '--site', 'sre', '--config', 'artifact-pages.yaml', '--format', 'json',
+      'registry', 'sync', '--config', 'artifact-pages.yaml', '--format', 'json',
     ], { cwd: adminRoot })
 
     const registry = JSON.parse(await fs.readFile(path.join(storageRoot, '_indexes/sites.json'), 'utf8'))
@@ -360,7 +360,7 @@ async function main() {
     assert((await treeSnapshot(path.join(storageRoot, '_previews/sre'))).length === 0, 'unregister left SRE preview objects')
 
     success = true
-    console.log('Registered local flow passed: separate admin/satellite repositories, dry-run, two-site publish, update/removal, encoded-name preview publish and edge/browser loads, retry tests, and scoped artifact/index/preview unregister.')
+    console.log('Registered local flow passed: separate admin/satellite repositories, dry-run, two-site sync, update/removal, encoded-name preview publish and edge/browser loads, retry tests, and scoped artifact/index/preview cleanup for an omitted site.')
   } finally {
     if (composeStarted) {
       try {

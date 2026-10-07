@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -36,7 +37,7 @@ func TestPublishSitePrunesOnlyMissingPreviewManifestsAfterProductionCommit(t *te
 		{Action: "keep", GroupID: liveClosed.ID, HeadSHA: liveClosed.HeadSHA, Reason: "manifest-present"},
 		{Action: "keep", GroupID: liveOpen.ID, HeadSHA: liveOpen.HeadSHA, Reason: "manifest-present"},
 	}
-	if result.Outcome != "published" || !reflect.DeepEqual(previewChangesFromResult(result), wantPreviewChanges) {
+	if result.Outcome != "synced" || !reflect.DeepEqual(previewChangesFromResult(result), wantPreviewChanges) {
 		t.Fatalf("PublishSite() = %+v, want published with preview plan %+v", result, wantPreviewChanges)
 	}
 	if !strings.Contains(strings.Join(result.InvalidationPaths, "\n"), "/_previews/sre/catalog.json") {
@@ -172,7 +173,7 @@ func TestPublishSiteRetriesPreviewCatalogWriteFailureToConvergence(t *testing.T)
 	if err != nil {
 		t.Fatalf("retry PublishSite() error = %v", err)
 	}
-	if retry.Outcome != "published" || !reflect.DeepEqual(previewChangesFromResult(retry), wantPreviewChanges) {
+	if retry.Outcome != "synced" || !reflect.DeepEqual(previewChangesFromResult(retry), wantPreviewChanges) {
 		t.Fatalf("retry PublishSite() = %+v, want published after preview pruning", retry)
 	}
 	finalCatalog := readPreviewPublishCatalog(t, backend.lockMemoryBackend, "sre")
@@ -284,7 +285,14 @@ func previewPublishManualGroup(headSHA string) preview.Group {
 
 func seedPreviewPublishCatalog(t *testing.T, backend *lockMemoryBackend, groups []preview.Group, liveManifestHeads ...string) {
 	t.Helper()
-	contents, err := preview.EncodeCatalog(preview.Catalog{SchemaVersion: preview.SchemaVersion, Site: "sre", Groups: groups})
+	histories := make([]preview.GroupRevisionHistory, 0, len(groups))
+	for _, group := range groups {
+		histories = append(histories, preview.GroupRevisionHistory{
+			GroupID: group.ID, Revisions: []preview.RevisionOwnership{{HeadSHA: group.HeadSHA, Files: []string{}}},
+		})
+	}
+	sort.Slice(histories, func(i, j int) bool { return histories[i].GroupID < histories[j].GroupID })
+	contents, err := preview.EncodeCatalog(preview.Catalog{SchemaVersion: preview.SchemaVersion, Site: "sre", Groups: groups, RevisionHistory: histories})
 	if err != nil {
 		t.Fatalf("encode preview catalog fixture: %v", err)
 	}

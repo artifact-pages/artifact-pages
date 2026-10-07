@@ -86,7 +86,7 @@ STORAGE_ROOT=./.local/storage npm run serve:local
 
 `/_control/` is reserved for private coordination records and nginx returns 404 for it.
 
-For a local registry and separate satellite checkout workflow, see [Local registered-site development](docs/guides/local-registered-sites.md). The admin's selected deployment YAML holds both the provider target and its optional `sites` mapping; `registry register`, `site publish`, and `registry unregister` consume that shared contract.
+For a local registry and separate satellite checkout workflow, see [Local registered-site development](docs/guides/local-registered-sites.md). The admin's selected deployment YAML holds both the provider target and its complete desired `sites` mapping for `registry sync`; `site sync` uses the deployed registry to validate its selected source.
 
 For package-level build tasks and explicit local/Cloudflare publishing shortcuts, see [Development tasks](docs/guides/taskfile.md).
 

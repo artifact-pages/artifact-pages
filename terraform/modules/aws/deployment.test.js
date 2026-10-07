@@ -180,11 +180,18 @@ test('admin and satellite OIDC roles have separate exact-subject trust and scope
   assert.match(adminStatements, /"_control\/locks\/\*"/u)
   assert.match(adminStatements, /"_control\/registry-cleanup\.json"/u)
   assert.match(adminStatements, /"\$\{local\.bucket_arn\}\/_control\/app-cache\/retry\.json"/u)
+  assert.match(adminStatements, /"\$\{local\.bucket_arn\}\/_control\/preview-cleanup\/\*"/u)
   const adminList = localStatement(adminStatements, 'ListProjectionPrefixes')
   assert.doesNotMatch(adminList, /_control\/app-cache/u, 'the fixed retry object does not require ListBucket')
   for (const statementName of ['ReadRegistryAppAndControlState', 'WriteApplicationRegistryAndControlState', 'DeleteUnregisteredProjectionObjects']) {
     assert.match(localStatement(adminStatements, statementName), /_control\/app-cache\/retry\.json/u, `${statementName} must cover the exact app retry object`)
+    assert.match(localStatement(adminStatements, statementName), /_control\/preview-cleanup\/\*/u, `${statementName} must cover preview cleanup records`)
   }
+  const adminDelete = localStatement(adminStatements, 'DeleteUnregisteredProjectionObjects')
+  for (const path of ['index.html', 'preview-bridge.js', 'LICENSE', 'THIRD_PARTY_NOTICES.txt']) {
+    assert.ok(adminDelete.includes(`/${path}"`), `admin DeleteObject must cover the app key ${path}`)
+  }
+  assert.match(adminDelete, /\/assets\/\*/u, 'admin DeleteObject must cover generated app assets')
   assert.doesNotMatch(adminStatements, /Action\s*=\s*"\*"/u)
   assert.doesNotMatch(adminStatements, /"s3:\*"/u)
 
@@ -196,6 +203,7 @@ test('admin and satellite OIDC roles have separate exact-subject trust and scope
   assert.match(satellitePolicy, /"_artifacts\/\$\{each\.key\}\/\*"/u)
   assert.match(satellitePolicy, /"_previews\/\$\{each\.key\}\/\*"/u)
   assert.match(satellitePolicy, /"_control\/locks\/sites\/\$\{each\.key\}\.json"/u)
+  assert.match(satellitePolicy, /"\$\{local\.bucket_arn\}\/_control\/preview-cleanup\/\$\{each\.key\}\.json"/u)
   assert.match(satellitePolicy, /"\$\{local\.bucket_arn\}\/_indexes\/sites\.json"/u)
   assert.doesNotMatch(satellitePolicy, /\/index\.html|\/assets\/\*/u)
   assert.doesNotMatch(satellitePolicy, /"s3:\*"/u)
@@ -209,7 +217,9 @@ test('admin and satellite OIDC roles have separate exact-subject trust and scope
   assert.match(satelliteDelete, /"s3:DeleteObject"/u)
   assert.match(satelliteDelete, /_artifacts\/\$\{each\.key\}\/\*/u)
   assert.match(satelliteDelete, /_indexes\/\$\{each\.key\}\/\*/u, 'stale generated indexes and search objects are site-owned cleanup')
-  assert.doesNotMatch(satelliteDelete, /_indexes\/sites\.json|_indexes\/\$\{each\.key\}\/\*\*|_previews|_control\/locks/u)
+  assert.doesNotMatch(satelliteDelete, /_indexes\/sites\.json|_indexes\/\$\{each\.key\}\/\*\*|_control\/locks/u)
+  assert.match(satelliteDelete, /_previews\/\$\{each\.key\}\/\*/u, 'preview removal deletes only the selected site preview prefix')
+  assert.match(satelliteDelete, /_control\/preview-cleanup\/\$\{each\.key\}\.json/u, 'preview removal can clear its exact per-site cleanup record')
   assert.match(satelliteDelete, /_control\/site-cache\/\$\{each\.key\}\.json/u)
   assert.match(satelliteWrite, /_control\/site-cache\/\$\{each\.key\}\.json/u)
   assert.match(satellitePolicy, /Sid\s*=\s*"RevalidateSelectedSiteDistribution"[\s\S]*?Resource\s*=\s*aws_cloudfront_distribution\.site\.arn/u)

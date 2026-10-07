@@ -92,6 +92,11 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 		})
 	}
 	operation := func() (Result, error) {
+		if !options.DryRun {
+			if _, _, err := resumePreviewCleanup(operationCtx, backend, conditional, previewStore); err != nil {
+				return Result{}, err
+			}
+		}
 		projection, err := loadOriginRegistry(operationCtx, conditional)
 		if err != nil {
 			return Result{}, err
@@ -136,7 +141,7 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 			return Result{}, err
 		}
 		emptyPreviewChanges := []preview.CatalogReconciliationChange{}
-		result := Result{Operation: "site publish", Site: options.SiteID, Changes: diff.changes, PreviewChanges: &emptyPreviewChanges, BuildSkipped: diff.buildSkipped}
+		result := Result{Operation: "site sync", Site: options.SiteID, Changes: diff.changes, PreviewChanges: &emptyPreviewChanges, BuildSkipped: diff.buildSkipped}
 		var previewPlan preview.CatalogReconciliationPlan
 		if options.DryRun {
 			previewPlan, err = preview.PlanCatalogReconciliation(operationCtx, previewStore, options.SiteID)
@@ -207,7 +212,7 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 		if err := backend.DeleteObjects(operationCtx, []string{siteCacheRetryKey(options.SiteID)}); err != nil {
 			return result, fmt.Errorf("site synchronized and cache revalidation requested; clear cache retry record: %w", err)
 		}
-		result.Outcome, result.FilesPublished, result.FilesRemoved = "published", filesPublished, filesRemoved
+		result.Outcome, result.FilesPublished, result.FilesRemoved = "synced", filesPublished, filesRemoved
 		return result, nil
 	}
 	result, operationErr := operation()

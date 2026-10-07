@@ -46,6 +46,10 @@ Before changing app objects, the command writes the private `/_control/app-cache
 
 The command writes the application plane and its private lock/retry controls only. It neither lists nor deletes site indexes, artifacts, or previews. The shell uses browser revalidation; hashed assets use the immutable one-year cache policy. Site registration and published site content continue to use their separate admin and satellite operations.
 
+## Remove the application bundle
+
+`artifact-pages app remove --config artifact-pages.yaml --dry-run` plans removal without locking or changing storage. Apply with the same command without `--dry-run`. It deletes only `index.html`, `preview-bridge.js`, `LICENSE`, `THIRD_PARTY_NOTICES.txt`, and objects under `assets/`; missing files are a successful no-op. The application lock and cache retry journal make partial deletion and cache-purge retries converge. A later `app deploy` replays pending application cache work before deciding that the bundle is unchanged. Site indexes, artifacts, previews, and registry data are outside this operation.
+
 ## Run the local checkout, upgrade, and rollback smoke
 
 From this repository, run:

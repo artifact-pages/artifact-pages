@@ -132,7 +132,7 @@ func TestRegisterSitesDryRunMatchesApplyPlanAndDoesNotWrite(t *testing.T) {
 	if !reflect.DeepEqual(applied.Changes, planned.Changes) {
 		t.Fatalf("apply plan = %+v, dry-run plan = %+v", applied.Changes, planned.Changes)
 	}
-	if applied.Outcome != "registered" {
+	if applied.Outcome != "synced" {
 		t.Fatalf("apply outcome = %q, want registered", applied.Outcome)
 	}
 	assertRegistryUpdatedJSON(t, applied, true, false)
@@ -219,7 +219,7 @@ func TestRegisterSitesRetainsPendingCatalogInvalidationWhenCleanupTargetIsRegist
 	if err != nil {
 		t.Fatalf("retry RegisterSites() error = %v", err)
 	}
-	if second.Outcome != "registered" {
+	if second.Outcome != "synced" {
 		t.Fatalf("retry outcome = %q; want catalog invalidation retry", second.Outcome)
 	}
 	assertRegistryUpdatedJSON(t, second, false, false)
@@ -278,7 +278,7 @@ func TestRegisterSitesPersistsCatalogRetryForAddAndMetadataOnlyChanges(t *testin
 			if err != nil {
 				t.Fatalf("retry register: %v", err)
 			}
-			if second.Outcome != "registered" || second.RegistryUpdated == nil || *second.RegistryUpdated {
+			if second.Outcome != "synced" || second.RegistryUpdated == nil || *second.RegistryUpdated {
 				t.Fatalf("retry result = %+v; want cache-only registered outcome", second)
 			}
 			if len(backend.invalidations) != 1 || !reflect.DeepEqual(backend.invalidations[0], []string{"/_indexes/sites.json"}) {
@@ -372,7 +372,7 @@ func TestRegisterReaddedSitePreservesPendingPathsButStopsCleanup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RegisterSites(retry re-add) error = %v", err)
 	}
-	if third.Outcome != "registered" || third.RegistryUpdated == nil || *third.RegistryUpdated || third.FilesRemoved != 0 {
+	if third.Outcome != "synced" || third.RegistryUpdated == nil || *third.RegistryUpdated || third.FilesRemoved != 0 {
 		t.Fatalf("cache-only re-add retry = %+v; want successful purge without registry write or site deletion", third)
 	}
 	if len(backend.invalidations) != 1 || !reflect.DeepEqual(backend.invalidations[0], paths) {
@@ -438,7 +438,7 @@ func TestRegistryCleanupIntentFailureStopsCatalogMutationAndCanResumeAfterAmbigu
 			if err != nil {
 				t.Fatalf("retry after intent error = %+v, %v", second, err)
 			}
-			if second.Outcome != "registered" || second.RegistryUpdated == nil || !*second.RegistryUpdated {
+			if second.Outcome != "synced" || second.RegistryUpdated == nil || !*second.RegistryUpdated {
 				t.Fatalf("retry result = %+v; want successful catalog update", second)
 			}
 			if len(backend.invalidations) != 1 || !reflect.DeepEqual(backend.invalidations[0], []string{"/_indexes/sites.json"}) {
@@ -539,7 +539,7 @@ func TestUnregisterSiteRetriesRemovedSiteCleanupAfterPostWriteFailures(t *testin
 			if err != nil {
 				t.Fatalf("retry UnregisterSite() error = %v", err)
 			}
-			if second.Outcome != "unregistered" || second.Site != "legacy" {
+			if second.Outcome != "synced" || second.Site != "legacy" {
 				t.Fatalf("retry unregister result = %+v, want successful cleanup retry", second)
 			}
 			assertRegistryUpdatedJSON(t, second, false, false)
@@ -572,7 +572,7 @@ func TestUnregisterSiteRetriesRemovedSiteCleanupAfterPostWriteFailures(t *testin
 	}
 }
 
-func TestUnregisterSiteRetriesForcedCleanupWhenRegistrationIsAlreadyAbsent(t *testing.T) {
+func TestRegistrySyncRetriesForcedCleanupWhenSiteIsAlreadyOmitted(t *testing.T) {
 	tests := []struct {
 		name string
 		fail func(*registryApplyTestBackend)
@@ -607,7 +607,7 @@ func TestUnregisterSiteRetriesForcedCleanupWhenRegistrationIsAlreadyAbsent(t *te
 			if err == nil {
 				t.Fatalf("first UnregisterSite() = %+v; want injected %s failure", first, test.name)
 			}
-			if first.Operation != "registry unregister" || first.Site != "sre" || first.RegistryUpdated == nil || *first.RegistryUpdated {
+			if first.Operation != "registry sync" || first.Site != "sre" || first.RegistryUpdated == nil || *first.RegistryUpdated {
 				t.Fatalf("first unregister result = %+v; want site identity and unchanged registry", first)
 			}
 			registryAfterFailure, registryETagAfterFailure, err := backend.GetObject(context.Background(), "_indexes/sites.json")
@@ -627,7 +627,7 @@ func TestUnregisterSiteRetriesForcedCleanupWhenRegistrationIsAlreadyAbsent(t *te
 			if err != nil {
 				t.Fatalf("retry UnregisterSite() error = %v", err)
 			}
-			if retry.Outcome != "unregistered" || retry.Site != "sre" || retry.RegistryUpdated == nil || *retry.RegistryUpdated {
+			if retry.Outcome != "synced" || retry.Site != "sre" || retry.RegistryUpdated == nil || *retry.RegistryUpdated {
 				t.Fatalf("retry unregister result = %+v; want successful forced cleanup without registry rewrite", retry)
 			}
 			registryAfterRetry, registryETagAfterRetry, err := backend.GetObject(context.Background(), "_indexes/sites.json")

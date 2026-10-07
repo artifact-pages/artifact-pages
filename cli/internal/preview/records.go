@@ -19,9 +19,10 @@ import (
 const SchemaVersion = 1
 
 type Catalog struct {
-	SchemaVersion int     `json:"schemaVersion"`
-	Site          string  `json:"site"`
-	Groups        []Group `json:"groups"`
+	SchemaVersion   int                    `json:"schemaVersion"`
+	Site            string                 `json:"site"`
+	Groups          []Group                `json:"groups"`
+	RevisionHistory []GroupRevisionHistory `json:"revisionHistory"`
 }
 
 type Group struct {
@@ -31,6 +32,22 @@ type Group struct {
 	PRURL     string     `json:"prUrl,omitempty"`
 	UpdatedAt string     `json:"updatedAt"`
 	Documents []Document `json:"documents"`
+}
+
+// GroupRevisionHistory is durable ownership metadata for a preview group. It
+// remains in the catalog after the reader-facing group disappears because a
+// PR has no previewable documents or its latest manifest expires.
+type GroupRevisionHistory struct {
+	GroupID   string              `json:"groupId"`
+	Revisions []RevisionOwnership `json:"revisions"`
+}
+
+// RevisionOwnership records the exact source paths written for an immutable
+// SHA. It lets explicit removal finish safely even after storage retention has
+// removed that revision's manifest.
+type RevisionOwnership struct {
+	HeadSHA string   `json:"headSha"`
+	Files   []string `json:"files"`
 }
 
 type RevisionManifest struct {
@@ -208,30 +225,111 @@ func ValidateCatalog(catalog Catalog) error {
 	if !validSiteID(catalog.Site) {
 		return fmt.Errorf("invalid preview catalog site %q", catalog.Site)
 	}
+	if catalog.Groups == nil {
+		return errors.New("preview catalog groups must be an array")
+	}
+	if catalog.RevisionHistory == nil {
+		return errors.New("preview catalog has no complete revision ownership history")
+	}
+	historyByGroup := make(map[string]GroupRevisionHistory, len(catalog.RevisionHistory))
+	sharedRevisionFiles := make(map[string][]string)
+	previousGroupID := ""
+	for _, history := range catalog.RevisionHistory {
+		if err := validateGroupID(history.GroupID, "", ""); err != nil {
+			return fmt.Errorf("preview revision history: %w", err)
+		}
+		if history.GroupID <= previousGroupID {
+			return errors.New("preview revision history must be sorted by unique group ID")
+		}
+		previousGroupID = history.GroupID
+		if history.Revisions == nil || len(history.Revisions) == 0 {
+			return fmt.Errorf("preview group %q has no revision ownership history", history.GroupID)
+		}
+		for index, revision := range history.Revisions {
+			if !shaPattern.MatchString(revision.HeadSHA) {
+				return fmt.Errorf("preview group %q history requires full lowercase Git SHAs", history.GroupID)
+			}
+			if index > 0 {
+				previous := history.Revisions[index-1].HeadSHA
+				if previous >= revision.HeadSHA {
+					return fmt.Errorf("preview group %q revisions must be sorted by unique SHA", history.GroupID)
+				}
+			}
+			if revision.Files == nil {
+				return fmt.Errorf("preview revision %q has no complete file list", revision.HeadSHA)
+			}
+			for index, file := range revision.Files {
+				if err := validateSourcePath(file); err != nil {
+					return fmt.Errorf("preview revision %q ownership: %w", revision.HeadSHA, err)
+				}
+				if index > 0 && revision.Files[index-1] >= file {
+					return fmt.Errorf("preview revision %q ownership files must be sorted and unique", revision.HeadSHA)
+				}
+			}
+			if prior, exists := sharedRevisionFiles[revision.HeadSHA]; exists && !equalStrings(prior, revision.Files) {
+				return fmt.Errorf("shared preview revision %q has inconsistent file ownership", revision.HeadSHA)
+			}
+			sharedRevisionFiles[revision.HeadSHA] = revision.Files
+		}
+		historyByGroup[history.GroupID] = history
+	}
 	seen := make(map[string]struct{}, len(catalog.Groups))
 	for _, group := range catalog.Groups {
 		if _, exists := seen[group.ID]; exists {
 			return fmt.Errorf("duplicate preview group %q", group.ID)
 		}
 		seen[group.ID] = struct{}{}
-		if err := validateGroupID(group.ID, group.Kind, group.HeadSHA); err != nil {
+		if err := validateGroup(group); err != nil {
 			return err
 		}
-		if group.Kind == "pull-request" {
-			if err := validatePRURL(group.PRURL, group.ID); err != nil {
-				return err
+		history, exists := historyByGroup[group.ID]
+		if !exists {
+			return fmt.Errorf("preview group %q has no complete revision ownership history", group.ID)
+		}
+		currentHeadRecorded := false
+		for _, revision := range history.Revisions {
+			if revision.HeadSHA == group.HeadSHA {
+				currentHeadRecorded = true
+				break
 			}
-		} else if group.PRURL != "" {
-			return fmt.Errorf("manual preview group %q cannot carry a pull request URL", group.ID)
 		}
-		if err := validateTimestamp(group.UpdatedAt); err != nil {
-			return fmt.Errorf("preview group %q updatedAt: %w", group.ID, err)
-		}
-		if err := validateDocuments(group.Documents); err != nil {
-			return fmt.Errorf("preview group %q: %w", group.ID, err)
+		if !currentHeadRecorded {
+			return fmt.Errorf("preview group %q head is missing from its revision ownership history", group.ID)
 		}
 	}
 	return nil
+}
+
+func validateGroup(group Group) error {
+	if err := validateGroupID(group.ID, group.Kind, group.HeadSHA); err != nil {
+		return err
+	}
+	if group.Kind == "pull-request" {
+		if err := validatePRURL(group.PRURL, group.ID); err != nil {
+			return err
+		}
+	} else if group.PRURL != "" {
+		return fmt.Errorf("manual preview group %q cannot carry a pull request URL", group.ID)
+	}
+	if err := validateTimestamp(group.UpdatedAt); err != nil {
+		return fmt.Errorf("preview group %q updatedAt: %w", group.ID, err)
+	}
+	if err := validateDocuments(group.Documents); err != nil {
+		return fmt.Errorf("preview group %q: %w", group.ID, err)
+	}
+	return nil
+}
+
+func equalStrings(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
 }
 
 func ValidateManifest(manifest RevisionManifest) error {
@@ -289,6 +387,12 @@ func GroupIDForHead(headSHA string) (string, error) {
 		return "", fmt.Errorf("invalid full Git head SHA %q", headSHA)
 	}
 	return "head:" + headSHA, nil
+}
+
+// ValidateGroupID validates the exact reader-facing group selector accepted
+// by preview remove without inferring it from a pull request or Git ref.
+func ValidateGroupID(groupID string) error {
+	return validateGroupID(groupID, "", "")
 }
 
 func validateDocuments(documents []Document) error {

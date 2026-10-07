@@ -116,7 +116,7 @@ func TestPublishSiteFromShallowCloneMatchesFullClone(t *testing.T) {
 
 	deployed := newRegisteredBackend(t)
 	first := publishFrom(t, cloneRegistered(t, origin, 0), deployed, false)
-	if first.Outcome != "published" {
+	if first.Outcome != "synced" {
 		t.Fatalf("initial publish outcome = %q", first.Outcome)
 	}
 
@@ -140,7 +140,7 @@ func TestPublishSiteFromShallowCloneMatchesFullClone(t *testing.T) {
 		t.Fatalf("shallow dry-run outcome = %q, want planned", dry.Outcome)
 	}
 	real := publishFrom(t, shallowCheckout, deployed, false)
-	if real.Outcome != "published" {
+	if real.Outcome != "synced" {
 		t.Fatalf("shallow publish outcome = %q", real.Outcome)
 	}
 	gotRoot, gotIndex := publishedProjection(t, deployed)

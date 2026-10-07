@@ -1,5 +1,5 @@
-name: Artifact Pages publish
-description: Publish a registered site to Artifact Pages, a searchable static reader for Git-managed documents.
+name: Artifact Pages site sync
+description: Reconcile a registered site's static projection with its Git-managed publishable files.
 author: artifact-pages
 branding:
   icon: book-open
@@ -45,7 +45,7 @@ outputs:
     description: CLI operation name.
     value: ${{ steps.cli.outputs.operation }}
   outcome:
-    description: CLI outcome string, such as planned, published, no-op, or failed.
+    description: CLI outcome string, such as planned, synced, no-op, or failed.
     value: ${{ steps.cli.outputs.outcome }}
   site:
     description: Explicit site ID selected for this operation.
@@ -87,7 +87,7 @@ runs:
       env:
         ARTIFACT_PAGES_TOKEN: ${{ github.token }}
       run: node "$GITHUB_ACTION_PATH/../shared/prebuilt-cli.mjs" --action-root "$GITHUB_ACTION_PATH"
-    - name: Publish the site
+    - name: Sync the site
       id: cli
       shell: bash
       working-directory: ${{ github.workspace }}

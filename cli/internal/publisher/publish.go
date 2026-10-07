@@ -36,6 +36,7 @@ type Result struct {
 	Operation         string                                 `json:"operation"`
 	Outcome           string                                 `json:"outcome"`
 	Site              string                                 `json:"site,omitempty"`
+	GroupID           string                                 `json:"groupId,omitempty"`
 	Changes           []Change                               `json:"changes"`
 	PreviewChanges    *[]preview.CatalogReconciliationChange `json:"previewChanges,omitempty"`
 	RegistryUpdated   *bool                                  `json:"registryUpdated,omitempty"`
@@ -111,10 +112,11 @@ func DeployApp(ctx context.Context, backend DeploymentBackend, options AppDeploy
 		}
 
 		needsInvalidation := len(changed) > 0 || len(retry.Paths) > 0
-		invalidationPaths := []string(nil)
-		if needsInvalidation {
-			invalidationPaths = []string{"/index.html"}
+		invalidationPaths := append([]string(nil), retry.Paths...)
+		if len(changed) > 0 {
+			invalidationPaths = append(invalidationPaths, "/index.html")
 		}
+		invalidationPaths = uniqueSorted(invalidationPaths)
 		plannedPaths := plannedInvalidationPaths(backend, invalidationPaths)
 		result := Result{
 			Operation: "app deploy", Changes: []Change{},
@@ -144,9 +146,7 @@ func DeployApp(ctx context.Context, backend DeploymentBackend, options AppDeploy
 		// retry for the next invocation.
 		journal := retry
 		if len(changed) > 0 {
-			journal = appCacheRetry{
-				SchemaVersion: appCacheRetrySchema, Paths: invalidationPaths,
-			}
+			journal = appCacheRetry{SchemaVersion: appCacheRetrySchema, Paths: invalidationPaths}
 			if _, err := writeAppCacheRetry(ctx, conditional, journal, retryETag); err != nil {
 				return result, err
 			}

@@ -23,11 +23,11 @@ func TestDeploymentReports(t *testing.T) {
 		dry    bool
 		want   []string
 	}{
-		{"register plan", publisher.Result{Operation: "registry register", Outcome: "planned", RegistryUpdated: &updated, Changes: []publisher.Change{{Action: "create", Path: "_indexes/sites.json#sites/guide"}, {Action: "update", Path: "_indexes/sites.json"}, {Action: "invalidate", Path: "/_indexes/sites.json"}}}, true, []string{"registry register  DRY RUN", "+ 1 create", "~ 1 update", "1 invalidate", "Site registrations", "Registry projection", "Cache revalidation", "will update", "No writes."}},
-		{"register", publisher.Result{Operation: "registry register", Outcome: "registered"}, false, []string{"registry register  REGISTERED", "reconciliation complete"}},
-		{"unregister", publisher.Result{Operation: "registry unregister", Site: "retired", Outcome: "unregistered", FilesRemoved: 1, Changes: []publisher.Change{{Action: "remove", Path: "_artifacts/retired/page.html"}}}, false, []string{"registry unregister retired  UNREGISTERED", "Site cleanup", "1 objects removed"}},
+		{"register plan", publisher.Result{Operation: "registry sync", Outcome: "planned", RegistryUpdated: &updated, Changes: []publisher.Change{{Action: "create", Path: "_indexes/sites.json#sites/guide"}, {Action: "update", Path: "_indexes/sites.json"}, {Action: "invalidate", Path: "/_indexes/sites.json"}}}, true, []string{"registry sync  DRY RUN", "+ 1 create", "~ 1 update", "1 invalidate", "Site registrations", "Registry projection", "Cache revalidation", "will update", "No writes."}},
+		{"sync", publisher.Result{Operation: "registry sync", Outcome: "synced"}, false, []string{"registry sync  SYNCED", "reconciliation complete"}},
+		{"sync cleanup", publisher.Result{Operation: "registry sync", Outcome: "synced", FilesRemoved: 1, Changes: []publisher.Change{{Action: "remove", Path: "_artifacts/retired/page.html"}}}, false, []string{"registry sync  SYNCED", "Site cleanup", "1 objects removed"}},
 		{"app", publisher.Result{Operation: "app deploy", Version: "1.2.3", Outcome: "deployed", FilesPublished: 1, InvalidationID: "request-id", Changes: []publisher.Change{{Action: "create", Path: "index.html"}}}, false, []string{"app deploy 1.2.3  DEPLOYED", "Application files", "request-id", "Deployed 1 application files"}},
-		{"no-op", publisher.Result{Operation: "registry register", Outcome: "no-op"}, false, []string{"UP TO DATE", "Everything is up to date"}},
+		{"no-op", publisher.Result{Operation: "registry sync", Outcome: "no-op"}, false, []string{"UP TO DATE", "Everything is up to date"}},
 		{"dry no-op", publisher.Result{Operation: "app deploy", Outcome: "no-op"}, true, []string{"DRY RUN", "No writes."}},
 		{"inspect", publisher.Result{Operation: "lock inspect", Site: "registry", Outcome: "inspected", Lock: &publisher.LockSnapshot{State: "held", Owner: "owner-1", ETag: `"exact-etag"`, AcquiredAt: time.Unix(0, 0).UTC()}}, false, []string{"lock inspect registry  INSPECTED", "held", `"exact-etag"`, "owner-1", "1970-01-01T00:00:00Z", "No writes."}},
 		{"recover", publisher.Result{Operation: "lock recover", Site: "guide", Outcome: "recovered", Lock: &publisher.LockSnapshot{State: "free", ETag: "new-etag"}}, false, []string{"RECOVERED", "free", "new-etag", "fresh inspection"}},
@@ -82,7 +82,7 @@ func TestIndexAndConfigReports(t *testing.T) {
 }
 
 func TestPreviewReports(t *testing.T) {
-	for _, state := range []string{"planned", "published", "no-op", "no-preview"} {
+	for _, state := range []string{"planned", "synced", "no-op", "no-preview"} {
 		t.Run(state, func(t *testing.T) {
 			var output bytes.Buffer
 			result := previewPublishOutput{Site: "guide", Outcome: state, HeadSHA: "head-sha", PullRequestURL: "https://github.com/acme/docs/pull/42", GroupListURL: "https://example.test/guide/previews", Documents: []previewDocumentURL{{Path: "guide.md", URL: "https://example.test/guide/preview/guide.md"}}, Objects: []preview.PublicationObjectChange{{Action: "create", Path: "guide.md"}}, CatalogChanges: []preview.PublicationCatalogChange{{Action: "add", GroupID: "pr:42", Reason: "published"}}}

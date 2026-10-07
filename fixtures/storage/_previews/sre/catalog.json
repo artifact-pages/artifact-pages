@@ -20,7 +20,7 @@
           "format": "html"
         },
         {
-          "path": "guides/review r\u00e9sum\u00e9 #% +?.md",
+          "path": "guides/review résumé #% +?.md",
           "title": "Encoded preview route",
           "format": "markdown"
         }
@@ -43,7 +43,7 @@
           "format": "html"
         },
         {
-          "path": "guides/review r\u00e9sum\u00e9 #% +?.md",
+          "path": "guides/review résumé #% +?.md",
           "title": "Encoded preview route",
           "format": "markdown"
         }
@@ -81,9 +81,80 @@
           "format": "html"
         },
         {
-          "path": "guides/review r\u00e9sum\u00e9 #% +?.md",
+          "path": "guides/review résumé #% +?.md",
           "title": "Encoded preview route",
           "format": "markdown"
+        }
+      ]
+    }
+  ],
+  "revisionHistory": [
+    {
+      "groupId": "head:0123456789abcdef0123456789abcdef01234567",
+      "revisions": [
+        {
+          "headSha": "0123456789abcdef0123456789abcdef01234567",
+          "files": [
+            "assets/guide.pdf",
+            "assets/mark.svg",
+            "assets/preview.css",
+            "assets/preview.js",
+            "fonts/preview.woff2",
+            "guides/modules/dependency.js",
+            "guides/modules/entry.js",
+            "guides/preview-guide.md",
+            "guides/preview.html",
+            "guides/review résumé #% +?.md"
+          ]
+        }
+      ]
+    },
+    {
+      "groupId": "pr:42",
+      "revisions": [
+        {
+          "headSha": "0123456789abcdef0123456789abcdef01234567",
+          "files": [
+            "assets/guide.pdf",
+            "assets/mark.svg",
+            "assets/preview.css",
+            "assets/preview.js",
+            "fonts/preview.woff2",
+            "guides/modules/dependency.js",
+            "guides/modules/entry.js",
+            "guides/preview-guide.md",
+            "guides/preview.html",
+            "guides/review résumé #% +?.md"
+          ]
+        }
+      ]
+    },
+    {
+      "groupId": "pr:43",
+      "revisions": [
+        {
+          "headSha": "0123456789abcdef0123456789abcdef01234567",
+          "files": [
+            "assets/guide.pdf",
+            "assets/mark.svg",
+            "assets/preview.css",
+            "assets/preview.js",
+            "fonts/preview.woff2",
+            "guides/modules/dependency.js",
+            "guides/modules/entry.js",
+            "guides/preview-guide.md",
+            "guides/preview.html",
+            "guides/review résumé #% +?.md"
+          ]
+        }
+      ]
+    },
+    {
+      "groupId": "pr:99",
+      "revisions": [
+        {
+          "headSha": "ffffffffffffffffffffffffffffffffffffffff",
+          "files": []
         }
       ]
     }

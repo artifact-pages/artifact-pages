@@ -168,7 +168,7 @@ jobs:
           SMOKE_ROOT: ${{ runner.temp }}/actions-smoke
         run: node scripts/actions-smoke-prepare.mjs
 
-      - name: Registry register (dry-run)
+      - name: Registry sync (dry-run)
         id: register-plan
         uses: ./actions/registry
         with:
@@ -181,7 +181,7 @@ jobs:
         run: |
           test "$OUTCOME" = planned
           test -z "$(find "$STORAGE" -type f)"
-      - name: Registry register
+      - name: Registry sync
         id: register
         uses: ./actions/registry
         with:
@@ -205,7 +205,7 @@ jobs:
           jq -e '.sites | map(.id) | index("smoke")' "$STORAGE/_indexes/sites.json"
           test -f "$STORAGE/index.html"
 
-      # Runs before any site publish: the first publish unshallows the checkout, and the
+      # Runs before any site sync: the first sync unshallows the checkout, and the
       # preview must start from the depth-1 checkout to prove the fetch and deepen path.
       - name: Commit a document change to preview
         run: |
@@ -267,7 +267,7 @@ jobs:
         env:
           STORAGE: ${{ steps.prep.outputs.storage }}
         run: echo "digest=$(cd "$STORAGE" && find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
-      - name: Site publish (dry-run)
+      - name: Site sync (dry-run)
         id: site-plan
         uses: ./actions/publish
         with:
@@ -284,19 +284,19 @@ jobs:
           test "$OUTCOME" = planned
           test "$(jq length <<<"$CHANGES")" -gt 0
           test "$BEFORE" = "$(cd "$STORAGE" && find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)"
-      - name: Site publish
+      - name: Site sync
         id: site-fulltext
         uses: ./actions/publish
         with:
           site: smoke
           config: ${{ steps.prep.outputs.config }}
-      - name: Assert the publish and its full-text data
+      - name: Assert the sync and its full-text data
         env:
           OUTCOME: ${{ steps.site-fulltext.outputs.outcome }}
           SITE: ${{ steps.site-fulltext.outputs.site }}
           STORAGE: ${{ steps.prep.outputs.storage }}
         run: |
-          test "$OUTCOME" = published
+          test "$OUTCOME" = synced
           test "$SITE" = smoke
           jq -e '.fullTextUrl' "$STORAGE/_indexes/smoke/meta.json"
           test -f "$STORAGE/_artifacts/smoke/overview.html"
@@ -310,7 +310,7 @@ jobs:
           actual="$(date -u -d "$(jq -r '.artifacts[] | select(.path == "overview.html") | .updatedAt' "$STORAGE/_indexes/smoke/index.json")" +%s)"
           test "$expected" = "$actual"
           test "$(git log -1 --format=%cn -- fixtures/actions-smoke/site/overview.html)" = "$(jq -r '.artifacts[] | select(.path == "overview.html") | .lastCommitter.name' "$STORAGE/_indexes/smoke/index.json")"
-      - name: Repeat the site publish
+      - name: Repeat the site sync
         id: site-repeat
         uses: ./actions/publish
         with:
@@ -324,7 +324,7 @@ jobs:
           test "$EXIT_CODE" = 0
           jq -e '.fullTextUrl' "$STORAGE/_indexes/smoke/meta.json"
 
-      - name: Site publish for an unregistered site
+      - name: Site sync for an unregistered site
         id: unregistered
         continue-on-error: true
         uses: ./actions/publish
@@ -332,7 +332,7 @@ jobs:
           site: not-registered
           config: ${{ steps.prep.outputs.config }}
           dry-run: "true"
-      - name: Site publish with an invalid input
+      - name: Site sync with an invalid input
         id: invalid
         continue-on-error: true
         uses: ./actions/publish
@@ -354,21 +354,19 @@ jobs:
           test "$INVALID_OUTCOME" = failure
           test "$INVALID_EXIT" = 2
 
-      # `registry unregister` has no Action (TD14); the CLI built above runs it.
-      - name: Registry unregister (CLI)
-        id: unregister
+      - name: Registry sync with an empty desired set
+        id: registry-empty
+        uses: ./actions/registry
+        with:
+          config: ${{ steps.prep.outputs.empty-sites-config }}
+      - name: Assert omitted site cleanup
         env:
-          CONFIG: ${{ steps.prep.outputs.unregister-config }}
-        run: |
-          set -euo pipefail
-          "$ARTIFACT_PAGES_TEST_CLI" registry unregister --site smoke --config "$CONFIG" --format json | tee "$RUNNER_TEMP/unregister.json"
-          echo "exit-code=0" >> "$GITHUB_OUTPUT"
-      - name: Assert the site was unregistered
-        env:
-          EXIT_CODE: ${{ steps.unregister.outputs['exit-code'] }}
+          EXIT_CODE: ${{ steps.registry-empty.outputs['exit-code'] }}
+          OUTCOME: ${{ steps.registry-empty.outputs.outcome }}
           STORAGE: ${{ steps.prep.outputs.storage }}
         run: |
           test "$EXIT_CODE" = 0
+          test "$OUTCOME" = synced
           jq -e '.sites | map(.id) | index("smoke") | not' "$STORAGE/_indexes/sites.json"
           test ! -e "$STORAGE/_indexes/smoke"
 

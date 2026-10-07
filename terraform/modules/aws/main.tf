@@ -80,6 +80,7 @@ locals {
         "${local.bucket_arn}/_control/publish-state/*",
         "${local.bucket_arn}/_control/registry-cleanup.json",
         "${local.bucket_arn}/_control/app-cache/retry.json",
+        "${local.bucket_arn}/_control/preview-cleanup/*",
         "${local.bucket_arn}/index.html",
         "${local.bucket_arn}/preview-bridge.js",
         "${local.bucket_arn}/LICENSE",
@@ -103,6 +104,7 @@ locals {
         "${local.bucket_arn}/_control/publish-state/*",
         "${local.bucket_arn}/_control/registry-cleanup.json",
         "${local.bucket_arn}/_control/app-cache/retry.json",
+        "${local.bucket_arn}/_control/preview-cleanup/*",
       ]
     },
     {
@@ -117,6 +119,12 @@ locals {
         "${local.bucket_arn}/_control/site-cache/*",
         "${local.bucket_arn}/_control/publish-state/*",
         "${local.bucket_arn}/_control/app-cache/retry.json",
+        "${local.bucket_arn}/_control/preview-cleanup/*",
+        "${local.bucket_arn}/index.html",
+        "${local.bucket_arn}/preview-bridge.js",
+        "${local.bucket_arn}/LICENSE",
+        "${local.bucket_arn}/THIRD_PARTY_NOTICES.txt",
+        "${local.bucket_arn}/assets/*",
       ]
     },
     {
@@ -559,6 +567,7 @@ resource "aws_iam_role_policy" "satellite" {
           "${local.bucket_arn}/_control/locks/sites/${each.key}.json",
           "${local.bucket_arn}/_control/site-cache/${each.key}.json",
           "${local.bucket_arn}/_control/publish-state/${each.key}.json.gz",
+          "${local.bucket_arn}/_control/preview-cleanup/${each.key}.json",
         ]
       },
       {
@@ -590,6 +599,7 @@ resource "aws_iam_role_policy" "satellite" {
           "${local.bucket_arn}/_control/locks/sites/${each.key}.json",
           "${local.bucket_arn}/_control/site-cache/${each.key}.json",
           "${local.bucket_arn}/_control/publish-state/${each.key}.json.gz",
+          "${local.bucket_arn}/_control/preview-cleanup/${each.key}.json",
         ]
       },
       {
@@ -601,6 +611,8 @@ resource "aws_iam_role_policy" "satellite" {
           "${local.bucket_arn}/_indexes/${each.key}/*",
           "${local.bucket_arn}/_control/site-cache/${each.key}.json",
           "${local.bucket_arn}/_control/publish-state/${each.key}.json.gz",
+          "${local.bucket_arn}/_control/preview-cleanup/${each.key}.json",
+          "${local.bucket_arn}/_previews/${each.key}/*",
         ]
       },
       {

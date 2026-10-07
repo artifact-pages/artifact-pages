@@ -113,7 +113,7 @@
           <circle class="ad-num" cx="26" cy="236" r="10"/><text class="ad-num-t" x="26" y="240" text-anchor="middle">6</text>
           <text class="ad-lab" x="42" y="240">片付け</text>
           <rect class="ad-box" x="16" y="252" width="400" height="110" rx="8"/>
-          <text class="ad-m acc" x="28" y="276">site publish</text>
+          <text class="ad-m acc" x="28" y="276">site sync</text>
           <text class="ad-s" x="114" y="276">（とpreview publish）がプレビューの一覧を読む</text>
           <text class="ad-s" x="28" y="300">マニフェストが無いと確認できた → 参照を除く</text>
           <text class="ad-s" x="28" y="320">マニフェストがある、または読めない → 残す</text>
@@ -142,7 +142,7 @@
           <li>ファイルを<code>/_previews/checkout/revisions/&lt;sha&gt;/files/…</code>に書き、最後に不変の<code>manifest.json</code>を書きます。続けて変わりうる<code>catalog.json</code>を更新し、グループ<code>pr:42</code>が新しいheadを指すようにします。</li>
           <li>読者は、そのPRの最新のプレビューなら<code>/checkout/_previews?group=pr%3A42</code>を、固定のリビジョンなら<code>/checkout/_previews/&lt;sha&gt;/design/flow.html</code>のようなURLを開きます。</li>
           <li><code>_previews/</code>にかけたプロバイダーのライフサイクル規則が、設定した日数を過ぎたオブジェクトを期限切れにします。閲覧アプリは、プレビューの一覧でマニフェストが無い項目を隠します。</li>
-          <li>次の<code>site publish</code>（または<code>preview publish</code>）が、マニフェストが無いと確認できた参照をプレビューの一覧から除きます。マニフェストがあるもの、読めなかったものは残します。</li>
+          <li>次の<code>site sync</code>（または<code>preview publish</code>）が、マニフェストが無いと確認できた参照をプレビューの一覧から除きます。マニフェストがあるもの、読めなかったものは残します。</li>
         </ol>
       </details>
     </figure>
@@ -189,7 +189,7 @@
 
     <section class="doc-section" aria-labelledby="publication">
       <h2 id="publication">公開の順序とリンク</h2>
-      <p><code>preview publish</code>は、<code>site publish</code>や<code>registry unregister</code>と同じサイトのロックを取り、デプロイ済みのサイトの登録情報を確かめ直します。リビジョンのファイルとマニフェストは新規作成だけを許すオブジェクトとして書き、そのあとでプレビューの一覧を読み、グループ単位の冪等な追加・更新を行います。プレビューの一覧の更新に失敗したら失敗を報告し、再試行できます。プレビューの一覧に載らなかったオブジェクトも、ほかと同じくプロバイダーの保持期間で消えます。</p>
+      <p><code>preview publish</code>は、<code>site sync</code>や<code>registry sync</code>と同じサイトのロックを取り、デプロイ済みのサイトの登録情報を確かめ直します。リビジョンのファイルとマニフェストは新規作成だけを許すオブジェクトとして書き、そのあとでプレビューの一覧を読み、グループ単位の冪等な追加・更新を行います。プレビューの一覧の更新に失敗したら失敗を報告し、再試行できます。プレビューの一覧に載らなかったオブジェクトも、ほかと同じくプロバイダーの保持期間で消えます。</p>
       <p>プレビューの中で、<strong>ほかの変更された文書</strong>へのリンクは同じリビジョンのその文書を開きます。<strong>変更されていない文書</strong>へのリンクは本番のルートを開きます。HTMLのリンクはフレームの中にアプリを入れ子にせず、閲覧アプリそのものを移動させます。</p>
       <p>プレビューは本番の画面には出ません。<code>index.json</code>、Browse、最近の更新、本文検索、パレットのページの候補のどれにも入りません。サイトのホームにはプレビューの一覧への控えめなリンクがあり、パレットには「Open previews」のコマンドがあります。プレビューの一覧を開いたときに読むのは、そのサイトの<code>catalog.json</code>だけです。</p>
     </section>
@@ -200,9 +200,9 @@
       <p>プロバイダーの削除は非同期なので、期限切れになったリビジョンをプレビューの一覧がしばらく指していることがあります。これには2つの仕組みで対処します。</p>
       <ol>
         <li>プレビューの一覧を開くと、閲覧アプリが候補ごとにマニフェストを確かめ、無いものを隠します。無いプレビューの文書には「Preview unavailable」とサイトへ戻る手段を表示し、無い生のリソースには実際の404応答を返します。</li>
-        <li><code>site publish</code>と<code>preview publish</code>は毎回、サイトのロックの中でオリジンのプレビューの一覧を読みます。参照を除くのは、マニフェストが<strong>無いと確認できたとき</strong>だけで、読み取りのエラーは無いことの証拠にしません。<code>site publish</code>が小さくなったプレビューの一覧を書くのは本番の投影を書き終えたあとなので、本番の公開が失敗してプレビューが隠れることはありません。</li>
+        <li><code>site sync</code>と<code>preview publish</code>は毎回、サイトのロックの中でオリジンのプレビューの一覧を読みます。参照を除くのは、マニフェストが<strong>無いと確認できたとき</strong>だけで、読み取りのエラーは無いことの証拠にしません。<code>site sync</code>が小さくなったプレビューの一覧を書くのは本番の投影を書き終えたあとなので、本番の公開が失敗してプレビューが隠れることはありません。</li>
       </ol>
-      <p>PRを閉じたときに動くワークフローはありません。マージ済み、閉じたもの、手動のプレビューも、マニフェストがある間はプレビューの一覧に出ます。<code>registry unregister</code>は、サイトのほかの投影と一緒にプレビューもすぐに消します。</p>
+      <p>PRを閉じたときに動くワークフローはありません。マージ済み、閉じたもの、手動のプレビューも、マニフェストがある間はプレビューの一覧に出ます。<code>registry sync</code>は、サイトのほかの投影と一緒にプレビューもすぐに消します。</p>
     </section>
 
     <section class="doc-section" aria-labelledby="proof">

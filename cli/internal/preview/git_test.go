@@ -654,7 +654,7 @@ func TestPreviewPathAndRecordValidation(t *testing.T) {
 	catalog := Catalog{SchemaVersion: SchemaVersion, Site: "sre", Groups: []Group{{
 		ID: "pr:42", Kind: "pull-request", HeadSHA: headSHA, PRURL: "https://github.com/acme/project/pull/42", UpdatedAt: "2026-09-27T00:00:00Z",
 		Documents: []Document{{Path: "docs/report.md", Title: "Report", Format: "markdown"}},
-	}}}
+	}}, RevisionHistory: []GroupRevisionHistory{{GroupID: "pr:42", Revisions: []RevisionOwnership{{HeadSHA: headSHA, Files: []string{"docs/report.md"}}}}}}
 	encoded, err := EncodeCatalog(catalog)
 	if err != nil {
 		t.Fatal(err)

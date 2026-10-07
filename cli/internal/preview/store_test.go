@@ -502,6 +502,11 @@ func TestPlanPublicationSortsCatalogChangesIndependentOfExistingCatalogOrder(t *
 		SchemaVersion: SchemaVersion,
 		Site:          "project",
 		Groups:        []Group{staleLast.Group, currentOld.Group, staleFirst.Group},
+		RevisionHistory: []GroupRevisionHistory{
+			{GroupID: staleFirst.Group.ID, Revisions: []RevisionOwnership{{HeadSHA: staleFirst.Group.HeadSHA, Files: []string{}}}},
+			{GroupID: currentOld.Group.ID, Revisions: []RevisionOwnership{{HeadSHA: currentOld.Group.HeadSHA, Files: []string{}}}},
+			{GroupID: staleLast.Group.ID, Revisions: []RevisionOwnership{{HeadSHA: staleLast.Group.HeadSHA, Files: []string{}}}},
+		},
 	}
 	catalogBytes, err := EncodeCatalog(catalog)
 	if err != nil {
@@ -538,7 +543,7 @@ func readTestCatalog(t *testing.T, store PreviewStore, site string) Catalog {
 	}
 	contents, err := store.ReadObject(context.Background(), key)
 	if errors.Is(err, ErrObjectNotFound) {
-		return Catalog{SchemaVersion: SchemaVersion, Site: site, Groups: []Group{}}
+		return Catalog{SchemaVersion: SchemaVersion, Site: site, Groups: []Group{}, RevisionHistory: []GroupRevisionHistory{}}
 	}
 	if err != nil {
 		t.Fatal(err)
@@ -817,6 +822,28 @@ func TestPublishSameHeadRetryVerifiesImmutableBundleAndDocuments(t *testing.T) {
 				t.Fatalf("catalog after rejected retry = %+v; want the original selected documents", catalog.Groups)
 			}
 		})
+	}
+}
+
+func TestRevisionHistoryIsSortedOwnershipSetAndSupportsHeadRevert(t *testing.T) {
+	store := newMemoryPreviewStore()
+	const first = "1111111111111111111111111111111111111111"
+	const second = "2222222222222222222222222222222222222222"
+	for _, result := range []BuildResult{
+		testPreviewResult("project", "42", first),
+		testPreviewResult("project", "42", second),
+		testPreviewResult("project", "42", first),
+	} {
+		if err := Publish(context.Background(), store, result); err != nil {
+			t.Fatalf("Publish(head %s) error = %v", result.Group.HeadSHA, err)
+		}
+	}
+	catalog := readTestCatalog(t, store, "project")
+	if len(catalog.Groups) != 1 || catalog.Groups[0].HeadSHA != first {
+		t.Fatalf("visible group = %+v; want reverted head %s", catalog.Groups, first)
+	}
+	if len(catalog.RevisionHistory) != 1 || len(catalog.RevisionHistory[0].Revisions) != 2 || catalog.RevisionHistory[0].Revisions[0].HeadSHA != first || catalog.RevisionHistory[0].Revisions[1].HeadSHA != second {
+		t.Fatalf("revision ownership history = %+v; want unique SHA-sorted set", catalog.RevisionHistory)
 	}
 }
 

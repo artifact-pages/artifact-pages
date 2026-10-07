@@ -68,11 +68,11 @@
           <rect class="ad-box" x="16" y="142" width="170" height="74" rx="8"/>
           <text class="ad-t" x="28" y="164">管理者の設定</text>
           <text class="ad-mq" x="28" y="182">artifact-pages.yaml</text>
-          <text class="ad-m acc" x="28" y="204">registry register</text>
+          <text class="ad-m acc" x="28" y="204">registry sync</text>
           <rect class="ad-box" x="16" y="236" width="170" height="74" rx="8"/>
           <text class="ad-t" x="28" y="258">サイトのソース</text>
           <text class="ad-mq" x="28" y="276">acme/checkout · docs/</text>
-          <text class="ad-m acc" x="28" y="298">site publish</text>
+          <text class="ad-m acc" x="28" y="298">site sync</text>
           <rect class="ad-box" x="16" y="330" width="170" height="74" rx="8"/>
           <text class="ad-t" x="28" y="352">PRのhead</text>
           <text class="ad-mq" x="28" y="370">acme/checkout @ &lt;sha&gt;</text>
@@ -157,8 +157,8 @@
         <summary>図の内容を文章で読む</summary>
         <ol>
           <li><code>app deploy</code>が、版番号付きのSPA一式をアプリケーションプレーン（<code>/index.html</code>と<code>/assets/*</code>）へ書き込みます。</li>
-          <li><code>registry register</code>が、<code>artifact-pages.yaml</code>の<code>sites</code>から<code>/_indexes/sites.json</code>を作ります。</li>
-          <li><code>site publish</code>が、サイトのインデックス類を<code>/_indexes/&lt;site&gt;/</code>に、ファイルを<code>/_artifacts/&lt;site&gt;/</code>に書き込みます。<code>preview publish</code>の書き込み先は<code>/_previews/&lt;site&gt;/</code>です。</li>
+          <li><code>registry sync</code>が、<code>artifact-pages.yaml</code>の<code>sites</code>から<code>/_indexes/sites.json</code>を作ります。</li>
+          <li><code>site sync</code>が、サイトのインデックス類を<code>/_indexes/&lt;site&gt;/</code>に、ファイルを<code>/_artifacts/&lt;site&gt;/</code>に書き込みます。<code>preview publish</code>の書き込み先は<code>/_previews/&lt;site&gt;/</code>です。</li>
           <li>ロックや再試行の記録は非公開の<code>/_control/*</code>に置き、読者には返しません。</li>
           <li>エッジは<code>/checkout/design/flow.html</code>のような論理ルートをアプリのシェルへ、<code>/assets/*</code>・<code>/_indexes/*</code>・<code>/_artifacts/*</code>・<code>/_previews/*</code>を保存済みのオブジェクトへ振り分けます。オブジェクトが無ければ実際の404応答を返します。</li>
           <li>ブラウザでは、閲覧アプリがインデックスを読み、HTMLの成果物を<code>/_artifacts/…</code>からiframeに読み込みます。Markdownはアプリ自身が描画します。</li>
@@ -174,13 +174,13 @@
 
     <section class="doc-section" aria-labelledby="independent">
       <h2 id="independent">公開はサイトごとに、読む体験は共通に</h2>
-      <p>公開には、全サイトをまとめる段階がありません。管理者は閲覧アプリをデプロイし、<code>artifact-pages.yaml</code>の<code>sites</code>に各サイトを1度登録します。どちらの操作も、サイトの中身はビルドしません。そのあとは各サイトのリポジトリが、内容が変わったときに自分のCIから<code>site publish</code>を実行します。1回の公開が書き込むのはそのサイトの<code>/_indexes/&lt;site&gt;/</code>と<code>/_artifacts/&lt;site&gt;/</code>だけです。サイトごとのロックの下で動くので、ほかのサイトを作り直すことも、ほかのサイトを待つこともありません。</p>
+      <p>公開には、全サイトをまとめる段階がありません。管理者は閲覧アプリをデプロイし、<code>artifact-pages.yaml</code>の<code>sites</code>に各サイトを1度登録します。どちらの操作も、サイトの中身はビルドしません。そのあとは各サイトのリポジトリが、内容が変わったときに自分のCIから<code>site sync</code>を実行します。1回の公開が書き込むのはそのサイトの<code>/_indexes/&lt;site&gt;/</code>と<code>/_artifacts/&lt;site&gt;/</code>だけです。サイトごとのロックの下で動くので、ほかのサイトを作り直すことも、ほかのサイトを待つこともありません。</p>
       <div class="table-wrap"><table>
         <thead><tr><th>誰が</th><th>コマンド</th><th>書き込む先</th><th>いつ</th></tr></thead>
         <tbody>
           <tr><td>管理者</td><td><code>app deploy</code></td><td>アプリケーションプレーン</td><td>閲覧アプリを更新・切り戻すとき</td></tr>
-          <tr><td>管理者</td><td><code>registry register</code></td><td><code>/_indexes/sites.json</code></td><td>登録するサイトが変わったとき</td></tr>
-          <tr><td>各サイトのリポジトリ</td><td><code>site publish</code></td><td>そのサイトの<code>/_indexes/&lt;site&gt;/</code>と<code>/_artifacts/&lt;site&gt;/</code></td><td>そのサイトの内容が変わったとき。タイミングは各サイトで決める</td></tr>
+          <tr><td>管理者</td><td><code>registry sync</code></td><td><code>/_indexes/sites.json</code></td><td>登録するサイトが変わったとき</td></tr>
+          <tr><td>各サイトのリポジトリ</td><td><code>site sync</code></td><td>そのサイトの<code>/_indexes/&lt;site&gt;/</code>と<code>/_artifacts/&lt;site&gt;/</code></td><td>そのサイトの内容が変わったとき。タイミングは各サイトで決める</td></tr>
         </tbody>
       </table></div>
       <p>サイトどうしが共有するのは、静的な投影の構成と、それを読む閲覧アプリです。どのサイトの出力も同じオブジェクトの構成に従い、アプリは<code>/_indexes/sites.json</code>と各サイトの小さな<code>meta.json</code>からサイトを見つけます。そのため、別々に公開したサイトがばらばらのWebサイトにならず、1つのArtifact Pagesとしてまとまって見えます。サイトの選択、ファイルツリー、コマンドパレット、本文検索（有効にして公開したサイトのみ）、ピン留めと最近読んだページ、成果物の表示、目次と詳細、プレビューとGitへのリンクは、どのサイトでも同じように使えます。検索は、いま読んでいるサイトの中で行います。</p>
@@ -193,7 +193,7 @@
         <thead><tr><th>領域</th><th>パス</th><th>変わるとき</th><th>書き込むコマンド</th></tr></thead>
         <tbody>
           <tr><td>アプリケーションプレーン</td><td><code>/index.html</code>、<code>/assets/*</code>（ほかに<code>/preview-bridge.js</code>、<code>/LICENSE</code>、<code>/THIRD_PARTY_NOTICES.txt</code>）</td><td>閲覧アプリの更新・切り戻し</td><td><code>app deploy</code></td></tr>
-          <tr><td>コンテンツプレーン</td><td><code>/_indexes/*</code>、<code>/_artifacts/*</code>、<code>/_previews/*</code></td><td>サイトの登録・公開・プレビュー・登録解除</td><td><code>registry register</code> / <code>unregister</code>、<code>site publish</code>、<code>preview publish</code></td></tr>
+          <tr><td>コンテンツプレーン</td><td><code>/_indexes/*</code>、<code>/_artifacts/*</code>、<code>/_previews/*</code></td><td>サイトの登録・公開・プレビュー・desired setからの削除</td><td><code>registry sync</code> (desired-set omission)、<code>site sync</code>、<code>preview publish</code></td></tr>
           <tr><td>制御（非公開）</td><td><code>/_control/*</code></td><td>コマンドがロックを取る、再試行の記録を残す</td><td>上と同じコマンド。配信はしない</td></tr>
         </tbody>
       </table></div>

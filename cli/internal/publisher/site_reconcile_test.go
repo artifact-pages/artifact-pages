@@ -86,7 +86,7 @@ func TestPublishSitePreservesFilesMetadataOrderAndPrefixBoundaries(t *testing.T)
 	if err != nil {
 		t.Fatalf("PublishSite() error = %v", err)
 	}
-	if result.Outcome != "published" || result.FilesPublished != len(files)+6 || result.FilesRemoved != 1 {
+	if result.Outcome != "synced" || result.FilesPublished != len(files)+6 || result.FilesRemoved != 1 {
 		t.Fatalf("PublishSite() = %+v, want published files=%d removed=1", result, len(files)+6)
 	}
 
@@ -255,7 +255,7 @@ func TestPublishSiteRetriesAfterMetadataUploadFailureBeforeStaleDeletion(t *test
 	if err != nil {
 		t.Fatalf("retry PublishSite() error = %v", err)
 	}
-	if result.Outcome != "published" || result.FilesRemoved != 1 {
+	if result.Outcome != "synced" || result.FilesRemoved != 1 {
 		t.Fatalf("retry PublishSite() = %+v, want convergence and one stale removal", result)
 	}
 	if _, exists := backend.lockMemoryBackend.objects["_artifacts/sre/stale.html"]; exists {
@@ -323,7 +323,7 @@ func TestPublishSiteRetriesAfterArtifactAndIndexUploadFailures(t *testing.T) {
 			if err != nil {
 				t.Fatalf("retry PublishSite() error = %v", err)
 			}
-			if result.Outcome != "published" || result.FilesRemoved != 1 {
+			if result.Outcome != "synced" || result.FilesRemoved != 1 {
 				t.Fatalf("retry PublishSite() = %+v, want successful convergence and one stale removal", result)
 			}
 			if got := backend.lockMemoryBackend.objects[test.failedKey].Bytes; string(got) == string(test.oldContent) {

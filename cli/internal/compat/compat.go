@@ -21,7 +21,7 @@ type UnsupportedSchemaError struct {
 
 func (err *UnsupportedSchemaError) Error() string {
 	if err.Found > err.Supported {
-		return fmt.Sprintf("%s has schemaVersion %d, but this CLI (version %s) reads schemaVersion %d: it was written by a newer major version of Artifact Pages. Upgrade the CLI to that release and follow the upgrade procedure in its release notes (registry register, app deploy, then republish every site)",
+		return fmt.Sprintf("%s has schemaVersion %d, but this CLI (version %s) reads schemaVersion %d: it was written by a newer major version of Artifact Pages. Upgrade the CLI to that release and follow the upgrade procedure in its release notes (registry sync, app deploy, then sync every site)",
 			err.Format, err.Found, version.Product, err.Supported)
 	}
 	return fmt.Sprintf("%s has schemaVersion %d, but this CLI (version %s) reads schemaVersion %d: it was written by an older, no longer supported version. Republish it with this CLI, or use the older CLI release that matches the data",

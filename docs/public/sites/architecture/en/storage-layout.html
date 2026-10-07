@@ -105,16 +105,16 @@
           <g class="ad-mq">
             <text x="450" y="92">app deploy</text>
             <text x="450" y="116">app deploy</text>
-            <text x="450" y="164">registry register</text>
-            <text x="450" y="212">site publish</text>
-            <text x="450" y="236">site publish</text>
-            <text x="450" y="260">site publish --fulltext</text>
-            <text x="450" y="380">site publish</text>
-            <text x="450" y="404">site publish</text>
+            <text x="450" y="164">registry sync</text>
+            <text x="450" y="212">site sync</text>
+            <text x="450" y="236">site sync</text>
+            <text x="450" y="260">site sync</text>
+            <text x="450" y="380">site sync</text>
+            <text x="450" y="404">site sync</text>
             <text x="450" y="452">preview publish</text>
             <text x="450" y="476">preview publish</text>
-            <text x="450" y="524">publish, unregister</text>
-            <text x="450" y="548">site publish</text>
+            <text x="450" y="524">site sync, registry sync</text>
+            <text x="450" y="548">site sync</text>
           </g>
           <g class="ad-s">
             <text x="618" y="92">revalidate</text>
@@ -139,7 +139,7 @@
         <summary>The diagram as text</summary>
         <ul>
           <li>Application plane: <code>/index.html</code> (app shell, always revalidated) and <code>/assets/&lt;name&gt;-&lt;hash&gt;.*</code> (cached for a year), written by <code>app deploy</code>.</li>
-          <li>Content plane: <code>/_indexes/sites.json</code> from <code>registry register</code>; <code>/_indexes/checkout/meta.json</code>, <code>index.json</code> and, with <code>--fulltext</code>, <code>search/manifest.json</code>, <code>root-&lt;sha256&gt;.gz</code> and <code>leaf-&lt;sha256&gt;.gz</code> from <code>site publish</code>; the site's files under <code>/_artifacts/checkout/</code>; previews under <code>/_previews/checkout/</code> from <code>preview publish</code>.</li>
+          <li>Content plane: <code>/_indexes/sites.json</code> from <code>registry sync</code>; <code>/_indexes/checkout/meta.json</code>, <code>index.json</code> and <code>search/manifest.json</code>, <code>root-&lt;sha256&gt;.gz</code> and <code>leaf-&lt;sha256&gt;.gz</code> from <code>site sync</code>; the site's files under <code>/_artifacts/checkout/</code>; previews under <code>/_previews/checkout/</code> from <code>preview publish</code>.</li>
           <li>Private area: <code>/_control/locks/sites/checkout.json</code> and <code>/_control/site-cache/checkout.json</code>, never returned to viewers.</li>
           <li>Shared caches may keep JSON indexes and catalogs for up to 60 seconds, artifacts and preview files for up to 300 seconds, and content-hashed app and search files for a year.</li>
         </ul>
@@ -148,7 +148,7 @@
 
     <section class="doc-section" aria-labelledby="registry">
       <h2 id="registry">The site registry: <code>sites.json</code></h2>
-      <p>The admin keeps the list of sites in the <code>sites</code> mapping of <code>artifact-pages.yaml</code>, reviewed in Git. <code>registry register</code> validates it and writes <code>/_indexes/sites.json</code>: an array sorted by site ID, so equivalent YAML always produces the same JSON. Nobody edits the JSON by hand.</p>
+      <p>The admin keeps the list of sites in the <code>sites</code> mapping of <code>artifact-pages.yaml</code>, reviewed in Git. <code>registry sync</code> validates it and writes <code>/_indexes/sites.json</code>: an array sorted by site ID, so equivalent YAML always produces the same JSON. Nobody edits the JSON by hand.</p>
       <div class="term" aria-label="Example sites.json">
         <div class="term-head"><span>/_indexes/sites.json</span></div>
 <pre>{
@@ -241,7 +241,7 @@
               <circle class="ad-num" cx="36" cy="382" r="11"/><text class="ad-num-t" x="36" y="386" text-anchor="middle">5</text>
               <text class="ad-t" x="60" y="386">The reader presses Enter in page text search</text>
               <text class="ad-m" x="60" y="408">GET search/manifest.json → root-&lt;sha256&gt;.gz → needed leaf-&lt;sha256&gt;.gz</text>
-              <text class="ad-q" x="60" y="426">Nothing is fetched while typing. Only on sites published with --fulltext.</text>
+              <text class="ad-q" x="60" y="426">Nothing is fetched while typing. Search data is fetched only after submit.</text>
             </g>
             <g>
               <circle class="ad-num" cx="36" cy="472" r="11"/><text class="ad-num-t" x="36" y="476" text-anchor="middle">6</text>
@@ -293,7 +293,7 @@
           <tr><td>Preview <code>catalog.json</code> / revision files</td><td><code>s-maxage=60</code> / <code>s-maxage=300</code>, both with <code>max-age=0, must-revalidate</code></td></tr>
         </tbody>
       </table></div>
-      <p>Bounded freshness is only the fallback. After the origin is updated, <code>site publish</code> asks the CDN to invalidate exactly the URLs that changed, and keeps a retry record until that request succeeds (see <a href="publishing-model.html#cache-retry">Publishing model</a>). A successful request still does not mean every edge has refreshed, and it cannot update a reader who already has the page open.</p>
+      <p>Bounded freshness is only the fallback. After the origin is updated, <code>site sync</code> asks the CDN to invalidate exactly the URLs that changed, and keeps a retry record until that request succeeds (see <a href="publishing-model.html#cache-retry">Publishing model</a>). A successful request still does not mean every edge has refreshed, and it cannot update a reader who already has the page open.</p>
       <p class="note">The local nginx analogue serves <code>/_indexes/*</code> with <code>no-store</code> so changes show immediately during development. The rules above are what publishing stores on each object and what provider delivery must honor; live Cloudflare responses for sampled index and artifact objects matched them (T15). Live AWS headers have not been observed yet.</p>
     </section>
 
@@ -303,7 +303,7 @@
       <div class="table-wrap"><table>
         <thead><tr><th>Key</th><th>Purpose</th></tr></thead>
         <tbody>
-          <tr><td><code>_control/locks/sites/&lt;site&gt;.json</code></td><td>The per-site lock shared by site publish, preview publish, and unregister. Kept (as <code>free</code>) even after the site is unregistered.</td></tr>
+          <tr><td><code>_control/locks/sites/&lt;site&gt;.json</code></td><td>The per-site lock shared by site sync, preview operations, and registry cleanup. Kept (as <code>free</code>) after registry omission cleanup.</td></tr>
           <tr><td><code>_control/locks/registry.json</code></td><td>Serializes whole-registry updates.</td></tr>
           <tr><td><code>_control/site-cache/&lt;site&gt;.json</code></td><td>Cache invalidation paths still owed after a failed publish.</td></tr>
           <tr><td><code>_control/registry-cleanup.json</code></td><td>Content cleanup still owed for sites removed from the registry.</td></tr>

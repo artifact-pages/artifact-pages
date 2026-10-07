@@ -17,8 +17,8 @@ tasks:
     cmds:
       - go test ./cli/... -count=1
 
-  site:publish: &publish
-    desc: Publish one explicitly selected site and source (SITE, SOURCE, optional CONFIG, DRY_RUN)
+  site:sync: &site_sync
+    desc: Reconcile one explicitly selected site from its Git working tree (SITE, SOURCE, optional CONFIG, DRY_RUN)
     dir: '{{.REPO_ROOT}}'
     vars:
       CONFIG_FLAGS: >-
@@ -32,16 +32,16 @@ tasks:
     cmds:
       - task: build
       - >-
-        ./artifact-pages site publish --site {{.SITE | shellQuote}} --source {{.SOURCE | shellQuote}}
+        ./artifact-pages site sync --site {{.SITE | shellQuote}} --source {{.SOURCE | shellQuote}}
         {{.CONFIG_FLAGS}} {{if eq .DRY_RUN "true"}}--dry-run{{end}}
 
-  site:publish:cloudflare:
-    <<: *publish
-    desc: Publish to Cloudflare with the base config and Cloudflare overlay (SITE, SOURCE, DRY_RUN)
+  site:sync:cloudflare:
+    <<: *site_sync
+    desc: Reconcile a Cloudflare site with the base config and overlay (SITE, SOURCE, DRY_RUN)
     vars:
       CONFIG_FLAGS: --config artifact-pages.yaml --config artifact-pages.cloudflare.yaml
 
-  registry:register: &registry
+  registry:sync: &registry_sync
     desc: Reconcile the configured site registry (optional CONFIG, DRY_RUN)
     dir: '{{.REPO_ROOT}}'
     vars:
@@ -52,10 +52,10 @@ tasks:
           enum: ['true', 'false']
     cmds:
       - task: build
-      - ./artifact-pages registry register {{.CONFIG_FLAGS}} {{if eq .DRY_RUN "true"}}--dry-run{{end}}
+      - ./artifact-pages registry sync {{.CONFIG_FLAGS}} {{if eq .DRY_RUN "true"}}--dry-run{{end}}
 
-  registry:register:cloudflare:
-    <<: *registry
+  registry:sync:cloudflare:
+    <<: *registry_sync
     desc: Reconcile the Cloudflare registry with the base config and overlay (DRY_RUN)
     vars:
       CONFIG_FLAGS: --config artifact-pages.yaml --config artifact-pages.cloudflare.yaml
@@ -82,23 +82,22 @@ tasks:
     vars:
       CONFIG_FLAGS: --config artifact-pages.yaml --config artifact-pages.cloudflare.yaml
 
-  registry:unregister: &unregister
-    desc: Remove a site already omitted from the config (SITE, optional CONFIG, DRY_RUN)
+  app:remove: &app_remove
+    desc: Remove only application-plane objects (optional CONFIG, DRY_RUN)
     dir: '{{.REPO_ROOT}}'
     vars:
       CONFIG_FLAGS: '{{if .CONFIG}}--config {{.CONFIG | shellQuote}}{{end}}'
     requires:
       vars:
-        - SITE
         - name: DRY_RUN
           enum: ['true', 'false']
     cmds:
       - task: build
-      - ./artifact-pages registry unregister --site {{.SITE | shellQuote}} {{.CONFIG_FLAGS}} {{if eq .DRY_RUN "true"}}--dry-run{{end}}
+      - ./artifact-pages app remove {{.CONFIG_FLAGS}} {{if eq .DRY_RUN "true"}}--dry-run{{end}}
 
-  registry:unregister:cloudflare:
-    <<: *unregister
-    desc: Unregister and clean one Cloudflare site (SITE, DRY_RUN)
+  app:remove:cloudflare:
+    <<: *app_remove
+    desc: Remove Cloudflare application-plane objects (DRY_RUN)
     vars:
       CONFIG_FLAGS: --config artifact-pages.yaml --config artifact-pages.cloudflare.yaml
 
@@ -128,6 +127,27 @@ tasks:
   preview:publish:cloudflare:
     <<: *preview
     desc: Publish a Cloudflare preview (SITE, SOURCE, BASE_URL, optional PULL_REQUEST, DRY_RUN)
+    vars:
+      CONFIG_FLAGS: --config artifact-pages.yaml --config artifact-pages.cloudflare.yaml
+
+  preview:remove: &preview_remove
+    desc: Remove all revisions for one preview group (SITE, GROUP, optional CONFIG, DRY_RUN)
+    dir: '{{.REPO_ROOT}}'
+    vars:
+      CONFIG_FLAGS: '{{if .CONFIG}}--config {{.CONFIG | shellQuote}}{{end}}'
+    requires:
+      vars:
+        - SITE
+        - GROUP
+        - name: DRY_RUN
+          enum: ['true', 'false']
+    cmds:
+      - task: build
+      - ./artifact-pages preview remove --site {{.SITE | shellQuote}} --group {{.GROUP | shellQuote}} {{.CONFIG_FLAGS}} {{if eq .DRY_RUN "true"}}--dry-run{{end}}
+
+  preview:remove:cloudflare:
+    <<: *preview_remove
+    desc: Remove a Cloudflare preview group (SITE, GROUP, DRY_RUN)
     vars:
       CONFIG_FLAGS: --config artifact-pages.yaml --config artifact-pages.cloudflare.yaml
 

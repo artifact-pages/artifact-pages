@@ -28,6 +28,7 @@ type appCachePublishBackend struct {
 	failInvalidation         bool
 	failClearAfterDelete     bool
 	failClearBeforeDelete    bool
+	partialDeleteOnce        bool
 	persistJournalThenError  bool
 	failAppPutKey            string
 	persistAppPutThenError   bool
@@ -105,6 +106,15 @@ func (backend *appCachePublishBackend) DeleteObjects(ctx context.Context, keys [
 	if backend.failClearBeforeDelete && len(keys) == 1 && keys[0] == appCacheRetryObjectKey {
 		backend.failClearBeforeDelete = false
 		return errors.New("injected retry journal deletion failure before persistence")
+	}
+	if backend.partialDeleteOnce && !(len(keys) == 1 && keys[0] == appCacheRetryObjectKey) {
+		backend.partialDeleteOnce = false
+		if len(keys) > 0 {
+			if err := backend.store.objects.DeleteObjects(ctx, keys[:1]); err != nil {
+				return err
+			}
+		}
+		return errors.New("injected partial application delete")
 	}
 	if err := backend.store.objects.DeleteObjects(ctx, keys); err != nil {
 		return err

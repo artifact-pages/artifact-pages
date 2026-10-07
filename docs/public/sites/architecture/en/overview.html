@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="How Git Artifact Pages works: Git as the source of truth, independent per-site publishing into one shared static projection, one reader app for every site, the application and content planes, logical routes, and why there is no request-time server.">
+  <meta name="description" content="How Git Artifact Pages works: Git as the source of truth, independent per-site syncing into one shared static projection, one reader app for every site, the application and content planes, logical routes, and why there is no request-time server.">
   <title>Architecture overview</title>
   <script>
     // Copy the reader app's theme (same-origin parent) before first paint; assets/site.js keeps it in sync.
@@ -43,7 +43,7 @@
         <p class="eyebrow">Architecture · 01</p>
         <h1>How Git Artifact Pages works</h1>
       </div>
-      <p class="answer"><span class="answer-label">Short answer</span>Git holds the source. Each site publishes from its own repository, separately from every other site, into one shared static projection in object storage. One static reader app in the browser reads that projection and presents every site the same way. No application server sits in the request path.</p>
+      <p class="answer"><span class="answer-label">Short answer</span>Git holds the source. Each site syncs from its own repository, separately from every other site, into one shared static projection in object storage. One static reader app in the browser reads that projection and presents every site the same way. No application server sits in the request path.</p>
     </header>
 
     <figure class="fig" style="--fig-min: 720px; --fig-max: 1080px">
@@ -69,11 +69,11 @@
           <rect class="ad-box" x="16" y="142" width="170" height="74" rx="8"/>
           <text class="ad-t" x="28" y="164">Admin config</text>
           <text class="ad-mq" x="28" y="182">artifact-pages.yaml</text>
-          <text class="ad-m acc" x="28" y="204">registry register</text>
+          <text class="ad-m acc" x="28" y="204">registry sync</text>
           <rect class="ad-box" x="16" y="236" width="170" height="74" rx="8"/>
           <text class="ad-t" x="28" y="258">Site source</text>
           <text class="ad-mq" x="28" y="276">acme/checkout · docs/</text>
-          <text class="ad-m acc" x="28" y="298">site publish</text>
+          <text class="ad-m acc" x="28" y="298">site sync</text>
           <rect class="ad-box" x="16" y="330" width="170" height="74" rx="8"/>
           <text class="ad-t" x="28" y="352">Pull request head</text>
           <text class="ad-mq" x="28" y="370">acme/checkout @ &lt;sha&gt;</text>
@@ -162,8 +162,8 @@
         <summary>The diagram as text</summary>
         <ol>
           <li><code>app deploy</code> writes a versioned SPA bundle to the application plane: <code>/index.html</code> and <code>/assets/*</code>.</li>
-          <li><code>registry register</code> writes <code>/_indexes/sites.json</code> from the <code>sites</code> mapping in <code>artifact-pages.yaml</code>.</li>
-          <li><code>site publish</code> writes one site's index objects under <code>/_indexes/&lt;site&gt;/</code> and its files under <code>/_artifacts/&lt;site&gt;/</code>. <code>preview publish</code> writes under <code>/_previews/&lt;site&gt;/</code>.</li>
+          <li><code>registry sync</code> writes <code>/_indexes/sites.json</code> from the <code>sites</code> mapping in <code>artifact-pages.yaml</code>.</li>
+          <li><code>site sync</code> writes one site's index objects under <code>/_indexes/&lt;site&gt;/</code> and its files under <code>/_artifacts/&lt;site&gt;/</code>. <code>preview publish</code> writes under <code>/_previews/&lt;site&gt;/</code>.</li>
           <li>Private locks and retry records live under <code>/_control/*</code> and are never returned to viewers.</li>
           <li>The edge sends logical routes such as <code>/checkout/design/flow.html</code> to the app shell, and <code>/assets/*</code>, <code>/_indexes/*</code>, <code>/_artifacts/*</code> and <code>/_previews/*</code> to stored objects; a missing object is a real 404.</li>
           <li>In the browser, the app reads the indexes and loads an HTML artifact into an iframe from <code>/_artifacts/…</code>; Markdown is rendered by the app itself.</li>
@@ -179,13 +179,13 @@
 
     <section class="doc-section" aria-labelledby="independent">
       <h2 id="independent">Independent publishing, shared experience</h2>
-      <p>Publishing has no central step. An admin deploys the reader app and registers each site once in the <code>sites</code> mapping of <code>artifact-pages.yaml</code>; neither operation builds any site's content. From then on, each site's repository runs <code>site publish</code> from its own CI whenever its content changes. A run writes only that site's prefixes, <code>/_indexes/&lt;site&gt;/</code> and <code>/_artifacts/&lt;site&gt;/</code>, under that site's own lock, so it neither rebuilds nor waits for any other site.</p>
+      <p>Publishing has no central step. An admin deploys the reader app and registers each site once in the <code>sites</code> mapping of <code>artifact-pages.yaml</code>; neither operation builds any site's content. From then on, each site's repository runs <code>site sync</code> from its own CI whenever its content changes. A run writes only that site's prefixes, <code>/_indexes/&lt;site&gt;/</code> and <code>/_artifacts/&lt;site&gt;/</code>, under that site's own lock, so it neither rebuilds nor waits for any other site.</p>
       <div class="table-wrap"><table>
         <thead><tr><th>Who</th><th>Command</th><th>Writes</th><th>When</th></tr></thead>
         <tbody>
           <tr><td>Admin</td><td><code>app deploy</code></td><td>The application plane</td><td>When the reader app is upgraded or rolled back</td></tr>
-          <tr><td>Admin</td><td><code>registry register</code></td><td><code>/_indexes/sites.json</code></td><td>When the set of sites changes</td></tr>
-          <tr><td>Each site's repository</td><td><code>site publish</code></td><td>That site's <code>/_indexes/&lt;site&gt;/</code> and <code>/_artifacts/&lt;site&gt;/</code></td><td>Whenever that site's content changes, on its own schedule</td></tr>
+          <tr><td>Admin</td><td><code>registry sync</code></td><td><code>/_indexes/sites.json</code></td><td>When the set of sites changes</td></tr>
+          <tr><td>Each site's repository</td><td><code>site sync</code></td><td>That site's <code>/_indexes/&lt;site&gt;/</code> and <code>/_artifacts/&lt;site&gt;/</code></td><td>Whenever that site's content changes, on its own schedule</td></tr>
         </tbody>
       </table></div>
       <p>What the sites share is the layout of the static projection and the reader app that reads it. Every site's output follows the same object layout, and the app finds sites through <code>/_indexes/sites.json</code> and each site's small <code>meta.json</code>. Independently published sites therefore appear as one Artifact Pages space instead of separate websites. The site picker, file tree, command palette, page text search (on sites published with it), pins and recent reads, the reader, Contents and Details, and links to previews and to Git work the same on every site. Search stays within the site being read.</p>
@@ -198,7 +198,7 @@
         <thead><tr><th>Area</th><th>Paths</th><th>Changes when</th><th>Written by</th></tr></thead>
         <tbody>
           <tr><td>Application plane</td><td><code>/index.html</code>, <code>/assets/*</code> (also <code>/preview-bridge.js</code>, <code>/LICENSE</code>, <code>/THIRD_PARTY_NOTICES.txt</code>)</td><td>The reader app is upgraded or rolled back</td><td><code>app deploy</code></td></tr>
-          <tr><td>Content plane</td><td><code>/_indexes/*</code>, <code>/_artifacts/*</code>, <code>/_previews/*</code></td><td>Sites are registered, published, previewed, or unregistered</td><td><code>registry register</code> / <code>unregister</code>, <code>site publish</code>, <code>preview publish</code></td></tr>
+          <tr><td>Content plane</td><td><code>/_indexes/*</code>, <code>/_artifacts/*</code>, <code>/_previews/*</code></td><td>Sites are registered, published, previewed, or removed from the desired set</td><td><code>registry sync</code> (desired-set omission), <code>site sync</code>, <code>preview publish</code></td></tr>
           <tr><td>Control (private)</td><td><code>/_control/*</code></td><td>Commands take locks or keep retry records</td><td>The same commands; never served</td></tr>
         </tbody>
       </table></div>
@@ -253,7 +253,7 @@
       <h2 id="proof">What has been proven where</h2>
       <p>The repository is in its local-product phase. The contract above is proven locally first; provider delivery is checked separately and is not complete.</p>
       <ul class="proof">
-        <li><span class="chip local">Proven locally</span><span>The reader, nginx routing, committed fixtures, and registered-site publishing to a local storage directory. Emulator profiles (MinIO for the S3 API shape, fake-gcs-server for the <code>gcp-local</code> profile) prove adapter and HTTP contracts, <strong>not</strong> equivalence with real CloudFront, Cloudflare, or GCP services.</span></li>
+        <li><span class="chip local">Proven locally</span><span>The reader, nginx routing, committed fixtures, and registered-site syncing to a local storage directory. Emulator profiles (MinIO for the S3 API shape, fake-gcs-server for the <code>gcp-local</code> profile) prove adapter and HTTP contracts, <strong>not</strong> equivalence with real CloudFront, Cloudflare, or GCP services.</span></li>
         <li><span class="chip sampled">Sampled on Cloudflare</span><span>On 2026-10-01 and 10-02, live checks on the Cloudflare deployment observed logical routes returning the app shell, real 404s for missing objects, the cache headers, and the production and preview CSP headers. Disposable sites were taken through publish, preview, and unregister, concurrent preview publishes and interruption recovery, publishing with scoped credentials, and a runtime HTTP request refused by the CSP. These are samples; the provider-delivery verification (T15) is still in progress.</span></li>
         <li><span class="chip open">Not yet proven</span><span>Live AWS delivery (CloudFront and S3), actual preview lifecycle deletion timing, provider race and recovery cases such as concurrent publishes for different sites, and GitHub OIDC. Each page states its own open items.</span></li>
       </ul>

@@ -1,8 +1,6 @@
-# Artifact Pages registry
+# Artifact Pages registry sync
 
-Reconciles the Artifact Pages site registry with the complete `sites` mapping of the admin deployment config (`artifact-pages registry register`). Registering adds and updates sites and removes the sites the mapping omits, including cleaning their published content. Run it from a protected admin workflow.
-
-`registry unregister` has no Action. `registry register` already removes omitted sites; `unregister` is the per-site retry path for a cleanup that failed part-way, and it is run with the CLI.
+Reconciles the Artifact Pages site registry with the complete `sites` mapping of the admin deployment config (`artifact-pages registry sync`). It adds and updates configured sites and removes omitted sites from discovery, including cleaning their published content. A retry resumes any cleanup left by a partial failure. Run it from a protected admin workflow.
 
 ## Usage
 
@@ -28,7 +26,7 @@ steps:
 
 ## Outputs
 
-`operation`, `outcome` (`planned`, `registered`, `no-op` or `failed`), `registry-updated` (`true` or `false`), `changes` (JSON array), `result`, `exit-code` and `error`.
+`operation`, `outcome` (`planned`, `synced`, `no-op` or `failed`), `registry-updated` (`true` or `false`), `changes` (JSON array), `result`, `exit-code` and `error`.
 
 ## Version and runners
 

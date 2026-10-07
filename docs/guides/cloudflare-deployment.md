@@ -12,11 +12,11 @@ The in-repository [Cloudflare caller example](../../examples/cloudflare/terrafor
 
 The delivery module owns the complete zone root rulesets for the transform, custom firewall, cache, response-header, and configuration-settings phases. The configuration-settings rule turns off the edge features that rewrite HTML (email obfuscation, Rocket Loader, Automatic HTTPS Rewrites, Fonts, analytics injection, Polish) for the Artifact Pages hostname only, so artifacts and previews are delivered byte-for-byte; a zone that already has Configuration Rules must import that root and pass its rules through `existing_config_rules`. Review existing rules and import/merge them before applying; see its README for the exact resource addresses and preservation inputs. A Terraform apply uses `CLOUDFLARE_API_TOKEN` through the environment or a secret manager, with only the R2 custom/managed domain, R2 lifecycle, and zone Rulesets permissions needed by these modules, which include Transform Rules Edit, Cache Rules Edit, Zone WAF Edit, and Config Rules Edit. This infrastructure credential is separate from runtime CLI credentials. A normal CLI publisher starts with only the primary R2 access key and secret; `CF_API_TOKEN` is an optional runtime zone-scoped credential with cache purge permission for app or registry operations that actually invalidate public URLs. None of these credential values belong in Terraform variables, YAML, or the repository.
 
-`app deploy` serializes writers with the private `_control/locks/application.json` record and keeps pending `/index.html` invalidation work in `_control/app-cache/retry.json`. The primary runtime R2 identity needs read/write access to the lock and read/write/delete access to that exact retry record. Keep both paths inside the private control namespace; they are not viewer content.
+`app deploy` and `app remove` serialize through the private `_control/locks/application.json` record and keep pending application URL invalidations in `_control/app-cache/retry.json`. The primary runtime R2 identity needs read/write access to the lock and read/write/delete access to that exact retry record. Keep both paths inside the private control namespace; they are not viewer content.
 
 ## 2. Configure the CLI
 
-Copy the [minimal config template](../../examples/cloudflare/artifact-pages.cloudflare.yaml.example) or the [full deployment example](../../examples/cloudflare/deployment.yaml.example) to `artifact-pages.yaml` and replace the placeholder account, zone, and public URL values. The Cloudflare bucket defaults to `artifact-pages`; set `bucket` only when using another R2 bucket. You can instead keep the ignored local file `artifact-pages.cloudflare.yaml` and pass it with `--config artifact-pages.cloudflare.yaml`; `artifact-pages.yaml` remains the implicit local default. Add the admin's `sites` mapping before running `registry register` or `registry unregister`; an omitted `sites` field is an input error, not an empty registry. The same YAML file contains the provider target and the registry mapping rather than using a second manifest file. The deployment config contains environment-variable names only, never credential values.
+Copy the [minimal config template](../../examples/cloudflare/artifact-pages.cloudflare.yaml.example) or the [full deployment example](../../examples/cloudflare/deployment.yaml.example) to `artifact-pages.yaml` and replace the placeholder account, zone, and public URL values. The Cloudflare bucket defaults to `artifact-pages`; set `bucket` only when using another R2 bucket. You can instead keep the ignored local file `artifact-pages.cloudflare.yaml` and pass it with `--config artifact-pages.cloudflare.yaml`; `artifact-pages.yaml` remains the implicit local default. Add the admin's complete desired `sites` mapping before running `registry sync`; an omitted `sites` field is an input error, not an empty registry. The same YAML file contains the provider target and the registry mapping rather than using a second manifest file. The deployment config contains environment-variable names only, never credential values.
 
 For the normal setup, provide only the two primary R2 secrets:
 
@@ -30,13 +30,14 @@ The CLI defaults to those names, so the deployment YAML and Terraform output omi
 | CLI operation | Primary R2 credential | Registry-reader credential | `CF_API_TOKEN` |
 | --- | --- | --- | --- |
 | `index build`, `config set-default` | Not needed | Not needed | Not needed |
-| `site publish` | Required | Optional; used only when reader env names are configured | Required when a real publish changes content or retries pending invalidation (cache purge) |
+| `site sync` | Required | Optional; used only when reader env names are configured | Required when a real publish changes content or retries pending invalidation (cache purge) |
 | `preview publish` | Required | Optional; used only when reader env names are configured | Not needed |
+| `preview remove` | Required | Optional; used only when reader env names are configured | Required for a real removal's preview cache purge |
 | `app deploy` | Required | Not used | Required only when a real deploy requests invalidation |
-| `registry register`, `registry unregister` | Required | Not used | Required only when a real operation requests invalidation |
+| `app remove` | Required | Not used | Required for a real removal's app cache purge |
+| `registry sync` | Required | Not used | Required only when a real operation requests invalidation |
 | `lock inspect`, `lock recover` | Required | Not used | Not needed |
-
-If registry-reader env names are present, `site publish` and `preview publish` require the corresponding access key and secret values before making provider requests, and use that identity only for `GetObject("_indexes/sites.json")`. Without those names, these commands read the registry with the primary credential. Other commands ignore configured reader env values. Registry, app, and site-publish mutations check that the API token is configured before changing projection objects.
+If registry-reader env names are present, `site sync` and `preview publish` require the corresponding access key and secret values before making provider requests, and use that identity only for `GetObject("_indexes/sites.json")`. Without those names, these commands read the registry with the primary credential. Other commands ignore configured reader env values. Site sync, registry sync, preview removal, and app removal check the API token before changing origin objects when those operations require a cache purge.
 
 ### Optional delegated publisher
 
@@ -49,7 +50,7 @@ cloudflare:
   registryReaderSessionTokenEnv: CF_R2_REGISTRY_READER_SESSION_TOKEN # only for temporary reader credentials
 ```
 
-R2 temporary credentials support one bucket-level operation scope (`object-read-only` or `object-read-write`) plus exact object and prefix restrictions. Give the delegated publisher a read-only credential scoped to the exact `_indexes/sites.json` object and a read/write credential scoped to `_indexes/<site>/`, `_artifacts/<site>/`, `_previews/<site>/`, and the exact `_control/locks/sites/<site>.json`, `_control/site-cache/<site>.json`, and `_control/publish-state/<site>.json.gz` objects. The writer must be able to list and read its site prefixes, HEAD/GET/PUT its site objects, and delete stale artifacts and generated index/search objects under those prefixes; the exact cache retry and publish-state objects also need read/write/delete support for retries and unregister cleanup. The `object-read-write` scope supports read, write, and list; when minting locally with explicit action scopes, allow `ListObjectsV2`, `HeadObject`, `GetObject`, `PutObject`, `DeleteObject`, and `DeleteObjects`. Do not widen this to another site's paths, `/_indexes/sites.json`, or the application plane. The CLI uses the reader only for the registry read and the primary credential for site writes. Do not put the parent R2 secret or the API token used to mint temporary credentials in the satellite repository or workflow. Set the primary credential's session token through `CF_R2_SESSION_TOKEN`; set the reader credential's session token through `CF_R2_REGISTRY_READER_SESSION_TOKEN`. The CLI does not mint or refresh either credential.
+R2 temporary credentials support one bucket-level operation scope (`object-read-only` or `object-read-write`) plus exact object and prefix restrictions. Give the delegated publisher a read-only credential scoped to the exact `_indexes/sites.json` object and a read/write credential scoped to `_indexes/<site>/`, `_artifacts/<site>/`, `_previews/<site>/`, and the exact `_control/locks/sites/<site>.json`, `_control/site-cache/<site>.json`, and `_control/publish-state/<site>.json.gz` objects. The writer must be able to list and read its site prefixes, HEAD/GET/PUT its site objects, and delete stale artifacts and generated index/search objects under those prefixes; `_previews/<site>/*` also needs delete permission for preview removal. The exact cache retry, publish-state, and `_control/preview-cleanup/<site>.json` objects need the operations used to retry and remove the site. The `object-read-write` scope supports read, write, and list; when minting locally with explicit action scopes, allow `ListObjectsV2`, `HeadObject`, `GetObject`, `PutObject`, `DeleteObject`, and `DeleteObjects`. Do not widen this to another site's paths, `/_indexes/sites.json`, or the application plane. The CLI uses the reader only for the registry read and the primary credential for site writes. Do not put the parent R2 secret or the API token used to mint temporary credentials in the satellite repository or workflow. Set the primary credential's session token through `CF_R2_SESSION_TOKEN`; set the reader credential's session token through `CF_R2_REGISTRY_READER_SESSION_TOKEN`. The CLI does not mint or refresh either credential.
 
 ### Publish-state fast path and explicit repair
 
@@ -64,13 +65,13 @@ The input root includes full-text mode and the output-affecting builder, index, 
 To inspect the plan without writing, use `--reconcile --dry-run`. For example:
 
 ```sh
-artifact-pages site publish --site sre --source docs/artifacts --config artifact-pages.yaml --reconcile --dry-run
-artifact-pages site publish --site sre --source docs/artifacts --config artifact-pages.yaml --reconcile
+artifact-pages site sync --site sre --source docs/artifacts --config artifact-pages.yaml --reconcile --dry-run
+artifact-pages site sync --site sre --source docs/artifacts --config artifact-pages.yaml --reconcile
 ```
 
-Ordinary `site publish` keeps the fast path. Use explicit reconciliation after a suspected out-of-band origin edit or when checking for drift; a reported normal no-op is not an origin-integrity audit.
+Ordinary `site sync` keeps the fast path. Use explicit reconciliation after a suspected out-of-band origin edit or when checking for drift; a reported normal no-op is not an origin-integrity audit.
 
-For a changed production site publish or a pending cache retry, `CF_API_TOKEN` must authorize cache purge for the configured zone. Dry-run and a fully converged no-op do not require the token. The CLI checks token presence before mutating the projection, then purges changed URLs after synchronization; provider rejection reports failure and preserves the exact retry record. When a site has more than 100 unique changed URLs under an artifact or index prefix, the Cloudflare adapter submits a prefix purge for that site's trailing-slash prefix. This reduces purge requests for large publishes and can refresh unchanged cached objects inside that site's artifact or index prefix; application paths, the shared registry, previews, and other sites stay exact. Cloudflare's prefix purge supports 100 prefixes per request on all plans, and provider rate limits still apply. Retry the same site publish to complete a rejected cache request, even if it reports zero file differences. Successful purge submission does not reload an already-open application; reload to fetch its fresh catalog/index. See [Cloudflare's prefix purge documentation](https://developers.cloudflare.com/cache/how-to/purge-cache/purge_by_prefix/) for current limits.
+For a changed production site sync or a pending cache retry, `CF_API_TOKEN` must authorize cache purge for the configured zone. Dry-run and a fully converged no-op do not require the token. The CLI checks token presence before mutating the projection, then purges changed URLs after synchronization; provider rejection reports failure and preserves the exact retry record. When a site has more than 100 unique changed URLs under an artifact or index prefix, the Cloudflare adapter submits a prefix purge for that site's trailing-slash prefix. This reduces purge requests for large publishes and can refresh unchanged cached objects inside that site's artifact or index prefix; application paths, the shared registry, previews, and other sites stay exact. Cloudflare's prefix purge supports 100 prefixes per request on all plans, and provider rate limits still apply. Retry the same site sync to complete a rejected cache request, even if it reports zero file differences. Successful purge submission does not reload an already-open application; reload to fetch its fresh catalog/index. See [Cloudflare's prefix purge documentation](https://developers.cloudflare.com/cache/how-to/purge-cache/purge_by_prefix/) for current limits.
 
 Make two separate R2 temporary-credential requests. Substitute a registered site ID and use a short TTL appropriate for the publish job:
 
@@ -100,7 +101,7 @@ The site prefixes must permit complete `ListObjectsV2` inventory for migration a
 For a satellite repository, pin the admin config to a reviewed commit so the provider endpoint and bucket cannot silently change during a run:
 
 ```sh
-artifact-pages site publish \
+artifact-pages site sync \
   --site sre \
   --source docs/artifacts \
   --config 'github://acme/platform-admin/artifact-pages.yaml?ref=0123456789abcdef0123456789abcdef01234567'
@@ -137,22 +138,22 @@ terraform -chdir=examples/cloudflare/terraform apply -var-file=terraform.tfvars
 
 artifact-pages app deploy --config artifact-pages.yaml --dry-run
 artifact-pages app deploy --config artifact-pages.yaml
-artifact-pages registry register --config artifact-pages.yaml --dry-run
-artifact-pages registry register --config artifact-pages.yaml
+artifact-pages registry sync --config artifact-pages.yaml --dry-run
+artifact-pages registry sync --config artifact-pages.yaml
 ```
 
-The versioned app bundle is verified before deployment. `registry register` writes the deterministic registry projection for the complete desired set in `artifact-pages.yaml` and cleans content prefixes for sites omitted from its `sites` mapping. Registry commands require `sites`; omitting it is an input error, while `sites: {}` explicitly means the empty desired registry and registering it removes all current registrations. Provide the R2 credentials for registry operations, and provide the Cloudflare zone API token when the operation will invalidate public URLs; dry-runs and no-op operations do not need the API token.
+The versioned app bundle is verified before deployment. `registry sync` writes the deterministic registry projection for the complete desired set in `artifact-pages.yaml` and cleans content prefixes for sites omitted from its `sites` mapping. Registry commands require `sites`; omitting it is an input error, while `sites: {}` explicitly means an empty desired registry and syncing it removes all current registrations. Provide the R2 credentials for registry operations, and provide the Cloudflare zone API token when the operation will invalidate public URLs; dry-runs and no-op operations do not need the API token.
 
 With the separate read-only registry and read/write site credentials configured, each satellite repository can run the dry-run, inspect its site change plan, and publish one explicit registered site:
 
 ```sh
-artifact-pages site publish --site sre --source docs/artifacts --config artifact-pages.yaml --dry-run
-artifact-pages site publish --site sre --source docs/artifacts --config artifact-pages.yaml
+artifact-pages site sync --site sre --source docs/artifacts --config artifact-pages.yaml --dry-run
+artifact-pages site sync --site sre --source docs/artifacts --config artifact-pages.yaml
 ```
 
 An ordinary successful no-op trusts the state written by the last publisher success and can skip object-by-object checks. To force missing/stale/metadata-drift checks, include `--reconcile` as shown above; this still checks HEAD metadata rather than downloading every artifact body.
 
-The satellite publishes only its site projection and does not need the zone token. To remove a site, first remove it from the admin config's `sites` mapping, then run `registry unregister --site sre --config artifact-pages.yaml` from the admin repository; unregister requires the selected config to omit that site and deletes its exact content prefixes. If viewer access should be restricted, configure Cloudflare Access or another edge policy independently; Artifact Pages does not store site visibility or authorize viewers. The commands document the external flow; [T16](../backlog/verification/T16-external-adoption.md) records clean-room adoption evidence.
+The satellite's R2 credentials restrict object access to its site's projection, but a real `site sync` also needs `CF_API_TOKEN` when it changes content or retries a pending cache purge. Dry-runs and fully converged no-ops do not need the zone token. To remove a site, first remove it from the admin config's complete `sites` mapping, then run `registry sync --config artifact-pages.yaml` from the admin repository; the sync cleans every omitted site's exact content prefixes. To remove one preview group without removing its production site, run `preview remove --site sre --group pr:42`; this deletes only revisions owned by that group and requests a site-preview cache purge. To remove the application bundle while retaining site content, run `app remove`. Preview removal evicts the selected site preview cache prefix; this may refresh cached responses for sibling groups but never deletes their origin objects. If viewer access should be restricted, configure Cloudflare Access or another edge policy independently; Artifact Pages does not store site visibility or authorize viewers. The commands document the external flow; [T16](../backlog/verification/T16-external-adoption.md) records clean-room adoption evidence.
 
 ## 4. Verify the deployed boundary
 
@@ -165,7 +166,7 @@ After publishing, verify the hostname directly. A successful local MinIO/purge-m
 - If the operator enables Cloudflare Access, verify its cold/warm request behavior in that deployment; this is an operator-owned edge policy, not an Artifact Pages product check.
 - Publish a change, confirm new bytes at origin, request the site through the custom domain, and confirm purge/revalidation reaches the updated content within the expected bound.
 - Exercise real R2 conditional creation and a simultaneous `If-Match` race. Exactly one competing lock update must win, the other must map to a precondition failure, and the final object must match the winner.
-- Verify complete R2 list pagination and delete behavior, including a partial-delete retry, before relying on unregister for cleanup.
+- Verify complete R2 list pagination and delete behavior, including a partial-delete retry, before relying on registry omission cleanup.
 
 ## Limitations
 

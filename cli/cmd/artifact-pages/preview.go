@@ -151,6 +151,58 @@ func runPreviewPublish(ctx context.Context, args []string, stdout, stderr io.Wri
 	return nil
 }
 
+func runPreviewRemove(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	flags := flag.NewFlagSet("artifact-pages preview remove", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	flags.Usage = func() { writePreviewRemoveUsage(stderr) }
+	siteID := flags.String("site", "", "registered site identifier")
+	groupID := flags.String("group", "", "exact preview group ID, such as pr:42 or head:<full-sha>")
+	var configLocators stringSliceFlag
+	flags.Var(&configLocators, "config", "deployment config path or github:// locator (repeatable; later layers override earlier ones)")
+	dryRun := flags.Bool("dry-run", false, "show exact preview object and cache changes without writes, deletes, locks, recovery, or invalidation")
+	format := flags.String("format", "text", "result format: text or json")
+	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
+		return withExitCode(err, 2)
+	}
+	if flags.NArg() != 0 {
+		return withExitCode(fmt.Errorf("unexpected arguments: %v", flags.Args()), 2)
+	}
+	if *siteID == "" || *groupID == "" {
+		return withExitCode(errors.New("--site and --group are required"), 2)
+	}
+	if err := registry.ValidateSiteID(*siteID); err != nil {
+		return withExitCode(err, 2)
+	}
+	if err := preview.ValidateGroupID(*groupID); err != nil {
+		return withExitCode(err, 2)
+	}
+	if *format != "text" && *format != "json" {
+		return withExitCode(errors.New("--format must be text or json"), 2)
+	}
+	resolved, err := (deploymentconfig.Resolver{}).ResolveLayers(ctx, configLocators)
+	if err != nil {
+		return withExitCode(err, 2)
+	}
+	backend, err := newDeploymentBackend(ctx, resolved.Config)
+	if err != nil {
+		return withResolvedError(err, resolved)
+	}
+	result, err := publisher.RemovePreviewGroup(ctx, backend, publisher.PreviewRemoveOptions{
+		SiteID: *siteID, GroupID: *groupID, DryRun: *dryRun,
+	})
+	if err != nil {
+		return withResolvedResult(err, result, resolved)
+	}
+	if *format == "json" {
+		return encodeDeploymentResult(stdout, result, resolved)
+	}
+	writeDeploymentReport(stdout, result, resolved, *dryRun)
+	return nil
+}
+
 func githubTokenFromEnv() string {
 	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
 		return token
@@ -299,8 +351,22 @@ func printPreviewPublishReport(writer io.Writer, output previewPublishOutput, re
 func writePreviewUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "Usage:")
 	fmt.Fprintln(writer, "  artifact-pages preview publish [options]")
+	fmt.Fprintln(writer, "  artifact-pages preview remove --site ID --group ID [options]")
 	fmt.Fprintln(writer, "")
-	fmt.Fprintln(writer, "Build and publish one registered site's pre-merge review projection.")
+	fmt.Fprintln(writer, "Publish or remove one explicitly selected registered site's review preview.")
+}
+
+func writePreviewRemoveUsage(writer io.Writer) {
+	fmt.Fprintln(writer, "Usage:")
+	fmt.Fprintln(writer, "  artifact-pages preview remove --site ID --group ID [--config LOCATOR ...] [--dry-run] [--format text|json]")
+	fmt.Fprintln(writer, "")
+	fmt.Fprintln(writer, "Remove one explicit preview group and its exclusive revision objects. Shared revisions remain for sibling groups.")
+	fmt.Fprintln(writer, "Options:")
+	fmt.Fprintln(writer, "  --site ID               required registered site identifier")
+	fmt.Fprintln(writer, "  --group ID              exact group selector: pr:NUMBER or head:<full-sha>")
+	fmt.Fprintln(writer, "  --config LOCATOR        deployment config path or github:// locator (repeatable; later layers override earlier ones)")
+	fmt.Fprintln(writer, "  --dry-run               show exact changes without lock acquisition, recovery, or provider writes")
+	fmt.Fprintln(writer, "  --format text|json      output a human-readable result or typed JSON")
 }
 
 func writePreviewPublishUsage(writer io.Writer) {

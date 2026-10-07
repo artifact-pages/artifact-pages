@@ -113,7 +113,7 @@
           <circle class="ad-num" cx="26" cy="236" r="10"/><text class="ad-num-t" x="26" y="240" text-anchor="middle">6</text>
           <text class="ad-lab" x="42" y="240">CLEANUP</text>
           <rect class="ad-box" x="16" y="252" width="400" height="110" rx="8"/>
-          <text class="ad-m acc" x="28" y="276">site publish</text>
+          <text class="ad-m acc" x="28" y="276">site sync</text>
           <text class="ad-s" x="114" y="276">(and preview publish) read the catalog:</text>
           <text class="ad-s" x="28" y="300">manifest confirmed missing → remove the reference</text>
           <text class="ad-s" x="28" y="320">manifest present or unreadable → keep it</text>
@@ -142,7 +142,7 @@
           <li>Files go to <code>/_previews/checkout/revisions/&lt;sha&gt;/files/…</code>, then the immutable <code>manifest.json</code>; the mutable <code>catalog.json</code> is updated so group <code>pr:42</code> points at the new head.</li>
           <li>Readers open <code>/checkout/_previews?group=pr%3A42</code> for the latest preview of that PR, or a fixed revision URL such as <code>/checkout/_previews/&lt;sha&gt;/design/flow.html</code>.</li>
           <li>A provider lifecycle rule on <code>_previews/</code> expires objects after the configured number of days. The reader hides catalog entries whose manifest is missing.</li>
-          <li>The next <code>site publish</code> (or <code>preview publish</code>) removes catalog references whose manifest is confirmed missing, and keeps those that are present or could not be read.</li>
+          <li>The next <code>site sync</code> (or <code>preview publish</code>) removes catalog references whose manifest is confirmed missing, and keeps those that are present or could not be read.</li>
         </ol>
       </details>
     </figure>
@@ -189,7 +189,7 @@
 
     <section class="doc-section" aria-labelledby="publication">
       <h2 id="publication">Publication order and links</h2>
-      <p><code>preview publish</code> takes the same per-site lock as <code>site publish</code> and <code>registry unregister</code>, then rechecks the deployed registry. It uploads the revision files and its manifest as create-only objects, and only then reads and updates the catalog as an idempotent upsert by group. If the catalog update fails, the run reports failure and can be retried; uploaded objects that never reached the catalog are removed by provider retention like any others.</p>
+      <p><code>preview publish</code> takes the same per-site lock as <code>site sync</code> and <code>registry sync</code>, then rechecks the deployed registry. It uploads the revision files and its manifest as create-only objects, and only then reads and updates the catalog as an idempotent upsert by group. If the catalog update fails, the run reports failure and can be retried; uploaded objects that never reached the catalog are removed by provider retention like any others.</p>
       <p>Inside a preview, a link to <strong>another changed document</strong> opens that document in the same revision; a link to an <strong>unchanged document</strong> opens its production route. HTML links move the reader app itself rather than nesting the app inside the frame.</p>
       <p>Previews stay out of production views: they are not in <code>index.json</code>, Browse, Recently updated, page text search, or palette page results. The site home has a quiet link to the Previews list, and the palette has an “Open previews” command. Opening that list loads only this site's catalog.</p>
     </section>
@@ -200,9 +200,9 @@
       <p>Because provider deletion is asynchronous, a catalog can briefly point at an expired revision. Two things handle that:</p>
       <ol>
         <li>When the Previews list opens, the reader checks each candidate's manifest and hides missing ones. A missing preview document shows <em>Preview unavailable</em> with a way back to the site; a missing raw resource returns a real 404.</li>
-        <li>Every <code>site publish</code> and <code>preview publish</code> reads the catalog at the origin under the site lock. A reference is removed only when its manifest is <strong>confirmed missing</strong>; a read error is not proof of absence. <code>site publish</code> writes the reduced catalog only after the production projection is committed, so a failed production publish never hides previews.</li>
+        <li>Every <code>site sync</code> and <code>preview publish</code> reads the catalog at the origin under the site lock. A reference is removed only when its manifest is <strong>confirmed missing</strong>; a read error is not proof of absence. <code>site sync</code> writes the reduced catalog only after the production projection is committed, so a failed production publish never hides previews.</li>
       </ol>
-      <p>There is no PR-close workflow. Merged, closed, and manual previews stay discoverable while their manifests exist. <code>registry unregister</code> deletes a site's previews immediately along with the rest of its projection.</p>
+      <p>There is no PR-close workflow. Merged, closed, and manual previews stay discoverable while their manifests exist. <code>registry sync</code> deletes a site's previews immediately along with the rest of its projection.</p>
     </section>
 
     <section class="doc-section" aria-labelledby="proof">

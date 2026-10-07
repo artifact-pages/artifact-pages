@@ -222,7 +222,7 @@ func TestPublishSiteIncludesIgnoredRegularFilesWhenLocalTargetIsSeparate(t *test
 	if err != nil {
 		t.Fatalf("PublishSite() error = %v", err)
 	}
-	if result.Outcome != "published" {
+	if result.Outcome != "synced" {
 		t.Fatalf("PublishSite() outcome = %q, want published", result.Outcome)
 	}
 	for key, expected := range map[string][]byte{
@@ -300,7 +300,7 @@ func TestPublishSiteUsesOriginRegistryAfterSiteLockAndIgnoresBranch(t *testing.T
 	if err != nil {
 		t.Fatalf("PublishSite() error = %v", err)
 	}
-	if result.Outcome != "published" || result.Site != "sre" || result.FilesPublished != 5 {
+	if result.Outcome != "synced" || result.Site != "sre" || result.FilesPublished != 5 {
 		t.Fatalf("PublishSite() = %+v, want a successful publish independent of branch", result)
 	}
 	operations := backend.operationSnapshot()
@@ -399,7 +399,7 @@ func TestPublishFirstThenUnregisterWithdrawsAndCleansSite(t *testing.T) {
 	case outcome := <-publishDone:
 		publishPending = false
 		awaitOperationCleanup(t, "publish", publishStopped)
-		if outcome.err != nil || outcome.result.Outcome != "published" {
+		if outcome.err != nil || outcome.result.Outcome != "synced" {
 			t.Fatalf("publish-first result = %+v, err=%v", outcome.result, outcome.err)
 		}
 	case <-time.After(5 * time.Second):
@@ -409,7 +409,7 @@ func TestPublishFirstThenUnregisterWithdrawsAndCleansSite(t *testing.T) {
 	case outcome := <-unregisterDone:
 		unregisterPending = false
 		awaitOperationCleanup(t, "unregister", unregisterStopped)
-		if outcome.err != nil || outcome.result.Outcome != "unregistered" {
+		if outcome.err != nil || outcome.result.Outcome != "synced" {
 			t.Fatalf("unregister result = %+v, err=%v", outcome.result, outcome.err)
 		}
 	case <-time.After(5 * time.Second):
@@ -490,7 +490,7 @@ func TestUnregisterFirstBlocksPublishBeforeContentWrites(t *testing.T) {
 	case outcome := <-unregisterDone:
 		unregisterPending = false
 		awaitOperationCleanup(t, "unregister", unregisterStopped)
-		if outcome.err != nil || outcome.result.Outcome != "unregistered" {
+		if outcome.err != nil || outcome.result.Outcome != "synced" {
 			t.Fatalf("unregister result = %+v, err=%v", outcome.result, outcome.err)
 		}
 	case <-time.After(5 * time.Second):

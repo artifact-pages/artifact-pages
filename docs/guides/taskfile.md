@@ -17,20 +17,20 @@ Local serving defaults to port 4179 and `.local/public-site/storage`, matching t
 Publishing requires both SITE and SOURCE. Every mutation task builds the CLI before invoking it. CONFIG is optional for ordinary tasks; without it the CLI uses its own config resolution rules. DRY_RUN accepts only `true` or `false` and defaults to `false`.
 
 ~~~sh
-task cli:site:publish SITE=guide SOURCE=docs/public/sites/guide DRY_RUN=true
-task cli:site:publish SITE=guide SOURCE=docs/public/sites/guide
-task cli:registry:register DRY_RUN=true
+task cli:site:sync SITE=guide SOURCE=docs/public/sites/guide DRY_RUN=true
+task cli:site:sync SITE=guide SOURCE=docs/public/sites/guide
+task cli:registry:sync DRY_RUN=true
 task cli:app:deploy ARCHIVE=.local/releases/artifact-pages-web-v1.2.3.tar.gz DRY_RUN=true
 task cli:app:deploy VERSION=1.2.3 DRY_RUN=true
 ~~~
 
-App deployment requires exactly one of ARCHIVE or VERSION. Registry reconciliation is the existing `registry register` operation; it may remove registrations omitted from the desired mapping. Publishing never implicitly reconciles the registry, deploys the app, or runs Terraform.
+Registry sync reconciles the complete desired `sites` mapping and removes sites omitted from it. Site sync only changes its selected site. App deployment requires exactly one of ARCHIVE or VERSION. Site sync never implicitly reconciles the registry, deploys the app, or runs Terraform.
 
 ## Cloudflare overlay
 
 ~~~sh
-task cli:registry:register:cloudflare DRY_RUN=true
-task cli:site:publish:cloudflare SITE=guide SOURCE=docs/public/sites/guide DRY_RUN=true
+task cli:registry:sync:cloudflare DRY_RUN=true
+task cli:site:sync:cloudflare SITE=guide SOURCE=docs/public/sites/guide DRY_RUN=true
 task cli:app:deploy:cloudflare VERSION=1.2.3 DRY_RUN=true
 ~~~
 
@@ -40,12 +40,16 @@ Provider-module repositories have separate `tf:*` tasks. Run those within the mo
 
 ## Other CLI subcommands
 
-Task names mirror the CLI hierarchy. The earlier `cli:publish`, `cli:registry`, and `cli:deploy` shortcuts have been replaced by `cli:site:publish`, `cli:registry:register`, and `cli:app:deploy`.
+Task names mirror the CLI hierarchy: `site:sync`, `registry:sync`, `app:deploy`, `app:remove`, `preview:publish`, and `preview:remove`.
 
 ~~~sh
-# First remove retired from the desired config's sites mapping.
-task cli:registry:unregister SITE=retired DRY_RUN=true
-task cli:registry:unregister:cloudflare SITE=retired DRY_RUN=true
+# Remove retired from the desired config's sites mapping, then review the full cleanup plan.
+task cli:registry:sync DRY_RUN=true
+task cli:registry:sync:cloudflare DRY_RUN=true
+
+task cli:app:remove DRY_RUN=true
+task cli:preview:remove SITE=guide GROUP=pr:42 DRY_RUN=true
+task cli:preview:remove:cloudflare SITE=guide GROUP=pr:42 DRY_RUN=true
 
 task cli:preview:publish SITE=guide SOURCE=docs/public/sites/guide BASE_URL=http://localhost:4179 DRY_RUN=true
 task cli:preview:publish:cloudflare SITE=guide SOURCE=docs/public/sites/guide BASE_URL=https://artifact-pages.dev PULL_REQUEST=42 DRY_RUN=true

@@ -18,7 +18,7 @@ func TestFullTextPublishOrderNoOpUpdate(t *testing.T) {
 	seedMemoryObject(backend.lockMemoryBackend, "_indexes/other/search/keep.gz", []byte("neighbor"))
 	opts := SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts"}
 	result, err := PublishSite(context.Background(), backend, opts)
-	if err != nil || result.Outcome != "published" {
+	if err != nil || result.Outcome != "synced" {
 		t.Fatalf("publish = %+v, %v", result, err)
 	}
 	manifestKey := "_indexes/sre/search/manifest.json"
@@ -81,7 +81,7 @@ func TestFullTextPublishOrderNoOpUpdate(t *testing.T) {
 	}
 	backend.failPutKey = ""
 	result, err = PublishSite(context.Background(), backend, opts)
-	if err != nil || result.Outcome != "published" {
+	if err != nil || result.Outcome != "synced" {
 		t.Fatalf("retry = %+v, %v", result, err)
 	}
 	oldRoot := strings.TrimPrefix(manifest.Root.URL, "/")
