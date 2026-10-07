@@ -1,6 +1,7 @@
 # Modified-click new-tab and route.fetch e2e tests fail intermittently under parallel load
 
 - Status: In progress
+- Assignee: Claude
 - Priority: P2
 - Area: e2e tests / new-tab navigation and route mocking (`web/e2e/local-serving.spec.ts`)
 

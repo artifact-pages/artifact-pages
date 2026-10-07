@@ -1,6 +1,7 @@
 # [Concise problem statement]
 
 - Status: Open
+- Assignee: [Claude | Codex | Owner, set when work starts; omit while unclaimed]
 - Priority: P2
 - Area: [Page or workflow]
 
