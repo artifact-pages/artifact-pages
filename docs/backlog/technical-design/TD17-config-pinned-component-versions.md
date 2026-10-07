@@ -102,7 +102,7 @@ Each Action's generated `release.json` gains a supported CLI range (for example 
 
 The Action needs `cli.version` before it has a CLI, and the config may be layered and remote (T10 locators, private config via `github-token`). Two ways:
 
-- **(a) Bootstrap CLI, recommended.** The Action installs the CLI named in its `release.json` as a bootstrap. The CLI resolves the config; if `cli.version` differs from its own version, it downloads that release, verifies it and re-executes it with the same arguments (the model of Go's `toolchain` line). Config resolution stays in one implementation, and local runs follow the config the same way CI does. Constraint: reading `cli.version` must stay stable across config `schemaVersion`s, so an old bootstrap can still find the version that understands a newer config.
+- **(a) Bootstrap CLI, recommended.** The Action installs `bootstrapCli` from its `release.json` (section 5a) as a bootstrap. The CLI resolves the config; if `cli.version` differs from its own version, it downloads that release, verifies it and re-executes it with the same arguments (the model of Go's `toolchain` line). Config resolution stays in one implementation, and local runs follow the config the same way CI does. Constraint: reading `cli.version` must stay stable across config `schemaVersion`s, so an old bootstrap can still find the version that understands a newer config.
 - **(b) Action-side parse.** The Action reads `cli.version` itself (for example with `yq`). Rejected unless (a) proves impractical: it duplicates locator and layer resolution in JavaScript.
 
 ### 7. Upgrade flow for an operator
