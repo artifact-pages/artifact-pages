@@ -4,7 +4,8 @@
 - Lanes: Docs / spec
 - Owner: Claude
 - Depends on: [TD17](../technical-design/TD17-config-pinned-component-versions.md)
-- Blocks: —
+- Sequenced with: IMP-68, IMP-69, IMP-70 (each behavior change merges with or after its spec text)
+- Blocks: IMP-72
 
 ## Goal
 

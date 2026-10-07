@@ -2,7 +2,7 @@
 
 - Status: Open
 - Lanes: Web, CLI / release
-- Owner: Claude (web constants), Codex (packaging script)
+- Owner: Claude (web constants), Codex (packaging script); two PRs, one per agent's directories, web constants first
 - Depends on: [TD17](../technical-design/TD17-config-pinned-component-versions.md)
 - Blocks: IMP-69, IMP-70
 

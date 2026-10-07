@@ -13,10 +13,12 @@ Any CLI resolves the config and re-executes the CLI version it names; the Action
 ## Scope
 
 - CLI: tolerant `cli.version` read after layer merge; download, verify, cache and re-exec; `ARTIFACT_PAGES_CLI_RESOLVED` loop guard; `--cli-version` and `ARTIFACT_PAGES_CLI_VERSION` precedence; downloads use only `ARTIFACT_PAGES_DOWNLOAD_TOKEN`, never the private-config token.
-- Actions: `release.json` schemaVersion 2 (`actionVersion`, `bootstrapCli`, `cliRange`, `repository`); range check before download; `cli-version` input; summary line when an override ran; preview resolves only after the trust preflight from the trusted config; `ARTIFACT_PAGES_TEST_CLI` skips bootstrap and re-exec.
+- The overriding CLI runs the same checks as IMP-69; an override never skips validation.
+- The CLI release that implements this slice and IMP-69 is the lower bound of every Action's `cliRange` (older CLIs reject the new config keys).
+- Actions: `release.json` schemaVersion 2 (`actionVersion`, `bootstrapCli`, `cliRange`, `repository`); range check before download, applied to the config version and to a `cli-version` override alike; `cli-version` input; summary line when an override ran; preview resolves only after the trust preflight from the trusted config; `ARTIFACT_PAGES_TEST_CLI` skips bootstrap and re-exec.
 
 ## Acceptance criteria
 
 - [ ] Tests for loop guard, range failure, precedence, token separation and preview ordering.
 - [ ] Action parity and hosted smoke pass with an unreleased bootstrap and a released target (or a local release fixture).
-- [ ] Spec "Released CLI" text is updated in IMP-71 before merge of this slice.
+- [ ] Spec "Released CLI" text is updated (IMP-71) in or before the PR that merges this slice.
