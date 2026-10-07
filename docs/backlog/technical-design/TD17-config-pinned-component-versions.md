@@ -3,8 +3,8 @@
 - Status: Done
 - Assignee: Claude
 - Phase: Reusable distribution
-- Decision: Proposed and decided by the owner on 2026-10-07. The specification, TD2 and TD14 still describe the current behavior; they are amended by the implementation slices below, which are filed as IMP items when work starts. Until then, the specification is authoritative for what ships.
-- Amends (when implemented): [TD2](TD2-component-release-policy.md) (one product version; CLI-pinned web bundle and "pinning an Action or CLI ref pins a tested CLI/web pair", replaced by the checks of section 3; web-changed release notes move to web releases; immutable tags during 0.x), [TD14](TD14-one-repository-per-action.md) (decision 2 one tag for all Actions; decision 4 Action version decides the CLI version; the sync rule "an existing tag is never moved" during 0.x), specification §19 "Released CLI" and "Action repositories", and §22 (config keys, `app deploy` bundle selection)
+- Decision: Proposed and decided by the owner on 2026-10-07. The specification, TD2 and TD14 are amended for the implemented slices (IMP-67, IMP-68 and IMP-69, on 2026-10-08); the parts that depend on IMP-70 (sections 4, 5, 5a and 6: bootstrap re-exec, `cli-version` override, Action `release.json` schemaVersion 2) are amended when IMP-70 lands. The specification is authoritative for what ships.
+- Amends: [TD2](TD2-component-release-policy.md) (one product version; CLI-pinned web bundle and "pinning an Action or CLI ref pins a tested CLI/web pair", replaced by the checks of section 3; web-changed release notes move to web releases; immutable tags during 0.x), [TD14](TD14-one-repository-per-action.md) (decision 2 one tag for all Actions; decision 4 Action version decides the CLI version; the sync rule "an existing tag is never moved" during 0.x), specification §19 "Released CLI" and "Action repositories", and §22 (config keys, `app deploy` bundle selection)
 - Related design: [TD15](TD15-terraform-module-source-of-truth.md) (per-module tags, the model reused here), [TD12](TD12-action-consumer-contract.md), [T10](T10-config-location.md) (config layers)
 
 ## Problem
@@ -67,12 +67,25 @@ The checks, all failing before any write:
 | Command | Checks |
 | --- | --- |
 | `config check` (new; for operator pull requests that change `cli.version` or `web.version`) | The CLI reads the config's `schemaVersion`; `web.version` reads every format this CLI writes; `web.version` reads every format the per-site records say is in storage (sites it cannot read are listed as needing a republish). |
-| `app deploy` | The bundle to deploy reads every format recorded in storage for the stored registry and every site it lists. Otherwise it fails and names the sites (unreadable and unknown), so a web upgrade never silently turns live sites into "needs to be republished"; `--accept-breaking` accepts that outcome for a planned breaking upgrade. |
-| `site sync`, `preview publish`, `registry sync` | The deployed web (from storage) reads every format this CLI writes. This catches the window where the config already names a new CLI but `app deploy` has not run or failed, and a web deployed outside the config. If no web version is recorded yet (first deploy, or storage from before this design), the check falls back to `web.version`. `--accept-breaking` lets `registry sync` write a format the deployed web cannot read, for step 1 of a planned breaking upgrade. |
+| `app deploy` | The bundle to deploy reads every format recorded in storage for the stored registry and every site it lists. Otherwise it fails and names the sites (unreadable and unknown), so a web upgrade never silently turns live sites into "needs to be republished"; `--accept-breaking` accepts that outcome for a planned breaking upgrade (step 2). |
+| `site sync`, `preview publish`, `registry sync` | The deployed web (from storage) reads every format this CLI writes. This catches the window where the config already names a new CLI but `app deploy` has not run or failed, and a web deployed outside the config. If no web version is recorded yet (first deploy, or storage from before this design), the check falls back to `web.version`. Of these three only `registry sync` takes `--accept-breaking`: it lets `registry sync` write a format the deployed web cannot read, for step 1 of a planned breaking upgrade. |
 
 Existing data written by a newer CLI is still guarded by the reader rule (an unknown control-record `schemaVersion` makes the CLI fail). The per-site records also let the operator see which CLI wrote each site.
 
 While the product is `0.x` no compatibility is promised, so these data-driven checks are the only guard; version numbers are never used to infer compatibility.
+
+`--accept-breaking` exists only on `registry sync` (accepts a deployed web that cannot read the formats the CLI writes) and `app deploy` (accepts stored sites and a registry that the new web cannot read, unknown ones included). It never overrides an unsupported version-record `schemaVersion` or an incomplete record.
+
+**Implementation notes (IMP-69, 2026-10-08).** The implementation adds the following to the design above; the specification (§5.3 Version records, §11, §22) is authoritative.
+
+- Records can be incomplete: `pending: true`, and for writers `pendingWrites`, are staged before the origin changes and replaced by the final record afterwards. Incomplete records count as unknown, and a retry of the same operation repairs them.
+- `preview publish` validates every retained revision manifest of the site, including revisions absent from the catalog, before it certifies the site's preview formats; a preview-only write never certifies production data that has no record.
+- Locks: `app deploy` takes the application lock, then the registry lock, then every registered site's lock in sorted order; `registry sync` takes the locks of the sites it changes or omits in sorted order before it mutates the catalog and validates their records under the locks.
+- `app remove` also deletes `/_control/versions/app.json`.
+- Legacy path: a config with neither `cli` nor `web` and storage without an app record keeps the unpinned flow (own-version bundle, no checks); an existing app record always turns the checks on.
+- `config check` requires `web.version` and checks the web manifest's `reads`, this CLI's writes and the stored records; it does not compare `cli.version` with the running CLI, which waits for IMP-70.
+- The CLI publishes `artifact-pages compatibility --format json`, and the CLI release carries the same output as `artifact-pages_vX.Y.Z_compatibility.json`.
+- The Cloudflare read-only registry credential reads `app.json`, and the AWS satellite policy gets exactly that key (read-only).
 
 ### 4. Overriding the CLI version
 
@@ -124,8 +137,8 @@ The Action needs `cli.version` before it has a CLI, and the config may be layere
 
 ## Implementation slices (filed as [IMP-67](../implementation/IMP-67-web-compatibility-manifest.md) to [IMP-72](../implementation/IMP-72-td17-first-releases-and-rollout.md))
 
-- CLI: `cli`/`web` config keys, storage version records, compatibility data and `config check`, validation at command start, bootstrap re-exec, `app deploy` by `web.version` (Codex).
-- Release workflows: root tag CLI-only, `web/v*` and per-Action tags, generated-content check (Codex).
-- Actions: `cli-version` input, supported range in `release.json`, summary line for overrides (Codex).
-- Specification §19 and §22, TD2 and TD14 amendments, operator upgrade guide (Claude).
-- Operator repositories: add `cli`/`web` to `admin/artifact-pages.yaml` (Codex, owner approval for production).
+- CLI: `cli`/`web` config keys, storage version records, compatibility data and `config check`, validation at command start, `app deploy` by `web.version` (Codex): Done, [IMP-69](../implementation/IMP-69-config-pins-and-compatibility-checks.md); the web manifest's `reads` is [IMP-67](../implementation/IMP-67-web-compatibility-manifest.md), Done. Bootstrap re-exec: [IMP-70](../implementation/IMP-70-bootstrap-cli-and-override.md), Open.
+- Release workflows: root tag CLI-only, `web/v*` and per-Action tags, generated-content check (Codex): Done, [IMP-68](../implementation/IMP-68-release-series-split.md).
+- Actions: `cli-version` input, supported range in `release.json`, summary line for overrides (Codex): Open, IMP-70.
+- Specification §19 and §22, TD2 and TD14 amendments, operator upgrade guide (Claude): [IMP-71](../implementation/IMP-71-td17-spec-and-guides.md), In progress. The specification, TD2 and TD14 describe IMP-67 to IMP-69; the IMP-70 parts and the guide follow.
+- Operator repositories: add `cli`/`web` to `admin/artifact-pages.yaml` (Codex, owner approval for production): [IMP-72](../implementation/IMP-72-td17-first-releases-and-rollout.md).

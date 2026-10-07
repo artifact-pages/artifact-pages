@@ -27,7 +27,7 @@ There is no application server in the request path. Git is the source of truth; 
 
 Phase 1 local product. The SPA discovers sites from lightweight metadata, loads only the active site's artifact index, and provides a site picker, recent-artifact home, searchable navigation tree, and command palette. HTML artifacts run in an iframe; Markdown artifacts use a sanitized native reader.
 
-AWS infrastructure and published reusable distribution packages come later. The optional GitHub Actions are documented in the [GitHub Actions guide](docs/guides/github-actions.md). Each Action has its own repository, generated from `actions/<name>/` on release and tagged with the product version: [`artifact-pages/publish-action`](https://github.com/artifact-pages/publish-action), [`preview-action`](https://github.com/artifact-pages/preview-action), [`registry-action`](https://github.com/artifact-pages/registry-action) and [`app-deploy-action`](https://github.com/artifact-pages/app-deploy-action). Reference an exact release tag, as the templates do.
+AWS infrastructure and published reusable distribution packages come later. The optional GitHub Actions are documented in the [GitHub Actions guide](docs/guides/github-actions.md). Each Action has its own repository, generated from `actions/<name>/` on that Action's own release and tagged with its own version: [`artifact-pages/publish-action`](https://github.com/artifact-pages/publish-action), [`preview-action`](https://github.com/artifact-pages/preview-action), [`registry-action`](https://github.com/artifact-pages/registry-action) and [`app-deploy-action`](https://github.com/artifact-pages/app-deploy-action). Reference an exact release tag, as the templates do.
 
 ## Local development
 
@@ -59,7 +59,7 @@ Package the built application plane for a separate installation repository with:
 npm run package:web -- --version local-test-1
 ~~~
 
-This creates a version-labelled `artifact-pages-web-*.tar.gz` archive, a SHA-256 checksum, and a release manifest under `.local/releases/`. The archive contains the deployable SPA output at its root, including the project `LICENSE` and a generated `THIRD_PARTY_NOTICES.txt` for production web dependencies; site indexes, artifacts, and previews remain a separate content plane. Public `vMAJOR.MINOR.PATCH` releases version the web application bundle only. This local label is only for integration testing; Actions and Terraform sources are selected by immutable Git commit SHA.
+This creates a version-labelled `artifact-pages-web-*.tar.gz` archive, a SHA-256 checksum, and a release manifest under `.local/releases/`. The archive contains the deployable SPA output at its root, including the project `LICENSE` and a generated `THIRD_PARTY_NOTICES.txt` for production web dependencies; site indexes, artifacts, and previews remain a separate content plane. Public `web/vMAJOR.MINOR.PATCH` releases version the web application bundle only; the CLI and each Action have their own series. This local label is only for integration testing; Actions and Terraform sources are selected by immutable Git commit SHA.
 
 To serve an extracted app bundle through the existing local nginx/E2E setup, install this archive and set `WEB_ROOT` to its installation directory.
 

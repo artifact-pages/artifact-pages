@@ -8,7 +8,7 @@
 
 ## Goal
 
-Any CLI resolves the config and re-executes the CLI version it names; the Actions install a bootstrap CLI, declare their supported range and accept an override (TD17 sections 4, 5, 5a and 6a).
+Any CLI resolves the config and re-executes the CLI version it names; the Actions install a bootstrap CLI, declare their supported range and accept an override (TD17 sections 4, 5, 5a and 6).
 
 ## Scope
 
