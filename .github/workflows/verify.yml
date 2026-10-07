@@ -45,6 +45,13 @@ jobs:
       # Some fast Node tests (full-text core, app cache rollback) drive Chromium.
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
+      - name: Go formatting
+        run: |
+          unformatted="$(gofmt -l $(git ls-files '*.go'))"
+          if [ -n "$unformatted" ]; then
+            echo "::error::Run gofmt -w on: $unformatted"
+            exit 1
+          fi
       - name: Go vet
         run: go vet ./...
       - name: Go modules are tidy

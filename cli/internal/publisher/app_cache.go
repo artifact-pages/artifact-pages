@@ -15,11 +15,11 @@ const (
 )
 
 var appCacheRetryPathAllowlist = map[string]struct{}{
-	"/LICENSE": {},
+	"/LICENSE":                 {},
 	"/THIRD_PARTY_NOTICES.txt": {},
-	"/assets/*": {},
-	"/index.html": {},
-	"/preview-bridge.js": {},
+	"/assets/*":                {},
+	"/index.html":              {},
+	"/preview-bridge.js":       {},
 }
 
 // appCacheRetry records the application URL paths that still need cache
