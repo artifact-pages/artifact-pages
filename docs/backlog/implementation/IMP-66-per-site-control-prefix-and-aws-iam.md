@@ -90,6 +90,7 @@ No other role touches the bucket: CloudFront reads only through the OAC bucket p
 - [x] The migration (read-old-write-new fallback or one-shot move) is implemented and tested, including a stale old-key lock and state; the release ordering is documented here and must be copied into the release notes of the CLI release that carries it.
 - [x] A test enumerates every `_control/` key the CLI uses and asserts which role may read, write, delete and list it.
 - [x] `terraform validate`/tests and the Node tests pass; the plan against the AWS verification deployment shows only in-place IAM policy updates (reviewed, no apply). The module tests and validate pass; the verification plan is an owner step and remains open.
+- [ ] Public documentation (guide and architecture sites under `docs/public`, en and ja: configuration, publishing, publishing-model, storage-layout, trust-model) describes the `_control/sites/<site>/` layout. It ships with the CLI release that carries this change, not before, so the published pages never describe a layout no released CLI writes.
 - [ ] [TD15](../technical-design/TD15-terraform-module-source-of-truth.md) and the specification are updated: AWS is decoupled from CLI releases once this item is Done.
 
 ## Results

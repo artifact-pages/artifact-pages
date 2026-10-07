@@ -66,7 +66,7 @@
 
           <circle class="ad-num" cx="30" cy="108" r="11"/><text class="ad-num-t" x="30" y="112" text-anchor="middle">2</text>
           <text class="ad-t" x="52" y="106">サイトのロックを取る</text>
-          <text class="ad-mq" x="52" y="124">_control/sites/&lt;site&gt;/lock.json · --dry-runでは取らない</text>
+          <text class="ad-mq" x="52" y="124">_control/locks/sites/&lt;site&gt;.json · --dry-runでは取らない</text>
           <text class="ad-lab acc" x="470" y="110">オリジン</text>
 
           <circle class="ad-num" cx="30" cy="152" r="11"/><text class="ad-num-t" x="30" y="156" text-anchor="middle">3</text>
@@ -90,7 +90,7 @@
 
           <circle class="ad-num" cx="30" cy="312" r="11"/><text class="ad-num-t" x="30" y="316" text-anchor="middle">6</text>
           <text class="ad-t" x="52" y="310">キャッシュ再試行の記録を保存する</text>
-          <text class="ad-mq" x="52" y="328">_control/sites/&lt;site&gt;/site-cache.json</text>
+          <text class="ad-mq" x="52" y="328">_control/site-cache/&lt;site&gt;.json</text>
           <text class="ad-lab acc" x="470" y="314">オリジン</text>
 
           <circle class="ad-num" cx="30" cy="356" r="11"/><text class="ad-num-t" x="30" y="360" text-anchor="middle">7</text>
@@ -134,11 +134,11 @@
         <summary>図の内容を文章で読む</summary>
         <ol>
           <li>配信先がローカルのストレージのときだけ、登録からソースのパスを求め、ストレージのディレクトリとソースが重ならないことをロックの前に確かめます。この時点の登録の読み取りは事前の確認で、正式な確認は3で行います。</li>
-          <li>サイトのロック<code>_control/sites/&lt;site&gt;/lock.json</code>を条件付き書き込みで取ります。ドライランでは取りません。</li>
+          <li>サイトのロック<code>_control/locks/sites/&lt;site&gt;.json</code>を条件付き書き込みで取ります。ドライランでは取りません。</li>
           <li><code>/_indexes/sites.json</code>をCDN経由ではなくオリジンから直接読み、サイトが登録されていること、チェックアウトのリポジトリとソースパスが登録と一致することを確かめます。</li>
           <li>ソースのファイルを集め（通常のファイルだけ）、登録の名前と説明を使ってインデックス、メタデータ、検索データを一時ディレクトリに作ります。</li>
           <li><code>_artifacts/&lt;site&gt;/</code>と<code>_indexes/&lt;site&gt;/</code>を最後まで一覧にし、あるべき各オブジェクトのダイジェストとヘッダーを比べます。プレビューの一覧と、残っているキャッシュ再試行の記録も読みます。ドライランはこの計画を表示して終わります。</li>
-          <li>無効化するパスを<code>_control/sites/&lt;site&gt;/site-cache.json</code>に保存します。</li>
+          <li>無効化するパスを<code>_control/site-cache/&lt;site&gt;.json</code>に保存します。</li>
           <li>新規と変更のファイルを書き込みます。</li>
           <li>検索のblob、次に<code>index.json</code>を書き込みます。</li>
           <li>検索のマニフェスト、次に<code>meta.json</code>を書き込みます。</li>
@@ -200,7 +200,7 @@
 
     <section class="doc-section" aria-labelledby="lock">
       <h2 id="lock">サイトのロックとサイトの登録情報の確認</h2>
-      <p>サイトごとに小さなロックの記録<code>_control/sites/&lt;site&gt;/lock.json</code>が1つあり、<code>site sync</code>、<code>preview publish</code>、<code>registry sync</code>が共有します。記録は存在しないときだけ作り、変更はETagによる比較交換（compare-and-swap）でだけ行います。そのため、古い状態を見て復旧しようとした操作が、あとから取った別の持ち主のロックを解放してしまうことはありません。サイトが違えばロックも別なので、別々に公開できます。</p>
+      <p>サイトごとに小さなロックの記録<code>_control/locks/sites/&lt;site&gt;.json</code>が1つあり、<code>site sync</code>、<code>preview publish</code>、<code>registry sync</code>が共有します。記録は存在しないときだけ作り、変更はETagによる比較交換（compare-and-swap）でだけ行います。そのため、古い状態を見て復旧しようとした操作が、あとから取った別の持ち主のロックを解放してしまうことはありません。サイトが違えばロックも別なので、別々に公開できます。</p>
       <p>サイトの登録情報の確認は、ロックを取った<strong>あと</strong>に、キャッシュではなくオリジンの<code>sites.json</code>を直接読んで行います。「このソースは登録されているか」の確認と「オブジェクトを書く」の間に隙間ができません。別のリポジトリから公開する人は、管理者の設定のチェックアウトを必要とせず、デプロイ済みのサイトの登録情報を読めれば足ります。</p>
       <p>これはArtifact Pagesのコマンド同士の調整で、<strong>セキュリティの境界ではありません</strong>。バケットへ直接書き込める認証情報を持つ人は迂回できます。認証情報の範囲を絞るのはプロバイダー側の設定の役目です。<a href="trust-model.html#publishers">信頼モデル</a>を参照してください。</p>
     </section>

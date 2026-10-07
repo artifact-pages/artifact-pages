@@ -79,8 +79,8 @@
             <text x="24" y="452">│  ├─ catalog.json</text>
             <text x="24" y="476">│  └─ revisions/&lt;sha&gt;/…</text>
             <text x="24" y="500">└─ _control/</text>
-            <text x="24" y="524">   ├─ sites/checkout/lock.json</text>
-            <text x="24" y="548">   └─ sites/checkout/site-cache.json</text>
+            <text x="24" y="524">   ├─ locks/sites/checkout.json</text>
+            <text x="24" y="548">   └─ site-cache/checkout.json</text>
           </g>
           <text class="ad-lab" x="290" y="68">アプリケーションプレーン</text>
           <text class="ad-lab acc" x="290" y="140">コンテンツプレーン</text>
@@ -140,7 +140,7 @@
         <ul>
           <li>アプリケーションプレーン：<code>/index.html</code>（アプリのシェル、毎回再検証）と<code>/assets/&lt;name&gt;-&lt;hash&gt;.*</code>（1年キャッシュ）。<code>app deploy</code>が書き込みます。</li>
           <li>コンテンツプレーン：<code>registry sync</code>が書く<code>/_indexes/sites.json</code>。<code>site sync</code>が書く<code>/_indexes/checkout/meta.json</code>、<code>index.json</code>、毎回の同期で生成する<code>search/manifest.json</code>・<code>root-&lt;sha256&gt;.gz</code>・<code>leaf-&lt;sha256&gt;.gz</code>。サイトのファイル一式は<code>/_artifacts/checkout/</code>、<code>preview publish</code>が書くプレビューは<code>/_previews/checkout/</code>にあります。</li>
-          <li>非公開の領域：<code>/_control/sites/checkout/lock.json</code>と<code>/_control/sites/checkout/site-cache.json</code>。読者には返しません。</li>
+          <li>非公開の領域：<code>/_control/locks/sites/checkout.json</code>と<code>/_control/site-cache/checkout.json</code>。読者には返しません。</li>
           <li>共有キャッシュは、JSONのインデックスとプレビューの一覧を最大60秒、成果物とプレビューのファイルを最大300秒、内容のハッシュを名前に持つアプリと検索のファイルを1年保持できます。</li>
         </ul>
       </details>
@@ -296,9 +296,9 @@
       <div class="table-wrap"><table>
         <thead><tr><th>キー</th><th>用途</th></tr></thead>
         <tbody>
-          <tr><td><code>_control/sites/&lt;site&gt;/lock.json</code></td><td>サイトの公開、プレビューの公開、registry syncによるサイト削除が共有するサイトごとのロック。registry syncによるサイト削除のあとも（<code>free</code>の状態で）残します。</td></tr>
+          <tr><td><code>_control/locks/sites/&lt;site&gt;.json</code></td><td>サイトの公開、プレビューの公開、registry syncによるサイト削除が共有するサイトごとのロック。registry syncによるサイト削除のあとも（<code>free</code>の状態で）残します。</td></tr>
           <tr><td><code>_control/locks/registry.json</code></td><td>サイトの登録情報の更新を1つずつ順に行うためのロック。</td></tr>
-          <tr><td><code>_control/sites/&lt;site&gt;/site-cache.json</code></td><td>失敗した公開のあと、まだ済んでいないキャッシュ無効化のパス。</td></tr>
+          <tr><td><code>_control/site-cache/&lt;site&gt;.json</code></td><td>失敗した公開のあと、まだ済んでいないキャッシュ無効化のパス。</td></tr>
           <tr><td><code>_control/registry-cleanup.json</code></td><td>サイトの登録情報から外したサイトについて、まだ済んでいない片付け。</td></tr>
         </tbody>
       </table></div>

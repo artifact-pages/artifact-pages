@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -332,5 +333,111 @@ func TestSiteIdentifiersCannotEscapeTheirControlPrefix(t *testing.T) {
 		if err := validateLockSite(site); err == nil {
 			t.Errorf("validateLockSite(%q) accepted a site identifier that could escape %s", site, siteControlPrefix("x"))
 		}
+	}
+}
+
+// Two post-IMP-66 CLIs adopting the same site at once: the one that loses the
+// legacy lock must not fail on the tombstone the winner leaves, and the records
+// must survive exactly once.
+func TestConcurrentAdoptionOfOneSite(t *testing.T) {
+	ctx := context.Background()
+	for round := 0; round < 25; round++ {
+		backend := newLockMemoryBackend()
+		seedLegacyObject(t, backend, legacySiteLockKey("sre"), legacyLockBody("sre", "free"))
+		seedLegacyObject(t, backend, legacySitePublishStateKey("sre"), `legacy-state`)
+		manager := SiteLockManager{Backend: backend, WaitLimit: 5 * time.Second, PollPeriod: time.Millisecond}
+		var wg sync.WaitGroup
+		var mu sync.Mutex
+		inside := 0
+		errs := make(chan error, 3)
+		for i := 0; i < 3; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				_, release, err := manager.Acquire(ctx, "sre")
+				if err != nil {
+					errs <- err
+					return
+				}
+				mu.Lock()
+				inside++
+				if inside != 1 {
+					errs <- errors.New("two holders inside the site lock")
+				}
+				mu.Unlock()
+				object, _, getErr := backend.GetObject(ctx, sitePublishStateKey("sre"))
+				if getErr != nil || string(object.Bytes) != "legacy-state" {
+					errs <- errors.New("publish state lost during adoption")
+				}
+				mu.Lock()
+				inside--
+				mu.Unlock()
+				if err := release(); err != nil {
+					errs <- err
+				}
+			}()
+		}
+		wg.Wait()
+		close(errs)
+		for err := range errs {
+			t.Fatalf("round %d: %v", round, err)
+		}
+	}
+}
+
+// Crash after the legacy lock was tombstoned but before the current lock
+// recorded LegacyAdopted: the next run adopts as a no-op and succeeds.
+func TestAdoptionResumesAfterCrashBetweenTombstoneAndFlag(t *testing.T) {
+	ctx := context.Background()
+	backend := newLockMemoryBackend()
+	seedLegacyObject(t, backend, legacySiteLockKey("sre"), legacyLockBody("sre", "free"))
+	seedLegacyObject(t, backend, legacySitePublishStateKey("sre"), `legacy-state`)
+	manager := SiteLockManager{Backend: backend, WaitLimit: time.Second, PollPeriod: time.Millisecond}
+	if err := manager.adoptLegacySite(ctx, "sre"); err != nil {
+		t.Fatal(err)
+	}
+	// Simulated crash: the current lock record was never written.
+	for i := 0; i < 2; i++ {
+		_, release, err := manager.Acquire(ctx, "sre")
+		if err != nil || release() != nil {
+			t.Fatalf("Acquire() #%d after crash = %v", i, err)
+		}
+	}
+	object, _, err := backend.GetObject(ctx, sitePublishStateKey("sre"))
+	if err != nil || string(object.Bytes) != "legacy-state" {
+		t.Fatalf("state = %+v, %v", object, err)
+	}
+}
+
+// Crash after some records were copied but before the tombstone: the legacy
+// lock is still held by the crashed adopter, nothing is lost, and recovering it
+// by ETag lets the next run finish the move idempotently.
+func TestAdoptionResumesAfterCrashBeforeTombstone(t *testing.T) {
+	ctx := context.Background()
+	backend := newLockMemoryBackend()
+	seedLegacyObject(t, backend, legacySiteLockKey("sre"), legacyLockBody("sre", "held"))
+	seedLegacyObject(t, backend, legacySitePublishStateKey("sre"), `legacy-state`)
+	seedLegacyObject(t, backend, sitePublishStateKey("sre"), `legacy-state`) // copied, legacy delete lost
+	manager := SiteLockManager{Backend: backend, WaitLimit: 20 * time.Millisecond, PollPeriod: time.Millisecond}
+	if _, _, err := manager.Acquire(ctx, "sre"); err == nil {
+		t.Fatal("Acquire() proceeded past a held legacy lock")
+	}
+	snapshot, err := manager.Inspect(ctx, "sre")
+	if err != nil || snapshot.State != "held" {
+		t.Fatalf("Inspect() = %+v, %v", snapshot, err)
+	}
+	if err := manager.Recover(ctx, "sre", snapshot.ETag); err != nil {
+		t.Fatal(err)
+	}
+	manager.WaitLimit = time.Second
+	if _, release, err := manager.Acquire(ctx, "sre"); err != nil || release() != nil {
+		t.Fatalf("Acquire() after recovery = %v", err)
+	}
+	object, _, err := backend.GetObject(ctx, sitePublishStateKey("sre"))
+	if err != nil || string(object.Bytes) != "legacy-state" {
+		t.Fatalf("state = %+v, %v", object, err)
+	}
+	if _, _, err := backend.GetObject(ctx, legacySitePublishStateKey("sre")); !errors.Is(err, ErrObjectNotFound) {
+		t.Fatalf("legacy state remains: %v", err)
 	}
 }

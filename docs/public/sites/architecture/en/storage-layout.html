@@ -79,8 +79,8 @@
             <text x="24" y="452">│  ├─ catalog.json</text>
             <text x="24" y="476">│  └─ revisions/&lt;sha&gt;/…</text>
             <text x="24" y="500">└─ _control/</text>
-            <text x="24" y="524">   ├─ sites/checkout/lock.json</text>
-            <text x="24" y="548">   └─ sites/checkout/site-cache.json</text>
+            <text x="24" y="524">   ├─ locks/sites/checkout.json</text>
+            <text x="24" y="548">   └─ site-cache/checkout.json</text>
           </g>
           <text class="ad-lab" x="290" y="68">APPLICATION PLANE</text>
           <text class="ad-lab acc" x="290" y="140">CONTENT PLANE</text>
@@ -140,7 +140,7 @@
         <ul>
           <li>Application plane: <code>/index.html</code> (app shell, always revalidated) and <code>/assets/&lt;name&gt;-&lt;hash&gt;.*</code> (cached for a year), written by <code>app deploy</code>.</li>
           <li>Content plane: <code>/_indexes/sites.json</code> from <code>registry sync</code>; <code>/_indexes/checkout/meta.json</code>, <code>index.json</code> and <code>search/manifest.json</code>, <code>root-&lt;sha256&gt;.gz</code> and <code>leaf-&lt;sha256&gt;.gz</code> from <code>site sync</code>; the site's files under <code>/_artifacts/checkout/</code>; previews under <code>/_previews/checkout/</code> from <code>preview publish</code>.</li>
-          <li>Private area: <code>/_control/sites/checkout/lock.json</code> and <code>/_control/sites/checkout/site-cache.json</code>, never returned to viewers.</li>
+          <li>Private area: <code>/_control/locks/sites/checkout.json</code> and <code>/_control/site-cache/checkout.json</code>, never returned to viewers.</li>
           <li>Shared caches may keep JSON indexes and catalogs for up to 60 seconds, artifacts and preview files for up to 300 seconds, and content-hashed app and search files for a year.</li>
         </ul>
       </details>
@@ -303,9 +303,9 @@
       <div class="table-wrap"><table>
         <thead><tr><th>Key</th><th>Purpose</th></tr></thead>
         <tbody>
-          <tr><td><code>_control/sites/&lt;site&gt;/lock.json</code></td><td>The per-site lock shared by site sync, preview operations, and registry cleanup. Kept (as <code>free</code>) after registry omission cleanup.</td></tr>
+          <tr><td><code>_control/locks/sites/&lt;site&gt;.json</code></td><td>The per-site lock shared by site sync, preview operations, and registry cleanup. Kept (as <code>free</code>) after registry omission cleanup.</td></tr>
           <tr><td><code>_control/locks/registry.json</code></td><td>Serializes whole-registry updates.</td></tr>
-          <tr><td><code>_control/sites/&lt;site&gt;/site-cache.json</code></td><td>Cache invalidation paths still owed after a failed publish.</td></tr>
+          <tr><td><code>_control/site-cache/&lt;site&gt;.json</code></td><td>Cache invalidation paths still owed after a failed publish.</td></tr>
           <tr><td><code>_control/registry-cleanup.json</code></td><td>Content cleanup still owed for sites removed from the registry.</td></tr>
         </tbody>
       </table></div>

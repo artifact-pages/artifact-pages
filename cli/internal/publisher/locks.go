@@ -479,6 +479,11 @@ func (manager SiteLockManager) adoptLegacySite(ctx context.Context, siteID strin
 	}
 	held, release, err := manager.acquire(ctx, siteID, key)
 	if err != nil {
+		// A concurrent post-IMP-66 CLI may have retired the legacy lock while
+		// this one waited for it. That is the success path, not a failure.
+		if retired, _, readErr := manager.Backend.GetObject(ctx, key); readErr == nil && compat.CheckSchemaVersion("site lock record", retired.Bytes, 1) != nil {
+			return migrateLegacySiteControl(ctx, manager.Backend, siteID)
+		}
 		return fmt.Errorf("acquire legacy site lock (an older CLI may still be publishing; recover the lock by ETag if it is stale): %w", err)
 	}
 	if err := migrateLegacySiteControl(ctx, manager.Backend, siteID); err != nil {

@@ -66,7 +66,7 @@
 
           <circle class="ad-num" cx="30" cy="108" r="11"/><text class="ad-num-t" x="30" y="112" text-anchor="middle">2</text>
           <text class="ad-t" x="52" y="106">Acquire the site lock</text>
-          <text class="ad-mq" x="52" y="124">_control/sites/&lt;site&gt;/lock.json · skipped by --dry-run</text>
+          <text class="ad-mq" x="52" y="124">_control/locks/sites/&lt;site&gt;.json · skipped by --dry-run</text>
           <text class="ad-lab acc" x="470" y="110">ORIGIN</text>
 
           <circle class="ad-num" cx="30" cy="152" r="11"/><text class="ad-num-t" x="30" y="156" text-anchor="middle">3</text>
@@ -90,7 +90,7 @@
 
           <circle class="ad-num" cx="30" cy="312" r="11"/><text class="ad-num-t" x="30" y="316" text-anchor="middle">6</text>
           <text class="ad-t" x="52" y="310">Save the cache retry record</text>
-          <text class="ad-mq" x="52" y="328">_control/sites/&lt;site&gt;/site-cache.json</text>
+          <text class="ad-mq" x="52" y="328">_control/site-cache/&lt;site&gt;.json</text>
           <text class="ad-lab acc" x="470" y="314">ORIGIN</text>
 
           <circle class="ad-num" cx="30" cy="356" r="11"/><text class="ad-num-t" x="30" y="360" text-anchor="middle">7</text>
@@ -134,11 +134,11 @@
         <summary>The diagram as text</summary>
         <ol>
           <li>Only when the target is local storage: resolve the source path from the registry and check, before locking, that the storage directory and the source do not overlap. This early registry read is advisory; the authoritative check is step 3.</li>
-          <li>Acquire the per-site lock <code>_control/sites/&lt;site&gt;/lock.json</code> with a conditional write. A dry run does not.</li>
+          <li>Acquire the per-site lock <code>_control/locks/sites/&lt;site&gt;.json</code> with a conditional write. A dry run does not.</li>
           <li>Read <code>/_indexes/sites.json</code> from the origin, not through the CDN, and require that the site is registered and that the checkout's repository and source path match the registration.</li>
           <li>Collect the source files (regular files only) and build the index, metadata and search data in a temporary directory, using the registered name and description.</li>
           <li>List <code>_artifacts/&lt;site&gt;/</code> and <code>_indexes/&lt;site&gt;/</code> completely and compare each desired object's digest and headers. The preview catalog and any outstanding cache retry record are read too. A dry run prints this plan and stops.</li>
-          <li>Save the invalidation paths in <code>_control/sites/&lt;site&gt;/site-cache.json</code>.</li>
+          <li>Save the invalidation paths in <code>_control/site-cache/&lt;site&gt;.json</code>.</li>
           <li>Upload new and changed files.</li>
           <li>Upload search blobs, then <code>index.json</code>.</li>
           <li>Upload the search manifest, then <code>meta.json</code>.</li>
@@ -200,7 +200,7 @@
 
     <section class="doc-section" aria-labelledby="lock">
       <h2 id="lock">The site lock and the registry check</h2>
-      <p>Each site has one small lock record, <code>_control/sites/&lt;site&gt;/lock.json</code>, shared by <code>site sync</code>, <code>preview publish</code>, and <code>registry sync</code>. It is created only if absent and changed only with a compare-and-swap on its ETag, so a recovery that inspected an old state cannot release a newer owner's lock. Different sites use different locks and publish independently.</p>
+      <p>Each site has one small lock record, <code>_control/locks/sites/&lt;site&gt;.json</code>, shared by <code>site sync</code>, <code>preview publish</code>, and <code>registry sync</code>. It is created only if absent and changed only with a compare-and-swap on its ETag, so a recovery that inspected an old state cannot release a newer owner's lock. Different sites use different locks and publish independently.</p>
       <p>The registry check runs <strong>after</strong> the lock is held and reads <code>sites.json</code> directly from the origin rather than a cached copy. That closes the gap between “is this source registered?” and “write the objects”. A publisher in another repository does not need the admin's config checkout; it only needs to read the deployed registry.</p>
       <p>This is coordination between Artifact Pages commands, <strong>not a security boundary</strong>. Someone with direct write credentials to the bucket can bypass it. Scoping credentials is a provider setup concern; see <a href="trust-model.html#publishers">Trust model</a>.</p>
     </section>
