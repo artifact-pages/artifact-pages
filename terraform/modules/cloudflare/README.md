@@ -101,7 +101,7 @@ registry_reader = {
 }
 ```
 
-The CLI uses these names only for `site publish` and `preview publish`. Other commands ignore the reader values, and a configuration without this object uses the primary credential to read the registry.
+The CLI uses these names only for `site sync` and `preview publish`, to read the registry (`/_indexes/sites.json`) and deployed web compatibility record (`/_control/versions/app.json`). Other commands ignore the reader values, and a configuration without this object uses the primary credential for both reads.
 
 ## Resource ownership and apply review
 
