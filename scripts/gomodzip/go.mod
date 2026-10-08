@@ -2,6 +2,6 @@ module github.com/artifact-pages/artifact-pages/scripts/gomodzip
 
 go 1.26.0
 
-toolchain go1.26.7
+toolchain go1.26.9
 
 require golang.org/x/mod v0.41.0
