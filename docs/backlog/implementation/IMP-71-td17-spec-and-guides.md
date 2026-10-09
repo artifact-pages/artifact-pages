@@ -19,9 +19,10 @@ Move TD17 into accepted behavior: specification §19 ("Released CLI", "Action re
 
 ## Acceptance criteria
 
-- [ ] Spec, TD2, TD14 describe the implemented behavior; no pending pointers left.
+- [x] Spec, TD2, TD14 describe the implemented behavior; no pending pointers left (IMP-67 to IMP-70).
 - [ ] Guide page reviewed per the docs workflow.
 
 ## Progress
 
-- 2026-10-08: the specification, TD2 and TD14 describe the merged behavior of IMP-67, IMP-68 and IMP-69, with one narrow pointer each for the IMP-70 parts. Remaining: the IMP-70 parts (and removal of those pointers) and the operator guide page.
+- 2026-10-08: the specification, TD2 and TD14 describe the merged behavior of IMP-67, IMP-68 and IMP-69, with one narrow pointer each for the IMP-70 parts.
+- 2026-10-09: the specification (§5.3, §19, §22), TD2, TD14, TD17 and the monorepo guides describe the IMP-70 behavior (bootstrap CLI, `release.json` schemaVersion 2, `cli-version` override); no pending pointers remain. This text merges before IMP-70 (PR #58). Remaining: the operator guide page in the docs repository.
