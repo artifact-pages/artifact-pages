@@ -1,6 +1,6 @@
 # IMP-71 — Specification, TD2/TD14 amendments and operator upgrade guide for TD17
 
-- Status: In progress
+- Status: Done
 - Assignee: Claude
 - Lanes: Docs / spec
 - Owner: Claude
@@ -20,9 +20,10 @@ Move TD17 into accepted behavior: specification §19 ("Released CLI", "Action re
 ## Acceptance criteria
 
 - [x] Spec, TD2, TD14 describe the implemented behavior; no pending pointers left (IMP-67 to IMP-70).
-- [ ] Guide page reviewed per the docs workflow.
+- [x] Guide page reviewed per the docs workflow ([DOC-17](https://github.com/artifact-pages/docs/blob/main/backlog/DOC-17-guide-versions.md), docs PR #16).
 
 ## Progress
 
 - 2026-10-08: the specification, TD2 and TD14 describe the merged behavior of IMP-67, IMP-68 and IMP-69, with one narrow pointer each for the IMP-70 parts.
 - 2026-10-09: the specification (§5.3, §19, §22), TD2, TD14, TD17 and the monorepo guides describe the IMP-70 behavior (bootstrap CLI, `release.json` schemaVersion 2, `cli-version` override); no pending pointers remain. This text merges before IMP-70 (currently PR #58). Remaining: the operator guide page in the docs repository.
+- 2026-10-09: the operator guide page `versions.html` (ja/en) and revisions to the guide pages that described one product version were published by docs PR #16 (DOC-17), ahead of the IMP-72 release with owner consent, and approved by the owner.
