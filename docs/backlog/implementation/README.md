@@ -29,7 +29,7 @@ Decided 2026-10-07 in [TD17](../technical-design/TD17-config-pinned-component-ve
 | [IMP-69](IMP-69-config-pins-and-compatibility-checks.md) | Done | Codex | `cli`/`web` config keys, storage version records, compatibility checks, `--accept-breaking`. |
 | [IMP-70](IMP-70-bootstrap-cli-and-override.md) | Done | Codex | Bootstrap re-exec, `release.json` v2, `cli-version` override. |
 | [IMP-71](IMP-71-td17-spec-and-guides.md) | Done | Claude | Spec §19/§22, TD2/TD14 amendments, operator guide. |
-| [IMP-72](IMP-72-td17-first-releases-and-rollout.md) | In progress | Codex (owner approval per step) | First releases of the new series and operator rollout. |
+| [IMP-72](IMP-72-td17-first-releases-and-rollout.md) | Done | Codex | First releases of the new series and operator rollout. |
 
 ## Optional operator-managed edge policy
 
