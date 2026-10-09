@@ -3,7 +3,7 @@
 - Status: Done
 - Assignee: Claude
 - Phase: Reusable distribution
-- Decision: Proposed and decided by the owner on 2026-10-07. The specification, TD2 and TD14 are amended for the implemented slices (IMP-67, IMP-68 and IMP-69, on 2026-10-08); the parts that depend on IMP-70 (sections 4, 5, 5a and 6: bootstrap re-exec, `cli-version` override, Action `release.json` schemaVersion 2) are amended when IMP-70 lands. The specification is authoritative for what ships.
+- Decision: Proposed and decided by the owner on 2026-10-07. The specification, TD2 and TD14 are amended for the implemented slices (IMP-67, IMP-68 and IMP-69, on 2026-10-08); and for IMP-70 (sections 4, 5, 5a and 6: bootstrap re-exec, `cli-version` override, Action `release.json` schemaVersion 2) with the IMP-70 pull request. All amendments are applied. The specification is authoritative for what ships.
 - Amends: [TD2](TD2-component-release-policy.md) (one product version; CLI-pinned web bundle and "pinning an Action or CLI ref pins a tested CLI/web pair", replaced by the checks of section 3; web-changed release notes move to web releases; immutable tags during 0.x), [TD14](TD14-one-repository-per-action.md) (decision 2 one tag for all Actions; decision 4 Action version decides the CLI version; the sync rule "an existing tag is never moved" during 0.x), specification §19 "Released CLI" and "Action repositories", and §22 (config keys, `app deploy` bundle selection)
 - Related design: [TD15](TD15-terraform-module-source-of-truth.md) (per-module tags, the model reused here), [TD12](TD12-action-consumer-contract.md), [T10](T10-config-location.md) (config layers)
 
@@ -83,7 +83,7 @@ While the product is `0.x` no compatibility is promised, so these data-driven ch
 - Locks: `app deploy` takes the application lock, then the registry lock, then every registered site's lock in sorted order; `registry sync` takes the locks of the sites it changes or omits in sorted order before it mutates the catalog and validates their records under the locks.
 - `app remove` also deletes `/_control/versions/app.json`.
 - Legacy path: a config with neither `cli` nor `web` and storage without an app record keeps the unpinned flow (own-version bundle, no checks); an existing app record always turns the checks on.
-- `config check` requires `web.version` and checks the web manifest's `reads`, this CLI's writes and the stored records; it does not compare `cli.version` with the running CLI, which waits for IMP-70.
+- `config check` requires `web.version` and checks the web manifest's `reads`, this CLI's writes and the stored records; it runs under the CLI that `cli.version` selects (IMP-70), so the check does not compare `cli.version` with the running CLI itself.
 - The CLI publishes `artifact-pages compatibility --format json`, and the CLI release carries the same output as `artifact-pages_vX.Y.Z_compatibility.json`.
 - The Cloudflare read-only registry credential reads `app.json`, and the AWS satellite policy gets exactly that key (read-only).
 
@@ -108,6 +108,15 @@ Each Action's generated `release.json` gains a supported CLI range (for example 
 - **Download and cache:** the target is fetched exactly as the published Actions fetch the CLI today (unauthenticated, checksum-verified, rate-limit retry through the GitHub API with the workflow token only, passed as `ARTIFACT_PAGES_DOWNLOAD_TOKEN`). The private-config `github-token` is used only to read the config and never for downloads. Binaries are cached per version under the runner tool cache (locally under the user cache directory).
 - **No loop:** the re-exec sets `ARTIFACT_PAGES_CLI_RESOLVED=<version>`. A CLI started with it never resolves or re-executes again; it fails if its own version differs.
 - **Tests:** `ARTIFACT_PAGES_TEST_CLI` (unreleased Action source only) skips the bootstrap and the re-exec; the test binary runs directly and still runs the checks of section 3.
+
+**Implementation notes (IMP-70).** The implementation adds the following; the specification (§19 "Released CLI", §22) is authoritative.
+
+- The range check runs in the CLI (the Action passes `cliRange` as `ARTIFACT_PAGES_CLI_RANGE`), for the config target and for an override alike, before any download; the Action itself only validates (`requireCliRange`) that `bootstrapCli` lies inside `cliRange`, and a failure there fails the install step with exit 1 and the "installation failed" summary. The CLI-side range failure exits 2.
+- Only deployment commands (`app`, `site`, `registry`, `preview`, `lock`, `config check`) resolve the config; other commands run as installed unless an override is given. A config without `cli.version` selects the running CLI.
+- The checksums file is fetched on every use, including cache hits, and a cached binary must match it.
+- The generator writes `bootstrapCli` and `cliRange` as fixed values (`0.1.0`, `>=0.1.0 <0.2.0`), not from the CLI version constant; the generated-content comparison ignores `actionVersion`.
+- A new Action tag must exceed the highest tag already published in that Action's repository (checked by the release preflight).
+- Job Summary lines record the executing CLI and any override; an Action input override is reported as `environment`.
 - **Preview trust:** the preview Action resolves and downloads the target only after its trust preflight, from the same config the preflight uses (the base ref or the operator's config, never the pull-request head). Because sources are fixed to official releases, the choice of version cannot introduce foreign code, but a pull request still cannot change it.
 - **Config keys and old CLIs:** the strict config parser rejects unknown fields, so `cli` and `web` become valid in the CLI release that implements this design. That release is the lower bound of every Action's `cliRange`, and operator configs add the keys only after their Actions move to it.
 
@@ -137,8 +146,8 @@ The Action needs `cli.version` before it has a CLI, and the config may be layere
 
 ## Implementation slices (filed as [IMP-67](../implementation/IMP-67-web-compatibility-manifest.md) to [IMP-72](../implementation/IMP-72-td17-first-releases-and-rollout.md))
 
-- CLI: `cli`/`web` config keys, storage version records, compatibility data and `config check`, validation at command start, `app deploy` by `web.version` (Codex): Done, [IMP-69](../implementation/IMP-69-config-pins-and-compatibility-checks.md); the web manifest's `reads` is [IMP-67](../implementation/IMP-67-web-compatibility-manifest.md), Done. Bootstrap re-exec: [IMP-70](../implementation/IMP-70-bootstrap-cli-and-override.md), Open.
+- CLI: `cli`/`web` config keys, storage version records, compatibility data and `config check`, validation at command start, `app deploy` by `web.version` (Codex): Done, [IMP-69](../implementation/IMP-69-config-pins-and-compatibility-checks.md); the web manifest's `reads` is [IMP-67](../implementation/IMP-67-web-compatibility-manifest.md), Done. Bootstrap re-exec: [IMP-70](../implementation/IMP-70-bootstrap-cli-and-override.md) (PR #58).
 - Release workflows: root tag CLI-only, `web/v*` and per-Action tags, generated-content check (Codex): Done, [IMP-68](../implementation/IMP-68-release-series-split.md).
-- Actions: `cli-version` input, supported range in `release.json`, summary line for overrides (Codex): Open, IMP-70.
-- Specification §19 and §22, TD2 and TD14 amendments, operator upgrade guide (Claude): [IMP-71](../implementation/IMP-71-td17-spec-and-guides.md), In progress. The specification, TD2 and TD14 describe IMP-67 to IMP-69; the IMP-70 parts and the guide follow.
+- Actions: `cli-version` input, supported range in `release.json`, summary line for overrides (Codex): [IMP-70](../implementation/IMP-70-bootstrap-cli-and-override.md) (PR #58).
+- Specification §19 and §22, TD2 and TD14 amendments, operator upgrade guide (Claude): [IMP-71](../implementation/IMP-71-td17-spec-and-guides.md), In progress. The specification, TD2 and TD14 describe IMP-67 to IMP-70; the operator guide follows.
 - Operator repositories: add `cli`/`web` to `admin/artifact-pages.yaml` (Codex, owner approval for production): [IMP-72](../implementation/IMP-72-td17-first-releases-and-rollout.md).
