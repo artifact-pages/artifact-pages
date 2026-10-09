@@ -200,7 +200,7 @@ jobs:
       - name: Verify the CLI assets pinned by the generated Action exist
         run: |
           set -euo pipefail
-          cli_version="$(jq -r .version "$RUNNER_TEMP/action-repos/$RELEASE_ACTION-action/release.json")"
+          cli_version="$(jq -r .bootstrapCli "$RUNNER_TEMP/action-repos/$RELEASE_ACTION-action/release.json")"
           mkdir -p "$RUNNER_TEMP/cli-assets"
           gh release download "v$cli_version" --pattern "artifact-pages_v${cli_version}_*" --dir "$RUNNER_TEMP/cli-assets"
           cd "$RUNNER_TEMP/cli-assets"

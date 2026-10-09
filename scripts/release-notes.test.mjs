@@ -57,3 +57,13 @@ test('release notes distinguish 0.x prereleases from stable components', () => {
     assert.doesNotMatch(buildNotes({version:'1.0.0',component}).split('\n')[0], /pre-release/)
   }
 })
+
+test('breaking CLI upgrade notes order admin writes and republishing without config check', () => {
+  const notes = buildNotes({version:'2.0.0',component:'cli',verdict:{verdict:'breaking',changedFormats:['registry']}})
+  const registry = notes.indexOf('`artifact-pages registry sync --accept-breaking`')
+  const app = notes.indexOf('`artifact-pages app deploy --accept-breaking`')
+  const republish = notes.indexOf('republish every site and preview')
+  assert.ok(registry >= 0 && registry < app && app < republish)
+  assert.doesNotMatch(notes,/config check/)
+  assert.match(notes,/`registry`/)
+})

@@ -175,8 +175,8 @@ jobs:
   # this job covers the composite runtime: expressions, action_path resolution and the
   # output mapping. No credentials are used.
   #
-  # The published Actions download the released CLI of their own version (TD14), which
-  # does not exist for unreleased code. This job therefore runs the source Actions by
+  # Published Actions download their declared bootstrap CLI, then resolve the config
+  # target. That bootstrap release does not exist for unreleased code. This job therefore runs the source Actions by
   # local path (`./actions/<name>`, which carries no release.json) and gives them the CLI
   # it built from the same commit through ARTIFACT_PAGES_TEST_CLI; a published Action
   # ignores that variable.

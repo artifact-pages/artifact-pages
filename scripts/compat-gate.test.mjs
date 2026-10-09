@@ -294,6 +294,8 @@ test('stable web gates use previous web tags and reject removed reads without a 
   const fixture = realpathSync(candidateTree(t, '0.1.0'))
   mkdirSync(path.join(fixture, 'scripts'))
   for (const script of ['compat-gate.mjs', 'release-series.mjs', 'build-action-repos.mjs']) cpSync(path.join(projectRoot, 'scripts', script), path.join(fixture, 'scripts', script))
+  mkdirSync(path.join(fixture, 'actions/shared'), { recursive: true })
+  cpSync(path.join(projectRoot, 'actions/shared/cli-range.mjs'), path.join(fixture, 'actions/shared/cli-range.mjs'))
   const declaration = path.join(fixture, 'web/src/data/supported-schema-versions.json')
   mkdirSync(path.dirname(declaration), { recursive: true })
   writeFileSync(declaration, JSON.stringify({schemaVersion:1, reads:{registry:[1], 'artifact-index':[1]}}))

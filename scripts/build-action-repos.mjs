@@ -6,7 +6,7 @@
 // For each Action the output directory <out>/<name>-action/ holds:
 //   action.yml     the source action.yml with shared script paths made repository-relative
 //   scripts/       the shared scripts the Action runs (import closure, no tests)
-//   release.json   {schemaVersion, version, repository}: the CLI release the Action installs
+//   release.json   {schemaVersion, actionVersion, bootstrapCli, cliRange, repository}
 // The component version tags the generated repository independently from that CLI pin.
 //   README.md      actions/<name>/README.md behind a "generated" notice
 //   LICENSE        the product license
@@ -14,6 +14,7 @@
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
+import { requireCliRange } from '../actions/shared/cli-range.mjs'
 import { fileURLToPath } from 'node:url'
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -58,7 +59,10 @@ export function repositoryActionYml(actionYml) {
 }
 
 export function buildActionRepos({ sourceRoot = projectRoot, out, version, repository = productRepository, names = actionNames }) {
-  const product = readProductVersion(sourceRoot)
+  const bootstrapCli = '0.1.0'
+  const cliRange = '>=0.1.0 <0.2.0'
+  requireCliRange(bootstrapCli, cliRange)
+  if (repository !== productRepository) throw new Error('CLI release repository must be artifact-pages/artifact-pages')
   if (!/^\d+\.\d+\.\d+$/.test(version ?? '')) throw new Error(`version must look like X.Y.Z, got ${version}`)
   if (names.some((name) => !actionNames.includes(name))) throw new Error('unknown Action name')
   const built = []
@@ -71,7 +75,7 @@ export function buildActionRepos({ sourceRoot = projectRoot, out, version, repos
     writeFileSync(path.join(target, 'action.yml'), repositoryActionYml(actionYml))
     const scripts = scriptClosure(actionYml, path.join(sourceRoot, 'actions', 'shared'))
     for (const script of scripts) cpSync(path.join(sourceRoot, 'actions', 'shared', script), path.join(target, 'scripts', script))
-    writeFileSync(path.join(target, 'release.json'), `${JSON.stringify({ schemaVersion: 1, version: product, repository }, null, 2)}\n`)
+    writeFileSync(path.join(target, 'release.json'), `${JSON.stringify({ schemaVersion: 2, actionVersion: version, bootstrapCli, cliRange, repository }, null, 2)}\n`)
     const readme = readFileSync(path.join(source, 'README.md'), 'utf8')
     writeFileSync(path.join(target, 'README.md'), `> This repository is generated from [${productRepository}](https://github.com/${productRepository}) (\`actions/${name}\`) on its component release. Open issues and pull requests there.\n\n${readme}`)
     cpSync(path.join(sourceRoot, 'LICENSE'), path.join(target, 'LICENSE'))

@@ -24,9 +24,9 @@ jobs:
           aws-region: us-east-1
           role-session-name: artifact-pages-app-${{ github.run_id }}
 
-      # The Action ref below pins the CLI, and the CLI deploys the web bundle of
-      # its own version. Updating the pinned ref is the application upgrade.
-      - name: Deploy the web application pinned by the Action version
+      # The Action ref pins the wrapper. The CLI deploys the web bundle named by
+      # web.version from the deployment config. Updating that pin upgrades the app.
+      - name: Deploy the web application pinned by the config
         uses: artifact-pages/app-deploy-action@v0.1.0
         with:
           config: artifact-pages.yaml

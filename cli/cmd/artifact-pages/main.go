@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/artifact-pages/artifact-pages/cli/internal/bootstrap"
 	"github.com/artifact-pages/artifact-pages/cli/internal/compat"
 	deploymentconfig "github.com/artifact-pages/artifact-pages/cli/internal/config"
 	"github.com/artifact-pages/artifact-pages/cli/internal/indexer"
@@ -22,7 +23,28 @@ import (
 
 func main() {
 	args := os.Args[1:]
-	if err := run(context.Background(), args, os.Stdout, os.Stderr); err != nil {
+	clean, executed, err := (bootstrap.Runner{Version: version.Product}).Run(context.Background(), args, os.Stdout, os.Stderr)
+	if executed {
+		if err != nil {
+			var exit *bootstrap.Error
+			if errors.As(err, &exit) {
+				os.Exit(exit.Code)
+			}
+			os.Exit(1)
+		}
+		return
+	}
+	if clean != nil {
+		args = clean
+	}
+	if err == nil && !executed {
+		err = run(context.Background(), clean, os.Stdout, os.Stderr)
+	}
+	if err != nil {
+		var bootstrapErr *bootstrap.Error
+		if errors.As(err, &bootstrapErr) {
+			err = withExitCode(err, bootstrapErr.Code)
+		}
 		var commandErr *commandError
 		failure := failureResult(args, err)
 		if errors.As(err, &commandErr) {
@@ -608,7 +630,7 @@ func runAppDeploy(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	format := flags.String("format", "text", "result format: text or json")
 	for _, arg := range args {
 		if arg == "--version" || arg == "-version" || strings.HasPrefix(arg, "--version=") || strings.HasPrefix(arg, "-version=") {
-			return withExitCode(fmt.Errorf("--version was removed: this CLI deploys the web bundle of its own version (%s); use a CLI of the version you want, or --archive FILE", version.Product), 2)
+			return withExitCode(errors.New("--version was removed: set web.version in the deployment config, or use --archive FILE for a local bundle; only legacy configs without component pins select the CLI-version bundle"), 2)
 		}
 	}
 	if err := flags.Parse(args); err != nil {
@@ -626,6 +648,9 @@ func runAppDeploy(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	resolved, err := (deploymentconfig.Resolver{}).ResolveLayers(ctx, configLocators)
 	if err != nil {
 		return withExitCode(err, 2)
+	}
+	if *archive == "" && resolved.Config.CLI != nil && resolved.Config.Web == nil {
+		return withExitCode(errors.New("app deploy requires web.version or --archive FILE when cli.version is configured"), 2)
 	}
 	ctx = publisher.WithCompatibility(ctx, resolved.Config, *acceptBreaking)
 	webVersion := pinnedVersion(*archive)
@@ -700,8 +725,10 @@ func runAppRemove(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	return nil
 }
 
-// pinnedVersion is the web release this CLI deploys when no local archive is
-// given: the CLI's own product version.
+// pinnedVersion returns the legacy CLI-version bundle pin, or no pin for a
+// local archive. runAppDeploy replaces it with web.version for independent web
+// releases and rejects cli-only pins; only configs without either component
+// pin retain the root product bundle fallback.
 func pinnedVersion(archive string) string {
 	if archive != "" {
 		return ""
@@ -899,7 +926,7 @@ func writeRootUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "Artifact Pages CLI")
 	fmt.Fprintln(writer, "")
 	fmt.Fprintln(writer, "Usage:")
-	fmt.Fprintln(writer, "  artifact-pages <command>")
+	fmt.Fprintln(writer, "  artifact-pages [--cli-version MAJOR.MINOR.PATCH] <command>")
 	fmt.Fprintln(writer, "")
 	fmt.Fprintln(writer, "Commands:")
 	fmt.Fprintln(writer, "  index build   Build a site index without copying or publishing artifacts")
@@ -914,6 +941,7 @@ func writeRootUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "")
 	fmt.Fprintln(writer, "Run a command with --help for options.")
 	fmt.Fprintln(writer, "Default deployment config: artifact-pages.yaml (--config and ARTIFACT_PAGES_CONFIG take precedence).")
+	fmt.Fprintln(writer, "CLI selection: --cli-version, ARTIFACT_PAGES_CLI_VERSION, then config cli.version; overrides keep compatibility checks.")
 }
 
 func writeLockUsage(writer io.Writer) {
@@ -986,6 +1014,7 @@ func writeSiteUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "")
 	fmt.Fprintln(writer, "Reconcile one selected site's static projection with its publishable source directory.")
 	fmt.Fprintln(writer, "Default deployment config: artifact-pages.yaml (--config and ARTIFACT_PAGES_CONFIG take precedence).")
+	fmt.Fprintln(writer, "CLI selection: --cli-version, ARTIFACT_PAGES_CLI_VERSION, then config cli.version; overrides keep compatibility checks.")
 }
 
 func writeSiteSyncUsage(writer io.Writer) {
