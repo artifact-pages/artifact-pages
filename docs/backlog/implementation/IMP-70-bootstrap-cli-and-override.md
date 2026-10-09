@@ -1,6 +1,6 @@
 # IMP-70 — Bootstrap CLI re-exec and `cli-version` override
 
-- Status: In progress
+- Status: Done
 - Assignee: Codex
 - Lanes: CLI, Actions
 - Owner: Codex
@@ -22,7 +22,7 @@ Any CLI resolves the config and re-executes the CLI version it names; the Action
 
 - [x] Tests for loop guard, range failure, precedence, token separation and preview ordering.
 - [x] Action parity and hosted smoke pass with an unreleased bootstrap and a released target (or a local release fixture).
-- [ ] Spec "Released CLI" text is updated (IMP-71) in or before the PR that merges this slice.
+- [x] Spec "Released CLI" text is updated (IMP-71) in or before the PR that merges this slice.
 
 ## CLI implementation handoff (Codex, 2026-10-08)
 
@@ -35,4 +35,4 @@ Any CLI resolves the config and re-executes the CLI version it names; the Action
 - Preview preflight supplies `ARTIFACT_PAGES_TRUSTED_CONFIG_REF` only after trust checks. Both tolerant and strict resolvers read repository-local layers from regular tracked files at that full base SHA, including default discovery when the PR removes the config. PR-added configs, base symlinks, and repository links escaping the checkout fail closed. Explicit external operator files preserve their existing authority; an external alias back into the checkout reads the base blob. Remote operator locators are unchanged. A missing base object can be fetched exactly with the workflow fetch/download token; private-config tokens are removed from that subprocess.
 - `app deploy --version` now directs callers to config `web.version` or local `--archive`. A config with only `cli.version` requires `web.version` or `--archive` and fails with exit 2 before creating a backend or requesting an archive. Neither-pin legacy configs retain the root CLI-version web bundle path. **IMP-72 rollout dependency:** root CLI-only releases lack that legacy web asset; operational configs must set `web.version` before upgrading to the split-release CLI. No fallback infers a web version from a CLI tag.
 
-CLI validation: full `go test ./cli/...` passed; targeted tests cover future schemas, remote/private locators, local layers and precedence, loop guards/ranges, checksum cache tampering/symlinks, download/fetch token separation, real child streams/exit codes, trusted preview base/deletion/addition/symlinks/shallow fetch, and strict/compatibility checks after resolution. An integrated local official-release fixture builds an actual target CLI (`0.1.99`), downloads its binary/checksum through the fixed official paths, re-executes it, records the actual target version and proves its incompatible-stored-web refusal before writes. Local Action parity with the actual unreleased CLI passed. Hosted Composite Actions smoke passed at `eb77b931` in [run 37702566666](https://github.com/artifact-pages/artifact-pages/actions/runs/37702566666); CI revalidation of the rebased head with the compatibility-test fixture repair and narrow release/reader documentation fixes is pending. The IMP-71 specification criterion remains pending; keep this item In progress until that criterion is verified.
+CLI validation: full `go test ./cli/...` passed; targeted tests cover future schemas, remote/private locators, local layers and precedence, loop guards/ranges, checksum cache tampering/symlinks, download/fetch token separation, real child streams/exit codes, trusted preview base/deletion/addition/symlinks/shallow fetch, and strict/compatibility checks after resolution. An integrated local official-release fixture builds an actual target CLI (`0.1.99`), downloads its binary/checksum through the fixed official paths, re-executes it, records the actual target version and proves its incompatible-stored-web refusal before writes. Local Action parity with the actual unreleased CLI passed. Hosted Composite Actions smoke passed at `eb77b931` in [run 37702566666](https://github.com/artifact-pages/artifact-pages/actions/runs/37702566666); All six checks also passed at `89ceb314` in [run 37858330385](https://github.com/artifact-pages/artifact-pages/actions/runs/37858330385), including the compatibility-test fixture repair and hosted smoke. The Released CLI text, TD2, TD14 and TD17 amendments are merged in IMP-71 PR #59 (`00c58257`), meeting the final specification criterion. The final PR #58 head is rebased on that merge; its own required CI and independent review remain merge gates.
