@@ -92,3 +92,20 @@ test('installation failures report that no CLI ran and preserve the requested ov
   assert.match(text,/CLI executed.*none \(installation failed\)/)
   assert.match(text,/CLI override requested.*0.1.3/)
 })
+
+
+test('requested overrides are not reported as applied before resolution or in source mode', () => {
+  for (const resolved of [false, true]) {
+    const text = renderSummary({operation:'registry sync',exitCode:2,cliMetadata:{schemaVersion:1,cliVersion:'0.1.0',configVersion:'0.1.1',override:false,overrideRequested:'0.1.3',overrideSource:'environment',resolved}})
+    assert.match(text,/CLI executed.*`0.1.0`/)
+    assert.match(text,/CLI override requested.*`0.1.3`.*`environment`/)
+    assert.doesNotMatch(text,/\*\*CLI override:\*\*/)
+  }
+})
+
+test('an executed override is reported as applied even when the target operation fails', () => {
+  const text = renderSummary({operation:'registry sync',exitCode:1,cliMetadata:{schemaVersion:1,cliVersion:'0.1.3',configVersion:'0.1.1',override:true,overrideRequested:'0.1.3',overrideSource:'flag',resolved:true}})
+  assert.match(text,/CLI executed.*`0.1.3`/)
+  assert.match(text,/\*\*CLI override:\*\* `flag` \(config `0.1.1`\)/)
+  assert.doesNotMatch(text,/CLI override requested/)
+})

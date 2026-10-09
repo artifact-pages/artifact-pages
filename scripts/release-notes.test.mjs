@@ -58,13 +58,12 @@ test('release notes distinguish 0.x prereleases from stable components', () => {
   }
 })
 
-test('breaking CLI upgrade notes validate storage after ordered breaking writes and republishing', () => {
+test('breaking CLI upgrade notes order admin writes and republishing without config check', () => {
   const notes = buildNotes({version:'2.0.0',component:'cli',verdict:{verdict:'breaking',changedFormats:['registry']}})
   const registry = notes.indexOf('`artifact-pages registry sync --accept-breaking`')
   const app = notes.indexOf('`artifact-pages app deploy --accept-breaking`')
   const republish = notes.indexOf('republish every site and preview')
-  const check = notes.indexOf('`artifact-pages config check`')
-  assert.ok(registry >= 0 && registry < app && app < republish && republish < check)
-  assert.match(notes,/config check can fail on incompatible formats still recorded in storage/)
+  assert.ok(registry >= 0 && registry < app && app < republish)
+  assert.doesNotMatch(notes,/config check/)
   assert.match(notes,/`registry`/)
 })

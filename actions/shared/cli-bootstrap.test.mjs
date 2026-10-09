@@ -24,7 +24,7 @@ test('wrapper preserves environment precedence, publishes only range/download to
   const dir = mkdtempSync(path.join(tmpdir(), 'cli-bootstrap-'))
   try {
     const cli = path.join(dir, 'cli'), capture = path.join(dir, 'capture.json'), summary = path.join(dir, 'summary')
-    writeFileSync(cli, `#!/usr/bin/env node\nconst fs=require('fs');fs.writeFileSync(process.env.CAPTURE,JSON.stringify(process.env));fs.writeFileSync(process.env.ARTIFACT_PAGES_CLI_METADATA,JSON.stringify({schemaVersion:1,cliVersion:'0.1.0',configVersion:'0.1.1',override:true,overrideSource:'environment',resolved:false}));console.log(JSON.stringify({operation:'registry sync',outcome:'failed',error:'test failure'}));process.exit(2)\n`)
+    writeFileSync(cli, `#!/usr/bin/env node\nconst fs=require('fs');fs.writeFileSync(process.env.CAPTURE,JSON.stringify(process.env));fs.writeFileSync(process.env.ARTIFACT_PAGES_CLI_METADATA,JSON.stringify({schemaVersion:1,cliVersion:'0.1.0',configVersion:'0.1.1',override:false,overrideRequested:process.env.ARTIFACT_PAGES_CLI_VERSION,overrideSource:'environment',resolved:false}));console.log(JSON.stringify({operation:'registry sync',outcome:'failed',error:'test failure'}));process.exit(2)\n`)
     chmodSync(cli, 0o755)
     writeFileSync(path.join(dir, 'release.json'), JSON.stringify({schemaVersion:2,actionVersion:'0.9.0',bootstrapCli:'0.1.0',cliRange:'>=0.1.0 <0.2.0',repository:'artifact-pages/artifact-pages'}))
     const env = {...process.env, GITHUB_ACTION_PATH:dir, ARTIFACT_PAGES_CLI:cli, ARTIFACT_PAGES_ACTION_KIND:'registry', CAPTURE:capture, GITHUB_STEP_SUMMARY:summary, ARTIFACT_PAGES_INPUT_CLI_VERSION:'0.1.2', ARTIFACT_PAGES_CLI_VERSION:'0.1.3', ARTIFACT_PAGES_DOWNLOAD_TOKEN:'workflow', GITHUB_TOKEN:'private-config', ARTIFACT_PAGES_TEST_CLI:cli, ARTIFACT_PAGES_CLI_SKIP_RESOLUTION:'1'}
@@ -37,7 +37,8 @@ test('wrapper preserves environment precedence, publishes only range/download to
     assert.equal(actual.ARTIFACT_PAGES_DOWNLOAD_TOKEN,'workflow')
     assert.equal(actual.ARTIFACT_PAGES_CLI_RANGE,'>=0.1.0 <0.2.0')
     assert.match(readFileSync(summary,'utf8'),/CLI executed.*0.1.0/)
-    assert.match(readFileSync(summary,'utf8'),/CLI override/)
+    assert.match(readFileSync(summary,'utf8'),/CLI override requested.*0.1.3/)
+    assert.doesNotMatch(readFileSync(summary,'utf8'),/\*\*CLI override:\*\*/)
     env.ARTIFACT_PAGES_CLI_VERSION='';assert.equal(run().status,2)
     actual=JSON.parse(readFileSync(capture));assert.equal(actual.ARTIFACT_PAGES_CLI_VERSION,'0.1.2')
     rmSync(path.join(dir,'release.json'));assert.equal(run().status,2)

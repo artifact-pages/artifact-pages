@@ -96,6 +96,7 @@ export function renderSummary({ kind, operation, result, exitCode = 0, dryRun = 
   if (cliMetadata?.schemaVersion === 1 && cliMetadata.cliVersion) {
     lines.push('', `- **CLI executed:** ${code(cliMetadata.cliVersion)}`)
     if (cliMetadata.override) lines.push(`- **CLI override:** ${code(cliMetadata.overrideSource || 'environment')}${cliMetadata.configVersion ? ` (config ${code(cliMetadata.configVersion)})` : ''}`)
+    else if (cliMetadata.overrideRequested) lines.push(`- **CLI override requested:** ${code(cliMetadata.overrideRequested)}${cliMetadata.overrideSource ? ` (${code(cliMetadata.overrideSource)})` : ''}`)
   }
   return `${lines.join('\n')}\n`
 }
