@@ -3,7 +3,7 @@
 - Status: Done
 - Assignee: Claude
 - Phase: Reusable distribution
-- Decision: Proposed and decided by the owner on 2026-10-07. The specification, TD2 and TD14 are amended for the implemented slices (IMP-67, IMP-68 and IMP-69, on 2026-10-08); and for IMP-70 (sections 4, 5, 5a and 6: bootstrap re-exec, `cli-version` override, Action `release.json` schemaVersion 2) with the IMP-70 pull request (#58). All amendments are applied. The specification is authoritative for what ships.
+- Decision: Proposed and decided by the owner on 2026-10-07. The specification, TD2 and TD14 are amended for the implemented slices (IMP-67, IMP-68 and IMP-69, on 2026-10-08); and for IMP-70 (sections 4, 5, 5a and 6: bootstrap re-exec, `cli-version` override, Action `release.json` schemaVersion 2) with the IMP-70 pull request. All amendments are applied. The specification is authoritative for what ships.
 - Amends: [TD2](TD2-component-release-policy.md) (one product version; CLI-pinned web bundle and "pinning an Action or CLI ref pins a tested CLI/web pair", replaced by the checks of section 3; web-changed release notes move to web releases; immutable tags during 0.x), [TD14](TD14-one-repository-per-action.md) (decision 2 one tag for all Actions; decision 4 Action version decides the CLI version; the sync rule "an existing tag is never moved" during 0.x), specification §19 "Released CLI" and "Action repositories", and §22 (config keys, `app deploy` bundle selection)
 - Related design: [TD15](TD15-terraform-module-source-of-truth.md) (per-module tags, the model reused here), [TD12](TD12-action-consumer-contract.md), [T10](T10-config-location.md) (config layers)
 
@@ -111,7 +111,7 @@ Each Action's generated `release.json` gains a supported CLI range (for example 
 
 **Implementation notes (IMP-70).** The implementation adds the following; the specification (§19 "Released CLI", §22) is authoritative.
 
-- The range check runs in the CLI (the Action passes `cliRange` as `ARTIFACT_PAGES_CLI_RANGE`), for the config target and for an override alike, before any download; the Action itself only validates that `bootstrapCli` lies inside `cliRange`. Both fail with exit 2.
+- The range check runs in the CLI (the Action passes `cliRange` as `ARTIFACT_PAGES_CLI_RANGE`), for the config target and for an override alike, before any download; the Action itself only validates (`requireCliRange`) that `bootstrapCli` lies inside `cliRange`, and a failure there fails the install step with exit 1 and the "installation failed" summary. The CLI-side range failure exits 2.
 - Only deployment commands (`app`, `site`, `registry`, `preview`, `lock`, `config check`) resolve the config; other commands run as installed unless an override is given. A config without `cli.version` selects the running CLI.
 - The checksums file is fetched on every use, including cache hits, and a cached binary must match it.
 - The generator writes `bootstrapCli` and `cliRange` as fixed values (`0.1.0`, `>=0.1.0 <0.2.0`), not from the CLI version constant; the generated-content comparison ignores `actionVersion`.
@@ -146,8 +146,8 @@ The Action needs `cli.version` before it has a CLI, and the config may be layere
 
 ## Implementation slices (filed as [IMP-67](../implementation/IMP-67-web-compatibility-manifest.md) to [IMP-72](../implementation/IMP-72-td17-first-releases-and-rollout.md))
 
-- CLI: `cli`/`web` config keys, storage version records, compatibility data and `config check`, validation at command start, `app deploy` by `web.version` (Codex): Done, [IMP-69](../implementation/IMP-69-config-pins-and-compatibility-checks.md); the web manifest's `reads` is [IMP-67](../implementation/IMP-67-web-compatibility-manifest.md), Done. Bootstrap re-exec: [IMP-70](../implementation/IMP-70-bootstrap-cli-and-override.md), lands with PR #58.
+- CLI: `cli`/`web` config keys, storage version records, compatibility data and `config check`, validation at command start, `app deploy` by `web.version` (Codex): Done, [IMP-69](../implementation/IMP-69-config-pins-and-compatibility-checks.md); the web manifest's `reads` is [IMP-67](../implementation/IMP-67-web-compatibility-manifest.md), Done. Bootstrap re-exec: [IMP-70](../implementation/IMP-70-bootstrap-cli-and-override.md) (PR #58).
 - Release workflows: root tag CLI-only, `web/v*` and per-Action tags, generated-content check (Codex): Done, [IMP-68](../implementation/IMP-68-release-series-split.md).
-- Actions: `cli-version` input, supported range in `release.json`, summary line for overrides (Codex): IMP-70, lands with PR #58.
+- Actions: `cli-version` input, supported range in `release.json`, summary line for overrides (Codex): [IMP-70](../implementation/IMP-70-bootstrap-cli-and-override.md) (PR #58).
 - Specification §19 and §22, TD2 and TD14 amendments, operator upgrade guide (Claude): [IMP-71](../implementation/IMP-71-td17-spec-and-guides.md), In progress. The specification, TD2 and TD14 describe IMP-67 to IMP-70; the operator guide follows.
 - Operator repositories: add `cli`/`web` to `admin/artifact-pages.yaml` (Codex, owner approval for production): [IMP-72](../implementation/IMP-72-td17-first-releases-and-rollout.md).

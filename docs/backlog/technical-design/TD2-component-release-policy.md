@@ -114,7 +114,7 @@ The CLI release commit (version constant bump) is prepared locally and reviewed 
 - [x] Define the automated gate that classifies changes and the release workflow it guards.
 - [x] Hand implementation and the `v0.1.0` re-release to [IMP-45](../implementation/IMP-45-unified-release-and-compatibility.md).
 - [x] Split the single product version into independent CLI, web and Action series and move the web bundle choice into the deployment config ([TD17](TD17-config-pinned-component-versions.md); IMP-67 to IMP-69 behavior described above, 2026-10-08).
-- [x] Describe the bootstrap CLI re-exec and the `cli-version` override ([IMP-70](../implementation/IMP-70-bootstrap-cli-and-override.md), [IMP-71](../implementation/IMP-71-td17-spec-and-guides.md); specification §19, lands with the IMP-70 pull request).
+- [x] Describe the bootstrap CLI re-exec and the `cli-version` override ([IMP-70](../implementation/IMP-70-bootstrap-cli-and-override.md), [IMP-71](../implementation/IMP-71-td17-spec-and-guides.md); specification §19).
 
 ## Known gate limits and release runbook
 
