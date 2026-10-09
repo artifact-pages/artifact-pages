@@ -216,6 +216,69 @@ func TestConfigCheckAndPendingRecords(t *testing.T) {
 	}
 }
 
+func TestLegacyProjectionMigratesThroughPlannedOrder(t *testing.T) {
+	root := createPublisherCheckout(t, "git@github.com:acme/sre.git")
+	if err := runPublisherGitAt(root, "branch", "--move", "main"); err != nil {
+		t.Fatal(err)
+	}
+	backend := testVersionBackend(t)
+	ctx := WithCompatibility(context.Background(), config.DeploymentConfig{
+		CLI: &config.ComponentVersion{Version: "0.2.0"}, Web: &config.ComponentVersion{Version: "0.1.0"},
+	}, false)
+	fakeManifest(t, allReads())
+
+	legacyProjection, _, err := testRegistryBuild(t, []byte(registeredSREManifest))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := backend.PutObject(ctx, "_indexes/sites.json", Object{Bytes: legacyProjection}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := PublishSite(context.Background(), backend, SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts"}); err != nil {
+		t.Fatalf("seed pre-record site projection: %v", err)
+	}
+	if err := backend.DeleteObjects(context.Background(), []string{siteVersionsKey("sre")}); err != nil {
+		t.Fatalf("remove version record to model legacy storage: %v", err)
+	}
+	if err := CheckConfig(ctx, backend); err == nil || !strings.Contains(err.Error(), "registry: unknown") || !strings.Contains(err.Error(), "sre: unknown; republish required") {
+		t.Fatalf("initial config check = %v; want diagnostic for missing legacy records", err)
+	}
+
+	desired, err := registry.DecodeProjection(legacyProjection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RegisterSites(ctx, backend, desired, false); err != nil {
+		t.Fatalf("registry sync: %v", err)
+	}
+	if err := CheckConfig(ctx, backend); err == nil || strings.Contains(err.Error(), "registry: unknown") || !strings.Contains(err.Error(), "sre: unknown; republish required") {
+		t.Fatalf("config check after registry sync = %v; want only the unrecorded site diagnostic", err)
+	}
+
+	archive := bundleWithReads(t, allReads())
+	if _, err := DeployApp(ctx, backend, AppDeployOptions{ArchivePath: archive}); err == nil || !strings.Contains(err.Error(), "sre: unknown; republish required") {
+		t.Fatalf("ordinary app deploy = %v; want refusal before unknown site formats are accepted", err)
+	}
+	approvedContext := WithCompatibility(context.Background(), config.DeploymentConfig{
+		CLI: &config.ComponentVersion{Version: "0.2.0"}, Web: &config.ComponentVersion{Version: "0.1.0"},
+	}, true)
+	if _, err := DeployApp(approvedContext, backend, AppDeployOptions{ArchivePath: archive}); err != nil {
+		t.Fatalf("approved app deploy with accept-breaking: %v", err)
+	}
+	if _, err := PublishSite(ctx, backend, SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts"}); err != nil {
+		t.Fatalf("site sync: %v", err)
+	}
+	if err := CheckConfig(ctx, backend); err != nil {
+		t.Fatalf("final config check after records exist: %v", err)
+	}
+	for _, key := range []string{registryVersionsKey, siteVersionsKey("sre")} {
+		record, present, err := readVersionRecord(ctx, backend, key)
+		if err != nil || !present || record.CLIVersion != "0.2.0" {
+			t.Fatalf("version record %s = %+v, present=%t, err=%v; want writing CLI 0.2.0", key, record, present, err)
+		}
+	}
+}
+
 func TestSiteRecordStagedOnFailureAndRetryConverges(t *testing.T) {
 	createPublisherCheckout(t, "git@github.com:acme/sre.git")
 	backend := newSiteReconcileBackend()

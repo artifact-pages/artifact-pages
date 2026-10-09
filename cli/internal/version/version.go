@@ -1,9 +1,9 @@
-// Package version holds the product version of Artifact Pages.
+// Package version holds the product version of the Artifact Pages CLI.
 //
-// One tag series vMAJOR.MINOR.PATCH versions the CLI, the composite Actions and
-// the web bundle together (docs/backlog/technical-design/TD2). The release
-// commit sets Product; -ldflags are not used because `go install` and the
-// Actions' `go build` cannot pass them.
+// The CLI uses the root vMAJOR.MINOR.PATCH tag series. Web and Action releases
+// use their own component tag series (docs/backlog/technical-design/TD17).
+// The release commit sets Product, so source builds and packaged binaries from
+// the same commit report the same CLI version without linker overrides.
 package version
 
 import (
@@ -11,13 +11,11 @@ import (
 	"runtime/debug"
 )
 
-// Product is the product version this source tree releases. It is set in the
-// release commit, so the tree already names the version being prepared. The
-// version is also the web bundle pin: without --archive, `app deploy` downloads
-// the release assets tagged v<Product>. A build from a tree whose tag has not
-// been published yet therefore fails to download those assets; pass --archive
-// with a locally packaged bundle until the release exists.
-const Product = "0.1.0"
+// Product is the CLI version this source tree releases. It is set in the
+// release commit, so the tree already names the version being prepared. For
+// app deploy, config web.version selects the independent web bundle; legacy
+// configs without component pins retain the original CLI-version bundle path.
+const Product = "0.2.0"
 
 // Build describes the VCS state recorded in the Go build info.
 type Build struct {
