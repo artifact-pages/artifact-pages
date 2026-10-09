@@ -67,7 +67,7 @@ func TestBootstrapOverrideStillRejectsIncompatibleStoredWeb(t *testing.T) {
 	}
 	var metadata bootstrap.Metadata
 	data, _ := os.ReadFile(metadataPath)
-	if err := json.Unmarshal(data, &metadata); err != nil || metadata.CLIVersion != version.Product || metadata.ConfigVersion != "0.1.99" || !metadata.Override || !metadata.Resolved {
+	if err := json.Unmarshal(data, &metadata); err != nil || metadata.CLIVersion != version.Product || metadata.ConfigVersion != "0.1.99" || !metadata.Override || metadata.OverrideRequested != version.Product || !metadata.Resolved {
 		t.Fatalf("%+v %v", metadata, err)
 	}
 	if _, err := os.Stat(filepath.Join(storage, "_indexes", "sites.json")); !os.IsNotExist(err) {

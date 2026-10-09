@@ -64,7 +64,7 @@ func TestOfficialFixtureReexecutesActualTargetAndKeepsCompatibilityChecks(t *tes
 	t.Setenv(MetadataEnv, metadataPath)
 	t.Setenv(ResolvedEnv, "")
 	t.Setenv(SkipEnv, "")
-	t.Setenv(VersionEnv, "")
+	t.Setenv(VersionEnv, targetVersion)
 	t.Setenv(RangeEnv, ">=0.1.0 <0.2.0")
 	t.Setenv(configVersionEnv, "")
 	downloads := 0
@@ -87,7 +87,7 @@ func TestOfficialFixtureReexecutesActualTargetAndKeepsCompatibilityChecks(t *tes
 	}
 	var metadata Metadata
 	data, _ := os.ReadFile(metadataPath)
-	if err = json.Unmarshal(data, &metadata); err != nil || metadata.CLIVersion != targetVersion || metadata.ConfigVersion != targetVersion || !metadata.Resolved {
+	if err = json.Unmarshal(data, &metadata); err != nil || metadata.CLIVersion != targetVersion || metadata.ConfigVersion != targetVersion || !metadata.Override || metadata.OverrideRequested != targetVersion || !metadata.Resolved {
 		t.Fatalf("%+v %v", metadata, err)
 	}
 	if _, err = os.Stat(filepath.Join(storage, "_indexes", "sites.json")); !os.IsNotExist(err) {

@@ -63,7 +63,11 @@ func TestOverridePrecedenceRangeAndReexec(t *testing.T) {
 			var m Metadata
 			b, _ := os.ReadFile(metadata)
 			json.Unmarshal(b, &m)
-			if m.CLIVersion != "0.1.0" || m.ConfigVersion != tc.pin || m.OverrideSource != tc.source || m.Resolved {
+			requested := tc.want
+			if tc.source == "" {
+				requested = ""
+			}
+			if m.CLIVersion != "0.1.0" || m.ConfigVersion != tc.pin || m.OverrideSource != tc.source || m.OverrideRequested != requested || m.Override || m.Resolved {
 				t.Fatalf("%+v", m)
 			}
 		})
@@ -146,5 +150,68 @@ func TestRealChildPreservesExitAndStreams(t *testing.T) {
 	var exit *exec.ExitError
 	if !errors.As(err, &exit) {
 		t.Fatal("exit wrapper lost cause")
+	}
+}
+
+func TestOverrideRequestIsNotAppliedWhenSkippedOrDownloadFails(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		skip         bool
+		wantResolved bool
+	}{
+		{"source test skip", true, true}, {"download failure", false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			metadataPath := filepath.Join(t.TempDir(), "metadata.json")
+			values := map[string]string{VersionEnv: "0.1.9", MetadataEnv: metadataPath, RangeEnv: ">=0.1.0 <0.2.0"}
+			if tc.skip {
+				values[SkipEnv] = "1"
+			}
+			called := false
+			r := Runner{Version: "0.1.0", Getenv: env(values), Resolve: func(context.Context, []string) (string, error) {
+				if tc.skip {
+					t.Fatal("test skip resolved config")
+				}
+				return "0.1.1", nil
+			}, Install: func(context.Context, string) (string, error) {
+				called = true
+				return "", errors.New("fixture download unavailable")
+			}}
+			_, done, err := r.Run(t.Context(), []string{"registry", "sync"}, io.Discard, io.Discard)
+			if done || tc.skip && err != nil || !tc.skip && err == nil || called != !tc.skip {
+				t.Fatalf("done=%t err=%v installed=%t", done, err, called)
+			}
+			if !tc.skip {
+				var e *Error
+				if !errors.As(err, &e) || e.Code != 1 {
+					t.Fatalf("download error did not retain exit 1: %v", err)
+				}
+			}
+			var m Metadata
+			body, _ := os.ReadFile(metadataPath)
+			if e := json.Unmarshal(body, &m); e != nil {
+				t.Fatal(e)
+			}
+			if m.CLIVersion != "0.1.0" || m.Override || m.OverrideRequested != "0.1.9" || m.OverrideSource != "environment" || m.Resolved != tc.wantResolved {
+				t.Fatalf("%+v", m)
+			}
+		})
+	}
+}
+
+func TestResolvedOverrideIsAppliedOnlyAfterRangeGuard(t *testing.T) {
+	for _, rangeText := range []string{">=0.1.0 <0.2.0", ">=0.2.0 <0.3.0"} {
+		metadataPath := filepath.Join(t.TempDir(), "metadata.json")
+		r := Runner{Version: "0.1.9", Getenv: env(map[string]string{VersionEnv: "0.1.9", ResolvedEnv: "0.1.9", RangeEnv: rangeText, MetadataEnv: metadataPath})}
+		_, _, err := r.Run(t.Context(), []string{"registry", "sync"}, io.Discard, io.Discard)
+		var m Metadata
+		body, _ := os.ReadFile(metadataPath)
+		if e := json.Unmarshal(body, &m); e != nil {
+			t.Fatal(e)
+		}
+		allowed := rangeText == ">=0.1.0 <0.2.0"
+		if (err == nil) != allowed || m.Override != allowed || m.OverrideRequested != "0.1.9" || m.Resolved != allowed {
+			t.Fatalf("range=%s metadata=%+v err=%v", rangeText, m, err)
+		}
 	}
 }

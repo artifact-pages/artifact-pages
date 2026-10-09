@@ -25,12 +25,13 @@ const (
 )
 
 type Metadata struct {
-	SchemaVersion  int    `json:"schemaVersion"`
-	CLIVersion     string `json:"cliVersion"`
-	ConfigVersion  string `json:"configVersion"`
-	Override       bool   `json:"override"`
-	OverrideSource string `json:"overrideSource"`
-	Resolved       bool   `json:"resolved"`
+	SchemaVersion     int    `json:"schemaVersion"`
+	CLIVersion        string `json:"cliVersion"`
+	ConfigVersion     string `json:"configVersion"`
+	Override          bool   `json:"override"`
+	OverrideRequested string `json:"overrideRequested"`
+	OverrideSource    string `json:"overrideSource"`
+	Resolved          bool   `json:"resolved"`
 }
 
 type Error struct {
@@ -157,7 +158,7 @@ func (r Runner) Run(ctx context.Context, args []string, stdout, stderr io.Writer
 		override = flagVersion
 		source = "flag"
 	}
-	metadata := Metadata{SchemaVersion: 1, CLIVersion: r.Version, ConfigVersion: r.Getenv(configVersionEnv), Override: source != "", OverrideSource: source}
+	metadata := Metadata{SchemaVersion: 1, CLIVersion: r.Version, ConfigVersion: r.Getenv(configVersionEnv), OverrideRequested: override, OverrideSource: source}
 	writeMetadata := func() error {
 		p := r.Getenv(MetadataEnv)
 		if p == "" {
@@ -197,6 +198,7 @@ func (r Runner) Run(ctx context.Context, args []string, stdout, stderr io.Writer
 		if err = CheckRange(r.Version, r.Getenv(RangeEnv)); err != nil {
 			return clean, false, &Error{err, 2}
 		}
+		metadata.Override = source != "" && override == r.Version
 		metadata.Resolved = true
 		err = writeMetadata()
 		return clean, false, err
@@ -237,6 +239,7 @@ func (r Runner) Run(ctx context.Context, args []string, stdout, stderr io.Writer
 		return clean, false, &Error{err, 2}
 	}
 	if target == r.Version {
+		metadata.Override = source != ""
 		metadata.Resolved = true
 		err = writeMetadata()
 		return clean, false, err
