@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 
 import { checkActionChanges } from './check-action-releases.mjs'
 import { releaseSeries, previousRelease } from './release-series.mjs'
+import { requireCliRange } from '../actions/shared/cli-range.mjs'
 
 import { actionNames, buildActionRepos, readProductVersion, repositoryActionYml, repositoryName } from './build-action-repos.mjs'
 
@@ -22,13 +23,14 @@ function scratch(t) {
 
 test('each Action repository is self-contained and carries the CLI release record', (t) => {
   const out = scratch(t)
-  const built = buildActionRepos({ out, version })
+  const actionVersion = '0.1.0'
+  const built = buildActionRepos({ out, version: actionVersion })
   assert.deepEqual(built.map((entry) => entry.repository), ['publish-action', 'preview-action', 'registry-action', 'app-deploy-action'])
   for (const entry of built) {
     const files = readdirSync(entry.directory).sort()
     assert.deepEqual(files, ['LICENSE', 'README.md', 'action.yml', 'release.json', 'scripts'])
     const release = JSON.parse(readFileSync(path.join(entry.directory, 'release.json'), 'utf8'))
-    assert.deepEqual(release, { schemaVersion: 2, actionVersion: version, bootstrapCli: version, cliRange: '>=0.1.0 <0.2.0', repository: 'artifact-pages/artifact-pages' })
+    assert.deepEqual(release, { schemaVersion: 2, actionVersion, bootstrapCli: '0.2.0', cliRange: '>=0.2.0 <0.3.0', repository: 'artifact-pages/artifact-pages' })
     const action = readFileSync(path.join(entry.directory, 'action.yml'), 'utf8')
     assert.doesNotMatch(action, /\.\.|\/shared\//, `${entry.repository} must not refer outside its repository`)
     assert.match(action, /^name: Artifact Pages \S/m)
@@ -49,6 +51,13 @@ test('each Action repository is self-contained and carries the CLI release recor
   assert.ok(existsSync(path.join(built[1].directory, 'scripts', 'verify-preview-pr.mjs')))
   assert.ok(!existsSync(path.join(built[0].directory, 'scripts', 'verify-preview-pr.mjs')))
   assert.deepEqual(actionNames.map(repositoryName), built.map((entry) => entry.repository))
+})
+
+test('the first Action release range admits CLI 0.2.0 and excludes both neighboring minor lines', () => {
+  const range = '>=0.2.0 <0.3.0'
+  assert.equal(requireCliRange('0.2.0', range), '0.2.0')
+  assert.throws(() => requireCliRange('0.1.0', range), /outside this Action's supported range/)
+  assert.throws(() => requireCliRange('0.3.0', range), /outside this Action's supported range/)
 })
 
 test('generation is deterministic and Action versions are independent of the CLI pin', (t) => {
@@ -190,9 +199,9 @@ test('generated-content checks reject unchanged tags and shared changes warn for
   assert.ok(checkActionChanges(args).every((row) => !row.changed))
   mkdirSync(path.join(baseline, 'scripts'))
   const generator = readFileSync(path.join(projectRoot, 'scripts/build-action-repos.mjs'), 'utf8')
-  writeFileSync(path.join(baseline, 'scripts/build-action-repos.mjs'), generator.replace("const bootstrapCli = '0.1.0'", "const bootstrapCli = '0.1.1'"))
+  writeFileSync(path.join(baseline, 'scripts/build-action-repos.mjs'), generator.replace("const bootstrapCli = '0.2.0'", "const bootstrapCli = '0.2.1'"))
   assert.ok(checkActionChanges(args).every((row) => row.changed), 'historical bootstrap metadata must be preserved')
-  writeFileSync(path.join(baseline, 'scripts/build-action-repos.mjs'), generator.replace("const cliRange = '>=0.1.0 <0.2.0'", "const cliRange = '>=0.1.0 <0.1.9'"))
+  writeFileSync(path.join(baseline, 'scripts/build-action-repos.mjs'), generator.replace("const cliRange = '>=0.2.0 <0.3.0'", "const cliRange = '>=0.2.0 <0.2.9'"))
   assert.ok(checkActionChanges(args).every((row) => row.changed), 'historical range metadata must be preserved')
   writeFileSync(path.join(baseline, 'scripts/build-action-repos.mjs'), generator)
   assert.ok(checkActionChanges(args).every((row) => !row.changed), 'Action-version-only metadata must remain excluded')

@@ -60,7 +60,9 @@ func TestBootstrapOverrideStillRejectsIncompatibleStoredWeb(t *testing.T) {
 	t.Setenv(bootstrap.VersionEnv, version.Product)
 	t.Setenv(bootstrap.ResolvedEnv, "")
 	t.Setenv(bootstrap.SkipEnv, "")
-	t.Setenv(bootstrap.RangeEnv, ">=0.1.0 <0.2.0")
+	// Allow the current CLI release through the Action range so this test
+	// reaches the stored-web compatibility check it is intended to exercise.
+	t.Setenv(bootstrap.RangeEnv, ">=0.2.0 <0.3.0")
 	stdout, _, code := runCLIProcess(t, root, []string{"registry", "sync", "--format", "json"})
 	if code != 1 || !strings.Contains(stdout, "cannot read") {
 		t.Fatalf("%d %s", code, stdout)
