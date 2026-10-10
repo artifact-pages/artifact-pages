@@ -1,8 +1,9 @@
-aws_region               = "us-east-1"
-bucket_name              = "artifact-pages-example-0001"
-preview_retention_days   = 1
-github_oidc_provider_arn = "arn:aws:iam::111111111111:oidc-provider/token.actions.githubusercontent.com"
-admin_github_subjects    = ["repo:example/admin:ref:refs/heads/main"]
-satellite_github_subjects = {}
-aliases                   = []
+name_prefix               = "artifact-pages-aws-verify"
+aws_region                = "us-east-1"
+bucket_name               = null
+preview_retention_days    = 1
+github_oidc_provider_arn  = "arn:aws:iam::231136241959:oidc-provider/token.actions.githubusercontent.com"
+admin_github_subjects     = ["repo:artifact-pages/admin:environment:aws-verify"]
+satellite_github_subjects = { aws-verify = ["repo:artifact-pages/docs:environment:aws-verify"] }
+cloudflare_zone_id        = "11111111111111111111111111111111"
 price_class               = "PriceClass_100"

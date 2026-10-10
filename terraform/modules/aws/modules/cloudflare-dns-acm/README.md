@@ -23,7 +23,7 @@ Additional domain inputs:
 | `cloudflare_domain.zone_name` | Yes | DNS name of that zone, used to validate the hostname boundary. |
 | `cloudflare_domain.hostname` | Yes | One non-apex hostname within the zone. |
 
-The module returns the root AWS deployment outputs plus `hostname`, `certificate_arn`, and `cloudflare_dns_records`. Credentials and provider configuration stay in the caller. The Cloudflare token needs DNS read and write access for the supplied zone; the AWS identity needs the permissions required by the root module and ACM in `us-east-1`.
+The module returns the root AWS deployment outputs plus `hostname`, `certificate_arn`, and `cloudflare_dns_records`. Credentials and provider configuration stay in the caller. The Cloudflare token needs `Zone > DNS > Edit` scoped to the supplied zone; DNS Edit includes the read/list access needed to refresh these records. This module receives the existing zone ID as input and does not perform a zone lookup, so it does not need Zone Read. The AWS identity needs the permissions required by the root module and ACM in `us-east-1`.
 
 ## Existing records and replacement
 
