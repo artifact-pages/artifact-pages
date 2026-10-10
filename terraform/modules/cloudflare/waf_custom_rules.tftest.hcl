@@ -131,3 +131,53 @@ run "config_phase_inputs_pass_through_the_entry_module" {
     error_message = "The entry module must accept existing_config_rules and config_ruleset_name."
   }
 }
+
+run "invalid_account_id_fails_required_input_validation" {
+  command = plan
+
+  variables {
+    account_id = "not-an-account-id"
+  }
+
+  expect_failures = [var.account_id]
+}
+
+run "invalid_zone_id_fails_required_input_validation" {
+  command = plan
+
+  variables {
+    zone_id = "not-a-zone-id"
+  }
+
+  expect_failures = [var.zone_id]
+}
+
+run "invalid_public_hostname_fails_required_input_validation" {
+  command = plan
+
+  variables {
+    public_hostname = "https://artifacts.example.test"
+  }
+
+  expect_failures = [var.public_hostname]
+}
+
+run "fractional_preview_retention_fails_required_input_validation" {
+  command = plan
+
+  variables {
+    preview_retention_days = 1.5
+  }
+
+  expect_failures = [var.preview_retention_days]
+}
+
+run "empty_optional_bucket_override_fails_validation" {
+  command = plan
+
+  variables {
+    bucket_name = ""
+  }
+
+  expect_failures = [var.bucket_name]
+}

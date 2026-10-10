@@ -12,7 +12,7 @@ Use the [priority-ordered, one-at-a-time repair queue](../issues/README.md#repai
 
 | Order | Ticket | Status | Execution | Outcome / handoff |
 | --- | --- | --- | --- | --- |
-| 1 | [IMP-37](IMP-37-cloudflare-entry-module.md) | In progress | Agent-led | One Cloudflare entry module creates the bucket and composes delivery/retention; local acceptance hands off real-account proof to T15. |
+| 1 | [IMP-37](IMP-37-cloudflare-entry-module.md) | Done | Agent-led | One Cloudflare entry module creates the bucket and composes delivery/retention; local acceptance is verified, with real-account proof remaining in T15. |
 | 2 | [IMP-38](IMP-38-terraform-registry-publication.md) | In progress | Collaborative | Prepare the package in parallel; owner-approved publication follows Cloudflare proof, then exact-version retrieval feeds T16. Depends on [IMP-63](IMP-63-consolidate-terraform-modules.md), [IMP-64](IMP-64-generate-sync-terraform-packages.md) and [IMP-65](IMP-65-admin-module-source-switch.md) ([TD15](../technical-design/TD15-terraform-module-source-of-truth.md) option 1: monorepo is the source, package repositories are generated). |
 | AWS parallel/follow-up | [IMP-39](IMP-39-aws-cloudflare-dns-acm.md) | In progress | Agent-led | Compose DNS-only Cloudflare records and ACM in us-east-1 with CloudFront; keep Cloudflare publication independent and hand AWS live evidence to T15. |
 

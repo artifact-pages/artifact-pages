@@ -1,6 +1,7 @@
 # IMP-37 — A single Cloudflare Terraform entry module
 
-- Status: In progress
+- Status: Done
+- Assignee: Codex
 - Phase: Reusable distribution
 - Execution: Agent-led; live-account handoff is tracked by [T15](../verification/T15-provider-delivery.md).
 - Depends on: [IMP-33](IMP-33-cloudflare-deployment.md), accepted Cloudflare mapping in [T12](../technical-design/T12-cloudflare-production-mapping.md).
@@ -35,13 +36,13 @@ For the project's first real deployment, the owner selected `artifact-pages.dev`
 
 ## Acceptance criteria
 
-- [ ] A clean root configuration invokes one entry module; its local plan includes the new bucket and required delivery/retention resources without an externally pre-created bucket. Omitting `bucket_name` selects `artifact-pages`; an explicit override is used as supplied, and a name collision fails without random fallback.
-- [ ] Bucket identity is shared across delivery and retention. `preview_retention_days` controls Terraform lifecycle only and is not duplicated in the CLI deployment config.
-- [ ] Outputs provide the non-secret information needed for the existing Cloudflare deployment config; secrets remain outside committed examples and outputs.
-- [ ] Source/contract tests retain logical SPA routes, explicit content-path origin behavior, catch-all rewrites (including `/_control/*`) to `/index.html`, cache policy, and provider-owned preview expiration. They do not stand in for live CDN evidence.
-- [ ] Existing zone rules and lifecycle ownership, migration/state handling, destruction limitations, permissions, and potentially billable operations are explicit before apply. Existing-bucket callers are instructed to disable `r2.dev` separately because it bypasses custom-host rewrites (superseded 2026-10-07: the delivery module now keeps `r2.dev` disabled for every caller, PR #39). No blanket destructive defaults are introduced.
-- [ ] Formatting, initialization without a backend, validation, and mock/offline plan checks pass with pinned tool/provider versions; invalid required inputs have regression coverage.
-- [ ] An independent review is completed and any findings are addressed. Local evidence and the remaining live-account handoff are recorded separately.
+- [x] A clean root configuration invokes one entry module; its local plan includes the new bucket and required delivery/retention resources without an externally pre-created bucket. Omitting `bucket_name` selects `artifact-pages`; an explicit override is used as supplied, and a name collision fails without random fallback.
+- [x] Bucket identity is shared across delivery and retention. `preview_retention_days` controls Terraform lifecycle only and is not duplicated in the CLI deployment config.
+- [x] Outputs provide the non-secret information needed for the existing Cloudflare deployment config; secrets remain outside committed examples and outputs.
+- [x] Source/contract tests retain logical SPA routes, explicit content-path origin behavior, catch-all rewrites (including `/_control/*`) to `/index.html`, cache policy, and provider-owned preview expiration. They do not stand in for live CDN evidence.
+- [x] Existing zone rules and lifecycle ownership, migration/state handling, destruction limitations, permissions, and potentially billable operations are explicit before apply. Existing-bucket callers are instructed to disable `r2.dev` separately because it bypasses custom-host rewrites (superseded 2026-10-07: the delivery module now keeps `r2.dev` disabled for every caller, PR #39). No blanket destructive defaults are introduced.
+- [x] Formatting, initialization without a backend, validation, and mock/offline plan checks pass with pinned tool/provider versions; invalid required inputs have regression coverage.
+- [x] An independent review is completed and any findings are addressed. Local evidence and the remaining live-account handoff are recorded separately.
 
 ## Agent preparation and user handoff
 
@@ -52,3 +53,5 @@ For T15, the owner selects the account/zone/hostname, supplies credentials outsi
 ## Evidence
 
 On 2026-09-29, Cloudflare module commits `0ca5eea` and `98e046c` passed `mise exec terraform@1.9.8 -- ./scripts/validate.sh`: Terraform formatting, backend-free initialization and validation for the module and local consumer, all three mocked Terraform-to-CLI contract cases, 8/8 source-contract tests, and the local-only `terraform_data` module-address migration fixture with a no-change plan after state moves. The contract cases pass evaluated Terraform YAML to the OSS `config.Parse` function and verify the default bucket, explicit bucket override, custom credential environment-variable names, and omission of default environment names, secrets, and Terraform-only retention. Independent review found no remaining material blocker; its output-description and lockfile notes were addressed. No Cloudflare credentials or provider API calls were used. Live account, DNS, custom-domain, and content-delivery proof remain in T15.
+
+On 2026-10-10, I rechecked the entry module at `origin/main` commit `1178f9dfe4bf797155d481b78d9ba4c57dfc496b`. `mise exec terraform@1.9.8 -- bash ./scripts/validate.sh` passed: root `terraform test` 9/9, the minimum-provider local consumer (Cloudflare 5.24.0) init/validate, CLI contract tests 3/3 (default and overridden bucket plus custom credential environment names), delivery tests 20/20, WAF destruction protection, retention API round-trip, Node source-contract tests 12/12, and the local module-address migration plan with no changes after the state moves. A credential-free `terraform plan -refresh=false` from `examples/local-consumer` created 8 planned resources, including the default `artifact-pages` bucket, custom domain, disabled `r2.dev`, four zone phase roots, and preview lifecycle policy; it planned no changes or destruction. The plan's shared bucket identity was `artifact-pages`; its deployment YAML output included only the account ID, zone ID, bucket, and public base URL. Luna max independently reviewed the evidence PR head `c0222be9265c438f9efdfe3d2e2cc7547adb13b7`, reported no findings, and reran the then-current checks successfully. A final acceptance audit found the required account ID, zone ID, hostname, and retention validations lacked negative regression cases. I added mock plan cases for each invalid required input plus an empty optional bucket override. The full pinned validation then passed again: root Terraform tests 14/14, minimum-provider local consumer init/validate, CLI contract 3/3, delivery tests 20/20, WAF destruction protection, retention round-trip, Node source-contract tests 12/12, and the no-change module-address migration plan. The local clean-caller plan, source checks, and CLI contract cases verify default and explicit bucket names, shared bucket identity, route/cache and `/_control/*` fallback behavior, secret omission, and retention staying out of CLI config. No Cloudflare credentials or API calls were used. Local IMP-37 acceptance is complete; live account, DNS, custom-domain, and content-delivery proof remain in T15.
