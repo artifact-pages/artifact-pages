@@ -5404,19 +5404,37 @@ test.describe('release UX fixes', () => {
     await registerManySites(page)
     await page.goto('/')
     await expect(page.getByRole('link', { name: /SRE/ })).toHaveAttribute('href', '/sre')
-    const [newTab] = await Promise.all([
-      context.waitForEvent('page'),
-      page.getByRole('link', { name: /SRE/ }).click({ modifiers: ['ControlOrMeta'] }),
-    ])
-    await expectTabLocation(newTab, '/sre')
-    await newTab.close()
+    // Whether the browser then opens a tab is browser behavior, and under load Chromium/Playwright
+    // sometimes never reports the tab (ISSUE-072 A3), so this test does not wait for one. It proves the
+    // app's contract instead: a modified or middle click reaches the window with defaultPrevented still
+    // false (the app did not intercept it). The bubble-phase listener runs after the app's React root
+    // handler; it then prevents the default so the browser does not open a tab. Real new-tab coverage
+    // lives in the Browse row and result link tests.
+    const pagesBefore = context.pages().length
+    await page.evaluate(() => {
+      const w = window as unknown as { __kept: boolean, __clicks: Array<{ type: string, button: number, modified: boolean, defaultPrevented: boolean }> }
+      w.__kept = true
+      w.__clicks = []
+      const record = (event: Event) => {
+        const mouse = event as MouseEvent
+        if (!(event.target instanceof Element) || !event.target.closest('a[href="/sre"]')) return
+        w.__clicks.push({ type: event.type, button: mouse.button, modified: mouse.ctrlKey || mouse.metaKey, defaultPrevented: event.defaultPrevented })
+        event.preventDefault()
+      }
+      window.addEventListener('click', record)
+      window.addEventListener('auxclick', record)
+    })
+    const clicks = () => page.evaluate(() => (window as unknown as { __clicks: Array<{ type: string, button: number, modified: boolean, defaultPrevented: boolean }> }).__clicks)
+    await page.getByRole('link', { name: /SRE/ }).click({ modifiers: ['ControlOrMeta'] })
+    await expect.poll(async () => (await clicks()).length).toBe(1)
+    await page.getByRole('link', { name: /SRE/ }).click({ button: 'middle' })
+    await expect.poll(async () => (await clicks()).length).toBe(2)
+    const [ctrlClick, middleClick] = await clicks()
+    expect(ctrlClick).toMatchObject({ type: 'click', button: 0, modified: true, defaultPrevented: false })
+    expect(middleClick).toMatchObject({ type: 'auxclick', button: 1, defaultPrevented: false })
     await expect(page).toHaveURL(/\/$/)
-    const [middleTab] = await Promise.all([
-      context.waitForEvent('page'),
-      page.getByRole('link', { name: /SRE/ }).click({ button: 'middle' }),
-    ])
-    await expectTabLocation(middleTab, '/sre')
-    await middleTab.close()
+    expect(await page.evaluate(() => (window as unknown as { __kept?: boolean }).__kept)).toBe(true)
+    expect(context.pages().length).toBe(pagesBefore)
 
     // A plain click stays inside the app (no document reload).
     await page.evaluate(() => { (window as unknown as { __kept: boolean }).__kept = true })
