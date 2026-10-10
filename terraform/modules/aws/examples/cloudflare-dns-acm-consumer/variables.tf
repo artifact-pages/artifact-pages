@@ -25,7 +25,7 @@ variable "github_oidc_provider_arn" {
 variable "admin_github_subjects" {
   description = "Exact GitHub OIDC subjects allowed to assume the admin role."
   type        = list(string)
-  default     = ["repo:example/admin:ref:refs/heads/main"]
+  default     = ["repo:example@123456789/admin@1234567890:ref:refs/heads/main"]
 }
 
 variable "cloudflare_zone_id" {

@@ -9,12 +9,6 @@ mock_provider "aws" {
     }
   }
 
-  mock_data "aws_iam_policy_document" {
-    defaults = {
-      json = "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"sts:AssumeRole\",\"Principal\":{\"AWS\":\"*\"}}]}"
-    }
-  }
-
   mock_resource "aws_acm_certificate" {
     defaults = {
       arn = "arn:aws:acm:us-east-1:231136241959:certificate/verification"
@@ -70,7 +64,9 @@ run "disposable_dns_acm_plan" {
   command = plan
 
   variables {
-    cloudflare_zone_id = "11111111111111111111111111111111"
+    cloudflare_zone_id        = "11111111111111111111111111111111"
+    admin_github_subjects     = ["repo:artifact-pages@338198830/admin@1402509181:environment:aws-verify"]
+    satellite_github_subjects = { aws-verify = ["repo:artifact-pages@338198830/docs@1402509222:environment:aws-verify"] }
   }
 
   assert {

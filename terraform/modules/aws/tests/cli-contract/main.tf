@@ -43,7 +43,7 @@ module "artifact_pages" {
   bucket_name               = var.bucket_name
   preview_retention_days    = 1
   github_oidc_provider_arn  = "arn:aws:iam::${var.oidc_account_id}:oidc-provider/token.actions.githubusercontent.com"
-  admin_github_subjects     = ["repo:contract/admin:ref:refs/heads/main"]
+  admin_github_subjects     = ["repo:contract@123456789/admin@1234567890:ref:refs/heads/main"]
   satellite_github_subjects = {}
 }
 

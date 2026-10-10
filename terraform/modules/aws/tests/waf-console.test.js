@@ -13,7 +13,7 @@ const terraform = process.env.TERRAFORM_BIN || 'terraform'
 const base = {
   aws_region: 'us-west-2', preview_retention_days: 1,
   github_oidc_provider_arn: 'arn:aws:iam::000000000000:oidc-provider/token.actions.githubusercontent.com',
-  admin_github_subjects: ['repo:test/admin:ref:refs/heads/main'],
+  admin_github_subjects: ['repo:test@123456789/admin@1234567890:ref:refs/heads/main'],
 }
 const arn = (kind) => `arn:aws:wafv2:us-east-1:000000000000:global/${kind}/example/00000000-0000-0000-0000-000000000000`
 const geo = { geo_match_statement: { country_codes: ['JP'] } }

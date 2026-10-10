@@ -39,6 +39,7 @@ trap 'rm -r "$contract_helper_dir"' EXIT
 "$terraform_bin" fmt -check -recursive
 "$terraform_bin" init -backend=false -input=false -lockfile=readonly
 "$terraform_bin" validate
+"$terraform_bin" test -no-color
 "$terraform_bin" -chdir=examples/local-consumer init -backend=false -input=false -lockfile=readonly
 "$terraform_bin" -chdir=examples/local-consumer validate
 "$terraform_bin" -chdir=examples/cloudflare-dns-acm-consumer init -backend=false -input=false -lockfile=readonly

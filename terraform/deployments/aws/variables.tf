@@ -29,16 +29,16 @@ variable "github_oidc_provider_arn" {
 }
 
 variable "admin_github_subjects" {
-  description = "Exact GitHub OIDC subjects for the dedicated aws-verify admin environment."
+  description = "Exact GitHub OIDC subjects for the dedicated aws-verify admin environment; the repository currently uses immutable subjects."
   type        = list(string)
-  default     = ["repo:artifact-pages/admin:environment:aws-verify"]
+  default     = ["repo:artifact-pages@338198830/admin@1402509181:environment:aws-verify"]
 }
 
 variable "satellite_github_subjects" {
-  description = "Exact GitHub OIDC subjects mapped to each disposable satellite site ID."
+  description = "Exact GitHub OIDC subjects mapped to each disposable satellite site ID; the repository currently uses immutable subjects."
   type        = map(list(string))
   default = {
-    aws-verify = ["repo:artifact-pages/docs:environment:aws-verify"]
+    aws-verify = ["repo:artifact-pages@338198830/docs@1402509222:environment:aws-verify"]
   }
 }
 

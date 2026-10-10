@@ -22,7 +22,7 @@ module "artifact_pages" {
   bucket_name              = null
   preview_retention_days   = 1
   github_oidc_provider_arn = "arn:aws:iam::000000000000:oidc-provider/token.actions.githubusercontent.com"
-  admin_github_subjects    = ["repo:contract/admin:ref:refs/heads/main"]
+  admin_github_subjects    = ["repo:contract@123456789/admin@1234567890:ref:refs/heads/main"]
   cloudflare_domain = {
     zone_id   = "11111111111111111111111111111111"
     zone_name = "example.com"

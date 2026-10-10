@@ -26,6 +26,18 @@ Create the GitHub OIDC provider in the AWS account first. The AWS provider confi
 | `price_class` | No | `PriceClass_100` | CloudFront edge location class. |
 | `tags` | No | `{}` | Tags applied to supported resources. |
 
+## GitHub OIDC subject claims
+
+The admin and satellite role trust policies compare `token.actions.githubusercontent.com:sub` with `StringEquals`. Each subject input is an explicit allowlist: the module does not derive repository names, add wildcards, or infer the job's environment or ref. A list with both subject formats permits either exact string; include both only when both forms need to work during a migration.
+
+For GitHub's default subject templates, a job that declares an environment uses a legacy name-based subject like `repo:OWNER/REPO:environment:ENVIRONMENT`; its immutable equivalent looks like `repo:OWNER@OWNER_ID/REPO@REPO_ID:environment:ENVIRONMENT`. For a job without an environment, the context may instead be a ref, such as `:ref:refs/heads/main`. Read the repository's configured prefix without changing settings with:
+
+```sh
+gh api repos/OWNER/REPO/actions/oidc/customization/sub --jq '.sub_claim_prefix'
+```
+
+When the repository uses GitHub's default subject template, append the job context, such as `:environment:aws-verify` or `:ref:refs/heads/main`, to that prefix and use the resulting exact claim. A custom subject template can replace the default format and change the context, so inspect the actual `sub` emitted by a controlled workflow instead of inferring it from the prefix. Immutable subjects include owner and repository IDs in the repo segment; see [GitHub's OIDC subject reference](https://docs.github.com/en/actions/reference/security/oidc#immutable-subject-claims). A custom template may optionally include `job_workflow_ref` to bind trust to a reusable workflow; the module leaves that choice to the caller.
+
 ## Outputs
 
 | Name | Description |
@@ -89,4 +101,4 @@ terraform state mv 'aws_s3_bucket.origin' 'module.artifact_pages.aws_s3_bucket.o
 
 Repeat for each resource and data source from the former root configuration using its exact current and new address. Do not move unrelated resources in a shared state. A no-move source-only migration applies only to a caller that already wrapped the old implementation in a Terraform module; no such caller is present in this OSS repository. After the moves, inspect a fresh plan for address changes, replacements, and IAM differences, and keep the backup until the migration is accepted. Changing a module source or reverting the source ref does not roll back infrastructure state.
 
-The local caller and validation script are not deployment authorization. The script checks formatting, backend-free initialization, validation, the role/cache/lifecycle source contract, and mocked Terraform plans whose evaluated deployment YAML is passed to the OSS CLI config parser for both the default bucket and an explicit override. Separate mocked mismatch plans verify that the core module and the Cloudflare/ACM wrapper reject AWS provider accounts that differ from the OIDC account. AWS and Cloudflare providers are mocked, so validation uses no real credentials or provider APIs.
+The local caller and validation script are not deployment authorization. The script checks formatting, backend-free initialization, validation, the role/cache/lifecycle source contract, and mocked Terraform plans whose evaluated deployment YAML is passed to the OSS CLI config parser for both the default bucket and an explicit override. Separate mocked mismatch plans verify that the core module and the Cloudflare/ACM wrapper reject AWS provider accounts that differ from the OIDC account. The OIDC subject test uses synthetic AWS credentials and overrides caller identity while calculating the policy document locally; the remaining provider checks use mocks. Validation makes no real provider API calls.
