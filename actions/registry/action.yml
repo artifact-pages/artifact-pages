@@ -13,10 +13,6 @@ inputs:
     description: Override the config CLI pin with an exact supported release; compatibility checks still run.
     required: false
     default: ""
-  github-token:
-    description: Optional token with read-only access to a separate private admin config repository; otherwise uses this workflow's GITHUB_TOKEN.
-    required: false
-    default: ""
   dry-run:
     description: Plan changes without provider object writes or cache changes.
     required: false
@@ -30,7 +26,7 @@ inputs:
     required: false
     default: "true"
   checkout:
-    description: "auto (default): run actions/checkout when the workspace is not already a Git checkout. true: always check out. false: never.  Uses the workflow token with persist-credentials: false, never the github-token input."
+    description: "auto (default): run actions/checkout when the workspace is not already a Git checkout. true: always check out. false: never. Uses the workflow token with persist-credentials: false."
     required: false
     default: auto
   fetch-depth:
@@ -97,5 +93,5 @@ runs:
         ARTIFACT_PAGES_INPUT_DRY_RUN: ${{ inputs.dry-run }}
         ARTIFACT_PAGES_INPUT_SUMMARY: ${{ inputs.summary }}
         ARTIFACT_PAGES_INPUT_PUBLISH_ON: ${{ inputs.publish-on }}
-        GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
+        GITHUB_TOKEN: ${{ github.token }}
       run: node "$GITHUB_ACTION_PATH/../shared/invoke-cli.mjs"

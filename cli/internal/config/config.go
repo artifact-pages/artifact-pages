@@ -970,7 +970,7 @@ func remoteConfigAccessError(rawLocator string, locator remoteLocator, step stri
 			return errors.New(prefix + "the config path or ref does not exist in " + repo + " (HTTP 404). Check the locator.")
 		}
 		if !meta.TokenSent {
-			return errors.New(prefix + "GitHub returned HTTP 404; " + repo + " may be private and no token was provided. Set GITHUB_TOKEN or GH_TOKEN (in GitHub Actions, the github-token input) to a token with contents:read on " + repo + ".")
+			return errors.New(prefix + "GitHub returned HTTP 404; " + repo + " may be private and no token was provided. Set GITHUB_TOKEN or GH_TOKEN to a token with contents:read on " + repo + ".")
 		}
 		return errors.New(prefix + "GitHub returned HTTP 404, which it uses both for missing repositories and for private repositories the token cannot access. Check the locator, and that the token (for example a GitHub App installation or fine-grained PAT) has contents:read on " + repo + ".")
 	}

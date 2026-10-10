@@ -11,7 +11,7 @@ const localRoot = path.join(projectRoot, '.local')
 const actionRunner = path.join(projectRoot, 'actions', 'shared', 'invoke-cli.mjs')
 
 const runOutputs = ['operation', 'outcome', 'changes', 'result', 'exit-code', 'error']
-const commonInputs = ['cli-version', 'config', 'github-token', 'dry-run', 'publish-on', 'summary', 'checkout', 'fetch-depth']
+const commonInputs = ['cli-version', 'config', 'dry-run', 'publish-on', 'summary', 'checkout', 'fetch-depth']
 // One Action per CLI operation (TD14): the Action directory, the CLI operation it runs
 // and its typed inputs and outputs. There is no `operation` input anywhere.
 const expectedActionContracts = {
@@ -22,7 +22,7 @@ const expectedActionContracts = {
   },
   preview: {
     directory: path.join(projectRoot, 'actions', 'preview'),
-    inputs: ['site', 'source', 'head', 'default-ref', 'pull-request', 'include', 'base-url', 'cli-version', 'config', 'github-token', 'dry-run', 'comment', 'summary', 'checkout', 'fetch-depth'],
+    inputs: ['site', 'source', 'head', 'default-ref', 'pull-request', 'include', 'base-url', 'cli-version', 'config', 'dry-run', 'comment', 'summary', 'checkout', 'fetch-depth'],
     outputs: ['operation', 'outcome', 'site', 'group-list-url', 'documents', 'result', 'exit-code', 'error', 'comment-url'],
   },
   registry: {
@@ -99,6 +99,11 @@ async function assertCompositeActionWiring() {
     assert.deepEqual(actualInputs, [...contract.inputs].sort(), `${kind} Action input contract changed`)
     assert.deepEqual(actualOutputs, [...contract.outputs].sort(), `${kind} Action output contract changed`)
     assert.ok(!actualInputs.includes('operation'), `${kind} Action must not switch between operations with an input`)
+    assert.doesNotMatch(source, /github-token/i, `${kind} Action source must not retain the retired private-config token input`)
+
+    const readme = await fs.readFile(path.join(contract.directory, 'README.md'), 'utf8')
+    assert.doesNotMatch(readme, /^\| `github-token` \|/m, `${kind} Action README must not document the retired token input`)
+    assert.doesNotMatch(readme, /private-config token/i, `${kind} Action README must not describe the retired private-config token`)
 
     // Marketplace metadata: a unique name, a description short enough for the card, branding.
     assert.match(source, /^name: Artifact Pages \S.*$/m, `${kind} Action needs its own name`)
@@ -120,14 +125,14 @@ async function assertCompositeActionWiring() {
     const expectedEnv = {
       ARTIFACT_PAGES_CLI: '${{ runner.temp }}/artifact-pages',
       ARTIFACT_PAGES_ACTION_KIND: kind,
-      GITHUB_TOKEN: '${{ inputs.github-token || github.token }}',
+      GITHUB_TOKEN: '${{ github.token }}',
     }
     // The comment input belongs to the separate comment step, not the CLI invocation.
-    for (const inputName of contract.inputs.filter((name) => name !== 'github-token' && name !== 'checkout' && name !== 'fetch-depth' && !(kind === 'preview' && name === 'comment'))) {
+    for (const inputName of contract.inputs.filter((name) => name !== 'checkout' && name !== 'fetch-depth' && !(kind === 'preview' && name === 'comment'))) {
       expectedEnv[`ARTIFACT_PAGES_INPUT_${inputName.toUpperCase().replaceAll('-', '_')}`] = `\${{ inputs.${inputName} }}`
     }
     if (kind === 'publish' || kind === 'preview') {
-      assert.match(source, /^        ARTIFACT_PAGES_FETCH_TOKEN: \$\{\{ github\.token \}\}$/m, `${kind} Action must give the CLI the workflow token (not the github-token input) to deepen a shallow checkout`)
+      assert.match(source, /^        ARTIFACT_PAGES_FETCH_TOKEN: \$\{\{ github\.token \}\}$/m, `${kind} Action must give the CLI's Git-history fetch subprocess the workflow token`)
     }
     expectedEnv.ARTIFACT_PAGES_DOWNLOAD_TOKEN = '${{ github.token }}'
     if (kind === 'preview') expectedEnv.ARTIFACT_PAGES_TRUSTED_CONFIG_REF = "${{ steps.preflight.outputs['trusted-config-ref'] }}"
@@ -151,7 +156,7 @@ async function assertCompositeActionWiring() {
     // Thin Actions: install the declared bootstrap CLI, then resolve the config target; never build it.
     assert.doesNotMatch(source, /actions\/setup-go|actions\/cache|go build|build-once|ARTIFACT_PAGES_ACTION_REF|github\.action_ref|github\.action_repository/, `${kind} Action must not build from source or decide on its ref`)
     assert.equal((source.match(/prebuilt-cli\.mjs" --action-root "\$GITHUB_ACTION_PATH"/g) ?? []).length, 1, `${kind} Action must install the CLI once from its own release record`)
-    assert.match(source, /ARTIFACT_PAGES_DOWNLOAD_TOKEN: \$\{\{ github\.token \}\}/, `${kind} Action must use the workflow token, not the private-config token, for release downloads`)
+    assert.match(source, /ARTIFACT_PAGES_DOWNLOAD_TOKEN: \$\{\{ github\.token \}\}/, `${kind} Action must use the workflow token for release downloads`)
     assert.ok(source.indexOf('id: install') < source.indexOf('id: cli'), `${kind} Action must install the CLI before running it`)
 
     // Own checkout (decision 2): pinned, workflow token only, no persisted credentials, before anything else.
@@ -162,7 +167,7 @@ async function assertCompositeActionWiring() {
     assert.match(source, /^      if: \$\{\{ steps\.checkout-mode\.outputs\.checkout == 'true' \}\}$/m, `${kind} checkout must follow the decision step`)
     assert.match(source, /^        fetch-depth: \$\{\{ inputs\.fetch-depth \}\}$/m, `${kind} checkout must use the fetch-depth input`)
     assert.match(source, /^        persist-credentials: false$/m, `${kind} checkout must not persist credentials`)
-    assert.doesNotMatch(source.slice(source.indexOf('uses: actions/checkout@'), source.indexOf('uses: actions/checkout@') + 400), /token:/, `${kind} checkout must use the workflow token, not the github-token input`)
+    assert.doesNotMatch(source.slice(source.indexOf('uses: actions/checkout@'), source.indexOf('uses: actions/checkout@') + 400), /token:/, `${kind} checkout must not add another token parameter`)
     assert.ok(source.indexOf('checkout-mode.mjs') < source.indexOf('id: install'), `${kind} checkout must precede the CLI install`)
     if (kind === 'preview') {
       assert.match(source, /^        ref: \$\{\{ github\.event\.pull_request\.base\.ref \}\}$/m, 'preview checkout must use the base ref, never the pull-request head')
@@ -173,6 +178,11 @@ async function assertCompositeActionWiring() {
     }
 
     if (kind === 'preview') {
+      const preflightStart = source.indexOf('id: preflight')
+      const installStart = source.indexOf('id: install')
+      const commentStart = source.indexOf('id: comment')
+      assert.match(source.slice(preflightStart, installStart), /^        GITHUB_TOKEN: \$\{\{ github\.token \}\}$/m, 'preview trust verification must use the workflow token')
+      assert.match(source.slice(commentStart), /^        GITHUB_TOKEN: \$\{\{ github\.token \}\}$/m, 'preview comments must use the workflow token')
       const preflightLine = source.indexOf('run: node "$GITHUB_ACTION_PATH/../shared/verify-preview-pr.mjs"')
       const installLine = source.indexOf('id: install')
       const cliLine = source.indexOf('run: node "$GITHUB_ACTION_PATH/../shared/invoke-cli.mjs"')
