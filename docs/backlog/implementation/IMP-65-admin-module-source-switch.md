@@ -1,6 +1,6 @@
 # IMP-65 — Switch admin's module source to the synced module tag
 
-- Status: In progress
+- Status: Done
 - Assignee: Codex
 - Lanes: Operations
 - Depends on: [IMP-63](IMP-63-consolidate-terraform-modules.md), [IMP-64](IMP-64-generate-sync-terraform-packages.md) (first synced module release, `terraform-cloudflare/vX.Y.Z`), and completed operations items OPS-003 and OPS-001 (workspace `ops/`, outside this repository), so the production state and pending ISSUE-069 apply are settled first
@@ -13,12 +13,12 @@
 ## Acceptance criteria
 
 - [x] The first synced module release exists and the package tag's content equals the generated tree of that release.
-- [ ] `admin`'s module `source` pins the module tag (not a product tag); `terraform init -upgrade` and `plan` against production state show no change relative to the pre-switch plan (the switch is a no-op in infrastructure), or show only changes already reviewed by the owner.
-- [x] Any production apply that follows is an owner step; this item contains no apply.
-- [ ] The workspace `STATUS.md` and ops notes record the new pin.
+- [x] `admin`'s module `source` pins the module tag (not a product tag); `terraform init -upgrade` and the production plan show no source-switch changes, or show only changes reviewed by the owner.
+- [x] Any production apply has explicit owner authorization; the approved D5 plan is applied and a fresh plan reports no changes.
+- [x] The workspace `STATUS.md` and ops notes record the new pin and operation result.
 
 ## Results
 
-`admin` now pins `terraform-cloudflare-artifact-pages` at the plain Git tag `v0.1.0`, generated from the monorepo release. `terraform init -upgrade` fetched that tag; the final plan uses the existing Cloudflare provider lock at 5.26.0 to keep this source-switch change isolated.
+`admin` now pins `terraform-cloudflare-artifact-pages` at the plain Git tag `v0.1.0`, generated from the monorepo release. `terraform init -upgrade` fetched that tag; the production plan used the existing Cloudflare provider lock at 5.26.0 to keep this source-switch change isolated.
 
-The remote production plan contains one change for D5 owner review: create Terraform management for `cloudflare_r2_managed_domain.development` with `enabled = false`. The resource was absent from the pre-switch state. A read-only Cloudflare API check confirmed the bucket's existing managed r2.dev domain is already disabled. All other resources are no-op and the three outputs are unchanged. The saved plan is ready for owner review; do not apply it until the owner approves D5. The workspace `STATUS.md` update is owned by the parent session.
+The exact saved plan SHA-256 `de4c3bd58770782ec603747941702ed742f0ec83e3cb1162d1593aaf7b4f0377` was approved by the owner for D5 and applied on 2026-10-10. It created only `cloudflare_r2_managed_domain.development` with `enabled = false` (1 added, 0 changed, 0 destroyed); this manages the already-disabled r2.dev setting. The pre/post remote state retained its lineage and advanced from serial 1 to 2, with managed resources increasing from 7 to 8 and the data-resource count remaining 1; outputs were unchanged. A fresh production plan reported no changes. A post-apply read-only API GET returned HTTP 200 with `enabled = false`, and the remote state lock object was absent after the operation. Protected state, plan, and command evidence is retained outside the repository under `~/.config/artifact-pages/state-backup/ops-004-20261010/`. The workspace `STATUS.md` and OPS-004 notes record the operation.
