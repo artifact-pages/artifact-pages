@@ -50,6 +50,8 @@ test('module tags trigger only the separate Terraform release workflow', () => {
   assert.match(terraformWorkflow, /run: bash scripts\/sync-terraform-package-repos\.sh/)
   assert.match(terraformWorkflow, /actions\/create-github-app-token/)
   assert.match(terraformWorkflow, /repositories: \$\{\{ steps\.release\.outputs\.repository \}\}/)
+  assert.match(terraformWorkflow, /permission-contents: write\n\s+permission-workflows: write/,
+    'the narrowly scoped package token can update generated GitHub workflow files')
   assert.doesNotMatch(productWorkflow, /terraform-(?:cloudflare|aws)\/v\*/)
   assert.match(productWorkflow, /tags: \["v\*"/)
 })
