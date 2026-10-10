@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Release preflight: select one component on main. Root CLI tags match the
-// product constant; new Action tags advance their published repository series.
+// product constant; Action and Terraform tags advance their own repository series.
 //
 //   node scripts/release-preflight.mjs --tag vX.Y.Z [--sha COMMIT] [--main-ref origin/main]
 import { spawnSync } from 'node:child_process'
@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
-import { releaseSeries, checkPublishedActionVersion } from './release-series.mjs'
+import { releaseSeries, checkPublishedActionVersion, checkPublishedTerraformVersion } from './release-series.mjs'
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -48,6 +48,17 @@ if (series.action) {
     return match ? [match[1]] : []
   })
   try { checkPublishedActionVersion(series, tags) } catch (error) { fail(error.message) }
+}
+
+if (series.terraformModule) {
+  const repository = `https://github.com/artifact-pages/${series.repository}.git`
+  const inventory = git(['ls-remote', '--tags', repository])
+  if (inventory.status !== 0) fail(`cannot read published ${series.repository} tags; retry after repository access is restored`)
+  const tags = [...new Set(inventory.stdout.split('\n').flatMap((line) => {
+    const match = /^[0-9a-f]+\s+refs\/tags\/(v[^\s]+?)(?:\^\{\})?$/.exec(line)
+    return match && !match[1].includes('^') ? [match[1]] : []
+  }))]
+  try { checkPublishedTerraformVersion(series, tags) } catch (error) { fail(error.message) }
 }
 
 console.log(`release preflight passed: ${tag} selects ${series.component} and ${sha} is on ${mainRef}`)

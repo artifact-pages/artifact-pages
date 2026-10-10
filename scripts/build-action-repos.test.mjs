@@ -166,7 +166,7 @@ test('all release patterns select only their component and only stable CLI is la
     const built = buildActionRepos({ out: scratch(t), version: series.version, names: [series.action] })
     assert.deepEqual(built.map((entry) => entry.repository), [`${name}-action`])
   }
-  for (const tag of ['v01.0.0', 'web/v1.2.3-beta', 'unknown-action/v1.0.0', 'terraform-aws/v1.0.0']) assert.throws(() => releaseSeries(tag))
+  for (const tag of ['v01.0.0', 'web/v1.2.3-beta', 'unknown-action/v1.0.0', 'terraform-gcp/v1.0.0']) assert.throws(() => releaseSeries(tag))
   const tags = ['v0.2.0', 'v0.1.0', 'web/v0.1.0', 'web/v0.3.0', 'publish-action/v0.2.0']
   assert.equal(previousRelease(tags, 'v0.3.0'), 'v0.2.0')
   assert.equal(previousRelease(tags, 'web/v0.2.0'), 'web/v0.1.0')

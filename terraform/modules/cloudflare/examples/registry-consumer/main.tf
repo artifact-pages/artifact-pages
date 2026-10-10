@@ -1,5 +1,5 @@
 module "artifact_pages" {
-  source  = "tasuku43/artifact-pages/cloudflare"
+  source  = "artifact-pages/artifact-pages/cloudflare"
   version = "0.1.0"
 
   account_id             = var.cloudflare_account_id

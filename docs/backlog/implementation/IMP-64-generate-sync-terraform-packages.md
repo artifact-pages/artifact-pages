@@ -1,6 +1,7 @@
 # IMP-64 — Generate and sync a Terraform package repository on a per-module tag
 
-- Status: Open
+- Status: In progress
+- Assignee: Codex
 - Lanes: CLI / release, Terraform
 - Depends on: [IMP-63](IMP-63-consolidate-terraform-modules.md), [TD15](../technical-design/TD15-terraform-module-source-of-truth.md) (re-scoped 2026-10-07), [TD14](../technical-design/TD14-one-repository-per-action.md) (mechanism to reuse)
 - Blocks: [IMP-65](IMP-65-admin-module-source-switch.md), [IMP-38](IMP-38-terraform-registry-publication.md)
@@ -23,15 +24,17 @@ When a module tag `terraform-cloudflare/vX.Y.Z` or `terraform-aws/vX.Y.Z` is pus
 ## Acceptance criteria
 
 - [ ] The first releases are `terraform-cloudflare/v0.1.0` and `terraform-aws/v0.1.0`.
-- [ ] Generator tests cover the layout, the example rewrite, determinism (two runs produce identical trees), refusal on a missing module file, and that the generated `release.json` carries the module version and source tag.
-- [ ] CI validates the generated trees (`terraform fmt -check`, `init -backend=false`, `validate`, and the module tests) without network writes.
-- [ ] Pushing `terraform-<provider>/vX.Y.Z` syncs only the matching package repository and tags plain `vX.Y.Z` there; a product tag `vX.Y.Z` does not run the Terraform sync, and a module tag does not trigger `release.yml`.
-- [ ] A dry-run of the sync (local or `workflow_dispatch`, no push) prints the planned commit and tag for the selected module.
-- [ ] A second run with identical content is a no-op; different content at an existing tag fails; an unchanged module is not released under a new version (no-op guard).
+- [x] Generator tests cover the layout, the example rewrite, determinism (two runs produce identical trees), refusal on a missing module file, and that the generated `release.json` carries the module version and source tag.
+- [x] CI validates the generated trees (`terraform fmt -check`, `init -backend=false`, `validate`, and the module tests) without network writes.
+- [x] Pushing `terraform-<provider>/vX.Y.Z` is wired to sync only the matching package repository and tag plain `vX.Y.Z` there; the product workflow retains only its existing tag patterns, and a module tag is isolated to the Terraform workflow.
+- [x] A dry-run of the sync (local or `workflow_dispatch`, no push) prints the planned commit and tag for the selected module.
+- [x] A second run with identical content is a no-op; different content at an existing tag fails; an unchanged module is not released under a new version (no-op guard).
 - [ ] After the owner installs the App, a real module release syncs the package repository; it contains no content that is absent from the monorepo.
 - [ ] Each package repository carries the generated-repository notice and the PR auto-close workflow, verified by opening and closing a test pull request.
-- [ ] The release documentation ([release readiness](../release-readiness.md)) lists the new workflow, the tag shapes and the owner step.
+- [x] The release documentation ([release readiness](../release-readiness.md)) lists the new workflow, the tag shapes and the owner step.
 
 ## Results
 
-Not started.
+Local implementation and verification are complete for the source-controlled portion. `npm run test:terraform-packages` passes 15 tests, the existing Action release test passes 13 tests, and generated Cloudflare and AWS package trees both pass their full `scripts/validate.sh` under Terraform 1.9.8. The package comparison normalizes only `release.json` version/source metadata and the Registry consumer's exact module version; README, LICENSE, generated workflow and executable-mode changes remain content changes. Release tags accept only plain `X.Y.Z`, matching TD15's `vX.Y.Z` package tag contract; prerelease/build suffixes are rejected.
+
+The owner installed `artifact-pages-release` on both package repositories on 2026-10-10 with Contents write and Metadata read. The generated pull-request guard uses each package repository's own `GITHUB_TOKEN`, so the App does not need Pull requests write. No first module tag, real package sync, Registry publication or test pull request was run: the owner's approval for an actual tag/sync remains pending, and acceptance criteria 1, 7 and 8 stay open for that external proof.
