@@ -4,6 +4,7 @@
 - Assignee: Claude
 - Phase: Reusable distribution
 - Decision: Decided by the owner on 2026-10-10 with live evidence (below). The specification (§19 "Official site onboarding") records the settled path; the implementation slices are IMP-73 to IMP-76.
+- Amends: [T10](T10-config-location.md) (official satellite path; addendum)
 - Related design: [T10](T10-config-location.md) (config layers and the `github://` locator), [TD12](TD12-action-consumer-contract.md) (Action consumer contract), [TD17](TD17-config-pinned-component-versions.md) (config-pinned versions), [TD5](TD5-verification-environment-and-operator-repositories.md) (operator repositories)
 
 ## Design question
@@ -31,12 +32,12 @@ jobs:
 ~~~
 
 - `site` is `type: string, required: true`. It is never inferred from the repository name, the same rule as the publish Action.
-- The caller job declares `permissions`; the called workflow cannot exceed them. The minimum is `contents: read`, plus `id-token: write` for AWS, plus `pull-requests: write` for preview.
+- The caller job declares `permissions`. The generated workflows omit job `permissions` (inheriting the caller's) or declare only the provider-specific minimum, because a called workflow that requests more than the caller grants fails at startup; it is not silently capped. The caller's minimum is `contents: read`, plus `id-token: write` for AWS, plus `pull-requests: write` for preview.
 - A preview call keeps the same-repository `if:` gate in the caller job, as the caller-owned preview workflow does today (TD12).
 
 ### 2. A composite action in the admin repository reads the bundled config
 
-The reusable workflows call a composite action in the same repository with GitHub's self-repository syntax, `uses: $/.github/actions/site-sync`. The reference resolves to the same commit as the called workflow, must not carry `@ref`, needs runner version 2.336.0 or later, and is not available on GitHub Enterprise Server (GitHub changelog, 2026-07-30).
+The reusable workflows call a composite action in the same repository with GitHub's self-repository syntax, `uses: $/.github/actions/site-sync`. The reference resolves to the same commit as the called workflow, must not carry `@ref`, needs runner version 2.336.0 or later, and is not available on GitHub Enterprise Server ([GitHub changelog, 2026-07-30](https://github.blog/changelog/2026-07-30-reference-same-repository-actions-with-self-repository-syntax/)).
 
 - The action reads the admin's single `artifact-pages.yaml` through `$GITHUB_ACTION_PATH/../../../artifact-pages.yaml` and passes it as `config` to the official `artifact-pages/publish-action` or `preview-action`.
 - There is no checkout of the admin repository, no token and no copied config value. The config the site runs is the config at the called commit.
@@ -45,6 +46,7 @@ The reusable workflows call a composite action in the same repository with GitHu
 ### 3. Credentials
 
 - **Cloudflare:** the keys come from organization or site-repository secrets, passed with `secrets: inherit` (same organization or enterprise only) and mapped to `env` in the reusable workflow, because composite actions cannot read `secrets`. Secrets stored only on the admin repository are not passed to callers.
+- **Environment secrets:** a caller job that uses a reusable workflow cannot set `environment:`, and `secrets: inherit` does not pass environment secrets; only a job-level `environment:` inside the called workflow reads them, resolved against the caller repository's environments. The generated reusable workflows therefore take an optional string input `environment`, and the generated job sets `environment: ${{ inputs.environment }}`. This lets a site keep protected `production` and `preview` environments. How an empty value behaves is verified in IMP-73: if an empty name is not treated as no environment, the job is generated so that the environment is set only when given, or the input is documented as required.
 - **AWS:** OIDC, with no stored secret. The admin repository commits `.github/actions/site-sync/aws-roles.json`, the Terraform output `satellite_role_arns` (role ARNs are not secret), and the action selects the role by site ID.
 
 ### 4. Ref policy
@@ -65,7 +67,7 @@ Admin YAML `sites` plus `registry sync` remains required and unchanged. Self-reg
 
 `artifact-pages registry setup` (name provisional; the owner may rename it) generates, idempotently, the admin-side files: the two reusable workflows, the `site-sync` composite action, the admin's registry workflow, and for AWS `aws-roles.json` from a provided Terraform output file.
 
-- Generated files carry a header naming the generating CLI version and pin the official Actions to the versions recorded for that CLI release (TD17).
+- Generated files carry a header naming the generating CLI version and pin each official Action to an exact release (full SHA with a version comment) following TD17's independent Action series. IMP-73 decides where the generator gets those versions.
 - `--check` exits non-zero when the committed files differ from what would be generated, for admin CI.
 - It prints the remaining manual steps as copyable `gh` commands (the Actions access level for private admins, secrets) and performs no GitHub API mutation.
 
@@ -92,7 +94,7 @@ Live runs on 2026-10-10 in disposable public, then private, organization reposit
 
 ### Finding: the OIDC `sub` is ID-qualified
 
-With no organization `sub` customization set, the organization's actual `sub` has the form `repo:<owner>@<owner-id>/<repo>@<repo-id>:ref:...`. The AWS module examples and tests use `repo:owner/repo:ref:...`. An exact-match trust subject written in the documented form would not match in a real deployment. IMP-74 aligns the examples, documentation and verification subjects and decides whether the module accepts or documents both forms.
+The ID-qualified form comes from the repository OIDC setting `use_immutable_subject: true`. On 2026-10-10 `gh api repos/artifact-pages/admin/actions/oidc/customization/sub` returned `{"use_default":true,"use_immutable_subject":true,"sub_claim_prefix":"repo:artifact-pages@338198830/admin@1402509181"}`, and the organization-level template returned 404. With that setting the `sub` has the form `repo:<owner>@<owner-id>/<repo>@<repo-id>:ref:...`. The AWS module examples and tests use `repo:owner/repo:ref:...`. An exact-match trust subject written in the documented form would not match in a real deployment. IMP-74 aligns the examples, documentation and verification subjects and decides whether the module accepts or documents both forms.
 
 Optional future hardening, not decided here: customize `sub` to include `job_workflow_ref`, so only the admin's official workflow can assume the roles.
 

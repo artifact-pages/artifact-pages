@@ -8,14 +8,16 @@
 
 ## Goal
 
-After `admin` and `docs` use the admin-provided workflows, the Action `github-token` private-config topology leaves the official procedure (TD18 decision 8) and its fixtures go away.
+After `admin` and `docs` use the admin-provided workflows, the Action `github-token` private-config topology leaves the official procedure (TD18 contract item 8) and its fixtures go away.
 
 ## Scope
 
 - Remove `.github/workflows/private-config.yml` and any smoke or regression check that only exists for it.
 - Delete the `artifact-pages/fixture-private-config` repository and the `artifact-pages-ci-fixture` GitHub App, after owner approval.
 - Keep the CLI `github://` locator and its tests (local and admin use).
-- Update guides and the specification where they present the private-config topology as an official path.
+- Update guides and the specification where they present the private-config topology as an official path. This is Claude's lane (spec prose, docs); Claude handles it and announces it in STATUS.md.
+
+**Open question for the owner:** whether the Actions' `github-token` config-read use is removed or kept. If kept, it becomes untested once the fixture is gone. Not decided here.
 
 ## Acceptance criteria
 

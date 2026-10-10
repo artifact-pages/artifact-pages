@@ -39,7 +39,7 @@ A satellite checkout can resolve the provider target from the same remote config
 artifact-pages site publish --config 'github://acme/platform-admin/artifact-pages.yaml?ref=main' --site sre --source docs/artifacts --dry-run
 ~~~
 
-**Addendum (2026-10-10, [TD18](TD18-admin-provided-site-workflows.md)).** The official satellite path no longer uses a remote `github://` config: the admin repository provides reusable workflows that pass its bundled `artifact-pages.yaml` to the official Actions. The `github://` locator and its rules above remain for local and admin use.
+**Addendum (2026-10-10, [TD18](TD18-admin-provided-site-workflows.md)).** Once TD18 ships, the official satellite path does not use a remote `github://` config: the admin repository provides reusable workflows that pass its bundled `artifact-pages.yaml` to the official Actions. The `github://` locator and its rules above remain for local and admin use.
 
 ## Design question
 
