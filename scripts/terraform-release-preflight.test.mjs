@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -34,10 +34,29 @@ test('module tags trigger only the separate Terraform release workflow', () => {
   assert.match(terraformWorkflow, /terraform-cloudflare\/v\*/)
   assert.match(terraformWorkflow, /terraform-aws\/v\*/)
   assert.match(terraformWorkflow, /workflow_dispatch:/)
-  assert.match(terraformWorkflow, /Manual dispatch is always a dry-run/)
+  assert.match(terraformWorkflow, /default: true\n\s+type: boolean/)
+  assert.match(terraformWorkflow, /description: Keep enabled to plan only/)
+  assert.match(terraformWorkflow, /source_sha:/)
+  assert.match(terraformWorkflow, /Authorize the approved Cloudflare package sync recovery/)
+  assert.match(terraformWorkflow, /test "\$RELEASE_TAG" = "terraform-cloudflare\/v0\.1\.0"/)
+  assert.match(terraformWorkflow, /test "\$EXPECTED_SOURCE_SHA" = "dea0a2d53a1a04d4a7990d4fb985770fe334aaf1"/)
+  assert.match(terraformWorkflow, /git cat-file -t "refs\/tags\/\$RELEASE_TAG"/)
+  assert.match(terraformWorkflow, /git ls-remote --exit-code --refs origin "refs\/tags\/\$RELEASE_TAG"/)
+  assert.match(terraformWorkflow, /test "\$remote_tag_object" = "\$local_tag_object"/)
+  assert.match(terraformWorkflow, /refs\/tags\/\$RELEASE_TAG\^\{commit\}/)
+  assert.match(terraformWorkflow, /node scripts\/release-preflight\.mjs --tag "\$RELEASE_TAG" --sha "\$EXPECTED_SOURCE_SHA" --main-ref origin\/main/)
+  assert.match(terraformWorkflow, /github\.event_name == 'workflow_dispatch' && inputs\.dry_run == true/)
+  assert.match(terraformWorkflow, /github\.event_name == 'workflow_dispatch' && inputs\.dry_run == false/)
+  assert.match(terraformWorkflow, /run: bash scripts\/sync-terraform-package-repos\.sh/)
   assert.match(terraformWorkflow, /actions\/create-github-app-token/)
+  assert.match(terraformWorkflow, /repositories: \$\{\{ steps\.release\.outputs\.repository \}\}/)
   assert.doesNotMatch(productWorkflow, /terraform-(?:cloudflare|aws)\/v\*/)
   assert.match(productWorkflow, /tags: \["v\*"/)
+})
+
+test('Terraform package sync script is executable for tag-triggered releases', () => {
+  const syncScript = fileURLToPath(new URL('./sync-terraform-package-repos.sh', import.meta.url))
+  assert.notEqual(statSync(syncScript).mode & 0o111, 0, 'workflow can invoke the checked-in script directly')
 })
 
 test('published module versions start at 0.1.0, move forward, and allow exact-tag retries', () => {
