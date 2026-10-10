@@ -8,11 +8,15 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing merged module tag to validate and dry-run
+        description: Existing merged module tag to validate or dry-run
         required: true
         type: string
+      source_sha:
+        description: Expected peeled source commit (required for the approved Cloudflare sync recovery)
+        required: false
+        type: string
       dry_run:
-        description: Manual dispatch is always a dry-run
+        description: Keep enabled to plan only; disable only for the approved Cloudflare v0.1.0 recovery
         required: true
         default: true
         type: boolean
@@ -27,6 +31,7 @@ concurrency:
 jobs:
   package:
     name: Validate and sync selected module
+    if: github.event_name != 'workflow_dispatch' || inputs.dry_run == true || github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     permissions:
@@ -53,11 +58,23 @@ jobs:
         with:
           terraform_version: 1.9.8
           terraform_wrapper: false
-      - name: Keep manual dispatch read-only
-        if: github.event_name == 'workflow_dispatch'
+      - name: Authorize the approved Cloudflare package sync recovery
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run == false && github.ref == 'refs/heads/main'
         env:
-          DRY_RUN: ${{ inputs.dry_run }}
-        run: test "$DRY_RUN" = true
+          RELEASE_TAG: ${{ inputs.tag }}
+          EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$RELEASE_TAG" = "terraform-cloudflare/v0.1.0"
+          test "$EXPECTED_SOURCE_SHA" = "dea0a2d53a1a04d4a7990d4fb985770fe334aaf1"
+          test "$(git cat-file -t "refs/tags/$RELEASE_TAG")" = tag
+          remote_tag_object="$(git ls-remote --exit-code --refs origin "refs/tags/$RELEASE_TAG" | cut -f1)"
+          local_tag_object="$(git rev-parse --verify "refs/tags/$RELEASE_TAG")"
+          test "$remote_tag_object" = "$local_tag_object"
+          source_sha="$(git rev-parse --verify "refs/tags/$RELEASE_TAG^{commit}")"
+          test "$source_sha" = "$EXPECTED_SOURCE_SHA"
+          node scripts/release-preflight.mjs --tag "$RELEASE_TAG" --sha "$EXPECTED_SOURCE_SHA" --main-ref origin/main
       - name: Verify the tag, source ancestry, and package version
         id: release
         run: |
@@ -82,7 +99,7 @@ jobs:
           ARTIFACT_PAGES_APPREPO_DIR: ${{ github.workspace }}
         run: bash "$RUNNER_TEMP/terraform-package-repos/${{ steps.release.outputs.repository }}/scripts/validate.sh"
       - name: Create an App token scoped to the selected package repository
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false && github.ref == 'refs/heads/main')
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
@@ -92,13 +109,13 @@ jobs:
           repositories: ${{ steps.release.outputs.repository }}
           permission-contents: write
       - name: Dry-run the package sync
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run == true
         env:
           SOURCE_SHA: ${{ steps.release.outputs.source_sha }}
-        run: scripts/sync-terraform-package-repos.sh "$RUNNER_TEMP/terraform-package-repos" "${{ steps.release.outputs.module }}" "${{ steps.release.outputs.version }}" --dry-run
+        run: bash scripts/sync-terraform-package-repos.sh "$RUNNER_TEMP/terraform-package-repos" "${{ steps.release.outputs.module }}" "${{ steps.release.outputs.version }}" --dry-run
       - name: Sync the generated package and immutable tag
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false && github.ref == 'refs/heads/main')
         env:
           TERRAFORM_PACKAGE_REPO_TOKEN: ${{ steps.app-token.outputs.token }}
           SOURCE_SHA: ${{ steps.release.outputs.source_sha }}
-        run: scripts/sync-terraform-package-repos.sh "$RUNNER_TEMP/terraform-package-repos" "${{ steps.release.outputs.module }}" "${{ steps.release.outputs.version }}"
+        run: bash scripts/sync-terraform-package-repos.sh "$RUNNER_TEMP/terraform-package-repos" "${{ steps.release.outputs.module }}" "${{ steps.release.outputs.version }}"
