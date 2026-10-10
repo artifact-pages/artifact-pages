@@ -16,6 +16,7 @@ import (
 	"github.com/artifact-pages/artifact-pages/cli/internal/config"
 	"github.com/artifact-pages/artifact-pages/cli/internal/preview"
 	"github.com/artifact-pages/artifact-pages/cli/internal/registry"
+	"github.com/artifact-pages/artifact-pages/cli/internal/version"
 )
 
 func allReads() map[string][]int {
@@ -223,7 +224,7 @@ func TestLegacyProjectionMigratesThroughPlannedOrder(t *testing.T) {
 	}
 	backend := testVersionBackend(t)
 	ctx := WithCompatibility(context.Background(), config.DeploymentConfig{
-		CLI: &config.ComponentVersion{Version: "0.2.0"}, Web: &config.ComponentVersion{Version: "0.1.0"},
+		CLI: &config.ComponentVersion{Version: version.Product}, Web: &config.ComponentVersion{Version: "0.1.0"},
 	}, false)
 	fakeManifest(t, allReads())
 
@@ -271,8 +272,8 @@ func TestLegacyProjectionMigratesThroughPlannedOrder(t *testing.T) {
 	}
 	for _, key := range []string{registryVersionsKey, siteVersionsKey("sre")} {
 		record, present, err := readVersionRecord(ctx, backend, key)
-		if err != nil || !present || record.CLIVersion != "0.2.0" {
-			t.Fatalf("version record %s = %+v, present=%t, err=%v; want writing CLI 0.2.0", key, record, present, err)
+		if err != nil || !present || record.CLIVersion != version.Product {
+			t.Fatalf("version record %s = %+v, present=%t, err=%v; want writing CLI %s", key, record, present, err, version.Product)
 		}
 	}
 }

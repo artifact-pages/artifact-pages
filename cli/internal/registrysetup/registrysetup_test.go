@@ -115,7 +115,7 @@ func TestCloudflareGenerationIsDeterministicCheckableAndLocal(t *testing.T) {
 		if err := yaml.Unmarshal(snapshot[path], &value); err != nil {
 			t.Errorf("generated YAML %s is invalid: %v", path, err)
 		}
-		if !strings.Contains(string(snapshot[path]), "CLI v0.2.0") {
+		if !strings.Contains(string(snapshot[path]), "CLI v0.3.0") {
 			t.Errorf("generated YAML %s does not record the generating CLI version", path)
 		}
 	}

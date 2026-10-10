@@ -15,7 +15,7 @@ import (
 // release commit, so the tree already names the version being prepared. For
 // app deploy, config web.version selects the independent web bundle; legacy
 // configs without component pins retain the original CLI-version bundle path.
-const Product = "0.2.0"
+const Product = "0.3.0"
 
 // Build describes the VCS state recorded in the Go build info.
 type Build struct {
