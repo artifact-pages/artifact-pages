@@ -32,6 +32,17 @@ Decided 2026-10-07 in [TD17](../technical-design/TD17-config-pinned-component-ve
 | [IMP-71](IMP-71-td17-spec-and-guides.md) | Done | Claude | Spec §19/§22, TD2/TD14 amendments, operator guide. |
 | [IMP-72](IMP-72-td17-first-releases-and-rollout.md) | Done | Codex | First releases of the new series and operator rollout. |
 
+## Admin-provided site workflows (TD18)
+
+Decided 2026-10-10 in [TD18](../technical-design/TD18-admin-provided-site-workflows.md). The Owner column is the intended agent; an agent claims an item with `- Assignee:` when it starts.
+
+| Ticket | Status | Owner | Outcome |
+| --- | --- | --- | --- |
+| [IMP-73](IMP-73-registry-setup-command.md) | Open | Codex | `registry setup` generates the admin reusable workflows, composite action and registry workflow. |
+| [IMP-74](IMP-74-aws-oidc-subject-alignment.md) | Open | Codex | AWS module examples and tests use the ID-qualified OIDC `sub`. |
+| [IMP-75](IMP-75-migrate-operator-repositories.md) | Open | Codex | `admin` and `docs` adopt the admin-provided workflows. |
+| [IMP-76](IMP-76-retire-private-config-fixture.md) | Open | Codex | Retire the private-config fixture, App and workflow. |
+
 ## Optional operator-managed edge policy
 
 | Ticket | Status | Lane | Execution / next step |

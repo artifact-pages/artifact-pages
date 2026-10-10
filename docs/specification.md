@@ -888,6 +888,17 @@ The core product contract should not require AWS. AWS is a reference infrastruct
 
 Do not freeze package/repository boundaries before the local and AWS implementations validate the contracts.
 
+### Official site onboarding
+
+The official path for a site repository to start publishing uses reusable workflows provided by the admin repository ([TD18](backlog/technical-design/TD18-admin-provided-site-workflows.md)):
+
+- The admin repository carries `.github/workflows/publish-site.yml` and `preview-site.yml` (`on: workflow_call`). A site repository calls one with `uses: OWNER/ADMIN/.github/workflows/publish-site.yml@main` and a required string input `site`; the site is never inferred from the repository name. The caller job declares `permissions` (`contents: read`, plus `id-token: write` for AWS, plus `pull-requests: write` for preview) and keeps the same-repository gate on preview.
+- The workflows call a composite action in the same admin repository (`uses: $/.github/actions/site-sync`, resolved at the called workflow's commit; runner 2.336.0 or later; not available on GitHub Enterprise Server). The action passes the admin's own `artifact-pages.yaml` to the official Action as `config`, so the site needs no token, no checkout of the admin repository and no copy of the config. The official Action pin lives only in the admin repository.
+- Cloudflare credentials come from organization or site-repository secrets (`secrets: inherit`, same organization or enterprise); secrets stored only on the admin repository are not passed. AWS uses OIDC and the admin's committed `aws-roles.json` (the `satellite_role_arns` output), selected by site ID.
+- Sites stay pre-registered: admin `sites` plus `registry sync` is required, and eligibility still comes from the deployed `/_indexes/sites.json`.
+- Trust: admin code runs with each calling site's token, secrets and OIDC identity; the admin is the operator. A private admin repository needs Actions access "Accessible from repositories in the organization", which lets outside collaborators of a calling repository read its workflow logs.
+- Planned (TD18, IMP-73): `artifact-pages registry setup [--check]` generates the admin-side files idempotently and prints the remaining manual steps; it is not part of the current command tree (§22).
+
 ### Post-MVP pre-publish preview contract
 
 The [preview publishing contract](architecture/preview-publishing-contract.html) gives the proposed static object layout, completion order, adapter boundary, and validation matrix for this product contract. It is design documentation, not Phase 1 implementation.
