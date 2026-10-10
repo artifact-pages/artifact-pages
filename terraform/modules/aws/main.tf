@@ -296,8 +296,8 @@ resource "aws_cloudfront_cache_policy" "no_store" {
   max_ttl     = 0
 
   parameters_in_cache_key_and_forwarded_to_origin {
-    enable_accept_encoding_gzip   = true
-    enable_accept_encoding_brotli = true
+    enable_accept_encoding_gzip   = false
+    enable_accept_encoding_brotli = false
 
     cookies_config {
       cookie_behavior = "none"

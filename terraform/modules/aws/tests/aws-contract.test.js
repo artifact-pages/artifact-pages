@@ -135,6 +135,23 @@ test('AWS deployment maps the logical app and content paths to bounded cache pol
   assert.match(routeFunction, /request\.uri = "\/index\.html"/u)
 })
 
+test('AWS no-store cache policy disables compression while cacheable policies retain it', () => {
+  const noStore = block(main, 'resource "aws_cloudfront_cache_policy" "no_store"')
+  for (const field of ['min_ttl', 'default_ttl', 'max_ttl']) {
+    assert.match(noStore, new RegExp(`${field}\\s*=\\s*0(?:\\s|$)`, 'u'), `${field} must remain zero`)
+  }
+  for (const field of ['enable_accept_encoding_gzip', 'enable_accept_encoding_brotli']) {
+    assert.match(noStore, new RegExp(`${field}\\s*=\\s*false(?:\\s|$)`, 'u'), `${field} must be disabled when caching is disabled`)
+  }
+
+  for (const name of ['indexes', 'artifacts', 'immutable_assets']) {
+    const cachePolicy = block(main, `resource "aws_cloudfront_cache_policy" "${name}"`)
+    for (const field of ['enable_accept_encoding_gzip', 'enable_accept_encoding_brotli']) {
+      assert.match(cachePolicy, new RegExp(`${field}\\s*=\\s*true(?:\\s|$)`, 'u'), `${name}.${field} must remain enabled`)
+    }
+  }
+})
+
 test('trusted production and preview HTML receive the enforced HTTPS CSP without CORS', () => {
   const policy = block(main, 'resource "aws_cloudfront_response_headers_policy" "artifact_csp"')
   assert.match(policy, /content_security_policy\s*=\s*join\("; ",/u)
