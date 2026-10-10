@@ -27,9 +27,22 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 6.0"
     }
+    cloudflare = {
+      source  = "cloudflare/cloudflare"
+      version = "~> 5.24"
+    }
   }
 }
 
 provider "aws" {
-  region = var.aws_region
+  region              = var.aws_region
+  allowed_account_ids = ["231136241959"]
 }
+
+provider "aws" {
+  alias               = "us_east_1"
+  region              = "us-east-1"
+  allowed_account_ids = ["231136241959"]
+}
+
+provider "cloudflare" {}

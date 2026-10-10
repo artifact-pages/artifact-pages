@@ -179,6 +179,7 @@ jobs:
           for dir in terraform/deployments/aws; do
             terraform -chdir="$dir" init -backend=false -input=false
             terraform -chdir="$dir" validate
+            terraform -chdir="$dir" test -no-color
           done
 
   terraform-package-layouts:
