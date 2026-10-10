@@ -12,7 +12,7 @@ Each ticket records one independently verifiable contract or measurement. Status
 | [T13](T13-registered-flow.md) | Done | Registered admin and satellite flow |
 | [T14](T14-production-reconciliation.md) | In progress | Production reconciliation and race safety |
 | [T15](T15-provider-delivery.md) | In progress | AWS and Cloudflare delivery boundaries |
-| [T16](T16-external-adoption.md) | Open | Clean-room distribution and upgrade |
+| [T16](T16-external-adoption.md) | Open | Clean-consumer adoption of released components, web upgrade and rollback |
 | [T17](T17-local-preview-retirement-e2e.md) | Done | Local preview deletion and main-publish reconciliation E2E |
 | [T18](T18-publish-scale-baseline.md) | Done | Publisher scale baseline and state-manifest comparison |
 | [T19](T19-publish-state-layout-cost.md) | Done | Publish-state layout and provider-cost comparison |
