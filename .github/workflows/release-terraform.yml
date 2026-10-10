@@ -31,6 +31,7 @@ concurrency:
 jobs:
   package:
     name: Validate and sync selected module
+    if: github.event_name != 'workflow_dispatch' || inputs.dry_run == true || github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     permissions:
@@ -58,12 +59,13 @@ jobs:
           terraform_version: 1.9.8
           terraform_wrapper: false
       - name: Authorize the approved Cloudflare package sync recovery
-        if: github.event_name == 'workflow_dispatch' && inputs.dry_run == false
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run == false && github.ref == 'refs/heads/main'
         env:
           RELEASE_TAG: ${{ inputs.tag }}
           EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
         run: |
           set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
           test "$RELEASE_TAG" = "terraform-cloudflare/v0.1.0"
           test "$EXPECTED_SOURCE_SHA" = "dea0a2d53a1a04d4a7990d4fb985770fe334aaf1"
           test "$(git cat-file -t "refs/tags/$RELEASE_TAG")" = tag
@@ -97,7 +99,7 @@ jobs:
           ARTIFACT_PAGES_APPREPO_DIR: ${{ github.workspace }}
         run: bash "$RUNNER_TEMP/terraform-package-repos/${{ steps.release.outputs.repository }}/scripts/validate.sh"
       - name: Create an App token scoped to the selected package repository
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false)
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false && github.ref == 'refs/heads/main')
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
@@ -112,7 +114,7 @@ jobs:
           SOURCE_SHA: ${{ steps.release.outputs.source_sha }}
         run: bash scripts/sync-terraform-package-repos.sh "$RUNNER_TEMP/terraform-package-repos" "${{ steps.release.outputs.module }}" "${{ steps.release.outputs.version }}" --dry-run
       - name: Sync the generated package and immutable tag
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false)
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false && github.ref == 'refs/heads/main')
         env:
           TERRAFORM_PACKAGE_REPO_TOKEN: ${{ steps.app-token.outputs.token }}
           SOURCE_SHA: ${{ steps.release.outputs.source_sha }}

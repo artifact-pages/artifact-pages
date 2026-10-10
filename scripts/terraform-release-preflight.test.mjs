@@ -54,6 +54,21 @@ test('module tags trigger only the separate Terraform release workflow', () => {
   assert.match(productWorkflow, /tags: \["v\*"/)
 })
 
+test('write-enabled manual Terraform recovery is restricted to main', () => {
+  const terraformWorkflow = readFileSync(new URL('../.github/workflows/release-terraform.yml', import.meta.url), 'utf8')
+  assert.match(terraformWorkflow, /if: github\.event_name != 'workflow_dispatch' \|\| inputs\.dry_run == true \|\| github\.ref == 'refs\/heads\/main'/)
+  assert.match(terraformWorkflow, /if: github\.event_name == 'workflow_dispatch' && inputs\.dry_run == false && github\.ref == 'refs\/heads\/main'/)
+  assert.equal(terraformWorkflow.match(/github\.event_name == 'workflow_dispatch' && inputs\.dry_run == false && github\.ref == 'refs\/heads\/main'/g)?.length, 3,
+    'authorization, App token, and sync all require a main-ref dispatch')
+
+  const refGuard = terraformWorkflow.match(/test "\$GITHUB_REF" = "refs\/heads\/main"/)?.[0]
+  assert.ok(refGuard, 'the authorization step also fails closed at runtime')
+  for (const [ref, expectedStatus] of [['refs/heads/main', 0], ['refs/heads/codex-feature', 1], ['refs/tags/terraform-cloudflare/v0.1.0', 1]]) {
+    const result = spawnSync('bash', ['-c', refGuard], { env: { ...process.env, GITHUB_REF: ref }, encoding: 'utf8' })
+    assert.equal(result.status, expectedStatus, `manual write dispatch on ${ref}`)
+  }
+})
+
 test('Terraform package sync script is executable for tag-triggered releases', () => {
   const syncScript = fileURLToPath(new URL('./sync-terraform-package-repos.sh', import.meta.url))
   assert.notEqual(statSync(syncScript).mode & 0o111, 0, 'workflow can invoke the checked-in script directly')
