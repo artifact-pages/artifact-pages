@@ -65,7 +65,15 @@ if (args[0] === 'ls-remote') {
   console.log('abc123\\trefs/tags/v0.1.0^{}')
   process.exit(0)
 }
-if (args[0] === 'rev-parse') { console.log('${sourceCommit}'); process.exit(0) }
+if (args[0] === 'cat-file') {
+  if (process.env.MISSING_LOCAL_TAG) process.exit(1)
+  console.log(process.env.LIGHTWEIGHT_TAG ? 'commit' : 'tag')
+  process.exit(0)
+}
+if (args[0] === 'rev-parse') {
+  console.log(args[2]?.startsWith('refs/tags/') ? (process.env.TAG_COMMIT || '${sourceCommit}') : '${sourceCommit}')
+  process.exit(0)
+}
 if (args[0] === 'merge-base') process.exit(process.env.NOT_ANCESTOR ? 1 : 0)
 process.exit(91)
 `)
@@ -84,6 +92,17 @@ process.exit(91)
     assert.match(result.stdout, /selects terraform-cloudflare/)
     result = run('terraform-aws/v0.1.0', { EXPECTED_REPOSITORY: 'https://github.com/artifact-pages/terraform-aws-artifact-pages.git', PUBLISHED_TAGS: '' })
     assert.equal(result.status, 0, result.stderr)
+    result = run('terraform-cloudflare/v0.1.0', { PUBLISHED_TAGS: '' })
+    assert.equal(result.status, 0, result.stderr, 'first-version dry-run must work before the package tag exists')
+    result = run('terraform-cloudflare/v0.1.1', { LIGHTWEIGHT_TAG: '1' })
+    assert.notEqual(result.status, 0)
+    assert.match(result.stderr, /must exist as an annotated tag/)
+    result = run('terraform-cloudflare/v0.1.1', { MISSING_LOCAL_TAG: '1' })
+    assert.notEqual(result.status, 0)
+    assert.match(result.stderr, /must exist as an annotated tag/)
+    result = run('terraform-cloudflare/v0.1.1', { TAG_COMMIT: 'b'.repeat(40) })
+    assert.notEqual(result.status, 0)
+    assert.match(result.stderr, /does not point to selected commit/)
     result = run('terraform-cloudflare/v0.1.1', { PUBLISHED_TAGS: 'v0.2.0' })
     assert.notEqual(result.status, 0)
     assert.match(result.stderr, /must exceed published 0\.2\.0/)

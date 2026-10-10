@@ -40,6 +40,17 @@ const resolved = git(['rev-parse', '--verify', `${mainRef}^{commit}`])
 if (resolved.status !== 0) fail(`cannot resolve ${mainRef}; fetch main before running the preflight`)
 if (git(['merge-base', '--is-ancestor', sha, mainRef]).status !== 0) fail(`commit ${sha} is not on ${mainRef}; tag a commit that has been merged to main`)
 
+if (series.terraformModule) {
+  const tagRef = `refs/tags/${tag}`
+  const tagType = git(['cat-file', '-t', tagRef])
+  if (tagType.status !== 0 || tagType.stdout.trim() !== 'tag') {
+    fail(`module tag ${tag} must exist as an annotated tag in the checked-out repository`)
+  }
+  const tagCommit = git(['rev-parse', '--verify', `${tagRef}^{commit}`])
+  if (tagCommit.status !== 0) fail(`cannot resolve module tag ${tag} to a commit`)
+  if (tagCommit.stdout.trim() !== sha) fail(`module tag ${tag} does not point to selected commit ${sha}`)
+}
+
 if (series.action) {
   const inventory = git(['ls-remote', '--tags', `https://github.com/artifact-pages/${series.action}-action.git`])
   if (inventory.status !== 0) fail(`cannot read published ${series.action}-action tags; retry after repository access is restored`)
