@@ -38,7 +38,7 @@ Decided 2026-10-10 in [TD18](../technical-design/TD18-admin-provided-site-workfl
 
 | Ticket | Status | Owner | Outcome |
 | --- | --- | --- | --- |
-| [IMP-73](IMP-73-registry-setup-command.md) | Open | Codex | `registry setup` generates the admin reusable workflows, composite action and registry workflow. |
+| [IMP-73](IMP-73-registry-setup-command.md) | In progress | Codex | `registry setup` generates the admin reusable workflows, composite action and registry workflow. |
 | [IMP-74](IMP-74-aws-oidc-subject-alignment.md) | Done | Codex | Both legacy and ID-qualified subjects are accepted only as explicit exact allowlist entries; AWS examples and verification use the observed ID-qualified form. |
 | [IMP-75](IMP-75-migrate-operator-repositories.md) | Open | Codex | `admin` and `docs` adopt the admin-provided workflows. |
 | [IMP-76](IMP-76-retire-private-config-fixture.md) | Open | Codex | Retire the private-config fixture, App and workflow. |

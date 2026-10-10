@@ -149,6 +149,18 @@ func (r Runner) Run(ctx context.Context, args []string, stdout, stderr io.Writer
 	if err != nil {
 		return clean, false, &Error{err, 2}
 	}
+	if isRegistrySetup(clean) {
+		if hasRegistrySetupHelp(clean) {
+			return clean, false, nil
+		}
+		if flagSet || r.Getenv(VersionEnv) != "" {
+			return clean, false, &Error{errors.New("registry setup always uses the running CLI; remove --cli-version and ARTIFACT_PAGES_CLI_VERSION"), 2}
+		}
+		// Setup consumes only explicit local files and embedded Action pins. Do
+		// not resolve a config pin, contact GitHub, download a CLI, or write
+		// bootstrap metadata for this command.
+		return clean, false, nil
+	}
 	override := r.Getenv(VersionEnv)
 	source := ""
 	if override != "" {
@@ -259,6 +271,19 @@ func (r Runner) Run(ctx context.Context, args []string, stdout, stderr io.Writer
 		return clean, false, &Error{err, 1}
 	}
 	return clean, true, nil
+}
+
+func isRegistrySetup(args []string) bool {
+	return len(args) >= 2 && args[0] == "registry" && args[1] == "setup"
+}
+
+func hasRegistrySetupHelp(args []string) bool {
+	for _, arg := range args {
+		if arg == "--help" || arg == "-h" {
+			return true
+		}
+	}
+	return false
 }
 
 func withEnv(env []string, key, value string) []string {
