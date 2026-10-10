@@ -2,8 +2,22 @@ import { actionNames } from './build-action-repos.mjs'
 
 const exactVersion = '(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)'
 export function releaseSeries(tag) {
+  const terraform = new RegExp(`^(terraform-(cloudflare|aws))/v(${exactVersion})$`).exec(tag)
+  if (terraform) {
+    const module = terraform[2]
+    const component = terraform[1]
+    return {
+      component,
+      version: terraform[3],
+      prefix: `${component}/`,
+      terraformModule: module,
+      repository: `terraform-${module}-artifact-pages`,
+      prerelease: terraform[3].startsWith('0.'),
+      makeLatest: false,
+    }
+  }
   const match = new RegExp(`^(?:(web|${actionNames.map((name) => `${name}-action`).join('|')})/)?v(${exactVersion})$`).exec(tag)
-  if (!match) throw new Error(`unsupported release tag ${tag}; use vX.Y.Z, web/vX.Y.Z or <name>-action/vX.Y.Z`)
+  if (!match) throw new Error(`unsupported release tag ${tag}; use vX.Y.Z, web/vX.Y.Z, <name>-action/vX.Y.Z or terraform-<provider>/vX.Y.Z`)
   const component = match[1] ?? 'cli'
   const prerelease = match[2].startsWith('0.')
   return { component, version: match[2], prefix: component === 'cli' ? '' : `${component}/`, action: component.endsWith('-action') ? component.slice(0, -7) : undefined, prerelease, makeLatest: component === 'cli' && !prerelease }
@@ -33,4 +47,26 @@ export function checkPublishedActionVersion(series, tags) {
   if (versions.includes(series.version)) return
   const latest = versions.sort(compare).at(-1)
   if (latest && compare(series.version, latest) <= 0) throw new Error(`new ${series.action}-action version ${series.version} must exceed published ${latest}`)
+}
+
+export function checkPublishedTerraformVersion(series, tags) {
+  if (!series.terraformModule) throw new Error('expected a Terraform module release series')
+  const versions = tags.flatMap((tag) => {
+    const match = new RegExp(`^v(${exactVersion})$`).exec(tag)
+    return match ? [match[1]] : []
+  })
+  const compare = (a, b) => {
+    const left = a.split('.').map(Number), right = b.split('.').map(Number)
+    return left[0] - right[0] || left[1] - right[1] || left[2] - right[2]
+  }
+  // The matching version reaches the sync script's immutable-tree identity guard.
+  // An existing tag may be retried only when its generated payload is identical.
+  if (versions.includes(series.version)) return
+  const latest = versions.sort(compare).at(-1)
+  if (latest && compare(series.version, latest) <= 0) {
+    throw new Error(`new ${series.component} version ${series.version} must exceed published ${latest}`)
+  }
+  if (!latest && series.version !== '0.1.0') {
+    throw new Error(`first ${series.component} version must be 0.1.0, got ${series.version}`)
+  }
 }

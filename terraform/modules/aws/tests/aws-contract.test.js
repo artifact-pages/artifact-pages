@@ -311,10 +311,10 @@ test('module and clean caller examples use distinct local and Registry sources',
   const registryReadme = await readFile(new URL('../examples/registry-consumer/README.md', import.meta.url), 'utf8')
   assert.match(local, /source\s*=\s*"\.\.\/\.\."/u)
   assert.match(localVariables, /variable "bucket_name"[\s\S]*?default\s*=\s*null/u)
-  assert.match(registry, /source\s*=\s*"tasuku43\/artifact-pages\/aws"/u)
+  assert.match(registry, /source\s*=\s*"artifact-pages\/artifact-pages\/aws"/u)
   assert.match(registry, /version\s*=\s*"0\.1\.0"/u)
   assert.match(registryVariables, /variable "bucket_name"[\s\S]*?default\s*=\s*null/u)
-  assert.match(registryReadme, /has not been approved or published/u)
+  assert.match(registryReadme, /publication is a separate owner-controlled step/u)
 })
 
 test('optional Cloudflare composition leaves the root AWS module and caller-managed path independent', async () => {

@@ -1,0 +1,104 @@
+name: Release Terraform module
+
+on:
+  push:
+    tags:
+      - "terraform-cloudflare/v*"
+      - "terraform-aws/v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing merged module tag to validate and dry-run
+        required: true
+        type: string
+      dry_run:
+        description: Manual dispatch is always a dry-run
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: terraform-release-${{ startsWith(inputs.tag || github.ref_name, 'terraform-aws/') && 'aws' || 'cloudflare' }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    name: Validate and sync selected module
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+    steps:
+      - name: Check out the selected module tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.9.8
+          terraform_wrapper: false
+      - name: Keep manual dispatch read-only
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: test "$DRY_RUN" = true
+      - name: Verify the tag, source ancestry, and package version
+        id: release
+        run: |
+          set -euo pipefail
+          source_sha="$(git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}")"
+          node scripts/release-preflight.mjs --tag "$RELEASE_TAG" --sha "$source_sha" --main-ref origin/main
+          SOURCE_SHA="$source_sha" node --input-type=module <<'JS' >> "$GITHUB_OUTPUT"
+          import { releaseSeries } from './scripts/release-series.mjs'
+          const series = releaseSeries(process.env.RELEASE_TAG)
+          for (const [name, value] of Object.entries({ module: series.terraformModule, version: series.version, repository: series.repository, source_sha: process.env.SOURCE_SHA })) console.log(`${name}=${value}`)
+          JS
+      - name: Generate the selected Registry package
+        run: |
+          node scripts/build-terraform-package-repos.mjs \
+            --module "${{ steps.release.outputs.module }}" \
+            --version "${{ steps.release.outputs.version }}" \
+            --source-tag "$RELEASE_TAG" \
+            --source-commit "${{ steps.release.outputs.source_sha }}" \
+            --out "$RUNNER_TEMP/terraform-package-repos"
+      - name: Validate the generated package without cloud credentials
+        env:
+          ARTIFACT_PAGES_APPREPO_DIR: ${{ github.workspace }}
+        run: bash "$RUNNER_TEMP/terraform-package-repos/${{ steps.release.outputs.repository }}/scripts/validate.sh"
+      - name: Create an App token scoped to the selected package repository
+        if: github.event_name == 'push'
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ steps.release.outputs.repository }}
+          permission-contents: write
+      - name: Dry-run the package sync
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          SOURCE_SHA: ${{ steps.release.outputs.source_sha }}
+        run: scripts/sync-terraform-package-repos.sh "$RUNNER_TEMP/terraform-package-repos" "${{ steps.release.outputs.module }}" "${{ steps.release.outputs.version }}" --dry-run
+      - name: Sync the generated package and immutable tag
+        if: github.event_name == 'push'
+        env:
+          TERRAFORM_PACKAGE_REPO_TOKEN: ${{ steps.app-token.outputs.token }}
+          SOURCE_SHA: ${{ steps.release.outputs.source_sha }}
+        run: scripts/sync-terraform-package-repos.sh "$RUNNER_TEMP/terraform-package-repos" "${{ steps.release.outputs.module }}" "${{ steps.release.outputs.version }}"

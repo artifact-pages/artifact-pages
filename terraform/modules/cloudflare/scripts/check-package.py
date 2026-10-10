@@ -66,7 +66,7 @@ with tempfile.TemporaryDirectory(prefix='artifact-pages-package-') as work:
     for name in ['main.tf', 'variables.tf', 'outputs.tf', 'versions.tf']:
         contents = (package / 'examples/registry-consumer' / name).read_text()
         if name == 'main.tf':
-            contents = contents.replace('source  = "tasuku43/artifact-pages/cloudflare"',
+            contents = contents.replace('source  = "artifact-pages/artifact-pages/cloudflare"',
                                         'source = "' + git_source_base + '?ref=' + sha + '"')
             contents = contents.replace('  version = "0.1.0"\n', '')
         if name == 'versions.tf':

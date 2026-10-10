@@ -1,5 +1,5 @@
 module "artifact_pages" {
-  source  = "tasuku43/artifact-pages/aws"
+  source  = "artifact-pages/artifact-pages/aws"
   version = "0.1.0"
 
   name_prefix               = var.name_prefix

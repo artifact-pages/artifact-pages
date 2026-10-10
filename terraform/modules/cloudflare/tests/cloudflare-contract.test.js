@@ -141,10 +141,10 @@ test('local and Registry examples have separate, explicit source contracts', asy
   const registryReadme = await read('examples/registry-consumer/README.md')
   assert.match(local, /source\s*=\s*"\.\.\/\.\."/u)
   assert.match(localVariables, /variable "r2_bucket_name"[\s\S]*?default\s*=\s*null/u)
-  assert.match(registry, /source\s*=\s*"tasuku43\/artifact-pages\/cloudflare"/u)
+  assert.match(registry, /source\s*=\s*"artifact-pages\/artifact-pages\/cloudflare"/u)
   assert.match(registry, /version\s*=\s*"0\.1\.0"/u)
   assert.match(registryVariables, /variable "r2_bucket_name"[\s\S]*?default\s*=\s*null/u)
-  assert.match(registryReadme, /has not approved or published/u)
+  assert.match(registryReadme, /publication is a separate owner-controlled step/u)
 })
 
 test('local Cloudflare example uses reserved values and does not claim live verification', async () => {
