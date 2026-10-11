@@ -27,7 +27,7 @@ Reader code under `web/` (ISSUE-085, Claude). The CLI release that ships it (WS4
 ## Acceptance criteria
 
 - [ ] Format contract and golden fixtures merged before the writer; Claude reviewed it.
-- [ ] A republish reuses packs for unchanged documents while their pack membership and preceding byte lengths stay stable; a test proves deterministic reuse under that condition. Boundary shifts may change neighboring packs.
+- [ ] A republish reuses packs for unchanged documents while their pack membership and preceding byte lengths stay stable; a test proves deterministic reuse under that condition. Boundary shifts may change neighboring packs. (Owner accepted on 2026-10-12 that a length change can shift later pack boundaries; TD20's "only packs with changed documents" claim is amended accordingly.)
 - [ ] v1 readers keep working against an index with the new objects (no v1 object changes).
 - [ ] Publisher state accepts the new keys; an older CLI's behaviour on such a site is recorded (TD20 notes it converges to v1 or fails closed).
 - [ ] Caps warn and are recorded in the manifest.
