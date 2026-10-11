@@ -17,7 +17,7 @@ From the 2026-10-11 dogfooding of `https://artifact-pages.dev` (guide site).
 3. Search `プレビュー`. Returns only the 5 Japanese pages and works well.
 4. On open, the matched word is highlighted in the page and scrolled to; the list persists. Those behaviors are good and must be kept.
 
-Confirmed in code and documents: results are path-ordered by design (`PageTextSearch.tsx:374` "Results arrive in path order", `docs/specification.md:473` "Ranking and snippets are not provided", `docs/architecture/fulltext-search.md:61` "no relevance score, term frequency or positions are stored"). The Reading page of the Guide documents this. So this is a known limit, filed here because it is the largest friction in finding a task by text.
+Confirmed in code and documents: results are path-ordered by design (`PageTextSearch.tsx:374` "Results arrive in path order", `docs/specification.md:473` "Ranking and snippets are not provided", `docs/architecture/fulltext-search.md:61` "no relevance score, term frequency or positions are stored"). The Reading page of the Guide documents this. So this is a known limit, filed here because it is the largest friction in finding a task by text. Path-ordered, folder-grouped results are also the interaction the owner agreed on 2026-10-02 in [IMP-42](../implementation/IMP-42-fulltext-search-ux.md) ("Agreed interaction"); changing the order amends that agreement and needs the owner's confirmation.
 
 Feasibility constraints (from the format contract): the client has no body text, term frequencies or positions, so body-hit counts and snippets cannot be computed from the existing search data. What the web already has: page titles and H2 headings in `index.json` (`toc`), which allow a title-hit and heading-hit tier without any format change.
 
