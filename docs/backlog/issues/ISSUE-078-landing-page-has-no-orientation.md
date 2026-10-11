@@ -1,6 +1,7 @@
 # The landing page offers only "Choose a site": no orientation, alphabetical cards, double-counted translations
 
-- Status: Open
+- Status: In progress
+- Assignee: Claude
 - Priority: P1
 - Area: Site picker and site home (`web/src/components/SitePicker.tsx`, `SiteHome.tsx`, `web/src/domain/site-count-label.ts`)
 
@@ -16,7 +17,7 @@ From the 2026-10-11 dogfooding of `https://artifact-pages.dev`, confirmed in cod
 2. Open `/guide`. The site home leads with an update feed: "14 published artifacts. Browse the latest work or jump to an artifact by name." (`SiteHome.tsx:76-80`), then Recently updated. The newcomer's first view is what changed last, not a start point.
 3. Counts: the guide site lists "14 artifacts" and architecture "12 artifacts", which are 7 English plus 7 Japanese pages and 6 plus 6. The count is `index.artifacts.length` (`SiteHome.tsx:77`) and `entry.artifactCount` (`SitePicker.tsx:147`).
 
-Design point, hypothesis to check before implementing: both sites keep translations in top-level `en/` and `ja/` folders, which is a path convention. This tree contains no language notion in the specification or the index (a search of `docs/specification.md` and `cli/internal/indexer` found none). Counting "7 pages (en, ja)" therefore needs either a convention the reader detects from parallel folder structure, or explicit metadata (see [TD19](../technical-design/TD19-navigation-metadata-in-the-site-index.md)). Decide and record the detection rule before implementing; a wrong guess would miscount unrelated folders.
+Design point (resolved by the owner decision below): both sites keep translations in top-level `en/` and `ja/` folders, which is only a path convention; the specification and the index have no language notion. The reader therefore reports counts per top-level folder and does not claim the folders are translations.
 
 ## Expected outcome
 
@@ -26,12 +27,25 @@ A visitor can tell what the deployment is, which site to open first, and how lar
 
 Chosen from the Storybook `Concepts/Reader UX 2026-10`/ISSUE-078 stories: variant A. Site cards show the registry description, page counts per top-level folder (for example `en 7 · ja 7`) and a "Start reading" link to the site home. No translation-detection rule is introduced: counts are per top-level folder, without claiming those folders are translations. A per-site start page waits for TD19 or a new config field. No operator intro text (variant B) for now.
 
+## Data and trade-off
+
+- Registry description and the page total are in `sites.json` / `meta.json`; per-folder counts are only derivable from the per-site `index.json`.
+- The picker reads the indexes of published sites after the first paint: at most 8 sites, 3 at a time, failures silent (the card keeps the metadata total). Unpublished sites are never requested. This relaxes the "load a site's index only when it becomes active" rule for the landing page only; recorded in the specification (Site home).
+- Rule: first path segment = folder, root pages = a separate `(root)` bucket; 2 to 4 groups show chips, more than 4 show "N top-level folders", 1 group or no data shows no chips. The total always comes from `meta.json`.
+- Index reads share a 30 s in-memory cache (site view and preview page reuse the picker's read), abort on unmount, and are never cached on failure.
+- Follow-up (TD19, Codex-owned indexer): publish per-folder counts in `meta.json`, after which the reader drops the index reads on the landing page.
+- The "Start reading" label is part of the card's single link (no nested links); it is not a second link.
+
 ## Acceptance criteria
 
-- [ ] The landing page states what the deployment is (operator-provided text or a short default) and marks a start point. Where the start point comes from (registry config such as a featured or ordered site list, or the site description) is decided in the issue; if it needs registry or config schema changes, split a CLI-side follow-up (Codex-owned).
-- [ ] Site cards follow an explicit order when one is provided and fall back to title order otherwise.
-- [ ] A site home leads with orientation (the site description and a start-here entry when the site defines one) before the update feed; the update feed remains available.
-- [ ] Page counts do not double-count translations for sites whose translations are detected or declared per the recorded rule (for example "7 pages (en, ja)"); sites without translations show plain counts unchanged.
-- [ ] Existing site-picker behavior (search, not-published and metadata-unavailable states, `docs/specification.md:155`) is unchanged.
-- [ ] Narrow-screen layout checked at 390 px.
-- [ ] Specification updated for the changed site picker and site home behavior.
+- [x] Site cards show the registry description, page counts per top-level folder (e.g. `en 7 · ja 7`) without claiming the folders are translations, and a "Start reading" link to the site home. Sites without folders or with one group show only the total. (Unit tests in `web/src/domain/site-folder-counts.test.mjs`, e2e "site cards show the description ...".)
+- [ ] Deferred to TD19: the landing page marks an explicit start point per site (registry-provided start page); operator intro text is out of scope by the owner decision. The "Start reading" link to the site home is the satisfied part.
+- [ ] Deferred to TD19: site cards follow an explicit order when one is provided and fall back to title order otherwise. Today cards are in title order.
+- [ ] Deferred to TD19 (start-here entry): a site home leads with orientation (the site description and a start-here entry when the site defines one) before the update feed. The site-home half has no start page to show until TD19 and was not changed.
+- [x] Existing site-picker behavior (search, not-published and metadata-unavailable states, `docs/specification.md:155`) is unchanged; the full local-serving e2e suite passes with five index-request assertions updated for the bounded count reads.
+- [x] Narrow-screen layout checked at 390 px (Storybook `Navigation/Site picker` Narrow390 stories, Playwright check for no horizontal overflow, screenshot).
+- [x] Specification updated for the changed site picker behavior (Site home).
+
+## Remaining
+
+Only the TD19-dependent items (explicit start page, explicit site order, site-home start-here entry) remain. They cannot start before TD19 settles the metadata contract; the item stays In progress until the owner decides whether to split them into a follow-up and mark this one Done.
