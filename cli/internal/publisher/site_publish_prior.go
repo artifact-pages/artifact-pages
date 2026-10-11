@@ -29,10 +29,16 @@ func sitePriorStateLoader(backend ConditionalObjectBackend, siteID string) index
 		}
 		info := sitePublishStateInfo(stateObject, etag)
 		if err := validateSitePublishStateHead(siteID, info); err != nil {
+			if errors.Is(err, errSiteControlLegacyFormat) {
+				return nil, nil
+			}
 			return nil, fmt.Errorf("validate site publish state HEAD: %w", err)
 		}
 		state, err := decodeSitePublishState(siteID, info, stateObject.Bytes)
 		if err != nil {
+			if errors.Is(err, errSiteControlLegacyFormat) {
+				return nil, nil
+			}
 			return nil, fmt.Errorf("validate site publish state: %w", err)
 		}
 		artifactPrefix := "_artifacts/" + siteID + "/"

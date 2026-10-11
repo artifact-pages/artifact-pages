@@ -18,19 +18,24 @@ import (
 const sitePublishInputPolicy = "publisher-site-projection-v1;http-policy-v1;index-schema-v1;fulltext-policy-v1"
 
 type sitePublishSnapshot struct {
-	state         sitePublishState
-	head          ObjectInfo
-	etag          string
-	exists        bool
-	fastPath      bool
-	actual        map[string]sitePublishObject
-	actualKeys    []string
-	generation    string
-	retry         siteCacheRetry
-	retryETag     string
-	retryExists   bool
-	activeTx      *sitePublishTransaction
-	activeTouched []string
+	state           sitePublishState
+	head            ObjectInfo
+	etag            string
+	exists          bool
+	fastPath        bool
+	actual          map[string]sitePublishObject
+	actualKeys      []string
+	generation      string
+	legacyRebuild   bool
+	legacyDetail    string
+	legacyBytes     []byte
+	legacyObject    Object
+	legacyBackupKey string
+	retry           siteCacheRetry
+	retryETag       string
+	retryExists     bool
+	activeTx        *sitePublishTransaction
+	activeTouched   []string
 }
 
 type sitePublishDiff struct {
@@ -87,31 +92,59 @@ func loadSitePublishSnapshot(ctx context.Context, backend ConditionalObjectBacke
 		snapshot.head = info
 	}
 	if err := validateSitePublishStateHead(siteID, info); err != nil {
+		if errors.Is(err, errSiteControlLegacyFormat) {
+			if stateReadMode == publishStateReadHeadThenGet {
+				var getErr error
+				stateObject, getETag, getErr = getSiteControl(ctx, backend, siteID, key)
+				if getErr != nil {
+					return sitePublishSnapshot{}, fmt.Errorf("read site publish state: %w", getErr)
+				}
+				if getETag != info.ETag {
+					return sitePublishSnapshot{}, errors.New("site publish state changed between HEAD and GET; retry site publish")
+				}
+			}
+			return loadLegacySitePublishSnapshot(ctx, backend, siteID, snapshot, info, stateObject, err)
+		}
 		return sitePublishSnapshot{}, fmt.Errorf("validate site publish state HEAD: %w", err)
 	}
 	version, _ := strconv.Atoi(info.Metadata["artifact-pages-publish-state-schema"])
 	snapshot.generation = sitePublishGenerationFromHead(siteID, info)
-	if err := classifySitePublishTransaction(&snapshot); err != nil {
-		return sitePublishSnapshot{}, err
+	classifyErr := classifySitePublishTransaction(&snapshot)
+	if classifyErr != nil {
+		body, bodyETag := stateObject, getETag
+		if stateReadMode == publishStateReadHeadThenGet {
+			var readErr error
+			body, bodyETag, readErr = getSiteControl(ctx, backend, siteID, key)
+			if readErr != nil || bodyETag != info.ETag {
+				return sitePublishSnapshot{}, classifyErr
+			}
+		}
+		if _, decodeErr := decodeSitePublishState(siteID, info, body.Bytes); errors.Is(decodeErr, errSiteControlLegacyFormat) {
+			return loadLegacySitePublishSnapshot(ctx, backend, siteID, snapshot, info, body, decodeErr)
+		}
+		return sitePublishSnapshot{}, classifyErr
 	}
 	if stateReadMode == publishStateReadGetOnly {
 		state, err := decodeSitePublishState(siteID, info, stateObject.Bytes)
 		if err != nil {
+			if errors.Is(err, errSiteControlLegacyFormat) {
+				return loadLegacySitePublishSnapshot(ctx, backend, siteID, snapshot, info, stateObject, err)
+			}
 			return sitePublishSnapshot{}, fmt.Errorf("validate site publish state: %w", err)
 		}
 		snapshot.state = state
-	} else if !reconcile && prepared.Reusable() && info.Metadata["artifact-pages-publish-pending"] == "false" &&
-		info.Metadata["artifact-pages-publish-input-root"] == prepared.InputRoot() && snapshot.activeTx == nil {
-		// The trusted state HEAD supplies both the fingerprint and transaction
-		// generation, so ordinary no-ops can skip the state body and full build.
-		snapshot.state = sitePublishState{
-			SchemaVersion: version, Site: siteID,
-			Committed: sitePublishCommitted{InputRoot: prepared.InputRoot(), Generation: snapshot.generation, Objects: []sitePublishObject{}},
+	} else {
+		if !reconcile && retry.Transaction == nil && prepared.Reusable() && info.Metadata["artifact-pages-publish-pending"] == "false" &&
+			info.Metadata["artifact-pages-publish-input-root"] == prepared.InputRoot() && snapshot.activeTx == nil {
+			// The trusted state HEAD supplies both the fingerprint and transaction
+			// generation, so ordinary no-ops can skip the state body and full build.
+			snapshot.state = sitePublishState{
+				SchemaVersion: version, Site: siteID,
+				Committed: sitePublishCommitted{InputRoot: prepared.InputRoot(), Generation: snapshot.generation, Objects: []sitePublishObject{}},
+			}
+			snapshot.fastPath = true
+			return snapshot, nil
 		}
-		snapshot.fastPath = true
-		return snapshot, nil
-	}
-	if stateReadMode == publishStateReadHeadThenGet {
 		var err error
 		stateObject, getETag, err = getSiteControl(ctx, backend, siteID, key)
 		if err != nil {
@@ -122,6 +155,9 @@ func loadSitePublishSnapshot(ctx context.Context, backend ConditionalObjectBacke
 		}
 		state, err := decodeSitePublishState(siteID, info, stateObject.Bytes)
 		if err != nil {
+			if errors.Is(err, errSiteControlLegacyFormat) {
+				return loadLegacySitePublishSnapshot(ctx, backend, siteID, snapshot, info, stateObject, err)
+			}
 			return sitePublishSnapshot{}, fmt.Errorf("validate site publish state: %w", err)
 		}
 		snapshot.state = state
@@ -139,6 +175,43 @@ func loadSitePublishSnapshot(ctx context.Context, backend ConditionalObjectBacke
 		snapshot.actual = rowsMap(rows)
 		snapshot.actualKeys = keys
 	}
+	return snapshot, nil
+}
+
+func loadLegacySitePublishSnapshot(ctx context.Context, backend ConditionalObjectBackend, siteID string, snapshot sitePublishSnapshot, info ObjectInfo, object Object, legacyErr error) (sitePublishSnapshot, error) {
+	var formatErr *siteControlLegacyFormatError
+	if !errors.As(legacyErr, &formatErr) {
+		return sitePublishSnapshot{}, legacyErr
+	}
+	if err := validateLegacySitePublishStateBytes(siteID, info, object.Bytes); err != nil {
+		return sitePublishSnapshot{}, err
+	}
+	if snapshot.retry.Transaction != nil {
+		return sitePublishSnapshot{}, unfinishedSiteCacheRetryError(siteID, legacyErr)
+	}
+	rows, keys, err := inventorySiteObjects(ctx, backend, siteID)
+	if err != nil {
+		return sitePublishSnapshot{}, err
+	}
+	generation := legacySitePublishGeneration(siteID, info.ETag)
+	snapshot.state = sitePublishState{
+		SchemaVersion: sitePublishStateSchemaVersion, Site: siteID,
+		Committed: sitePublishCommitted{Generation: generation, Objects: rows},
+	}
+	snapshot.head = info
+	snapshot.etag = info.ETag
+	snapshot.exists = true
+	snapshot.fastPath = false
+	snapshot.actual = rowsMap(rows)
+	snapshot.actualKeys = keys
+	snapshot.generation = generation
+	snapshot.legacyRebuild = true
+	snapshot.legacyDetail = formatErr.Detail
+	snapshot.legacyBytes = append([]byte(nil), object.Bytes...)
+	snapshot.legacyObject = cloneSiteControlObject(object)
+	snapshot.legacyBackupKey = siteLegacyPublishStateBackupKey(siteID, snapshot.legacyBytes)
+	snapshot.activeTx = nil
+	snapshot.activeTouched = nil
 	return snapshot, nil
 }
 
@@ -268,7 +341,7 @@ func buildSitePublishDiff(ctx context.Context, backend ConditionalObjectBackend,
 			touched[key] = struct{}{}
 		}
 	}
-	if reconcile || !snapshot.exists {
+	if reconcile || !snapshot.exists || snapshot.legacyRebuild {
 		actualKeys := make(map[string]struct{}, len(snapshot.actualKeys))
 		for _, key := range snapshot.actualKeys {
 			actualKeys[key] = struct{}{}

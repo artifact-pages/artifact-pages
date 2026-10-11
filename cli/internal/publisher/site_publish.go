@@ -106,11 +106,6 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 		if err := checkWriter(ctx, conditional, compatCurrentWrites()); err != nil {
 			return Result{}, err
 		}
-		if !options.DryRun {
-			if _, _, err := resumePreviewCleanup(operationCtx, backend, conditional, previewStore); err != nil {
-				return Result{}, err
-			}
-		}
 		projection, err := loadOriginRegistry(operationCtx, conditional)
 		if err != nil {
 			return Result{}, err
@@ -156,6 +151,33 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 		}
 		emptyPreviewChanges := []preview.CatalogReconciliationChange{}
 		result := Result{Operation: "site sync", Site: options.SiteID, Changes: diff.changes, PreviewChanges: &emptyPreviewChanges, BuildSkipped: diff.buildSkipped}
+		legacyControl := LegacyControl{}
+		if snapshot.legacyRebuild {
+			legacyControl.PublishState = &LegacyControlRecord{Detail: snapshot.legacyDetail, BackupKey: snapshot.legacyBackupKey}
+		}
+		if pending.legacyRecord {
+			legacyControl.CacheRetry = &LegacyControlRecord{Detail: pending.legacyDetail, BackupKey: pending.legacyBackupKey}
+		}
+		if legacyControl.PublishState != nil || legacyControl.CacheRetry != nil {
+			result.LegacyControl = &legacyControl
+		}
+		if !options.DryRun {
+			if snapshot.legacyRebuild {
+				if err := writeSiteControlLegacyBackup(operationCtx, conditional, "publish-state", snapshot.legacyBackupKey, snapshot.legacyObject); err != nil {
+					return result, err
+				}
+			}
+			if pending.legacyRecord {
+				if err := writeSiteControlLegacyBackup(operationCtx, conditional, "cache-retry record", pending.legacyBackupKey, pending.legacyObject); err != nil {
+					return result, err
+				}
+			}
+			// A pending preview-cleanup journal can mutate projection objects. Save
+			// any legacy site controls before resuming that work.
+			if _, _, err := resumePreviewCleanup(operationCtx, backend, conditional, previewStore); err != nil {
+				return result, err
+			}
+		}
 		var previewPlan preview.CatalogReconciliationPlan
 		if options.DryRun {
 			previewPlan, err = preview.PlanCatalogReconciliation(operationCtx, previewStore, options.SiteID)
@@ -195,7 +217,7 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 				// Keep a completed generation marker while its cache work remains.
 				retryNext.Transaction = pending.Transaction
 			}
-			writeRetry = siteCacheRetryNeedsWrite(pending, retryNext, pendingETag != "")
+			writeRetry = pending.legacyRecord || siteCacheRetryNeedsWrite(pending, retryNext, pendingETag != "")
 			if writeRetry {
 				pendingETag, err = writeSiteCacheRetryRecord(operationCtx, conditional, options.SiteID, retryNext, pendingETag)
 				if err != nil {

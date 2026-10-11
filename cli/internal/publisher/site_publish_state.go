@@ -25,6 +25,7 @@ const (
 )
 
 var (
+	errSiteControlLegacyFormat  = errors.New("legacy site control format")
 	sitePublishStateHashPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 	sitePublishStateSearchBlob  = regexp.MustCompile(`^(root|leaf)-[0-9a-f]{64}\.gz$`)
 )
@@ -55,6 +56,10 @@ type sitePublishObject struct {
 
 func absentSitePublishGeneration(site string) string {
 	return sha256Hex([]byte("artifact-pages-publish-state-absent\x00" + site))
+}
+
+func legacySitePublishGeneration(site, etag string) string {
+	return sha256Hex([]byte("artifact-pages-publish-state-legacy\x00" + site + "\x00" + etag))
 }
 
 // encodeSitePublishState validates and serializes state as deterministic gzip
@@ -96,6 +101,14 @@ func encodeSitePublishState(state sitePublishState) ([]byte, error) {
 // The body digest is syntax-checked here and checked against bytes by Decode.
 // A non-empty ETag is required because every state transition is a CAS.
 func validateSitePublishStateHead(site string, info ObjectInfo) error {
+	return validateSitePublishStateHeadWithLegacy(site, info, false)
+}
+
+func validateSitePublishStateHeadForLegacy(site string, info ObjectInfo) error {
+	return validateSitePublishStateHeadWithLegacy(site, info, true)
+}
+
+func validateSitePublishStateHeadWithLegacy(site string, info ObjectInfo, continueLegacy bool) error {
 	if err := validateStateSite(site); err != nil {
 		return err
 	}
@@ -121,28 +134,41 @@ func validateSitePublishStateHead(site string, info ObjectInfo) error {
 	if metadata["artifact-pages-site"] != site {
 		return errors.New("site publish state HEAD site does not match the selected site")
 	}
-	root := metadata["artifact-pages-publish-input-root"]
-	if root == "" {
-		return sitePrivateControlFormatResetError(site, "publish-state", "missing committed input root")
-	}
-	if !sitePublishStateHashPattern.MatchString(root) {
+	var legacyErr error
+	root, hasRoot := metadata["artifact-pages-publish-input-root"]
+	if !hasRoot {
+		legacyErr = sitePrivateControlFormatResetError(site, "publish-state", "missing committed input root")
+		if !continueLegacy {
+			return legacyErr
+		}
+	} else if !sitePublishStateHashPattern.MatchString(root) {
 		return errors.New("site publish state HEAD has an invalid input root")
 	}
 	if pending := metadata["artifact-pages-publish-pending"]; pending == "true" {
-		return sitePrivateControlFormatResetError(site, "publish-state", "obsolete inline pending field")
+		if legacyErr == nil {
+			legacyErr = sitePrivateControlFormatResetError(site, "publish-state", "obsolete inline pending field")
+		}
+		if !continueLegacy {
+			return legacyErr
+		}
 	} else if pending != "false" {
 		return errors.New("site publish state HEAD has an invalid pending flag")
 	}
-	if metadata["artifact-pages-publish-generation"] == "" {
-		return sitePrivateControlFormatResetError(site, "publish-state", "missing committed generation")
-	}
-	if !sitePublishStateHashPattern.MatchString(metadata["artifact-pages-publish-generation"]) {
+	generation, hasGeneration := metadata["artifact-pages-publish-generation"]
+	if !hasGeneration {
+		if legacyErr == nil {
+			legacyErr = sitePrivateControlFormatResetError(site, "publish-state", "missing committed generation")
+		}
+		if !continueLegacy {
+			return legacyErr
+		}
+	} else if !sitePublishStateHashPattern.MatchString(generation) {
 		return errors.New("site publish state HEAD has an invalid committed generation")
 	}
 	if !sitePublishStateHashPattern.MatchString(metadata["artifact-pages-sha256"]) {
 		return errors.New("site publish state HEAD has an invalid compressed SHA256")
 	}
-	return nil
+	return legacyErr
 }
 
 var sitePublishStateMetadataKeys = map[string]struct{}{
@@ -235,6 +261,105 @@ func decodeSitePublishState(site string, info ObjectInfo, body []byte) (sitePubl
 	return state, nil
 }
 
+func validateLegacySitePublishStateBytes(site string, info ObjectInfo, body []byte) error {
+	if err := validateSitePublishStateHeadForLegacy(site, info); err != nil && !errors.Is(err, errSiteControlLegacyFormat) {
+		return fmt.Errorf("validate site publish state HEAD: %w", err)
+	}
+	if err := validateLegacySitePublishStateBody(site, info, body); err != nil {
+		return fmt.Errorf("validate site publish state: %w", err)
+	}
+	return nil
+}
+
+func validateLegacySitePublishStateBody(site string, info ObjectInfo, body []byte) error {
+	if int64(len(body)) != info.Size {
+		return errors.New("site publish state body size does not match HEAD")
+	}
+	if sha256Hex(body) != info.Metadata["artifact-pages-sha256"] {
+		return errors.New("site publish state body SHA256 does not match HEAD")
+	}
+	plain, err := decompressSitePublishState(body)
+	if err != nil {
+		return err
+	}
+	if !utf8.Valid(plain) {
+		return errors.New("site publish state JSON is not valid UTF-8")
+	}
+	if err := validateNoDuplicateJSONKeys(plain); err != nil {
+		return fmt.Errorf("validate site publish state JSON: %w", err)
+	}
+	var envelope map[string]json.RawMessage
+	if err := json.Unmarshal(plain, &envelope); err != nil {
+		return fmt.Errorf("decode site publish state JSON: %w", err)
+	}
+	if envelope == nil {
+		return errors.New("site publish state must be a JSON object")
+	}
+	versionRaw, ok := envelope["schemaVersion"]
+	if !ok {
+		return errors.New("site publish state has no schemaVersion")
+	}
+	var version int
+	if err := json.Unmarshal(versionRaw, &version); err != nil {
+		return errors.New("site publish state has an invalid schemaVersion")
+	}
+	if version != sitePublishStateSchemaVersion {
+		return fmt.Errorf("unsupported site publish state schema version %d; this CLI reads schema %d", version, sitePublishStateSchemaVersion)
+	}
+	if rawSite, exists := envelope["site"]; exists {
+		if !rawJSONKind(rawSite, "string") {
+			return errors.New(`site publish state field "site" must be a string`)
+		}
+		var recordedSite string
+		if err := json.Unmarshal(rawSite, &recordedSite); err != nil {
+			return errors.New(`site publish state field "site" must be a string`)
+		}
+		if recordedSite != site {
+			return errors.New("site publish state site does not match the selected site")
+		}
+	}
+	if err := requireStateJSONFields(envelope, map[string]string{"committed": "object"}); err != nil {
+		return err
+	}
+	var committedEnvelope map[string]json.RawMessage
+	if err := json.Unmarshal(envelope["committed"], &committedEnvelope); err != nil || committedEnvelope == nil {
+		return errors.New("site publish state committed field must be an object")
+	}
+	if err := requireStateJSONFields(committedEnvelope, map[string]string{"inputRoot": "string", "objects": "array"}); err != nil {
+		return err
+	}
+	_, hasGeneration := committedEnvelope["generation"]
+	if hasGeneration {
+		if err := requireStateJSONFields(committedEnvelope, map[string]string{"generation": "string"}); err != nil {
+			return err
+		}
+	}
+	if err := requireStateObjectRows(envelope["committed"]); err != nil {
+		return err
+	}
+	var state sitePublishState
+	if err := json.Unmarshal(plain, &state); err != nil {
+		return fmt.Errorf("decode site publish state: %w", err)
+	}
+	if _, hasSite := envelope["site"]; !hasSite {
+		state.Site = site
+	}
+	if !hasGeneration {
+		state.Committed.Generation = strings.Repeat("0", 64)
+	}
+	if err := validateSitePublishState(state, site); err != nil {
+		return err
+	}
+	metadata := info.Metadata
+	headerVersion, _ := strconv.Atoi(metadata["artifact-pages-publish-state-schema"])
+	if state.SchemaVersion != version || state.SchemaVersion != headerVersion ||
+		state.Committed.InputRoot != metadata["artifact-pages-publish-input-root"] && metadata["artifact-pages-publish-input-root"] != "" ||
+		hasGeneration && metadata["artifact-pages-publish-generation"] != "" && state.Committed.Generation != metadata["artifact-pages-publish-generation"] {
+		return errors.New("site publish state body does not match HEAD metadata")
+	}
+	return nil
+}
+
 // buildSitePublishStateObject returns the exact object policy used for private
 // state. The SHA metadata covers the gzip bytes stored in Bytes.
 func buildSitePublishStateObject(site string, state sitePublishState) (Object, error) {
@@ -307,9 +432,20 @@ func validateSitePublishState(state sitePublishState, site string) error {
 	return nil
 }
 
+type siteControlLegacyFormatError struct {
+	Site   string
+	Record string
+	Detail string
+}
+
+func (err *siteControlLegacyFormatError) Error() string {
+	return fmt.Sprintf("site %q %s uses an older prerelease control format (%s)", err.Site, err.Record, err.Detail)
+}
+
+func (err *siteControlLegacyFormatError) Unwrap() error { return errSiteControlLegacyFormat }
+
 func sitePrivateControlFormatResetError(site, record, detail string) error {
-	return fmt.Errorf("site %q %s is not in the current prerelease control format (%s); after backing up and confirming no publish or cache retry is in progress, reset only %s and %s, then retry (this command will not delete control records)",
-		site, record, detail, sitePublishStateKey(site), siteCacheRetryKey(site))
+	return &siteControlLegacyFormatError{Site: site, Record: record, Detail: detail}
 }
 
 func validateSitePublishRow(site string, row sitePublishObject) error {

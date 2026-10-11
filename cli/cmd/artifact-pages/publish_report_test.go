@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
@@ -103,6 +104,60 @@ func TestSitePublishReportCacheOnlyRetry(t *testing.T) {
 		if !dry && !strings.Contains(output.String(), "Request   purge-request-123") {
 			t.Fatal("cache request ID missing")
 		}
+	}
+}
+
+func TestSiteSyncReportLegacyControlAndJSON(t *testing.T) {
+	result := publisher.Result{
+		Operation: "site sync", Outcome: "planned", Site: "sre", Changes: []publisher.Change{},
+		LegacyControl: &publisher.LegacyControl{
+			PublishState: &publisher.LegacyControlRecord{Detail: "missing committed generation", BackupKey: "_control/sites/sre/legacy/publish-state-abc.json.gz"},
+			CacheRetry:   &publisher.LegacyControlRecord{Detail: "missing selected-site field", BackupKey: "_control/sites/sre/legacy/site-cache-def.json"},
+		},
+	}
+	for _, test := range []struct {
+		dry  bool
+		want []string
+	}{
+		{dry: true, want: []string{
+			"Publish state  would be rebuilt from the origin inventory (older prerelease format: missing committed generation); previous record would be saved to _control/sites/sre/legacy/publish-state-abc.json.gz",
+			"Cache retry  older prerelease record adopted; previous record would be saved to _control/sites/sre/legacy/site-cache-def.json",
+		}},
+		{dry: false, want: []string{
+			"Publish state  rebuilt from the origin inventory (older prerelease format: missing committed generation); previous record saved to _control/sites/sre/legacy/publish-state-abc.json.gz",
+			"Cache retry  older prerelease record adopted; previous record saved to _control/sites/sre/legacy/site-cache-def.json",
+		}},
+	} {
+		var output bytes.Buffer
+		writeSiteSyncReport(&output, result, deploymentconfig.ResolvedConfig{}, test.dry, false)
+		wantLines := "  " + strings.Join(test.want, "\n  ")
+		if !strings.Contains(output.String(), "\n"+wantLines+"\n") {
+			t.Errorf("legacy report lines differ from the specified summary lines:\n%s", output.String())
+		}
+		for _, expected := range test.want {
+			if !strings.Contains(output.String(), expected) {
+				t.Errorf("legacy report missing %q:\n%s", expected, output.String())
+			}
+		}
+	}
+	var encoded bytes.Buffer
+	if err := encodeDeploymentResult(&encoded, result, deploymentconfig.ResolvedConfig{Config: deploymentconfig.DeploymentConfig{Provider: "local"}}); err != nil {
+		t.Fatal(err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(encoded.Bytes(), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	legacy, ok := decoded["legacyControl"].(map[string]any)
+	if !ok || legacy["publishState"] == nil || legacy["cacheRetry"] == nil {
+		t.Fatalf("serialized result omitted legacy controls: %s", encoded.String())
+	}
+	withoutLegacy, err := json.Marshal(publisher.Result{Operation: "site sync", Outcome: "no-op", Changes: []publisher.Change{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(withoutLegacy), `"legacyControl"`) {
+		t.Fatalf("empty legacyControl was not omitted: %s", withoutLegacy)
 	}
 }
 

@@ -241,7 +241,7 @@ func TestLegacyProjectionMigratesThroughPlannedOrder(t *testing.T) {
 	if err := backend.DeleteObjects(context.Background(), []string{siteVersionsKey("sre")}); err != nil {
 		t.Fatalf("remove version record to model legacy storage: %v", err)
 	}
-	if err := CheckConfig(ctx, backend); err == nil || !strings.Contains(err.Error(), "registry: unknown") || !strings.Contains(err.Error(), "sre: unknown; republish required") {
+	if err := CheckConfig(ctx, backend); err == nil || !strings.Contains(err.Error(), "registry: unknown") || !strings.Contains(err.Error(), "sre: unknown; republish with: artifact-pages site sync --site sre") {
 		t.Fatalf("initial config check = %v; want diagnostic for missing legacy records", err)
 	}
 
@@ -252,7 +252,7 @@ func TestLegacyProjectionMigratesThroughPlannedOrder(t *testing.T) {
 	if _, err := RegisterSites(ctx, backend, desired, false); err != nil {
 		t.Fatalf("registry sync: %v", err)
 	}
-	if err := CheckConfig(ctx, backend); err == nil || strings.Contains(err.Error(), "registry: unknown") || !strings.Contains(err.Error(), "sre: unknown; republish required") {
+	if err := CheckConfig(ctx, backend); err == nil || strings.Contains(err.Error(), "registry: unknown") || !strings.Contains(err.Error(), "sre: unknown; republish with: artifact-pages site sync --site sre") {
 		t.Fatalf("config check after registry sync = %v; want only the unrecorded site diagnostic", err)
 	}
 
@@ -262,6 +262,13 @@ func TestLegacyProjectionMigratesThroughPlannedOrder(t *testing.T) {
 	if err := CheckConfig(ctx, backend); err != nil {
 		t.Fatalf("config check after registry and site records exist: %v", err)
 	}
+	unsupportedReads := allReads()
+	unsupportedReads["full-text-manifest"] = []int{99}
+	fakeManifest(t, unsupportedReads)
+	if err := checkStoredFormats(ctx, backend, unsupportedReads, false); err == nil || !strings.Contains(err.Error(), "sre: republish with: artifact-pages site sync --site sre: web cannot read full-text-manifest schemaVersion") {
+		t.Fatalf("incompatible site formats = %v; want per-site republish command", err)
+	}
+	fakeManifest(t, allReads())
 
 	archive := bundleWithReads(t, allReads())
 	if _, err := DeployApp(ctx, backend, AppDeployOptions{ArchivePath: archive}); err != nil {

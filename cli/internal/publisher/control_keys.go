@@ -32,6 +32,12 @@ func siteControlPrefix(site string) string { return siteControlRoot + site + "/"
 
 func siteLockKey(site string) string       { return siteControlPrefix(site) + "lock.json" }
 func siteCacheRetryKey(site string) string { return siteControlPrefix(site) + "site-cache.json" }
+func siteLegacyPublishStateBackupKey(site string, legacyBytes []byte) string {
+	return siteControlPrefix(site) + "legacy/publish-state-" + sha256Hex(legacyBytes) + ".json.gz"
+}
+func siteLegacyCacheRetryBackupKey(site string, legacyBytes []byte) string {
+	return siteControlPrefix(site) + "legacy/site-cache-" + sha256Hex(legacyBytes) + ".json"
+}
 func previewCleanupKey(site string) string { return siteControlPrefix(site) + "preview-cleanup.json" }
 func sitePublishStateKey(site string) string {
 	return siteControlPrefix(site) + "publish-state.json.gz"

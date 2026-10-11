@@ -249,16 +249,20 @@ func TestSiteCachePathsEncodeSpecialFilenamesAndStaySiteScoped(t *testing.T) {
 	}
 }
 
-func TestSiteCacheRetryRejectsOldSchemaOneShapeWithScopedResetGuidance(t *testing.T) {
+func TestSiteCacheRetryAdoptsOldSchemaOneShapeAndRejectsInvalidPaths(t *testing.T) {
 	b := newLockMemoryBackend()
 	seedMemoryObject(b, siteCacheRetryKey("sre"), []byte(`{"schemaVersion":1,"paths":["/_artifacts/sre/old.html"]}`))
-	_, _, err := readSiteCacheRetry(t.Context(), b, "sre")
-	if err == nil {
-		t.Fatal("old schema-one cache-retry shape was accepted")
+	record, etag, err := readSiteCacheRetry(t.Context(), b, "sre")
+	if err != nil || !record.legacyRecord || record.Site != "sre" || record.Transaction != nil ||
+		!reflect.DeepEqual(record.Paths, []string{"/_artifacts/sre/old.html"}) || etag == "" ||
+		record.legacyBackupKey != siteLegacyCacheRetryBackupKey("sre", record.legacyBytes) {
+		t.Fatalf("legacy cache-retry adoption = %+v, %q, %v", record, etag, err)
 	}
-	for _, exactKey := range []string{sitePublishStateKey("sre"), siteCacheRetryKey("sre")} {
-		if !strings.Contains(err.Error(), exactKey) {
-			t.Fatalf("old schema-one cache retry error = %v; want target-scoped reset guidance including %s", err, exactKey)
-		}
+
+	seedMemoryObject(b, siteCacheRetryKey("sre"), []byte(`{"schemaVersion":1,"paths":["/_artifacts/other/old.html"]}`))
+	_, _, err = readSiteCacheRetry(t.Context(), b, "sre")
+	if err == nil || !strings.Contains(err.Error(), "site \"sre\" cache-retry record uses an older prerelease control format (missing selected-site field) and has an unfinished cache retry") ||
+		!strings.Contains(err.Error(), siteCacheRetryKey("sre")) {
+		t.Fatalf("invalid legacy cache retry error = %v; want unfinished retry guidance for the cache key", err)
 	}
 }
