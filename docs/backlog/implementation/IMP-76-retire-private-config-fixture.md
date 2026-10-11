@@ -16,7 +16,7 @@ After `admin` and `docs` use the admin-provided workflows, retire the private-co
 - Remove the `github-token` input from all four composite Actions and use the workflow token for config/API reads. Keep `ARTIFACT_PAGES_FETCH_TOKEN` as the separate credential channel for repository history fetches.
 - Remove `.github/workflows/private-config.yml` and checks dedicated to that fixture; keep generic CLI `github://` locator tests.
 - Delete the `artifact-pages/fixture-private-config` repository, the `artifact-pages-ci-fixture` GitHub App, and the monorepo repository-scoped `FIXTURE_APP_ID` variable and `FIXTURE_APP_PRIVATE_KEY` secret only after IMP-75 is verified and the owner approves the concrete deletion.
-- Update official guide and specification text that describes the Action input. This is Claude's prose lane and will be coordinated separately.
+- Update the official guide and specification text that describes the retired Action input. The narrow guide scope is announced in workspace `STATUS.md`; keep the CLI `github://` locator documentation.
 
 **Pending gates:** IMP-75 migration verification; owner approval for repository/App/credential deletion; fresh independent review and green CI before source merge. The private repository and App still exist, and this item is not complete.
 
