@@ -25,16 +25,15 @@ function escapeRegExp(s: string) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-/** Wraps query terms in <mark>. `current` numbers the marks in document order for the navigator. */
-function Highlight({ text, terms, current }: { text: string; terms: string[]; current?: { index: number; seen: { n: number } } }) {
+/** Wraps query terms in <mark>. `current` gives the document-wide index of this text's first mark and the active one. */
+function Highlight({ text, terms, current }: { text: string; terms: string[]; current?: { index: number; start: number } }) {
   if (!terms.length) return <>{text}</>
   const parts = text.split(new RegExp(`(${terms.map(escapeRegExp).join('|')})`, 'gi'))
   return (
     <>
       {parts.map((part, i) => {
         if (i % 2 === 0) return part
-        const n = current ? current.seen.n++ : -1
-        const isCurrent = current !== undefined && n === current.index
+        const isCurrent = current !== undefined && current.start + (i - 1) / 2 === current.index
         return <mark key={i} className={isCurrent ? 'srp-mark-current' : undefined} data-current={isCurrent || undefined}>{part}</mark>
       })}
     </>
@@ -128,7 +127,7 @@ function ResultItem({ page, terms, active, id, withSnippets }: { page: SearchPag
   const groups = expanded ? page.matches : page.matches.slice(0, MAX_GROUPS)
   const more = page.matches.length - MAX_GROUPS
   return (
-    <li className="srp-result" id={id} data-active={active || undefined} lang={folderOf(page.path)}>
+    <li className="srp-result" id={id} data-active={active || undefined} aria-current={active || undefined} lang={folderOf(page.path)}>
       <a href="#page" className="srp-title" onClick={(e) => e.preventDefault()}><Highlight text={page.title} terms={terms} /></a>
       <span className="srp-path">{page.path}</span>
       {withSnippets ? (
@@ -184,7 +183,7 @@ export function SearchResultsPage({
     listRef.current?.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' })
   }, [active])
 
-  function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+  function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
     if (loading || !shown.length) return
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault()
@@ -208,7 +207,7 @@ export function SearchResultsPage({
 
   return (
     <Frame sidebarQuery={query} crumb="Search">
-      <div className="srp-wrap" onKeyDown={onKeyDown} ref={listRef}>
+      <div className="srp-wrap" ref={listRef}>
         <div className="srp">
           <form className="srp-field" role="search" onSubmit={(e) => e.preventDefault()}>
             <Icon name="search" size={16} />
@@ -217,13 +216,12 @@ export function SearchResultsPage({
               onChange={(e) => { setQuery(e.target.value); setActive(-1); setOpened(null) }}
               placeholder="Search page text…"
               aria-label="Search page text"
-              aria-controls="srp-list"
-              aria-activedescendant={active >= 0 ? `srp-result-${active}` : undefined}
+              onKeyDown={onKeyDown}
               autoComplete="off"
             />
             {query ? <button type="button" className="icon-button" aria-label="Clear search" onClick={() => { setQuery(''); setActive(-1) }}><Icon name="close" size={13} /></button> : null}
           </form>
-          <p className="srp-count" role="status" aria-live="polite">
+          <p className="srp-count" role="status">
             {loading ? <span className="srp-skel-bar" style={{ width: 190, height: 12 }} /> : count}
             {!loading && shown.length ? <span className="srp-keys"><kbd className="srp-kbd">↑</kbd><kbd className="srp-kbd">↓</kbd> move <kbd className="srp-kbd">↵</kbd> open</span> : null}
           </p>
@@ -290,16 +288,20 @@ export function MatchNavigatorPage({ query }: { query: string }) {
   const [open, setOpen] = useState(true)
   const [index, setIndex] = useState(1)
   const docRef = useRef<HTMLDivElement>(null)
-  const seen = { n: 0 }
-  const total = navigatorArticle.reduce((sum, b) => sum + (b.text.match(new RegExp(terms.map(escapeRegExp).join('|'), 'gi'))?.length ?? 0), 0)
+  const pattern = new RegExp(terms.map(escapeRegExp).join('|'), 'gi')
+  const counts = navigatorArticle.map((b) => (terms.length ? b.text.match(pattern)?.length ?? 0 : 0))
+  const offsets = counts.map((_, i) => counts.slice(0, i).reduce((a, b) => a + b, 0))
+  const total = counts.reduce((a, b) => a + b, 0)
+  const articleRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
     docRef.current?.querySelector('[data-current="true"]')?.scrollIntoView({ block: 'center' })
   }, [index, open])
 
-  const step = (d: number) => setIndex((i) => (i + d + total) % total)
+  const step = (d: number) => { if (total) setIndex((i) => (i + d + total) % total) }
+  const close = () => { setOpen(false); articleRef.current?.focus() }
   function onKeyDown(e: KeyboardEvent<HTMLElement>) {
-    if (e.key === 'Escape') setOpen(false)
+    if (e.key === 'Escape') close()
     else if (e.key === 'Enter') { e.preventDefault(); step(e.shiftKey ? -1 : 1) }
     else if (e.key === 'ArrowDown') { e.preventDefault(); step(1) }
     else if (e.key === 'ArrowUp') { e.preventDefault(); step(-1) }
@@ -309,20 +311,20 @@ export function MatchNavigatorPage({ query }: { query: string }) {
     <Frame sidebarQuery={query} crumb="04 インデックスと検索">
       <div className="srp-doc-host">
         <div className="srp-doc-scroll" ref={docRef}>
-          <article className="markdown-article srp-doc" lang="ja">
+          <article className="markdown-article srp-doc" lang="ja" tabIndex={-1} ref={articleRef}>
             {navigatorArticle.map((b, i) => {
-              const content = <Highlight text={b.text} terms={open ? terms : []} current={{ index, seen }} />
+              const content = <Highlight text={b.text} terms={open ? terms : []} current={{ index, start: offsets[i] }} />
               return b.kind === 'h1' ? <h1 key={i}>{content}</h1> : b.kind === 'h2' ? <h2 key={i}>{content}</h2> : <p key={i}>{content}</p>
             })}
           </article>
         </div>
-        {open ? (
+        {open && total > 0 ? (
           <div className="srp-navbar" role="group" aria-label="Matches in this page" onKeyDown={onKeyDown}>
             <span className="srp-navbar-term">{query}</span>
-            <span className="srp-navbar-count" aria-live="polite">{index + 1} / {total}</span>
+            <span className="srp-navbar-count">{index + 1} / {total}</span>
             <button type="button" className="icon-button" aria-label="Previous match" onClick={() => step(-1)}>↑</button>
             <button type="button" className="icon-button" aria-label="Next match" onClick={() => step(1)}>↓</button>
-            <button type="button" className="icon-button" aria-label="Close match navigator" onClick={() => setOpen(false)}><Icon name="close" size={13} /></button>
+            <button type="button" className="icon-button" aria-label="Close match navigator" onClick={close}><Icon name="close" size={13} /></button>
           </div>
         ) : null}
       </div>

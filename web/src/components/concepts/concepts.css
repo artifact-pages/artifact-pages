@@ -343,8 +343,10 @@
 .srp-skel-bar { display: block; border-radius: 4px; background: var(--hover); animation: srp-pulse 1.4s ease-in-out infinite; }
 @keyframes srp-pulse { 50% { opacity: .45; } }
 @media (prefers-reduced-motion: reduce) { .srp-skel-bar { animation: none; } }
-.srp-ft-row { display: flex; align-items: center; gap: 8px; margin: 6px 4px 0; padding-inline-start: 9px; background: var(--active); color: var(--text); }
-.srp-ft-row { height: auto; min-height: 30px; padding-block: 5px; line-height: 1.35; }
+.srp-ft-row {
+  display: flex; align-items: center; gap: 8px; height: auto; min-height: 30px; margin: 6px 4px 0; padding-block: 5px; padding-inline-start: 9px;
+  background: var(--active); color: var(--text); line-height: 1.35;
+}
 .srp-ft-row .tree-label { flex: 1; min-width: 0; overflow: visible; white-space: normal; }
 .srp-ft-row svg, .srp-ft-row .srp-kbd { flex: none; }
 
