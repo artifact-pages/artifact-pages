@@ -405,6 +405,29 @@ func TestManualStepsUseCustomCloudflareSecretNames(t *testing.T) {
 	}
 }
 
+func TestManualStepsProvisionAdminRepositorySecretsForRegistryPullRequestDryRuns(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, cloudflareConfig, "")
+	output, err := runFixture(t, root, "cloudflare", false)
+	if err != nil {
+		t.Fatalf("generate Cloudflare files: %v", err)
+	}
+	if !strings.Contains(output, "Registry pull-request dry-runs do not select an environment") {
+		t.Fatalf("manual steps do not explain the registry pull-request environment behavior: %s", output)
+	}
+	for _, name := range []string{"CF_API_TOKEN", "CF_READER_SECRET"} {
+		if !strings.Contains(output, "gh secret set "+name+" --repo acme/admin\n") {
+			t.Errorf("manual steps do not provision admin %s at repository scope: %s", name, output)
+		}
+		if !strings.Contains(output, "gh secret set "+name+" --repo acme/admin --env production") {
+			t.Errorf("manual steps omit the optional production override for %s: %s", name, output)
+		}
+	}
+	if !strings.Contains(output, "Optional: production environment secrets of the same names override repository values") {
+		t.Fatalf("manual steps do not identify production environment secrets as optional overrides: %s", output)
+	}
+}
+
 func TestRoleFileChangeRequiresMatchingGeneratorMetadata(t *testing.T) {
 	root := t.TempDir()
 	writeFixture(t, root, awsConfig, `{"docs":"arn:aws:iam::123456789012:role/site/docs","guide":"arn:aws:iam::123456789012:role/site/guide"}`)

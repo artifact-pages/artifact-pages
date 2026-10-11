@@ -569,7 +569,11 @@ func printManualSteps(output io.Writer, repository string, outputs map[string][]
 		for _, name := range names {
 			fmt.Fprintf(output, "  gh secret set %s --repo OWNER/SITE_REPOSITORY\n", name)
 		}
-		fmt.Fprintln(output, "  # Set admin registry secrets in the production environment.")
+		fmt.Fprintln(output, "  # Registry pull-request dry-runs do not select an environment, so set admin secrets at repository scope.")
+		for _, name := range names {
+			fmt.Fprintf(output, "  gh secret set %s --repo %s\n", name, repository)
+		}
+		fmt.Fprintln(output, "  # Optional: production environment secrets of the same names override repository values on production runs.")
 		for _, name := range names {
 			fmt.Fprintf(output, "  gh secret set %s --repo %s --env production\n", name, repository)
 		}
