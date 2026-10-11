@@ -647,3 +647,57 @@
 }
 
 a.page-text-result { text-decoration: none; }
+
+/* ---- related pages (rp-), ISSUE-086 ---- */
+.rp-doc.markdown-article { padding: 28px 28px 36px; }
+.rp-chip { padding: 1px 7px; border-radius: 999px; background: var(--hover); color: var(--text-secondary); font-size: 11px; line-height: 1.6; white-space: nowrap; }
+.rp-chip--similar { border: 1px solid var(--line-soft); background: transparent; }
+.rp-folder { color: var(--text-tertiary); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+
+.rp-next, .rp-cards, .rp-end-related { margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--line-soft); }
+.rp-end-related { margin-top: 0; padding-top: 0; border-top: 0; }
+.rp-doc .rp-next h2, .rp-doc .rp-cards h2 { padding: 0; margin: 0 0 8px; border: 0; font-size: 13px; letter-spacing: 0; color: var(--text-secondary); }
+.rp-next ul, .rp-cards ul, .rp-panel-related ul { margin: 0; padding: 0; list-style: none; }
+.rp-next-row { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; padding: 9px 8px; border-top: 1px solid var(--line-soft); color: var(--text); text-decoration: none; }
+.rp-next li:last-child .rp-next-row { border-bottom: 1px solid var(--line-soft); }
+.rp-next-row:hover { background: var(--hover); }
+.rp-next-row svg { color: var(--text-tertiary); }
+.rp-next-title { font-size: 14px; font-weight: 560; letter-spacing: -.01em; }
+.rp-next-meta { display: inline-flex; align-items: center; gap: 8px; }
+@container (max-width: 520px) {
+  .rp-next-row { grid-template-columns: 18px minmax(0, 1fr); }
+  .rp-next-meta { grid-column: 2; }
+  .rp-doc.markdown-article { padding: 18px 16px 28px; font-size: 14px; line-height: 1.65; }
+}
+
+.rp-cards ul { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.rp-card { display: grid; height: 100%; align-content: start; gap: 4px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-raised); color: var(--text); text-decoration: none; }
+.rp-card:hover { border-color: var(--text-tertiary); }
+.rp-card-folder { color: var(--text-tertiary); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+.rp-card-title { font-size: 14px; font-weight: 580; letter-spacing: -.01em; }
+.rp-card-head { color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
+
+/* panel inside the reader frame: the production popover is absolutely positioned in .stage */
+.rp-frame .rux-reader { height: 780px; }
+.rp-stage { position: relative; height: 100%; }
+.rp-scroll { height: 100%; overflow: auto; }
+.rp-panel.context-panel { top: 9px; right: 12px; width: 268px; }
+.rp-panel-related { border-top: 1px solid var(--line-soft); padding: 8px 5px 6px; }
+.rp-panel-related h3 { margin: 0; padding: 2px 9px 4px; color: var(--text-tertiary); font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.rp-panel-related a { display: grid; gap: 1px; padding: 6px 9px; border-radius: 6px; color: var(--text-secondary); text-decoration: none; }
+.rp-panel-related a:hover { color: var(--text); background: var(--hover); }
+.rp-panel-title { font-size: 12.5px; color: var(--text); }
+.rp-panel-sub { color: var(--text-tertiary); font-size: 11px; }
+
+/* HTML artifact stand-in: frame fills the stage and scrolls on its own */
+.rp-html-stage { position: relative; display: flex; height: 100%; flex-direction: column; }
+.rp-html-frame { min-height: 0; flex: 1; overflow: auto; background: var(--surface); }
+.rp-html-doc { max-width: 560px; height: 900px; padding: 28px; font-size: 14px; line-height: 1.65; }
+.rp-html-doc h1 { margin: 0 0 12px; font-size: 26px; letter-spacing: -.03em; }
+.rp-html-more { color: var(--text-tertiary); }
+.rp-strip { flex: none; border-top: 1px solid var(--line); background: var(--surface-raised); }
+.rp-strip > summary { display: flex; align-items: center; gap: 8px; padding: 9px 14px; color: var(--text-secondary); font-size: 12.5px; cursor: pointer; list-style: none; }
+.rp-strip > summary::-webkit-details-marker { display: none; }
+.rp-strip[open] > summary svg { transform: rotate(90deg); }
+.rp-strip .rp-next { margin: 0; padding: 0 12px 10px; border: 0; max-height: 220px; overflow: auto; }
+.rp-strip .rp-next h2 { display: none; }

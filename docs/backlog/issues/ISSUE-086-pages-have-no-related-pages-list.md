@@ -1,6 +1,6 @@
 # Pages have no list of related pages to read next
 
-- Status: Open
+- Status: In progress
 - Assignee: Claude
 - Priority: P2
 - Area: Reader page footer (web reader; `web/src/components/ArtifactWorkspace.tsx`, a new pure selector under `web/src/domain/`)
@@ -33,3 +33,7 @@ Relations based on the link graph (outgoing links and backlinks) would need an i
 - [ ] e2e: the list appears below an HTML artifact and a Markdown artifact, links navigate, it is reachable by keyboard, and it does not require scrolling inside the artifact iframe (the control lives in the shell).
 - [ ] Specification updated with the selection rule.
 - [ ] Narrow-screen layout checked at 390 px, no horizontal page scroll.
+
+## Progress
+
+- 2026-10-11 (Claude): the pure selector landed in `web/src/domain/related-pages.ts` with unit tests (sibling-only, similarity-only, mixed, no candidates, cap, tie-breaking, current page excluded, parallel `en/`/`ja/`). Score: +4 same folder, +2 same top-level folder, plus title/heading token overlap (CJK bigrams); a non-sibling needs overlap of at least 2; the same relative path under another top-level folder is dropped. Placement awaits the owner's choice among three concept stories (`Concepts/Reader UX 2026-10/ISSUE-086 related pages`); the reader is not wired yet. Finding for the owner: the HTML iframe fills the stage and scrolls inside itself, so an end-of-page block is not reachable without scrolling in the iframe unless the shell adds a strip under the frame or sizes the frame to its document; the Contents-panel placement is unaffected.
