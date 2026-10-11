@@ -104,6 +104,11 @@ export function SearchResultsPage({
   }, [shown])
 
   // Committing the query that is already shown adds no history entry; after a failure it retries.
+  // A folder limit on a list that is not fully loaded: keep loading pages until one lies in the folder or the list ends.
+  useEffect(() => {
+    if (folder && shown.status === 'success' && !shown.ranked && shown.hasMore && shown.more === 'idle' && hits.length === 0 && !stale) onLoadMore()
+  }, [folder, shown, hits.length, stale, onLoadMore])
+
   function commitNow() {
     const next = draft.trim()
     if (next !== query) onQueryChange(next)
@@ -144,7 +149,10 @@ export function SearchResultsPage({
       : state.status === 'error'
         ? `Search for “${query}” failed.`
         : shown.status === 'success'
-          ? `${folder ? hits.length.toLocaleString('en-US') : shown.total.toLocaleString('en-US')} ${(folder ? hits.length : shown.total) === 1 ? 'page' : 'pages'}${scope} ${(folder ? hits.length : shown.total) === 1 ? 'contains' : 'contain'} “${query}”`
+          ? folder && !complete
+            // Only part of the list is loaded: say so instead of presenting a folder total.
+            ? `${hits.length.toLocaleString('en-US')} ${hits.length === 1 ? 'page' : 'pages'} in ${folder}/ so far, among ${shown.hits.length.toLocaleString('en-US')} of ${shown.total.toLocaleString('en-US')} pages that contain “${query}”`
+            : `${folder ? hits.length.toLocaleString('en-US') : shown.total.toLocaleString('en-US')} ${(folder ? hits.length : shown.total) === 1 ? 'page' : 'pages'}${scope} ${(folder ? hits.length : shown.total) === 1 ? 'contains' : 'contain'} “${query}”`
           : ''
 
   return (
@@ -162,8 +170,6 @@ export function SearchResultsPage({
                 enterKeyHint="search"
                 autoComplete="off"
                 aria-label={`Search page text in ${siteTitle}`}
-                aria-controls={hits.length > 0 ? listId : undefined}
-                aria-activedescendant={active >= 0 && !stale ? `${listId}-${active}` : undefined}
                 placeholder="Search page text…"
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
@@ -214,7 +220,7 @@ export function SearchResultsPage({
                   <Skeleton />
                 ) : state.status === 'error' ? (
                   <ErrorMessage error={state.error} onRetry={() => { onRetry(); inputRef.current?.focus() }} />
-                ) : shown.status === 'success' && hits.length === 0 ? (
+                ) : shown.status === 'success' && hits.length === 0 && !shown.hasMore ? (
                   <NoMatches
                     query={query}
                     folder={folder}
@@ -224,6 +230,9 @@ export function SearchResultsPage({
                   />
                 ) : shown.status === 'success' ? (
                   <>
+                    {hits.length === 0 ? (
+                      <p className="search-page-partial">No pages in {folder}/ among the results loaded so far.</p>
+                    ) : null}
                     <ul ref={listRef} id={listId} className={`search-page-results${stale ? ' is-stale' : ''}`} aria-label="Results">
                       {hits.map((hit, position) => {
                         const artifact = artifactsById.get(hit.id)
@@ -234,6 +243,7 @@ export function SearchResultsPage({
                               href={hitHref(hit)}
                               className="search-page-result-link"
                               data-hit-id={hit.id}
+                              aria-current={position === active && !stale ? 'true' : undefined}
                               onClick={(event) => followInApp(event, () => onOpenHit(hit))}
                             >
                               <span className="search-page-result-title"><Highlighted text={title} query={query} /></span>

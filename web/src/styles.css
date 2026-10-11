@@ -3296,6 +3296,12 @@ mark {
   text-decoration: underline;
 }
 
+.search-page-partial {
+  margin: 0 0 6px;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+}
+
 .search-page-message {
   margin: 0;
 }

@@ -231,11 +231,15 @@ export function MarkdownArtifact({
       onMatches?.([])
       return
     }
-    return keepSearchHighlighted(article, highlightQuery, (first) => {
+    const stop = keepSearchHighlighted(article, highlightQuery, (first) => {
       if (scrolledQuery.current === highlightQuery) return
       scrolledQuery.current = highlightQuery
       if (!hash && !readerScroll.current?.scrolled) first.startContainer.parentElement?.scrollIntoView({ block: 'center' })
     }, onMatches)
+    return () => {
+      stop()
+      onMatches?.([])
+    }
   }, [source, highlightQuery, hash, onMatches])
 
   useEffect(() => () => clearSearchHighlight(document), [])

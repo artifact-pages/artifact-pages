@@ -4937,13 +4937,13 @@ test.describe('page text search', () => {
     await expect(sidebar(page).locator('.page-text-results')).toHaveCount(0)
 
     // ↑/↓ move through the results while the field has focus; Enter opens the active one.
-    await expect(field(page)).not.toHaveAttribute('aria-activedescendant', /.+/)
+    await expect(page.locator('.search-page-result a[aria-current]')).toHaveCount(0)
     await page.keyboard.press('ArrowDown')
     await page.keyboard.press('ArrowDown')
     const active = page.locator('.search-page-result[data-active]')
     await expect(active).toHaveCount(1)
     await expect(active.locator('[data-hit-id]')).toHaveAttribute('data-hit-id', 'reports/latency-retrospective.md')
-    await expect(field(page)).toHaveAttribute('aria-activedescendant', (await active.getAttribute('id'))!)
+    await expect(active.locator('a')).toHaveAttribute('aria-current', 'true')
     await page.keyboard.press('ArrowUp')
     await expect(active.locator('[data-hit-id]')).toHaveAttribute('data-hit-id', 'incidents/checkout-latency/index.html')
     await page.keyboard.press('ArrowUp')
@@ -5161,8 +5161,12 @@ test.describe('page text search', () => {
     await expect(page.locator('.search-page-facets')).toHaveCount(0)
     await page.goto('/textsearch/_search?q=lighthouse&in=bulk')
     await expect(hits(page)).toHaveCount(20)
+    // The count says the list is partial rather than claiming a folder total.
+    await expect(status(page)).toHaveText('20 pages in bulk/ so far, among 20 of 24 pages that contain “lighthouse”')
+    // No match among the first page: further pages load by themselves, and "no matches" appears only once the list has ended.
     await page.goto('/textsearch/_search?q=lighthouse&in=guides')
     await expect(page.getByRole('heading', { name: 'No pages in guides/ contain “lighthouse”' })).toBeVisible()
+    await expect(page.locator('.search-page-more')).toHaveCount(0)
   })
 
   test('"Show more" leaves focus where the reader moved it while the page loaded', async ({ page }) => {
@@ -5597,6 +5601,16 @@ test.describe('page text search', () => {
     await page.goto('/textsearch/long/scroll-target.md')
     await expect(page.getByTestId('markdown-document')).toBeVisible()
     await expect(matchNav(page)).toHaveCount(0)
+  })
+
+  test('the match navigator starts over on another page and never keeps the previous count', async ({ page }) => {
+    await page.goto('/textsearch/long/scroll-target.md?q=word')
+    await expect(matchNav(page).locator('.match-nav-count')).toHaveText(/^1 \/ \d+$/)
+    await matchNav(page).getByRole('button', { name: 'Next match' }).click()
+    await expect(matchNav(page).locator('.match-nav-count')).toHaveText(/^2 \/ \d+$/)
+    // Another page starts at 1 again.
+    await changeUrl(page, '/textsearch/long/scroll-target.html?q=word')
+    await expect(matchNav(page).locator('.match-nav-count')).toHaveText(/^1 \/ \d+$/)
   })
 
   test('the palette opens the results page from its full-text entry', async ({ page }) => {

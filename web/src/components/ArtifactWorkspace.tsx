@@ -155,9 +155,14 @@ export function ArtifactWorkspace({
   const highlightQuery = navigatorKey && closedNavigatorKey !== navigatorKey ? pageQuery : ''
   const highlightQueryRef = useRef(highlightQuery)
   highlightQueryRef.current = highlightQuery
-  const [matchRanges, setMatchRanges] = useState<Range[]>([])
+  // Ranges belong to the page and query they were found for: a report is filed under the key current when it
+  // arrives, so a new page or query never shows the previous count or steps through its detached ranges.
+  const navigatorKeyRef = useRef(navigatorKey)
+  navigatorKeyRef.current = navigatorKey
+  const [reportedMatches, setReportedMatches] = useState<{ key: string; ranges: Range[] }>({ key: '', ranges: [] })
+  const matchRanges = reportedMatches.key === navigatorKey ? reportedMatches.ranges : NO_RANGES
   const [matchIndex, setMatchIndex] = useState(0)
-  const reportMatches = useCallback((ranges: Range[]) => setMatchRanges(ranges), [])
+  const reportMatches = useCallback((ranges: Range[]) => setReportedMatches({ key: navigatorKeyRef.current, ranges }), [])
   const currentMatch = clampMatch(matchIndex, matchRanges.length)
   const navigatorVisible = highlightQuery !== '' && matchRanges.length > 0
   useEffect(() => setMatchIndex(0), [navigatorKey])
@@ -216,7 +221,9 @@ export function ArtifactWorkspace({
   // already open (a palette hand-off with a new query) focus is moved here.
   function openSearchResults(query: string, folder?: string) {
     setPaletteSeed(null)
-    navigate(searchRouteHref(index.site.id, query, folder))
+    const target = searchRouteHref(index.site.id, query, folder)
+    // Opening the page that is already open must not add a history entry.
+    navigate(target, { replace: target === `${pathname}${search}` })
     if (window.innerWidth <= 860) updateSidebarOpen(false)
     window.requestAnimationFrame(() => document.getElementById(SEARCH_PAGE_INPUT_ID)?.focus())
   }
@@ -1195,6 +1202,7 @@ function highlightFrame(iframe: HTMLIFrameElement, query: string, scrollToFirst:
     }, onMatches)
     frameHighlightCleanup.set(iframe, () => {
       stop()
+      onMatches([])
       reader?.dispose()
     })
   } catch {
@@ -1251,6 +1259,8 @@ function watchFrameHeight(iframe: HTMLIFrameElement, onHeight: (height: number) 
 function withSearchQuery(href: string, query: string) {
   return `${href}?${new URLSearchParams({ q: query })}`
 }
+
+const NO_RANGES: Range[] = []
 
 function findArtifact(index: SiteIndex, path: string) {
   return index.artifacts.find((artifact) => artifact.path === path || artifact.id === path)
