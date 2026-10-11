@@ -97,3 +97,11 @@ test('page counts are pluralised', () => {
   assert.equal(pageCountLabel(1), '1 page')
   assert.equal(pageCountLabel(3), '3 pages')
 })
+
+test('README.md wins over readme.md in the same folder and the other is listed', () => {
+  const listing = resolveDirectory([page('x/readme.md', 'Lower'), page('x/README.md', 'Upper'), page('x/a.md', 'A')], 'x')
+  assert.equal(listing.indexArtifact?.path, 'x/README.md')
+  assert.deepEqual(listing.pages.map(({ path }) => path), ['x/a.md', 'x/readme.md'])
+  const reversed = resolveDirectory([page('x/README.md', 'Upper'), page('x/readme.md', 'Lower')], 'x')
+  assert.equal(reversed.indexArtifact?.path, 'x/README.md')
+})

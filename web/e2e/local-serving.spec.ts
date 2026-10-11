@@ -6271,3 +6271,88 @@ test.describe('directory pages', () => {
     await page.close()
   })
 })
+
+// ISSUE-075 review follow-ups: scrolling inside a directory page.
+test.describe('directory page scrolling', () => {
+  const field = (page: Page) => page.getByRole('searchbox', { name: 'Search page text in Text Search' })
+
+  /** `long/` gets a README.md and (second site variant) an index.html, both reusing the long scroll-target pages. */
+  async function routeLongIndex(page: Page, kind: 'markdown' | 'html') {
+    await registerTextSearchSite(page)
+    await page.route('**/_indexes/textsearch/index.json', async (route) => {
+      const response = await route.fetch()
+      const index = await response.json()
+      const source = kind === 'markdown' ? 'long/scroll-target.md' : 'long/scroll-target.html'
+      const original = index.artifacts.find((artifact: { path: string }) => artifact.path === source)
+      expect(original, 'the generated textsearch site has the long scroll-target pages').toBeTruthy()
+      index.artifacts.push({
+        ...original,
+        id: `long/${kind === 'markdown' ? 'README.md' : 'index.html'}`,
+        path: `long/${kind === 'markdown' ? 'README.md' : 'index.html'}`,
+        title: 'Long folder index',
+      })
+      await route.fulfill({ response, json: index })
+    })
+  }
+
+  test('moving to another folder page starts at the top', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 600 })
+    await page.route('**/_indexes/sre/index.json', async (route) => {
+      const response = await route.fetch()
+      const index = await response.json()
+      const template = index.artifacts.find((artifact: { format: string }) => artifact.format === 'markdown')
+      for (let number = 1; number <= 40; number += 1) {
+        const path = `big/page-${String(number).padStart(2, '0')}.md`
+        index.artifacts.push({ ...template, id: path, path, title: `Big page ${number}`, toc: [] })
+      }
+      index.artifacts.push({ ...template, id: 'big/sub/inner.md', path: 'big/sub/inner.md', title: 'Inner', toc: [] })
+      await route.fulfill({ response, json: index })
+    })
+    await page.goto('/sre/big')
+    const scroller = page.locator('.directory-scroll')
+    await scroller.evaluate((element) => { element.scrollTop = 600 })
+    expect(await scroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(300)
+    await page.locator('.browse-tree a[data-tree-folder="big/sub"]').click()
+    await expect(page).toHaveURL('/sre/big/sub')
+    await expect.poll(() => page.locator('.directory-scroll').evaluate((element) => element.scrollTop)).toBe(0)
+  })
+
+  test('a Markdown index body scrolls the directory page to a first match and respects reader scrolling', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 })
+    await routeLongIndex(page, 'markdown')
+    await page.goto('/textsearch/long?q=zephyrmarker')
+    const reader = page.getByTestId('markdown-document')
+    await expect(reader.getByText('The zephyrmarker word is at the end.')).toBeInViewport()
+    expect(await page.locator('.directory-scroll').evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+
+    await page.goto('/textsearch/long#middle-section')
+    await expect(reader.getByRole('heading', { name: 'Middle section' })).toBeInViewport()
+
+    // Scrolling the directory page by hand (outside the article) means a match that turns up late does not pull it away.
+    await page.goto('/textsearch/long?q=latemarker')
+    await expect(reader.locator('h1')).toBeInViewport()
+    await page.mouse.move(1260, 400)
+    await page.mouse.wheel(0, 40)
+    await page.evaluate(() => {
+      document.querySelector('.markdown-article')!.append(Object.assign(document.createElement('p'), { textContent: 'The latemarker word arrives late.' }))
+    })
+    await expect.poll(() => page.evaluate(() => (
+      (CSS as unknown as { highlights: Map<string, Set<Range>> }).highlights.get('gap-page-text-search')?.size ?? 0
+    ))).toBe(1)
+    await expect(reader.getByText('The latemarker word arrives late.')).not.toBeInViewport()
+  })
+
+  test('an HTML index body scrolls the directory page to a fragment and to a first match', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 })
+    await routeLongIndex(page, 'html')
+    const frame = page.frameLocator('iframe.artifact-frame')
+
+    await page.goto('/textsearch/long#middle-section')
+    await expect(frame.getByRole('heading', { name: 'Middle section' })).toBeInViewport()
+    expect(await page.locator('.directory-scroll').evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+
+    await page.goto('/textsearch/long?q=zephyrmarker')
+    await expect(frame.getByText('The zephyrmarker word is at the end.')).toBeInViewport()
+    expect(await page.locator('.directory-scroll').evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+  })
+})

@@ -45,7 +45,10 @@ function compareTitles(left: ArtifactIndexEntry, right: ArtifactIndexEntry) {
 /** The folder's README or index page, if it has one among its direct pages. */
 export function findIndexArtifact(pages: readonly ArtifactIndexEntry[]) {
   for (const name of INDEX_FILE_NAMES) {
-    const found = pages.find((page) => (page.path.split('/').at(-1) ?? '').toLowerCase() === name)
+    // Several files can match once case is ignored; the code-point order of the path decides, so the choice never depends on index order.
+    const found = pages
+      .filter((page) => (page.path.split('/').at(-1) ?? '').toLowerCase() === name)
+      .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0))[0]
     if (found) return found
   }
   return undefined

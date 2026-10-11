@@ -337,10 +337,10 @@ export function ArtifactWorkspace({
   }, [sidebarReveal, sidebarOpen])
 
   useEffect(() => {
-    if (recentReads !== undefined || !currentArtifact || lastRecordedArtifactId.current === currentArtifact.id) return
-    lastRecordedArtifactId.current = currentArtifact.id
-    setStoredRecentReads(recordRecentArtifactRead(index.site.id, currentArtifact.id, storedRecentReads))
-  }, [currentArtifact?.id, index.site.id, recentReads, storedRecentReads])
+    if (recentReads !== undefined || !bodyArtifact || lastRecordedArtifactId.current === bodyArtifact.id) return
+    lastRecordedArtifactId.current = bodyArtifact.id
+    setStoredRecentReads(recordRecentArtifactRead(index.site.id, bodyArtifact.id, storedRecentReads))
+  }, [bodyArtifact?.id, index.site.id, recentReads, storedRecentReads])
 
   useEffect(() => {
     if (paletteSeed === null) return
@@ -422,10 +422,10 @@ export function ArtifactWorkspace({
       onSelect: () => togglePanel('details'),
     },
     {
-      title: currentArtifact && pinnedArtifactIds.includes(currentArtifact.id) ? 'Unpin artifact' : 'Pin artifact',
-      available: Boolean(currentArtifact),
+      title: bodyArtifact && pinnedArtifactIds.includes(bodyArtifact.id) ? 'Unpin artifact' : 'Pin artifact',
+      available: Boolean(bodyArtifact),
       onSelect: () => {
-        if (currentArtifact) toggleArtifactPin(currentArtifact)
+        if (bodyArtifact) toggleArtifactPin(bodyArtifact)
       },
     },
     { title: 'Go to site home', onSelect: () => navigateWithinWorkspace(`/${encodeURIComponent(index.site.id)}`) },
@@ -586,7 +586,7 @@ export function ArtifactWorkspace({
       // fragment stays a same-document navigation (to the top of the page), so
       // the frame is not reloaded and does not scroll to the first match again.
       frameWindow.location.replace(hash ? frameUrl.href : `${frameUrl.href}#`)
-      scrollFrameToFragment(frameWindow, hash)
+      scrollFrameToFragment(frameWindow, hash, iframe.closest<HTMLElement>('.directory-scroll'))
     } catch {
       // Cross-origin redirects remain isolated; same-origin artifacts receive the logical fragment.
     }
@@ -621,6 +621,21 @@ export function ArtifactWorkspace({
   const frameHeightCleanup = useRef<(() => void) | null>(null)
   useEffect(() => () => frameHeightCleanup.current?.(), [])
   useEffect(() => { setDirectoryFrameHeight(null) }, [htmlArtifactUrl])
+  // The first measured height lets the directory page scroll as far as a fragment needs.
+  const settleHostScroll = useRef(false)
+  useEffect(() => {
+    if (!settleHostScroll.current || !directoryFrameHeight) return
+    settleHostScroll.current = false
+    const frame = htmlFrameRef.current
+    const frameWindow = frame?.contentWindow
+    if (!frame || !frameWindow) return
+    window.requestAnimationFrame(() => {
+      try {
+        if (hashRef.current) scrollFrameToFragment(frameWindow, hashRef.current, frame.closest<HTMLElement>('.directory-scroll'))
+        else hostMatchScroll.get(frame)?.()
+      } catch { /* cross-origin */ }
+    })
+  }, [directoryFrameHeight])
 
   const artifactView = bodyArtifact && currentFormat === 'markdown' ? (
     <MarkdownArtifact
@@ -649,6 +664,7 @@ export function ArtifactWorkspace({
         syncHtmlFrameLocation(event.currentTarget)
         highlightFrame(event.currentTarget, committedQueryRef.current, !hash)
         frameHeightCleanup.current?.()
+        settleHostScroll.current = Boolean(currentDirectory)
         frameHeightCleanup.current = currentDirectory ? watchFrameHeight(event.currentTarget, setDirectoryFrameHeight) : null
       }}
     />
@@ -777,7 +793,7 @@ export function ArtifactWorkspace({
                 <Icon name="search" size={12} />
                 <span className="context-search-chip-query">{committedQuery}</span>
                 {textSearch.state.status === 'success' ? (
-                  <span className="context-search-chip-count">{searchPositionLabel(textSearch.state, textSearch.scopeFolder, currentArtifact?.id)}</span>
+                  <span className="context-search-chip-count">{searchPositionLabel(textSearch.state, textSearch.scopeFolder, bodyArtifact?.id)}</span>
                 ) : null}
               </button>
             ) : null}
@@ -804,19 +820,19 @@ export function ArtifactWorkspace({
                   <span>{index.site.title} home</span>
                 </button>
               ) : null}
-              {currentArtifact ? (
+              {bodyArtifact ? (
                 <button
-                  className={`context-button current-artifact-pin-button${pinnedArtifactIds.includes(currentArtifact.id) ? ' is-active' : ''}`}
+                  className={`context-button current-artifact-pin-button${pinnedArtifactIds.includes(bodyArtifact.id) ? ' is-active' : ''}`}
                   type="button"
-                  aria-label={`${pinnedArtifactIds.includes(currentArtifact.id) ? 'Unpin' : 'Pin'} ${currentArtifact.title}`}
-                  aria-pressed={pinnedArtifactIds.includes(currentArtifact.id)}
-                  title={pinnedArtifactIds.includes(currentArtifact.id)
-                    ? `Unpin ${currentArtifact.title}`
-                    : `Pin ${currentArtifact.title} for later`}
-                  onClick={() => toggleArtifactPin(currentArtifact)}
+                  aria-label={`${pinnedArtifactIds.includes(bodyArtifact.id) ? 'Unpin' : 'Pin'} ${bodyArtifact.title}`}
+                  aria-pressed={pinnedArtifactIds.includes(bodyArtifact.id)}
+                  title={pinnedArtifactIds.includes(bodyArtifact.id)
+                    ? `Unpin ${bodyArtifact.title}`
+                    : `Pin ${bodyArtifact.title} for later`}
+                  onClick={() => toggleArtifactPin(bodyArtifact)}
                 >
                   <Icon name="pin" size={14} />
-                  <span>{pinnedArtifactIds.includes(currentArtifact.id) ? 'Pinned' : 'Pin'}</span>
+                  <span>{pinnedArtifactIds.includes(bodyArtifact.id) ? 'Pinned' : 'Pin'}</span>
                 </button>
               ) : null}
               {bodyArtifact ? (
@@ -873,6 +889,7 @@ export function ArtifactWorkspace({
           <main ref={stageRef} id="main-content" tabIndex={-1} className={`stage${currentArtifact ? ' has-artifact' : ''}`} data-heading-jump={headingJump ?? undefined}>
             {currentDirectory ? (
               <DirectoryPage
+                key={currentDirectory.path}
                 listing={currentDirectory}
                 siteId={index.site.id}
                 body={currentDirectory.indexArtifact ? artifactView : undefined}
@@ -992,17 +1009,27 @@ export function ArtifactWorkspace({
 // can skip that scroll when the navigation lands while the frame is being
 // resized or restored by a history traversal, leaving the reader at the old
 // position. Apply the target position explicitly so the result never depends on it.
-function scrollFrameToFragment(frameWindow: Window, hash: string) {
+function scrollFrameToFragment(frameWindow: Window, hash: string, host: HTMLElement | null = null) {
   const document = frameWindow.document
   if (!hash) {
-    frameWindow.scrollTo(0, 0)
+    if (!host) frameWindow.scrollTo(0, 0)
     return
   }
   let id = hash.slice(1)
   try { id = decodeURIComponent(id) } catch { /* keep the raw fragment */ }
   const target = document.getElementById(id) ?? document.getElementsByName(id)[0]
+  if (!target) return
+  const offsetInFrame = target.getBoundingClientRect().top + frameWindow.scrollY
+  if (host) {
+    // A frame inside a directory page is as tall as its document, so the directory page scrolls.
+    const frame = frameWindow.frameElement
+    if (!frame) return
+    const frameTop = frame.getBoundingClientRect().top - host.getBoundingClientRect().top + host.scrollTop
+    host.scrollTo({ top: Math.max(0, frameTop + offsetInFrame), behavior: 'instant' })
+    return
+  }
   // scrollTo keeps the scroll inside the frame; scrollIntoView would also move the app page.
-  if (target) frameWindow.scrollTo(0, target.getBoundingClientRect().top + frameWindow.scrollY)
+  frameWindow.scrollTo(0, offsetInFrame)
 }
 
 /** The language an HTML artifact declares on its own `<html>`; undefined when it declares none or the frame is cross-origin. */
@@ -1029,9 +1056,30 @@ function highlightFrame(iframe: HTMLIFrameElement, query: string, scrollToFirst:
     // page.html#section, which leaves the app URL unchanged) wins as well.
     const scroll = scrollToFirst && !iframe.contentWindow?.location.hash
     // A match found after the reader started scrolling the page does not move it.
-    const reader = document.defaultView ? watchReaderScroll(document.defaultView) : undefined
+    const host = iframe.closest<HTMLElement>('.directory-scroll')
+    const frameReader = document.defaultView ? watchReaderScroll(document.defaultView) : undefined
+    const hostReader = host ? watchReaderScroll(host) : undefined
+    const reader = frameReader ? {
+      get scrolled() { return frameReader.scrolled || Boolean(hostReader?.scrolled) },
+      dispose() { frameReader.dispose(); hostReader?.dispose() },
+    } : undefined
     const stop = keepSearchHighlighted(document.body, query, (first) => {
-      if (scroll && !reader?.scrolled) first.startContainer.parentElement?.scrollIntoView({ block: 'center' })
+      const element = first.startContainer.parentElement
+      if (!scroll || reader?.scrolled || !element) return
+      if (!host) {
+        element.scrollIntoView({ block: 'center' })
+        return
+      }
+      // In a directory page the frame is as tall as its document, so the page around it scrolls.
+      const scrollHost = () => {
+        if (reader?.scrolled) return
+        const rect = element.getBoundingClientRect()
+        const frameTop = iframe.getBoundingClientRect().top - host.getBoundingClientRect().top + host.scrollTop
+        const top = frameTop + rect.top + (iframe.contentWindow?.scrollY ?? 0) - host.clientHeight / 2 + rect.height / 2
+        host.scrollTo({ top: Math.max(0, top), behavior: 'instant' })
+      }
+      hostMatchScroll.set(iframe, scrollHost)
+      scrollHost()
     })
     frameHighlightCleanup.set(iframe, () => {
       stop()
@@ -1043,6 +1091,8 @@ function highlightFrame(iframe: HTMLIFrameElement, query: string, scrollToFirst:
 }
 
 const frameHighlightCleanup = new WeakMap<HTMLIFrameElement, () => void>()
+/** Scrolls a directory page to the first search match in its HTML index frame; re-run once the frame has its full height. */
+const hostMatchScroll = new WeakMap<HTMLIFrameElement, () => void>()
 
 function searchPositionLabel(
   state: Extract<PageTextSearchState, { status: 'success' }>,

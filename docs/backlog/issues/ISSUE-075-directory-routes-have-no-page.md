@@ -69,3 +69,4 @@ Implemented on branch `claude-issue-075-directory-pages` (web only; pure logic i
 - Chips link to the heading anchor of the page rather than an expandable outline. Order is alphabetical (folders by name, pages by title) until ISSUE-076 and TD19; `directory.test.mjs` pins that order.
 - Verified: unit tests (`web/src/domain/directory.test.mjs`), Playwright e2e ("directory pages" in `web/e2e/local-serving.spec.ts`) including 390 px, and Storybook `Product/Directory page`.
 - Open: the command palette AC is satisfied by the ISSUE-079 change; set Done once that merges. Per-child descriptions wait for TD19.
+- Known limitation: the child lists are not virtualized, so a folder with thousands of direct children renders every row.
