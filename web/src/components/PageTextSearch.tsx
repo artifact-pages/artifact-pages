@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
 import type { FullTextHit } from '../data/fulltext'
 import type { ArtifactIndexEntry, SiteIndex } from '../domain/index'
+import { folderOfPath, matchReason, scopeHits, type MatchReason } from '../domain/search-ranking'
 import { searchTerms } from '../domain/text-highlight'
 import { Icon } from './Icon'
 import { followInApp } from './spa-link'
 import { describePageTextSearchError, type PageTextSearchState } from './usePageTextSearch'
 
 export const PAGE_TEXT_SEARCH_INPUT_ID = 'page-text-search'
+const RESULT_LIST_ID = 'page-text-search-results'
 
 export function PageTextSearchBar({
   siteTitle,
@@ -83,6 +85,9 @@ export function PageTextSearchResults({
   committedQuery,
   draft,
   currentArtifactId,
+  currentArtifactPath,
+  scopeFolder,
+  onScopeChange,
   listRef,
   onOpen,
   hitHref,
@@ -95,6 +100,10 @@ export function PageTextSearchResults({
   committedQuery: string
   draft: string
   currentArtifactId?: string
+  currentArtifactPath?: string
+  /** Folder the ranked list is limited to, or null. */
+  scopeFolder: string | null
+  onScopeChange: (folder: string | null) => void
   listRef: RefObject<HTMLDivElement | null>
   onOpen: (hit: FullTextHit) => void
   /** The link target of a result row. */
@@ -106,8 +115,23 @@ export function PageTextSearchResults({
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
   const artifactsById = useMemo(() => new Map(index.artifacts.map((artifact) => [artifact.id, artifact])), [index.artifacts])
   const pendingDraft = draft.trim() && draft.trim() !== committedQuery ? draft.trim() : ''
-  const hits = state.status === 'success' ? state.hits : []
+  const ranked = state.status === 'success' && state.ranked
+  // Folder scope: off by default, offered only for a page inside a folder, and
+  // limited to the folder it was switched on for. A new query resets it.
+  const openFolder = currentArtifactPath ? folderOfPath(currentArtifactPath) : ''
+  const allHits = state.status === 'success' ? state.hits : []
+  const scope = ranked ? scopeFolder : null
+  const hits = useMemo(() => scopeHits(allHits, scope), [allHits, scope])
+  // Why each page matched, computed once per list rather than on every render.
+  const reasons = useMemo(
+    () => new Map(ranked && state.status === 'success'
+      ? hits.map((hit) => [hit.id, matchReason(state.query, artifactsById.get(hit.id))] as const)
+      : []),
+    [ranked, hits, state, artifactsById],
+  )
   const groups = useMemo(() => groupByFolder(hits), [hits])
+  // The paged fallback has loaded only part of the list; its total comes from the search.
+  const shownTotal = state.status === 'success' && scope === null ? state.total : hits.length
   const position = currentArtifactId ? hits.findIndex(({ id }) => id === currentArtifactId) : -1
 
   // "Show more" keeps keyboard focus: once the next page arrives, focus moves
@@ -191,7 +215,7 @@ export function PageTextSearchResults({
     } else if (event.key === 'Home' || event.key === 'End') {
       event.preventDefault()
       items[event.key === 'Home' ? 0 : items.length - 1]?.focus()
-    } else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+    } else if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && !ranked) {
       const folder = item.dataset.folder ?? ''
       const isGroup = item.dataset.textSearchItem === 'group'
       if (isGroup) {
@@ -214,7 +238,7 @@ export function PageTextSearchResults({
           role="status"
         >
           <Icon name="search" size={12} />
-          {statusLabel(state, index.artifacts.length)}
+          {statusLabel(state, index.artifacts.length, scope === null ? undefined : { folder: scope, shown: hits.length })}
         </span>
         {pendingDraft ? (
           <span className="sidebar-section-label page-text-search-pending">
@@ -223,7 +247,7 @@ export function PageTextSearchResults({
           </span>
         ) : null}
         {state.status === 'success' && state.total > 0 ? (
-          <span className="mono">{position >= 0 ? `${position + 1} / ${state.total}` : state.total}</span>
+          <span className="mono">{position >= 0 ? `${position + 1} / ${shownTotal}` : shownTotal}</span>
         ) : null}
       </div>
 
@@ -244,12 +268,44 @@ export function PageTextSearchResults({
             : 'Check the spelling or try a different word.'}
         />
       ) : state.status === 'success' ? (
+        <>
+        {ranked && (openFolder || scope !== null) ? (
+          <div className="page-text-scope-row">
+            {/* One persistent toggle: focus stays on it when the scope changes. */}
+            <button
+              type="button"
+              className={`page-text-scope-chip${scope === null ? ' is-offer' : ''}`}
+              aria-pressed={scope !== null}
+              aria-controls={RESULT_LIST_ID}
+              onClick={() => onScopeChange(scope === null ? openFolder : null)}
+            >
+              Search only in {(scope ?? openFolder) ? `${scope ?? openFolder}/` : 'the top level'}
+              {scope !== null ? <Icon name="close" size={11} /> : null}
+            </button>
+          </div>
+        ) : null}
         <div
           ref={listRef}
-          className={`page-text-result-list${pendingDraft ? ' is-stale' : ''}`}
+          id={RESULT_LIST_ID}
+          className={`page-text-result-list${ranked ? ' is-ranked' : ''}${pendingDraft ? ' is-stale' : ''}`}
           onKeyDown={handleKeyDown}
         >
-          {groups.map(({ folder, hits: groupHits }) => {
+          {ranked && hits.length === 0 ? (
+            <p className="page-text-scope-note">No matches in {scope ? `${scope}/` : 'the top level'}. Turn the scope off to see all {allHits.length}.</p>
+          ) : null}
+          {ranked ? hits.map((hit) => (
+            <ResultRow
+              key={hit.id}
+              hit={hit}
+              folder=""
+              artifact={artifactsById.get(hit.id)}
+              current={hit.id === currentArtifactId}
+              href={hitHref(hit)}
+              onOpen={onOpen}
+              reason={reasons.get(hit.id)}
+              showPath={scope === null}
+            />
+          )) : groups.map(({ folder, hits: groupHits }) => {
             const isCollapsed = collapsed.has(folder)
             return (
               <div className="page-text-result-group" key={folder}>
@@ -299,6 +355,10 @@ export function PageTextSearchResults({
             {state.more === 'error' ? 'Could not load more results.' : ''}
           </span>
         </div>
+        {scope !== null && allHits.length > hits.length ? (
+          <p className="page-text-scope-note">{allHits.length - hits.length} more {allHits.length - hits.length === 1 ? 'match' : 'matches'} outside {scope ? `${scope}/` : 'the top level'}</p>
+        ) : null}
+        </>
       ) : null}
     </div>
   )
@@ -313,6 +373,8 @@ function ResultRow({
   current,
   href,
   onOpen,
+  reason,
+  showPath,
 }: {
   hit: FullTextHit
   folder: string
@@ -320,6 +382,9 @@ function ResultRow({
   current: boolean
   href: string
   onOpen: (hit: FullTextHit) => void
+  /** Present in the ranked list: why the page matched. */
+  reason?: MatchReason
+  showPath?: boolean
 }) {
   const filename = hit.path.slice(folder ? folder.length + 1 : 0)
   return (
@@ -333,8 +398,23 @@ function ResultRow({
       title={hit.path}
       onClick={(event) => followInApp(event, () => onOpen(hit))}
     >
-      <span className="page-text-result-title">{artifact?.title ?? filename}</span>
-      <span className="page-text-result-path">{filename}</span>
+      {reason ? (
+        <>
+          <span className="page-text-result-title-line">
+            <span className="page-text-result-title">{artifact?.title ?? filename}</span>
+            {showPath ? <span className="page-text-result-flat-path">{hit.path.replace(/\.[^./]+$/, '')}</span> : null}
+          </span>
+          <span className="page-text-result-reason" data-reason={reason.tier}>
+            <span className="page-text-visually-hidden">Matches in: </span>
+            {reason.tier === 'title' ? <b>Title</b> : reason.tier === 'heading' ? <><b>Heading:</b> <span className="page-text-result-reason-heading">{reason.heading}</span></> : <b>Text</b>}
+          </span>
+        </>
+      ) : (
+        <>
+          <span className="page-text-result-title">{artifact?.title ?? filename}</span>
+          <span className="page-text-result-path">{filename}</span>
+        </>
+      )}
     </a>
   )
 }
@@ -364,14 +444,17 @@ function PageTextSearchMessage({
   )
 }
 
-function statusLabel(state: PageTextSearchState, documentCount: number) {
+function statusLabel(state: PageTextSearchState, documentCount: number, scope?: { folder: string; shown: number }) {
   if (state.status === 'loading') return `Searching ${documentCount.toLocaleString('en-US')} pages…`
   if (state.status === 'error') return `“${state.query}”`
+  if (state.status === 'success' && scope) {
+    return `${scope.shown.toLocaleString('en-US')} ${scope.shown === 1 ? 'page' : 'pages'} in ${scope.folder ? `${scope.folder}/` : 'the top level'} contain “${state.query}”`
+  }
   if (state.status === 'success') return `${state.total.toLocaleString('en-US')} ${state.total === 1 ? 'page contains' : 'pages contain'} “${state.query}”`
   return 'Page text'
 }
 
-// Results arrive in path order; grouping by folder keeps that order readable.
+// The fallback list (too many hits to rank) arrives in path order; grouping by folder keeps that order readable.
 function groupByFolder(hits: FullTextHit[]): ResultGroup[] {
   const groups = new Map<string, FullTextHit[]>()
   for (const hit of hits) {
@@ -383,10 +466,7 @@ function groupByFolder(hits: FullTextHit[]): ResultGroup[] {
   return [...groups].map(([folder, groupHits]) => ({ folder, hits: groupHits }))
 }
 
-function folderOf(path: string) {
-  const slash = path.lastIndexOf('/')
-  return slash < 0 ? '' : path.slice(0, slash)
-}
+const folderOf = folderOfPath
 
 function toggled(set: Set<string>, value: string, include: boolean) {
   if (set.has(value) === include) return set

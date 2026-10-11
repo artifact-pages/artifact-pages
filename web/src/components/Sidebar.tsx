@@ -15,6 +15,8 @@ import type { PageTextSearchState } from './usePageTextSearch'
 export type SidebarPageTextSearch = {
   committedQuery: string
   state: PageTextSearchState
+  scopeFolder: string | null
+  onScopeChange: (folder: string | null) => void
   onCommit: (query: string) => void
   onClear: () => void
   onRetry: () => void
@@ -206,6 +208,9 @@ export function Sidebar({
             committedQuery={committedQuery}
             draft={draft}
             currentArtifactId={currentArtifactId}
+            currentArtifactPath={artifactPath}
+            scopeFolder={pageTextSearch.scopeFolder}
+            onScopeChange={pageTextSearch.onScopeChange}
             listRef={resultListRef}
             onOpen={pageTextSearch.onOpenHit}
             hitHref={(hit) => artifactHref(hit.href)}

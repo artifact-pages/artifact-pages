@@ -17,6 +17,8 @@ const sites = storyIndexes.map((index) => ({
 
 type PageTextSearchStoryArgs = {
   search: StoryFullTextBehavior | 'unavailable'
+  /** 'paged' lowers the ranking threshold so the path-ordered fallback shows. */
+  ranking: 'ranked' | 'paged'
   startAt: 'site-home' | 'html' | 'markdown'
   query: string
   initialSidebarOpen: boolean
@@ -29,7 +31,7 @@ const startPaths = {
   markdown: 'reports/latency-retrospective.md',
 }
 
-function PageTextSearchStory({ search: behavior, startAt, query, initialSidebarOpen, theme }: PageTextSearchStoryArgs) {
+function PageTextSearchStory({ search: behavior, ranking, startAt, query, initialSidebarOpen, theme }: PageTextSearchStoryArgs) {
   const index = deepSreIndex
   const [route, setRoute] = useState<Extract<AppRoute, { kind: 'site' }>>({ kind: 'site', siteId: index.site.id, artifactPath: startPaths[startAt] })
   const [location, setLocation] = useState({ search: query ? `?q=${encodeURIComponent(query)}` : '', hash: '' })
@@ -73,6 +75,7 @@ function PageTextSearchStory({ search: behavior, startAt, query, initialSidebarO
       onSetThemeMode={setThemeMode}
       index={index}
       fullTextSearch={fullTextSearch}
+      rankingMaxHits={ranking === 'paged' ? 20 : undefined}
       initialExpandedPaths={deepExpandedPaths}
       initialSidebarOpen={initialSidebarOpen}
     />
@@ -85,12 +88,13 @@ const meta = {
     layout: 'fullscreen',
     docs: {
       description: {
-        component: 'Find pages by name with ⌘ K; search their text from the sidebar with ⌘ ⇧ F. A query runs only when it is committed with Enter, its results replace Pinned and Browse until it is cleared, and the committed terms are highlighted in the open page. This story searches the fixture pages in the browser instead of loading a generated search projection.',
+        component: 'Find pages by name with ⌘ K; search their text from the sidebar with ⌘ ⇧ F. A query runs only when it is committed with Enter, its results replace Pinned and Browse until it is cleared (ranked as title, heading, then text matches with a reason line, or in path order above the ranking threshold), and the committed terms are highlighted in the open page. This story searches the fixture pages in the browser instead of loading a generated search projection.',
       },
     },
   },
   args: {
     search: 'ready',
+    ranking: 'ranked',
     startAt: 'html',
     query: '',
     initialSidebarOpen: true,
@@ -99,9 +103,10 @@ const meta = {
   argTypes: {
     search: {
       control: 'radio',
-      options: ['ready', 'slow', 'network-error', 'invalid-data', 'unavailable'],
+      options: ['ready', 'slow', 'network-error', 'invalid-data', 'many-results', 'unavailable'],
       description: 'How the site\'s search data behaves.',
     },
+    ranking: { control: 'radio', options: ['ranked', 'paged'], description: 'Ranked list when every hit can be loaded, or the path-ordered fallback above the threshold.' },
     startAt: { control: 'radio', options: ['site-home', 'html', 'markdown'] },
     query: { control: 'text', description: 'The committed query in the URL (?q=).' },
     initialSidebarOpen: { control: 'boolean' },
@@ -160,4 +165,19 @@ export const Unavailable: Story = {
 export const CollapsedSidebar: Story = {
   name: 'Sidebar collapsed · results chip',
   args: { query: 'latency', initialSidebarOpen: false },
+}
+
+export const RankedResults: Story = {
+  name: 'Ranked results · Title / Heading / Text reasons',
+  args: { query: 'latency', startAt: 'site-home' },
+}
+
+export const RankedWithFolderScopeOffer: Story = {
+  name: 'Ranked · folder scope offered for the open page',
+  args: { query: 'latency', startAt: 'html' },
+}
+
+export const PathOrderedFallback: Story = {
+  name: 'Fallback · too many hits to rank (path order, 20 per page)',
+  args: { query: 'latency', search: 'many-results', ranking: 'paged', startAt: 'html' },
 }

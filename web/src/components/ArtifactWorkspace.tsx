@@ -8,13 +8,14 @@ import { siteCountLabel } from '../domain/site-count-label'
 import { ThemeSwitcher } from './ThemeSwitcher'
 import { MarkdownArtifact } from './MarkdownArtifact'
 import { PAGE_TEXT_SEARCH_INPUT_ID } from './PageTextSearch'
-import { usePageTextSearch } from './usePageTextSearch'
+import { usePageTextSearch, type PageTextSearchState } from './usePageTextSearch'
 import { pageTitle, usePageTitle } from './usePageTitle'
 import { usePageNoindex } from './usePageNoindex'
 import { followInApp } from './spa-link'
 import { nearbyArtifacts } from '../domain/nearby-pages'
 import { normalizeLanguageTag } from '../domain/document-language'
-import type { SiteFullTextSearch } from '../data/fulltext'
+import type { FullTextHit, SiteFullTextSearch } from '../data/fulltext'
+import { rankHits, scopeHits } from '../domain/search-ranking'
 import { clearSearchHighlight, ensureSearchHighlightStyle, keepSearchHighlighted, watchReaderScroll } from '../domain/text-highlight'
 import type { TreeStyle } from './ArtifactTree'
 import type { ArtifactIndexEntry, SiteCatalogEntry, SiteIndex, SiteSummary } from '../domain/index'
@@ -43,6 +44,7 @@ export function ArtifactWorkspace({
   siteHomeTreeStyle = 'path-list',
   initialExpandedPaths = [],
   initialSidebarOpen,
+  rankingMaxHits: rankingMaxHitsProp,
 }: {
   route: SiteRoute
   pathname: string
@@ -63,6 +65,8 @@ export function ArtifactWorkspace({
   siteHomeTreeStyle?: TreeStyle
   initialExpandedPaths?: string[]
   initialSidebarOpen?: boolean
+  /** Page text search ranks up to this many matching pages (stories and tests lower it). */
+  rankingMaxHits?: number
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(() => initialSidebarOpen ?? window.innerWidth > 860)
   const sidebarOpenRef = useRef(sidebarOpen)
@@ -77,7 +81,13 @@ export function ArtifactWorkspace({
   committedQueryRef.current = committedQuery
   const hashRef = useRef(hash)
   hashRef.current = hash
-  const textSearch = usePageTextSearch(textSearchClient, committedQuery)
+  const rankingMaxHits = rankingMaxHitsProp ?? testRankingMaxHits()
+  const artifactsById = useMemo(() => new Map(index.artifacts.map((artifact) => [artifact.id, artifact])), [index.artifacts])
+  const rankTextHits = useCallback(
+    (hits: FullTextHit[], query: string) => rankHits(hits, query, artifactsById),
+    [artifactsById],
+  )
+  const textSearch = usePageTextSearch(textSearchClient, committedQuery, { rank: rankTextHits, rankingMaxHits })
   const [pinnedArtifactsBySite, setPinnedArtifactsBySite] = useState<Record<string, string[]>>(readPinnedArtifacts)
   const pinnedArtifactIds = pinnedArtifactsBySite[index.site.id] ?? []
   const [storedRecentReads, setStoredRecentReads] = useState<RecentArtifactRead[]>(
@@ -616,6 +626,8 @@ export function ArtifactWorkspace({
         pageTextSearch={textSearchClient ? {
           committedQuery,
           state: textSearch.state,
+          scopeFolder: textSearch.scopeFolder,
+          onScopeChange: textSearch.setScopeFolder,
           onCommit: commitTextSearch,
           onClear: clearTextSearch,
           onRetry: textSearch.retry,
@@ -702,7 +714,7 @@ export function ArtifactWorkspace({
                 <Icon name="search" size={12} />
                 <span className="context-search-chip-query">{committedQuery}</span>
                 {textSearch.state.status === 'success' ? (
-                  <span className="context-search-chip-count">{searchPositionLabel(textSearch.state.hits, currentArtifact?.id, textSearch.state.total)}</span>
+                  <span className="context-search-chip-count">{searchPositionLabel(textSearch.state, textSearch.scopeFolder, currentArtifact?.id)}</span>
                 ) : null}
               </button>
             ) : null}
@@ -982,7 +994,15 @@ function highlightFrame(iframe: HTMLIFrameElement, query: string, scrollToFirst:
 
 const frameHighlightCleanup = new WeakMap<HTMLIFrameElement, () => void>()
 
-function searchPositionLabel(hits: { id: string }[], currentId: string | undefined, total: number) {
+function searchPositionLabel(
+  state: Extract<PageTextSearchState, { status: 'success' }>,
+  scopeFolder: string | null,
+  currentId: string | undefined,
+) {
+  // The same list and total the sidebar shows, scope included.
+  const scope = state.ranked ? scopeFolder : null
+  const hits = scopeHits(state.hits, scope)
+  const total = scope === null ? state.total : hits.length
   const position = currentId ? hits.findIndex(({ id }) => id === currentId) : -1
   return position >= 0 ? `${position + 1} / ${total}` : `${total}`
 }
@@ -1120,4 +1140,14 @@ function formatLongDate(value: string) {
   const date = new Date(value)
   if (Number.isNaN(date.valueOf())) return value
   return new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).format(date)
+}
+
+/**
+ * Test-only seam: end-to-end tests set `window.__artifactPagesTest = { rankingMaxHits }`
+ * (with `page.addInitScript`) to reach the path-ordered fallback without publishing
+ * more pages than the real threshold. Nothing reads or writes it in normal use.
+ */
+function testRankingMaxHits(): number | undefined {
+  const value = (window as unknown as { __artifactPagesTest?: { rankingMaxHits?: unknown } }).__artifactPagesTest?.rankingMaxHits
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : undefined
 }
