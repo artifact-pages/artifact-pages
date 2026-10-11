@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/artifact-pages/artifact-pages/cli/internal/compat"
+	"github.com/artifact-pages/artifact-pages/cli/internal/indexer"
 	"io"
 	"net/url"
 	"path"
@@ -501,8 +502,8 @@ func validateSourcePath(value string) error {
 			return fmt.Errorf("unsafe preview source-relative path %q", value)
 		}
 	}
-	if strings.Split(value, "/")[0] == "_previews" {
-		return fmt.Errorf("preview source path %q uses a reserved namespace", value)
+	if reserved, ok := indexer.ReservedFirstSegment(value); ok {
+		return fmt.Errorf("preview source path %q uses the reserved first segment %q (reserved: %s)", value, reserved, strings.Join(indexer.ReservedFirstSegments, ", "))
 	}
 	return nil
 }

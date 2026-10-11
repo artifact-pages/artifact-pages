@@ -420,6 +420,16 @@ func captureSourceTree(sourcePath, outputRoot string, rejectSymlinks bool, captu
 	if err != nil {
 		return nil, nil, scannedFiles, nil, fmt.Errorf("inspect site source: %w", err)
 	}
+	var reservedDocuments []string
+	for _, artifact := range artifacts {
+		if _, reserved := ReservedFirstSegment(artifact.relative); reserved {
+			reservedDocuments = append(reservedDocuments, artifact.relative)
+		}
+	}
+	if len(reservedDocuments) > 0 {
+		sort.Strings(reservedDocuments)
+		return nil, nil, scannedFiles, nil, fmt.Errorf("site documents must not start with a reserved path segment (%s) because the reader routes those names itself; rename or move: %s", strings.Join(ReservedFirstSegments, ", "), strings.Join(reservedDocuments, ", "))
+	}
 	sort.Slice(files, func(i, j int) bool { return files[i].RelativePath < files[j].RelativePath })
 	sort.Slice(artifacts, func(i, j int) bool { return artifacts[i].relative < artifacts[j].relative })
 	// latestArtifactFileModTime recurses through nested resources. Expand each

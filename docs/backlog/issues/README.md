@@ -84,5 +84,6 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-085](ISSUE-085-page-text-search-snippets.md) | Blocked | P3 | Page text search results show no match snippet (split from ISSUE-077; blocked on TD20). |
 | [ISSUE-086](ISSUE-086-pages-have-no-related-pages-list.md) | Open | P2 | Pages have no list of related pages to read next. |
 | [ISSUE-087](ISSUE-087-page-text-search-results-page.md) | In progress | P2 | Page text search needs a results page in the reading area (TD20 slice 1). |
+| [ISSUE-088](ISSUE-088-indexer-rejects-reserved-first-segments.md) | Done | P2 | The indexer does not reject documents under reserved first path segments (`_previews`, `_search`). |
 
 ISSUE-013's verified completion record is retained in Git history.
