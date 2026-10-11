@@ -111,6 +111,9 @@ func TestCloudflareGenerationIsDeterministicCheckableAndLocal(t *testing.T) {
 	}
 	snapshot := generatedSnapshot(t, root, "cloudflare")
 	for _, path := range generatedYAML {
+		if contents := snapshot[path]; !bytes.HasSuffix(contents, []byte("\n")) || bytes.HasSuffix(contents, []byte("\n\n")) {
+			t.Errorf("generated YAML %s must end with exactly one newline", path)
+		}
 		var value map[string]any
 		if err := yaml.Unmarshal(snapshot[path], &value); err != nil {
 			t.Errorf("generated YAML %s is invalid: %v", path, err)

@@ -341,6 +341,7 @@ func renderOutputs(data templateData, rolesBytes []byte) (map[string][]byte, err
 		if err != nil {
 			return nil, err
 		}
+		contents = normalizeGeneratedFile(contents)
 		contents = addManagedDigest(contents)
 		outputs[path] = contents
 	}
@@ -348,6 +349,11 @@ func renderOutputs(data templateData, rolesBytes []byte) (map[string][]byte, err
 		outputs[".github/actions/site-sync/aws-roles.json"] = rolesBytes
 	}
 	return outputs, nil
+}
+
+func normalizeGeneratedFile(contents []byte) []byte {
+	contents = bytes.TrimRight(contents, "\r\n")
+	return append(contents, '\n')
 }
 
 func renderTemplate(name string, data templateData) ([]byte, error) {
