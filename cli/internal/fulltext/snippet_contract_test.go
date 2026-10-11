@@ -61,13 +61,72 @@ type sectionRecordFixture struct {
 	Length  int    `json:"length"`
 }
 
-func snippetFixtureRecords() []Record {
-	return []Record{
-		{Path: "docs/help.md", Text: "shared search"},
-		{Path: "guide.html", Text: "shared cache retry"},
-		{Path: "large.md", Text: "shared " + strings.Repeat("x", snippetDocumentLimit+1)},
-		{Path: "title-only.md", Text: "titleonly"},
+type snippetFixtureSourceSection struct {
+	Text    string
+	Heading string
+	Anchor  string
+}
+
+type snippetFixtureSourceDocument struct {
+	Path     string
+	Title    string
+	Sections []snippetFixtureSourceSection
+}
+
+func snippetFixtureSources() []snippetFixtureSourceDocument {
+	return []snippetFixtureSourceDocument{
+		{Path: "docs/help.md", Title: "shared search", Sections: []snippetFixtureSourceSection{{Text: "検索結果"}}},
+		{Path: "guide.html", Title: "shared", Sections: []snippetFixtureSourceSection{
+			{Text: "cache"},
+			{Text: "Retry cache", Heading: "Retry", Anchor: "md-retry"},
+		}},
+		{Path: "large.md", Title: "shared", Sections: []snippetFixtureSourceSection{{Text: strings.Repeat("x", snippetDocumentLimit+1)}}},
+		{Path: "title-only.md", Title: "titleonly"},
 	}
+}
+
+func snippetFixtureSearchText(document snippetFixtureSourceDocument) string {
+	parts := []string{document.Title}
+	for _, section := range document.Sections {
+		parts = append(parts, section.Text)
+	}
+	return Normalize(strings.Join(parts, " "))
+}
+
+func snippetFixtureRecords() []Record {
+	sources := snippetFixtureSources()
+	records := make([]Record, 0, len(sources))
+	for _, document := range sources {
+		records = append(records, Record{Path: document.Path, Text: snippetFixtureSearchText(document)})
+	}
+	return records
+}
+
+func retainedFixtureSections(sections []snippetFixtureSourceSection, limit int) []snippetFixtureSourceSection {
+	retained := make([]snippetFixtureSourceSection, 0, len(sections))
+	remaining := limit
+	for _, section := range sections {
+		text := Normalize(section.Text)
+		if text == "" {
+			continue
+		}
+		data := []byte(text)
+		if len(data) > remaining {
+			end := remaining
+			for end > 0 && !utf8.RuneStart(data[end]) {
+				end--
+			}
+			if end > 0 {
+				section.Text = string(data[:end])
+				retained = append(retained, section)
+			}
+			break
+		}
+		section.Text = text
+		retained = append(retained, section)
+		remaining -= len(data)
+	}
+	return retained
 }
 
 func readSnippetManifest(t *testing.T, name string) snippetManifestFixture {
@@ -203,6 +262,9 @@ func TestV1RootAndLeafGoldenBlobsStayUnchanged(t *testing.T) {
 	if projection.Manifest.Root != legacy.Root || !reflect.DeepEqual(projection.Manifest.Shards, legacy.Shards) {
 		t.Fatal("adding the snippet fixture changed v1 root or leaf references")
 	}
+	if projection.Manifest.Generation != legacy.Generation {
+		t.Fatalf("v1 generation = %s; want golden %s", projection.Manifest.Generation, legacy.Generation)
+	}
 	refs := []ObjectRef{legacy.Root}
 	for _, ref := range legacy.Shards {
 		if ref != nil {
@@ -217,6 +279,73 @@ func TestV1RootAndLeafGoldenBlobsStayUnchanged(t *testing.T) {
 		}
 		if got := projection.Files[name]; !bytes.Equal(got, want) {
 			t.Fatalf("v1 blob %s changed", name)
+		}
+	}
+}
+
+func TestCombinedProjectionFixtureMatchesIndexedBodySource(t *testing.T) {
+	sources := snippetFixtureSources()
+	records := snippetFixtureRecords()
+	projection, err := Build(context.Background(), "sre", records)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := readSnippetManifest(t, "manifest-v1.json")
+	manifest := readSnippetManifest(t, "manifest-snippets.json")
+	if projection.Manifest.Generation != legacy.Generation || projection.Manifest.Root != manifest.Root || !reflect.DeepEqual(projection.Manifest.Shards, manifest.Shards) {
+		t.Fatal("additive snippet fixture does not extend the same indexed v1 projection")
+	}
+	legacyBytes, err := os.ReadFile(filepath.Join("testdata", "manifest-v1.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(projection.Files["manifest.json"], legacyBytes) {
+		t.Fatal("legacy manifest fixture is not the combined projection's exact v1 manifest")
+	}
+	searchTextByPath := make(map[string]string, len(records))
+	for _, record := range records {
+		searchTextByPath[record.Path] = record.Text
+	}
+
+	tableBytes := snippetObject(t, manifest.Site, "sections", *manifest.Sections)
+	var table sectionTableFixture
+	if err := json.Unmarshal(tableBytes, &table); err != nil {
+		t.Fatal(err)
+	}
+	packs := make([][]byte, len(manifest.Texts))
+	for i, ref := range manifest.Texts {
+		packs[i] = snippetObject(t, manifest.Site, "text", ref)
+	}
+	tableByPath := make(map[string]sectionDocumentFixture, len(table.Documents))
+	for _, document := range table.Documents {
+		tableByPath[document.Path] = document
+	}
+
+	for _, source := range sources {
+		indexedText, ok := searchTextByPath[source.Path]
+		if !ok || indexedText != snippetFixtureSearchText(source) {
+			t.Fatalf("v1 indexed text for %q does not include the fixture's title and source sections", source.Path)
+		}
+		retained := retainedFixtureSections(source.Sections, snippetDocumentLimit)
+		tableDocument, ok := tableByPath[source.Path]
+		if len(retained) == 0 {
+			if ok {
+				t.Fatalf("title-only document %q has a section row", source.Path)
+			}
+			continue
+		}
+		if !ok || len(tableDocument.Sections) != len(retained) {
+			t.Fatalf("section count for %q does not match its retained source body", source.Path)
+		}
+		for i, expected := range retained {
+			section := tableDocument.Sections[i]
+			got := string(packs[section.Pack][section.Offset : section.Offset+section.Length])
+			if got != expected.Text || section.Heading != expected.Heading || section.Anchor != expected.Anchor {
+				t.Fatalf("section %d for %q = (%q, %q, %q); want (%q, %q, %q)", i, source.Path, got, section.Heading, section.Anchor, expected.Text, expected.Heading, expected.Anchor)
+			}
+			if !strings.Contains(indexedText, got) {
+				t.Fatalf("stored section text for %q is absent from the v1 indexed text", source.Path)
+			}
 		}
 	}
 }
