@@ -23,7 +23,7 @@ From the 2026-10-11 dogfooding of `https://artifact-pages.dev`, confirmed in cod
 4. Sources: `sortTree` sorts `node.artifacts` by `title.localeCompare` (`web/src/domain/tree.ts:63-68`); the breadcrumb menu uses `compareArtifacts` (title, then path; `ArtifactBreadcrumbs.tsx:317-319`). The site picker also sorts sites by title (`SitePicker.tsx:27`; site order is covered by [ISSUE-078](ISSUE-078-landing-page-has-no-orientation.md)). The same order appears in the site home Browse list and in sibling menus; full-text results are path-ordered (ISSUE-077). `ArtifactIndexEntry` has no order field (`web/src/domain/index.ts:58-69`; Go `ArtifactIndexEntry` at `cli/internal/indexer/build.go:108-119`).
 5. `localeCompare` is called without a locale argument, so it uses the browser default locale (confirmed in code; the specific Japanese order observed is from the live site).
 
-With filename order, the Architecture case is fixed only if its files carry the 01-06 prefix; this has not been checked against the source files and may need a change in the `artifact-pages/docs` repository.
+The docs repository's files carry no numeric prefixes (for example `sites/architecture/en/overview.html`), so the docs sites will list in plain filename order unless that repository renames its files. Whether to rename is an owner decision tracked separately.
 
 ## Expected outcome
 
