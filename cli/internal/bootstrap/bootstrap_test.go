@@ -134,6 +134,56 @@ func TestNonDeploymentDoesNotRequireConfig(t *testing.T) {
 		}
 	}
 }
+
+func TestRegistrySetupUsesRunningCLIWithoutConfigOrNetwork(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		args        []string
+		cliOverride string
+		wantError   string
+	}{
+		{name: "local-only", args: []string{"registry", "setup"}},
+		{name: "help ignores config and CLI overrides", args: []string{"registry", "setup", "--help"}, cliOverride: "0.1.2"},
+		{name: "flag override rejected", args: []string{"registry", "setup", "--cli-version", "0.1.2"}, wantError: "registry setup always uses the running CLI"},
+		{name: "environment override rejected", args: []string{"registry", "setup"}, cliOverride: "0.1.2", wantError: "registry setup always uses the running CLI"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			called := false
+			metadataPath := filepath.Join(t.TempDir(), "metadata.json")
+			values := map[string]string{"ARTIFACT_PAGES_CONFIG": "github://private/admin/artifact-pages.yaml?ref=main", MetadataEnv: metadataPath}
+			if tc.cliOverride != "" {
+				values[VersionEnv] = tc.cliOverride
+			}
+			r := Runner{Version: "0.2.0", Getenv: env(values), Resolve: func(context.Context, []string) (string, error) {
+				called = true
+				return "", errors.New("resolver must not run")
+			}, Install: func(context.Context, string) (string, error) {
+				called = true
+				return "", errors.New("installer must not run")
+			}, Execute: func(context.Context, string, []string, []string, io.Reader, io.Writer, io.Writer) error {
+				called = true
+				return errors.New("child must not run")
+			}}
+			clean, done, err := r.Run(t.Context(), tc.args, io.Discard, io.Discard)
+			if called || done {
+				t.Fatalf("setup resolved or re-executed: called=%t done=%t", called, done)
+			}
+			if tc.wantError == "" && err != nil {
+				t.Fatalf("local setup resolution error = %v", err)
+			}
+			if tc.wantError != "" && (err == nil || !strings.Contains(err.Error(), tc.wantError)) {
+				t.Fatalf("setup error = %v, want %q", err, tc.wantError)
+			}
+			if len(clean) == 0 || clean[0] != "registry" {
+				t.Fatalf("clean args = %v", clean)
+			}
+			if _, err := os.Stat(metadataPath); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("setup wrote bootstrap metadata despite bypass: stat err=%v", err)
+			}
+		})
+	}
+}
+
 func TestRealChildPreservesExitAndStreams(t *testing.T) {
 	if os.PathSeparator != '/' {
 		t.Skip("Unix released platform")

@@ -177,7 +177,7 @@ func TestRunRootHelp(t *testing.T) {
 	if !strings.Contains(help, "artifact-pages [--cli-version MAJOR.MINOR.PATCH] <command>") {
 		t.Errorf("root help does not show the standalone CLI usage:\n%s", stdout.String())
 	}
-	for _, expected := range []string{"registry sync", "site sync", "app deploy", "app remove", "lock inspect|recover"} {
+	for _, expected := range []string{"registry setup", "registry sync", "site sync", "app deploy", "app remove", "lock inspect|recover"} {
 		if !strings.Contains(help, expected) {
 			t.Errorf("root help is missing %q:\n%s", expected, help)
 		}
@@ -198,6 +198,61 @@ func TestRunRegistryPublishCommandNameIsRejected(t *testing.T) {
 	err := run(t.Context(), []string{"registry", "publish"}, &stdout, &stderr)
 	if err == nil || !strings.Contains(err.Error(), `unknown registry command "publish"`) {
 		t.Fatalf("run(registry publish) error = %v, want an unknown-command error", err)
+	}
+}
+
+func TestRunRegistrySetupHelpDocumentsLocalInputsAndNoResolution(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if err := run(t.Context(), []string{"registry", "setup", "--help"}, &stdout, &stderr); err != nil {
+		t.Fatalf("run(registry setup --help): %v", err)
+	}
+	help := stdout.String() + stderr.String()
+	for _, expected := range []string{
+		"artifact-pages registry setup",
+		"--directory DIR",
+		"--terraform-output FILE",
+		"github:// and environment defaults are not used",
+		"does not read secrets, contact GitHub, resolve config versions",
+	} {
+		if !strings.Contains(help, expected) {
+			t.Errorf("registry setup help is missing %q:\n%s", expected, help)
+		}
+	}
+}
+
+func TestRunRegistrySetupGeneratesAndChecksLocalConfig(t *testing.T) {
+	root := t.TempDir()
+	config := `schemaVersion: 1
+provider: cloudflare
+cloudflare:
+  accountId: 0123456789abcdef0123456789abcdef
+  bucket: pages
+  zoneId: abcdef0123456789abcdef0123456789
+  publicBaseURL: https://pages.example.com
+  accessKeyIdEnv: CF_ACCESS
+  secretAccessKeyEnv: CF_SECRET
+  apiTokenEnv: CF_API_TOKEN
+sites: {}
+`
+	if err := os.WriteFile(filepath.Join(root, "artifact-pages.yaml"), []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	args := []string{"registry", "setup", "--directory", root, "--repository", "acme/admin"}
+	var stdout, stderr bytes.Buffer
+	if err := run(t.Context(), args, &stdout, &stderr); err != nil {
+		t.Fatalf("run(registry setup): %v; stderr=%s", err, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "generated .github/") || !strings.Contains(stdout.String(), "gh api --method PUT repos/acme/admin") {
+		t.Fatalf("setup output missing generation/manual steps: %s", stdout.String())
+	}
+	args = append(args, "--check")
+	stdout.Reset()
+	stderr.Reset()
+	if err := run(t.Context(), args, &stdout, &stderr); err != nil {
+		t.Fatalf("run(registry setup --check): %v; stderr=%s", err, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "files are up to date") {
+		t.Fatalf("check output = %s", stdout.String())
 	}
 }
 

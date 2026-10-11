@@ -18,6 +18,7 @@ import (
 	"github.com/artifact-pages/artifact-pages/cli/internal/preview"
 	"github.com/artifact-pages/artifact-pages/cli/internal/publisher"
 	"github.com/artifact-pages/artifact-pages/cli/internal/registry"
+	"github.com/artifact-pages/artifact-pages/cli/internal/registrysetup"
 	"github.com/artifact-pages/artifact-pages/cli/internal/version"
 )
 
@@ -401,6 +402,13 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 			}
 			return runRegistrySync(ctx, args[2:], stdout, stderr)
 		}
+		if args[1] == "setup" {
+			if len(args) >= 3 && (args[2] == "--help" || args[2] == "-h") {
+				writeRegistrySetupUsage(stdout)
+				return nil
+			}
+			return runRegistrySetup(args[2:], stdout, stderr)
+		}
 		writeRegistryUsage(stderr)
 		return withExitCode(fmt.Errorf("unknown registry command %q", args[1]), 2)
 	}
@@ -517,6 +525,41 @@ func runRegistrySync(ctx context.Context, args []string, stdout, stderr io.Write
 		return encodeDeploymentResult(stdout, result, resolved)
 	}
 	writeDeploymentReport(stdout, result, resolved, *dryRun)
+	return nil
+}
+
+func runRegistrySetup(args []string, stdout, stderr io.Writer) error {
+	flags := flag.NewFlagSet("artifact-pages registry setup", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	flags.Usage = func() { writeRegistrySetupUsage(stderr) }
+	directory := flags.String("directory", ".", "operator repository directory to generate files in")
+	configPath := flags.String("config", "", "local deployment config file (default: artifact-pages.yaml in --directory)")
+	terraformOutput := flags.String("terraform-output", "", "local JSON file produced by terraform output -json satellite_role_arns (AWS only)")
+	repository := flags.String("repository", "", "admin repository OWNER/REPOSITORY for printed manual commands (inferred from origin when possible)")
+	check := flags.Bool("check", false, "fail if generated files are missing or differ; do not modify files")
+	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
+		return withExitCode(err, 2)
+	}
+	if flags.NArg() != 0 {
+		return withExitCode(fmt.Errorf("unexpected arguments: %v", flags.Args()), 2)
+	}
+	options := registrysetup.Options{
+		Directory:       *directory,
+		ConfigPath:      *configPath,
+		TerraformOutput: *terraformOutput,
+		Repository:      *repository,
+		Check:           *check,
+		Output:          stdout,
+	}
+	if err := registrysetup.Run(options); err != nil {
+		if registrysetup.IsDrift(err) {
+			return withExitCode(err, 1)
+		}
+		return withExitCode(err, 2)
+	}
 	return nil
 }
 
@@ -934,6 +977,7 @@ func writeRootUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  app remove    Remove the deployed application bundle")
 	fmt.Fprintln(writer, "  site sync     Reconcile one site's artifacts and index with its source directory")
 	fmt.Fprintln(writer, "  preview publish  Build and publish one explicit site's review preview")
+	fmt.Fprintln(writer, "  registry setup Generate admin reusable workflows and registry workflow")
 	fmt.Fprintln(writer, "  registry sync  Reconcile the complete Git-owned site set")
 	fmt.Fprintln(writer, "  config set-default  Save the user's default deployment config locator")
 	fmt.Fprintln(writer, "  lock inspect|recover  Inspect or guardedly recover a site, registry, or application lock")
@@ -941,7 +985,7 @@ func writeRootUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "")
 	fmt.Fprintln(writer, "Run a command with --help for options.")
 	fmt.Fprintln(writer, "Default deployment config: artifact-pages.yaml (--config and ARTIFACT_PAGES_CONFIG take precedence).")
-	fmt.Fprintln(writer, "CLI selection: --cli-version, ARTIFACT_PAGES_CLI_VERSION, then config cli.version; overrides keep compatibility checks.")
+	fmt.Fprintln(writer, "CLI selection: --cli-version, ARTIFACT_PAGES_CLI_VERSION, then config cli.version; overrides keep compatibility checks. registry setup uses the running CLI and never resolves versions.")
 }
 
 func writeLockUsage(writer io.Writer) {
@@ -1040,9 +1084,27 @@ func writeConfigUsage(writer io.Writer) {
 
 func writeRegistryUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "Usage:")
+	fmt.Fprintln(writer, "  artifact-pages registry setup [--directory DIR] [--config FILE] [--terraform-output FILE] [--repository OWNER/REPOSITORY] [--check]")
 	fmt.Fprintln(writer, "  artifact-pages registry sync [--config LOCATOR ...] [--dry-run] [--format text|json]")
 	fmt.Fprintln(writer, "")
+	fmt.Fprintln(writer, "Generate admin workflows from a local config file; this command does not call GitHub or resolve config versions.")
 	fmt.Fprintln(writer, "Reconcile the complete site set declared in the selected deployment config; omitted sites are cleaned up.")
+}
+
+func writeRegistrySetupUsage(writer io.Writer) {
+	fmt.Fprintln(writer, "Usage:")
+	fmt.Fprintln(writer, "  artifact-pages registry setup [--directory DIR] [--config FILE] [--terraform-output FILE] [--repository OWNER/REPOSITORY] [--check]")
+	fmt.Fprintln(writer, "")
+	fmt.Fprintln(writer, "Generate the admin reusable workflows and same-commit composite action from local files.")
+	fmt.Fprintln(writer, "")
+	fmt.Fprintln(writer, "Options:")
+	fmt.Fprintln(writer, "  --directory DIR            operator repository directory (default .)")
+	fmt.Fprintln(writer, "  --config FILE              local config file under --directory (default artifact-pages.yaml); github:// and environment defaults are not used")
+	fmt.Fprintln(writer, "  --terraform-output FILE    local JSON under --directory from `terraform output -json satellite_role_arns` (required for AWS)")
+	fmt.Fprintln(writer, "  --repository OWNER/REPO    admin repository used only in printed gh commands (otherwise inferred from origin)")
+	fmt.Fprintln(writer, "  --check                    report missing or changed generated files without writing")
+	fmt.Fprintln(writer, "")
+	fmt.Fprintln(writer, "This command uses bundled Action pins and the running CLI version. It does not read secrets, contact GitHub, resolve config versions, or download/re-exec a CLI.")
 }
 
 func writeRegistrySyncUsage(writer io.Writer) {
