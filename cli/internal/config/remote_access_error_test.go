@@ -19,7 +19,7 @@ func TestRemoteConfigAccessErrors(t *testing.T) {
 		want    []string
 	}{
 		{"no token 404", "", locator, func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(404) },
-			[]string{"cannot read deployment config " + locator, "may be private", "no token was provided", "GITHUB_TOKEN or GH_TOKEN", "github-token", "contents:read on acme/admin"}},
+			[]string{"cannot read deployment config " + locator, "may be private", "no token was provided", "GITHUB_TOKEN or GH_TOKEN", "contents:read on acme/admin"}},
 		{"token 404", secret, locator, func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(404) },
 			[]string{"cannot read deployment config " + locator, "private repositories the token cannot access", "contents:read on acme/admin"}},
 		{"401", secret, locator, func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(401) },
@@ -61,6 +61,9 @@ func TestRemoteConfigAccessErrors(t *testing.T) {
 				if !strings.Contains(err.Error(), want) {
 					t.Errorf("error %q missing %q", err, want)
 				}
+			}
+			if strings.Contains(err.Error(), "github-token") {
+				t.Errorf("error still refers to the retired Action input: %q", err)
 			}
 			if strings.Contains(err.Error(), secret) {
 				t.Errorf("error contains the token: %q", err)

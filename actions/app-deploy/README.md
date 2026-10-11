@@ -20,7 +20,6 @@ steps:
 | `repository` | `artifact-pages/artifact-pages` | Repository that publishes the web release (used only when `archive` is empty). |
 | `config` | empty | Deployment config path or `github://` locator; empty uses `artifact-pages.yaml` in the workspace. |
 | `cli-version` | empty | Exact supported CLI override; environment overrides take precedence. |
-| `github-token` | `github.token` | Read-only token for a separate private config repository. |
 | `dry-run` | `false` | Plan without writes. |
 | `publish-on` | empty | Newline-separated `event` or `event:ref` entries; a run matching none becomes a dry-run. |
 | `summary` | `true` | Append the operation summary to the Job Summary. |
@@ -33,7 +32,7 @@ steps:
 
 ## Version and runners
 
-The Action version describes its wrapper. Its generated `release.json` declares a checksum-verified bootstrap CLI and the supported range `>=0.1.0 <0.2.0`. The bootstrap resolves `cli.version` from the deployment config; `cli-version` can override it within that range without bypassing compatibility checks. The Job Summary records the actual CLI and any override, including failed operations. CLI downloads use only official Artifact Pages releases and the workflow token; the private-config token is never used for downloads.
+The Action version describes its wrapper. Its generated `release.json` declares a checksum-verified bootstrap CLI and the supported range `>=0.1.0 <0.2.0`. The bootstrap resolves `cli.version` from the deployment config; `cli-version` can override it within that range without bypassing compatibility checks. The Job Summary records the actual CLI and any override, including failed operations. CLI bootstrap and target downloads use only official Artifact Pages releases and the workflow token.
 
 Supported runners: Linux and macOS, x64 and arm64. Windows runners are not supported.
 

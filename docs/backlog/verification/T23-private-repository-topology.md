@@ -9,7 +9,7 @@
 
 Every hosted-runner run so far used public repositories. Record actual runs, never inferred results, and never print tokens.
 
-> **Update 2026-10-06:** `artifact-pages/admin` and `artifact-pages/docs` (transferred from `tasuku43/artifact-pages-admin` and `-docs`) are public in the organization, use `production`/`preview` environments for secrets, and read the admin config with the workflow token; the personal GitHub App is no longer used by them. The text below records the private-repository period as run on 2026-10-05. The private-config path (App or token through `github-token`) is still a supported consumer topology and is to be covered by a CI regression check against a fixture set up separately.
+> **Update 2026-10-06 (historical):** `artifact-pages/admin` and `artifact-pages/docs` (transferred from `tasuku43/artifact-pages-admin` and `-docs`) became public in the organization, used `production`/`preview` environments for secrets, and read the admin config with the workflow token; the personal GitHub App was no longer used by them. The text below records the private-repository period as run on 2026-10-05. The private-config fixture was then added as a CI regression check.
 
 ## Constraint and decided approach
 
@@ -49,7 +49,9 @@ Recorded 2026-10-05, after the v0.2.0 migration ([IMP-55](../implementation/IMP-
 
 ## Regression check (2026-10-06)
 
-The operator repositories are public, so the private-config path is now covered by a CI job instead. [`.github/workflows/private-config.yml`](../../../.github/workflows/private-config.yml) (pull requests, main, weekly, manual) builds the CLI from the commit and runs `lock inspect --scope registry --config github://artifact-pages/fixture-private-config/artifact-pages.yaml` (config resolution only; the fixture uses provider `local`, so no provider credentials are involved and nothing is written). No CLI surface was added.
+> **Retirement note 2026-10-11:** The run below is historical evidence for the fixture topology as it existed then. The owner chose to remove the Actions' `github-token` input while retaining the CLI `github://` locator and tests. IMP-76 prepares removal of this fixture-only workflow after IMP-75 migration is verified; the private fixture repository and App remain pending separate owner approval. T23 records the completed historical verification, not completion of the IMP-76 retirement.
+
+At the time of this check, the operator repositories were public, so a CI job provided the private-config regression test instead. The fixture-only `.github/workflows/private-config.yml` (pull requests, main, weekly, manual) built the CLI from the commit and ran `lock inspect --scope registry --config github://artifact-pages/fixture-private-config/artifact-pages.yaml` (config resolution only; the fixture used provider `local`, so no provider credentials were involved and nothing was written). No CLI surface was added.
 
 - Fixture: private repository `artifact-pages/fixture-private-config` holding a credential-free `artifact-pages.yaml`; org App `artifact-pages-ci-fixture` (Contents read, Metadata read) installed only on it; monorepo variable `FIXTURE_APP_ID` and secret `FIXTURE_APP_PRIVATE_KEY`.
 - Positive: a token minted with `actions/create-github-app-token` (scoped to the fixture, `contents: read`) resolves the config and the output carries a `configCommitSha`.
