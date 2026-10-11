@@ -47,7 +47,7 @@ The reusable workflows call a composite action in the same repository with GitHu
 
 - **Cloudflare:** the keys come from organization or site-repository secrets, passed with `secrets: inherit` (same organization or enterprise only) and mapped to `env` in the reusable workflow, because composite actions cannot read `secrets`. Secrets stored only on the admin repository are not passed to callers.
 - **Environment secrets:** a caller job that uses a reusable workflow cannot set `environment:`, and `secrets: inherit` does not pass environment secrets; only a job-level `environment:` inside the called workflow reads them, resolved against the caller repository's environments. The generated reusable workflows therefore take an optional string input `environment`, and the generated job sets `environment: ${{ inputs.environment }}`. This lets a site keep protected `production` and `preview` environments. How an empty value behaves is verified in IMP-73: if an empty name is not treated as no environment, the job is generated so that the environment is set only when given, or the input is documented as required.
-- **AWS:** OIDC, with no stored secret. The admin repository commits `.github/actions/site-sync/aws-roles.json`, the Terraform output `satellite_role_arns` (role ARNs are not secret), and the action selects the role by site ID.
+- **AWS:** OIDC, with no stored secret. The composite action derives the site's publisher role ARN from config (see section 7); the admin repository commits no role map and needs no Terraform output. Until the site's OIDC subject is added to Terraform and applied, the role does not exist and the publish fails at role assumption; the action's error points to that step.
 
 ### 4. Ref policy
 
@@ -65,8 +65,9 @@ Admin YAML `sites` plus `registry sync` remains required and unchanged. Self-reg
 
 ### 7. Setup command
 
-`artifact-pages registry setup` (name provisional; the owner may rename it) generates, idempotently, the admin-side files: the two reusable workflows, the `site-sync` composite action, the admin's registry workflow, and for AWS `aws-roles.json` from a provided Terraform output file.
+`artifact-pages registry setup` (name provisional; the owner may rename it) generates, idempotently, the admin-side files: the two reusable workflows, the `site-sync` composite action, the admin's registry workflow.
 
+- **AWS role ARN (derived, amended 2026-10-11).** The `aws` config section carries `accountId` (required for the admin-provided AWS workflow; `registry setup` rejects a config without it) and `namePrefix` (default `artifact-pages`, `^[a-z][a-z0-9-]{1,30}$`, equal to the module's `name_prefix`). The ARN is `arn:aws:iam::<accountId>:role/<role name>` with no IAM path. The role name is `<namePrefix>-<site>-publisher` when that is at most 64 characters, otherwise `<namePrefix>-s-<first 20 hex characters of sha256(site ID)>-pub`: the rule of `local.satellite_role_names` in `terraform/modules/aws/main.tf`. It is a contract between the module and the CLI, and monorepo tests keep the two in agreement. Operators who build IAM without the module must name roles by the rule. A per-site ARN override in config is deferred and may be added later.
 - Generated files carry a header naming the generating CLI version and pin each official Action to an exact release (full SHA with a version comment) following TD17's independent Action series. IMP-73 decides where the generator gets those versions.
 - `--check` exits non-zero when the committed files differ from what would be generated, for admin CI.
 - It prints the remaining manual steps as copyable `gh` commands (the Actions access level for private admins, secrets) and performs no GitHub API mutation.
@@ -117,3 +118,9 @@ Optional future hardening, not decided here: customize `sub` to include `job_wor
 - [IMP-74](../implementation/IMP-74-aws-oidc-subject-alignment.md): align OIDC subject examples and verification with the ID-qualified `sub` (Codex).
 - [IMP-75](../implementation/IMP-75-migrate-operator-repositories.md): migrate `admin` and `docs` (Codex).
 - [IMP-76](../implementation/IMP-76-retire-private-config-fixture.md): retire the private-config fixture, App and workflow (Codex, owner approval for deletions).
+
+## Amendment 2026-10-11: derived role ARN
+
+The first design had `registry setup --terraform-output FILE` take `terraform output -json satellite_role_arns` and commit `aws-roles.json` in the admin repository. The owner rejected this because Terraform is often managed in a different repository than admin, so the admin side should not depend on Terraform output; deriving the ARN also removes one admin step per site. The flag, the role map and its digest recording are removed (sections 3 and 7).
+
+Rejected alternative: one shared satellite role for all sites. Per-site roles stay because IAM enforces prefix isolation between sites; a shared role would move that isolation into the workflow. Considered and rejected on 2026-10-11.
