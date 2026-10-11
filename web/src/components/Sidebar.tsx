@@ -29,11 +29,13 @@ export function Sidebar({
   index,
   sites,
   artifactPath,
+  directoryPath,
   expandedPaths,
   onExpandedPathsChange,
   revealRequest,
   onOpenPalette,
   onOpenArtifact,
+  onOpenDirectory,
   artifactHref,
   onToast,
   themeMode,
@@ -48,11 +50,14 @@ export function Sidebar({
   index: SiteIndex
   sites: SiteSummary[]
   artifactPath?: string
+  /** The folder whose page is open, if any: its row is highlighted and the tree expands to it. */
+  directoryPath?: string
   expandedPaths: Set<string>
   onExpandedPathsChange: (update: (current: Set<string>) => Set<string>) => void
   revealRequest: { path: string; request: number } | null
   onOpenPalette: (seed: string) => void
   onOpenArtifact: (artifact: ArtifactIndexEntry) => void
+  onOpenDirectory: (path: string) => void
   /** Resolves a logical route to the link target a row carries (for example with `?q=` kept). */
   artifactHref: (href: string) => string
   onToast: (message: string) => void
@@ -112,11 +117,11 @@ export function Sidebar({
   }
 
   useEffect(() => {
-    const ancestors = folderAncestors(artifactPath)
+    const ancestors = [...folderAncestors(artifactPath), ...folderPaths(directoryPath)]
     if (ancestors.length > 0) {
       onExpandedPathsChange((current) => new Set([...current, ...ancestors]))
     }
-  }, [artifactPath, onExpandedPathsChange])
+  }, [artifactPath, directoryPath, onExpandedPathsChange])
 
   useEffect(() => {
     if (!revealRequest || lastRevealedRequest.current === revealRequest.request) return
@@ -246,6 +251,9 @@ export function Sidebar({
                 <ArtifactTree
                   artifacts={index.artifacts}
                   activePath={artifactPath}
+                  activeDirectoryPath={directoryPath}
+                  directoryHref={(directory) => artifactHref(artifactRouteHref(index.site.id, directory.path))}
+                  onOpenDirectory={(directory) => onOpenDirectory(directory.path)}
                   style={treeStyle}
                   view={treeStyle === 'path-list' ? 'paths' : 'tree'}
                   expandedPaths={expandedPaths}
@@ -287,6 +295,12 @@ function safeRawArtifactUrl(value: string) {
 function folderAncestors(path?: string) {
   if (!path) return []
   const segments = path.split('/').filter(Boolean).slice(0, -1)
+  return segments.map((_, index) => segments.slice(0, index + 1).join('/'))
+}
+
+function folderPaths(path?: string) {
+  if (!path) return []
+  const segments = path.split('/').filter(Boolean)
   return segments.map((_, index) => segments.slice(0, index + 1).join('/'))
 }
 

@@ -6027,3 +6027,247 @@ test.describe('reader shell polish', () => {
     await expect(page.locator('head meta[name="robots"][content="noindex"]')).toHaveCount(1)
   })
 })
+
+// ISSUE-075: every directory is a routable page.
+test.describe('directory pages', () => {
+  const sharedMarkdown = '/_artifacts/sre/runbooks/service-recovery.md'
+  const toc = (...texts: string[]) => texts.map((text, index) => ({
+    level: 2, text, id: `section-${index + 1}`,
+  }))
+  const extraPages = [
+    ['guide/en/publishing.md', 'Publishing', '2026-10-03T00:00:00Z', toc('Publish on', 'Dry runs', 'Credentials', 'Cache', 'Rollback')],
+    ['guide/en/previews.md', 'Previews', '2026-10-04T00:00:00Z', toc('Pull requests')],
+    ['guide/en/reference/cli/publish.md', 'publish command', '2026-10-09T00:00:00Z', []],
+    ['guide/en/reference/cli/preview.md', 'preview command', '2026-10-05T00:00:00Z', []],
+    ['guide/en/reference/config.md', 'Configuration', '2026-10-06T00:00:00Z', []],
+    ['guide/ja/publishing.md', '公開する', '2026-10-02T00:00:00Z', []],
+    ['docs/README.md', 'Docs home', '2026-10-01T00:00:00Z', toc('Where to start')],
+    ['docs/changelog.md', 'Changelog', '2026-10-07T00:00:00Z', []],
+    ['solo/only.md', 'Only page', '2026-10-08T00:00:00Z', []],
+    ['my folder/日本語 ノート/page.md', 'Encoded page', '2026-10-08T00:00:00Z', []],
+  ] as const
+
+  async function routeDirectoryIndex(page: Page) {
+    await page.route('**/_indexes/sre/index.json', async (route) => {
+      const response = await route.fetch()
+      const index = await response.json()
+      index.artifacts.push(...extraPages.map(([path, title, updatedAt, headings]) => ({
+        id: path,
+        path,
+        title,
+        format: 'markdown',
+        filename: path.split('/').at(-1),
+        artifactUrl: sharedMarkdown,
+        updatedAt,
+        lastCommitter: { name: 'Ada Writer' },
+        toc: headings,
+      })))
+      await route.fulfill({ response, json: index })
+    })
+  }
+
+  test('a folder URL renders its folders and pages instead of Page not found', async ({ page }) => {
+    await routeDirectoryIndex(page)
+    await page.goto('/sre/guide/en')
+
+    const directory = page.getByTestId('directory-page')
+    await expect(directory.getByRole('heading', { level: 1, name: 'en' })).toBeVisible()
+    await expect(directory).toContainText('5 pages · updated Oct 9, 2026')
+    await expect(page.getByRole('heading', { name: 'Page not found' })).toHaveCount(0)
+    await expect(page.locator('head meta[name="robots"][content="noindex"]')).toHaveCount(0)
+    await expect(page).toHaveTitle('en · SRE')
+
+    const folders = directory.getByRole('region', { name: 'Folders' })
+    await expect(folders.getByRole('link')).toHaveText(['reference'])
+    await expect(folders).toContainText('3 pages · Oct 9, 2026')
+    await expect(folders.getByRole('link', { name: 'reference' })).toHaveAttribute('href', '/sre/guide/en/reference')
+
+    const pages = directory.getByRole('region', { name: 'Pages' })
+    await expect(pages.locator('.directory-row-link')).toHaveText(['Previews', 'Publishing'])
+    const publishing = pages.locator('.directory-row', { hasText: 'Publishing' })
+    await expect(publishing).toContainText('Oct 3, 2026 · Ada Writer')
+    await expect(publishing.locator('.directory-chip')).toHaveText(['Publish on', 'Dry runs', 'Credentials', '+2'])
+    await expect(publishing.locator('.directory-chip').first()).toHaveAttribute('href', '/sre/guide/en/publishing.md#section-1')
+    await expect(pages.locator('.directory-row', { hasText: 'Previews' }).locator('.directory-chip')).toHaveText(['Pull requests'])
+  })
+
+  test('a trailing slash and percent-encoded folder names name the same directory', async ({ page }) => {
+    await routeDirectoryIndex(page)
+    await page.goto('/sre/guide/en/')
+    await expect(page.getByTestId('directory-page').getByRole('heading', { level: 1, name: 'en' })).toBeVisible()
+    await expect(page).toHaveURL('/sre/guide/en/')
+
+    await page.goto('/sre/my%20folder/%E6%97%A5%E6%9C%AC%E8%AA%9E%20%E3%83%8E%E3%83%BC%E3%83%88')
+    await expect(page.getByTestId('directory-page').getByRole('heading', { level: 1, name: '日本語 ノート' })).toBeVisible()
+    await expect(page.getByTestId('directory-page').getByRole('link', { name: 'Encoded page' })).toHaveAttribute(
+      'href', '/sre/my%20folder/%E6%97%A5%E6%9C%AC%E8%AA%9E%20%E3%83%8E%E3%83%BC%E3%83%88/page.md')
+
+    await page.goto('/showcase/guides/url%20route%20samples')
+    await expect(page.getByTestId('directory-page').getByRole('heading', { level: 1, name: 'url route samples' })).toBeVisible()
+  })
+
+  test('a folder with only subfolders and a folder with one page keep their folder URLs', async ({ page }) => {
+    await routeDirectoryIndex(page)
+    await page.goto('/sre/guide')
+    const directory = page.getByTestId('directory-page')
+    await expect(directory.getByRole('region', { name: 'Folders' }).getByRole('link')).toHaveText(['en', 'ja'])
+    await expect(directory.getByRole('region', { name: 'Pages' })).toHaveCount(0)
+
+    await page.goto('/sre/solo')
+    await expect(page).toHaveURL('/sre/solo')
+    await expect(directory.getByRole('heading', { level: 1, name: 'solo' })).toBeVisible()
+    await expect(directory).toContainText('1 page ·')
+    await expect(directory.locator('.directory-row')).toHaveCount(1)
+  })
+
+  test('a README renders as the body with the other pages listed below it', async ({ page }) => {
+    await routeDirectoryIndex(page)
+    await page.goto('/sre/docs')
+
+    const directory = page.getByTestId('directory-page')
+    await expect(directory).toHaveAttribute('data-directory-variant', 'index')
+    await expect(directory.getByTestId('markdown-document')).toBeVisible()
+    await expect(directory).toContainText('rendered from README.md')
+    const children = directory.getByRole('navigation', { name: /In this folder/ })
+    await expect(children.getByRole('link')).toHaveText([/Changelog/])
+    await expect(children.getByRole('link', { name: /Docs home/ })).toHaveCount(0)
+    await expect(page).toHaveTitle('docs · SRE')
+    await expect(page.getByRole('button', { name: 'Contents' })).toBeEnabled()
+  })
+
+  test('a folder whose index.html is the only page renders it inside the directory page', async ({ page }) => {
+    await page.goto('/showcase/reports/cloud-spend-review')
+    const directory = page.getByTestId('directory-page')
+    await expect(directory).toHaveAttribute('data-directory-variant', 'index')
+    await expect(directory.locator('iframe.artifact-frame')).toBeVisible()
+    await expect(directory.getByRole('navigation', { name: /In this folder/ })).toHaveCount(0)
+  })
+
+  test('a path that is neither a page nor a folder is still not found', async ({ page }) => {
+    await routeDirectoryIndex(page)
+    for (const path of ['/sre/guide/nope', '/sre/gui', '/sre/guide/en/publishing']) {
+      await page.goto(path)
+      await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
+      await expect(page.locator('head meta[name="robots"][content="noindex"]')).toHaveCount(1)
+      await expect(page).toHaveTitle('Page not found · SRE')
+    }
+    await page.goto('/sre/guide/en/nope.md')
+    await expect(page.getByRole('navigation', { name: 'Similar pages' })).toBeVisible()
+  })
+
+  test('a sidebar folder label is a link and the chevron alone toggles', async ({ page, context }) => {
+    await routeDirectoryIndex(page)
+    await page.goto('/sre/guide/en/publishing.md')
+    const browse = page.locator('.browse-tree')
+    const label = browse.locator('a[data-tree-folder="guide/en"]')
+    const toggle = browse.locator('button[data-tree-path="guide/en"]')
+
+    await expect(label).toHaveAttribute('href', '/sre/guide/en')
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    await toggle.click()
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    await expect(page).toHaveURL('/sre/guide/en/publishing.md')
+    await toggle.click()
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+
+    const [tab] = await Promise.all([
+      context.waitForEvent('page'),
+      label.click({ modifiers: ['ControlOrMeta'] }),
+    ])
+    await expect.poll(() => new URL(tab.url()).pathname).toBe('/sre/guide/en')
+    await tab.close()
+    await expect(page).toHaveURL('/sre/guide/en/publishing.md')
+
+    const navigations = await page.evaluate(() => performance.getEntriesByType('navigation').length)
+    await label.click()
+    await expect(page).toHaveURL('/sre/guide/en')
+    await expect(label).toHaveAttribute('aria-current', 'page')
+    await expect(browse.locator('a.tree-artifact[aria-current="page"]')).toHaveCount(0)
+    await expect(page.getByTestId('directory-page')).toBeVisible()
+    expect(await page.evaluate(() => performance.getEntriesByType('navigation').length)).toBe(navigations)
+
+    await page.goBack()
+    await expect(page).toHaveURL('/sre/guide/en/publishing.md')
+    await expect(browse.locator('a.tree-artifact[aria-current="page"]')).toHaveCount(1)
+    await page.goForward()
+    await expect(page.getByTestId('directory-page').getByRole('heading', { level: 1, name: 'en' })).toBeVisible()
+  })
+
+  test('a folder label is keyboard operable: Enter opens it, Right and Left expand and collapse', async ({ page }) => {
+    await routeDirectoryIndex(page)
+    await page.goto('/sre')
+    const browse = page.locator('.browse-tree')
+    const label = browse.locator('a[data-tree-folder="guide"]')
+    const toggle = browse.locator('button[data-tree-path="guide"]')
+
+    await label.focus()
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    await page.keyboard.press('ArrowRight')
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    await expect(label).toBeFocused()
+    await page.keyboard.press('ArrowLeft')
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    await page.keyboard.press('Enter')
+    await expect(page).toHaveURL('/sre/guide')
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  test('breadcrumb folder segments are links and the sibling menu moves to a chevron', async ({ page }) => {
+    await routeDirectoryIndex(page)
+    await page.goto('/sre/guide/en/reference/config.md')
+    const breadcrumb = page.getByRole('navigation', { name: 'Artifact path' })
+
+    await expect(breadcrumb.getByRole('link')).toHaveText(['guide', 'en', 'reference'])
+    await expect(breadcrumb.getByRole('link', { name: 'en', exact: true })).toHaveAttribute('href', '/sre/guide/en')
+    await breadcrumb.getByRole('button', { name: 'Browse artifacts in guide/en', exact: true }).click()
+    await expect(page.getByRole('menu', { name: 'Artifacts in guide/en', exact: true })).toBeVisible()
+    await page.keyboard.press('Escape')
+
+    await breadcrumb.getByRole('link', { name: 'en', exact: true }).click()
+    await expect(page).toHaveURL('/sre/guide/en')
+    await expect(page.getByTestId('directory-page')).toBeVisible()
+    await expect(breadcrumb.locator('.breadcrumb-current')).toHaveText('en')
+    await expect(breadcrumb.locator('.breadcrumb-current')).toHaveAttribute('aria-current', 'page')
+    await expect(breadcrumb.getByRole('link')).toHaveText(['guide'])
+
+    await page.goBack()
+    await expect(page).toHaveURL('/sre/guide/en/reference/config.md')
+  })
+
+  test('directory rows and chips are real links that navigate in the app', async ({ page }) => {
+    await routeDirectoryIndex(page)
+    await page.goto('/sre/guide/en')
+    await page.getByTestId('directory-page').getByRole('link', { name: 'reference', exact: true }).click()
+    await expect(page).toHaveURL('/sre/guide/en/reference')
+    await expect(page.getByTestId('directory-page').getByRole('heading', { level: 1, name: 'reference' })).toBeVisible()
+    await page.getByTestId('directory-page').getByRole('link', { name: 'Configuration' }).click()
+    await expect(page).toHaveURL('/sre/guide/en/reference/config.md')
+    await page.goBack()
+    await page.goBack()
+    await expect(page).toHaveURL('/sre/guide/en')
+    await page.getByTestId('directory-page').getByRole('link', { name: 'Dry runs' }).click()
+    await expect(page).toHaveURL('/sre/guide/en/publishing.md#section-2')
+  })
+
+  test('the directory page fits a 390px screen and the drawer folder label closes the drawer', async ({ browser }) => {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+    await routeDirectoryIndex(page)
+    await page.goto('/sre/guide/en')
+    await expect(page.getByTestId('directory-page')).toBeVisible()
+    const overflow = await page.evaluate(() => ({
+      page: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      scroll: (() => {
+        const scroll = document.querySelector('.directory-scroll')!
+        return scroll.scrollWidth - scroll.clientWidth
+      })(),
+    }))
+    expect(overflow).toEqual({ page: 0, scroll: 0 })
+
+    await page.getByRole('button', { name: 'Expand navigation' }).tap()
+    await page.locator('.browse-tree a[data-tree-folder="docs"]').tap()
+    await expect(page).toHaveURL('/sre/docs')
+    await expect(page.getByTestId('directory-page')).toHaveAttribute('data-directory-variant', 'index')
+    await expect(page.locator('#workspace-sidebar')).toBeHidden()
+    await page.close()
+  })
+})
