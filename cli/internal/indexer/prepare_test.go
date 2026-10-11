@@ -512,3 +512,50 @@ func readBuildSiteIndex(t testing.TB, output, siteID string) SiteIndex {
 	}
 	return index
 }
+
+func TestPrepareBuildRejectsReservedFirstSegments(t *testing.T) {
+	repositoryRoot := initializeGitRepository(t)
+	restoreWorkingDirectory := chdirForTest(t, repositoryRoot)
+	defer restoreWorkingDirectory()
+
+	writeFixtureFile(t, repositoryRoot, "content/index.md", "# Home\n")
+	writeFixtureFile(t, repositoryRoot, "content/_search/page.md", "# Hidden\n")
+	writeFixtureFile(t, repositoryRoot, "content/_previews/deep/page.html", "<h1>Hidden</h1>")
+	commitFixture(t, repositoryRoot, "add reserved fixtures", time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC))
+	_, err := PrepareBuild(context.Background(), BuildOptions{SiteID: "sre", SourceDir: "content", OutputDir: filepath.Join(repositoryRoot, ".local", "out")})
+	if err == nil {
+		t.Fatal("PrepareBuild accepted documents under reserved first segments")
+	}
+	for _, want := range []string{"_previews/deep/page.html", "_search/page.md", "_previews, _search"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not mention %q", err, want)
+		}
+	}
+	if strings.Contains(err.Error(), "index.md") {
+		t.Errorf("error %q names an unaffected file", err)
+	}
+}
+
+func TestPrepareBuildAcceptsNonReservedLookalikes(t *testing.T) {
+	repositoryRoot := initializeGitRepository(t)
+	restoreWorkingDirectory := chdirForTest(t, repositoryRoot)
+	defer restoreWorkingDirectory()
+
+	writeFixtureFile(t, repositoryRoot, "content/index.md", "# Home\n")
+	writeFixtureFile(t, repositoryRoot, "content/docs/_search.md", "# A\n")
+	writeFixtureFile(t, repositoryRoot, "content/_searchable/x.md", "# B\n")
+	writeFixtureFile(t, repositoryRoot, "content/a/_previews/b.md", "# C\n")
+	writeFixtureFile(t, repositoryRoot, "content/_Search/y.md", "# D\n")
+	commitFixture(t, repositoryRoot, "add lookalike fixtures", time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC))
+	if _, err := PrepareBuild(context.Background(), BuildOptions{SiteID: "sre", SourceDir: "content", OutputDir: filepath.Join(repositoryRoot, ".local", "out")}); err != nil {
+		t.Fatalf("PrepareBuild rejected non-reserved paths: %v", err)
+	}
+}
+
+func TestReservedFirstSegment(t *testing.T) {
+	for path, want := range map[string]bool{"_search": true, "_search/a.md": true, "_previews/x/y.md": true, "_searchable/x.md": false, "docs/_search.md": false, "a/_previews/b.md": false, "_Search/a.md": false} {
+		if _, got := ReservedFirstSegment(path); got != want {
+			t.Errorf("ReservedFirstSegment(%q) = %v, want %v", path, got, want)
+		}
+	}
+}

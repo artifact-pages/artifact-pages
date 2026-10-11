@@ -41,6 +41,24 @@ func ValidateUTF8RelativePath(relative string) error {
 	return nil
 }
 
+// ReservedFirstSegments lists the first site-relative path segments the web
+// reader routes itself (`/<site>/_previews...` and `/<site>/_search`). A
+// document under one of them could never be reached, so the indexer and the
+// preview builder reject such paths. Matching is case-sensitive.
+var ReservedFirstSegments = []string{"_previews", "_search"}
+
+// ReservedFirstSegment returns the reserved first segment of a site-relative
+// slash path, if it has one.
+func ReservedFirstSegment(relative string) (string, bool) {
+	first, _, _ := strings.Cut(relative, "/")
+	for _, reserved := range ReservedFirstSegments {
+		if first == reserved {
+			return reserved, true
+		}
+	}
+	return "", false
+}
+
 type BuildOptions struct {
 	SiteID          string
 	SiteTitle       string

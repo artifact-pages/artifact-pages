@@ -996,3 +996,16 @@ func TestPublishAdvancesOnlyTheNamedCatalogGroup(t *testing.T) {
 		t.Fatalf("same-byte distinct-head file revisions were not retained independently: oldErr=%v newErr=%v", oldErr, newErr)
 	}
 }
+
+func TestValidateSourcePathRejectsReservedFirstSegments(t *testing.T) {
+	for _, value := range []string{"_previews/a.md", "_search/a.md", "_search/deep/a.html"} {
+		if err := validateSourcePath(value); err == nil || !strings.Contains(err.Error(), "reserved") {
+			t.Errorf("validateSourcePath(%q) = %v, want reserved-segment error", value, err)
+		}
+	}
+	for _, value := range []string{"docs/_search.md", "_searchable/x.md", "a/_previews/b.md"} {
+		if err := validateSourcePath(value); err != nil {
+			t.Errorf("validateSourcePath(%q) = %v, want nil", value, err)
+		}
+	}
+}

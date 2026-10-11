@@ -36,5 +36,5 @@ Owner feedback of 2026-10-11 on the live sites asked for a wider place for resul
 
 ## Follow-ups
 
-- Indexer enforcement of reserved first segments (`_previews`, `_search`) is a separate Codex item; until it lands a page whose path starts with `_search/` is unreachable, as `_previews/` is today.
+- Indexer enforcement of reserved first segments (`_previews`, `_search`): [ISSUE-088](ISSUE-088-indexer-rejects-reserved-first-segments.md).
 - Snippets, heading anchors and body-hit ordering: [ISSUE-085](ISSUE-085-page-text-search-snippets.md) after the format slice.
