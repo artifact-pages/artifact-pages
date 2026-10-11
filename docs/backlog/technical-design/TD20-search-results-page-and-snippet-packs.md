@@ -79,11 +79,11 @@ Manifest additions (both optional, same `ObjectRef` shape and the same URL, leng
 - Stability also needs deterministic gzip: fixed compression level, no mtime, no file name (the v1 objects already satisfy this), so identical input gives identical bytes and hash.
 - Same delivery as the leaves: `application/octet-stream`, no `Content-Encoding`, the immutable cache policy, reconciled with the rest of the owned search prefix.
 
-**Limits.** A per-document text cap (proposed 256 KiB of normalised text; longer sections are truncated) and a per-site cap on total raw pack bytes (proposed 32 MiB). Exceeding a cap never fails the publish and is never silent: the CLI prints a warning, and the manifest records that snippets were omitted for the site, or which documents were truncated. With `sections` and `texts` omitted the UI falls back to v1 behaviour ("Text", no snippet); the sidebar and ranking are unaffected.
+**Limits.** A per-document text cap (proposed 256 KiB of display text (UTF-8 bytes); longer sections are truncated) and a per-site cap on total raw pack bytes (proposed 32 MiB). Exceeding a cap never fails the publish and is never silent: the CLI prints a warning, and the manifest records that snippets were omitted for the site, or which documents were truncated. With `sections` and `texts` omitted the UI falls back to v1 behaviour ("Text", no snippet); the sidebar and ranking are unaffected.
 
 ### 4. Runtime cost
 
-For a results page of 20 hits the reader reads the section table, picks the sections of those documents that contain the query terms, and fetches only the distinct packs holding them. Snippets and per-page match lists are computed in the browser by finding normalised terms in the section text and cutting a window (about 160 characters) around the first match. Packs are cached across queries and, by content addressing, across publishes.
+For a results page of 20 hits the reader reads the section table, picks the sections of those documents that contain the query terms, and fetches only the distinct packs holding them. Snippets and per-page match lists are computed in the browser as specified in the Reader procedure of `docs/architecture/fulltext-search.md` (terms matched per grapheme cluster against the display text, a window of about 160 grapheme clusters around the first match). Packs are cached across queries and, by content addressing, across publishes.
 
 Rough figures for a ~100-page documentation site (about 5 KB of text per page, about 500 KB normalised, about 150 KB gzipped, about 800 sections; estimates to confirm on the real corpus in the first slice):
 

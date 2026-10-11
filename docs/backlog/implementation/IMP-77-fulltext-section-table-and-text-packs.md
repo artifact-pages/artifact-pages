@@ -16,7 +16,7 @@ TD20 slice 2: at publish time, write the section table and content-addressed tex
 ## Scope
 
 1. **Format contract first, as its own small PR.** Settle the byte layout of `sections-<sha256>.gz` and `text-<sha256>.gz`, the optional manifest fields `sections`, `texts`, and `snippetLimits`, path-hash sampling at document boundaries (soft minimum 16 KiB, approximate 64 KiB target, hard maximum 256 KiB raw), deterministic gzip, h1–h3 section starts, and the 256 KiB per-document / 32 MiB per-site caps. Write it in `docs/architecture/fulltext-search.md` and add golden fixture files under `cli/internal/fulltext/testdata/` that both the Go writer and the web reader test against (web tests read them; only Codex edits them). Claude reviews the contract PR, then starts the reader side of ISSUE-085 in parallel.
-2. Writer in the indexer, using the same text normalisation as the v1 index; sections at the `toc` anchors.
+2. Writer in the indexer, storing whitespace-folded display text (owner 2026-10-12; postings keep the v1 normalisation); sections at the `toc` anchors.
 3. Publisher reconciliation: extend `sitePublishStateSearchBlob` (`cli/internal/publisher/site_publish_state.go`) and the object-policy mapping to `text-` and `sections-`; immutable cache headers like the existing leaf objects.
 4. Caps: warn in the CLI output and record omitted or truncated documents in the manifest; never fail the publish.
 
