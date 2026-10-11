@@ -223,13 +223,17 @@ cloudflare:
 
 func TestParseAWSBucketAndAccountIDRules(t *testing.T) {
 	tests := []struct {
-		name    string
-		aws     string
-		want    string
-		wantErr string
+		name           string
+		aws            string
+		want           string
+		wantNamePrefix string
+		wantErr        string
 	}{
 		{name: "explicit bucket without account ID", aws: "region: us-east-1\nbucket: explicit-bucket", want: "explicit-bucket"},
 		{name: "explicit bucket overrides derivation", aws: "accountId: \"123456789012\"\nregion: us-east-1\nbucket: explicit-bucket", want: "explicit-bucket"},
+		{name: "optional custom name prefix", aws: "accountId: \"123456789012\"\nnamePrefix: custom-pages\nregion: us-east-1\nbucket: explicit-bucket", want: "explicit-bucket", wantNamePrefix: "custom-pages"},
+		{name: "invalid custom name prefix", aws: "namePrefix: Custom\nregion: us-east-1\nbucket: explicit-bucket", wantErr: "aws.namePrefix must match"},
+		{name: "too long custom name prefix", aws: "namePrefix: a1234567890123456789012345678901\nregion: us-east-1\nbucket: explicit-bucket", wantErr: "aws.namePrefix must match"},
 		{name: "missing bucket and account ID", aws: "region: us-east-1", wantErr: "aws.accountId is required when aws.bucket is omitted"},
 		{name: "malformed account ID with bucket", aws: "accountId: \"12345678901x\"\nregion: us-east-1\nbucket: explicit-bucket", wantErr: "aws.accountId must be a 12-digit AWS account ID"},
 		{name: "malformed account ID without bucket", aws: "accountId: \"12345678901x\"\nregion: us-east-1", wantErr: "aws.accountId must be a 12-digit AWS account ID"},
@@ -247,8 +251,8 @@ func TestParseAWSBucketAndAccountIDRules(t *testing.T) {
 				}
 				return
 			}
-			if err != nil || config.AWS.Bucket != test.want {
-				t.Fatalf("Parse() = %+v, %v; want bucket %q", config.AWS, err, test.want)
+			if err != nil || config.AWS.Bucket != test.want || config.AWS.NamePrefix != test.wantNamePrefix {
+				t.Fatalf("Parse() = %+v, %v; want bucket %q and namePrefix %q", config.AWS, err, test.want, test.wantNamePrefix)
 			}
 		})
 	}

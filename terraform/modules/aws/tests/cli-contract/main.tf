@@ -22,6 +22,16 @@ variable "expected_bucket" {
   type = string
 }
 
+variable "name_prefix" {
+  type    = string
+  default = "artifact-pages-contract"
+}
+
+variable "expected_name_prefix" {
+  type    = string
+  default = "artifact-pages-contract"
+}
+
 variable "oidc_account_id" {
   type    = string
   default = "000000000000"
@@ -38,7 +48,7 @@ variable "cli_contract_helper" {
 module "artifact_pages" {
   source = "../.."
 
-  name_prefix               = "artifact-pages-contract"
+  name_prefix               = var.name_prefix
   aws_region                = "us-west-2"
   bucket_name               = var.bucket_name
   preview_retention_days    = 1
@@ -58,5 +68,6 @@ data "external" "cli_contract" {
     expected_account_id      = "000000000000"
     expected_region          = "us-west-2"
     expected_distribution_id = "E0000000000000"
+    expected_name_prefix     = var.expected_name_prefix
   }
 }

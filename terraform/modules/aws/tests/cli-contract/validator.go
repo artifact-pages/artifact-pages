@@ -24,6 +24,7 @@ type request struct {
 	ExpectedAccount        string `json:"expected_account_id"`
 	ExpectedRegion         string `json:"expected_region"`
 	ExpectedDistributionID string `json:"expected_distribution_id"`
+	ExpectedNamePrefix     string `json:"expected_name_prefix"`
 }
 
 func main() {
@@ -58,6 +59,9 @@ func main() {
 	if target.DistributionID != input.ExpectedDistributionID {
 		fail("parsed distributionId = %q, want mocked distribution ID %q", target.DistributionID, input.ExpectedDistributionID)
 	}
+	if target.NamePrefix != input.ExpectedNamePrefix {
+		fail("parsed namePrefix = %q, want %q", target.NamePrefix, input.ExpectedNamePrefix)
+	}
 	root := yamlRoot(input.YAML)
 	aws := mappingValue(root, "aws")
 	for field, expected := range map[string]string{
@@ -70,6 +74,14 @@ func main() {
 			fail("raw Terraform YAML field aws.%s = %q, want %q", field, actual, expected)
 		}
 	}
+	namePrefix := mappingValue(aws, "namePrefix")
+	if input.ExpectedNamePrefix == "" {
+		if namePrefix != nil {
+			fail("default namePrefix must be omitted from the Terraform CLI YAML")
+		}
+	} else if actual := stringValue(namePrefix); actual != input.ExpectedNamePrefix {
+		fail("raw Terraform YAML field aws.namePrefix = %q, want %q", actual, input.ExpectedNamePrefix)
+	}
 	if mappingValue(root, "previewRetentionDays") != nil {
 		fail("generated CLI YAML must not include previewRetentionDays")
 	}
@@ -79,9 +91,10 @@ func main() {
 		}
 	}
 	_ = json.NewEncoder(os.Stdout).Encode(map[string]string{
-		"provider":  parsed.Provider,
-		"bucket":    target.Bucket,
-		"accountId": accountID,
+		"provider":   parsed.Provider,
+		"bucket":     target.Bucket,
+		"accountId":  accountID,
+		"namePrefix": target.NamePrefix,
 	})
 }
 

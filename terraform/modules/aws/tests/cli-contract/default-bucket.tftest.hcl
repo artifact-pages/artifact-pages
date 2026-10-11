@@ -32,8 +32,10 @@ run "default_bucket_output_parses_in_cli" {
   command = apply
 
   variables {
-    bucket_name     = null
-    expected_bucket = "artifact-pages-000000000000-us-west-2"
+    bucket_name          = null
+    expected_bucket      = "artifact-pages-000000000000-us-west-2"
+    name_prefix          = "artifact-pages"
+    expected_name_prefix = ""
   }
 
   assert {
@@ -44,6 +46,11 @@ run "default_bucket_output_parses_in_cli" {
   assert {
     condition     = data.external.cli_contract.result["bucket"] == "artifact-pages-000000000000-us-west-2"
     error_message = "the parsed CLI target must contain the deterministic account-and-region bucket"
+  }
+
+  assert {
+    condition     = data.external.cli_contract.result["namePrefix"] == ""
+    error_message = "the default module prefix must stay omitted from CLI config for older Action compatibility"
   }
 
   assert {
