@@ -24,6 +24,7 @@ import (
 	"github.com/artifact-pages/artifact-pages/cli/internal/config"
 	"github.com/artifact-pages/artifact-pages/cli/internal/registry"
 	"github.com/artifact-pages/artifact-pages/cli/internal/version"
+	"go.yaml.in/yaml/v3"
 )
 
 //go:embed templates/*.tmpl
@@ -51,19 +52,20 @@ type Options struct {
 }
 
 type templateData struct {
-	CLI             string
-	Provider        string
-	AWSRegion       string
-	CloudflareEnv   []string
-	PublishSHA      string
-	PublishVersion  string
-	PreviewSHA      string
-	PreviewVersion  string
-	RegistrySHA     string
-	RegistryVersion string
-	AWSCredsSHA     string
-	AWSCredsVersion string
-	RolesHash       string
+	CLI                  string
+	Provider             string
+	AWSRegion            string
+	CloudflareEnv        []string
+	PreviewCloudflareEnv []string
+	PublishSHA           string
+	PublishVersion       string
+	PreviewSHA           string
+	PreviewVersion       string
+	RegistrySHA          string
+	RegistryVersion      string
+	AWSCredsSHA          string
+	AWSCredsVersion      string
+	RolesHash            string
 }
 
 type actionPin struct {
@@ -141,7 +143,12 @@ func Run(options Options) error {
 		if options.TerraformOutput != "" {
 			return errors.New("--terraform-output is only valid for an AWS deployment")
 		}
-		data.CloudflareEnv = cloudflareEnvironmentNames(deployment)
+		data.CloudflareEnv = cloudflareEnvironmentNames(deployment, true)
+		explicitR2Credentials, parseErr := explicitCloudflareR2CredentialNames(configBytes)
+		if parseErr != nil {
+			return fmt.Errorf("inspect local Cloudflare credential settings: %w", parseErr)
+		}
+		data.PreviewCloudflareEnv = cloudflareEnvironmentNames(deployment, !explicitR2Credentials)
 	}
 
 	rolesSHA := data.RolesHash
@@ -287,16 +294,18 @@ func parseRoles(contents []byte, deployment config.DeploymentConfig) (map[string
 	return roles, nil
 }
 
-func cloudflareEnvironmentNames(deployment config.DeploymentConfig) []string {
+func cloudflareEnvironmentNames(deployment config.DeploymentConfig, includeAPIToken bool) []string {
 	target := deployment.Cloudflare
 	values := []string{
 		target.AccessKeyIDEnv,
 		target.SecretAccessKeyEnv,
 		target.SessionTokenEnv,
-		target.APITokenEnv,
 		target.RegistryReaderAccessKeyIDEnv,
 		target.RegistryReaderSecretAccessKeyEnv,
 		target.RegistryReaderSessionTokenEnv,
+	}
+	if includeAPIToken {
+		values = append(values, target.APITokenEnv)
 	}
 	set := make(map[string]struct{}, len(values))
 	for _, value := range values {
@@ -310,6 +319,19 @@ func cloudflareEnvironmentNames(deployment config.DeploymentConfig) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+func explicitCloudflareR2CredentialNames(contents []byte) (bool, error) {
+	var raw struct {
+		Cloudflare *struct {
+			AccessKeyIDEnv     *string `yaml:"accessKeyIdEnv"`
+			SecretAccessKeyEnv *string `yaml:"secretAccessKeyEnv"`
+		} `yaml:"cloudflare"`
+	}
+	if err := yaml.Unmarshal(contents, &raw); err != nil {
+		return false, err
+	}
+	return raw.Cloudflare != nil && raw.Cloudflare.AccessKeyIDEnv != nil && raw.Cloudflare.SecretAccessKeyEnv != nil, nil
 }
 
 func renderOutputs(data templateData, rolesBytes []byte) (map[string][]byte, error) {
