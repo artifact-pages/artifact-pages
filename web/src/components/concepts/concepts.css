@@ -701,3 +701,18 @@ a.page-text-result { text-decoration: none; }
 .rp-strip[open] > summary svg { transform: rotate(90deg); }
 .rp-strip .rp-next { margin: 0; padding: 0 12px 10px; border: 0; max-height: 220px; overflow: auto; }
 .rp-strip .rp-next h2 { display: none; }
+
+/* ISSUE-086 HTML strip: real same-origin iframe + shell-owned strip */
+.rh-iframe { display: block; min-height: 0; width: 100%; flex: 1; border: 0; background: #fff; }
+.rh-stage .rp-strip { position: relative; z-index: 1; box-shadow: 0 -6px 14px -8px rgb(0 0 0 / .35); }
+.rh-stage .rp-strip > summary:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.rh-stage .rp-strip > summary:hover { color: var(--text); background: var(--hover); }
+.rh-stage .rp-strip > summary svg { transition: transform .15s ease; }
+.rh-stage .rp-strip[open] .rp-next { animation: rh-open .22s ease-out; }
+.rh-stage .rp-strip--auto[open] { animation: rh-lift .22s ease-out; }
+@keyframes rh-open { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes rh-lift { from { box-shadow: 0 0 0 0 transparent; } }
+@media (prefers-reduced-motion: reduce) {
+  .rh-stage .rp-strip[open] .rp-next, .rh-stage .rp-strip--auto[open] { animation: none; }
+  .rh-stage .rp-strip > summary svg { transition: none; }
+}
