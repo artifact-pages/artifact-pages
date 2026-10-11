@@ -36,12 +36,13 @@ const (
 )
 
 var (
-	exactVersionPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
-	providerNamePattern = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
-	environmentPattern  = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-	commitPattern       = regexp.MustCompile(`^[0-9a-fA-F]{40}$`)
-	cloudflareIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{32}$`)
-	awsAccountIDPattern = regexp.MustCompile(`^[0-9]{12}$`)
+	exactVersionPattern  = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
+	providerNamePattern  = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
+	environmentPattern   = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	commitPattern        = regexp.MustCompile(`^[0-9a-fA-F]{40}$`)
+	cloudflareIDPattern  = regexp.MustCompile(`^[0-9a-fA-F]{32}$`)
+	awsAccountIDPattern  = regexp.MustCompile(`^[0-9]{12}$`)
+	awsNamePrefixPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{1,30}$`)
 )
 
 type LocalTarget struct {
@@ -50,6 +51,7 @@ type LocalTarget struct {
 
 type AWSTarget struct {
 	AccountID      string `yaml:"accountId,omitempty"`
+	NamePrefix     string `yaml:"namePrefix,omitempty"`
 	Region         string `yaml:"region"`
 	Bucket         string `yaml:"bucket"`
 	DistributionID string `yaml:"distributionId"`
@@ -297,6 +299,9 @@ func (config DeploymentConfig) WithDefaults() (DeploymentConfig, error) {
 			}
 			target.Bucket = fmt.Sprintf("artifact-pages-%s-%s", target.AccountID, target.Region)
 		}
+		if target.NamePrefix != "" && !awsNamePrefixPattern.MatchString(target.NamePrefix) {
+			return DeploymentConfig{}, errors.New("aws.namePrefix must match ^[a-z][a-z0-9-]{1,30}$")
+		}
 		config.AWS = &target
 	case "cloudflare":
 		if config.Cloudflare == nil {
@@ -352,6 +357,9 @@ func (config DeploymentConfig) Validate() error {
 		}
 		if strings.TrimSpace(config.AWS.Bucket) == "" {
 			return errors.New("aws.bucket is required")
+		}
+		if config.AWS.NamePrefix != "" && !awsNamePrefixPattern.MatchString(config.AWS.NamePrefix) {
+			return errors.New("aws.namePrefix must match ^[a-z][a-z0-9-]{1,30}$")
 		}
 	case "cloudflare":
 		if config.Cloudflare == nil || config.Local != nil || config.AWS != nil || config.GCSLocal != nil {

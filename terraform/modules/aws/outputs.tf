@@ -28,11 +28,14 @@ output "aws_deployment_config_yaml" {
   value = yamlencode({
     schemaVersion = 1
     provider      = "aws"
-    aws = {
-      accountId      = local.aws_account_id
-      region         = var.aws_region
-      bucket         = aws_s3_bucket.origin.bucket
-      distributionId = aws_cloudfront_distribution.site.id
-    }
+    aws = merge(
+      {
+        accountId      = local.aws_account_id
+        region         = var.aws_region
+        bucket         = aws_s3_bucket.origin.bucket
+        distributionId = aws_cloudfront_distribution.site.id
+      },
+      var.name_prefix == "artifact-pages" ? {} : { namePrefix = var.name_prefix },
+    )
   })
 }

@@ -1,0 +1,13 @@
+{
+  "namePrefix": "aa",
+  "cases": [
+    {
+      "siteID": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "roleName": "aa-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-publisher"
+    },
+    {
+      "siteID": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "roleName": "aa-s-6c1b3dc7a706b9dc8135-pub"
+    }
+  ]
+}

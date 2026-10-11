@@ -177,7 +177,7 @@ func TestRunRootHelp(t *testing.T) {
 	if !strings.Contains(help, "artifact-pages [--cli-version MAJOR.MINOR.PATCH] <command>") {
 		t.Errorf("root help does not show the standalone CLI usage:\n%s", stdout.String())
 	}
-	for _, expected := range []string{"registry setup", "registry sync", "site sync", "app deploy", "app remove", "lock inspect|recover"} {
+	for _, expected := range []string{"registry setup", "registry role-arn", "registry sync", "site sync", "app deploy", "app remove", "lock inspect|recover"} {
 		if !strings.Contains(help, expected) {
 			t.Errorf("root help is missing %q:\n%s", expected, help)
 		}
@@ -210,13 +210,17 @@ func TestRunRegistrySetupHelpDocumentsLocalInputsAndNoResolution(t *testing.T) {
 	for _, expected := range []string{
 		"artifact-pages registry setup",
 		"--directory DIR",
-		"--terraform-output FILE",
+		"aws.accountId is required",
+		"optional namePrefix",
 		"github:// and environment defaults are not used",
 		"does not read secrets, contact GitHub, resolve config versions",
 	} {
 		if !strings.Contains(help, expected) {
 			t.Errorf("registry setup help is missing %q:\n%s", expected, help)
 		}
+	}
+	if strings.Contains(help, "terraform-output") {
+		t.Fatalf("registry setup help still documents a Terraform output input:\n%s", help)
 	}
 }
 
@@ -253,6 +257,46 @@ sites: {}
 	}
 	if !strings.Contains(stdout.String(), "files are up to date") {
 		t.Fatalf("check output = %s", stdout.String())
+	}
+}
+
+func TestRunRegistryRoleARNUsesOnlyExplicitLocalConfig(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(root, "artifact-pages.yaml")
+	config := `schemaVersion: 1
+provider: aws
+aws:
+  accountId: "123456789012"
+  namePrefix: custom
+  region: us-east-1
+  bucket: pages
+  distributionId: E123456789
+sites:
+  docs:
+    name: Documentation
+    repository: acme/docs
+    sourcePath: public
+`
+	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	if err := run(t.Context(), []string{"registry", "role-arn", "--config", configPath, "--site", "docs"}, &stdout, &stderr); err != nil {
+		t.Fatalf("run(registry role-arn): %v; stderr=%s", err, stderr.String())
+	}
+	if stdout.String() != "arn:aws:iam::123456789012:role/custom-docs-publisher\n" {
+		t.Fatalf("role ARN output = %q", stdout.String())
+	}
+	stdout.Reset()
+	err = run(t.Context(), []string{"registry", "role-arn", "--config", configPath, "--site", "missing"}, &stdout, &stderr)
+	if err == nil || !strings.Contains(err.Error(), `site "missing" is not registered`) {
+		t.Fatalf("unregistered site error = %v", err)
+	}
+	if err := run(t.Context(), []string{"registry", "role-arn", "--config", "github://acme/admin/artifact-pages.yaml", "--site", "docs"}, &stdout, &stderr); err == nil || !strings.Contains(err.Error(), "local deployment config") {
+		t.Fatalf("remote config locator error = %v", err)
 	}
 }
 

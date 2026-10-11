@@ -161,6 +161,18 @@ func (r Runner) Run(ctx context.Context, args []string, stdout, stderr io.Writer
 		// bootstrap metadata for this command.
 		return clean, false, nil
 	}
+	if isRegistryRoleARN(clean) {
+		if hasRegistrySetupHelp(clean) {
+			return clean, false, nil
+		}
+		if flagSet || r.Getenv(VersionEnv) != "" {
+			return clean, false, &Error{errors.New("registry role-arn always uses the running CLI; remove --cli-version and ARTIFACT_PAGES_CLI_VERSION"), 2}
+		}
+		// This helper consumes only an explicit local config file. It is pinned
+		// independently by the generated AWS action and must not be re-executed
+		// to an older writer CLI selected by that config.
+		return clean, false, nil
+	}
 	override := r.Getenv(VersionEnv)
 	source := ""
 	if override != "" {
@@ -275,6 +287,10 @@ func (r Runner) Run(ctx context.Context, args []string, stdout, stderr io.Writer
 
 func isRegistrySetup(args []string) bool {
 	return len(args) >= 2 && args[0] == "registry" && args[1] == "setup"
+}
+
+func isRegistryRoleARN(args []string) bool {
+	return len(args) >= 2 && args[0] == "registry" && args[1] == "role-arn"
 }
 
 func hasRegistrySetupHelp(args []string) bool {

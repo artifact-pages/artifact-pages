@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/artifact-pages/artifact-pages/cli/internal/awsrole"
 	"github.com/artifact-pages/artifact-pages/cli/internal/bootstrap"
 	"github.com/artifact-pages/artifact-pages/cli/internal/compat"
 	deploymentconfig "github.com/artifact-pages/artifact-pages/cli/internal/config"
@@ -409,6 +410,13 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 			}
 			return runRegistrySetup(args[2:], stdout, stderr)
 		}
+		if args[1] == "role-arn" {
+			if len(args) >= 3 && (args[2] == "--help" || args[2] == "-h") {
+				writeRegistryRoleARNUsage(stdout)
+				return nil
+			}
+			return runRegistryRoleARN(args[2:], stdout, stderr)
+		}
 		writeRegistryUsage(stderr)
 		return withExitCode(fmt.Errorf("unknown registry command %q", args[1]), 2)
 	}
@@ -534,7 +542,6 @@ func runRegistrySetup(args []string, stdout, stderr io.Writer) error {
 	flags.Usage = func() { writeRegistrySetupUsage(stderr) }
 	directory := flags.String("directory", ".", "operator repository directory to generate files in")
 	configPath := flags.String("config", "", "local deployment config file (default: artifact-pages.yaml in --directory)")
-	terraformOutput := flags.String("terraform-output", "", "local JSON file produced by terraform output -json satellite_role_arns (AWS only)")
 	repository := flags.String("repository", "", "admin repository OWNER/REPOSITORY for printed manual commands (inferred from origin when possible)")
 	check := flags.Bool("check", false, "fail if generated files are missing or differ; do not modify files")
 	if err := flags.Parse(args); err != nil {
@@ -547,12 +554,11 @@ func runRegistrySetup(args []string, stdout, stderr io.Writer) error {
 		return withExitCode(fmt.Errorf("unexpected arguments: %v", flags.Args()), 2)
 	}
 	options := registrysetup.Options{
-		Directory:       *directory,
-		ConfigPath:      *configPath,
-		TerraformOutput: *terraformOutput,
-		Repository:      *repository,
-		Check:           *check,
-		Output:          stdout,
+		Directory:  *directory,
+		ConfigPath: *configPath,
+		Repository: *repository,
+		Check:      *check,
+		Output:     stdout,
 	}
 	if err := registrysetup.Run(options); err != nil {
 		if registrysetup.IsDrift(err) {
@@ -560,6 +566,36 @@ func runRegistrySetup(args []string, stdout, stderr io.Writer) error {
 		}
 		return withExitCode(err, 2)
 	}
+	return nil
+}
+
+func runRegistryRoleARN(args []string, stdout, stderr io.Writer) error {
+	flags := flag.NewFlagSet("artifact-pages registry role-arn", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	flags.Usage = func() { writeRegistryRoleARNUsage(stderr) }
+	configPath := flags.String("config", "", "explicit local deployment config file")
+	siteID := flags.String("site", "", "registered site ID")
+	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
+		return withExitCode(err, 2)
+	}
+	if flags.NArg() != 0 {
+		return withExitCode(fmt.Errorf("unexpected arguments: %v", flags.Args()), 2)
+	}
+	if *configPath == "" || *siteID == "" {
+		return withExitCode(errors.New("--config and --site are required"), 2)
+	}
+	deployment, err := awsrole.ReadLocalConfig(*configPath)
+	if err != nil {
+		return withExitCode(err, 2)
+	}
+	roleARN, err := awsrole.ForSite(deployment, *siteID)
+	if err != nil {
+		return withExitCode(err, 2)
+	}
+	fmt.Fprintln(stdout, roleARN)
 	return nil
 }
 
@@ -978,6 +1014,7 @@ func writeRootUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  site sync     Reconcile one site's artifacts and index with its source directory")
 	fmt.Fprintln(writer, "  preview publish  Build and publish one explicit site's review preview")
 	fmt.Fprintln(writer, "  registry setup Generate admin reusable workflows and registry workflow")
+	fmt.Fprintln(writer, "  registry role-arn Derive an AWS site publisher role ARN from a local config")
 	fmt.Fprintln(writer, "  registry sync  Reconcile the complete Git-owned site set")
 	fmt.Fprintln(writer, "  config set-default  Save the user's default deployment config locator")
 	fmt.Fprintln(writer, "  lock inspect|recover  Inspect or guardedly recover a site, registry, or application lock")
@@ -985,7 +1022,7 @@ func writeRootUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "")
 	fmt.Fprintln(writer, "Run a command with --help for options.")
 	fmt.Fprintln(writer, "Default deployment config: artifact-pages.yaml (--config and ARTIFACT_PAGES_CONFIG take precedence).")
-	fmt.Fprintln(writer, "CLI selection: --cli-version, ARTIFACT_PAGES_CLI_VERSION, then config cli.version; overrides keep compatibility checks. registry setup uses the running CLI and never resolves versions.")
+	fmt.Fprintln(writer, "CLI selection: --cli-version, ARTIFACT_PAGES_CLI_VERSION, then config cli.version; overrides keep compatibility checks. registry setup and role-arn use the running CLI and never resolve versions.")
 }
 
 func writeLockUsage(writer io.Writer) {
@@ -1084,27 +1121,34 @@ func writeConfigUsage(writer io.Writer) {
 
 func writeRegistryUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "Usage:")
-	fmt.Fprintln(writer, "  artifact-pages registry setup [--directory DIR] [--config FILE] [--terraform-output FILE] [--repository OWNER/REPOSITORY] [--check]")
+	fmt.Fprintln(writer, "  artifact-pages registry setup [--directory DIR] [--config FILE] [--repository OWNER/REPOSITORY] [--check]")
+	fmt.Fprintln(writer, "  artifact-pages registry role-arn --config FILE --site ID")
 	fmt.Fprintln(writer, "  artifact-pages registry sync [--config LOCATOR ...] [--dry-run] [--format text|json]")
 	fmt.Fprintln(writer, "")
-	fmt.Fprintln(writer, "Generate admin workflows from a local config file; this command does not call GitHub or resolve config versions.")
+	fmt.Fprintln(writer, "Generate admin workflows from a local config file; derive a site's AWS role ARN from config without calling AWS or GitHub.")
 	fmt.Fprintln(writer, "Reconcile the complete site set declared in the selected deployment config; omitted sites are cleaned up.")
 }
 
 func writeRegistrySetupUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "Usage:")
-	fmt.Fprintln(writer, "  artifact-pages registry setup [--directory DIR] [--config FILE] [--terraform-output FILE] [--repository OWNER/REPOSITORY] [--check]")
+	fmt.Fprintln(writer, "  artifact-pages registry setup [--directory DIR] [--config FILE] [--repository OWNER/REPOSITORY] [--check]")
 	fmt.Fprintln(writer, "")
 	fmt.Fprintln(writer, "Generate the admin reusable workflows and same-commit composite action from local files.")
 	fmt.Fprintln(writer, "")
 	fmt.Fprintln(writer, "Options:")
 	fmt.Fprintln(writer, "  --directory DIR            operator repository directory (default .)")
 	fmt.Fprintln(writer, "  --config FILE              local config file under --directory (default artifact-pages.yaml); github:// and environment defaults are not used")
-	fmt.Fprintln(writer, "  --terraform-output FILE    local JSON under --directory from `terraform output -json satellite_role_arns` (required for AWS)")
 	fmt.Fprintln(writer, "  --repository OWNER/REPO    admin repository used only in printed gh commands (otherwise inferred from origin)")
 	fmt.Fprintln(writer, "  --check                    report missing or changed generated files without writing")
 	fmt.Fprintln(writer, "")
-	fmt.Fprintln(writer, "This command uses bundled Action pins and the running CLI version. It does not read secrets, contact GitHub, resolve config versions, or download/re-exec a CLI.")
+	fmt.Fprintln(writer, "This command uses bundled Action pins and the running CLI version. For AWS, aws.accountId is required; per-site role ARNs are derived at run time from accountId, optional namePrefix, and the site ID.")
+	fmt.Fprintln(writer, "It does not read secrets, contact GitHub, resolve config versions, or download/re-exec a CLI.")
+}
+
+func writeRegistryRoleARNUsage(writer io.Writer) {
+	fmt.Fprintln(writer, "Usage: artifact-pages registry role-arn --config FILE --site ID")
+	fmt.Fprintln(writer, "Derive the registered site's AWS IAM role ARN from an explicit local AWS config; prints only the ARN.")
+	fmt.Fprintln(writer, "This local-only helper rejects remote locators and symlinked config paths and never calls AWS or GitHub.")
 }
 
 func writeRegistrySyncUsage(writer io.Writer) {

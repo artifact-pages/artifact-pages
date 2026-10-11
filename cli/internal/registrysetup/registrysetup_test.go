@@ -2,7 +2,6 @@ package registrysetup
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -58,13 +57,13 @@ var generatedYAML = []string{
 	".github/actions/site-sync/action.yml",
 }
 
-func writeFixture(t *testing.T, root, configText, terraformText string) {
+func writeFixture(t *testing.T, root, configText, legacyText string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(root, "artifact-pages.yaml"), []byte(configText), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if terraformText != "" {
-		if err := os.WriteFile(filepath.Join(root, "satellite-role-arns.json"), []byte(terraformText), 0o600); err != nil {
+	if legacyText != "" {
+		if err := os.WriteFile(filepath.Join(root, "satellite-role-arns.json"), []byte(legacyText), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -74,9 +73,6 @@ func runFixture(t *testing.T, root string, provider string, check bool) (string,
 	t.Helper()
 	var output bytes.Buffer
 	options := Options{Directory: root, Repository: "acme/admin", Check: check, Output: &output}
-	if provider == "aws" {
-		options.TerraformOutput = "satellite-role-arns.json"
-	}
 	err := Run(options)
 	return output.String(), err
 }
@@ -84,9 +80,6 @@ func runFixture(t *testing.T, root string, provider string, check bool) (string,
 func generatedSnapshot(t *testing.T, root string, provider string) map[string][]byte {
 	t.Helper()
 	paths := append([]string(nil), generatedYAML...)
-	if provider == "aws" {
-		paths = append(paths, ".github/actions/site-sync/aws-roles.json")
-	}
 	snapshot := make(map[string][]byte, len(paths))
 	for _, path := range paths {
 		contents, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
@@ -118,7 +111,7 @@ func TestCloudflareGenerationIsDeterministicCheckableAndLocal(t *testing.T) {
 		if err := yaml.Unmarshal(snapshot[path], &value); err != nil {
 			t.Errorf("generated YAML %s is invalid: %v", path, err)
 		}
-		if !strings.Contains(string(snapshot[path]), "CLI v0.3.0") {
+		if !strings.Contains(string(snapshot[path]), "CLI v0.4.0") {
 			t.Errorf("generated YAML %s does not record the generating CLI version", path)
 		}
 	}
@@ -193,36 +186,61 @@ func TestCloudflareGenerationIsDeterministicCheckableAndLocal(t *testing.T) {
 	}
 }
 
-func TestAWSGenerationUsesPlainTerraformRoleMapAndSafeLookup(t *testing.T) {
+func TestAWSGenerationDerivesRolesFromConfigAtRuntime(t *testing.T) {
 	root := t.TempDir()
-	terraformOutput := `{"docs":"arn:aws:iam::123456789012:role/site/docs","guide":"arn:aws:iam::123456789012:role/site/guide"}`
-	writeFixture(t, root, awsConfig, terraformOutput)
+	writeFixture(t, root, awsConfig, "")
 	if _, err := runFixture(t, root, "aws", false); err != nil {
 		t.Fatalf("generate AWS files: %v", err)
 	}
 	snapshot := generatedSnapshot(t, root, "aws")
-	var roles map[string]string
-	if err := json.Unmarshal(snapshot[".github/actions/site-sync/aws-roles.json"], &roles); err != nil {
-		t.Fatalf("generated AWS role map is not JSON: %v", err)
+	if _, exists := snapshot[legacyRoleMapPath]; exists {
+		t.Fatal("AWS output unexpectedly includes the retired site role map")
 	}
-	if len(roles) != 2 || roles["docs"] != "arn:aws:iam::123456789012:role/site/docs" || roles["guide"] == "" {
-		t.Fatalf("generated role map = %#v", roles)
+	if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(legacyRoleMapPath))); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("AWS setup created the retired role map: stat err=%v", err)
 	}
 	action := string(snapshot[".github/actions/site-sync/action.yml"])
 	for _, expected := range []string{
-		"jq -er --arg site \"$ARTIFACT_PAGES_SITE\"",
-		"no AWS role is registered for site",
+		"artifact-pages_v${cli_version}_linux_amd64",
+		"artifact-pages_v${cli_version}_checksums.txt",
+		"sha256sum --check --status",
+		"registry role-arn",
+		"--config \"$GITHUB_ACTION_PATH/../../../artifact-pages.yaml\"",
+		"--site \"$ARTIFACT_PAGES_SITE\"",
+		"Terraform applied this per-site role",
+		"exact OIDC sub",
+		"aws.namePrefix matches the Terraform module name_prefix",
+		"aws.accountId matches the role's AWS account",
 		"role-to-assume: ${{ steps.role.outputs['role-arn'] }}",
 		"aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0",
 		"aws-region: us-east-1",
-		"config: ${{ github.action_path }}/../../../artifact-pages.yaml",
 	} {
 		if !strings.Contains(action, expected) {
 			t.Errorf("AWS composite action missing %q", expected)
 		}
 	}
-	if strings.Contains(action, "${{ inputs.site }}\" ") || strings.Contains(action, "github-token") {
+	if strings.Contains(action, "aws-roles.json") || strings.Contains(action, "${{ inputs.site }}\" ") || strings.Contains(action, "github-token") {
 		t.Fatal("AWS site input is interpolated into shell or uses github-token")
+	}
+	before := snapshot
+	changedConfig := strings.Replace(awsConfig, "accountId: \"123456789012\"\n", "accountId: \"999999999999\"\n  namePrefix: custom-prefix\n", 1)
+	changedConfig += `  new-site:
+    name: New site
+    repository: acme/new-site
+    sourcePath: public
+`
+	if err := os.WriteFile(filepath.Join(root, "artifact-pages.yaml"), []byte(changedConfig), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	checkOutput, err := runFixture(t, root, "aws", true)
+	if err != nil || !strings.Contains(checkOutput, "files are up to date") {
+		t.Fatalf("AWS setup --check after account, namePrefix, and site changes = %v; output=%s", err, checkOutput)
+	}
+	after := generatedSnapshot(t, root, "aws")
+	for path, contents := range before {
+		if !bytes.Equal(contents, after[path]) {
+			t.Errorf("changing runtime AWS role inputs drifted generated file %s", path)
+		}
 	}
 	var workflow map[string]any
 	if err := yaml.Unmarshal(snapshot[".github/workflows/registry.yml"], &workflow); err != nil {
@@ -233,31 +251,13 @@ func TestAWSGenerationUsesPlainTerraformRoleMapAndSafeLookup(t *testing.T) {
 	}
 }
 
-func TestAWSRoleMapRejectsInvalidCoverageAndDuplicateKeys(t *testing.T) {
-	tests := []struct {
-		name string
-		json string
-		want string
-	}{
-		{"missing registered role", `{"docs":"arn:aws:iam::123456789012:role/site/docs"}`, `no role for registered site "guide"`},
-		{"unregistered role", `{"docs":"arn:aws:iam::123456789012:role/site/docs","guide":"arn:aws:iam::123456789012:role/site/guide","other":"arn:aws:iam::123456789012:role/site/other"}`, `unregistered site "other"`},
-		{"invalid ARN", `{"docs":"not-an-arn","guide":"arn:aws:iam::123456789012:role/site/guide"}`, `must be an AWS IAM role ARN`},
-		{"wrong account", `{"docs":"arn:aws:iam::999999999999:role/site/docs","guide":"arn:aws:iam::123456789012:role/site/guide"}`, `different AWS account`},
-		{"duplicate key", `{"docs":"arn:aws:iam::123456789012:role/site/docs","docs":"arn:aws:iam::123456789012:role/site/other","guide":"arn:aws:iam::123456789012:role/site/guide"}`, `duplicate site "docs"`},
-		{"wrapper object", `{"value":{"docs":"arn:aws:iam::123456789012:role/site/docs"}}`, `must be a string role ARN`},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			root := t.TempDir()
-			writeFixture(t, root, awsConfig, test.json)
-			_, err := runFixture(t, root, "aws", false)
-			if err == nil || !strings.Contains(err.Error(), test.want) {
-				t.Fatalf("generation error = %v, want substring %q", err, test.want)
-			}
-			if _, err := os.Stat(filepath.Join(root, ".github")); !errors.Is(err, os.ErrNotExist) {
-				t.Fatalf("invalid role map created output tree: stat err=%v", err)
-			}
-		})
+func TestAWSSetupRequiresAccountIDButGenericAWSConfigDoesNot(t *testing.T) {
+	root := t.TempDir()
+	configWithoutAccount := strings.Replace(awsConfig, "  accountId: \"123456789012\"\n", "", 1)
+	writeFixture(t, root, configWithoutAccount, "")
+	_, err := runFixture(t, root, "aws", false)
+	if err == nil || !strings.Contains(err.Error(), "aws.accountId is required for registry setup") {
+		t.Fatalf("setup missing account ID error = %v", err)
 	}
 }
 
@@ -431,26 +431,129 @@ func TestManualStepsProvisionAdminRepositorySecretsForRegistryPullRequestDryRuns
 	}
 }
 
-func TestRoleFileChangeRequiresMatchingGeneratorMetadata(t *testing.T) {
-	root := t.TempDir()
-	writeFixture(t, root, awsConfig, `{"docs":"arn:aws:iam::123456789012:role/site/docs","guide":"arn:aws:iam::123456789012:role/site/guide"}`)
-	if _, err := runFixture(t, root, "aws", false); err != nil {
+func TestLegacyRoleMapRetirementRequiresMatchingGeneratorMetadata(t *testing.T) {
+	t.Run("check reports a managed legacy map without changing it", func(t *testing.T) {
+		root := t.TempDir()
+		writeFixture(t, root, awsConfig, "")
+		legacyMap := []byte("{\"docs\":\"arn:aws:iam::123456789012:role/site/docs\"}\n")
+		legacyAction := makeLegacyAction(legacyMap)
+		writeLegacyRoleMap(t, root, legacyAction, legacyMap)
+		output, err := runFixture(t, root, "aws", true)
+		if !IsDrift(err) || !strings.Contains(err.Error(), legacyRoleMapPath) {
+			t.Fatalf("check error = %v; want managed role-map drift", err)
+		}
+		if output != "" {
+			t.Fatalf("check unexpectedly printed write guidance: %s", output)
+		}
+		for path, expected := range map[string][]byte{
+			legacyRoleMapPath:                      legacyMap,
+			".github/actions/site-sync/action.yml": legacyAction,
+		} {
+			got, readErr := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+			if readErr != nil || !bytes.Equal(got, expected) {
+				t.Errorf("check changed %s: got %q, err=%v", path, got, readErr)
+			}
+		}
+		if _, statErr := os.Stat(filepath.Join(root, ".github/workflows/publish-site.yml")); !errors.Is(statErr, os.ErrNotExist) {
+			t.Fatalf("check wrote a generated workflow: %v", statErr)
+		}
+	})
+	t.Run("managed legacy files are retired", func(t *testing.T) {
+		root := t.TempDir()
+		writeFixture(t, root, awsConfig, "")
+		legacyMap := []byte("{\"docs\":\"arn:aws:iam::123456789012:role/site/docs\"}\n")
+		writeLegacyRoleMap(t, root, makeLegacyAction(legacyMap), legacyMap)
+		if _, err := runFixture(t, root, "aws", false); err != nil {
+			t.Fatalf("regenerate files: %v", err)
+		}
+		if _, err := os.Lstat(filepath.Join(root, filepath.FromSlash(legacyRoleMapPath))); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("managed obsolete role map still exists: %v", err)
+		}
+		newAction, err := os.ReadFile(filepath.Join(root, ".github/actions/site-sync/action.yml"))
+		if err != nil || bytes.Contains(newAction, []byte(legacyRoleMapMarker)) {
+			t.Fatalf("new generated action retains legacy map metadata: err=%v", err)
+		}
+	})
+	t.Run("unmanaged legacy file is preserved and blocks generation", func(t *testing.T) {
+		root := t.TempDir()
+		writeFixture(t, root, awsConfig, "")
+		legacyMap := []byte("operator-owned\n")
+		writeLegacyRoleMap(t, root, nil, legacyMap)
+		_, err := runFixture(t, root, "aws", false)
+		if err == nil || !strings.Contains(err.Error(), "refusing to remove unmanaged") {
+			t.Fatalf("unmanaged legacy file error = %v", err)
+		}
+		got, readErr := os.ReadFile(filepath.Join(root, filepath.FromSlash(legacyRoleMapPath)))
+		if readErr != nil || !bytes.Equal(got, legacyMap) {
+			t.Fatalf("unmanaged legacy file changed: %q, %v", got, readErr)
+		}
+		if _, statErr := os.Stat(filepath.Join(root, ".github/workflows/publish-site.yml")); !errors.Is(statErr, os.ErrNotExist) {
+			t.Fatalf("generation partially wrote output before refusing legacy file: %v", statErr)
+		}
+	})
+	t.Run("modified legacy file is preserved", func(t *testing.T) {
+		root := t.TempDir()
+		writeFixture(t, root, awsConfig, "")
+		legacyMap := []byte("{\"docs\":\"old\"}\n")
+		writeLegacyRoleMap(t, root, makeLegacyAction(legacyMap), []byte("{\"docs\":\"edited\"}\n"))
+		_, err := runFixture(t, root, "aws", false)
+		if err == nil || !strings.Contains(err.Error(), "refusing to remove unmanaged") {
+			t.Fatalf("modified legacy file error = %v", err)
+		}
+	})
+	t.Run("symlink legacy path is refused", func(t *testing.T) {
+		root := t.TempDir()
+		writeFixture(t, root, awsConfig, "")
+		legacyMap := []byte("{\"docs\":\"arn:aws:iam::123456789012:role/site/docs\"}\n")
+		writeLegacyRoleMap(t, root, makeLegacyAction(legacyMap), legacyMap)
+		outside := filepath.Join(t.TempDir(), "roles.json")
+		if err := os.WriteFile(outside, []byte("protected\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		legacyPath := filepath.Join(root, filepath.FromSlash(legacyRoleMapPath))
+		if err := os.Remove(legacyPath); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(outside, legacyPath); err != nil {
+			t.Skipf("symlinks unavailable: %v", err)
+		}
+		_, err := runFixture(t, root, "aws", false)
+		if err == nil || !strings.Contains(err.Error(), "not a symlink or directory") {
+			t.Fatalf("symlink legacy path error = %v", err)
+		}
+		got, readErr := os.ReadFile(outside)
+		if readErr != nil || string(got) != "protected\n" {
+			t.Fatalf("symlink target changed: %q, %v", got, readErr)
+		}
+	})
+}
+
+func makeLegacyAction(roleMap []byte) []byte {
+	body := []byte(legacyRoleMapMarker + sha256Hex(roleMap) + "\nlegacy action body\n")
+	header := []byte(generatedHeader + " (CLI v0.3.0); DO NOT EDIT.\n")
+	return addManagedDigest(append(header, body...))
+}
+
+func writeLegacyRoleMap(t *testing.T, root string, action, roleMap []byte) {
+	t.Helper()
+	mapPath := filepath.Join(root, filepath.FromSlash(legacyRoleMapPath))
+	if err := os.MkdirAll(filepath.Dir(mapPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	rolesPath := filepath.Join(root, ".github/actions/site-sync/aws-roles.json")
-	if err := os.WriteFile(rolesPath, []byte(`{"docs":"arn:aws:iam::123456789012:role/site/manual","guide":"arn:aws:iam::123456789012:role/site/guide"}`), 0o644); err != nil {
-		t.Fatal(err)
+	if action != nil {
+		if err := os.WriteFile(filepath.Join(filepath.Dir(mapPath), "action.yml"), action, 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
-	_, err := runFixture(t, root, "aws", false)
-	if err == nil || !strings.Contains(err.Error(), "refusing to overwrite unmanaged") {
-		t.Fatalf("manual roles edit error = %v", err)
+	if err := os.WriteFile(mapPath, roleMap, 0o644); err != nil {
+		t.Fatal(err)
 	}
 }
 
 func TestGeneratedActionMetadataDoesNotAuthorizeUnmanagedOutputs(t *testing.T) {
 	t.Run("unmanaged workflow despite generated action metadata", func(t *testing.T) {
 		root := t.TempDir()
-		writeFixture(t, root, awsConfig, `{"docs":"arn:aws:iam::123456789012:role/site/docs","guide":"arn:aws:iam::123456789012:role/site/guide"}`)
+		writeFixture(t, root, awsConfig, "")
 		if _, err := runFixture(t, root, "aws", false); err != nil {
 			t.Fatal(err)
 		}
@@ -465,32 +568,6 @@ func TestGeneratedActionMetadataDoesNotAuthorizeUnmanagedOutputs(t *testing.T) {
 		contents, readErr := os.ReadFile(unmanaged)
 		if readErr != nil || string(contents) != "operator owned\n" {
 			t.Fatalf("unmanaged workflow changed: %q, err=%v", contents, readErr)
-		}
-	})
-	t.Run("symlinked role map despite generated action metadata", func(t *testing.T) {
-		root := t.TempDir()
-		writeFixture(t, root, awsConfig, `{"docs":"arn:aws:iam::123456789012:role/site/docs","guide":"arn:aws:iam::123456789012:role/site/guide"}`)
-		if _, err := runFixture(t, root, "aws", false); err != nil {
-			t.Fatal(err)
-		}
-		outside := filepath.Join(t.TempDir(), "roles.json")
-		if err := os.WriteFile(outside, []byte("operator owned\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		roles := filepath.Join(root, ".github/actions/site-sync/aws-roles.json")
-		if err := os.Remove(roles); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.Symlink(outside, roles); err != nil {
-			t.Skipf("symlinks unavailable: %v", err)
-		}
-		_, err := runFixture(t, root, "aws", false)
-		if err == nil || !strings.Contains(err.Error(), "must be a regular file, not a symlink or directory") {
-			t.Fatalf("generated action metadata authorized writing through role-map symlink: %v", err)
-		}
-		contents, readErr := os.ReadFile(outside)
-		if readErr != nil || string(contents) != "operator owned\n" {
-			t.Fatalf("symlink target changed: %q, err=%v", contents, readErr)
 		}
 	})
 }
@@ -535,11 +612,11 @@ func TestManagedDigestMatchesGeneratedBody(t *testing.T) {
 	if len(lines) != 3 || string(lines[1]) != "# managed-sha256: "+sha256Hex([]byte("body\n")) {
 		t.Fatalf("generated digest header = %q", generated)
 	}
-	if !managedOutput(".github/workflows/a.yml", generated, nil, "not-applicable", nil) {
+	if !managedOutput(generated) {
 		t.Fatal("generated output was not recognized as managed")
 	}
 	modified := append(append([]byte(nil), generated...), []byte("edit\n")...)
-	if managedOutput(".github/workflows/a.yml", modified, nil, "not-applicable", nil) {
+	if managedOutput(modified) {
 		t.Fatal("manually edited output was recognized as managed")
 	}
 }
