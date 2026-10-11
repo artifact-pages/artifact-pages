@@ -30,7 +30,7 @@ Today a body-only hit in the sidebar reads "Text" and nothing more, and the side
 **Facts that shape the proposal.**
 
 - Routing is History API paths plus a query string (`web/src/routing.ts`, `App.tsx`: `/<site>/<path>?q=…`), not hash routes.
-- Sidebar search commits on Enter today, so "results update as you type" is a behaviour change and the page text search paragraph of the specification (around line 481) must be rewritten.
+- Sidebar search commits on Enter today, so "results update as you type" is a behaviour change and the specification paragraph that starts "the sidebar's search field takes a committed query" must be rewritten.
 - Only headings that carry an id get an anchor; the `toc` skips the rest.
 - The publisher is strict about search keys: `sitePublishStateSearchBlob = ^(root|leaf)-[0-9a-f]{64}\.gz$` (`cli/internal/publisher/site_publish_state.go:29`, used at :377) is the only accepted shape, so `text-` and `sections-` keys have no HTTP policy and fail state validation today.
 - `Generation` is the SHA-256 of the whole manifest with an empty generation field (`cli/internal/fulltext/build.go`, end of `Build`), so new manifest fields change it; the reader's 60-second freshness window is unaffected.
@@ -104,7 +104,7 @@ Slice 1 ships value without any format change, and is accepted churn: it is rebu
 2. A new IMP (Codex): section table and text packs in the indexer, manifest `sections` and `texts`, limits and warnings, deterministic packing, and publisher reconciliation. The last includes extending `sitePublishStateSearchBlob` (and the object-policy mapping it feeds) to `text-` and `sections-`. Until then the publisher rejects the new keys.
 3. ISSUE-085 (Claude): snippet and heading extraction from packs, the match navigator, truncation and over-cap fallback, body-hit ordering.
 
-Older CLIs: publishing from a pre-change CLI builds only v1 objects, so its desired set lacks `text-` and `sections-` and reconciliation deletes them as stale search keys (`site_publish.go`, `oldIndexes` loop), converging back to v1. Its publish-state validation, however, rejects a stored state row for a `text-` or `sections-` key (`validateSitePublishRow`), failing closed with the control-format reset message, so operators upgrade the CLI before the first republish. This is acceptable under 0.x (TD2). The settled format wording will live in `docs/architecture/fulltext-search.md`.
+Older CLIs: a pre-change CLI builds only v1 objects. On a site that already has `text-` or `sections-` objects it either converges back to v1 (reconciliation deletes search keys missing from its desired set, `site_publish.go`) or fails closed, because its publish-state validation rejects state rows for those keys (`validateSitePublishRow`). Operators upgrade the CLI before the first republish. This is acceptable under 0.x (TD2). The settled format wording will live in `docs/architecture/fulltext-search.md`.
 
 ## Open questions for the owner
 
