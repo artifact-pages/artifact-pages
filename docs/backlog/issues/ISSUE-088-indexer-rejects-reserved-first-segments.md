@@ -7,7 +7,7 @@
 
 ## Problem
 
-The web reader routes `/<site>/_previews...` and `/<site>/_search` itself. Nothing in the CLI stopped a site from publishing a document whose site-relative path starts with one of those segments, so the page (or its directory page, [ISSUE-075](ISSUE-075-directory-pages.md)) was silently unreachable.
+The web reader routes `/<site>/_previews...` and `/<site>/_search` itself. Nothing in the CLI stopped a site from publishing a document whose site-relative path starts with one of those segments, so the page (or its directory page, [ISSUE-075](ISSUE-075-directory-routes-have-no-page.md)) was silently unreachable.
 
 ## Evidence and reproduction
 
