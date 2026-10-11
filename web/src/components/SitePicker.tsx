@@ -3,6 +3,8 @@ import type { ThemeMode } from '../domain/theme'
 import { artifactCountLabel } from '../domain/site-count-label'
 import { hasSiteDiscoveryMetadata, type SiteCatalogEntry } from '../domain/index'
 import { folderChipKey, folderChipLabel, folderSummaryText, summarizeFolders, type FolderCount } from '../domain/site-folder-counts'
+import { compareSites, ownValue } from '../domain/site-start'
+import { artifactRouteHref } from '../routing'
 import { useSiteFolderCounts } from '../data/use-site-folder-counts'
 import { CommandPalette, type PaletteCommand } from './CommandPalette'
 import { Icon } from './Icon'
@@ -18,6 +20,7 @@ export function SitePicker({
   themeMode = 'system',
   onSetThemeMode,
   folderCounts: folderCountsOverride,
+  startPaths: startPathsOverride,
 }: {
   sites: SiteCatalogEntry[]
   onNavigate: (href: string) => void
@@ -25,12 +28,14 @@ export function SitePicker({
   onSetThemeMode?: (mode: ThemeMode) => void
   /** Per-top-level-folder counts by site ID; when given, no site index is fetched. */
   folderCounts?: Record<string, FolderCount[]>
+  /** Root README path by site ID, used with `folderCounts` when no index is fetched. */
+  startPaths?: Record<string, string>
 }) {
   usePageTitle(pageTitle())
   const [paletteOpen, setPaletteOpen] = useState(false)
   const paletteReturnFocus = useRef<HTMLElement | null>(null)
-  const sortedSites = [...sites].sort((left, right) => left.site.title.localeCompare(right.site.title))
-  const { counts: folderCounts, pending: pendingCounts } = useSiteFolderCounts(sortedSites, folderCountsOverride)
+  const sortedSites = [...sites].sort(compareSites)
+  const { counts: folderCounts, startPaths, pending: pendingCounts } = useSiteFolderCounts(sortedSites, folderCountsOverride, startPathsOverride)
   const commands: PaletteCommand[] = [
     {
       title: 'Use light theme',
@@ -103,35 +108,39 @@ export function SitePicker({
             <p className="empty-note">No registered sites were found.</p>
           ) : (
             <div className="site-picker-list">
-              {sortedSites.map((entry) => (
-                <a
-                  className="site-picker-row"
-                  key={entry.site.id}
-                  href={`/${encodeURIComponent(entry.site.id)}`}
-                  onClick={(event) => followInApp(event, () => onNavigate(`/${encodeURIComponent(entry.site.id)}`))}
-                >
-                  <span className="site-mark" aria-hidden="true">{entry.site.title.slice(0, 1).toUpperCase()}</span>
-                  <span className="site-picker-main">
-                    <strong>{entry.site.title}</strong>
-                    {entry.site.description?.trim() ? (
-                      <span className="site-picker-description">{entry.site.description}</span>
-                    ) : null}
-                    <FolderCountChips entry={entry} folders={folderCounts[entry.site.id]} pending={pendingCounts.has(entry.site.id)} />
-                    <span className="site-picker-meta">
-                      <span className="mono">/{entry.site.id}</span>
-                      <span className="site-picker-meta-separator" aria-hidden="true">·</span>
-                      <span>{catalogStatusLabel(entry)}</span>
-                      {hasSiteDiscoveryMetadata(entry) ? (
-                        <span className="site-picker-start">Start reading <Icon name="arrow" size={12} /></span>
+              {sortedSites.map((entry) => {
+                const startPath = hasSiteDiscoveryMetadata(entry) ? ownValue(startPaths, entry.site.id) : undefined
+                const href = startPath === undefined ? `/${encodeURIComponent(entry.site.id)}` : artifactRouteHref(entry.site.id, startPath)
+                return (
+                  <a
+                    className="site-picker-row"
+                    key={entry.site.id}
+                    href={href}
+                    onClick={(event) => followInApp(event, () => onNavigate(href))}
+                  >
+                    <span className="site-mark" aria-hidden="true">{entry.site.title.slice(0, 1).toUpperCase()}</span>
+                    <span className="site-picker-main">
+                      <strong>{entry.site.title}</strong>
+                      {entry.site.description?.trim() ? (
+                        <span className="site-picker-description">{entry.site.description}</span>
                       ) : null}
+                      <FolderCountChips entry={entry} folders={ownValue(folderCounts, entry.site.id)} pending={pendingCounts.has(entry.site.id)} />
+                      <span className="site-picker-meta">
+                        <span className="mono">/{entry.site.id}</span>
+                        <span className="site-picker-meta-separator" aria-hidden="true">·</span>
+                        <span>{catalogStatusLabel(entry)}</span>
+                        {hasSiteDiscoveryMetadata(entry) ? (
+                          <span className="site-picker-start">Start reading <Icon name="arrow" size={12} /></span>
+                        ) : null}
+                      </span>
                     </span>
-                  </span>
-                  {hasSiteDiscoveryMetadata(entry) && entry.fullTextUrl ? (
-                    <span className="site-picker-badge" title="Page text can be searched in this site">Page text search</span>
-                  ) : null}
-                  {hasSiteDiscoveryMetadata(entry) ? null : <Icon name="arrow" size={16} />}
-                </a>
-              ))}
+                    {hasSiteDiscoveryMetadata(entry) && entry.fullTextUrl ? (
+                      <span className="site-picker-badge" title="Page text can be searched in this site">Page text search</span>
+                    ) : null}
+                    {hasSiteDiscoveryMetadata(entry) ? null : <Icon name="arrow" size={16} />}
+                  </a>
+                )
+              })}
             </div>
           )}
         </div>
