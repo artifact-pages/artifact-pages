@@ -1,6 +1,6 @@
 // Checks directory resolution, counts and ordering for the directory page (ISSUE-075).
 // Run with: npm run test:reader-shell
-// Ordering is alphabetical (title) until ISSUE-076 / TD19 define an explicit order; update the order assertions then.
+// Ordering is folders first, then filename order (ISSUE-076 / TD19), not title order.
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { findIndexArtifact, pageCountLabel, pageHeadings, resolveDirectory } from './directory.ts'
@@ -28,7 +28,7 @@ test('a path with no page below it is not a directory', () => {
   assert.equal(resolveDirectory(artifacts, ''), undefined)
 })
 
-test('a directory lists subfolders and pages in alphabetical order with deep counts', () => {
+test('a directory lists subfolders and pages in filename order with deep counts', () => {
   const listing = resolveDirectory(artifacts, 'en')
   assert.equal(listing.name, 'en')
   assert.equal(listing.pageCount, 5)
@@ -104,4 +104,17 @@ test('README.md wins over readme.md in the same folder and the other is listed',
   assert.deepEqual(listing.pages.map(({ path }) => path), ['x/a.md', 'x/readme.md'])
   const reversed = resolveDirectory([page('x/README.md', 'Upper'), page('x/readme.md', 'Lower')], 'x')
   assert.equal(reversed.indexArtifact?.path, 'x/README.md')
+})
+
+test('pages follow filename order, not title order', () => {
+  const numbered = [
+    page('guide/02-start.html', 'Aardvark'),
+    page('guide/01-intro.html', 'Zebra'),
+    page('guide/10-late.html', 'Middle'),
+    page('guide/b/x.html', 'X'),
+    page('guide/A/x.html', 'Y'),
+  ]
+  const listing = resolveDirectory(numbered, 'guide')
+  assert.deepEqual(listing.folders.map(({ name }) => name), ['A', 'b'])
+  assert.deepEqual(listing.pages.map(({ path }) => path), ['guide/01-intro.html', 'guide/02-start.html', 'guide/10-late.html'])
 })

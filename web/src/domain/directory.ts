@@ -1,4 +1,5 @@
 import type { ArtifactIndexEntry, TocEntry } from './index'
+import { compareArtifactsByPath, compareNames } from './listing-order.ts'
 
 export type DirectoryFolder = {
   name: string
@@ -11,14 +12,14 @@ export type DirectoryFolder = {
 export type DirectoryListing = {
   /** Slash-joined folder path without leading or trailing slash. */
   path: string
-  /** The last path segment, shown as-is (TD19 may add a display title later). */
+  /** The last path segment, shown as-is (TD19: no authored folder titles). */
   name: string
   /** Every page under the folder, at any depth, including the index page. */
   pageCount: number
   latestUpdatedAt?: string
-  /** Direct subfolders in alphabetical order. */
+  /** Direct subfolders in filename order (listing-order.ts). */
   folders: DirectoryFolder[]
-  /** Direct pages in alphabetical title order, without the index page. */
+  /** Direct pages in filename order (listing-order.ts), without the index page. */
   pages: ArtifactIndexEntry[]
   /** The folder's README or index page, rendered as the directory page body. */
   indexArtifact?: ArtifactIndexEntry
@@ -35,11 +36,6 @@ function latest(left: string | undefined, right: string | undefined) {
   if (!right || Number.isNaN(Date.parse(right))) return left
   if (!left) return right
   return Date.parse(right) > Date.parse(left) ? right : left
-}
-
-function compareTitles(left: ArtifactIndexEntry, right: ArtifactIndexEntry) {
-  // Alphabetical by title until ISSUE-076 / TD19 define an explicit order.
-  return left.title.localeCompare(right.title) || left.path.localeCompare(right.path)
 }
 
 /** The folder's README or index page, if it has one among its direct pages. */
@@ -97,8 +93,8 @@ export function resolveDirectory(
     name: path.split('/').at(-1) ?? path,
     pageCount,
     latestUpdatedAt,
-    folders: [...folders.values()].sort((left, right) => left.name.localeCompare(right.name)),
-    pages: pages.filter((page) => page !== indexArtifact).sort(compareTitles),
+    folders: [...folders.values()].sort((left, right) => compareNames(left.name, right.name)),
+    pages: pages.filter((page) => page !== indexArtifact).sort(compareArtifactsByPath),
     indexArtifact,
   }
 }

@@ -72,7 +72,7 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-073](ISSUE-073-palette-enter-uses-stale-selection.md) | Done | P2 | Pressing Enter right after typing in the command palette can do nothing or open the wrong page (regression from #34). |
 | [ISSUE-074](ISSUE-074-shallow-clone-test-tempdir-cleanup-flaky.md) | Done | P3 | Shallow-clone Go test failed once on TempDir cleanup, likely a detached `git maintenance` gc after fetch. |
 | [ISSUE-075](ISSUE-075-directory-routes-have-no-page.md) | Done | P1 | Directory routes have no page: folder URLs show "Page not found" and tree folders only toggle. |
-| [ISSUE-076](ISSUE-076-pages-sorted-alphabetically-by-title.md) | Open | P1 | Navigation, site home and breadcrumb menus sort pages alphabetically by title, not like a file browser (decided in TD19: folders first, filename order; web only). |
+| [ISSUE-076](ISSUE-076-pages-sorted-alphabetically-by-title.md) | Done | P1 | Navigation, site home and breadcrumb menus sort pages alphabetically by title, not like a file browser (decided in TD19: folders first, filename order; web only). |
 | [ISSUE-077](ISSUE-077-fulltext-results-unranked.md) | Done | P1 | Page text search results are unranked, have no snippets, and mix languages. |
 | [ISSUE-078](ISSUE-078-landing-page-has-no-orientation.md) | In progress | P1 | The landing page offers only "Choose a site": no orientation, alphabetical cards, double-counted translations. |
 | [ISSUE-079](ISSUE-079-palette-cannot-find-other-page-headings.md) | Done | P2 | The command palette cannot find headings of other pages. |

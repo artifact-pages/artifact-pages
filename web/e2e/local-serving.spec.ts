@@ -179,12 +179,13 @@ test('static sites catalog discovers sites and opens a site home without directo
   await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
   await expect(page.locator('.site-home .artifact-list-section[aria-label="Recently updated"]')).toHaveCount(0)
   await expect(page.locator('.site-home .tree-artifact .tree-label')).toHaveText([
-    'Checkout latency incident review',
+    // Folders first, then filename order (ISSUE-076): architecture, diagrams, guides, incidents, reports, runbooks.
     'Platform topology',
-    'Service recovery',
     'Mermaid rendering catalog',
     'Markdown styles in the reader',
+    'Checkout latency incident review',
     'Latency Retrospective',
+    'Service recovery',
   ])
 })
 
