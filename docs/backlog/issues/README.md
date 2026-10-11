@@ -81,6 +81,6 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-082](ISSUE-082-no-previous-next-navigation.md) | Blocked | P3 | Pages have no previous/next navigation at the end (blocked on ISSUE-076 and TD19). |
 | [ISSUE-083](ISSUE-083-unknown-urls-return-http-200.md) | In progress | P3 | Unknown URLs return HTTP 200 with the app shell (soft 404). |
 | [ISSUE-084](ISSUE-084-previews-entry-and-timestamp-polish.md) | Done | P3 | "View previews" is a button, and preview times carry no timezone. |
-| [ISSUE-085](ISSUE-085-page-text-search-snippets.md) | Open | P3 | Page text search results show no match snippet (split from ISSUE-077). |
+| [ISSUE-085](ISSUE-085-page-text-search-snippets.md) | Blocked | P3 | Page text search results show no match snippet (split from ISSUE-077; blocked on TD20). |
 
 ISSUE-013's verified completion record is retained in Git history.
