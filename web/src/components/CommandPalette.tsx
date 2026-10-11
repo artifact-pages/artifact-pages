@@ -20,6 +20,7 @@ import {
   type PaletteContext,
   type PaletteEntry,
 } from '../domain/palette-sections'
+import { warmHeadingSearch } from '../domain/palette-headings'
 import { Icon } from './Icon'
 
 export type { PaletteCommand, PaletteContext } from '../domain/palette-sections'
@@ -88,7 +89,7 @@ export function CommandPalette({
     : mode === 'command'
       ? 'Commands'
       : mode === 'heading'
-        ? 'This artifact'
+        ? (currentIndex ? 'All pages' : undefined)
         : context === 'sites'
           ? 'Sites'
           : currentIndex?.site.title
@@ -99,10 +100,10 @@ export function CommandPalette({
     : mode === 'command'
       ? 'Search commands...'
       : mode === 'heading'
-        ? 'Search headings in this artifact...'
+        ? 'Search headings in all pages...'
         : context === 'sites'
           ? 'Search sites...'
-          : context === 'artifact'
+          : currentIndex
             ? 'Search pages... (> commands, # headings, @ sites)'
             : 'Search pages... (> commands, @ sites)'
 
@@ -119,11 +120,14 @@ export function CommandPalette({
   // The default row follows the list while the query is blank or an unfiltered @; typed queries reset on each change.
   const entrySequence = mode === 'site' || isBlank ? JSON.stringify(entries.map(({ id }) => id)) : ''
   const blankInSite = isBlank && context !== 'sites' && currentIndex !== undefined
-  const emptyMessage = getEmptyMessage({ mode, context, currentArtifact, siteCount: sites.length, blank: blankInSite })
+  const emptyMessage = getEmptyMessage({ mode, context, currentArtifact, siteCount: sites.length, blank: mode === 'search' ? blankInSite : term === '' })
 
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
+
+  // Prepare other pages' headings in the background so the first keystroke stays cheap.
+  useEffect(() => (currentIndex ? warmHeadingSearch(currentIndex) : undefined), [currentIndex])
 
   // A selection is valid only for the context, site, query and (where the list drives the default)
   // entry sequence it was made under; anything else falls back to the current default during render.
@@ -288,11 +292,7 @@ export function CommandPalette({
 
         {blankInSite ? (
           <p className="palette-hint">
-            {currentArtifact ? (
-              <>Type <code>&gt;</code> for commands, <code>#</code> for headings in this page, <code>@</code> to switch sites.</>
-            ) : (
-              <>Type <code>&gt;</code> for commands or <code>@</code> to switch sites.</>
-            )}
+            Type <code>&gt;</code> for commands, <code>#</code> for headings, <code>@</code> to switch sites.
             {onlyCurrent ? ' Open another page to build your recent list.' : ''}
           </p>
         ) : null}
@@ -305,7 +305,7 @@ export function CommandPalette({
           {onSearchPageText && mode === 'search' && context !== 'sites' ? <span><kbd>⌘↵</kbd> search page text</span> : null}
           <span><code>&gt;</code> commands</span>
           <span><code>@</code> sites</span>
-          {currentArtifact ? <span><code>#</code> headings</span> : null}
+          {currentIndex ? <span><code>#</code> headings</span> : null}
         </footer>
       </section>
     </div>
@@ -313,7 +313,7 @@ export function CommandPalette({
 }
 
 function iconForEntry(kind: PaletteEntry['kind']) {
-  if (kind === 'site') return 'folder' as const
+  if (kind === 'site' || kind === 'folder') return 'folder' as const
   if (kind === 'command') return 'chevron' as const
   if (kind === 'heading') return 'contents' as const
   if (kind === 'page-text') return 'search' as const

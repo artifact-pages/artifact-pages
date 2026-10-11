@@ -20,6 +20,16 @@ import {
 } from './fuzzy-search'
 import type { FuzzyMatch } from './fuzzy-search'
 import { artifactRouteHref } from '../routing'
+import { findHeadingHits, headingFragment, headingLocation } from './palette-headings'
+import { findFolders, folderNameMatches, folderPageCountLabel, folderRouteHref } from './palette-folders'
+
+// Rows per group in a plain query: other pages' headings (at most OTHER_HEADINGS_PER_PAGE from one
+// page) and folders. `#` mode lists more, since headings are all it shows.
+const OTHER_HEADINGS_LIMIT = 6
+const OTHER_HEADINGS_PER_PAGE = 3
+const FOLDERS_LIMIT = 4
+const HEADING_MODE_OTHER_LIMIT = 20
+const HEADING_MODE_OTHER_PER_PAGE = 5
 
 export type PaletteCommand = {
   title: string
@@ -35,7 +45,7 @@ export type PaletteContext = 'sites' | 'site' | 'artifact'
 
 export type PaletteEntry = {
   id: string
-  kind: 'artifact' | 'site' | 'command' | 'heading' | 'page-text'
+  kind: 'artifact' | 'folder' | 'site' | 'command' | 'heading' | 'page-text'
   title: string
   description?: string
   siteId?: string
@@ -130,11 +140,16 @@ export function getEmptyMessage({
   context: PaletteContext
   currentArtifact?: ArtifactIndexEntry
   siteCount: number
+  /** The query (or, in a prefix mode, the text after the prefix) is empty. */
   blank?: boolean
 }): string {
   if (mode === 'heading') {
-    if (!currentArtifact) return 'Open an artifact first to search its headings.'
-    if ((currentArtifact.toc?.length ?? 0) === 0) return 'This artifact has no indexed headings.'
+    if (context === 'sites') return 'Headings are searched after you choose a site.'
+    if (blank) {
+      return (currentArtifact?.toc?.length ?? 0) === 0 && currentArtifact
+        ? 'This page has no indexed headings. Type to search the headings of other pages.'
+        : 'Type to search headings in all pages.'
+    }
     return 'No headings match. Change or clear your search.'
   }
   if (mode === 'site') {
@@ -199,10 +214,15 @@ export function buildSections({
   }
 
   if (mode === 'heading') {
+    // The open page's headings lead; with a term, headings of the site's other pages follow.
     const headings = buildHeadingEntries(currentArtifact, term, onJumpToHeading)
-    return plain(headings.length
-      ? [{ title: `In ${currentArtifact?.title ?? 'this artifact'}`, entries: headings }]
-      : [])
+    const others = currentIndex && term.trim()
+      ? buildOtherHeadingEntries(currentIndex, term, currentArtifact, onNavigate, HEADING_MODE_OTHER_LIMIT, HEADING_MODE_OTHER_PER_PAGE)
+      : []
+    return plain([
+      ...(headings.length ? [{ title: `In ${currentArtifact?.title ?? 'this page'}`, entries: headings }] : []),
+      ...(others.length ? [{ title: 'In other pages', entries: others }] : []),
+    ])
   }
 
   if (context === 'sites') {
@@ -234,15 +254,27 @@ export function buildSections({
     scoringExperiment,
     productionScorer,
   )
-  // Headings and commands compete with documents, so they appear only when no page matches.
+  // The open page's headings and commands compete with documents, so they appear only when no
+  // page matches. Folders and other pages' headings are different destinations and always follow
+  // the page matches.
   const fallback = pageSections.length === 0
+  const shownPaths = new Set(pageSections.flatMap((pageSection) => pageSection.entries.flatMap((entry) => entry.subtitle ? [entry.subtitle] : [])))
+  const folderEntries = buildFolderEntries(currentIndex, term, onNavigate, shownPaths)
+  const folderSection = folderEntries.length ? [{ title: 'Folders', entries: folderEntries }] : []
+  // A single character matches nearly every heading; other pages' headings wait for a second one.
+  const otherHeadingEntries = term.trim().length < 2 ? [] : buildOtherHeadingEntries(
+    currentIndex, term, currentArtifact, onNavigate, OTHER_HEADINGS_LIMIT, OTHER_HEADINGS_PER_PAGE, shownPaths,
+  )
+  const otherHeadingSection = otherHeadingEntries.length
+    ? [{ title: 'Headings in other pages', entries: otherHeadingEntries }]
+    : []
   const headingEntries = fallback && context === 'artifact'
     ? buildHeadingEntries(currentArtifact, term, onJumpToHeading, true)
     : []
   const headingSection = headingEntries.length
     ? [{ title: 'Headings in this page', entries: headingEntries }]
     : []
-  // Listed after page matches, it becomes the default selection when no page name matches.
+  // Listed after page matches, it becomes the default selection when no page name matches (IMP-42).
   const pageTextSection: PaletteSection[] = onSearchPageText
     ? [{
         title: 'Page text',
@@ -261,7 +293,9 @@ export function buildSections({
   return plain([
     ...pageSections,
     ...pageTextSection,
+    ...folderSection,
     ...headingSection,
+    ...otherHeadingSection,
     ...commandSection,
   ])
 }
@@ -383,6 +417,54 @@ function buildHeadingEntries(
     if (term.trim() && !titleMatch) return []
     return [headingEntry(heading, currentArtifact, onJumpToHeading, titleMatch, fallback)]
   }).sort((left, right) => (right.titleMatch?.score ?? 0) - (left.titleMatch?.score ?? 0))
+}
+
+function buildOtherHeadingEntries(
+  index: SiteIndex,
+  term: string,
+  currentArtifact: ArtifactIndexEntry | undefined,
+  onNavigate: (href: string) => void,
+  limit: number,
+  perPage: number,
+  shownPaths?: ReadonlySet<string>,
+): PaletteEntry[] {
+  const hits = findHeadingHits(index, prepareFuzzyQuery(term), { currentArtifact, excludeCurrent: true, shownPaths, limit, perPage })
+  return hits.map(({ artifact, heading }) => ({
+    id: `heading:${index.site.id}:${artifact.id}:${heading.id}`,
+    kind: 'heading' as const,
+    title: heading.text,
+    subtitle: headingLocation(artifact),
+    titleMatch: fuzzyMatch(heading.text, term),
+    onSelect: () => onNavigate(`${artifactRouteHref(index.site.id, artifact.path)}${headingFragment(heading.id)}`),
+  }))
+}
+
+// A wrapper folder (one page, already listed as a page match, e.g. `checkout-latency/index.html`)
+// would only echo that page, so it is left out. Folders with several pages, or whose own name
+// matched the query, are always eligible.
+function buildFolderEntries(
+  index: SiteIndex,
+  term: string,
+  onNavigate: (href: string) => void,
+  shownPaths: ReadonlySet<string>,
+): PaletteEntry[] {
+  const query = prepareFuzzyQuery(term)
+  const candidates = findFolders(index, query, FOLDERS_LIMIT + shownPaths.size)
+  const folders = candidates.filter((folder) => {
+    if (folder.pageCount !== 1 || folderNameMatches(folder, query)) return true
+    for (const path of shownPaths) if (path.startsWith(`${folder.path}/`)) return false
+    return true
+  }).slice(0, FOLDERS_LIMIT)
+  return folders.map((folder) => ({
+    id: `folder:${index.site.id}:${folder.path}`,
+    kind: 'folder' as const,
+    title: folder.name,
+    subtitle: folder.path,
+    titleMatch: fuzzyMatch(folder.name, term),
+    subtitleMatch: fuzzyMatch(folder.path, term),
+    badge: folderPageCountLabel(folder.pageCount),
+    onSelect: () => onNavigate(folderRouteHref(index.site.id, folder.path)),
+  }))
 }
 
 function buildPageSections(

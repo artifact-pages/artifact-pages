@@ -71,11 +71,11 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-072](ISSUE-072-modified-click-tab-and-route-fetch-e2e-flaky.md) | In progress | P2 | Modified-click new-tab and route.fetch e2e tests fail intermittently under parallel load. |
 | [ISSUE-073](ISSUE-073-palette-enter-uses-stale-selection.md) | Done | P2 | Pressing Enter right after typing in the command palette can do nothing or open the wrong page (regression from #34). |
 | [ISSUE-074](ISSUE-074-shallow-clone-test-tempdir-cleanup-flaky.md) | Done | P3 | Shallow-clone Go test failed once on TempDir cleanup, likely a detached `git maintenance` gc after fetch. |
-| [ISSUE-075](ISSUE-075-directory-routes-have-no-page.md) | In progress | P1 | Directory routes have no page: folder URLs show "Page not found" and tree folders only toggle. |
+| [ISSUE-075](ISSUE-075-directory-routes-have-no-page.md) | Done | P1 | Directory routes have no page: folder URLs show "Page not found" and tree folders only toggle. |
 | [ISSUE-076](ISSUE-076-pages-sorted-alphabetically-by-title.md) | Blocked | P1 | Navigation, site home and breadcrumb menus sort pages alphabetically by title, losing the author's reading order (blocked on TD19). |
 | [ISSUE-077](ISSUE-077-fulltext-results-unranked.md) | Done | P1 | Page text search results are unranked, have no snippets, and mix languages. |
 | [ISSUE-078](ISSUE-078-landing-page-has-no-orientation.md) | In progress | P1 | The landing page offers only "Choose a site": no orientation, alphabetical cards, double-counted translations. |
-| [ISSUE-079](ISSUE-079-palette-cannot-find-other-page-headings.md) | Open | P2 | The command palette cannot find headings of other pages. |
+| [ISSUE-079](ISSUE-079-palette-cannot-find-other-page-headings.md) | Done | P2 | The command palette cannot find headings of other pages. |
 | [ISSUE-080](ISSUE-080-narrow-screen-chrome-and-scroll-cues.md) | Open | P2 | On narrow screens the permanent rail and two-row toolbar take reading space, and wide tables and code scroll without a cue. |
 | [ISSUE-081](ISSUE-081-reader-shell-skip-link-and-document-language.md) | Done | P3 | The reader shell has no skip link and keeps `lang="en"` on Japanese documents. |
 | [ISSUE-082](ISSUE-082-no-previous-next-navigation.md) | Blocked | P3 | Pages have no previous/next navigation at the end (blocked on ISSUE-076 and TD19). |
