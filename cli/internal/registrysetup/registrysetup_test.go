@@ -492,6 +492,27 @@ func TestGeneratedActionMetadataDoesNotAuthorizeUnmanagedOutputs(t *testing.T) {
 	})
 }
 
+func TestCloudflarePreviewMapsAPITokenForTokenOnlyFallback(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, cloudflareConfig, "")
+	if _, err := runFixture(t, root, "cloudflare", false); err != nil {
+		t.Fatalf("generate Cloudflare files: %v", err)
+	}
+	preview, err := os.ReadFile(filepath.Join(root, ".github/workflows/preview-site.yml"))
+	if err != nil {
+		t.Fatalf("read generated preview workflow: %v", err)
+	}
+	for _, expected := range []string{
+		"CF_ACCESS: ${{ secrets.CF_ACCESS }}",
+		"CF_SECRET: ${{ secrets.CF_SECRET }}",
+		"CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}",
+	} {
+		if !strings.Contains(string(preview), expected) {
+			t.Errorf("preview workflow does not map %q", expected)
+		}
+	}
+}
+
 func equalSnapshot(left, right map[string][]byte) bool {
 	if len(left) != len(right) {
 		return false
