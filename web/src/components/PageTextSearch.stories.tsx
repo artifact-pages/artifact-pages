@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { ArtifactWorkspace } from './ArtifactWorkspace'
-import { RANKING_MAX_HITS_STORAGE_KEY } from './usePageTextSearch'
 import { parseRoute, type AppRoute } from '../routing'
 import { deepExpandedPaths, deepSreIndex, storyIndexes } from '../stories/fixtures'
 import { createStoryFullTextSearch, type StoryFullTextBehavior } from '../stories/fake-fulltext'
@@ -38,16 +37,8 @@ function PageTextSearchStory({ search: behavior, ranking, startAt, query, initia
   const [location, setLocation] = useState({ search: query ? `?q=${encodeURIComponent(query)}` : '', hash: '' })
   const [themeMode, setThemeMode] = useState(theme)
   const fullTextSearch = useMemo(
-    () => {
-      try {
-        if (ranking === 'paged') window.localStorage.setItem(RANKING_MAX_HITS_STORAGE_KEY, '20')
-        else window.localStorage.removeItem(RANKING_MAX_HITS_STORAGE_KEY)
-      } catch {
-        // Without storage the default threshold applies.
-      }
-      return behavior === 'unavailable' ? undefined : createStoryFullTextSearch(index, behavior)
-    },
-    [behavior, index, ranking],
+    () => behavior === 'unavailable' ? undefined : createStoryFullTextSearch(index, behavior),
+    [behavior, index],
   )
 
   useEffect(() => {
@@ -84,6 +75,7 @@ function PageTextSearchStory({ search: behavior, ranking, startAt, query, initia
       onSetThemeMode={setThemeMode}
       index={index}
       fullTextSearch={fullTextSearch}
+      rankingMaxHits={ranking === 'paged' ? 20 : undefined}
       initialExpandedPaths={deepExpandedPaths}
       initialSidebarOpen={initialSidebarOpen}
     />

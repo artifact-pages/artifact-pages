@@ -48,6 +48,16 @@ export function rankHits<T extends RankableHit>(hits: T[], query: string, artifa
     .map(({ hit }) => hit)
 }
 
+/** Ranking needs every hit loaded: it applies only up to this many matching pages. */
+export function shouldRank(total: number, maxHits: number = RANKING_MAX_HITS) {
+  return total <= maxHits
+}
+
+/** Limits a ranked list to one folder (subfolders included); null means no scope. */
+export function scopeHits<T extends { path: string }>(hits: T[], folder: string | null): T[] {
+  return folder === null ? hits : hits.filter((hit) => isInFolder(hit.path, folder))
+}
+
 /** The folder of a path, '' at the top level. */
 export function folderOfPath(path: string) {
   const slash = path.lastIndexOf('/')

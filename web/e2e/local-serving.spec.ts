@@ -4582,9 +4582,11 @@ test.describe('page text search', () => {
   const status = (page: Page) => page.locator('#page-text-search-status')
   const hits = (page: Page) => page.locator('.page-text-result-list [data-text-search-item="hit"]')
 
-  /** Lowers the ranking threshold so the 24 "lighthouse" notes exceed it and the paged, path-ordered fallback is shown. */
+  /** Lowers the ranking threshold (test-only `window.__artifactPagesTest`) so the 24 "lighthouse" notes exceed it and the paged, path-ordered fallback is shown. */
   async function usePagedFallback(page: Page) {
-    await page.addInitScript(() => window.localStorage.setItem('artifact-pages.search-ranking-max-hits', '20'))
+    await page.addInitScript(() => {
+      ;(window as unknown as { __artifactPagesTest: { rankingMaxHits: number } }).__artifactPagesTest = { rankingMaxHits: 20 }
+    })
   }
 
   function recordSearchRequests(page: Page) {
@@ -4757,7 +4759,7 @@ test.describe('page text search', () => {
     await expect(hits(page)).toHaveCount(5)
     const order = ['incidents/checkout-latency/index.html', 'reports/latency-retrospective.md', 'diagrams/mermaid-catalog.md', 'guides/markdown-style-gallery.md', 'runbooks/service-recovery.md']
     expect(await hits(page).evaluateAll((elements) => elements.map((element) => element.getAttribute('data-hit-id')))).toEqual(order)
-    await expect(hits(page).locator('.page-text-result-reason')).toHaveText(['Title', 'Title', 'Text', 'Text', 'Text'])
+    await expect(hits(page).locator('.page-text-result-reason')).toHaveText(['Matches in: Title', 'Matches in: Title', 'Matches in: Text', 'Matches in: Text', 'Matches in: Text'])
     await expect(sidebar(page).getByRole('region', { name: '5 pages contain “latency”' })).toBeVisible()
 
     await field(page).focus()
@@ -4818,7 +4820,7 @@ test.describe('page text search', () => {
     await page.goto('/textsearch?q=timeline')
     await expect(status(page)).toHaveText(/^\d+ pages? contain “timeline”$/)
     // "Timeline" is a heading of the retrospective, not its title: heading matches come before body-only matches.
-    await expect(page.locator('[data-hit-id="reports/latency-retrospective.md"] .page-text-result-reason')).toHaveText('Heading: Timeline')
+    await expect(page.locator('[data-hit-id="reports/latency-retrospective.md"] .page-text-result-reason')).toHaveText('Matches in: Heading: Timeline')
     const tiers = await page.locator('.page-text-result-reason').evaluateAll((elements) => elements.map((element) => element.getAttribute('data-reason')))
     expect(tiers).toEqual([...tiers].sort((left, right) => ['title', 'heading', 'text'].indexOf(left!) - ['title', 'heading', 'text'].indexOf(right!)))
     expect(tiers).toContain('heading')
@@ -4829,22 +4831,31 @@ test.describe('page text search', () => {
     await expect(status(page)).toHaveText('5 pages contain “latency”')
     await expect(hits(page)).toHaveCount(5)
     // The scope is off by default and offered for the open page's folder.
-    const offer = page.getByRole('button', { name: 'Search only in incidents/checkout-latency/' })
-    await expect(offer).toBeVisible()
-    await offer.click()
+    const scopeToggle = page.getByRole('button', { name: 'Search only in incidents/checkout-latency/' })
+    await expect(scopeToggle).toHaveAttribute('aria-pressed', 'false')
+    await scopeToggle.click()
+    // One persistent toggle: focus stays on it while the scope changes.
+    await expect(scopeToggle).toHaveAttribute('aria-pressed', 'true')
+    await expect(scopeToggle).toBeFocused()
     await expect(status(page)).toHaveText('1 page in incidents/checkout-latency/ contain “latency”')
     await expect(hits(page)).toHaveCount(1)
     await expect(page.locator('.page-text-scope-note')).toHaveText('4 more matches outside incidents/checkout-latency/')
     await expect(page.locator('.page-text-results-title .mono')).toHaveText('1 / 1')
     // The scope is only a filter: the committed query and the URL do not change.
     await expect(page).toHaveURL(/\/textsearch\/incidents\/checkout-latency\/index\.html\?q=latency$/)
-    await page.getByRole('button', { name: 'Search all folders' }).click()
+    // The collapsed-sidebar chip follows the scope.
+    await page.getByRole('button', { name: 'Collapse sidebar' }).click()
+    await expect(page.getByRole('button', { name: 'Show page text search results for latency' })).toContainText('1 / 1')
+    await page.getByRole('button', { name: 'Show page text search results for latency' }).click()
+    await scopeToggle.click()
+    await expect(scopeToggle).toHaveAttribute('aria-pressed', 'false')
+    await expect(scopeToggle).toBeFocused()
     await expect(hits(page)).toHaveCount(5)
     // A new query starts unscoped again.
-    await page.getByRole('button', { name: 'Search only in incidents/checkout-latency/' }).click()
+    await scopeToggle.click()
     await field(page).fill('service')
     await field(page).press('Enter')
-    await expect(page.locator('.page-text-scope-chip.is-offer')).toBeVisible()
+    await expect(page.locator('.page-text-scope-chip')).toHaveAttribute('aria-pressed', 'false')
   })
 
   test('a superseded query cannot overwrite the newer results', async ({ page }) => {
@@ -4938,11 +4949,14 @@ test.describe('page text search', () => {
     await page.goto('/textsearch?q=lighthouse')
     await expect(status(page)).toHaveText('24 pages contain “lighthouse”')
     await expect(hits(page)).toHaveCount(20)
+    // The fallback header counts all matches, not just the loaded page.
+    await expect(page.locator('.page-text-results-title .mono')).toHaveText('24')
     const more = page.getByRole('button', { name: 'Show 4 more (20 of 24 shown)' })
     // From the keyboard, focus moves to the first newly listed result.
     await more.focus()
     await page.keyboard.press('Enter')
     await expect(hits(page)).toHaveCount(24)
+    await expect(page.locator('.page-text-results-title .mono')).toHaveText('24')
     await expect(more).toHaveCount(0)
     await expect(hits(page).last()).toHaveAttribute('data-hit-id', 'bulk/note-24.md')
     await expect(page.locator('[data-hit-id="bulk/note-21.md"]')).toBeFocused()
@@ -4956,6 +4970,16 @@ test.describe('page text search', () => {
     await field(page).fill('zzzqqq')
     await field(page).press('Enter')
     await expect(page.getByText('Check the spelling or try a different word.')).toBeVisible()
+  })
+
+  test('the paged fallback shows the open page position against all matches and offers no scope', async ({ page }) => {
+    await usePagedFallback(page)
+    await page.goto('/textsearch/bulk/note-03.md?q=lighthouse')
+    await expect(status(page)).toHaveText('24 pages contain “lighthouse”')
+    await expect(hits(page)).toHaveCount(20)
+    await expect(page.locator('.page-text-results-title .mono')).toHaveText('3 / 24')
+    await expect(page.locator('.page-text-scope-chip')).toHaveCount(0)
+    await expect(page.locator('.page-text-result-folder')).toHaveCount(1)
   })
 
   test('"Show more" expands a collapsed folder to focus the first new result', async ({ page }) => {

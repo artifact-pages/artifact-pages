@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
 import type { FullTextHit } from '../data/fulltext'
 import type { ArtifactIndexEntry, SiteIndex } from '../domain/index'
-import { folderOfPath, isInFolder, matchReason, type MatchReason } from '../domain/search-ranking'
+import { folderOfPath, matchReason, scopeHits, type MatchReason } from '../domain/search-ranking'
 import { searchTerms } from '../domain/text-highlight'
 import { Icon } from './Icon'
 import { followInApp } from './spa-link'
 import { describePageTextSearchError, type PageTextSearchState } from './usePageTextSearch'
 
 export const PAGE_TEXT_SEARCH_INPUT_ID = 'page-text-search'
+const RESULT_LIST_ID = 'page-text-search-results'
 
 export function PageTextSearchBar({
   siteTitle,
@@ -85,6 +86,8 @@ export function PageTextSearchResults({
   draft,
   currentArtifactId,
   currentArtifactPath,
+  scopeFolder,
+  onScopeChange,
   listRef,
   onOpen,
   hitHref,
@@ -98,6 +101,9 @@ export function PageTextSearchResults({
   draft: string
   currentArtifactId?: string
   currentArtifactPath?: string
+  /** Folder the ranked list is limited to, or null. */
+  scopeFolder: string | null
+  onScopeChange: (folder: string | null) => void
   listRef: RefObject<HTMLDivElement | null>
   onOpen: (hit: FullTextHit) => void
   /** The link target of a result row. */
@@ -113,14 +119,19 @@ export function PageTextSearchResults({
   // Folder scope: off by default, offered only for a page inside a folder, and
   // limited to the folder it was switched on for. A new query resets it.
   const openFolder = currentArtifactPath ? folderOfPath(currentArtifactPath) : ''
-  const [scopeFolder, setScopeFolder] = useState<string | null>(null)
   const allHits = state.status === 'success' ? state.hits : []
   const scope = ranked ? scopeFolder : null
-  const hits = useMemo(
-    () => scope === null ? allHits : allHits.filter((hit) => isInFolder(hit.path, scope)),
-    [allHits, scope],
+  const hits = useMemo(() => scopeHits(allHits, scope), [allHits, scope])
+  // Why each page matched, computed once per list rather than on every render.
+  const reasons = useMemo(
+    () => new Map(ranked && state.status === 'success'
+      ? hits.map((hit) => [hit.id, matchReason(state.query, artifactsById.get(hit.id))] as const)
+      : []),
+    [ranked, hits, state, artifactsById],
   )
   const groups = useMemo(() => groupByFolder(hits), [hits])
+  // The paged fallback has loaded only part of the list; its total comes from the search.
+  const shownTotal = state.status === 'success' && scope === null ? state.total : hits.length
   const position = currentArtifactId ? hits.findIndex(({ id }) => id === currentArtifactId) : -1
 
   // "Show more" keeps keyboard focus: once the next page arrives, focus moves
@@ -132,7 +143,6 @@ export function PageTextSearchResults({
   const focusAfterExpand = useRef<string | null>(null)
   useEffect(() => {
     setCollapsed(new Set())
-    setScopeFolder(null)
     focusAfterMore.current = null
     focusAfterExpand.current = null
   }, [committedQuery])
@@ -205,7 +215,7 @@ export function PageTextSearchResults({
     } else if (event.key === 'Home' || event.key === 'End') {
       event.preventDefault()
       items[event.key === 'Home' ? 0 : items.length - 1]?.focus()
-    } else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+    } else if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && !ranked) {
       const folder = item.dataset.folder ?? ''
       const isGroup = item.dataset.textSearchItem === 'group'
       if (isGroup) {
@@ -237,7 +247,7 @@ export function PageTextSearchResults({
           </span>
         ) : null}
         {state.status === 'success' && state.total > 0 ? (
-          <span className="mono">{position >= 0 ? `${position + 1} / ${hits.length}` : hits.length}</span>
+          <span className="mono">{position >= 0 ? `${position + 1} / ${shownTotal}` : shownTotal}</span>
         ) : null}
       </div>
 
@@ -261,25 +271,28 @@ export function PageTextSearchResults({
         <>
         {ranked && (openFolder || scope !== null) ? (
           <div className="page-text-scope-row">
-            {scope !== null ? (
-              <span className="page-text-scope-chip">
-                <span>Only {scope ? `${scope}/` : 'top level'}</span>
-                <button type="button" className="icon-button" aria-label="Search all folders" onClick={() => setScopeFolder(null)}>
-                  <Icon name="close" size={11} />
-                </button>
-              </span>
-            ) : (
-              <button type="button" className="page-text-scope-chip is-offer" onClick={() => setScopeFolder(openFolder)}>
-                Search only in {openFolder}/
-              </button>
-            )}
+            {/* One persistent toggle: focus stays on it when the scope changes. */}
+            <button
+              type="button"
+              className={`page-text-scope-chip${scope === null ? ' is-offer' : ''}`}
+              aria-pressed={scope !== null}
+              aria-controls={RESULT_LIST_ID}
+              onClick={() => onScopeChange(scope === null ? openFolder : null)}
+            >
+              Search only in {(scope ?? openFolder) ? `${scope ?? openFolder}/` : 'the top level'}
+              {scope !== null ? <Icon name="close" size={11} /> : null}
+            </button>
           </div>
         ) : null}
         <div
           ref={listRef}
+          id={RESULT_LIST_ID}
           className={`page-text-result-list${ranked ? ' is-ranked' : ''}${pendingDraft ? ' is-stale' : ''}`}
           onKeyDown={handleKeyDown}
         >
+          {ranked && hits.length === 0 ? (
+            <p className="page-text-scope-note">No matches in {scope ? `${scope}/` : 'the top level'}. Turn the scope off to see all {allHits.length}.</p>
+          ) : null}
           {ranked ? hits.map((hit) => (
             <ResultRow
               key={hit.id}
@@ -289,7 +302,7 @@ export function PageTextSearchResults({
               current={hit.id === currentArtifactId}
               href={hitHref(hit)}
               onOpen={onOpen}
-              reason={matchReason(state.query, artifactsById.get(hit.id))}
+              reason={reasons.get(hit.id)}
               showPath={scope === null}
             />
           )) : groups.map(({ folder, hits: groupHits }) => {
@@ -392,6 +405,7 @@ function ResultRow({
             {showPath ? <span className="page-text-result-flat-path">{hit.path.replace(/\.[^./]+$/, '')}</span> : null}
           </span>
           <span className="page-text-result-reason" data-reason={reason.tier}>
+            <span className="page-text-visually-hidden">Matches in: </span>
             {reason.tier === 'title' ? <b>Title</b> : reason.tier === 'heading' ? <><b>Heading:</b> <span className="page-text-result-reason-heading">{reason.heading}</span></> : <b>Text</b>}
           </span>
         </>

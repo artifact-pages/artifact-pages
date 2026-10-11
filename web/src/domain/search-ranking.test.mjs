@@ -1,8 +1,8 @@
 // Checks the page text search ranking tiers and folder helpers.
-// Run with: npm run test:text-highlight
+// Run with: npm run test:reader-shell
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { folderOfPath, isInFolder, matchReason, rankHits } from '../web/src/domain/search-ranking.ts'
+import { folderOfPath, isInFolder, matchReason, rankHits, RANKING_MAX_HITS, scopeHits, shouldRank } from './search-ranking.ts'
 
 const artifacts = new Map([
   ['a.md', { title: 'Alpha notes', toc: [] }],
@@ -45,4 +45,31 @@ test('folder helpers', () => {
   assert.equal(isInFolder('en/a.html', 'en'), true)
   assert.equal(isInFolder('en/x/a.html', 'en'), true)
   assert.equal(isInFolder('english/a.html', 'en'), false)
+})
+
+test('CJK queries match titles and headings by substring', () => {
+  const ja = new Map([
+    ['t.md', { title: 'プレビューの使い方', toc: [] }],
+    ['h.md', { title: '公開', toc: [{ level: 2, text: 'プレビュー環境の設定', id: 'a' }] }],
+    ['x.md', { title: '設定', toc: [] }],
+  ])
+  assert.deepEqual(rankHits(['x.md', 'h.md', 't.md'].map(hit), 'プレビュー', ja).map(({ id }) => id), ['t.md', 'h.md', 'x.md'])
+  assert.deepEqual(matchReason('プレビュー', ja.get('h.md')), { tier: 'heading', heading: 'プレビュー環境の設定' })
+})
+
+test('the heading tier needs every term inside a single heading', () => {
+  const split = { title: 'Guide', toc: [{ level: 2, text: 'Cloudflare', id: 'a' }, { level: 2, text: 'Preview', id: 'b' }] }
+  assert.equal(matchReason('cloudflare preview', split).tier, 'text')
+  assert.equal(matchReason('cloudflare', split).tier, 'heading')
+})
+
+test('rank only up to the threshold; scope filters by folder', () => {
+  assert.equal(shouldRank(RANKING_MAX_HITS), true)
+  assert.equal(shouldRank(RANKING_MAX_HITS + 1), false)
+  assert.equal(shouldRank(24, 20), false)
+  assert.equal(shouldRank(0, 0), true)
+  const hits = ['en/a.md', 'ja/a.md', 'top.md'].map(hit)
+  assert.deepEqual(scopeHits(hits, 'en').map(({ id }) => id), ['en/a.md'])
+  assert.equal(scopeHits(hits, null), hits)
+  assert.deepEqual(scopeHits(hits, ''), hits)
 })

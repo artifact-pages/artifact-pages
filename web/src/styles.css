@@ -3113,6 +3113,20 @@ mark {
   background: var(--hover);
 }
 
+.page-text-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.page-text-result.is-current .page-text-result-reason,
+.page-text-result.is-current .page-text-result-reason b {
+  color: var(--text);
+}
+
 .page-text-scope-note {
   margin: 8px 8px 0;
   color: var(--text-tertiary);

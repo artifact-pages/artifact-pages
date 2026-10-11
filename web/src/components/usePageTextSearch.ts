@@ -1,23 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { FullTextSearchError, type FullTextHit, type SiteFullTextSearch } from '../data/fulltext'
-import { RANKING_MAX_HITS } from '../domain/search-ranking'
-
-/**
- * Diagnostic override of the ranking threshold (a non-negative integer in
- * localStorage). End-to-end tests lower it to exercise the paged fallback
- * without publishing more than RANKING_MAX_HITS pages.
- */
-export const RANKING_MAX_HITS_STORAGE_KEY = 'artifact-pages.search-ranking-max-hits'
-
-function rankingMaxHits() {
-  try {
-    const stored = Number(window.localStorage.getItem(RANKING_MAX_HITS_STORAGE_KEY))
-    if (Number.isInteger(stored) && stored >= 0 && window.localStorage.getItem(RANKING_MAX_HITS_STORAGE_KEY) !== null) return Math.min(stored, 1000)
-  } catch {
-    // Storage can be unavailable; use the default.
-  }
-  return RANKING_MAX_HITS
-}
+import { RANKING_MAX_HITS, shouldRank } from '../domain/search-ranking'
 
 export const PAGE_TEXT_SEARCH_PAGE_SIZE = 20
 /** The full-text client rejects longer queries. */
@@ -46,14 +29,19 @@ const MAX_PAGE_LIMIT = 1000
  * Runs the committed query against the site's full-text client. Only the latest
  * query may update the state: changing or clearing it aborts the older search.
  */
-export function usePageTextSearch(
-  client: SiteFullTextSearch | undefined,
-  query: string,
+export type PageTextSearchOptions = {
   /** Orders a complete hit list; without it results stay in path order and paged. */
-  rank?: (hits: FullTextHit[], query: string) => FullTextHit[],
-) {
-  const rankRef = useRef(rank)
-  rankRef.current = rank
+  rank?: (hits: FullTextHit[], query: string) => FullTextHit[]
+  /** Ranking applies up to this many matching pages (default RANKING_MAX_HITS, at most 1000). */
+  rankingMaxHits?: number
+}
+
+export function usePageTextSearch(client: SiteFullTextSearch | undefined, query: string, options: PageTextSearchOptions = {}) {
+  const optionsRef = useRef(options)
+  optionsRef.current = options
+  // Folder scope of a ranked list; it belongs to one query.
+  const [scopeFolder, setScopeFolder] = useState<string | null>(null)
+  useEffect(() => setScopeFolder(null), [query])
   const [state, setState] = useState<PageTextSearchState>({ status: 'idle' })
   const [attempt, setAttempt] = useState(0)
   const moreController = useRef<AbortController | null>(null)
@@ -69,11 +57,16 @@ export function usePageTextSearch(
     client.search(query, { signal: controller.signal, limit: PAGE_TEXT_SEARCH_PAGE_SIZE }).then(
       async (result) => {
         if (controller.signal.aborted) return
-        const ranker = rankRef.current
-        if (ranker && result.hasMore && result.total <= rankingMaxHits()) {
+        const { rank: ranker, rankingMaxHits = RANKING_MAX_HITS } = optionsRef.current
+        if (ranker && result.hasMore && shouldRank(result.total, Math.min(rankingMaxHits, MAX_PAGE_LIMIT))) {
           // Ranking needs every hit: list them all in one request. The result
           // is complete (a single generation), so it replaces the first page.
-          result = await client.search(query, { signal: controller.signal, limit: result.total })
+          // If that request fails, the first page is still listed in path order.
+          try {
+            result = await client.search(query, { signal: controller.signal, limit: result.total })
+          } catch (error) {
+            if (controller.signal.aborted) throw error
+          }
           if (controller.signal.aborted) return
         }
         if (ranker && !result.hasMore) {
@@ -134,7 +127,7 @@ export function usePageTextSearch(
 
   useEffect(() => () => moreController.current?.abort(), [])
 
-  return { state, retry, loadMore }
+  return { state, retry, loadMore, scopeFolder, setScopeFolder }
 }
 
 export type PageTextSearchErrorDescription = { title: string; detail: string; retryable: boolean }
