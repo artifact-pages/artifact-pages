@@ -1,6 +1,6 @@
 # Navigation, site home and breadcrumb menus sort pages alphabetically by title, not like a file browser
 
-- Status: Open
+- Status: Done
 - Assignee: Claude
 - Priority: P1
 - Area: Reader ordering (`web/src/domain/tree.ts`, `ArtifactBreadcrumbs.tsx`, `SiteHome.tsx`, `directory.ts`); web only
@@ -29,9 +29,13 @@ The docs repository's files carry no numeric prefixes (for example `sites/archit
 
 Every listing orders folders before files and sorts each group by filename, so authors control order by naming files, and the order is the same everywhere pages are listed.
 
+## Resolution
+
+One shared comparator, `web/src/domain/listing-order.ts`, is used by the sidebar tree (`tree.ts`), the Browse list on the site home (`ArtifactTree.tsx`), breadcrumb sibling menus (`ArtifactBreadcrumbs.tsx`) and directory pages (`directory.ts`). Paths compare segment by segment; at the first differing segment a folder sorts before a file, and names compare by lower-cased Unicode code points, then by the exact name, then by id. This approximates GitHub's file browser (case-insensitive, no natural number sorting; not guaranteed identical in every edge case) and uses no `Intl.Collator`, so the result does not depend on the browser locale. Consequences, documented in the specification: `10-x` sorts before `2-x` (use fixed-width prefixes), and Japanese names sort by code point (hiragana, katakana, then kanji), not by reading. The site picker, full-text results and landing-page site order are unchanged (ISSUE-078 owns the site order).
+
 ## Acceptance criteria
 
-- [ ] One shared comparator orders folders first, then files, each by filename (the last path segment), deterministically and independent of the browser locale (a fixed, documented comparison; numeric prefixes such as `01-` sort before `10-`).
-- [ ] The sidebar tree, site home Browse list, breadcrumb sibling menus and directory pages use that comparator. Full-text results keep their own ranking.
-- [ ] A fixture with a numbered sequence and folders shows author order (folders first) in all listings; unit tests cover the comparator with prefixed, unprefixed and mixed Japanese and English filenames.
-- [ ] Specification updated (directory page and tree ordering sentences).
+- [x] One shared comparator orders folders first, then files, each by filename (the last path segment), deterministically and independent of the browser locale (a fixed, documented comparison; numeric prefixes such as `01-` sort before `10-`).
+- [x] The sidebar tree, site home Browse list, breadcrumb sibling menus and directory pages use that comparator. Full-text results keep their own ranking.
+- [x] A fixture with a numbered sequence and folders shows author order (folders first) in all listings; unit tests cover the comparator with prefixed, unprefixed and mixed Japanese and English filenames.
+- [x] Specification updated (directory page and tree ordering sentences).

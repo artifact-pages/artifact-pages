@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ArtifactIndexEntry } from '../domain/index'
+import { compareArtifactsByPath } from '../domain/listing-order.ts'
 import { buildArtifactTree, countArtifacts, flattenArtifacts, type ArtifactTreeNode } from '../domain/tree'
 import { ArtifactActionsMenu } from './ArtifactActionsMenu'
 import { Icon } from './Icon'
@@ -69,7 +70,8 @@ export function ArtifactTree({
   const normalizedQuery = query.trim().toLocaleLowerCase()
   const tree = useMemo(() => needsTree ? buildArtifactTree(artifacts) : undefined, [artifacts, needsTree])
   const allArtifacts = useMemo(
-    () => tree ? flattenArtifacts(tree) : artifacts,
+    // Flat lists use the same folders-first filename order as the tree (ISSUE-076).
+    () => tree ? flattenArtifacts(tree) : [...artifacts].sort(compareArtifactsByPath),
     [artifacts, tree],
   )
   const filteredArtifacts = useMemo(

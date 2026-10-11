@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ArtifactIndexEntry } from '../domain/index'
+import { compareArtifactsByPath } from '../domain/listing-order.ts'
 import { Icon } from './Icon'
 import { followInApp } from './spa-link'
 
@@ -329,23 +330,19 @@ export function ArtifactBreadcrumbs({
 function getNearbyArtifacts(artifacts: ArtifactIndexEntry[], path: string, isDirectory: boolean) {
   if (isDirectory && !path) {
     // Site root: the artifacts that sit directly at the top level.
-    return artifacts.filter((artifact) => !artifact.path.includes('/')).sort(compareArtifacts)
+    return artifacts.filter((artifact) => !artifact.path.includes('/')).sort(compareArtifactsByPath)
   }
   if (isDirectory) {
     const prefix = `${path}/`
     return artifacts
       .filter((artifact) => artifact.path.startsWith(prefix))
-      .sort(compareArtifacts)
+      .sort(compareArtifactsByPath)
   }
 
   const directory = path.split('/').slice(0, -1).join('/')
   return artifacts
     .filter((artifact) => artifact.path.split('/').slice(0, -1).join('/') === directory)
-    .sort(compareArtifacts)
-}
-
-function compareArtifacts(left: ArtifactIndexEntry, right: ArtifactIndexEntry) {
-  return left.title.localeCompare(right.title) || left.path.localeCompare(right.path)
+    .sort(compareArtifactsByPath)
 }
 
 function isCurrentArtifact(

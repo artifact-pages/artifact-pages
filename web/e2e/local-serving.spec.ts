@@ -179,12 +179,13 @@ test('static sites catalog discovers sites and opens a site home without directo
   await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
   await expect(page.locator('.site-home .artifact-list-section[aria-label="Recently updated"]')).toHaveCount(0)
   await expect(page.locator('.site-home .tree-artifact .tree-label')).toHaveText([
-    'Checkout latency incident review',
+    // Folders first, then filename order (ISSUE-076): architecture, diagrams, guides, incidents, reports, runbooks.
     'Platform topology',
-    'Service recovery',
     'Mermaid rendering catalog',
     'Markdown styles in the reader',
+    'Checkout latency incident review',
     'Latency Retrospective',
+    'Service recovery',
   ])
 })
 
@@ -1076,7 +1077,8 @@ test('artifact actions pin locally without changing selection or Browse, and exp
   await expect(menu.getByRole('menuitem', { name: 'Unpin' })).toBeVisible()
   await menu.getByRole('menuitem', { name: 'Unpin' }).click()
   await expect(page.locator('.pinned-tree')).toHaveCount(0)
-  await expect(incidentsDirectory).toBeFocused()
+  // Focus falls back to the first Browse folder, which is now "architecture" (folders first, by name; ISSUE-076).
+  await expect(browse.locator('.tree-directory-button[data-tree-path="architecture"]')).toBeFocused()
   await expect(incidentsDirectory).toHaveAttribute('aria-expanded', 'false')
   await expect(page).toHaveURL(/\/sre\/architecture\/platform-topology\/index\.html$/)
 
@@ -3323,9 +3325,13 @@ test('breadcrumb sibling menus stay within narrow screens and scroll long lists'
   expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(viewport.height)
   await expect.poll(() => menuList.evaluate((element) => element.scrollHeight > element.clientHeight)).toBeTruthy()
 
-  await page.keyboard.press('ArrowDown')
+  // Filename order puts follow-up-01..28 before index.html (ISSUE-076); Home reaches the first sibling.
+  await page.keyboard.press('Home')
   const firstSibling = menu.getByRole('menuitem', { name: /Follow-up 01/ })
   await expect(firstSibling).toBeFocused()
+  await page.keyboard.press('ArrowDown')
+  await expect(menu.getByRole('menuitem', { name: /Follow-up 02/ })).toBeFocused()
+  await page.keyboard.press('Home')
   await page.keyboard.press('Enter')
   await expect(page).toHaveURL(/\/showcase\/reports\/cloud-spend-review\/follow-up-01\.html$/)
 

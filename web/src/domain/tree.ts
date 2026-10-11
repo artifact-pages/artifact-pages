@@ -1,4 +1,5 @@
 import type { ArtifactIndexEntry } from './index'
+import { compareArtifactsByPath, compareNames } from './listing-order.ts'
 
 export type ArtifactTreeNode = {
   name: string
@@ -54,15 +55,19 @@ export function countArtifacts(node: ArtifactTreeNode): number {
 }
 
 export function flattenArtifacts(node: ArtifactTreeNode): ArtifactIndexEntry[] {
+  // Folders first, like the tree itself.
   return [
-    ...node.artifacts,
     ...[...node.directories.values()].flatMap(flattenArtifacts),
+    ...node.artifacts,
   ]
 }
 
 function sortTree(node: ArtifactTreeNode) {
-  node.artifacts.sort((left, right) => left.title.localeCompare(right.title))
-  for (const directory of node.directories.values()) {
+  node.artifacts.sort(compareArtifactsByPath)
+  const sorted = [...node.directories.entries()].sort(([left], [right]) => compareNames(left, right))
+  node.directories.clear()
+  for (const [name, directory] of sorted) {
+    node.directories.set(name, directory)
     sortTree(directory)
   }
 }

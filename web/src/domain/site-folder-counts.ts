@@ -2,6 +2,8 @@
 // Paths only: the first path segment names the folder. No language or translation
 // notion is inferred; a folder is just a folder.
 
+import { compareNames } from './listing-order.ts'
+
 export type FolderCount = {
   folder: string
   count: number
@@ -28,7 +30,7 @@ export function topLevelFolderCounts(artifacts: ReadonlyArray<{ path: string }>)
     counts.set(folder, (counts.get(folder) ?? 0) + 1)
   }
   const result: FolderCount[] = [...counts].map(([folder, count]) => ({ folder, count }))
-    .sort((left, right) => left.folder.localeCompare(right.folder))
+    .sort((left, right) => compareNames(left.folder, right.folder))
   if (rootCount > 0) result.push({ folder: ROOT_FOLDER_LABEL, count: rootCount, isRoot: true })
   return result
 }
