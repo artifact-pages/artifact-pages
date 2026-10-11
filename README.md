@@ -103,6 +103,14 @@ npm run test:e2e
 
 The command builds the SPA first, starts an isolated Compose nginx service on port `4174`, and removes that test service when finished. The regular local service on `4173` is left untouched. Docker Compose and the Playwright Chromium browser are required. Tests cover site discovery, lazy per-site index loading, current-site search scope, deep-link/reload behavior, relative artifact assets, and the collapsed navigation rail.
 
+To run e2e checks from multiple worktrees at once, give each run a distinct Compose project name and loopback port. Each worktree supplies its own default bind-mount paths; set `WEB_ROOT`, `STORAGE_ROOT`, or `PREVIEW_ROOT` when multiple runs share one worktree and need separate mounts. `E2E_COMPOSE_PROJECT_NAME` defaults to `git-artifact-pages-e2e` and accepts lowercase letters, digits, dashes, and underscores. Playwright output is kept under `test-results/<project-name>` so same-worktree runs do not share traces or result files. Set `E2E_WORKERS` to a positive integer to limit each run's browser workers when sharing a local machine; omitting it preserves the Playwright default.
+
+```sh
+# Run one line in each worktree; use a distinct name and port per run.
+E2E_COMPOSE_PROJECT_NAME=artifact-pages-e2e-a E2E_PORT=4175 E2E_WORKERS=2 npm run test:e2e
+E2E_COMPOSE_PROJECT_NAME=artifact-pages-e2e-b E2E_PORT=4176 E2E_WORKERS=2 npm run test:e2e
+```
+
 ## Local index builder prototype
 
 The Go builder creates one site's discovery metadata and artifact index from a publishable static content directory inside a Git working tree. Point `--source` at the exact tree that should be served under `/_artifacts/<site>/`, containing ready-to-serve HTML, Markdown, and their local resources—not an unrendered template/source tree. It does not render templates, bundle assets, rewrite URLs, copy artifact files, or publish to a hosting provider.

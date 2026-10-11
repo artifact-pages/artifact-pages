@@ -76,9 +76,6 @@ jobs:
       - name: Fast Node tests
         run: |
           npm run test:compatibility-policy
-          npm run test:text-highlight
-          npm run test:palette-sections
-          npm run test:schema-versions
           npm run test:fulltext
           npm run test:third-party-notices
           npm run test:vite-malformed-url
@@ -91,6 +88,10 @@ jobs:
           npm run test:actions-parity
           npm run test:app-cache-rollback
           node scripts/test-clean-room-adoption.mjs
+      # Keep every web unit suite behind one root script so CI has one place to call
+      # when new web unit suites are added.
+      - name: Web unit tests
+        run: npm run test:web-unit
       - name: Browser tests (nginx behind Docker Compose)
         run: npm run test:e2e
 
