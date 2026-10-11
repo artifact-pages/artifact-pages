@@ -383,15 +383,100 @@ test('registered discovery honors sites.json, hides unregistered storage, and lo
   await expect(page.getByRole('link', { name: /SRE registered/ })).toBeVisible()
   await expect(page.getByRole('link', { name: /HTML Showcase/ })).toHaveCount(0)
   expect(metadataRequests.sort()).toEqual(['/_indexes/frontend/meta.json', '/_indexes/sre/meta.json'])
-  expect(indexRequests).toEqual([])
   expect(directoryRequests).toEqual([])
+  // The landing page lazily reads the indexes of the published registered sites for per-folder counts, and only those.
+  await expect.poll(() => [...new Set(indexRequests)].sort()).toEqual(['/_indexes/frontend/index.json', '/_indexes/sre/index.json'])
+  expect(indexRequests).not.toContain('/_indexes/orphaned/index.json')
 
   await page.getByRole('link', { name: /SRE registered/ }).click()
   await expect(page).toHaveURL(/\/sre$/u)
   await expect(page.getByRole('heading', { name: 'SRE registered', exact: true })).toBeVisible()
-  await expect.poll(() => [...indexRequests]).toEqual(['/_indexes/sre/index.json'])
-  expect(indexRequests).not.toContain('/_indexes/frontend/index.json')
   expect(indexRequests).not.toContain('/_indexes/orphaned/index.json')
+})
+
+test('site cards show the description, page counts per top-level folder and a Start reading link', async ({ page }) => {
+  const artifact = (path: string) => ({
+    id: path.replace(/\W+/gu, '-'),
+    title: path,
+    path,
+    format: 'html',
+    artifactUrl: `/x/${path}`,
+    updatedAt: '2026-10-01T00:00:00Z',
+  })
+  const index = (id: string, paths: string[]) => ({
+    schemaVersion: 1,
+    site: { id, title: id },
+    generatedAt: '2026-10-09T00:00:00Z',
+    artifacts: paths.map(artifact),
+  })
+  const meta = (id: string, count: number) => ({
+    schemaVersion: 1,
+    site: { id, title: id },
+    generatedAt: '2026-10-09T00:00:00Z',
+    artifactCount: count,
+    artifactIndexUrl: `/_indexes/${id}/index.json`,
+  })
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+  const sites = [
+    { id: 'drafts', name: 'Drafts', description: 'Not yet published.' },
+    { id: 'flat', name: 'Flat site', description: 'Pages without folders.' },
+    { id: 'guide', name: 'Guide', description: 'Start here.' },
+    { id: 'wide', name: 'Wide', description: 'Many folders.' },
+  ].map((site) => ({ ...site, repository: `acme/${site.id}`, sourcePath: `sites/${site.id}` }))
+  await page.route('**/_indexes/sites.json', (route) => route.fulfill(json({ schemaVersion: 1, sites })))
+  await page.route('**/_indexes/drafts/meta.json', (route) => route.fulfill({ status: 404, body: '{}' }))
+  await page.route('**/_indexes/flat/meta.json', (route) => route.fulfill(json(meta('flat', 2))))
+  await page.route('**/_indexes/flat/index.json', (route) => route.fulfill(json(index('flat', ['a.html', 'b.html']))))
+  await page.route('**/_indexes/guide/meta.json', (route) => route.fulfill(json(meta('guide', 5))))
+  await page.route('**/_indexes/guide/index.json', (route) => route.fulfill(json(index('guide', [
+    'en/a.html', 'en/b.html', 'en/deep/c.html', 'ja/a.html', 'ja/b.html',
+  ]))))
+  await page.route('**/_indexes/wide/meta.json', (route) => route.fulfill(json(meta('wide', 5))))
+  await page.route('**/_indexes/wide/index.json', (route) => route.fulfill(json(index('wide', [
+    'a/1.html', 'b/1.html', 'c/1.html', 'd/1.html', 'e/1.html',
+  ]))))
+
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Choose a site' })).toBeVisible()
+
+  const guide = page.getByRole('link', { name: /Guide/ })
+  await expect(guide.locator('.site-picker-description')).toHaveText('Start here.')
+  await expect(guide.locator('.site-picker-folder')).toHaveText(['en 3', 'ja 2'])
+  await expect(guide.getByRole('group', { name: 'Pages per top-level folder' })).toBeVisible()
+  await expect(guide.locator('.site-picker-start')).toHaveText('Start reading')
+  await expect(guide).not.toContainText('artifacts')
+  await expect(guide.locator('.site-picker-meta')).toContainText('/guide')
+  await expect(guide.locator('.site-picker-meta')).toContainText('updated')
+
+  const flat = page.getByRole('link', { name: /Flat site/ })
+  await expect(flat).toContainText('2 artifacts')
+  await expect(flat.locator('.site-picker-folder')).toHaveCount(0)
+  await expect(flat.locator('.site-picker-start')).toBeVisible()
+
+  const wide = page.getByRole('link', { name: /Wide/ })
+  await expect(wide).toContainText('5 artifacts in 5 folders')
+  await expect(wide.locator('.site-picker-folder')).toHaveCount(0)
+
+  const drafts = page.getByRole('link', { name: /Drafts/ })
+  await expect(drafts).toContainText('Registered · not published yet')
+  await expect(drafts.locator('.site-picker-start')).toHaveCount(0)
+  await expect(drafts.locator('.site-picker-folder')).toHaveCount(0)
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+  await expect(guide.locator('.site-picker-start')).toBeVisible()
+
+  await guide.locator('.site-picker-start').click()
+  await expect(page).toHaveURL(/\/guide$/u)
+})
+
+test('site cards keep the metadata total when a site index cannot be read', async ({ page }) => {
+  await page.route('**/_indexes/sre/index.json', (route) => route.fulfill({ status: 503, body: 'unavailable' }))
+  await page.goto('/')
+  const sre = page.getByRole('link', { name: /SRE/ })
+  await expect(sre).toContainText('6 artifacts')
+  await expect(sre.locator('.site-picker-folder')).toHaveCount(0)
+  await expect(sre.locator('.site-picker-start')).toBeVisible()
 })
 
 test('an empty registered site stays on its home route and does not affect a neighboring site', async ({ page }) => {
@@ -535,7 +620,9 @@ test('a registered site remains discoverable before and after its first publish'
   await expect(frontendBeforePublish).toContainText('Registered · not published yet')
   await expect(frontendBeforePublish).not.toContainText(/\d+ artifacts/u)
   await expect(page.getByRole('link', { name: /SRE registered/ })).toContainText('6 artifacts')
-  expect(indexRequests).toEqual([])
+  // Only the published site's index is read for the card counts; the unpublished site is not requested.
+  await expect.poll(() => [...indexRequests]).toEqual(['/_indexes/sre/index.json'])
+  indexRequests.length = 0
 
   await frontendBeforePublish.click()
   await expect(page.getByRole('heading', { name: 'Site registered, but not published yet' })).toBeVisible()
@@ -552,7 +639,7 @@ test('a registered site remains discoverable before and after its first publish'
   await search.press('Enter')
   await expect(page).toHaveURL(/\/sre$/u)
   await expect(page.getByRole('heading', { name: 'SRE registered', exact: true })).toBeVisible()
-  expect(indexRequests).toEqual(['/_indexes/frontend/index.json', '/_indexes/sre/index.json'])
+  expect([...new Set(indexRequests)]).toEqual(['/_indexes/frontend/index.json', '/_indexes/sre/index.json'])
 
   frontendPublished = true
   await page.goto('/')
@@ -562,11 +649,8 @@ test('a registered site remains discoverable before and after its first publish'
   await frontendAfterPublish.click()
   await expect(page).toHaveURL(/\/frontend$/u)
   await expect(page.getByRole('heading', { name: 'Frontend registered', exact: true })).toBeVisible()
-  expect(indexRequests).toEqual([
-    '/_indexes/frontend/index.json',
-    '/_indexes/sre/index.json',
-    '/_indexes/frontend/index.json',
-  ])
+  expect(indexRequests.filter((request) => request === '/_indexes/frontend/index.json').length).toBeGreaterThanOrEqual(2)
+  expect(indexRequests.every((request) => ['/_indexes/frontend/index.json', '/_indexes/sre/index.json'].includes(request))).toBe(true)
 })
 
 for (const failure of ['invalid metadata', 'network failure'] as const) {
@@ -638,7 +722,8 @@ for (const failure of ['invalid metadata', 'network failure'] as const) {
     await search.press('Enter')
     await expect(page).toHaveURL(/\/sre$/u)
     await expect(page.getByRole('heading', { name: 'SRE registered', exact: true })).toBeVisible()
-    expect(indexRequests).toEqual(['/_indexes/sre/index.json'])
+    // The failed site never gets an index request; only the healthy site's index is read.
+    expect([...new Set(indexRequests)]).toEqual(['/_indexes/sre/index.json'])
   })
 }
 

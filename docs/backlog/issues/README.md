@@ -74,7 +74,7 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-075](ISSUE-075-directory-routes-have-no-page.md) | Open | P1 | Directory routes have no page: folder URLs show "Page not found" and tree folders only toggle. |
 | [ISSUE-076](ISSUE-076-pages-sorted-alphabetically-by-title.md) | Blocked | P1 | Navigation, site home and breadcrumb menus sort pages alphabetically by title, losing the author's reading order (blocked on TD19). |
 | [ISSUE-077](ISSUE-077-fulltext-results-unranked.md) | Open | P1 | Page text search results are unranked, have no snippets, and mix languages. |
-| [ISSUE-078](ISSUE-078-landing-page-has-no-orientation.md) | Open | P1 | The landing page offers only "Choose a site": no orientation, alphabetical cards, double-counted translations. |
+| [ISSUE-078](ISSUE-078-landing-page-has-no-orientation.md) | In progress | P1 | The landing page offers only "Choose a site": no orientation, alphabetical cards, double-counted translations. |
 | [ISSUE-079](ISSUE-079-palette-cannot-find-other-page-headings.md) | Open | P2 | The command palette cannot find headings of other pages. |
 | [ISSUE-080](ISSUE-080-narrow-screen-chrome-and-scroll-cues.md) | Open | P2 | On narrow screens the permanent rail and two-row toolbar take reading space, and wide tables and code scroll without a cue. |
 | [ISSUE-081](ISSUE-081-reader-shell-skip-link-and-document-language.md) | Done | P3 | The reader shell has no skip link and keeps `lang="en"` on Japanese documents. |
