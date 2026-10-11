@@ -112,33 +112,33 @@ export function SitePicker({
                 const startPath = hasSiteDiscoveryMetadata(entry) ? startPaths[entry.site.id] : undefined
                 const href = startPath === undefined ? `/${encodeURIComponent(entry.site.id)}` : artifactRouteHref(entry.site.id, startPath)
                 return (
-                <a
-                  className="site-picker-row"
-                  key={entry.site.id}
-                  href={href}
-                  onClick={(event) => followInApp(event, () => onNavigate(href))}
-                >
-                  <span className="site-mark" aria-hidden="true">{entry.site.title.slice(0, 1).toUpperCase()}</span>
-                  <span className="site-picker-main">
-                    <strong>{entry.site.title}</strong>
-                    {entry.site.description?.trim() ? (
-                      <span className="site-picker-description">{entry.site.description}</span>
-                    ) : null}
-                    <FolderCountChips entry={entry} folders={folderCounts[entry.site.id]} pending={pendingCounts.has(entry.site.id)} />
-                    <span className="site-picker-meta">
-                      <span className="mono">/{entry.site.id}</span>
-                      <span className="site-picker-meta-separator" aria-hidden="true">·</span>
-                      <span>{catalogStatusLabel(entry)}</span>
-                      {hasSiteDiscoveryMetadata(entry) ? (
-                        <span className="site-picker-start">Start reading <Icon name="arrow" size={12} /></span>
+                  <a
+                    className="site-picker-row"
+                    key={entry.site.id}
+                    href={href}
+                    onClick={(event) => followInApp(event, () => onNavigate(href))}
+                  >
+                    <span className="site-mark" aria-hidden="true">{entry.site.title.slice(0, 1).toUpperCase()}</span>
+                    <span className="site-picker-main">
+                      <strong>{entry.site.title}</strong>
+                      {entry.site.description?.trim() ? (
+                        <span className="site-picker-description">{entry.site.description}</span>
                       ) : null}
+                      <FolderCountChips entry={entry} folders={folderCounts[entry.site.id]} pending={pendingCounts.has(entry.site.id)} />
+                      <span className="site-picker-meta">
+                        <span className="mono">/{entry.site.id}</span>
+                        <span className="site-picker-meta-separator" aria-hidden="true">·</span>
+                        <span>{catalogStatusLabel(entry)}</span>
+                        {hasSiteDiscoveryMetadata(entry) ? (
+                          <span className="site-picker-start">Start reading <Icon name="arrow" size={12} /></span>
+                        ) : null}
+                      </span>
                     </span>
-                  </span>
-                  {hasSiteDiscoveryMetadata(entry) && entry.fullTextUrl ? (
-                    <span className="site-picker-badge" title="Page text can be searched in this site">Page text search</span>
-                  ) : null}
-                  {hasSiteDiscoveryMetadata(entry) ? null : <Icon name="arrow" size={16} />}
-                </a>
+                    {hasSiteDiscoveryMetadata(entry) && entry.fullTextUrl ? (
+                      <span className="site-picker-badge" title="Page text can be searched in this site">Page text search</span>
+                    ) : null}
+                    {hasSiteDiscoveryMetadata(entry) ? null : <Icon name="arrow" size={16} />}
+                  </a>
                 )
               })}
             </div>

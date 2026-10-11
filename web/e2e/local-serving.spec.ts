@@ -512,10 +512,10 @@ test('site cards show the description, page counts per top-level folder and a St
   await expect(page.getByRole('heading', { name: 'Choose a site' })).toBeVisible()
 
   // Deterministic order: by site title (case-insensitive), not by registry order.
-  await expect(page.locator('.site-picker-row strong')).toHaveText(['Drafts', 'Flat site', 'Guide', 'handbook', 'Wide'])
+  await expect(page.locator('.site-picker-main strong')).toHaveText(['Drafts', 'Flat site', 'Guide', 'handbook', 'Wide'])
 
   // Start reading opens the root README when the site's top level has one, and the site home otherwise.
-  const handbook = page.getByRole('link', { name: /handbook/ })
+  const handbook = page.locator('a.site-picker-row[href="/handbook/README.md"]')
   await expect(handbook).toHaveAttribute('href', '/handbook/README.md')
   await expect(page.getByRole('link', { name: /Guide/ })).toHaveAttribute('href', '/guide')
   await expect(page.getByRole('link', { name: /Flat site/ })).toHaveAttribute('href', '/flat')
