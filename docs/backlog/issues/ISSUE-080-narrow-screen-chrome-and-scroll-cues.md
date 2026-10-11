@@ -1,6 +1,6 @@
 # On narrow screens the permanent rail and two-row toolbar take reading space, and wide tables and code scroll without a cue
 
-- Status: In progress
+- Status: Done
 - Assignee: Claude
 - Priority: P2
 - Area: Reader shell at narrow widths (`web/src/styles.css`, `web/src/components/ArtifactWorkspace.tsx`, `MarkdownArtifact.tsx`)
@@ -32,11 +32,15 @@ Chosen from the Storybook `Concepts/Reader UX 2026-10`/ISSUE-080 stories: varian
 - [x] At 390 px the permanent rail is replaced by a lighter affordance (for example one top-bar control for the drawer) so the document uses the full width when the drawer is closed; the rail remains at wider widths. Decided: a menu button opens the drawer.
 - [x] The toolbar fits one row at 390 px (overflow actions move into the existing menu), with a menu button and a single row (decided); icon-only controls keep accessible names.
 - [x] Scrollable regions the reader owns (Markdown tables, code blocks) show an edge shadow plus the existing hint when content is clipped (decided); no cues are injected into HTML artifact frames (decided).
-- [ ] Verified by a Playwright case at 390 px (viewport emulation) and then checked once on a real phone or device emulator; record which.
+- [x] Verified by a Playwright case at 390 px (viewport emulation) and then checked once on a real phone or device emulator; record which. Recorded: emulated check on production (see below); no physical device.
 - [x] No horizontal page scroll at 390 px (existing behavior kept).
 
 ## Resolution (2026-10-11)
 
 - Implemented per the owner decision: at up to 620 px the rail is not rendered, a menu button opens the drawer, and the single-row header holds the path, a search button and a More menu (`ReaderMoreMenu.tsx`) with Contents, Details, Pin, Copy link, Open raw artifact, site home, All sites and the theme choices. Folder pages and the not-found view use the same bar; the skip link and the page text search chip are unchanged.
 - Markdown tables and code blocks get an edge shadow per clipped side (`domain/scroll-edges.ts`, `.scroll-cue` in `styles.css`) plus the existing table hint; nothing is injected into HTML frames. Specification: Main pane section.
-- Verification: unit tests in `web/src/domain/scroll-edges.test.mjs`; Playwright cases at 390 px (the "narrow chrome and scroll cues (ISSUE-080)" group and the updated narrow cases) use viewport emulation only. The one-time real phone or device-emulator check is still open (it keeps this item In progress). Stories: `Product/Workspace` (Narrow ...) and `Product/Markdown scroll cues`.
+- Verification: unit tests in `web/src/domain/scroll-edges.test.mjs`; Playwright cases at 390 px (the "narrow chrome and scroll cues (ISSUE-080)" group and the updated narrow cases) use viewport emulation only. The one-time check was done on production after `web/v0.2.0` was deployed (see Production check). Stories: `Product/Workspace` (Narrow ...) and `Product/Markdown scroll cues`.
+
+## Production check (2026-10-11)
+
+On the owner's instruction the check was done by Claude in desktop Chrome, with artifact-pages.dev (web 0.2.0) loaded in a 390 x 780 px same-origin iframe; this is device emulation by width, not a physical phone (no touch events, browser chrome or safe areas). Checked: single-row bar with menu button, path, search and More; no horizontal page scroll (`scrollWidth` 390); More menu lists Contents, Details, Pin, Copy link, Open raw artifact, site home, All sites and theme, and closes on an outside tap; the drawer opens over a dimmed page and closes after choosing a page; Contents opens as a popover with the heading list. The Architecture object map is wider than the phone inside its HTML frame, which is the known content feedback for the docs repository.
