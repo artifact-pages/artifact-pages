@@ -998,7 +998,7 @@ func TestPublishAdvancesOnlyTheNamedCatalogGroup(t *testing.T) {
 }
 
 func TestValidateSourcePathRejectsReservedFirstSegments(t *testing.T) {
-	for _, value := range []string{"_previews/a.md", "_search/a.md", "_search/deep/a.html"} {
+	for _, value := range []string{"_previews/a.md", "_previews/x.md", "_search/a.md", "_search/deep/a.html"} {
 		if err := validateSourcePath(value); err == nil || !strings.Contains(err.Error(), "reserved") {
 			t.Errorf("validateSourcePath(%q) = %v, want reserved-segment error", value, err)
 		}
