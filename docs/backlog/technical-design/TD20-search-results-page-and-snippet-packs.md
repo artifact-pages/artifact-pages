@@ -2,7 +2,7 @@
 
 - Status: Open
 - Phase: Reusable distribution
-- Decision: Pending owner (proposed, waiting for the owner's decision). The recommendation below is the author's, not a decision.
+- Decision: Direction accepted by the owner on 2026-10-11 (results page, build-time packs); pack size and h4 remain open (see Open questions).
 - Related design: [TD2](TD2-component-release-policy.md) (additive schema changes), [TD19](TD19-navigation-metadata-in-the-site-index.md) (index metadata; same additive approach)
 - Subsumes: [ISSUE-085](../issues/ISSUE-085-page-text-search-snippets.md) (snippets). Builds on [ISSUE-077](../issues/ISSUE-077-fulltext-results-unranked.md) (reader-side ranking).
 - Origin: owner feedback of 2026-10-11 on the live sites.
@@ -105,6 +105,19 @@ Slice 1 ships value without any format change, and is accepted churn: it is rebu
 3. ISSUE-085 (Claude): snippet and heading extraction from packs, the match navigator, truncation and over-cap fallback, body-hit ordering.
 
 Older CLIs: a pre-change CLI builds only v1 objects. On a site that already has `text-` or `sections-` objects it either converges back to v1 (reconciliation deletes search keys missing from its desired set, `site_publish.go`) or fails closed, because its publish-state validation rejects state rows for those keys (`validateSitePublishRow`). Operators upgrade the CLI before the first republish. This is acceptable under 0.x (TD2). The settled format wording will live in `docs/architecture/fulltext-search.md`.
+
+## Owner decision (2026-10-11)
+
+The owner chose the results page (option A over snippets in the sidebar) and build-time packs over fetching pages at runtime, after reviewing this monthly cost estimate (estimates; third-party price summaries except the CloudFront Japan request rate; assumed ~3 requests/60 KB per page view and per-query figures measured from the live v1 index):
+
+| Monthly views / searches | Cloudflare (R2 + cache) | AWS v1 | AWS + packs | AWS + runtime page fetch |
+| --- | --- | --- | --- | --- |
+| 2k / 500 | $0 | $0 | $0 | $0 |
+| 100k / 20k | $0 | $0 | $0 | $0 |
+| 5M / 1M | $0 | ~$13 | ~$15 | ~$39 |
+| 20M / 5M | $0 | ~$140 | ~$165 | ~$360 |
+
+AWS figures are CloudFront pay-as-you-go (Japan) after the free 10M requests and 1 TB, plus CloudFront Functions; WAF adds about $0.60 per million requests. On Cloudflare the choice does not change cost; packs mainly cut round trips there.
 
 ## Open questions for the owner
 
