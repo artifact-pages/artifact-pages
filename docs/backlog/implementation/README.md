@@ -40,7 +40,7 @@ Decided 2026-10-10 in [TD18](../technical-design/TD18-admin-provided-site-workfl
 | --- | --- | --- | --- |
 | [IMP-73](IMP-73-registry-setup-command.md) | In progress | Codex | Generate admin workflows and derive AWS per-site roles from config at runtime; released-component and live-provider acceptance remain separate gates. |
 | [IMP-74](IMP-74-aws-oidc-subject-alignment.md) | Done | Codex | Both legacy and ID-qualified subjects are accepted only as explicit exact allowlist entries; AWS examples and verification use the observed ID-qualified form. |
-| [IMP-75](IMP-75-migrate-operator-repositories.md) | Open | Codex | `admin` and `docs` adopt the admin-provided workflows. |
+| [IMP-75](IMP-75-migrate-operator-repositories.md) | In progress | Codex | Admin migration merged at `218ff797`; docs workflow migration and hosted preview/publish acceptance remain pending after CLI v0.3.0 release. |
 | [IMP-76](IMP-76-retire-private-config-fixture.md) | In progress | Codex | Retire the private-config fixture, App and workflow. |
 
 ## Optional operator-managed edge policy
