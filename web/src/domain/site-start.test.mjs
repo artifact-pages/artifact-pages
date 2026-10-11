@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { compareSites, siteStartPath } from './site-start.ts'
+import { compareSites, ownValue, siteStartPath } from './site-start.ts'
 
 const site = (id, title) => ({ site: { id, title } })
 const order = (sites) => [...sites].sort(compareSites).map((entry) => entry.site.id)
@@ -23,4 +23,11 @@ test('the start path is the root README, with the directory-page preference', ()
 test('a site without a root README has no start path, even when a folder has one', () => {
   assert.equal(siteStartPath([{ path: 'en/README.md' }, { path: 'guide.md' }]), undefined)
   assert.equal(siteStartPath([]), undefined)
+})
+
+test('record lookups by site ID ignore inherited properties', () => {
+  const startPaths = { guide: 'README.md' }
+  assert.equal(ownValue(startPaths, 'guide'), 'README.md')
+  for (const id of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) assert.equal(ownValue(startPaths, id), undefined)
+  assert.equal(ownValue({ constructor: 'README.md' }, 'constructor'), 'README.md')
 })

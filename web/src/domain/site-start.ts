@@ -23,3 +23,8 @@ export function siteStartPath(artifacts: readonly ArtifactIndexEntry[]): string 
   const rootPages = artifacts.filter((artifact) => !artifact.path.includes('/'))
   return findIndexArtifact(rootPages)?.path
 }
+
+/** Reads a site-ID-keyed record without inheriting from Object.prototype (`constructor` is a valid site ID). */
+export function ownValue<T>(record: Readonly<Record<string, T>>, key: string): T | undefined {
+  return Object.prototype.hasOwnProperty.call(record, key) ? record[key] : undefined
+}

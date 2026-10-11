@@ -3,7 +3,7 @@ import type { ThemeMode } from '../domain/theme'
 import { artifactCountLabel } from '../domain/site-count-label'
 import { hasSiteDiscoveryMetadata, type SiteCatalogEntry } from '../domain/index'
 import { folderChipKey, folderChipLabel, folderSummaryText, summarizeFolders, type FolderCount } from '../domain/site-folder-counts'
-import { compareSites } from '../domain/site-start'
+import { compareSites, ownValue } from '../domain/site-start'
 import { artifactRouteHref } from '../routing'
 import { useSiteFolderCounts } from '../data/use-site-folder-counts'
 import { CommandPalette, type PaletteCommand } from './CommandPalette'
@@ -109,7 +109,7 @@ export function SitePicker({
           ) : (
             <div className="site-picker-list">
               {sortedSites.map((entry) => {
-                const startPath = hasSiteDiscoveryMetadata(entry) ? startPaths[entry.site.id] : undefined
+                const startPath = hasSiteDiscoveryMetadata(entry) ? ownValue(startPaths, entry.site.id) : undefined
                 const href = startPath === undefined ? `/${encodeURIComponent(entry.site.id)}` : artifactRouteHref(entry.site.id, startPath)
                 return (
                   <a
@@ -124,7 +124,7 @@ export function SitePicker({
                       {entry.site.description?.trim() ? (
                         <span className="site-picker-description">{entry.site.description}</span>
                       ) : null}
-                      <FolderCountChips entry={entry} folders={folderCounts[entry.site.id]} pending={pendingCounts.has(entry.site.id)} />
+                      <FolderCountChips entry={entry} folders={ownValue(folderCounts, entry.site.id)} pending={pendingCounts.has(entry.site.id)} />
                       <span className="site-picker-meta">
                         <span className="mono">/{entry.site.id}</span>
                         <span className="site-picker-meta-separator" aria-hidden="true">·</span>
