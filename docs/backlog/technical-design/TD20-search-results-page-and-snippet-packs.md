@@ -61,7 +61,7 @@ Up to about 20 extra requests per page of results, each the full HTML or Markdow
 
 The indexer already extracts each document's text for v1. It additionally:
 
-1. **Splits each document into sections at h1–h3** (the levels the `toc` already uses). A section is a heading text, the heading's anchor id (the same id that `toc` records; a heading without an id, or any text before the first heading, joins the preceding section or the lead section with no anchor) and the section's text. The text is normalised with the same `Normalize` as the index, so the browser matches query terms against it exactly as the core does, and `text-highlight.ts` keeps working for the destination page.
+1. **Splits each document into sections at h1–h3** (the levels the `toc` already uses). A section is a heading text, the heading's anchor id (the same id that `toc` records; a heading without an id, or any text before the first heading, joins the preceding section or the lead section with no anchor) and the section's text. The text is the section's display text with only whitespace folded (amended 2026-10-12, owner: excerpts show the original text, not the lowercased NFKC form); the browser normalises it per grapheme cluster at match time and maps highlights back to the display text, as specified in `docs/architecture/fulltext-search.md` (Reader procedure). `text-highlight.ts` keeps working for the destination page.
 2. **Writes a section table**: per document, an ordered list of `(heading, anchor, pack, offset, length)`.
 3. **Writes text packs**: section text concatenated into gzip objects `/_indexes/<site>/search/text-<sha256>.gz`.
 
