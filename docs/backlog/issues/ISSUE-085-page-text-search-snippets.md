@@ -6,7 +6,7 @@
 
 ## Blocker
 
-Blocked on [TD20](../technical-design/TD20-search-results-page-and-snippet-packs.md): the snippet format and the results page are undecided. TD20 proposes this issue as its slice 3 (snippets and match navigator, Claude) after the format slice (Codex).
+Blocked on [IMP-77](../implementation/IMP-77-fulltext-section-table-and-text-packs.md)'s format contract and golden fixtures (Codex). [TD20](../technical-design/TD20-search-results-page-and-snippet-packs.md) direction is accepted (2026-10-11) and the results page shipped in ISSUE-087; once the contract merges, the reader side (snippets, headings, body-hit ordering) proceeds in parallel with the Go writer. Package WS1 in [workstreams](../workstreams.md#current-work-packages-2026-10-11).
 
 ## Problem
 
