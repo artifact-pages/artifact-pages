@@ -3381,9 +3381,24 @@ test('published preview documents stay out of production browsing and the site-h
   expect(previewRequests).toContain('/_previews/showcase/catalog.json')
   expect(previewRequests).toContain(`/_previews/showcase/revisions/${previewHeadSha}/manifest.json`)
 
-  await page.getByRole('button', { name: 'View previews' }).click()
+  const viewPreviews = page.getByRole('link', { name: 'View previews' })
+  await expect(viewPreviews).toHaveAttribute('href', '/showcase/_previews')
+  const [previewsTab] = await Promise.all([
+    page.context().waitForEvent('page'),
+    viewPreviews.click({ modifiers: ['ControlOrMeta'] }),
+  ])
+  await expectTabLocation(previewsTab, '/showcase/_previews')
+  await previewsTab.close()
+  await expect(page).toHaveURL('/showcase')
+
+  await viewPreviews.click()
   await expect(page).toHaveURL('/showcase/_previews')
   await expect(page.getByRole('region', { name: 'Preview pr:701' })).toBeVisible()
+  // The time names its zone and keeps the full-precision UTC instant.
+  const previewTime = page.getByRole('region', { name: 'Preview pr:701' }).locator('time')
+  await expect(previewTime).toHaveAttribute('datetime', '2026-09-27T00:00:00.000Z')
+  await expect(previewTime).toHaveAttribute('title', '2026-09-27 00:00:00 UTC')
+  await expect(previewTime).toHaveText(/\d{4}, \d{1,2}:\d{2} [AP]M \S+$/)
   await expect(page.getByRole('link', { name: previewOnlyTitle })).toBeVisible()
   expect(previewRequests).toContain('/_previews/showcase/catalog.json')
   expect(previewRequests).toContain(`/_previews/showcase/revisions/${previewHeadSha}/manifest.json`)
@@ -3483,7 +3498,7 @@ test('site home reports empty preview availability and the empty page explains h
   await page.goto('/sre')
   await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
   await expect(page.getByRole('status')).toHaveText('There are no available previews for this site.')
-  const previewEntry = page.getByRole('button', { name: 'View previews' })
+  const previewEntry = page.getByRole('link', { name: 'View previews' })
   await expect(previewEntry).toHaveAttribute('aria-disabled', 'true')
   await expect(previewEntry).toHaveAccessibleDescription('There are no available previews for this site.')
   await expect(page.getByText(/^Previews are review copies of changed documents/)).toBeVisible()
@@ -3504,7 +3519,7 @@ test('site home reports empty preview availability and the empty page explains h
 test('site home keeps the preview entry active when previews exist', async ({ page }) => {
   await page.goto('/sre')
   await expect(page.getByRole('status')).toContainText('listed.')
-  const previewEntry = page.getByRole('button', { name: 'View previews' })
+  const previewEntry = page.getByRole('link', { name: 'View previews' })
   await expect(previewEntry).toBeEnabled()
   await previewEntry.click()
   await expect(page).toHaveURL('/sre/_previews')
@@ -3525,7 +3540,7 @@ test('preview list loading does not block returning to the site', async ({ page 
   })
 
   await page.goto('/sre')
-  await page.getByRole('button', { name: 'View previews' }).click()
+  await page.getByRole('link', { name: 'View previews' }).click()
   await catalogStarted
   await expect(page.getByRole('status')).toHaveText('Loading previews…')
   try {

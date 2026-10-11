@@ -452,7 +452,7 @@ Target layout:
 
 ### Site home
 
-/:site uses discovery metadata for the site picker and loads the active site's artifact index from its `artifactIndexUrl`; it initially presents recent artifacts, expected to start with roughly the latest 10 entries. It has no inline filter: a "Jump to a page… ⌘ K" button opens the command palette, and a quiet link leads to the site's Previews list.
+/:site uses discovery metadata for the site picker and loads the active site's artifact index from its `artifactIndexUrl`; it initially presents recent artifacts, expected to start with roughly the latest 10 entries. It has no inline filter: a "Jump to a page… ⌘ K" button opens the command palette, and a quiet "View previews" link (a real `<a href="/:site/_previews">`, like every navigating row; it is not an inert button) leads to the site's Previews list. When the site has no previews the link stays in place but is marked `aria-disabled` and does not navigate.
 
 The site picker marks sites that publish page text search. Below nine sites it lists them without a separate search trigger; ⌘ K still opens site search.
 
@@ -481,6 +481,8 @@ When the query is not blank, the palette also offers "Search page text for …" 
 Every row that navigates is a real link (`<a href>` to its logical route): site picker cards, Recently updated and Browse rows on the site home, sidebar Browse and Pinned items, page text search results, and breadcrumb menu entries. Only a plain primary click is handled in the app; ⌘/Ctrl/Shift/Alt-click, middle-click and "copy link address" keep the browser's behavior. A link's `href` already carries the committed `?q=` wherever following it in the app would (within the same site, never to previews). Counts read "1 artifact" and "N artifacts".
 
 The tab title reads from the most specific page to its container, joined by " · ": an artifact is "<artifact title> · <site title>", a site home is "<site title>", the site picker is "Git Artifact Pages", the Previews list is "Previews · <site title>", a preview document is "<document title> · Previews · <site title>", and a not-found page inside a site is "Page not found · <site title>". Pages outside any site (loading, error and not-found states) end with "· Git Artifact Pages". The site title is the registered name; the site ID stands in until the registry has loaded.
+
+The Previews list shows each group's update time in the reader's local zone with the zone named (for example "Oct 11, 2026, 3:03 PM GMT+9"). The time is a `<time datetime>` element whose `title` gives the full-precision UTC instant, so a reviewer in another zone can tell when a preview was built.
 
 ⌘ B (Ctrl B) toggles the sidebar, ⌘ K opens the palette and ⌘ ⇧ F focuses page text search from anywhere in the app, including while keyboard focus is inside an HTML artifact's frame. "Copy link" (the header button and the palette command) copies the document's link without the reader's `?q=` search and with its fragment; the committed search is personal context, not part of the document.
 

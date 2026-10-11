@@ -80,6 +80,6 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-081](ISSUE-081-reader-shell-skip-link-and-document-language.md) | Open | P3 | The reader shell has no skip link and keeps `lang="en"` on Japanese documents. |
 | [ISSUE-082](ISSUE-082-no-previous-next-navigation.md) | Blocked | P3 | Pages have no previous/next navigation at the end (blocked on ISSUE-076 and TD19). |
 | [ISSUE-083](ISSUE-083-unknown-urls-return-http-200.md) | Open | P3 | Unknown URLs return HTTP 200 with the app shell (soft 404). |
-| [ISSUE-084](ISSUE-084-previews-entry-and-timestamp-polish.md) | Open | P3 | "View previews" is a button, and preview times carry no timezone. |
+| [ISSUE-084](ISSUE-084-previews-entry-and-timestamp-polish.md) | Done | P3 | "View previews" is a button, and preview times carry no timezone. |
 
 ISSUE-013's verified completion record is retained in Git history.

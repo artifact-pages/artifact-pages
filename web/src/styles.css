@@ -1354,6 +1354,7 @@ mark {
   padding: 0;
   color: var(--text-tertiary);
   font-size: 12px;
+  text-decoration: none;
 }
 
 .site-home-preview-link:hover {

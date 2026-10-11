@@ -34,6 +34,7 @@ export function SiteHome({
 }) {
   const [previewAvailability, setPreviewAvailability] = useState<PreviewAvailabilityState>({ status: 'loading' })
   const hasPreviewEntry = Boolean(onOpenPreviews)
+  const previewsHref = `/${encodeURIComponent(index.site.id)}/_previews`
   const noPreviews = previewAvailability.status === 'success' && previewAvailability.count === 0
   const showRecentSection = index.artifacts.length >= RECENT_SECTION_MINIMUM_ARTIFACT_COUNT
   const recentArtifacts = useMemo(
@@ -81,12 +82,15 @@ export function SiteHome({
         </p>
         {onOpenPreviews ? (
           <div className="site-home-preview">
-            <button
+            <a
               className="site-home-preview-link"
-              onClick={noPreviews ? undefined : onOpenPreviews}
+              href={noPreviews ? undefined : previewsHref}
+              role={noPreviews ? 'link' : undefined}
+              tabIndex={noPreviews ? 0 : undefined}
+              onClick={noPreviews ? (event) => event.preventDefault() : (event) => followInApp(event, () => onOpenPreviews?.())}
               aria-disabled={noPreviews ? 'true' : undefined}
               aria-describedby={noPreviews ? 'site-home-preview-status' : undefined}
-            >View previews{noPreviews ? null : <> <span aria-hidden="true">→</span></>}</button>
+            >View previews{noPreviews ? null : <> <span aria-hidden="true">→</span></>}</a>
             <p className="site-home-preview-status" id="site-home-preview-status" role="status">
               {previewAvailability.status === 'loading'
                 ? 'Checking preview availability…'
