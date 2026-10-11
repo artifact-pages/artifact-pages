@@ -32,3 +32,11 @@ test('a folder path offers the pages under it, and unrelated paths offer nothing
 test('suggestions are capped', () => {
   assert.equal(nearbyArtifacts(artifacts, 'guide/en/nope.html', 1).length, 1)
 })
+
+test('non-ASCII path segments match decoded paths and titles', () => {
+  const pages = [
+    { id: 'a', path: 'guide/ja/公開手順.html', title: '公開手順' },
+    { id: 'b', path: 'guide/ja/概要.html', title: '概要' },
+  ]
+  assert.equal(nearbyArtifacts(pages, 'guide/ja/公開手順-旧')[0].id, 'a')
+})

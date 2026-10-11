@@ -235,6 +235,8 @@ export function MarkdownArtifact({
 
   useEffect(() => () => clearSearchHighlight(document), [])
 
+  const language = useMemo(() => source === null ? undefined : detectMarkdownLanguage(source), [source])
+
   if (error) {
     return (
       <div className="markdown-state" role="alert">
@@ -243,8 +245,6 @@ export function MarkdownArtifact({
       </div>
     )
   }
-
-  const language = useMemo(() => source === null ? undefined : detectMarkdownLanguage(source), [source])
 
   if (source === null) {
     return <div className="markdown-state" role="status">Loading document…</div>

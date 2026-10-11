@@ -3500,6 +3500,7 @@ test('site home reports empty preview availability and the empty page explains h
   await expect(page.getByRole('status')).toHaveText('There are no available previews for this site.')
   const previewEntry = page.getByRole('link', { name: 'View previews' })
   await expect(previewEntry).toHaveAttribute('aria-disabled', 'true')
+  await expect(previewEntry).not.toHaveAttribute('href')
   await expect(previewEntry).toHaveAccessibleDescription('There are no available previews for this site.')
   await expect(page.getByText(/^Previews are review copies of changed documents/)).toBeVisible()
   await previewEntry.focus()
@@ -5766,6 +5767,12 @@ test.describe('reader shell polish', () => {
     await page.goto('/sre/reports/latency-retrospective.md')
     await expect(page.getByTestId('markdown-document')).toBeVisible()
     await expect(page.getByTestId('markdown-document')).not.toHaveAttribute('lang', /.+/)
+  })
+
+  test('a Markdown artifact that fails to load shows the unavailable message', async ({ page }) => {
+    await page.route('**/_artifacts/sre/runbooks/service-recovery.md', (route) => route.fulfill({ status: 404, body: 'gone' }))
+    await page.goto('/sre/runbooks/service-recovery.md')
+    await expect(page.getByRole('alert')).toContainText('Markdown unavailable')
   })
 
   test('a missing page is not indexable and suggests similar pages', async ({ page }) => {

@@ -14,7 +14,7 @@
 export function normalizeLanguageTag(value: string | null | undefined): string | undefined {
   const tag = value?.trim()
   if (!tag || tag.length > 35) return undefined
-  if (!/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(tag)) return undefined
+  if (!/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{1,8})*$/.test(tag)) return undefined
   return tag
 }
 
@@ -28,13 +28,30 @@ const LETTER = /\p{L}/gu
  * least a third of its letters. Fenced code and inline code are ignored.
  */
 export function detectMarkdownLanguage(source: string): string | undefined {
-  const prose = source
-    .replace(/^ {0,3}(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:\n {0,3}\1[`~]*[ \t]*(?:\n|$)|$)/gm, '\n')
-    .replace(/`[^`\n]*`/g, '')
+  const prose = withoutCode(source)
   const letters = prose.match(LETTER)?.length ?? 0
   if (letters === 0) return undefined
   const kana = prose.match(KANA)?.length ?? 0
   if (kana === 0) return undefined
   const japanese = prose.match(JAPANESE_LETTER)?.length ?? 0
   return japanese / letters >= 1 / 3 ? 'ja' : undefined
+}
+
+/** Drops fenced code blocks (``` or ~~~, closed or running to the end of the text) and inline code. */
+function withoutCode(source: string) {
+  const kept: string[] = []
+  let fence: { char: string, length: number } | null = null
+  for (const line of source.split('\n')) {
+    const marker = /^ {0,3}(`{3,}|~{3,})/.exec(line)
+    if (fence) {
+      if (marker && marker[1][0] === fence.char && marker[1].length >= fence.length && /^\s*$/.test(line.slice(marker[0].length))) fence = null
+      continue
+    }
+    if (marker) {
+      fence = { char: marker[1][0], length: marker[1].length }
+      continue
+    }
+    kept.push(line)
+  }
+  return kept.join('\n').replace(/`[^`\n]*`/g, '')
 }
