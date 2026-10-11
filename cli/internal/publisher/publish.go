@@ -50,6 +50,17 @@ type Result struct {
 	InvalidationPaths []string                               `json:"invalidationPaths,omitempty"`
 	SourceDirty       bool                                   `json:"sourceDirty,omitempty"`
 	BuildSkipped      bool                                   `json:"buildSkipped,omitempty"`
+	LegacyControl     *LegacyControl                         `json:"legacyControl,omitempty"`
+}
+
+type LegacyControl struct {
+	PublishState *LegacyControlRecord `json:"publishState,omitempty"`
+	CacheRetry   *LegacyControlRecord `json:"cacheRetry,omitempty"`
+}
+
+type LegacyControlRecord struct {
+	Detail    string `json:"detail"`
+	BackupKey string `json:"backupKey"`
 }
 
 func DeployApp(ctx context.Context, backend DeploymentBackend, options AppDeployOptions) (Result, error) {

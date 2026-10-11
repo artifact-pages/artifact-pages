@@ -224,14 +224,14 @@ func checkStoredFormats(ctx context.Context, backend ConditionalObjectBackend, r
 			return err
 		}
 		if !present || record.Pending {
-			failures = append(failures, site.ID+": unknown; republish required")
+			failures = append(failures, site.ID+": unknown; republish with: artifact-pages site sync --site "+site.ID)
 		} else if err := checkSiteRecordCompleteness(ctx, backend, site.ID, record); err != nil {
 			if !errors.Is(err, errUnknownVersions) {
 				return err
 			}
 			failures = append(failures, site.ID+": "+err.Error())
 		} else if err := compat.CheckReads(reads, record.Writes); err != nil {
-			failures = append(failures, site.ID+": republish required: "+err.Error())
+			failures = append(failures, site.ID+": republish with: artifact-pages site sync --site "+site.ID+": "+err.Error())
 		}
 	}
 	if len(failures) > 0 && !acceptBreaking {

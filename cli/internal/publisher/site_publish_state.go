@@ -25,6 +25,7 @@ const (
 )
 
 var (
+	errSiteControlLegacyFormat  = errors.New("legacy site control format")
 	sitePublishStateHashPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 	sitePublishStateSearchBlob  = regexp.MustCompile(`^(root|leaf)-[0-9a-f]{64}\.gz$`)
 )
@@ -55,6 +56,10 @@ type sitePublishObject struct {
 
 func absentSitePublishGeneration(site string) string {
 	return sha256Hex([]byte("artifact-pages-publish-state-absent\x00" + site))
+}
+
+func legacySitePublishGeneration(site, etag string) string {
+	return sha256Hex([]byte("artifact-pages-publish-state-legacy\x00" + site + "\x00" + etag))
 }
 
 // encodeSitePublishState validates and serializes state as deterministic gzip
@@ -307,9 +312,20 @@ func validateSitePublishState(state sitePublishState, site string) error {
 	return nil
 }
 
+type siteControlLegacyFormatError struct {
+	Site   string
+	Record string
+	Detail string
+}
+
+func (err *siteControlLegacyFormatError) Error() string {
+	return fmt.Sprintf("site %q %s uses an older prerelease control format (%s)", err.Site, err.Record, err.Detail)
+}
+
+func (err *siteControlLegacyFormatError) Unwrap() error { return errSiteControlLegacyFormat }
+
 func sitePrivateControlFormatResetError(site, record, detail string) error {
-	return fmt.Errorf("site %q %s is not in the current prerelease control format (%s); after backing up and confirming no publish or cache retry is in progress, reset only %s and %s, then retry (this command will not delete control records)",
-		site, record, detail, sitePublishStateKey(site), siteCacheRetryKey(site))
+	return &siteControlLegacyFormatError{Site: site, Record: record, Detail: detail}
 }
 
 func validateSitePublishRow(site string, row sitePublishObject) error {

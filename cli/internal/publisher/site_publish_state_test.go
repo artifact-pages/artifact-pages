@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -70,10 +71,21 @@ func TestSitePublishStateRejectsOldSchemaOneShapeWithScopedResetGuidance(t *test
 	compressed := gzipForTest(t, plain)
 	info := stateInfoForBytes(compressed, "sre", inputRoot, generation)
 	_, err := decodeSitePublishState("sre", info, compressed)
-	for _, exactKey := range []string{sitePublishStateKey("sre"), siteCacheRetryKey("sre")} {
-		if err == nil || !strings.Contains(err.Error(), exactKey) {
-			t.Fatalf("old schema-one shape error = %v; want target-scoped reset guidance including %s", err, exactKey)
-		}
+	if err == nil || !errors.Is(err, errSiteControlLegacyFormat) ||
+		!strings.Contains(err.Error(), "site \"sre\" publish-state uses an older prerelease control format (missing committed generation)") {
+		t.Fatalf("old schema-one shape error = %v; want classified legacy format", err)
+	}
+	var legacyErr *siteControlLegacyFormatError
+	if !errors.As(err, &legacyErr) || legacyErr.Site != "sre" || legacyErr.Record != "publish-state" || legacyErr.Detail != "missing committed generation" {
+		t.Fatalf("legacy error details = %#v; want selected site, record, and detail", legacyErr)
+	}
+}
+
+func TestLegacySitePublishGenerationUsesDomainSeparatedETag(t *testing.T) {
+	const site, etag = "sre", `"legacy-etag"`
+	want := sha256Hex([]byte("artifact-pages-publish-state-legacy\x00" + site + "\x00" + etag))
+	if got := legacySitePublishGeneration(site, etag); got != want {
+		t.Fatalf("legacy generation = %q; want %q", got, want)
 	}
 }
 
@@ -85,9 +97,9 @@ func TestSitePublishStateHeadRejectsOldSchemaOneMetadataMissingGeneration(t *tes
 	}
 	info := sitePublishStateInfo(object, `"missing-generation"`)
 	delete(info.Metadata, "artifact-pages-publish-generation")
-	if err := validateSitePublishStateHead(state.Site, info); err == nil ||
-		!strings.Contains(err.Error(), sitePublishStateKey(state.Site)) || !strings.Contains(err.Error(), siteCacheRetryKey(state.Site)) {
-		t.Fatalf("old schema-one HEAD shape error = %v; want selected-site reset guidance", err)
+	if err := validateSitePublishStateHead(state.Site, info); err == nil || !errors.Is(err, errSiteControlLegacyFormat) ||
+		!strings.Contains(err.Error(), "missing committed generation") {
+		t.Fatalf("old schema-one HEAD shape error = %v; want classified legacy format", err)
 	}
 }
 

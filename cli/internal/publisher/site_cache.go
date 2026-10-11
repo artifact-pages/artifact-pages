@@ -16,10 +16,15 @@ import (
 )
 
 type siteCacheRetry struct {
-	SchemaVersion int                     `json:"schemaVersion"`
-	Site          string                  `json:"site,omitempty"`
-	Paths         []string                `json:"paths"`
-	Transaction   *sitePublishTransaction `json:"transaction,omitempty"`
+	SchemaVersion   int                     `json:"schemaVersion"`
+	Site            string                  `json:"site,omitempty"`
+	Paths           []string                `json:"paths"`
+	Transaction     *sitePublishTransaction `json:"transaction,omitempty"`
+	legacyRecord    bool
+	legacyDetail    string
+	legacyBytes     []byte
+	legacyObject    Object
+	legacyBackupKey string
 }
 
 type sitePublishTransaction struct {
@@ -102,7 +107,17 @@ func readSiteCacheRetry(ctx context.Context, backend ConditionalObjectBackend, s
 		return siteCacheRetry{}, "", errors.New("site cache retry record paths must be an array")
 	}
 	if rawSite, ok := envelope["site"]; !ok || !rawJSONKind(rawSite, "string") {
-		return siteCacheRetry{}, "", sitePrivateControlFormatResetError(site, "cache-retry record", "missing selected-site field")
+		legacyErr := sitePrivateControlFormatResetError(site, "cache-retry record", "missing selected-site field")
+		var paths []string
+		if err := json.Unmarshal(envelope["paths"], &paths); err != nil || validateSiteCacheRetryPaths(site, paths) != nil {
+			return siteCacheRetry{}, "", unfinishedSiteCacheRetryError(site, legacyErr)
+		}
+		return siteCacheRetry{
+			SchemaVersion: version, Site: site, Paths: paths,
+			legacyRecord: true, legacyDetail: "missing selected-site field",
+			legacyBytes: append([]byte(nil), object.Bytes...), legacyObject: cloneSiteControlObject(object),
+			legacyBackupKey: siteLegacyCacheRetryBackupKey(site, object.Bytes),
+		}, etag, nil
 	}
 	var recordedSite string
 	if err := json.Unmarshal(envelope["site"], &recordedSite); err != nil || recordedSite != site {
@@ -125,23 +140,8 @@ func readSiteCacheRetry(ctx context.Context, backend ConditionalObjectBackend, s
 	if record.Site != site {
 		return record, "", errors.New("site cache retry record does not match the selected site")
 	}
-	if len(record.Paths) == 0 {
-		return record, "", errors.New("invalid site cache retry record: paths must be non-empty")
-	}
-	for i, p := range record.Paths {
-		decoded, err := url.PathUnescape(p)
-		if err != nil || strings.ContainsAny(p, "?#*") ||
-			!(strings.HasPrefix(decoded, "/_artifacts/"+site+"/") || decoded == "/_indexes/"+site+"/index.json" || decoded == "/_indexes/"+site+"/meta.json" || strings.HasPrefix(decoded, "/_indexes/"+site+"/search/") || decoded == "/_previews/"+site+"/catalog.json") {
-			return record, "", errors.New("site cache retry record contains an out-of-scope path")
-		}
-		for _, segment := range strings.Split(decoded, "/") {
-			if segment == "." || segment == ".." {
-				return record, "", errors.New("site cache retry record contains a traversal path")
-			}
-		}
-		if i > 0 && record.Paths[i-1] >= p {
-			return record, "", errors.New("site cache retry paths must be sorted and unique")
-		}
+	if err := validateSiteCacheRetryPaths(site, record.Paths); err != nil {
+		return record, "", err
 	}
 	if record.Transaction != nil {
 		if err := validateSitePublishTransaction(site, *record.Transaction); err != nil {
@@ -155,10 +155,23 @@ func validateSiteCacheRetryRecord(site string, record siteCacheRetry) error {
 	if record.SchemaVersion != siteCacheRetrySchemaVersion || record.Site != site {
 		return errors.New("site cache retry record has an invalid schema or site")
 	}
-	if record.Paths == nil {
+	if err := validateSiteCacheRetryPaths(site, record.Paths); err != nil {
+		return err
+	}
+	if record.Transaction != nil {
+		return validateSitePublishTransaction(site, *record.Transaction)
+	}
+	return nil
+}
+
+func validateSiteCacheRetryPaths(site string, paths []string) error {
+	if paths == nil {
 		return errors.New("site cache retry paths must be an array")
 	}
-	for i, p := range record.Paths {
+	if len(paths) == 0 {
+		return errors.New("invalid site cache retry record: paths must be non-empty")
+	}
+	for i, p := range paths {
 		decoded, err := url.PathUnescape(p)
 		if err != nil || strings.ContainsAny(p, "?#*") ||
 			!(strings.HasPrefix(decoded, "/_artifacts/"+site+"/") || decoded == "/_indexes/"+site+"/index.json" || decoded == "/_indexes/"+site+"/meta.json" || strings.HasPrefix(decoded, "/_indexes/"+site+"/search/") || decoded == "/_previews/"+site+"/catalog.json") {
@@ -169,12 +182,9 @@ func validateSiteCacheRetryRecord(site string, record siteCacheRetry) error {
 				return errors.New("site cache retry record contains a traversal path")
 			}
 		}
-		if i > 0 && record.Paths[i-1] >= p {
+		if i > 0 && paths[i-1] >= p {
 			return errors.New("site cache retry paths must be sorted and unique")
 		}
-	}
-	if record.Transaction != nil {
-		return validateSitePublishTransaction(site, *record.Transaction)
 	}
 	return nil
 }
