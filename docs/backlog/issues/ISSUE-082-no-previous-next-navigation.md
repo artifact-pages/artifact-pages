@@ -1,12 +1,12 @@
 # Pages have no previous/next navigation at the end
 
-- Status: Blocked
+- Status: Won't fix
 - Priority: P3
 - Area: Reader page footer (`web/src/components/ArtifactWorkspace.tsx`)
 
-## Blocker
+## Why this will not be pursued
 
-Blocked on [ISSUE-076](ISSUE-076-pages-sorted-alphabetically-by-title.md) and [TD19](../technical-design/TD19-navigation-metadata-in-the-site-index.md): a pager needs an author-defined order, which the index does not carry. Unblock when ISSUE-076 lands.
+Owner decision, 2026-10-11 ([TD19](../technical-design/TD19-navigation-metadata-in-the-site-index.md)): the reader follows GitHub's repository file browser, which has no previous/next links, and no order metadata is added to the index. Without an author-defined order a pager would walk an arbitrary sequence. The underlying need (what to read after this page) is covered by [ISSUE-086](ISSUE-086-pages-have-no-related-pages-list.md), a related-pages list at the bottom of a page, which supersedes this issue.
 
 ## Problem
 
@@ -18,13 +18,13 @@ From the 2026-10-11 competitive review (hands-on DOM and screenshot checks of li
 
 Confirmed in code: the reader renders no such control; the neighbours of a page are not computed anywhere in `web/src`. The only sibling listing is the breadcrumb menu (`ArtifactBreadcrumbs.tsx:299-315`).
 
-Dependency: the sequence is meaningless until pages have an author-defined order. With the current title order (see [ISSUE-076](ISSUE-076-pages-sorted-alphabetically-by-title.md)) a pager would send readers through an arbitrary sequence. Do not ship before ISSUE-076 and [TD19](../technical-design/TD19-navigation-metadata-in-the-site-index.md).
+## Original proposal (not pursued)
 
-## Expected outcome
+### Expected outcome
 
 At the end of a page the reader can continue to the previous or next page in the site's tree order, with titles shown.
 
-## Acceptance criteria
+### Acceptance criteria (not pursued)
 
 - [ ] After the order from TD19 exists, each page offers previous and next links following the sidebar tree order within the site (depth-first, skipping directory pages), with titles; the first and last pages show only one.
 - [ ] It is reachable by keyboard and works for HTML artifacts, whose content sits in an iframe (the control lives in the shell, outside the frame; placement is decided in the issue so it does not require scrolling inside the frame).
