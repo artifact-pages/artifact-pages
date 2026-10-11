@@ -32,7 +32,7 @@ jobs:
           mode: preview
 <<if eq .Provider "cloudflare">>
     env:
-<<range .PreviewCloudflareEnv>>      <<.>>: ${{ secrets.<<.>> }}
+<<range .CloudflareEnv>>      <<.>>: ${{ secrets.<<.>> }}
 <<end>><<end>>
   preview-without-environment:
     if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && inputs.environment == '' }}
@@ -49,5 +49,5 @@ jobs:
           mode: preview
 <<if eq .Provider "cloudflare">>
     env:
-<<range .PreviewCloudflareEnv>>      <<.>>: ${{ secrets.<<.>> }}
+<<range .CloudflareEnv>>      <<.>>: ${{ secrets.<<.>> }}
 <<end>><<end>>

@@ -190,45 +190,6 @@ func TestCloudflareGenerationIsDeterministicCheckableAndLocal(t *testing.T) {
 	}
 }
 
-func TestPreviewWorkflowOmitsAPITokenWhenConfigNamesR2Credentials(t *testing.T) {
-	root := t.TempDir()
-	writeFixture(t, root, cloudflareConfig, "")
-	if _, err := runFixture(t, root, "cloudflare", false); err != nil {
-		t.Fatalf("generate Cloudflare files: %v", err)
-	}
-	snapshot := generatedSnapshot(t, root, "cloudflare")
-	preview := string(snapshot[".github/workflows/preview-site.yml"])
-	for _, name := range []string{"CF_ACCESS", "CF_SECRET"} {
-		if !strings.Contains(preview, name+": ${{ secrets."+name+" }}") {
-			t.Errorf("preview workflow does not map its configured R2 credential %s", name)
-		}
-	}
-	if strings.Contains(preview, "CF_API_TOKEN") {
-		t.Fatal("preview workflow maps the API-only token despite explicit R2 credential variable names")
-	}
-	for _, path := range []string{".github/workflows/publish-site.yml", ".github/workflows/registry.yml"} {
-		if !strings.Contains(string(snapshot[path]), "CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}") {
-			t.Errorf("%s does not retain the Cloudflare API token mapping", path)
-		}
-	}
-}
-
-func TestPreviewWorkflowRetainsAPITokenCredentialDerivationFallback(t *testing.T) {
-	root := t.TempDir()
-	config := strings.ReplaceAll(cloudflareConfig, "  accessKeyIdEnv: CF_ACCESS\n", "")
-	config = strings.ReplaceAll(config, "  secretAccessKeyEnv: CF_SECRET\n", "")
-	writeFixture(t, root, config, "")
-	if _, err := runFixture(t, root, "cloudflare", false); err != nil {
-		t.Fatalf("generate Cloudflare files: %v", err)
-	}
-	preview := string(generatedSnapshot(t, root, "cloudflare")[".github/workflows/preview-site.yml"])
-	for _, name := range []string{"CF_R2_ACCESS_KEY_ID", "CF_R2_SECRET_ACCESS_KEY", "CF_API_TOKEN"} {
-		if !strings.Contains(preview, name+": ${{ secrets."+name+" }}") {
-			t.Errorf("preview workflow does not preserve the token-only credential fallback variable %s", name)
-		}
-	}
-}
-
 func TestAWSGenerationUsesPlainTerraformRoleMapAndSafeLookup(t *testing.T) {
 	root := t.TempDir()
 	terraformOutput := `{"docs":"arn:aws:iam::123456789012:role/site/docs","guide":"arn:aws:iam::123456789012:role/site/guide"}`
