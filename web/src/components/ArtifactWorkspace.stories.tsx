@@ -25,13 +25,14 @@ function viewArtifactPath(view: WorkspaceStoryArgs['view']) {
   switch (view) {
     case 'site-home': return undefined
     case 'markdown': return 'runbooks/service-recovery.md'
+    case 'retrospective': return 'reports/latency-retrospective.md'
     case 'not-found': return MISSING_PAGE_PATH
     default: return 'incidents/checkout-latency/index.html'
   }
 }
 
 type WorkspaceStoryArgs = {
-  view: 'site-home' | 'artifact' | 'markdown' | 'not-found'
+  view: 'site-home' | 'artifact' | 'markdown' | 'retrospective' | 'not-found'
   theme: ThemeMode
   initialSidebarOpen: boolean
 }
@@ -104,7 +105,7 @@ const meta = {
   argTypes: {
     view: {
       control: 'radio',
-      options: ['site-home', 'artifact', 'markdown', 'not-found'],
+      options: ['site-home', 'artifact', 'markdown', 'retrospective', 'not-found'],
       description: 'Choose the main workspace state.',
     },
     theme: {
@@ -149,4 +150,45 @@ export const SidebarCollapsed: Story = {
 export const PageNotFound: Story = {
   name: 'Page not found',
   args: { view: 'not-found' },
+}
+
+// Narrow reader chrome (ISSUE-080): the viewport is 390 px wide, so the 620 px media rules apply.
+const narrowViewport = { viewport: { value: 'mobile1' } }
+
+function openMoreMenu({ canvasElement }: { canvasElement: HTMLElement }) {
+  window.requestAnimationFrame(() => {
+    canvasElement.ownerDocument.querySelector<HTMLButtonElement>('button[aria-label="More actions"]')?.click()
+  })
+}
+
+export const NarrowArtifact: Story = {
+  name: 'Narrow · More menu closed',
+  args: { view: 'retrospective', initialSidebarOpen: false, theme: 'light' },
+  globals: narrowViewport,
+}
+
+export const NarrowMoreMenuOpen: Story = {
+  name: 'Narrow · More menu open',
+  args: { view: 'retrospective', initialSidebarOpen: false, theme: 'light' },
+  globals: narrowViewport,
+  play: openMoreMenu,
+}
+
+export const NarrowMoreMenuOpenDark: Story = {
+  name: 'Narrow · More menu open · dark',
+  args: { view: 'retrospective', initialSidebarOpen: false, theme: 'dark' },
+  globals: narrowViewport,
+  play: openMoreMenu,
+}
+
+export const NarrowDrawerOpen: Story = {
+  name: 'Narrow · drawer open',
+  args: { view: 'retrospective', initialSidebarOpen: true, theme: 'light' },
+  globals: narrowViewport,
+}
+
+export const NarrowNotFound: Story = {
+  name: 'Narrow · page not found',
+  args: { view: 'not-found', initialSidebarOpen: false },
+  globals: narrowViewport,
 }

@@ -76,7 +76,7 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-077](ISSUE-077-fulltext-results-unranked.md) | Done | P1 | Page text search results are unranked, have no snippets, and mix languages. |
 | [ISSUE-078](ISSUE-078-landing-page-has-no-orientation.md) | In progress | P1 | The landing page offers only "Choose a site": no orientation, alphabetical cards, double-counted translations. |
 | [ISSUE-079](ISSUE-079-palette-cannot-find-other-page-headings.md) | Done | P2 | The command palette cannot find headings of other pages. |
-| [ISSUE-080](ISSUE-080-narrow-screen-chrome-and-scroll-cues.md) | Open | P2 | On narrow screens the permanent rail and two-row toolbar take reading space, and wide tables and code scroll without a cue. |
+| [ISSUE-080](ISSUE-080-narrow-screen-chrome-and-scroll-cues.md) | In progress | P2 | On narrow screens the permanent rail and two-row toolbar take reading space, and wide tables and code scroll without a cue. |
 | [ISSUE-081](ISSUE-081-reader-shell-skip-link-and-document-language.md) | Done | P3 | The reader shell has no skip link and keeps `lang="en"` on Japanese documents. |
 | [ISSUE-082](ISSUE-082-no-previous-next-navigation.md) | Blocked | P3 | Pages have no previous/next navigation at the end (blocked on ISSUE-076 and TD19). |
 | [ISSUE-083](ISSUE-083-unknown-urls-return-http-200.md) | In progress | P3 | Unknown URLs return HTTP 200 with the app shell (soft 404). |
