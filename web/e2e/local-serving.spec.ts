@@ -488,6 +488,7 @@ test('site cards show the description, page counts per top-level folder and a St
     { id: 'drafts', name: 'Drafts', description: 'Not yet published.' },
     { id: 'flat', name: 'Flat site', description: 'Pages without folders.' },
     { id: 'guide', name: 'Guide', description: 'Start here.' },
+    { id: 'handbook', name: 'handbook', description: 'Has a root README.' },
     { id: 'wide', name: 'Wide', description: 'Many folders.' },
   ].map((site) => ({ ...site, repository: `acme/${site.id}`, sourcePath: `sites/${site.id}` }))
   await page.route('**/_indexes/sites.json', (route) => route.fulfill(json({ schemaVersion: 1, sites })))
@@ -498,6 +499,10 @@ test('site cards show the description, page counts per top-level folder and a St
   await page.route('**/_indexes/guide/index.json', (route) => route.fulfill(json(index('guide', [
     'en/a.html', 'en/b.html', 'en/deep/c.html', 'ja/a.html', 'ja/b.html',
   ]))))
+  await page.route('**/_indexes/handbook/meta.json', (route) => route.fulfill(json(meta('handbook', 3))))
+  await page.route('**/_indexes/handbook/index.json', (route) => route.fulfill(json(index('handbook', [
+    'en/README.md', 'README.md', 'ja/a.html',
+  ]))))
   await page.route('**/_indexes/wide/meta.json', (route) => route.fulfill(json(meta('wide', 5))))
   await page.route('**/_indexes/wide/index.json', (route) => route.fulfill(json(index('wide', [
     'a/1.html', 'b/1.html', 'c/1.html', 'd/1.html', 'e/1.html',
@@ -505,6 +510,15 @@ test('site cards show the description, page counts per top-level folder and a St
 
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Choose a site' })).toBeVisible()
+
+  // Deterministic order: by site title (case-insensitive), not by registry order.
+  await expect(page.locator('.site-picker-row strong')).toHaveText(['Drafts', 'Flat site', 'Guide', 'handbook', 'Wide'])
+
+  // Start reading opens the root README when the site's top level has one, and the site home otherwise.
+  const handbook = page.getByRole('link', { name: /handbook/ })
+  await expect(handbook).toHaveAttribute('href', '/handbook/README.md')
+  await expect(page.getByRole('link', { name: /Guide/ })).toHaveAttribute('href', '/guide')
+  await expect(page.getByRole('link', { name: /Flat site/ })).toHaveAttribute('href', '/flat')
 
   const guide = page.getByRole('link', { name: /Guide/ })
   await expect(guide.locator('.site-picker-description')).toHaveText('Start here.')
@@ -534,6 +548,9 @@ test('site cards show the description, page counts per top-level folder and a St
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
   await expect(guide.locator('.site-picker-start')).toBeVisible()
 
+  await handbook.locator('.site-picker-start').click()
+  await expect(page).toHaveURL(/\/handbook\/README\.md$/u)
+  await page.goBack()
   await guide.locator('.site-picker-start').click()
   await expect(page).toHaveURL(/\/guide$/u)
 })
