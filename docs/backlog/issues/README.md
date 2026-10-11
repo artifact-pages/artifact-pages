@@ -68,7 +68,7 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-069](ISSUE-069-cloudflare-edge-rewrites-artifact-html.md) | Done | P1 | Cloudflare edge features (email obfuscation and similar) rewrite delivered artifact HTML; the module must disable them for the hostname. |
 | [ISSUE-070](ISSUE-070-pr-dry-run-source-ref-noise.md) | Done | P3 | PR dry-runs can align `source.ref` with production through a metadata-ref override. |
 | [ISSUE-071](ISSUE-071-remote-config-auth-error-unclear.md) | Done | P2 | A private deployment config the token cannot read fails with an unactionable HTTP status. |
-| [ISSUE-072](ISSUE-072-modified-click-tab-and-route-fetch-e2e-flaky.md) | In progress | P2 | Modified-click new-tab and route.fetch e2e tests fail intermittently under parallel load. |
+| [ISSUE-072](ISSUE-072-modified-click-tab-and-route-fetch-e2e-flaky.md) | Done | P2 | Modified-click new-tab and route.fetch e2e tests fail intermittently under parallel load. |
 | [ISSUE-073](ISSUE-073-palette-enter-uses-stale-selection.md) | Done | P2 | Pressing Enter right after typing in the command palette can do nothing or open the wrong page (regression from #34). |
 | [ISSUE-074](ISSUE-074-shallow-clone-test-tempdir-cleanup-flaky.md) | Done | P3 | Shallow-clone Go test failed once on TempDir cleanup, likely a detached `git maintenance` gc after fetch. |
 | [ISSUE-075](ISSUE-075-directory-routes-have-no-page.md) | Done | P1 | Directory routes have no page: folder URLs show "Page not found" and tree folders only toggle. |
