@@ -2,10 +2,21 @@ import { spawnSync } from 'node:child_process'
 import process from 'node:process'
 import { E2E_STORAGE_ROOT, prepareE2eStorage } from './prepare-e2e-storage.mjs'
 
-const projectName = 'git-artifact-pages-e2e'
+const projectName = process.env.E2E_COMPOSE_PROJECT_NAME ?? 'git-artifact-pages-e2e'
 const port = process.env.E2E_PORT ?? '4174'
+const workerCount = process.env.E2E_WORKERS
 const baseURL = `http://127.0.0.1:${port}`
 let exitCode = 1
+
+if (!/^[a-z0-9][a-z0-9_-]*$/.test(projectName)) {
+  console.error(`E2E_COMPOSE_PROJECT_NAME must start with a lowercase letter or digit and contain only lowercase letters, digits, dashes, or underscores; received "${projectName}".`)
+  process.exit(1)
+}
+
+if (workerCount !== undefined && (!/^\d+$/.test(workerCount) || !Number.isSafeInteger(Number(workerCount)) || Number(workerCount) < 1)) {
+  console.error(`E2E_WORKERS must be a positive integer; received "${workerCount}".`)
+  process.exit(1)
+}
 
 if (!/^\d{1,5}$/.test(port) || Number(port) < 1 || Number(port) > 65535) {
   console.error(`E2E_PORT must be a TCP port between 1 and 65535; received "${port}".`)
@@ -64,7 +75,13 @@ try {
   } else if (!(await waitForServer())) {
     console.error(`The local nginx test server did not become available at ${baseURL}.`)
   } else {
-    exitCode = run(process.execPath, ['node_modules/@playwright/test/cli.js', 'test', '--config', 'web/playwright.config.ts'], {
+    // Separate Playwright output paths as well as Compose resources for concurrent runs.
+    const playwrightArgs = [
+      'node_modules/@playwright/test/cli.js', 'test', '--config', 'web/playwright.config.ts',
+      '--output', `test-results/${projectName}`,
+    ]
+    if (workerCount !== undefined) playwrightArgs.push('--workers', workerCount)
+    exitCode = run(process.execPath, playwrightArgs, {
       PLAYWRIGHT_BASE_URL: baseURL,
     })
   }

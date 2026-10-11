@@ -22,6 +22,7 @@
     "test:palette-sections": "node --experimental-transform-types --no-warnings --test scripts/palette-sections.test.mjs",
     "test:reader-shell": "node --experimental-transform-types --no-warnings --test web/src/domain/*.test.mjs",
     "test:schema-versions": "node --experimental-transform-types --no-warnings --test web/src/data/supported-schema-versions.test.mjs",
+    "test:web-unit": "npm run test:text-highlight && npm run test:palette-sections && npm run test:reader-shell && npm run test:schema-versions",
     "package:web": "node scripts/package-web.mjs",
     "preview": "vite preview --config web/vite.config.ts",
     "serve:local": "npm run build && docker compose up",
