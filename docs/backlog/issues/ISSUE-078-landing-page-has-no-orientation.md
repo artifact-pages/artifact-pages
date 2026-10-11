@@ -22,6 +22,10 @@ Design point, hypothesis to check before implementing: both sites keep translati
 
 A visitor can tell what the deployment is, which site to open first, and how large each site really is.
 
+## Owner decision (2026-10-11)
+
+Chosen from the Storybook `Concepts/Reader UX 2026-10`/ISSUE-078 stories: variant A. Site cards show the registry description, page counts per top-level folder (for example `en 7 · ja 7`) and a "Start reading" link to the site home. No translation-detection rule is introduced: counts are per top-level folder, without claiming those folders are translations. A per-site start page waits for TD19 or a new config field. No operator intro text (variant B) for now.
+
 ## Acceptance criteria
 
 - [ ] The landing page states what the deployment is (operator-provided text or a short default) and marks a start point. Where the start point comes from (registry config such as a featured or ordered site list, or the site description) is decided in the issue; if it needs registry or config schema changes, split a CLI-side follow-up (Codex-owned).

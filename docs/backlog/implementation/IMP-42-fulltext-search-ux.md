@@ -23,6 +23,8 @@ Once the interaction is agreed, create a site client using `createSiteFullTextSe
 
 ## Agreed interaction (2026-10-02)
 
+Amended 2026-10-11 by the owner: result order changes from path-ordered folder groups to a ranked list with a match reason, per [ISSUE-077](../issues/ISSUE-077-fulltext-results-unranked.md). The rest of this interaction is unchanged.
+
 Finding pages and searching their text are separate surfaces, each with one behavior:
 
 - **Find by name — ⌘ K palette.** Typing searches titles and paths immediately, as before. The All / Recent / Pinned / Previews tabs are removed. A blank palette lists Pinned, then the reader's Recently read pages, then commands; it falls back to the ranked page list when both are empty. Pins and reads still boost ranking. When the site supports page text search and the query is not blank, a "Search page text for …" row follows the page matches (it is the default selection when no page name matches) and ⌘ ↵ hands the query over at any time. Previews moved to the site-home link and an "Open previews" command.
