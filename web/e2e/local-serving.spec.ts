@@ -150,7 +150,14 @@ async function expectModifiedClickKeptForBrowser(page: Page, link: Locator) {
   const records = () => page.evaluate(() => (window as unknown as { __probe: ClickRecord[] }).__probe)
   await expect.poll(async () => (await records()).length).toBe(1)
   expect((await records())[0]).toMatchObject({ type: 'click', button: 0, modified: true, defaultPrevented: false })
-  await page.evaluate(() => (window as unknown as { __probeStop: AbortController }).__probeStop.abort())
+  await page.evaluate(() => {
+    const w = window as unknown as { __probe?: ClickRecord[], __probeStop?: AbortController }
+    w.__probeStop?.abort()
+    delete w.__probe
+    delete w.__probeStop
+  })
+  // A delayed in-app navigation would show up within a short window; require the URL to stay put.
+  await page.waitForTimeout(500)
   expect(page.url()).toBe(urlBefore)
   expect(page.context().pages().length).toBe(pagesBefore)
 }
