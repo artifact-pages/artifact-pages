@@ -1,8 +1,12 @@
 # Page text search results show no match snippet
 
-- Status: Open
+- Status: Blocked
 - Priority: P3
 - Area: Page text search results (`web/src/components/PageTextSearch.tsx`); search format (`cli/internal/fulltext`, Codex-owned)
+
+## Blocker
+
+Blocked on [TD20](../technical-design/TD20-search-results-page-and-snippet-packs.md): the snippet format and the results page are undecided. TD20 proposes this issue as its slice 3 (snippets and match navigator, Claude) after the format slice (Codex).
 
 ## Problem
 
