@@ -24,16 +24,19 @@ Relations based on the link graph (outgoing links and backlinks) would need an i
 
 ## Acceptance criteria
 
-- [ ] Selection rule: candidates are same-folder sibling pages plus pages whose title or headings (`toc`) are similar to the current page's. Siblings and similar pages are merged into one ranked list.
-- [ ] Deterministic: the same index and page always give the same list in the same order (ties broken by path). The current page is never included.
-- [ ] Capped count (the issue decides the number, about 5), with each entry showing the title and its folder when it differs from the current page's.
-- [ ] Works with no siblings (a root page, or a one-page folder): similarity can still fill the list; with no candidates the section is not rendered.
-- [ ] Translations kept in parallel folders (`en/`, `ja/`) do not dominate: prefer pages under the same top-level folder, and do not fill the list with the same page's counterpart in another folder. No language detection is added.
-- [ ] Unit tests for the selector: sibling-only, similarity-only, mixed, no candidates, cap, tie-breaking, current page excluded, parallel `en/`/`ja/` folders.
-- [ ] e2e: the list appears below an HTML artifact and a Markdown artifact, links navigate, it is reachable by keyboard, and it does not require scrolling inside the artifact iframe (the control lives in the shell).
-- [ ] Specification updated with the selection rule.
-- [ ] Narrow-screen layout checked at 390 px, no horizontal page scroll.
+- [x] Selection rule: candidates are same-folder sibling pages plus pages whose title or headings (`toc`) are similar to the current page's. Siblings and similar pages are merged into one ranked list.
+- [x] Deterministic: the same index and page always give the same list in the same order (ties broken by path). The current page is never included.
+- [x] Capped count (the issue decides the number, about 5), with each entry showing the title and its folder when it differs from the current page's.
+- [x] Works with no siblings (a root page, or a one-page folder): similarity can still fill the list; with no candidates the section is not rendered.
+- [x] Translations kept in parallel folders (`en/`, `ja/`) do not dominate: prefer pages under the same top-level folder, and do not fill the list with the same page's counterpart in another folder. No language detection is added.
+- [x] Unit tests for the selector: sibling-only, similarity-only, mixed, no candidates, cap, tie-breaking, current page excluded, parallel `en/`/`ja/` folders.
+- [x] e2e: the list appears at the end of a Markdown page, links navigate, it is reachable by keyboard, and it is absent on an HTML artifact (revised by the owner decision below: HTML artifacts get no list).
+- [x] Specification updated with the selection rule.
+- [x] Narrow-screen layout checked at 390 px, no horizontal page scroll.
 
 ## Progress
 
 - 2026-10-11 (Claude): the pure selector landed in `web/src/domain/related-pages.ts` with unit tests (sibling-only, similarity-only, mixed, no candidates, cap, tie-breaking, current page excluded, parallel `en/`/`ja/`). Score: +4 same folder, +2 same top-level folder, plus title/heading token overlap (CJK bigrams); a non-sibling needs overlap of at least 2; the same relative path under another top-level folder is dropped. Placement awaits the owner's choice among three concept stories (`Concepts/Reader UX 2026-10/ISSUE-086 related pages`); the reader is not wired yet. Finding for the owner: the HTML iframe fills the stage and scrolls inside itself, so an end-of-page block is not reachable without scrolling in the iframe unless the shell adds a strip under the frame or sizes the frame to its document; the Contents-panel placement is unaffected.
+
+- 2026-10-12 (owner decision): placement A, a "Read next" list at the end of Markdown pages only. HTML artifacts get no related-pages UI at all: a shell strip under the frame was tried (concept #102) and rejected; variants B and C are rejected. This supersedes the acceptance criteria that asked for a list below HTML artifacts.
+- 2026-10-12 (Claude): shipped in the PR for this issue. `web/src/components/ReadNext.tsx` renders the selector's result after the Markdown article (inside the scrolling region, via `MarkdownArtifact`'s `footer`), with title, folder label when it differs from the page's folder, and a reason chip (Same folder / Similar topic). Links are real `<a href>` with the in-app click convention (`followInApp`: modified clicks keep browser behavior). Not rendered when there are no related pages, on HTML artifacts, on a folder's README shown inside a directory page (the directory page is itself the list), or on the search results page. The UI is English-only, so the heading is "Read next". The selector now memoises per-entry profiles and documents that the en/ja counterpart rule is path-based and checks only the top-level folder; tests added for current-id exclusion, filler-only titles and missing `toc`. e2e covers Markdown, HTML and 390 px. The selection rule is recorded in `docs/specification.md`. Status stays In progress until verified in production after the next web release.

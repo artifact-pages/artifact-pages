@@ -6815,3 +6815,54 @@ test.describe('narrow chrome and scroll cues (ISSUE-080)', () => {
     await expect(moreActionsButton(page)).toHaveCount(0)
   })
 })
+
+// ISSUE-086: a "Read next" list ends Markdown pages only; HTML artifacts get none.
+test.describe('read next list', () => {
+  test('ends a Markdown page, links in-app and is keyboard reachable', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.goto('/sre/reports/latency-retrospective.md')
+    const document = page.getByTestId('markdown-document')
+    await expect(document.getByRole('heading', { level: 2, name: 'Outcome at a glance' })).toBeVisible()
+    const readNext = document.getByTestId('read-next')
+    await expect(readNext.getByRole('heading', { level: 2, name: 'Read next' })).toBeVisible()
+
+    // It sits after the article content, inside the scrolling region.
+    const afterArticle = await document.evaluate((scroll) => {
+      const article = scroll.querySelector('article')!
+      const list = scroll.querySelector('[data-testid="read-next"]')!
+      return Boolean(article.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING) && !article.contains(list)
+    })
+    expect(afterArticle).toBe(true)
+
+    const link = readNext.getByRole('link', { name: /Checkout latency incident review/ })
+    await expect(link).toHaveAttribute('href', '/sre/incidents/checkout-latency/index.html')
+    await expect(link).toContainText('incidents/checkout-latency/')
+    await link.focus()
+    await expect(link).toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect(page).toHaveURL(/\/sre\/incidents\/checkout-latency\/index\.html$/u)
+    await expect(page.locator('iframe.artifact-frame')).toBeVisible()
+  })
+
+  test('is absent on an HTML artifact and on a Markdown page without related pages', async ({ page }) => {
+    await page.goto('/sre/incidents/checkout-latency/index.html')
+    await expect(page.locator('iframe.artifact-frame')).toBeVisible()
+    await expect(page.getByTestId('read-next')).toHaveCount(0)
+
+    await page.goto('/sre/runbooks/service-recovery.md')
+    await expect(page.getByTestId('markdown-document')).toBeVisible()
+    await expect(page.getByTestId('read-next')).toHaveCount(0)
+  })
+
+  test('fits a 390px viewport without horizontal page scroll', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 800 })
+    await page.goto('/sre/reports/latency-retrospective.md')
+    const readNext = page.getByTestId('read-next')
+    await readNext.scrollIntoViewIfNeeded()
+    await expect(readNext).toBeVisible()
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+    expect(overflow).toBeLessThanOrEqual(0)
+    const box = await readNext.boundingBox()
+    expect(box!.x + box!.width).toBeLessThanOrEqual(390)
+  })
+})

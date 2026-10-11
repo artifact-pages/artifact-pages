@@ -10,6 +10,8 @@ import { ThemeSwitcher } from './ThemeSwitcher'
 import { ReaderMoreMenu, type ReaderMoreMenuItem } from './ReaderMoreMenu'
 import { NARROW_CHROME_QUERY, useMediaQuery } from './useMediaQuery'
 import { MarkdownArtifact } from './MarkdownArtifact'
+import { ReadNext } from './ReadNext'
+import { relatedPages } from '../domain/related-pages'
 import { MatchNavigator } from './MatchNavigator'
 import { SEARCH_PAGE_INPUT_ID, SearchResultsPage } from './SearchResultsPage'
 import { usePageTextSearch } from './usePageTextSearch'
@@ -661,6 +663,12 @@ export function ArtifactWorkspace({
     })
   }, [directoryFrameHeight])
 
+  // "Read next" (ISSUE-086) ends Markdown pages only: not HTML artifacts, and not a folder's
+  // README shown inside a directory page (that page is itself the list of what to read).
+  const readNextItems = useMemo(
+    () => currentArtifact && currentFormat === 'markdown' ? relatedPages(index.artifacts, currentArtifact.path) : [],
+    [currentArtifact, currentFormat, index.artifacts],
+  )
   const artifactView = bodyArtifact && currentFormat === 'markdown' ? (
     <MarkdownArtifact
       key={bodyArtifact.artifactUrl}
@@ -670,6 +678,7 @@ export function ArtifactWorkspace({
       navigate={(href) => navigate(href)}
       highlightQuery={highlightQuery}
       onMatches={reportMatches}
+      footer={readNextItems.length > 0 ? <ReadNext items={readNextItems} siteId={index.site.id} navigate={(href) => navigateWithinWorkspace(href)} /> : undefined}
     />
   ) : bodyArtifact && htmlArtifactUrl ? (
     <iframe
