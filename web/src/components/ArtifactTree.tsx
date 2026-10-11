@@ -360,6 +360,11 @@ function matches(artifact: ArtifactIndexEntry, query: string) {
   return [artifact.title, artifact.path, artifact.filename ?? ''].some((text) => text.toLocaleLowerCase().includes(query))
 }
 
+/** Whether the sidebar's title and path filter lists the artifact (`query` lower-cased and trimmed). */
+export function artifactMatchesFilter(artifact: ArtifactIndexEntry, query: string) {
+  return matches(artifact, query)
+}
+
 function matchReason(artifact: ArtifactIndexEntry, query: string) {
   const text = artifact.path.toLocaleLowerCase().includes(query)
     ? artifact.path

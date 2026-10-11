@@ -44,8 +44,9 @@ function useLocation() {
     setUrl({ pathname: window.location.pathname, search: window.location.search, hash: window.location.hash })
   }, [url])
 
-  const navigate = useCallback((href: string) => {
-    window.history.pushState({}, '', href)
+  const navigate = useCallback((href: string, options: { replace?: boolean } = {}) => {
+    if (options.replace) window.history.replaceState(window.history.state, '', href)
+    else window.history.pushState({}, '', href)
     setUrl({ pathname: window.location.pathname, search: window.location.search, hash: window.location.hash })
   }, [])
 
@@ -171,14 +172,14 @@ function SitePage({
   theme,
   onSetThemeMode,
 }: {
-  route: Extract<AppRoute, { kind: 'site' }>
+  route: Extract<AppRoute, { kind: 'site' | 'search' }>
   sites: SiteCatalogEntry[]
   sitesLoading: boolean
   siteDiscoveryStatus: LoadingState<SiteCatalogEntry[]>['status']
   pathname: string
   search: string
   hash: string
-  navigate: (href: string) => void
+  navigate: (href: string, options?: { replace?: boolean }) => void
   themeMode: ThemeMode
   theme: ResolvedTheme
   onSetThemeMode: (mode: ThemeMode) => void

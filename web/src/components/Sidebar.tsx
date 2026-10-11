@@ -1,27 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { FullTextHit } from '../data/fulltext'
 import type { ArtifactIndexEntry, SiteIndex, SiteSummary } from '../domain/index'
 import type { ThemeMode } from '../domain/theme'
 import { artifactSourceLinks } from '../domain/source-links'
-import { artifactRouteHref } from '../routing'
+import { artifactRouteHref, searchRouteHref } from '../routing'
 import type { ArtifactRowActions } from './ArtifactTree'
-import { ArtifactTree, type TreeStyle } from './ArtifactTree'
+import { ArtifactTree, artifactMatchesFilter, type TreeStyle } from './ArtifactTree'
 import { Icon } from './Icon'
 import { siteCountLabel } from '../domain/site-count-label'
 import { ThemeSwitcher } from './ThemeSwitcher'
-import { PAGE_TEXT_SEARCH_INPUT_ID, PageTextSearchBar, PageTextSearchResults } from './PageTextSearch'
-import type { PageTextSearchState } from './usePageTextSearch'
+import { SearchFullTextRow, SidebarFilterBar } from './PageTextSearch'
 
 export type SidebarPageTextSearch = {
-  committedQuery: string
-  state: PageTextSearchState
-  scopeFolder: string | null
-  onScopeChange: (folder: string | null) => void
-  onCommit: (query: string) => void
-  onClear: () => void
-  onRetry: () => void
-  onLoadMore: () => void
-  onOpenHit: (hit: FullTextHit) => void
+  /** Opens the full-text results page for a query. */
+  onSearchFullText: (query: string) => void
 }
 
 export function Sidebar({
@@ -36,7 +27,6 @@ export function Sidebar({
   onOpenPalette,
   onOpenArtifact,
   onOpenDirectory,
-  artifactHref,
   onToast,
   themeMode,
   onSetThemeMode,
@@ -58,8 +48,6 @@ export function Sidebar({
   onOpenPalette: (seed: string) => void
   onOpenArtifact: (artifact: ArtifactIndexEntry) => void
   onOpenDirectory: (path: string) => void
-  /** Resolves a logical route to the link target a row carries (for example with `?q=` kept). */
-  artifactHref: (href: string) => string
   onToast: (message: string) => void
   themeMode: ThemeMode
   onSetThemeMode: (mode: ThemeMode) => void
@@ -70,10 +58,9 @@ export function Sidebar({
   pageTextSearch?: SidebarPageTextSearch
   treeStyle?: TreeStyle
 }) {
-  const committedQuery = pageTextSearch?.committedQuery ?? ''
-  const [draft, setDraft] = useState(committedQuery)
+  const [draft, setDraft] = useState('')
+  const filter = draft.trim()
   const sidebarRef = useRef<HTMLElement>(null)
-  const resultListRef = useRef<HTMLDivElement>(null)
   const lastRevealedRequest = useRef<number | null>(null)
   const pinned = useMemo(() => {
     const artifactsById = new Map(index.artifacts.map((artifact) => [artifact.id, artifact]))
@@ -83,12 +70,17 @@ export function Sidebar({
     ? index.artifacts.find((artifact) => artifact.path === artifactPath)?.id
     : undefined
 
-  // The URL owns the committed query; the field follows it after back/forward or a palette hand-off.
-  useEffect(() => {
-    setDraft(committedQuery)
-  }, [committedQuery])
+  const filterMatches = useMemo(() => {
+    const query = filter.toLocaleLowerCase()
+    return query ? index.artifacts.filter((artifact) => artifactMatchesFilter(artifact, query)).length : 0
+  }, [index.artifacts, filter])
 
-  const rowHref = (artifact: ArtifactIndexEntry) => artifactHref(artifactRouteHref(index.site.id, artifact.path))
+  function searchFullText(query: string) {
+    setDraft('')
+    pageTextSearch?.onSearchFullText(query)
+  }
+
+  const rowHref = (artifact: ArtifactIndexEntry) => artifactRouteHref(index.site.id, artifact.path)
 
   async function copyArtifactLink(artifact: ArtifactIndexEntry) {
     const href = new URL(artifactRouteHref(index.site.id, artifact.path), window.location.origin).href
@@ -125,7 +117,7 @@ export function Sidebar({
 
   useEffect(() => {
     if (!revealRequest || lastRevealedRequest.current === revealRequest.request) return
-    if (committedQuery) return
+    if (filter) return
 
     const browseTree = sidebarRef.current?.querySelector('.browse-tree')
     const target = Array.from(browseTree?.querySelectorAll<HTMLElement>('[data-tree-path]') ?? [])
@@ -134,7 +126,7 @@ export function Sidebar({
 
     target.scrollIntoView({ block: 'nearest' })
     lastRevealedRequest.current = revealRequest.request
-  }, [expandedPaths, committedQuery, revealRequest])
+  }, [expandedPaths, filter, revealRequest])
 
   const siteCount = sites.length
   const countLabel = siteCountLabel(siteCount)
@@ -174,17 +166,12 @@ export function Sidebar({
         </div>
 
         {pageTextSearch ? (
-          <PageTextSearchBar
+          <SidebarFilterBar
             siteTitle={index.site.title}
             draft={draft}
-            committedQuery={committedQuery}
             onDraftChange={setDraft}
-            onCommit={pageTextSearch.onCommit}
-            onClear={() => {
-              setDraft('')
-              pageTextSearch.onClear()
-            }}
-            onFocusResults={() => resultListRef.current?.querySelector<HTMLElement>('[data-text-search-item="hit"]')?.focus()}
+            onSearchFullText={searchFullText}
+            onFocusFirstMatch={() => sidebarRef.current?.querySelector<HTMLElement>('.sidebar-body .tree-artifact')?.focus()}
           />
         ) : (
           <button
@@ -206,23 +193,30 @@ export function Sidebar({
       </div>
 
       <nav className="sidebar-body" aria-label="Artifacts">
-        {pageTextSearch && committedQuery ? (
-          <PageTextSearchResults
-            index={index}
-            state={pageTextSearch.state}
-            committedQuery={committedQuery}
-            draft={draft}
-            currentArtifactId={currentArtifactId}
-            currentArtifactPath={artifactPath}
-            scopeFolder={pageTextSearch.scopeFolder}
-            onScopeChange={pageTextSearch.onScopeChange}
-            listRef={resultListRef}
-            onOpen={pageTextSearch.onOpenHit}
-            hitHref={(hit) => artifactHref(hit.href)}
-            onRetry={pageTextSearch.onRetry}
-            onLoadMore={pageTextSearch.onLoadMore}
-            onFocusInput={() => document.getElementById(PAGE_TEXT_SEARCH_INPUT_ID)?.focus()}
-          />
+        {pageTextSearch && filter ? (
+          <div className="sidebar-section filter-results">
+            <div className="sidebar-section-title">
+              <span className="sidebar-section-label"><Icon name="search" size={12} />Titles and paths</span>
+            </div>
+            {filterMatches > 0 ? (
+              <ArtifactTree
+                artifacts={index.artifacts}
+                activePath={artifactPath}
+                query={filter}
+                style={treeStyle}
+                view="tree"
+                onOpenArtifact={onOpenArtifact}
+                artifactHref={rowHref}
+              />
+            ) : (
+              <p className="sidebar-empty">No titles or paths match “{filter}”.</p>
+            )}
+            <SearchFullTextRow
+              query={filter}
+              href={searchRouteHref(index.site.id, filter)}
+              onOpen={() => searchFullText(filter)}
+            />
+          </div>
         ) : (
           <>
             {pinned.length > 0 ? (
@@ -252,7 +246,7 @@ export function Sidebar({
                   artifacts={index.artifacts}
                   activePath={artifactPath}
                   activeDirectoryPath={directoryPath}
-                  directoryHref={(directory) => artifactHref(artifactRouteHref(index.site.id, directory.path))}
+                  directoryHref={(directory) => artifactRouteHref(index.site.id, directory.path)}
                   onOpenDirectory={(directory) => onOpenDirectory(directory.path)}
                   style={treeStyle}
                   view={treeStyle === 'path-list' ? 'paths' : 'tree'}

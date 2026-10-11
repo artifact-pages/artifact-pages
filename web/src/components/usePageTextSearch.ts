@@ -26,7 +26,7 @@ export type PageTextSearchState =
 const MAX_PAGE_LIMIT = 1000
 
 /**
- * Runs the committed query against the site's full-text client. Only the latest
+ * Runs the query of the results page against the site's full-text client. Only the latest
  * query may update the state: changing or clearing it aborts the older search.
  */
 export type PageTextSearchOptions = {
@@ -39,9 +39,6 @@ export type PageTextSearchOptions = {
 export function usePageTextSearch(client: SiteFullTextSearch | undefined, query: string, options: PageTextSearchOptions = {}) {
   const optionsRef = useRef(options)
   optionsRef.current = options
-  // Folder scope of a ranked list; it belongs to one query.
-  const [scopeFolder, setScopeFolder] = useState<string | null>(null)
-  useEffect(() => setScopeFolder(null), [query])
   const [state, setState] = useState<PageTextSearchState>({ status: 'idle' })
   const [attempt, setAttempt] = useState(0)
   const moreController = useRef<AbortController | null>(null)
@@ -127,7 +124,7 @@ export function usePageTextSearch(client: SiteFullTextSearch | undefined, query:
 
   useEffect(() => () => moreController.current?.abort(), [])
 
-  return { state, retry, loadMore, scopeFolder, setScopeFolder }
+  return { state, retry, loadMore }
 }
 
 export type PageTextSearchErrorDescription = { title: string; detail: string; retryable: boolean }

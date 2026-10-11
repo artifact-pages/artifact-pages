@@ -1211,7 +1211,7 @@ test('the palette footer advertises headings only when a site is open', async ({
   footer = await open('Jump to a page in SRE')
   await expect(footer).toContainText('> commands')
   await expect(footer).toContainText('# headings')
-  await expect(footer).not.toContainText('search page text')
+  await expect(footer).not.toContainText('search full text')
   await page.keyboard.press('Escape')
 
   await page.goto('/sre/architecture/platform-topology/index.html')
@@ -1561,7 +1561,7 @@ test('blank palette lists no Commands section and hints at > # @', async ({ page
     .toHaveAttribute('placeholder', 'Search pages... (> commands, # headings, @ sites)')
 })
 
-test('typing a page name lists only Pages (and Page text), not headings or commands', async ({ page }) => {
+test('typing a page name lists only Pages (and Full text), not headings or commands', async ({ page }) => {
   // "recovery" is the title of the page "Service recovery" and also matches two headings on the open page.
   await page.goto('/sre/runbooks/service-recovery.md')
   await expect(page.locator('.markdown-scroll')).toBeVisible()
@@ -1638,7 +1638,7 @@ test('a folder with several pages is listed below the page matches and opens its
 
   await search.fill('bulk')
   const titles = await palette.locator('.palette-section-title').allTextContents()
-  expect(titles.slice(0, 3)).toEqual(['Pages', 'Page text', 'Folders'])
+  expect(titles.slice(0, 3)).toEqual(['Pages', 'Full text', 'Folders'])
   // Pages keep priority: the first Enter would open a page, not the folder.
   await expect(palette.locator('.palette-section').first().getByRole('option').first()).toHaveAttribute('aria-selected', 'true')
   const folder = palette.getByRole('option', { name: /^bulk/ })
@@ -1649,7 +1649,7 @@ test('a folder with several pages is listed below the page matches and opens its
   await expect(page.getByTestId('directory-page').getByRole('heading', { level: 1, name: 'bulk' })).toBeVisible()
 })
 
-test('page text search stays the default Enter target when only headings of other pages match', async ({ page }) => {
+test('full-text search stays the default Enter target when only headings of other pages match', async ({ page }) => {
   await registerTextSearchSite(page)
   await page.goto(`/textsearch/${CHECKOUT_PATH}`)
   await expect(page.getByRole('complementary', { name: 'Text Search navigation' })).toBeVisible()
@@ -1657,11 +1657,11 @@ test('page text search stays the default Enter target when only headings of othe
   const search = palette.getByRole('textbox', { name: PALETTE_SEARCH_LABEL })
 
   await search.fill('request path')
-  await expect(palette.locator('.palette-section-title')).toHaveText(['Page text', 'Headings in other pages'])
+  await expect(palette.locator('.palette-section-title')).toHaveText(['Full text', 'Headings in other pages'])
   await expect(palette.getByRole('option', { name: /Request path/ })).toBeVisible()
-  await expect(palette.getByRole('option', { name: /Search page text for/ })).toHaveAttribute('aria-selected', 'true')
+  await expect(palette.getByRole('option', { name: /Search full text for/ })).toHaveAttribute('aria-selected', 'true')
   await search.press('Enter')
-  await expect(page).toHaveURL(/\/textsearch\/incidents\/checkout-latency\/index\.html\?q=request(%20|\+)path$/)
+  await expect(page).toHaveURL(/\/textsearch\/_search\?q=request(%20|\+)path$/)
 })
 
 test('a one-page wrapper folder that matched only through its parent does not echo its page', async ({ page }) => {
@@ -4691,10 +4691,18 @@ test('artifact CSP blocks off-site HTTP requests when an artifact is served over
 // the SRE fixture pages, 24 bulk notes that all contain "lighthouse", and two long scroll-target pages.
 // A custom STORAGE_ROOT must be produced by that script for these tests to run.
 test.describe('page text search', () => {
+  /** The results page's field. */
   const field = (page: Page) => page.getByRole('searchbox', { name: 'Search page text in Text Search' })
+  /** The sidebar's title and path filter. */
+  const filter = (page: Page) => page.getByRole('searchbox', { name: 'Filter pages in Text Search by title or path' })
   const sidebar = (page: Page) => page.locator('.sidebar-panel')
-  const status = (page: Page) => page.locator('#page-text-search-status')
-  const hits = (page: Page) => page.locator('.page-text-result-list [data-text-search-item="hit"]')
+  const status = (page: Page) => page.locator('.search-page-count-text')
+  const hits = (page: Page) => page.locator('.search-page-results [data-hit-id]')
+  const facets = (page: Page) => page.locator('.search-page-facets .search-page-facet')
+  const matchNav = (page: Page) => page.getByRole('group', { name: 'Matches in this page' })
+  const highlightSize = (target: Page | import('@playwright/test').Frame, name = 'gap-page-text-search') => target.evaluate((highlight) => (
+    (CSS as unknown as { highlights: Map<string, Set<Range>> }).highlights.get(highlight)?.size ?? 0
+  ), name)
 
   /** Lowers the ranking threshold (test-only `window.__artifactPagesTest`) so the 24 "lighthouse" notes exceed it and the paged, path-ordered fallback is shown. */
   async function usePagedFallback(page: Page) {
@@ -4711,6 +4719,14 @@ test.describe('page text search', () => {
     return requests
   }
 
+  /** Moves the app to another URL without a reload, as back/forward would. */
+  async function changeUrl(page: Page, href: string) {
+    await page.evaluate((target) => {
+      history.pushState({}, '', target)
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    }, href)
+  }
+
   async function pressImeEnter(page: Page, variant: 'isComposing' | 'keyCode229') {
     await field(page).evaluate((input, kind) => {
       const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, isComposing: kind === 'isComposing' })
@@ -4719,18 +4735,26 @@ test.describe('page text search', () => {
     }, variant)
   }
 
-  /** Records the page text search status and alerts on every DOM change from now on. */
+  /** The facets as "label:count" strings. */
+  async function facetSummary(page: Page) {
+    return facets(page).evaluateAll((buttons) => buttons.map((button) => (
+      `${button.children[0].textContent}:${button.children[1].textContent}${button.getAttribute('aria-pressed') === 'true' ? '*' : ''}`
+    )))
+  }
+
+  /** Records the results page status and alerts on every DOM change from now on (and once at once). */
   async function startStatusRecorder(page: Page) {
     await page.evaluate(() => {
       const records: string[] = []
       const snapshot = () => {
-        const label = document.querySelector('#page-text-search-status')?.textContent ?? ''
-        const alert = document.querySelector('.sidebar-panel [role="alert"]')?.textContent
+        const label = document.querySelector('.search-page-count-text')?.textContent ?? ''
+        const alert = document.querySelector('.search-page [role="alert"]')?.textContent
         const entry = alert ? `alert: ${alert}` : `status: ${label}`
         if (records[records.length - 1] !== entry) records.push(entry)
       }
       const observer = new MutationObserver(snapshot)
       observer.observe(document.body, { childList: true, subtree: true, characterData: true })
+      snapshot()
       ;(window as unknown as { __statusRecords: string[] }).__statusRecords = records
     })
   }
@@ -4759,223 +4783,273 @@ test.describe('page text search', () => {
     await expect(page.locator('.site-picker-badge')).toHaveCount(1)
   })
 
-  test('search data is fetched only after Enter, never while typing or confirming IME input', async ({ page }) => {
+  test('the sidebar filters titles and paths without searching, and Enter opens the results page', async ({ page }) => {
     const requests = recordSearchRequests(page)
     await page.goto('/textsearch')
     await expect(page.getByRole('heading', { name: 'Text Search', exact: true })).toBeVisible()
     await expect(sidebar(page).getByRole('button', { name: 'Jump to a page in Text Search' })).toHaveCount(0)
 
-    await field(page).focus()
-    await field(page).pressSequentially('latency')
-    await expect(field(page)).toHaveValue('latency')
-    // Typing does nothing: Browse stays, no results, no URL change, no search data.
-    await expect(sidebar(page).locator('.browse-tree')).toBeVisible()
-    await expect(page.locator('.page-text-results')).toHaveCount(0)
-    await pressImeEnter(page, 'isComposing')
-    await pressImeEnter(page, 'keyCode229')
-    await expect(sidebar(page).locator('.browse-tree')).toBeVisible()
+    await filter(page).focus()
+    await filter(page).pressSequentially('latency')
+    const section = sidebar(page).locator('.filter-results')
+    await expect(section.locator('a[data-tree-path="reports/latency-retrospective.md"]')).toBeVisible()
+    // The tree is filtered by title and path; the last row leads to the results page.
+    await expect(sidebar(page).locator('.browse-tree')).toHaveCount(0)
+    const fullTextRow = section.getByRole('link', { name: /Search full text for “latency”/ })
+    await expect(fullTextRow).toHaveAttribute('href', '/textsearch/_search?q=latency')
+    // Typing, and an IME conversion's Enter, search nothing and change nothing.
     await expect(page).toHaveURL(/\/textsearch$/)
     expect(requests).toEqual([])
+    // ↓ moves from the field to the first title match.
+    await page.keyboard.press('ArrowDown')
+    await expect(section.locator('a[data-tree-path]').first()).toBeFocused()
+    await filter(page).focus()
 
-    await field(page).press('Enter')
-    await expect(page).toHaveURL(/\/textsearch\?q=latency$/)
+    await filter(page).press('Enter')
+    await expect(page).toHaveURL(/\/textsearch\/_search\?q=latency$/)
     await expect(status(page)).toHaveText('5 pages contain “latency”')
+    // The results page is ready to refine, and the sidebar is back to browsing.
+    await expect(field(page)).toHaveValue('latency')
+    await expect(field(page)).toBeFocused()
+    await expect(filter(page)).toHaveValue('')
+    await expect(sidebar(page).locator('.browse-tree')).toBeVisible()
     expect(requests[0]).toBe('/_indexes/textsearch/search/manifest.json')
     expect(requests.every((pathname) => pathname.startsWith('/_indexes/textsearch/search/'))).toBe(true)
 
-    // Editing after a search dims the previous results until Enter; it fetches nothing.
-    const committedRequestCount = requests.length
-    await field(page).fill('lighthouse')
-    // The hint is shown, but the live status keeps describing the committed results.
-    await expect(page.locator('.page-text-search-pending')).toHaveText('Press Enter to search “lighthouse”')
-    await expect(page.locator('.page-text-search-pending')).not.toHaveAttribute('role')
-    await expect(status(page)).toHaveText('5 pages contain “latency”')
-    await expect(page.locator('.page-text-result-list')).toHaveClass(/is-stale/)
-    await expect(hits(page)).toHaveCount(5)
-    expect(requests).toHaveLength(committedRequestCount)
-    await field(page).press('Enter')
+    // The row works as a link too.
+    await page.goto('/textsearch')
+    await filter(page).fill('lighthouse')
+    await sidebar(page).getByRole('link', { name: /Search full text for “lighthouse”/ }).click()
+    await expect(page).toHaveURL(/\/textsearch\/_search\?q=lighthouse$/)
     await expect(status(page)).toHaveText('24 pages contain “lighthouse”')
-    await expect(page.locator('.page-text-result-list')).not.toHaveClass(/is-stale/)
-    await expect(page.locator('.page-text-search-pending')).toHaveCount(0)
   })
 
-  test('Enter on the committed query adds no history entry and a new query keeps the fragment', async ({ page }) => {
-    const requests = recordSearchRequests(page)
-    await page.goto('/textsearch?q=latency')
+  test('a filter without title or path matches still offers the full-text search, and Esc clears it', async ({ page }) => {
+    await page.goto('/textsearch')
+    await filter(page).fill('zzzqqq')
+    await expect(sidebar(page).getByText('No titles or paths match “zzzqqq”.')).toBeVisible()
+    await expect(sidebar(page).getByRole('link', { name: /Search full text for “zzzqqq”/ })).toBeVisible()
+    await filter(page).press('Escape')
+    await expect(filter(page)).toHaveValue('')
+    await expect(sidebar(page).locator('.browse-tree')).toBeVisible()
+    await filter(page).fill('x')
+    await sidebar(page).getByRole('button', { name: 'Clear filter' }).click()
+    await expect(filter(page)).toBeFocused()
+    await expect(filter(page)).toHaveValue('')
+    // A blank filter never opens the results page.
+    await filter(page).fill('   ')
+    await filter(page).press('Enter')
+    await expect(page).toHaveURL(/\/textsearch$/)
+  })
+
+  test('the results page has a titled, shareable URL', async ({ page }) => {
+    await page.goto('/textsearch/_search?q=latency')
     await expect(status(page)).toHaveText('5 pages contain “latency”')
+    await expect(page).toHaveTitle('Search “latency” · Text Search')
+    await page.reload()
+    await expect(field(page)).toHaveValue('latency')
+    await expect(status(page)).toHaveText('5 pages contain “latency”')
+
+    await page.goto('/textsearch/_search')
+    await expect(page).toHaveTitle('Search · Text Search')
+    await expect(status(page)).toHaveText('Type to search page text.')
+    await expect(field(page)).toBeFocused()
+    await expect(page.getByRole('heading', { level: 1, name: 'Search Text Search' })).toBeAttached()
+  })
+
+  test('results update as you type, replace the history entry, and wait for an IME conversion', async ({ page }) => {
+    const requests = recordSearchRequests(page)
+    await page.goto('/textsearch/_search')
+    await expect(field(page)).toBeFocused()
+    expect(requests).toEqual([])
     const historyLength = await page.evaluate(() => history.length)
+
+    await field(page).pressSequentially('latency')
+    await expect(page).toHaveURL(/\/textsearch\/_search\?q=latency$/)
+    await expect(status(page)).toHaveText('5 pages contain “latency”')
+    await field(page).fill('lighthouse')
+    await expect(page).toHaveURL(/\?q=lighthouse$/)
+    await expect(status(page)).toHaveText('24 pages contain “lighthouse”')
+    // Typing replaces the entry instead of adding one per query.
+    expect(await page.evaluate(() => history.length)).toBe(historyLength)
+
+    // Clearing goes back to the empty page at once.
+    await field(page).press('Escape')
+    await expect(field(page)).toHaveValue('')
+    await expect(page).toHaveURL(/\/textsearch\/_search$/)
+    await expect(status(page)).toHaveText('Type to search page text.')
+
+    // Nothing is searched while a conversion is in progress, not even its Enter.
+    await field(page).evaluate((input) => input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true })))
+    await field(page).fill('latency')
+    await pressImeEnter(page, 'isComposing')
+    await pressImeEnter(page, 'keyCode229')
+    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 500)))
+    await expect(page).toHaveURL(/\/textsearch\/_search$/)
+    await field(page).evaluate((input) => input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true })))
+    await expect(page).toHaveURL(/\?q=latency$/)
+    await expect(status(page)).toHaveText('5 pages contain “latency”')
+
+    // Enter on the query that is already shown adds no history entry and fetches nothing.
     const requestCount = requests.length
     await field(page).press('Enter')
     await field(page).press('Enter')
-    await expect(page).toHaveURL(/\/textsearch\?q=latency$/)
     expect(await page.evaluate(() => history.length)).toBe(historyLength)
     expect(requests).toHaveLength(requestCount)
-
-    // After a failure, Enter on the same query retries.
-    let failing = true
-    await page.route('**/_indexes/textsearch/search/manifest.json', (route) => failing
-      ? route.fulfill({ status: 503, body: 'unavailable' })
-      : route.continue())
-    await page.goto('/textsearch?q=representative')
-    await expect(sidebar(page).getByRole('alert')).toContainText('Search data could not be loaded')
-    failing = false
-    const retryHistoryLength = await page.evaluate(() => history.length)
-    await field(page).press('Enter')
-    await expect(status(page)).toHaveText('1 page contains “representative”')
-    expect(await page.evaluate(() => history.length)).toBe(retryHistoryLength)
-
-    await page.goto('/textsearch/long/scroll-target.md#middle-section')
-    await expect(page.getByRole('heading', { name: 'Middle section' })).toBeInViewport()
-    await field(page).fill('zephyrmarker')
-    await field(page).press('Enter')
-    await expect(page).toHaveURL(/\/textsearch\/long\/scroll-target\.md\?q=zephyrmarker#middle-section$/)
-    await expect(status(page)).toHaveText('2 pages contain “zephyrmarker”')
   })
 
-  test('clearing a draft that was never searched leaves the URL and history alone', async ({ page }) => {
-    const requests = recordSearchRequests(page)
-    await page.goto('/textsearch')
-    await expect(page.getByRole('heading', { name: 'Text Search', exact: true })).toBeVisible()
-    const historyLength = await page.evaluate(() => history.length)
-
-    await field(page).fill('draft')
-    await field(page).press('Escape')
-    await expect(field(page)).toHaveValue('')
-    await field(page).fill('draft')
-    await sidebar(page).getByRole('button', { name: 'Clear page text search' }).click()
-    await expect(field(page)).toHaveValue('')
-    // The clear button removes itself; focus stays in the search field.
-    await expect(field(page)).toBeFocused()
-    await field(page).fill('   ')
-    await field(page).press('Enter')
-    await expect(field(page)).toHaveValue('')
-
-    await expect(page).toHaveURL(/\/textsearch$/)
-    expect(await page.evaluate(() => history.length)).toBe(historyLength)
-    expect(requests).toEqual([])
-  })
-
-  test('"Back to site" on a missing page keeps the committed query', async ({ page }) => {
-    await page.goto('/textsearch/no-such-page.md?q=latency')
-    await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
-    await page.getByRole('button', { name: 'Back to site' }).click()
-    await expect(page).toHaveURL(/\/textsearch\?q=latency$/)
+  test('Back returns through the typed query to the page the search started from', async ({ page }) => {
+    await page.goto('/textsearch/reports/latency-retrospective.md')
+    await filter(page).fill('latency')
+    await filter(page).press('Enter')
     await expect(status(page)).toHaveText('5 pages contain “latency”')
-  })
+    await field(page).fill('lighthouse')
+    await expect(status(page)).toHaveText('24 pages contain “lighthouse”')
+    await hits(page).first().click()
+    await expect(page).toHaveURL(/\/textsearch\/bulk\/note-01\.md\?q=lighthouse$/)
 
-  test('ranked results open from the keyboard, and persist through navigation and history', async ({ page }) => {
-    await page.goto('/textsearch?q=latency')
-    await expect(status(page)).toHaveText('5 pages contain “latency”')
+    await page.goBack()
+    await expect(page).toHaveURL(/\/textsearch\/_search\?q=lighthouse$/)
+    await expect(field(page)).toHaveValue('lighthouse')
+    await expect(status(page)).toHaveText('24 pages contain “lighthouse”')
+    await page.goBack()
+    await expect(page).toHaveURL(/\/textsearch\/reports\/latency-retrospective\.md$/)
+    await page.goForward()
+    await expect(field(page)).toHaveValue('lighthouse')
+    // The field follows the URL after history navigation.
+    await changeUrl(page, '/textsearch/_search?q=latency')
     await expect(field(page)).toHaveValue('latency')
-    // Results replace Pinned and Browse: a flat list, title matches first, path order within a tier.
-    await expect(sidebar(page).locator('.browse-tree')).toHaveCount(0)
-    await expect(page.locator('.page-text-result-folder')).toHaveCount(0)
-    await expect(hits(page)).toHaveCount(5)
+    await expect(status(page)).toHaveText('5 pages contain “latency”')
+  })
+
+  test('ranked results are a list of links that open from the keyboard', async ({ page }) => {
+    await page.goto('/textsearch/_search?q=latency')
+    await expect(status(page)).toHaveText('5 pages contain “latency”')
+    await expect(field(page)).toBeFocused()
+    // Title matches first, path order within a tier.
+    await expect(page.getByRole('list', { name: 'Results' })).toBeVisible()
+    await expect(page.getByRole('list', { name: 'Results' }).getByRole('listitem')).toHaveCount(5)
     const order = ['incidents/checkout-latency/index.html', 'reports/latency-retrospective.md', 'diagrams/mermaid-catalog.md', 'guides/markdown-style-gallery.md', 'runbooks/service-recovery.md']
     expect(await hits(page).evaluateAll((elements) => elements.map((element) => element.getAttribute('data-hit-id')))).toEqual(order)
-    await expect(hits(page).locator('.page-text-result-reason')).toHaveText(['Matches in: Title', 'Matches in: Title', 'Matches in: Text', 'Matches in: Text', 'Matches in: Text'])
-    await expect(sidebar(page).getByRole('region', { name: '5 pages contain “latency”' })).toBeVisible()
+    await expect(hits(page).first()).toHaveJSProperty('tagName', 'A')
+    await expect(hits(page).nth(1)).toHaveAttribute('href', '/textsearch/reports/latency-retrospective.md?q=latency')
+    await expect(hits(page).nth(1)).toContainText('reports/latency-retrospective.md')
+    await expect(sidebar(page).locator('.page-text-results')).toHaveCount(0)
 
-    await field(page).focus()
-    await page.keyboard.press('ArrowDown')
-    await expect(hits(page).first()).toBeFocused()
-    await page.keyboard.press('ArrowDown')
+    // ↑/↓ move through the results while the field has focus; Enter opens the active one.
+    await expect(field(page)).not.toHaveAttribute('aria-activedescendant', /.+/)
     await page.keyboard.press('ArrowDown')
     await page.keyboard.press('ArrowDown')
-    const guidesHit = page.locator('[data-hit-id="guides/markdown-style-gallery.md"]')
-    await expect(guidesHit).toBeFocused()
-    await page.keyboard.press('Enter')
-    await expect(page).toHaveURL(/\/textsearch\/guides\/markdown-style-gallery\.md\?q=latency$/)
-    await expect(guidesHit).toBeFocused()
-    await expect(guidesHit).toHaveAttribute('aria-current', 'page')
-    await expect(page.locator('.page-text-results-title .mono')).toHaveText('4 / 5')
-    await page.keyboard.press('End')
-    await expect(page.locator('[data-hit-id="runbooks/service-recovery.md"]')).toBeFocused()
-    await page.keyboard.press('Home')
-    await expect(hits(page).first()).toBeFocused()
+    const active = page.locator('.search-page-result[data-active]')
+    await expect(active).toHaveCount(1)
+    await expect(active.locator('[data-hit-id]')).toHaveAttribute('data-hit-id', 'reports/latency-retrospective.md')
+    await expect(field(page)).toHaveAttribute('aria-activedescendant', (await active.getAttribute('id'))!)
     await page.keyboard.press('ArrowUp')
-    await expect(field(page)).toBeFocused()
+    await expect(active.locator('[data-hit-id]')).toHaveAttribute('data-hit-id', 'incidents/checkout-latency/index.html')
+    await page.keyboard.press('ArrowUp')
+    await expect(active).toHaveCount(0)
+    await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('Enter')
+    await expect(page).toHaveURL(/\/textsearch\/reports\/latency-retrospective\.md\?q=latency$/)
+    await expect(page.getByTestId('markdown-document')).toBeVisible()
+    await expect(matchNav(page)).toBeVisible()
 
-    // Other in-site navigation keeps the query.
+    // Other in-site navigation drops the search: the page is read without highlights.
     await page.keyboard.press('Control+k')
     const palette = page.getByRole('dialog', { name: 'Command palette' })
     await palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' }).fill('Platform topology')
     await page.keyboard.press('Enter')
-    await expect(page).toHaveURL(/\/textsearch\/architecture\/platform-topology\/index\.html\?q=latency$/)
-    await expect(status(page)).toHaveText('5 pages contain “latency”')
-    await expect(page.locator('.page-text-results-title .mono')).toHaveText('5')
+    await expect(page).toHaveURL(/\/textsearch\/architecture\/platform-topology\/index\.html$/)
+    await expect(matchNav(page)).toHaveCount(0)
 
-    // Clearing restores Pinned and Browse; history restores the search.
-    await field(page).press('Escape')
-    await expect(page).toHaveURL(/\/textsearch\/architecture\/platform-topology\/index\.html$/)
-    await expect(field(page)).toHaveValue('')
-    await expect(page.locator('.page-text-results')).toHaveCount(0)
-    await expect(sidebar(page).locator('.browse-tree')).toBeVisible()
-    await page.goBack()
-    await expect(page).toHaveURL(/\?q=latency$/)
-    await expect(field(page)).toHaveValue('latency')
+    // Arrow keys do nothing special while the field does not have focus.
+    await page.goto('/textsearch/_search?q=latency')
     await expect(status(page)).toHaveText('5 pages contain “latency”')
-    await page.goBack()
-    await expect(page).toHaveURL(/\/textsearch\/guides\/markdown-style-gallery\.md\?q=latency$/)
-    await expect(page.locator('.page-text-results-title .mono')).toHaveText('4 / 5')
-    await page.goForward()
-    await page.goForward()
-    await expect(page).toHaveURL(/\/textsearch\/architecture\/platform-topology\/index\.html$/)
-    await expect(sidebar(page).locator('.browse-tree')).toBeVisible()
-
-    await page.goBack()
-    await sidebar(page).getByRole('button', { name: 'Clear page text search' }).click()
-    await expect(page).toHaveURL(/\/textsearch\/architecture\/platform-topology\/index\.html$/)
-    await expect(sidebar(page).locator('.browse-tree')).toBeVisible()
-    await expect(field(page)).toBeFocused()
+    await hits(page).first().focus()
+    await page.keyboard.press('ArrowDown')
+    await expect(active).toHaveCount(0)
   })
 
-  test('ranked results explain why a page matched, and a folder scope limits them', async ({ page }) => {
-    await page.goto('/textsearch?q=timeline')
-    await expect(status(page)).toHaveText(/^\d+ pages? contain “timeline”$/)
-    // "Timeline" is a heading of the retrospective, not its title: heading matches come before body-only matches.
-    await expect(page.locator('[data-hit-id="reports/latency-retrospective.md"] .page-text-result-reason')).toHaveText('Matches in: Heading: Timeline')
-    const tiers = await page.locator('.page-text-result-reason').evaluateAll((elements) => elements.map((element) => element.getAttribute('data-reason')))
-    expect(tiers).toEqual([...tiers].sort((left, right) => ['title', 'heading', 'text'].indexOf(left!) - ['title', 'heading', 'text'].indexOf(right!)))
-    expect(tiers).toContain('heading')
-    // No page is open, so no folder scope is offered.
-    await expect(page.locator('.page-text-scope-chip')).toHaveCount(0)
-
-    await page.goto('/textsearch/incidents/checkout-latency/index.html?q=latency')
+  test('folder facets count the current query and limit the list', async ({ page }) => {
+    await page.goto('/textsearch/_search?q=latency')
     await expect(status(page)).toHaveText('5 pages contain “latency”')
-    await expect(hits(page)).toHaveCount(5)
-    // The scope is off by default and offered for the open page's folder.
-    const scopeToggle = page.getByRole('button', { name: 'Search only in incidents/checkout-latency/' })
-    await expect(scopeToggle).toHaveAttribute('aria-pressed', 'false')
-    await scopeToggle.click()
-    // One persistent toggle: focus stays on it while the scope changes.
-    await expect(scopeToggle).toHaveAttribute('aria-pressed', 'true')
-    await expect(scopeToggle).toBeFocused()
-    await expect(status(page)).toHaveText('1 page in incidents/checkout-latency/ contain “latency”')
+    await expect(page.getByRole('navigation', { name: 'Folders' })).toBeVisible()
+    expect(await facetSummary(page)).toEqual(['All:5*', 'diagrams/:1', 'guides/:1', 'incidents/:1', 'reports/:1', 'runbooks/:1'])
+
+    await facets(page).filter({ hasText: 'guides/' }).click()
+    await expect(page).toHaveURL(/\/textsearch\/_search\?q=latency&in=guides$/)
+    await expect(status(page)).toHaveText('1 page in guides/ contains “latency”')
     await expect(hits(page)).toHaveCount(1)
-    await expect(page.locator('.page-text-scope-note')).toHaveText('4 more matches outside incidents/checkout-latency/')
-    await expect(page.locator('.page-text-results-title .mono')).toHaveText('1 / 1')
-    // The scope is only a filter: the committed query and the URL do not change.
-    await expect(page).toHaveURL(/\/textsearch\/incidents\/checkout-latency\/index\.html\?q=latency$/)
-    // The collapsed-sidebar chip follows the scope.
-    await page.getByRole('button', { name: 'Collapse sidebar' }).click()
-    await expect(page.getByRole('button', { name: 'Show page text search results for latency' })).toContainText('1 / 1')
-    await page.getByRole('button', { name: 'Show page text search results for latency' }).click()
-    await scopeToggle.click()
-    await expect(scopeToggle).toHaveAttribute('aria-pressed', 'false')
-    await expect(scopeToggle).toBeFocused()
+    await expect(hits(page).first()).toHaveAttribute('data-hit-id', 'guides/markdown-style-gallery.md')
+    // The counts stay those of the whole query, and the choice is shown as pressed.
+    expect(await facetSummary(page)).toEqual(['All:5', 'diagrams/:1', 'guides/:1*', 'incidents/:1', 'reports/:1', 'runbooks/:1'])
+    // The title and the result links keep the query (not the folder).
+    await expect(hits(page).first()).toHaveAttribute('href', '/textsearch/guides/markdown-style-gallery.md?q=latency')
+
+    await page.goBack()
+    await expect(status(page)).toHaveText('5 pages contain “latency”')
+    await page.goForward()
+    await page.reload()
+    await expect(facets(page).filter({ hasText: 'guides/' })).toHaveAttribute('aria-pressed', 'true')
+    await expect(hits(page)).toHaveCount(1)
+    await facets(page).filter({ hasText: 'All' }).click()
+    await expect(page).toHaveURL(/\/textsearch\/_search\?q=latency$/)
     await expect(hits(page)).toHaveCount(5)
-    // A new query starts unscoped again.
-    await scopeToggle.click()
-    await field(page).fill('service')
-    await field(page).press('Enter')
-    await expect(page.locator('.page-text-scope-chip')).toHaveAttribute('aria-pressed', 'false')
+
+    // The folder stays while the query changes.
+    await changeUrl(page, '/textsearch/_search?q=latency&in=guides')
+    await field(page).fill('retrospective')
+    await expect(page).toHaveURL(/\?q=retrospective&in=guides$/)
+  })
+
+  test('a folder without matches says so and offers the way out', async ({ page }) => {
+    await page.goto('/textsearch/_search?q=representative&in=guides')
+    await expect(page.getByRole('heading', { name: 'No pages in guides/ contain “representative”' })).toBeVisible()
+    await expect(status(page)).toHaveText('0 pages in guides/ contain “representative”')
+    // The chosen folder stays visible and pressed even without hits.
+    expect(await facetSummary(page)).toContain('guides/:0*')
+    await page.getByRole('button', { name: 'Clear folder filter (guides/)' }).click()
+    await expect(page).toHaveURL(/\/textsearch\/_search\?q=representative$/)
+    await expect(status(page)).toHaveText('1 page contains “representative”')
+
+    // A query without any match offers a title and path search instead.
+    await field(page).fill('zzzqqq')
+    await expect(page.getByRole('heading', { name: 'No pages contain “zzzqqq”' })).toBeVisible()
+    await expect(page.getByText('Check the spelling or try a different word.')).toBeVisible()
+    await page.getByRole('button', { name: 'Search titles and paths only' }).click()
+    const palette = page.getByRole('dialog', { name: 'Command palette' })
+    await expect(palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })).toHaveValue('zzzqqq')
+  })
+
+  test('narrow screens scroll the facets sideways and the page never does', async ({ browser }) => {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true })
+    await registerTextSearchSite(page)
+    await page.goto('/textsearch/_search?q=latency')
+    await expect(page.locator('.search-page-count-text')).toHaveText('5 pages contain “latency”')
+    const facetRow = page.locator('.search-page-facets')
+    await expect(facetRow).toBeVisible()
+    expect(await facetRow.evaluate((element) => getComputedStyle(element).overflowX)).toBe('auto')
+    expect(await facetRow.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+    // A long title and path wrap instead of widening the page.
+    expect(await page.locator('.search-page-wrap').evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+    await page.unrouteAll({ behavior: 'wait' })
+    await page.close()
+  })
+
+  test('a site without page text search explains the results page route', async ({ page }) => {
+    const requests = recordSearchRequests(page)
+    await page.goto('/sre/_search?q=latency')
+    await expect(page.getByRole('alert')).toContainText('Page text search is not available')
+    await expect(page.getByRole('searchbox')).toHaveCount(0)
+    expect(requests).toEqual([])
   })
 
   test('a superseded query cannot overwrite the newer results', async ({ page }) => {
     await usePagedFallback(page)
     // Warm the manifest and root so the next searches differ only in the leaves they need.
-    await page.goto('/textsearch?q=representative')
+    await page.goto('/textsearch/_search?q=representative')
     await expect(status(page)).toHaveText('1 page contains “representative”')
 
     const held: Array<() => Promise<void>> = []
@@ -4988,16 +5062,13 @@ test.describe('page text search', () => {
     })
 
     await field(page).fill('latency')
-    await field(page).press('Enter')
     await expect(status(page)).toHaveText('Searching 32 pages…')
     await expect.poll(() => held.length).toBeGreaterThan(0)
     holding = false
-    await field(page).fill('lighthouse')
-    await expect(page.locator('.page-text-search-pending')).toBeVisible()
-    // From the newer commit on, nothing about the older query may ever render:
+    // From the newer query on, nothing about the older one may ever render:
     // the abort that supersedes it must not surface as an error or a result.
     await startStatusRecorder(page)
-    await field(page).press('Enter')
+    await field(page).fill('lighthouse')
     await expect(page).toHaveURL(/\?q=lighthouse$/)
     await expect(status(page)).toHaveText('24 pages contain “lighthouse”')
 
@@ -5020,7 +5091,7 @@ test.describe('page text search', () => {
     // next page reload the search data, whose leaves are held to keep "Show more" pending.
     const start = new Date('2026-10-02T00:00:00Z')
     await page.clock.setFixedTime(start)
-    await page.goto('/textsearch?q=lighthouse')
+    await page.goto('/textsearch/_search?q=lighthouse')
     await expect(status(page)).toHaveText('24 pages contain “lighthouse”')
 
     const held = new Map<string, () => Promise<void>>()
@@ -5035,16 +5106,14 @@ test.describe('page text search', () => {
       await Promise.all(urls.map((url) => held.get(url)?.()))
     }
     await page.clock.setFixedTime(new Date(start.getTime() + 61_000))
-    const more = page.locator('.page-text-result-more')
+    const more = page.locator('.search-page-more')
     await more.click()
     await expect(more).toHaveAttribute('aria-disabled', 'true')
     await expect.poll(() => held.size).toBeGreaterThan(0)
     const olderLeaves = [...held.keys()]
 
-    await field(page).fill('latency')
-    await expect(page.locator('.page-text-search-pending')).toBeVisible()
     await startStatusRecorder(page)
-    await field(page).press('Enter')
+    await field(page).fill('latency')
     await expect(status(page)).toHaveText('Searching 32 pages…')
     // The newer query finishes first; only then does the older page arrive.
     await expect.poll(() => [...held.keys()].filter((url) => !olderLeaves.includes(url)).length).toBeGreaterThan(0)
@@ -5060,17 +5129,14 @@ test.describe('page text search', () => {
 
   test('results page twenty at a time, and zero results explain the AND rule', async ({ page }) => {
     await usePagedFallback(page)
-    await page.goto('/textsearch?q=lighthouse')
+    await page.goto('/textsearch/_search?q=lighthouse')
     await expect(status(page)).toHaveText('24 pages contain “lighthouse”')
     await expect(hits(page)).toHaveCount(20)
-    // The fallback header counts all matches, not just the loaded page.
-    await expect(page.locator('.page-text-results-title .mono')).toHaveText('24')
     const more = page.getByRole('button', { name: 'Show 4 more (20 of 24 shown)' })
     // From the keyboard, focus moves to the first newly listed result.
     await more.focus()
     await page.keyboard.press('Enter')
     await expect(hits(page)).toHaveCount(24)
-    await expect(page.locator('.page-text-results-title .mono')).toHaveText('24')
     await expect(more).toHaveCount(0)
     await expect(hits(page).last()).toHaveAttribute('data-hit-id', 'bulk/note-24.md')
     await expect(page.locator('[data-hit-id="bulk/note-21.md"]')).toBeFocused()
@@ -5078,7 +5144,7 @@ test.describe('page text search', () => {
     await field(page).fill('latency lighthouse')
     await field(page).press('Enter')
     await expect(status(page)).toHaveText('0 pages contain “latency lighthouse”')
-    await expect(page.getByText('No pages contain these words')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'No pages contain “latency lighthouse”' })).toBeVisible()
     await expect(page.getByText('Only pages that contain every word are listed. Try fewer words.')).toBeVisible()
 
     await field(page).fill('zzzqqq')
@@ -5086,33 +5152,17 @@ test.describe('page text search', () => {
     await expect(page.getByText('Check the spelling or try a different word.')).toBeVisible()
   })
 
-  test('the paged fallback shows the open page position against all matches and offers no scope', async ({ page }) => {
+  test('the paged fallback has no folder counts but still limits the loaded pages to a folder', async ({ page }) => {
     await usePagedFallback(page)
-    await page.goto('/textsearch/bulk/note-03.md?q=lighthouse')
+    await page.goto('/textsearch/_search?q=lighthouse')
     await expect(status(page)).toHaveText('24 pages contain “lighthouse”')
     await expect(hits(page)).toHaveCount(20)
-    await expect(page.locator('.page-text-results-title .mono')).toHaveText('3 / 24')
-    await expect(page.locator('.page-text-scope-chip')).toHaveCount(0)
-    await expect(page.locator('.page-text-result-folder')).toHaveCount(1)
-  })
-
-  test('"Show more" expands a collapsed folder to focus the first new result', async ({ page }) => {
-    await usePagedFallback(page)
-    await page.goto('/textsearch?q=lighthouse')
-    await expect(status(page)).toHaveText('24 pages contain “lighthouse”')
-    const bulk = page.locator('[data-text-search-item="group"][data-folder="bulk"]')
-    await bulk.focus()
-    await page.keyboard.press('ArrowLeft')
-    await expect(bulk).toHaveAttribute('aria-expanded', 'false')
-    await expect(hits(page).and(page.locator('[data-folder="bulk"]'))).toHaveCount(0)
-    await page.keyboard.press('End')
-    const more = page.getByRole('button', { name: 'Show 4 more (20 of 24 shown)' })
-    await expect(more).toBeFocused()
-    await page.keyboard.press('Enter')
-    await expect(more).toHaveCount(0)
-    await expect(bulk).toHaveAttribute('aria-expanded', 'true')
-    await expect(hits(page)).toHaveCount(24)
-    await expect(page.locator('[data-hit-id="bulk/note-21.md"]')).toBeFocused()
+    // Counting folders would need every hit; above the ranking threshold only path-ordered pages are loaded.
+    await expect(page.locator('.search-page-facets')).toHaveCount(0)
+    await page.goto('/textsearch/_search?q=lighthouse&in=bulk')
+    await expect(hits(page)).toHaveCount(20)
+    await page.goto('/textsearch/_search?q=lighthouse&in=guides')
+    await expect(page.getByRole('heading', { name: 'No pages in guides/ contain “lighthouse”' })).toBeVisible()
   })
 
   test('"Show more" leaves focus where the reader moved it while the page loaded', async ({ page }) => {
@@ -5120,7 +5170,7 @@ test.describe('page text search', () => {
     // As in the "Show more" race test: an expired cache makes the next page reload, and its leaves are held.
     const start = new Date('2026-10-02T00:00:00Z')
     await page.clock.setFixedTime(start)
-    await page.goto('/textsearch?q=lighthouse')
+    await page.goto('/textsearch/_search?q=lighthouse')
     await expect(status(page)).toHaveText('24 pages contain “lighthouse”')
     const held: Array<() => Promise<void>> = []
     let holding = true
@@ -5132,7 +5182,7 @@ test.describe('page text search', () => {
     const more = page.getByRole('button', { name: 'Show 4 more (20 of 24 shown)' })
     await more.focus()
     await page.keyboard.press('Enter')
-    await expect(page.locator('.page-text-result-more')).toHaveAttribute('aria-disabled', 'true')
+    await expect(page.locator('.search-page-more')).toHaveAttribute('aria-disabled', 'true')
     await expect.poll(() => held.length).toBeGreaterThan(0)
 
     const firstHit = page.locator('[data-hit-id="bulk/note-01.md"]')
@@ -5144,62 +5194,26 @@ test.describe('page text search', () => {
     await expect(firstHit).toBeFocused()
   })
 
-  test('"Show more" leaves focus on the page when the reader clicks article text while it loads', async ({ page }) => {
-    await usePagedFallback(page)
-    const start = new Date('2026-10-02T00:00:00Z')
-    await page.clock.setFixedTime(start)
-    await page.goto('/textsearch/long/scroll-target.md?q=lighthouse')
-    await expect(status(page)).toHaveText('24 pages contain “lighthouse”')
-    const reader = page.getByTestId('markdown-document')
-    await expect(reader.locator('h1')).toBeVisible()
-    const held: Array<() => Promise<void>> = []
-    let holding = true
-    await page.route('**/_indexes/textsearch/search/leaf-*', async (route) => {
-      if (!holding) return route.continue()
-      await new Promise<void>((resolve) => held.push(async () => { await route.continue(); resolve() }))
-    })
-    await page.clock.setFixedTime(new Date(start.getTime() + 61_000))
-    const more = page.getByRole('button', { name: 'Show 4 more (20 of 24 shown)' })
-    await more.focus()
-    await page.keyboard.press('Enter')
-    await expect(page.locator('.page-text-result-more')).toHaveAttribute('aria-disabled', 'true')
-    await expect.poll(() => held.length).toBeGreaterThan(0)
-
-    // Clicking plain text moves focus to the page (the focusable main region, else <body>), which must not read as "the button was removed".
-    const focusIsOnPage = () => page.evaluate(() => (
-      document.activeElement === document.body || document.activeElement?.classList.contains('stage') === true
-    ))
-    await reader.locator('article p').first().click()
-    await expect.poll(focusIsOnPage).toBe(true)
-    holding = false
-    await Promise.all(held.map((release) => release()))
-    await expect(hits(page)).toHaveCount(24)
-    await expect(page.locator('.page-text-result-more')).toHaveCount(0)
-    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 100)))
-    await expect(page.locator('[data-hit-id="bulk/note-21.md"]')).not.toBeFocused()
-    expect(await focusIsOnPage()).toBe(true)
-  })
-
   test('a "Show more" failure is announced and can be retried', async ({ page }) => {
     await usePagedFallback(page)
     const start = new Date('2026-10-02T00:00:00Z')
     await page.clock.setFixedTime(start)
-    await page.goto('/textsearch?q=lighthouse')
+    await page.goto('/textsearch/_search?q=lighthouse')
     await expect(status(page)).toHaveText('24 pages contain “lighthouse”')
     let failing = true
     await page.route('**/_indexes/textsearch/search/leaf-*', (route) => failing
       ? route.fulfill({ status: 503, body: 'temporarily unavailable' })
       : route.continue())
     await page.clock.setFixedTime(new Date(start.getTime() + 61_000))
-    const live = sidebar(page).locator('.page-text-result-list [role="status"]')
+    const live = page.locator('.search-page-main [role="status"]')
     await expect(live).toHaveText('')
     await page.getByRole('button', { name: 'Show 4 more (20 of 24 shown)' }).click()
-    await expect(page.locator('.page-text-result-more')).toHaveText('Could not load more. Try again')
+    await expect(page.locator('.search-page-more')).toHaveText('Could not load more. Try again')
     await expect(live).toHaveText('Could not load more results.')
     await expect(hits(page)).toHaveCount(20)
 
     failing = false
-    await page.locator('.page-text-result-more').click()
+    await page.locator('.search-page-more').click()
     await expect(hits(page)).toHaveCount(24)
     await expect(live).toHaveText('')
   })
@@ -5211,7 +5225,7 @@ test.describe('page text search', () => {
     // offsets of the old generation.
     const start = new Date('2026-10-02T00:00:00Z')
     await page.clock.setFixedTime(start)
-    await page.goto('/textsearch?q=lighthouse')
+    await page.goto('/textsearch/_search?q=lighthouse')
     await expect(status(page)).toHaveText('24 pages contain “lighthouse”')
     await expect(hits(page)).toHaveCount(20)
     await expect(hits(page).first()).toHaveAttribute('data-hit-id', 'bulk/note-01.md')
@@ -5232,7 +5246,7 @@ test.describe('page text search', () => {
     expect(new Set(ids).size).toBe(ids.length)
     expect(ids.slice(0, 3)).toEqual(['bulk/note-00a.md', 'bulk/note-00b.md', 'bulk/note-01.md'])
     expect(ids.at(-1)).toBe('bulk/note-24.md')
-    await expect(page.locator('.page-text-result-more')).toHaveCount(0)
+    await expect(page.locator('.search-page-more')).toHaveCount(0)
     // Focus moves from the removed button to the result at the old list length.
     await expect(page.locator('[data-hit-id="bulk/note-19.md"]')).toBeFocused()
   })
@@ -5248,8 +5262,8 @@ test.describe('page text search', () => {
       return route.continue()
     })
 
-    await page.goto('/textsearch?q=latency')
-    const alert = sidebar(page).getByRole('alert')
+    await page.goto('/textsearch/_search?q=latency')
+    const alert = page.locator('.search-page').getByRole('alert')
     await expect(alert).toContainText('Search data could not be loaded')
     await expect(alert).toContainText('The server returned HTTP 503.')
 
@@ -5259,10 +5273,13 @@ test.describe('page text search', () => {
     // "Try again" was removed while the query reloaded; focus is in the search field.
     await expect(field(page)).toBeFocused()
 
+    // Enter on the same query retries, without a new history entry.
     manifestState = 'ok'
+    const historyLength = await page.evaluate(() => history.length)
     await field(page).press('Enter')
     await expect(status(page)).toHaveText('5 pages contain “latency”')
     await expect(alert).toHaveCount(0)
+    expect(await page.evaluate(() => history.length)).toBe(historyLength)
   })
 
   test('a decoder chunk that fails to load is a retryable network failure', async ({ page }) => {
@@ -5270,8 +5287,8 @@ test.describe('page text search', () => {
     await page.route('**/assets/fulltext-codec-*.js', (route) => failing
       ? route.fulfill({ status: 404, body: 'not found' })
       : route.continue())
-    await page.goto('/textsearch?q=latency')
-    const alert = sidebar(page).getByRole('alert')
+    await page.goto('/textsearch/_search?q=latency')
+    const alert = page.locator('.search-page').getByRole('alert')
     await expect(alert).toContainText('Search data could not be loaded')
     await expect(alert).toContainText('If trying again does not help, reload the page.')
     await expect(alert).not.toContainText('This query could not be searched')
@@ -5285,25 +5302,23 @@ test.describe('page text search', () => {
 
   test('a query over the length limit is reported as a query problem, not a data problem', async ({ page }) => {
     const requests = recordSearchRequests(page)
-    await page.goto(`/textsearch?q=${'a'.repeat(4097)}`)
-    const alert = sidebar(page).getByRole('alert')
+    await page.goto(`/textsearch/_search?q=${'a'.repeat(4097)}`)
+    const alert = page.locator('.search-page').getByRole('alert')
     await expect(alert).toContainText('This query is too long')
     await expect(alert).toContainText('Shorten it to 4,096 characters or fewer.')
     await expect(alert).not.toContainText('Search data')
     await expect(alert.getByRole('button', { name: 'Try again' })).toHaveCount(0)
     expect(requests).toEqual([])
   })
-
-  test('each newly committed query scrolls to its first match unless the URL has a fragment', async ({ page }) => {
+  test('a newly arrived query scrolls to its first match unless the URL has a fragment', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 720 })
     // HTML: loading with a query scrolls to the match.
     await page.goto('/textsearch/long/scroll-target.html?q=zephyrmarker')
     const frame = page.frameLocator('iframe.artifact-frame')
     await expect(frame.getByText('The zephyrmarker word is at the end.')).toBeInViewport()
 
-    // A new query on the open page scrolls to its first match.
-    await field(page).fill('midmarker')
-    await field(page).press('Enter')
+    // A new query on the open page (history navigation) scrolls to its first match.
+    await changeUrl(page, '/textsearch/long/scroll-target.html?q=midmarker')
     await expect(frame.getByText('The midmarker word is here.')).toBeInViewport()
     await expect(frame.getByText('The zephyrmarker word is at the end.')).not.toBeInViewport()
 
@@ -5326,8 +5341,7 @@ test.describe('page text search', () => {
     await page.goto('/textsearch/long/scroll-target.md?q=zephyrmarker')
     const reader = page.getByTestId('markdown-document')
     await expect(reader.getByText('The zephyrmarker word is at the end.')).toBeInViewport()
-    await field(page).fill('midmarker')
-    await field(page).press('Enter')
+    await changeUrl(page, '/textsearch/long/scroll-target.md?q=midmarker')
     await expect(reader.getByText('The midmarker word is here.')).toBeInViewport()
     await reader.locator('h1').evaluate((heading) => heading.scrollIntoView())
     await reader.locator('article').evaluate((article) => article.append(Object.assign(document.createElement('p'), { textContent: 'late content' })))
@@ -5475,7 +5489,7 @@ test.describe('page text search', () => {
     await expect(frame.getByText('The zephyrmarker word is at the end.')).not.toBeInViewport()
   })
 
-  test('committed terms are highlighted in HTML and Markdown pages without changing their DOM', async ({ page }) => {
+  test('the terms of the search are highlighted in HTML and Markdown pages without changing their DOM', async ({ page }) => {
     const highlightSize = (target: Page | import('@playwright/test').Frame) => target.evaluate(() => (
       (CSS as unknown as { highlights: Map<string, Set<Range>> }).highlights.get('gap-page-text-search')?.size ?? 0
     ))
@@ -5495,11 +5509,11 @@ test.describe('page text search', () => {
     }))
     expect(await frameStyles()).toEqual({ elements: 0, adopted: 1 })
 
-    await field(page).press('Escape')
+    // Closing the match navigator removes the highlight.
+    await page.getByRole('button', { name: 'Close match navigator' }).click()
     await expect.poll(() => highlightSize(artifactFrame)).toBe(0)
-    // Committing again reuses the adopted sheet instead of adding another.
-    await field(page).fill('fixture')
-    await field(page).press('Enter')
+    // Another query reuses the adopted sheet instead of adding another.
+    await changeUrl(page, '/textsearch/incidents/checkout-latency/index.html?q=fixture')
     await expect.poll(() => highlightSize(artifactFrame)).toBeGreaterThan(0)
     expect(await frameStyles()).toEqual({ elements: 0, adopted: 1 })
 
@@ -5510,77 +5524,154 @@ test.describe('page text search', () => {
     expect(await reader.locator('mark').count()).toBe(0)
 
     // A different committed query replaces the highlight.
-    await field(page).fill('outage')
-    await field(page).press('Enter')
-    await expect(status(page)).toContainText('“outage”')
+    await changeUrl(page, '/textsearch/reports/latency-retrospective.md?q=outage')
     await expect.poll(() => highlightSize(page)).toBe(1)
   })
 
-  test('the palette hands its query to page text search', async ({ page }) => {
+  test('an opened result offers a match navigator for Markdown pages', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 })
+    await page.goto('/textsearch/long/scroll-target.md?q=word')
+    const reader = page.getByTestId('markdown-document')
+    await expect(reader).toBeVisible()
+    await expect.poll(() => highlightSize(page)).toBeGreaterThan(1)
+    const total = await highlightSize(page)
+    await expect(matchNav(page)).toBeVisible()
+    await expect(matchNav(page)).toContainText('word')
+    const count = matchNav(page).locator('.match-nav-count')
+    await expect(count).toHaveText(`1 / ${total}`)
+    // The current match is drawn over the others.
+    await expect.poll(() => highlightSize(page, 'gap-page-text-search-current')).toBe(1)
+
+    await matchNav(page).getByRole('button', { name: 'Next match' }).click()
+    await expect(count).toHaveText(`2 / ${total}`)
+    await expect(reader.getByText('The zephyrmarker word is at the end.')).toBeInViewport()
+    await matchNav(page).getByRole('button', { name: 'Previous match' }).click()
+    await expect(count).toHaveText(`1 / ${total}`)
+    // Stepping wraps around.
+    await matchNav(page).getByRole('button', { name: 'Previous match' }).click()
+    await expect(count).toHaveText(`${total} / ${total}`)
+
+    // Enter steps forward and Shift+Enter back while the bar has focus.
+    await matchNav(page).locator('.match-nav-term').focus()
+    await page.keyboard.press('Enter')
+    await expect(count).toHaveText(`1 / ${total}`)
+    await page.keyboard.press('Shift+Enter')
+    await expect(count).toHaveText(`${total} / ${total}`)
+
+    // Esc closes the bar, removes the highlight and returns focus to the page.
+    await page.keyboard.press('Escape')
+    await expect(matchNav(page)).toHaveCount(0)
+    await expect.poll(() => highlightSize(page)).toBe(0)
+    await expect(page.locator('#main-content')).toBeFocused()
+    // The URL keeps the search for reload and for Back from here.
+    await expect(page).toHaveURL(/\?q=word$/)
+  })
+
+  test('an opened result offers a match navigator for HTML pages, and no bar without matches', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 })
+    await page.goto('/textsearch/long/scroll-target.html?q=word')
+    const frame = page.frameLocator('iframe.artifact-frame')
+    await expect(matchNav(page)).toBeVisible()
+    const count = matchNav(page).locator('.match-nav-count')
+    await expect(count).toHaveText(/^1 \/ \d+$/)
+    const total = Number((await count.textContent())!.split('/')[1])
+    expect(total).toBeGreaterThan(1)
+    await matchNav(page).getByRole('button', { name: 'Next match' }).click()
+    await expect(count).toHaveText(`2 / ${total}`)
+    await expect.poll(() => frame.locator('body').evaluate(() => (
+      (CSS as unknown as { highlights: Map<string, Set<Range>> }).highlights.get('gap-page-text-search-current')?.size ?? 0
+    ))).toBe(1)
+    await expect(frame.getByText('The zephyrmarker word is at the end.')).toBeInViewport()
+
+    await matchNav(page).getByRole('button', { name: 'Close match navigator' }).click()
+    await expect(matchNav(page)).toHaveCount(0)
+    await expect(page.locator('iframe.artifact-frame')).toBeFocused()
+
+    // A query that does not occur in the page shows no bar (and no highlight).
+    await page.goto('/textsearch/long/scroll-target.md?q=qqqzzznotthere')
+    await expect(page.getByTestId('markdown-document')).toBeVisible()
+    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 300)))
+    await expect(matchNav(page)).toHaveCount(0)
+    expect(await highlightSize(page)).toBe(0)
+    // A page opened without a search has none either.
+    await page.goto('/textsearch/long/scroll-target.md')
+    await expect(page.getByTestId('markdown-document')).toBeVisible()
+    await expect(matchNav(page)).toHaveCount(0)
+  })
+
+  test('the palette opens the results page from its full-text entry', async ({ page }) => {
     await page.goto('/textsearch')
     await expect(page.getByRole('heading', { name: 'Text Search', exact: true })).toBeVisible()
     await page.keyboard.press('Control+k')
     const palette = page.getByRole('dialog', { name: 'Command palette' })
     const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
-    await expect(palette.locator('.palette-footer')).toContainText('search page text')
+    await expect(palette.locator('.palette-footer')).toContainText('search full text')
 
-    // A page name matches, so it stays selected; the hand-off row follows the page matches.
+    // A page name matches, so it stays selected; the full-text row follows the page matches.
     await search.fill('latency')
-    const handOff = palette.getByRole('option', { name: /Search page text for “latency”/ })
+    const handOff = palette.getByRole('option', { name: /Search full text for “latency”/ })
     await expect(handOff).toBeVisible()
     await expect(palette.locator('.palette-section-title').first()).toHaveText('Pages')
     await expect(handOff).toHaveAttribute('aria-selected', 'false')
     await search.press('Control+Enter')
     await expect(palette).toBeHidden()
-    await expect(page).toHaveURL(/\/textsearch\?q=latency$/)
+    await expect(page).toHaveURL(/\/textsearch\/_search\?q=latency$/)
     await expect(status(page)).toHaveText('5 pages contain “latency”')
-    // Focus lands in the search field, so ↓ enters the results.
+    // Focus lands in the results page's field.
     await expect(field(page)).toBeFocused()
-    await page.keyboard.press('ArrowDown')
-    await expect(hits(page).first()).toBeFocused()
 
-    // No page name matches, so the hand-off is the default selection.
+    // No page name matches, so the full-text row is the default selection (also from the results page itself).
     await page.keyboard.press('Control+k')
     await search.fill('representative')
-    const representative = palette.getByRole('option', { name: /Search page text for “representative”/ })
+    const representative = palette.getByRole('option', { name: /Search full text for “representative”/ })
     await expect(representative).toHaveAttribute('aria-selected', 'true')
     await search.press('Enter')
-    await expect(page).toHaveURL(/\/textsearch\?q=representative$/)
+    await expect(page).toHaveURL(/\/textsearch\/_search\?q=representative$/)
     await expect(field(page)).toHaveValue('representative')
     await expect(field(page)).toBeFocused()
   })
 
-  test('the page text shortcut focuses the field, and a collapsed sidebar shows the query as a chip', async ({ page }) => {
+  test('the page text shortcut opens the results page with the open search ready to change', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 })
     await page.goto('/textsearch/reports/latency-retrospective.md?q=latency')
-    await expect(status(page)).toHaveText('5 pages contain “latency”')
+    await expect(matchNav(page)).toBeVisible()
     await page.getByTestId('markdown-document').click()
     await page.keyboard.press('ControlOrMeta+Shift+F')
+    await expect(page).toHaveURL(/\/textsearch\/_search\?q=latency$/)
+    await expect(field(page)).toBeFocused()
+    await expect(field(page)).toHaveValue('latency')
+
+    // On the results page it focuses and selects the field.
+    await sidebar(page).locator('.browse-tree').click({ position: { x: 4, y: 4 } })
+    await page.keyboard.press('ControlOrMeta+Shift+F')
     await expect(field(page)).toBeFocused()
 
-    // From inside an HTML artifact frame as well.
-    await page.goto('/textsearch/incidents/checkout-latency/index.html?q=latency')
+    // From inside an HTML artifact frame as well, and without a search it opens the empty page.
+    await page.goto('/textsearch/incidents/checkout-latency/index.html')
     const artifactFrame = page.frameLocator('iframe.artifact-frame')
     // The app attaches its key handler to the frame's window in the same load
-    // callback that adds the highlight style, so the style means the frame is wired.
-    await expect.poll(() => artifactFrame.locator('body').evaluate((body) => (
-      body.ownerDocument.adoptedStyleSheets.some((sheet) => [...sheet.cssRules].some((rule) => rule.cssText.includes('gap-page-text-search')))
-    ))).toBe(true)
+    // callback that adds the highlight style, so wait for the frame to be wired.
+    await expect(artifactFrame.locator('body')).toBeVisible()
+    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 300)))
     await artifactFrame.locator('body').click()
     await page.keyboard.press('ControlOrMeta+Shift+F')
+    await expect(page).toHaveURL(/\/textsearch\/_search$/)
     await expect(field(page)).toBeFocused()
+  })
 
-    await page.getByRole('button', { name: 'Collapse sidebar' }).click()
-    const chip = page.getByRole('button', { name: 'Show page text search results for latency' })
-    await expect(chip).toBeVisible()
-    await expect(chip).toContainText('1 / 5')
-    await chip.click()
-    await expect(sidebar(page)).toBeVisible()
-    await expect(chip).toHaveCount(0)
-
-    await page.getByRole('button', { name: 'Collapse sidebar' }).click()
-    await page.keyboard.press('ControlOrMeta+Shift+F')
-    await expect(field(page)).toBeFocused()
+  test('the results page is built from landmarks, labels and live regions', async ({ page }) => {
+    await page.goto('/textsearch/_search?q=latency')
+    await expect(status(page)).toHaveText('5 pages contain “latency”')
+    // The field is labelled and inside a search landmark; the count is a status region.
+    await expect(page.getByRole('search').getByRole('searchbox', { name: 'Search page text in Text Search' })).toBeVisible()
+    await expect(page.getByRole('status').filter({ hasText: '5 pages contain “latency”' })).toBeVisible()
+    // Facets are buttons that expose their state.
+    const all = page.getByRole('navigation', { name: 'Folders' }).getByRole('button').first()
+    await expect(all).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByRole('navigation', { name: 'Folders' }).getByRole('button').nth(1)).toHaveAttribute('aria-pressed', 'false')
+    // Results are links in a list.
+    await expect(page.getByRole('list', { name: 'Results' }).getByRole('link')).toHaveCount(5)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1)
   })
 
   test('sites without page text search keep the jump button and offer no hand-off', async ({ page }) => {
@@ -5588,16 +5679,16 @@ test.describe('page text search', () => {
     await page.goto('/sre?q=latency')
     await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
     await expect(page.getByRole('searchbox', { name: /Search page text/ })).toHaveCount(0)
+    await expect(page.getByRole('searchbox', { name: /Filter pages/ })).toHaveCount(0)
     await expect(sidebar(page).getByRole('button', { name: 'Jump to a page in SRE' })).toBeVisible()
-    await expect(page.locator('.page-text-results')).toHaveCount(0)
     await expect(sidebar(page).locator('.browse-tree')).toBeVisible()
 
     await page.keyboard.press('Control+k')
     const palette = page.getByRole('dialog', { name: 'Command palette' })
     await palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' }).fill('latency')
     await expect(palette.getByRole('option', { name: /Latency Retrospective/ })).toBeVisible()
-    await expect(palette.getByRole('option', { name: /Search page text/ })).toHaveCount(0)
-    await expect(palette.locator('.palette-footer')).not.toContainText('search page text')
+    await expect(palette.getByRole('option', { name: /Search full text/ })).toHaveCount(0)
+    await expect(palette.locator('.palette-footer')).not.toContainText('search full text')
     await page.keyboard.press('Escape')
 
     await page.keyboard.press('ControlOrMeta+Shift+F')
@@ -5605,8 +5696,8 @@ test.describe('page text search', () => {
     expect(requests).toEqual([])
   })
 
-  test('result links keep ?q= and leave modified clicks to the browser', async ({ page, context }) => {
-    await page.goto('/textsearch/long/scroll-target.md?q=lighthouse')
+  test('result links carry ?q= and leave modified clicks to the browser', async ({ page, context }) => {
+    await page.goto('/textsearch/_search?q=lighthouse')
     await expect(status(page)).toHaveText('24 pages contain “lighthouse”')
     const hit = page.locator('[data-hit-id="bulk/note-01.md"]')
     await expect(hit).toHaveJSProperty('tagName', 'A')
@@ -5617,23 +5708,28 @@ test.describe('page text search', () => {
     ])
     await expectTabLocation(tab, '/textsearch/bulk/note-01.md', '?q=lighthouse')
     await tab.close()
-    await expect(page).toHaveURL(/\/long\/scroll-target\.md\?q=lighthouse$/)
+    await expect(page).toHaveURL(/\/_search\?q=lighthouse$/)
     await hit.click()
     await expect(page).toHaveURL(/\/bulk\/note-01\.md\?q=lighthouse$/)
+    await expect(matchNav(page)).toBeVisible()
   })
 
-  test('site home rows and Browse rows carry ?q= while a search is committed', async ({ page }) => {
+  test('moving around the site leaves the search behind', async ({ page }) => {
+    await page.goto('/textsearch/bulk/note-01.md?q=lighthouse')
+    await expect(matchNav(page)).toBeVisible()
     await page.goto('/textsearch?q=lighthouse')
-    await expect(page.locator('.site-home .artifact-list-row').first()).toHaveAttribute('href', /\?q=lighthouse$/)
-    await expect(page.locator('.site-home a.tree-artifact').first()).toHaveAttribute('href', /\?q=lighthouse$/)
-    await page.goto('/textsearch')
     await expect(page.locator('.site-home .artifact-list-row').first()).not.toHaveAttribute('href', /q=/)
+    await expect(page.locator('.site-home a.tree-artifact').first()).not.toHaveAttribute('href', /q=/)
+    await page.locator('.site-home .artifact-list-row').first().click()
+    await expect(page).not.toHaveURL(/q=/)
+    await expect(page.locator('.site-home')).toHaveCount(0)
+    await expect(matchNav(page)).toHaveCount(0)
   })
 
-  test('Copy link omits the committed search and keeps the fragment', async ({ page, context }) => {
+  test('Copy link omits the search and keeps the fragment', async ({ page, context }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write'])
     await page.goto('/textsearch/long/scroll-target.md?q=lighthouse#middle-section')
-    await expect(status(page)).toHaveText('24 pages contain “lighthouse”')
+    await expect(page.getByTestId('markdown-document')).toBeVisible()
     const origin = new URL(page.url()).origin
     await page.getByRole('button', { name: 'Copy artifact link' }).click()
     await expect(page.getByRole('status').filter({ hasText: 'Link copied to clipboard.' })).toBeVisible()
@@ -6034,8 +6130,8 @@ test.describe('reader compatibility rules', () => {
   test('an unknown full-text manifest version says search needs a republish, not a read error', async ({ page }) => {
     await registerTextSearchSite(page)
     await mutateJson(page, '**/_indexes/textsearch/search/manifest.json', (manifest) => ({ ...manifest, version: 2 }))
-    await page.goto('/textsearch?q=latency')
-    const alert = page.locator('.sidebar-panel').getByRole('alert')
+    await page.goto('/textsearch/_search?q=latency')
+    const alert = page.locator('.search-page').getByRole('alert')
     await expect(alert).toContainText('Page text search needs to be republished')
     await expect(alert).not.toContainText('could not be read')
   })

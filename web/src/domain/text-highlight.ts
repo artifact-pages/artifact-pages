@@ -7,6 +7,8 @@
 // cluster.
 
 export const SEARCH_HIGHLIGHT_NAME = 'gap-page-text-search'
+/** The match the navigator is on; drawn over the general highlight. */
+export const CURRENT_MATCH_HIGHLIGHT_NAME = 'gap-page-text-search-current'
 const MAX_RANGES = 1000
 const SKIPPED_ELEMENTS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'TEXTAREA'])
 
@@ -24,14 +26,19 @@ export function searchTerms(query: string): string[] {
  * matches or the browser cannot highlight.
  */
 export function highlightSearchTerms(root: Node, query: string): Range | undefined {
+  return applySearchHighlight(root, query)[0]
+}
+
+/** Like highlightSearchTerms, but returns every matching range in document order. */
+function applySearchHighlight(root: Node, query: string): Range[] {
   const document = root.ownerDocument ?? (root as Document)
   const view = document.defaultView as HighlightWindow | null
   const registry = view?.CSS && 'highlights' in view.CSS ? view.CSS.highlights : undefined
-  if (!view || !registry || !view.Highlight) return undefined
+  if (!view || !registry || !view.Highlight) return []
   registry.delete(SEARCH_HIGHLIGHT_NAME)
 
   const terms = searchTerms(query)
-  if (terms.length === 0) return undefined
+  if (terms.length === 0) return []
   const ranges: Range[] = []
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode: (node) => isSearchableText(node) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT,
@@ -49,24 +56,50 @@ export function highlightSearchTerms(root: Node, query: string): Range | undefin
       }
     }
   }
-  if (ranges.length === 0) return undefined
+  if (ranges.length === 0) {
+    registry.delete(CURRENT_MATCH_HIGHLIGHT_NAME)
+    return []
+  }
   ranges.sort((left, right) => left.compareBoundaryPoints(Range.START_TO_START, right))
   registry.set(SEARCH_HIGHLIGHT_NAME, new view.Highlight(...ranges) as never)
-  return ranges[0]
+  return ranges
+}
+
+/**
+ * Marks one of the highlighted ranges as the current match (or none). The
+ * general highlight stays in place; the current one is drawn over it.
+ */
+export function setCurrentSearchMatch(document: Document, range: Range | undefined) {
+  const view = document.defaultView as HighlightWindow | null
+  const registry = view?.CSS && 'highlights' in view.CSS ? view.CSS.highlights : undefined
+  if (!view || !registry || !view.Highlight) return
+  registry.delete(CURRENT_MATCH_HIGHLIGHT_NAME)
+  if (!range) return
+  const highlight = new view.Highlight(range) as { priority: number }
+  highlight.priority = 1
+  registry.set(CURRENT_MATCH_HIGHLIGHT_NAME, highlight as never)
 }
 
 /**
  * Keeps the highlight current while the document renders asynchronously
  * (tables, diagrams, hydrating scripts). Highlights never touch the DOM, so
- * re-applying them cannot retrigger the observer. `onFirstMatch` runs once.
+ * re-applying them cannot retrigger the observer. `onFirstMatch` runs once;
+ * `onMatches` runs after every application with all current ranges.
  */
-export function keepSearchHighlighted(root: Element, query: string, onFirstMatch?: (range: Range) => void): () => void {
+export function keepSearchHighlighted(
+  root: Element,
+  query: string,
+  onFirstMatch?: (range: Range) => void,
+  onMatches?: (ranges: Range[]) => void,
+): () => void {
   const view = root.ownerDocument.defaultView
   let reported = false
   let frame = 0
   const apply = () => {
     frame = 0
-    const first = highlightSearchTerms(root, query)
+    const ranges = applySearchHighlight(root, query)
+    const first = ranges[0]
+    onMatches?.(ranges)
     if (first && !reported) {
       reported = true
       onFirstMatch?.(first)
@@ -112,10 +145,14 @@ export function watchReaderScroll(target: EventTarget) {
 
 export function clearSearchHighlight(document: Document) {
   const view = document.defaultView
-  if (view?.CSS && 'highlights' in view.CSS) view.CSS.highlights.delete(SEARCH_HIGHLIGHT_NAME)
+  if (view?.CSS && 'highlights' in view.CSS) {
+    view.CSS.highlights.delete(SEARCH_HIGHLIGHT_NAME)
+    view.CSS.highlights.delete(CURRENT_MATCH_HIGHLIGHT_NAME)
+  }
 }
 
-const HIGHLIGHT_STYLE = `::highlight(${SEARCH_HIGHLIGHT_NAME}) { background-color: rgba(255, 196, 0, 0.42); color: inherit; }`
+const HIGHLIGHT_STYLE = `::highlight(${SEARCH_HIGHLIGHT_NAME}) { background-color: rgba(255, 196, 0, 0.42); color: inherit; }
+::highlight(${CURRENT_MATCH_HIGHLIGHT_NAME}) { background-color: rgba(255, 140, 0, 0.78); color: inherit; }`
 const adoptedHighlightSheets = new WeakSet<CSSStyleSheet>()
 
 /**

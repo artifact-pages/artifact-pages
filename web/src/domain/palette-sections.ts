@@ -277,11 +277,11 @@ export function buildSections({
   // Listed after page matches, it becomes the default selection when no page name matches (IMP-42).
   const pageTextSection: PaletteSection[] = onSearchPageText
     ? [{
-        title: 'Page text',
+        title: 'Full text',
         entries: [{
           id: 'page-text-search',
           kind: 'page-text',
-          title: `Search page text for “${term}”`,
+          title: `Search full text for “${term}”`,
           shortcut: '⌘ ↵',
           onSelect: () => onSearchPageText(term),
         }],

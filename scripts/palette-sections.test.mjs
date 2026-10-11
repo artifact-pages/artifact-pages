@@ -92,7 +92,7 @@ test('blank query with no history yields Pages section and empty-history flag', 
 
 test('typed query with page matches omits headings and commands', () => {
   const result = build({ term: 'setup', currentArtifact: pages[0] })
-  assert.deepEqual(result.sections.map((section) => section.title), ['Pages', 'Page text'])
+  assert.deepEqual(result.sections.map((section) => section.title), ['Pages', 'Full text'])
   assert.equal(selection(result, 'setup', pages[0]), 0)
 })
 
@@ -113,7 +113,7 @@ test('typed query without page matches keeps page-text, headings, commands in th
     onJumpToHeading() {},
     onSearchPageText: () => {},
   })
-  assert.deepEqual(result.sections.map((section) => section.title), ['Page text', 'Headings in this page', 'Commands'])
+  assert.deepEqual(result.sections.map((section) => section.title), ['Full text', 'Headings in this page', 'Commands'])
   assert.equal(result.sections[1].entries[0].subtitle, 'Heading 2 · this page')
 })
 
@@ -208,7 +208,7 @@ const section = (result, title) => result.sections.find((candidate) => candidate
 test('a heading of another page is listed below page matches with its page and folder', () => {
   const navigated = []
   const result = buildDocs({ term: 'cloudflare', currentArtifact: docsIndex.artifacts[3], navigated })
-  assert.deepEqual(result.sections.map((s) => s.title), ['Page text', 'Headings in other pages'])
+  assert.deepEqual(result.sections.map((s) => s.title), ['Full text', 'Headings in other pages'])
   const headings = section(result, 'Headings in other pages').entries
   assert.deepEqual(headings.map((entry) => entry.title), ['Start with Cloudflare', 'Cloudflare R2 settings', 'Cloudflare で始める'])
   assert.deepEqual(headings.map((entry) => entry.subtitle), ['Getting started · en', 'Configuration · en/reference', 'はじめに · ja'])
@@ -232,7 +232,7 @@ test('pages keep priority: matched pages come first and headings follow, matched
 test('the open page is left out of other-page headings and keeps its fallback group', () => {
   const current = docsIndex.artifacts[1]
   const result = buildDocs({ term: 'cloudflare', currentArtifact: current })
-  assert.deepEqual(result.sections.map((s) => s.title), ['Page text', 'Headings in this page', 'Headings in other pages'])
+  assert.deepEqual(result.sections.map((s) => s.title), ['Full text', 'Headings in this page', 'Headings in other pages'])
   assert.deepEqual(section(result, 'Headings in other pages').entries.map((entry) => entry.title), ['Start with Cloudflare', 'Cloudflare で始める'])
 })
 
@@ -270,7 +270,7 @@ test('folders matching the query are listed below pages with page counts and a f
   folders.entries[0].onSelect()
   assert.deepEqual(navigated, ['/guide/en'])
   const titles = result.sections.map((s) => s.title)
-  assert.ok(titles.indexOf('Page text') < titles.indexOf('Folders'))
+  assert.ok(titles.indexOf('Full text') < titles.indexOf('Folders'))
 })
 
 test('a wrapper folder whose single page is already listed is not echoed, and folder hrefs are percent-encoded', () => {

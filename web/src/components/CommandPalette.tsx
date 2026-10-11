@@ -53,7 +53,7 @@ export function CommandPalette({
   onClose: () => void
   onNavigate: (href: string) => void
   onJumpToHeading: (headingId: string) => void
-  /** Hands the query to the sidebar's page text search; present only when the site supports it. */
+  /** Opens the full-text results page for the query; present only when the site supports it. */
   onSearchPageText?: (query: string) => void
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
@@ -302,7 +302,7 @@ export function CommandPalette({
         <footer className="palette-footer">
           <span><kbd>↑</kbd><kbd>↓</kbd> or <kbd>Ctrl+J/K</kbd> navigate</span>
           <span><kbd>↵</kbd> open</span>
-          {onSearchPageText && mode === 'search' && context !== 'sites' ? <span><kbd>⌘↵</kbd> search page text</span> : null}
+          {onSearchPageText && mode === 'search' && context !== 'sites' ? <span><kbd>⌘↵</kbd> search full text</span> : null}
           <span><code>&gt;</code> commands</span>
           <span><code>@</code> sites</span>
           {currentIndex ? <span><code>#</code> headings</span> : null}
