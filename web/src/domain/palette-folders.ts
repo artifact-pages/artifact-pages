@@ -52,6 +52,11 @@ export function findFolders(index: SiteIndex, query: FuzzyQuery, limit: number):
     .map(({ folder }) => folder)
 }
 
+/** True when the folder's own name (not just its path) matches the query. */
+export function folderNameMatches(folder: PaletteFolder, query: FuzzyQuery): boolean {
+  return fuzzyScoreNormalizedText(folder.preparedName, query) !== undefined
+}
+
 /**
  * Folder route `/<site>/<folder path>` (no trailing slash). Same segment encoding as
  * artifactRouteHref; kept here so the palette does not depend on routing.ts changes made

@@ -21,7 +21,7 @@ import {
 import type { FuzzyMatch } from './fuzzy-search'
 import { artifactRouteHref } from '../routing'
 import { findHeadingHits, headingFragment, headingLocation } from './palette-headings'
-import { findFolders, folderPageCountLabel, folderRouteHref } from './palette-folders'
+import { findFolders, folderNameMatches, folderPageCountLabel, folderRouteHref } from './palette-folders'
 
 // Rows per group in a plain query: other pages' headings (at most OTHER_HEADINGS_PER_PAGE from one
 // page) and folders. `#` mode lists more, since headings are all it shows.
@@ -261,7 +261,8 @@ export function buildSections({
   const shownPaths = new Set(pageSections.flatMap((pageSection) => pageSection.entries.flatMap((entry) => entry.subtitle ? [entry.subtitle] : [])))
   const folderEntries = buildFolderEntries(currentIndex, term, onNavigate, shownPaths)
   const folderSection = folderEntries.length ? [{ title: 'Folders', entries: folderEntries }] : []
-  const otherHeadingEntries = buildOtherHeadingEntries(
+  // A single character matches nearly every heading; other pages' headings wait for a second one.
+  const otherHeadingEntries = term.trim().length < 2 ? [] : buildOtherHeadingEntries(
     currentIndex, term, currentArtifact, onNavigate, OTHER_HEADINGS_LIMIT, OTHER_HEADINGS_PER_PAGE, shownPaths,
   )
   const otherHeadingSection = otherHeadingEntries.length
@@ -273,7 +274,7 @@ export function buildSections({
   const headingSection = headingEntries.length
     ? [{ title: 'Headings in this page', entries: headingEntries }]
     : []
-  // Listed after every match group, so a page, folder or heading is the default selection when one matches.
+  // Listed after page matches, it becomes the default selection when no page name matches (IMP-42).
   const pageTextSection: PaletteSection[] = onSearchPageText
     ? [{
         title: 'Page text',
@@ -291,10 +292,10 @@ export function buildSections({
 
   return plain([
     ...pageSections,
+    ...pageTextSection,
     ...folderSection,
     ...headingSection,
     ...otherHeadingSection,
-    ...pageTextSection,
     ...commandSection,
   ])
 }
@@ -439,16 +440,18 @@ function buildOtherHeadingEntries(
 }
 
 // A wrapper folder (one page, already listed as a page match, e.g. `checkout-latency/index.html`)
-// would only echo that page, so it is left out. Folders with several pages are always eligible.
+// would only echo that page, so it is left out. Folders with several pages, or whose own name
+// matched the query, are always eligible.
 function buildFolderEntries(
   index: SiteIndex,
   term: string,
   onNavigate: (href: string) => void,
   shownPaths: ReadonlySet<string>,
 ): PaletteEntry[] {
-  const candidates = findFolders(index, prepareFuzzyQuery(term), FOLDERS_LIMIT + shownPaths.size)
+  const query = prepareFuzzyQuery(term)
+  const candidates = findFolders(index, query, FOLDERS_LIMIT + shownPaths.size)
   const folders = candidates.filter((folder) => {
-    if (folder.pageCount !== 1) return true
+    if (folder.pageCount !== 1 || folderNameMatches(folder, query)) return true
     for (const path of shownPaths) if (path.startsWith(`${folder.path}/`)) return false
     return true
   }).slice(0, FOLDERS_LIMIT)

@@ -96,7 +96,7 @@ test('typed query with page matches omits headings and commands', () => {
   assert.equal(selection(result, 'setup', pages[0]), 0)
 })
 
-test('typed query without page matches keeps headings, page-text, commands in that order', () => {
+test('typed query without page matches keeps page-text, headings, commands in that order', () => {
   const withNotes = { ...index, artifacts: [artifact('overview', 'Overview', { toc: [{ id: 'n', text: 'Quokka notes', level: 2 }] })] }
   const commandsWithMatch = [{ title: 'Quokka mode', onSelect() {} }]
   const result = buildSections({
@@ -113,8 +113,8 @@ test('typed query without page matches keeps headings, page-text, commands in th
     onJumpToHeading() {},
     onSearchPageText: () => {},
   })
-  assert.deepEqual(result.sections.map((section) => section.title), ['Headings in this page', 'Page text', 'Commands'])
-  assert.equal(result.sections[0].entries[0].subtitle, 'Heading 2 · this page')
+  assert.deepEqual(result.sections.map((section) => section.title), ['Page text', 'Headings in this page', 'Commands'])
+  assert.equal(result.sections[1].entries[0].subtitle, 'Heading 2 · this page')
 })
 
 test('current page entry is flagged and badge text is Current page only', () => {
@@ -208,12 +208,13 @@ const section = (result, title) => result.sections.find((candidate) => candidate
 test('a heading of another page is listed below page matches with its page and folder', () => {
   const navigated = []
   const result = buildDocs({ term: 'cloudflare', currentArtifact: docsIndex.artifacts[3], navigated })
-  assert.deepEqual(result.sections.map((s) => s.title), ['Headings in other pages', 'Page text'])
+  assert.deepEqual(result.sections.map((s) => s.title), ['Page text', 'Headings in other pages'])
   const headings = section(result, 'Headings in other pages').entries
   assert.deepEqual(headings.map((entry) => entry.title), ['Start with Cloudflare', 'Cloudflare R2 settings', 'Cloudflare で始める'])
   assert.deepEqual(headings.map((entry) => entry.subtitle), ['Getting started · en', 'Configuration · en/reference', 'はじめに · ja'])
-  // The heading, not the page-text search, is the default Enter target.
-  assert.equal(entriesOf(result)[0].kind, 'heading')
+  // IMP-42: the page-text search stays the default Enter target when no page name matches.
+  assert.equal(entriesOf(result)[0].kind, 'page-text')
+  assert.equal(selection(result, 'cloudflare', docsIndex.artifacts[3]), 0)
   headings[0].onSelect()
   assert.deepEqual(navigated, ['/guide/en/getting-started.md#start-with-cloudflare'])
 })
@@ -231,7 +232,7 @@ test('pages keep priority: matched pages come first and headings follow, matched
 test('the open page is left out of other-page headings and keeps its fallback group', () => {
   const current = docsIndex.artifacts[1]
   const result = buildDocs({ term: 'cloudflare', currentArtifact: current })
-  assert.deepEqual(result.sections.map((s) => s.title), ['Headings in this page', 'Headings in other pages', 'Page text'])
+  assert.deepEqual(result.sections.map((s) => s.title), ['Page text', 'Headings in this page', 'Headings in other pages'])
   assert.deepEqual(section(result, 'Headings in other pages').entries.map((entry) => entry.title), ['Start with Cloudflare', 'Cloudflare で始める'])
 })
 
@@ -269,11 +270,14 @@ test('folders matching the query are listed below pages with page counts and a f
   folders.entries[0].onSelect()
   assert.deepEqual(navigated, ['/guide/en'])
   const titles = result.sections.map((s) => s.title)
-  assert.ok(titles.indexOf('Folders') < titles.indexOf('Page text'))
+  assert.ok(titles.indexOf('Page text') < titles.indexOf('Folders'))
 })
 
 test('a wrapper folder whose single page is already listed is not echoed, and folder hrefs are percent-encoded', () => {
-  assert.equal(section(buildDocs({ term: 'reference' }), 'Folders'), undefined)
+  const nested = { ...docsIndex, artifacts: [artifact('z', 'Zeta page', { path: 'docs/zeta/page.md' })] }
+  const wrapped = buildSections({ mode: 'search', context: 'site', term: 'docs', sites: docsSites, currentIndex: nested, recentReads: [], pinnedArtifactIds: [], commands, onNavigate() {}, onJumpToHeading() {} })
+  // "docs/zeta" matches only through its parent's name and holds the one listed page: hidden.
+  assert.deepEqual(section(wrapped, 'Folders').entries.map((entry) => entry.subtitle), ['docs'])
   const navigated = []
   const encoded = {
     ...docsIndex,
@@ -344,4 +348,56 @@ test('heading mode empty states', () => {
     'No headings match. Change or clear your search.')
   assert.equal(getEmptyMessage({ ...base, context: 'sites' }), 'Headings are searched after you choose a site.')
   assert.equal(buildDocs({ mode: 'heading', term: 'zzzz', currentArtifact: docsIndex.artifacts[0] }).sections.length, 0)
+})
+
+test('a wrapper folder whose own name matched is still listed', () => {
+  const wrapper = {
+    ...docsIndex,
+    artifacts: [artifact('c', 'Checkout review', { path: 'checkout/index.md' })],
+  }
+  const result = buildSections({ mode: 'search', context: 'site', term: 'checkout', sites: docsSites, currentIndex: wrapper, recentReads: [], pinnedArtifactIds: [], commands, onNavigate() {}, onJumpToHeading() {} })
+  assert.deepEqual(section(result, 'Folders').entries.map((entry) => entry.title), ['checkout'])
+})
+
+test('# fills its row limit across pages: the per-page cap does not starve the list', () => {
+  const many = {
+    ...docsIndex,
+    artifacts: Array.from({ length: 30 }, (_, page) => ({
+      ...artifact(`p${page}`, `Page ${page}`, { path: `d/p${page}.md` }),
+      toc: Array.from({ length: 10 }, (_, heading) => ({ id: `h${heading}`, text: `Topic ${heading}`, level: 2 })),
+    })),
+  }
+  const result = buildSections({ mode: 'heading', context: 'site', term: 'topic', sites: docsSites, currentIndex: many, recentReads: [], pinnedArtifactIds: [], commands, onNavigate() {}, onJumpToHeading() {} })
+  const entries = section(result, 'In other pages').entries
+  assert.equal(entries.length, 20)
+  const perPage = Object.values(Object.groupBy(entries, (entry) => entry.id.split(':')[2])).map((group) => group.length)
+  assert.ok(perPage.every((count) => count <= 5))
+})
+
+test('narrowing then widening the query gives the same headings as a fresh search', () => {
+  const run = (term) => section(buildDocs({ term, currentArtifact: docsIndex.artifacts[3] }), 'Headings in other pages')?.entries.map((entry) => entry.id)
+  const widened = (run('cloud'), run('cloudf'), run('cloudflare'))
+  const fresh = run('cloudflare')
+  assert.deepEqual(widened, fresh)
+  assert.deepEqual(run('cloud'), run('cloud'))
+})
+
+test('other-page heading search stays fast on a large heading-rich site', () => {
+  const words = ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot', 'golf', 'hotel', 'india', 'juliet']
+  const large = {
+    ...docsIndex,
+    artifacts: Array.from({ length: 5000 }, (_, page) => ({
+      ...artifact(`p${page}`, `Page ${page}`, { path: `d${page % 50}/p${page}.md` }),
+      toc: Array.from({ length: 12 }, (_, heading) => ({ id: `h${heading}`, text: `${words[(page + heading) % 10]} ${words[(page * 3 + heading) % 10]} ${heading}`, level: 2 })),
+    })),
+  }
+  const run = (term) => buildSections({ mode: 'search', context: 'site', term, sites: docsSites, currentIndex: large, recentReads: [], pinnedArtifactIds: [], commands, onNavigate() {}, onJumpToHeading() {}, onSearchPageText: () => {} })
+  run('zq') // warm the per-heading caches
+  const started = performance.now()
+  run('zqx')
+  run('hotel')
+  run('hotelx')
+  const perQuery = (performance.now() - started) / 3
+  // Generous bound (CI machines vary); the measured cost is a few ms.
+  assert.ok(perQuery < 150, `palette query took ${perQuery.toFixed(1)} ms for 5000 pages`)
 })

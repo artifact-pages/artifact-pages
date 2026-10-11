@@ -20,6 +20,7 @@ import {
   type PaletteContext,
   type PaletteEntry,
 } from '../domain/palette-sections'
+import { warmHeadingSearch } from '../domain/palette-headings'
 import { Icon } from './Icon'
 
 export type { PaletteCommand, PaletteContext } from '../domain/palette-sections'
@@ -124,6 +125,9 @@ export function CommandPalette({
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
+
+  // Prepare other pages' headings in the background so the first keystroke stays cheap.
+  useEffect(() => (currentIndex ? warmHeadingSearch(currentIndex) : undefined), [currentIndex])
 
   // A selection is valid only for the context, site, query and (where the list drives the default)
   // entry sequence it was made under; anything else falls back to the current default during render.

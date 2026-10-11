@@ -27,17 +27,64 @@ export type HeadingSearchOptions = {
   perPage: number
 }
 
-// Hits kept while scanning; the per-page cap is applied to this shortlist.
-const SHORTLIST = 64
+type PreparedHeading = { heading: TocEntry; text: string; mask: number }
+type PreparedToc = { headings: PreparedHeading[]; mask: number }
+type HeadingSearchCache = { terms: string[]; ordinals: number[] }
 
-const preparedHeadingText = new WeakMap<TocEntry, string>()
+const preparedTocs = new WeakMap<ArtifactIndexEntry, PreparedToc>()
+const searchCache = new WeakMap<SiteIndex, HeadingSearchCache>()
+
+// A 32-bit character bag: bit (code point mod 32) is set for every character. A text can match a
+// query only if it has every bit of the query, which rejects most headings (and, through the
+// union over a page's headings, most pages) before any fuzzy scoring.
+function characterMask(text: string): number {
+  let mask = 0
+  for (const character of text) mask |= 1 << (character.codePointAt(0)! & 31)
+  return mask
+}
+
+function preparedToc(artifact: ArtifactIndexEntry): PreparedToc {
+  let prepared = preparedTocs.get(artifact)
+  if (!prepared) {
+    let union = 0
+    const headings = (artifact.toc ?? []).map((heading) => {
+      const text = prepareFuzzyScoreText(heading.text)
+      const mask = characterMask(text)
+      union |= mask
+      return { heading, text, mask }
+    })
+    prepared = { headings, mask: union }
+    preparedTocs.set(artifact, prepared)
+  }
+  return prepared
+}
+
+/**
+ * Prepares every page's heading text in small time slices (idle-friendly) so the first keystroke
+ * does not pay for it. Returns a cancel function. Safe to skip: searching prepares on demand.
+ */
+export function warmHeadingSearch(index: SiteIndex): () => void {
+  let next = 0
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const slice = () => {
+    const deadline = performance.now() + 8
+    while (next < index.artifacts.length && performance.now() < deadline) preparedToc(index.artifacts[next++])
+    timer = next < index.artifacts.length ? setTimeout(slice, 0) : undefined
+  }
+  timer = setTimeout(slice, 0)
+  return () => { if (timer !== undefined) clearTimeout(timer) }
+}
 
 /**
  * Ranking: the heading's fuzzy score (the same scoring pages use), shallower headings
  * slightly ahead of deeper ones, and pages near the open page (shared folders) ahead of
- * distant ones as a tiebreak. A page that also matched by title is not excluded: its
- * headings are different targets. The same text twice on one page (for example two
- * "Examples" sections) is listed once, at the first anchor.
+ * distant ones as a tiebreak. A page that also matched by title is not excluded, but its
+ * title-level headings are (see shownPaths). The same text twice on one page (for example two
+ * "Examples" sections) is listed once, at the first anchor. Each page contributes its best
+ * `perPage` headings before the global top `limit` is taken, so the caps never starve the list.
+ *
+ * Cost: per-heading and per-page character masks reject most candidates cheaply, and a query
+ * that extends the previous one (same site index) only revisits the pages that matched it.
  */
 export function findHeadingHits(
   index: SiteIndex,
@@ -45,46 +92,48 @@ export function findHeadingHits(
   { currentArtifact, excludeCurrent = false, shownPaths, limit, perPage }: HeadingSearchOptions,
 ): HeadingHit[] {
   if (query.terms.length === 0) return []
-  const shortlist: HeadingHit[] = []
-  for (const artifact of index.artifacts) {
-    const toc = artifact.toc
-    if (!toc?.length) continue
-    if (excludeCurrent && artifact.id === currentArtifact?.id) continue
-    const titleShown = shownPaths?.has(artifact.path) === true
-    const folded = titleShown ? prepareFuzzyScoreText(artifact.title) : ''
-    const affinity = getPalettePathAffinity(artifact.path, currentArtifact?.path) * 0.1
-    for (const heading of toc) {
-      let prepared = preparedHeadingText.get(heading)
-      if (prepared === undefined) {
-        prepared = prepareFuzzyScoreText(heading.text)
-        preparedHeadingText.set(heading, prepared)
-      }
-      if (titleShown && (heading.level === 1 || prepared === folded)) continue
-      const fit = fuzzyScoreNormalizedText(prepared, query)
+  const queryMask = query.terms.reduce((mask, term) => mask | characterMask(term.normalized), 0)
+  const previous = searchCache.get(index)
+  const extendsPrevious = previous !== undefined
+    && query.terms.length >= previous.terms.length
+    && previous.terms.every((term, position) => query.terms[position].normalized.startsWith(term))
+  const candidateCount = extendsPrevious ? previous.ordinals.length : index.artifacts.length
+  const matchedOrdinals: number[] = []
+  const top: HeadingHit[] = []
+
+  for (let candidate = 0; candidate < candidateCount; candidate += 1) {
+    const ordinal = extendsPrevious ? previous.ordinals[candidate] : candidate
+    const artifact = index.artifacts[ordinal]
+    const prepared = preparedToc(artifact)
+    if (prepared.headings.length === 0 || (prepared.mask & queryMask) !== queryMask) continue
+    const own: HeadingHit[] = []
+    const seenText = new Set<string>()
+    let affinity: number | undefined
+    let matched = false
+    for (const { heading, text, mask } of prepared.headings) {
+      if ((mask & queryMask) !== queryMask) continue
+      const fit = fuzzyScoreNormalizedText(text, query)
       if (fit === undefined) continue
-      const score = fit - heading.level * 0.05 + affinity
-      let position = shortlist.length
-      while (position > 0 && shortlist[position - 1].score < score) position -= 1
-      if (position >= SHORTLIST) continue
-      shortlist.splice(position, 0, { artifact, heading, score })
-      if (shortlist.length > SHORTLIST) shortlist.pop()
+      matched = true
+      if (excludeCurrent && artifact.id === currentArtifact?.id) break
+      if (shownPaths?.has(artifact.path) && (heading.level === 1 || text === prepareFuzzyScoreText(artifact.title))) continue
+      if (seenText.has(text)) continue
+      seenText.add(text)
+      affinity ??= getPalettePathAffinity(artifact.path, currentArtifact?.path) * 0.1
+      own.push({ artifact, heading, score: fit - heading.level * 0.05 + affinity })
+    }
+    if (matched) matchedOrdinals.push(ordinal)
+    own.sort((left, right) => right.score - left.score)
+    for (const hit of own.slice(0, perPage)) {
+      let position = top.length
+      while (position > 0 && top[position - 1].score < hit.score) position -= 1
+      if (position >= limit) continue
+      top.splice(position, 0, hit)
+      if (top.length > limit) top.pop()
     }
   }
-
-  const hits: HeadingHit[] = []
-  const perPageCount = new Map<string, number>()
-  const seen = new Set<string>()
-  for (const hit of shortlist) {
-    const key = `${hit.artifact.id}\0${preparedHeadingText.get(hit.heading)}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    const count = perPageCount.get(hit.artifact.id) ?? 0
-    if (count >= perPage) continue
-    perPageCount.set(hit.artifact.id, count + 1)
-    hits.push(hit)
-    if (hits.length >= limit) break
-  }
-  return hits
+  searchCache.set(index, { terms: query.terms.map((term) => term.normalized), ordinals: matchedOrdinals })
+  return top
 }
 
 /** "Page title · folder", the folder omitted for pages at the site root. */
