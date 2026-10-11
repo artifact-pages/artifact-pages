@@ -1,12 +1,12 @@
 # Pages have no previous/next navigation at the end
 
-- Status: Blocked
+- Status: Won't fix
 - Priority: P3
 - Area: Reader page footer (`web/src/components/ArtifactWorkspace.tsx`)
 
-## Blocker
+## Why this will not be pursued
 
-Blocked on [ISSUE-076](ISSUE-076-pages-sorted-alphabetically-by-title.md) and [TD19](../technical-design/TD19-navigation-metadata-in-the-site-index.md): a pager needs an author-defined order, which the index does not carry. Unblock when ISSUE-076 lands.
+Owner decision, 2026-10-11 ([TD19](../technical-design/TD19-navigation-metadata-in-the-site-index.md)): the reader follows GitHub's repository file browser, which has no previous/next links, and no order metadata is added to the index. Without an author-defined order a pager would walk an arbitrary sequence. The underlying need (what to read after this page) is covered by [ISSUE-086](ISSUE-086-pages-have-no-related-pages-list.md), a related-pages list at the bottom of a page, which supersedes this issue.
 
 ## Problem
 

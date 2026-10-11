@@ -38,7 +38,7 @@ Chosen from the Storybook `Concepts/Reader UX 2026-10`/ISSUE-075 stories:
 - A folder with one page keeps its own folder URL (no redirect).
 - Sidebar: the folder label navigates to the folder page; the chevron only toggles. Breadcrumb folder segments are links; the sibling menu stays on a small chevron.
 - Palette: folders are listed below page matches.
-- Folder title is the raw folder name until TD19 provides metadata. Order stays alphabetical until ISSUE-076/TD19.
+- Folder title is the raw folder name; [TD19](../technical-design/TD19-navigation-metadata-in-the-site-index.md) (2026-10-11) settled that folders get no authored titles or descriptions. Order follows ISSUE-076 (folders first, then files by filename); until it lands the page uses title order.
 
 ## Acceptance criteria
 
@@ -46,7 +46,7 @@ Chosen from the Storybook `Concepts/Reader UX 2026-10`/ISSUE-075 stories:
 - [x] In the sidebar tree the folder label navigates to the directory page and the chevron alone toggles; keyboard: Enter on the label navigates, Right and Left expand and collapse. Existing `aria-expanded` semantics are kept on the toggle.
 - [x] Resolution order: if the directory has a `README.md`, `index.md`, `index.html` or `index.htm` (owner confirmed including the HTML index files on 2026-10-11) it renders as the page body with the child listing appended below it; otherwise the reader generates a page. Treating a sibling `foo.md` as the index of `foo/` (the Nextra and Outline model) is not in the first version (open follow-up); the collision rule when both an artifact and a directory have the same name is recorded in the Owner decision section. A `README.md` or `index.md` is itself an indexed page: decide whether it also appears as a child in the listing or only as the directory body (listing it twice is the default to avoid).
 - [x] The generated page has a title (the raw folder name; nicer titles wait for TD19), a breadcrumb whose segments are links, and a child list with subfolders first. Each artifact child shows its title and updated date, and its H2 headings are available from the index `toc` (shown as chips). Each subfolder child shows its page count.
-- [x] The first version needs no index schema change: it uses only fields `index.json` already carries. Per-child descriptions arrive later with [TD19](../technical-design/TD19-navigation-metadata-in-the-site-index.md).
+- [x] The first version needs no index schema change: it uses only fields `index.json` already carries. Per-child descriptions are dropped: [TD19](../technical-design/TD19-navigation-metadata-in-the-site-index.md) adds no description field.
 - [x] Breadcrumb folder segments become links to the directory page. The existing sibling menu may stay as a secondary affordance (for example on the chevron); decide the split in the issue.
 - [x] Directories appear in the command palette as results (a "Folders" group listed below page matches, with page counts) and open the directory page. Implemented with ISSUE-079.
 - [x] Listing order follows the rule introduced by [ISSUE-076](ISSUE-076-pages-sorted-alphabetically-by-title.md) and TD19. Until then the page uses the current (title) order, and that dependency is noted in the page's tests.
@@ -57,7 +57,7 @@ Chosen from the Storybook `Concepts/Reader UX 2026-10`/ISSUE-075 stories:
 ## Notes
 
 - Web only (Claude-owned). Do not build it for a single-level site with very few pages; the site home already serves that case, so the generated page may link to it or collapse to it.
-- Dependencies: ordering from ISSUE-076 and descriptions from TD19. Neither blocks the first version.
+- Dependencies: ordering from ISSUE-076 (filename order, decided in TD19). Descriptions are not planned. Neither blocks the first version.
 
 ## Resolution
 
@@ -68,5 +68,5 @@ Implemented on branch `claude-issue-075-directory-pages` (web only; pure logic i
 - Sidebar: the label is a link, the chevron a separate toggle (Right/Left on the label expand and collapse); the open folder row has `aria-current`. Breadcrumb: folder segments are links, the sibling menu moved to a small chevron button.
 - Chips link to the heading anchor of the page rather than an expandable outline. Order is alphabetical (folders by name, pages by title) until ISSUE-076 and TD19; `directory.test.mjs` pins that order.
 - Verified: unit tests (`web/src/domain/directory.test.mjs`), Playwright e2e ("directory pages" in `web/e2e/local-serving.spec.ts`) including 390 px, and Storybook `Product/Directory page`.
-- Open: the command palette AC is satisfied by the ISSUE-079 change; set Done once that merges. Per-child descriptions wait for TD19.
+- Open: the command palette AC is satisfied by the ISSUE-079 change; set Done once that merges. Per-child descriptions are no longer planned (TD19); the remaining ordering change is ISSUE-076.
 - Known limitation: the child lists are not virtualized, so a folder with thousands of direct children renders every row.
