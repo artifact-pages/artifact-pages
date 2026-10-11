@@ -1,6 +1,6 @@
 # Static full-text search core
 
-Implemented in [IMP-41](../backlog/implementation/IMP-41-fulltext-search-core.md). The production palette still uses its existing metadata search. This core can be called from a later submit-to-search interface without choosing that interface now.
+Implemented in [IMP-41](../backlog/implementation/IMP-41-fulltext-search-core.md). The palette keeps its metadata search and opens the results route for full-text queries; the route is defined in [TD20](../backlog/technical-design/TD20-search-results-page-and-snippet-packs.md) and [ISSUE-087](../backlog/issues/ISSUE-087-page-text-search-results-page.md). The additive section data below is the format contract for snippets; reader consumption remains in ISSUE-085.
 
 ## Build and publish
 
@@ -31,7 +31,7 @@ import { createSiteFullTextSearch } from './data/fulltext'
 
 const search = createSiteFullTextSearch(siteMetadata) // no request
 
-// Call on query commit (Enter/button), not on each keystroke.
+// Call for a committed or debounced nonblank query; the results route searches as the reader types.
 const controller = new AbortController()
 const result = await search.search('再試行 cache', {
   signal: controller.signal,
@@ -60,7 +60,7 @@ HTML title plus static body text are indexed. Markdown uses its display title an
 
 All result IDs are full source-relative document paths. Ordering is ascending UTF-8 path bytes, matching the Go artifact index; no relevance score, term frequency or positions are stored. The total covers the complete intersection, while `hits` contains only the requested page. Every path segment is URL-encoded independently for `href`.
 
-Reader-side ranking (ISSUE-077, 2026-10-11): the core stays path-ordered and unranked. The web reader loads every hit when the total is at most 500 (one request, `limit` = total, within the client's 1000 per request cap) and orders pages by title match, heading match from `index.json` `toc`, then body-only, path order within a tier; above 500 it keeps the paged, path-ordered list. This needs no format change. Snippets and body-hit ranking are not provided: they would need term frequencies or stored excerpts (a format change owned by the CLI side, versioned per TD2) or a client fetch of every result page. The owner chose no snippets for this step; they are deferred to a follow-up that must start from that format decision. That decision is proposed in [TD20](../backlog/technical-design/TD20-search-results-page-and-snippet-packs.md); once settled, the format wording will live in this document.
+Reader-side ranking (ISSUE-077, 2026-10-11): the core stays path-ordered and unranked. The web reader loads every hit when the total is at most 500 (one request, `limit` = total, within the client's 1000 per request cap) and orders pages by title match, heading match from `index.json` `toc`, then body-only, path order within a tier; above 500 it keeps the paged, path-ordered list. This ranking uses no new v1 data. The additive section-table and text-pack contract below supplies the body text needed for snippets; the reader behavior remains in ISSUE-085.
 
 ## Projection and binary format v1
 
@@ -69,9 +69,11 @@ _indexes/<site>/meta.json
 _indexes/<site>/search/manifest.json          mutable entry point
 _indexes/<site>/search/root-<sha256>.gz       dictionary, singleton IDs, path table
 _indexes/<site>/search/leaf-<sha256>.gz       shared postings for a stable token bucket
+_indexes/<site>/search/sections-<sha256>.gz   optional section table (v1 extension)
+_indexes/<site>/search/text-<sha256>.gz       optional normalized body-text pack (v1 extension)
 ```
 
-The manifest contains `version: 1`, `site`, `documents`, `generation`, a `root` object reference, and exactly 128 `shards` entries. Unused shards are `null`. Each reference contains `url`, `sha256`, compressed `bytes`, and decoded `rawBytes`. `generation` hashes the deterministic Go-encoded manifest with an empty generation field; it covers root **and all leaves**. A posting-only change may leave the root hash unchanged while the generation changes. SHA-256 references hash actual gzip file bytes; compression does not include timestamps. URLs are confined to the selected site's search prefix.
+The manifest contains `version: 1`, `site`, `documents`, `generation`, a `root` object reference, and exactly 128 `shards` entries. Unused shards are `null`. Each reference contains `url`, `sha256`, compressed `bytes`, and decoded `rawBytes`. `generation` hashes the deterministic Go-encoded manifest with an empty generation field; it covers root, all leaves, and any present `sections`, `texts`, and `snippetLimits` values. A posting-only or body-only change may leave the root hash unchanged while the generation changes. SHA-256 references hash actual gzip file bytes; compression does not include timestamps. URLs are confined to the selected site's search prefix. The v1 manifest may add the optional `sections`, `texts`, and `snippetLimits` fields below; their absence is valid and means there is no section data. They do not change the root, leaf, posting, or path-table bytes.
 
 Binary fields use unsigned LEB128 integers. Strings are UTF-8, front-coded against the previous string with byte-prefix length, suffix length, and suffix bytes. A prefix can split a UTF-8 code point; decode after reconstructing the complete string.
 
@@ -80,6 +82,51 @@ Binary fields use unsigned LEB128 integers. Strings are UTF-8, front-coded again
 - Posting starts with mode and cardinality. Mode 0 contains sorted document delta-varints (initial previous = 0); mode 1 contains `ceil(documents/8)` bitmap bytes, least-significant bit first; mode 2 contains run count followed by start delta from previous end and positive length; mode 3 contains delta-varints of the excluded documents; mode 4 means all documents and has no payload. The builder picks the shortest raw representation and interns identical lists within each leaf before gzip compression.
 
 The browser checks blob digest and byte lengths before/after decompression, magic/version, bounds, UTF-8, path shape, list references and cardinality. Truncated or trailing data is rejected. It never treats a missing/corrupt shard as an empty partial result.
+
+## Additive v1 section table and text packs
+
+The writer may add these fields to the existing v1 manifest without changing `version`:
+
+```json
+{
+  "sections": {"url": "/_indexes/sre/search/sections-<sha256>.gz", "sha256": "<64 lowercase hex>", "bytes": 123, "rawBytes": 456},
+  "texts": [
+    {"url": "/_indexes/sre/search/text-<sha256>.gz", "sha256": "<64 lowercase hex>", "bytes": 123, "rawBytes": 456}
+  ],
+  "snippetLimits": {
+    "maxDocumentBytes": 262144,
+    "maxSiteBytes": 33554432,
+    "truncatedDocuments": [],
+    "omittedDocuments": []
+  }
+}
+```
+
+`sections` and `texts` are either both present or both absent. When any section text is retained, `sections` is one object reference and `texts` is a non-empty array. If the site has no retained body text, both may be absent. The section reference's gzip member expands to compact UTF-8 JSON, with no leading/trailing whitespace or final newline:
+
+```json
+{"version":1,"documents":[{"path":"guide/start.md","sections":[{"heading":"","anchor":"","pack":0,"offset":0,"length":12},{"heading":"Retry","anchor":"md-retry","pack":0,"offset":12,"length":18}]}]}
+```
+
+The JSON member order is fixed as shown: table `version`, `documents`; document `path`, `sections`; section `heading`, `anchor`, `pack`, `offset`, `length`. The Go writer uses compact `encoding/json` output and its default string escaping. `version` is exactly `1`. Document rows are strictly ordered by the same UTF-8 path-byte order as the root path table and contain only documents with retained, non-empty body text. A title-only document has no row. A row's section list is in document order. It may begin with one lead section before any anchored heading; that section has empty `heading` and `anchor` and may appear only first. Every later section has a non-empty display heading and anchor and starts at an h1–h3 heading whose text and ID are recorded by the artifact index `toc`. h4–h6 and headings without a `toc` record stay in the current section. A heading that starts a section is also part of that section's text.
+
+`heading` is the display text recorded by `toc`, and `anchor` is that exact display anchor; neither is normalized. They are labels and navigation data, not the bytes searched in a snippet. The section's text bytes are `Normalize` of the static body text in that section, including its heading, using the same NFKC, lowercase, and whitespace folding as v1. The display title is not copied into a section: v1 postings still index title plus body, while the title remains in `index.json`. Thus a hit caused only by the title has no matching body section, no synthetic excerpt, and no heading anchor. A bodyless/title-only document also has no section row. A result whose path appears in `snippetLimits.omittedDocuments` has no stored body text because the site cap omitted it; the reader can distinguish this from a title-only hit.
+
+`texts` is an optional, non-empty array of object references in pack order. Each `text-<sha256>.gz` expands to plain UTF-8 bytes, with no magic, length prefix, JSON wrapper, or separator. The bytes are the concatenation of the normalized section strings in document/section order. This is storage concatenation only: a consumer keeps the section ranges separate and never matches across adjacent ranges. `pack` is a zero-based index into `texts`; `offset` and `length` are unsigned JSON integers measured in **bytes** of that pack's uncompressed payload, not Unicode scalar values, UTF-16 code units, or characters. Each section range is non-empty, in bounds, starts and ends on UTF-8 scalar boundaries, and decodes to valid UTF-8. Ranges cover each pack contiguously from byte zero to `rawBytes`, with no gaps, overlaps, or unreferenced packs. A document is never split between packs. Each pack contains whole documents in path order, although a pack may contain several documents.
+
+The section table and every text pack use the same reference checks as root and leaf: the URL must be exactly `/_indexes/<site>/search/<kind>-<sha256>.gz`, where `<kind>` is `sections` or `text`; the lowercase SHA-256 covers the compressed bytes, and `bytes` and `rawBytes` match the compressed and decoded lengths. Each object is exactly one gzip member with no trailing bytes. Gzip uses DEFLATE level 9 (`BestCompression`) with zero modification time and empty name, comment, and extra fields; the OS header byte is 255. This fixes the gzip metadata and makes repeated output deterministic for the same raw bytes and Go compressor. It does not promise that a different Go compressor version will emit the same DEFLATE bitstream.
+
+The decoder rejects unsupported table versions; malformed JSON, duplicate keys, wrong field types, unsafe/non-integer numbers, invalid UTF-8, duplicate or out-of-order document paths, a path absent from the root table, a repeated or misplaced lead section, invalid heading/anchor pairs, an invalid pack index, a range outside its pack, a range that splits a UTF-8 scalar, a non-contiguous range layout, an unreferenced pack, mismatched byte lengths or digest, a concatenated gzip member, and trailing compressed or decoded bytes. `sections` and `texts` must occur together; `texts` must be non-empty; the limit constants must be exactly 262144 and 33554432; and each path in the cap record must obey the stated root-membership and row-presence rules. Pack output is at most 262144 raw bytes. Readers continue to ignore unknown v1 manifest fields, but treat malformed values for these known optional fields as invalid search data; they must not silently fall back to an empty snippet result.
+
+### Packing and caps
+
+Documents are considered in root path order. Each section's static body text is normalized independently with `Normalize`, then its UTF-8 bytes are stored as that section's range; adjacent ranges are not normalized or matched as one string. For document-size accounting, the section byte lengths are summed, equivalent to concatenating them without delimiters. The per-document limit is 262144 normalized UTF-8 bytes. A longer document is truncated to the largest UTF-8 boundary at or below that byte limit; later sections disappear and the final retained section may be partial. The per-site limit is 33554432 raw text bytes across included packs, excluding the compressed bytes and section-table bytes. If adding a document's post-truncation text would exceed the site limit, that whole document is omitted; later documents are still considered and may fit. Omitted documents do not affect pack boundaries.
+
+After appending a whole document, a soft pack boundary occurs when the pack has at least 16384 raw bytes and the first byte of `SHA-256(UTF-8 path)` has its low three bits clear (`byte & 0x07 == 0`, probability 1/8). The target is approximately 65536 raw bytes, not a guarantee; actual size depends on document sizes and sampled paths. Before adding a document that would take a non-empty pack above 262144 bytes, the writer closes the current pack even if it is below 16384 bytes. It closes a pack at exactly 262144 bytes and closes the final non-empty pack at end of input even when it is below the soft minimum. A document is at most 262144 bytes after the per-document cap, so it can always fit in an empty pack. These constants, the path hash, and the section serialization are fixed for this extension.
+
+`snippetLimits` is present whenever `sections` or `texts` is present, and also when every candidate was omitted. The manifest extension keys are appended as `sections`, `texts`, `snippetLimits`; the record fields appear in the order shown. The two path fields are JSON arrays even when empty, sorted by UTF-8 bytes, and unique. Every listed path exists in the v1 root path table, and the arrays are disjoint. `truncatedDocuments` lists documents whose retained body is a prefix shortened by the per-document limit; each has a section-table row. `omittedDocuments` lists documents omitted by the site limit and therefore has no section row. A document omitted by the site limit is listed only in `omittedDocuments`, even if its untruncated source would also exceed the per-document limit. Each cap is non-fatal: the CLI warns with the affected document paths, and the v1 full-text index remains complete. If no body text is retained and no document is capped, all three optional fields may be absent. Missing `sections`/`texts` remains the v1 fallback: full-text results work but have no body snippets.
+
+The packer is path-hash sampling at document boundaries, not a rolling content hash over text. A republish with the same paths, same normalized section bytes, and same cap decisions produces the same raw packs and references under the same gzip implementation. A same-path content change with unchanged normalized byte lengths preserves boundary eligibility; the pack containing it still changes because the digest covers all bytes in that pack. A length change can move a soft or hard boundary and alter neighboring pack membership, offsets, and hashes until a later boundary is shared. Adding or removing a document can shift later partitions. Therefore unchanged documents keep identical pack objects only while their pack membership and preceding byte lengths remain stable; the format does not promise that only the changed document's pack changes. The `sections` reference and manifest generation may change even when some text packs remain reusable. Existing v1 root and leaf bytes stay unchanged; the v1 manifest generation changes to cover any new optional fields.
 
 ## Publication and updates
 
