@@ -18,11 +18,15 @@ After `admin` and `docs` use the admin-provided workflows, retire the private-co
 - Delete the `artifact-pages/fixture-private-config` repository, the `artifact-pages-ci-fixture` GitHub App, and the monorepo repository-scoped `FIXTURE_APP_ID` variable and `FIXTURE_APP_PRIVATE_KEY` secret only after IMP-75 is verified and the owner approves the concrete deletion.
 - Update the official guide and specification text that describes the retired Action input. The narrow guide scope is announced in workspace `STATUS.md`; keep the CLI `github://` locator documentation.
 
-**Pending gates:** IMP-75 migration verification; owner approval for repository/App/credential deletion; fresh independent review and green CI before source merge. The private repository and App still exist, and this item is not complete.
+## Current status (2026-10-11)
+
+The source change merged in [monorepo PR #81](https://github.com/artifact-pages/artifact-pages/pull/81) at [`ee6cc1e09d855dba31672c52a160772488534a68`](https://github.com/artifact-pages/artifact-pages/commit/ee6cc1e09d855dba31672c52a160772488534a68), after independent review and green CI. The four-page guide update merged in [docs PR #24](https://github.com/artifact-pages/docs/pull/24) at [`109ad7612baed0d2ac041845b031db67ddb93e1f`](https://github.com/artifact-pages/docs/commit/109ad7612baed0d2ac041845b031db67ddb93e1f). Post-merge publish run [38117652268](https://github.com/artifact-pages/docs/actions/runs/38117652268) succeeded: the `guide` site synced the four changed HTML pages and guide index, while `architecture` was a no-op. A separate post-publish check confirmed all four changed public pages return HTTP 200 and their SHA-256 hashes match the source at `109ad7612baed0d2ac041845b031db67ddb93e1f`.
+
+The `artifact-pages/fixture-private-config` repository, `artifact-pages-ci-fixture` GitHub App, and repository-scoped `FIXTURE_APP_ID` variable and `FIXTURE_APP_PRIVATE_KEY` secret still exist. The owner has not approved their deletion; that cleanup remains pending.
 
 ## Acceptance criteria
 
 - [x] Source removes the Action input and fixture-only workflow/check while preserving the CLI `github://` locator and tests.
-- [ ] Verify IMP-75 migration, then merge the source change after independent review and green CI.
+- [x] Verify IMP-75 migration, then merge the source change after independent review and green CI (monorepo PR #81; IMP-75 verification is recorded in its ticket).
 - [ ] Delete the repository, App, variable and secret with the owner's recorded approval.
-- [ ] No official guide page presents the retired Action input as a site topology.
+- [x] No official guide page presents the retired Action input as a site topology; all four changed pages were verified against the merged source after publish run 38117652268.
