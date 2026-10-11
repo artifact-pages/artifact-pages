@@ -25,6 +25,10 @@ Feasibility constraints (from the format contract): the client has no body text,
 
 Results are ordered by relevance, show why they matched, and can be scoped by language or folder.
 
+## Owner decision (2026-10-11)
+
+Chosen from the Storybook `Concepts/Reader UX 2026-10`/ISSUE-077 stories: variant B, a ranked flat list with a match-reason line ("Title", "Heading: <heading>", "Text"). This amends the IMP-42 agreed interaction (path-ordered folder groups); the owner approved the change on 2026-10-11. The folder scope chip is off by default and offered only when the open page sits in a folder. Ranking loads all hit pages first and falls back to path order above a recorded threshold. No snippets in this step.
+
 ## Acceptance criteria
 
 - [ ] First step, web-side only (no search format change): results are ranked by (title match, then heading match from `index.json` `toc`, then body-only match) while keeping path order within a tier. The matching tier is not shown as a score, only as order. Unit tests cover the tiers. Constraint: the search contract returns path-ordered results paged 20 at a time (`docs/specification.md:473`, `:475`; `docs/architecture/fulltext-search.md:61`), so tier ranking needs every hit page loaded before ordering. The cost is bounded by the site's `documents` count; record the threshold above which ranking falls back to path order.

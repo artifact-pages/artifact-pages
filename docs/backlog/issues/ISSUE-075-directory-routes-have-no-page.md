@@ -28,6 +28,17 @@ Competitor patterns (observed in the 2026-10-11 review; hands-on DOM and screens
 
 Every directory in a site is a routable page with a stable URL, reachable from the tree, the breadcrumb and the command palette, and usable on a narrow screen.
 
+## Owner decision (2026-10-11)
+
+Chosen from the Storybook `Concepts/Reader UX 2026-10`/ISSUE-075 stories:
+
+- Layout: variant A (list rows: icon, title, updated date and committer, H2 headings as chips, subfolders first with "N pages"). A folder that contains `README.md` or `index.md` uses variant C: that page's body first, then the compact child list.
+- The README/index page is not listed again among the children.
+- A folder with one page keeps its own folder URL (no redirect).
+- Sidebar: the folder label navigates to the folder page; the chevron only toggles. Breadcrumb folder segments are links; the sibling menu stays on a small chevron.
+- Palette: folders are listed below page matches.
+- Folder title is the raw folder name until TD19 provides metadata. Order stays alphabetical until ISSUE-076/TD19.
+
 ## Acceptance criteria
 
 - [ ] `/<site>/<dir>` for any directory that contains at least one artifact (at any depth) renders a directory page instead of "Page not found". A path that is neither an artifact nor a directory keeps the existing not-found view.

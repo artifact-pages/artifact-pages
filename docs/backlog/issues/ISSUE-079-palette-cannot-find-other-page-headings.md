@@ -22,6 +22,10 @@ This is the documented contract (`docs/specification.md:463`: `#` searches headi
 
 A heading of any page in the site can be found and opened from the palette, with the page it belongs to visible.
 
+## Owner decision (2026-10-11)
+
+Chosen from the Storybook `Concepts/Reader UX 2026-10`/ISSUE-079 stories: in the normal palette, variant A, a separate "Headings in other pages" section below the page results so pages keep priority. In `#` mode, headings of all pages are searched with the open page's headings first (variant C behavior).
+
 ## Acceptance criteria
 
 - [ ] A plain query that matches a heading of another page lists it, labeled "Page > Heading", below page matches so page-title results keep priority (ranking rule recorded in the issue).
