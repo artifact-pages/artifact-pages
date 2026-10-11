@@ -1,6 +1,7 @@
 # The reader shell has no skip link and keeps lang="en" on Japanese documents
 
-- Status: Open
+- Status: Done
+- Assignee: Claude
 - Priority: P3
 - Area: Reader shell accessibility (`web/index.html`, `web/src/components/ArtifactWorkspace.tsx`)
 
@@ -27,6 +28,12 @@ Keyboard users can skip straight to the document, and assistive technology annou
 
 ## Acceptance criteria
 
-- [ ] A "Skip to content" link is the first focusable element in the shell, visible on focus, and moves focus to the main region (or the artifact frame).
-- [ ] When a document with a declared language is open, the language is exposed to assistive technology: either the shell sets `lang` for the document region or the frame element carries the artifact's declared language. The approach is recorded in the issue; chrome text stays English unless localization is separately decided.
-- [ ] A Playwright case checks the skip link's focus order and target; the language behavior is checked on a Japanese fixture.
+- [x] A "Skip to content" link is the first focusable element in the shell, visible on focus, and moves focus to the main region (or the artifact frame).
+- [x] When a document with a declared language is open, the language is exposed to assistive technology: either the shell sets `lang` for the document region or the frame element carries the artifact's declared language. The approach is recorded in the issue; chrome text stays English unless localization is separately decided.
+- [x] A Playwright case checks the skip link's focus order and target; the language behavior is checked on a Japanese fixture.
+
+## Resolution
+
+- Skip link: `ArtifactWorkspace` renders "Skip to content" as the first element of the shell. It is visually hidden until focused. Activation does not navigate (the URL fragment belongs to the open document); it moves focus to the artifact frame for HTML and to `<main id="main-content">` otherwise.
+- Language source (recorded in the specification, "Main pane"): for HTML artifacts the reader reads `<html lang>` of the artifact through the same-origin frame (`onLoad`) and sets `lang` on the iframe element when it is a valid BCP 47-shaped tag. The index carries no language, so nothing is guessed for HTML. Markdown has no declaration; the Markdown reader sets `lang="ja"` on the document region only when the prose (code ignored) has kana and at least a third of its letters are Japanese (Han alone is ambiguous with Chinese); other Markdown stays undeclared. The shell chrome stays English and `<html lang="en">` is unchanged (localizing the chrome is still a separate decision).
+- Tests: `web/src/domain/document-language.test.mjs` (`npm run test:reader-shell`) and the Playwright cases in "reader shell polish" (skip link focus order and target for HTML and Markdown; HTML `lang="ja"` and Markdown Japanese fixtures routed over the committed pages).

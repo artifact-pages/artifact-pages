@@ -494,6 +494,10 @@ The left sidebar derives a tree/navigation model from the site index. Its top ho
 
 ### Main pane
 
+The first focusable element of the workspace is a "Skip to content" link. It is hidden until it receives keyboard focus, and activating it moves focus to the artifact frame (HTML) or to the main region (Markdown, site home and not-found views) without changing the URL, whose fragment belongs to the open document.
+
+The document's language is exposed as `lang` on the artifact region only; the shell chrome stays English and the application document keeps `<html lang="en">`. The source is the document itself, never a guess about the site: for an HTML artifact the reader reads the `lang` of the artifact's own `<html>` through the same-origin frame and sets it on the frame element when it is a valid language tag (a missing, invalid or cross-origin value sets nothing). Markdown has no declaration, so the reader marks a Markdown document `lang="ja"` only when its prose, ignoring code, contains kana and at least a third of its letters are Japanese; any other Markdown document is left undeclared. Localizing the chrome is a separate product decision.
+
 HTML artifacts are loaded from `/_artifacts/*` into the iframe. Markdown artifacts are rendered in
 the application's native reader within the same workspace.
 

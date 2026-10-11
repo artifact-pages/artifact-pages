@@ -5710,3 +5710,61 @@ test.describe('reader compatibility rules', () => {
     await expect(page.locator('.preview-group').first()).toBeVisible()
   })
 })
+
+test.describe('reader shell polish', () => {
+  const checkoutPath = '/sre/incidents/checkout-latency/index.html'
+
+  test('the skip link is the first tab stop, shows on focus and moves focus to the document', async ({ page }) => {
+    await page.goto(checkoutPath)
+    const frame = page.locator('iframe.artifact-frame')
+    await expect(frame).toBeVisible()
+
+    const skipLink = page.getByRole('link', { name: 'Skip to content' })
+    await expect(skipLink).not.toBeInViewport()
+    await page.keyboard.press('Tab')
+    await expect(skipLink).toBeFocused()
+    await expect(skipLink).toBeInViewport({ ratio: 1 })
+
+    await page.keyboard.press('Enter')
+    await expect(frame).toBeFocused()
+    await expect(page).toHaveURL(checkoutPath)
+    await expect(skipLink).not.toBeInViewport()
+  })
+
+  test('the skip link focuses the main region for a Markdown document', async ({ page }) => {
+    await page.goto('/sre/runbooks/service-recovery.md')
+    await expect(page.getByTestId('markdown-document')).toBeVisible()
+    await page.getByRole('link', { name: 'Skip to content' }).focus()
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('main')).toBeFocused()
+    await expect(page).toHaveURL('/sre/runbooks/service-recovery.md')
+  })
+
+  test('the artifact frame carries the language its HTML declares', async ({ page }) => {
+    await page.route('**/_artifacts/sre/architecture/platform-topology/index.html', async (route) => {
+      const response = await route.fetch()
+      const html = (await response.text()).replace(/<html[^>]*>/i, '<html lang="ja">')
+      await route.fulfill({ response, body: html })
+    })
+    await page.goto('/sre/architecture/platform-topology/index.html')
+    await expect(page.locator('iframe.artifact-frame')).toHaveAttribute('lang', 'ja')
+    // The shell chrome stays English.
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en')
+
+    await page.goto(checkoutPath)
+    await expect(page.locator('iframe.artifact-frame')).toHaveAttribute('lang', 'en')
+  })
+
+  test('a Japanese Markdown document is marked lang="ja" and an English one is not', async ({ page }) => {
+    await page.route('**/_artifacts/sre/runbooks/service-recovery.md', (route) => route.fulfill({
+      contentType: 'text/markdown; charset=utf-8',
+      body: '# サービス復旧手順\n\nこのページでは、障害発生時の初動と復旧の流れをまとめます。\n',
+    }))
+    await page.goto('/sre/runbooks/service-recovery.md')
+    await expect(page.getByTestId('markdown-document')).toHaveAttribute('lang', 'ja')
+
+    await page.goto('/sre/reports/latency-retrospective.md')
+    await expect(page.getByTestId('markdown-document')).toBeVisible()
+    await expect(page.getByTestId('markdown-document')).not.toHaveAttribute('lang', /.+/)
+  })
+})
