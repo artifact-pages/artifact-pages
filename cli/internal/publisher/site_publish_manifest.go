@@ -93,9 +93,6 @@ func loadSitePublishSnapshot(ctx context.Context, backend ConditionalObjectBacke
 	}
 	if err := validateSitePublishStateHead(siteID, info); err != nil {
 		if errors.Is(err, errSiteControlLegacyFormat) {
-			if retry.Transaction != nil {
-				return sitePublishSnapshot{}, unfinishedSiteCacheRetryError(siteID, err)
-			}
 			if stateReadMode == publishStateReadHeadThenGet {
 				var getErr error
 				stateObject, getETag, getErr = getSiteControl(ctx, backend, siteID, key)
@@ -123,7 +120,7 @@ func loadSitePublishSnapshot(ctx context.Context, backend ConditionalObjectBacke
 			}
 		}
 		if _, decodeErr := decodeSitePublishState(siteID, info, body.Bytes); errors.Is(decodeErr, errSiteControlLegacyFormat) {
-			return sitePublishSnapshot{}, unfinishedSiteCacheRetryError(siteID, decodeErr)
+			return loadLegacySitePublishSnapshot(ctx, backend, siteID, snapshot, info, body, decodeErr)
 		}
 		return sitePublishSnapshot{}, classifyErr
 	}
@@ -131,9 +128,6 @@ func loadSitePublishSnapshot(ctx context.Context, backend ConditionalObjectBacke
 		state, err := decodeSitePublishState(siteID, info, stateObject.Bytes)
 		if err != nil {
 			if errors.Is(err, errSiteControlLegacyFormat) {
-				if retry.Transaction != nil {
-					return sitePublishSnapshot{}, unfinishedSiteCacheRetryError(siteID, err)
-				}
 				return loadLegacySitePublishSnapshot(ctx, backend, siteID, snapshot, info, stateObject, err)
 			}
 			return sitePublishSnapshot{}, fmt.Errorf("validate site publish state: %w", err)
@@ -162,9 +156,6 @@ func loadSitePublishSnapshot(ctx context.Context, backend ConditionalObjectBacke
 		state, err := decodeSitePublishState(siteID, info, stateObject.Bytes)
 		if err != nil {
 			if errors.Is(err, errSiteControlLegacyFormat) {
-				if retry.Transaction != nil {
-					return sitePublishSnapshot{}, unfinishedSiteCacheRetryError(siteID, err)
-				}
 				return loadLegacySitePublishSnapshot(ctx, backend, siteID, snapshot, info, stateObject, err)
 			}
 			return sitePublishSnapshot{}, fmt.Errorf("validate site publish state: %w", err)
@@ -191,6 +182,9 @@ func loadLegacySitePublishSnapshot(ctx context.Context, backend ConditionalObjec
 	var formatErr *siteControlLegacyFormatError
 	if !errors.As(legacyErr, &formatErr) {
 		return sitePublishSnapshot{}, legacyErr
+	}
+	if err := validateLegacySitePublishStateBytes(siteID, info, object.Bytes); err != nil {
+		return sitePublishSnapshot{}, err
 	}
 	if snapshot.retry.Transaction != nil {
 		return sitePublishSnapshot{}, unfinishedSiteCacheRetryError(siteID, legacyErr)

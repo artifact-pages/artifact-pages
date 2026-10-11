@@ -87,6 +87,7 @@ func writeSiteSyncReport(writer io.Writer, result publisher.Result, resolved dep
 	}
 	fmt.Fprintln(writer)
 	if result.LegacyControl != nil {
+		wroteLine := false
 		if state := result.LegacyControl.PublishState; state != nil {
 			verb, saved := "rebuilt", "saved"
 			if dryRun {
@@ -94,13 +95,17 @@ func writeSiteSyncReport(writer io.Writer, result publisher.Result, resolved dep
 			}
 			fmt.Fprintf(writer, "\n  Publish state  %s from the origin inventory (older prerelease format: %s); previous record %s to %s\n",
 				verb, reportText(state.Detail), saved, reportText(state.BackupKey))
+			wroteLine = true
 		}
 		if retry := result.LegacyControl.CacheRetry; retry != nil {
 			saved := "saved"
 			if dryRun {
 				saved = "would be saved"
 			}
-			fmt.Fprintf(writer, "\n  Cache retry  older prerelease record adopted; previous record %s to %s\n", saved, reportText(retry.BackupKey))
+			if !wroteLine {
+				fmt.Fprint(writer, "\n")
+			}
+			fmt.Fprintf(writer, "  Cache retry  older prerelease record adopted; previous record %s to %s\n", saved, reportText(retry.BackupKey))
 		}
 	}
 	changes := append([]publisher.Change(nil), result.Changes...)

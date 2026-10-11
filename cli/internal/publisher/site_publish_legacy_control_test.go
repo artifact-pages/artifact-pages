@@ -140,7 +140,7 @@ func addLegacyPublishChanges(t *testing.T, root string, store *sitePublishScaleB
 	return staleKey, newKey
 }
 
-func publishSiteLegacyCapture(t *testing.T, root string, store *sitePublishScaleBackend, options SitePublishOptions, backend *sitePublishLegacyCaptureBackend) (Result, error) {
+func publishSiteLegacyCapture(t *testing.T, root string, store *sitePublishScaleBackend, options SitePublishOptions, backend DeploymentBackend) (Result, error) {
 	t.Helper()
 	if backend == nil {
 		backend = &sitePublishLegacyCaptureBackend{sitePublishScaleBackend: store}
@@ -200,6 +200,18 @@ type sitePublishLegacyGetOnlyBackend struct {
 	*sitePublishLegacyCaptureBackend
 }
 
+type sitePublishLegacyHeadSizeMismatchBackend struct {
+	*sitePublishLegacyCaptureBackend
+}
+
+func (backend *sitePublishLegacyHeadSizeMismatchBackend) HeadObject(ctx context.Context, key string) (ObjectInfo, error) {
+	info, err := backend.sitePublishLegacyCaptureBackend.HeadObject(ctx, key)
+	if err == nil && key == sitePublishStateKey("sre") {
+		info.Size++
+	}
+	return info, err
+}
+
 func (*sitePublishLegacyGetOnlyBackend) publishStateReadMode() publishStateReadMode {
 	return publishStateReadGetOnly
 }
@@ -217,6 +229,70 @@ func TestPublishSiteRebuildsLegacyStateInGetOnlyMode(t *testing.T) {
 	}
 	if _, _, err := store.lockMemoryBackend.GetObject(context.Background(), siteLegacyPublishStateBackupKey("sre", legacy.Bytes)); err != nil {
 		t.Fatalf("GET-only legacy backup missing: %v", err)
+	}
+}
+
+func TestPublishSiteLegacyValidationFailsClosedBeforeWrites(t *testing.T) {
+	for _, test := range []struct {
+		name             string
+		edit             func(*Object)
+		want             string
+		headSizeMismatch bool
+	}{
+		{
+			name: "invalid sha metadata",
+			edit: func(object *Object) { object.Metadata["artifact-pages-sha256"] = "not-a-hash" },
+			want: "site publish state HEAD has an invalid compressed SHA256",
+		},
+		{
+			name:             "size mismatch",
+			want:             "site publish state body size does not match HEAD",
+			headSizeMismatch: true,
+		},
+		{
+			name: "digest mismatch",
+			edit: func(object *Object) {
+				object.Metadata["artifact-pages-sha256"] = strings.Repeat("0", 64)
+				if object.Metadata["artifact-pages-sha256"] == sha256Hex(object.Bytes) {
+					object.Metadata["artifact-pages-sha256"] = strings.Repeat("1", 64)
+				}
+			},
+			want: "site publish state body SHA256 does not match HEAD",
+		},
+		{
+			name: "non-gzip body",
+			edit: func(object *Object) {
+				object.Bytes = []byte("not gzip")
+				object.Metadata["artifact-pages-sha256"] = sha256Hex(object.Bytes)
+			},
+			want: "open site publish state gzip:",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root, store, options := sitePublishRecoveryFixture(t)
+			legacy, etag := legacySitePublishState(t, store, "missing committed generation")
+			if test.edit != nil {
+				test.edit(&legacy)
+				if _, err := store.lockMemoryBackend.PutObjectConditional(context.Background(), sitePublishStateKey("sre"), legacy, ObjectCondition{IfMatchETag: etag}); err != nil {
+					t.Fatalf("seed malformed legacy state: %v", err)
+				}
+			}
+			options.DryRun = true
+			base := &sitePublishLegacyCaptureBackend{sitePublishScaleBackend: store}
+			var backend DeploymentBackend = base
+			if test.headSizeMismatch {
+				backend = &sitePublishLegacyHeadSizeMismatchBackend{sitePublishLegacyCaptureBackend: base}
+			}
+			store.resetCounts()
+			_, err := publishSiteLegacyCapture(t, root, store, options, backend)
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("legacy validation error = %v; want text containing %q", err, test.want)
+			}
+			counts, _, _, bytesWritten := store.countSnapshot()
+			if counts["PUT"] != 0 || counts["DELETE"] != 0 || bytesWritten != 0 || len(base.originWrites) != 0 || len(base.originDeletes) != 0 || len(base.stateConditions) != 0 {
+				t.Fatalf("invalid legacy state caused writes: counts=%v bytesWritten=%d origin=%v deletes=%v state=%v", counts, bytesWritten, base.originWrites, base.originDeletes, base.stateConditions)
+			}
+		})
 	}
 }
 
@@ -299,6 +375,28 @@ func TestPublishSiteLegacyBackupConflictStopsBeforeOriginWrites(t *testing.T) {
 				t.Fatalf("origin/state writes occurred before backup conflict: writes=%v deletes=%v state=%v", backend.originWrites, backend.originDeletes, backend.stateConditions)
 			}
 		})
+	}
+}
+
+func TestPublishSiteLegacyCacheRetryBackupConflictNamesRecord(t *testing.T) {
+	root, store, options := sitePublishRecoveryFixture(t)
+	legacyBytes := []byte(`{"schemaVersion":1,"paths":["/_artifacts/sre/old.html"]}`)
+	legacy := Object{Bytes: legacyBytes, ContentType: "application/json; charset=utf-8", Cache: "no-store"}
+	if _, err := store.lockMemoryBackend.PutObjectConditional(context.Background(), siteCacheRetryKey("sre"), legacy, ObjectCondition{IfNoneMatch: true}); err != nil {
+		t.Fatalf("seed legacy cache retry record: %v", err)
+	}
+	backupKey := siteLegacyCacheRetryBackupKey("sre", legacyBytes)
+	if err := store.lockMemoryBackend.PutObject(context.Background(), backupKey, Object{Bytes: []byte("different backup bytes")}); err != nil {
+		t.Fatalf("seed conflicting cache retry backup: %v", err)
+	}
+	backend := &sitePublishLegacyCaptureBackend{sitePublishScaleBackend: store}
+	_, err := publishSiteLegacyCapture(t, root, store, options, backend)
+	want := "legacy cache-retry record backup " + backupKey + " exists with different bytes"
+	if err == nil || err.Error() != want {
+		t.Fatalf("cache retry backup conflict = %v; want %q", err, want)
+	}
+	if len(backend.originWrites) != 0 || len(backend.originDeletes) != 0 || len(backend.stateConditions) != 0 || len(backend.retryConditions) != 0 {
+		t.Fatalf("origin/control writes occurred before cache retry backup conflict: writes=%v deletes=%v state=%v retry=%v", backend.originWrites, backend.originDeletes, backend.stateConditions, backend.retryConditions)
 	}
 }
 

@@ -16,7 +16,7 @@ func unfinishedSiteCacheRetryError(site string, legacyErr error) error {
 		site, formatErr.Record, formatErr.Detail, siteCacheRetryKey(site))
 }
 
-func writeSiteControlLegacyBackup(ctx context.Context, backend ConditionalObjectBackend, key string, original Object) error {
+func writeSiteControlLegacyBackup(ctx context.Context, backend ConditionalObjectBackend, record, key string, original Object) error {
 	backup := cloneSiteControlObject(original)
 	_, err := backend.PutObjectConditional(ctx, key, backup, ObjectCondition{IfNoneMatch: true})
 	if err == nil {
@@ -31,7 +31,7 @@ func writeSiteControlLegacyBackup(ctx context.Context, backend ConditionalObject
 		return fmt.Errorf("read existing legacy site control backup %s: %w", key, err)
 	}
 	if !bytes.Equal(existing.Bytes, original.Bytes) {
-		return fmt.Errorf("legacy publish-state backup %s exists with different bytes", key)
+		return fmt.Errorf("legacy %s backup %s exists with different bytes", record, key)
 	}
 	return nil
 }

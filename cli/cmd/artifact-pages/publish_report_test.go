@@ -130,6 +130,10 @@ func TestSiteSyncReportLegacyControlAndJSON(t *testing.T) {
 	} {
 		var output bytes.Buffer
 		writeSiteSyncReport(&output, result, deploymentconfig.ResolvedConfig{}, test.dry, false)
+		wantLines := "  " + strings.Join(test.want, "\n  ")
+		if !strings.Contains(output.String(), "\n"+wantLines+"\n") {
+			t.Errorf("legacy report lines differ from the specified summary lines:\n%s", output.String())
+		}
 		for _, expected := range test.want {
 			if !strings.Contains(output.String(), expected) {
 				t.Errorf("legacy report missing %q:\n%s", expected, output.String())

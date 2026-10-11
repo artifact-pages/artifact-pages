@@ -163,12 +163,12 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 		}
 		if !options.DryRun {
 			if snapshot.legacyRebuild {
-				if err := writeSiteControlLegacyBackup(operationCtx, conditional, snapshot.legacyBackupKey, snapshot.legacyObject); err != nil {
+				if err := writeSiteControlLegacyBackup(operationCtx, conditional, "publish-state", snapshot.legacyBackupKey, snapshot.legacyObject); err != nil {
 					return result, err
 				}
 			}
 			if pending.legacyRecord {
-				if err := writeSiteControlLegacyBackup(operationCtx, conditional, pending.legacyBackupKey, pending.legacyObject); err != nil {
+				if err := writeSiteControlLegacyBackup(operationCtx, conditional, "cache-retry record", pending.legacyBackupKey, pending.legacyObject); err != nil {
 					return result, err
 				}
 			}
