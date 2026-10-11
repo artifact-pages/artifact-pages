@@ -11,6 +11,7 @@ import { isThemeMode, resolveTheme } from './domain/theme'
 import type { ResolvedTheme, ThemeMode } from './domain/theme'
 import { canonicalPathname, parseRoute, type AppRoute } from './routing'
 import { APP_NAME, pageTitle, usePageTitle } from './components/usePageTitle'
+import { usePageNoindex } from './components/usePageNoindex'
 
 type LoadingState<T> =
   | { status: 'loading' }
@@ -383,6 +384,7 @@ function RepublishPage({ scope, title, onBack }: { scope: 'site' | 'registry'; t
 
 function PageNotFoundPage({ onBack }: { onBack: () => void }) {
   usePageTitle(pageTitle('Page not found', APP_NAME))
+  usePageNoindex()
   return (
     <main className="status-page">
       <div className="status-content">

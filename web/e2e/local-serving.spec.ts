@@ -5767,4 +5767,30 @@ test.describe('reader shell polish', () => {
     await expect(page.getByTestId('markdown-document')).toBeVisible()
     await expect(page.getByTestId('markdown-document')).not.toHaveAttribute('lang', /.+/)
   })
+
+  test('a missing page is not indexable and suggests similar pages', async ({ page }) => {
+    const noindex = page.locator('head meta[name="robots"][content="noindex"]')
+    await page.goto('/sre/incidents/checkout-latency/nope.html')
+    await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
+    await expect(noindex).toHaveCount(1)
+
+    const suggestions = page.getByRole('navigation', { name: 'Similar pages' })
+    const suggestion = suggestions.getByRole('link', { name: /Checkout latency incident review/ })
+    await expect(suggestion).toHaveAttribute('href', checkoutPath)
+    await suggestion.click()
+    await expect(page).toHaveURL(checkoutPath)
+    await expect(page.locator('iframe.artifact-frame')).toBeVisible()
+    await expect(noindex).toHaveCount(0)
+  })
+
+  test('a missing page with nothing similar offers no suggestions and an unknown site is not indexable either', async ({ page }) => {
+    await page.goto('/sre/zzzz/qqqq')
+    await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
+    await expect(page.getByRole('navigation', { name: 'Similar pages' })).toHaveCount(0)
+    await expect(page.locator('head meta[name="robots"][content="noindex"]')).toHaveCount(1)
+
+    await page.goto('/no-such-site')
+    await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
+    await expect(page.locator('head meta[name="robots"][content="noindex"]')).toHaveCount(1)
+  })
 })

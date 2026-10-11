@@ -10,6 +10,9 @@ import { MarkdownArtifact } from './MarkdownArtifact'
 import { PAGE_TEXT_SEARCH_INPUT_ID } from './PageTextSearch'
 import { usePageTextSearch } from './usePageTextSearch'
 import { pageTitle, usePageTitle } from './usePageTitle'
+import { usePageNoindex } from './usePageNoindex'
+import { followInApp } from './spa-link'
+import { nearbyArtifacts } from '../domain/nearby-pages'
 import { normalizeLanguageTag } from '../domain/document-language'
 import type { SiteFullTextSearch } from '../data/fulltext'
 import { clearSearchHighlight, ensureSearchHighlightStyle, keepSearchHighlighted, watchReaderScroll } from '../domain/text-highlight'
@@ -102,8 +105,14 @@ export function ArtifactWorkspace({
     ? findArtifact(index, route.artifactPath)
     : undefined
   const effectiveRecentReads = recentReads ?? storedRecentReads
+  const pageNotFound = Boolean(route.artifactPath) && !currentArtifact
+  usePageNoindex(pageNotFound)
   // The language the open HTML artifact declares on its own <html>, keyed by the artifact it was read from.
   const [frameLanguage, setFrameLanguage] = useState<{ artifactUrl: string, lang: string | undefined } | null>(null)
+  const nearbyPages = useMemo(
+    () => pageNotFound && route.artifactPath ? nearbyArtifacts(index.artifacts, route.artifactPath) : [],
+    [pageNotFound, route.artifactPath, index.artifacts],
+  )
   usePageTitle(route.artifactPath
     ? pageTitle(currentArtifact?.title ?? 'Page not found', index.site.title)
     : pageTitle(index.site.title))
@@ -813,6 +822,24 @@ export function ArtifactWorkspace({
                 <p className="eyebrow">{index.site.title}</p>
                 <h1>Page not found</h1>
                 <p role="alert">The page you requested does not exist or is no longer available.</p>
+                {nearbyPages.length > 0 ? (
+                  <nav className="not-found-suggestions" aria-label="Similar pages">
+                    <h2>Similar pages</h2>
+                    <ul>
+                      {nearbyPages.map((artifact) => {
+                        const href = withTextSearch(artifactRouteHref(index.site.id, artifact.path))
+                        return (
+                          <li key={artifact.id}>
+                            <a href={href} onClick={(event) => followInApp(event, () => navigateWithinWorkspace(artifactRouteHref(index.site.id, artifact.path)))}>
+                              <span>{artifact.title}</span>
+                              <code>{artifact.path}</code>
+                            </a>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  </nav>
+                ) : null}
                 <button className="text-action" onClick={() => navigateWithinWorkspace(`/${encodeURIComponent(index.site.id)}`)}>
                   <Icon name="arrow" size={14} /> Back to site
                 </button>
