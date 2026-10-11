@@ -115,9 +115,9 @@ function Chip({ item }: { item: RelatedPage }) {
   return <span className={`rp-chip rp-chip--${item.reason}`}>{reasonLabel[item.reason]}</span>
 }
 
-function StripList({ items }: { items: RelatedPage[] }) {
+function StripList({ items, label }: { items: RelatedPage[]; label: string }) {
   return (
-    <section className="rp-next" aria-label="Read next">
+    <section className="rp-next" aria-label={`Read next (${label})`}>
       <ul>
         {items.map((item) => (
           <li key={item.entry.path}>
@@ -137,6 +137,7 @@ function StripList({ items }: { items: RelatedPage[] }) {
 }
 
 const NEAR_END_PX = 24
+const MODE_LABEL: Record<Mode, string> = { collapsed: 'collapsed', open: 'open from the start', 'at-end': 'opens at the end' }
 
 /** Reader stage: a real same-origin iframe that scrolls inside itself, plus the shell-owned strip. */
 function HtmlStage({ mode, current, artifactStyle, items }: { mode: Mode; current: Current; artifactStyle: ArtifactStyle; items: RelatedPage[] }) {
@@ -163,6 +164,7 @@ function HtmlStage({ mode, current, artifactStyle, items }: { mode: Mode; curren
 
   const attach = useCallback(() => {
     cleanup.current?.()
+    cleanup.current = null
     const win = frameRef.current?.contentWindow
     if (!win || mode !== 'at-end') return
     win.addEventListener('scroll', check, { passive: true })
@@ -177,7 +179,10 @@ function HtmlStage({ mode, current, artifactStyle, items }: { mode: Mode; curren
   useEffect(() => {
     // The srcDoc load can finish before React attaches onLoad, so also attach once mounted.
     if (frameRef.current?.contentDocument?.readyState === 'complete') attach()
-    return () => cleanup.current?.()
+    return () => {
+      cleanup.current?.()
+      cleanup.current = null
+    }
   }, [attach])
 
   return (
@@ -185,7 +190,7 @@ function HtmlStage({ mode, current, artifactStyle, items }: { mode: Mode; curren
       <iframe
         ref={frameRef}
         className="rh-iframe"
-        title={`${title} (HTML artifact)`}
+        title={`${title} (HTML artifact, ${MODE_LABEL[mode]})`}
         srcDoc={artifactHtml(artifactStyle, title)}
         onLoad={attach}
       />
@@ -203,7 +208,7 @@ function HtmlStage({ mode, current, artifactStyle, items }: { mode: Mode; curren
         >
           <Icon name="chevron" size={11} />Read next · {items.length}
         </summary>
-        <StripList items={items} />
+        <StripList items={items} label={MODE_LABEL[mode]} />
       </details>
     </div>
   )
@@ -235,13 +240,13 @@ function Concept({ theme, layout, current, artifactStyle }: Args) {
       intro="Variant A for HTML artifacts: the iframe fills the stage and scrolls inside itself, and the shell owns a strip under it. Each frame below is a real same-origin iframe with a self-contained artifact. Compare the three open/closed rules, in both shell themes and over a light and a dark artifact."
     >
       <VariantGrid wideColumns={3}>
-        <Variant id="1" name="Collapsed" caption="Closed by default: costs one line of stage (about 36px) and never covers the artifact. The list is one click away.">
+        <Variant id="1" name="Collapsed" caption="Closed by default: costs one line of stage and never covers the artifact. The list is one click away.">
           <Placement mode="collapsed" current={current} artifactStyle={artifactStyle} />
           <Note>Always discoverable as a line, but easy to overlook, and readers who finish the page may not look at the bottom edge.</Note>
         </Variant>
         <Variant id="2" name="Open from the start" caption="Open by default with the list capped at 220px: shows how much stage the list takes before the reader has read anything.">
           <Placement mode="open" current={current} artifactStyle={artifactStyle} />
-          <Note>The strip takes roughly a quarter to a third of this stage for the whole read; the artifact gets less room on every page.</Note>
+          <Note>The strip takes about a third of this stage for the whole read; the artifact gets less room on every page.</Note>
         </Variant>
         <Variant id="3" name="Opens at the end" caption="Collapsed while reading; opens by itself when the artifact is scrolled to within 24px of its bottom.">
           <Placement mode="at-end" current={current} artifactStyle={artifactStyle} />
