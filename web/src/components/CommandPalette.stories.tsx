@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { storyIndexes } from '../stories/fixtures'
 import type { ArtifactIndexEntry, SiteDiscoveryMetadata, SiteIndex } from '../domain/index'
@@ -45,7 +45,7 @@ const longTitleIndex: SiteIndex = {
 }
 
 type PaletteHistory = 'default' | 'none' | 'only-current' | 'current-pinned'
-type PaletteStoryArgs = { seed: string; context: PaletteContext; history?: PaletteHistory; overlappingHeading?: boolean; longTitles?: boolean }
+type PaletteStoryArgs = { seed: string; context: PaletteContext; history?: PaletteHistory; overlappingHeading?: boolean; longTitles?: boolean; theme?: 'light' | 'dark' }
 
 function historyFor(history: PaletteHistory) {
   if (history === 'none') return { reads: [], pinned: [] as string[] }
@@ -56,7 +56,16 @@ function historyFor(history: PaletteHistory) {
 
 const phone390 = { name: 'Phone 390', styles: { width: '390px', height: '844px' }, type: 'mobile' as const }
 
-function PaletteStory({ seed, context, history = 'default', overlappingHeading = false, longTitles = false }: PaletteStoryArgs) {
+function PaletteStory({ seed, context, history = 'default', overlappingHeading = false, longTitles = false, theme }: PaletteStoryArgs) {
+  useEffect(() => {
+    if (!theme) return undefined
+    const previous = document.documentElement.dataset.theme
+    document.documentElement.dataset.theme = theme
+    return () => {
+      if (previous === undefined) delete document.documentElement.dataset.theme
+      else document.documentElement.dataset.theme = previous
+    }
+  }, [theme])
   const storyIndex = longTitles ? longTitleIndex : currentIndex
   const { reads, pinned } = historyFor(history)
   const baseArtifact = storyIndex.artifacts.find(({ id }) => id === currentArtifact.id) ?? currentArtifact
@@ -180,6 +189,63 @@ export const Phone390Blank: Story = {
 
 export const Phone390LongTitle: Story = {
   args: { context: 'artifact', longTitles: true },
+  parameters: { viewport: { options: { phone390 } } },
+  globals: { viewport: { value: 'phone390', isRotated: false } },
+}
+
+// ISSUE-079: other pages' headings below the page matches, a Folders group, and `#` over all pages.
+// The headings come from the fixture pages' tables of contents; the deep fixture repeats them across
+// pages, so these stories also show duplicate headings told apart by their page and folder.
+export const OtherPageHeadings: Story = {
+  name: 'Headings in other pages',
+  args: { context: 'artifact', seed: 'follow' },
+}
+
+export const OtherPageHeadingsBelowPages: Story = {
+  name: 'Headings in other pages · below page matches',
+  args: { context: 'artifact', seed: 'topology' },
+}
+
+export const FoldersGroup: Story = {
+  name: 'Folders group',
+  args: { context: 'artifact', seed: 'incidents' },
+}
+
+export const HeadingsAllPages: Story = {
+  name: 'Headings (#) · all pages, open page first',
+  args: { context: 'artifact', seed: '#follow' },
+}
+
+export const HeadingsAllPagesNoOpenPage: Story = {
+  name: 'Headings (#) · site home',
+  args: { context: 'site', seed: '#root cause' },
+}
+
+export const HeadingsAllPagesEmpty: Story = {
+  name: 'Headings (#) · no match',
+  args: { context: 'artifact', seed: '#zzzz' },
+}
+
+export const OtherPageHeadingsDark: Story = {
+  name: 'Headings in other pages · dark',
+  args: { context: 'artifact', seed: 'follow', theme: 'dark' },
+}
+
+export const FoldersGroupDark: Story = {
+  name: 'Folders group · dark',
+  args: { context: 'artifact', seed: 'incidents', theme: 'dark' },
+}
+
+export const OtherPageHeadingsPhone390: Story = {
+  name: 'Headings in other pages · phone 390',
+  args: { context: 'artifact', seed: 'follow' },
+  parameters: { viewport: { options: { phone390 } } },
+  globals: { viewport: { value: 'phone390', isRotated: false } },
+}
+
+export const FoldersGroupPhone390: Story = {
+  name: 'Folders group · phone 390',
+  args: { context: 'artifact', seed: 'incidents', longTitles: true },
   parameters: { viewport: { options: { phone390 } } },
   globals: { viewport: { value: 'phone390', isRotated: false } },
 }
