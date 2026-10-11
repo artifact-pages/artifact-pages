@@ -1,7 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ArtifactIndexEntry } from '../domain/index'
-import { compareArtifactsByPath } from '../domain/listing-order'
+import { compareArtifactsByPath } from '../domain/listing-order.ts'
 import { Icon } from './Icon'
 import { followInApp } from './spa-link'
 

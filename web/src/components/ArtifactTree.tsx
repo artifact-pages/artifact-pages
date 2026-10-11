@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ArtifactIndexEntry } from '../domain/index'
-import { compareArtifactsByPath } from '../domain/listing-order'
+import { compareArtifactsByPath } from '../domain/listing-order.ts'
 import { buildArtifactTree, countArtifacts, flattenArtifacts, type ArtifactTreeNode } from '../domain/tree'
 import { ArtifactActionsMenu } from './ArtifactActionsMenu'
 import { Icon } from './Icon'

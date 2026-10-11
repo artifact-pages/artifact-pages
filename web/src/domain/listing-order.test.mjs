@@ -62,3 +62,19 @@ test('the tree lists folders first and each group by filename', () => {
   assert.deepEqual(tree.artifacts.map((artifact) => artifact.path), ['a.html', 'b.html'])
   assert.deepEqual(tree.directories.get('zz').artifacts.map((artifact) => artifact.path), ['zz/00.html', 'zz/01.html'])
 })
+
+test('a file and a folder sharing a prefix still put the folder first', () => {
+  assert.deepEqual(sortPaths(['a', 'a.html', 'a/b.html', 'ab/c.html']), ['a/b.html', 'ab/c.html', 'a', 'a.html'])
+  assert.equal(comparePaths('a/z.html', 'a.html') < 0, true)
+})
+
+test('surrogate-pair names order by code point', () => {
+  assert.deepEqual(sortNames(['\u{1F600}.html', '\uFF5E.html', 'a.html', '\u{20BB7}.html']), ['a.html', '\uFF5E.html', '\u{1F600}.html', '\u{20BB7}.html'])
+})
+
+test('NFC and NFD spellings are distinct and sort deterministically', () => {
+  const nfc = '\u00E9.html'
+  const nfd = 'e\u0301.html'
+  assert.notEqual(compareNames(nfc, nfd), 0)
+  assert.deepEqual(sortNames([nfd, nfc]), sortNames([nfc, nfd]))
+})
