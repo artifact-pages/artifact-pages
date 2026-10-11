@@ -7,6 +7,8 @@ import { Sidebar } from './Sidebar'
 import { SiteHome } from './SiteHome'
 import { siteCountLabel } from '../domain/site-count-label'
 import { ThemeSwitcher } from './ThemeSwitcher'
+import { ReaderMoreMenu, type ReaderMoreMenuItem } from './ReaderMoreMenu'
+import { NARROW_CHROME_QUERY, useMediaQuery } from './useMediaQuery'
 import { MarkdownArtifact } from './MarkdownArtifact'
 import { PAGE_TEXT_SEARCH_INPUT_ID } from './PageTextSearch'
 import { usePageTextSearch, type PageTextSearchState } from './usePageTextSearch'
@@ -22,7 +24,7 @@ import { clearSearchHighlight, ensureSearchHighlightStyle, keepSearchHighlighted
 import type { TreeStyle } from './ArtifactTree'
 import type { ArtifactIndexEntry, SiteCatalogEntry, SiteIndex, SiteSummary } from '../domain/index'
 import { readRecentArtifactReads, recordRecentArtifactRead, type RecentArtifactRead } from '../domain/recent-reads'
-import type { ResolvedTheme, ThemeMode } from '../domain/theme'
+import { themeModeIcon, type ResolvedTheme, type ThemeMode } from '../domain/theme'
 import { artifactRouteHref, type AppRoute } from '../routing'
 
 type SiteRoute = Extract<AppRoute, { kind: 'site' }>
@@ -113,6 +115,8 @@ export function ArtifactWorkspace({
   const htmlFrameRef = useRef<HTMLIFrameElement>(null)
   const contentsToggleRef = useRef<HTMLButtonElement>(null)
   const detailsToggleRef = useRef<HTMLButtonElement>(null)
+  const moreMenuTriggerRef = useRef<HTMLButtonElement>(null)
+  const narrowChrome = useMediaQuery(NARROW_CHROME_QUERY)
   const headingJumpRequest = useRef(0)
   const headingJumpTimer = useRef<number | null>(null)
   const [headingJump, setHeadingJump] = useState<'pending' | 'settled' | null>(null)
@@ -514,7 +518,7 @@ export function ArtifactWorkspace({
   function closePanelAfterJump() {
     setHeadingJump('settled')
     setActivePanel(null)
-    contentsToggleRef.current?.focus()
+    ;(contentsToggleRef.current ?? moreMenuTriggerRef.current)?.focus()
   }
 
   // Contents stays open after a jump only when the target heading is not
@@ -563,7 +567,7 @@ export function ArtifactWorkspace({
   function closePanel() {
     const toggle = activePanel === 'details' ? detailsToggleRef.current : contentsToggleRef.current
     setActivePanel(null)
-    toggle?.focus()
+    ;(toggle ?? moreMenuTriggerRef.current)?.focus()
   }
 
   const htmlArtifactUrl = bodyArtifact && currentFormat === 'html'
@@ -669,6 +673,70 @@ export function ArtifactWorkspace({
       }}
     />
   ) : null
+  const siteHomeHref = `/${encodeURIComponent(index.site.id)}`
+  const moreMenuItems: ReaderMoreMenuItem[] = []
+  if (bodyArtifact) {
+    moreMenuItems.push(
+      {
+        id: 'contents',
+        label: 'Contents',
+        icon: 'contents',
+        checked: tocOpen,
+        disabled: tocEntries.length === 0,
+        title: tocEntries.length ? undefined : 'No indexed contents for this artifact',
+        onSelect: () => togglePanel('contents'),
+      },
+      { id: 'details', label: 'Details', icon: 'info', checked: detailsOpen, onSelect: () => togglePanel('details') },
+      {
+        id: 'pin',
+        label: pinnedArtifactIds.includes(bodyArtifact.id) ? 'Unpin' : 'Pin',
+        icon: 'pin',
+        onSelect: () => toggleArtifactPin(bodyArtifact),
+      },
+    )
+  }
+  if (currentArtifact || currentDirectory) {
+    moreMenuItems.push({
+      id: 'copy-link',
+      label: 'Copy link',
+      icon: 'copy',
+      onSelect: () => void copyCurrentLink(showToast),
+    })
+  }
+  if (bodyArtifact) {
+    moreMenuItems.push({
+      id: 'raw',
+      label: 'Open raw artifact',
+      icon: 'external',
+      onSelect: () => { window.open(bodyArtifact.artifactUrl, '_blank', 'noopener,noreferrer') },
+    })
+  }
+  if (currentArtifact || currentDirectory) {
+    moreMenuItems.push({
+      id: 'site-home',
+      label: `${index.site.title} home`,
+      icon: 'home',
+      separatorBefore: moreMenuItems.length > 0,
+      onSelect: () => navigateWithinWorkspace(siteHomeHref),
+    })
+  }
+  moreMenuItems.push({
+    id: 'all-sites',
+    label: 'All sites',
+    icon: 'library',
+    separatorBefore: moreMenuItems.length > 0 && !(currentArtifact || currentDirectory),
+    onSelect: () => navigateWithinWorkspace('/'),
+  })
+  moreMenuItems.push(...(['system', 'light', 'dark'] as const).map((mode, position) => ({
+    id: `theme-${mode}`,
+    label: `Theme: ${mode[0].toUpperCase()}${mode.slice(1)}`,
+    icon: themeModeIcon(mode),
+    radio: true,
+    checked: themeMode === mode,
+    separatorBefore: position === 0,
+    onSelect: () => onSetThemeMode(mode),
+  })))
+
   return (
     <div className={`app-shell${sidebarOpen ? '' : ' sidebar-collapsed'}`}>
       <a
@@ -713,7 +781,7 @@ export function ArtifactWorkspace({
         treeStyle={sidebarTreeStyle}
       />
       {sidebarOpen ? <button className="sidebar-backdrop" aria-label="Close navigation" onClick={() => updateSidebarOpen(false, true)} /> : null}
-      {!sidebarOpen ? (
+      {!sidebarOpen && !narrowChrome ? (
         <aside className="collapsed-rail" aria-label={`${index.site.title} navigation`}>
           <div className="collapsed-rail-group">
             <button
@@ -767,6 +835,21 @@ export function ArtifactWorkspace({
       <div className="workspace">
         <div className="workspace-panel">
           <header className="context-bar">
+            {narrowChrome ? (
+              <button
+                type="button"
+                className="icon-button reader-menu-button"
+                id={sidebarOpen ? undefined : 'sidebar-toggle-trigger'}
+                title={sidebarOpen ? 'Close navigation' : 'Expand navigation'}
+                aria-label={sidebarOpen ? 'Close navigation' : 'Expand navigation'}
+                aria-controls="workspace-sidebar"
+                aria-expanded={sidebarOpen}
+                onClick={() => updateSidebarOpen(!sidebarOpen, true)}
+              >
+                <Icon name="sidebar" size={17} />
+              </button>
+            ) : null}
+            {narrowChrome && !route.artifactPath ? <span className="reader-bar-title">{index.site.title}</span> : null}
             {route.artifactPath ? (
               <ArtifactBreadcrumbs
                 artifactPath={currentArtifact?.path ?? currentDirectory?.path ?? route.artifactPath}
@@ -797,93 +880,112 @@ export function ArtifactWorkspace({
                 ) : null}
               </button>
             ) : null}
-            <div className="context-actions">
-              <button
-                className="context-button context-library-button"
-                type="button"
-                aria-label="Go to all sites"
-                title="All sites"
-                onClick={() => navigateWithinWorkspace('/')}
-              >
-                <Icon name="library" size={14} />
-                <span>All sites</span>
-              </button>
-              {currentArtifact || currentDirectory ? (
+            {narrowChrome ? (
+              <div className="context-actions reader-bar-actions">
                 <button
-                  className="context-button context-home-button"
                   type="button"
-                  aria-label={`Go to ${index.site.title} home`}
-                  title={`Go to ${index.site.title} home`}
-                  onClick={() => navigateWithinWorkspace(`/${encodeURIComponent(index.site.id)}`)}
+                  className="icon-button"
+                  title={`Jump to a page in ${index.site.title}`}
+                  aria-label={`Jump to a page in ${index.site.title}`}
+                  aria-keyshortcuts="Meta+K Control+K"
+                  onClick={(event) => {
+                    event.currentTarget.focus()
+                    openPalette('')
+                  }}
                 >
-                  <Icon name="home" size={14} />
-                  <span>{index.site.title} home</span>
+                  <Icon name="search" size={17} />
                 </button>
-              ) : null}
-              {bodyArtifact ? (
+                <ReaderMoreMenu ref={moreMenuTriggerRef} items={moreMenuItems} />
+              </div>
+            ) : (
+              <div className="context-actions">
                 <button
-                  className={`context-button current-artifact-pin-button${pinnedArtifactIds.includes(bodyArtifact.id) ? ' is-active' : ''}`}
+                  className="context-button context-library-button"
                   type="button"
-                  aria-label={`${pinnedArtifactIds.includes(bodyArtifact.id) ? 'Unpin' : 'Pin'} ${bodyArtifact.title}`}
-                  aria-pressed={pinnedArtifactIds.includes(bodyArtifact.id)}
-                  title={pinnedArtifactIds.includes(bodyArtifact.id)
-                    ? `Unpin ${bodyArtifact.title}`
-                    : `Pin ${bodyArtifact.title} for later`}
-                  onClick={() => toggleArtifactPin(bodyArtifact)}
+                  aria-label="Go to all sites"
+                  title="All sites"
+                  onClick={() => navigateWithinWorkspace('/')}
                 >
-                  <Icon name="pin" size={14} />
-                  <span>{pinnedArtifactIds.includes(bodyArtifact.id) ? 'Pinned' : 'Pin'}</span>
+                  <Icon name="library" size={14} />
+                  <span>All sites</span>
                 </button>
-              ) : null}
-              {bodyArtifact ? (
-                <>
+                {currentArtifact || currentDirectory ? (
                   <button
-                    ref={contentsToggleRef}
-                    className={`context-button${tocOpen ? ' is-active' : ''}`}
-                    disabled={tocEntries.length === 0}
-                    aria-pressed={tocOpen}
-                    title={tocEntries.length ? 'Contents (⌘ ⇧ O)' : 'No indexed contents for this artifact'}
-                    onClick={() => togglePanel('contents')}
+                    className="context-button context-home-button"
+                    type="button"
+                    aria-label={`Go to ${index.site.title} home`}
+                    title={`Go to ${index.site.title} home`}
+                    onClick={() => navigateWithinWorkspace(`/${encodeURIComponent(index.site.id)}`)}
                   >
-                    <Icon name="contents" size={14} />
-                    <span>Contents</span>
+                    <Icon name="home" size={14} />
+                    <span>{index.site.title} home</span>
                   </button>
+                ) : null}
+                {bodyArtifact ? (
                   <button
-                    ref={detailsToggleRef}
-                    className={`context-button${detailsOpen ? ' is-active' : ''}`}
-                    aria-pressed={detailsOpen}
-                    title="Artifact details"
-                    onClick={() => togglePanel('details')}
+                    className={`context-button current-artifact-pin-button${pinnedArtifactIds.includes(bodyArtifact.id) ? ' is-active' : ''}`}
+                    type="button"
+                    aria-label={`${pinnedArtifactIds.includes(bodyArtifact.id) ? 'Unpin' : 'Pin'} ${bodyArtifact.title}`}
+                    aria-pressed={pinnedArtifactIds.includes(bodyArtifact.id)}
+                    title={pinnedArtifactIds.includes(bodyArtifact.id)
+                      ? `Unpin ${bodyArtifact.title}`
+                      : `Pin ${bodyArtifact.title} for later`}
+                    onClick={() => toggleArtifactPin(bodyArtifact)}
                   >
-                    <Icon name="info" size={14} />
-                    <span>Details</span>
+                    <Icon name="pin" size={14} />
+                    <span>{pinnedArtifactIds.includes(bodyArtifact.id) ? 'Pinned' : 'Pin'}</span>
                   </button>
-                </>
-              ) : null}
-              {bodyArtifact || currentDirectory ? <span className="action-divider" /> : null}
-              {currentArtifact || currentDirectory ? (
-                <button
-                  className="icon-button"
-                  title="Copy link"
-                  aria-label={currentDirectory ? 'Copy folder link' : 'Copy artifact link'}
-                  onClick={() => void copyCurrentLink(showToast)}
-                >
-                  <Icon name="copy" size={15} />
-                </button>
-              ) : null}
-              {bodyArtifact ? (
-                <a
-                  className="icon-button"
-                  title="Open raw artifact"
-                  aria-label="Open raw artifact"
-                  href={bodyArtifact.artifactUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <Icon name="external" size={15} />
-                </a>
-              ) : null}
-            </div>
+                ) : null}
+                {bodyArtifact ? (
+                  <>
+                    <button
+                      ref={contentsToggleRef}
+                      className={`context-button${tocOpen ? ' is-active' : ''}`}
+                      disabled={tocEntries.length === 0}
+                      aria-pressed={tocOpen}
+                      title={tocEntries.length ? 'Contents (⌘ ⇧ O)' : 'No indexed contents for this artifact'}
+                      onClick={() => togglePanel('contents')}
+                    >
+                      <Icon name="contents" size={14} />
+                      <span>Contents</span>
+                    </button>
+                    <button
+                      ref={detailsToggleRef}
+                      className={`context-button${detailsOpen ? ' is-active' : ''}`}
+                      aria-pressed={detailsOpen}
+                      title="Artifact details"
+                      onClick={() => togglePanel('details')}
+                    >
+                      <Icon name="info" size={14} />
+                      <span>Details</span>
+                    </button>
+                  </>
+                ) : null}
+                {bodyArtifact || currentDirectory ? <span className="action-divider" /> : null}
+                {currentArtifact || currentDirectory ? (
+                  <button
+                    className="icon-button"
+                    title="Copy link"
+                    aria-label={currentDirectory ? 'Copy folder link' : 'Copy artifact link'}
+                    onClick={() => void copyCurrentLink(showToast)}
+                  >
+                    <Icon name="copy" size={15} />
+                  </button>
+                ) : null}
+                {bodyArtifact ? (
+                  <a
+                    className="icon-button"
+                    title="Open raw artifact"
+                    aria-label="Open raw artifact"
+                    href={bodyArtifact.artifactUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <Icon name="external" size={15} />
+                  </a>
+                ) : null}
+              </div>
+            )}
           </header>
 
           <main ref={stageRef} id="main-content" tabIndex={-1} className={`stage${currentArtifact ? ' has-artifact' : ''}`} data-heading-jump={headingJump ?? undefined}>

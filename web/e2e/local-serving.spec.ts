@@ -1,5 +1,31 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
+
+/** True while the viewport uses the narrow reader chrome (ISSUE-080: menu button and More menu). */
+function isNarrowChrome(page: Page) {
+  return (page.viewportSize()?.width ?? 1280) <= 620
+}
+
+function moreActionsButton(page: Page) {
+  return page.getByRole('button', { name: 'More actions' })
+}
+
+/** Runs a secondary toolbar action: its button on wide screens, its More menu item on narrow ones. */
+async function clickToolbarAction(page: Page, desktop: Locator, menuName: string | RegExp) {
+  if (!isNarrowChrome(page)) {
+    await desktop.click()
+    return
+  }
+  await moreActionsButton(page).click()
+  await page.getByRole('menu', { name: 'More actions' }).getByRole('menuitem', { name: menuName })
+    .or(page.getByRole('menu', { name: 'More actions' }).getByRole('menuitemcheckbox', { name: menuName }))
+    .click()
+}
+
+/** The control that takes focus when a panel opened from the toolbar closes. */
+function toolbarFocusTarget(page: Page, desktop: Locator) {
+  return isNarrowChrome(page) ? moreActionsButton(page) : desktop
+}
 
 const markdownHeadingConformanceFixture = JSON.parse(
   readFileSync('cli/internal/indexer/testdata/markdown-heading-id-cases.json', 'utf8'),
@@ -1132,16 +1158,14 @@ test('the current page pin control stays discoverable with the sidebar closed an
     return value ? JSON.parse(value) : {}
   })).toEqual({})
 
-  const pinButton = page.getByRole('button', { name: 'Pin Platform topology' })
-  await expect(pinButton).toBeVisible()
-  await expect(pinButton).toContainText('Pin')
-  await expect(pinButton).toHaveAttribute('aria-pressed', 'false')
-  await pinButton.click()
-
-  const unpinButton = page.getByRole('button', { name: 'Unpin Platform topology' })
-  await expect(unpinButton).toBeVisible()
-  await expect(unpinButton).toContainText('Pinned')
-  await expect(unpinButton).toHaveAttribute('aria-pressed', 'true')
+  // At 390px the pin action lives in the More menu (ISSUE-080).
+  const more = moreActionsButton(page)
+  const menu = page.getByRole('menu', { name: 'More actions' })
+  await more.click()
+  await expect(menu.getByRole('menuitem', { name: 'Pin', exact: true })).toBeVisible()
+  await menu.getByRole('menuitem', { name: 'Pin', exact: true }).click()
+  await expect(menu).toBeHidden()
+  await expect(more).toBeFocused()
   await expect(page.getByRole('status')).toHaveText('Pinned Platform topology.')
   await expect.poll(() => page.evaluate(() => JSON.parse(
     window.localStorage.getItem('git-artifact-pages:pinned-artifacts:v1') ?? '{}',
@@ -1149,16 +1173,16 @@ test('the current page pin control stays discoverable with the sidebar closed an
 
   await page.reload()
   await expect(page.locator('.sidebar-panel')).toBeHidden()
-  const persistedUnpinButton = page.getByRole('button', { name: 'Unpin Platform topology' })
-  await expect(persistedUnpinButton).toBeVisible()
-  await expect(persistedUnpinButton).toHaveAttribute('aria-pressed', 'true')
-  await persistedUnpinButton.click()
-
-  const restoredPinButton = page.getByRole('button', { name: 'Pin Platform topology' })
-  await expect(restoredPinButton).toBeVisible()
-  await expect(restoredPinButton).toHaveAttribute('aria-pressed', 'false')
+  await more.click()
+  await expect(menu.getByRole('menuitem', { name: 'Unpin', exact: true })).toBeVisible()
+  await menu.getByRole('menuitem', { name: 'Unpin', exact: true }).click()
   await expect(page.getByRole('status')).toHaveText('Unpinned Platform topology.')
   await page.reload()
+  await more.click()
+  await expect(menu.getByRole('menuitem', { name: 'Pin', exact: true })).toBeVisible()
+
+  // Wide screens keep the labeled toolbar button.
+  await page.setViewportSize({ width: 1280, height: 800 })
   await expect(page.getByRole('button', { name: 'Pin Platform topology' })).toHaveAttribute('aria-pressed', 'false')
 })
 
@@ -1976,7 +2000,7 @@ test('Contents and Details can be dismissed and reopened without losing the read
       await iframeScrollY() - readingPosition,
     )).toBeLessThanOrEqual(2)
 
-    await contentsButton.click()
+    await clickToolbarAction(page, contentsButton, 'Contents')
     const contents = page.getByRole('complementary', { name: 'Contents' })
     const closeContents = contents.getByRole('button', { name: 'Close Contents' })
     await expect(closeContents).toBeVisible()
@@ -1984,28 +2008,28 @@ test('Contents and Details can be dismissed and reopened without losing the read
     await expect(closeContents).toHaveAttribute('title', 'Close Contents')
     await closeContents.click()
     await expect(contents).toBeHidden()
-    await expect(contentsButton).toBeFocused()
+    await expect(toolbarFocusTarget(page, contentsButton)).toBeFocused()
     await expectReadingPositionPreserved()
 
-    await contentsButton.click()
+    await clickToolbarAction(page, contentsButton, 'Contents')
     await expect(contents).toBeVisible()
     await expectReadingPositionPreserved()
-    await detailsButton.click()
+    await clickToolbarAction(page, detailsButton, 'Details')
     const details = page.getByRole('complementary', { name: 'Details' })
     const closeDetails = details.getByRole('button', { name: 'Close Details' })
     await expect(closeDetails).toBeVisible()
     await expect(closeDetails).toHaveAttribute('title', 'Close Details')
     await closeDetails.click()
     await expect(details).toBeHidden()
-    await expect(detailsButton).toBeFocused()
+    await expect(toolbarFocusTarget(page, detailsButton)).toBeFocused()
     await expectReadingPositionPreserved()
 
-    await detailsButton.click()
+    await clickToolbarAction(page, detailsButton, 'Details')
     await expect(details).toBeVisible()
     await expectReadingPositionPreserved()
     expect(await iframe.evaluate((frame) => frame.getBoundingClientRect().width)).toBe(frameWidth)
 
-    await contentsButton.click()
+    await clickToolbarAction(page, contentsButton, 'Contents')
     await contents.getByRole('button', { name: 'Practice over prediction' }).click()
     await expect(page).toHaveURL(/#practice$/)
     await expect.poll(iframeHash).toBe('#practice')
@@ -2044,7 +2068,8 @@ test('Contents stays open after a heading jump only when the heading is not cove
       if (viewport.sidebar) await expect(collapse).toBeVisible()
       else await expect(collapse).toBeHidden()
 
-      await page.locator('.context-actions .context-button[title^="Contents"]').click()
+      const contentsToggle = page.locator('.context-actions .context-button[title^="Contents"]')
+      await clickToolbarAction(page, contentsToggle, 'Contents')
       const contents = page.getByRole('complementary', { name: 'Contents' })
       await expect(contents).toBeVisible()
       const panelBox = (await contents.boundingBox())!
@@ -2078,10 +2103,10 @@ test('Contents stays open after a heading jump only when the heading is not cove
       if (target.frameTitle) {
         // HTML artifacts always close, and focus moves to the Contents toggle.
         await expect(contents, label).toBeHidden()
-        await expect(page.locator('.context-actions .context-button[title^="Contents"]'), label).toBeFocused()
+        await expect(toolbarFocusTarget(page, contentsToggle), label).toBeFocused()
       } else if (intersects(headingBox, panelBox)) {
         await expect(contents, label).toBeHidden()
-        await expect(page.locator('.context-actions .context-button[title^="Contents"]'), label).toBeFocused()
+        await expect(toolbarFocusTarget(page, contentsToggle), label).toBeFocused()
       } else {
         expect(viewport.width, label).toBeGreaterThan(620)
         await expect(contents, label).toBeVisible()
@@ -2746,8 +2771,9 @@ test('Markdown retrospective stays readable on narrow screens and supports theme
   expect(documentWidthAfterScroll).toBe(dimensions.documentWidth)
 
   const initialHeadingColor = await reader.locator('h2').first().evaluate((element) => getComputedStyle(element).color)
-  await page.getByRole('button', { name: /Color theme:/ }).click()
-  await page.getByRole('menuitemradio', { name: 'Dark' }).click()
+  // At 390px the theme choice lives in the More menu (ISSUE-080).
+  await moreActionsButton(page).click()
+  await page.getByRole('menuitemradio', { name: 'Theme: Dark' }).click()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   const darkHeadingColor = await reader.locator('h2').first().evaluate((element) => getComputedStyle(element).color)
   expect(darkHeadingColor).not.toBe(initialHeadingColor)
@@ -3364,11 +3390,11 @@ test('artifact title and site home navigation stay clear on narrow screens', asy
   await expect(currentArtifact).toHaveText('Latency Retrospective')
   await expect(currentArtifact).toHaveAttribute('aria-current', 'page')
 
-  const homeButton = page.getByRole('button', { name: 'Go to SRE home' })
-  await expect(homeButton).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Switch site. Current site: SRE' })).toBeVisible()
-
-  await homeButton.click()
+  // Site home and all sites are More menu items; the site switcher is in the drawer (ISSUE-080).
+  await moreActionsButton(page).click()
+  const menu = page.getByRole('menu', { name: 'More actions' })
+  await expect(menu.getByRole('menuitem', { name: 'SRE home' })).toBeVisible()
+  await menu.getByRole('menuitem', { name: 'SRE home' }).click()
   await expect(page).toHaveURL(/\/sre\/?$/)
   await expect(page.getByRole('heading', { name: 'SRE' })).toBeVisible()
 })
@@ -3380,13 +3406,15 @@ test('all-sites navigation is available from site home and documents with the si
     await page.goto(path)
     await expect(page.locator('.sidebar-panel')).toBeHidden()
 
-    const allSitesButton = page.getByRole('button', { name: 'Go to all sites' })
-    await expect(allSitesButton).toBeVisible()
+    await moreActionsButton(page).click()
+    const menu = page.getByRole('menu', { name: 'More actions' })
+    const allSitesItem = menu.getByRole('menuitem', { name: 'All sites' })
+    await expect(allSitesItem).toBeVisible()
     if (path !== '/sre') {
-      await expect(page.getByRole('button', { name: 'Go to SRE home' })).toBeVisible()
+      await expect(menu.getByRole('menuitem', { name: 'SRE home' })).toBeVisible()
     }
 
-    await allSitesButton.click()
+    await allSitesItem.click()
     await expect(page).toHaveURL('/')
     await expect(page.getByRole('heading', { name: 'Choose a site' })).toBeVisible()
   }
@@ -5807,7 +5835,8 @@ test.describe('release UX fixes', () => {
       const textBox = text.getBoundingClientRect()
       return { navLeft: navBox.left, navRight: navBox.right, left: textBox.left, right: textBox.right, scrollLeft: navElement.scrollLeft, width: textBox.width }
     })
-    expect(metrics.scrollLeft).toBe(0)
+    await expect(label).toBeVisible()
+    // The single-row bar (ISSUE-080) may scroll folders out of view to keep the whole title visible.
     expect(metrics.left).toBeGreaterThanOrEqual(metrics.navLeft - 1)
     expect(metrics.right).toBeLessThanOrEqual(metrics.navRight + 1)
     expect(metrics.width).toBeGreaterThanOrEqual(180)
@@ -6440,5 +6469,215 @@ test.describe('directory page scrolling', () => {
     await page.goto('/textsearch/long?q=zephyrmarker')
     await expect(frame.getByText('The zephyrmarker word is at the end.')).toBeInViewport()
     expect(await page.locator('.directory-scroll').evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+  })
+})
+
+test.describe('narrow chrome and scroll cues (ISSUE-080)', () => {
+  test.use({ viewport: { width: 390, height: 844 } })
+
+  const markdownPath = '/sre/reports/latency-retrospective.md'
+
+  test('the rail is gone, a menu button opens the drawer and the page does not scroll sideways', async ({ page }) => {
+    await page.goto(markdownPath)
+    await expect(page.locator('.collapsed-rail')).toHaveCount(0)
+    await expect(page.locator('.sidebar-panel')).toBeHidden()
+
+    const bar = page.locator('.context-bar')
+    const barBox = (await bar.boundingBox())!
+    expect(barBox.height).toBeLessThanOrEqual(48)
+    const workspaceBox = (await page.locator('.workspace').boundingBox())!
+    expect(workspaceBox.x).toBe(0)
+    expect(workspaceBox.width).toBe(390)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+
+    const menuButton = page.getByRole('button', { name: 'Expand navigation' })
+    await expect(menuButton).toHaveAttribute('aria-expanded', 'false')
+    await menuButton.click()
+    await expect(page.locator('.sidebar-panel')).toBeVisible()
+    await expect(page.locator('.reader-menu-button')).toHaveAttribute('aria-expanded', 'true')
+    await page.locator('.sidebar-backdrop').click({ position: { x: 360, y: 400 } })
+    await expect(page.locator('.sidebar-panel')).toBeHidden()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+  })
+
+  test('the More menu is a keyboard-operable menu button that returns focus', async ({ page }) => {
+    await page.goto(markdownPath)
+    const more = moreActionsButton(page)
+    await expect(more).toHaveAttribute('aria-haspopup', 'menu')
+    await expect(more).toHaveAttribute('aria-expanded', 'false')
+
+    await more.focus()
+    await page.keyboard.press('Enter')
+    const menu = page.getByRole('menu', { name: 'More actions' })
+    await expect(menu).toBeVisible()
+    await expect(more).toHaveAttribute('aria-expanded', 'true')
+    const items = menu.getByRole('menuitem')
+    await expect(menu.getByRole('menuitemcheckbox', { name: 'Contents' })).toBeFocused()
+    await page.keyboard.press('ArrowDown')
+    await expect(menu.getByRole('menuitemcheckbox', { name: 'Details' })).toBeFocused()
+    await page.keyboard.press('End')
+    await expect(menu.getByRole('menuitemradio', { name: 'Theme: Dark' })).toBeFocused()
+    await page.keyboard.press('Home')
+    await expect(menu.getByRole('menuitemcheckbox', { name: 'Contents' })).toBeFocused()
+    expect(await items.count()).toBeGreaterThan(2)
+    const box = (await menu.boundingBox())!
+    expect(box.x).toBeGreaterThanOrEqual(0)
+    expect(box.x + box.width).toBeLessThanOrEqual(390)
+
+    await page.keyboard.press('Escape')
+    await expect(menu).toBeHidden()
+    await expect(more).toBeFocused()
+    await expect(more).toHaveAttribute('aria-expanded', 'false')
+
+    // Click outside closes it without moving focus into the page.
+    await more.click()
+    await expect(menu).toBeVisible()
+    await page.locator('.markdown-article').click({ position: { x: 20, y: 20 } })
+    await expect(menu).toBeHidden()
+  })
+
+  test('More menu actions: Contents, Details, Pin, Copy link and theme', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    await page.goto(markdownPath)
+    const more = moreActionsButton(page)
+    const menu = page.getByRole('menu', { name: 'More actions' })
+
+    await more.click()
+    await menu.getByRole('menuitemcheckbox', { name: 'Contents' }).click()
+    const contents = page.getByRole('complementary', { name: 'Contents' })
+    await expect(contents).toBeVisible()
+    await expect(more).toBeFocused()
+    await more.click()
+    await expect(menu.getByRole('menuitemcheckbox', { name: 'Contents' })).toHaveAttribute('aria-checked', 'true')
+    await menu.getByRole('menuitemcheckbox', { name: 'Details' }).click()
+    const details = page.getByRole('complementary', { name: 'Details' })
+    await expect(details).toBeVisible()
+    await details.getByRole('button', { name: 'Close Details' }).click()
+    await expect(details).toBeHidden()
+    await expect(more).toBeFocused()
+
+    await more.click()
+    await menu.getByRole('menuitem', { name: 'Pin', exact: true }).click()
+    await expect(page.getByRole('status')).toContainText('Pinned')
+    await more.click()
+    await expect(menu.getByRole('menuitem', { name: 'Unpin', exact: true })).toBeVisible()
+    await menu.getByRole('menuitem', { name: 'Unpin', exact: true }).click()
+    await expect(page.getByRole('status')).toContainText('Unpinned')
+
+    await more.click()
+    await menu.getByRole('menuitem', { name: 'Copy link' }).click()
+    await expect(page.getByRole('status')).toContainText(/copied/i)
+
+    await more.click()
+    await menu.getByRole('menuitemradio', { name: 'Theme: Dark' }).click()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    await more.click()
+    await expect(menu.getByRole('menuitemradio', { name: 'Theme: Dark' })).toHaveAttribute('aria-checked', 'true')
+    await page.keyboard.press('Escape')
+  })
+
+  test('folder pages and the not-found view use the same chrome', async ({ page }) => {
+    await page.goto('/sre/reports')
+    await expect(page.getByTestId('directory-page')).toBeVisible()
+    await expect(page.locator('.collapsed-rail')).toHaveCount(0)
+    const more = moreActionsButton(page)
+    await more.click()
+    const menu = page.getByRole('menu', { name: 'More actions' })
+    await expect(menu.getByRole('menuitem', { name: 'Copy link' })).toBeVisible()
+    await expect(menu.getByRole('menuitem', { name: 'SRE home' })).toBeVisible()
+    await expect(menu.getByRole('menuitemcheckbox', { name: 'Contents' })).toHaveCount(0)
+    await page.keyboard.press('Escape')
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+
+    await page.goto('/sre/nowhere/missing.md')
+    await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
+    await moreActionsButton(page).click()
+    const missingMenu = page.getByRole('menu', { name: 'More actions' })
+    await expect(missingMenu.getByRole('menuitem', { name: 'All sites' })).toBeVisible()
+    await expect(missingMenu.getByRole('menuitem', { name: 'Copy link' })).toHaveCount(0)
+    await page.keyboard.press('Escape')
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+  })
+
+  test('the skip link still moves focus to the main content', async ({ page }) => {
+    await page.goto(markdownPath)
+    await expect(page.locator('.markdown-article')).toBeVisible()
+    await page.keyboard.press('Tab')
+    const skip = page.getByRole('link', { name: 'Skip to content' })
+    await expect(skip).toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect(page.locator('#main-content')).toBeFocused()
+  })
+
+  test('a wide table and a code block show edge shadows only where content is clipped', async ({ page }) => {
+    await page.route('**/latency-retrospective.md', async (route) => {
+      const response = await route.fetch()
+      const body = await response.text()
+      await route.fulfill({
+        response,
+        body: `${body}\n\n## Scroll cue fixtures\n\n\`\`\`sh\n${'artifact-pages publish --site guide --environment production --registry .artifact-pages/registry.yaml '.repeat(3)}\n\`\`\`\n\n\`\`\`sh\nshort\n\`\`\`\n`,
+      })
+    })
+    await page.goto(markdownPath)
+    const article = page.locator('.markdown-article')
+
+    const tableCue = article.locator('.scroll-cue-table').first()
+    const tableScroll = tableCue.locator('.markdown-table-scroll')
+    await expect(tableCue).toHaveAttribute('data-right', 'true')
+    await expect(tableCue).toHaveAttribute('data-left', 'false')
+    const shadow = (locator: Locator, edge: '::before' | '::after') => locator.evaluate(
+      (element, pseudo) => getComputedStyle(element, pseudo).opacity, edge,
+    )
+    await expect.poll(() => shadow(tableCue, '::after')).toBe('1')
+    expect(await shadow(tableCue, '::before')).toBe('0')
+    await expect(article.locator('.markdown-table-hint').first()).toHaveText('Scroll to see more columns →')
+
+    await tableScroll.evaluate((element) => { element.scrollLeft = 60 })
+    await expect(tableCue).toHaveAttribute('data-left', 'true')
+    await expect(tableCue).toHaveAttribute('data-right', 'true')
+    await tableScroll.evaluate((element) => { element.scrollLeft = element.scrollWidth })
+    await expect(tableCue).toHaveAttribute('data-left', 'true')
+    await expect(tableCue).toHaveAttribute('data-right', 'false')
+    await expect.poll(() => shadow(tableCue, '::after')).toBe('0')
+    expect(await shadow(tableCue, '::before')).toBe('1')
+
+    const longCode = article.locator('.scroll-cue-code').filter({ hasText: 'artifact-pages publish' })
+    await expect(longCode).toHaveAttribute('data-right', 'true')
+    await expect(longCode).toHaveAttribute('data-left', 'false')
+    await expect(longCode.locator('pre')).toHaveAttribute('tabindex', '0')
+    await longCode.locator('pre').evaluate((element) => { element.scrollLeft = element.scrollWidth })
+    await expect(longCode).toHaveAttribute('data-left', 'true')
+    await expect(longCode).toHaveAttribute('data-right', 'false')
+
+    const shortCode = article.locator('.scroll-cue-code').filter({ hasText: 'short' })
+    await expect(shortCode).toHaveAttribute('data-left', 'false')
+    await expect(shortCode).toHaveAttribute('data-right', 'false')
+    expect(await shadow(shortCode, '::before')).toBe('0')
+    expect(await shadow(shortCode, '::after')).toBe('0')
+    await expect(shortCode.locator('pre')).not.toHaveAttribute('tabindex', '0')
+
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+  })
+
+  test('HTML artifact frames get no injected cues', async ({ page }) => {
+    await page.goto('/sre/architecture/platform-topology/index.html')
+    await expect(page.locator('iframe.artifact-frame')).toBeVisible()
+    await expect(page.locator('.scroll-cue')).toHaveCount(0)
+    const injected = await page.locator('iframe.artifact-frame').evaluate(
+      (frame) => (frame as HTMLIFrameElement).contentDocument?.querySelectorAll('.scroll-cue').length ?? 0,
+    )
+    expect(injected).toBe(0)
+  })
+
+  test('wide screens keep the rail and the labeled toolbar', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.goto(markdownPath)
+    await expect(moreActionsButton(page)).toHaveCount(0)
+    await page.getByRole('button', { name: 'Collapse sidebar' }).click()
+    await expect(page.locator('.collapsed-rail')).toBeVisible()
+    await expect(page.locator('.context-actions').getByRole('button', { name: 'Contents', exact: true })).toBeVisible()
+    await page.setViewportSize({ width: 800, height: 800 })
+    await expect(page.locator('.collapsed-rail')).toBeVisible()
+    await expect(moreActionsButton(page)).toHaveCount(0)
   })
 })

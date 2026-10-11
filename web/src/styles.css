@@ -17,6 +17,7 @@
   --scrim: rgba(24, 28, 32, 0.3);
   --lift: 0 0 0 0.5px rgba(16, 20, 24, 0.04), 0 1px 2px rgba(16, 20, 24, 0.04);
   --pop: 0 0 0 0.5px rgba(16, 20, 24, 0.07), 0 2px 6px rgba(16, 20, 24, 0.06), 0 18px 44px rgba(16, 20, 24, 0.14);
+  --scroll-cue-shadow: rgba(16, 20, 24, 0.2);
   --sidebar-width: 252px;
   --app-gap: 10px;
   --context-height: 46px;
@@ -45,6 +46,7 @@
   --scrim: rgba(0, 0, 0, 0.52);
   --lift: 0 0 0 0.5px rgba(255, 255, 255, 0.05);
   --pop: 0 0 0 0.5px rgba(255, 255, 255, 0.08), 0 20px 50px rgba(0, 0, 0, 0.6);
+  --scroll-cue-shadow: rgba(0, 0, 0, 0.6);
 }
 
 *,
@@ -911,6 +913,82 @@ mark {
   background: var(--line-soft);
 }
 
+/* The narrow-screen More menu (ISSUE-080). */
+.reader-more {
+  position: relative;
+  display: inline-flex;
+}
+
+.reader-more-menu {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 4px);
+  right: 0;
+  width: 224px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 72px);
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text-secondary);
+  background: var(--surface-raised);
+  box-shadow: var(--pop);
+}
+
+.reader-more-item {
+  display: flex;
+  width: 100%;
+  min-height: 40px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 7px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.reader-more-item:hover:not(:disabled),
+.reader-more-item:focus-visible {
+  color: var(--text);
+  background: var(--hover);
+  outline: none;
+}
+
+.reader-more-item:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--ring);
+}
+
+.reader-more-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.reader-more-item > svg {
+  flex: none;
+  color: var(--text-tertiary);
+}
+
+.reader-more-item > span:not(.reader-more-check) {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reader-more-check {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.reader-more-separator {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--line-soft);
+}
+
 .sidebar-backdrop {
   display: none;
 }
@@ -1282,14 +1360,28 @@ mark {
 .markdown-article code,
 .markdown-article kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.86em; }
 .markdown-article :not(pre) > code { padding: 2px 5px; border: 1px solid var(--line-soft); border-radius: 4px; background: var(--hover); color: var(--text); }
-.markdown-article pre { overflow: auto; padding: 16px 18px; border: 1px solid var(--line-soft); border-radius: 8px; background: var(--surface-raised); color: var(--text); font-size: 12px; line-height: 1.65; }
+.markdown-article pre { margin: 0; overflow: auto; padding: 16px 18px; border: 1px solid var(--line-soft); border-radius: 8px; background: var(--surface-raised); color: var(--text); font-size: 12px; line-height: 1.65; }
 .markdown-article pre code { font-size: inherit; }
-.markdown-table-scroll { max-width: 100%; overflow-x: auto; overflow-y: hidden; margin: 20px 0; overscroll-behavior-x: contain; scrollbar-color: var(--line) transparent; scrollbar-width: thin; }
+.markdown-table-scroll { max-width: 100%; overflow-x: auto; overflow-y: hidden; margin: 0; overscroll-behavior-x: contain; scrollbar-color: var(--line) transparent; scrollbar-width: thin; }
 .markdown-table-scroll:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .markdown-article table { width: max-content; min-width: 100%; border-collapse: collapse; color: var(--text-secondary); font-size: 13px; }
 .markdown-article th,
 .markdown-article td { min-width: 100px; padding: 8px 11px; border: 1px solid var(--line); text-align: left; }
 .markdown-article th { color: var(--text); background: var(--hover); font-weight: 580; }
+.markdown-article pre:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+/* Edge cue (ISSUE-080): a shadow on each side of a scrollable table or code block that hides more content. */
+.scroll-cue { position: relative; max-width: 100%; }
+.scroll-cue-table { margin: 20px 0; }
+.scroll-cue-code { margin: 12px 0; }
+.scroll-cue::before,
+.scroll-cue::after { content: ''; position: absolute; z-index: 1; top: 0; bottom: 0; width: 16px; opacity: 0; pointer-events: none; transition: opacity 0.15s ease; }
+.scroll-cue-code::before, .scroll-cue-code::after { border-radius: 8px 0 0 8px; }
+.scroll-cue-code::after { border-radius: 0 8px 8px 0; }
+.scroll-cue::before { left: 0; background: linear-gradient(to right, var(--scroll-cue-shadow), transparent); }
+.scroll-cue::after { right: 0; background: linear-gradient(to left, var(--scroll-cue-shadow), transparent); }
+.scroll-cue[data-left="true"]::before,
+.scroll-cue[data-right="true"]::after { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .scroll-cue::before, .scroll-cue::after { transition: none; } }
 .markdown-table-hint { margin: -14px 0 20px; color: var(--text-tertiary); font-size: 11px; line-height: 1.4; text-align: right; }
 .markdown-article img { max-width: 100%; height: auto; border-radius: 5px; }
 .markdown-article hr { height: 1px; border: 0; margin: 30px 0; background: var(--line-soft); }
@@ -2700,33 +2792,33 @@ mark {
     --radius: 10px;
   }
 
+  /* One row (ISSUE-080): menu button, path, search and a More menu. The permanent rail is not
+     rendered at this width, so the document keeps the full width. */
+  .app-shell.sidebar-collapsed {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sidebar-collapsed .workspace {
+    grid-column: 1;
+  }
+
   .context-bar {
-    gap: 1px;
-    padding-right: 5px;
+    gap: 2px;
+    padding-right: 4px;
     padding-left: 4px;
   }
 
   .context-actions {
     gap: 0;
+    margin-left: auto;
   }
 
   .context-bar .icon-button {
-    width: 27px;
-  }
-
-  /* Too narrow to share one row with the actions: the path takes its own row
-     above them, so the current document's title keeps the full width (an
-     ellipsis at its end at most) and the folders stay one scroll away. */
-  .context-bar {
-    height: auto;
-    min-height: var(--context-height);
-    flex-wrap: wrap;
-    padding-top: 3px;
-    padding-bottom: 3px;
+    width: 36px;
+    height: 36px;
   }
 
   .breadcrumbs {
-    flex: 1 0 100%;
     margin-left: 2px;
     font-size: 10px;
     touch-action: pan-x;
@@ -2737,7 +2829,7 @@ mark {
   }
 
   /* Folders give way first (ellipsis, down to their menu chevron); the current
-     document keeps its full title up to the width of the row. */
+     document keeps its title up to the width of the row. */
   .breadcrumb-part:not(:last-child) {
     min-width: 34px;
     flex: 0 1 auto;
@@ -2748,35 +2840,25 @@ mark {
     flex: 0 0 auto;
   }
 
-  .context-actions {
-    margin-left: auto;
-  }
-
   .breadcrumb-current {
     font-size: 11px;
   }
 
-  .context-button {
-    width: 29px;
-    justify-content: center;
-    padding: 0;
+  .reader-bar-title {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    padding-left: 4px;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  .context-button span {
-    display: none;
-  }
-
-  .context-button.current-artifact-pin-button {
-    width: auto;
-    padding: 0 7px;
-  }
-
-  .context-button.current-artifact-pin-button span {
-    display: inline;
-  }
-
-  .action-divider {
-    margin: 0 2px;
+  .context-search-chip {
+    max-width: 96px;
+    flex: 0 1 auto;
   }
 
   .site-home-heading {
