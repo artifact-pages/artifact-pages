@@ -28,8 +28,8 @@ Chosen from the Storybook `Concepts/Reader UX 2026-10`/ISSUE-080 stories: varian
 
 ## Acceptance criteria
 
-- [ ] At 390 px the permanent rail is replaced by a lighter affordance (for example one top-bar control for the drawer) so the document uses the full width when the drawer is closed; the rail remains at wider widths. The exact pattern is decided in the issue.
-- [ ] The toolbar fits one row at 390 px (overflow actions move into the existing menu), or its second row is justified in the issue; icon-only controls keep accessible names.
-- [ ] Scrollable regions the reader owns (Markdown tables, code blocks) show an edge fade or equivalent cue when content is clipped; whether the reader injects a cue into HTML artifact frames is decided and recorded.
+- [ ] At 390 px the permanent rail is replaced by a lighter affordance (for example one top-bar control for the drawer) so the document uses the full width when the drawer is closed; the rail remains at wider widths. Decided: a menu button opens the drawer.
+- [ ] The toolbar fits one row at 390 px (overflow actions move into the existing menu), with a menu button and a single row (decided); icon-only controls keep accessible names.
+- [ ] Scrollable regions the reader owns (Markdown tables, code blocks) show an edge shadow plus the existing hint when content is clipped (decided); no cues are injected into HTML artifact frames (decided).
 - [ ] Verified by a Playwright case at 390 px (viewport emulation) and then checked once on a real phone or device emulator; record which.
 - [ ] No horizontal page scroll at 390 px (existing behavior kept).

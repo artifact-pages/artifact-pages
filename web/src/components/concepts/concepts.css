@@ -1,6 +1,6 @@
 /* Reader UX concepts (2026-10). Uses the real tokens from styles.css; light/dark follows
    :root[data-theme]. Class prefix: rux- (shared), dp- (directory page), lp- (landing),
-   nv- (narrow), sr- (search), cp- (palette). */
+   nv- (narrow), sr- (search); the palette mocks use production palette-* classes. */
 
 .rux {
   width: 100%;
@@ -278,5 +278,4 @@
 .sr-flat-path { color: var(--text-tertiary); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; }
 .sr-title-line { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
 .sr-title-line .sr-flat-path { margin-left: auto; flex: none; }
-.nv-cue-frame.markdown-article { width: 390px; max-width: 100%; margin: 0; padding: 8px 16px 14px; font-size: 14px; }
 .nv-cue-frame.markdown-article { width: 390px; max-width: 100%; margin: 0; padding: 8px 16px 14px; font-size: 14px; }

@@ -141,7 +141,3 @@ export function latestUpdate(node: DirNode): string {
 export function sortByTitle<T extends { title: string }>(items: T[]): T[] {
   return [...items].sort((a, b) => a.title.localeCompare(b.title, 'en'))
 }
-
-export function pageFileName(p: ConceptPage): string {
-  return p.path.split('/').pop() ?? p.path
-}

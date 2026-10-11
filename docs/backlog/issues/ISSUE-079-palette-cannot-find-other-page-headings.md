@@ -28,7 +28,8 @@ Chosen from the Storybook `Concepts/Reader UX 2026-10`/ISSUE-079 stories: in the
 
 ## Acceptance criteria
 
-- [ ] A plain query that matches a heading of another page lists it, labeled "Page > Heading", below page matches so page-title results keep priority (ranking rule recorded in the issue).
+- [ ] A plain query that matches a heading of another page lists it, as a row "Heading — Page title · folder", below page matches so page-title results keep priority (ranking rule recorded in the issue).
+- [ ] Scope added from [ISSUE-075](ISSUE-075-directory-routes-have-no-page.md): the palette also lists a "Folders" group below page matches, with page counts; selecting a folder navigates to its route `/<site>/<folder path>`.
 - [ ] Selecting it opens the page at the heading (reusing the heading-jump path used for the open page).
 - [ ] `#` mode can search all pages' headings, with the open page's headings listed first; the open-page-only wording in the footer hints and the specification is updated.
 - [ ] No extra network request: the data is already loaded with the site index.

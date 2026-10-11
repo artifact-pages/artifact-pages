@@ -1,6 +1,5 @@
 import { createContext, useContext, useEffect } from 'react'
 import type { ReactNode } from 'react'
-import { Icon } from '../Icon'
 import './concepts.css'
 
 export type ConceptTheme = 'light' | 'dark'
@@ -26,7 +25,12 @@ export function ConceptShell({
   children,
 }: ConceptArgs & { eyebrow: string; title: string; intro: ReactNode; children: ReactNode }) {
   useEffect(() => {
+    const previous = document.documentElement.dataset.theme
     document.documentElement.dataset.theme = theme
+    return () => {
+      if (previous === undefined) delete document.documentElement.dataset.theme
+      else document.documentElement.dataset.theme = previous
+    }
   }, [theme])
   return (
     <LayoutContext.Provider value={layout}>
@@ -87,11 +91,3 @@ export function SiteMark({ title }: { title: string }) {
 
 /** Story helper: standard meta args. */
 export const conceptDefaults: ConceptArgs = { theme: 'light', layout: 'wide' }
-
-export function IconButton({ name, label, active }: { name: Parameters<typeof Icon>[0]['name']; label: string; active?: boolean }) {
-  return (
-    <button type="button" className={`icon-button${active ? ' is-active' : ''}`} aria-label={label} title={label}>
-      <Icon name={name} size={16} />
-    </button>
-  )
-}
