@@ -1,6 +1,7 @@
 export type AppRoute =
   | { kind: 'sites' }
   | { kind: 'site'; siteId: string; artifactPath?: string }
+  | { kind: 'search'; siteId: string; query: string; folder?: string }
   | { kind: 'preview-list'; siteId: string; groupId?: string }
   | { kind: 'preview-document'; siteId: string; headSha: string; artifactPath: string; groupId?: string }
 
@@ -20,6 +21,12 @@ export function parseRoute(pathname: string, search = ''): AppRoute {
   }
 
   const [siteId, ...artifactSegments] = segments
+  // `_search` is reserved within the site namespace, like `_previews`.
+  if (artifactSegments.length === 1 && artifactSegments[0] === '_search') {
+    const query = new URLSearchParams(search)
+    const folder = query.get('in')?.replace(/^\/+|\/+$/g, '')
+    return { kind: 'search', siteId, query: query.get('q')?.trim() ?? '', folder: folder || undefined }
+  }
   if (artifactSegments[0] === '_previews') {
     const query = new URLSearchParams(search)
     const groupId = query.get('group') || undefined
@@ -39,6 +46,15 @@ export function parseRoute(pathname: string, search = ''): AppRoute {
     siteId,
     artifactPath: artifactSegments.length > 0 ? artifactSegments.join('/') : undefined,
   }
+}
+
+/** The full-text results page of a site; `folder` limits it to one folder (subfolders included). */
+export function searchRouteHref(siteId: string, query: string, folder?: string) {
+  const params = new URLSearchParams()
+  if (query) params.set('q', query)
+  if (folder) params.set('in', folder)
+  const rest = params.toString()
+  return `/${encodeURIComponent(siteId)}/_search${rest ? `?${rest}` : ''}`
 }
 
 export function artifactRouteHref(siteId: string, artifactPath: string) {

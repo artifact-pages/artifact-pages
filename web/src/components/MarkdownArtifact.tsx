@@ -157,14 +157,17 @@ export function MarkdownArtifact({
   navigate,
   resolveHref,
   highlightQuery = '',
+  onMatches,
 }: {
   artifact: ArtifactIndexEntry
   siteId: string
   hash: string
   navigate: (href: string) => void
   resolveHref?: (url: URL) => string | undefined
-  /** Committed page text search to highlight in the rendered document. */
+  /** Page text search query (`?q=`) to highlight in the rendered document. */
   highlightQuery?: string
+  /** Every highlighted range, after each application of the highlight (empty without matches). */
+  onMatches?: (ranges: Range[]) => void
 }) {
   const [source, setSource] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -225,14 +228,19 @@ export function MarkdownArtifact({
     if (!highlightQuery) {
       scrolledQuery.current = null
       clearSearchHighlight(article.ownerDocument)
+      onMatches?.([])
       return
     }
-    return keepSearchHighlighted(article, highlightQuery, (first) => {
+    const stop = keepSearchHighlighted(article, highlightQuery, (first) => {
       if (scrolledQuery.current === highlightQuery) return
       scrolledQuery.current = highlightQuery
       if (!hash && !readerScroll.current?.scrolled) first.startContainer.parentElement?.scrollIntoView({ block: 'center' })
-    })
-  }, [source, highlightQuery, hash])
+    }, onMatches)
+    return () => {
+      stop()
+      onMatches?.([])
+    }
+  }, [source, highlightQuery, hash, onMatches])
 
   useEffect(() => () => clearSearchHighlight(document), [])
 

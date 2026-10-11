@@ -32,7 +32,7 @@ if (mode === 'smoke') {
     })
 
     test(`${site.id}: page text search finds published pages`, async ({ page }) => {
-      await page.goto(`/${site.id}?q=${encodeURIComponent(site.searchTerm)}`)
+      await page.goto(`/${site.id}/_search?q=${encodeURIComponent(site.searchTerm)}`)
       await expect(page.locator('[data-hit-id]').first()).toBeVisible()
       expect(await page.locator('[data-hit-id]').count()).toBeGreaterThanOrEqual(2)
     })

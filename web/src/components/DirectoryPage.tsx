@@ -13,7 +13,7 @@ export function DirectoryPage({
   listing,
   siteId,
   body,
-  resolveHref,
+  resolveHref = (href) => href,
   onOpen,
 }: {
   listing: DirectoryListing
@@ -21,7 +21,7 @@ export function DirectoryPage({
   /** The rendered README or index page; present exactly when `listing.indexArtifact` is. */
   body?: ReactNode
   /** Resolves a logical route to the link target a row carries (for example with `?q=` kept). */
-  resolveHref: (href: string) => string
+  resolveHref?: (href: string) => string
   onOpen: (href: string) => void
 }) {
   const { folders, pages } = listing

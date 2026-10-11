@@ -19,22 +19,32 @@ type PageTextSearchStoryArgs = {
   search: StoryFullTextBehavior | 'unavailable'
   /** 'paged' lowers the ranking threshold so the path-ordered fallback shows. */
   ranking: 'ranked' | 'paged'
-  startAt: 'site-home' | 'html' | 'markdown'
+  startAt: 'site-home' | 'html' | 'markdown' | 'results'
   query: string
+  /** The folder of the results page (`in` in the URL). */
+  folder: string
   initialSidebarOpen: boolean
   theme: ThemeMode
 }
 
 const startPaths = {
-  'site-home': undefined,
-  html: 'incidents/checkout-latency/index.html',
-  markdown: 'reports/latency-retrospective.md',
+  'site-home': '',
+  html: '/incidents/checkout-latency/index.html',
+  markdown: '/reports/latency-retrospective.md',
+  results: '/_search',
 }
 
-function PageTextSearchStory({ search: behavior, ranking, startAt, query, initialSidebarOpen, theme }: PageTextSearchStoryArgs) {
+function startLocation({ startAt, query, folder }: Pick<PageTextSearchStoryArgs, 'startAt' | 'query' | 'folder'>) {
+  const params = new URLSearchParams()
+  if (query) params.set('q', query)
+  if (startAt === 'results' && folder) params.set('in', folder)
+  const rest = params.toString()
+  return { pathname: `/${deepSreIndex.site.id}${startPaths[startAt]}`, search: rest ? `?${rest}` : '', hash: '' }
+}
+
+function PageTextSearchStory({ search: behavior, ranking, startAt, query, folder, initialSidebarOpen, theme }: PageTextSearchStoryArgs) {
   const index = deepSreIndex
-  const [route, setRoute] = useState<Extract<AppRoute, { kind: 'site' }>>({ kind: 'site', siteId: index.site.id, artifactPath: startPaths[startAt] })
-  const [location, setLocation] = useState({ search: query ? `?q=${encodeURIComponent(query)}` : '', hash: '' })
+  const [location, setLocation] = useState(() => startLocation({ startAt, query, folder }))
   const [themeMode, setThemeMode] = useState(theme)
   const fullTextSearch = useMemo(
     () => behavior === 'unavailable' ? undefined : createStoryFullTextSearch(index, behavior),
@@ -42,9 +52,8 @@ function PageTextSearchStory({ search: behavior, ranking, startAt, query, initia
   )
 
   useEffect(() => {
-    setRoute({ kind: 'site', siteId: index.site.id, artifactPath: startPaths[startAt] })
-    setLocation({ search: query ? `?q=${encodeURIComponent(query)}` : '', hash: '' })
-  }, [index.site.id, startAt, query])
+    setLocation(startLocation({ startAt, query, folder }))
+  }, [startAt, query, folder])
   useEffect(() => setThemeMode(theme), [theme])
 
   const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
@@ -55,16 +64,17 @@ function PageTextSearchStory({ search: behavior, ranking, startAt, query, initia
 
   function navigate(href: string) {
     const destination = new URL(href, window.location.origin)
-    const nextRoute = parseRoute(destination.pathname)
-    if (nextRoute.kind === 'site' && nextRoute.siteId === index.site.id) setRoute(nextRoute)
-    setLocation({ search: destination.search, hash: destination.hash })
+    const nextRoute = parseRoute(destination.pathname, destination.search)
+    if (nextRoute.kind === 'sites' || (nextRoute.kind !== 'preview-list' && nextRoute.kind !== 'preview-document' && nextRoute.siteId !== index.site.id)) return
+    setLocation({ pathname: destination.pathname, search: destination.search, hash: destination.hash })
   }
 
-  const pathname = `/${route.siteId}${route.artifactPath ? `/${route.artifactPath}` : ''}`
+  const route = parseRoute(location.pathname, location.search)
+  if (route.kind !== 'site' && route.kind !== 'search') return null
   return (
     <ArtifactWorkspace
       route={route}
-      pathname={pathname}
+      pathname={location.pathname}
       search={location.search}
       hash={location.hash}
       sites={sites}
@@ -88,15 +98,16 @@ const meta = {
     layout: 'fullscreen',
     docs: {
       description: {
-        component: 'Find pages by name with ⌘ K; search their text from the sidebar with ⌘ ⇧ F. A query runs only when it is committed with Enter, its results replace Pinned and Browse until it is cleared (ranked as title, heading, then text matches with a reason line, or in path order above the ranking threshold), and the committed terms are highlighted in the open page. This story searches the fixture pages in the browser instead of loading a generated search projection.',
+        component: 'Find pages by name with ⌘ K or the sidebar filter; search their text on the results page (/<site>/_search, opened with ⌘ ⇧ F or the sidebar\'s "Search full text" row). It updates as you type, shows folder facets with counts, and ranks pages as title, heading, then text matches (path order above the ranking threshold). An opened result highlights the matches and offers a match navigator. This story searches the fixture pages in the browser instead of loading a generated search projection.',
       },
     },
   },
   args: {
     search: 'ready',
     ranking: 'ranked',
-    startAt: 'html',
+    startAt: 'results',
     query: '',
+    folder: '',
     initialSidebarOpen: true,
     theme: 'system',
   },
@@ -107,8 +118,9 @@ const meta = {
       description: 'How the site\'s search data behaves.',
     },
     ranking: { control: 'radio', options: ['ranked', 'paged'], description: 'Ranked list when every hit can be loaded, or the path-ordered fallback above the threshold.' },
-    startAt: { control: 'radio', options: ['site-home', 'html', 'markdown'] },
-    query: { control: 'text', description: 'The committed query in the URL (?q=).' },
+    startAt: { control: 'radio', options: ['results', 'site-home', 'html', 'markdown'] },
+    query: { control: 'text', description: 'The query in the URL (?q=).' },
+    folder: { control: 'text', description: 'The results page folder (in=).' },
     initialSidebarOpen: { control: 'boolean' },
     theme: { control: 'radio', options: ['system', 'light', 'dark'] },
   },
@@ -118,66 +130,70 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 
+// Narrow reading area: facets become a chip row.
+const narrowViewport = { viewport: { value: 'mobile1' } }
+
 export const StartSearching: Story = {
-  name: 'Start · type a query and press Enter',
+  name: 'Results page · empty, type a query',
 }
 
-export const ReadingResults: Story = {
-  name: 'Reading results · HTML page highlighted',
+export const Results: Story = {
+  name: 'Results page · ranked results with folder facets',
   args: { query: 'latency' },
 }
 
-export const ReadingMarkdownResults: Story = {
-  name: 'Reading results · Markdown page highlighted',
-  args: { query: 'retry', startAt: 'markdown' },
+export const ResultsInFolder: Story = {
+  name: 'Results page · limited to a folder',
+  args: { query: 'latency', folder: 'incidents' },
 }
 
-export const SiteHomeWithResults: Story = {
-  name: 'Site home with results',
-  args: { query: 'latency', startAt: 'site-home' },
+export const ResultsNarrow: Story = {
+  name: 'Results page · narrow',
+  args: { query: 'latency', initialSidebarOpen: false },
+  globals: narrowViewport,
 }
 
 export const Searching: Story = {
-  name: 'Searching',
+  name: 'Results page · searching',
   args: { query: 'latency', search: 'slow' },
 }
 
-export const NoResults: Story = {
-  name: 'No results',
+export const NoMatches: Story = {
+  name: 'Results page · no matches',
   args: { query: 'latency kubernetes' },
 }
 
+export const NoMatchesInFolder: Story = {
+  name: 'Results page · no matches in the folder',
+  args: { query: 'retry', folder: 'architecture' },
+}
+
 export const NetworkError: Story = {
-  name: 'Search data could not be loaded',
+  name: 'Results page · search data could not be loaded',
   args: { query: 'latency', search: 'network-error' },
 }
 
 export const InvalidData: Story = {
-  name: 'Search data is invalid',
+  name: 'Results page · search data is invalid',
   args: { query: 'latency', search: 'invalid-data' },
 }
 
+export const PathOrderedFallback: Story = {
+  name: 'Results page · too many hits to rank (path order, 20 per page)',
+  args: { query: 'latency', search: 'many-results', ranking: 'paged' },
+}
+
 export const Unavailable: Story = {
-  name: 'Site without page text search',
+  name: 'Results page · site without page text search',
   args: { search: 'unavailable' },
 }
 
-export const CollapsedSidebar: Story = {
-  name: 'Sidebar collapsed · results chip',
-  args: { query: 'latency', initialSidebarOpen: false },
-}
-
-export const RankedResults: Story = {
-  name: 'Ranked results · Title / Heading / Text reasons',
-  args: { query: 'latency', startAt: 'site-home' },
-}
-
-export const RankedWithFolderScopeOffer: Story = {
-  name: 'Ranked · folder scope offered for the open page',
+export const ReadingResults: Story = {
+  name: 'Opened result · HTML page, match navigator',
   args: { query: 'latency', startAt: 'html' },
 }
 
-export const PathOrderedFallback: Story = {
-  name: 'Fallback · too many hits to rank (path order, 20 per page)',
-  args: { query: 'latency', search: 'many-results', ranking: 'paged', startAt: 'html' },
+export const ReadingMarkdownResults: Story = {
+  name: 'Opened result · Markdown page, match navigator',
+  args: { query: 'retry', startAt: 'markdown' },
 }
