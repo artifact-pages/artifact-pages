@@ -40,7 +40,7 @@ const handbook = site('handbook', 'Handbook', 'Team handbook with a few top-leve
 const folderCounts: Record<string, FolderCount[]> = {
   guide: [{ folder: 'en', count: 7 }, { folder: 'ja', count: 7 }],
   architecture: [{ folder: 'en', count: 6 }, { folder: 'ja', count: 6 }],
-  handbook: [{ folder: 'root', count: 5 }],
+  handbook: [{ folder: '(root)', count: 5, isRoot: true }],
   sre: [
     { folder: 'architecture', count: 1 }, { folder: 'diagrams', count: 1 }, { folder: 'guides', count: 1 },
     { folder: 'incidents', count: 1 }, { folder: 'reports', count: 1 }, { folder: 'runbooks', count: 1 },

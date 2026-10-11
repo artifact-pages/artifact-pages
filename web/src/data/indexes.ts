@@ -50,20 +50,85 @@ function parseSiteDiscoveryMetadata(payload: unknown, url: string, expectedSiteI
   return metadata as SiteDiscoveryMetadata
 }
 
+/** How long a shared index read is reused. Keeps picker -> site navigation to one request, yet picks up a newer publish soon. */
+export const SITE_INDEX_CACHE_TTL_MS = 30_000
+
+type CachedIndex = { promise: Promise<SiteIndex>; startedAt: number; controller: AbortController; subscribers: number }
+const indexCache = new Map<string, CachedIndex>()
+
+/** For tests. */
+export function clearSiteIndexCache() {
+  indexCache.clear()
+}
+
+/**
+ * Loads a site's artifact index. Reads through the global `fetch` are shared per URL for
+ * SITE_INDEX_CACHE_TTL_MS (the site picker's count reads, the site view and the preview page reuse
+ * one request); failures and aborted reads are never cached. A custom fetcher bypasses the cache.
+ * `options.signal` cancels this caller's wait; the underlying request is aborted only when every
+ * caller that joined it has aborted.
+ */
 export async function loadSiteIndex(
   siteId: string,
   fetcher: Fetcher = fetch,
   indexUrl = defaultSiteIndexUrl(siteId),
+  options: { signal?: AbortSignal } = {},
 ): Promise<SiteIndex> {
   if (!isValidSiteId(siteId)) {
     throw new IndexLoadError(`Invalid site id: ${siteId}.`, indexUrl)
   }
+  const { signal } = options
+  if (fetcher !== globalThis.fetch) return fetchSiteIndex(siteId, fetcher, indexUrl, signal)
 
-  const url = indexUrl
+  const key = `${siteId}\0${indexUrl}`
+  let entry = indexCache.get(key)
+  if (!entry || Date.now() - entry.startedAt >= SITE_INDEX_CACHE_TTL_MS) {
+    const controller = new AbortController()
+    const created: CachedIndex = {
+      controller,
+      startedAt: Date.now(),
+      subscribers: 0,
+      promise: fetchSiteIndex(siteId, fetcher, indexUrl, controller.signal).catch((error: unknown) => {
+        if (indexCache.get(key) === created) indexCache.delete(key)
+        throw error
+      }),
+    }
+    created.promise.catch(() => undefined) // consumed by callers; this only avoids an unhandled rejection when all abort
+    indexCache.set(key, created)
+    entry = created
+  }
+  const joined = entry
+  joined.subscribers += 1
+  if (!signal) return joined.promise
+  if (signal.aborted) {
+    release(key, joined)
+    throw new IndexLoadError(`Aborted ${indexUrl}.`, indexUrl)
+  }
+  return new Promise<SiteIndex>((resolve, reject) => {
+    const onAbort = () => {
+      release(key, joined)
+      reject(new IndexLoadError(`Aborted ${indexUrl}.`, indexUrl))
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+    joined.promise.then(
+      (index) => { signal.removeEventListener('abort', onAbort); resolve(index) },
+      (error: unknown) => { signal.removeEventListener('abort', onAbort); reject(error) },
+    )
+  })
+}
+
+function release(key: string, entry: CachedIndex) {
+  entry.subscribers -= 1
+  if (entry.subscribers > 0) return
+  if (indexCache.get(key) === entry) indexCache.delete(key)
+  entry.controller.abort()
+}
+
+async function fetchSiteIndex(siteId: string, fetcher: Fetcher, url: string, signal?: AbortSignal): Promise<SiteIndex> {
   let payload: unknown
 
   try {
-    const response = await fetcher(url)
+    const response = await fetcher(url, signal ? { signal } : undefined)
     if (!response.ok) {
       throw new IndexLoadError(`Request failed with status ${response.status}: ${url}.`, url, { status: response.status })
     }

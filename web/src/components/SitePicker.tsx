@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ThemeMode } from '../domain/theme'
 import { artifactCountLabel } from '../domain/site-count-label'
 import { hasSiteDiscoveryMetadata, type SiteCatalogEntry } from '../domain/index'
-import { summarizeSiteCounts, type FolderCount } from '../domain/site-folder-counts'
+import { folderChipKey, folderChipLabel, folderSummaryText, summarizeFolders, type FolderCount } from '../domain/site-folder-counts'
 import { useSiteFolderCounts } from '../data/use-site-folder-counts'
 import { CommandPalette, type PaletteCommand } from './CommandPalette'
 import { Icon } from './Icon'
@@ -30,7 +30,7 @@ export function SitePicker({
   const [paletteOpen, setPaletteOpen] = useState(false)
   const paletteReturnFocus = useRef<HTMLElement | null>(null)
   const sortedSites = [...sites].sort((left, right) => left.site.title.localeCompare(right.site.title))
-  const folderCounts = useSiteFolderCounts(sortedSites, folderCountsOverride)
+  const { counts: folderCounts, pending: pendingCounts } = useSiteFolderCounts(sortedSites, folderCountsOverride)
   const commands: PaletteCommand[] = [
     {
       title: 'Use light theme',
@@ -116,11 +116,11 @@ export function SitePicker({
                     {entry.site.description?.trim() ? (
                       <span className="site-picker-description">{entry.site.description}</span>
                     ) : null}
-                    <FolderCountChips entry={entry} folders={folderCounts[entry.site.id]} />
+                    <FolderCountChips entry={entry} folders={folderCounts[entry.site.id]} pending={pendingCounts.has(entry.site.id)} />
                     <span className="site-picker-meta">
                       <span className="mono">/{entry.site.id}</span>
                       <span className="site-picker-meta-separator" aria-hidden="true">·</span>
-                      <span>{catalogStatusLabel(entry, folderCounts[entry.site.id])}</span>
+                      <span>{catalogStatusLabel(entry)}</span>
                       {hasSiteDiscoveryMetadata(entry) ? (
                         <span className="site-picker-start">Start reading <Icon name="arrow" size={12} /></span>
                       ) : null}
@@ -152,26 +152,30 @@ export function SitePicker({
   )
 }
 
-function FolderCountChips({ entry, folders }: { entry: SiteCatalogEntry; folders?: FolderCount[] }) {
+// The chip row is reserved while a site's count is still loading so the card does not jump.
+function FolderCountChips({ entry, folders, pending }: { entry: SiteCatalogEntry; folders?: FolderCount[]; pending: boolean }) {
   if (!hasSiteDiscoveryMetadata(entry)) return null
-  const summary = summarizeSiteCounts(entry.artifactCount, folders)
-  if (summary.kind !== 'folders') return null
+  const summary = summarizeFolders(folders)
+  if (summary.kind === 'none') {
+    return pending ? <span className="site-picker-folders site-picker-folders--reserved" aria-hidden="true" /> : null
+  }
   return (
-    <span className="site-picker-folders" role="group" aria-label="Pages per top-level folder">
-      {summary.folders.map(({ folder, count }) => (
-        <span className="site-picker-folder" key={folder}><b>{folder}</b> {count}</span>
-      ))}
-    </span>
+    <>
+      <span className="site-picker-folders" aria-hidden="true">
+        {summary.kind === 'folders'
+          ? summary.folders.map((entry) => (
+            <span className="site-picker-folder" key={folderChipKey(entry)}><b>{folderChipLabel(entry)}</b> {entry.count}</span>
+          ))
+          : <span className="site-picker-folder">{summary.folderCount} top-level folders</span>}
+      </span>
+      <span className="site-picker-sr-only">{folderSummaryText(summary)}</span>
+    </>
   )
 }
 
-function catalogStatusLabel(entry: SiteCatalogEntry, folders?: FolderCount[]) {
+function catalogStatusLabel(entry: SiteCatalogEntry) {
   if (hasSiteDiscoveryMetadata(entry)) {
-    const summary = summarizeSiteCounts(entry.artifactCount, folders)
-    const updated = `updated ${formatDate(entry.generatedAt)}`
-    if (summary.kind === 'folders') return updated
-    const total = artifactCountLabel(summary.total)
-    return `${summary.folderCount ? `${total} in ${summary.folderCount} folders` : total} · ${updated}`
+    return `${artifactCountLabel(entry.artifactCount)} · updated ${formatDate(entry.generatedAt)}`
   }
   if (entry.status === 'not-published') return 'Registered · not published yet'
   if (entry.status === 'needs-republish') return 'Registered · needs to be republished'

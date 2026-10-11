@@ -31,13 +31,14 @@ Chosen from the Storybook `Concepts/Reader UX 2026-10`/ISSUE-078 stories: varian
 
 - Registry description and the page total are in `sites.json` / `meta.json`; per-folder counts are only derivable from the per-site `index.json`.
 - The picker reads the indexes of published sites after the first paint: at most 8 sites, 3 at a time, failures silent (the card keeps the metadata total). Unpublished sites are never requested. This relaxes the "load a site's index only when it becomes active" rule for the landing page only; recorded in the specification (Site home).
-- Rule: first path segment = folder, root pages = `root`; 2 to 4 groups show chips, 1 group or no data shows the plain total, more than 4 show "N artifacts in M folders".
+- Rule: first path segment = folder, root pages = a separate `(root)` bucket; 2 to 4 groups show chips, more than 4 show "N top-level folders", 1 group or no data shows no chips. The total always comes from `meta.json`.
+- Index reads share a 30 s in-memory cache (site view and preview page reuse the picker's read), abort on unmount, and are never cached on failure.
 - Follow-up (TD19, Codex-owned indexer): publish per-folder counts in `meta.json`, after which the reader drops the index reads on the landing page.
 - The "Start reading" label is part of the card's single link (no nested links); it is not a second link.
 
 ## Acceptance criteria
 
-- [x] Site cards show the registry description, page counts per top-level folder (e.g. `en 7 · ja 7`) without claiming the folders are translations, and a "Start reading" link to the site home. Sites without folders or with one group show the plain total. (Unit tests in `web/src/domain/site-folder-counts.test.mjs`, e2e "site cards show the description ...".)
+- [x] Site cards show the registry description, page counts per top-level folder (e.g. `en 7 · ja 7`) without claiming the folders are translations, and a "Start reading" link to the site home. Sites without folders or with one group show only the total. (Unit tests in `web/src/domain/site-folder-counts.test.mjs`, e2e "site cards show the description ...".)
 - [ ] Deferred to TD19: the landing page marks an explicit start point per site (registry-provided start page); operator intro text is out of scope by the owner decision. The "Start reading" link to the site home is the satisfied part.
 - [ ] Deferred to TD19: site cards follow an explicit order when one is provided and fall back to title order otherwise. Today cards are in title order.
 - [ ] Deferred to TD19 (start-here entry): a site home leads with orientation (the site description and a start-here entry when the site defines one) before the update feed. The site-home half has no start page to show until TD19 and was not changed.

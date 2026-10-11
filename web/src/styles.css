@@ -2582,6 +2582,19 @@ mark {
   margin-top: 3px;
 }
 
+.site-picker-folders--reserved {
+  min-height: 1.5em;
+}
+
+.site-picker-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .site-picker-folder {
   padding: 1px 8px;
   border-radius: 999px;
