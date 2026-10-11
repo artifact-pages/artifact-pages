@@ -18,7 +18,7 @@
     "benchmark:preview-discovery": "npm run build && node scripts/benchmark-preview-discovery.mjs",
     "fulltext:load": "node scripts/fulltext-load.mjs",
     "test:fulltext": "node scripts/test-fulltext-core.mjs",
-    "test:text-highlight": "node --experimental-transform-types --no-warnings --test scripts/text-highlight.test.mjs",
+    "test:text-highlight": "node --experimental-transform-types --no-warnings --test scripts/text-highlight.test.mjs scripts/search-ranking.test.mjs",
     "test:palette-sections": "node --experimental-transform-types --no-warnings --test scripts/palette-sections.test.mjs",
     "test:reader-shell": "node --experimental-transform-types --no-warnings --test web/src/domain/*.test.mjs",
     "test:schema-versions": "node --experimental-transform-types --no-warnings --test web/src/data/supported-schema-versions.test.mjs",

@@ -206,6 +206,7 @@ export function Sidebar({
             committedQuery={committedQuery}
             draft={draft}
             currentArtifactId={currentArtifactId}
+            currentArtifactPath={artifactPath}
             listRef={resultListRef}
             onOpen={pageTextSearch.onOpenHit}
             hitHref={(hit) => artifactHref(hit.href)}

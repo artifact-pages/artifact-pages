@@ -2,7 +2,7 @@ import { FullTextSearchError, type FullTextResult, type SiteFullTextSearch } fro
 import type { SiteIndex } from '../domain/index'
 import { searchTerms } from '../domain/text-highlight'
 
-export type StoryFullTextBehavior = 'ready' | 'slow' | 'network-error' | 'invalid-data'
+export type StoryFullTextBehavior = 'ready' | 'slow' | 'network-error' | 'invalid-data' | 'many-results'
 
 /**
  * Stands in for the generated search projection in Storybook: it searches the
@@ -37,7 +37,12 @@ export function createStoryFullTextSearch(index: SiteIndex, behavior: StoryFullT
     if (behavior === 'network-error') throw new FullTextSearchError('network', 'Story network failure', 503)
     if (behavior === 'invalid-data') throw new FullTextSearchError('invalid-data', 'Story invalid data')
     const terms = searchTerms(query)
-    const matches = (await load()).filter(({ text }) => terms.length > 0 && terms.every((term) => text.includes(term)))
+    const found = (await load()).filter(({ text }) => terms.length > 0 && terms.every((term) => text.includes(term)))
+    // 'many-results' adds pages that are not in the site index, so a short query exceeds one result page.
+    const extra = behavior === 'many-results' && found.length > 0
+      ? Array.from({ length: 30 }, (_, number) => ({ path: `bulk/note-${String(number + 1).padStart(2, '0')}.md`, text: '' }))
+      : []
+    const matches = [...found, ...extra].sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0)
     signal?.throwIfAborted()
     const hits = matches.slice(offset, offset + limit).map(({ path }) => ({
       id: path,

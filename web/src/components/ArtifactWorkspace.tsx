@@ -14,7 +14,8 @@ import { usePageNoindex } from './usePageNoindex'
 import { followInApp } from './spa-link'
 import { nearbyArtifacts } from '../domain/nearby-pages'
 import { normalizeLanguageTag } from '../domain/document-language'
-import type { SiteFullTextSearch } from '../data/fulltext'
+import type { FullTextHit, SiteFullTextSearch } from '../data/fulltext'
+import { rankHits } from '../domain/search-ranking'
 import { clearSearchHighlight, ensureSearchHighlightStyle, keepSearchHighlighted, watchReaderScroll } from '../domain/text-highlight'
 import type { TreeStyle } from './ArtifactTree'
 import type { ArtifactIndexEntry, SiteCatalogEntry, SiteIndex, SiteSummary } from '../domain/index'
@@ -77,7 +78,12 @@ export function ArtifactWorkspace({
   committedQueryRef.current = committedQuery
   const hashRef = useRef(hash)
   hashRef.current = hash
-  const textSearch = usePageTextSearch(textSearchClient, committedQuery)
+  const artifactsById = useMemo(() => new Map(index.artifacts.map((artifact) => [artifact.id, artifact])), [index.artifacts])
+  const rankTextHits = useCallback(
+    (hits: FullTextHit[], query: string) => rankHits(hits, query, artifactsById),
+    [artifactsById],
+  )
+  const textSearch = usePageTextSearch(textSearchClient, committedQuery, rankTextHits)
   const [pinnedArtifactsBySite, setPinnedArtifactsBySite] = useState<Record<string, string[]>>(readPinnedArtifacts)
   const pinnedArtifactIds = pinnedArtifactsBySite[index.site.id] ?? []
   const [storedRecentReads, setStoredRecentReads] = useState<RecentArtifactRead[]>(

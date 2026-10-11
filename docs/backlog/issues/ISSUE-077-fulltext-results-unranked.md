@@ -1,6 +1,7 @@
 # Page text search results are unranked, have no snippets, and mix languages
 
-- Status: Open
+- Status: In progress
+- Assignee: Claude
 - Priority: P1
 - Area: Page text search results (`web/src/components/PageTextSearch.tsx`, `web/src/domain/fulltext-codec.ts`); search format (`cli/internal/fulltext`, Codex-owned)
 
@@ -31,8 +32,12 @@ Chosen from the Storybook `Concepts/Reader UX 2026-10`/ISSUE-077 stories: varian
 
 ## Acceptance criteria
 
-- [ ] First step, web-side only (no search format change): results are ranked by (title match, then heading match from `index.json` `toc`, then body-only match) while keeping path order within a tier. The matching tier is not shown as a score, only as order. Unit tests cover the tiers. Constraint: the search contract returns path-ordered results paged 20 at a time (`docs/specification.md:473`, `:475`; `docs/architecture/fulltext-search.md:61`), so tier ranking needs every hit page loaded before ordering. The cost is bounded by the site's `documents` count; record the threshold above which ranking falls back to path order.
-- [ ] Optional scope: a control to search only the open page's folder (for example `en/`) or to prefer the current folder's results; default and persistence decided in the issue. Language detection by path is a convention, not a data model (see [ISSUE-078](ISSUE-078-landing-page-has-no-orientation.md)); the scope is folder-based.
+- [x] First step, web-side only (no search format change): results are ranked by (title match, then heading match from `index.json` `toc`, then body-only match) while keeping path order within a tier. The tier is not shown as a numeric score; a match-reason label (Title / Heading: … / Text) is shown. Unit tests cover the tiers. Constraint: the search contract returns path-ordered results paged 20 at a time (`docs/specification.md:473`, `:475`; `docs/architecture/fulltext-search.md:61`), so tier ranking needs every hit page loaded before ordering. The cost is bounded by the site's `documents` count; record the threshold above which ranking falls back to path order. Verified: `web/src/domain/search-ranking.ts` with `scripts/search-ranking.test.mjs` (run by `npm run test:text-highlight`); threshold 500 matching pages (`RANKING_MAX_HITS`), one request with `limit` = total (client cap 1000); above it the list stays path-ordered, grouped by folder and paged; e2e covers order, reasons and the fallback.
+- [x] Optional scope: a control to search only the open page's folder (for example `en/`) or to prefer the current folder's results; default and persistence decided in the issue (decided: off by default, not persisted, resets with the next query, offered only for a page inside a folder, limited to ranked lists because a partial list cannot be scoped honestly). Language detection by path is a convention, not a data model (see [ISSUE-078](ISSUE-078-landing-page-has-no-orientation.md)); the scope is folder-based.
 - [ ] A match snippet per result and body-hit ranking need either extra fulltext data (term frequency or a stored excerpt, a search format change owned by the CLI side with versioning per TD2) or a client fetch of each result page. Decide in a short design note (amend `docs/architecture/fulltext-search.md`) before implementing; split a follow-up issue if the format changes. Do not claim snippets in the first step.
-- [ ] The result header (currently truncated in the narrow sidebar, "10 pages contain "previe…") still shows the query and "n / total".
-- [ ] Specification updated (`docs/specification.md:473`, `:475`): ranking, paging and the "n / total" position, with committed query in `?q=`, highlight and scroll-to-first-match unchanged.
+- [x] The result header (currently truncated in the narrow sidebar, "10 pages contain "previe…") still shows the query and "n / total".
+- [x] Specification updated (`docs/specification.md:473`, `:475`): ranking, paging and the "n / total" position, with committed query in `?q=`, highlight and scroll-to-first-match unchanged.
+
+## Status note (2026-10-11)
+
+Implemented and verified except the snippet criterion. Its decision part is made: snippets and body-hit ranking need a search format change or a client fetch per result, the owner chose no snippets for this step, and the design note is in `docs/architecture/fulltext-search.md`. The criterion stays unticked because it also asks for a follow-up issue when the format changes; that issue is not filed yet (outside this change's allowed files). File it, then this item can be closed as Done with the snippet criterion split out.

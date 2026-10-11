@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
 import type { FullTextHit } from '../data/fulltext'
 import type { ArtifactIndexEntry, SiteIndex } from '../domain/index'
+import { folderOfPath, isInFolder, matchReason, type MatchReason } from '../domain/search-ranking'
 import { searchTerms } from '../domain/text-highlight'
 import { Icon } from './Icon'
 import { followInApp } from './spa-link'
@@ -83,6 +84,7 @@ export function PageTextSearchResults({
   committedQuery,
   draft,
   currentArtifactId,
+  currentArtifactPath,
   listRef,
   onOpen,
   hitHref,
@@ -95,6 +97,7 @@ export function PageTextSearchResults({
   committedQuery: string
   draft: string
   currentArtifactId?: string
+  currentArtifactPath?: string
   listRef: RefObject<HTMLDivElement | null>
   onOpen: (hit: FullTextHit) => void
   /** The link target of a result row. */
@@ -106,7 +109,17 @@ export function PageTextSearchResults({
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
   const artifactsById = useMemo(() => new Map(index.artifacts.map((artifact) => [artifact.id, artifact])), [index.artifacts])
   const pendingDraft = draft.trim() && draft.trim() !== committedQuery ? draft.trim() : ''
-  const hits = state.status === 'success' ? state.hits : []
+  const ranked = state.status === 'success' && state.ranked
+  // Folder scope: off by default, offered only for a page inside a folder, and
+  // limited to the folder it was switched on for. A new query resets it.
+  const openFolder = currentArtifactPath ? folderOfPath(currentArtifactPath) : ''
+  const [scopeFolder, setScopeFolder] = useState<string | null>(null)
+  const allHits = state.status === 'success' ? state.hits : []
+  const scope = ranked ? scopeFolder : null
+  const hits = useMemo(
+    () => scope === null ? allHits : allHits.filter((hit) => isInFolder(hit.path, scope)),
+    [allHits, scope],
+  )
   const groups = useMemo(() => groupByFolder(hits), [hits])
   const position = currentArtifactId ? hits.findIndex(({ id }) => id === currentArtifactId) : -1
 
@@ -119,6 +132,7 @@ export function PageTextSearchResults({
   const focusAfterExpand = useRef<string | null>(null)
   useEffect(() => {
     setCollapsed(new Set())
+    setScopeFolder(null)
     focusAfterMore.current = null
     focusAfterExpand.current = null
   }, [committedQuery])
@@ -214,7 +228,7 @@ export function PageTextSearchResults({
           role="status"
         >
           <Icon name="search" size={12} />
-          {statusLabel(state, index.artifacts.length)}
+          {statusLabel(state, index.artifacts.length, scope === null ? undefined : { folder: scope, shown: hits.length })}
         </span>
         {pendingDraft ? (
           <span className="sidebar-section-label page-text-search-pending">
@@ -223,7 +237,7 @@ export function PageTextSearchResults({
           </span>
         ) : null}
         {state.status === 'success' && state.total > 0 ? (
-          <span className="mono">{position >= 0 ? `${position + 1} / ${state.total}` : state.total}</span>
+          <span className="mono">{position >= 0 ? `${position + 1} / ${hits.length}` : hits.length}</span>
         ) : null}
       </div>
 
@@ -244,12 +258,41 @@ export function PageTextSearchResults({
             : 'Check the spelling or try a different word.'}
         />
       ) : state.status === 'success' ? (
+        <>
+        {ranked && (openFolder || scope !== null) ? (
+          <div className="page-text-scope-row">
+            {scope !== null ? (
+              <span className="page-text-scope-chip">
+                <span>Only {scope ? `${scope}/` : 'top level'}</span>
+                <button type="button" className="icon-button" aria-label="Search all folders" onClick={() => setScopeFolder(null)}>
+                  <Icon name="close" size={11} />
+                </button>
+              </span>
+            ) : (
+              <button type="button" className="page-text-scope-chip is-offer" onClick={() => setScopeFolder(openFolder)}>
+                Search only in {openFolder}/
+              </button>
+            )}
+          </div>
+        ) : null}
         <div
           ref={listRef}
-          className={`page-text-result-list${pendingDraft ? ' is-stale' : ''}`}
+          className={`page-text-result-list${ranked ? ' is-ranked' : ''}${pendingDraft ? ' is-stale' : ''}`}
           onKeyDown={handleKeyDown}
         >
-          {groups.map(({ folder, hits: groupHits }) => {
+          {ranked ? hits.map((hit) => (
+            <ResultRow
+              key={hit.id}
+              hit={hit}
+              folder=""
+              artifact={artifactsById.get(hit.id)}
+              current={hit.id === currentArtifactId}
+              href={hitHref(hit)}
+              onOpen={onOpen}
+              reason={matchReason(state.query, artifactsById.get(hit.id))}
+              showPath={scope === null}
+            />
+          )) : groups.map(({ folder, hits: groupHits }) => {
             const isCollapsed = collapsed.has(folder)
             return (
               <div className="page-text-result-group" key={folder}>
@@ -299,6 +342,10 @@ export function PageTextSearchResults({
             {state.more === 'error' ? 'Could not load more results.' : ''}
           </span>
         </div>
+        {scope !== null && allHits.length > hits.length ? (
+          <p className="page-text-scope-note">{allHits.length - hits.length} more {allHits.length - hits.length === 1 ? 'match' : 'matches'} outside {scope ? `${scope}/` : 'the top level'}</p>
+        ) : null}
+        </>
       ) : null}
     </div>
   )
@@ -313,6 +360,8 @@ function ResultRow({
   current,
   href,
   onOpen,
+  reason,
+  showPath,
 }: {
   hit: FullTextHit
   folder: string
@@ -320,6 +369,9 @@ function ResultRow({
   current: boolean
   href: string
   onOpen: (hit: FullTextHit) => void
+  /** Present in the ranked list: why the page matched. */
+  reason?: MatchReason
+  showPath?: boolean
 }) {
   const filename = hit.path.slice(folder ? folder.length + 1 : 0)
   return (
@@ -333,8 +385,22 @@ function ResultRow({
       title={hit.path}
       onClick={(event) => followInApp(event, () => onOpen(hit))}
     >
-      <span className="page-text-result-title">{artifact?.title ?? filename}</span>
-      <span className="page-text-result-path">{filename}</span>
+      {reason ? (
+        <>
+          <span className="page-text-result-title-line">
+            <span className="page-text-result-title">{artifact?.title ?? filename}</span>
+            {showPath ? <span className="page-text-result-flat-path">{hit.path.replace(/\.[^./]+$/, '')}</span> : null}
+          </span>
+          <span className="page-text-result-reason" data-reason={reason.tier}>
+            {reason.tier === 'title' ? <b>Title</b> : reason.tier === 'heading' ? <><b>Heading:</b> <span className="page-text-result-reason-heading">{reason.heading}</span></> : <b>Text</b>}
+          </span>
+        </>
+      ) : (
+        <>
+          <span className="page-text-result-title">{artifact?.title ?? filename}</span>
+          <span className="page-text-result-path">{filename}</span>
+        </>
+      )}
     </a>
   )
 }
@@ -364,14 +430,17 @@ function PageTextSearchMessage({
   )
 }
 
-function statusLabel(state: PageTextSearchState, documentCount: number) {
+function statusLabel(state: PageTextSearchState, documentCount: number, scope?: { folder: string; shown: number }) {
   if (state.status === 'loading') return `Searching ${documentCount.toLocaleString('en-US')} pages…`
   if (state.status === 'error') return `“${state.query}”`
+  if (state.status === 'success' && scope) {
+    return `${scope.shown.toLocaleString('en-US')} ${scope.shown === 1 ? 'page' : 'pages'} in ${scope.folder ? `${scope.folder}/` : 'the top level'} contain “${state.query}”`
+  }
   if (state.status === 'success') return `${state.total.toLocaleString('en-US')} ${state.total === 1 ? 'page contains' : 'pages contain'} “${state.query}”`
   return 'Page text'
 }
 
-// Results arrive in path order; grouping by folder keeps that order readable.
+// The fallback list (too many hits to rank) arrives in path order; grouping by folder keeps that order readable.
 function groupByFolder(hits: FullTextHit[]): ResultGroup[] {
   const groups = new Map<string, FullTextHit[]>()
   for (const hit of hits) {
@@ -383,10 +452,7 @@ function groupByFolder(hits: FullTextHit[]): ResultGroup[] {
   return [...groups].map(([folder, groupHits]) => ({ folder, hits: groupHits }))
 }
 
-function folderOf(path: string) {
-  const slash = path.lastIndexOf('/')
-  return slash < 0 ? '' : path.slice(0, slash)
-}
+const folderOf = folderOfPath
 
 function toggled(set: Set<string>, value: string, include: boolean) {
   if (set.has(value) === include) return set

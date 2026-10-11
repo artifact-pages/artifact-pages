@@ -60,6 +60,8 @@ HTML title plus static body text are indexed. Markdown uses its display title an
 
 All result IDs are full source-relative document paths. Ordering is ascending UTF-8 path bytes, matching the Go artifact index; no relevance score, term frequency or positions are stored. The total covers the complete intersection, while `hits` contains only the requested page. Every path segment is URL-encoded independently for `href`.
 
+Reader-side ranking (ISSUE-077, 2026-10-11): the core stays path-ordered and unranked. The web reader loads every hit when the total is at most 500 (one request, `limit` = total, within the client's 1000 per request cap) and orders pages by title match, heading match from `index.json` `toc`, then body-only, path order within a tier; above 500 it keeps the paged, path-ordered list. This needs no format change. Snippets and body-hit ranking are not provided: they would need term frequencies or stored excerpts (a format change owned by the CLI side, versioned per TD2) or a client fetch of every result page. The owner chose no snippets for this step; they are deferred to a follow-up that must start from that format decision.
+
 ## Projection and binary format v1
 
 ```text
