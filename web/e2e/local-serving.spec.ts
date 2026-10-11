@@ -124,6 +124,37 @@ async function expectTabLocation(tab: Page, pathname: string, search = '') {
   )
 }
 
+/**
+ * Ctrl/Meta-click a link and prove the app leaves it to the browser: the click reaches the window with
+ * `defaultPrevented` still false and the app neither navigated nor reloaded. Whether the browser then
+ * opens a tab is browser behavior, and under load Chromium/Playwright sometimes never reports the tab
+ * (ISSUE-072 A3), so this does not wait for one. A bubble-phase listener on `window` runs after the app's
+ * React root handler; it then prevents the default so no tab opens.
+ */
+async function expectModifiedClickKeptForBrowser(page: Page, link: Locator) {
+  const pagesBefore = page.context().pages().length
+  const urlBefore = page.url()
+  await link.evaluate((element) => {
+    const w = window as unknown as { __probe: ClickRecord[], __probeStop: AbortController }
+    w.__probe = []
+    w.__probeStop = new AbortController()
+    const record = (event: Event) => {
+      const mouse = event as MouseEvent
+      if (!(event.target instanceof Element) || event.target.closest('a') !== element) return
+      w.__probe.push({ type: event.type, button: mouse.button, modified: mouse.ctrlKey || mouse.metaKey, defaultPrevented: event.defaultPrevented })
+      event.preventDefault()
+    }
+    window.addEventListener('click', record, { signal: w.__probeStop.signal })
+  })
+  await link.click({ modifiers: ['ControlOrMeta'] })
+  const records = () => page.evaluate(() => (window as unknown as { __probe: ClickRecord[] }).__probe)
+  await expect.poll(async () => (await records()).length).toBe(1)
+  expect((await records())[0]).toMatchObject({ type: 'click', button: 0, modified: true, defaultPrevented: false })
+  await page.evaluate(() => (window as unknown as { __probeStop: AbortController }).__probeStop.abort())
+  expect(page.url()).toBe(urlBefore)
+  expect(page.context().pages().length).toBe(pagesBefore)
+}
+
 // Route handlers use route.fetch(); let in-flight ones finish before the
 // fixture closes the context, which would dispose their responses.
 test.afterEach(async ({ page }) => {
@@ -3659,12 +3690,7 @@ test('published preview documents stay out of production browsing and the site-h
 
   const viewPreviews = page.getByRole('link', { name: 'View previews' })
   await expect(viewPreviews).toHaveAttribute('href', '/showcase/_previews')
-  const [previewsTab] = await Promise.all([
-    page.context().waitForEvent('page'),
-    viewPreviews.click({ modifiers: ['ControlOrMeta'] }),
-  ])
-  await expectTabLocation(previewsTab, '/showcase/_previews')
-  await previewsTab.close()
+  await expectModifiedClickKeptForBrowser(page, viewPreviews)
   await expect(page).toHaveURL('/showcase')
 
   await viewPreviews.click()
@@ -5716,18 +5742,13 @@ test.describe('page text search', () => {
     expect(requests).toEqual([])
   })
 
-  test('result links carry ?q= and leave modified clicks to the browser', async ({ page, context }) => {
+  test('result links carry ?q= and leave modified clicks to the browser', async ({ page }) => {
     await page.goto('/textsearch/_search?q=lighthouse')
     await expect(status(page)).toHaveText('24 pages contain “lighthouse”')
     const hit = page.locator('[data-hit-id="bulk/note-01.md"]')
     await expect(hit).toHaveJSProperty('tagName', 'A')
     await expect(hit).toHaveAttribute('href', '/textsearch/bulk/note-01.md?q=lighthouse')
-    const [tab] = await Promise.all([
-      context.waitForEvent('page'),
-      hit.click({ modifiers: ['ControlOrMeta'] }),
-    ])
-    await expectTabLocation(tab, '/textsearch/bulk/note-01.md', '?q=lighthouse')
-    await tab.close()
+    await expectModifiedClickKeptForBrowser(page, hit)
     await expect(page).toHaveURL(/\/_search\?q=lighthouse$/)
     await hit.click()
     await expect(page).toHaveURL(/\/bulk\/note-01\.md\?q=lighthouse$/)
@@ -5883,7 +5904,7 @@ test.describe('release UX fixes', () => {
     // app's contract instead: a modified or middle click reaches the window with defaultPrevented still
     // false (the app did not intercept it). The bubble-phase listener runs after the app's React root
     // handler; it then prevents the default so the browser does not open a tab. The listener is removed
-    // before the plain click. Real new-tab coverage lives in the Browse row and result link tests.
+    // before the plain click. The same check is shared with the other modified-click tests (expectModifiedClickKeptForBrowser).
     await page.evaluate(() => {
       const w = window as unknown as { __clicks: ClickRecord[], __stopClicks: AbortController }
       w.__clicks = []
@@ -5919,16 +5940,11 @@ test.describe('release UX fixes', () => {
     await expect(page.locator('.site-home a.tree-artifact').first()).toHaveAttribute('href', /^\/sre\//)
   })
 
-  test('sidebar Browse rows, Pinned items and breadcrumb menu entries are links', async ({ page, context }) => {
+  test('sidebar Browse rows, Pinned items and breadcrumb menu entries are links', async ({ page }) => {
     await page.goto(checkoutPath)
     const browseRow = page.locator('.browse-tree a.tree-artifact[aria-current="page"]')
     await expect(browseRow).toHaveAttribute('href', checkoutPath)
-    const [rowTab] = await Promise.all([
-      context.waitForEvent('page'),
-      browseRow.click({ modifiers: ['ControlOrMeta'] }),
-    ])
-    await expectTabLocation(rowTab, checkoutPath)
-    await rowTab.close()
+    await expectModifiedClickKeptForBrowser(page, browseRow)
     await page.getByRole('button', { name: 'Pin Checkout latency incident review' }).click()
     await expect(page.locator('.pinned-tree a.tree-artifact')).toHaveAttribute('href', checkoutPath)
     await page.getByRole('navigation', { name: 'Artifact path' })
@@ -6386,7 +6402,7 @@ test.describe('directory pages', () => {
     await expect(page.getByRole('navigation', { name: 'Similar pages' })).toBeVisible()
   })
 
-  test('a sidebar folder label is a link and the chevron alone toggles', async ({ page, context }) => {
+  test('a sidebar folder label is a link and the chevron alone toggles', async ({ page }) => {
     await routeDirectoryIndex(page)
     await page.goto('/sre/guide/en/publishing.md')
     const browse = page.locator('.browse-tree')
@@ -6401,12 +6417,7 @@ test.describe('directory pages', () => {
     await toggle.click()
     await expect(toggle).toHaveAttribute('aria-expanded', 'true')
 
-    const [tab] = await Promise.all([
-      context.waitForEvent('page'),
-      label.click({ modifiers: ['ControlOrMeta'] }),
-    ])
-    await expect.poll(() => new URL(tab.url()).pathname).toBe('/sre/guide/en')
-    await tab.close()
+    await expectModifiedClickKeptForBrowser(page, label)
     await expect(page).toHaveURL('/sre/guide/en/publishing.md')
 
     const navigations = await page.evaluate(() => performance.getEntriesByType('navigation').length)
