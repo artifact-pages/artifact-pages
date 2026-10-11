@@ -33,6 +33,9 @@ export function ArtifactTree({
   artifactHref,
   getArtifactActions,
   virtualizePaths = false,
+  activeDirectoryPath,
+  directoryHref,
+  onOpenDirectory,
 }: {
   artifacts: ArtifactIndexEntry[]
   activePath?: string
@@ -47,6 +50,15 @@ export function ArtifactTree({
   artifactHref: (artifact: ArtifactIndexEntry) => string
   getArtifactActions?: (artifact: ArtifactIndexEntry) => ArtifactRowActions
   virtualizePaths?: boolean
+  /** The folder whose page is open; its row is highlighted and its ancestors are expanded. */
+  activeDirectoryPath?: string
+  /**
+   * The link target of a folder row. When given, a folder label is a link to the
+   * folder page and the chevron is a separate button that only toggles; without it
+   * the whole row is one toggle button.
+   */
+  directoryHref?: (directory: ArtifactTreeNode) => string
+  onOpenDirectory?: (directory: ArtifactTreeNode) => void
 }) {
   const needsTree = view === 'tree' && style !== 'path-list'
   const [localExpandedPaths, setLocalExpandedPaths] = useState(
@@ -113,11 +125,11 @@ export function ArtifactTree({
   }, [isVirtualizedPathList, items.length])
 
   useEffect(() => {
-    const ancestors = folderAncestors(activePath)
+    const ancestors = [...folderAncestors(activePath), ...folderPaths(activeDirectoryPath)]
     if (ancestors.length > 0) {
       setExpanded((current) => new Set([...current, ...ancestors]))
     }
-  }, [activePath, setExpanded])
+  }, [activePath, activeDirectoryPath, setExpanded])
 
   function toggleDirectory(path: string) {
     setExpanded((current) => {
@@ -161,18 +173,58 @@ export function ArtifactTree({
 
           return (
             <div className="tree-directory" key={directory.path}>
-              <button
-                className="tree-directory-button"
-                style={{ paddingInlineStart: style === 'branch-guides' ? '8px' : `${9 + depth * 14}px` }}
-                data-tree-depth={depth}
-                data-tree-path={directory.path}
-                aria-expanded={isExpanded}
-                onClick={() => toggleDirectory(directory.path)}
-              >
-                <Icon name="chevron" size={11} />
-                <span className="tree-label">{highlight(directory.name, normalizedQuery)}</span>
-                <span className="tree-count">{count}</span>
-              </button>
+              {directoryHref ? (
+                <div
+                  className={`tree-directory-row${directory.path === activeDirectoryPath ? ' is-active' : ''}`}
+                  data-tree-depth={depth}
+                >
+                  <button
+                    type="button"
+                    className="tree-directory-button tree-directory-toggle"
+                    style={{ marginInlineStart: style === 'branch-guides' ? '4px' : `${5 + depth * 14}px` }}
+                    data-tree-depth={depth}
+                    data-tree-path={directory.path}
+                    aria-expanded={isExpanded}
+                    aria-label={`Toggle ${directory.name}`}
+                    onClick={() => toggleDirectory(directory.path)}
+                  >
+                    <Icon name="chevron" size={11} />
+                  </button>
+                  <a
+                    className="tree-directory-link"
+                    href={directoryHref(directory)}
+                    data-tree-folder={directory.path}
+                    aria-current={directory.path === activeDirectoryPath ? 'page' : undefined}
+                    title={directory.path}
+                    onClick={(event) => followInApp(event, () => onOpenDirectory?.(directory))}
+                    onKeyDown={(event) => {
+                      if (event.key === 'ArrowRight' && !isExpanded) {
+                        event.preventDefault()
+                        toggleDirectory(directory.path)
+                      } else if (event.key === 'ArrowLeft' && isExpanded && !normalizedQuery) {
+                        event.preventDefault()
+                        toggleDirectory(directory.path)
+                      }
+                    }}
+                  >
+                    <span className="tree-label">{highlight(directory.name, normalizedQuery)}</span>
+                    <span className="tree-count">{count}</span>
+                  </a>
+                </div>
+              ) : (
+                <button
+                  className="tree-directory-button"
+                  style={{ paddingInlineStart: style === 'branch-guides' ? '8px' : `${9 + depth * 14}px` }}
+                  data-tree-depth={depth}
+                  data-tree-path={directory.path}
+                  aria-expanded={isExpanded}
+                  onClick={() => toggleDirectory(directory.path)}
+                >
+                  <Icon name="chevron" size={11} />
+                  <span className="tree-label">{highlight(directory.name, normalizedQuery)}</span>
+                  <span className="tree-count">{count}</span>
+                </button>
+              )}
               {isExpanded ? (
                 <div className={`tree-children tree-children-${style}`}>
                   {renderNode(directory, depth + 1)}
@@ -289,6 +341,12 @@ function ArtifactRow({
 
 function rootPaths(artifacts: ArtifactIndexEntry[]) {
   return [...new Set(artifacts.map(({ path }) => path.split('/').filter(Boolean)[0]).filter(Boolean))]
+}
+
+function folderPaths(path?: string) {
+  if (!path) return []
+  const segments = path.split('/').filter(Boolean)
+  return segments.map((_, index) => segments.slice(0, index + 1).join('/'))
 }
 
 function folderAncestors(path?: string) {

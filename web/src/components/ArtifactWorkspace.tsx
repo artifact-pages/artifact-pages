@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArtifactBreadcrumbs } from './ArtifactBreadcrumbs'
 import { CommandPalette, type PaletteCommand } from './CommandPalette'
+import { DirectoryPage } from './DirectoryPage'
 import { Icon } from './Icon'
 import { Sidebar } from './Sidebar'
 import { SiteHome } from './SiteHome'
@@ -13,6 +14,7 @@ import { pageTitle, usePageTitle } from './usePageTitle'
 import { usePageNoindex } from './usePageNoindex'
 import { followInApp } from './spa-link'
 import { nearbyArtifacts } from '../domain/nearby-pages'
+import { resolveDirectory } from '../domain/directory'
 import { normalizeLanguageTag } from '../domain/document-language'
 import type { FullTextHit, SiteFullTextSearch } from '../data/fulltext'
 import { rankHits, scopeHits } from '../domain/search-ranking'
@@ -94,7 +96,11 @@ export function ArtifactWorkspace({
     () => readRecentArtifactReads(index.site.id),
   )
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(
-    () => new Set([...folderAncestors(route.artifactPath), ...initialExpandedPaths]),
+    () => new Set([
+      ...folderAncestors(route.artifactPath),
+      ...folderPaths(route.artifactPath && !findArtifact(index, route.artifactPath) ? route.artifactPath : ''),
+      ...initialExpandedPaths,
+    ]),
   )
   const [sidebarReveal, setSidebarReveal] = useState<{ path: string; request: number } | null>(null)
   const sidebarRevealRequest = useRef(0)
@@ -114,8 +120,15 @@ export function ArtifactWorkspace({
   const currentArtifact = route.artifactPath
     ? findArtifact(index, route.artifactPath)
     : undefined
+  // A path that is not a page may be a folder: every folder is a page (ISSUE-075).
+  const currentDirectory = useMemo(
+    () => route.artifactPath && !currentArtifact ? resolveDirectory(index.artifacts, route.artifactPath) : undefined,
+    [route.artifactPath, currentArtifact, index.artifacts],
+  )
+  // The page whose content fills the stage: the open page, or a folder's README or index page.
+  const bodyArtifact = currentArtifact ?? currentDirectory?.indexArtifact
   const effectiveRecentReads = recentReads ?? storedRecentReads
-  const pageNotFound = Boolean(route.artifactPath) && !currentArtifact
+  const pageNotFound = Boolean(route.artifactPath) && !currentArtifact && !currentDirectory
   usePageNoindex(pageNotFound)
   // The language the open HTML artifact declares on its own <html>, keyed by the artifact it was read from.
   const [frameLanguage, setFrameLanguage] = useState<{ artifactUrl: string, lang: string | undefined } | null>(null)
@@ -124,11 +137,11 @@ export function ArtifactWorkspace({
     [pageNotFound, route.artifactPath, index.artifacts],
   )
   usePageTitle(route.artifactPath
-    ? pageTitle(currentArtifact?.title ?? 'Page not found', index.site.title)
+    ? pageTitle(currentArtifact?.title ?? currentDirectory?.name ?? 'Page not found', index.site.title)
     : pageTitle(index.site.title))
   const lastRecordedArtifactId = useRef<string | null>(null)
-  const currentFormat = currentArtifact?.format
-  const hasContents = Boolean(currentArtifact?.toc?.length)
+  const currentFormat = bodyArtifact?.format
+  const hasContents = Boolean(bodyArtifact?.toc?.length)
   const tocOpen = activePanel === 'contents'
   const detailsOpen = activePanel === 'details'
   const panelLabel = activePanel === 'details' ? 'Details' : 'Contents'
@@ -142,7 +155,7 @@ export function ArtifactWorkspace({
       setActiveHeading(null)
       setHeadingJump((current) => current === 'pending' ? null : current)
     }
-  }, [activePanel, currentArtifact?.id])
+  }, [activePanel, bodyArtifact?.id])
 
   const togglePanel = useCallback((panel: Exclude<WorkspacePanel, null>) => {
     setActivePanel((current) => current === panel ? null : panel)
@@ -324,10 +337,10 @@ export function ArtifactWorkspace({
   }, [sidebarReveal, sidebarOpen])
 
   useEffect(() => {
-    if (recentReads !== undefined || !currentArtifact || lastRecordedArtifactId.current === currentArtifact.id) return
-    lastRecordedArtifactId.current = currentArtifact.id
-    setStoredRecentReads(recordRecentArtifactRead(index.site.id, currentArtifact.id, storedRecentReads))
-  }, [currentArtifact?.id, index.site.id, recentReads, storedRecentReads])
+    if (recentReads !== undefined || !bodyArtifact || lastRecordedArtifactId.current === bodyArtifact.id) return
+    lastRecordedArtifactId.current = bodyArtifact.id
+    setStoredRecentReads(recordRecentArtifactRead(index.site.id, bodyArtifact.id, storedRecentReads))
+  }, [bodyArtifact?.id, index.site.id, recentReads, storedRecentReads])
 
   useEffect(() => {
     if (paletteSeed === null) return
@@ -405,14 +418,14 @@ export function ArtifactWorkspace({
     },
     {
       title: 'Toggle details',
-      available: Boolean(currentArtifact),
+      available: Boolean(bodyArtifact),
       onSelect: () => togglePanel('details'),
     },
     {
-      title: currentArtifact && pinnedArtifactIds.includes(currentArtifact.id) ? 'Unpin artifact' : 'Pin artifact',
-      available: Boolean(currentArtifact),
+      title: bodyArtifact && pinnedArtifactIds.includes(bodyArtifact.id) ? 'Unpin artifact' : 'Pin artifact',
+      available: Boolean(bodyArtifact),
       onSelect: () => {
-        if (currentArtifact) toggleArtifactPin(currentArtifact)
+        if (bodyArtifact) toggleArtifactPin(bodyArtifact)
       },
     },
     { title: 'Go to site home', onSelect: () => navigateWithinWorkspace(`/${encodeURIComponent(index.site.id)}`) },
@@ -440,14 +453,14 @@ export function ArtifactWorkspace({
     },
     {
       title: 'Copy artifact link',
-      available: Boolean(currentArtifact),
+      available: Boolean(currentArtifact || currentDirectory),
       onSelect: () => void copyCurrentLink(showToast),
     },
     {
       title: 'Open raw artifact',
-      available: Boolean(currentArtifact),
+      available: Boolean(bodyArtifact),
       onSelect: () => {
-        if (currentArtifact) window.open(currentArtifact.artifactUrl, '_blank', 'noopener,noreferrer')
+        if (bodyArtifact) window.open(bodyArtifact.artifactUrl, '_blank', 'noopener,noreferrer')
       },
     },
   ]
@@ -472,6 +485,12 @@ export function ArtifactWorkspace({
 
   function openArtifact(artifact: ArtifactIndexEntry) {
     navigateWithinWorkspace(artifactRouteHref(index.site.id, artifact.path))
+    setActivePanel(null)
+    setPaletteSeed(null)
+  }
+
+  function openDirectory(path: string) {
+    navigateWithinWorkspace(artifactRouteHref(index.site.id, path))
     setActivePanel(null)
     setPaletteSeed(null)
   }
@@ -516,7 +535,7 @@ export function ArtifactWorkspace({
       return
     }
     const request = headingJumpRequest.current
-    const artifactId = currentArtifact?.id ?? ''
+    const artifactId = bodyArtifact?.id ?? ''
     setHeadingJump('pending')
     // Wait for the scroll to settle (heading position unchanged between polls).
     let previousTop: number | null = null
@@ -547,8 +566,8 @@ export function ArtifactWorkspace({
     toggle?.focus()
   }
 
-  const htmlArtifactUrl = currentArtifact && currentFormat === 'html'
-    ? currentArtifact.artifactUrl
+  const htmlArtifactUrl = bodyArtifact && currentFormat === 'html'
+    ? bodyArtifact.artifactUrl
     : undefined
   const syncHtmlFrameLocation = useCallback((iframe = htmlFrameRef.current) => {
     if (!iframe || !htmlArtifactUrl) return
@@ -567,7 +586,7 @@ export function ArtifactWorkspace({
       // fragment stays a same-document navigation (to the top of the page), so
       // the frame is not reloaded and does not scroll to the first match again.
       frameWindow.location.replace(hash ? frameUrl.href : `${frameUrl.href}#`)
-      scrollFrameToFragment(frameWindow, hash)
+      scrollFrameToFragment(frameWindow, hash, iframe.closest<HTMLElement>('.directory-scroll'))
     } catch {
       // Cross-origin redirects remain isolated; same-origin artifacts receive the logical fragment.
     }
@@ -594,7 +613,62 @@ export function ArtifactWorkspace({
     }
   }, [htmlArtifactUrl])
 
-  const tocEntries = currentArtifact?.toc ?? []
+  const tocEntries = bodyArtifact?.toc ?? []
+
+  // A folder's HTML index page is read inside the directory page, so its frame takes the height of
+  // its document instead of filling the stage (the directory page scrolls).
+  const [directoryFrameHeight, setDirectoryFrameHeight] = useState<number | null>(null)
+  const frameHeightCleanup = useRef<(() => void) | null>(null)
+  useEffect(() => () => frameHeightCleanup.current?.(), [])
+  useEffect(() => { setDirectoryFrameHeight(null) }, [htmlArtifactUrl])
+  // The first measured height lets the directory page scroll as far as a fragment needs.
+  const settleHostScroll = useRef(false)
+  useEffect(() => {
+    if (!settleHostScroll.current || !directoryFrameHeight) return
+    settleHostScroll.current = false
+    const frame = htmlFrameRef.current
+    const frameWindow = frame?.contentWindow
+    if (!frame || !frameWindow) return
+    window.requestAnimationFrame(() => {
+      try {
+        if (hashRef.current) scrollFrameToFragment(frameWindow, hashRef.current, frame.closest<HTMLElement>('.directory-scroll'))
+        else hostMatchScroll.get(frame)?.()
+      } catch { /* cross-origin */ }
+    })
+  }, [directoryFrameHeight])
+
+  const artifactView = bodyArtifact && currentFormat === 'markdown' ? (
+    <MarkdownArtifact
+      key={bodyArtifact.artifactUrl}
+      artifact={bodyArtifact}
+      siteId={index.site.id}
+      hash={hash}
+      navigate={(href) => navigate(withTextSearch(href))}
+      highlightQuery={committedQuery}
+    />
+  ) : bodyArtifact && htmlArtifactUrl ? (
+    <iframe
+      className="artifact-frame"
+      ref={htmlFrameRef}
+      key={bodyArtifact.artifactUrl}
+      src={htmlArtifactUrl}
+      title={bodyArtifact.title}
+      lang={frameLanguage?.artifactUrl === bodyArtifact.artifactUrl ? frameLanguage.lang : undefined}
+      style={{
+        colorScheme: theme,
+        ...(currentDirectory && directoryFrameHeight ? { ['--directory-frame-height' as string]: `${directoryFrameHeight}px` } : {}),
+      }}
+      onLoad={(event) => {
+        setFrameLanguage({ artifactUrl: bodyArtifact.artifactUrl, lang: readFrameLanguage(event.currentTarget) })
+        event.currentTarget.contentWindow?.addEventListener('keydown', forwardArtifactKeyDown, true)
+        syncHtmlFrameLocation(event.currentTarget)
+        highlightFrame(event.currentTarget, committedQueryRef.current, !hash)
+        frameHeightCleanup.current?.()
+        settleHostScroll.current = Boolean(currentDirectory)
+        frameHeightCleanup.current = currentDirectory ? watchFrameHeight(event.currentTarget, setDirectoryFrameHeight) : null
+      }}
+    />
+  ) : null
   return (
     <div className={`app-shell${sidebarOpen ? '' : ' sidebar-collapsed'}`}>
       <a
@@ -611,11 +685,13 @@ export function ArtifactWorkspace({
         id="workspace-sidebar"
         sites={paletteSites.map(({ site }) => site)}
         artifactPath={currentArtifact?.path}
+        directoryPath={currentDirectory?.path}
         expandedPaths={expandedPaths}
         onExpandedPathsChange={updateExpandedPaths}
         revealRequest={sidebarReveal}
         onOpenPalette={openPalette}
         onOpenArtifact={openArtifact}
+        onOpenDirectory={openDirectory}
         artifactHref={withTextSearch}
         onToast={showToast}
         themeMode={themeMode}
@@ -693,12 +769,15 @@ export function ArtifactWorkspace({
           <header className="context-bar">
             {route.artifactPath ? (
               <ArtifactBreadcrumbs
-                artifactPath={currentArtifact?.path ?? route.artifactPath}
+                artifactPath={currentArtifact?.path ?? currentDirectory?.path ?? route.artifactPath}
                 siteTitle={index.site.title}
                 artifacts={index.artifacts}
                 currentArtifact={currentArtifact}
                 onOpenArtifact={openArtifact}
                 artifactHref={(artifact) => withTextSearch(artifactRouteHref(index.site.id, artifact.path))}
+                isDirectoryPage={Boolean(currentDirectory)}
+                folderHref={(path) => withTextSearch(artifactRouteHref(index.site.id, path))}
+                onOpenFolder={openDirectory}
                 onRevealInSidebar={revealSidebarLocation}
               />
             ) : null}
@@ -714,7 +793,7 @@ export function ArtifactWorkspace({
                 <Icon name="search" size={12} />
                 <span className="context-search-chip-query">{committedQuery}</span>
                 {textSearch.state.status === 'success' ? (
-                  <span className="context-search-chip-count">{searchPositionLabel(textSearch.state, textSearch.scopeFolder, currentArtifact?.id)}</span>
+                  <span className="context-search-chip-count">{searchPositionLabel(textSearch.state, textSearch.scopeFolder, bodyArtifact?.id)}</span>
                 ) : null}
               </button>
             ) : null}
@@ -729,7 +808,7 @@ export function ArtifactWorkspace({
                 <Icon name="library" size={14} />
                 <span>All sites</span>
               </button>
-              {currentArtifact ? (
+              {currentArtifact || currentDirectory ? (
                 <button
                   className="context-button context-home-button"
                   type="button"
@@ -741,22 +820,22 @@ export function ArtifactWorkspace({
                   <span>{index.site.title} home</span>
                 </button>
               ) : null}
-              {currentArtifact ? (
+              {bodyArtifact ? (
                 <button
-                  className={`context-button current-artifact-pin-button${pinnedArtifactIds.includes(currentArtifact.id) ? ' is-active' : ''}`}
+                  className={`context-button current-artifact-pin-button${pinnedArtifactIds.includes(bodyArtifact.id) ? ' is-active' : ''}`}
                   type="button"
-                  aria-label={`${pinnedArtifactIds.includes(currentArtifact.id) ? 'Unpin' : 'Pin'} ${currentArtifact.title}`}
-                  aria-pressed={pinnedArtifactIds.includes(currentArtifact.id)}
-                  title={pinnedArtifactIds.includes(currentArtifact.id)
-                    ? `Unpin ${currentArtifact.title}`
-                    : `Pin ${currentArtifact.title} for later`}
-                  onClick={() => toggleArtifactPin(currentArtifact)}
+                  aria-label={`${pinnedArtifactIds.includes(bodyArtifact.id) ? 'Unpin' : 'Pin'} ${bodyArtifact.title}`}
+                  aria-pressed={pinnedArtifactIds.includes(bodyArtifact.id)}
+                  title={pinnedArtifactIds.includes(bodyArtifact.id)
+                    ? `Unpin ${bodyArtifact.title}`
+                    : `Pin ${bodyArtifact.title} for later`}
+                  onClick={() => toggleArtifactPin(bodyArtifact)}
                 >
                   <Icon name="pin" size={14} />
-                  <span>{pinnedArtifactIds.includes(currentArtifact.id) ? 'Pinned' : 'Pin'}</span>
+                  <span>{pinnedArtifactIds.includes(bodyArtifact.id) ? 'Pinned' : 'Pin'}</span>
                 </button>
               ) : null}
-              {currentArtifact ? (
+              {bodyArtifact ? (
                 <>
                   <button
                     ref={contentsToggleRef}
@@ -779,57 +858,45 @@ export function ArtifactWorkspace({
                     <Icon name="info" size={14} />
                     <span>Details</span>
                   </button>
-                  <span className="action-divider" />
-                  <button
-                    className="icon-button"
-                    title="Copy link"
-                    aria-label="Copy artifact link"
-                    onClick={() => void copyCurrentLink(showToast)}
-                  >
-                    <Icon name="copy" size={15} />
-                  </button>
-                  <a
-                    className="icon-button"
-                    title="Open raw artifact"
-                    aria-label="Open raw artifact"
-                    href={currentArtifact.artifactUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    <Icon name="external" size={15} />
-                  </a>
                 </>
+              ) : null}
+              {bodyArtifact || currentDirectory ? <span className="action-divider" /> : null}
+              {currentArtifact || currentDirectory ? (
+                <button
+                  className="icon-button"
+                  title="Copy link"
+                  aria-label={currentDirectory ? 'Copy folder link' : 'Copy artifact link'}
+                  onClick={() => void copyCurrentLink(showToast)}
+                >
+                  <Icon name="copy" size={15} />
+                </button>
+              ) : null}
+              {bodyArtifact ? (
+                <a
+                  className="icon-button"
+                  title="Open raw artifact"
+                  aria-label="Open raw artifact"
+                  href={bodyArtifact.artifactUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <Icon name="external" size={15} />
+                </a>
               ) : null}
             </div>
           </header>
 
           <main ref={stageRef} id="main-content" tabIndex={-1} className={`stage${currentArtifact ? ' has-artifact' : ''}`} data-heading-jump={headingJump ?? undefined}>
-            {currentArtifact && currentFormat === 'markdown' ? (
-              <MarkdownArtifact
-                key={currentArtifact.artifactUrl}
-                artifact={currentArtifact}
+            {currentDirectory ? (
+              <DirectoryPage
+                key={currentDirectory.path}
+                listing={currentDirectory}
                 siteId={index.site.id}
-                hash={hash}
-                navigate={(href) => navigate(withTextSearch(href))}
-                highlightQuery={committedQuery}
+                body={currentDirectory.indexArtifact ? artifactView : undefined}
+                resolveHref={withTextSearch}
+                onOpen={navigateWithinWorkspace}
               />
-            ) : currentArtifact && htmlArtifactUrl ? (
-              <iframe
-                className="artifact-frame"
-                ref={htmlFrameRef}
-                key={currentArtifact.artifactUrl}
-                src={htmlArtifactUrl}
-                title={currentArtifact.title}
-                lang={frameLanguage?.artifactUrl === currentArtifact.artifactUrl ? frameLanguage.lang : undefined}
-                style={{ colorScheme: theme }}
-                onLoad={(event) => {
-                  setFrameLanguage({ artifactUrl: currentArtifact.artifactUrl, lang: readFrameLanguage(event.currentTarget) })
-                  event.currentTarget.contentWindow?.addEventListener('keydown', forwardArtifactKeyDown, true)
-                  syncHtmlFrameLocation(event.currentTarget)
-                  highlightFrame(event.currentTarget, committedQueryRef.current, !hash)
-                }}
-              />
-            ) : route.artifactPath ? (
+            ) : artifactView ?? (route.artifactPath ? (
               <div className="stage-message">
                 <p className="eyebrow">{index.site.title}</p>
                 <h1>Page not found</h1>
@@ -866,9 +933,9 @@ export function ArtifactWorkspace({
                 treeStyle={siteHomeTreeStyle}
                 defaultExpandedPaths={initialExpandedPaths}
               />
-            )}
+            ))}
 
-            {activePanel && currentArtifact ? (
+            {activePanel && bodyArtifact ? (
               <aside
                 className="context-panel"
                 aria-label={panelLabel}
@@ -894,7 +961,7 @@ export function ArtifactWorkspace({
                         <button
                           className={`toc-link${entry.level >= 3 ? ' toc-level-3' : ''}`}
                           key={`${entry.id}:${entry.text}`}
-                          aria-current={activeHeading?.artifactId === currentArtifact.id && activeHeading.id === entry.id ? 'location' : undefined}
+                          aria-current={activeHeading?.artifactId === bodyArtifact.id && activeHeading.id === entry.id ? 'location' : undefined}
                           onClick={() => jumpToHeading(entry.id, { keepPanelIfClear: true })}
                         >
                           {entry.text}
@@ -903,7 +970,7 @@ export function ArtifactWorkspace({
                     </nav>
                   )
                 ) : (
-                  <ArtifactDetails artifact={currentArtifact} />
+                  <ArtifactDetails artifact={bodyArtifact} />
                 )}
               </aside>
             ) : null}
@@ -942,17 +1009,27 @@ export function ArtifactWorkspace({
 // can skip that scroll when the navigation lands while the frame is being
 // resized or restored by a history traversal, leaving the reader at the old
 // position. Apply the target position explicitly so the result never depends on it.
-function scrollFrameToFragment(frameWindow: Window, hash: string) {
+function scrollFrameToFragment(frameWindow: Window, hash: string, host: HTMLElement | null = null) {
   const document = frameWindow.document
   if (!hash) {
-    frameWindow.scrollTo(0, 0)
+    if (!host) frameWindow.scrollTo(0, 0)
     return
   }
   let id = hash.slice(1)
   try { id = decodeURIComponent(id) } catch { /* keep the raw fragment */ }
   const target = document.getElementById(id) ?? document.getElementsByName(id)[0]
+  if (!target) return
+  const offsetInFrame = target.getBoundingClientRect().top + frameWindow.scrollY
+  if (host) {
+    // A frame inside a directory page is as tall as its document, so the directory page scrolls.
+    const frame = frameWindow.frameElement
+    if (!frame) return
+    const frameTop = frame.getBoundingClientRect().top - host.getBoundingClientRect().top + host.scrollTop
+    host.scrollTo({ top: Math.max(0, frameTop + offsetInFrame), behavior: 'instant' })
+    return
+  }
   // scrollTo keeps the scroll inside the frame; scrollIntoView would also move the app page.
-  if (target) frameWindow.scrollTo(0, target.getBoundingClientRect().top + frameWindow.scrollY)
+  frameWindow.scrollTo(0, offsetInFrame)
 }
 
 /** The language an HTML artifact declares on its own `<html>`; undefined when it declares none or the frame is cross-origin. */
@@ -979,9 +1056,30 @@ function highlightFrame(iframe: HTMLIFrameElement, query: string, scrollToFirst:
     // page.html#section, which leaves the app URL unchanged) wins as well.
     const scroll = scrollToFirst && !iframe.contentWindow?.location.hash
     // A match found after the reader started scrolling the page does not move it.
-    const reader = document.defaultView ? watchReaderScroll(document.defaultView) : undefined
+    const host = iframe.closest<HTMLElement>('.directory-scroll')
+    const frameReader = document.defaultView ? watchReaderScroll(document.defaultView) : undefined
+    const hostReader = host ? watchReaderScroll(host) : undefined
+    const reader = frameReader ? {
+      get scrolled() { return frameReader.scrolled || Boolean(hostReader?.scrolled) },
+      dispose() { frameReader.dispose(); hostReader?.dispose() },
+    } : undefined
     const stop = keepSearchHighlighted(document.body, query, (first) => {
-      if (scroll && !reader?.scrolled) first.startContainer.parentElement?.scrollIntoView({ block: 'center' })
+      const element = first.startContainer.parentElement
+      if (!scroll || reader?.scrolled || !element) return
+      if (!host) {
+        element.scrollIntoView({ block: 'center' })
+        return
+      }
+      // In a directory page the frame is as tall as its document, so the page around it scrolls.
+      const scrollHost = () => {
+        if (reader?.scrolled) return
+        const rect = element.getBoundingClientRect()
+        const frameTop = iframe.getBoundingClientRect().top - host.getBoundingClientRect().top + host.scrollTop
+        const top = frameTop + rect.top + (iframe.contentWindow?.scrollY ?? 0) - host.clientHeight / 2 + rect.height / 2
+        host.scrollTo({ top: Math.max(0, top), behavior: 'instant' })
+      }
+      hostMatchScroll.set(iframe, scrollHost)
+      scrollHost()
     })
     frameHighlightCleanup.set(iframe, () => {
       stop()
@@ -993,6 +1091,8 @@ function highlightFrame(iframe: HTMLIFrameElement, query: string, scrollToFirst:
 }
 
 const frameHighlightCleanup = new WeakMap<HTMLIFrameElement, () => void>()
+/** Scrolls a directory page to the first search match in its HTML index frame; re-run once the frame has its full height. */
+const hostMatchScroll = new WeakMap<HTMLIFrameElement, () => void>()
 
 function searchPositionLabel(
   state: Extract<PageTextSearchState, { status: 'success' }>,
@@ -1027,6 +1127,25 @@ function headingIsClearOfPanel(id: string) {
   if (heading.width === 0 && heading.height === 0) return false
   return heading.right <= panel.left || heading.left >= panel.right
     || heading.bottom <= panel.top || heading.top >= panel.bottom
+}
+
+/** Observes an HTML page's document height so a frame inside a scrolling page can show all of it. */
+function watchFrameHeight(iframe: HTMLIFrameElement, onHeight: (height: number) => void) {
+  try {
+    const frameDocument = iframe.contentDocument
+    const root = frameDocument?.documentElement
+    const view = frameDocument?.defaultView
+    if (!root || !view) return null
+    const update = () => onHeight(Math.ceil(root.scrollHeight))
+    update()
+    const observer = new view.ResizeObserver(update)
+    observer.observe(root)
+    if (frameDocument.body) observer.observe(frameDocument.body)
+    return () => observer.disconnect()
+  } catch {
+    // Cross-origin artifacts keep the default height.
+    return null
+  }
 }
 
 function findArtifact(index: SiteIndex, path: string) {

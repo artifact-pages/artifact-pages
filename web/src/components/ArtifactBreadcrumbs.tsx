@@ -21,6 +21,9 @@ export function ArtifactBreadcrumbs({
   currentArtifact,
   onOpenArtifact,
   artifactHref,
+  isDirectoryPage = false,
+  folderHref,
+  onOpenFolder,
   onRevealInSidebar,
 }: {
   artifactPath: string
@@ -30,6 +33,11 @@ export function ArtifactBreadcrumbs({
   onOpenArtifact: (artifact: ArtifactIndexEntry) => void
   /** The link target of a menu entry. */
   artifactHref: (artifact: ArtifactIndexEntry) => string
+  /** The path is a folder page: its last segment is the current page, a folder. */
+  isDirectoryPage?: boolean
+  /** The link target of a folder segment. */
+  folderHref: (path: string) => string
+  onOpenFolder: (path: string) => void
   onRevealInSidebar: (path: string, isDirectory: boolean) => void
 }) {
   const navRef = useRef<HTMLElement>(null)
@@ -193,7 +201,8 @@ export function ArtifactBreadcrumbs({
           </span>
         ) : null}
         {segments.map((segment, segmentIndex) => {
-          const isDirectory = segmentIndex < segments.length - 1
+          const isLast = segmentIndex === segments.length - 1
+          const isDirectory = !isLast || isDirectoryPage
           const path = segments.slice(0, segmentIndex + 1).join('/')
           const key = `${isDirectory ? 'folder' : 'artifact'}:${path}`
           const label = isDirectory ? segment : currentArtifact?.title ?? segment
@@ -202,23 +211,44 @@ export function ArtifactBreadcrumbs({
             <span className={`breadcrumb-part${openMenu?.key === key ? ' is-open' : ''}`} key={key}>
               {segmentIndex > 0 || segments.length === 1 ? <span className="breadcrumb-separator" aria-hidden="true">/</span> : null}
               {isDirectory ? (
-                <button
-                  ref={(element) => {
-                    if (element) triggerRefs.current.set(key, element)
-                    else triggerRefs.current.delete(key)
-                  }}
-                  type="button"
-                  className="breadcrumb-trigger"
-                  aria-label={`Browse artifacts in ${path}`}
-                  aria-haspopup="menu"
-                  aria-expanded={openMenu?.key === key}
-                  aria-controls={openMenu?.key === key ? menuId : undefined}
-                  title={path}
-                  onClick={() => toggleMenu(key, path, true)}
-                >
-                  <span className="breadcrumb-trigger-label">{label}</span>
-                  <Icon name="chevron" size={10} />
-                </button>
+                <>
+                  {isLast ? (
+                    <span
+                      ref={currentLabelRef}
+                      tabIndex={-1}
+                      className="breadcrumb-trigger breadcrumb-current"
+                      aria-current="page"
+                      title={path}
+                    >
+                      <span className="breadcrumb-trigger-label">{label}</span>
+                    </span>
+                  ) : (
+                    <a
+                      className="breadcrumb-link"
+                      href={folderHref(path)}
+                      title={path}
+                      onClick={(event) => followInApp(event, () => onOpenFolder(path))}
+                    >
+                      {label}
+                    </a>
+                  )}
+                  <button
+                    ref={(element) => {
+                      if (element) triggerRefs.current.set(key, element)
+                      else triggerRefs.current.delete(key)
+                    }}
+                    type="button"
+                    className="breadcrumb-trigger breadcrumb-chevron"
+                    aria-label={`Browse artifacts in ${path}`}
+                    aria-haspopup="menu"
+                    aria-expanded={openMenu?.key === key}
+                    aria-controls={openMenu?.key === key ? menuId : undefined}
+                    title={`Browse artifacts in ${path}`}
+                    onClick={() => toggleMenu(key, path, true)}
+                  >
+                    <Icon name="chevron" size={10} />
+                  </button>
+                </>
               ) : (
                 <span
                   ref={currentLabelRef}

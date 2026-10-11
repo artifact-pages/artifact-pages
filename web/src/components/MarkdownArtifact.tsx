@@ -211,7 +211,7 @@ export function MarkdownArtifact({
   useEffect(() => {
     const article = articleRef.current
     if (source === null || !article || !highlightQuery) return
-    const reader = watchReaderScroll(article.closest('.markdown-scroll') ?? article)
+    const reader = watchReaderScroll(article.closest('.directory-scroll') ?? article.closest('.markdown-scroll') ?? article)
     readerScroll.current = reader
     return () => {
       reader.dispose()
