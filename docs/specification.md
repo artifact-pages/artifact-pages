@@ -148,7 +148,7 @@ The initial projection shape is:
 
 ### 5.1 Site discovery
 
-Unknown or invalid site routes and unmatched artifact routes use a common reader-facing `Page not found` message rather than exposing site-ID parsing or storage-index details. An unknown route offers a return to All sites; an unmatched artifact retains its known site's navigation and offers Back to site. Registered-but-unpublished sites and loading/network failures remain distinct states. This is an SPA presentation contract, not an HTTP-status or private-storage access-control mechanism; an edge-served SPA shell may still have HTTP status 200.
+Unknown or invalid site routes and unmatched artifact routes use a common reader-facing `Page not found` message rather than exposing site-ID parsing or storage-index details. An unknown route offers a return to All sites; an unmatched artifact retains its known site's navigation and offers Back to site. Registered-but-unpublished sites and loading/network failures remain distinct states. This is an SPA presentation contract, not an HTTP-status or private-storage access-control mechanism; an edge-served SPA shell may still have HTTP status 200. So that crawlers that run the script do not keep the shell, every not-found view adds `<meta name="robots" content="noindex">` to the document head while it is shown and removes it when the reader moves to another page. An unmatched artifact route also lists up to five similar pages from the site index under "Similar pages", as ordinary links: pages that share leading folders or words (in the path or title) with the requested path, best match first, and none when nothing is shared.
 
 Fixture and registered modes read the static `/_indexes/sites.json` catalog and fetch each listed site's small `<site>/meta.json` discovery metadata. This metadata contains the site's display name, artifact count, generated time, and an `artifactIndexUrl` pointer. It does not contain artifact records. The catalog is a committed projection in fixture mode and is built from the admin-owned YAML registry for registered deployments. This contract does not depend on nginx autoindex or an object-storage list API at browser request time.
 
@@ -452,7 +452,7 @@ Target layout:
 
 ### Site home
 
-/:site uses discovery metadata for the site picker and loads the active site's artifact index from its `artifactIndexUrl`; it initially presents recent artifacts, expected to start with roughly the latest 10 entries. It has no inline filter: a "Jump to a page… ⌘ K" button opens the command palette, and a quiet link leads to the site's Previews list.
+/:site uses discovery metadata for the site picker and loads the active site's artifact index from its `artifactIndexUrl`; it initially presents recent artifacts, expected to start with roughly the latest 10 entries. It has no inline filter: a "Jump to a page… ⌘ K" button opens the command palette, and a quiet "View previews" link (a real `<a href="/:site/_previews">`, like every navigating row; it is not an inert button) leads to the site's Previews list. When the site has no previews the link stays in place but is marked `aria-disabled` and does not navigate.
 
 The site picker marks sites that publish page text search. Below nine sites it lists them without a separate search trigger; ⌘ K still opens site search.
 
@@ -482,6 +482,8 @@ Every row that navigates is a real link (`<a href>` to its logical route): site 
 
 The tab title reads from the most specific page to its container, joined by " · ": an artifact is "<artifact title> · <site title>", a site home is "<site title>", the site picker is "Git Artifact Pages", the Previews list is "Previews · <site title>", a preview document is "<document title> · Previews · <site title>", and a not-found page inside a site is "Page not found · <site title>". Pages outside any site (loading, error and not-found states) end with "· Git Artifact Pages". The site title is the registered name; the site ID stands in until the registry has loaded.
 
+The Previews list shows each group's update time in the reader's local zone with the zone named (for example "Oct 11, 2026, 3:03 PM GMT+9"). The time is a `<time datetime>` element whose `title` gives the full-precision UTC instant, so a reviewer in another zone can tell when a preview was built.
+
 ⌘ B (Ctrl B) toggles the sidebar, ⌘ K opens the palette and ⌘ ⇧ F focuses page text search from anywhere in the app, including while keyboard focus is inside an HTML artifact's frame. "Copy link" (the header button and the palette command) copies the document's link without the reader's `?q=` search and with its fragment; the committed search is personal context, not part of the document.
 
 Below 620 px wide the workspace header puts the breadcrumb path on its own row above the actions, so the current document's title keeps the full width (an ellipsis at its end at most) while the folder menus stay available. The site picker keeps its "Page text search" badge at every width (smaller on narrow screens).
@@ -491,6 +493,10 @@ Below 620 px wide the workspace header puts the breadcrumb path on its own row a
 The left sidebar derives a tree/navigation model from the site index. Its top holds the page text search field, or a "Jump to a page… ⌘ K" button on sites without page text search; the sidebar does not filter by name, which the palette does. Artifact rows may offer Pin/Unpin, Copy link, Open source, View history, and Open raw artifact actions. Pin stores only a site-scoped artifact reference in the current browser's local storage; it does not change the index, artifact bytes, source tree, or Browse hierarchy. The Pinned section is a shortcut list above Browse. Recently updated pages are listed on the site home rather than in the sidebar. Copy link copies the application's artifact route (without `?q=`), while raw/source/history actions open their corresponding projections in a new tab. No sidebar action mutates Git content.
 
 ### Main pane
+
+The first focusable element of the workspace is a "Skip to content" link. It is hidden until it receives keyboard focus, and activating it moves focus to the artifact frame (HTML) or to the main region (Markdown, site home and not-found views) without changing the URL, whose fragment belongs to the open document.
+
+The document's language is exposed as `lang` on the artifact region only; the shell chrome stays English and the application document keeps `<html lang="en">`. The source is the document itself, never a guess about the site: for an HTML artifact the reader reads the `lang` of the artifact's own `<html>` through the same-origin frame and sets it on the frame element when it is a valid language tag (a missing, invalid or cross-origin value sets nothing). Markdown has no declaration, so the reader marks a Markdown document `lang="ja"` only when its prose, ignoring code, contains kana and at least a third of its letters are Japanese; any other Markdown document is left undeclared. Localizing the chrome is a separate product decision.
 
 HTML artifacts are loaded from `/_artifacts/*` into the iframe. Markdown artifacts are rendered in
 the application's native reader within the same workspace.

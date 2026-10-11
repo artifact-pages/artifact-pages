@@ -3381,9 +3381,24 @@ test('published preview documents stay out of production browsing and the site-h
   expect(previewRequests).toContain('/_previews/showcase/catalog.json')
   expect(previewRequests).toContain(`/_previews/showcase/revisions/${previewHeadSha}/manifest.json`)
 
-  await page.getByRole('button', { name: 'View previews' }).click()
+  const viewPreviews = page.getByRole('link', { name: 'View previews' })
+  await expect(viewPreviews).toHaveAttribute('href', '/showcase/_previews')
+  const [previewsTab] = await Promise.all([
+    page.context().waitForEvent('page'),
+    viewPreviews.click({ modifiers: ['ControlOrMeta'] }),
+  ])
+  await expectTabLocation(previewsTab, '/showcase/_previews')
+  await previewsTab.close()
+  await expect(page).toHaveURL('/showcase')
+
+  await viewPreviews.click()
   await expect(page).toHaveURL('/showcase/_previews')
   await expect(page.getByRole('region', { name: 'Preview pr:701' })).toBeVisible()
+  // The time names its zone and keeps the full-precision UTC instant.
+  const previewTime = page.getByRole('region', { name: 'Preview pr:701' }).locator('time')
+  await expect(previewTime).toHaveAttribute('datetime', '2026-09-27T00:00:00.000Z')
+  await expect(previewTime).toHaveAttribute('title', '2026-09-27 00:00:00 UTC')
+  await expect(previewTime).toHaveText(/\d{4}, \d{1,2}:\d{2} [AP]M \S+$/)
   await expect(page.getByRole('link', { name: previewOnlyTitle })).toBeVisible()
   expect(previewRequests).toContain('/_previews/showcase/catalog.json')
   expect(previewRequests).toContain(`/_previews/showcase/revisions/${previewHeadSha}/manifest.json`)
@@ -3483,8 +3498,9 @@ test('site home reports empty preview availability and the empty page explains h
   await page.goto('/sre')
   await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
   await expect(page.getByRole('status')).toHaveText('There are no available previews for this site.')
-  const previewEntry = page.getByRole('button', { name: 'View previews' })
+  const previewEntry = page.getByRole('link', { name: 'View previews' })
   await expect(previewEntry).toHaveAttribute('aria-disabled', 'true')
+  await expect(previewEntry).not.toHaveAttribute('href')
   await expect(previewEntry).toHaveAccessibleDescription('There are no available previews for this site.')
   await expect(page.getByText(/^Previews are review copies of changed documents/)).toBeVisible()
   await previewEntry.focus()
@@ -3504,7 +3520,7 @@ test('site home reports empty preview availability and the empty page explains h
 test('site home keeps the preview entry active when previews exist', async ({ page }) => {
   await page.goto('/sre')
   await expect(page.getByRole('status')).toContainText('listed.')
-  const previewEntry = page.getByRole('button', { name: 'View previews' })
+  const previewEntry = page.getByRole('link', { name: 'View previews' })
   await expect(previewEntry).toBeEnabled()
   await previewEntry.click()
   await expect(page).toHaveURL('/sre/_previews')
@@ -3525,7 +3541,7 @@ test('preview list loading does not block returning to the site', async ({ page 
   })
 
   await page.goto('/sre')
-  await page.getByRole('button', { name: 'View previews' }).click()
+  await page.getByRole('link', { name: 'View previews' }).click()
   await catalogStarted
   await expect(page.getByRole('status')).toHaveText('Loading previews…')
   try {
@@ -5693,5 +5709,95 @@ test.describe('reader compatibility rules', () => {
     await expect(page.getByRole('heading', { name: 'Previews', exact: true })).toBeVisible()
     await expect(page.getByText('Previews need to be republished')).toHaveCount(0)
     await expect(page.locator('.preview-group').first()).toBeVisible()
+  })
+})
+
+test.describe('reader shell polish', () => {
+  const checkoutPath = '/sre/incidents/checkout-latency/index.html'
+
+  test('the skip link is the first tab stop, shows on focus and moves focus to the document', async ({ page }) => {
+    await page.goto(checkoutPath)
+    const frame = page.locator('iframe.artifact-frame')
+    await expect(frame).toBeVisible()
+
+    const skipLink = page.getByRole('link', { name: 'Skip to content' })
+    await expect(skipLink).not.toBeInViewport()
+    await page.keyboard.press('Tab')
+    await expect(skipLink).toBeFocused()
+    await expect(skipLink).toBeInViewport({ ratio: 1 })
+
+    await page.keyboard.press('Enter')
+    await expect(frame).toBeFocused()
+    await expect(page).toHaveURL(checkoutPath)
+    await expect(skipLink).not.toBeInViewport()
+  })
+
+  test('the skip link focuses the main region for a Markdown document', async ({ page }) => {
+    await page.goto('/sre/runbooks/service-recovery.md')
+    await expect(page.getByTestId('markdown-document')).toBeVisible()
+    await page.getByRole('link', { name: 'Skip to content' }).focus()
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('main')).toBeFocused()
+    await expect(page).toHaveURL('/sre/runbooks/service-recovery.md')
+  })
+
+  test('the artifact frame carries the language its HTML declares', async ({ page }) => {
+    await page.route('**/_artifacts/sre/architecture/platform-topology/index.html', async (route) => {
+      const response = await route.fetch()
+      const html = (await response.text()).replace(/<html[^>]*>/i, '<html lang="ja">')
+      await route.fulfill({ response, body: html })
+    })
+    await page.goto('/sre/architecture/platform-topology/index.html')
+    await expect(page.locator('iframe.artifact-frame')).toHaveAttribute('lang', 'ja')
+    // The shell chrome stays English.
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en')
+
+    await page.goto(checkoutPath)
+    await expect(page.locator('iframe.artifact-frame')).toHaveAttribute('lang', 'en')
+  })
+
+  test('a Japanese Markdown document is marked lang="ja" and an English one is not', async ({ page }) => {
+    await page.route('**/_artifacts/sre/runbooks/service-recovery.md', (route) => route.fulfill({
+      contentType: 'text/markdown; charset=utf-8',
+      body: '# サービス復旧手順\n\nこのページでは、障害発生時の初動と復旧の流れをまとめます。\n',
+    }))
+    await page.goto('/sre/runbooks/service-recovery.md')
+    await expect(page.getByTestId('markdown-document')).toHaveAttribute('lang', 'ja')
+
+    await page.goto('/sre/reports/latency-retrospective.md')
+    await expect(page.getByTestId('markdown-document')).toBeVisible()
+    await expect(page.getByTestId('markdown-document')).not.toHaveAttribute('lang', /.+/)
+  })
+
+  test('a Markdown artifact that fails to load shows the unavailable message', async ({ page }) => {
+    await page.route('**/_artifacts/sre/runbooks/service-recovery.md', (route) => route.fulfill({ status: 404, body: 'gone' }))
+    await page.goto('/sre/runbooks/service-recovery.md')
+    await expect(page.getByRole('alert')).toContainText('Markdown unavailable')
+  })
+
+  test('a missing page is not indexable and suggests similar pages', async ({ page }) => {
+    const noindex = page.locator('head meta[name="robots"][content="noindex"]')
+    await page.goto('/sre/incidents/checkout-latency/nope.html')
+    await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
+    await expect(noindex).toHaveCount(1)
+
+    const suggestions = page.getByRole('navigation', { name: 'Similar pages' })
+    const suggestion = suggestions.getByRole('link', { name: /Checkout latency incident review/ })
+    await expect(suggestion).toHaveAttribute('href', checkoutPath)
+    await suggestion.click()
+    await expect(page).toHaveURL(checkoutPath)
+    await expect(page.locator('iframe.artifact-frame')).toBeVisible()
+    await expect(noindex).toHaveCount(0)
+  })
+
+  test('a missing page with nothing similar offers no suggestions and an unknown site is not indexable either', async ({ page }) => {
+    await page.goto('/sre/zzzz/qqqq')
+    await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
+    await expect(page.getByRole('navigation', { name: 'Similar pages' })).toHaveCount(0)
+    await expect(page.locator('head meta[name="robots"][content="noindex"]')).toHaveCount(1)
+
+    await page.goto('/no-such-site')
+    await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
+    await expect(page.locator('head meta[name="robots"][content="noindex"]')).toHaveCount(1)
   })
 })

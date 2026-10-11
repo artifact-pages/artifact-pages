@@ -77,9 +77,9 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-078](ISSUE-078-landing-page-has-no-orientation.md) | Open | P1 | The landing page offers only "Choose a site": no orientation, alphabetical cards, double-counted translations. |
 | [ISSUE-079](ISSUE-079-palette-cannot-find-other-page-headings.md) | Open | P2 | The command palette cannot find headings of other pages. |
 | [ISSUE-080](ISSUE-080-narrow-screen-chrome-and-scroll-cues.md) | Open | P2 | On narrow screens the permanent rail and two-row toolbar take reading space, and wide tables and code scroll without a cue. |
-| [ISSUE-081](ISSUE-081-reader-shell-skip-link-and-document-language.md) | Open | P3 | The reader shell has no skip link and keeps `lang="en"` on Japanese documents. |
+| [ISSUE-081](ISSUE-081-reader-shell-skip-link-and-document-language.md) | Done | P3 | The reader shell has no skip link and keeps `lang="en"` on Japanese documents. |
 | [ISSUE-082](ISSUE-082-no-previous-next-navigation.md) | Blocked | P3 | Pages have no previous/next navigation at the end (blocked on ISSUE-076 and TD19). |
-| [ISSUE-083](ISSUE-083-unknown-urls-return-http-200.md) | Open | P3 | Unknown URLs return HTTP 200 with the app shell (soft 404). |
-| [ISSUE-084](ISSUE-084-previews-entry-and-timestamp-polish.md) | Open | P3 | "View previews" is a button, and preview times carry no timezone. |
+| [ISSUE-083](ISSUE-083-unknown-urls-return-http-200.md) | In progress | P3 | Unknown URLs return HTTP 200 with the app shell (soft 404). |
+| [ISSUE-084](ISSUE-084-previews-entry-and-timestamp-polish.md) | Done | P3 | "View previews" is a button, and preview times carry no timezone. |
 
 ISSUE-013's verified completion record is retained in Git history.

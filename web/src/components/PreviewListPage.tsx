@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { PreviewGroup } from '../domain/preview'
 import { UnsupportedSchemaError } from '../data/schema'
 import { loadPreviewCatalog, loadPreviewManifest, PreviewLoadError, previewRouteHref } from '../data/previews'
+import { formatPreviewTime } from '../domain/preview-time'
 import type { AppRoute } from '../routing'
 import { pageTitle, usePageTitle } from './usePageTitle'
 
@@ -120,7 +121,7 @@ export function PreviewListPage({ route, navigate, siteTitle }: {
                 <div>
                   <p className="eyebrow">{group.kind === 'pull-request' ? 'Pull request' : 'Manual preview'}</p>
                   <h2>{group.kind === 'pull-request' ? `PR #${group.id.slice(3)}` : `Revision ${group.headSha.slice(0, 8)}`}</h2>
-                  <p className="preview-group-meta mono">{group.headSha.slice(0, 12)} · {formatDate(group.updatedAt)}</p>
+                  <p className="preview-group-meta mono">{group.headSha.slice(0, 12)} · <PreviewTimeLabel value={group.updatedAt} /></p>
                 </div>
                 {group.prUrl ? <a className="preview-external-link" href={group.prUrl} target="_blank" rel="noreferrer noopener">Open PR ↗</a> : null}
               </div>
@@ -188,8 +189,7 @@ function sameDocuments(left: PreviewGroup['documents'], right: PreviewGroup['doc
   ))
 }
 
-function formatDate(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.valueOf())) return value
-  return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(date)
+function PreviewTimeLabel({ value }: { value: string }) {
+  const time = formatPreviewTime(value)
+  return time.dateTime ? <time dateTime={time.dateTime} title={time.title}>{time.label}</time> : <>{time.label}</>
 }

@@ -18,8 +18,20 @@ const sites = indexes.map((index) => ({
 }))
 const sreFullTextSearch = createStoryFullTextSearch(deepSreIndex)
 
+/** A path that matches no page but sits next to real ones, so the not-found view offers similar pages. */
+const MISSING_PAGE_PATH = 'incidents/2026/q3/checkout/latency-summary'
+
+function viewArtifactPath(view: WorkspaceStoryArgs['view']) {
+  switch (view) {
+    case 'site-home': return undefined
+    case 'markdown': return 'runbooks/service-recovery.md'
+    case 'not-found': return MISSING_PAGE_PATH
+    default: return 'incidents/checkout-latency/index.html'
+  }
+}
+
 type WorkspaceStoryArgs = {
-  view: 'site-home' | 'artifact' | 'markdown'
+  view: 'site-home' | 'artifact' | 'markdown' | 'not-found'
   theme: ThemeMode
   initialSidebarOpen: boolean
 }
@@ -28,11 +40,7 @@ function WorkspaceStory({ view, theme, initialSidebarOpen }: WorkspaceStoryArgs)
   const [route, setRoute] = useState<Extract<AppRoute, { kind: 'site' }>>(() => ({
     kind: 'site',
     siteId: deepSreIndex.site.id,
-    artifactPath: view === 'site-home'
-      ? undefined
-      : view === 'markdown'
-        ? 'runbooks/service-recovery.md'
-        : 'incidents/checkout-latency/index.html',
+    artifactPath: viewArtifactPath(view),
   }))
   const [location, setLocation] = useState({ search: '', hash: '' })
   const [activeThemeMode, setActiveThemeMode] = useState(theme)
@@ -42,11 +50,7 @@ function WorkspaceStory({ view, theme, initialSidebarOpen }: WorkspaceStoryArgs)
     setRoute({
       kind: 'site',
       siteId: deepSreIndex.site.id,
-      artifactPath: view === 'site-home'
-        ? undefined
-        : view === 'markdown'
-          ? 'runbooks/service-recovery.md'
-          : 'incidents/checkout-latency/index.html',
+      artifactPath: viewArtifactPath(view),
     })
     setLocation({ search: '', hash: '' })
   }, [view])
@@ -100,7 +104,7 @@ const meta = {
   argTypes: {
     view: {
       control: 'radio',
-      options: ['site-home', 'artifact', 'markdown'],
+      options: ['site-home', 'artifact', 'markdown', 'not-found'],
       description: 'Choose the main workspace state.',
     },
     theme: {
@@ -140,4 +144,9 @@ export const DarkArtifactView: Story = {
 export const SidebarCollapsed: Story = {
   name: 'Artifact viewer · sidebar collapsed',
   args: { initialSidebarOpen: false },
+}
+
+export const PageNotFound: Story = {
+  name: 'Page not found',
+  args: { view: 'not-found' },
 }

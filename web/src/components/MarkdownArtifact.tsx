@@ -1,4 +1,4 @@
-import { isValidElement, useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { isValidElement, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import Markdown, { defaultUrlTransform, type Options as MarkdownOptions } from 'react-markdown'
 import GithubSlugger from 'github-slugger'
 import rehypeRaw from 'rehype-raw'
@@ -7,6 +7,7 @@ import remarkGfm from 'remark-gfm'
 import { artifactRouteHref } from '../routing'
 import type { ArtifactIndexEntry } from '../domain/index'
 import { clearSearchHighlight, keepSearchHighlighted, watchReaderScroll } from '../domain/text-highlight'
+import { detectMarkdownLanguage } from '../domain/document-language'
 import { MermaidDiagram } from './MermaidDiagram'
 
 const markdownSanitizeSchema = {
@@ -234,6 +235,8 @@ export function MarkdownArtifact({
 
   useEffect(() => () => clearSearchHighlight(document), [])
 
+  const language = useMemo(() => source === null ? undefined : detectMarkdownLanguage(source), [source])
+
   if (error) {
     return (
       <div className="markdown-state" role="alert">
@@ -248,7 +251,7 @@ export function MarkdownArtifact({
   }
 
   return (
-    <div className="markdown-scroll" data-testid="markdown-document">
+    <div className="markdown-scroll" data-testid="markdown-document" lang={language}>
       <article ref={articleRef} className="markdown-article">
         <Markdown
           remarkPlugins={markdownRemarkPlugins}

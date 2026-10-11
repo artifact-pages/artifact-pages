@@ -10,6 +10,10 @@ import { MarkdownArtifact } from './MarkdownArtifact'
 import { PAGE_TEXT_SEARCH_INPUT_ID } from './PageTextSearch'
 import { usePageTextSearch } from './usePageTextSearch'
 import { pageTitle, usePageTitle } from './usePageTitle'
+import { usePageNoindex } from './usePageNoindex'
+import { followInApp } from './spa-link'
+import { nearbyArtifacts } from '../domain/nearby-pages'
+import { normalizeLanguageTag } from '../domain/document-language'
 import type { SiteFullTextSearch } from '../data/fulltext'
 import { clearSearchHighlight, ensureSearchHighlightStyle, keepSearchHighlighted, watchReaderScroll } from '../domain/text-highlight'
 import type { TreeStyle } from './ArtifactTree'
@@ -101,6 +105,14 @@ export function ArtifactWorkspace({
     ? findArtifact(index, route.artifactPath)
     : undefined
   const effectiveRecentReads = recentReads ?? storedRecentReads
+  const pageNotFound = Boolean(route.artifactPath) && !currentArtifact
+  usePageNoindex(pageNotFound)
+  // The language the open HTML artifact declares on its own <html>, keyed by the artifact it was read from.
+  const [frameLanguage, setFrameLanguage] = useState<{ artifactUrl: string, lang: string | undefined } | null>(null)
+  const nearbyPages = useMemo(
+    () => pageNotFound && route.artifactPath ? nearbyArtifacts(index.artifacts, route.artifactPath) : [],
+    [pageNotFound, route.artifactPath, index.artifacts],
+  )
   usePageTitle(route.artifactPath
     ? pageTitle(currentArtifact?.title ?? 'Page not found', index.site.title)
     : pageTitle(index.site.title))
@@ -575,6 +587,15 @@ export function ArtifactWorkspace({
   const tocEntries = currentArtifact?.toc ?? []
   return (
     <div className={`app-shell${sidebarOpen ? '' : ' sidebar-collapsed'}`}>
+      <a
+        className="skip-link"
+        href="#main-content"
+        onClick={(event) => {
+          // The URL fragment belongs to the open page, so the link moves focus instead of navigating.
+          event.preventDefault()
+          focusStage()
+        }}
+      >Skip to content</a>
       <Sidebar
         index={index}
         id="workspace-sidebar"
@@ -770,7 +791,7 @@ export function ArtifactWorkspace({
             </div>
           </header>
 
-          <main ref={stageRef} tabIndex={-1} className={`stage${currentArtifact ? ' has-artifact' : ''}`} data-heading-jump={headingJump ?? undefined}>
+          <main ref={stageRef} id="main-content" tabIndex={-1} className={`stage${currentArtifact ? ' has-artifact' : ''}`} data-heading-jump={headingJump ?? undefined}>
             {currentArtifact && currentFormat === 'markdown' ? (
               <MarkdownArtifact
                 key={currentArtifact.artifactUrl}
@@ -787,8 +808,10 @@ export function ArtifactWorkspace({
                 key={currentArtifact.artifactUrl}
                 src={htmlArtifactUrl}
                 title={currentArtifact.title}
+                lang={frameLanguage?.artifactUrl === currentArtifact.artifactUrl ? frameLanguage.lang : undefined}
                 style={{ colorScheme: theme }}
                 onLoad={(event) => {
+                  setFrameLanguage({ artifactUrl: currentArtifact.artifactUrl, lang: readFrameLanguage(event.currentTarget) })
                   event.currentTarget.contentWindow?.addEventListener('keydown', forwardArtifactKeyDown, true)
                   syncHtmlFrameLocation(event.currentTarget)
                   highlightFrame(event.currentTarget, committedQueryRef.current, !hash)
@@ -799,6 +822,24 @@ export function ArtifactWorkspace({
                 <p className="eyebrow">{index.site.title}</p>
                 <h1>Page not found</h1>
                 <p role="alert">The page you requested does not exist or is no longer available.</p>
+                {nearbyPages.length > 0 ? (
+                  <nav className="not-found-suggestions" aria-label="Similar pages">
+                    <h2>Similar pages</h2>
+                    <ul>
+                      {nearbyPages.map((artifact) => {
+                        const href = withTextSearch(artifactRouteHref(index.site.id, artifact.path))
+                        return (
+                          <li key={artifact.id}>
+                            <a href={href} onClick={(event) => followInApp(event, () => navigateWithinWorkspace(artifactRouteHref(index.site.id, artifact.path)))}>
+                              <span>{artifact.title}</span>
+                              <code>{artifact.path}</code>
+                            </a>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  </nav>
+                ) : null}
                 <button className="text-action" onClick={() => navigateWithinWorkspace(`/${encodeURIComponent(index.site.id)}`)}>
                   <Icon name="arrow" size={14} /> Back to site
                 </button>
@@ -900,6 +941,15 @@ function scrollFrameToFragment(frameWindow: Window, hash: string) {
   const target = document.getElementById(id) ?? document.getElementsByName(id)[0]
   // scrollTo keeps the scroll inside the frame; scrollIntoView would also move the app page.
   if (target) frameWindow.scrollTo(0, target.getBoundingClientRect().top + frameWindow.scrollY)
+}
+
+/** The language an HTML artifact declares on its own `<html>`; undefined when it declares none or the frame is cross-origin. */
+function readFrameLanguage(iframe: HTMLIFrameElement) {
+  try {
+    return normalizeLanguageTag(iframe.contentDocument?.documentElement.getAttribute('lang'))
+  } catch {
+    return undefined
+  }
 }
 
 function highlightFrame(iframe: HTMLIFrameElement, query: string, scrollToFirst: boolean) {
