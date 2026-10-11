@@ -1,6 +1,6 @@
 # Directory routes have no page: folder URLs show "Page not found" and tree folders only toggle
 
-- Status: In progress
+- Status: Done
 - Assignee: Claude
 - Priority: P1
 - Area: Reader routing, sidebar tree, breadcrumbs, command palette (`web/src/components/ArtifactWorkspace.tsx`, `ArtifactTree.tsx`, `ArtifactBreadcrumbs.tsx`, `web/src/domain/tree.ts`)
@@ -48,7 +48,7 @@ Chosen from the Storybook `Concepts/Reader UX 2026-10`/ISSUE-075 stories:
 - [x] The generated page has a title (the raw folder name; nicer titles wait for TD19), a breadcrumb whose segments are links, and a child list with subfolders first. Each artifact child shows its title and updated date, and its H2 headings are available from the index `toc` (shown as chips). Each subfolder child shows its page count.
 - [x] The first version needs no index schema change: it uses only fields `index.json` already carries. Per-child descriptions arrive later with [TD19](../technical-design/TD19-navigation-metadata-in-the-site-index.md).
 - [x] Breadcrumb folder segments become links to the directory page. The existing sibling menu may stay as a secondary affordance (for example on the chevron); decide the split in the issue.
-- [ ] Directories appear in the command palette as results (a "Folders" group listed below page matches, with page counts) and open the directory page. Implemented with ISSUE-079.
+- [x] Directories appear in the command palette as results (a "Folders" group listed below page matches, with page counts) and open the directory page. Implemented with ISSUE-079.
 - [x] Listing order follows the rule introduced by [ISSUE-076](ISSUE-076-pages-sorted-alphabetically-by-title.md) and TD19. Until then the page uses the current (title) order, and that dependency is noted in the page's tests.
 - [x] The directory page, its breadcrumb and the folder-row split work at 390 px width and in the drawer sidebar; no horizontal page scroll.
 - [x] Edge cases covered by tests: a directory with one child, a directory whose only artifacts sit in nested folders, and a path that percent-encodes characters.

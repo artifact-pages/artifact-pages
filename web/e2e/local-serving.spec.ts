@@ -1621,8 +1621,8 @@ test('a folder with several pages is listed below the page matches and opens its
   await expect(folder).toContainText('24 pages')
   await folder.click()
   await expect(palette).toBeHidden()
-  // The directory page itself is built by ISSUE-075; this checks the route only.
   await expect(page).toHaveURL(/\/textsearch\/bulk$/)
+  await expect(page.getByTestId('directory-page').getByRole('heading', { level: 1, name: 'bulk' })).toBeVisible()
 })
 
 test('page text search stays the default Enter target when only headings of other pages match', async ({ page }) => {
