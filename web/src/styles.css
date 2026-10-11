@@ -1374,7 +1374,9 @@ mark {
 .scroll-cue-table { margin: 20px 0; }
 .scroll-cue-code { margin: 12px 0; }
 .scroll-cue::before,
-.scroll-cue::after { content: ''; position: absolute; z-index: 1; top: 0; bottom: 0; width: 16px; border-radius: inherit; opacity: 0; pointer-events: none; transition: opacity 0.15s ease; }
+.scroll-cue::after { content: ''; position: absolute; z-index: 1; top: 0; bottom: 0; width: 16px; opacity: 0; pointer-events: none; transition: opacity 0.15s ease; }
+.scroll-cue-code::before, .scroll-cue-code::after { border-radius: 8px 0 0 8px; }
+.scroll-cue-code::after { border-radius: 0 8px 8px 0; }
 .scroll-cue::before { left: 0; background: linear-gradient(to right, var(--scroll-cue-shadow), transparent); }
 .scroll-cue::after { right: 0; background: linear-gradient(to left, var(--scroll-cue-shadow), transparent); }
 .scroll-cue[data-left="true"]::before,

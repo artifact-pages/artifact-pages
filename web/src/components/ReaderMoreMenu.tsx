@@ -69,6 +69,8 @@ export const ReaderMoreMenu = forwardRef<HTMLButtonElement, {
       return
     }
     if (event.key === 'Tab') {
+      // Focus the button first (no preventDefault) so Tab continues from it, not from the page start.
+      triggerRef.current?.focus()
       setOpen(false)
       return
     }

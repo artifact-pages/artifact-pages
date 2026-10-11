@@ -319,7 +319,7 @@ export function MarkdownArtifact({
 }
 
 /** Tracks which edges of a horizontally scrollable region hide content; updates on scroll and resize. */
-function useScrollEdges(scrollRef: RefObject<HTMLElement | null>, watch: unknown) {
+function useScrollEdges(scrollRef: RefObject<HTMLElement | null>) {
   const [edges, setEdges] = useState<ScrollEdges>({ overflows: false, left: false, right: false })
 
   useEffect(() => {
@@ -341,7 +341,7 @@ function useScrollEdges(scrollRef: RefObject<HTMLElement | null>, watch: unknown
       observer.disconnect()
       scrollport.removeEventListener('scroll', update)
     }
-  }, [scrollRef, watch])
+  }, [scrollRef])
 
   return edges
 }
@@ -358,7 +358,7 @@ function ScrollCue({ edges, kind, children }: { edges: ScrollEdges; kind: 'table
 function MarkdownTableScroll({ children }: { children: ReactNode }) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const hintId = useId()
-  const scrollState = useScrollEdges(scrollRef, children)
+  const scrollState = useScrollEdges(scrollRef)
   const canScrollLeft = scrollState.left
   const canScrollRight = scrollState.right
 
@@ -392,14 +392,12 @@ function MarkdownTableScroll({ children }: { children: ReactNode }) {
 /** A code block: scrolls sideways with the same edge cue as a table, and is keyboard-scrollable when it overflows. */
 function MarkdownCodeBlock({ children, ...props }: ComponentPropsWithoutRef<'pre'>) {
   const scrollRef = useRef<HTMLPreElement>(null)
-  const edges = useScrollEdges(scrollRef, children)
+  const edges = useScrollEdges(scrollRef)
   return (
     <ScrollCue edges={edges} kind="code">
       <pre
         {...props}
         ref={scrollRef}
-        role={edges.overflows ? 'region' : undefined}
-        aria-label={edges.overflows ? 'Scrollable code' : undefined}
         tabIndex={edges.overflows ? 0 : undefined}
       >
         {children}

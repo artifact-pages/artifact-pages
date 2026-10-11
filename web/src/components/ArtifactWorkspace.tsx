@@ -840,7 +840,7 @@ export function ArtifactWorkspace({
                 type="button"
                 className="icon-button reader-menu-button"
                 id={sidebarOpen ? undefined : 'sidebar-toggle-trigger'}
-                title="Expand navigation"
+                title={sidebarOpen ? 'Close navigation' : 'Expand navigation'}
                 aria-label={sidebarOpen ? 'Close navigation' : 'Expand navigation'}
                 aria-controls="workspace-sidebar"
                 aria-expanded={sidebarOpen}

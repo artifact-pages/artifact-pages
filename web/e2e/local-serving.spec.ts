@@ -5835,6 +5835,7 @@ test.describe('release UX fixes', () => {
       const textBox = text.getBoundingClientRect()
       return { navLeft: navBox.left, navRight: navBox.right, left: textBox.left, right: textBox.right, scrollLeft: navElement.scrollLeft, width: textBox.width }
     })
+    await expect(label).toBeVisible()
     // The single-row bar (ISSUE-080) may scroll folders out of view to keep the whole title visible.
     expect(metrics.left).toBeGreaterThanOrEqual(metrics.navLeft - 1)
     expect(metrics.right).toBeLessThanOrEqual(metrics.navRight + 1)
@@ -6643,7 +6644,7 @@ test.describe('narrow chrome and scroll cues (ISSUE-080)', () => {
     const longCode = article.locator('.scroll-cue-code').filter({ hasText: 'artifact-pages publish' })
     await expect(longCode).toHaveAttribute('data-right', 'true')
     await expect(longCode).toHaveAttribute('data-left', 'false')
-    await expect(longCode.getByRole('region', { name: 'Scrollable code' })).toBeVisible()
+    await expect(longCode.locator('pre')).toHaveAttribute('tabindex', '0')
     await longCode.locator('pre').evaluate((element) => { element.scrollLeft = element.scrollWidth })
     await expect(longCode).toHaveAttribute('data-left', 'true')
     await expect(longCode).toHaveAttribute('data-right', 'false')
