@@ -42,6 +42,8 @@ Decided 2026-10-10 in [TD18](../technical-design/TD18-admin-provided-site-workfl
 | [IMP-74](IMP-74-aws-oidc-subject-alignment.md) | Done | Codex | Both legacy and ID-qualified subjects are accepted only as explicit exact allowlist entries; AWS examples and verification use the observed ID-qualified form. |
 | [IMP-75](IMP-75-migrate-operator-repositories.md) | Done | Codex | Admin and docs migrations are merged; hosted docs preview and both-site main-source dry-run passed, with the dry-run dispatched from a temporary branch. |
 | [IMP-76](IMP-76-retire-private-config-fixture.md) | Done | Codex | Source and guide pages are verified; owner-approved repository/App/installation retirement and credential removal are confirmed. |
+| [IMP-77](IMP-77-fulltext-section-table-and-text-packs.md) | Open | Codex | TD20 slice 2: format contract with golden fixtures first, then section table and text packs in the indexer and publisher (unblocks ISSUE-085). |
+| [IMP-78](IMP-78-ci-runs-all-web-unit-tests.md) | Open | Codex | Run every web unit suite in CI through one aggregate script; make the e2e compose project name configurable. |
 
 ## Optional operator-managed edge policy
 
