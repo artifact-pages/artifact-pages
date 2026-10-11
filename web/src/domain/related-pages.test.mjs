@@ -111,3 +111,27 @@ test('the root folder is labelled "/" for a page in a folder', () => {
   const pages = [page('guide/a.html', 'Cloud storage setup'), page('storage.html', 'Cloud storage setup')]
   assert.equal(relatedPages(pages, 'guide/a.html')[0].folderLabel, '/')
 })
+
+test('the current entry is excluded even when another entry shares its id', () => {
+  const pages = [page('a/one.html', 'Cloud storage setup'), { ...page('b/dup.html', 'Cloud storage setup'), id: 'a/one.html' }, page('a/two.html', 'Two')]
+  assert.deepEqual(paths(relatedPages(pages, 'a/one.html')), ['a/two.html'])
+})
+
+test('a title made only of filler words has no tokens and matches nothing by similarity', () => {
+  assert.equal(relatedTokens('The and to of').size, 0)
+  const pages = [page('x/a.html', 'The and'), page('y/b.html', 'The and'), page('x/c.html', 'Sibling')]
+  assert.deepEqual(paths(relatedPages(pages, 'x/a.html')), ['x/c.html'])
+  assert.deepEqual(relatedPages([page('x/a.html', 'The and'), page('y/b.html', 'The and')], 'x/a.html'), [])
+})
+
+test('entries without a toc are handled, on both the current page and candidates', () => {
+  const noToc = (path, title) => ({ id: path, path, title })
+  const pages = [noToc('a/x.html', 'Cloud storage setup'), noToc('b/y.html', 'Cloud storage setup'), noToc('a/z.html', 'Z')]
+  assert.deepEqual(paths(relatedPages(pages, 'a/x.html')), ['b/y.html', 'a/z.html'])
+})
+
+test('the translation rule looks only at the top-level folder', () => {
+  const pages = [page('docs/en/b.html', 'Setup'), page('docs/ja/b.html', 'Setup')]
+  // Language below the top level is not recognised: these two are ordinary similar pages, not dropped.
+  assert.deepEqual(paths(relatedPages(pages, 'docs/en/b.html')), ['docs/ja/b.html'])
+})

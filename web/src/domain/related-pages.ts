@@ -21,7 +21,9 @@ import { comparePaths } from './listing-order.ts'
 //
 // Translations kept in parallel top-level folders (`en/x.html`, `ja/x.html`) are not
 // recommended for each other: a page with the same path below a different top-level folder
-// is dropped. No language detection is involved.
+// is dropped. No language detection is involved. This counterpart rule is path-based and looks
+// only at the top-level folder: `en/a/b.html` and `ja/a/b.html` are counterparts, while
+// `docs/en/b.html` and `docs/ja/b.html` (language below the top level) are ordinary siblings.
 
 export type RelatedReason = 'sibling' | 'similar'
 
@@ -57,7 +59,19 @@ export function relatedTokens(text: string): Set<string> {
 
 type Profile = { title: Set<string>; headings: Set<string> }
 
+// Profiles are memoised per index entry: the index is loaded once and its entry objects are
+// stable, so the whole site is tokenised once, not on every render.
+const profileCache = new WeakMap<ArtifactIndexEntry, Profile>()
+
 function profileOf(entry: ArtifactIndexEntry): Profile {
+  const cached = profileCache.get(entry)
+  if (cached) return cached
+  const profile = buildProfile(entry)
+  profileCache.set(entry, profile)
+  return profile
+}
+
+function buildProfile(entry: ArtifactIndexEntry): Profile {
   const title = relatedTokens(entry.title)
   const headings = new Set<string>()
   for (const heading of entry.toc ?? []) for (const token of relatedTokens(heading.text)) headings.add(token)

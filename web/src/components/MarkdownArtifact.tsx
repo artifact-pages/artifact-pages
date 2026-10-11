@@ -158,6 +158,7 @@ export function MarkdownArtifact({
   resolveHref,
   highlightQuery = '',
   onMatches,
+  footer,
 }: {
   artifact: ArtifactIndexEntry
   siteId: string
@@ -168,6 +169,8 @@ export function MarkdownArtifact({
   highlightQuery?: string
   /** Every highlighted range, after each application of the highlight (empty without matches). */
   onMatches?: (ranges: Range[]) => void
+  /** Rendered after the article inside the scrolling region (the "Read next" list). */
+  footer?: ReactNode
 }) {
   const [source, setSource] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -322,6 +325,7 @@ export function MarkdownArtifact({
           {source}
         </Markdown>
       </article>
+      {footer ? <div className="markdown-footer">{footer}</div> : null}
     </div>
   )
 }
