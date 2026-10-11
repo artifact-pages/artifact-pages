@@ -5472,6 +5472,8 @@ test.describe('release UX fixes', () => {
       const metadata = await response.json()
       await route.fulfill({ response, json: { ...metadata, artifactCount: 1 } })
     })
+    // Keep the card on the metadata total: the real index would add a per-folder summary.
+    await page.route('**/_indexes/sre/index.json', (route) => route.abort())
     await page.goto('/')
     const row = page.getByRole('link', { name: /SRE/ })
     await expect(row).toContainText('1 artifact ·')
