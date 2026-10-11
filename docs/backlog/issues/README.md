@@ -31,6 +31,8 @@ ISSUE-030's Markdown cross-document fragments passed the 63/63 local Playwright 
 
 ISSUE-038–047 come from the 2026-10-01 beginner UX review in the Codex in-app browser at `http://127.0.0.1:4179/`: one Guide site with four HTML documents, at normal width and 390×844. No implementation or design documents informed that review. Each issue preserves observable evidence, scope limitations, and acceptance criteria; discovery and reading improvements are explicitly distinguished from broken behavior. The review's search-entry observations F02/F07 are combined in ISSUE-039. Local screenshots and the full report remain ignored under `.local/ux-review-2026-10-01/`; issue reproduction does not depend on those files. Missing fixtures, real-device IME, and broader provider proofs are not new product issues.
 
+ISSUE-075–084 come from the 2026-10-11 dogfooding of `https://artifact-pages.dev` (the guide and architecture sites: 26 published pages, all HTML artifacts under `en/` and `ja/`) and a competitive review of documentation readers. Findings were checked against the current source before filing; claims not reproduced are labeled as hypotheses. Caveats: narrow-screen behavior was exercised in a 390 px iframe embedding the real app, not on a device; heading-anchor jumps could not be verified because the test tab was in the background, so no issue is filed for them; competitor search dialogs could not be opened, so no competitor search behavior is claimed; Mermaid was not tested because the sampled sites contain no Markdown. Content findings (heading ids, the CLI version in Getting started, wide diagrams) belong to the `artifact-pages/docs` repository. The ordering and description questions are tracked in [TD19](../technical-design/TD19-navigation-metadata-in-the-site-index.md). The reports are kept outside the repository; each issue records its own evidence.
+
 ## Repair order
 
 Work one issue at a time: mark it In progress, reproduce it, add a regression, implement, verify its acceptance criteria, then commit that concern and move on. Keep the parent summary synchronized. Retain completed records in Git history under the existing removal policy; do not remove an issue before its criteria are verified.
@@ -69,5 +71,15 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-072](ISSUE-072-modified-click-tab-and-route-fetch-e2e-flaky.md) | In progress | P2 | Modified-click new-tab and route.fetch e2e tests fail intermittently under parallel load. |
 | [ISSUE-073](ISSUE-073-palette-enter-uses-stale-selection.md) | Done | P2 | Pressing Enter right after typing in the command palette can do nothing or open the wrong page (regression from #34). |
 | [ISSUE-074](ISSUE-074-shallow-clone-test-tempdir-cleanup-flaky.md) | Done | P3 | Shallow-clone Go test failed once on TempDir cleanup, likely a detached `git maintenance` gc after fetch. |
+| [ISSUE-075](ISSUE-075-directory-routes-have-no-page.md) | Open | P1 | Directory routes have no page: folder URLs show "Page not found" and tree folders only toggle. |
+| [ISSUE-076](ISSUE-076-pages-sorted-alphabetically-by-title.md) | Blocked | P1 | Navigation, site home and breadcrumb menus sort pages alphabetically by title, losing the author's reading order (blocked on TD19). |
+| [ISSUE-077](ISSUE-077-fulltext-results-unranked.md) | Open | P1 | Page text search results are unranked, have no snippets, and mix languages. |
+| [ISSUE-078](ISSUE-078-landing-page-has-no-orientation.md) | Open | P1 | The landing page offers only "Choose a site": no orientation, alphabetical cards, double-counted translations. |
+| [ISSUE-079](ISSUE-079-palette-cannot-find-other-page-headings.md) | Open | P2 | The command palette cannot find headings of other pages. |
+| [ISSUE-080](ISSUE-080-narrow-screen-chrome-and-scroll-cues.md) | Open | P2 | On narrow screens the permanent rail and two-row toolbar take reading space, and wide tables and code scroll without a cue. |
+| [ISSUE-081](ISSUE-081-reader-shell-skip-link-and-document-language.md) | Open | P3 | The reader shell has no skip link and keeps `lang="en"` on Japanese documents. |
+| [ISSUE-082](ISSUE-082-no-previous-next-navigation.md) | Blocked | P3 | Pages have no previous/next navigation at the end (blocked on ISSUE-076 and TD19). |
+| [ISSUE-083](ISSUE-083-unknown-urls-return-http-200.md) | Open | P3 | Unknown URLs return HTTP 200 with the app shell (soft 404). |
+| [ISSUE-084](ISSUE-084-previews-entry-and-timestamp-polish.md) | Open | P3 | "View previews" is a button, and preview times carry no timezone. |
 
 ISSUE-013's verified completion record is retained in Git history.
