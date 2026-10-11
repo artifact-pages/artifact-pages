@@ -1,7 +1,7 @@
 # IMP-66 — Per-site control prefix and prefix-level AWS IAM
 
 - Status: In progress
-- Assignee: Claude
+- Assignee: Codex (handed over by Claude on 2026-10-11 for the last slice; see workstreams WS6)
 - Lanes: CLI, Terraform / AWS
 - Depends on: design check below; owner decision recorded 2026-10-07 (option c)
 - Sequencing: `cli-sync-remove` and [IMP-63](IMP-63-consolidate-terraform-modules.md) (AWS half) have merged; this change builds on both
