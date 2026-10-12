@@ -51,6 +51,12 @@ type Result struct {
 	SourceDirty       bool                                   `json:"sourceDirty,omitempty"`
 	BuildSkipped      bool                                   `json:"buildSkipped,omitempty"`
 	LegacyControl     *LegacyControl                         `json:"legacyControl,omitempty"`
+	SnippetLimits     *SnippetLimitsReport                   `json:"snippetLimits,omitempty"`
+}
+
+type SnippetLimitsReport struct {
+	TruncatedDocuments []string `json:"truncatedDocuments"`
+	OmittedDocuments   []string `json:"omittedDocuments"`
 }
 
 type LegacyControl struct {

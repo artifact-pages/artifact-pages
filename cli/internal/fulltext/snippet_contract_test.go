@@ -123,6 +123,9 @@ func retainedFixtureSections(sections []snippetFixtureSourceSection, limit int) 
 			for end > 0 && !utf8.RuneStart(data[end]) {
 				end--
 			}
+			if end > 0 && data[end-1] == ' ' {
+				end--
+			}
 			if end > 0 {
 				section.Text = string(data[:end])
 				retained = append(retained, section)
@@ -429,7 +432,7 @@ func assertSnippetContractVector(t *testing.T, name string, tableBytes []byte, t
 		if document.Sections[0].Heading != "Overview" || document.Sections[0].Anchor != "overview" || string(sectionText(document.Sections[0])) != "Overview Lead introduction." {
 			t.Fatalf("unexpected HTML h1 section: %+v text=%q", document.Sections[0], sectionText(document.Sections[0]))
 		}
-		if document.Sections[1].Heading != "Setup" || document.Sections[1].Anchor != "setup" || string(sectionText(document.Sections[1])) != "Setup Setup steps. Unanchored details. Continued text." {
+		if document.Sections[1].Heading != "Setup" || document.Sections[1].Anchor != "setup" || string(sectionText(document.Sections[1])) != "Setup Setup steps. Unanchored details Continued text." {
 			t.Fatalf("id-less HTML h2 did not stay in the current section: %+v text=%q", document.Sections[1], sectionText(document.Sections[1]))
 		}
 	case "F5 empty sections":

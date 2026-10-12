@@ -626,12 +626,13 @@ func TestRunSitePublishDryRunAndNoOpAreMachineReadable(t *testing.T) {
 		t.Fatalf("site sync dry-run exit code = %d, want 0; stdout=%s stderr=%s", exitCode, stdout, stderr)
 	}
 	var planned struct {
-		Operation      string             `json:"operation"`
-		Outcome        string             `json:"outcome"`
-		Site           string             `json:"site"`
-		Changes        []publisher.Change `json:"changes"`
-		FilesPublished int                `json:"filesPublished"`
-		FilesRemoved   int                `json:"filesRemoved"`
+		Operation      string                         `json:"operation"`
+		Outcome        string                         `json:"outcome"`
+		Site           string                         `json:"site"`
+		Changes        []publisher.Change             `json:"changes"`
+		FilesPublished int                            `json:"filesPublished"`
+		FilesRemoved   int                            `json:"filesRemoved"`
+		SnippetLimits  *publisher.SnippetLimitsReport `json:"snippetLimits"`
 		PreviewChanges []struct {
 			Action  string `json:"action"`
 			GroupID string `json:"groupId"`
@@ -649,8 +650,10 @@ func TestRunSitePublishDryRunAndNoOpAreMachineReadable(t *testing.T) {
 		{Action: "create", Path: "_indexes/sre/meta.json"},
 		{Action: "create", Path: "_indexes/sre/search/manifest.json"},
 		{Action: "create", Path: "_indexes/sre/search/root-a9b445d38284b9a0f4995534afe000d1e3e8ee30b2c66db9866be64b37f1e0c7.gz"},
+		{Action: "create", Path: "_indexes/sre/search/sections-0704e999e474e7850a3d59df46ace390bbde01d8a2fb12e63be7222fe9b1baa4.gz"},
+		{Action: "create", Path: "_indexes/sre/search/text-e2bc09af633c933a8641de184ce66f8b495c5c4b68e7a99dcfedf48be54823c1.gz"},
 	}
-	if planned.Operation != "site sync" || planned.Outcome != "planned" || planned.Site != "sre" || planned.FilesPublished != 5 || planned.FilesRemoved != 1 || !reflect.DeepEqual(planned.Changes, wantChanges) {
+	if planned.Operation != "site sync" || planned.Outcome != "planned" || planned.Site != "sre" || planned.FilesPublished != 7 || planned.FilesRemoved != 1 || planned.SnippetLimits != nil || !reflect.DeepEqual(planned.Changes, wantChanges) {
 		t.Fatalf("site sync dry-run result = %+v, want planned creates %+v", planned, wantChanges)
 	}
 	wantPreviewChanges := []struct {
@@ -679,7 +682,7 @@ func TestRunSitePublishDryRunAndNoOpAreMachineReadable(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &published); err != nil {
 		t.Fatalf("decode site sync JSON: %v; output=%s", err, stdout)
 	}
-	if published.Operation != "site sync" || published.Outcome != "synced" || published.Site != "sre" || published.FilesPublished != 5 || published.FilesRemoved != 1 || !reflect.DeepEqual(published.Changes, wantChanges) {
+	if published.Operation != "site sync" || published.Outcome != "synced" || published.Site != "sre" || published.FilesPublished != 7 || published.FilesRemoved != 1 || published.SnippetLimits != nil || !reflect.DeepEqual(published.Changes, wantChanges) {
 		t.Fatalf("site sync result = %+v, want published result with changes %+v", published, wantChanges)
 	}
 	artifact, err := os.ReadFile(filepath.Join(storageRoot, "_artifacts", "sre", "overview.html"))
@@ -717,6 +720,52 @@ func TestRunSitePublishDryRunAndNoOpAreMachineReadable(t *testing.T) {
 		t.Fatalf("site sync no-op result = %+v, want an empty machine-readable no-op", noOp)
 	}
 	assertEmptyPreviewChangesField(t, stdout)
+}
+
+func TestSnippetLimitWarningsForIndexBuildAndSiteSync(t *testing.T) {
+	root := createLocalSitePublishCheckout(t, registeredLocalSiteManifest)
+	const cappedPath = "docs/artifacts/capped.md"
+	cappedSource := []byte("# Capped\n\n" + strings.Repeat("x", 262145))
+	if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(cappedPath)), cappedSource, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, exitCode := runCLIProcess(t, root, []string{
+		"index", "build", "--site", "sre", "--source", "docs/artifacts", "--out", ".local/index-output",
+	})
+	if exitCode != 0 || !strings.Contains(stderr, "Warning: search excerpts keep only the first 262144 bytes of page text for 1 document:") ||
+		!strings.Contains(stderr, "capped.md") {
+		t.Fatalf("index build cap warning exit=%d stdout=%s stderr=%s", exitCode, stdout, stderr)
+	}
+	if strings.Contains(stdout, "Warning:") {
+		t.Fatalf("index build warning was written to stdout: %s", stdout)
+	}
+
+	jsonArgs := []string{"site", "sync", "--site", "sre", "--source", "docs/artifacts", "--dry-run", "--format", "json"}
+	stdout, stderr, exitCode = runCLIProcess(t, root, jsonArgs)
+	if exitCode != 0 {
+		t.Fatalf("site sync JSON dry-run exit=%d stdout=%s stderr=%s", exitCode, stdout, stderr)
+	}
+	var jsonResult publisher.Result
+	if err := json.Unmarshal([]byte(stdout), &jsonResult); err != nil {
+		t.Fatalf("decode site sync capped JSON: %v; output=%s", err, stdout)
+	}
+	if jsonResult.SnippetLimits == nil || !reflect.DeepEqual(jsonResult.SnippetLimits.TruncatedDocuments, []string{"capped.md"}) {
+		t.Fatalf("site sync JSON snippet limits = %+v", jsonResult.SnippetLimits)
+	}
+	if strings.Contains(stdout+stderr, "Warning:") {
+		t.Fatalf("JSON site sync emitted warning lines: stdout=%s stderr=%s", stdout, stderr)
+	}
+
+	textArgs := []string{"site", "sync", "--site", "sre", "--source", "docs/artifacts", "--dry-run"}
+	stdout, stderr, exitCode = runCLIProcess(t, root, textArgs)
+	if exitCode != 0 || !strings.Contains(stderr, "Warning: search excerpts keep only the first 262144 bytes of page text for 1 document:") ||
+		!strings.Contains(stderr, "capped.md") {
+		t.Fatalf("site sync text cap warning exit=%d stdout=%s stderr=%s", exitCode, stdout, stderr)
+	}
+	if strings.Contains(stdout, "Warning:") {
+		t.Fatalf("site sync warning was written to stdout: %s", stdout)
+	}
 }
 
 func TestPreviewRemoveCLIHelpValidationNoOpAndJSONFailure(t *testing.T) {

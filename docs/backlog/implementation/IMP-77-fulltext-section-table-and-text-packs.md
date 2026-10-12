@@ -1,8 +1,8 @@
 # IMP-77 — Full-text section table and text packs
 
-- Status: In progress
+- Status: Done
 - Assignee: Codex
-- Contract review: Pending; the format-only PR must pass a fresh independent Luna review and Claude's contract review before writer work starts.
+- Contract review: Done (#106).
 - Lanes: CLI (primary), Frontend (participating)
 - Owner: Codex
 - Depends on: [TD20](../technical-design/TD20-search-results-page-and-snippet-packs.md) (direction accepted 2026-10-11)
@@ -26,8 +26,8 @@ Reader code under `web/` (ISSUE-085, Claude). The CLI release that ships it (WS4
 
 ## Acceptance criteria
 
-- [ ] Format contract and golden fixtures merged before the writer; Claude reviewed it.
-- [ ] A republish reuses packs for unchanged documents while their pack membership and preceding byte lengths stay stable; a test proves deterministic reuse under that condition. Boundary shifts may change neighboring packs. (Owner accepted on 2026-10-12 that a length change can shift later pack boundaries; TD20's "only packs with changed documents" claim is amended accordingly.)
-- [ ] v1 readers keep working against an index with the new objects (no v1 object changes).
-- [ ] Publisher state accepts the new keys; an older CLI's behaviour on such a site is recorded (TD20 notes it converges to v1 or fails closed).
-- [ ] Caps warn and are recorded in the manifest.
+- [x] Format contract and golden fixtures merged before the writer; Claude reviewed it.
+- [x] A republish reuses packs for unchanged documents while their pack membership and preceding byte lengths stay stable; a test proves deterministic reuse under that condition. Boundary shifts may change neighboring packs. (Owner accepted on 2026-10-12 that a length change can shift later pack boundaries; TD20's "only packs with changed documents" claim is amended accordingly.)
+- [x] v1 readers keep working against an index with the new objects (no v1 object changes).
+- [x] Publisher state accepts the new keys. At v0.4.0, a `sections-` or `text-` state row fails `expectedSitePublishObjectPolicy` because `sitePublishStateSearchBlob` accepts only root and leaf blobs, and site sync stops fail-closed (`cli/internal/publisher/site_publish_state.go:29,315-330,368-380`; `cli/internal/publisher/site_publish_manifest.go:123-126`).
+- [x] Caps warn and are recorded in the manifest.
