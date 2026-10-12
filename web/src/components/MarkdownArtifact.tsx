@@ -175,7 +175,7 @@ export function MarkdownArtifact({
 }) {
   const [source, setSource] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const loadingVisible = useDelayedVisible()
+  const loadingVisible = useDelayedVisible(artifact.artifactUrl)
   const articleRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
