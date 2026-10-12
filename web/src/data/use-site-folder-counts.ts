@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { hasSiteDiscoveryMetadata, type SiteCatalogEntry } from '../domain/index'
 import { topLevelFolderCounts, type FolderCount } from '../domain/site-folder-counts'
-import { siteStartPath } from '../domain/site-start'
 import { loadSiteIndex } from './indexes'
 
 /** The landing page reads at most this many site indexes (in display order). */
@@ -10,8 +9,6 @@ export const COUNT_CONCURRENCY = 3
 
 export type SiteFolderCounts = {
   counts: Record<string, FolderCount[]>
-  /** Root README path by site ID, for sites whose top level has one. */
-  startPaths: Record<string, string>
   /** Sites whose count read is queued or in flight (used to reserve space on the card). */
   pending: ReadonlySet<string>
 }
@@ -26,10 +23,8 @@ export type SiteFolderCounts = {
 export function useSiteFolderCounts(
   sites: SiteCatalogEntry[],
   override?: Record<string, FolderCount[]>,
-  startOverride?: Record<string, string>,
 ): SiteFolderCounts {
   const [counts, setCounts] = useState<Record<string, FolderCount[]>>({})
-  const [startPaths, setStartPaths] = useState<Record<string, string>>({})
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set())
   const key = sites.map((entry) => (hasSiteDiscoveryMetadata(entry) ? `${entry.site.id}\0${entry.artifactIndexUrl}` : '')).join('\n')
 
@@ -41,7 +36,6 @@ export function useSiteFolderCounts(
     const ids = new Set(eligible.map((entry) => entry.site.id))
     setPending(new Set(ids))
     setCounts((current) => Object.fromEntries(Object.entries(current).filter(([id]) => ids.has(id))))
-    setStartPaths((current) => Object.fromEntries(Object.entries(current).filter(([id]) => ids.has(id))))
     const settle = (id: string) => setPending((current) => {
       const next = new Set(current)
       next.delete(id)
@@ -55,13 +49,10 @@ export function useSiteFolderCounts(
           if (controller.signal.aborted) return
           const folders = topLevelFolderCounts(index.artifacts)
           setCounts((current) => ({ ...current, [id]: folders }))
-          const start = siteStartPath(index.artifacts)
-          setStartPaths(({ [id]: _previous, ...rest }) => (start === undefined ? rest : { ...rest, [id]: start }))
         } catch {
           // Keep the metadata total for this site and drop any stale breakdown.
           if (controller.signal.aborted) return
           setCounts(({ [id]: _dropped, ...rest }) => rest)
-          setStartPaths(({ [id]: _dropped, ...rest }) => rest)
         }
         settle(id)
       }
@@ -77,5 +68,5 @@ export function useSiteFolderCounts(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, override])
 
-  return override ? { counts: override, startPaths: startOverride ?? {}, pending: new Set() } : { counts, startPaths, pending }
+  return override ? { counts: override, pending: new Set() } : { counts, pending }
 }

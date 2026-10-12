@@ -6475,6 +6475,8 @@ test.describe('directory pages', () => {
     // The page's own panels refer to the root README; the site home button is not shown on the home itself.
     await expect(page.getByRole('button', { name: 'Contents' })).toBeEnabled()
     await expect(page.getByRole('button', { name: 'Go to SRE home' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Copy site link' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Copy folder link' })).toHaveCount(0)
 
     const top = (selector: string) => directory.locator(selector).first().evaluate((element) => element.getBoundingClientRect().top)
     const [headerTop, listTop, labelTop, recentTop] = await Promise.all([

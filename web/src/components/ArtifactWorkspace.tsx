@@ -974,7 +974,7 @@ export function ArtifactWorkspace({
                   <button
                     className="icon-button"
                     title="Copy link"
-                    aria-label={currentDirectory ? 'Copy folder link' : 'Copy artifact link'}
+                    aria-label={isSiteRoot ? 'Copy site link' : currentDirectory ? 'Copy folder link' : 'Copy artifact link'}
                     onClick={() => void copyCurrentLink(showToast)}
                   >
                     <Icon name="copy" size={15} />
