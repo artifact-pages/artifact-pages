@@ -1,6 +1,6 @@
 # Pages have no list of related pages to read next
 
-- Status: In progress
+- Status: Done
 - Assignee: Claude
 - Priority: P2
 - Area: Reader page footer (web reader; `web/src/components/ArtifactWorkspace.tsx`, a new pure selector under `web/src/domain/`)
@@ -40,3 +40,7 @@ Relations based on the link graph (outgoing links and backlinks) would need an i
 
 - 2026-10-12 (owner decision): placement A, a "Read next" list at the end of Markdown pages only. HTML artifacts get no related-pages UI at all: a shell strip under the frame was tried (concept #102) and rejected; variants B and C are rejected. This supersedes the acceptance criteria that asked for a list below HTML artifacts.
 - 2026-10-12 (Claude): shipped in the PR for this issue. `web/src/components/ReadNext.tsx` renders the selector's result after the Markdown article (inside the scrolling region, via `MarkdownArtifact`'s `footer`), with title, folder label when it differs from the page's folder, and a reason chip (Same folder / Similar topic). Links are real `<a href>` with the in-app click convention (`followInApp`: modified clicks keep browser behavior). Not rendered when there are no related pages, on HTML artifacts, on a folder's README shown inside a directory page (the directory page is itself the list), or on the search results page. The UI is English-only, so the heading is "Read next". The selector now memoises per-entry profiles and documents that the en/ja counterpart rule is path-based and checks only the top-level folder; tests added for current-id exclusion, filler-only titles and missing `toc`. e2e covers Markdown, HTML and 390 px. The selection rule is recorded in `docs/specification.md`. Status stays In progress until verified in production after the next web release.
+
+## Production check (2026-10-12)
+
+web/v0.3.0 is deployed to https://artifact-pages.dev, whose sites contain HTML pages only, so the list correctly does not appear there. The Markdown behaviour was checked on the verification deployment (https://artifact-pages.stream/readme-demo, same reader code) and is covered by e2e. Done.

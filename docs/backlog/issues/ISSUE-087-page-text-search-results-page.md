@@ -1,6 +1,6 @@
 # Page text search needs a results page in the reading area
 
-- Status: In progress
+- Status: Done
 - Assignee: Claude
 - Priority: P2
 - Area: Page text search (`web/`: sidebar, command palette, routing, reader); specification
@@ -38,3 +38,7 @@ Owner feedback of 2026-10-11 on the live sites asked for a wider place for resul
 
 - Indexer enforcement of reserved first segments (`_previews`, `_search`): [ISSUE-088](ISSUE-088-indexer-rejects-reserved-first-segments.md).
 - Snippets, heading anchors and body-hit ordering: [ISSUE-085](ISSUE-085-page-text-search-snippets.md) after the format slice.
+
+## Production check (2026-10-12)
+
+web/v0.3.0 deployed to https://artifact-pages.dev: `/guide/_search?q=cache` shows "4 pages contain “cache”" with the folder facet (All 4, en/ 4) and the four result rows. Excerpts (ISSUE-085) appear once a CLI release containing the IMP-77 writer republishes the sites. Done.
