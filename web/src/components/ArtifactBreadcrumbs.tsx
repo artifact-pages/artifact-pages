@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { findIndexArtifact, folderLabel } from '../domain/directory.ts'
 import type { ArtifactIndexEntry } from '../domain/index'
 import { compareArtifactsByPath } from '../domain/listing-order.ts'
 import { Icon } from './Icon'
@@ -206,7 +207,7 @@ export function ArtifactBreadcrumbs({
           const isDirectory = !isLast || isDirectoryPage
           const path = segments.slice(0, segmentIndex + 1).join('/')
           const key = `${isDirectory ? 'folder' : 'artifact'}:${path}`
-          const label = isDirectory ? segment : currentArtifact?.title ?? segment
+          const label = isDirectory ? directoryLabel(artifacts, path, segment) : currentArtifact?.title ?? segment
 
           return (
             <span className={`breadcrumb-part${openMenu?.key === key ? ' is-open' : ''}`} key={key}>
@@ -356,4 +357,13 @@ function isCurrentArtifact(
 function menuPathLabel(artifact: ArtifactIndexEntry, menuPath: string, isDirectory: boolean) {
   if (isDirectory && menuPath) return artifact.path.slice(`${menuPath}/`.length)
   return artifact.path.split('/').at(-1) ?? artifact.filename ?? artifact.path
+}
+
+/** A folder's label: the title of its own index page, else the segment (see folderLabel). */
+function directoryLabel(artifacts: ArtifactIndexEntry[], path: string, segment: string) {
+  const depth = path.split('/').length
+  const direct = artifacts.filter(
+    (artifact) => artifact.path.startsWith(`${path}/`) && artifact.path.split('/').filter(Boolean).length === depth + 1,
+  )
+  return folderLabel(segment, findIndexArtifact(direct))
 }

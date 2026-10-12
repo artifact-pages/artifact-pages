@@ -3,7 +3,7 @@
 // Ordering is folders first, then filename order (ISSUE-076 / TD19), not title order.
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { findIndexArtifact, pageCountLabel, pageHeadings, resolveDirectory, resolveRootDirectory } from './directory.ts'
+import { findIndexArtifact, folderLabel, pageCountLabel, pageHeadings, resolveDirectory, resolveRootDirectory } from './directory.ts'
 
 const page = (path, title, updatedAt = '2026-10-01T00:00:00Z', extra = {}) => ({ id: path, path, title, updatedAt, format: path.endsWith('.md') ? 'markdown' : 'html', ...extra })
 
@@ -144,4 +144,32 @@ test('the site root uses its README as the index page and leaves it out of the p
 
 test('a site with no pages has no root directory', () => {
   assert.equal(resolveRootDirectory([]), undefined)
+})
+
+test('folderLabel uses the index page title, else the folder name', () => {
+  assert.equal(folderLabel('docs', page('docs/README.md', '  Docs home ')), 'Docs home')
+  assert.equal(folderLabel('docs', page('docs/README.md', 'README')), 'docs')
+  assert.equal(folderLabel('docs', page('docs/README.md', 'Readme')), 'docs')
+  assert.equal(folderLabel('docs', page('docs/index.html', 'Index')), 'docs')
+  assert.equal(folderLabel('docs', page('docs/index.html', 'index.html')), 'docs')
+  assert.equal(folderLabel('docs', page('docs/index.html', '   ')), 'docs')
+  assert.equal(folderLabel('docs', undefined), 'docs')
+})
+
+test('listings label folders by their own index page', () => {
+  const sample = [
+    page('guide/README.md', 'The guide'),
+    page('guide/a.md', 'A'),
+    page('guide/sub/README.md', 'README'),
+    page('other/x.md', 'X'),
+    page('nested/inner/README.md', 'Inner title'),
+  ]
+  const root = resolveRootDirectory(sample)
+  assert.equal(root.label, '')
+  assert.deepEqual(root.folders.map(({ name, label }) => [name, label]), [['guide', 'The guide'], ['nested', 'nested'], ['other', 'other']])
+  const guide = resolveDirectory(sample, 'guide')
+  assert.equal(guide.label, 'The guide')
+  assert.deepEqual(guide.folders.map(({ name, label }) => [name, label]), [['sub', 'sub']])
+  assert.equal(resolveDirectory(sample, 'nested/inner').label, 'Inner title')
+  assert.equal(resolveDirectory(sample, 'other').label, 'other')
 })

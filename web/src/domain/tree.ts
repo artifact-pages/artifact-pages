@@ -1,8 +1,11 @@
 import type { ArtifactIndexEntry } from './index'
+import { findIndexArtifact, folderLabel } from './directory.ts'
 import { compareArtifactsByPath, compareNames } from './listing-order.ts'
 
 export type ArtifactTreeNode = {
   name: string
+  /** What is displayed: the index page's title when it has one, else `name`. Empty for the root. */
+  label: string
   path: string
   directories: Map<string, ArtifactTreeNode>
   artifacts: ArtifactIndexEntry[]
@@ -11,6 +14,7 @@ export type ArtifactTreeNode = {
 export function buildArtifactTree(artifacts: ArtifactIndexEntry[]): ArtifactTreeNode {
   const root: ArtifactTreeNode = {
     name: '',
+    label: '',
     path: '',
     directories: new Map(),
     artifacts: [],
@@ -31,6 +35,7 @@ export function buildArtifactTree(artifacts: ArtifactIndexEntry[]): ArtifactTree
       if (!directory) {
         directory = {
           name: segment,
+          label: segment,
           path: node.path ? `${node.path}/${segment}` : segment,
           directories: new Map(),
           artifacts: [],
@@ -45,6 +50,17 @@ export function buildArtifactTree(artifacts: ArtifactIndexEntry[]): ArtifactTree
 
   sortTree(root)
   return root
+}
+
+/**
+ * The index page whose own row is folded into its folder row in the sidebar tree:
+ * the folder's README or index page, but only when the folder has other children.
+ * A folder whose only child is its index page keeps that row.
+ */
+export function foldedIndexArtifact(node: Pick<ArtifactTreeNode, 'path' | 'artifacts' | 'directories'>) {
+  if (!node.path) return undefined
+  if (node.artifacts.length <= 1 && node.directories.size === 0) return undefined
+  return findIndexArtifact(node.artifacts)
 }
 
 export function countArtifacts(node: ArtifactTreeNode): number {
@@ -64,6 +80,7 @@ export function flattenArtifacts(node: ArtifactTreeNode): ArtifactIndexEntry[] {
 
 function sortTree(node: ArtifactTreeNode) {
   node.artifacts.sort(compareArtifactsByPath)
+  if (node.path) node.label = folderLabel(node.name, findIndexArtifact(node.artifacts))
   const sorted = [...node.directories.entries()].sort(([left], [right]) => compareNames(left, right))
   node.directories.clear()
   for (const [name, directory] of sorted) {

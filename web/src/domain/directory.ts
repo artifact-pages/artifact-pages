@@ -2,7 +2,10 @@ import type { ArtifactIndexEntry, TocEntry } from './index'
 import { compareArtifactsByPath, compareNames } from './listing-order.ts'
 
 export type DirectoryFolder = {
+  /** The path segment. */
   name: string
+  /** What is displayed: the index page's title when it has one, else `name`. */
+  label: string
   path: string
   /** Every page under the folder, at any depth. */
   pageCount: number
@@ -12,8 +15,10 @@ export type DirectoryFolder = {
 export type DirectoryListing = {
   /** Slash-joined folder path without leading or trailing slash. */
   path: string
-  /** The last path segment, shown as-is (TD19: no authored folder titles). */
+  /** The last path segment. `label` is what is displayed. */
   name: string
+  /** The index page's title when it has one, else `name` (TD19). Empty for the root. */
+  label: string
   /** Every page under the folder, at any depth, including the index page. */
   pageCount: number
   latestUpdatedAt?: string
@@ -51,6 +56,22 @@ export function findIndexArtifact(pages: readonly ArtifactIndexEntry[]) {
 }
 
 /**
+ * What a folder is called: the title of its index page, unless that page has no
+ * real title (empty, or the CLI's filename-stem fallback such as README), in
+ * which case the folder name.
+ */
+export function folderLabel(name: string, indexArtifact?: ArtifactIndexEntry): string {
+  if (!indexArtifact) return name
+  const title = (indexArtifact.title ?? '').trim()
+  if (!title) return name
+  const fileName = (indexArtifact.path.split('/').at(-1) ?? '').toLowerCase()
+  const stem = fileName.includes('.') ? fileName.slice(0, fileName.lastIndexOf('.')) : fileName
+  const lowered = title.toLowerCase()
+  if (lowered === fileName || lowered === stem) return name
+  return title
+}
+
+/**
  * The listing of a directory, or undefined when no page sits under the path (so
  * the path is not a directory). A path that is itself a page is the caller's to
  * resolve first: a page wins over a directory of the same name.
@@ -78,6 +99,7 @@ function buildListing(artifacts: readonly ArtifactIndexEntry[], path: string): D
 
   const pages: ArtifactIndexEntry[] = []
   const folders = new Map<string, DirectoryFolder>()
+  const folderPages = new Map<string, ArtifactIndexEntry[]>()
   let pageCount = 0
   let latestUpdatedAt: string | undefined
 
@@ -91,7 +113,12 @@ function buildListing(artifacts: readonly ArtifactIndexEntry[], path: string): D
       continue
     }
     const name = segments[depth]
-    const folder = folders.get(name) ?? { name, path: path ? `${path}/${name}` : name, pageCount: 0 }
+    const folder = folders.get(name) ?? { name, label: name, path: path ? `${path}/${name}` : name, pageCount: 0 }
+    if (segments.length === depth + 2) {
+      const direct = folderPages.get(name) ?? []
+      direct.push(artifact)
+      folderPages.set(name, direct)
+    }
     folder.pageCount += 1
     folder.latestUpdatedAt = latest(folder.latestUpdatedAt, artifact.updatedAt)
     folders.set(name, folder)
@@ -99,10 +126,16 @@ function buildListing(artifacts: readonly ArtifactIndexEntry[], path: string): D
 
   if (pageCount === 0) return undefined
 
+  for (const folder of folders.values()) {
+    folder.label = folderLabel(folder.name, findIndexArtifact(folderPages.get(folder.name) ?? []))
+  }
+
   const indexArtifact = findIndexArtifact(pages)
+  const name = path.split('/').at(-1) ?? path
   return {
     path,
-    name: path.split('/').at(-1) ?? path,
+    name,
+    label: path ? folderLabel(name, indexArtifact) : '',
     pageCount,
     latestUpdatedAt,
     folders: [...folders.values()].sort((left, right) => compareNames(left.name, right.name)),
