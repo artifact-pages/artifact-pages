@@ -12,6 +12,7 @@ import type { ResolvedTheme, ThemeMode } from './domain/theme'
 import { canonicalPathname, parseRoute, type AppRoute } from './routing'
 import { APP_NAME, pageTitle, usePageTitle } from './components/usePageTitle'
 import { usePageNoindex } from './components/usePageNoindex'
+import { useDelayedVisible } from './components/useDelayedVisible'
 
 type LoadingState<T> =
   | { status: 'loading' }
@@ -289,6 +290,8 @@ function SitePage({
 
 function StatusPage({ title, message }: { title: string; message: string }) {
   usePageTitle(pageTitle(title === 'Sites' ? undefined : title, APP_NAME))
+  const visible = useDelayedVisible()
+  if (!visible) return <main className="status-page" aria-busy="true" />
   return (
     <main className="status-page">
       <div className="status-content">

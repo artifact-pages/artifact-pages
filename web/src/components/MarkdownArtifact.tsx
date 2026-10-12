@@ -10,6 +10,7 @@ import { clearSearchHighlight, keepSearchHighlighted, watchReaderScroll } from '
 import { detectMarkdownLanguage } from '../domain/document-language'
 import { sameScrollEdges, scrollEdges, type ScrollEdges } from '../domain/scroll-edges'
 import { MermaidDiagram } from './MermaidDiagram'
+import { useDelayedVisible } from './useDelayedVisible'
 
 const markdownSanitizeSchema = {
   ...defaultSchema,
@@ -174,6 +175,7 @@ export function MarkdownArtifact({
 }) {
   const [source, setSource] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const loadingVisible = useDelayedVisible()
   const articleRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
@@ -259,6 +261,7 @@ export function MarkdownArtifact({
   }
 
   if (source === null) {
+    if (!loadingVisible) return <div className="markdown-state" aria-busy="true" />
     return <div className="markdown-state" role="status">Loading document…</div>
   }
 

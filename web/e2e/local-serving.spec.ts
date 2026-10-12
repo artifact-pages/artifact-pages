@@ -6883,3 +6883,26 @@ test.describe('read next list', () => {
     expect(box!.x + box!.width).toBeLessThanOrEqual(390)
   })
 })
+
+test('loading text appears only after a 300 ms delay and the page stays blank but busy until then', async ({ page }) => {
+  let releaseRegistry!: () => void
+  const registryGate = new Promise<void>((resolve) => { releaseRegistry = resolve })
+  await page.route('**/_indexes/sites.json', async (route) => {
+    await registryGate
+    await route.continue()
+  })
+
+  await page.clock.install({ time: 0 })
+  await page.clock.pauseAt(1000)
+  await page.goto('/')
+  try {
+    await expect(page.locator('main.status-page[aria-busy="true"]')).toBeAttached()
+    await expect(page.getByText('Loading sites…')).toHaveCount(0)
+    await page.clock.runFor(299)
+    await expect(page.getByText('Loading sites…')).toHaveCount(0)
+    await page.clock.runFor(2)
+    await expect(page.getByText('Loading sites…')).toBeVisible()
+  } finally {
+    releaseRegistry()
+  }
+})
