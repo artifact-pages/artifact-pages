@@ -2,7 +2,7 @@
 
 - Status: Open
 - Phase: Reusable distribution
-- Decision: Direction accepted by the owner on 2026-10-11 (results page, build-time packs); pack size and h4 remain open (see Open questions).
+- Decision: Direction accepted by the owner on 2026-10-11 (results page, build-time packs); pack size and h4 handling confirmed with the defaults on 2026-10-12.
 - Related design: [TD2](TD2-component-release-policy.md) (additive schema changes), [TD19](TD19-navigation-metadata-in-the-site-index.md) (index metadata; same additive approach)
 - Subsumes: [ISSUE-085](../issues/ISSUE-085-page-text-search-snippets.md) (snippets). Builds on [ISSUE-077](../issues/ISSUE-077-fulltext-results-unranked.md) (reader-side ranking).
 - Origin: owner feedback of 2026-10-11 on the live sites.
@@ -119,10 +119,12 @@ The owner chose the results page (option A over snippets in the sidebar) and bui
 
 AWS figures are CloudFront pay-as-you-go (Japan) after the free 10M requests and 1 TB, plus CloudFront Functions; WAF adds about $0.60 per million requests. On Cloudflare the choice does not change cost; packs mainly cut round trips there.
 
-## Open questions for the owner
+## Resolved questions
 
 - **Pack target size.** 64 KiB raw, or larger (fewer requests, less cache reuse)?
+  Resolved (2026-10-12): the pack constants stay at minimum 16 KiB, target about 64 KiB, maximum 256 KiB, as in the contract.
 - **Sections.** Do h4 headings also start a section (finer anchors, larger table), or stop at h3 to match `toc`?
+  Resolved (2026-10-12): h4–h6 stay inside the current section; sections start at h1–h3 only.
 
 ## Settled contract
 
