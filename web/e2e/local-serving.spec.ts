@@ -4962,7 +4962,7 @@ test.describe('page text search', () => {
     await field(page).fill('lighthouse')
     await expect(status(page)).toHaveText('24 pages contain “lighthouse”')
     await hits(page).first().click()
-    await expect(page).toHaveURL(/\/textsearch\/bulk\/note-01\.md\?q=lighthouse$/)
+    await expect(page).toHaveURL(/\/textsearch\/bulk\/note-01\.md\?q=lighthouse#md-[^/]+$/)
 
     await page.goBack()
     await expect(page).toHaveURL(/\/textsearch\/_search\?q=lighthouse$/)
@@ -5115,7 +5115,7 @@ test.describe('page text search', () => {
     // The counts stay those of the whole query, and the choice is shown as pressed.
     expect(await facetSummary(page)).toEqual(['All:5', 'diagrams/:1', 'guides/:1*', 'incidents/:1', 'reports/:1', 'runbooks/:1'])
     // The title and the result links keep the query (not the folder).
-    await expect(hits(page).first()).toHaveAttribute('href', '/textsearch/guides/markdown-style-gallery.md?q=latency')
+    await expect(hits(page).first()).toHaveAttribute('href', /^\/textsearch\/guides\/markdown-style-gallery\.md\?q=latency#md-[^/]+$/)
 
     await page.goBack()
     await expect(status(page)).toHaveText('5 pages contain “latency”')
@@ -5845,11 +5845,11 @@ test.describe('page text search', () => {
     await expect(status(page)).toHaveText('24 pages contain “lighthouse”')
     const hit = page.locator('[data-hit-id="bulk/note-01.md"]')
     await expect(hit).toHaveJSProperty('tagName', 'A')
-    await expect(hit).toHaveAttribute('href', '/textsearch/bulk/note-01.md?q=lighthouse')
+    await expect(hit).toHaveAttribute('href', /^\/textsearch\/bulk\/note-01\.md\?q=lighthouse#md-[^/]+$/)
     await expectModifiedClickKeptForBrowser(page, hit)
     await expect(page).toHaveURL(/\/_search\?q=lighthouse$/)
     await hit.click()
-    await expect(page).toHaveURL(/\/bulk\/note-01\.md\?q=lighthouse$/)
+    await expect(page).toHaveURL(/\/bulk\/note-01\.md\?q=lighthouse#md-[^/]+$/)
     await expect(matchNav(page)).toBeVisible()
   })
 
