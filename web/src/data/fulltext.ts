@@ -22,7 +22,7 @@ export class FullTextSearchError extends Error {
 type ObjectRef = { url: string; sha256: string; bytes: number; rawBytes: number }
 type Manifest = { version: 1; generation: string; site: string; documents: number; root: ObjectRef; shards: (ObjectRef | null)[] }
 /** The optional section table and text packs (ISSUE-085); null when absent or invalid. */
-type SnippetFields = { sections: ObjectRef; texts: ObjectRef[]; omitted: Set<string> }
+type SnippetFields = { sections: ObjectRef; texts: ObjectRef[]; truncated: string[]; omitted: string[] }
 type Generation = {
   manifest: Manifest
   root: Root
@@ -34,6 +34,9 @@ type Generation = {
 type Options = { fetcher?: typeof fetch; now?: () => number }
 type SearchOptions = { signal?: AbortSignal; offset?: number; limit?: number }
 type ExcerptOptions = { signal?: AbortSignal }
+
+/** A text pack holds at most this many raw bytes (docs/architecture/fulltext-search.md, Packing and caps). */
+const MAX_PACK_RAW_BYTES = 262144
 
 function validRef(r: ObjectRef, kind: string, site: string) {
   return r && typeof r === 'object' && typeof r.sha256 === 'string' && /^[a-f0-9]{64}$/.test(r.sha256) &&
@@ -48,12 +51,12 @@ function parseSnippetFields(payload: unknown, site: string): SnippetFields | nul
   if (m.sections === undefined && m.texts === undefined) return null
   if (m.sections === undefined || m.texts === undefined) return null
   if (!Array.isArray(m.texts) || m.texts.length === 0) return null
-  if (!validRef(m.sections as ObjectRef, 'sections', site) || m.texts.some((ref: ObjectRef) => !validRef(ref, 'text', site))) return null
+  if (!validRef(m.sections as ObjectRef, 'sections', site) || m.texts.some((ref: ObjectRef) => !validRef(ref, 'text', site) || ref.rawBytes > MAX_PACK_RAW_BYTES)) return null
   const limits = m.snippetLimits as Record<string, unknown> | null | undefined
   if (!limits || typeof limits !== 'object' || limits.maxDocumentBytes !== 262144 || limits.maxSiteBytes !== 33554432) return null
   const strings = (value: unknown): value is string[] => Array.isArray(value) && value.every((item) => typeof item === 'string')
   if (!strings(limits.truncatedDocuments) || !strings(limits.omittedDocuments)) return null
-  return { sections: m.sections as ObjectRef, texts: m.texts as ObjectRef[], omitted: new Set(limits.omittedDocuments) }
+  return { sections: m.sections as ObjectRef, texts: m.texts as ObjectRef[], truncated: limits.truncatedDocuments, omitted: limits.omittedDocuments }
 }
 
 function parseManifest(payload: unknown, site: string): Manifest {
@@ -219,13 +222,18 @@ export function createSiteFullTextSearch(metadata: Pick<SiteDiscoveryMetadata, '
     const excerpts = new Map<string, SearchExcerpt | null>(paths.map((path) => [path, null]))
     const snippet = g.snippet
     if (!snippet) return { excerpts, missing: false }
-    const wanted = paths.filter((path) => !snippet.omitted.has(path))
+    const omitted = new Set(snippet.omitted), wanted = paths.filter((path) => !omitted.has(path))
     if (wanted.length === 0) return { excerpts, missing: false }
     let pendingTable = g.sections
     if (!pendingTable) {
       const created = unpack(snippet.sections).then((bytes) => {
-        try { return codec.decodeSectionTable(bytes, g.root.paths, snippet.texts.map((ref) => ref.rawBytes)) }
-        catch { return null }
+        try {
+          const rows = codec.decodeSectionTable(bytes, g.root.paths, snippet.texts.map((ref) => ref.rawBytes))
+          // The cap record must name root paths, and an omitted document has no section row.
+          const known = new Set(g.root.paths)
+          if ([...snippet.truncated, ...snippet.omitted].some((path) => !known.has(path)) || snippet.omitted.some((path) => rows.has(path))) return null
+          return rows
+        } catch { return null }
       }, (cause: unknown) => {
         // A missing or unreachable table is retried later; invalid data stays cached as null.
         if (cause instanceof FullTextSearchError && cause.code === 'invalid-data') return null

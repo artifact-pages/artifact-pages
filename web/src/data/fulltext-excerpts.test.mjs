@@ -106,6 +106,7 @@ test('invalid snippet fields in the manifest disable excerpts only', async () =>
     (manifest) => { manifest.snippetLimits.maxSiteBytes = 1 },
     (manifest) => { manifest.snippetLimits.omittedDocuments = [1] },
     (manifest) => { delete manifest.snippetLimits },
+    (manifest) => { manifest.texts[1].rawBytes = 262145 },
     (manifest) => { manifest.sections.url = '/_indexes/sre/search/text-' + manifest.sections.sha256 + '.gz' },
   ]) {
     const { client, count } = fixture('manifest-snippets.json', (manifest) => { edit(manifest); return manifest })
@@ -179,4 +180,19 @@ test('an aborted call rejects with the signal reason', async () => {
   const pending = client.excerpts('cache', generation, ['guide.html'], { signal: controller.signal })
   controller.abort(new Error('stop'))
   await assert.rejects(pending, /stop/)
+})
+
+test('a cap record that contradicts the table disables excerpts for the page', async () => {
+  for (const edit of [
+    (manifest) => { manifest.snippetLimits.omittedDocuments = ['guide.html'] },
+    (manifest) => { manifest.snippetLimits.truncatedDocuments = ['not-in-the-site.md'] },
+    (manifest) => { manifest.snippetLimits.omittedDocuments = ['not-in-the-site.md'] },
+  ]) {
+    const { client, count } = fixture('manifest-snippets.json', (manifest) => { edit(manifest); return manifest })
+    const { generation, hits } = await client.search('cache')
+    assert.ok(hits.length > 0)
+    const excerpts = await client.excerpts('cache', generation, ['guide.html', 'docs/help.md'])
+    assert.deepEqual([...excerpts.values()], [null, null])
+    assert.equal(count('text'), 0)
+  }
 })
