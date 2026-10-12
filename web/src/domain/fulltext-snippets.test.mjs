@@ -159,3 +159,17 @@ test('no excerpt without a match or without terms', () => {
   assert.equal(excerptFor([], ['x']), null)
   assert.deepEqual(excerptTerms('Cache  cache RETRY'), ['cache', 'retry'])
 })
+
+test('overlapping occurrences merge into one mark', () => {
+  const excerpt = excerptFor([{ heading: '', anchor: '', text: 'aaa' }], excerptTerms('aa'))
+  assert.deepEqual(markedText(excerpt), ['aaa'])
+})
+
+test('a capped section full of matches still yields an excerpt quickly', () => {
+  const started = performance.now()
+  const excerpt = excerptFor([{ heading: '', anchor: '', text: 'a'.repeat(262144) }], excerptTerms('a'))
+  const elapsed = performance.now() - started
+  assert.ok(excerpt)
+  assert.equal(excerpt.parts.at(-1).text, '…')
+  console.log(`# 262144-char all-match section: ${Math.round(elapsed)} ms`)
+})

@@ -38,7 +38,7 @@ export function excerptFor(sections: readonly DecodedSection[], terms: readonly 
     let distinct = 0
     for (const term of terms) {
       let found = false
-      for (let position = normalized.indexOf(term); position !== -1; position = normalized.indexOf(term, position + term.length)) {
+      for (let position = normalized.indexOf(term); position !== -1; position = normalized.indexOf(term, position + 1)) {
         found = true
         ranges.push([sourceStart[position], sourceEnd[position + term.length - 1]])
       }
@@ -48,7 +48,8 @@ export function excerptFor(sections: readonly DecodedSection[], terms: readonly 
   }
   if (!best) return null
   const { section, ranges } = best
-  const first = Math.min(...ranges.map((range) => range[0]))
+  let first = Infinity
+  for (const range of ranges) if (range[0] < first) first = range[0]
   const clusters = [...segmenter.segment(section.text)]
   let f = clusters.findIndex((cluster) => first < cluster.index + cluster.segment.length)
   if (f < 0) f = clusters.length - 1
