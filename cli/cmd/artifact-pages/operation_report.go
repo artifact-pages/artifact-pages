@@ -198,6 +198,25 @@ func writeIndexReport(w io.Writer, site string, result indexer.BuildResult, inde
 	fmt.Fprintln(w, "\n  Index build complete. No artifacts were copied or published.")
 }
 
+func writeSnippetLimitWarnings(w io.Writer, truncated, omitted []string) {
+	writePaths := func(paths []string, format string) {
+		if len(paths) == 0 {
+			return
+		}
+		document := "documents"
+		if len(paths) == 1 {
+			document = "document"
+		}
+		message := fmt.Sprintf(format, len(paths), document)
+		fmt.Fprintf(w, "  %s %s\n", reportTone("Warning:", "update", terminalColor(w)), message)
+		for _, path := range paths {
+			fmt.Fprintf(w, "    %s\n", reportText(path))
+		}
+	}
+	writePaths(truncated, "search excerpts keep only the first 262144 bytes of page text for %d %s:")
+	writePaths(omitted, "search excerpts omit %d %s because the site's page text exceeds 33554432 bytes:")
+}
+
 func writeConfigReport(w io.Writer, locator, path string) {
 	reportHeader(w, "config set-default", "saved", false)
 	fmt.Fprintf(w, "  Locator   %s\n  Saved in  %s\n\n  Updated only the user's default locator. No deployment changes.\n", reportText(locator), reportText(path))

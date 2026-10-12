@@ -86,8 +86,8 @@ func TestPublishSitePreservesFilesMetadataOrderAndPrefixBoundaries(t *testing.T)
 	if err != nil {
 		t.Fatalf("PublishSite() error = %v", err)
 	}
-	if result.Outcome != "synced" || result.FilesPublished != len(files)+6 || result.FilesRemoved != 1 {
-		t.Fatalf("PublishSite() = %+v, want published files=%d removed=1", result, len(files)+6)
+	if result.Outcome != "synced" || result.FilesPublished != len(files)+8 || result.FilesRemoved != 1 {
+		t.Fatalf("PublishSite() = %+v, want published files=%d removed=1", result, len(files)+8)
 	}
 
 	wantSourceKeys := make([]string, 0, len(files)+1)
@@ -126,7 +126,7 @@ func TestPublishSitePreservesFilesMetadataOrderAndPrefixBoundaries(t *testing.T)
 	// Source and immutable search writes use bounded independent workers, so
 	// their order is arbitrary inside each phase. The serial reference-bearing
 	// objects must remain after both phases and in dependency order.
-	generatedCount := 5 // index, search manifest, meta, and two search blobs
+	generatedCount := 7 // index, search manifest, meta, and root/leaf/sections/text blobs
 	if len(putOrder) != len(wantSourceKeys)+generatedCount {
 		t.Fatalf("site put count = %d, want %d; order=%v events=%v", len(putOrder), len(wantSourceKeys)+generatedCount, putOrder, events)
 	}
@@ -407,7 +407,7 @@ func TestPublishSiteRepairsHTTPMetadataWhenBytesAlreadyMatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PublishSite() error = %v", err)
 	}
-	if result.FilesPublished != 5 {
+	if result.FilesPublished != 7 {
 		t.Fatalf("PublishSite() filesPublished = %d, want artifact plus index/meta metadata repair and search data", result.FilesPublished)
 	}
 	object := backend.lockMemoryBackend.objects["_artifacts/sre/report.html"]
@@ -632,6 +632,47 @@ func writePublisherFixture(t *testing.T, root, relative string, contents []byte)
 	}
 	if err := os.WriteFile(filename, contents, 0o600); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func siteSearchBlobKeys(changes []Change, site, action string) []string {
+	prefix := "_indexes/" + site + "/search/"
+	keys := make(map[string]struct{})
+	for _, change := range changes {
+		if action != "" && change.Action != action {
+			continue
+		}
+		if !strings.HasPrefix(change.Path, prefix) || !strings.HasSuffix(change.Path, ".gz") {
+			continue
+		}
+		name := strings.TrimPrefix(change.Path, prefix)
+		if !(strings.HasPrefix(name, "root-") || strings.HasPrefix(name, "leaf-") ||
+			strings.HasPrefix(name, "sections-") || strings.HasPrefix(name, "text-")) {
+			continue
+		}
+		keys[change.Path] = struct{}{}
+	}
+	result := make([]string, 0, len(keys))
+	for key := range keys {
+		result = append(result, key)
+	}
+	sort.Strings(result)
+	return result
+}
+
+func assertSearchBlobKinds(t *testing.T, keys []string, kinds ...string) {
+	t.Helper()
+	for _, kind := range kinds {
+		found := false
+		for _, key := range keys {
+			if strings.Contains(key, "/search/"+kind+"-") {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("search blob keys %v have no %s pack", keys, kind)
+		}
 	}
 }
 

@@ -82,6 +82,8 @@ type BuildOptions struct {
 type BuildResult struct {
 	SearchFiles      []string
 	SearchBytes      int
+	SnippetTruncated []string
+	SnippetOmitted   []string
 	FilesScanned     int
 	ArtifactsIndexed int
 	OutputPath       string
@@ -249,7 +251,7 @@ func BuildPrepared(ctx context.Context, prepared *PreparedBuild, outputDir strin
 	for _, document := range prepared.documents {
 		artifact := document.artifact
 		sourceFile := prepared.fileByRelative[artifact.relative]
-		metadata, searchText, err := readArtifactWithSearchBytes(sourceFile.bytes, artifact.filename)
+		metadata, searchText, sections, err := readArtifactWithSearchBytes(sourceFile.bytes, artifact.filename)
 		if err != nil {
 			return BuildResult{}, fmt.Errorf("parse artifact %q: %w", artifact.relative, err)
 		}
@@ -286,7 +288,7 @@ func BuildPrepared(ctx context.Context, prepared *PreparedBuild, outputDir strin
 			}
 		}
 		index.Artifacts = append(index.Artifacts, entry)
-		searchRecords = append(searchRecords, fulltext.Record{Path: entry.Path, Text: entry.Title + " " + searchText})
+		searchRecords = append(searchRecords, fulltext.Record{Path: entry.Path, Text: entry.Title + " " + searchText, Sections: sections})
 	}
 	sort.Slice(index.Artifacts, func(i, j int) bool {
 		return index.Artifacts[i].ID < index.Artifacts[j].ID
@@ -299,6 +301,11 @@ func BuildPrepared(ctx context.Context, prepared *PreparedBuild, outputDir strin
 	projection, err := fulltext.Build(ctx, options.SiteID, searchRecords)
 	if err != nil {
 		return BuildResult{}, fmt.Errorf("build full-text index: %w", err)
+	}
+	var snippetTruncated, snippetOmitted []string
+	if limits := projection.Manifest.SnippetLimits; limits != nil {
+		snippetTruncated = append([]string{}, limits.TruncatedDocuments...)
+		snippetOmitted = append([]string{}, limits.OmittedDocuments...)
 	}
 	var searchFiles []string
 	searchBytes := 0
@@ -351,6 +358,8 @@ func BuildPrepared(ctx context.Context, prepared *PreparedBuild, outputDir strin
 	return BuildResult{
 		SearchFiles:      searchFiles,
 		SearchBytes:      searchBytes,
+		SnippetTruncated: snippetTruncated,
+		SnippetOmitted:   snippetOmitted,
 		FilesScanned:     scannedFiles,
 		ArtifactsIndexed: len(index.Artifacts),
 		OutputPath:       indexPath,
@@ -601,15 +610,15 @@ func readArtifactMetadata(filename, basename string) (artifactHTMLMetadata, erro
 	return metadata, nil
 }
 
-func readArtifactWithSearch(filename, basename string) (artifactHTMLMetadata, string, error) {
+func readArtifactWithSearch(filename, basename string) (artifactHTMLMetadata, string, []fulltext.Section, error) {
 	source, err := os.ReadFile(filename)
 	if err != nil {
-		return artifactHTMLMetadata{}, "", err
+		return artifactHTMLMetadata{}, "", nil, err
 	}
 	return readArtifactWithSearchBytes(source, basename)
 }
 
-func readArtifactWithSearchBytes(source []byte, basename string) (artifactHTMLMetadata, string, error) {
+func readArtifactWithSearchBytes(source []byte, basename string) (artifactHTMLMetadata, string, []fulltext.Section, error) {
 	var document *html.Node
 	var err error
 	if isMarkdownDocument(basename) {
@@ -618,13 +627,17 @@ func readArtifactWithSearchBytes(source []byte, basename string) (artifactHTMLMe
 		document, err = html.Parse(bytes.NewReader(source))
 	}
 	if err != nil {
-		return artifactHTMLMetadata{}, "", err
+		return artifactHTMLMetadata{}, "", nil, err
 	}
 	metadata := readArtifactHTMLDocumentNode(document)
 	if isMarkdownDocument(basename) {
 		metadata.title = metadata.firstH1
 	}
-	return metadata, fulltext.ExtractText(document), nil
+	searchText, sections := fulltext.ExtractDocument(document, func(node *html.Node) (string, string, bool) {
+		entry, ok := tocHeading(node)
+		return entry.Text, entry.ID, ok
+	})
+	return metadata, searchText, sections, nil
 }
 
 // Only remove files owned by this format, after the new metadata is visible.
@@ -640,7 +653,7 @@ func pruneSearchFiles(directory string, files []string) error {
 	for _, filename := range files {
 		keep[filepath.Base(filename)] = true
 	}
-	owned := regexp.MustCompile(`^(root|leaf)-[a-f0-9]{64}\.gz$`)
+	owned := regexp.MustCompile(`^(root|leaf|sections|text)-[a-f0-9]{64}\.gz$`)
 	for _, entry := range entries {
 		if !entry.IsDir() && !keep[entry.Name()] && (entry.Name() == "manifest.json" || owned.MatchString(entry.Name())) {
 			if err := os.Remove(filepath.Join(directory, entry.Name())); err != nil {
@@ -784,15 +797,11 @@ func readArtifactHTMLDocumentNode(document *html.Node) artifactHTMLMetadata {
 		if node.Type == html.ElementNode && node.Data == "title" && metadata.title == "" {
 			metadata.title = normalizedText(node)
 		}
-		if level := markdownHeadingRank(node); level >= 1 && level <= 3 {
-			id := strings.TrimSpace(htmlAttribute(node, "id"))
-			text := normalizedText(node)
-			if level == 1 && metadata.firstH1 == "" {
-				metadata.firstH1 = text
-			}
-			if id != "" && text != "" {
-				metadata.toc = append(metadata.toc, TOCEntry{Level: level, Text: text, ID: id})
-			}
+		if level := markdownHeadingRank(node); level == 1 && metadata.firstH1 == "" {
+			metadata.firstH1 = normalizedText(node)
+		}
+		if entry, ok := tocHeading(node); ok {
+			metadata.toc = append(metadata.toc, entry)
 		}
 		for child := node.FirstChild; child != nil; child = child.NextSibling {
 			visit(child)
@@ -800,6 +809,19 @@ func readArtifactHTMLDocumentNode(document *html.Node) artifactHTMLMetadata {
 	}
 	visit(document)
 	return metadata
+}
+
+func tocHeading(node *html.Node) (TOCEntry, bool) {
+	level := markdownHeadingRank(node)
+	if level < 1 || level > 3 {
+		return TOCEntry{}, false
+	}
+	id := strings.TrimSpace(htmlAttribute(node, "id"))
+	text := normalizedText(node)
+	if id == "" || text == "" {
+		return TOCEntry{}, false
+	}
+	return TOCEntry{Level: level, Text: text, ID: id}, true
 }
 
 func normalizedText(node *html.Node) string {

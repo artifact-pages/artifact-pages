@@ -3,6 +3,7 @@ package publisher
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -21,6 +22,9 @@ func TestFullTextPublishOrderNoOpUpdate(t *testing.T) {
 	if err != nil || result.Outcome != "synced" {
 		t.Fatalf("publish = %+v, %v", result, err)
 	}
+	if result.SnippetLimits != nil {
+		t.Fatalf("uncapped publish reported snippet limits: %+v", result.SnippetLimits)
+	}
 	manifestKey := "_indexes/sre/search/manifest.json"
 	obj, _, err := backend.GetObject(context.Background(), manifestKey)
 	if err != nil {
@@ -36,9 +40,17 @@ func TestFullTextPublishOrderNoOpUpdate(t *testing.T) {
 			refs = append(refs, *ref)
 		}
 	}
+	if manifest.Sections == nil || len(manifest.Texts) == 0 {
+		t.Fatalf("search manifest has no section table or text packs: %+v", manifest)
+	}
+	refs = append(refs, *manifest.Sections)
+	refs = append(refs, manifest.Texts...)
 	events := backend.eventSnapshot()
-	manifestAt, metadataAt := -1, -1
+	indexAt, manifestAt, metadataAt := -1, -1, -1
 	for i, e := range events {
+		if e == "put:_indexes/sre/index.json" {
+			indexAt = i
+		}
 		if e == "put:"+manifestKey {
 			manifestAt = i
 		}
@@ -46,7 +58,7 @@ func TestFullTextPublishOrderNoOpUpdate(t *testing.T) {
 			metadataAt = i
 		}
 	}
-	if manifestAt < 0 || metadataAt <= manifestAt {
+	if indexAt < 0 || manifestAt <= indexAt || metadataAt <= manifestAt {
 		t.Fatalf("bad publication order: %v", events)
 	}
 	for _, ref := range refs {
@@ -57,22 +69,24 @@ func TestFullTextPublishOrderNoOpUpdate(t *testing.T) {
 				at = i
 			}
 		}
-		if at < 0 || at >= manifestAt {
-			t.Fatalf("blob published after manifest: %s", key)
+		if at < 0 || at >= indexAt {
+			t.Fatalf("blob published after index: %s", key)
 		}
 		object, _, err := backend.GetObject(context.Background(), key)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if object.ContentType != "application/octet-stream" || object.ContentEncoding != "" || object.Cache != immutableCache {
+		if object.ContentType != "application/octet-stream" || object.ContentDisposition != "inline" || object.ContentEncoding != "" || object.Cache != immutableCache {
 			t.Fatalf("bad blob metadata: %+v", object)
 		}
 	}
 	backend.resetEvents()
 	result, err = PublishSite(context.Background(), backend, opts)
-	if err != nil || result.Outcome != "no-op" {
+	if err != nil || result.Outcome != "no-op" || result.SnippetLimits != nil {
 		t.Fatalf("repeat = %+v, %v", result, err)
 	}
+	oldSection := strings.TrimPrefix(manifest.Sections.URL, "/")
+	oldText := strings.TrimPrefix(manifest.Texts[0].URL, "/")
 	writePublisherFixture(t, root, "docs/artifacts/report.html", []byte("<title>First</title><p>newgeneration</p>"))
 	// A partial failure must leave a retryable cache record containing search paths.
 	backend.failPutKey = manifestKey
@@ -88,6 +102,13 @@ func TestFullTextPublishOrderNoOpUpdate(t *testing.T) {
 	if _, _, err := backend.GetObject(context.Background(), oldRoot); err == nil {
 		t.Fatal("stale root retained")
 	}
+	for _, key := range []string{oldSection, oldText} {
+		if _, _, err := backend.GetObject(context.Background(), key); err == nil {
+			t.Fatalf("stale search pack retained: %s", key)
+		} else if err != ErrObjectNotFound {
+			t.Fatalf("read stale search pack %s: %v", key, err)
+		}
+	}
 	metadata, _, err := backend.GetObject(context.Background(), "_indexes/sre/meta.json")
 	if err != nil {
 		t.Fatal(err)
@@ -97,5 +118,25 @@ func TestFullTextPublishOrderNoOpUpdate(t *testing.T) {
 	}
 	if _, _, err := backend.GetObject(context.Background(), "_indexes/other/search/keep.gz"); err != nil {
 		t.Fatal("neighbor removed")
+	}
+}
+
+func TestFullTextSnippetLimitsReportOnlyWhenCapped(t *testing.T) {
+	root := createPublisherCheckout(t, "git@github.com:acme/sre.git")
+	backend := newSiteReconcileBackend()
+	seedPublisherRegistry(t, backend.lockMemoryBackend, registeredSREManifest)
+	opts := SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts"}
+	initial, err := PublishSite(context.Background(), backend, opts)
+	if err != nil || initial.SnippetLimits != nil {
+		t.Fatalf("uncapped publish = %+v, %v", initial, err)
+	}
+	writePublisherFixture(t, root, "docs/artifacts/capped.md", []byte("# Capped\n\n"+strings.Repeat("x", 262145)))
+	result, err := PublishSite(context.Background(), backend, opts)
+	if err != nil {
+		t.Fatalf("capped publish = %+v, %v", result, err)
+	}
+	if result.SnippetLimits == nil || !reflect.DeepEqual(result.SnippetLimits.TruncatedDocuments, []string{"capped.md"}) ||
+		result.SnippetLimits.OmittedDocuments == nil || len(result.SnippetLimits.OmittedDocuments) != 0 {
+		t.Fatalf("snippet limit report = %+v", result.SnippetLimits)
 	}
 }

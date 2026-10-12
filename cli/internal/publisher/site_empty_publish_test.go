@@ -30,6 +30,8 @@ func TestPublishSiteAllowsEmptyDocumentsAndRetriesPartialStaleDeletion(t *testin
 	if initial.Outcome != "synced" {
 		t.Fatalf("initial PublishSite() = %+v, want published", initial)
 	}
+	initialSearchBlobs := siteSearchBlobKeys(initial.Changes, "sre", "")
+	assertSearchBlobKinds(t, initialSearchBlobs, "root", "sections", "text")
 
 	missingPreview := previewPublishGroup("42", "0123456789abcdef0123456789abcdef01234567")
 	livePreview := previewPublishGroup("43", "abcdefabcdefabcdefabcdefabcdefabcdefabcd")
@@ -55,10 +57,15 @@ func TestPublishSiteAllowsEmptyDocumentsAndRetriesPartialStaleDeletion(t *testin
 	if err != nil {
 		t.Fatalf("retry empty-site PublishSite() error = %v", err)
 	}
-	// The current builder always publishes its full-text projection. Emptying
-	// the indexed document set changes the search manifest/root blob too, in
-	// addition to the index/meta rows and the two uncertain stale artifacts.
-	if result.Outcome != "synced" || result.FilesPublished != 4 || result.FilesRemoved != 3 {
+	// Emptying the indexed document set replaces the root and removes every
+	// prior search blob, including the section and text packs, along with the
+	// two stale artifact documents.
+	removedSearchBlobs := siteSearchBlobKeys(result.Changes, "sre", "remove")
+	if !reflect.DeepEqual(removedSearchBlobs, initialSearchBlobs) {
+		t.Fatalf("removed search blobs = %v, want every prior blob %v; changes=%v", removedSearchBlobs, initialSearchBlobs, result.Changes)
+	}
+	wantFilesRemoved := 2 + len(initialSearchBlobs)
+	if result.Outcome != "synced" || result.FilesPublished != 4 || result.FilesRemoved != wantFilesRemoved {
 		t.Fatalf("retry empty-site PublishSite() = %+v, want index/meta/search updates and all uncertain stale deletes", result)
 	}
 

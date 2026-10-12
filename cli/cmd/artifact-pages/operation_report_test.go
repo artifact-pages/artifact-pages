@@ -66,6 +66,24 @@ func TestOperationReportsBoundedAndSanitized(t *testing.T) {
 	}
 }
 
+func TestSnippetLimitWarningsPluralizeAndSanitizePaths(t *testing.T) {
+	var output bytes.Buffer
+	writeSnippetLimitWarnings(&output, []string{"page\nname.md"}, []string{"first.md", "second\x1b.md"})
+	for _, expected := range []string{
+		"Warning: search excerpts keep only the first 262144 bytes of page text for 1 document:",
+		"page\uFFFDname.md",
+		"Warning: search excerpts omit 2 documents because the site's page text exceeds 33554432 bytes:",
+		"second\uFFFD.md",
+	} {
+		if !strings.Contains(output.String(), expected) {
+			t.Errorf("warning output is missing %q:\n%s", expected, output.String())
+		}
+	}
+	if strings.Contains(output.String(), "\x1b") {
+		t.Fatalf("warning path contains terminal control: %q", output.String())
+	}
+}
+
 func TestIndexAndConfigReports(t *testing.T) {
 	var index bytes.Buffer
 	writeIndexReport(&index, "guide", indexer.BuildResult{ArtifactsIndexed: 2, FilesScanned: 3, OutputBytes: 100, MetadataBytes: 40, Elapsed: time.Second}, ".local/guide/index.json", ".local/guide/meta.json")

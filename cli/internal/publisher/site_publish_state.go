@@ -27,7 +27,7 @@ const (
 var (
 	errSiteControlLegacyFormat  = errors.New("legacy site control format")
 	sitePublishStateHashPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
-	sitePublishStateSearchBlob  = regexp.MustCompile(`^(root|leaf)-[0-9a-f]{64}\.gz$`)
+	sitePublishStateSearchBlob  = regexp.MustCompile(`^(root|leaf|sections|text)-[0-9a-f]{64}\.gz$`)
 )
 
 // sitePublishState is the complete committed snapshot used by the publisher's

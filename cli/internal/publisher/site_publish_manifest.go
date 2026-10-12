@@ -15,7 +15,7 @@ import (
 	"github.com/artifact-pages/artifact-pages/cli/internal/indexer"
 )
 
-const sitePublishInputPolicy = "publisher-site-projection-v1;http-policy-v1;index-schema-v1;fulltext-policy-v1"
+const sitePublishInputPolicy = "publisher-site-projection-v1;http-policy-v1;index-schema-v1;fulltext-policy-v2"
 
 type sitePublishSnapshot struct {
 	state           sitePublishState
@@ -39,15 +39,17 @@ type sitePublishSnapshot struct {
 }
 
 type sitePublishDiff struct {
-	changes       []Change
-	stale         []string
-	desired       []desiredSiteObject
-	committedNext sitePublishState
-	stateExists   bool
-	stateETag     string
-	needsCommit   bool
-	buildSkipped  bool
-	transaction   *sitePublishTransaction
+	changes          []Change
+	stale            []string
+	desired          []desiredSiteObject
+	snippetTruncated []string
+	snippetOmitted   []string
+	committedNext    sitePublishState
+	stateExists      bool
+	stateETag        string
+	needsCommit      bool
+	buildSkipped     bool
+	transaction      *sitePublishTransaction
 }
 
 func sitePublishBuildOptions(siteID, title, description, sourceDir, ref string, identity indexer.GitSourceIdentity) indexer.BuildOptions {
@@ -410,7 +412,9 @@ func buildSitePublishDiff(ctx context.Context, backend ConditionalObjectBackend,
 	}
 	return sitePublishDiff{
 		changes: changes, stale: stale, desired: desired, committedNext: state,
-		stateExists: snapshot.exists, stateETag: snapshot.etag, needsCommit: needsCommit, transaction: transaction,
+		snippetTruncated: append([]string{}, build.SnippetTruncated...),
+		snippetOmitted:   append([]string{}, build.SnippetOmitted...),
+		stateExists:      snapshot.exists, stateETag: snapshot.etag, needsCommit: needsCommit, transaction: transaction,
 	}, nil
 }
 

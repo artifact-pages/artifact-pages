@@ -16,8 +16,12 @@ func TestStaticBodyExtractionAndNormalization(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := ExtractText(doc); got != "cache retry & 再試行 second line" {
+	got, sections := ExtractDocument(doc, nil)
+	if got != ExtractText(doc) || got != "cache retry & 再試行 second line" {
 		t.Fatalf("extraction = %q", got)
+	}
+	if len(sections) != 1 || Normalize(sections[0].Text) != got {
+		t.Fatalf("sectionless extraction = %+v", sections)
 	}
 	for _, pair := range [][2]string{{"ΟΣ İ K Ａ", "ος i\u0307 k a"}, {"A\ufeffB\u0085C", "a b\u0085c"}, {"ｶﾀｶﾅ\u3000再試行", "カタカナ 再試行"}} {
 		if got := Normalize(pair[0]); got != pair[1] {
@@ -27,7 +31,7 @@ func TestStaticBodyExtractionAndNormalization(t *testing.T) {
 }
 
 func TestProjectionIsDeterministicAndContentAddressed(t *testing.T) {
-	records := []Record{{"b.md", "cache retry"}, {"a 日本.html", "cache rare"}, {"empty.html", ""}}
+	records := []Record{{Path: "b.md", Text: "cache retry"}, {Path: "a 日本.html", Text: "cache rare"}, {Path: "empty.html"}}
 	a, err := Build(context.Background(), "sre", records)
 	if err != nil {
 		t.Fatal(err)
@@ -71,11 +75,11 @@ func TestProjectionIsDeterministicAndContentAddressed(t *testing.T) {
 }
 
 func TestGenerationChangesWhenOnlyPostingsChange(t *testing.T) {
-	a, err := Build(context.Background(), "sre", []Record{{"a.html", "common x"}, {"b.html", "common x"}, {"c.html", "common y"}, {"d.html", "common y"}})
+	a, err := Build(context.Background(), "sre", []Record{{Path: "a.html", Text: "common x"}, {Path: "b.html", Text: "common x"}, {Path: "c.html", Text: "common y"}, {Path: "d.html", Text: "common y"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := Build(context.Background(), "sre", []Record{{"a.html", "common y"}, {"b.html", "common x"}, {"c.html", "common x"}, {"d.html", "common y"}})
+	b, err := Build(context.Background(), "sre", []Record{{Path: "a.html", Text: "common y"}, {Path: "b.html", Text: "common x"}, {Path: "c.html", Text: "common x"}, {Path: "d.html", Text: "common y"}})
 	if err != nil {
 		t.Fatal(err)
 	}
