@@ -103,6 +103,13 @@ test('AWS deployment keeps the S3 origin private behind signed CloudFront OAC', 
   assert.doesNotMatch(bucketPolicy, /Principal\s*=\s*"\*"/u)
 })
 
+test('site origin uses OAC without an s3_origin_config block (plan converges)', () => {
+  const distribution = block(main, 'resource "aws_cloudfront_distribution" "site"')
+  const origin = block(distribution, 'origin {')
+  assert.match(origin, /origin_access_control_id\s*=\s*aws_cloudfront_origin_access_control\.origin\.id/u)
+  assert.doesNotMatch(origin, /s3_origin_config/u)
+})
+
 test('AWS deployment maps the logical app and content paths to bounded cache policies', async () => {
   const behaviors = block(main, '  cache_behaviors = {')
   for (const [name, path, policy] of [
