@@ -153,3 +153,59 @@ export function execute(root: Root, queryPlan: Plan, leaves: Map<number, Leaf>) 
   }).sort((a, b) => a.size - b.size)
   return [...sets[0]].filter((doc) => sets.every((set) => set.has(doc))).sort((a, b) => a - b)
 }
+
+export type SectionRow = { heading: string; anchor: string; pack: number; offset: number; length: number }
+
+/** UTF-8 byte order of two strings, the order of the root path table. */
+function compareUtf8(a: string, b: string) {
+  const x = encoder.encode(a), y = encoder.encode(b), n = Math.min(x.length, y.length)
+  for (let i = 0; i < n; i++) if (x[i] !== y[i]) return x[i] - y[i]
+  return x.length - y.length
+}
+
+function exactKeys(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const actual = Object.keys(value)
+  return actual.length === keys.length && actual.every((key, i) => key === keys[i])
+}
+
+/** Decodes and checks a section table; throws on any violation. */
+export function decodeSectionTable(bytes: Uint8Array, rootPaths: readonly string[], packRawBytes: readonly number[]): Map<string, SectionRow[]> {
+  const fail = (): never => { throw new Error('Invalid section table') }
+  const table: unknown = JSON.parse(decoder.decode(bytes))
+  if (!exactKeys(table, ['version', 'documents']) || table.version !== 1 || !Array.isArray(table.documents)) return fail()
+  const known = new Set(rootPaths), rows = new Map<string, SectionRow[]>()
+  const cursor = packRawBytes.map(() => 0)
+  let current = 0, previousPath: string | null = null
+  for (const document of table.documents as unknown[]) {
+    if (!exactKeys(document, ['path', 'sections'])) return fail()
+    const { path, sections } = document
+    if (typeof path !== 'string' || !known.has(path) || !Array.isArray(sections) || sections.length === 0) return fail()
+    if (previousPath !== null && compareUtf8(previousPath, path) >= 0) return fail()
+    previousPath = path
+    const list: SectionRow[] = []
+    let documentPack = -1
+    for (const [index, section] of (sections as unknown[]).entries()) {
+      if (!exactKeys(section, ['heading', 'anchor', 'pack', 'offset', 'length'])) return fail()
+      const { heading, anchor, pack, offset, length } = section
+      if (typeof heading !== 'string' || typeof anchor !== 'string' || (heading === '') !== (anchor === '')) return fail()
+      if (heading === '' && index !== 0) return fail()
+      if (typeof pack !== 'number' || typeof offset !== 'number' || typeof length !== 'number') return fail()
+      if (!Number.isSafeInteger(pack) || !Number.isSafeInteger(offset) || !Number.isSafeInteger(length)) return fail()
+      if (pack < 0 || pack >= packRawBytes.length || offset < 0 || length <= 0 || offset + length > packRawBytes[pack]) return fail()
+      if (documentPack !== -1 && pack !== documentPack) return fail()
+      documentPack = pack
+      if (pack === current) { /* same pack */ }
+      else if (pack === current + 1 && cursor[current] === packRawBytes[current]) current = pack
+      else return fail()
+      if (offset !== cursor[pack]) return fail()
+      cursor[pack] = offset + length
+      list.push({ heading, anchor, pack, offset, length })
+    }
+    rows.set(path, list)
+  }
+  if (packRawBytes.length > 0) {
+    if (current !== packRawBytes.length - 1 || cursor[current] !== packRawBytes[current]) return fail()
+  }
+  return rows
+}

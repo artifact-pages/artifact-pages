@@ -1,5 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
+import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
+import { gzipSync } from 'node:zlib'
 
 /** True while the viewport uses the narrow reader chrome (ISSUE-080: menu button and More menu). */
 function isNarrowChrome(page: Page) {
@@ -5025,6 +5027,80 @@ test.describe('page text search', () => {
     await hits(page).first().focus()
     await page.keyboard.press('ArrowDown')
     await expect(active).toHaveCount(0)
+  })
+
+  /** Serves the text search manifest with a section table and one text pack for `long/scroll-target.html` (ISSUE-085). */
+  async function serveExcerptData(page: Page) {
+    const pack = Buffer.from('Middle section The midmarker word is here.')
+    const table = Buffer.from(JSON.stringify({
+      version: 1,
+      documents: [{ path: 'long/scroll-target.html', sections: [{ heading: 'Middle section', anchor: 'middle-section', pack: 0, offset: 0, length: pack.length }] }],
+    }))
+    const ref = (kind: string, raw: Buffer) => {
+      const gz = gzipSync(raw, { level: 9 }), sha256 = createHash('sha256').update(gz).digest('hex')
+      return { gz, ref: { url: `/_indexes/textsearch/search/${kind}-${sha256}.gz`, sha256, bytes: gz.length, rawBytes: raw.length } }
+    }
+    const sections = ref('sections', table), text = ref('text', pack)
+    await page.route('**/_indexes/textsearch/search/manifest.json', async (route) => {
+      const response = await route.fetch()
+      const manifest = await response.json()
+      manifest.sections = sections.ref
+      manifest.texts = [text.ref]
+      manifest.snippetLimits = { maxDocumentBytes: 262144, maxSiteBytes: 33554432, truncatedDocuments: [], omittedDocuments: [] }
+      await route.fulfill({ response, json: manifest })
+    })
+    for (const blob of [sections, text]) {
+      await page.route(`**${blob.ref.url}`, (route) => route.fulfill({ body: blob.gz, contentType: 'application/octet-stream' }))
+    }
+  }
+
+  test('a result shows the text around the match and links to its section', async ({ page }) => {
+    await serveExcerptData(page)
+    await page.goto('/textsearch/_search?q=midmarker')
+    await expect(status(page)).toHaveText('2 pages contain “midmarker”')
+    const row = page.locator('.search-page-result', { has: page.locator('[data-hit-id="long/scroll-target.html"]') })
+    const excerpt = row.locator('.search-page-result-excerpt')
+    await expect(excerpt).toBeVisible()
+    await expect(excerpt.locator('.search-page-result-section')).toHaveText('Middle section')
+    await expect(excerpt.locator('mark')).toHaveText('midmarker')
+    await expect(excerpt.locator('.search-page-result-snippet')).toHaveText('Middle section The midmarker word is here.')
+    await expect(row.locator('a')).toHaveCount(1)
+    await expect(row.locator('a')).toHaveAttribute('href', /\/textsearch\/long\/scroll-target\.html\?q=midmarker#middle-section$/)
+    // The page that has no section data keeps the plain row.
+    await expect(page.locator('.search-page-result-excerpt')).toHaveCount(1)
+    await row.locator('a').click()
+    await expect(page).toHaveURL(/\/textsearch\/long\/scroll-target\.html\?q=midmarker#middle-section$/)
+    await expect(page.frameLocator('iframe.artifact-frame').getByRole('heading', { name: 'Middle section' })).toBeInViewport()
+  })
+
+  test('a manifest without section data shows plain results without an error', async ({ page }) => {
+    await page.route('**/_indexes/textsearch/search/manifest.json', async (route) => {
+      const response = await route.fetch()
+      const manifest = await response.json()
+      delete manifest.sections
+      delete manifest.texts
+      delete manifest.snippetLimits
+      await route.fulfill({ response, json: manifest })
+    })
+    await page.goto('/textsearch/_search?q=midmarker')
+    await expect(status(page)).toHaveText('2 pages contain “midmarker”')
+    await expect(page.locator('.search-page-result-excerpt')).toHaveCount(0)
+    await expect(page.getByRole('alert')).toHaveCount(0)
+  })
+
+  test('arrow keys and Enter still walk the results when excerpts are shown', async ({ page }) => {
+    await serveExcerptData(page)
+    await page.goto('/textsearch/_search?q=midmarker')
+    await expect(page.locator('.search-page-result-excerpt')).toHaveCount(1)
+    const active = page.locator('.search-page-result[data-active]')
+    await page.keyboard.press('ArrowDown')
+    await expect(active.locator('[data-hit-id]')).toHaveAttribute('data-hit-id', 'long/scroll-target.html')
+    await page.keyboard.press('ArrowDown')
+    await expect(active.locator('[data-hit-id]')).toHaveAttribute('data-hit-id', 'long/scroll-target.md')
+    await page.keyboard.press('ArrowUp')
+    await expect(active.locator('[data-hit-id]')).toHaveAttribute('data-hit-id', 'long/scroll-target.html')
+    await page.keyboard.press('Enter')
+    await expect(page).toHaveURL(/\/textsearch\/long\/scroll-target\.html\?q=midmarker#middle-section$/)
   })
 
   test('folder facets count the current query and limit the list', async ({ page }) => {

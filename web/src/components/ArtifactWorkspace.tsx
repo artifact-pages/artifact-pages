@@ -1007,8 +1007,9 @@ export function ArtifactWorkspace({
                 onRetry={textSearch.retry}
                 onLoadMore={textSearch.loadMore}
                 hitHref={(hit) => withSearchQuery(hit.href, searchRoute.query)}
-                onOpenHit={(hit) => navigateWithinWorkspace(withSearchQuery(hit.href, searchRoute.query))}
+                onOpenHit={(hit, anchor) => navigateWithinWorkspace(`${withSearchQuery(hit.href, searchRoute.query)}${anchor ? `#${encodeURIComponent(anchor)}` : ''}`)}
                 onSearchTitles={(query) => openPalette(query)}
+                loadExcerpts={textSearchClient ? (query, generation, paths, signal) => textSearchClient.excerpts(query, generation, paths, { signal }) : undefined}
               />
             ) : currentDirectory ? (
               <DirectoryPage
