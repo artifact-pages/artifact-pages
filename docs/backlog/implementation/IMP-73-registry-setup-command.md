@@ -22,7 +22,7 @@ Generate the admin-side files of the official site onboarding path (TD18 contrac
 - `--check` exits non-zero when committed files differ from the generated ones.
 - The command prints the remaining manual steps as copyable `gh` commands (Actions access level for private admins, secrets) and performs no GitHub API mutation.
 - Specification §19/§22 and the command tree document `registry setup` and `registry role-arn`; both local-only commands bypass config resolution, downloads, re-execution and bootstrap metadata.
-- AWS `namePrefix` is emitted by the Terraform config output only when `name_prefix` is non-default. A custom prefix is an operationally breaking role-name change. The current source candidate uses writer CLI 0.4.0, while published Action v0.1.0 bootstraps CLI 0.2.0 and declares `cliRange: ">=0.2.0 <0.3.0"`; it rejects CLI 0.4.0 before reading a config with the new field. A custom-prefix rollout therefore waits for a compatible writer Action release and a generator pin refresh. The Cloudflare IMP-75 path remains on released generator CLI 0.3.0 and writer CLI 0.2.0.
+- AWS `namePrefix` is emitted by the Terraform config output only when `name_prefix` is non-default. A custom prefix is an operationally breaking role-name change. Published Action v0.2.0 bootstraps CLI 0.4.0 and declares `cliRange: ">=0.4.0 <0.5.0"`, so generated workflows with v0.2.0 Action pins accept the current writer CLI. The Cloudflare IMP-75 path remains on released generator CLI 0.3.0 and writer CLI 0.2.0.
 
 ## Acceptance criteria
 

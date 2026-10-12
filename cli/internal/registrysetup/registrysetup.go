@@ -70,13 +70,13 @@ type actionPin struct {
 	Version string
 }
 
-// These peeled tag commits were read from the official repositories when IMP-73
-// was implemented. Keeping the values in source makes setup reproducible and
-// usable without network access. Update this table only with a reviewed release.
+// These values are the peeled commits of the published v0.2.0 tags, read on
+// 2026-10-12. Keeping the values in source makes setup reproducible and usable
+// without network access. Update this table only with a reviewed release.
 var pins = map[string]actionPin{
-	"artifact-pages/publish-action":         {SHA: "d59b7eceb7431c998bd2338eede1137081a141a2", Version: "v0.1.0"},
-	"artifact-pages/preview-action":         {SHA: "9961a1de43f1ac7e6deb6598b9cfbed9fdab7acb", Version: "v0.1.0"},
-	"artifact-pages/registry-action":        {SHA: "c5edcfaa4ae9a479cb52b3489daa8925cf5eec29", Version: "v0.1.0"},
+	"artifact-pages/publish-action":         {SHA: "8d66d7a606fc047715d25e8acdb8f09309ad4991", Version: "v0.2.0"},
+	"artifact-pages/preview-action":         {SHA: "d4d96885d0d430bbe1591d3cc11207d92e680339", Version: "v0.2.0"},
+	"artifact-pages/registry-action":        {SHA: "47ff737c5751748608afc3a1cd4763696f319f45", Version: "v0.2.0"},
 	"aws-actions/configure-aws-credentials": {SHA: "e1253824e5c10ff9df46874f81ed3ec929e19cfd", Version: "v6.3.0"},
 }
 

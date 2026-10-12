@@ -150,9 +150,9 @@ func TestCloudflareGenerationIsDeterministicCheckableAndLocal(t *testing.T) {
 		t.Fatal("site-sync does not pass the config from its own admin commit")
 	}
 	for _, reference := range []string{
-		"artifact-pages/publish-action@d59b7eceb7431c998bd2338eede1137081a141a2 # v0.1.0",
-		"artifact-pages/preview-action@9961a1de43f1ac7e6deb6598b9cfbed9fdab7acb # v0.1.0",
-		"artifact-pages/registry-action@c5edcfaa4ae9a479cb52b3489daa8925cf5eec29 # v0.1.0",
+		"artifact-pages/publish-action@8d66d7a606fc047715d25e8acdb8f09309ad4991 # v0.2.0",
+		"artifact-pages/preview-action@d4d96885d0d430bbe1591d3cc11207d92e680339 # v0.2.0",
+		"artifact-pages/registry-action@47ff737c5751748608afc3a1cd4763696f319f45 # v0.2.0",
 	} {
 		if !strings.Contains(action+registry, reference) {
 			t.Errorf("generated files missing pinned Action %q", reference)
