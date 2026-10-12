@@ -50,8 +50,10 @@ export function DirectoryPage({
     return { href: resolveHref(route), onClick: (event: React.MouseEvent<HTMLElement>) => followInApp(event, () => onOpen(route)) }
   }
 
+  const shownFolders = folders.slice(0, visibleRows)
+  const shownPages = pages.slice(0, Math.max(0, visibleRows - folders.length))
   const compactRows = [
-    ...folders.map((folder) => (
+    ...shownFolders.map((folder) => (
       <li key={folder.path}>
         <a {...link(folder.path)} data-directory-folder={folder.path}>
           <Icon name="folder" size={14} />
@@ -60,7 +62,7 @@ export function DirectoryPage({
         </a>
       </li>
     )),
-    ...pages.map((page) => (
+    ...shownPages.map((page) => (
       <li key={page.id}>
         <a {...link(page.path)} data-directory-page={page.path}>
           <Icon name="file" size={14} />
@@ -69,7 +71,7 @@ export function DirectoryPage({
         </a>
       </li>
     )),
-  ].slice(0, visibleRows)
+  ]
 
   return (
     <div className="directory-scroll" data-testid="directory-page" data-directory-variant={body ? 'index' : 'list'}>
