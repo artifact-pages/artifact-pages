@@ -164,7 +164,11 @@ export function ArtifactWorkspace({
   const [reportedMatches, setReportedMatches] = useState<{ key: string; ranges: Range[] }>({ key: '', ranges: [] })
   const matchRanges = reportedMatches.key === navigatorKey ? reportedMatches.ranges : NO_RANGES
   const [matchIndex, setMatchIndex] = useState(0)
-  const reportMatches = useCallback((ranges: Range[]) => setReportedMatches({ key: navigatorKeyRef.current, ranges }), [])
+  const reportMatches = useCallback((ranges: Range[]) => setReportedMatches((current) => {
+    const key = navigatorKeyRef.current
+    // An empty report over an already empty one changes nothing; skipping it avoids a re-render on every page load.
+    return ranges.length === 0 && current.key === key && current.ranges.length === 0 ? current : { key, ranges }
+  }), [])
   const currentMatch = clampMatch(matchIndex, matchRanges.length)
   const navigatorVisible = highlightQuery !== '' && matchRanges.length > 0
   useEffect(() => setMatchIndex(0), [navigatorKey])

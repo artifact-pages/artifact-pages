@@ -1,5 +1,19 @@
 import { useEffect, useId, useState } from 'react'
 
+const currentTheme = (): 'dark' | 'default' => document.documentElement.dataset.theme === 'dark' ? 'dark' : 'default'
+
+/** The page theme, following the root data-theme attribute even when no parent re-renders. */
+function useDiagramTheme() {
+  const [theme, setTheme] = useState(currentTheme)
+  useEffect(() => {
+    const observer = new MutationObserver(() => setTheme(currentTheme()))
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+    setTheme(currentTheme())
+    return () => observer.disconnect()
+  }, [])
+  return theme
+}
+
 type DiagramState =
   | { status: 'loading' }
   | { status: 'ready'; svg: string }
@@ -10,7 +24,7 @@ export function MermaidDiagram({ source }: { source: string }) {
   const diagramId = `markdown-diagram-${reactId.replace(/[^a-zA-Z0-9_-]/g, '-')}`
   const diagramType = source.trim().match(/^[a-z][a-z0-9-]*/i)?.[0].toLowerCase().slice(0, 40) ?? 'unknown'
   const [state, setState] = useState<DiagramState>({ status: 'loading' })
-  const theme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'default'
+  const theme = useDiagramTheme()
 
   useEffect(() => {
     let cancelled = false

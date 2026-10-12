@@ -1,4 +1,4 @@
-import { isValidElement, useEffect, useId, useMemo, useRef, useState, type ComponentPropsWithoutRef, type ReactNode, type RefObject } from 'react'
+import { createContext, isValidElement, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type ComponentPropsWithoutRef, type ReactNode, type RefObject } from 'react'
 import Markdown, { defaultUrlTransform, type Options as MarkdownOptions } from 'react-markdown'
 import GithubSlugger from 'github-slugger'
 import rehypeRaw from 'rehype-raw'
@@ -250,6 +250,16 @@ export function MarkdownArtifact({
   useEffect(() => () => clearSearchHighlight(document), [])
 
   const language = useMemo(() => source === null ? undefined : detectMarkdownLanguage(source), [source])
+  const navigateRef = useRef(navigate)
+  navigateRef.current = navigate
+  const renderContext = useMemo<MarkdownRender>(
+    () => ({ artifact, siteId, resolveHref, navigate: (href) => navigateRef.current(href) }),
+    [artifact, siteId, resolveHref],
+  )
+  const urlTransform = useCallback(
+    (url: string, key: string) => transformMarkdownUrl(url, key, artifact, siteId, resolveHref),
+    [artifact, siteId, resolveHref],
+  )
 
   if (error) {
     return (
@@ -266,71 +276,95 @@ export function MarkdownArtifact({
   }
 
   return (
+    <MarkdownRenderContext.Provider value={renderContext}>
     <div className="markdown-scroll" data-testid="markdown-document" lang={language}>
       <article ref={articleRef} className="markdown-article">
         <Markdown
           remarkPlugins={markdownRemarkPlugins}
           rehypePlugins={markdownRehypePlugins}
-          urlTransform={(url, key) => transformMarkdownUrl(url, key, artifact, siteId, resolveHref)}
-          components={{
-            table: ({ children, ...props }) => (
-              <MarkdownTableScroll>
-                <table {...props}>{children}</table>
-              </MarkdownTableScroll>
-            ),
-            pre: ({ children, ...props }) => {
-              const nodes = Array.isArray(children) ? children : [children]
-              const mermaidCode = nodes.find((node) => (
-                isValidElement<{ className?: string }>(node)
-                && node.props.className?.split(/\s+/).includes('language-mermaid')
-              ))
-              if (isValidElement<{ children?: ReactNode }>(mermaidCode)) {
-                return <MermaidDiagram source={String(mermaidCode.props.children).replace(/\n$/, '')} />
-              }
-              return <MarkdownCodeBlock {...props}>{children}</MarkdownCodeBlock>
-            },
-            source: ({ srcSet, ...props }) => (
-              <source
-                {...props}
-                srcSet={typeof srcSet === 'string'
-                  ? transformMarkdownSrcSet(srcSet, artifact, siteId, resolveHref)
-                  : srcSet}
-              />
-            ),
-            a: ({ href, children, ...props }) => {
-              const isAppRoute = Boolean(href?.startsWith(`/${encodeURIComponent(siteId)}/`))
-              const isSamePage = Boolean(href?.startsWith('#'))
-              const openInNewTab = !isAppRoute && !isSamePage && Boolean(href)
-              return (
-                <a
-                  {...props}
-                  href={href}
-                  target={openInNewTab ? '_blank' : undefined}
-                  rel={openInNewTab ? 'noreferrer noopener' : undefined}
-                  onClick={(event) => {
-                    if (!isAppRoute || !href || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-                    event.preventDefault()
-                    navigate(href)
-                  }}
-                >
-                  {children}
-                </a>
-              )
-            },
-            code: ({ className, children, ...props }) => {
-              if (className?.split(/\s+/).includes('language-mermaid')) {
-                return <MermaidDiagram source={String(children).replace(/\n$/, '')} />
-              }
-              return <code {...props} className={className}>{children}</code>
-            },
-          }}
+          urlTransform={urlTransform}
+          components={markdownComponents}
         >
           {source}
         </Markdown>
       </article>
       {footer ? <div className="markdown-footer">{footer}</div> : null}
     </div>
+    </MarkdownRenderContext.Provider>
   )
+}
+
+interface MarkdownRender {
+  artifact: ArtifactIndexEntry
+  siteId: string
+  resolveHref?: (url: URL) => string | undefined
+  navigate: (href: string) => void
+}
+
+// The components passed to <Markdown> must keep their identity across renders: a new function
+// type remounts every table and code block, losing scroll position and scroll-cue state.
+const MarkdownRenderContext = createContext<MarkdownRender | null>(null)
+
+function MarkdownSource({ srcSet, ...props }: ComponentPropsWithoutRef<'source'>) {
+  const render = useContext(MarkdownRenderContext)
+  return (
+    <source
+      {...props}
+      srcSet={typeof srcSet === 'string' && render
+        ? transformMarkdownSrcSet(srcSet, render.artifact, render.siteId, render.resolveHref)
+        : srcSet}
+    />
+  )
+}
+
+function MarkdownAnchor({ href, children, node: _node, ...props }: ComponentPropsWithoutRef<'a'> & { node?: unknown }) {
+  const render = useContext(MarkdownRenderContext)
+  const siteId = render?.siteId ?? ''
+  const isAppRoute = Boolean(href?.startsWith(`/${encodeURIComponent(siteId)}/`))
+  const isSamePage = Boolean(href?.startsWith('#'))
+  const openInNewTab = !isAppRoute && !isSamePage && Boolean(href)
+  return (
+    <a
+      {...props}
+      href={href}
+      target={openInNewTab ? '_blank' : undefined}
+      rel={openInNewTab ? 'noreferrer noopener' : undefined}
+      onClick={(event) => {
+        if (!isAppRoute || !href || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+        event.preventDefault()
+        render?.navigate(href)
+      }}
+    >
+      {children}
+    </a>
+  )
+}
+
+const markdownComponents: NonNullable<MarkdownOptions['components']> = {
+  table: ({ children, ...props }) => (
+    <MarkdownTableScroll>
+      <table {...props}>{children}</table>
+    </MarkdownTableScroll>
+  ),
+  pre: ({ children, ...props }) => {
+    const nodes = Array.isArray(children) ? children : [children]
+    const mermaidCode = nodes.find((node) => (
+      isValidElement<{ className?: string }>(node)
+      && node.props.className?.split(/\s+/).includes('language-mermaid')
+    ))
+    if (isValidElement<{ children?: ReactNode }>(mermaidCode)) {
+      return <MermaidDiagram source={String(mermaidCode.props.children).replace(/\n$/, '')} />
+    }
+    return <MarkdownCodeBlock {...props}>{children}</MarkdownCodeBlock>
+  },
+  source: MarkdownSource,
+  a: MarkdownAnchor,
+  code: ({ className, children, ...props }) => {
+    if (className?.split(/\s+/).includes('language-mermaid')) {
+      return <MermaidDiagram source={String(children).replace(/\n$/, '')} />
+    }
+    return <code {...props} className={className}>{children}</code>
+  },
 }
 
 /** Tracks which edges of a horizontally scrollable region hide content; updates on scroll and resize. */

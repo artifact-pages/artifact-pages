@@ -6760,6 +6760,22 @@ test.describe('narrow chrome and scroll cues (ISSUE-080)', () => {
     await expect(page.locator('#main-content')).toBeFocused()
   })
 
+  test('a Markdown table stays mounted and keeps its scroll position after the page settles', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto('/sre/reports/latency-retrospective.md')
+    await expect(page.locator('.markdown-table-hint').first()).toBeVisible()
+    await page.locator('.scroll-cue').first().evaluate((element) => {
+      element.setAttribute('data-probe', 'kept')
+      element.querySelector<HTMLElement>('.markdown-table-scroll')!.scrollLeft = 60
+    })
+    await page.waitForTimeout(1000)
+    const state = await page.evaluate(() => {
+      const element = document.querySelector('.scroll-cue[data-probe="kept"]')
+      return { connected: Boolean(element?.isConnected), scrollLeft: element?.querySelector<HTMLElement>('.markdown-table-scroll')?.scrollLeft }
+    })
+    expect(state).toEqual({ connected: true, scrollLeft: 60 })
+  })
+
   test('a wide table and a code block show edge shadows only where content is clipped', async ({ page }) => {
     await page.route('**/latency-retrospective.md', async (route) => {
       const response = await route.fetch()
