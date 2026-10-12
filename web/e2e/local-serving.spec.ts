@@ -6494,7 +6494,7 @@ test.describe('directory pages', () => {
     expect(labelTop).toBeLessThan(bodyTop)
     await expect(children.getByRole('link')).toHaveText([/Changelog/])
     await expect(children.getByRole('link', { name: /Docs home/ })).toHaveCount(0)
-    await expect(page).toHaveTitle('docs · SRE')
+    await expect(page).toHaveTitle('Docs home · SRE')
     await expect(page.getByRole('button', { name: 'Contents' })).toBeEnabled()
   })
 

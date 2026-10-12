@@ -153,7 +153,7 @@ export function ArtifactWorkspace({
   usePageTitle(searchRoute
     ? pageTitle(searchRoute.query ? `Search “${searchRoute.query}”` : 'Search', index.site.title)
     : routeArtifactPath
-      ? pageTitle(currentArtifact?.title ?? currentDirectory?.name ?? 'Page not found', index.site.title)
+      ? pageTitle(currentArtifact?.title ?? currentDirectory?.label ?? 'Page not found', index.site.title)
       : pageTitle(index.site.title))
   // The match navigator belongs to one page and query; closing it also removes the highlight.
   const navigatorKey = bodyArtifact && pageQuery ? `${bodyArtifact.id}\n${pageQuery}` : ''
