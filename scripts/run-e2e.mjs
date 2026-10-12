@@ -81,6 +81,8 @@ try {
       '--output', `test-results/${projectName}`,
     ]
     if (workerCount !== undefined) playwrightArgs.push('--workers', workerCount)
+    // Extra arguments (e.g. -g <title> --repeat-each=30) go straight to Playwright.
+    playwrightArgs.push(...process.argv.slice(2))
     exitCode = run(process.execPath, playwrightArgs, {
       PLAYWRIGHT_BASE_URL: baseURL,
     })
