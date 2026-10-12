@@ -349,8 +349,10 @@ export function ArtifactWorkspace({
 
     const frame = window.requestAnimationFrame(() => {
       const browseTree = document.querySelector('.sidebar-panel .browse-tree')
-      const target = Array.from(browseTree?.querySelectorAll<HTMLElement>('[data-tree-path]') ?? [])
-        .find((element) => element.dataset.treePath === sidebarReveal.path)
+      const rows = Array.from(browseTree?.querySelectorAll<HTMLElement>('[data-tree-path]') ?? [])
+      // A folded index page has no row of its own; its folder row stands for it.
+      const target = rows.find((element) => element.dataset.treePath === sidebarReveal.path)
+        ?? rows.find((element) => element.dataset.treePath === sidebarReveal.path.split('/').slice(0, -1).join('/'))
       target?.focus({ preventScroll: true })
     })
 

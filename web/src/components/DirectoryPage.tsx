@@ -57,7 +57,7 @@ export function DirectoryPage({
       <li key={folder.path}>
         <a {...link(folder.path)} data-directory-folder={folder.path}>
           <Icon name="folder" size={14} />
-          <span className="directory-compact-title">{folder.name}/</span>
+          <span className="directory-compact-title">{folder.label}{folder.label === folder.name ? '/' : ''}</span>
           <span className="directory-meta">{pageCountLabel(folder.pageCount)}</span>
         </a>
       </li>
@@ -79,7 +79,7 @@ export function DirectoryPage({
         {header ?? (
           <header className="directory-header">
             <p className="directory-eyebrow">Folder · {listing.path}/</p>
-            <h1>{listing.name}</h1>
+            <h1>{listing.label}</h1>
             <p className="directory-sub">
               {pageCountLabel(listing.pageCount)}
               {listing.latestUpdatedAt ? <> · updated <time dateTime={listing.latestUpdatedAt}>{formatDate(listing.latestUpdatedAt)}</time></> : null}
@@ -117,7 +117,7 @@ export function DirectoryPage({
                     <li key={folder.path} className="directory-row">
                       <span className="directory-row-icon"><Icon name="folder" size={16} /></span>
                       <span className="directory-row-main">
-                        <a className="directory-row-title directory-row-link" {...link(folder.path)} data-directory-folder={folder.path}>{folder.name}</a>
+                        <a className="directory-row-title directory-row-link" {...link(folder.path)} data-directory-folder={folder.path}>{folder.label}</a>
                       </span>
                       <span className="directory-meta">
                         {pageCountLabel(folder.pageCount)}

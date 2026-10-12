@@ -120,8 +120,10 @@ export function Sidebar({
     if (filter) return
 
     const browseTree = sidebarRef.current?.querySelector('.browse-tree')
-    const target = Array.from(browseTree?.querySelectorAll<HTMLElement>('[data-tree-path]') ?? [])
-      .find((element) => element.dataset.treePath === revealRequest.path)
+    const rows = Array.from(browseTree?.querySelectorAll<HTMLElement>('[data-tree-path]') ?? [])
+    // A folded index page has no row of its own; its folder row stands for it.
+    const target = rows.find((element) => element.dataset.treePath === revealRequest.path)
+      ?? rows.find((element) => element.dataset.treePath === revealRequest.path.split('/').slice(0, -1).join('/'))
     if (!target) return
 
     target.scrollIntoView({ block: 'nearest' })

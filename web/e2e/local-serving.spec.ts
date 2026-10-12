@@ -6498,6 +6498,33 @@ test.describe('directory pages', () => {
     await expect(page.getByRole('button', { name: 'Contents' })).toBeEnabled()
   })
 
+  test('a folder with a README is labelled by its title and its README row is folded into the folder', async ({ page }) => {
+    await routeDirectoryIndex(page)
+    await page.goto('/sre/docs')
+
+    const directory = page.getByTestId('directory-page')
+    await expect(directory.getByRole('heading', { level: 1, name: 'Docs home' })).toBeVisible()
+    const browse = page.locator('.browse-tree')
+    const folder = browse.locator('a[data-tree-folder="docs"]')
+    await expect(folder).toContainText('Docs home')
+    await expect(folder).toHaveAttribute('title', 'docs')
+    await expect(folder).toHaveAttribute('aria-current', 'page')
+    await expect(browse.getByRole('button', { name: 'Toggle Docs home' })).toBeVisible()
+    await expect(browse.locator('a[data-tree-path="docs/changelog.md"]')).toHaveCount(1)
+    await expect(browse.locator('a[data-tree-path="docs/README.md"]')).toHaveCount(0)
+    await expect(page.getByRole('navigation', { name: 'Artifact path' }).getByRole('link', { name: 'Docs home' })).toHaveCount(0)
+
+    // A nested page shows the labelled folder in its breadcrumb; a folder without a README keeps its name.
+    await page.goto('/sre/docs/changelog.md')
+    await expect(page.getByRole('navigation', { name: 'Artifact path' }).getByRole('link', { name: 'Docs home' })).toBeVisible()
+    await expect(browse.locator('a[data-tree-folder="solo"]')).toContainText('solo')
+
+    // A folder whose only child is its index page keeps that row, which carries the active state.
+    await page.goto('/sre/architecture/platform-topology/index.html')
+    await expect(browse.locator('a.tree-artifact[data-tree-path="architecture/platform-topology/index.html"]')).toHaveAttribute('aria-current', 'page')
+    await expect(browse.locator('a[data-tree-folder="architecture/platform-topology"]')).not.toHaveAttribute('aria-current', 'page')
+  })
+
   test('a folder with a README and more than 12 children shows 10 rows until expanded', async ({ page }) => {
     await routeDirectoryIndex(page, [...extraPages, ...cappedPages])
     await page.goto('/sre/handbook')

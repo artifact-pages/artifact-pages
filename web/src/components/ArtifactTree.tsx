@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ArtifactIndexEntry } from '../domain/index'
 import { compareArtifactsByPath } from '../domain/listing-order.ts'
-import { buildArtifactTree, countArtifacts, flattenArtifacts, type ArtifactTreeNode } from '../domain/tree'
+import { buildArtifactTree, countArtifacts, flattenArtifacts, foldedIndexArtifact, type ArtifactTreeNode } from '../domain/tree'
 import { ArtifactActionsMenu } from './ArtifactActionsMenu'
 import { Icon } from './Icon'
 import { followInApp } from './spa-link'
@@ -113,9 +113,15 @@ export function ArtifactTree({
 
   function renderNode(node: ArtifactTreeNode, depth: number): React.ReactNode {
     const directories = [...node.directories.values()].filter(
-      (directory) => !normalizedQuery || countMatching(directory, normalizedQuery) > 0,
+      (directory) => !normalizedQuery
+        || folderMatches(directory, normalizedQuery)
+        || countMatching(directory, normalizedQuery) > 0,
     )
-    const files = node.artifacts.filter((artifact) => matches(artifact, normalizedQuery))
+    // With folder links, the folder row stands for its index page (not while filtering).
+    const foldedIndex = directoryHref && !normalizedQuery ? foldedIndexArtifact(node) : undefined
+    const files = node.artifacts.filter(
+      (artifact) => artifact !== foldedIndex && matches(artifact, normalizedQuery),
+    )
 
     return (
       <>
@@ -125,11 +131,15 @@ export function ArtifactTree({
             ? countMatching(directory, normalizedQuery)
             : countArtifacts(directory)
 
+          const hiddenIndex = directoryHref && !normalizedQuery ? foldedIndexArtifact(directory) : undefined
+          const isActiveDirectory = directory.path === activeDirectoryPath
+            || (hiddenIndex !== undefined && hiddenIndex.path === activePath)
+
           return (
             <div className="tree-directory" key={directory.path}>
               {directoryHref ? (
                 <div
-                  className={`tree-directory-row${directory.path === activeDirectoryPath ? ' is-active' : ''}`}
+                  className={`tree-directory-row${isActiveDirectory ? ' is-active' : ''}`}
                   data-tree-depth={depth}
                 >
                   <button
@@ -139,7 +149,7 @@ export function ArtifactTree({
                     data-tree-depth={depth}
                     data-tree-path={directory.path}
                     aria-expanded={isExpanded}
-                    aria-label={`Toggle ${directory.name}`}
+                    aria-label={`Toggle ${directory.label}`}
                     onClick={() => toggleDirectory(directory.path)}
                   >
                     <Icon name="chevron" size={11} />
@@ -148,7 +158,7 @@ export function ArtifactTree({
                     className="tree-directory-link"
                     href={directoryHref(directory)}
                     data-tree-folder={directory.path}
-                    aria-current={directory.path === activeDirectoryPath ? 'page' : undefined}
+                    aria-current={isActiveDirectory ? 'page' : undefined}
                     title={directory.path}
                     onClick={(event) => followInApp(event, () => onOpenDirectory?.(directory))}
                     onKeyDown={(event) => {
@@ -161,7 +171,7 @@ export function ArtifactTree({
                       }
                     }}
                   >
-                    <span className="tree-label">{highlight(directory.name, normalizedQuery)}</span>
+                    <span className="tree-label">{highlight(directory.label, normalizedQuery)}</span>
                     <span className="tree-count">{count}</span>
                   </a>
                 </div>
@@ -175,7 +185,7 @@ export function ArtifactTree({
                   onClick={() => toggleDirectory(directory.path)}
                 >
                   <Icon name="chevron" size={11} />
-                  <span className="tree-label">{highlight(directory.name, normalizedQuery)}</span>
+                  <span className="tree-label">{highlight(directory.label, normalizedQuery)}</span>
                   <span className="tree-count">{count}</span>
                 </button>
               )}
@@ -304,6 +314,10 @@ function matchReason(artifact: ArtifactIndexEntry, query: string) {
   const index = text.toLocaleLowerCase().indexOf(query)
   // Keep the matched part visible when the row truncates a long path.
   return index > 14 ? `\u2026${text.slice(index - 10)}` : text
+}
+
+function folderMatches(node: ArtifactTreeNode, query: string) {
+  return [node.label, node.name].some((text) => text.toLocaleLowerCase().includes(query))
 }
 
 function countMatching(node: ArtifactTreeNode, query: string): number {
