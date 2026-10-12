@@ -74,7 +74,7 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-075](ISSUE-075-directory-routes-have-no-page.md) | Done | P1 | Directory routes have no page: folder URLs show "Page not found" and tree folders only toggle. |
 | [ISSUE-076](ISSUE-076-pages-sorted-alphabetically-by-title.md) | Done | P1 | Navigation, site home and breadcrumb menus sort pages alphabetically by title, not like a file browser (decided in TD19: folders first, filename order; web only). |
 | [ISSUE-077](ISSUE-077-fulltext-results-unranked.md) | Done | P1 | Page text search results are unranked, have no snippets, and mix languages. |
-| [ISSUE-078](ISSUE-078-landing-page-has-no-orientation.md) | In progress | P1 | The landing page offers only "Choose a site": no orientation, alphabetical cards, double-counted translations. |
+| [ISSUE-078](ISSUE-078-landing-page-has-no-orientation.md) | Done | P1 | The landing page offers only "Choose a site": no orientation, alphabetical cards, double-counted translations. |
 | [ISSUE-079](ISSUE-079-palette-cannot-find-other-page-headings.md) | Done | P2 | The command palette cannot find headings of other pages. |
 | [ISSUE-080](ISSUE-080-narrow-screen-chrome-and-scroll-cues.md) | Done | P2 | On narrow screens the permanent rail and two-row toolbar take reading space, and wide tables and code scroll without a cue. |
 | [ISSUE-081](ISSUE-081-reader-shell-skip-link-and-document-language.md) | Done | P3 | The reader shell has no skip link and keeps `lang="en"` on Japanese documents. |
@@ -82,8 +82,8 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-083](ISSUE-083-unknown-urls-return-http-200.md) | In progress | P3 | Unknown URLs return HTTP 200 with the app shell (soft 404). |
 | [ISSUE-084](ISSUE-084-previews-entry-and-timestamp-polish.md) | Done | P3 | "View previews" is a button, and preview times carry no timezone. |
 | [ISSUE-085](ISSUE-085-page-text-search-snippets.md) | In progress | P3 | Page text search results show no match snippet (split from ISSUE-077; reader side, the writer is IMP-77). |
-| [ISSUE-086](ISSUE-086-pages-have-no-related-pages-list.md) | In progress | P2 | Pages have no list of related pages to read next. |
-| [ISSUE-087](ISSUE-087-page-text-search-results-page.md) | In progress | P2 | Page text search needs a results page in the reading area (TD20 slice 1). |
+| [ISSUE-086](ISSUE-086-pages-have-no-related-pages-list.md) | Done | P2 | Pages have no list of related pages to read next. |
+| [ISSUE-087](ISSUE-087-page-text-search-results-page.md) | Done | P2 | Page text search needs a results page in the reading area (TD20 slice 1). |
 | [ISSUE-088](ISSUE-088-indexer-rejects-reserved-first-segments.md) | Done | P2 | The indexer does not reject documents under reserved first path segments (`_previews`, `_search`). |
 
 ISSUE-013's verified completion record is retained in Git history.
