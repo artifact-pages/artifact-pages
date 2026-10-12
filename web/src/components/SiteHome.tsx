@@ -3,8 +3,8 @@ import type { ArtifactIndexEntry, SiteIndex } from '../domain/index'
 import { RECENT_SECTION_MINIMUM_ARTIFACT_COUNT } from '../domain/navigation-sections'
 import { loadPreviewCandidates, PREVIEW_EXPLANATION, PreviewLoadError } from '../data/previews'
 import { UnsupportedSchemaError } from '../data/schema'
+import { pageCountLabel } from '../domain/directory'
 import { artifactRouteHref } from '../routing'
-import { ArtifactTree, type TreeStyle } from './ArtifactTree'
 import { Icon } from './Icon'
 import { followInApp } from './spa-link'
 
@@ -14,33 +14,43 @@ type PreviewAvailabilityState =
   | { status: 'error' }
   | { status: 'needs-republish' }
 
+/** The empty site: the header and a note, because there is no root listing to show. */
 export function SiteHome({
   index,
-  onOpenArtifact,
-  linkHref = (href) => href,
   onOpenPreviews,
   onOpenPalette,
-  treeStyle = 'path-list',
-  defaultExpandedPaths,
 }: {
   index: SiteIndex
-  onOpenArtifact: (href: string) => void
-  /** Maps a logical route to the link target a row carries (for example with `?q=` kept). */
-  linkHref?: (href: string) => string
   onOpenPreviews?: () => void
   onOpenPalette?: () => void
-  treeStyle?: TreeStyle
-  defaultExpandedPaths?: string[]
+}) {
+  return (
+    <div className="site-home">
+      <SiteHomeHeader index={index} pageCount={index.artifacts.length} onOpenPreviews={onOpenPreviews} onOpenPalette={onOpenPalette} />
+      <p className="empty-note site-home-empty">No artifacts have been published to this site yet.</p>
+    </div>
+  )
+}
+
+/** The site root's header: identity, title, description, page count and update, previews link and page jump. */
+export function SiteHomeHeader({
+  index,
+  pageCount,
+  latestUpdatedAt,
+  onOpenPreviews,
+  onOpenPalette,
+}: {
+  index: SiteIndex
+  pageCount: number
+  latestUpdatedAt?: string
+  onOpenPreviews?: () => void
+  onOpenPalette?: () => void
 }) {
   const [previewAvailability, setPreviewAvailability] = useState<PreviewAvailabilityState>({ status: 'loading' })
   const hasPreviewEntry = Boolean(onOpenPreviews)
   const previewsHref = `/${encodeURIComponent(index.site.id)}/_previews`
   const noPreviews = previewAvailability.status === 'success' && previewAvailability.count === 0
-  const showRecentSection = index.artifacts.length >= RECENT_SECTION_MINIMUM_ARTIFACT_COUNT
-  const recentArtifacts = useMemo(
-    () => showRecentSection ? selectMostRecent(index.artifacts, 6) : [],
-    [index.artifacts, showRecentSection],
-  )
+  const description = index.site.description?.trim()
   useEffect(() => {
     if (!hasPreviewEntry) return
 
@@ -67,94 +77,89 @@ export function SiteHome({
   }, [hasPreviewEntry, index.site.id])
 
   return (
-    <div className="site-home">
-      <div className="site-home-heading">
-        <div className="site-home-identity">
-          <span className="site-mark" aria-hidden="true">{index.site.title.slice(0, 1).toUpperCase()}</span>
-          <span className="mono">/{index.site.id}</span>
-        </div>
-        <h1>{index.site.title}</h1>
-        <p className="site-home-lede">
-          {index.artifacts.length} published {index.artifacts.length === 1 ? 'artifact' : 'artifacts'}.
-          {' '}{showRecentSection
-            ? 'Browse the latest work or jump to an artifact by name.'
-            : 'Browse artifacts or jump to one by name.'}
-        </p>
-        {onOpenPreviews ? (
-          <div className="site-home-preview">
-            <a
-              className="site-home-preview-link"
-              href={noPreviews ? undefined : previewsHref}
-              role={noPreviews ? 'link' : undefined}
-              tabIndex={noPreviews ? 0 : undefined}
-              onClick={noPreviews ? (event) => event.preventDefault() : (event) => followInApp(event, () => onOpenPreviews?.())}
-              aria-disabled={noPreviews ? 'true' : undefined}
-              aria-describedby={noPreviews ? 'site-home-preview-status' : undefined}
-            >View previews{noPreviews ? null : <> <span aria-hidden="true">→</span></>}</a>
-            <p className="site-home-preview-status" id="site-home-preview-status" role="status">
-              {previewAvailability.status === 'loading'
-                ? 'Checking preview availability…'
-                : previewAvailability.status === 'error'
-                  ? 'Preview availability could not be checked.'
-                  : previewAvailability.status === 'needs-republish'
-                    ? 'Previews for this site need to be republished.'
-                    : previewAvailability.count === 0
-                    ? 'There are no available previews for this site.'
-                    : `${previewAvailability.count} preview${previewAvailability.count === 1 ? '' : 's'} listed.`}
-            </p>
-            <p className="site-home-preview-note">{PREVIEW_EXPLANATION}</p>
-          </div>
-        ) : null}
-        {onOpenPalette ? (
-          <button
-            type="button"
-            className="site-home-jump"
-            aria-keyshortcuts="Meta+K Control+K"
-            onClick={(event) => {
-              // Safari and Firefox do not focus buttons on click; focus first so closing the palette returns here.
-              event.currentTarget.focus()
-              onOpenPalette()
-            }}
-          >
-            <Icon name="search" size={16} />
-            <span>Jump to a page…</span>
-            <kbd>⌘ K</kbd>
-          </button>
-        ) : null}
+    <div className="site-home-heading">
+      <div className="site-home-identity">
+        <span className="site-mark" aria-hidden="true">{index.site.title.slice(0, 1).toUpperCase()}</span>
+        <span className="mono">/{index.site.id}</span>
       </div>
-
-      <>
-          {showRecentSection ? (
-            <ArtifactSection
-              title="Recently updated"
-              icon="clock"
-              artifacts={recentArtifacts}
-              siteId={index.site.id}
-              onOpenArtifact={onOpenArtifact}
-              linkHref={linkHref}
-              emptyMessage="No artifacts have been published to this site yet."
-            />
-          ) : null}
-
-          <section className="browse-section" aria-labelledby="browse-heading">
-            <h2 className="home-section-title" id="browse-heading">
-              <Icon name="tree" size={13} /> Browse
-            </h2>
-            {index.artifacts.length === 0 ? (
-              <p className="empty-note">There are no artifact groups to browse yet.</p>
-            ) : (
-              <ArtifactTree
-                artifacts={index.artifacts}
-                style={treeStyle}
-                defaultExpandedPaths={defaultExpandedPaths}
-                onOpenArtifact={(artifact) => onOpenArtifact(artifactRouteHref(index.site.id, artifact.path))}
-                artifactHref={(artifact) => linkHref(artifactRouteHref(index.site.id, artifact.path))}
-                virtualizePaths
-              />
-            )}
-          </section>
-      </>
+      <h1>{index.site.title}</h1>
+      {description ? <p className="site-home-description">{description}</p> : null}
+      <p className="site-home-lede">
+        {pageCountLabel(pageCount)}
+        {latestUpdatedAt ? <> · updated <time dateTime={latestUpdatedAt}>{formatFullDate(latestUpdatedAt)}</time></> : null}
+      </p>
+      {onOpenPreviews ? (
+        <div className="site-home-preview">
+          <a
+            className="site-home-preview-link"
+            href={noPreviews ? undefined : previewsHref}
+            role={noPreviews ? 'link' : undefined}
+            tabIndex={noPreviews ? 0 : undefined}
+            onClick={noPreviews ? (event) => event.preventDefault() : (event) => followInApp(event, () => onOpenPreviews?.())}
+            aria-disabled={noPreviews ? 'true' : undefined}
+            aria-describedby={noPreviews ? 'site-home-preview-status' : undefined}
+          >View previews{noPreviews ? null : <> <span aria-hidden="true">→</span></>}</a>
+          <p className="site-home-preview-status" id="site-home-preview-status" role="status">
+            {previewAvailability.status === 'loading'
+              ? 'Checking preview availability…'
+              : previewAvailability.status === 'error'
+                ? 'Preview availability could not be checked.'
+                : previewAvailability.status === 'needs-republish'
+                  ? 'Previews for this site need to be republished.'
+                  : previewAvailability.count === 0
+                  ? 'There are no available previews for this site.'
+                  : `${previewAvailability.count} preview${previewAvailability.count === 1 ? '' : 's'} listed.`}
+          </p>
+          <p className="site-home-preview-note">{PREVIEW_EXPLANATION}</p>
+        </div>
+      ) : null}
+      {onOpenPalette ? (
+        <button
+          type="button"
+          className="site-home-jump"
+          aria-keyshortcuts="Meta+K Control+K"
+          onClick={(event) => {
+            // Safari and Firefox do not focus buttons on click; focus first so closing the palette returns here.
+            event.currentTarget.focus()
+            onOpenPalette()
+          }}
+        >
+          <Icon name="search" size={16} />
+          <span>Jump to a page…</span>
+          <kbd>⌘ K</kbd>
+        </button>
+      ) : null}
     </div>
+  )
+}
+
+/** The six most recently updated pages, shown last on the site root once the site is large enough. */
+export function RecentlyUpdated({
+  index,
+  onOpenArtifact,
+  linkHref = (href) => href,
+}: {
+  index: SiteIndex
+  onOpenArtifact: (href: string) => void
+  /** Maps a logical route to the link target a row carries (for example with `?q=` kept). */
+  linkHref?: (href: string) => string
+}) {
+  const showRecentSection = index.artifacts.length >= RECENT_SECTION_MINIMUM_ARTIFACT_COUNT
+  const recentArtifacts = useMemo(
+    () => showRecentSection ? selectMostRecent(index.artifacts, 6) : [],
+    [index.artifacts, showRecentSection],
+  )
+  if (!showRecentSection) return null
+  return (
+    <ArtifactSection
+      title="Recently updated"
+      icon="clock"
+      artifacts={recentArtifacts}
+      siteId={index.site.id}
+      onOpenArtifact={onOpenArtifact}
+      linkHref={linkHref}
+      emptyMessage="No artifacts have been published to this site yet."
+    />
   )
 }
 
@@ -268,4 +273,10 @@ function formatDate(value: string) {
   const date = new Date(value)
   if (Number.isNaN(date.valueOf())) return value
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date)
+}
+
+function formatFullDate(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.valueOf())) return value
+  return new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).format(date)
 }

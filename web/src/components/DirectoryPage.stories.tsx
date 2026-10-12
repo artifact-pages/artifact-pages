@@ -38,6 +38,9 @@ const documentationPages = [
   page('docs/changelog.md', 'Changelog', '2026-10-07T09:00:00Z', ['0.4', '0.3']),
   page('docs/contributing/review.md', 'Review checklist', '2026-10-08T09:00:00Z'),
   page('solo/only-page.md', 'The only page', '2026-10-08T09:00:00Z', ['Overview']),
+  // A folder with a README and more than 12 children: the list shows 10 rows and a "Show all" control.
+  page('handbook/README.md', 'Handbook home', '2026-10-01T09:00:00Z', ['Welcome']),
+  ...Array.from({ length: 14 }, (_, position) => page(`handbook/topic-${String(position + 1).padStart(2, '0')}.md`, `Topic ${position + 1}`, '2026-10-05T09:00:00Z')),
 ]
 
 const directoryIndex: SiteIndex = {
@@ -51,6 +54,8 @@ const VIEWS = {
   nested: 'guide/en/reference/cli',
   'one-page': 'solo',
   readme: 'docs',
+  'readme-many': 'handbook',
+  'site-root': undefined,
   'html-index': 'incidents/checkout-latency',
 } as const
 
@@ -124,7 +129,7 @@ export const FoldersAndPagesNarrow: Story = {
 export const FoldersOnly: Story = { args: { view: 'folders-only' } }
 export const NestedFolder: Story = { args: { view: 'nested' } }
 export const OnePageFolder: Story = { args: { view: 'one-page' } }
-export const ReadmeBody: Story = { name: 'README body then children (variant C)', args: { view: 'readme' } }
+export const ReadmeBody: Story = { name: 'Children then README body', args: { view: 'readme' } }
 export const ReadmeBodyDark: Story = { args: { view: 'readme', theme: 'dark' } }
 export const ReadmeBodyNarrow: Story = {
   name: 'README body · 390px',
@@ -132,4 +137,7 @@ export const ReadmeBodyNarrow: Story = {
   parameters: { viewport: { options: { phone390 } } },
   globals: { viewport: { value: 'phone390', isRotated: false } },
 }
+export const ReadmeManyChildren: Story = { name: 'README with more than 12 children', args: { view: 'readme-many' } }
+export const SiteRoot: Story = { name: 'Site root', args: { view: 'site-root' } }
+export const SiteRootDark: Story = { args: { view: 'site-root', theme: 'dark' } }
 export const HtmlIndexBody: Story = { name: 'index.html body', args: { view: 'html-index' } }

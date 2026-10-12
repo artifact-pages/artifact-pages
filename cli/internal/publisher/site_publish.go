@@ -151,6 +151,12 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 		}
 		emptyPreviewChanges := []preview.CatalogReconciliationChange{}
 		result := Result{Operation: "site sync", Site: options.SiteID, Changes: diff.changes, PreviewChanges: &emptyPreviewChanges, BuildSkipped: diff.buildSkipped}
+		if len(diff.snippetTruncated) > 0 || len(diff.snippetOmitted) > 0 {
+			result.SnippetLimits = &SnippetLimitsReport{
+				TruncatedDocuments: append([]string{}, diff.snippetTruncated...),
+				OmittedDocuments:   append([]string{}, diff.snippetOmitted...),
+			}
+		}
 		legacyControl := LegacyControl{}
 		if snapshot.legacyRebuild {
 			legacyControl.PublishState = &LegacyControlRecord{Detail: snapshot.legacyDetail, BackupKey: snapshot.legacyBackupKey}

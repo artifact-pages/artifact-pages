@@ -485,6 +485,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		}
 	}
 	writeIndexReport(stdout, *siteID, result, outputPath, metadataPath)
+	writeSnippetLimitWarnings(stderr, result.SnippetTruncated, result.SnippetOmitted)
 	return nil
 }
 
@@ -923,6 +924,9 @@ func runSiteSync(ctx context.Context, args []string, stdout, stderr io.Writer) e
 		return encodeDeploymentResult(stdout, result, resolved)
 	}
 	writeSiteSyncReport(stdout, result, resolved, *dryRun, terminalColor(stdout))
+	if result.SnippetLimits != nil {
+		writeSnippetLimitWarnings(stderr, result.SnippetLimits.TruncatedDocuments, result.SnippetLimits.OmittedDocuments)
+	}
 	return nil
 }
 

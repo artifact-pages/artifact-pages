@@ -3,7 +3,7 @@
 // Ordering is folders first, then filename order (ISSUE-076 / TD19), not title order.
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { findIndexArtifact, pageCountLabel, pageHeadings, resolveDirectory } from './directory.ts'
+import { findIndexArtifact, pageCountLabel, pageHeadings, resolveDirectory, resolveRootDirectory } from './directory.ts'
 
 const page = (path, title, updatedAt = '2026-10-01T00:00:00Z', extra = {}) => ({ id: path, path, title, updatedAt, format: path.endsWith('.md') ? 'markdown' : 'html', ...extra })
 
@@ -117,4 +117,31 @@ test('pages follow filename order, not title order', () => {
   const listing = resolveDirectory(numbered, 'guide')
   assert.deepEqual(listing.folders.map(({ name }) => name), ['A', 'b'])
   assert.deepEqual(listing.pages.map(({ path }) => path), ['guide/01-intro.html', 'guide/02-start.html', 'guide/10-late.html'])
+})
+
+test('the site root lists top-level folders and pages', () => {
+  const listing = resolveRootDirectory(artifacts)
+  assert.equal(listing.path, '')
+  assert.equal(listing.name, '')
+  assert.equal(listing.pageCount, artifacts.length)
+  assert.equal(listing.latestUpdatedAt, '2026-10-09T00:00:00Z')
+  assert.deepEqual(listing.folders.map(({ name, path, pageCount }) => [name, path, pageCount]), [
+    ['docs', 'docs', 2],
+    ['en', 'en', 5],
+    ['ja', 'ja', 1],
+    ['solo', 'solo', 1],
+    ['with space', 'with space', 1],
+  ])
+  assert.deepEqual(listing.pages.map(({ path }) => path), ['top.html'])
+  assert.equal(listing.indexArtifact, undefined)
+})
+
+test('the site root uses its README as the index page and leaves it out of the pages', () => {
+  const listing = resolveRootDirectory([...artifacts, page('README.md', 'Home'), page('index.html', 'Index')])
+  assert.equal(listing.indexArtifact.path, 'README.md')
+  assert.deepEqual(listing.pages.map(({ path }) => path), ['index.html', 'top.html'])
+})
+
+test('a site with no pages has no root directory', () => {
+  assert.equal(resolveRootDirectory([]), undefined)
 })

@@ -51,7 +51,7 @@ Today a body-only hit in the sidebar reads "Text" and nothing more, and the side
 - **Results page** in the main content area at `/<site>/_search?q=…&in=<folder>`. This follows the `_previews` precedent. The first segments `_previews` and `_search` are reserved so the reader's route namespace and directory pages stay unambiguous: a directory page for a `_search/` folder would be shadowed by the search route, and documents under `_previews/` would be shadowed by the preview routes. The specification reserves both and the indexer rejects them ([ISSUE-088](ISSUE-088-indexer-rejects-reserved-first-segments.md)). Per result: title, path, the heading the match sits under (linking to its anchor), one or more highlighted snippets. Folder facets with counts replace the "Search only in <dir>/" chip (`in` carries the choice). Results update as the reader types (debounced; stale responses dropped as the core contract already requires), and the URL is shareable; Back returns to the previous query or page.
 - **⌘K palette** keeps jumping to titles and headings and gets a "Search full text" fallback entry.
 - **Destination page:** the existing highlight is extended with a "1/5 ↑↓" match navigator. A result link carries `?q=` so the target highlights and scrolls as it does today.
-- ISSUE-085 is subsumed; ISSUE-077 ranking stays and snippets add a body-hit order (more matching sections first, then path).
+- ISSUE-085 is subsumed; ISSUE-077 ranking stays and snippets add a body-hit order (more matching sections first, then path). (Amended 2026-10-12: snippets do not reorder hits; see the Reader procedure in docs/architecture/fulltext-search.md.)
 
 ### 2. Rejected: fetch each hit's page in the browser
 

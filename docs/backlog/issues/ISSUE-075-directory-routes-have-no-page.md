@@ -40,6 +40,10 @@ Chosen from the Storybook `Concepts/Reader UX 2026-10`/ISSUE-075 stories:
 - Palette: folders are listed below page matches.
 - Folder title is the raw folder name; [TD19](../technical-design/TD19-navigation-metadata-in-the-site-index.md) (2026-10-11) settled that folders get no authored titles or descriptions. Order follows ISSUE-076 (folders first, then files by filename); until it lands the page uses title order.
 
+## Owner decision (2026-10-12)
+
+A directory page shows the folder's contents first and the README or index page below it (the GitHub order). This replaces variant C's README-first order. Because a folder with many children would push the README out of view, the list shows the first 10 rows once there are more than 12 children, with a "Show all N items" control. The site root uses the same directory-page view (`/:site` is the root folder's page with a site header).
+
 ## Acceptance criteria
 
 - [x] `/<site>/<dir>` for any directory that contains at least one artifact (at any depth) renders a directory page instead of "Page not found". A path that is neither an artifact nor a directory keeps the existing not-found view.

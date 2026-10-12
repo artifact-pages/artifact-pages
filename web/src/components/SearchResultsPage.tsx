@@ -1,6 +1,7 @@
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { Fragment, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { FullTextSearchError, type FullTextHit } from '../data/fulltext'
 import type { ArtifactIndexEntry } from '../domain/index'
+import type { SearchExcerpt } from '../domain/fulltext-snippets'
 import { folderFacets } from '../domain/search-facets'
 import { scopeHits } from '../domain/search-ranking'
 import { searchTerms } from '../domain/text-highlight'
@@ -13,6 +14,9 @@ export const SEARCH_PAGE_INPUT_ID = 'search-page-input'
 const TYPING_DEBOUNCE_MS = 200
 
 type SuccessState = Extract<PageTextSearchState, { status: 'success' }>
+/** Excerpts are requested for this many rows at a time. */
+const EXCERPT_BATCH = 20
+const NO_EXCERPTS: ReadonlyMap<string, SearchExcerpt | null> = new Map()
 
 export function SearchResultsPage({
   siteTitle,
@@ -29,6 +33,7 @@ export function SearchResultsPage({
   hitHref,
   onOpenHit,
   onSearchTitles,
+  loadExcerpts,
 }: {
   siteTitle: string
   /** Pages in the site, named while searching. */
@@ -48,9 +53,12 @@ export function SearchResultsPage({
   onLoadMore: () => void
   /** The link target of a result row; it carries the query so the page highlights it. */
   hitHref: (hit: FullTextHit) => string
-  onOpenHit: (hit: FullTextHit) => void
+  /** The anchor of the section excerpt shown for the row, when there is one. */
+  onOpenHit: (hit: FullTextHit, anchor?: string) => void
   /** Offers the sidebar-style title and path search for a query that matched no text. */
   onSearchTitles: (query: string) => void
+  /** Loads excerpts for result paths of one query and generation. Absent: no excerpts. */
+  loadExcerpts?: (query: string, generation: string, paths: readonly string[], signal: AbortSignal) => Promise<ReadonlyMap<string, SearchExcerpt | null>>
 }) {
   const [draft, setDraft] = useState(query)
   const [composing, setComposing] = useState(false)
@@ -90,6 +98,53 @@ export function SearchResultsPage({
   const hits = useMemo(() => scopeHits(allHits, folder ?? null), [allHits, folder])
   const facets = useMemo(() => complete ? folderFacets(allHits, folder) : [], [complete, allHits, folder])
 
+  // Page text excerpts (ISSUE-085). They belong to the shown list (query and generation), so
+  // the dimmed previous list keeps its own while a newer query loads. Rows are excerpted in
+  // batches of EXCERPT_BATCH: a ranked list shows all its hits at once, so the next batch is
+  // requested when the last excerpted row scrolls into view; a path-ordered list is already
+  // loaded in pages of that size.
+  const excerptKey = shown.status === 'success' && shown.generation !== null ? `${shown.query}\u0000${shown.generation}` : null
+  const [loaded, setLoaded] = useState<{ key: string; byPath: ReadonlyMap<string, SearchExcerpt | null> }>({ key: '', byPath: NO_EXCERPTS })
+  const [batches, setBatches] = useState(1)
+  const requests = useRef<{ controller: AbortController | null; inFlight: Set<string> }>({ controller: null, inFlight: new Set() })
+  const byPath = excerptKey !== null && loaded.key === excerptKey ? loaded.byPath : NO_EXCERPTS
+  useEffect(() => {
+    const controller = new AbortController(), state = requests.current
+    state.controller = controller
+    state.inFlight = new Set()
+    return () => controller.abort()
+  }, [excerptKey])
+  useEffect(() => setBatches(1), [excerptKey, folder])
+  const excerptLimit = shown.status === 'success' && !shown.ranked ? hits.length : batches * EXCERPT_BATCH
+  const excerptPaths = hits.slice(0, excerptLimit).map((hit) => hit.path)
+  const excerptPathsKey = excerptPaths.join('\u0000')
+  useEffect(() => {
+    const { controller, inFlight } = requests.current
+    if (!controller || controller.signal.aborted || excerptKey === null || shown.status !== 'success' || shown.generation === null || !loadExcerpts) return
+    const todo = excerptPaths.filter((path) => !byPath.has(path) && !inFlight.has(path))
+    if (todo.length === 0) return
+    const { query: forQuery, generation } = shown
+    for (const path of todo) inFlight.add(path)
+    const merge = (result: ReadonlyMap<string, SearchExcerpt | null>) => {
+      if (controller.signal.aborted) return
+      setLoaded((current) => ({ key: excerptKey, byPath: new Map([...(current.key === excerptKey ? current.byPath : NO_EXCERPTS), ...result]) }))
+    }
+    loadExcerpts(forQuery, generation, todo, controller.signal).then(merge, () => merge(new Map(todo.map((path) => [path, null]))))
+      .finally(() => { for (const path of todo) inFlight.delete(path) })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [excerptKey, excerptPathsKey, loadExcerpts, byPath])
+  const moreExcerpts = shown.status === 'success' && shown.ranked && excerptLimit < hits.length
+  useEffect(() => {
+    if (!moreExcerpts || stale || typeof IntersectionObserver === 'undefined') return
+    const row = listRef.current?.children[excerptLimit - 1]
+    if (!row) return
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) { observer.disconnect(); setBatches((count) => count + 1) }
+    })
+    observer.observe(row)
+    return () => observer.disconnect()
+  }, [moreExcerpts, excerptLimit, stale, hits.length])
+
   // "Show more" keeps keyboard focus: once the next page arrives it moves to the first new result.
   const focusAfterMore = useRef<number | null>(null)
   const listRef = useRef<HTMLUListElement>(null)
@@ -100,7 +155,7 @@ export function SearchResultsPage({
     if (shown.more === 'error') return
     const focused = document.activeElement
     if (focused && focused !== document.body && !focused.classList.contains('search-page-more')) return
-    listRef.current?.querySelectorAll<HTMLElement>('a')[first]?.focus()
+    listRef.current?.querySelectorAll<HTMLElement>('.search-page-result-link')[first]?.focus()
   }, [shown])
 
   // Committing the query that is already shown adds no history entry; after a failure it retries.
@@ -120,7 +175,7 @@ export function SearchResultsPage({
     if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
     if (event.key === 'Enter') {
       event.preventDefault()
-      if (active >= 0 && !stale && hits[active]) onOpenHit(hits[active])
+      if (active >= 0 && !stale && hits[active]) onOpenHit(hits[active], byPath.get(hits[active].path)?.anchor || undefined)
       else commitNow()
     } else if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && hits.length > 0 && !stale) {
       event.preventDefault()
@@ -138,7 +193,7 @@ export function SearchResultsPage({
 
   useEffect(() => {
     if (active < 0) return
-    listRef.current?.querySelectorAll<HTMLElement>('a')[active]?.scrollIntoView({ block: 'nearest' })
+    listRef.current?.querySelectorAll<HTMLElement>('.search-page-result-link')[active]?.scrollIntoView({ block: 'nearest' })
   }, [active])
 
   const scope = folder ? ` in ${folder}/` : ''
@@ -237,17 +292,26 @@ export function SearchResultsPage({
                       {hits.map((hit, position) => {
                         const artifact = artifactsById.get(hit.id)
                         const title = artifact?.title ?? hit.path.slice(hit.path.lastIndexOf('/') + 1)
+                        const excerpt = byPath.get(hit.path) ?? null
+                        const anchor = excerpt?.anchor || undefined
+                        const href = anchor ? `${hitHref(hit)}#${encodeURIComponent(anchor)}` : hitHref(hit)
                         return (
                           <li key={hit.id} className="search-page-result" id={`${listId}-${position}`} data-active={position === active || undefined}>
                             <a
-                              href={hitHref(hit)}
+                              href={href}
                               className="search-page-result-link"
                               data-hit-id={hit.id}
                               aria-current={position === active && !stale ? 'true' : undefined}
-                              onClick={(event) => followInApp(event, () => onOpenHit(hit))}
+                              onClick={(event) => followInApp(event, () => onOpenHit(hit, anchor))}
                             >
                               <span className="search-page-result-title"><Highlighted text={title} query={query} /></span>
                               <span className="search-page-result-path">{hit.path}</span>
+                              {excerpt ? (
+                                <span className="search-page-result-excerpt">
+                                  {excerpt.heading ? <span className="search-page-result-section">{excerpt.heading}</span> : null}
+                                  <span className="search-page-result-snippet">{excerpt.parts.map((part, i) => part.mark ? <mark key={i}>{part.text}</mark> : <Fragment key={i}>{part.text}</Fragment>)}</span>
+                                </span>
+                              ) : null}
                             </a>
                           </li>
                         )

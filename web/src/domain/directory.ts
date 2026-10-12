@@ -61,8 +61,20 @@ export function resolveDirectory(
 ): DirectoryListing | undefined {
   const path = directoryPathOf(requestedPath)
   if (!path) return undefined
-  const prefix = `${path}/`
-  const depth = path.split('/').length
+  return buildListing(artifacts, path)
+}
+
+/**
+ * The listing of the site root: the same shape as a folder's, with an empty path
+ * and name. Undefined when the site has no pages.
+ */
+export function resolveRootDirectory(artifacts: readonly ArtifactIndexEntry[]): DirectoryListing | undefined {
+  return buildListing(artifacts, '')
+}
+
+function buildListing(artifacts: readonly ArtifactIndexEntry[], path: string): DirectoryListing | undefined {
+  const prefix = path ? `${path}/` : ''
+  const depth = path ? path.split('/').length : 0
 
   const pages: ArtifactIndexEntry[] = []
   const folders = new Map<string, DirectoryFolder>()
@@ -79,7 +91,7 @@ export function resolveDirectory(
       continue
     }
     const name = segments[depth]
-    const folder = folders.get(name) ?? { name, path: `${path}/${name}`, pageCount: 0 }
+    const folder = folders.get(name) ?? { name, path: path ? `${path}/${name}` : name, pageCount: 0 }
     folder.pageCount += 1
     folder.latestUpdatedAt = latest(folder.latestUpdatedAt, artifact.updatedAt)
     folders.set(name, folder)

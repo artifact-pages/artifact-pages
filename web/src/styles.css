@@ -1435,8 +1435,7 @@ mark {
 }
 
 .site-home-heading,
-.artifact-list-section,
-.browse-section {
+.artifact-list-section {
   width: min(100%, 900px);
   padding-right: 42px;
   padding-left: 42px;
@@ -1466,12 +1465,45 @@ mark {
 }
 
 .site-home h1,
+.site-home-heading h1,
 .stage-message h1 {
   margin: 0 0 9px;
   color: var(--text);
   font-size: 30px;
   font-weight: 620;
   letter-spacing: -0.035em;
+}
+
+.site-home-description {
+  max-width: 60ch;
+  margin: 0 0 8px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.site-home-empty {
+  width: min(100%, 900px);
+  padding-right: 42px;
+  padding-left: 42px;
+  margin: 0 auto;
+}
+
+/* On the site root the header and the recent list sit inside the directory page, which pads them. */
+.directory-page .site-home-heading,
+.directory-page .artifact-list-section {
+  width: 100%;
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.directory-page .site-home-heading {
+  padding-top: 0;
+  padding-bottom: 18px;
+}
+
+.directory-page .artifact-list-section {
+  padding-top: 24px;
 }
 
 .site-home-lede {
@@ -1530,14 +1562,12 @@ mark {
 
 
 
-.artifact-list-section,
-.browse-section {
+.artifact-list-section {
   padding-top: 2px;
   padding-bottom: 24px;
 }
 
-.artifact-list-section h2,
-.browse-section > h2 {
+.artifact-list-section h2 {
   display: flex;
   align-items: center;
   gap: 7px;
@@ -1608,36 +1638,6 @@ mark {
   color: var(--text-tertiary);
   font-size: 11px;
   white-space: nowrap;
-}
-
-.browse-section {
-  padding-bottom: 60px;
-}
-
-.browse-section .artifact-tree {
-  max-width: 780px;
-  margin-top: 10px;
-}
-
-.site-home .tree-directory-button,
-.site-home .tree-artifact {
-  padding-top: 7px;
-  padding-bottom: 7px;
-  font-size: 14px;
-}
-
-.site-home .is-virtualized-path-list .tree-path-row {
-  height: 44px;
-}
-
-.site-home .tree-children-branch-guides {
-  margin-left: 16px;
-}
-
-.site-home .tree-style-branch-guides .tree-directory-button[data-tree-depth]:not([data-tree-depth="0"])::before,
-.site-home .tree-style-branch-guides .tree-artifact[data-tree-depth]:not([data-tree-depth="0"])::before {
-  left: -16px;
-  width: 16px;
 }
 
 .empty-note {
@@ -2802,8 +2802,7 @@ mark {
   }
 
   .site-home-heading,
-  .artifact-list-section,
-  .browse-section {
+  .artifact-list-section {
     padding-right: 28px;
     padding-left: 28px;
   }
@@ -2885,8 +2884,7 @@ mark {
   }
 
   .site-home-heading,
-  .artifact-list-section,
-  .browse-section {
+  .artifact-list-section {
     padding-right: 18px;
     padding-left: 18px;
   }
@@ -3294,6 +3292,22 @@ mark {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
   overflow-wrap: anywhere;
+}
+
+.search-page-result-excerpt {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.search-page-result-section {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--text-tertiary);
+  font-size: 12px;
 }
 
 .search-page-result mark {
@@ -3826,8 +3840,43 @@ a.breadcrumb-menu-item {
 }
 
 .directory-children {
-  padding-top: 20px;
+  padding-bottom: 20px;
+}
+
+.directory-more {
+  margin: 6px 0 0 8px;
+  padding: 5px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.directory-more:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.directory-readme-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 2px;
   border-top: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.directory-readme-label svg {
+  flex: none;
+}
+
+.directory-readme-label code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
 }
 
 .directory-children h2 {
