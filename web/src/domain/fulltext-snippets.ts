@@ -15,50 +15,63 @@ export function excerptTerms(query: string): string[] {
 
 const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
 
-export function foldWithSourceRanges(text: string): { normalized: string; sourceStart: number[]; sourceEnd: number[] } {
+type Folded = { normalized: string; sourceStart: number[]; sourceEnd: number[]; clusters: { segment: string; index: number }[] }
+
+export function foldWithSourceRanges(text: string): Folded {
   let normalized = ''
-  const sourceStart: number[] = [], sourceEnd: number[] = []
+  const sourceStart: number[] = [], sourceEnd: number[] = [], clusters: Folded['clusters'] = []
   for (const { segment, index } of segmenter.segment(text)) {
-    let n = segment.normalize('NFKC').toLowerCase().replace(/\s+/gu, ' ')
+    clusters.push({ segment, index })
+    // Printable ASCII (no space) is unchanged by NFKC and whitespace folding; only A-Z needs lowercasing.
+    const code = segment.charCodeAt(0)
+    let n = segment.length === 1 && code > 32 && code < 127
+      ? (code >= 65 && code <= 90 ? String.fromCharCode(code + 32) : segment)
+      : segment.normalize('NFKC').toLowerCase().replace(/\s+/gu, ' ')
     if (n.startsWith(' ') && (normalized === '' || normalized.endsWith(' '))) n = n.slice(1)
     normalized += n
     for (let i = 0; i < n.length; i++) { sourceStart.push(index); sourceEnd.push(index + segment.length) }
   }
-  return { normalized, sourceStart, sourceEnd }
+  return { normalized, sourceStart, sourceEnd, clusters }
 }
 
 type Range = [number, number]
 
 export function excerptFor(sections: readonly DecodedSection[], terms: readonly string[]): SearchExcerpt | null {
   if (terms.length === 0) return null
-  let best: { section: DecodedSection; ranges: Range[]; distinct: number } | null = null
+  // Choosing the section needs only whether each term occurs: one indexOf per term.
+  let best: { section: DecodedSection; folded: Folded; distinct: number; first: number } | null = null
   for (const section of sections) {
-    const { normalized, sourceStart, sourceEnd } = foldWithSourceRanges(section.text)
-    const ranges: Range[] = []
-    let distinct = 0
+    const folded = foldWithSourceRanges(section.text)
+    let distinct = 0, first = Infinity
     for (const term of terms) {
-      let found = false
-      for (let position = normalized.indexOf(term); position !== -1; position = normalized.indexOf(term, position + 1)) {
-        found = true
-        ranges.push([sourceStart[position], sourceEnd[position + term.length - 1]])
-      }
-      if (found) distinct++
+      const position = folded.normalized.indexOf(term)
+      if (position === -1) continue
+      distinct++
+      first = Math.min(first, folded.sourceStart[position])
     }
-    if (distinct > 0 && (!best || distinct > best.distinct)) best = { section, ranges, distinct }
+    if (distinct > 0 && (!best || distinct > best.distinct)) best = { section, folded, distinct, first }
   }
   if (!best) return null
-  const { section, ranges } = best
-  let first = Infinity
-  for (const range of ranges) if (range[0] < first) first = range[0]
-  const clusters = [...segmenter.segment(section.text)]
-  let f = clusters.findIndex((cluster) => first < cluster.index + cluster.segment.length)
+  const { section, folded } = best
+  const { clusters } = folded
+  let f = clusters.findIndex((cluster) => best.first < cluster.index + cluster.segment.length)
   if (f < 0) f = clusters.length - 1
   const start = Math.max(0, f - EXCERPT_CLUSTERS_BEFORE), end = Math.min(clusters.length, start + EXCERPT_CLUSTERS)
   const from = clusters[start].index, last = clusters[end - 1], to = last.index + last.segment.length
-  const clipped = ranges
-    .map(([a, b]): Range => [Math.max(a, from), Math.min(b, to)])
-    .filter(([a, b]) => a < b)
-    .sort((x, y) => x[0] - y[0] || x[1] - y[1])
+  // Occurrences (overlapping ones included) are collected only inside the window's normalized range.
+  const { normalized, sourceStart, sourceEnd } = folded
+  let lo = 0
+  while (lo < normalized.length && sourceEnd[lo] <= from) lo++
+  let hi = normalized.length
+  while (hi > lo && sourceStart[hi - 1] >= to) hi--
+  const clipped: Range[] = []
+  for (const term of terms) {
+    for (let position = normalized.indexOf(term, lo); position !== -1 && position < hi; position = normalized.indexOf(term, position + 1)) {
+      const a = Math.max(sourceStart[position], from), b = Math.min(sourceEnd[position + term.length - 1], to)
+      if (a < b) clipped.push([a, b])
+    }
+  }
+  clipped.sort((x, y) => x[0] - y[0] || x[1] - y[1])
   const merged: Range[] = []
   for (const range of clipped) {
     const top = merged[merged.length - 1]

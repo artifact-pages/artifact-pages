@@ -170,6 +170,7 @@ test('a capped section full of matches still yields an excerpt quickly', () => {
   const excerpt = excerptFor([{ heading: '', anchor: '', text: 'a'.repeat(262144) }], excerptTerms('a'))
   const elapsed = performance.now() - started
   assert.ok(excerpt)
+  assert.ok(elapsed < 150, `took ${elapsed} ms`)
   assert.equal(excerpt.parts.at(-1).text, '…')
   console.log(`# 262144-char all-match section: ${Math.round(elapsed)} ms`)
 })
