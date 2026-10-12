@@ -46,6 +46,7 @@ test('system, missing and unknown values follow the dark media query', () => {
   }
 })
 
-test('unavailable storage leaves the theme to the app', () => {
-  assert.equal(themeAfterBootstrap({ stored: 'dark', prefersDark: true, storageThrows: true }), undefined)
+test('unavailable storage falls back to the dark media query', () => {
+  assert.equal(themeAfterBootstrap({ stored: 'dark', prefersDark: true, storageThrows: true }), 'dark')
+  assert.equal(themeAfterBootstrap({ stored: 'dark', prefersDark: false, storageThrows: true }), 'light')
 })
