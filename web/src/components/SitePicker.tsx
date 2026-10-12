@@ -4,7 +4,6 @@ import { artifactCountLabel } from '../domain/site-count-label'
 import { hasSiteDiscoveryMetadata, type SiteCatalogEntry } from '../domain/index'
 import { folderChipKey, folderChipLabel, folderSummaryText, summarizeFolders, type FolderCount } from '../domain/site-folder-counts'
 import { compareSites, ownValue } from '../domain/site-start'
-import { artifactRouteHref } from '../routing'
 import { useSiteFolderCounts } from '../data/use-site-folder-counts'
 import { CommandPalette, type PaletteCommand } from './CommandPalette'
 import { Icon } from './Icon'
@@ -20,7 +19,6 @@ export function SitePicker({
   themeMode = 'system',
   onSetThemeMode,
   folderCounts: folderCountsOverride,
-  startPaths: startPathsOverride,
 }: {
   sites: SiteCatalogEntry[]
   onNavigate: (href: string) => void
@@ -28,14 +26,12 @@ export function SitePicker({
   onSetThemeMode?: (mode: ThemeMode) => void
   /** Per-top-level-folder counts by site ID; when given, no site index is fetched. */
   folderCounts?: Record<string, FolderCount[]>
-  /** Root README path by site ID, used with `folderCounts` when no index is fetched. */
-  startPaths?: Record<string, string>
 }) {
   usePageTitle(pageTitle())
   const [paletteOpen, setPaletteOpen] = useState(false)
   const paletteReturnFocus = useRef<HTMLElement | null>(null)
   const sortedSites = [...sites].sort(compareSites)
-  const { counts: folderCounts, startPaths, pending: pendingCounts } = useSiteFolderCounts(sortedSites, folderCountsOverride, startPathsOverride)
+  const { counts: folderCounts, pending: pendingCounts } = useSiteFolderCounts(sortedSites, folderCountsOverride)
   const commands: PaletteCommand[] = [
     {
       title: 'Use light theme',
@@ -109,8 +105,7 @@ export function SitePicker({
           ) : (
             <div className="site-picker-list">
               {sortedSites.map((entry) => {
-                const startPath = hasSiteDiscoveryMetadata(entry) ? ownValue(startPaths, entry.site.id) : undefined
-                const href = startPath === undefined ? `/${encodeURIComponent(entry.site.id)}` : artifactRouteHref(entry.site.id, startPath)
+                const href = `/${encodeURIComponent(entry.site.id)}`
                 return (
                   <a
                     className="site-picker-row"

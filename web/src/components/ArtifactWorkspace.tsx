@@ -4,7 +4,7 @@ import { CommandPalette, type PaletteCommand } from './CommandPalette'
 import { DirectoryPage } from './DirectoryPage'
 import { Icon } from './Icon'
 import { Sidebar } from './Sidebar'
-import { SiteHome } from './SiteHome'
+import { RecentlyUpdated, SiteHome, SiteHomeHeader } from './SiteHome'
 import { siteCountLabel } from '../domain/site-count-label'
 import { ThemeSwitcher } from './ThemeSwitcher'
 import { ReaderMoreMenu, type ReaderMoreMenuItem } from './ReaderMoreMenu'
@@ -19,7 +19,7 @@ import { pageTitle, usePageTitle } from './usePageTitle'
 import { usePageNoindex } from './usePageNoindex'
 import { followInApp } from './spa-link'
 import { nearbyArtifacts } from '../domain/nearby-pages'
-import { resolveDirectory } from '../domain/directory'
+import { resolveDirectory, resolveRootDirectory } from '../domain/directory'
 import { normalizeLanguageTag } from '../domain/document-language'
 import type { FullTextHit, SiteFullTextSearch } from '../data/fulltext'
 import { clampMatch, stepMatch } from '../domain/match-navigator'
@@ -50,7 +50,6 @@ export function ArtifactWorkspace({
   fullTextSearch,
   recentReads,
   sidebarTreeStyle = 'branch-guides',
-  siteHomeTreeStyle = 'path-list',
   initialExpandedPaths = [],
   initialSidebarOpen,
   rankingMaxHits: rankingMaxHitsProp,
@@ -71,7 +70,6 @@ export function ArtifactWorkspace({
   fullTextSearch?: SiteFullTextSearch
   recentReads?: RecentArtifactRead[]
   sidebarTreeStyle?: TreeStyle
-  siteHomeTreeStyle?: TreeStyle
   initialExpandedPaths?: string[]
   initialSidebarOpen?: boolean
   /** Page text search ranks up to this many matching pages (stories and tests lower it). */
@@ -131,10 +129,16 @@ export function ArtifactWorkspace({
     ? findArtifact(index, routeArtifactPath)
     : undefined
   // A path that is not a page may be a folder: every folder is a page (ISSUE-075).
+  // The site root is the root folder's directory page, with an empty path.
   const currentDirectory = useMemo(
-    () => routeArtifactPath && !currentArtifact ? resolveDirectory(index.artifacts, routeArtifactPath) : undefined,
-    [routeArtifactPath, currentArtifact, index.artifacts],
+    () => route.kind !== 'site'
+      ? undefined
+      : routeArtifactPath
+        ? (!currentArtifact ? resolveDirectory(index.artifacts, routeArtifactPath) : undefined)
+        : resolveRootDirectory(index.artifacts),
+    [route.kind, routeArtifactPath, currentArtifact, index.artifacts],
   )
+  const isSiteRoot = Boolean(currentDirectory) && !routeArtifactPath
   // The page whose content fills the stage: the open page, or a folder's README or index page.
   const bodyArtifact = currentArtifact ?? currentDirectory?.indexArtifact
   const effectiveRecentReads = recentReads ?? storedRecentReads
@@ -741,7 +745,7 @@ export function ArtifactWorkspace({
       onSelect: () => { window.open(bodyArtifact.artifactUrl, '_blank', 'noopener,noreferrer') },
     })
   }
-  if (currentArtifact || currentDirectory) {
+  if (currentArtifact || (currentDirectory && !isSiteRoot)) {
     moreMenuItems.push({
       id: 'site-home',
       label: `${index.site.title} home`,
@@ -754,7 +758,7 @@ export function ArtifactWorkspace({
     id: 'all-sites',
     label: 'All sites',
     icon: 'library',
-    separatorBefore: moreMenuItems.length > 0 && !(currentArtifact || currentDirectory),
+    separatorBefore: moreMenuItems.length > 0 && !(currentArtifact || (currentDirectory && !isSiteRoot)),
     onSelect: () => navigateWithinWorkspace('/'),
   })
   moreMenuItems.push(...(['system', 'light', 'dark'] as const).map((mode, position) => ({
@@ -783,7 +787,7 @@ export function ArtifactWorkspace({
         id="workspace-sidebar"
         sites={paletteSites.map(({ site }) => site)}
         artifactPath={currentArtifact?.path}
-        directoryPath={currentDirectory?.path}
+        directoryPath={currentDirectory?.path || undefined}
         expandedPaths={expandedPaths}
         onExpandedPathsChange={updateExpandedPaths}
         revealRequest={sidebarReveal}
@@ -913,7 +917,7 @@ export function ArtifactWorkspace({
                   <Icon name="library" size={14} />
                   <span>All sites</span>
                 </button>
-                {currentArtifact || currentDirectory ? (
+                {currentArtifact || (currentDirectory && !isSiteRoot) ? (
                   <button
                     className="context-button context-home-button"
                     type="button"
@@ -1016,7 +1020,17 @@ export function ArtifactWorkspace({
                 listing={currentDirectory}
                 siteId={index.site.id}
                 body={currentDirectory.indexArtifact ? artifactView : undefined}
-                                onOpen={navigateWithinWorkspace}
+                header={isSiteRoot ? (
+                  <SiteHomeHeader
+                    index={index}
+                    pageCount={currentDirectory.pageCount}
+                    latestUpdatedAt={currentDirectory.latestUpdatedAt}
+                    onOpenPreviews={() => navigateWithinWorkspace(`/${encodeURIComponent(index.site.id)}/_previews`)}
+                    onOpenPalette={() => openPalette('')}
+                  />
+                ) : undefined}
+                footer={isSiteRoot ? <RecentlyUpdated index={index} onOpenArtifact={navigateWithinWorkspace} /> : undefined}
+                onOpen={navigateWithinWorkspace}
               />
             ) : artifactView ?? (routeArtifactPath ? (
               <div className="stage-message">
@@ -1048,11 +1062,8 @@ export function ArtifactWorkspace({
             ) : (
               <SiteHome
                 index={index}
-                onOpenArtifact={navigateWithinWorkspace}
-                                onOpenPreviews={() => navigateWithinWorkspace(`/${encodeURIComponent(index.site.id)}/_previews`)}
+                onOpenPreviews={() => navigateWithinWorkspace(`/${encodeURIComponent(index.site.id)}/_previews`)}
                 onOpenPalette={() => openPalette('')}
-                treeStyle={siteHomeTreeStyle}
-                defaultExpandedPaths={initialExpandedPaths}
               />
             ))}
 

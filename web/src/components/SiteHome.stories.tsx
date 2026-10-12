@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { deepExpandedPaths, deepSreIndex } from '../stories/fixtures'
+import { deepSreIndex } from '../stories/fixtures'
 import { SiteHome as SiteHomeView } from './SiteHome'
 
 type SiteHomeStoryArgs = {
@@ -14,17 +14,14 @@ function SiteHomeStory({ theme }: SiteHomeStoryArgs) {
 
   return (
     <SiteHomeView
-      index={deepSreIndex}
-      onOpenArtifact={() => undefined}
+      index={{ ...deepSreIndex, artifacts: [] }}
       onOpenPalette={() => undefined}
-      treeStyle="path-list"
-      defaultExpandedPaths={deepExpandedPaths}
     />
   )
 }
 
 const meta = {
-  title: 'Product/Site home',
+  title: 'Product/Site home (empty)',
   args: {
     theme: 'light',
   },
@@ -41,5 +38,5 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const SiteHome: Story = {
-  name: 'Site home',
+  name: 'Empty site',
 }
