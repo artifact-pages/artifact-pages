@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"go.yaml.in/yaml/v3"
+
+	"github.com/artifact-pages/artifact-pages/cli/internal/version"
 )
 
 const cloudflareConfig = `schemaVersion: 1
@@ -111,7 +113,7 @@ func TestCloudflareGenerationIsDeterministicCheckableAndLocal(t *testing.T) {
 		if err := yaml.Unmarshal(snapshot[path], &value); err != nil {
 			t.Errorf("generated YAML %s is invalid: %v", path, err)
 		}
-		if !strings.Contains(string(snapshot[path]), "CLI v0.4.0") {
+		if !strings.Contains(string(snapshot[path]), "CLI v"+version.Product) {
 			t.Errorf("generated YAML %s does not record the generating CLI version", path)
 		}
 	}
