@@ -107,6 +107,8 @@ test('invalid snippet fields in the manifest disable excerpts only', async () =>
     (manifest) => { manifest.snippetLimits.omittedDocuments = [1] },
     (manifest) => { delete manifest.snippetLimits },
     (manifest) => { manifest.texts[1].rawBytes = 262145 },
+    (manifest) => { manifest.sections.rawBytes = 67108865 },
+    (manifest) => { manifest.sections.bytes = 67108865 },
     (manifest) => { manifest.sections.url = '/_indexes/sre/search/text-' + manifest.sections.sha256 + '.gz' },
   ]) {
     const { client, count } = fixture('manifest-snippets.json', (manifest) => { edit(manifest); return manifest })

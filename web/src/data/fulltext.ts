@@ -38,6 +38,9 @@ type ExcerptOptions = { signal?: AbortSignal }
 /** A text pack holds at most this many raw bytes (docs/architecture/fulltext-search.md, Packing and caps). */
 const MAX_PACK_RAW_BYTES = 262144
 
+/** A reader treats a larger `sections` reference (compressed or decoded) as invalid snippet data. */
+const MAX_SECTIONS_BYTES = 67108864
+
 function validRef(r: ObjectRef, kind: string, site: string) {
   return r && typeof r === 'object' && typeof r.sha256 === 'string' && /^[a-f0-9]{64}$/.test(r.sha256) &&
     r.url === `/_indexes/${site}/search/${kind}-${r.sha256}.gz` &&
@@ -51,7 +54,7 @@ function parseSnippetFields(payload: unknown, site: string): SnippetFields | nul
   if (m.sections === undefined && m.texts === undefined) return null
   if (m.sections === undefined || m.texts === undefined) return null
   if (!Array.isArray(m.texts) || m.texts.length === 0) return null
-  if (!validRef(m.sections as ObjectRef, 'sections', site) || m.texts.some((ref: ObjectRef) => !validRef(ref, 'text', site) || ref.rawBytes > MAX_PACK_RAW_BYTES)) return null
+  if (!validRef(m.sections as ObjectRef, 'sections', site) || (m.sections as ObjectRef).bytes > MAX_SECTIONS_BYTES || (m.sections as ObjectRef).rawBytes > MAX_SECTIONS_BYTES || m.texts.some((ref: ObjectRef) => !validRef(ref, 'text', site) || ref.rawBytes > MAX_PACK_RAW_BYTES)) return null
   const limits = m.snippetLimits as Record<string, unknown> | null | undefined
   if (!limits || typeof limits !== 'object' || limits.maxDocumentBytes !== 262144 || limits.maxSiteBytes !== 33554432) return null
   const strings = (value: unknown): value is string[] => Array.isArray(value) && value.every((item) => typeof item === 'string')
