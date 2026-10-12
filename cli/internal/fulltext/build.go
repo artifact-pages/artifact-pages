@@ -545,6 +545,7 @@ func Build(ctx context.Context, site string, input []Record) (Projection, error)
 		return Projection{}, err
 	}
 	if p.Manifest.Sections == nil && p.Manifest.Texts == nil && p.Manifest.SnippetLimits == nil {
+		// Keep v1's historical trailing newline for byte-identical manifests; extended manifests match testdata/manifest-snippets.json without one.
 		data = append(data, '\n')
 	}
 	p.Files["manifest.json"] = data

@@ -246,7 +246,7 @@ func TestSnippetWriterSiteCapOmitsWholeDocumentAndContinues(t *testing.T) {
 		t.Fatalf("unexpected later-small range: %+v", smallSection)
 	}
 
-	withoutOmitted := append([]Record(nil), records[:129]...)
+	withoutOmitted := append([]Record(nil), records[:128]...)
 	withoutOmitted = append(withoutOmitted, records[129])
 	comparison, err := Build(context.Background(), "sre", withoutOmitted)
 	if err != nil {
