@@ -1,6 +1,6 @@
 # IMP-79 — Legacy site control records rebuild automatically
 
-- Status: In progress
+- Status: Done
 - Assignee: Codex
 - Priority: P1
 
@@ -22,13 +22,13 @@
 
 ## Acceptance criteria
 
-- [ ] Known legacy shapes wrap `errSiteControlLegacyFormat` and retain the record and detail; other validation failures remain fail-closed.
-- [ ] Legacy publish-state rebuilds from a full origin inventory, never uses the fast path, uses a deterministic legacy generation, backs up exact bytes and metadata before origin writes, and replaces state with an `If-Match` on the legacy ETag.
-- [ ] Identical pre-existing backups are accepted; conflicting backup bytes fail before origin writes. Active retry transactions return the specified unfinished-cache-retry error.
-- [ ] A valid legacy cache-retry record without a site field is adopted with its paths revalidated, backed up, and updated through the existing ETag condition. Invalid paths return the specified unfinished-cache-retry error.
-- [ ] Dry runs write nothing and report planned legacy recovery. Text output includes the specified publish-state and cache-retry lines; JSON includes optional `legacyControl` details.
-- [ ] The prior-state loader returns `(nil, nil)` for legacy state, and `app deploy` uses the specified per-site republish hints while leaving registry failures unchanged.
-- [ ] Corrupt, oversized, unsupported-schema, and otherwise invalid records still fail closed; tests cover reconciliation, backup conflicts, CAS races, retry handling, and output.
+- [x] Known legacy shapes wrap `errSiteControlLegacyFormat` and retain the record and detail; other validation failures remain fail-closed.
+- [x] Legacy publish-state rebuilds from a full origin inventory, never uses the fast path, uses a deterministic legacy generation, backs up exact bytes and metadata before origin writes, and replaces state with an `If-Match` on the legacy ETag.
+- [x] Identical pre-existing backups are accepted; conflicting backup bytes fail before origin writes. Active retry transactions return the specified unfinished-cache-retry error.
+- [x] A valid legacy cache-retry record without a site field is adopted with its paths revalidated, backed up, and updated through the existing ETag condition. Invalid paths return the specified unfinished-cache-retry error.
+- [x] Dry runs write nothing and report planned legacy recovery. Text output includes the specified publish-state and cache-retry lines; JSON includes optional `legacyControl` details.
+- [x] The prior-state loader returns `(nil, nil)` for legacy state, and `app deploy` uses the specified per-site republish hints while leaving registry failures unchanged.
+- [x] Corrupt, oversized, unsupported-schema, and otherwise invalid records still fail closed; tests cover reconciliation, backup conflicts, CAS races, retry handling, and output.
 
 ## Verification
 
@@ -37,3 +37,5 @@
 - Focused publisher tests covering legacy publish-state rebuilds, GET-only mode, dry-run reporting, CAS races, backup conflicts, unfinished retries, cache-retry adoption, prior-state loading, strict state validation, and compatibility hints passed.
 - Focused `cli/cmd/artifact-pages` tests covering the legacy text lines and optional JSON result field passed.
 - `GOCACHE=$PWD/.local/go-cache go test ./cli/...` could not complete in this sandbox: existing tests using `httptest` panic because listening on `[::1]:0` is denied (`operation not permitted`). The observed cases were `TestNewDeploymentBackendWiresCloudflareRegistryReaderEnvironment`, `TestBootstrapRemoteUsesPrivateConfigTokenForConfigOnly`, `TestPullRequestResolverAcceptsExplicitNumberOrCanonicalURL`, and `TestDeployAppDownloadsPublishedVersionOverHTTPS`.
+- CI on [#108](https://github.com/artifact-pages/artifact-pages/pull/108) passed the full `go test ./cli/...` suite (merged as `29723eda`).
+- Verification bucket, 2026-10-12: `site sync` rebuilt the four `verify-scale-*` sites from their legacy publish-state records automatically, saved the exact bytes under `_control/sites/<site>/legacy/`; the web build was deployed afterwards.
