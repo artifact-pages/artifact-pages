@@ -16,7 +16,7 @@ export async function resolve(specifier, context, next) {
 }`))
 
 const { decodeSectionTable } = await import('./fulltext-codec.ts')
-const { EXCERPT_CLUSTERS, EXCERPT_CLUSTERS_BEFORE, excerptFor, excerptTerms, foldWithSourceRanges } = await import('./fulltext-snippets.ts')
+const { EXCERPT_CLUSTERS, EXCERPT_CLUSTERS_BEFORE, EXCERPT_SNAP_CLUSTERS, excerptFor, excerptTerms, foldWithSourceRanges } = await import('./fulltext-snippets.ts')
 
 const dir = new URL('../../../cli/internal/fulltext/testdata/', import.meta.url)
 const blob = (ref) => gunzipSync(readFileSync(new URL(ref.url.split('/').pop(), dir)))
@@ -114,7 +114,8 @@ test('F3 long single section: window arithmetic at the edges', () => {
   assert.equal(tail.parts[0].text, '…')
   assert.equal(tail.parts.at(-1).mark, true)
   assert.deepEqual(markedText(tail), ['界'])
-  assert.equal(clusters(tail.parts.slice(1).map((part) => part.text).join('')), EXCERPT_CLUSTERS_BEFORE + 1)
+  const tailSize = clusters(tail.parts.slice(1).map((part) => part.text).join(''))
+  assert.ok(tailSize >= 1 && tailSize <= EXCERPT_CLUSTERS_BEFORE + 1)
   const head = excerptFor([{ heading: '', anchor: '', text: longText }], excerptTerms('aaa'))
   assert.notEqual(head.parts[0].text, '…')
   assert.equal(head.parts.at(-1).text, '…')
@@ -136,12 +137,48 @@ test('the window never splits a grapheme cluster and starts 40 clusters before t
     const excerpt = excerptFor([{ heading: 'H', anchor: 'h', text: clustersList.join('') }], ['q'])
     assert.deepEqual(markedText(excerpt), ['Q'])
     const body = excerpt.parts.filter((part) => part.text !== '…').map((part) => part.text).join('')
-    const expected = clustersList.slice(position - EXCERPT_CLUSTERS_BEFORE, position - EXCERPT_CLUSTERS_BEFORE + EXCERPT_CLUSTERS).join('')
-    assert.equal(body, expected)
-    assert.equal(clusters(body), EXCERPT_CLUSTERS)
+    const size = clusters(body)
+    assert.ok(size >= EXCERPT_CLUSTERS - 2 * EXCERPT_SNAP_CLUSTERS && size <= EXCERPT_CLUSTERS, `body of ${size} clusters`)
+    // The body is a contiguous run of whole clusters that keeps the match.
+    const at = clustersList.join('').indexOf(body)
+    assert.ok(at >= 0)
+    assert.ok(body.includes('Q'))
     assert.equal(excerpt.parts[0].text, '…')
     assert.equal(excerpt.parts.at(-1).text, '…')
   }
+})
+
+test('the window snaps to word boundaries without dropping the match', () => {
+  const words = Array.from({ length: 60 }, (_, i) => `word${String(i + 1).padStart(2, '0')}`)
+  const text = words.join(' ')
+  const excerpt = excerptFor([{ heading: '', anchor: '', text }], ['word40'])
+  assert.deepEqual(markedText(excerpt), ['word40'])
+  assert.equal(excerpt.parts[0].text, '…')
+  const body = excerpt.parts.filter((part) => part.text !== '…').map((part) => part.text).join('')
+  const at = text.indexOf(body)
+  assert.ok(at > 0)
+  assert.doesNotMatch(text[at - 1] + body[0], /^[A-Za-z0-9][A-Za-z0-9]$/)
+  assert.doesNotMatch(body, /^\s|\s$/)
+  const endsAt = at + body.length
+  if (endsAt < text.length) assert.equal(text[endsAt], ' ')
+  assert.match(body, /^word\d\d/)
+  assert.match(body, /word\d\d$/)
+})
+
+test('without word boundaries near the cut the grapheme cut stands', () => {
+  const run = `${'a'.repeat(200)}q${'a'.repeat(199)}`
+  const excerpt = excerptFor([{ heading: '', anchor: '', text: run }], ['q'])
+  assert.deepEqual(markedText(excerpt), ['q'])
+  const body = excerpt.parts.filter((part) => part.text !== '…').map((part) => part.text).join('')
+  assert.equal(body, run.slice(200 - EXCERPT_CLUSTERS_BEFORE, 200 - EXCERPT_CLUSTERS_BEFORE + EXCERPT_CLUSTERS))
+})
+
+test('Japanese text still yields a highlighted excerpt', () => {
+  const text = '検索結果の表示を改善するために、全文検索の仕組みを見直しました。'.repeat(20)
+  const excerpt = excerptFor([{ heading: '', anchor: '', text }], excerptTerms('全文検索'))
+  assert.ok(excerpt)
+  assert.ok(markedText(excerpt).length > 0)
+  assert.ok(markedText(excerpt).every((part) => part === '全文検索'))
 })
 
 test('foldWithSourceRanges maps folded text back to source clusters', () => {
