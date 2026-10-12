@@ -3296,6 +3296,22 @@ mark {
   overflow-wrap: anywhere;
 }
 
+.search-page-result-excerpt {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.search-page-result-section {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
 .search-page-result mark {
   padding: 0 1px;
   border-radius: 3px;

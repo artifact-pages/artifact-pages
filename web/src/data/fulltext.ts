@@ -1,5 +1,6 @@
 import type { SiteDiscoveryMetadata } from '../domain/index'
-import type { Leaf, Root } from '../domain/fulltext-codec'
+import type { Leaf, Root, SectionRow } from '../domain/fulltext-codec'
+import type { SearchExcerpt } from '../domain/fulltext-snippets'
 import { isValidSiteId } from './indexes'
 import { assertSupportedSchema, isSupportedSchema, UnsupportedSchemaError } from './schema'
 
@@ -20,9 +21,40 @@ export class FullTextSearchError extends Error {
 }
 type ObjectRef = { url: string; sha256: string; bytes: number; rawBytes: number }
 type Manifest = { version: 1; generation: string; site: string; documents: number; root: ObjectRef; shards: (ObjectRef | null)[] }
-type Generation = { manifest: Manifest; root: Root; leaves: Map<number, Promise<Leaf>> }
+/** The optional section table and text packs (ISSUE-085); null when absent or invalid. */
+type SnippetFields = { sections: ObjectRef; texts: ObjectRef[]; omitted: Set<string> }
+type Generation = {
+  manifest: Manifest
+  root: Root
+  leaves: Map<number, Promise<Leaf>>
+  snippet: SnippetFields | null
+  sections?: Promise<Map<string, SectionRow[]> | null>
+  packs: Map<string, Promise<Uint8Array>>
+}
 type Options = { fetcher?: typeof fetch; now?: () => number }
 type SearchOptions = { signal?: AbortSignal; offset?: number; limit?: number }
+type ExcerptOptions = { signal?: AbortSignal }
+
+function validRef(r: ObjectRef, kind: string, site: string) {
+  return r && typeof r === 'object' && typeof r.sha256 === 'string' && /^[a-f0-9]{64}$/.test(r.sha256) &&
+    r.url === `/_indexes/${site}/search/${kind}-${r.sha256}.gz` &&
+    Number.isSafeInteger(r.bytes) && r.bytes > 0 && Number.isSafeInteger(r.rawBytes) && r.rawBytes > 0
+}
+
+/** Reads the additive snippet fields. Never throws: anything unusable disables excerpts only. */
+function parseSnippetFields(payload: unknown, site: string): SnippetFields | null {
+  if (!payload || typeof payload !== 'object') return null
+  const m = payload as Record<string, unknown>
+  if (m.sections === undefined && m.texts === undefined) return null
+  if (m.sections === undefined || m.texts === undefined) return null
+  if (!Array.isArray(m.texts) || m.texts.length === 0) return null
+  if (!validRef(m.sections as ObjectRef, 'sections', site) || m.texts.some((ref: ObjectRef) => !validRef(ref, 'text', site))) return null
+  const limits = m.snippetLimits as Record<string, unknown> | null | undefined
+  if (!limits || typeof limits !== 'object' || limits.maxDocumentBytes !== 262144 || limits.maxSiteBytes !== 33554432) return null
+  const strings = (value: unknown): value is string[] => Array.isArray(value) && value.every((item) => typeof item === 'string')
+  if (!strings(limits.truncatedDocuments) || !strings(limits.omittedDocuments)) return null
+  return { sections: m.sections as ObjectRef, texts: m.texts as ObjectRef[], omitted: new Set(limits.omittedDocuments) }
+}
 
 function parseManifest(payload: unknown, site: string): Manifest {
   const fail = () => { throw new FullTextSearchError('invalid-data', 'Invalid full-text manifest') }
@@ -36,10 +68,7 @@ function parseManifest(payload: unknown, site: string): Manifest {
   }
   const m = payload as Manifest
   if (!isSupportedSchema('full-text-manifest', m.version) || !/^[a-f0-9]{64}$/.test(m.generation) || m.site !== site || !Number.isSafeInteger(m.documents) || m.documents < 0 || !Array.isArray(m.shards) || m.shards.length !== 128) return fail()
-  const validRef = (r: ObjectRef, kind: string) => r && /^[a-f0-9]{64}$/.test(r.sha256) &&
-    r.url === `/_indexes/${site}/search/${kind}-${r.sha256}.gz` &&
-    Number.isSafeInteger(r.bytes) && r.bytes > 0 && Number.isSafeInteger(r.rawBytes) && r.rawBytes > 0
-  if (!validRef(m.root, 'root') || m.shards.some((r) => r !== null && !validRef(r, 'leaf'))) return fail()
+  if (!validRef(m.root, 'root', site) || m.shards.some((r) => r !== null && !validRef(r, 'leaf', site))) return fail()
   return m
 }
 
@@ -102,14 +131,18 @@ export function createSiteFullTextSearch(metadata: Pick<SiteDiscoveryMetadata, '
     expiresAt = now() + 60_000
     const pending = (async () => {
       if (!url) throw new FullTextSearchError('unavailable', 'Full-text search is not enabled for this site')
-      let manifest: Manifest
-      try { manifest = parseManifest(await (await request(url, true)).json(), siteId) }
+      let manifest: Manifest, snippet: SnippetFields | null
+      try {
+        const payload: unknown = await (await request(url, true)).json()
+        manifest = parseManifest(payload, siteId)
+        snippet = parseSnippetFields(payload, siteId)
+      }
       catch (cause) { if (cause instanceof FullTextSearchError) throw cause; throw new FullTextSearchError('invalid-data', 'Invalid search manifest JSON', undefined, { cause }) }
       const root = codec.decodeRoot(await unpack(manifest.root))
       if (root.documents !== manifest.documents) throw new FullTextSearchError('invalid-data', 'Search document count mismatch')
       // Empty shard references are legitimate only when no external token routes there.
       if (root.tokens.some((token, i) => !root.ids[i] && !manifest.shards[codec.tokenShard(token, manifest.shards.length)])) throw new FullTextSearchError('invalid-data', 'Missing search shard reference')
-      return { manifest, root, leaves: new Map<number, Promise<Leaf>>() }
+      return { manifest, root, leaves: new Map<number, Promise<Leaf>>(), snippet, packs: new Map<string, Promise<Uint8Array>>() }
     })()
     generation = pending
     void pending.catch(() => { if (generation === pending) generation = undefined })
@@ -171,7 +204,110 @@ export function createSiteFullTextSearch(metadata: Pick<SiteDiscoveryMetadata, '
       throw new FullTextSearchError('invalid-data', 'Invalid full-text index', undefined, { cause })
     }
   }
-  return { available: url !== undefined, search, clear }
+
+  // Excerpts (ISSUE-085): optional and never fatal. They read the section table and the
+  // text packs of the displayed hits only, and never change the result list.
+  type Attempt = { excerpts: Map<string, SearchExcerpt | null>; missing: boolean }
+  async function attempt(
+    g: Generation,
+    query: string,
+    paths: readonly string[],
+    snippets: typeof import('../domain/fulltext-snippets'),
+    codec: typeof import('../domain/fulltext-codec'),
+    signal?: AbortSignal,
+  ): Promise<Attempt> {
+    const excerpts = new Map<string, SearchExcerpt | null>(paths.map((path) => [path, null]))
+    const snippet = g.snippet
+    if (!snippet) return { excerpts, missing: false }
+    const wanted = paths.filter((path) => !snippet.omitted.has(path))
+    if (wanted.length === 0) return { excerpts, missing: false }
+    let pendingTable = g.sections
+    if (!pendingTable) {
+      const created = unpack(snippet.sections).then((bytes) => {
+        try { return codec.decodeSectionTable(bytes, g.root.paths, snippet.texts.map((ref) => ref.rawBytes)) }
+        catch { return null }
+      }, (cause: unknown) => {
+        // A missing or unreachable table is retried later; invalid data stays cached as null.
+        if (cause instanceof FullTextSearchError && cause.code === 'invalid-data') return null
+        throw cause
+      })
+      pendingTable = created
+      g.sections = created
+      void created.catch(() => { if (g.sections === created) g.sections = undefined })
+    }
+    let table: Map<string, SectionRow[]> | null
+    try { table = await cancellable(pendingTable, signal) }
+    catch (cause) {
+      if (signal?.aborted) throw cause
+      return { excerpts, missing: cause instanceof FullTextSearchError && cause.status === 404 }
+    }
+    if (!table) return { excerpts, missing: false }
+    const rows = new Map<string, SectionRow[]>()
+    for (const path of wanted) { const row = table.get(path); if (row) rows.set(path, row) }
+    const needed = [...new Set([...rows.values()].map((row) => row[0].pack))]
+    const bytesByPack = new Map<number, Uint8Array>()
+    let missing = false
+    await Promise.all(Array.from({ length: Math.min(6, needed.length) }, async () => {
+      for (;;) {
+        signal?.throwIfAborted()
+        const index = needed.shift(); if (index === undefined) break
+        const ref = snippet.texts[index]
+        let pending = g.packs.get(ref.sha256)
+        if (!pending) {
+          const created = unpack(ref)
+          pending = created
+          g.packs.set(ref.sha256, created)
+          void created.catch(() => { if (g.packs.get(ref.sha256) === created) g.packs.delete(ref.sha256) })
+        }
+        try { bytesByPack.set(index, await cancellable(pending, signal)) }
+        catch (cause) {
+          if (signal?.aborted) throw cause
+          if (cause instanceof FullTextSearchError && cause.status === 404) missing = true
+        }
+      }
+    }))
+    signal?.throwIfAborted()
+    const terms = snippets.excerptTerms(query), decoder = new TextDecoder('utf-8', { fatal: true })
+    for (const [path, row] of rows) {
+      const bytes = bytesByPack.get(row[0].pack)
+      if (!bytes) continue
+      try {
+        const sections = row.map((section) => ({
+          heading: section.heading,
+          anchor: section.anchor,
+          text: decoder.decode(bytes.subarray(section.offset, section.offset + section.length)),
+        }))
+        excerpts.set(path, snippets.excerptFor(sections, terms))
+      } catch { /* a hit whose sections fail to decode has no excerpt */ }
+    }
+    return { excerpts, missing }
+  }
+
+  async function excerpts(query: string, generationId: string, paths: readonly string[], { signal }: ExcerptOptions = {}): Promise<Map<string, SearchExcerpt | null>> {
+    signal?.throwIfAborted()
+    const none = () => new Map<string, SearchExcerpt | null>(paths.map((path) => [path, null]))
+    if (!url || !query.normalize('NFKC').trim() || !generation || paths.length === 0) return none()
+    let g: Generation
+    try { g = await cancellable(generation, signal) }
+    catch (cause) { if (signal?.aborted) throw cause; return none() }
+    if (g.manifest.generation !== generationId) return none()
+    try {
+      const [snippets, codec] = await cancellable(Promise.all([import('../domain/fulltext-snippets'), import('../domain/fulltext-codec')]), signal)
+      const first = await attempt(g, query, paths, snippets, codec, signal)
+      if (!first.missing) return first.excerpts
+      // A 404 means the generation was reconciled away: reload the manifest once.
+      clear()
+      let fresh: Generation
+      try { fresh = await cancellable(load(codec), signal) }
+      catch (cause) { if (signal?.aborted) throw cause; return first.excerpts }
+      if (fresh.manifest.generation === g.manifest.generation) return first.excerpts
+      return (await attempt(fresh, query, paths, snippets, codec, signal)).excerpts
+    } catch (cause) {
+      if (signal?.aborted) throw cause
+      return none()
+    }
+  }
+  return { available: url !== undefined, search, excerpts, clear }
 }
 
 export type SiteFullTextSearch = ReturnType<typeof createSiteFullTextSearch>

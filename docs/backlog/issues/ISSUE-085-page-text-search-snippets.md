@@ -1,12 +1,13 @@
 # Page text search results show no match snippet
 
-- Status: Blocked
+- Status: In progress
+- Assignee: Claude
 - Priority: P3
 - Area: Page text search results (`web/src/components/PageTextSearch.tsx`); search format (`cli/internal/fulltext`, Codex-owned)
 
-## Blocker
+## Status note
 
-Blocked on [IMP-77](../implementation/IMP-77-fulltext-section-table-and-text-packs.md)'s format contract and golden fixtures (Codex). [TD20](../technical-design/TD20-search-results-page-and-snippet-packs.md) direction is accepted (2026-10-11) and the results page shipped in ISSUE-087; once the contract merges, the reader side (snippets, headings, body-hit ordering) proceeds in parallel with the Go writer. Package WS1 in [workstreams](../workstreams.md#current-work-packages-2026-10-11).
+The format contract merged in #106 and the writer is [IMP-77](../implementation/IMP-77-fulltext-section-table-and-text-packs.md) (Codex); this item is the reader side.
 
 ## Problem
 
@@ -21,11 +22,10 @@ The search projection stores tokens and postings, not text, frequencies or posit
 
 ## Expected outcome
 
-Each "Text" result shows a short excerpt around the first match, and body-only hits can be ordered by relevance.
+Each text result shows a short excerpt around the first match, linking to its section. Body-only hits are not reordered by snippets (contract, Reader procedure step 8, owner 2026-10-12).
 
 ## Acceptance criteria
 
-- [ ] A design note in `docs/architecture/fulltext-search.md` chooses between a format change (stored excerpts or term positions, versioned per TD2 and owned by the CLI side) and a bounded client fetch of result pages, with size and latency measurements.
-- [ ] If the format changes, the CLI and web slices are split and sequenced through `STATUS.md`.
-- [ ] Results show a highlighted excerpt for text matches without regressing the ISSUE-077 ranking, the fallback above the ranking threshold, or keyboard navigation.
+- [x] The design note choosing the format change is met by the contract in `docs/architecture/fulltext-search.md` (#106); the CLI and web slices are split (IMP-77 and this item).
+- [ ] Results show a highlighted excerpt for text matches without reordering or regressing the ISSUE-077 ranking, the fallback above the ranking threshold, or keyboard navigation.
 - [ ] Specification updated.

@@ -52,7 +52,9 @@ export function createStoryFullTextSearch(index: SiteIndex, behavior: StoryFullT
     return { siteId: index.site.id, query, generation: 'story', total: matches.length, hits, hasMore: offset + hits.length < matches.length }
   }
 
-  return { available: true, search, clear: () => { documents = undefined } }
+  const excerpts: SiteFullTextSearch['excerpts'] = async (_query, _generation, paths) => new Map(paths.map((path) => [path, null]))
+
+  return { available: true, search, excerpts, clear: () => { documents = undefined } }
 }
 
 function wait(ms: number, signal?: AbortSignal) {
