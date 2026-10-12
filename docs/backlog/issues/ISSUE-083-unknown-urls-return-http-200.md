@@ -3,7 +3,7 @@
 - Status: Won't fix
 - Assignee: Claude
 - Priority: P3
-- Area: Split. Web part (Claude-owned): robots meta and nearest-page suggestion in the not-found view. Edge part (Codex-owned: Terraform modules, CLI-produced registry data): HTTP status; announce in `STATUS.md` before starting.
+- Area: Web part (done): robots meta and nearest-page suggestion in the not-found view. Edge part (HTTP status at the edge): declined, see Decision.
 
 ## Problem
 
