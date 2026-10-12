@@ -217,16 +217,15 @@ test('static sites catalog discovers sites and opens a site home without directo
   await page.getByRole('link', { name: /SRE/ }).click()
   await expect(page).toHaveURL(/\/sre$/)
   await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
-  await expect(page.locator('.site-home .artifact-list-section[aria-label="Recently updated"]')).toHaveCount(0)
-  await expect(page.locator('.site-home .tree-artifact .tree-label')).toHaveText([
-    // Folders first, then filename order (ISSUE-076): architecture, diagrams, guides, incidents, reports, runbooks.
-    'Platform topology',
-    'Mermaid rendering catalog',
-    'Markdown styles in the reader',
-    'Checkout latency incident review',
-    'Latency Retrospective',
-    'Service recovery',
+  const siteRoot = page.getByTestId('directory-page')
+  await expect(siteRoot.locator('.site-home-heading')).toBeVisible()
+  await expect(siteRoot.locator('.artifact-list-section[aria-label="Recently updated"]')).toHaveCount(0)
+  await expect(siteRoot.locator('.browse-section')).toHaveCount(0)
+  // The site root lists its top-level folders (ISSUE-076 order); there is no Browse tree.
+  await expect(siteRoot.getByRole('region', { name: 'Folders' }).getByRole('link')).toHaveText([
+    'architecture', 'diagrams', 'guides', 'incidents', 'reports', 'runbooks',
   ])
+
 })
 
 test('mobile search affordances describe their scope and open the matching palette', async ({ page }) => {
@@ -246,7 +245,7 @@ test('mobile search affordances describe their scope and open the matching palet
 
   await page.getByRole('link', { name: /SRE/ }).click()
   await expect(page).toHaveURL(/\/sre$/)
-  const homeJump = page.locator('.site-home').getByRole('button', { name: /Jump to a page/ })
+  const homeJump = page.getByTestId('directory-page').getByRole('button', { name: /Jump to a page/ })
   await expect(homeJump).toBeVisible()
   await expect(homeJump.locator('kbd')).toBeHidden()
 
@@ -324,8 +323,8 @@ test('desktop search affordances keep keyboard shortcuts visible', async ({ page
   await page.getByRole('link', { name: /SRE/ }).click()
   await expect(page).toHaveURL(/\/sre$/)
   // The site home has no inline filter; its ⌘ K button opens the palette.
-  await expect(page.locator('.site-home').getByRole('searchbox')).toHaveCount(0)
-  const homeJump = page.locator('.site-home').getByRole('button', { name: /Jump to a page/ })
+  await expect(page.getByTestId('directory-page').getByRole('searchbox')).toHaveCount(0)
+  const homeJump = page.getByTestId('directory-page').getByRole('button', { name: /Jump to a page/ })
   await expect(homeJump).toBeVisible()
   await expect(homeJump.locator('kbd')).toHaveText('⌘ K')
   await expect(homeJump).toHaveAttribute('aria-keyshortcuts', 'Meta+K Control+K')
@@ -516,9 +515,9 @@ test('site cards show the description, page counts per top-level folder and a St
   // Deterministic order: by site title (case-insensitive), not by registry order.
   await expect(page.locator('.site-picker-main strong')).toHaveText(['Drafts', 'Flat site', 'Guide', 'handbook', 'Wide'])
 
-  // Start reading opens the root README when the site's top level has one, and the site home otherwise.
-  const handbook = page.locator('a.site-picker-row[href="/handbook/README.md"]')
-  await expect(handbook).toHaveAttribute('href', '/handbook/README.md')
+  // Start reading always opens the site root, which shows the root README when there is one.
+  const handbook = page.getByRole('link', { name: /handbook/ })
+  await expect(handbook).toHaveAttribute('href', '/handbook')
   await expect(page.getByRole('link', { name: /Guide/ })).toHaveAttribute('href', '/guide')
   await expect(page.getByRole('link', { name: /Flat site/ })).toHaveAttribute('href', '/flat')
 
@@ -551,7 +550,7 @@ test('site cards show the description, page counts per top-level folder and a St
   await expect(guide.locator('.site-picker-start')).toBeVisible()
 
   await handbook.locator('.site-picker-start').click()
-  await expect(page).toHaveURL(/\/handbook\/README\.md$/u)
+  await expect(page).toHaveURL(/\/handbook$/u)
   await page.goBack()
   await guide.locator('.site-picker-start').click()
   await expect(page).toHaveURL(/\/guide$/u)
@@ -705,9 +704,9 @@ test('an empty registered site stays on its home route and does not affect a nei
   await emptySite.click()
   await expect(page).toHaveURL(/\/empty$/u)
   await expect(page.getByRole('heading', { name: 'Empty registered', exact: true })).toBeVisible()
-  await expect(page.locator('.site-home .site-home-lede')).toContainText('0 published artifacts.')
-  await expect(page.getByText('There are no artifact groups to browse yet.')).toBeVisible()
-  await expect(page.locator('.site-home .tree-artifact')).toHaveCount(0)
+  await expect(page.locator('.site-home .site-home-lede')).toContainText('0 pages')
+  await expect(page.getByText('No artifacts have been published to this site yet.')).toBeVisible()
+  await expect(page.getByTestId('directory-page')).toHaveCount(0)
   await expect(page.locator('.artifact-frame')).toHaveCount(0)
 
   await page.goto('/empty/index.html')
@@ -717,7 +716,7 @@ test('an empty registered site stays on its home route and does not affect a nei
 
   await page.goto('/neighbor')
   await expect(page.getByRole('heading', { name: 'Neighbor', exact: true })).toBeVisible()
-  await expect(page.locator('.site-home .tree-artifact .tree-label')).toHaveText('Neighbor report')
+  await expect(page.getByTestId('directory-page').locator('.directory-row-link')).toHaveText('Neighbor report')
   expect(artifactRequests).toEqual([])
 })
 
@@ -1058,17 +1057,16 @@ test('fixture discovery never falls back to nginx directory listing', async ({ p
 test('small sites avoid redundant recent sections while larger sites keep them', async ({ page }) => {
   await page.goto('/sre')
 
-  await expect(page.locator('.site-home .artifact-list-section[aria-label="Recently updated"]')).toHaveCount(0)
-  await expect(page.locator('.site-home .browse-section')).toBeVisible()
+  await expect(page.locator('.directory-page .artifact-list-section[aria-label="Recently updated"]')).toHaveCount(0)
+  await expect(page.locator('.directory-page .browse-section')).toHaveCount(0)
   await expect(page.locator('.sidebar-panel .sidebar-section-label', { hasText: 'Recently updated' })).toHaveCount(0)
   await expect(page.locator('.sidebar-panel .browse-tree')).toBeVisible()
 
   await page.goto('/showcase')
 
-  await expect(page.locator('.site-home .artifact-list-section[aria-label="Recently updated"]')).toBeVisible()
-  // Recently updated lives on the site home only; the sidebar keeps Pinned and Browse.
+  await expect(page.locator('.directory-page .artifact-list-section[aria-label="Recently updated"]')).toBeVisible()
+  // Recently updated lives on the site root only; the sidebar keeps Pinned and Browse.
   await expect(page.locator('.sidebar-panel .sidebar-section-label', { hasText: 'Recently updated' })).toHaveCount(0)
-  await expect(page.locator('.site-home .browse-section')).toBeVisible()
   await expect(page.locator('.sidebar-panel .browse-tree')).toBeVisible()
 })
 
@@ -3415,8 +3413,8 @@ test('the site home jumps to a page by name through the palette, ignoring IME En
   await page.goto('/sre')
 
   // The site home has no inline filter; finding a page by name is the palette's job.
-  await expect(page.locator('.site-home').getByRole('searchbox')).toHaveCount(0)
-  const homeJump = page.locator('.site-home').getByRole('button', { name: /Jump to a page/ })
+  await expect(page.getByTestId('directory-page').getByRole('searchbox')).toHaveCount(0)
+  const homeJump = page.getByTestId('directory-page').getByRole('button', { name: /Jump to a page/ })
   await homeJump.click()
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('textbox', { name: 'Search artifacts, sites, commands, and headings' })
@@ -3704,8 +3702,8 @@ test('published preview documents stay out of production browsing and the site-h
 
   await page.goto('/showcase')
   await expect(page.getByRole('heading', { name: 'HTML Showcase', exact: true })).toBeVisible()
-  const recent = page.locator('.site-home .artifact-list-section[aria-label="Recently updated"]')
-  const browse = page.locator('.site-home .browse-section')
+  const recent = page.locator('.directory-page .artifact-list-section[aria-label="Recently updated"]')
+  const browse = page.getByTestId('directory-page')
   await expect(recent).toBeVisible()
   await expect(browse).toBeVisible()
   await expect(recent).not.toContainText(previewOnlyTitle)
@@ -5859,11 +5857,11 @@ test.describe('page text search', () => {
     await page.goto('/textsearch/bulk/note-01.md?q=lighthouse')
     await expect(matchNav(page)).toBeVisible()
     await page.goto('/textsearch?q=lighthouse')
-    await expect(page.locator('.site-home .artifact-list-row').first()).not.toHaveAttribute('href', /q=/)
-    await expect(page.locator('.site-home a.tree-artifact').first()).not.toHaveAttribute('href', /q=/)
-    await page.locator('.site-home .artifact-list-row').first().click()
+    await expect(page.locator('.directory-page .artifact-list-row').first()).not.toHaveAttribute('href', /q=/)
+    await expect(page.locator('.directory-page a[data-directory-folder]').first()).not.toHaveAttribute('href', /q=/)
+    await page.locator('.directory-page .artifact-list-row').first().click()
     await expect(page).not.toHaveURL(/q=/)
-    await expect(page.locator('.site-home')).toHaveCount(0)
+    await expect(page.getByTestId('directory-page')).toHaveCount(0)
     await expect(matchNav(page)).toHaveCount(0)
   })
 
@@ -5991,7 +5989,7 @@ test.describe('release UX fixes', () => {
     await expect(page).toHaveTitle('Page not found · Git Artifact Pages')
     // In-app navigation updates the title without a reload.
     await page.goto('/sre')
-    await page.locator('.site-home .tree-artifact').first().click()
+    await page.locator('.directory-page a[data-directory-folder]').first().click()
     await expect(page).toHaveTitle(/ · SRE$/)
   })
 
@@ -6037,7 +6035,7 @@ test.describe('release UX fixes', () => {
     expect(await page.evaluate(() => (window as unknown as { __kept?: boolean }).__kept)).toBe(true)
 
     // Site home and sidebar rows.
-    await expect(page.locator('.site-home a.tree-artifact').first()).toHaveAttribute('href', /^\/sre\//)
+    await expect(page.locator('.directory-page a[data-directory-folder]').first()).toHaveAttribute('href', /^\/sre\//)
   })
 
   test('sidebar Browse rows, Pinned items and breadcrumb menu entries are links', async ({ page }) => {
@@ -6393,12 +6391,21 @@ test.describe('directory pages', () => {
     ['solo/only.md', 'Only page', '2026-10-08T00:00:00Z', []],
     ['my folder/日本語 ノート/page.md', 'Encoded page', '2026-10-08T00:00:00Z', []],
   ] as const
+  type ExtraPage = readonly [string, string, string, readonly { level: number, text: string, id: string }[]]
+  // Folders with a README: 13 children (capped), exactly 12 (not capped).
+  const readmeFolder = (folder: string, children: number): ExtraPage[] => [
+    [`${folder}/README.md`, `${folder} home`, '2026-10-01T00:00:00Z', toc('Welcome')],
+    ...Array.from({ length: children }, (_, position): ExtraPage => [
+      `${folder}/topic-${String(position + 1).padStart(2, '0')}.md`, `Topic ${position + 1}`, '2026-10-05T00:00:00Z', [],
+    ]),
+  ]
+  const cappedPages = [...readmeFolder('handbook', 13), ...readmeFolder('twelve', 12)]
 
-  async function routeDirectoryIndex(page: Page) {
+  async function routeDirectoryIndex(page: Page, pages: readonly ExtraPage[] = extraPages) {
     await page.route('**/_indexes/sre/index.json', async (route) => {
       const response = await route.fetch()
       const index = await response.json()
-      index.artifacts.push(...extraPages.map(([path, title, updatedAt, headings]) => ({
+      index.artifacts.push(...pages.map(([path, title, updatedAt, headings]) => ({
         id: path,
         path,
         title,
@@ -6474,12 +6481,95 @@ test.describe('directory pages', () => {
     const directory = page.getByTestId('directory-page')
     await expect(directory).toHaveAttribute('data-directory-variant', 'index')
     await expect(directory.getByTestId('markdown-document')).toBeVisible()
-    await expect(directory).toContainText('rendered from README.md')
+    await expect(directory.locator('.directory-readme-label')).toHaveText('README.md')
+    await expect(directory).not.toContainText('rendered from')
     const children = directory.getByRole('navigation', { name: /In this folder/ })
+    // The folder header and the list come first; the README sits below them under its file label.
+    const top = (selector: string) => directory.locator(selector).first().evaluate((element) => element.getBoundingClientRect().top)
+    const [headerTop, listTop, labelTop, bodyTop] = await Promise.all([
+      top('.directory-header'), top('.directory-children'), top('.directory-readme-label'), top('[data-testid="markdown-document"]'),
+    ])
+    expect(headerTop).toBeLessThan(listTop)
+    expect(listTop).toBeLessThan(labelTop)
+    expect(labelTop).toBeLessThan(bodyTop)
     await expect(children.getByRole('link')).toHaveText([/Changelog/])
     await expect(children.getByRole('link', { name: /Docs home/ })).toHaveCount(0)
     await expect(page).toHaveTitle('docs · SRE')
     await expect(page.getByRole('button', { name: 'Contents' })).toBeEnabled()
+  })
+
+  test('a folder with a README and more than 12 children shows 10 rows until expanded', async ({ page }) => {
+    await routeDirectoryIndex(page, [...extraPages, ...cappedPages])
+    await page.goto('/sre/handbook')
+
+    const directory = page.getByTestId('directory-page')
+    const rows = directory.getByRole('navigation', { name: /In this folder/ }).locator('.directory-compact li')
+    const more = directory.getByRole('button', { name: 'Show all 13 items' })
+    await expect(rows).toHaveCount(10)
+    await expect(more).toHaveAttribute('aria-expanded', 'false')
+    await expect(more).toHaveAttribute('aria-controls', 'directory-children-list')
+    await expect(directory.locator('#directory-children-list')).toHaveCount(1)
+
+    await more.click()
+    await expect(rows).toHaveCount(13)
+    const fewer = directory.getByRole('button', { name: 'Show fewer' })
+    await expect(fewer).toHaveAttribute('aria-expanded', 'true')
+    await expect(fewer).toBeFocused()
+
+    await fewer.click()
+    await expect(rows).toHaveCount(10)
+    await expect(directory.getByRole('button', { name: 'Show all 13 items' })).toBeFocused()
+    await expect(directory.getByRole('button', { name: 'Show all 13 items' })).toHaveAttribute('aria-expanded', 'false')
+    // The README stays below the list.
+    await expect(directory.locator('.directory-readme-label')).toHaveText('README.md')
+  })
+
+  test('a folder with a README and 12 or fewer children shows every row and no button', async ({ page }) => {
+    await routeDirectoryIndex(page, [...extraPages, ...cappedPages])
+    for (const [path, count] of [['/sre/twelve', 12], ['/sre/docs', 1]] as const) {
+      await page.goto(path)
+      const directory = page.getByTestId('directory-page')
+      await expect(directory.getByRole('navigation', { name: /In this folder/ }).locator('.directory-compact li')).toHaveCount(count)
+      await expect(directory.locator('.directory-more')).toHaveCount(0)
+    }
+  })
+
+  test('the site root is a directory page: header, list, README, then Recently updated', async ({ page }) => {
+    await routeDirectoryIndex(page, [...extraPages, ...cappedPages, ['README.md', 'Site home', '2026-10-02T00:00:00Z', toc('Welcome')]])
+    await page.goto('/sre')
+
+    const directory = page.getByTestId('directory-page')
+    await expect(directory).toHaveAttribute('data-directory-variant', 'index')
+    await expect(directory.getByRole('heading', { level: 1, name: 'SRE', exact: true })).toBeVisible()
+    await expect(directory.locator('.site-home-lede')).toContainText('pages · updated')
+    await expect(directory.getByRole('link', { name: 'View previews' })).toBeVisible()
+    await expect(directory.getByRole('button', { name: /Jump to a page/ })).toBeVisible()
+    await expect(directory.locator('.browse-section')).toHaveCount(0)
+    await expect(directory.locator('.directory-readme-label')).toHaveText('README.md')
+    await expect(directory.getByTestId('markdown-document')).toBeVisible()
+    await expect(page).toHaveTitle('SRE')
+    // The page's own panels refer to the root README; the site home button is not shown on the home itself.
+    await expect(page.getByRole('button', { name: 'Contents' })).toBeEnabled()
+    await expect(page.getByRole('button', { name: 'Go to SRE home' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Copy site link' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Copy folder link' })).toHaveCount(0)
+
+    const top = (selector: string) => directory.locator(selector).first().evaluate((element) => element.getBoundingClientRect().top)
+    const [headerTop, listTop, labelTop, recentTop] = await Promise.all([
+      top('.site-home-heading'), top('.directory-children'), top('.directory-readme-label'), top('.artifact-list-section[aria-label="Recently updated"]'),
+    ])
+    expect(headerTop).toBeLessThan(listTop)
+    expect(listTop).toBeLessThan(labelTop)
+    expect(labelTop).toBeLessThan(recentTop)
+  })
+
+  test('the site root without a README shows the header and full rows', async ({ page }) => {
+    await page.goto('/sre')
+    const directory = page.getByTestId('directory-page')
+    await expect(directory).toHaveAttribute('data-directory-variant', 'list')
+    await expect(directory.locator('.site-home-heading')).toBeVisible()
+    await expect(directory.locator('.directory-readme-label')).toHaveCount(0)
+    await expect(directory.locator('.directory-row').first()).toBeVisible()
   })
 
   test('a folder whose index.html is the only page renders it inside the directory page', async ({ page }) => {

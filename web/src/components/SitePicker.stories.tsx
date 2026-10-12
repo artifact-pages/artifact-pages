@@ -113,11 +113,6 @@ export const CountsNotLoaded: Story = {
   args: { sites: [architecture, guide], folderCounts: {} },
 }
 
-// Guide has a root README, so its card opens that page; the others open the site home.
-export const StartAtRootReadme: Story = {
-  args: { sites: [architecture, guide, handbook], startPaths: { guide: 'README.md' } },
-}
-
 export const Statuses: Story = {
   args: { sites: statusSites },
 }
