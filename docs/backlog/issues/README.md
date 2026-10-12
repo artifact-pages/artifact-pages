@@ -79,7 +79,7 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-080](ISSUE-080-narrow-screen-chrome-and-scroll-cues.md) | Done | P2 | On narrow screens the permanent rail and two-row toolbar take reading space, and wide tables and code scroll without a cue. |
 | [ISSUE-081](ISSUE-081-reader-shell-skip-link-and-document-language.md) | Done | P3 | The reader shell has no skip link and keeps `lang="en"` on Japanese documents. |
 | [ISSUE-082](ISSUE-082-no-previous-next-navigation.md) | Won't fix | P3 | Pages have no previous/next navigation at the end (owner chose GitHub behavior in TD19; superseded by ISSUE-086). |
-| [ISSUE-083](ISSUE-083-unknown-urls-return-http-200.md) | In progress | P3 | Unknown URLs return HTTP 200 with the app shell (soft 404). |
+| [ISSUE-083](ISSUE-083-unknown-urls-return-http-200.md) | Won't fix | P3 | Unknown URLs return HTTP 200 with the app shell (soft 404); web part done, edge 404 declined (owner, 2026-10-12). |
 | [ISSUE-084](ISSUE-084-previews-entry-and-timestamp-polish.md) | Done | P3 | "View previews" is a button, and preview times carry no timezone. |
 | [ISSUE-085](ISSUE-085-page-text-search-snippets.md) | Done | P3 | Page text search results show no match snippet (split from ISSUE-077; reader side, the writer is IMP-77). |
 | [ISSUE-086](ISSUE-086-pages-have-no-related-pages-list.md) | Done | P2 | Pages have no list of related pages to read next. |
