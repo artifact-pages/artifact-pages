@@ -6883,3 +6883,55 @@ test.describe('read next list', () => {
     expect(box!.x + box!.width).toBeLessThanOrEqual(390)
   })
 })
+
+test('loading text appears only after a 300 ms delay and the page stays blank but busy until then', async ({ page }) => {
+  let releaseRegistry!: () => void
+  const registryGate = new Promise<void>((resolve) => { releaseRegistry = resolve })
+  await page.route('**/_indexes/sites.json', async (route) => {
+    await registryGate
+    await route.continue()
+  })
+
+  await page.clock.install({ time: 0 })
+  await page.clock.pauseAt(1000)
+  await page.goto('/')
+  try {
+    await expect(page.locator('main.status-page[aria-busy="true"]')).toBeAttached()
+    await expect(page.getByText('Loading sites…')).toHaveCount(0)
+    await page.clock.runFor(299)
+    await expect(page.getByText('Loading sites…')).toHaveCount(0)
+    await page.clock.runFor(2)
+    await expect(page.getByText('Loading sites…')).toBeVisible()
+  } finally {
+    releaseRegistry()
+  }
+})
+
+test('switching to another Markdown document delays its loading text again', async ({ page }) => {
+  await page.goto('/sre/runbooks/service-recovery.md')
+  await expect(page.getByTestId('markdown-document')).toBeVisible()
+
+  let releaseDocument!: () => void
+  const documentGate = new Promise<void>((resolve) => { releaseDocument = resolve })
+  await page.route('**/_artifacts/sre/diagrams/mermaid-catalog.md', async (route) => {
+    await documentGate
+    await route.continue()
+  })
+
+  await page.clock.install({ time: 0 })
+  await page.clock.pauseAt(1000)
+  try {
+    await page.evaluate(() => {
+      window.history.pushState({}, '', '/sre/diagrams/mermaid-catalog.md')
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
+    await expect(page.locator('.markdown-state[aria-busy="true"]')).toBeAttached()
+    await expect(page.getByText('Loading document…')).toHaveCount(0)
+    await page.clock.runFor(299)
+    await expect(page.getByText('Loading document…')).toHaveCount(0)
+    await page.clock.runFor(2)
+    await expect(page.getByText('Loading document…')).toBeVisible()
+  } finally {
+    releaseDocument()
+  }
+})
