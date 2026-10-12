@@ -4,6 +4,7 @@ import { normalize } from './fulltext-codec'
 
 export const EXCERPT_CLUSTERS = 160
 export const EXCERPT_CLUSTERS_BEFORE = 40
+export const EXCERPT_SNAP_CLUSTERS = 20
 export type ExcerptPart = { text: string; mark: boolean }
 export type SearchExcerpt = { heading: string; anchor: string; parts: ExcerptPart[] }
 export type DecodedSection = { heading: string; anchor: string; text: string }
@@ -14,6 +15,7 @@ export function excerptTerms(query: string): string[] {
 }
 
 const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+const wordSegmenter = new Intl.Segmenter(undefined, { granularity: 'word' })
 
 type Folded = { normalized: string; sourceStart: number[]; sourceEnd: number[]; clusters: { segment: string; index: number }[] }
 
@@ -56,7 +58,26 @@ export function excerptFor(sections: readonly DecodedSection[], terms: readonly 
   const { clusters } = folded
   let f = clusters.findIndex((cluster) => best.first < cluster.index + cluster.segment.length)
   if (f < 0) f = clusters.length - 1
-  const start = Math.max(0, f - EXCERPT_CLUSTERS_BEFORE), end = Math.min(clusters.length, start + EXCERPT_CLUSTERS)
+  let start = Math.max(0, f - EXCERPT_CLUSTERS_BEFORE), end = Math.min(clusters.length, start + EXCERPT_CLUSTERS)
+  // Snap the cut to word boundaries (at most EXCERPT_SNAP_CLUSTERS clusters), never past the first match.
+  const boundaries = new Set<number>([section.text.length])
+  for (const { index } of wordSegmenter.segment(section.text)) boundaries.add(index)
+  if (start > 0) {
+    let s = start
+    const limit = Math.min(f, start + EXCERPT_SNAP_CLUSTERS)
+    while (s <= limit && !boundaries.has(clusters[s].index)) s++
+    if (s > limit) s = start
+    while (s < f && /^\s+$/u.test(clusters[s].segment)) s++
+    start = s
+  }
+  if (end < clusters.length) {
+    let e = end
+    const limit = Math.max(f + 1, end - EXCERPT_SNAP_CLUSTERS)
+    while (e >= limit && !boundaries.has(clusters[e].index)) e--
+    if (e < limit) e = end
+    while (e > f + 1 && /^\s+$/u.test(clusters[e - 1].segment)) e--
+    end = e
+  }
   const from = clusters[start].index, last = clusters[end - 1], to = last.index + last.segment.length
   // Occurrences (overlapping ones included) are collected only inside the window's normalized range.
   const { normalized, sourceStart, sourceEnd } = folded
