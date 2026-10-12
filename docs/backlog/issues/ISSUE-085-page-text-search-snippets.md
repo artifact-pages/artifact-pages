@@ -1,6 +1,6 @@
 # Page text search results show no match snippet
 
-- Status: In progress
+- Status: Done
 - Assignee: Claude
 - Priority: P3
 - Area: Page text search results (`web/src/components/PageTextSearch.tsx`); search format (`cli/internal/fulltext`, Codex-owned)
@@ -27,5 +27,9 @@ Each text result shows a short excerpt around the first match, linking to its se
 ## Acceptance criteria
 
 - [x] The design note choosing the format change is met by the contract in `docs/architecture/fulltext-search.md` (#106); the CLI and web slices are split (IMP-77 and this item).
-- [ ] Results show a highlighted excerpt for text matches without reordering or regressing the ISSUE-077 ranking, the fallback above the ranking threshold, or keyboard navigation.
-- [ ] Specification updated.
+- [x] Results show a highlighted excerpt for text matches without reordering or regressing the ISSUE-077 ranking, the fallback above the ranking threshold, or keyboard navigation.
+- [x] Specification updated.
+
+## Production check (2026-10-12)
+
+CLI v0.4.2 (with the IMP-77 writer, #116) republished `guide` and `architecture` on https://artifact-pages.dev (docs Publish run 38230281773: one section table and two text packs per site, no caps hit). With web 0.3.0 (#113), `/guide/_search?q=cache` shows four results, each with its section heading and a highlighted excerpt cut with "…", in the unchanged ISSUE-077 order; rows link to the section anchor. Done.
