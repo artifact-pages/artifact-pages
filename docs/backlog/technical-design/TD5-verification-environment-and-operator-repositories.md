@@ -31,7 +31,7 @@ Cloudflare zone-level entry point rulesets are unique per phase ("Each phase has
 | --- | --- | --- |
 | `artifact-pages.dev` | Admin repository | Production documentation and public demonstration |
 | `artifact-pages.stream` | This repository | Cloudflare verification: module changes, app deploy, publish, preview, recovery |
-| `aws.artifact-pages.stream` | This repository | AWS verification. Decided 2026-10-03, replacing `aws.artifact-pages.dev` so that this repository writes no records in the production zone |
+| `aws.artifact-pages.stream` | This repository | AWS verification. Decided 2026-10-03, replacing `aws.artifact-pages.dev` so that this repository writes no records in the production zone. Retired 2026-10-13: AWS verification now uses the default CloudFront hostname (`*.cloudfront.net`) and no DNS record |
 
 ### Verification capabilities this repository keeps
 
@@ -47,4 +47,9 @@ Cloudflare zone-level entry point rulesets are unique per phase ("Each phase has
 - [x] Record the verification domain and the zone-ruleset reason.
 - [x] Record the repository names (`artifact-pages-admin`, `artifact-pages-docs`).
 - [x] Record the AWS verification hostname (`aws.artifact-pages.stream`), and update the deployment domain policy, specification, roadmap, IMP-38/39, T15 and delegation.
+- [x] Record the 2026-10-13 retirement of `aws.artifact-pages.stream` (see the 2026-10-13 note below).
 - [x] Hand the split to [IMP-48](../implementation/IMP-48-operator-repository-split.md) and the Action smoke to [IMP-47](../implementation/IMP-47-actions-hosted-smoke.md).
+
+## Notes
+
+- 2026-10-13: The owner retired the `aws.artifact-pages.stream` hostname. The disposable AWS verification deployment now builds the stack up to CloudFront (private S3 origin through OAC, IAM OIDC roles, optional WAF) and is reached at its default `*.cloudfront.net` hostname, with no ACM certificate, no DNS record and no Cloudflare provider or token. AWS adopters normally keep DNS in Route 53 and add their own records once the distribution exists, so the module's job ends at CloudFront. The custom-domain path stays covered by the module's `aliases` and `acm_certificate_arn` inputs, the `examples/route53-consumer` example and the `modules/cloudflare-dns-acm` composition. The earlier live deployment on `aws.artifact-pages.stream` remains valid historical evidence for that composition.
