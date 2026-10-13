@@ -72,7 +72,7 @@ Exercised: not yet exercised.
 5. For an interrupted `registry sync`, run the same `registry sync` again. Its cleanup journal lets the retry resume and finish.
 6. Purge cannot clear a viewer's browser cache. Browsers revalidate mutable objects, and the origin and browser TTLs still bound how long an old copy can survive.
 
-**What is not touched.** A site sync writes only that site's `_artifacts/<site>/`, `_indexes/<site>/` and its own control objects. Neighbouring sites, the shared registry and the application files are not changed, and private `_control/` objects are never served. When a site has more than 100 unique changed URLs, the purge is a prefix purge for that site's artifact or index prefix: it can refresh unchanged cached objects inside that prefix, but application paths, the shared registry, previews and other sites stay exact.
+**What is not touched.** A site sync writes only that site's `_artifacts/<site>/`, `_indexes/<site>/`, its own control objects and, for preview housekeeping, its `_previews/<site>/` catalog and any revisions an interrupted `preview remove` journaled (see scenario 3). Neighbouring sites, the shared registry and the application files are not changed, and private `_control/` objects are never served. When a site has more than 100 unique changed URLs, the purge is a prefix purge for that site's artifact or index prefix: it can refresh unchanged cached objects inside that prefix, but application paths, the shared registry, previews and other sites stay exact.
 
 Exercised: not yet exercised.
 
@@ -101,7 +101,7 @@ Exercised: not yet exercised.
 5. Rebuild generated output the same way before every publish. Generated files that are untracked or Git-ignored can still be indexed, but their `updatedAt` falls back to the filesystem modification time and `lastCommitter` is omitted, so rebuilding at a different time changes the metadata. Run the same generator at the source commit, then sync.
 6. If the command reports malformed or unsupported publish state, it fails closed and never treats the record as missing. The specification's reset procedure is to back up both exact per-site control keys, confirm no publish or cache retry is in progress, and delete only those keys; see [Per-site sync state and reconciliation](../specification.md#per-site-sync-state-and-reconciliation). The publisher never does this on its own.
 
-**What is not touched.** `--reconcile` works on one site's two prefixes. Other sites, previews, the registry and the application are outside it.
+**What is not touched.** The reconcile check itself works on one site's `_artifacts/<site>/` and `_indexes/<site>/` prefixes. Other sites, the registry and the application are outside it. A `site sync` run (with or without `--reconcile`) also does two preview-related things for that site. First, a real run resumes a pending preview-cleanup journal left by an interrupted `preview remove`; that can delete the revision objects the journal lists under `_previews/<site>/revisions/`. Second, it plans preview-catalog pruning (stale preview references, for example a revision whose completion manifest is missing) and applies it on a real run, which rewrites `_previews/<site>/catalog.json` and adds that catalog to the cache purge. `--dry-run` reports the pruning plan under the preview changes and writes nothing.
 
 Exercised: not yet exercised.
 
@@ -120,7 +120,12 @@ Exercised: not yet exercised.
    ```
 
    The result shows the lock's `state` (`free`, `held`, or `uninitialized` when the record does not exist yet), the opaque `owner` and `acquiredAt` of a held lock, and the `etag`. Add `--format json` for machine-readable output.
-2. Decide whether the lock is stale or the operation is still running. Check that nothing for that scope is active: the GitHub Actions runs of the publish, registry or app-deploy workflows (a site lock belongs to that site's publish and preview runs), and any local `artifact-pages` process on an operator's machine. Compare `acquiredAt` with the start time of the runs you found. If anything is still running, wait for it.
+2. Decide whether the lock is stale or the operation is still running. Several operations can hold each lock, so check all of them, in the admin repository and in every satellite repository that publishes to this deployment, plus any local `artifact-pages` process on an operator's machine:
+   - Site lock (`--site`): `site sync` and `preview publish` / `preview remove` for that site (publish and preview workflows in that site's satellite repository). Also `registry sync` when the site's registry entry changes or the site is omitted, and `app deploy` when the web bundle declares the formats it reads or the config pins versions, because that transition locks every registered site.
+   - Registry lock (`--scope registry`): `registry sync`, and the same `app deploy` transition.
+   - Application lock (`--scope application`): `app deploy` and `app remove`.
+
+   So an app-deploy or registry workflow in the admin repository can hold site locks that look like they belong to a satellite. Compare `acquiredAt` with the start time of the runs you find. If anything is still running, wait for it.
 3. Recover with the ETag you inspected:
 
    ```sh
@@ -132,7 +137,7 @@ Exercised: not yet exercised.
 
 **Why the ETag prevents a double operation.** `lock recover` reads the lock again and compares its ETag with the one you passed. If they differ, it fails with a precondition error and changes nothing. Otherwise it replaces the record with a free one using a conditional write (`If-Match` on the same ETag), so a concurrent change between the read and the write also fails. If another job released the lock and a new operation acquired it after your inspection, the ETag changed, recovery fails, and you must inspect again. Recovery also refuses a lock that is not held. The ETag guard does not tell you whether the original process is still alive. That check in step 2 is yours.
 
-**What is not touched.** Recovery only rewrites the lock record to free. It does not touch the journals, the projection or any other lock. `lock inspect` and `lock recover` need the primary R2 credential and not `CF_API_TOKEN`.
+**What is not touched.** Recovery only rewrites the lock record to free. It does not touch the journals, the projection or any other lock. `lock inspect` and `lock recover` need the primary R2 credential and not `CF_API_TOKEN` for cache purge. In single-token mode (no explicit R2 key pair), the CLI derives the R2 credentials from `CF_API_TOKEN` when it opens the backend, so these commands need the token too.
 
 Exercised: not yet exercised.
 
@@ -156,16 +161,18 @@ They live in the environment or repository secrets of the admin repository and o
 1. Create the new credential first: a new R2 key pair with the same scope, a new `CF_API_TOKEN` with the same permissions, or a new key or token for the GitHub App. Keep the old one active.
 2. Update the secrets in every environment or repository that uses it. Do not put credential values in the deployment YAML or the repository.
 3. Run the smallest operation that verifies the new value:
-   - R2 key pair, session token or reader pair: a dry-run uses the R2 read credentials. Run `site sync --dry-run` from the affected satellite, or `registry sync --dry-run` from the admin repository:
+   - Primary R2 key pair or session token: a dry-run uses the R2 read credentials. Run `registry sync --dry-run` from the admin repository, or `site sync --dry-run` from the affected satellite:
 
      ```sh
-     artifact-pages site sync --site sre --source docs/artifacts --config artifact-pages.yaml --dry-run
      artifact-pages registry sync --config artifact-pages.yaml --dry-run
+     artifact-pages site sync --site sre --source docs/artifacts --config artifact-pages.yaml --dry-run
      ```
 
-     A dry-run writes nothing. Reader credentials are used only when the reader environment names are configured.
+   - Registry-reader pair: `registry sync` uses the primary credential only and does not exercise the reader pair. Verify the pair with `site sync --dry-run` (or `preview publish`) in a satellite whose config names the reader environment variables; only those commands read through the reader credential.
+
+     A dry-run writes nothing.
    - GitHub App or `github-token`: any command that resolves a `github://` config locator reads the config with the token, so the same dry-run through that locator verifies it. A wrong or missing token shows as an HTTP 401, 403 or 404 error that names the locator.
-   - `CF_API_TOKEN`: dry-runs and no-op operations do not need it, so they cannot verify it. It is checked only by the next real operation that purges the cache (a real `site sync` that changes content, `app deploy`, or `registry sync`). Plan that run, then check the result. In single-token mode the token is required for every command that touches the provider, so a dry-run does verify it there.
+   - `CF_API_TOKEN`: dry-runs and no-op operations do not need it, so they cannot verify it. It is checked only by the next real operation that purges the cache (a real `site sync` that changes content, `app deploy`, or `registry sync`). Plan that run, then check the result. In single-token mode the token is required for every command that touches the provider, including `lock inspect` and `lock recover`, because the R2 credentials are derived from it. A dry-run does verify it there, and a stale or wrong token also blocks lock recovery.
 4. Revoke the old credential only after the verifying operation succeeded.
 5. If a leaked credential cannot wait, revoke first and accept that operations fail until the new secret is in place. Retry journals make the interrupted operations converge afterwards.
 
