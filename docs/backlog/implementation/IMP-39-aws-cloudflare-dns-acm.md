@@ -1,6 +1,6 @@
 # IMP-39 — AWS custom-domain delivery with Cloudflare DNS and ACM
 
-- Status: In progress
+- Status: Done
 - Assignee: Codex
 - Phase: Provider-backed deployment / reusable distribution
 - Execution: Agent-led local implementation; real-account proof is Collaborative in T15.
@@ -9,6 +9,8 @@
 - Consumer module repository: [terraform-aws-artifact-pages](https://github.com/tasuku43/terraform-aws-artifact-pages).
 
 ## Background
+
+> Closed 2026-10-13: superseded and removed before the AWS module's first release. `modules/cloudflare-dns-acm`, its example `examples/cloudflare-dns-acm-consumer` and the fixture `tests/cloudflare-dns-acm-account` are deleted. Reason: no user; the verification deployment uses the default CloudFront hostname and production is Cloudflare R2. Any DNS provider works with the root module's `aliases` and `acm_certificate_arn`, and the module ships `examples/route53-consumer`. The composition was proven live once (ACM `ISSUED`, alias, DNS-only CNAME on `aws.artifact-pages.stream`); the text below is kept as history.
 
 The owner selected Cloudflare Registrar and authoritative Cloudflare DNS for the long-lived `artifact-pages.dev` domain. Cloudflare Cache/CDN with R2 serves production at the apex. AWS verification uses `aws.artifact-pages.stream` (moved from `aws.artifact-pages.dev` on 2026-10-03 by [TD5](../technical-design/TD5-verification-environment-and-operator-repositories.md); its DNS-only and ACM-validation records live in the separate `artifact-pages.stream` Cloudflare zone, not in the production zone) through CloudFront and private S3, with an ACM viewer certificate in `us-east-1`; no Route 53 hosted zone is used.
 
@@ -40,11 +42,11 @@ An operator can use the AWS module's documented composition to create and valida
 ## Acceptance criteria
 
 - [x] The `terraform/deployments/aws` caller selects the composed custom-domain path from the in-tree `modules/aws/modules/cloudflare-dns-acm` source without sibling OSS paths or copied delivery code.
-- [ ] Tests/validation establish ACM placement in `us-east-1`, matching certificate/CloudFront alias, DNS validation before distribution attachment, and DNS-only Cloudflare CNAMEs for delivery and validation.
-- [ ] The reviewed real plan contains no Route 53 hosted zone/record and no Cloudflare proxy for AWS delivery. It owns only the explicitly selected DNS records; apex and unrelated zone state remain untouched.
-- [ ] Existing unmanaged-DNS/certificate and distribution-hostname callers still validate; invalid or conflicting input modes fail clearly.
-- [ ] Formatting, initialization/validation, mock/offline plan or source-contract tests, and independent review pass. Provider configuration, credential names/scopes, inputs/outputs, record/certificate ownership, adoption/import, and replacement behavior are documented.
-- [ ] Handoff records tested source commits and a fresh real-plan checklist for `aws.artifact-pages.stream` (retired 2026-10-13; later verification uses the default CloudFront hostname). Local acceptance may close this implementation item; live DNS, certificate issuance/renewal prerequisites, direct CloudFront/S3 routes, headers, and browser behavior remain unchecked T15 proof.
+- [ ] Tests/validation establish ACM placement in `us-east-1`, matching certificate/CloudFront alias, DNS validation before distribution attachment, and DNS-only Cloudflare CNAMEs for delivery and validation. (dropped 2026-10-13)
+- [ ] The reviewed real plan contains no Route 53 hosted zone/record and no Cloudflare proxy for AWS delivery. It owns only the explicitly selected DNS records; apex and unrelated zone state remain untouched. (dropped 2026-10-13)
+- [ ] Existing unmanaged-DNS/certificate and distribution-hostname callers still validate; invalid or conflicting input modes fail clearly. (dropped 2026-10-13)
+- [ ] Formatting, initialization/validation, mock/offline plan or source-contract tests, and independent review pass. Provider configuration, credential names/scopes, inputs/outputs, record/certificate ownership, adoption/import, and replacement behavior are documented. (dropped 2026-10-13)
+- [ ] Handoff records tested source commits and a fresh real-plan checklist for `aws.artifact-pages.stream` (retired 2026-10-13; later verification uses the default CloudFront hostname). Local acceptance may close this implementation item; live DNS, certificate issuance/renewal prerequisites, direct CloudFront/S3 routes, headers, and browser behavior remain unchecked T15 proof. (dropped 2026-10-13)
 
 ## Current preparation
 

@@ -5,7 +5,7 @@
 - Primary lane: Infra
 - Execution: Design accepted and local implementation authorized on October 2, 2026, through the pre-plan boundary. Agent-led local checks only; Terraform plan (including mocked plans), live changes and publication require further authorization.
 - Module repository: `/Users/tasuku/work/github.com/tasuku43/terraform-aws-artifact-pages`
-- Requires: The existing self-contained AWS CloudFront delivery module. Coordinate with [IMP-39](IMP-39-aws-cloudflare-dns-acm.md) and [IMP-38](IMP-38-terraform-registry-publication.md); neither Cloudflare WAF completion nor public Registry publication is a prerequisite to design.
+- Requires: The existing self-contained AWS CloudFront delivery module. Coordinate with [IMP-38](IMP-38-terraform-registry-publication.md); neither Cloudflare WAF completion nor public Registry publication is a prerequisite to design.
 - Related: [TD1](../technical-design/TD1-site-viewer-access.md), [T15](../verification/T15-provider-delivery.md), [Cloudflare counterpart](IMP-43-cloudflare-waf-custom-rules.md), [workstreams](../workstreams.md).
 - Requested on: October 2, 2026 (JST).
 
