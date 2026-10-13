@@ -21,7 +21,7 @@ The Go writer does not produce such rows. The realistic causes are a hand edit, 
 
 ## Expected outcome
 
-An index with invalid rows is reported as a load error that names the site, and any other render exception shows a recovery screen instead of a blank page. Decision (main session): reject the whole index with a load error naming the site; do not drop individual rows. Unknown extra fields stay ignored.
+An index with invalid rows is reported as a load error that names the site, and any other render exception shows a recovery screen instead of a blank page. The review calls the desired result a proper load error instead of a render-time crash. The whole index is rejected rather than individual rows dropped, because a partially dropped index would show a tree and search that silently miss pages. The reader shows a load error naming the site and a republish hint. Unknown extra fields stay ignored.
 
 ## Acceptance criteria
 

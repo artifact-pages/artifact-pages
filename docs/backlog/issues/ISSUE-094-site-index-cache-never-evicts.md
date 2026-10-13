@@ -1,4 +1,4 @@
-# The site index cache never evicts successful entries
+# Expired site-index cache entries stay in memory until the same site is read again
 
 - Status: Open
 - Priority: P2

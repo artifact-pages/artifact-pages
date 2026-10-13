@@ -20,7 +20,7 @@ Add `docs/guides/operator-recovery.md` and link it from `docs/guides/cloudflare-
 4. A stale lock: telling a stale lock from a running operation, recovery with the observed ETag, avoiding a double operation.
 5. Credential and GitHub App key rotation: which repositories and environments, the update order, revoking the old values, the smallest operation that verifies the new ones.
 6. Terraform remote state restore, and importing or merging existing zone rules.
-7. Detection: link to the production health check, which is tracked in the workspace ops item OPS-006.
+7. Detection: link to the production health check, which, together with ownership of CI, release and publish failure notifications, is tracked in the workspace ops item OPS-006.
 
 ## Acceptance criteria
 
