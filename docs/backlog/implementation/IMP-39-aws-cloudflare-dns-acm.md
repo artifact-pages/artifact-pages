@@ -42,11 +42,12 @@ An operator can use the AWS module's documented composition to create and valida
 ## Acceptance criteria
 
 - [x] The `terraform/deployments/aws` caller selects the composed custom-domain path from the in-tree `modules/aws/modules/cloudflare-dns-acm` source without sibling OSS paths or copied delivery code.
-- [ ] Tests/validation establish ACM placement in `us-east-1`, matching certificate/CloudFront alias, DNS validation before distribution attachment, and DNS-only Cloudflare CNAMEs for delivery and validation. (dropped 2026-10-13)
-- [ ] The reviewed real plan contains no Route 53 hosted zone/record and no Cloudflare proxy for AWS delivery. It owns only the explicitly selected DNS records; apex and unrelated zone state remain untouched. (dropped 2026-10-13)
-- [ ] Existing unmanaged-DNS/certificate and distribution-hostname callers still validate; invalid or conflicting input modes fail clearly. (dropped 2026-10-13)
-- [ ] Formatting, initialization/validation, mock/offline plan or source-contract tests, and independent review pass. Provider configuration, credential names/scopes, inputs/outputs, record/certificate ownership, adoption/import, and replacement behavior are documented. (dropped 2026-10-13)
-- [ ] Handoff records tested source commits and a fresh real-plan checklist for `aws.artifact-pages.stream` (retired 2026-10-13; later verification uses the default CloudFront hostname). Local acceptance may close this implementation item; live DNS, certificate issuance/renewal prerequisites, direct CloudFront/S3 routes, headers, and browser behavior remain unchecked T15 proof. (dropped 2026-10-13)
+- [x] ~~Tests/validation establish ACM placement in `us-east-1`, matching certificate/CloudFront alias, DNS validation before distribution attachment, and DNS-only Cloudflare CNAMEs for delivery and validation.~~ — dropped by owner decision 2026-10-13 (composition removed before release).
+- [x] ~~The reviewed real plan contains no Route 53 hosted zone/record and no Cloudflare proxy for AWS delivery. It owns only the explicitly selected DNS records; apex and unrelated zone state remain untouched.~~ — dropped by owner decision 2026-10-13 (composition removed before release).
+- [x] ~~Existing unmanaged-DNS/certificate and distribution-hostname callers still validate; invalid or conflicting input modes fail clearly.~~ — dropped by owner decision 2026-10-13 (composition removed before release).
+- [x] ~~Formatting, initialization/validation, mock/offline plan or source-contract tests, and independent review pass. Provider configuration, credential names/scopes, inputs/outputs, record/certificate ownership, adoption/import, and replacement behavior are documented.~~ — dropped by owner decision 2026-10-13 (composition removed before release).
+- [x] ~~Handoff records tested source commits and a fresh real-plan checklist for `aws.artifact-pages.stream` (retired 2026-10-13; later verification uses the default CloudFront hostname). Local acceptance may close this implementation item; live DNS, certificate issuance/renewal prerequisites, direct CloudFront/S3 routes, headers, and browser behavior remain unchecked T15 proof.~~ — dropped by owner decision 2026-10-13 (composition removed before release).
+- [x] The composition, its example and its account-mismatch fixture are removed from terraform/modules/aws before the first AWS module release (owner decision 2026-10-13; removal PR merged before this item closed).
 
 ## Current preparation
 
