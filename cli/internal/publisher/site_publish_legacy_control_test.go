@@ -8,11 +8,13 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 )
 
 type sitePublishLegacyCaptureBackend struct {
 	*sitePublishScaleBackend
+	mu              sync.Mutex
 	stateConditions []ObjectCondition
 	retryConditions []ObjectCondition
 	originWrites    []string
@@ -23,24 +25,33 @@ type sitePublishLegacyCaptureBackend struct {
 }
 
 func (backend *sitePublishLegacyCaptureBackend) PutObjectConditional(ctx context.Context, key string, object Object, condition ObjectCondition) (string, error) {
+	backend.mu.Lock()
 	if key == sitePublishStateKey("sre") {
 		backend.stateConditions = append(backend.stateConditions, condition)
 	}
 	if key == siteCacheRetryKey("sre") {
 		backend.retryConditions = append(backend.retryConditions, condition)
 	}
+	backend.mu.Unlock()
 	return backend.sitePublishScaleBackend.PutObjectConditional(ctx, key, object, condition)
 }
 
 func (backend *sitePublishLegacyCaptureBackend) PutObject(ctx context.Context, key string, object Object) error {
 	if sitePublishLegacyProjectionKey(key) {
+		backend.mu.Lock()
 		backend.originWrites = append(backend.originWrites, key)
+		backend.mu.Unlock()
 	}
 	if err := backend.sitePublishScaleBackend.PutObject(ctx, key, object); err != nil {
 		return err
 	}
-	if backend.raceStateOnPut && !backend.racedState && sitePublishLegacyProjectionKey(key) {
+	backend.mu.Lock()
+	injectRace := backend.raceStateOnPut && !backend.racedState && sitePublishLegacyProjectionKey(key)
+	if injectRace {
 		backend.racedState = true
+	}
+	backend.mu.Unlock()
+	if injectRace {
 		stateKey := sitePublishStateKey("sre")
 		_, etag, err := backend.sitePublishScaleBackend.GetObject(ctx, stateKey)
 		if err != nil {
@@ -57,14 +68,18 @@ func (backend *sitePublishLegacyCaptureBackend) PutObject(ctx context.Context, k
 func (backend *sitePublishLegacyCaptureBackend) DeleteObjects(ctx context.Context, keys []string) error {
 	for _, key := range keys {
 		if sitePublishLegacyProjectionKey(key) {
+			backend.mu.Lock()
 			backend.originDeletes = append(backend.originDeletes, key)
+			backend.mu.Unlock()
 		}
 	}
 	return backend.sitePublishScaleBackend.DeleteObjects(ctx, keys)
 }
 
 func (backend *sitePublishLegacyCaptureBackend) Invalidate(ctx context.Context, paths []string) (string, error) {
+	backend.mu.Lock()
 	backend.invalidations = append(backend.invalidations, append([]string(nil), paths...))
+	backend.mu.Unlock()
 	return backend.sitePublishScaleBackend.Invalidate(ctx, paths)
 }
 
