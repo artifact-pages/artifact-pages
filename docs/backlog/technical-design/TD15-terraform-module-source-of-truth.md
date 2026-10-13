@@ -58,8 +58,8 @@ The owner confirmed option 1 and changed the versioning rule.
 1. **Source paths.** `terraform/modules/cloudflare/` and `terraform/modules/aws/` in the monorepo are the only edited copies. Callers that deploy from this repository stay under `terraform/deployments/`; they are not published. IMP-63 gives each module directory the shape of a Registry module (see 2), so that generation is a copy plus a small amount of rewriting, not a restructuring.
 2. **Generated package content.** Each package repository's `main` is replaced by the generated tree, laid out as the Terraform Registry expects ([standard module structure](https://developer.hashicorp.com/terraform/language/modules/develop/structure)):
    - repository root: `README.md`, `main.tf`, `variables.tf`, `outputs.tf`, `versions.tf`, `LICENSE` (MIT, copied from the monorepo), `.terraform.lock.hcl` only where the package already ships one for examples/tests;
-   - `modules/<name>/` for nested modules (Cloudflare: `delivery`, `retention`; AWS: `cloudflare-dns-acm`), each with its own README and `.tf` files;
-   - `examples/<name>/` for runnable consumers (`local-consumer`, `registry-consumer`; AWS also `cloudflare-dns-acm-consumer`);
+   - `modules/<name>/` for nested modules (Cloudflare: `delivery`, `retention`; AWS has no nested module; composition removed 2026-10-13), each with its own README and `.tf` files;
+   - `examples/<name>/` for runnable consumers (`local-consumer`, `registry-consumer`; AWS also `route53-consumer`);
    - `tests/` and module-level `*.tftest.hcl` files, plus the validation scripts they need;
    - `release.json` (`version`, `repository`) recording the source release, as in the Action repositories.
    Module-internal references to sibling nested modules use relative `./modules/...` paths. Examples reference the module by its Registry address with an exact `version` in the generated copy and by relative path in the monorepo copy; the generator performs that single rewrite.

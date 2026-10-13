@@ -80,7 +80,7 @@ Base: package `dd0fcde` copied into `terraform/modules/aws` in Registry layout. 
 | Target account guard (`aws_caller_identity`, `terraform_data.target_account_guard`, `depends_on` on every resource, OIDC provider ARN account match, `github_oidc_provider_arn` validation, default `bucket_name = artifact-pages-<account>-<region>`) | Taken. |
 | `viewer_protocol_policy` variable (`redirect-to-https` / `https-only`) on every behavior | Taken. |
 | WAF presets: `waf.tf`, `waf-validation.tf`, `waf_custom_rules`, `web_acl_arn` validation, `docs/waf.md`, `scripts/generate-waf.py`, `scripts/validate-waf.sh`, `tests/waf-console.test.js` | Taken unchanged. |
-| DNS/ACM composition `modules/cloudflare-dns-acm` (IMP-39) with `examples/cloudflare-dns-acm-consumer` and `tests/cloudflare-dns-acm-account` | Taken unchanged. |
+| AWS layout: no nested module; examples `local-consumer`, `registry-consumer`, `route53-consumer` (composition removed 2026-10-13; formerly IMP-39 `modules/cloudflare-dns-acm`) | Taken unchanged. |
 | `examples/local-consumer`, `examples/registry-consumer`, `Taskfile.yml`, `LICENSE`, `.gitignore`, provider lock files | Taken (Taskfile gains `check`). |
 | Contract tests: `tests/aws-contract.test.js`, `tests/cli-contract`, `tests/cli-contract-mismatch` | Taken. `aws-contract.test.js` was adapted to the merged module (satellite `cloudfront:CreateInvalidation`, selected-site index/preview/control deletes, response headers policy instead of the CloudFront Function). |
 | Outputs: `accountId` in `aws_deployment_config_yaml`, `.bucket` instead of `.id` for bucket outputs | Taken. The CLI config parser accepts `accountId` (checked by `tests/cli-contract`). |
