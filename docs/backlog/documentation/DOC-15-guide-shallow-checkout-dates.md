@@ -1,5 +1,7 @@
 # DOC-15 — Guide: shallow checkouts and document dates
 
+> **Historical copy.** The live ticket is in the [artifact-pages/docs backlog](https://github.com/artifact-pages/docs/tree/main/backlog).
+
 - Status: Done
 - Site: `guide`
 - Page: revision of `ja/publishing.html` and `en/publishing.html` (the "Dates and committers" section and the example workflow that currently sets `fetch-depth: 0`). Optional one-paragraph pointer in `architecture` `publishing-model.html`.

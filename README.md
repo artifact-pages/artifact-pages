@@ -25,9 +25,16 @@ There is no application server in the request path. Git is the source of truth; 
 
 ## Status
 
-Phase 1 local product. The SPA discovers sites from lightweight metadata, loads only the active site's artifact index, and provides a site picker, recent-artifact home, searchable navigation tree, and command palette. HTML artifacts run in an iframe; Markdown artifacts use a sanitized native reader.
+Pre-release (0.x, no compatibility promise yet). Released components: the CLI (binaries for linux and darwin, amd64 and arm64), the web application bundle (`web/v…` releases) and the four GitHub Actions; current versions are on the [releases page](https://github.com/artifact-pages/artifact-pages/releases). The Cloudflare Terraform module is tagged in [artifact-pages/terraform-cloudflare-artifact-pages](https://github.com/artifact-pages/terraform-cloudflare-artifact-pages/tags); it is not yet published to the Terraform Registry.
 
-AWS infrastructure and published reusable distribution packages come later. The optional GitHub Actions are documented in the [GitHub Actions guide](docs/guides/github-actions.md). Each Action has its own repository, generated from `actions/<name>/` on that Action's own release and tagged with its own version: [`artifact-pages/publish-action`](https://github.com/artifact-pages/publish-action), [`preview-action`](https://github.com/artifact-pages/preview-action), [`registry-action`](https://github.com/artifact-pages/registry-action) and [`app-deploy-action`](https://github.com/artifact-pages/app-deploy-action). Reference an exact release tag, as the templates do.
+- Cloudflare (R2 and Cloudflare cache) is the first supported provider and runs the public deployment at <https://artifact-pages.dev>.
+- AWS (S3 and CloudFront): the Terraform module and backend exist and live verification is in progress. It is not yet a supported deployment target.
+- GCP is emulator-only (local tests) and not supported.
+- Windows has no CLI binaries and is unsupported.
+
+The SPA discovers sites from lightweight metadata, loads only the active site's artifact index, and provides a site picker, recent-artifact home, searchable navigation tree, and command palette. HTML artifacts run in an iframe; Markdown artifacts use a sanitized native reader.
+
+For adoption, publishing and reading, see the published guide at <https://artifact-pages.dev/guide>. Deployment is covered in the [Cloudflare deployment guide](docs/guides/cloudflare-deployment.md). The optional GitHub Actions are documented in the [GitHub Actions guide](docs/guides/github-actions.md). Each Action has its own repository, generated from `actions/<name>/` on that Action's own release and tagged with its own version: [`artifact-pages/publish-action`](https://github.com/artifact-pages/publish-action), [`preview-action`](https://github.com/artifact-pages/preview-action), [`registry-action`](https://github.com/artifact-pages/registry-action) and [`app-deploy-action`](https://github.com/artifact-pages/app-deploy-action). Reference an exact release tag, as the templates do.
 
 To report a vulnerability see [SECURITY.md](SECURITY.md); to contribute see [CONTRIBUTING.md](CONTRIBUTING.md).
 

@@ -1,5 +1,7 @@
 # DOC-10 — Architecture: publishing model
 
+> **Historical copy.** The live ticket is in the [artifact-pages/docs backlog](https://github.com/artifact-pages/docs/tree/main/backlog).
+
 - Status: In progress
 - Site: `architecture`
 - Page: `ja/publishing-model.html`, `en/publishing-model.html`
