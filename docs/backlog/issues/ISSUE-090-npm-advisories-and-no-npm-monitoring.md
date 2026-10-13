@@ -1,6 +1,7 @@
 # npm has known advisories and nothing monitors them continuously
 
-- Status: Open
+- Status: Done
+- Assignee: Codex
 - Priority: P2
 - Area: dependencies / CI
 - Implementer: Codex
@@ -24,8 +25,24 @@ Known npm advisories are fixed or explicitly triaged with reachability, and new 
 
 ## Acceptance criteria
 
-- [ ] The lockfile resolves `source-map-js` at 1.2.2 or later.
-- [ ] The katex advisory is fixed by a compatible update or a verified `overrides` entry. If neither is possible, a written triage records reachability (whether Mermaid's `securityLevel`, input paths and the sanitization in the reader allow the precondition) and a revisit trigger.
-- [ ] `npm audit fix --force` is not used.
-- [ ] After the dependency change, Mermaid diagrams render, the sanitization tests pass, and the entry and lazy chunk sizes are rechecked against the build output of `04783fb3` (entry JS 745.83 kB minified).
-- [ ] A scheduled workflow (for example an extension of `vulncheck.yml`) runs an npm advisory check on `main`, and the repository records the response rule (severity thresholds and time limits for fix or triage).
+- [x] The lockfile resolves `source-map-js` at 1.2.2 or later.
+- [x] The katex advisory is fixed by a compatible update or a verified `overrides` entry. If neither is possible, a written triage records reachability (whether Mermaid's `securityLevel`, input paths and the sanitization in the reader allow the precondition) and a revisit trigger.
+- [x] `npm audit fix --force` is not used.
+- [x] After the dependency change, Mermaid diagrams render, the sanitization tests pass, and the entry and lazy chunk sizes are rechecked against the build output of `04783fb3` (entry JS 745.83 kB minified).
+- [x] A scheduled workflow (for example an extension of `vulncheck.yml`) runs an npm advisory check on `main`, and the repository records the response rule (severity thresholds and time limits for fix or triage).
+
+## Verification
+
+- Lockfile: `postcss@8.5.30`, `source-map-js@1.2.2` (with `nanoid@3.3.20`, required by postcss), and `katex@0.18.10` through the root `overrides` entry; Mermaid stays on 11.17.2. Mermaid 11 calls `katex.renderToString` with `throwOnError`, `displayMode` and `output`, which are unchanged in 0.18.
+- `npm audit` before: 1 high and 2 low (production only: 2 low). After: 0 vulnerabilities.
+- `npm run build` passed. Bundle sizes are minified / gzip, in kB:
+
+  | Chunk | `origin/main` baseline | Updated | Change |
+  | --- | ---: | ---: | ---: |
+  | `index` | 745.83 / 227.14 | 745.83 / 227.14 | 0 / 0 |
+  | `mermaid.core` | 94.28 / 32.53 | 94.28 / 32.53 | 0 / 0 |
+  | `katex` | 258.68 / 77.43 | 258.89 / 77.66 | +0.21 / +0.23 |
+
+- `npm run test:third-party-notices`: 3 passed. `npm run test:web-packaging`: 2 passed. `npm run test:web-unit`: 188 passed.
+- No committed `THIRD_PARTY_NOTICES.txt` exists. The release packaging flow generates notices from the installed production dependency graph; the notice and packaging tests pass with the new KaTeX lockfile.
+- Added a `$$x^2$$` label to the Mermaid catalog flowchart and an e2e assertion that a `.katex` element renders inside that diagram. Browser verification (this assertion, the Mermaid catalog and the Markdown sanitization e2e cases) ran in the pull request CI job "Unit, type and browser tests" ([#132](https://github.com/artifact-pages/artifact-pages/pull/132)).

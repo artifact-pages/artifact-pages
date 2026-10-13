@@ -1,5 +1,8 @@
-# Weekly vulnerability scan of main. Pull requests and pushes are covered by the
-# govulncheck step in verify.yml; this catches advisories published afterwards.
+# Weekly vulnerability scan of main for Go modules (`govulncheck`) and npm
+# dependencies (`npm audit`), catching advisories published after merge.
+# Response rule: a failing run opens work the same week. High or critical: fix or
+# record a triage in docs/backlog within 7 days. Moderate or low in production
+# dependencies: within 30 days.
 name: Vulnerability check
 
 on:
@@ -31,3 +34,25 @@ jobs:
           go-version-file: go.mod
       - name: Known vulnerabilities (govulncheck)
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
+  npm-audit:
+    name: npm audit on main
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Production dependencies (any severity)
+        run: npm audit --omit=dev
+      - name: All dependencies (high and critical)
+        run: npm audit --audit-level=high
