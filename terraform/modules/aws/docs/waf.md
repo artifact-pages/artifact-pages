@@ -8,7 +8,7 @@ Choose exactly one WAF ownership mode:
 - Set `web_acl_arn` to attach a caller-owned WAFv2 global ACL in us-east-1 and the distribution's account. The module does not manage its rules.
 - Set `waf_custom_rules` for one module-owned inline ACL and two stable IP sets (IPv4 and IPv6), including rules-only policies. No caller ACL may be supplied simultaneously.
 
-All owned WAF resources use per-resource `region = "us-east-1"` and `scope = "CLOUDFRONT"`. The default AWS provider still configures S3 in `aws_region`; no additional WAF provider alias is required. The DNS/ACM wrapper forwards both inputs; its existing ACM alias is unchanged. Rules apply to the entire distribution, including aliases, the default hostname, logical and raw URLs, assets, errors, previews and cache hits. Cloudflare DNS-only records do not enforce this policy. This adds no application accounts or CLI policy fields.
+All owned WAF resources use per-resource `region = "us-east-1"` and `scope = "CLOUDFRONT"`. The default AWS provider still configures S3 in `aws_region`; no additional WAF provider alias is required. Rules apply to the entire distribution, including aliases, the default hostname, logical and raw URLs, assets, errors, previews and cache hits. DNS records, including Cloudflare DNS-only CNAMEs, do not enforce this policy. This adds no application accounts or CLI policy fields.
 
 ## Caller example
 
