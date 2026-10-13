@@ -12,9 +12,9 @@ Planned work lives in `docs/backlog/`; see the [backlog section of AGENTS.md](AG
 
 Follow the [Local development](README.md#local-development) section of the README.
 
-## Before a pull request
+## Before opening a pull request
 
-Run the checks CI runs (see `.github/workflows/verify.yml`):
+Before opening a pull request, run at least these checks. CI (`.github/workflows/verify.yml`) runs more, including module tidiness, govulncheck, Terraform validation and Action smoke tests.
 
 ~~~sh
 gofmt -l $(git ls-files '*.go')   # must print nothing

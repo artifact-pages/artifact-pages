@@ -12,7 +12,7 @@ Report here for any of these components:
 
 ## Supported versions
 
-The project is a 0.x pre-release. Fixes land on `main` and ship in the next release of the affected component (CLI, web, Actions, Terraform module). Only the latest released version of each component receives fixes. There are no backports.
+The project is a 0.x pre-release. Fixes are made on `main` and released with the affected component (CLI, web, Actions, Terraform module), with no timing promise for releases. Only the latest released version of each component receives fixes. There are no backports.
 
 ## Response
 
