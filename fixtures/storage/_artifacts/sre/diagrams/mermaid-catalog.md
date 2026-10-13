@@ -11,6 +11,7 @@ flowchart LR
   Request[Request] --> Gateway{Healthy?}
   Gateway -->|yes| Service[Service]
   Gateway -->|no| Recovery[Recovery]
+  Formula["$$x^2$$"] --> Service
   classDef healthy fill:#dcfce7,stroke:#16a34a,color:#14532d,stroke-width:2px
   classDef warning fill:#fef3c7,stroke:#d97706,color:#78350f,stroke-dasharray:4 3
   class Service healthy

@@ -2903,6 +2903,7 @@ test('Mermaid catalog renders every fixture type supported by the bundled core a
     await expect(diagram.locator('svg').first()).toBeVisible()
     await expect(diagram.locator(':scope > div > svg')).toHaveAttribute('xmlns', 'http://www.w3.org/2000/svg')
   }
+  await expect(reader.locator('figure.markdown-diagram[data-diagram-type="flowchart"] .katex')).toBeVisible()
   await expect(reader.locator('.markdown-diagram-error')).toHaveCount(unsupportedTypes.length)
   for (const type of unsupportedTypes) {
     const fallback = reader.locator(`.markdown-diagram-error[data-diagram-type="${type}"]`)

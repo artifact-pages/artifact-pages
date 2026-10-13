@@ -96,7 +96,7 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-087](ISSUE-087-page-text-search-results-page.md) | Done | P2 | Page text search needs a results page in the reading area (TD20 slice 1). |
 | [ISSUE-088](ISSUE-088-indexer-rejects-reserved-first-segments.md) | Done | P2 | The indexer does not reject documents under reserved first path segments (`_previews`, `_search`). |
 | [ISSUE-089](ISSUE-089-publisher-race-test-backend-and-race-ci.md) | Done | P2 | The publisher legacy-control test backend has a data race and CI never runs `-race`. |
-| [ISSUE-090](ISSUE-090-npm-advisories-and-no-npm-monitoring.md) | Open | P2 | npm has known advisories (source-map-js, katex) and nothing monitors them continuously. |
+| [ISSUE-090](ISSUE-090-npm-advisories-and-no-npm-monitoring.md) | Done | P2 | npm has known advisories (source-map-js, katex) and nothing monitors them continuously. |
 | [ISSUE-091](ISSUE-091-malformed-index-rows-crash-render.md) | Open | P2 | Malformed artifact index rows pass loading and crash rendering; there is no error boundary. |
 | [ISSUE-092](ISSUE-092-slow-site-metadata-blocks-site-list.md) | Open | P2 | One slow site metadata request holds the whole home page. |
 | [ISSUE-093](ISSUE-093-directory-and-sidebar-render-every-row.md) | Open | P2 | Directory pages and the sidebar tree render every row. |
