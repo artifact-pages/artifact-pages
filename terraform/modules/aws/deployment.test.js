@@ -266,6 +266,9 @@ test('official web-bundle manifest paths fit the exact AWS admin list, read, and
 })
 
 test('deployment output remains compatible with the CLI AWS target contract', () => {
+  const hostedZoneOutput = block(outputs, 'output "distribution_hosted_zone_id"')
+  assert.match(hostedZoneOutput, /value\s*=\s*aws_cloudfront_distribution\.site\.hosted_zone_id/u)
+
   const targetOutput = block(outputs, 'output "aws_deployment_config_yaml"')
   assert.match(targetOutput, /schemaVersion\s*=\s*1/u)
   assert.match(targetOutput, /provider\s*=\s*"aws"/u)

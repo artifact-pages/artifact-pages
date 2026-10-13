@@ -9,28 +9,18 @@ output "distribution_id" {
 }
 
 output "distribution_domain_name" {
-  description = "Default CloudFront hostname for the distribution."
+  description = "Default CloudFront hostname; the verification deployment is reached at this name."
   value       = module.artifact_pages.distribution_domain_name
+}
+
+output "distribution_hosted_zone_id" {
+  description = "CloudFront hosted zone ID for Route 53 alias records (A and AAAA)."
+  value       = module.artifact_pages.distribution_hosted_zone_id
 }
 
 output "aws_deployment_config_yaml" {
   description = "Non-secret Artifact Pages AWS deployment configuration."
   value       = module.artifact_pages.aws_deployment_config_yaml
-}
-
-output "hostname" {
-  description = "DNS-only Cloudflare hostname routed to the CloudFront distribution."
-  value       = module.artifact_pages.hostname
-}
-
-output "certificate_arn" {
-  description = "Validated us-east-1 ACM certificate attached to CloudFront."
-  value       = module.artifact_pages.certificate_arn
-}
-
-output "cloudflare_dns_records" {
-  description = "Distribution and ACM validation record names managed in artifact-pages.stream."
-  value       = module.artifact_pages.cloudflare_dns_records
 }
 
 output "admin_role_arn" {

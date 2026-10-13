@@ -5,7 +5,7 @@ variable "name_prefix" {
 }
 
 variable "aws_region" {
-  description = "Region for the private S3 origin and IAM roles. ACM for CloudFront is always created in us-east-1."
+  description = "Region for the private S3 origin and IAM roles."
   type        = string
   default     = "us-east-1"
 }
@@ -39,16 +39,6 @@ variable "satellite_github_subjects" {
   type        = map(list(string))
   default = {
     aws-verify = ["repo:artifact-pages@338198830/docs@1402509222:environment:aws-verify"]
-  }
-}
-
-variable "cloudflare_zone_id" {
-  description = "ID of the existing artifact-pages.stream zone; provide through an untracked variable file."
-  type        = string
-
-  validation {
-    condition     = can(regex("^[0-9a-fA-F]{32}$", var.cloudflare_zone_id))
-    error_message = "cloudflare_zone_id must be the 32-character ID of the existing artifact-pages.stream zone."
   }
 }
 
