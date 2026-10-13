@@ -69,7 +69,7 @@
         <div>
           <h3>AWS verification</h3>
           <p>AWS verification uses the default CloudFront hostname and creates no DNS record; the <code>aws.artifact-pages.stream</code> hostname was retired on 2026-10-13. For a custom hostname through the Cloudflare composition, create a Cloudflare <strong>DNS-only</strong> CNAME pointing to the CloudFront distribution hostname. Never proxy CloudFront through Cloudflare: the browser must exercise CloudFront directly, without a second CDN masking AWS behavior.</p>
-          <p>Issue the viewer certificate in ACM <code>us-east-1</code>, publish its DNS-validation CNAMEs in Cloudflare as DNS-only records, wait for validation, and attach the certificate and matching alias to CloudFront. Keep validation records for renewal. The S3 origin region is independent of the certificate region. Do not create a Route 53 hosted zone.</p>
+          <p>The default CloudFront hostname uses CloudFront's default certificate and needs no DNS record. For a custom hostname (callers who set <code>aliases</code> and <code>acm_certificate_arn</code>, with Route 53 or the Cloudflare DNS/ACM composition), issue the viewer certificate in ACM <code>us-east-1</code>, publish its DNS-validation CNAMEs in Cloudflare as DNS-only records, wait for validation, and attach the certificate and matching alias to CloudFront. Keep validation records for renewal. The S3 origin region is independent of the certificate region. Do not create a Route 53 hosted zone.</p>
         </div>
       </div>
     </section>
