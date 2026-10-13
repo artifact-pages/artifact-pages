@@ -1,20 +1,23 @@
 import { assertSupportedSchema, isSupportedSchema, UnsupportedSchemaError } from './schema'
-import type { SiteCatalogEntry, SiteDiscoveryMetadata, SiteIndex, SiteRegistryProjection, SiteSummary } from '../domain/index'
+import type { ArtifactIndexEntry, SiteCatalogEntry, SiteDiscoveryMetadata, SiteIndex, SiteRegistryProjection, SiteSummary } from '../domain/index'
 
 const INDEX_ROOT = '/_indexes'
 const SITE_ID_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/
 
 export class IndexLoadError extends Error {
   readonly status?: number
+  /** The payload was read but its content is not a valid index (not a transport or schema-version problem). */
+  readonly invalidData?: boolean
 
   constructor(
     message: string,
     readonly url: string,
-    options?: ErrorOptions & { status?: number },
+    options?: ErrorOptions & { status?: number; invalidData?: boolean },
   ) {
     super(message, options)
     this.name = 'IndexLoadError'
     this.status = options?.status
+    this.invalidData = options?.invalidData
   }
 }
 
@@ -144,8 +147,9 @@ async function fetchSiteIndex(siteId: string, fetcher: Fetcher, url: string, sig
 }
 
 function parseSiteIndex(payload: unknown, url: string, expectedSiteId: string): SiteIndex {
+  const invalid = () => new IndexLoadError(`Invalid site artifact index data: ${url}.`, url, { invalidData: true })
   if (!payload || typeof payload !== 'object') {
-    throw new IndexLoadError(`Invalid site artifact index data: ${url}.`, url)
+    throw invalid()
   }
 
   assertSupportedSchema(payload, 'artifact-index', url)
@@ -159,10 +163,61 @@ function parseSiteIndex(payload: unknown, url: string, expectedSiteId: string): 
     typeof index.generatedAt !== 'string' ||
     !Array.isArray(index.artifacts)
   ) {
-    throw new IndexLoadError(`Invalid site artifact index data: ${url}.`, url)
+    throw invalid()
+  }
+
+  const seenIds = new Set<string>()
+  const seenPaths = new Set<string>()
+  for (const row of index.artifacts as unknown[]) {
+    if (!isValidArtifactRow(row, expectedSiteId) || seenIds.has(row.id) || seenPaths.has(row.path)) throw invalid()
+    seenIds.add(row.id)
+    seenPaths.add(row.path)
   }
 
   return index as SiteIndex
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function isOptionalString(value: unknown) {
+  return value === undefined || typeof value === 'string'
+}
+
+function isValidArtifactRow(row: unknown, siteId: string): row is ArtifactIndexEntry {
+  if (!isRecord(row)) return false
+  const { id, title, path, format, filename, artifactUrl, updatedAt, lastCommitter, source, toc } = row
+  if (typeof id !== 'string' || !id || typeof title !== 'string' || typeof updatedAt !== 'string') return false
+  if (typeof path !== 'string' || !path || path.startsWith('/')) return false
+  if (path.split('/').some((segment) => segment === '' || segment === '.' || segment === '..')) return false
+  if (format !== 'html' && format !== 'markdown') return false
+  if (!isOptionalString(filename)) return false
+  if (typeof artifactUrl !== 'string' || !isSameOriginRootPath(artifactUrl, siteId)) return false
+  if (lastCommitter !== undefined && !(isRecord(lastCommitter) && typeof lastCommitter.name === 'string')) return false
+  if (source !== undefined) {
+    if (!isRecord(source) || typeof source.repository !== 'string' || typeof source.ref !== 'string'
+      || !isOptionalString(source.repositoryUrl) || !isOptionalString(source.filePath)) return false
+  }
+  if (toc !== undefined) {
+    if (!Array.isArray(toc)) return false
+    for (const item of toc as unknown[]) {
+      if (!isRecord(item) || !Number.isInteger(item.level) || (item.level as number) < 1 || (item.level as number) > 6
+        || typeof item.text !== 'string' || typeof item.id !== 'string') return false
+    }
+  }
+  return true
+}
+
+function isSameOriginRootPath(value: string, siteId: string) {
+  const prefix = `/_artifacts/${encodeURIComponent(siteId)}/`
+  if (!value.startsWith(prefix) || value.length === prefix.length || /[?#]/.test(value)) return false
+  if (value.startsWith('//') || value.includes('\\')) return false
+  try {
+    return new URL(value, 'https://artifact-pages.invalid').origin === 'https://artifact-pages.invalid'
+  } catch {
+    return false
+  }
 }
 
 export function defaultSiteIndexUrl(siteId: string) {
@@ -184,7 +239,30 @@ function isLocalIndexUrl(value: string) {
   }
 }
 
-export async function discoverSites(fetcher: Fetcher = fetch): Promise<SiteCatalogEntry[]> {
+/** How long one site's metadata read may take before the site is listed as unavailable. */
+export const SITE_METADATA_TIMEOUT_MS = 10_000
+/** At most this many metadata reads are in flight at once. */
+export const SITE_METADATA_CONCURRENCY = 6
+
+async function mapWithConcurrency<T, R>(items: T[], limit: number, task: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length)
+  let next = 0
+  const worker = async () => {
+    while (next < items.length) {
+      const position = next
+      next += 1
+      results[position] = await task(items[position])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return results
+}
+
+export async function discoverSites(
+  fetcher: Fetcher = fetch,
+  options: { metadataTimeoutMs?: number } = {},
+): Promise<SiteCatalogEntry[]> {
+  const metadataTimeoutMs = options.metadataTimeoutMs ?? SITE_METADATA_TIMEOUT_MS
   const registryResponse = await fetchResponse(`${INDEX_ROOT}/sites.json`, fetcher)
   if (!registryResponse.ok) {
     throw new IndexLoadError(`Request failed with status ${registryResponse.status}: ${INDEX_ROOT}/sites.json.`, `${INDEX_ROOT}/sites.json`, { status: registryResponse.status })
@@ -196,14 +274,19 @@ export async function discoverSites(fetcher: Fetcher = fetch): Promise<SiteCatal
     throw new IndexLoadError(`Invalid site registry: ${INDEX_ROOT}/sites.json.`, `${INDEX_ROOT}/sites.json`, { cause: error })
   }
   const registry = parseSiteRegistry(payload)
-  const sites = await Promise.all(registry.sites.map(async (site): Promise<SiteCatalogEntry> => {
+  const deadline = Date.now() + metadataTimeoutMs
+  const sites = await mapWithConcurrency(registry.sites, SITE_METADATA_CONCURRENCY, async (site): Promise<SiteCatalogEntry> => {
     const registeredSummary: SiteSummary = {
       id: site.id,
       title: site.name,
       ...(site.description?.trim() ? { description: site.description } : {}),
     }
+    const remaining = deadline - Date.now()
+    if (remaining <= 0) return { site: registeredSummary, status: 'metadata-unavailable' }
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), remaining)
     try {
-      const metadata = await loadSiteDiscoveryMetadata(site.id, fetcher)
+      const metadata = await loadSiteDiscoveryMetadata(site.id, fetcher, controller.signal)
       return { ...metadata, site: registeredSummary, status: 'available' }
     } catch (error) {
       return {
@@ -214,8 +297,10 @@ export async function discoverSites(fetcher: Fetcher = fetch): Promise<SiteCatal
             ? 'not-published'
             : 'metadata-unavailable',
       }
+    } finally {
+      clearTimeout(timer)
     }
-  }))
+  })
   return sites.sort((left, right) => left.site.title.localeCompare(right.site.title))
 }
 
@@ -271,11 +356,12 @@ function isCanonicalSourcePath(sourcePath: string) {
 async function loadSiteDiscoveryMetadata(
   siteId: string,
   fetcher: Fetcher,
+  signal: AbortSignal,
 ): Promise<SiteDiscoveryMetadata> {
   const url = `${INDEX_ROOT}/${encodeURIComponent(siteId)}/meta.json`
   let payload: unknown
   try {
-    const response = await fetcher(url)
+    const response = await fetcher(url, { signal })
     if (!response.ok) {
       throw new IndexLoadError(`Request failed with status ${response.status}: ${url}.`, url, { status: response.status })
     }

@@ -1,6 +1,7 @@
 # One slow site metadata request holds the whole home page
 
-- Status: Open
+- Status: Done
+- Assignee: Claude
 - Priority: P2
 - Area: Site discovery
 - Implementer: Claude
@@ -20,13 +21,21 @@
 
 Registered sites appear as soon as the registry is read, and each card fills in its metadata when it arrives or shows the existing unavailable state.
 
-Options (the choice is left to the implementation brief):
+Options considered:
 
 - Show the registry's own site entries first and fill metadata per card as each request completes.
 - Keep the single result but add a per-request timeout and a bounded concurrency.
 
+Decision: the second option. It keeps the `SiteCatalogEntry` contract, the title sort and the availability states that `App.tsx` and `SitePicker` already use, and the home page waits at most the overall deadline (`SITE_METADATA_TIMEOUT_MS`, 10 s from the start of the metadata phase; reads that would start after it are not fetched) instead of indefinitely. Metadata reads run with at most `SITE_METADATA_CONCURRENCY` (6) in flight, and a read that hits the deadline ends as `metadata-unavailable`. The progressive per-card option stays a possible later improvement.
+
 ## Acceptance criteria
 
-- [ ] The home page renders registered sites without waiting for every metadata request.
-- [ ] The existing availability states (`available`, `not-published`, `needs-republish`, `metadata-unavailable`) and the specification's behavior for them are unchanged.
-- [ ] A test with one never-resolving metadata request shows the other sites and a pending or unavailable state for the slow one.
+- [x] The home page renders registered sites within the metadata deadline (10 s overall) even if a metadata request never completes.
+- [x] The existing availability states (`available`, `not-published`, `needs-republish`, `metadata-unavailable`) and the specification's behavior for them are unchanged.
+- [x] A test with one never-resolving metadata request shows the other sites and a pending or unavailable state for the slow one.
+
+## Verification
+
+- `npx tsc -b web/tsconfig.json`: clean. `npm run build`: passes.
+- `npm run test:web-unit`: passes, including two new tests in `web/src/data/indexes.test.mjs`: a never-completing `meta.json` (timeout 50 ms) leaves the other two sites `available` and the slow one `metadata-unavailable`; ten sites never exceed 6 concurrent metadata requests; ten hanging sites all end `metadata-unavailable` within the overall deadline.
+- e2e against the local compose stack (project `claude-091`, port 4395), `CI=1` full suite: 223 passed, 0 failed, 0 flaky.

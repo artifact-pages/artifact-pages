@@ -1,6 +1,7 @@
 # Malformed artifact index rows pass loading and crash rendering
 
-- Status: Open
+- Status: Done
+- Assignee: Claude
 - Priority: P2
 - Area: Web data loading
 - Implementer: Claude
@@ -25,6 +26,12 @@ An index with invalid rows is reported as a load error that names the site, and 
 
 ## Acceptance criteria
 
-- [ ] `parseSiteIndex` validates the fields the web reader requires on every artifact row (including `id`, `path`, and the URL fields), rejects duplicate ids and duplicate paths, and rejects the whole index with an `IndexLoadError` that names the site. Unknown extra fields are still ignored.
-- [ ] An app-level React error boundary shows a recovery screen with a reload hint and a republish hint instead of a blank page.
-- [ ] A regression test feeds `{"artifacts":[{"id":"broken"}]}` and a duplicate-id index and expects the load error; a second test makes a child component throw and expects the recovery screen.
+- [x] `parseSiteIndex` validates the fields the web reader requires on every artifact row (including `id`, `path`, and the URL fields), rejects duplicate ids and duplicate paths, and rejects the whole index with an `IndexLoadError` that names the site. Unknown extra fields are still ignored.
+- [x] An app-level React error boundary shows a recovery screen with a reload hint and a republish hint instead of a blank page.
+- [x] A regression test feeds `{"artifacts":[{"id":"broken"}]}` and a duplicate-id index and expects the load error; a second test makes a child component throw and expects the recovery screen.
+
+## Verification
+
+- `npx tsc -b web/tsconfig.json`: clean. `npm run build`: passes.
+- `npm run test:web-unit`: passes, including the new `web/src/data/indexes.test.mjs` (8 tests: malformed row, duplicate id, duplicate path, protocol-relative `artifactUrl`, `..` path, unknown extra field, the sre fixture, HTTP failure not marked as invalid data).
+- e2e against a local compose stack (project `claude-091`, port 4395): two new tests in `web/e2e/local-serving.spec.ts` (a malformed row shows "Unable to load this site" with the republish message; a forced render-time exception shows "Something went wrong" and the Reload button). `CI=1` full suite: 223 passed, 0 failed, 0 flaky.

@@ -463,19 +463,19 @@ test('registered discovery honors sites.json, hides unregistered storage, and lo
 })
 
 test('site cards show the description, page counts per top-level folder and a Start reading link', async ({ page }) => {
-  const artifact = (path: string) => ({
+  const artifact = (id: string, path: string) => ({
     id: path.replace(/\W+/gu, '-'),
     title: path,
     path,
     format: 'html',
-    artifactUrl: `/x/${path}`,
+    artifactUrl: `/_artifacts/${id}/${path}`,
     updatedAt: '2026-10-01T00:00:00Z',
   })
   const index = (id: string, paths: string[]) => ({
     schemaVersion: 1,
     site: { id, title: id },
     generatedAt: '2026-10-09T00:00:00Z',
-    artifacts: paths.map(artifact),
+    artifacts: paths.map((path) => artifact(id, path)),
   })
   const meta = (id: string, count: number) => ({
     schemaVersion: 1,
@@ -585,7 +585,7 @@ test('the landing page reads at most 8 site indexes, 3 at a time', async ({ page
         site: { id, title: id },
         generatedAt: '2026-10-09T00:00:00Z',
         artifacts: ['en/a.html', 'ja/a.html'].map((path) => ({
-          id: path, title: path, path, format: 'html', artifactUrl: `/x/${path}`, updatedAt: '2026-10-01T00:00:00Z',
+          id: path, title: path, path, format: 'html', artifactUrl: `/_artifacts/${id}/${path}`, updatedAt: '2026-10-01T00:00:00Z',
         })),
       }))
     })
@@ -614,7 +614,7 @@ test('a real folder named root is not confused with pages at the site root', asy
   await page.route('**/_indexes/mixed/index.json', (route) => route.fulfill(json({
     schemaVersion: 1, site: { id: 'mixed', title: 'Mixed' }, generatedAt: '2026-10-09T00:00:00Z',
     artifacts: ['root/a.html', 'root/b.html', 'index.html'].map((path) => ({
-      id: path, title: path, path, format: 'html', artifactUrl: `/x/${path}`, updatedAt: '2026-10-01T00:00:00Z',
+      id: path, title: path, path, format: 'html', artifactUrl: `/_artifacts/mixed/${path}`, updatedAt: '2026-10-01T00:00:00Z',
     })),
   })))
   await page.goto('/')
@@ -3627,6 +3627,43 @@ test('a failed known-site index load stays distinct from an unknown site', async
   await page.getByRole('button', { name: '← All sites' }).click()
   await expect(page).toHaveURL('/')
   await expect(page.getByRole('heading', { name: 'Choose a site' })).toBeVisible()
+})
+
+test('a site index with a malformed row is a load error with a republish hint', async ({ page }) => {
+  await page.route('**/_indexes/sre/index.json', async (route) => {
+    const response = await route.fetch()
+    const index = await response.json() as { artifacts: Array<Record<string, unknown>> }
+    await route.fulfill({ response, json: { ...index, artifacts: [{ id: 'broken' }, ...index.artifacts.slice(1)] } })
+  })
+  await page.goto('/sre/')
+
+  await expect(page.getByRole('heading', { name: 'Unable to load this site' })).toBeVisible()
+  await expect(page.getByRole('alert')).toHaveText(
+    "This site's index is damaged or was written by an incompatible publisher. Ask the site's publisher to republish it.",
+  )
+  await page.unrouteAll({ behavior: 'wait' })
+})
+
+test('a render-time exception shows the recovery screen instead of a blank page', async ({ page }) => {
+  // buildArtifactTree (inside ArtifactTree's useMemo) sorts directory names with compareNames,
+  // which calls String.prototype.toLowerCase on the 'incidents' folder name while React renders
+  // the site page. Only that call throws, and only while the flag is set, so the load itself
+  // and the rest of the app are unaffected.
+  await page.addInitScript(() => {
+    ;(window as unknown as { __apForceRenderError: boolean }).__apForceRenderError = true
+    const original = String.prototype.toLowerCase
+    String.prototype.toLowerCase = function (this: string) {
+      if ((window as unknown as { __apForceRenderError?: boolean }).__apForceRenderError === true && String(this) === 'incidents') {
+        throw new Error('forced render error')
+      }
+      return original.call(this)
+    }
+  })
+  await page.goto('/sre/')
+
+  await expect(page.getByRole('heading', { name: 'Something went wrong' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Reload' })).toBeVisible()
+  await expect(page.getByRole('link', { name: '← All sites' })).toHaveAttribute('href', '/')
 })
 
 const previewHeadSha = '0123456789abcdef0123456789abcdef01234567'
