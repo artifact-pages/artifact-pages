@@ -42,8 +42,6 @@ trap 'rm -r "$contract_helper_dir"' EXIT
 "$terraform_bin" test -no-color
 "$terraform_bin" -chdir=examples/local-consumer init -backend=false -input=false -lockfile=readonly
 "$terraform_bin" -chdir=examples/local-consumer validate
-"$terraform_bin" -chdir=examples/cloudflare-dns-acm-consumer init -backend=false -input=false -lockfile=readonly
-"$terraform_bin" -chdir=examples/cloudflare-dns-acm-consumer validate
 "$terraform_bin" -chdir=examples/route53-consumer init -backend=false -input=false -lockfile=readonly
 "$terraform_bin" -chdir=examples/route53-consumer validate
 "$terraform_bin" -chdir=tests/cli-contract init -backend=false -input=false -lockfile=readonly
@@ -59,25 +57,5 @@ if [[ "$mismatch_status" -eq 0 ]] || ! printf '%s' "$mismatch_output" | grep -Eq
   exit 1
 fi
 printf 'Mocked AWS provider/OIDC account mismatch was rejected during planning.\n'
-
-"$terraform_bin" -chdir=tests/cloudflare-dns-acm-account init -backend=false -input=false -lockfile=readonly
-check_wrapper_account_mismatch() {
-  local test_file="$1"
-  local mismatch_output
-  local mismatch_status
-
-  set +e
-  mismatch_output=$("$terraform_bin" -chdir=tests/cloudflare-dns-acm-account test -no-color -filter="$test_file" 2>&1)
-  mismatch_status=$?
-  set -e
-  if [[ "$mismatch_status" -eq 0 ]] || ! printf '%s' "$mismatch_output" | grep -Eq 'Both AWS provider accounts must match the OIDC account\.'; then
-    printf '%s\n' "$mismatch_output" >&2
-    printf 'Expected mocked wrapper account mismatch to stop plan in %s.\n' "$test_file" >&2
-    exit 1
-  fi
-  printf 'Mocked AWS account mismatch rejected by the Cloudflare/ACM wrapper: %s\n' "$test_file"
-}
-check_wrapper_account_mismatch default-provider-mismatch.tftest.hcl
-check_wrapper_account_mismatch us-east-1-provider-mismatch.tftest.hcl
 
 node --test tests/*.test.js

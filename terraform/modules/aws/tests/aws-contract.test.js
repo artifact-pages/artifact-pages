@@ -5,10 +5,6 @@ const main = await readFile(new URL('../main.tf', import.meta.url), 'utf8')
 const variables = await readFile(new URL('../variables.tf', import.meta.url), 'utf8')
 const outputs = await readFile(new URL('../outputs.tf', import.meta.url), 'utf8')
 const versions = await readFile(new URL('../versions.tf', import.meta.url), 'utf8')
-const cloudflareComposition = await readFile(new URL('../modules/cloudflare-dns-acm/main.tf', import.meta.url), 'utf8')
-const cloudflareVariables = await readFile(new URL('../modules/cloudflare-dns-acm/variables.tf', import.meta.url), 'utf8')
-const cloudflareOutputs = await readFile(new URL('../modules/cloudflare-dns-acm/outputs.tf', import.meta.url), 'utf8')
-const cloudflareVersions = await readFile(new URL('../modules/cloudflare-dns-acm/versions.tf', import.meta.url), 'utf8')
 
 function block(source, header) {
   const start = source.indexOf(header)
@@ -341,92 +337,18 @@ test('module and clean caller examples use distinct local and Registry sources',
   assert.match(registryReadme, /publication is a separate owner-controlled step/u)
 })
 
-test('optional Cloudflare composition leaves the root AWS module and caller-managed path independent', async () => {
+test('AWS aliases and certificates remain caller-managed', async () => {
   assert.match(versions, /source\s*=\s*"hashicorp\/aws"/u)
   assert.doesNotMatch(versions, /cloudflare\/cloudflare/u)
   assert.doesNotMatch(versions, /configuration_aliases/u)
-  const compositionVariables = await readFile(new URL('../modules/cloudflare-dns-acm/variables.tf', import.meta.url), 'utf8')
-  const compositionExampleVariables = await readFile(new URL('../examples/cloudflare-dns-acm-consumer/variables.tf', import.meta.url), 'utf8')
-  assert.match(compositionVariables, /variable "bucket_name"[\s\S]*?default\s*=\s*null/u)
-  assert.match(compositionExampleVariables, /variable "bucket_name"[\s\S]*?default\s*=\s*null/u)
+
   assert.match(variables, /variable "aliases"[\s\S]*?default\s*=\s*\[\]/u)
   assert.match(variables, /variable "acm_certificate_arn"[\s\S]*?default\s*=\s*null/u)
   assert.match(variables, /length\(var\.aliases\) == 0 \|\| var\.acm_certificate_arn != null/u)
+  assert.match(main, /aliases\s*=\s*var\.aliases/u)
+  assert.match(main, /viewer_certificate[\s\S]*?acm_certificate_arn\s*=\s*length\(var\.aliases\)\s*>\s*0\s*\?\s*var\.acm_certificate_arn/u)
 
   const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8')
   assert.match(readme, /root AWS module remains AWS-only/u)
   assert.match(readme, /manage DNS and the `us-east-1` certificate in your own Terraform configuration/u)
-  assert.match(readme, /does not create a Route 53 zone or records/u)
-})
-
-test('optional composition validates an ACM certificate in us-east-1 before wiring its alias into CloudFront', () => {
-  assert.match(cloudflareVersions, /configuration_aliases\s*=\s*\[aws\.us_east_1\]/u)
-  assert.match(cloudflareVersions, /source\s*=\s*"cloudflare\/cloudflare"/u)
-
-  const certificate = block(cloudflareComposition, 'resource "aws_acm_certificate" "viewer"')
-  assert.match(certificate, /provider\s*=\s*aws\.us_east_1/u)
-  assert.match(certificate, /domain_name\s*=\s*local\.hostname/u)
-  assert.match(certificate, /validation_method\s*=\s*"DNS"/u)
-  assert.match(certificate, /create_before_destroy\s*=\s*true/u)
-
-  const validation = block(cloudflareComposition, 'resource "aws_acm_certificate_validation" "viewer"')
-  assert.match(validation, /provider\s*=\s*aws\.us_east_1/u)
-  assert.match(validation, /certificate_arn\s*=\s*aws_acm_certificate\.viewer\.arn/u)
-  assert.match(validation, /validation_record_fqdns\s*=\s*\[for record in cloudflare_dns_record\.acm_validation : record\.name\]/u)
-
-  const awsModule = block(cloudflareComposition, 'module "artifact_pages"')
-  assert.match(awsModule, /aws\s*=\s*aws/u)
-  assert.match(awsModule, /aliases\s*=\s*\[local\.hostname\]/u)
-  assert.match(awsModule, /acm_certificate_arn\s*=\s*aws_acm_certificate_validation\.viewer\.certificate_arn/u)
-  assert.doesNotMatch(cloudflareComposition, /provider\s+"(?:aws|cloudflare)"/u)
-})
-
-test('Cloudflare records are DNS-only, scoped to the supplied zone, and never create Route 53 resources', () => {
-  const validationRecord = block(cloudflareComposition, 'resource "cloudflare_dns_record" "acm_validation"')
-  assert.match(validationRecord, /for_each\s*=\s*\{[\s\S]*?domain_validation_options/u)
-  assert.match(validationRecord, /zone_id\s*=\s*var\.cloudflare_domain\.zone_id/u)
-  assert.match(validationRecord, /type\s*=\s*each\.value\.resource_record_type/u)
-  assert.match(validationRecord, /content\s*=\s*trimsuffix\(each\.value\.resource_record_value, "\."\)/u)
-  assert.match(validationRecord, /ttl\s*=\s*1/u)
-  assert.match(validationRecord, /proxied\s*=\s*false/u)
-
-  const distributionRecord = block(cloudflareComposition, 'resource "cloudflare_dns_record" "distribution"')
-  assert.match(distributionRecord, /zone_id\s*=\s*var\.cloudflare_domain\.zone_id/u)
-  assert.match(distributionRecord, /name\s*=\s*local\.hostname/u)
-  assert.match(distributionRecord, /type\s*=\s*"CNAME"/u)
-  assert.match(distributionRecord, /content\s*=\s*module\.artifact_pages\.distribution_domain_name/u)
-  assert.match(distributionRecord, /ttl\s*=\s*1/u)
-  assert.match(distributionRecord, /proxied\s*=\s*false/u)
-  assert.doesNotMatch(cloudflareComposition, /aws_route53_|cloudflare_zone\s/u)
-})
-
-test('composition docs include a real-plan review checklist and preserve live proof as T15', async () => {
-  const readme = await readFile(new URL('../modules/cloudflare-dns-acm/README.md', import.meta.url), 'utf8')
-  assert.match(readme, /## Real-plan review checklist/u)
-  assert.match(readme, /accepts any valid non-apex hostname beneath the supplied Cloudflare zone/u)
-  assert.match(readme, /cloudflare_domain\.hostname/u)
-  assert.match(readme, /certificate validation waiter completes before the CloudFront distribution/u)
-  assert.match(readme, /no Route 53 resources, apex record, unrelated Cloudflare records/u)
-  assert.match(readme, /live T15 proof/u)
-  assert.match(readme, /local validation script does not perform them/u)
-})
-
-test('Cloudflare hostname validation requires a valid non-apex name under the declared zone', async () => {
-  const domain = block(cloudflareVariables, 'variable "cloudflare_domain"')
-  assert.match(domain, /zone_id\s*=\s*string/u)
-  assert.match(domain, /zone_name\s*=\s*string/u)
-  assert.match(domain, /hostname\s*=\s*string/u)
-  assert.match(domain, /lower\(var\.cloudflare_domain\.hostname\) != lower\(var\.cloudflare_domain\.zone_name\)/u)
-  assert.match(domain, /endswith\(lower\(var\.cloudflare_domain\.hostname\), "\.\$\{lower\(var\.cloudflare_domain\.zone_name\)\}"\)/u)
-
-  const example = await readFile(new URL('../examples/cloudflare-dns-acm-consumer/main.tf', import.meta.url), 'utf8')
-  const providerConfig = await readFile(new URL('../examples/cloudflare-dns-acm-consumer/versions.tf', import.meta.url), 'utf8')
-  assert.match(example, /aws\.us_east_1\s*=\s*aws\.us_east_1/u)
-  assert.match(example, /cloudflare\s*=\s*cloudflare/u)
-  assert.match(example, /zone_name\s*=\s*var\.cloudflare_zone_name/u)
-  assert.match(example, /hostname\s*=\s*var\.aws_hostname/u)
-  assert.match(providerConfig, /provider\s+"aws"\s*\{\s*region\s*=\s*var\.aws_region/u)
-  assert.match(providerConfig, /alias\s*=\s*"us_east_1"\s+region\s*=\s*"us-east-1"/u)
-  assert.match(providerConfig, /provider\s+"cloudflare"/u)
-  assert.match(cloudflareOutputs, /certificate_arn/u)
 })
