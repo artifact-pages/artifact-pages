@@ -72,7 +72,7 @@ No other role touches the bucket: CloudFront reads only through the OAC bucket p
 0.x carries no compatibility promise ([TD2](../technical-design/TD2-component-release-policy.md)), but the cutover must not strand state (locks, publish state, cache-retry and cleanup records):
 - New CLI writes only the new keys. For reads it falls back to the old key when the new one is absent and writes the result to the new key (read-old-write-new); the old key is deleted after the new key is written, by the admin or satellite role that holds delete on it. Alternative if the fallback is too intrusive: a one-shot `registry sync` step that moves all per-site records, run once by the admin. The implementer picks one and records it in Results; the fallback is the default because it needs no operator step.
 - Locks are short-lived: the cutover is safe when no publish is in flight; document that, and treat a stale old-path lock as recoverable by the existing lock-recovery rules.
-- Ordering: (1) module release that grants **both** the old exact keys and `_control/sites/<site>/*` (and admin `_control/*`), applied by the owner; (2) CLI release writing the new layout (with old-key fallback), published as a product release; (3) a later module release drops the old exact keys once the satellites run the new CLI. Releasing the CLI before step 1 would fail with AccessDenied on the new keys. This is the one place where the AWS module and CLI releases are still ordered; afterwards they are independent.
+- Ordering: (1) module release that grants **both** the old exact keys and `_control/sites/<site>/*` (and admin `_control/*`), applied by the owner; (2) CLI release writing the new layout (with old-key fallback), published as a product release; (3) a later module release drops the old exact keys once the satellites run the new CLI. Releasing the CLI before step 1 would fail with AccessDenied on the new keys. This is the one place where the AWS module and CLI releases are still ordered; afterwards they are independent. (Superseded 2026-10-14: see Release ordering.)
 - Cloudflare credentials are bucket-level; the Cloudflare module needs no change, but the CLI layout change applies to both providers and the local/emulator profiles, fixtures and spec text (`docs/specification.md` control-record paths) must be updated with it.
 
 ## Scope
@@ -95,7 +95,7 @@ No other role touches the bucket: CloudFront reads only through the OAC bucket p
 
 ## Results
 
-Design check and owner decision (option c) recorded 2026-10-07. Steps 1 and 2 of the ordering (CLI with fallback, module granting both layouts) landed together in one change on 2026-10-07; step 3 is open.
+Design check and owner decision (option c) recorded 2026-10-07. Steps 1 and 2 of the ordering (CLI with fallback, module granting both layouts) landed together in one change on 2026-10-07; step 3 landed on 2026-10-14 before the module's first release.
 
 ### Key layout (old to new)
 
@@ -135,6 +135,8 @@ CloudFront OAC and the bucket policy are unchanged; `/_control/*` still has no b
 Nothing on the Cloudflare side scopes `_control` keys: the module's R2 credentials are bucket-level and the delivery config only keeps `/_control` out of the exclusions (tests unchanged). Operators who hand-roll prefix- or object-scoped R2 temporary credentials (see the Cloudflare deployment guide) must allow `_control/sites/<site>/` before upgrading the CLI.
 
 ### Release ordering
+
+As it happened (2026-10-14): the AWS module was never published with the transitional grants. Its first release (`terraform-aws/v0.1.0`) grants only `_control/sites/<site>/*` and requires CLI 0.4.0 or later, so adopters install CLI 0.4.0+ before or with the module; no module→CLI→module sequence applies to them. The numbered steps below record the plan as designed for an already-deployed module.
 
 1. Release and apply the AWS module version carrying this change (grants both layouts).
 2. Release the CLI with this change and use it for every site (one CLI version per site while adoption happens). Releasing the CLI first fails with AccessDenied on the new keys.
