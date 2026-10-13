@@ -322,7 +322,9 @@ function ErrorPage({
         <p className="eyebrow">{title}</p>
         <h1>{scope === 'catalog' ? 'Unable to load sites' : 'Unable to load this site'}</h1>
         <p className="error-message" role="alert">
-          {error instanceof IndexLoadError && error.status
+          {scope === 'site' && error instanceof IndexLoadError && error.invalidData
+            ? "This site's index is damaged or was written by an incompatible publisher. Ask the site's publisher to republish it."
+            : error instanceof IndexLoadError && error.status
             ? scope === 'catalog'
               ? `The site catalog could not be loaded (HTTP ${error.status}). Please try again in a moment.`
               : `The site could not be loaded (HTTP ${error.status}). Please try again in a moment.`

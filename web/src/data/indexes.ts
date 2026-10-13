@@ -1,20 +1,23 @@
 import { assertSupportedSchema, isSupportedSchema, UnsupportedSchemaError } from './schema'
-import type { SiteCatalogEntry, SiteDiscoveryMetadata, SiteIndex, SiteRegistryProjection, SiteSummary } from '../domain/index'
+import type { ArtifactIndexEntry, SiteCatalogEntry, SiteDiscoveryMetadata, SiteIndex, SiteRegistryProjection, SiteSummary } from '../domain/index'
 
 const INDEX_ROOT = '/_indexes'
 const SITE_ID_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/
 
 export class IndexLoadError extends Error {
   readonly status?: number
+  /** The payload was read but its content is not a valid index (not a transport or schema-version problem). */
+  readonly invalidData?: boolean
 
   constructor(
     message: string,
     readonly url: string,
-    options?: ErrorOptions & { status?: number },
+    options?: ErrorOptions & { status?: number; invalidData?: boolean },
   ) {
     super(message, options)
     this.name = 'IndexLoadError'
     this.status = options?.status
+    this.invalidData = options?.invalidData
   }
 }
 
@@ -144,8 +147,9 @@ async function fetchSiteIndex(siteId: string, fetcher: Fetcher, url: string, sig
 }
 
 function parseSiteIndex(payload: unknown, url: string, expectedSiteId: string): SiteIndex {
+  const invalid = () => new IndexLoadError(`Invalid site artifact index data: ${url}.`, url, { invalidData: true })
   if (!payload || typeof payload !== 'object') {
-    throw new IndexLoadError(`Invalid site artifact index data: ${url}.`, url)
+    throw invalid()
   }
 
   assertSupportedSchema(payload, 'artifact-index', url)
@@ -159,10 +163,59 @@ function parseSiteIndex(payload: unknown, url: string, expectedSiteId: string): 
     typeof index.generatedAt !== 'string' ||
     !Array.isArray(index.artifacts)
   ) {
-    throw new IndexLoadError(`Invalid site artifact index data: ${url}.`, url)
+    throw invalid()
+  }
+
+  const seenIds = new Set<string>()
+  const seenPaths = new Set<string>()
+  for (const row of index.artifacts as unknown[]) {
+    if (!isValidArtifactRow(row) || seenIds.has(row.id) || seenPaths.has(row.path)) throw invalid()
+    seenIds.add(row.id)
+    seenPaths.add(row.path)
   }
 
   return index as SiteIndex
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function isOptionalString(value: unknown) {
+  return value === undefined || typeof value === 'string'
+}
+
+function isValidArtifactRow(row: unknown): row is ArtifactIndexEntry {
+  if (!isRecord(row)) return false
+  const { id, title, path, format, filename, artifactUrl, updatedAt, lastCommitter, source, toc } = row
+  if (typeof id !== 'string' || !id || typeof title !== 'string' || typeof updatedAt !== 'string') return false
+  if (typeof path !== 'string' || !path || path.startsWith('/') || path.includes('\\')) return false
+  if (path.split('/').some((segment) => segment === '' || segment === '.' || segment === '..')) return false
+  if (format !== 'html' && format !== 'markdown') return false
+  if (!isOptionalString(filename)) return false
+  if (typeof artifactUrl !== 'string' || !isSameOriginRootPath(artifactUrl)) return false
+  if (lastCommitter !== undefined && !(isRecord(lastCommitter) && typeof lastCommitter.name === 'string')) return false
+  if (source !== undefined) {
+    if (!isRecord(source) || typeof source.repository !== 'string' || typeof source.ref !== 'string'
+      || !isOptionalString(source.repositoryUrl) || !isOptionalString(source.filePath)) return false
+  }
+  if (toc !== undefined) {
+    if (!Array.isArray(toc)) return false
+    for (const item of toc as unknown[]) {
+      if (!isRecord(item) || !Number.isInteger(item.level) || (item.level as number) < 1 || (item.level as number) > 6
+        || typeof item.text !== 'string' || typeof item.id !== 'string') return false
+    }
+  }
+  return true
+}
+
+function isSameOriginRootPath(value: string) {
+  if (!value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return false
+  try {
+    return new URL(value, 'https://artifact-pages.invalid').origin === 'https://artifact-pages.invalid'
+  } catch {
+    return false
+  }
 }
 
 export function defaultSiteIndexUrl(siteId: string) {
