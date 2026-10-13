@@ -25,7 +25,7 @@ There is no application server in the request path. Git is the source of truth; 
 
 ## Status
 
-Pre-release (0.x, no compatibility promise yet). Released components: the CLI (binaries for linux and darwin, amd64 and arm64), the web application bundle (`web/v…` releases), the four GitHub Actions and the Cloudflare Terraform module (`terraform-cloudflare/v…`). Current versions are on the [releases page](https://github.com/artifact-pages/artifact-pages/releases).
+Pre-release (0.x, no compatibility promise yet). Released components: the CLI (binaries for linux and darwin, amd64 and arm64), the web application bundle (`web/v…` releases) and the four GitHub Actions; current versions are on the [releases page](https://github.com/artifact-pages/artifact-pages/releases). The Cloudflare Terraform module is tagged in [artifact-pages/terraform-cloudflare-artifact-pages](https://github.com/artifact-pages/terraform-cloudflare-artifact-pages/tags); it is not yet published to the Terraform Registry.
 
 - Cloudflare (R2 and Cloudflare cache) is the first supported provider and runs the public deployment at <https://artifact-pages.dev>.
 - AWS (S3 and CloudFront): the Terraform module and backend exist and live verification is in progress. It is not yet a supported deployment target.
