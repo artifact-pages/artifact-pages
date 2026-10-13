@@ -177,6 +177,8 @@ After publishing, verify the hostname directly. A successful local MinIO/purge-m
 - Exercise real R2 conditional creation and a simultaneous `If-Match` race. Exactly one competing lock update must win, the other must map to a precondition failure, and the final object must match the winner.
 - Verify complete R2 list pagination and delete behavior, including a partial-delete retry, before relying on registry omission cleanup.
 
+For recovery from common failures, see the [operator recovery runbook](operator-recovery.md).
+
 ## Limitations
 
 R2 temporary credentials must be minted and renewed outside this CLI. Viewer access is configured and verified independently by the operator at the edge; Artifact Pages has no user identity or per-site permission model. Cache purge cannot clear a viewer's browser cache; origin/browser TTLs therefore stay part of the contract. The post-change state fast path and `--reconcile` behavior still need candidate measurements against the same target and fixture source used for the recorded pre-change baseline; [T18](../backlog/verification/T18-publish-scale-baseline.md) keeps those results separate. [T15](../backlog/verification/T15-provider-delivery.md) owns live delivery/cache evidence, and [T16](../backlog/verification/T16-external-adoption.md) owns the external clean-room flow.
