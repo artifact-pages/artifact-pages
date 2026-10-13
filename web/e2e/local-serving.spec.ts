@@ -463,19 +463,19 @@ test('registered discovery honors sites.json, hides unregistered storage, and lo
 })
 
 test('site cards show the description, page counts per top-level folder and a Start reading link', async ({ page }) => {
-  const artifact = (path: string) => ({
+  const artifact = (id: string, path: string) => ({
     id: path.replace(/\W+/gu, '-'),
     title: path,
     path,
     format: 'html',
-    artifactUrl: `/x/${path}`,
+    artifactUrl: `/_artifacts/${id}/${path}`,
     updatedAt: '2026-10-01T00:00:00Z',
   })
   const index = (id: string, paths: string[]) => ({
     schemaVersion: 1,
     site: { id, title: id },
     generatedAt: '2026-10-09T00:00:00Z',
-    artifacts: paths.map(artifact),
+    artifacts: paths.map((path) => artifact(id, path)),
   })
   const meta = (id: string, count: number) => ({
     schemaVersion: 1,
@@ -585,7 +585,7 @@ test('the landing page reads at most 8 site indexes, 3 at a time', async ({ page
         site: { id, title: id },
         generatedAt: '2026-10-09T00:00:00Z',
         artifacts: ['en/a.html', 'ja/a.html'].map((path) => ({
-          id: path, title: path, path, format: 'html', artifactUrl: `/x/${path}`, updatedAt: '2026-10-01T00:00:00Z',
+          id: path, title: path, path, format: 'html', artifactUrl: `/_artifacts/${id}/${path}`, updatedAt: '2026-10-01T00:00:00Z',
         })),
       }))
     })
@@ -614,7 +614,7 @@ test('a real folder named root is not confused with pages at the site root', asy
   await page.route('**/_indexes/mixed/index.json', (route) => route.fulfill(json({
     schemaVersion: 1, site: { id: 'mixed', title: 'Mixed' }, generatedAt: '2026-10-09T00:00:00Z',
     artifacts: ['root/a.html', 'root/b.html', 'index.html'].map((path) => ({
-      id: path, title: path, path, format: 'html', artifactUrl: `/x/${path}`, updatedAt: '2026-10-01T00:00:00Z',
+      id: path, title: path, path, format: 'html', artifactUrl: `/_artifacts/mixed/${path}`, updatedAt: '2026-10-01T00:00:00Z',
     })),
   })))
   await page.goto('/')
