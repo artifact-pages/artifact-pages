@@ -1,6 +1,6 @@
 # IMP-80 — Operator recovery runbook
 
-- Status: In review
+- Status: Done
 - Assignee: Claude
 - Lanes: Documentation (primary), CLI and operations (technical review)
 - Owner: Claude (prose); Codex reviews technical accuracy
@@ -26,9 +26,10 @@ Add `docs/guides/operator-recovery.md` and link it from `docs/guides/cloudflare-
 ## Acceptance criteria
 
 - [x] `docs/guides/operator-recovery.md` exists, covers the seven scenarios, and is linked from `docs/guides/cloudflare-deployment.md`.
-- [ ] Every command shown exists in the current CLI (verified with `--help` or the source), and Codex has reviewed the technical accuracy.
+- [x] Every command shown exists in the current CLI (verified with `--help` or the source), and Codex has reviewed the technical accuracy.
 - [x] Each scenario is either exercised once on `artifact-pages.stream` with the result noted, or marked "not yet exercised".
 
 ## Progress
 
 - 2026-10-14 (Claude): runbook drafted in `docs/guides/operator-recovery.md` and linked from the Cloudflare deployment guide and `docs/README.md`. All seven scenarios are marked "not yet exercised". Codex technical review (criterion 2) is pending.
+- 2026-10-14 (Claude main): Codex technical-accuracy review in two passes (PR #136). Fixed: the operations that can hold each lock scope (`app deploy` and `registry sync` also take site locks), `CF_API_TOKEN` in single-token mode (needed by the lock commands; a dry run does not prove purge permission), registry-reader verification through `site sync --dry-run`, and the preview side effects of `site sync`. Criterion 2 met. Exercising the scenarios on `artifact-pages.stream` remains open; each is marked "not yet exercised".
