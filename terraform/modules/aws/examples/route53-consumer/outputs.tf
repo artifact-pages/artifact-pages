@@ -1,0 +1,44 @@
+output "hostname" {
+  description = "Custom hostname served by the CloudFront distribution."
+  value       = var.hostname
+}
+
+output "certificate_arn" {
+  description = "Validated us-east-1 ACM viewer certificate ARN."
+  value       = aws_acm_certificate_validation.viewer.certificate_arn
+}
+
+output "distribution_id" {
+  description = "CloudFront distribution ID."
+  value       = module.artifact_pages.distribution_id
+}
+
+output "distribution_domain_name" {
+  description = "CloudFront distribution hostname targeted by the Route 53 aliases."
+  value       = module.artifact_pages.distribution_domain_name
+}
+
+output "distribution_hosted_zone_id" {
+  description = "CloudFront hosted zone ID for Route 53 alias records (A and AAAA)."
+  value       = module.artifact_pages.distribution_hosted_zone_id
+}
+
+output "bucket_name" {
+  description = "Private S3 origin bucket name."
+  value       = module.artifact_pages.bucket_name
+}
+
+output "admin_role_arn" {
+  description = "GitHub OIDC role for registry, application, and administrative site operations."
+  value       = module.artifact_pages.admin_role_arn
+}
+
+output "satellite_role_arns" {
+  description = "Per-site GitHub OIDC role ARNs keyed by site ID."
+  value       = module.artifact_pages.satellite_role_arns
+}
+
+output "aws_deployment_config_yaml" {
+  description = "Provider-neutral artifact-pages AWS target configuration."
+  value       = module.artifact_pages.aws_deployment_config_yaml
+}

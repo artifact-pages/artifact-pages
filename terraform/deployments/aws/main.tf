@@ -1,5 +1,5 @@
 module "artifact_pages" {
-  source = "../../modules/aws/modules/cloudflare-dns-acm"
+  source = "../../modules/aws"
 
   name_prefix               = var.name_prefix
   aws_region                = var.aws_region
@@ -15,14 +15,6 @@ module "artifact_pages" {
   tags                      = var.tags
 
   providers = {
-    aws           = aws
-    aws.us_east_1 = aws.us_east_1
-    cloudflare    = cloudflare
-  }
-
-  cloudflare_domain = {
-    zone_id   = var.cloudflare_zone_id
-    zone_name = "artifact-pages.stream"
-    hostname  = "aws.artifact-pages.stream"
+    aws = aws
   }
 }

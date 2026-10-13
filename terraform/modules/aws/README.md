@@ -45,6 +45,8 @@ When the repository uses GitHub's default subject template, append the job conte
 | `bucket_name` | Private S3 origin bucket name. |
 | `distribution_id` | CloudFront distribution ID for the deployment configuration. |
 | `distribution_domain_name` | CloudFront distribution hostname for DNS and browser checks. |
+| `distribution_hosted_zone_id` | CloudFront hosted zone ID for Route 53 alias records (A and AAAA). |
+| `distribution_arn` | CloudFront distribution ARN. |
 | `admin_role_arn` | GitHub OIDC role for registry, application-plane, and administrative site operations. |
 | `satellite_role_arns` | Per-site publisher role ARNs keyed by site ID. |
 | `aws_deployment_config_yaml` | Non-secret AWS target configuration for the CLI. |
@@ -53,9 +55,11 @@ When `bucket_name` is omitted, the deterministic default uses the 12-digit accou
 
 The module does not create DNS records. It creates a WAF policy only when `waf_custom_rules` is supplied; see [rule subset, ownership and retirement](docs/waf.md). A satellite role only exists for a key in `satellite_github_subjects`; registry edits do not change these permissions. Update the module inputs separately when repository identity or the intended site boundary changes.
 
-## Optional Cloudflare DNS and ACM composition
+## Custom domain with Route 53
 
-The root AWS module remains AWS-only and keeps its generic custom-domain path: configure `aliases` and `acm_certificate_arn`, then manage DNS and the `us-east-1` certificate in your own Terraform configuration. Callers that use the default CloudFront hostname need no Cloudflare provider or certificate.
+The root AWS module remains AWS-only and keeps its generic custom-domain path: configure `aliases` and `acm_certificate_arn`, then manage DNS and the `us-east-1` certificate in your own Terraform configuration. With Route 53, create the `us-east-1` ACM certificate and its DNS-validation records first; CloudFront requires an issued certificate that covers every alias when the distribution is created or updated. Then create Alias A and AAAA records using `distribution_domain_name` and `distribution_hosted_zone_id`; the distribution has IPv6 enabled. The [Route 53 consumer example](examples/route53-consumer) shows this sequence. Callers that use the default CloudFront hostname need no Cloudflare provider or certificate.
+
+## Optional Cloudflare DNS and ACM composition
 
 For callers that want Cloudflare-managed DNS for a custom AWS hostname, [`modules/cloudflare-dns-acm`](modules/cloudflare-dns-acm) composes this module with a caller-supplied Cloudflare zone and hostname plus an ACM certificate in `us-east-1`. It owns only the supplied non-apex hostname, its ACM DNS-validation CNAMEs, and a DNS-only CNAME to the resulting CloudFront distribution. It does not create a Route 53 zone or records, proxy traffic through Cloudflare, or manage the zone apex. The default AWS provider and its `us-east-1` alias must target the account in the supplied OIDC provider ARN; both identities are checked during planning. The [consumer example](examples/cloudflare-dns-acm-consumer) shows the required providers.
 

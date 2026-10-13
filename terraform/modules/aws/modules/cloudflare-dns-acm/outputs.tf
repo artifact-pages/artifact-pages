@@ -13,6 +13,16 @@ output "distribution_domain_name" {
   value       = module.artifact_pages.distribution_domain_name
 }
 
+output "distribution_hosted_zone_id" {
+  description = "CloudFront hosted zone ID for Route 53 alias records (A and AAAA)."
+  value       = module.artifact_pages.distribution_hosted_zone_id
+}
+
+output "distribution_arn" {
+  description = "CloudFront distribution ARN."
+  value       = module.artifact_pages.distribution_arn
+}
+
 output "distribution_id" {
   description = "CloudFront distribution ID for the deployment configuration."
   value       = module.artifact_pages.distribution_id

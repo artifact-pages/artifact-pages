@@ -13,6 +13,16 @@ output "distribution_domain_name" {
   value       = aws_cloudfront_distribution.site.domain_name
 }
 
+output "distribution_hosted_zone_id" {
+  description = "CloudFront hosted zone ID for Route 53 alias records (A and AAAA)."
+  value       = aws_cloudfront_distribution.site.hosted_zone_id
+}
+
+output "distribution_arn" {
+  description = "CloudFront distribution ARN."
+  value       = aws_cloudfront_distribution.site.arn
+}
+
 output "admin_role_arn" {
   description = "GitHub OIDC role for registry, application, and administrative site operations."
   value       = aws_iam_role.admin.arn
