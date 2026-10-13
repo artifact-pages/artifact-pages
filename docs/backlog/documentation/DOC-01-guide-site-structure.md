@@ -1,5 +1,7 @@
 # DOC-01 — Move to the `guide` site structure
 
+> **Historical copy.** The live ticket is in the [artifact-pages/docs backlog](https://github.com/artifact-pages/docs/tree/main/backlog).
+
 - Status: Done
 - Site: `guide`
 - Depends on: —

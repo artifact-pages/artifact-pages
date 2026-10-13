@@ -1,5 +1,7 @@
 # DOC-06 — Guide: configuration
 
+> **Historical copy.** The live ticket is in the [artifact-pages/docs backlog](https://github.com/artifact-pages/docs/tree/main/backlog).
+
 - Status: In progress
 - Site: `guide`
 - Page: `ja/configuration.html`, `en/configuration.html`

@@ -1,5 +1,7 @@
 # DOC-02 — Guide: overview page
 
+> **Historical copy.** The live ticket is in the [artifact-pages/docs backlog](https://github.com/artifact-pages/docs/tree/main/backlog).
+
 - Status: In progress
 - Site: `guide`
 - Page: `ja/what-is-git-artifact-pages.html`, `en/what-is-git-artifact-pages.html`

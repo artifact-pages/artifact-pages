@@ -1,5 +1,7 @@
 # DOC-12 — Architecture: trust model
 
+> **Historical copy.** The live ticket is in the [artifact-pages/docs backlog](https://github.com/artifact-pages/docs/tree/main/backlog).
+
 - Status: In progress
 - Site: `architecture`
 - Page: `ja/trust-model.html`, `en/trust-model.html`

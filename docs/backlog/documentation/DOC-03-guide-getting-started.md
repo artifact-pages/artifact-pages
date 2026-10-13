@@ -1,5 +1,7 @@
 # DOC-03 — Guide: getting started
 
+> **Historical copy.** The live ticket is in the [artifact-pages/docs backlog](https://github.com/artifact-pages/docs/tree/main/backlog).
+
 - Status: Blocked
 - Site: `guide`
 - Page: `ja/getting-started.html`, `en/getting-started.html`

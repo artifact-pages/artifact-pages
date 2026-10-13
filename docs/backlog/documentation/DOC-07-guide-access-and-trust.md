@@ -1,5 +1,7 @@
 # DOC-07 — Guide: access and trust
 
+> **Historical copy.** The live ticket is in the [artifact-pages/docs backlog](https://github.com/artifact-pages/docs/tree/main/backlog).
+
 - Status: In progress
 - Site: `guide`
 - Page: `ja/access-and-trust.html`, `en/access-and-trust.html`

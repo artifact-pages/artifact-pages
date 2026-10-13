@@ -1,5 +1,7 @@
 # Documentation backlog
 
+> **Historical copy.** The live documentation backlog moved to the [artifact-pages/docs repository](https://github.com/artifact-pages/docs/tree/main/backlog) when the operator repositories were transferred (October 6, 2026). This copy is no longer updated; do not edit it.
+
 Statuses follow the [shared backlog legend](../../../AGENTS.md#backlog-and-issue-tracking). This track covers the public, reader-facing documentation sites published from `docs/public/sites/`. Internal design notes, UI concepts, and backlog records stay in their existing tracks and are not published as these sites.
 
 Each ticket is one page (or one structural change). Until 2026-10-01 pages were written and reviewed one at a time. Since 2026-10-02 the owner drafts every page that can be written in one batch, has it reviewed independently by agents first, and then reviews the set together.

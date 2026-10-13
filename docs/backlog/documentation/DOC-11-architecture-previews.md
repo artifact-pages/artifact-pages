@@ -1,5 +1,7 @@
 # DOC-11 — Architecture: previews
 
+> **Historical copy.** The live ticket is in the [artifact-pages/docs backlog](https://github.com/artifact-pages/docs/tree/main/backlog).
+
 - Status: In progress
 - Site: `architecture`
 - Page: `ja/previews.html`, `en/previews.html`

@@ -1,6 +1,7 @@
 # First-reader documents describe an outdated state
 
-- Status: Open
+- Status: Done
+- Assignee: Claude
 - Priority: P2
 - Area: Repository docs
 - Implementer: Claude
@@ -22,6 +23,12 @@ A first reader finds the current state in one place, and old records are visibly
 
 ## Acceptance criteria
 
-- [ ] `README.md` describes the current state (released components, Cloudflare first, AWS gated, GCP emulator-only, Windows unsupported) and points to the published guide.
-- [ ] `release-readiness.md` is updated to the current state or clearly marked historical with a pointer to the current source.
-- [ ] The documentation track states that the live backlog is in the `artifact-pages/docs` repository and marks the local copy historical or removes it.
+- [x] `README.md` describes the current state (released components, Cloudflare first, AWS gated, GCP emulator-only, Windows unsupported) and points to the published guide.
+- [x] `release-readiness.md` is updated to the current state or clearly marked historical with a pointer to the current source.
+- [x] The documentation track states that the live backlog is in the `artifact-pages/docs` repository and marks the local copy historical or removes it.
+
+## Resolution
+
+- `README.md`: the Status section now states the pre-release state, released components, Cloudflare first, AWS gated, GCP emulator-only, Windows unsupported, and links the published guide and the Cloudflare deployment guide.
+- `docs/backlog/release-readiness.md`: marked as a historical record with pointers to GitHub Releases and the public launch order.
+- `docs/backlog/documentation/`: the README and every DOC file are marked as historical copies pointing to the live backlog in `artifact-pages/docs`.

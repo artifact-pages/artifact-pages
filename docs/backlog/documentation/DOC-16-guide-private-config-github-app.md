@@ -1,5 +1,7 @@
 # DOC-16 — Guide: GitHub App for private configuration repositories
 
+> **Historical copy.** The live ticket is in the [artifact-pages/docs backlog](https://github.com/artifact-pages/docs/tree/main/backlog).
+
 - Status: Done
 - Site: `guide`
 - Page: addition to `ja/` and `en/` `configuration.html` or `access-and-trust.html` (choose when drafting); optional pointer from `publishing.html`
