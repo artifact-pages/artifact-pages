@@ -169,7 +169,7 @@ function parseSiteIndex(payload: unknown, url: string, expectedSiteId: string): 
   const seenIds = new Set<string>()
   const seenPaths = new Set<string>()
   for (const row of index.artifacts as unknown[]) {
-    if (!isValidArtifactRow(row) || seenIds.has(row.id) || seenPaths.has(row.path)) throw invalid()
+    if (!isValidArtifactRow(row, expectedSiteId) || seenIds.has(row.id) || seenPaths.has(row.path)) throw invalid()
     seenIds.add(row.id)
     seenPaths.add(row.path)
   }
@@ -185,15 +185,15 @@ function isOptionalString(value: unknown) {
   return value === undefined || typeof value === 'string'
 }
 
-function isValidArtifactRow(row: unknown): row is ArtifactIndexEntry {
+function isValidArtifactRow(row: unknown, siteId: string): row is ArtifactIndexEntry {
   if (!isRecord(row)) return false
   const { id, title, path, format, filename, artifactUrl, updatedAt, lastCommitter, source, toc } = row
   if (typeof id !== 'string' || !id || typeof title !== 'string' || typeof updatedAt !== 'string') return false
-  if (typeof path !== 'string' || !path || path.startsWith('/') || path.includes('\\')) return false
+  if (typeof path !== 'string' || !path || path.startsWith('/')) return false
   if (path.split('/').some((segment) => segment === '' || segment === '.' || segment === '..')) return false
   if (format !== 'html' && format !== 'markdown') return false
   if (!isOptionalString(filename)) return false
-  if (typeof artifactUrl !== 'string' || !isSameOriginRootPath(artifactUrl)) return false
+  if (typeof artifactUrl !== 'string' || !isSameOriginRootPath(artifactUrl, siteId)) return false
   if (lastCommitter !== undefined && !(isRecord(lastCommitter) && typeof lastCommitter.name === 'string')) return false
   if (source !== undefined) {
     if (!isRecord(source) || typeof source.repository !== 'string' || typeof source.ref !== 'string'
@@ -209,8 +209,10 @@ function isValidArtifactRow(row: unknown): row is ArtifactIndexEntry {
   return true
 }
 
-function isSameOriginRootPath(value: string) {
-  if (!value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return false
+function isSameOriginRootPath(value: string, siteId: string) {
+  const prefix = `/_artifacts/${encodeURIComponent(siteId)}/`
+  if (!value.startsWith(prefix) || value.length === prefix.length || /[?#]/.test(value)) return false
+  if (value.startsWith('//') || value.includes('\\')) return false
   try {
     return new URL(value, 'https://artifact-pages.invalid').origin === 'https://artifact-pages.invalid'
   } catch {
@@ -272,14 +274,17 @@ export async function discoverSites(
     throw new IndexLoadError(`Invalid site registry: ${INDEX_ROOT}/sites.json.`, `${INDEX_ROOT}/sites.json`, { cause: error })
   }
   const registry = parseSiteRegistry(payload)
+  const deadline = Date.now() + metadataTimeoutMs
   const sites = await mapWithConcurrency(registry.sites, SITE_METADATA_CONCURRENCY, async (site): Promise<SiteCatalogEntry> => {
     const registeredSummary: SiteSummary = {
       id: site.id,
       title: site.name,
       ...(site.description?.trim() ? { description: site.description } : {}),
     }
+    const remaining = deadline - Date.now()
+    if (remaining <= 0) return { site: registeredSummary, status: 'metadata-unavailable' }
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), metadataTimeoutMs)
+    const timer = setTimeout(() => controller.abort(), remaining)
     try {
       const metadata = await loadSiteDiscoveryMetadata(site.id, fetcher, controller.signal)
       return { ...metadata, site: registeredSummary, status: 'available' }

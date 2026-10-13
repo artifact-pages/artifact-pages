@@ -78,6 +78,17 @@ test('an HTTP failure is not marked as invalid data', async () => {
   )
 })
 
+test('a path with a literal backslash loads', async () => {
+  const index = await load(indexWith([row({ id: 'notes/a\\b.md', path: 'notes/a\\b.md', format: 'markdown', artifactUrl: '/_artifacts/sre/notes/a%5Cb.md' })]))
+  assert.equal(index.artifacts.length, 1)
+})
+
+test('artifactUrl must be under this site\'s /_artifacts/ prefix', async () => {
+  for (const artifactUrl of ['/', '/_indexes/sites.json', '/_artifacts/other/x.html', '/_artifacts/sre/', '/_artifacts/sre/x.html?a=1', '/_artifacts/sre/x.html#h']) {
+    await assertInvalid(indexWith([row({ artifactUrl })]))
+  }
+})
+
 // --- bounded site discovery (ISSUE-092) ---
 
 const registryOf = (ids) => ({
@@ -125,4 +136,19 @@ test('at most SITE_METADATA_CONCURRENCY metadata requests are in flight', async 
   assert.ok(sites.every((entry) => entry.status === 'available'))
   assert.ok(maxInFlight <= SITE_METADATA_CONCURRENCY, `max in flight ${maxInFlight}`)
   assert.ok(maxInFlight > 1)
+})
+
+test('the timeout is an overall deadline, not per batch', async () => {
+  const ids = Array.from({ length: 10 }, (_, i) => `site-${String(i).padStart(2, '0')}`)
+  const fetcher = (url, init) => {
+    if (url.endsWith('sites.json')) return Promise.resolve(json(registryOf(ids)))
+    return new Promise((_, reject) => {
+      init.signal.addEventListener('abort', () => reject(new Error('aborted')))
+    })
+  }
+  const started = Date.now()
+  const sites = await discoverSites(fetcher, { metadataTimeoutMs: 50 })
+  assert.ok(Date.now() - started < 500)
+  assert.equal(sites.length, 10)
+  assert.ok(sites.every((entry) => entry.status === 'metadata-unavailable'))
 })
