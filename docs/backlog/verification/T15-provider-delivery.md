@@ -21,17 +21,44 @@ For lifecycle verification, the owner prefers hours rather than the 30-day sampl
 - [x] Record the owner's confirmation that `artifact-pages.dev` was acquired; keep independent DNS/hosting proof separate.
 - [ ] Confirm authoritative Cloudflare DNS and account/zone identifiers; request the Cloudflare apex over HTTPS and verify R2 custom-domain delivery without an alternate public `r2.dev` endpoint or Pages/Workers Static Assets deployment.
 - [ ] For AWS, verify the Cloudflare delivery/ACM validation records are DNS-only, the certificate is issued in `us-east-1` and covers the CloudFront alias, and browsers exercise CloudFront without a second Cloudflare CDN. Keep validation records for renewal; confirm no Route 53 hosted zone was created and existing apex/unrelated DNS records were preserved.
+  - Superseded 2026-10-13: the verification deployment uses the default CloudFront hostname; no ACM/DNS records exist. Historical evidence below.
   - Update 2026-10-13: the next AWS deployment is checked at its default CloudFront hostname instead (HTTPS on the default CloudFront certificate, no DNS records, no Route 53 hosted zone, browsers exercise CloudFront directly). The ACM, alias and DNS-only CNAME checks above stay as historical evidence for the Cloudflare DNS/ACM composition.
 - [ ] For each provider, directly load/reload logical routes and nested relative resources; missing resources return 404 rather than the app shell.
+  - 2026-10-14 AWS sample: logical routes and missing-resource behavior observed (see the October 13–14 evidence); Cloudflare unchanged. Preview and nested-route matrix remain open.
 - [ ] Inspect actual browser/CDN response headers for mutable indexes/artifacts, hashed app assets, content types, and disposition.
+  - 2026-10-14 AWS sample: raw artifact, index and hashed-asset headers observed (see evidence). Preview objects remain unsampled.
 - [ ] Verify projected catalog/site objects are readable through the configured public delivery endpoint, while `/_control/*` stays denied and the private origin cannot be read directly from the public internet.
+  - 2026-10-14 AWS sample: `/_control/*` returned the app shell and direct S3 requests returned 403 (observed); registry-only and satellite credentials were not used, so the credential-scoped part remains open.
 - [ ] Assume the configured admin and satellite roles through GitHub OIDC; reject unconfigured subjects and verify a satellite cannot access a neighboring site, write the registry or app plane, or delete retained preview history.
 - [ ] Test provider invalidation/revalidation after unregister and confirm the serving path returns the resulting origin/edge state within the documented bounds.
+  - 2026-10-14 AWS sample: update visible after 14 s and unregister 404 after 10 s, observed with the operator's SSO identity, not OIDC roles; still open for the reference roles.
 - [ ] With the exact reference admin/satellite IAM policies on a fresh AWS bucket, observe absent registry, lock and site reads and verify first-use bootstrap with prefix-conditioned ListBucket permissions. Distinguish confirmed absence from denied reads without widening privileges. The review did not prove whether this setup returns 403 or 404; this is an unverified contract, not a confirmed defect.
 - [ ] Deploy an official bundle including `LICENSE` and `THIRD_PARTY_NOTICES.txt` with the reference admin role and request both through the CDN. Offline ISSUE-016 package, IAM, route, and publisher regressions pass; live delivery proof remains open here.
+  - 2026-10-14 AWS sample: both files were delivered through CloudFront, but were deployed with the operator's SSO identity, not the reference admin role; still open.
 - [ ] Observe enforced production/preview HTML CSP and same-origin raw-preview module/resource behavior under the accepted TD3 trust model after local ISSUE-026 and ISSUE-037 checks. No additional preview hostname or broad null/wildcard CORS grant is required; verify real local/transitive modules, allowed HTTPS resources, HTTP blocking, raw 404s, and control denial. Parent-DOM/storage isolation is not an HTML guarantee ([TD3](../technical-design/TD3-preview-origin-delivery.md)).
 
 ## Evidence
+
+### AWS default-hostname deployment and live delivery checks — October 13–14, 2026 (JST)
+
+The owner approved a plan on October 13 with 22 creates and no changes or destroys: no WAF (owner decision), `viewer_protocol_policy = https-only`, no aliases, the CloudFront default certificate, `PriceClass_100`, account `231136241959` and a single satellite, `aws-verify`. It was applied from main `fec48c10`; the post-apply plan reported "No changes". The distribution is `ECFTIR5GVPQDF` (status Deployed) at `d3qg4cc5j20soe.cloudfront.net`, with bucket `artifact-pages-231136241959-us-east-1`. Protected logs are under `~/.config/artifact-pages/aws-verify/recreate-fec48c10-nowaf/`.
+
+On October 14 the operator ran the following with the AWS IAM Identity Center profile `artifact-pages-verify` (not GitHub OIDC), using a local CLI built from main and a `--dry-run` before each mutation: `app deploy` of web 0.3.1 (102 files, deployed); `registry sync` registering the disposable site `aws-verify` (repository `artifact-pages/docs`, fixture from a synthetic local Git repository; nothing was pushed); and `site sync` (16 files). Evidence is under `~/.config/artifact-pages/aws-verify/t15-live-20261014/`.
+
+| Check | Observed result | Remaining boundary |
+| --- | --- | --- |
+| Logical routes | `/`, `/aws-verify/`, `/aws-verify/README.md`, `/aws-verify/notes/first.md`, and unknown site and missing page paths returned the app shell with 200 and `no-cache, max-age=0, must-revalidate`. The reader showed "Page not found" with `noindex` for a missing page (accepted soft 404, ISSUE-083 Won't fix). | Sampled on AWS only; Cloudflare unchanged. |
+| Raw misses | Raw `/_artifacts/...` and `/_indexes/...` misses returned 404 with `/_errors/not-found.html` and `no-store`. | Sampled objects only. |
+| Raw artifact headers | `.md` `text/markdown; charset=utf-8`, `.html` `text/html`, `.js` `text/javascript`, `.css` `text/css`; all `inline`, `public, max-age=0, s-maxage=300, must-revalidate`, with an enforced CSP and `X-Content-Type-Options: nosniff`. | Preview objects not sampled. |
+| Index and app headers | Indexes: `application/json`, `public, max-age=0, s-maxage=60, must-revalidate`. Hashed `/assets/*`: `public, max-age=31536000, immutable`. | Current deployed bundle only. |
+| Notice files | `/LICENSE` and `/THIRD_PARTY_NOTICES.txt` returned 200 `text/plain` through CloudFront. | Deployed with the operator's SSO identity, not the reference admin role. |
+| Browser rendering | In Chrome, raw `page.html` rendered the CSS color `rgb(24, 67, 91)` and executed a relative entry module plus its transitive module ("Transitive module loaded"). The reader rendered the Markdown page and a Mermaid flowchart as SVG, rewrote relative links to logical routes, and the tree used page titles. | Production only; preview and preview CSP not exercised. |
+| Control and private origin | `/_control/*` over CloudFront returned the app shell (byte-identical to `index.html`), never the control object. Direct S3 requests (object, control object, bucket listing) returned 403. | Registry-only and satellite credentials were not used. |
+| HTTP | Port 80 returned 404 with the not-found page: CloudFront refuses HTTP with 403 under `https-only`, and the distribution's 403 to 404 custom error response maps it. No content was served over HTTP. | Sampled hostname only. |
+| Update | After changing one page and re-running `site sync` (9 invalidation paths), the new bytes were visible at the edge after 14 s (the previous response was a cache Hit). | One sample; no propagation bound. |
+| Unregister | `registry sync` with the site removed deleted 18 objects, updated `_indexes/sites.json` to an empty list, and the raw artifact returned 404 at the edge after 10 s. `_control/sites/aws-verify/lock.json` remains. | Observed with the operator's SSO identity, not OIDC roles. |
+
+Not yet proven: GitHub OIDC role assumption and satellite isolation (this needs `aws-verify` GitHub environments and dedicated workflows in admin/docs), fresh-bucket bootstrap with the reference roles, LICENSE/notices via the reference admin role, and preview publication and CSP preview behavior on AWS. The checklist above stays open.
 
 ### AWS partial apply diagnostic — October 10, 2026 (JST)
 
