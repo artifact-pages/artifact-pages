@@ -21,6 +21,7 @@ Start with the [thesis](thesis.md) for the product's purpose, the [specification
 - [Application bundle deployment](guides/app-bundle-deployment.md) — package, deploy, upgrade, and roll back the static application plane.
 - [Clean-room adoption and recovery](guides/clean-room-adoption.md) — exercise separate adopter repositories, local deployment, app rollback, and guarded lock recovery.
 - [Cloudflare deployment](guides/cloudflare-deployment.md) — connect an R2 bucket and Cloudflare edge policy, then deploy the app and registered content.
+- [Operator recovery](guides/operator-recovery.md) — recover a Cloudflare-first deployment from failed upgrades, interrupted publishes, drift, stale locks, rotated credentials, and lost Terraform state.
 - [Local registered-site development](guides/local-registered-sites.md) — work across an admin checkout and a satellite checkout locally.
 - [Local full-text load verification](guides/local-fulltext-load.md) — generate actual pages, deploy an isolated nginx lab, and measure submit-to-search behavior.
 - [Optional GitHub Actions](guides/github-actions.md) — thin admin and explicit-site entry points, outputs, credential boundaries, and workflow templates.

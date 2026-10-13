@@ -45,7 +45,7 @@ Decided 2026-10-10 in [TD18](../technical-design/TD18-admin-provided-site-workfl
 | [IMP-77](IMP-77-fulltext-section-table-and-text-packs.md) | Done | Codex | Contract #106; writer and publisher slice. |
 | [IMP-78](IMP-78-ci-runs-all-web-unit-tests.md) | Done | Codex | CI run [38172000667](https://github.com/artifact-pages/artifact-pages/actions/runs/38172000667) passed all four unit suites (148 tests) and 210 browser tests; local concurrent runs confirmed separate Compose projects, ports, and bind mounts. |
 | [IMP-79](IMP-79-legacy-site-control-records-rebuild-automatically.md) | Done | Codex | Merged in [#108](https://github.com/artifact-pages/artifact-pages/pull/108); on 2026-10-12 the verification bucket rebuilt four legacy `verify-scale-*` records automatically, with backups under `legacy/`. |
-| [IMP-80](IMP-80-operator-recovery-runbook.md) | Open | Claude | Operator recovery runbook (`docs/guides/operator-recovery.md`) from the 2026-10-13 public-launch review; Codex reviews technical accuracy. |
+| [IMP-80](IMP-80-operator-recovery-runbook.md) | In review | Claude | Operator recovery runbook (`docs/guides/operator-recovery.md`) from the 2026-10-13 public-launch review; Codex reviews technical accuracy. |
 
 ## Optional operator-managed edge policy
 

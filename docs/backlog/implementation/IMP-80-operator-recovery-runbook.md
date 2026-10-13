@@ -1,6 +1,7 @@
 # IMP-80 — Operator recovery runbook
 
-- Status: Open
+- Status: In review
+- Assignee: Claude
 - Lanes: Documentation (primary), CLI and operations (technical review)
 - Owner: Claude (prose); Codex reviews technical accuracy
 - Depends on: —
@@ -24,6 +25,10 @@ Add `docs/guides/operator-recovery.md` and link it from `docs/guides/cloudflare-
 
 ## Acceptance criteria
 
-- [ ] `docs/guides/operator-recovery.md` exists, covers the seven scenarios, and is linked from `docs/guides/cloudflare-deployment.md`.
+- [x] `docs/guides/operator-recovery.md` exists, covers the seven scenarios, and is linked from `docs/guides/cloudflare-deployment.md`.
 - [ ] Every command shown exists in the current CLI (verified with `--help` or the source), and Codex has reviewed the technical accuracy.
-- [ ] Each scenario is either exercised once on `artifact-pages.stream` with the result noted, or marked "not yet exercised".
+- [x] Each scenario is either exercised once on `artifact-pages.stream` with the result noted, or marked "not yet exercised".
+
+## Progress
+
+- 2026-10-14 (Claude): runbook drafted in `docs/guides/operator-recovery.md` and linked from the Cloudflare deployment guide and `docs/README.md`. All seven scenarios are marked "not yet exercised". Codex technical review (criterion 2) is pending.
