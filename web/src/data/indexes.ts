@@ -237,7 +237,30 @@ function isLocalIndexUrl(value: string) {
   }
 }
 
-export async function discoverSites(fetcher: Fetcher = fetch): Promise<SiteCatalogEntry[]> {
+/** How long one site's metadata read may take before the site is listed as unavailable. */
+export const SITE_METADATA_TIMEOUT_MS = 10_000
+/** At most this many metadata reads are in flight at once. */
+export const SITE_METADATA_CONCURRENCY = 6
+
+async function mapWithConcurrency<T, R>(items: T[], limit: number, task: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length)
+  let next = 0
+  const worker = async () => {
+    while (next < items.length) {
+      const position = next
+      next += 1
+      results[position] = await task(items[position])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return results
+}
+
+export async function discoverSites(
+  fetcher: Fetcher = fetch,
+  options: { metadataTimeoutMs?: number } = {},
+): Promise<SiteCatalogEntry[]> {
+  const metadataTimeoutMs = options.metadataTimeoutMs ?? SITE_METADATA_TIMEOUT_MS
   const registryResponse = await fetchResponse(`${INDEX_ROOT}/sites.json`, fetcher)
   if (!registryResponse.ok) {
     throw new IndexLoadError(`Request failed with status ${registryResponse.status}: ${INDEX_ROOT}/sites.json.`, `${INDEX_ROOT}/sites.json`, { status: registryResponse.status })
@@ -249,14 +272,16 @@ export async function discoverSites(fetcher: Fetcher = fetch): Promise<SiteCatal
     throw new IndexLoadError(`Invalid site registry: ${INDEX_ROOT}/sites.json.`, `${INDEX_ROOT}/sites.json`, { cause: error })
   }
   const registry = parseSiteRegistry(payload)
-  const sites = await Promise.all(registry.sites.map(async (site): Promise<SiteCatalogEntry> => {
+  const sites = await mapWithConcurrency(registry.sites, SITE_METADATA_CONCURRENCY, async (site): Promise<SiteCatalogEntry> => {
     const registeredSummary: SiteSummary = {
       id: site.id,
       title: site.name,
       ...(site.description?.trim() ? { description: site.description } : {}),
     }
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), metadataTimeoutMs)
     try {
-      const metadata = await loadSiteDiscoveryMetadata(site.id, fetcher)
+      const metadata = await loadSiteDiscoveryMetadata(site.id, fetcher, controller.signal)
       return { ...metadata, site: registeredSummary, status: 'available' }
     } catch (error) {
       return {
@@ -267,8 +292,10 @@ export async function discoverSites(fetcher: Fetcher = fetch): Promise<SiteCatal
             ? 'not-published'
             : 'metadata-unavailable',
       }
+    } finally {
+      clearTimeout(timer)
     }
-  }))
+  })
   return sites.sort((left, right) => left.site.title.localeCompare(right.site.title))
 }
 
@@ -324,11 +351,12 @@ function isCanonicalSourcePath(sourcePath: string) {
 async function loadSiteDiscoveryMetadata(
   siteId: string,
   fetcher: Fetcher,
+  signal: AbortSignal,
 ): Promise<SiteDiscoveryMetadata> {
   const url = `${INDEX_ROOT}/${encodeURIComponent(siteId)}/meta.json`
   let payload: unknown
   try {
-    const response = await fetcher(url)
+    const response = await fetcher(url, { signal })
     if (!response.ok) {
       throw new IndexLoadError(`Request failed with status ${response.status}: ${url}.`, url, { status: response.status })
     }

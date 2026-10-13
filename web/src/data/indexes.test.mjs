@@ -14,7 +14,7 @@ export async function resolve(specifier, context, next) {
   return next(specifier, context)
 }`))
 
-const { IndexLoadError, clearSiteIndexCache, loadSiteIndex } = await import('./indexes.ts')
+const { IndexLoadError, SITE_METADATA_CONCURRENCY, clearSiteIndexCache, discoverSites, loadSiteIndex } = await import('./indexes.ts')
 
 const fixture = JSON.parse(readFileSync(new URL('../../../fixtures/storage/_indexes/sre/index.json', import.meta.url), 'utf8'))
 const json = (body) => ({ ok: true, status: 200, json: async () => body })
@@ -76,4 +76,53 @@ test('an HTTP failure is not marked as invalid data', async () => {
     loadSiteIndex('sre', async () => ({ ok: false, status: 503, json: async () => ({}) })),
     (error) => error instanceof IndexLoadError && error.invalidData === undefined && error.status === 503,
   )
+})
+
+// --- bounded site discovery (ISSUE-092) ---
+
+const registryOf = (ids) => ({
+  schemaVersion: 1,
+  sites: ids.map((id) => ({ id, name: id.toUpperCase(), repository: 'o/r', sourcePath: id })),
+})
+const metaOf = (id) => ({
+  schemaVersion: 1,
+  site: { id, title: id.toUpperCase() },
+  generatedAt: '2026-01-01T00:00:00Z',
+  artifactCount: 1,
+  artifactIndexUrl: `/_indexes/${id}/index.json`,
+})
+
+test('a metadata request that never completes ends as metadata-unavailable after the timeout', async () => {
+  const ids = ['alpha', 'beta', 'slow']
+  const fetcher = (url, init) => {
+    if (url.endsWith('sites.json')) return Promise.resolve(json(registryOf(ids)))
+    const id = url.split('/')[2]
+    if (id !== 'slow') return Promise.resolve(json(metaOf(id)))
+    return new Promise((_, reject) => {
+      init.signal.addEventListener('abort', () => reject(new Error('aborted')))
+    })
+  }
+  const sites = await discoverSites(fetcher, { metadataTimeoutMs: 50 })
+  assert.equal(sites.length, 3)
+  const byId = Object.fromEntries(sites.map((entry) => [entry.site.id, entry.status]))
+  assert.deepEqual(byId, { alpha: 'available', beta: 'available', slow: 'metadata-unavailable' })
+})
+
+test('at most SITE_METADATA_CONCURRENCY metadata requests are in flight', async () => {
+  const ids = Array.from({ length: 10 }, (_, i) => `site-${String(i).padStart(2, '0')}`)
+  let inFlight = 0
+  let maxInFlight = 0
+  const fetcher = async (url) => {
+    if (url.endsWith('sites.json')) return json(registryOf(ids))
+    inFlight += 1
+    maxInFlight = Math.max(maxInFlight, inFlight)
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    inFlight -= 1
+    return json(metaOf(url.split('/')[2]))
+  }
+  const sites = await discoverSites(fetcher)
+  assert.equal(sites.length, 10)
+  assert.ok(sites.every((entry) => entry.status === 'available'))
+  assert.ok(maxInFlight <= SITE_METADATA_CONCURRENCY, `max in flight ${maxInFlight}`)
+  assert.ok(maxInFlight > 1)
 })
