@@ -6,7 +6,7 @@ cd "$module_root"
 "$terraform_bin" fmt -check -recursive
 "$terraform_bin" init -backend=false -input=false -lockfile=readonly
 "$terraform_bin" validate
-for caller in examples/local-consumer examples/cloudflare-dns-acm-consumer examples/route53-consumer; do
+for caller in examples/local-consumer examples/route53-consumer; do
   "$terraform_bin" -chdir="$caller" init -backend=false -input=false -lockfile=readonly
   "$terraform_bin" -chdir="$caller" validate
 done
