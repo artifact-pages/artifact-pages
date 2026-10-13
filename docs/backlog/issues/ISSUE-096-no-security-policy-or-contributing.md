@@ -1,6 +1,7 @@
 # The repository has no security policy, contributing guide or issue templates
 
-- Status: Open
+- Status: In progress
+- Assignee: Claude
 - Priority: P2
 - Area: OSS project
 - Implementer: Claude
@@ -22,5 +23,11 @@ The repository tells reporters how to report privately, which versions are fixed
 ## Acceptance criteria
 
 - [ ] `SECURITY.md` points to GitHub private vulnerability reporting, states the response expectation, and states which versions receive fixes during the `0.x` pre-releases. Enabling private vulnerability reporting is a repository setting tracked in the workspace ops item OPS-005.
-- [ ] A minimal `CONTRIBUTING.md` and issue templates (bug report and feature request) exist.
-- [ ] Every link in the new files resolves.
+- [x] A minimal `CONTRIBUTING.md` and issue templates (bug report and feature request) exist.
+- [x] Every link in the new files resolves.
+
+## Verification
+
+- Created `SECURITY.md`, `CONTRIBUTING.md`, `.github/ISSUE_TEMPLATE/bug_report.yml`, `.github/ISSUE_TEMPLATE/feature_request.yml` and `.github/ISSUE_TEMPLATE/config.yml`; `README.md` links the first two.
+- YAML files parse; relative links resolve.
+- Blocked on the owner enabling private vulnerability reporting (workspace ops item OPS-005); checked 2026-10-13: disabled. Mark Done after the advisories/new link opens the form.

@@ -1,0 +1,49 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: input
+    id: cli-version
+    attributes:
+      label: CLI version
+  - type: input
+    id: web-version
+    attributes:
+      label: Web version
+  - type: input
+    id: action-version
+    attributes:
+      label: Action and version
+      description: For example publish-action@v0.1.0
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider
+      options:
+        - Cloudflare
+        - AWS
+        - Local
+        - Not applicable
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      description: Only if the problem is in the web reader.
