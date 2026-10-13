@@ -274,7 +274,7 @@ test('admin and satellite OIDC roles have separate exact-subject trust and scope
   assert.match(satellitePolicy, /"_control\/sites\/\$\{each\.key\}\/\*"/u, 'satellite list scope is its own control prefix')
   assert.match(satellitePolicy, /"\$\{local\.bucket_arn\}\/_control\/sites\/\$\{each\.key\}\/\*"/u)
   assert.doesNotMatch(satellitePolicy, /_control\/(?:\*|sites\/\*)/u, 'a satellite never gets another site or the whole control prefix')
-  assert.match(satellitePolicy, /"_control\/locks\/sites\/\$\{each\.key\}\.json"/u, 'transitional legacy exact key (IMP-66 step 3 removes it)')
+  assert.doesNotMatch(satellitePolicy, /_control\/(?:locks\/sites|site-cache|publish-state|preview-cleanup)\//u, 'IMP-66 step 3: no pre-prefix per-site control key')
   assert.match(satellitePolicy, /"\$\{local\.bucket_arn\}\/_indexes\/sites\.json"/u)
   assert.doesNotMatch(satellitePolicy, /\/index\.html|\/assets\/\*/u)
   assert.doesNotMatch(satellitePolicy, /"s3:\*"/u)

@@ -603,11 +603,6 @@ resource "aws_iam_role_policy" "satellite" {
           "${local.bucket_arn}/_artifacts/${each.key}/*",
           "${local.bucket_arn}/_previews/${each.key}/*",
           "${local.bucket_arn}/_control/sites/${each.key}/*",
-          # Transitional (IMP-66): exact pre-prefix keys, for CLIs that still use the old layout. Removed in a later module release.
-          "${local.bucket_arn}/_control/locks/sites/${each.key}.json",
-          "${local.bucket_arn}/_control/site-cache/${each.key}.json",
-          "${local.bucket_arn}/_control/publish-state/${each.key}.json.gz",
-          "${local.bucket_arn}/_control/preview-cleanup/${each.key}.json",
         ]
       },
       {
@@ -622,10 +617,6 @@ resource "aws_iam_role_policy" "satellite" {
               "_artifacts/${each.key}/*",
               "_previews/${each.key}/*",
               "_control/sites/${each.key}/*",
-              # Transitional (IMP-66): pre-prefix exact keys.
-              "_control/locks/sites/${each.key}.json",
-              "_control/site-cache/${each.key}.json",
-              "_control/publish-state/${each.key}.json.gz",
             ]
           }
         }
@@ -639,11 +630,6 @@ resource "aws_iam_role_policy" "satellite" {
           "${local.bucket_arn}/_artifacts/${each.key}/*",
           "${local.bucket_arn}/_previews/${each.key}/*",
           "${local.bucket_arn}/_control/sites/${each.key}/*",
-          # Transitional (IMP-66): exact pre-prefix keys, for CLIs that still use the old layout. Removed in a later module release.
-          "${local.bucket_arn}/_control/locks/sites/${each.key}.json",
-          "${local.bucket_arn}/_control/site-cache/${each.key}.json",
-          "${local.bucket_arn}/_control/publish-state/${each.key}.json.gz",
-          "${local.bucket_arn}/_control/preview-cleanup/${each.key}.json",
         ]
       },
       {
@@ -654,10 +640,6 @@ resource "aws_iam_role_policy" "satellite" {
           "${local.bucket_arn}/_artifacts/${each.key}/*",
           "${local.bucket_arn}/_indexes/${each.key}/*",
           "${local.bucket_arn}/_control/sites/${each.key}/*",
-          # Transitional (IMP-66): pre-prefix exact keys. The legacy lock is never deleted.
-          "${local.bucket_arn}/_control/site-cache/${each.key}.json",
-          "${local.bucket_arn}/_control/publish-state/${each.key}.json.gz",
-          "${local.bucket_arn}/_control/preview-cleanup/${each.key}.json",
           "${local.bucket_arn}/_previews/${each.key}/*",
         ]
       },

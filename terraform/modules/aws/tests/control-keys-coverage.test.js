@@ -9,9 +9,8 @@ import test from 'node:test'
 const main = await readFile(new URL('../main.tf', import.meta.url), 'utf8')
 const fixture = JSON.parse(await readFile(new URL('./fixtures/control-keys.json', import.meta.url), 'utf8'))
 
-// Flip to false in the module release that drops the pre-prefix exact keys (IMP-66 step 3); the
-// legacy assertions below then require that no legacy key is granted any more.
-const TRANSITIONAL_LEGACY_GRANTS = true
+// IMP-66 step 3 dropped the pre-prefix exact keys: no legacy key is granted to a satellite.
+const TRANSITIONAL_LEGACY_GRANTS = false
 
 const ACTIONS = { get: 's3:GetObject', put: 's3:PutObject', delete: 's3:DeleteObject', list: 's3:ListBucket' }
 
@@ -97,7 +96,7 @@ test('a satellite role covers its own site control records and nothing else unde
   }
 })
 
-test('transitional legacy grants follow the fixture exactly', () => {
+test('no legacy pre-prefix key is granted to a satellite', () => {
   for (const row of fixture.legacySite) {
     for (const op of row.ops) {
       const granted = allows(satellitePatterns, ACTIONS[op], concrete(row.key, 'alpha'), 'alpha')
