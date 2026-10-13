@@ -12,6 +12,8 @@
 
 The owner selected Cloudflare Registrar and authoritative Cloudflare DNS for the long-lived `artifact-pages.dev` domain. Cloudflare Cache/CDN with R2 serves production at the apex. AWS verification uses `aws.artifact-pages.stream` (moved from `aws.artifact-pages.dev` on 2026-10-03 by [TD5](../technical-design/TD5-verification-environment-and-operator-repositories.md); its DNS-only and ACM-validation records live in the separate `artifact-pages.stream` Cloudflare zone, not in the production zone) through CloudFront and private S3, with an ACM viewer certificate in `us-east-1`; no Route 53 hosted zone is used.
 
+> Note 2026-10-13: the composition remains supported and is tested by its example, but the disposable verification deployment no longer uses it. That deployment stops at CloudFront and is reached at its default CloudFront hostname; `aws.artifact-pages.stream` is retired. The earlier live deployment on that hostname remains historical evidence for this composition.
+
 The original AWS module accepts caller-managed aliases and an existing certificate ARN; callers manage DNS separately. IMP-30's completed local evidence does not implement the newly selected composed Cloudflare DNS/ACM path. This is new infrastructure composition, not a duplicate review defect or reason to reopen that historical checkpoint.
 
 ## Outcome
@@ -42,7 +44,7 @@ An operator can use the AWS module's documented composition to create and valida
 - [ ] The reviewed real plan contains no Route 53 hosted zone/record and no Cloudflare proxy for AWS delivery. It owns only the explicitly selected DNS records; apex and unrelated zone state remain untouched.
 - [ ] Existing unmanaged-DNS/certificate and distribution-hostname callers still validate; invalid or conflicting input modes fail clearly.
 - [ ] Formatting, initialization/validation, mock/offline plan or source-contract tests, and independent review pass. Provider configuration, credential names/scopes, inputs/outputs, record/certificate ownership, adoption/import, and replacement behavior are documented.
-- [ ] Handoff records tested source commits and a fresh real-plan checklist for `aws.artifact-pages.stream`. Local acceptance may close this implementation item; live DNS, certificate issuance/renewal prerequisites, direct CloudFront/S3 routes, headers, and browser behavior remain unchecked T15 proof.
+- [ ] Handoff records tested source commits and a fresh real-plan checklist for `aws.artifact-pages.stream` (retired 2026-10-13; later verification uses the default CloudFront hostname). Local acceptance may close this implementation item; live DNS, certificate issuance/renewal prerequisites, direct CloudFront/S3 routes, headers, and browser behavior remain unchecked T15 proof.
 
 ## Current preparation
 
