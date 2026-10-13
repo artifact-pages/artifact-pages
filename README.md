@@ -29,6 +29,8 @@ Phase 1 local product. The SPA discovers sites from lightweight metadata, loads 
 
 AWS infrastructure and published reusable distribution packages come later. The optional GitHub Actions are documented in the [GitHub Actions guide](docs/guides/github-actions.md). Each Action has its own repository, generated from `actions/<name>/` on that Action's own release and tagged with its own version: [`artifact-pages/publish-action`](https://github.com/artifact-pages/publish-action), [`preview-action`](https://github.com/artifact-pages/preview-action), [`registry-action`](https://github.com/artifact-pages/registry-action) and [`app-deploy-action`](https://github.com/artifact-pages/app-deploy-action). Reference an exact release tag, as the templates do.
 
+To report a vulnerability see [SECURITY.md](SECURITY.md); to contribute see [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Local development
 
 Install dependencies and start the Vite development server:

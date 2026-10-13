@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/artifact-pages/artifact-pages/security/advisories/new
+    about: Report vulnerabilities privately. Do not open a public issue.
+  - name: Guide
+    url: https://artifact-pages.dev/guide/
+    about: Read the user guide before filing a question.

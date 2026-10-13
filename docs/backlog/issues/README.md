@@ -102,7 +102,7 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-093](ISSUE-093-directory-and-sidebar-render-every-row.md) | Open | P2 | Directory pages and the sidebar tree render every row. |
 | [ISSUE-094](ISSUE-094-site-index-cache-never-evicts.md) | Open | P2 | Expired site-index cache entries stay in memory until the same site is read again. |
 | [ISSUE-095](ISSUE-095-home-folder-counts-load-full-indexes.md) | Open | P3 | Home folder counts load the full index of up to eight sites. |
-| [ISSUE-096](ISSUE-096-no-security-policy-or-contributing.md) | Open | P2 | No security policy, contributing guide or issue templates. |
+| [ISSUE-096](ISSUE-096-no-security-policy-or-contributing.md) | Done | P2 | No security policy, contributing guide or issue templates. |
 | [ISSUE-097](ISSUE-097-stale-first-reader-documents.md) | Open | P2 | README, release-readiness and the documentation track describe an outdated state. |
 | [ISSUE-098](ISSUE-098-spa-shell-metadata-for-sharing.md) | Open | P3 | The SPA shell has generic metadata for search and share cards. |
 
