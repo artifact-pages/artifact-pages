@@ -97,7 +97,15 @@ jobs:
       - name: Validate the generated package without cloud credentials
         env:
           ARTIFACT_PAGES_APPREPO_DIR: ${{ github.workspace }}
-        run: bash "$RUNNER_TEMP/terraform-package-repos/${{ steps.release.outputs.repository }}/scripts/validate.sh"
+        # Validate a copy so terraform init artifacts never reach the package sync.
+        run: |
+          set -euo pipefail
+          package="$RUNNER_TEMP/terraform-package-repos/${{ steps.release.outputs.repository }}"
+          validate_root="$RUNNER_TEMP/terraform-package-validate"
+          rm -rf "$validate_root"
+          mkdir -p "$validate_root"
+          cp -a "$package" "$validate_root/"
+          bash "$validate_root/${{ steps.release.outputs.repository }}/scripts/validate.sh"
       - name: Create an App token scoped to the selected package repository
         if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false && github.ref == 'refs/heads/main')
         id: app-token

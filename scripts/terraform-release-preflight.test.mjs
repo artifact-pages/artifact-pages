@@ -45,6 +45,8 @@ test('module tags trigger only the separate Terraform release workflow', () => {
   assert.match(terraformWorkflow, /test "\$remote_tag_object" = "\$local_tag_object"/)
   assert.match(terraformWorkflow, /refs\/tags\/\$RELEASE_TAG\^\{commit\}/)
   assert.match(terraformWorkflow, /node scripts\/release-preflight\.mjs --tag "\$RELEASE_TAG" --sha "\$EXPECTED_SOURCE_SHA" --main-ref origin\/main/)
+  assert.match(terraformWorkflow, /Validate the generated package without cloud credentials\n\s+env:\n\s+ARTIFACT_PAGES_APPREPO_DIR: \$\{\{ github\.workspace \}\}\n\s+# Validate a copy so terraform init artifacts never reach the package sync\.\n\s+run: \|\n\s+set -euo pipefail\n\s+package="\$RUNNER_TEMP\/terraform-package-repos\/\$\{\{ steps\.release\.outputs\.repository \}\}"\n\s+validate_root="\$RUNNER_TEMP\/terraform-package-validate"\n\s+rm -rf "\$validate_root"\n\s+mkdir -p "\$validate_root"\n\s+cp -a "\$package" "\$validate_root\/"\n\s+bash "\$validate_root\/\$\{\{ steps\.release\.outputs\.repository \}\}\/scripts\/validate\.sh"/)
+  assert.doesNotMatch(terraformWorkflow, /bash "\$RUNNER_TEMP\/terraform-package-repos\/\$\{\{ steps\.release\.outputs\.repository \}\}\/scripts\/validate\.sh"/)
   assert.match(terraformWorkflow, /github\.event_name == 'workflow_dispatch' && inputs\.dry_run == true/)
   assert.match(terraformWorkflow, /github\.event_name == 'workflow_dispatch' && inputs\.dry_run == false/)
   assert.match(terraformWorkflow, /run: bash scripts\/sync-terraform-package-repos\.sh/)
