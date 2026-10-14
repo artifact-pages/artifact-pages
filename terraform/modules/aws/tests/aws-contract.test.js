@@ -343,7 +343,7 @@ test('module and clean caller examples use distinct local and Registry sources',
   if (release) assert.equal(registryVersions[0][1], release.version)
   else assert.equal(registryVersions[0][1], '0.1.0')
   assert.match(registryVariables, /variable "bucket_name"[\s\S]*?default\s*=\s*null/u)
-  assert.match(registryReadme, /publication is a separate owner-controlled step/u)
+  assert.match(registryReadme, /published on the public Terraform Registry/u)
 })
 
 test('AWS aliases and certificates remain caller-managed', async () => {

@@ -6,7 +6,7 @@ The module does not deploy the SPA, publish a registry or site, create publisher
 
 ## Registry consumer
 
-The Registry address is `artifact-pages/artifact-pages/cloudflare`. The source of truth is `terraform/modules/cloudflare` in the monorepo; `artifact-pages/terraform-cloudflare-artifact-pages` is generated when the monorepo tag `terraform-cloudflare/vX.Y.Z` is released. Releases are tagged and synced to the package repository as plain `vX.Y.Z` tags, starting with `0.1.0`. Registry connection and publication remain an owner-controlled step under IMP-38. Terraform can retrieve this source after the owner publishes that exact version:
+The Registry address is `artifact-pages/artifact-pages/cloudflare`. The source of truth is `terraform/modules/cloudflare` in the monorepo; `artifact-pages/terraform-cloudflare-artifact-pages` is generated when the monorepo tag `terraform-cloudflare/vX.Y.Z` is released. Releases are tagged and synced to the package repository as plain `vX.Y.Z` tags, starting with `0.1.0`. Each release is published on the public Terraform Registry. Use an exact version:
 
 ```hcl
 module "artifact_pages" {
