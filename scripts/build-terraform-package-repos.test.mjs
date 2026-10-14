@@ -88,6 +88,30 @@ test('generator emits deterministic Registry package trees for both providers', 
   }
 })
 
+test('generator rewrites Registry examples for a later package version', async (t) => {
+  for (const module of ['cloudflare', 'aws']) {
+    await t.test(`${module} 0.1.1 package`, () => {
+      const root = mkdtempSync(path.join(os.tmpdir(), `terraform-generator-${module}-0.1.1-`))
+      try {
+        fixture(root, module)
+        const args = {
+          sourceRoot: root,
+          out: path.join(root, 'out'),
+          module,
+          version: '0.1.1',
+          sourceTag: `terraform-${module}/v0.1.1`,
+          sourceCommit,
+        }
+        const [built] = buildTerraformPackageRepos(args)
+        const consumer = readFileSync(path.join(built.directory, 'examples/registry-consumer/main.tf'), 'utf8')
+        assert.match(consumer, /version\s*=\s*"0\.1\.1"/)
+      } finally {
+        rmSync(root, { recursive: true, force: true })
+      }
+    })
+  }
+})
+
 function readdirContains(root, relative) {
   try {
     lstatSync(path.join(root, relative))

@@ -329,10 +329,19 @@ test('module and clean caller examples use distinct local and Registry sources',
   const registry = await readFile(new URL('../examples/registry-consumer/main.tf', import.meta.url), 'utf8')
   const registryVariables = await readFile(new URL('../examples/registry-consumer/variables.tf', import.meta.url), 'utf8')
   const registryReadme = await readFile(new URL('../examples/registry-consumer/README.md', import.meta.url), 'utf8')
+  const registryVersions = [...registry.matchAll(/^\s*version\s*=\s*"(\d+\.\d+\.\d+)"\s*$/gmu)]
+  assert.equal(registryVersions.length, 1)
+  let release
+  try {
+    release = JSON.parse(await readFile(new URL('../release.json', import.meta.url), 'utf8'))
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error
+  }
   assert.match(local, /source\s*=\s*"\.\.\/\.\."/u)
   assert.match(localVariables, /variable "bucket_name"[\s\S]*?default\s*=\s*null/u)
   assert.match(registry, /source\s*=\s*"artifact-pages\/artifact-pages\/aws"/u)
-  assert.match(registry, /version\s*=\s*"0\.1\.0"/u)
+  if (release) assert.equal(registryVersions[0][1], release.version)
+  else assert.equal(registryVersions[0][1], '0.1.0')
   assert.match(registryVariables, /variable "bucket_name"[\s\S]*?default\s*=\s*null/u)
   assert.match(registryReadme, /publication is a separate owner-controlled step/u)
 })
