@@ -106,7 +106,7 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-096](ISSUE-096-no-security-policy-or-contributing.md) | In progress | P2 | No security policy, contributing guide or issue templates. |
 | [ISSUE-097](ISSUE-097-stale-first-reader-documents.md) | Done | P2 | README, release-readiness and the documentation track describe an outdated state. |
 | [ISSUE-098](ISSUE-098-spa-shell-metadata-for-sharing.md) | Open | P3 | The SPA shell has generic metadata for search and share cards. |
-| [ISSUE-099](ISSUE-099-version-command-prints-cli-version-as-web.md) | Open | P3 | The version command prints the CLI version as the web app version. |
-| [ISSUE-100](ISSUE-100-app-deploy-summary-does-not-match-work.md) | Open | P3 | The app deploy change summary does not match the files written. |
+| [ISSUE-099](ISSUE-099-version-command-prints-cli-version-as-web.md) | Done | P3 | The version command prints the CLI version as the web app version. |
+| [ISSUE-100](ISSUE-100-app-deploy-summary-does-not-match-work.md) | Done | P3 | The app deploy change summary does not match the files written. |
 
 ISSUE-013's verified completion record is retained in Git history.

@@ -1673,7 +1673,7 @@ func TestRunVersionPrintsProductVersionAndRevision(t *testing.T) {
 	if err := run(t.Context(), []string{"version"}, &stdout, &stderr); err != nil {
 		t.Fatalf("run(version) error = %v", err)
 	}
-	if !strings.HasPrefix(stdout.String(), "artifact-pages "+version.Product+"\n") || !strings.Contains(stdout.String(), "Revision") || !strings.Contains(stdout.String(), "  Go        "+runtime.Version()+"\n") {
+	if !strings.HasPrefix(stdout.String(), "artifact-pages "+version.Product+"\n") || !strings.Contains(stdout.String(), "  Revision") || !strings.Contains(stdout.String(), "  Go        "+runtime.Version()+"\n") || strings.Contains(stdout.String(), "Web app") {
 		t.Fatalf("text version output = %q", stdout.String())
 	}
 	stdout.Reset()

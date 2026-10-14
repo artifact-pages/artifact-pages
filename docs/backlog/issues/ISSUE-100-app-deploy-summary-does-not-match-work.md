@@ -1,6 +1,7 @@
 # The app deploy change summary does not match the files written
 
-- Status: Open
+- Status: Done
+- Assignee: Codex
 - Priority: P3
 - Area: CLI
 - Implementer: Codex
@@ -22,6 +23,10 @@ The text summary of a real deploy matches the files written: the create count re
 
 ## Acceptance criteria
 
-- [ ] After a real `app deploy`, the create count in the summary matches the files newly written.
-- [ ] The remove count is documented or explained in the output when old assets are kept.
-- [ ] A test covers the summary for a first deploy, a redeploy and a version change.
+- [x] After a real `app deploy`, the create count in the summary matches the files newly written.
+- [x] The remove count is documented or explained in the output when old assets are kept.
+- [x] A test covers the summary for a first deploy, a redeploy and a version change.
+
+## Resolution
+
+Successful real deploys now report the same create and update entries as dry runs; unchanged redeploys keep an empty change list, and error results do not receive the plan. App deploy never deletes application objects; old hashed assets are retained on purpose, so `0 remove` is correct.

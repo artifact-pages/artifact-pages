@@ -240,6 +240,7 @@ func DeployApp(ctx context.Context, backend DeploymentBackend, options AppDeploy
 		}
 		result.Outcome = "deployed"
 		result.FilesPublished = len(changed)
+		result.Changes = plan
 		result.InvalidationID = invalidationID
 		result.InvalidationPaths = plannedPaths
 		return result, nil
@@ -294,6 +295,7 @@ func DeployApp(ctx context.Context, backend DeploymentBackend, options AppDeploy
 		}
 	}
 	if operationErr != nil {
+		result.Changes = []Change{}
 		return result, operationErr
 	}
 	return result, nil

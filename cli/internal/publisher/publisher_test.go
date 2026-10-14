@@ -178,6 +178,9 @@ func TestDeployAppVerifiesAndPublishesBundle(t *testing.T) {
 	if result.Version != "test-1" || result.FilesPublished != 7 {
 		t.Fatalf("DeployApp() = %+v, want version test-1 and all 7 manifest files", result)
 	}
+	if result.FilesPublished != len(result.Changes) || !reflect.DeepEqual(result.Changes, planned.Changes) {
+		t.Fatalf("DeployApp() changes = %+v, files published = %d; want the dry-run plan %+v", result.Changes, result.FilesPublished, planned.Changes)
+	}
 	if got := string(s3Client.objects["index.html"].body); !strings.Contains(got, "app-AbC123xY.js") {
 		t.Fatalf("uploaded application shell = %q", got)
 	}
@@ -215,8 +218,66 @@ func TestDeployAppVerifiesAndPublishesBundle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DeployApp() unchanged bundle error = %v", err)
 	}
-	if unchanged.Outcome != "no-op" || unchanged.FilesPublished != 0 || len(publicApplicationPuts(s3Client.puts)) != 0 || len(cloudFront.invalidations) != 0 {
+	if unchanged.Outcome != "no-op" || unchanged.FilesPublished != 0 || len(unchanged.Changes) != 0 || len(publicApplicationPuts(s3Client.puts)) != 0 || len(cloudFront.invalidations) != 0 {
 		t.Errorf("DeployApp() unchanged result = %+v, puts=%v invalidations=%v; want no-op without application-object writes", unchanged, s3Client.puts, cloudFront.invalidations)
+	}
+}
+
+func TestDeployAppVersionChangeReportsCreatedAndUpdatedFilesWithoutRemoves(t *testing.T) {
+	firstArchive := createWebBundle(t, map[string][]byte{
+		"index.html":             []byte("shell v1"),
+		"assets/app.js":          []byte("app v1"),
+		"assets/old-AbC123xY.js": []byte("old hashed asset"),
+	})
+	secondArchive := createWebBundle(t, map[string][]byte{
+		"index.html":             []byte("shell v2"),
+		"assets/app.js":          []byte("app v2"),
+		"assets/new-DeF456wZ.js": []byte("new hashed asset"),
+	})
+	manifestBytes, err := os.ReadFile(secondArchive + ".json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var manifest releaseManifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		t.Fatal(err)
+	}
+	manifest.Version = "test-2"
+	manifestBytes, err = json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(secondArchive+".json", manifestBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	s3Client := newFakeS3()
+	backend, err := newAWSBackend(awsClients{s3: s3Client, cloudFront: &fakeCloudFront{}}, AWSOptions{Bucket: "example-bucket"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := DeployApp(context.Background(), backend, AppDeployOptions{ArchivePath: firstArchive}); err != nil {
+		t.Fatalf("first DeployApp() error = %v", err)
+	}
+	result, err := DeployApp(context.Background(), backend, AppDeployOptions{ArchivePath: secondArchive})
+	if err != nil {
+		t.Fatalf("second DeployApp() error = %v", err)
+	}
+	wantChanges := []Change{
+		{Action: "update", Path: "assets/app.js"},
+		{Action: "create", Path: "assets/new-DeF456wZ.js"},
+		{Action: "update", Path: "index.html"},
+	}
+	if result.Outcome != "deployed" || result.Version != "test-2" || result.FilesPublished != len(wantChanges) || !reflect.DeepEqual(result.Changes, wantChanges) {
+		t.Fatalf("second DeployApp() = %+v; want version test-2 with created and updated files %+v", result, wantChanges)
+	}
+	for _, change := range result.Changes {
+		if change.Action == "remove" {
+			t.Fatalf("second DeployApp() reported removal: %+v", result.Changes)
+		}
+	}
+	if _, exists := s3Client.objects["assets/old-AbC123xY.js"]; !exists {
+		t.Fatal("second DeployApp() removed the old hashed asset")
 	}
 }
 

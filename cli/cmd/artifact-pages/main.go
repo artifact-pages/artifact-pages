@@ -864,7 +864,6 @@ func runVersion(args []string, stdout, stderr io.Writer) error {
 		fmt.Fprintf(stdout, "  Sum       %s\n", reportText(build.ModuleSum))
 	}
 	fmt.Fprintf(stdout, "  Go        %s\n", reportText(build.GoVersion))
-	fmt.Fprintf(stdout, "  Web app   %s (pinned; deployed by app deploy)\n", "v"+version.Product)
 	return nil
 }
 
