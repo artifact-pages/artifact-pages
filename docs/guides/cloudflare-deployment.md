@@ -1,5 +1,7 @@
 # Cloudflare deployment
 
+For AWS, see the [AWS deployment guide](aws-deployment.md).
+
 This guide connects an existing private R2 bucket to a Cloudflare custom domain, applies preview retention, and publishes the Artifact Pages application and registered content to it. It follows the selected provider mapping in [T12](../backlog/technical-design/T12-cloudflare-production-mapping.md); it does not claim a live Cloudflare deployment has been verified.
 
 ## 1. Prepare Cloudflare

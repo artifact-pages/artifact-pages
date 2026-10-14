@@ -18,6 +18,7 @@ Start with the [thesis](thesis.md) for the product's purpose, the [specification
 
 ## Guides
 
+- [AWS deployment](guides/aws-deployment.md) — create the S3 and CloudFront origin with the Terraform module, then deploy the app and registered content with GitHub OIDC roles.
 - [Application bundle deployment](guides/app-bundle-deployment.md) — package, deploy, upgrade, and roll back the static application plane.
 - [Clean-room adoption and recovery](guides/clean-room-adoption.md) — exercise separate adopter repositories, local deployment, app rollback, and guarded lock recovery.
 - [Cloudflare deployment](guides/cloudflare-deployment.md) — connect an R2 bucket and Cloudflare edge policy, then deploy the app and registered content.
