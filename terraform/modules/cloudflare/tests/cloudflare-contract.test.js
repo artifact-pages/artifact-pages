@@ -139,10 +139,19 @@ test('local and Registry examples have separate, explicit source contracts', asy
   const registry = await read('examples/registry-consumer/main.tf')
   const registryVariables = await read('examples/registry-consumer/variables.tf')
   const registryReadme = await read('examples/registry-consumer/README.md')
+  const registryVersions = [...registry.matchAll(/^\s*version\s*=\s*"(\d+\.\d+\.\d+)"\s*$/gmu)]
+  assert.equal(registryVersions.length, 1)
+  let release
+  try {
+    release = JSON.parse(await read('release.json'))
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error
+  }
   assert.match(local, /source\s*=\s*"\.\.\/\.\."/u)
   assert.match(localVariables, /variable "r2_bucket_name"[\s\S]*?default\s*=\s*null/u)
   assert.match(registry, /source\s*=\s*"artifact-pages\/artifact-pages\/cloudflare"/u)
-  assert.match(registry, /version\s*=\s*"0\.1\.0"/u)
+  if (release) assert.equal(registryVersions[0][1], release.version)
+  else assert.equal(registryVersions[0][1], '0.1.0')
   assert.match(registryVariables, /variable "r2_bucket_name"[\s\S]*?default\s*=\s*null/u)
   assert.match(registryReadme, /publication is a separate owner-controlled step/u)
 })
