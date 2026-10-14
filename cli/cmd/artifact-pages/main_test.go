@@ -102,7 +102,7 @@ func assertVerificationCloudflareTarget(t *testing.T, config deploymentconfig.De
 		t.Fatalf("effective target = provider %q, cloudflare=%+v, local=%+v; want Cloudflare only", config.Provider, config.Cloudflare, config.Local)
 	}
 	target := config.Cloudflare
-	if target.AccountID != "9ac354c8aa31d424224d8c4f3aa8ba2a" || target.ZoneID != "b647a1ef28dde558fa8b80b50ad0c040" || target.Bucket != "artifact-pages-verify" || target.PublicBaseURL != "https://artifact-pages.stream" {
+	if target.AccountID != "21a0acb78621cc00cfa655a276d77b74" || target.ZoneID != "744453a7ac0be7e31a275932d119035b" || target.Bucket != "artifact-pages-verify" || target.PublicBaseURL != "https://artifact-pages.stream" {
 		t.Fatalf("Cloudflare verification target = %+v; want artifact-pages-verify at https://artifact-pages.stream", target)
 	}
 	if target.AccessKeyIDEnv != "CF_VERIFY_R2_ACCESS_KEY_ID" || target.SecretAccessKeyEnv != "CF_VERIFY_R2_SECRET_ACCESS_KEY" || target.APITokenEnv != "CF_VERIFY_API_TOKEN" {
