@@ -7,7 +7,7 @@ data "cloudflare_zone" "target" {
   lifecycle {
     postcondition {
       condition     = self.name == var.expected_zone_name
-      error_message = "cloudflare_zone_id does not belong to the verification zone; check ~/.config/artifact-pages/verify.env."
+      error_message = "cloudflare_zone_id does not belong to the verification zone; check ~/.config/artifact-pages-verify/verify.env."
     }
   }
 }

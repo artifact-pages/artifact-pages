@@ -1,11 +1,12 @@
-# Verification deployment on artifact-pages.stream (TD5). The env file holds the
-# verification-only token and IDs; it overrides any production Cloudflare
-# variables in this directory only. Keep it outside Git with mode 600. mise skips
-# a missing file, so main.tf refuses any zone other than artifact-pages.stream.
+# Verification deployment on artifact-pages.stream (TD5). The env file and state
+# credentials live in ~/.config/artifact-pages-verify/ (mode 700), separate from
+# production. The env file holds the verification-only token and IDs; it overrides
+# any production Cloudflare variables in this directory only. mise skips a missing
+# file, so main.tf refuses any zone other than artifact-pages.stream.
 [tools]
 terraform = "latest"
 
 [env]
-_.file = "~/.config/artifact-pages/verify.env"
+_.file = "~/.config/artifact-pages-verify/verify.env"
 TF_VAR_cloudflare_account_id = "{{env.CLOUDFLARE_ACCOUNT_ID}}"
 TF_VAR_cloudflare_zone_id = "{{env.CLOUDFLARE_ZONE_ID}}"

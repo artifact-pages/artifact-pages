@@ -2,12 +2,12 @@
 # historical artifact-pages.stream target for callers using --config once;
 # sites is the complete desired registration set, including smoke.
 # Secrets remain in CF_VERIFY_* environment variables. Load them with:
-#   set -a; source ~/.config/artifact-pages/verify.env; set +a
+#   set -a; source ~/.config/artifact-pages-verify/verify.env; set +a
 schemaVersion: 1
 provider: cloudflare
 cloudflare:
-  accountId: 9ac354c8aa31d424224d8c4f3aa8ba2a
-  zoneId: b647a1ef28dde558fa8b80b50ad0c040
+  accountId: 21a0acb78621cc00cfa655a276d77b74
+  zoneId: 744453a7ac0be7e31a275932d119035b
   bucket: artifact-pages-verify
   publicBaseURL: https://artifact-pages.stream
   accessKeyIdEnv: CF_VERIFY_R2_ACCESS_KEY_ID
