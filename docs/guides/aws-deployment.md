@@ -102,7 +102,7 @@ terraform plan
 terraform apply
 ```
 
-Review the plan before applying. A plan without WAF and with one site creates 22 resources: the bucket and its configuration, the CloudFront distribution with its origin access control, routes function, response-headers policy and cache policies, the admin role and policy, one role and policy per site, and two `terraform_data` guards. The module README recommends verifying a new setup on a disposable target.
+Review the plan before applying. A plan without WAF and with one site creates 22 resources: the bucket and its configuration, the CloudFront distribution with its origin access control, routes function, response-headers policy and cache policies, the admin role and policy, one role and policy per site, and two `terraform_data` guards.
 
 Outputs you will use:
 
@@ -153,7 +153,7 @@ artifact-pages registry sync --config artifact-pages.yaml --dry-run
 artifact-pages registry sync --config artifact-pages.yaml
 ```
 
-In a workflow, the same steps are `artifact-pages/app-deploy-action` and `artifact-pages/registry-action` after the credentials step, each with `config`, `dry-run` and `publish-on`, in a job that runs in the restricted environment. The verification workflows used `workflow_dispatch` with a `dry-run` input and the release tag `v0.2.0` of the Actions. App deploy writes the application files and then invalidates CloudFront for them. `registry sync` writes the registry for the complete `sites` mapping and removes the content of sites that are omitted from it.
+In a workflow, the same steps are `artifact-pages/app-deploy-action` and `artifact-pages/registry-action` after the credentials step, each with `config`, `dry-run` and `publish-on`, in a job that runs in the restricted environment. The verification workflows used `workflow_dispatch` with a `dry-run` input and the release tag `v0.2.0` of the Actions. App deploy writes the application files and then invalidates only the application shell (`/index.html`); hashed assets are immutable and need no invalidation. `registry sync` writes the registry for the complete `sites` mapping and removes the content of sites that are omitted from it.
 
 Then each satellite repository publishes its own site with its satellite role:
 
@@ -210,7 +210,7 @@ For recovery from failed upgrades, interrupted publishes and stale locks, see th
 - **Viewer access.** Artifact Pages has no user identity or per-site permission model. The module's only viewer policy is the optional WAF input; any other edge policy is yours to configure and verify.
 - **Preview scripts.** Preview HTML runs in an unsandboxed iframe on the application origin, and its scripts can reach the parent page. See the module README.
 - **State migration.** Moving from the former root `infra/aws` configuration is a Terraform state-address migration, described in the module README.
-- **Custom `name_prefix`.** Published Action v0.1.0 rejects CLI 0.4.0 before reading `aws.namePrefix`, so a non-default `name_prefix` needs a newer Action release; see the module README.
+- **Custom `name_prefix`.** A non-default `name_prefix` needs Action v0.2.0 or later (CLI 0.4.x), which reads `aws.namePrefix`; a custom prefix has not been exercised live.
 - **Evidence.** [T15](../backlog/verification/T15-provider-delivery.md) owns the live delivery evidence and the open items.
 
 ## References
