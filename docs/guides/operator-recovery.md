@@ -1,6 +1,6 @@
 # Operator recovery
 
-This runbook is for the operator of a Cloudflare-first deployment who did not write the tooling. It covers the common failures: a web upgrade that has to be undone, a publish that stopped part-way, drift between Git and storage, a lock left behind, credential rotation, and a lost Terraform state. AWS operators can follow the CLI parts, but the provider-specific steps (cache purge, R2 credentials, Terraform and zone rules) are Cloudflare only.
+This runbook is for the operator of a Cloudflare-first deployment who did not write the tooling. It covers the common failures: a web upgrade that has to be undone, a publish that stopped part-way, drift between Git and storage, a lock left behind, credential rotation, and a lost Terraform state. AWS operators can follow the CLI parts (see the [AWS deployment guide](aws-deployment.md)), but the provider-specific steps (cache purge, R2 credentials, Terraform and zone rules) are Cloudflare only.
 
 None of the scenarios below has been exercised on the verification environment yet. Each one ends with its exercise status. Treat the steps as reviewed procedure, not as proven procedure, and use `--dry-run` first.
 
