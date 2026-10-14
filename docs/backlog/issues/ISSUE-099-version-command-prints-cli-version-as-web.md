@@ -1,6 +1,7 @@
 # The version command prints the CLI version as the web app version
 
-- Status: Open
+- Status: Done
+- Assignee: Codex
 - Priority: P3
 - Area: CLI
 - Implementer: Codex
@@ -25,5 +26,9 @@ The command shows only versions the CLI really knows. Open question for Codex to
 
 ## Acceptance criteria
 
-- [ ] `artifact-pages version` never prints the CLI product version as the web app version.
-- [ ] The chosen option is covered by a test of the text output.
+- [x] `artifact-pages version` never prints the CLI product version as the web app version.
+- [x] The chosen option is covered by a test of the text output.
+
+## Resolution
+
+Removed the misleading `Web app` line; the text output test still checks the CLI product, revision, and Go lines. The JSON output is unchanged.
