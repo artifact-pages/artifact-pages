@@ -9,7 +9,7 @@
 
 ## Proof needed
 
-The operator repositories `artifact-pages/admin` and `artifact-pages/docs` already run released Actions for `artifact-pages.dev` ([TD5](../technical-design/TD5-verification-environment-and-operator-repositories.md)), but they are the project's own deployments. This ticket needs a clean consumer: a new public repository with its own Cloudflare bucket and hostname, chosen by the owner, that follows only the [public guide](https://artifact-pages.dev/guide/) and released artifacts. CLI, web and each Action are versioned independently ([TD17](../technical-design/TD17-config-pinned-component-versions.md)); the Terraform module is versioned per module ([TD15](../technical-design/TD15-terraform-module-source-of-truth.md)).
+The operator repositories `artifact-pages/admin` and `artifact-pages/docs` already run released Actions for `artifact-pages.dev` ([TD5](../technical-design/TD5-verification-environment-and-operator-repositories.md)), but they are the project's own deployments. This ticket needs a clean consumer: a new repository (public or private; record the visibility and any private-repository steps) with its own Cloudflare bucket and hostname, chosen by the owner, that follows only the [public guide](https://artifact-pages.dev/guide/) and released artifacts. CLI, web and each Action are versioned independently ([TD17](../technical-design/TD17-config-pinned-component-versions.md)); the Terraform module is versioned per module ([TD15](../technical-design/TD15-terraform-module-source-of-truth.md)).
 
 - [ ] Select each deliverable independently from released artifacts only, without copying OSS application or infrastructure source: CLI release binaries (`v0.2.0` or later) verified against the release checksums; the web bundle `web/v0.1.0` or later; the four Actions (`publish-action`, `preview-action`, `registry-action`, `app-deploy-action`, currently `v0.1.0`) pinned by exact `vX.Y.Z` tag or that tag's full commit SHA, as [TD4](../technical-design/TD4-action-marketplace-distribution.md) documents; and the Cloudflare module from `artifact-pages/terraform-cloudflare-artifact-pages` at its first tag, via a Git source (after IMP-64). Record the resolved module commit and provider versions. Registry retrieval is the last item below.
 - [ ] Confirm the CLI and web versions come from the consumer's operator config (`cli.version`, `web.version`), not from the Action pin. The pinned Action only contributes its bootstrap CLI and `cliRange`. The bootstrap CLI downloads, verifies and re-executes the release named by `cli.version`, and `app deploy` installs the bundle named by `web.version`. Verify bundle integrity, install/deploy, complete-manifest `registry sync` dry-run/apply, site dry-run/publish, and that an Action run matches the CLI run.
@@ -19,6 +19,18 @@ The operator repositories `artifact-pages/admin` and `artifact-pages/docs` alrea
 - [ ] After [IMP-38](../implementation/IMP-38-terraform-registry-publication.md), switch the clean consumer's module source to the Registry address and exact module version, then record the Registry URL, resolved module commit and provider versions. The Git-source run above does not prove Registry adoption.
 
 ## Evidence
+
+### Cold-start trial A (2026-10-14), run 1 baseline
+
+Setup: an isolated sandbox, a fresh agent with no prior context, public material only, a new private repository and a separate Cloudflare account (zone `artifact-pages.stream`). That is why the clean consumer here was private, not public. Versions: CLI v0.4.2, web 0.3.2 and 0.3.1, publish-action and preview-action v0.2.0 pinned by SHA, Cloudflare module `terraform-cloudflare-artifact-pages` v0.1.1 by Git source, Terraform 1.9.8, cloudflare provider 5.26.0.
+
+Outcome: the agent reached all 6 primary criteria in about 20 minutes of wall clock with 60 tool calls, including one stop-and-ask (R2 had to be enabled on the new account). Extras that worked: the PR preview, web up and down (0.3.2, 0.3.1, 0.3.2) and site withdrawal. Hostname restriction was not achieved, because the trial token deliberately had no WAF permission. The only product source the agent read was the module `variables.tf`, to learn the `waf_custom_rules` schema. An independent reviewer confirmed every outcome against the transcripts.
+
+Not exercised: the admin reusable-workflow path (`registry setup`), registry-action and app-deploy-action, environment secrets, Cloudflare Access, the local repeat with the released CLI binary, and Registry retrieval.
+
+Findings: [ISSUE-099](../issues/ISSUE-099-version-command-prints-cli-version-as-web.md), [ISSUE-100](../issues/ISSUE-100-app-deploy-summary-does-not-match-work.md), documentation tickets in `artifact-pages/docs` (DOC-14 and new DOC tickets), and [IMP-38](../implementation/IMP-38-terraform-registry-publication.md) (the documented Registry address returns 404).
+
+Run 1 is baseline evidence, not acceptance. A second run with a new agent follows after the fixes and the docs pairing. The criteria above stay open.
 
 The results below are preparation results from before the move to the `artifact-pages` organization and the TD17 split releases; they do not describe the current released components.
 
