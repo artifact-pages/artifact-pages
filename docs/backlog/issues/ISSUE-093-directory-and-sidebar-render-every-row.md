@@ -18,6 +18,8 @@ This is required before the launch advertises large-site support. For a small-sc
 2. `web/src/components/ArtifactTree.tsx` renders every entry of `files` (line 200) and of the recent and filter lists (lines 207 and 210).
 3. Server-side render of the real `DirectoryPage` with 5,000 pages: without a README 5,000 rows and 2,889,384 bytes of HTML; with a README 10 rows (public-launch review 2026-10-13, workspace-local report). This counts mounted rows structurally; it is not a browser timing.
 
+4. Rechecked at `86841bb1` on 2026-10-15 in the built reader: a synthetic 5,000-page flat site mounted 5,000 directory rows and 5,000 sidebar links, with 90,127 DOM elements overall. The same component SSR still produced 5,000 rows / 2,889,384 bytes without a README and 10 compact rows with one. This confirms structure, not a latency percentile or supported-size limit. Supplementary workspace evidence: `reviews/2026-10-15-project/large-dom.json` and `reproductions.json`.
+
 ## Expected outcome
 
 The number of rendered rows in a directory page and in the sidebar is bounded regardless of folder size, and every page stays reachable.
