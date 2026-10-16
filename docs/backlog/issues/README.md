@@ -118,5 +118,8 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-104](ISSUE-104-search-selection-is-not-associated-with-input.md) | Open | P2 | Arrow-selected search results are not associated with the focused input. |
 | [ISSUE-105](ISSUE-105-site-picker-updated-date-stays-stale.md) | Open | P2 | Site cards present metadata-generation time as content freshness. |
 | [ISSUE-106](ISSUE-106-known-html-failure-has-no-reader-guidance.md) | Open | P3 | A missing indexed HTML body shows only the server error inside the reader. |
+| [ISSUE-107](ISSUE-107-site-home-overview-files-preview-tabs.md) | Open | P2 | Site home mixes publisher introduction and tool navigation; owner selected compact overview/files/previews with persistent search. |
 
 ISSUE-013's verified completion record is retained in Git history.
+
+ISSUE-107 records the owner-selected site-home direction (2026-10-16), with a portable mock and explicit remaining behavior decisions. It is a reader product change; public documentation restructuring remains separate. Schedule it explicitly with the existing repair queue rather than treating it as a new release blocker.
