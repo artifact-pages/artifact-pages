@@ -6,5 +6,46 @@
   },
   "generatedAt": "2026-09-25T00:00:00Z",
   "artifactCount": 9,
-  "artifactIndexUrl": "/_indexes/showcase/index.json"
+  "artifactIndexUrl": "/_indexes/showcase/index.json",
+  "contentUpdatedAt": "2026-09-25T00:00:00Z",
+  "rootArtifactCount": 0,
+  "topLevelFolderCount": 9,
+  "topLevelFolders": [
+    {
+      "name": "dashboards",
+      "artifactCount": 1
+    },
+    {
+      "name": "editorial",
+      "artifactCount": 1
+    },
+    {
+      "name": "forms",
+      "artifactCount": 1
+    },
+    {
+      "name": "guides",
+      "artifactCount": 1
+    },
+    {
+      "name": "handbook",
+      "artifactCount": 1
+    },
+    {
+      "name": "presentations",
+      "artifactCount": 1
+    },
+    {
+      "name": "product",
+      "artifactCount": 1
+    },
+    {
+      "name": "reports",
+      "artifactCount": 1
+    },
+    {
+      "name": "tests",
+      "artifactCount": 1
+    }
+  ]
 }
