@@ -8040,6 +8040,37 @@ test.describe('reader context column (ISSUE-108)', () => {
     await expect.poll(activeId).toContain('toc-link')
   })
 
+  test('the column is not remounted when a Markdown document finishes loading, so focus stays', async ({ page }) => {
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    await page.route('**/_artifacts/sre/runbooks/service-recovery.md', async (route) => {
+      await gate
+      await route.continue()
+    })
+    await page.goto('/sre/runbooks/service-recovery.md', { waitUntil: 'commit' })
+    const column = columnOf(page)
+    await expect(column).toBeVisible()
+    await expect(page.getByTestId('markdown-document')).toHaveCount(0)
+    // Focus a Contents entry and mark both it and the Details heading so identity can be compared later.
+    await page.keyboard.press('Control+Shift+O')
+    await expect.poll(() => focusInColumn(page)).toMatch(/^button:/)
+    const focusedText = await page.evaluate(() => {
+      const active = document.activeElement as HTMLElement
+      active.dataset.probe = 'focus'
+      document.querySelector<HTMLElement>('#reader-column-details-heading')!.dataset.probe = 'details'
+      return active.textContent
+    })
+    release()
+    await expect(page.getByTestId('markdown-document')).toBeVisible()
+    await expect(page.locator('.markdown-article')).toBeVisible()
+    expect(await page.evaluate(() => ({
+      focusKept: document.activeElement?.getAttribute('data-probe'),
+      detailsKept: document.querySelector('#reader-column-details-heading')?.getAttribute('data-probe'),
+      text: document.activeElement?.textContent,
+      inColumn: Boolean(document.activeElement?.closest('[data-reader-column]')),
+    }))).toEqual({ focusKept: 'focus', detailsKept: 'details', text: focusedText, inColumn: true })
+  })
+
   test('the column is absent on site home, folders, search, previews and missing pages', async ({ page }) => {
     await registerTextSearchSite(page)
     for (const path of [

@@ -289,16 +289,6 @@ export function MarkdownArtifact({
     [artifact, siteId, resolveHref],
   )
 
-  // With a column, the loading and error states keep its place so the page does not shift when the text arrives.
-  const withAside = (content: ReactNode) => aside ? (
-    <div className="markdown-scroll has-aside">
-      <div className="markdown-split">
-        <div className="markdown-split-main">{content}</div>
-        {aside}
-      </div>
-    </div>
-  ) : content
-
   if (error) {
     return (
       <div className="markdown-state" role="alert">
@@ -320,12 +310,8 @@ export function MarkdownArtifact({
     )
   }
 
-  if (source === null) {
-    if (!loadingVisible) return withAside(<div className="markdown-state" aria-busy="true" />)
-    return withAside(<div className="markdown-state" role="status">Loading document…</div>)
-  }
-
-  const article = (
+  const loaded = source !== null
+  const article = loaded ? (
     <article ref={articleRef} className="markdown-article">
       <Markdown
         remarkPlugins={markdownRemarkPlugins}
@@ -336,18 +322,32 @@ export function MarkdownArtifact({
         {source}
       </Markdown>
     </article>
-  )
-  const footerView = footer ? <div className="markdown-footer">{footer}</div> : null
+  ) : loadingVisible
+    ? <div className="markdown-state" role="status">Loading document…</div>
+    : <div className="markdown-state" aria-busy="true" />
+  const footerView = loaded && footer ? <div className="markdown-footer">{footer}</div> : null
+
+  // With a column, one tree serves loading and loaded alike, so the column is never remounted
+  // (focus inside it, and Details, survive the document arriving).
+  if (aside) {
+    return (
+      <MarkdownRenderContext.Provider value={renderContext}>
+        <div className="markdown-scroll has-aside" data-testid={loaded ? 'markdown-document' : undefined} lang={loaded ? language : undefined}>
+          <div className="markdown-split">
+            <div className="markdown-split-main">{article}{footerView}</div>
+            {aside}
+          </div>
+        </div>
+      </MarkdownRenderContext.Provider>
+    )
+  }
+
+  if (!loaded) return article
 
   return (
     <MarkdownRenderContext.Provider value={renderContext}>
-    <div className={`markdown-scroll${aside ? ' has-aside' : ''}`} data-testid="markdown-document" lang={language}>
-      {aside ? (
-        <div className="markdown-split">
-          <div className="markdown-split-main">{article}{footerView}</div>
-          {aside}
-        </div>
-      ) : <>{article}{footerView}</>}
+    <div className="markdown-scroll" data-testid="markdown-document" lang={language}>
+      {article}{footerView}
     </div>
     </MarkdownRenderContext.Provider>
   )
