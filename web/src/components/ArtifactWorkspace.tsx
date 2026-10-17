@@ -146,6 +146,11 @@ export function ArtifactWorkspace({
   usePageNoindex(pageNotFound)
   // The language the open HTML artifact declares on its own <html>, keyed by the artifact it was read from.
   const [frameLanguage, setFrameLanguage] = useState<{ artifactUrl: string, lang: string | undefined } | null>(null)
+  // A known HTML body whose response failed (ISSUE-106), keyed by the artifact it was read from.
+  const [frameFailure, setFrameFailure] = useState<{ artifactUrl: string, status: number } | null>(null)
+  const [frameAttempt, setFrameAttempt] = useState(0)
+  const retryFrameRef = useRef<HTMLButtonElement | null>(null)
+  const focusRetryRef = useRef(false)
   const nearbyPages = useMemo(
     () => pageNotFound && routeArtifactPath ? nearbyArtifacts(index.artifacts, routeArtifactPath) : [],
     [pageNotFound, routeArtifactPath, index.artifacts],
@@ -682,6 +687,19 @@ export function ArtifactWorkspace({
     () => currentArtifact && currentFormat === 'markdown' ? relatedPages(index.artifacts, currentArtifact.path) : [],
     [currentArtifact, currentFormat, index.artifacts],
   )
+  const siteHomeHref = `/${encodeURIComponent(index.site.id)}`
+  const bodyArtifactUrl = bodyArtifact?.artifactUrl
+  useEffect(() => {
+    setFrameFailure(null)
+    setFrameAttempt(0)
+    focusRetryRef.current = false
+  }, [bodyArtifactUrl])
+  useEffect(() => {
+    if (frameFailure && focusRetryRef.current) {
+      focusRetryRef.current = false
+      retryFrameRef.current?.focus()
+    }
+  }, [frameFailure])
   const artifactView = bodyArtifact && currentFormat === 'markdown' ? (
     <MarkdownArtifact
       key={bodyArtifact.artifactUrl}
@@ -694,10 +712,38 @@ export function ArtifactWorkspace({
       footer={readNextItems.length > 0 ? <ReadNext items={readNextItems} siteId={index.site.id} navigate={(href) => navigateWithinWorkspace(href)} /> : undefined}
     />
   ) : bodyArtifact && htmlArtifactUrl ? (
+    <>
+    {frameFailure?.artifactUrl === bodyArtifact.artifactUrl ? (
+      <div className="markdown-state" role="alert">
+        <h1>Document unavailable</h1>
+        <p>The content of “{bodyArtifact.title}” could not be loaded (HTTP {frameFailure.status}). It may have been removed or not published yet.</p>
+        <button
+          type="button"
+          className="text-action"
+          ref={retryFrameRef}
+          onClick={() => {
+            focusRetryRef.current = true
+            setFrameFailure(null)
+            setFrameAttempt((attempt) => attempt + 1)
+          }}
+        >
+          Try again
+        </button>
+        {' '}
+        <a
+          className="text-action"
+          href={siteHomeHref}
+          onClick={(event) => followInApp(event, () => navigateWithinWorkspace(siteHomeHref))}
+        >
+          ← {index.site.title}
+        </a>
+      </div>
+    ) : null}
     <iframe
       className="artifact-frame"
       ref={htmlFrameRef}
-      key={bodyArtifact.artifactUrl}
+      key={`${bodyArtifact.artifactUrl}#${frameAttempt}`}
+      hidden={frameFailure?.artifactUrl === bodyArtifact.artifactUrl}
       src={htmlArtifactUrl}
       title={bodyArtifact.title}
       lang={frameLanguage?.artifactUrl === bodyArtifact.artifactUrl ? frameLanguage.lang : undefined}
@@ -706,6 +752,13 @@ export function ArtifactWorkspace({
         ...(currentDirectory && directoryFrameHeight ? { ['--directory-frame-height' as string]: `${directoryFrameHeight}px` } : {}),
       }}
       onLoad={(event) => {
+        const status = readFrameResponseStatus(event.currentTarget)
+        if (status !== null) {
+          frameHeightCleanup.current?.()
+          frameHeightCleanup.current = null
+          setFrameFailure({ artifactUrl: bodyArtifact.artifactUrl, status })
+          return
+        }
         setFrameLanguage({ artifactUrl: bodyArtifact.artifactUrl, lang: readFrameLanguage(event.currentTarget) })
         event.currentTarget.contentWindow?.addEventListener('keydown', forwardArtifactKeyDown, true)
         syncHtmlFrameLocation(event.currentTarget)
@@ -715,8 +768,8 @@ export function ArtifactWorkspace({
         frameHeightCleanup.current = currentDirectory ? watchFrameHeight(event.currentTarget, setDirectoryFrameHeight) : null
       }}
     />
+    </>
   ) : null
-  const siteHomeHref = `/${encodeURIComponent(index.site.id)}`
   const moreMenuItems: ReaderMoreMenuItem[] = []
   if (bodyArtifact) {
     moreMenuItems.push(
@@ -1181,6 +1234,17 @@ function scrollFrameToFragment(frameWindow: Window, hash: string, host: HTMLElem
 }
 
 /** The language an HTML artifact declares on its own `<html>`; undefined when it declares none or the frame is cross-origin. */
+/** The HTTP status of the frame's document when it is an error (>= 400); null otherwise or when the browser does not expose it. */
+function readFrameResponseStatus(iframe: HTMLIFrameElement): number | null {
+  try {
+    const entry = iframe.contentWindow?.performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined
+    const status = entry?.responseStatus
+    return typeof status === 'number' && status >= 400 ? status : null
+  } catch {
+    return null
+  }
+}
+
 function readFrameLanguage(iframe: HTMLIFrameElement) {
   try {
     return normalizeLanguageTag(iframe.contentDocument?.documentElement.getAttribute('lang'))

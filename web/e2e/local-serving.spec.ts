@@ -2000,6 +2000,46 @@ test('Markdown heading IDs match the shared fixture and Contents and palette rea
   await expect.poll(() => scrollport.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
 })
 
+test('a known HTML document whose body fails to load shows reader guidance and can be retried', async ({ page }) => {
+  const artifactPath = 'guides/missing.html'
+  let available = false
+  await page.route('**/_indexes/sre/index.json', async (route) => {
+    const response = await route.fetch()
+    const index = await response.json() as { artifacts: Array<Record<string, unknown>> }
+    index.artifacts.push({
+      id: artifactPath,
+      title: 'Missing body',
+      path: artifactPath,
+      format: 'html',
+      filename: 'missing.html',
+      artifactUrl: `/_artifacts/sre/${artifactPath}`,
+      updatedAt: '2026-10-01T00:00:00Z',
+    })
+    await route.fulfill({ response, body: JSON.stringify(index) })
+  })
+  await page.route(`**/_artifacts/sre/${artifactPath}`, (route) => available
+    ? route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: '<!doctype html><title>Back</title><p id="body">Body is back</p>' })
+    : route.fulfill({ status: 404, contentType: 'text/html; charset=utf-8', body: '<h1>404 Not Found</h1>' }))
+
+  await page.goto(`/sre/${artifactPath}`)
+  const alert = page.getByRole('alert')
+  await expect(alert.getByRole('heading', { name: 'Document unavailable' })).toBeVisible()
+  await expect(alert).toContainText('The content of “Missing body” could not be loaded (HTTP 404).')
+  await expect(alert.getByRole('link', { name: /← / })).toBeVisible()
+  await expect(page.locator('iframe[title="Missing body"]')).toBeHidden()
+
+  // A retry while the body is still missing keeps the guidance and returns focus to the button.
+  await alert.getByRole('button', { name: 'Try again' }).click()
+  await expect(alert.getByRole('button', { name: 'Try again' })).toBeFocused()
+  await expect(alert).toContainText('HTTP 404')
+
+  available = true
+  await alert.getByRole('button', { name: 'Try again' }).click()
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  await expect(page.frameLocator('iframe[title="Missing body"]').locator('#body')).toHaveText('Body is back')
+  await expect(page).toHaveURL(new RegExp(`/sre/${artifactPath}$`))
+})
+
 test('HTML heading navigation keeps the URL and iframe section in sync with one history step', async ({ page }) => {
   await page.goto('/showcase/editorial/field-notes/index.html')
 
