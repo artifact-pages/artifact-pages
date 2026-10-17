@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { ArtifactIndexEntry, SiteCatalogEntry, SiteIndex } from '../domain/index'
 import type { RecentArtifactRead } from '../domain/recent-reads'
 import { createPaletteProductionScorer } from '../domain/palette-scoring'
@@ -25,6 +26,12 @@ import { Icon } from './Icon'
 
 export type { PaletteCommand, PaletteContext } from '../domain/palette-sections'
 export type { RecentArtifactRead } from '../domain/recent-reads'
+
+const FOCUSABLE = 'input:not([tabindex="-1"]), button:not([disabled]):not([tabindex="-1"]), a[href], [tabindex]:not([tabindex="-1"])'
+
+function visibleFocusables(root: HTMLElement) {
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((element) => element.getClientRects().length > 0)
+}
 
 export function CommandPalette({
   seed,
@@ -57,6 +64,13 @@ export function CommandPalette({
   onSearchPageText?: (query: string) => void
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const listboxId = useId()
+  const optionId = (index: number) => `${listboxId}-option-${index}`
+  // The element that opened the palette, read during the first render before the input takes focus.
+  const [opener] = useState(() => {
+    const active = document.activeElement
+    return active instanceof HTMLElement && active !== document.body ? active : null
+  })
   const [query, setQuery] = useState(seed)
   const scoringConfig = paletteScoringExperimentConfig(window.location.search)
   const mode = paletteMode(query)
@@ -126,6 +140,38 @@ export function CommandPalette({
     inputRef.current?.focus()
   }, [])
 
+  // The palette is modal: the app root is inert while it is open, so focus cannot reach the page behind.
+  useEffect(() => {
+    const root = document.getElementById('root')
+    if (!root) return undefined
+    const previous = root.inert
+    root.inert = true
+    return () => { root.inert = previous }
+  }, [])
+
+  // Escape, the close button and a backdrop click return focus to the opener; choosing an entry does not.
+  function dismiss() {
+    onClose()
+    window.requestAnimationFrame(() => {
+      if (opener && opener.isConnected && opener.getClientRects().length > 0) opener.focus()
+    })
+  }
+
+  function handleDialogKeyDown(event: React.KeyboardEvent<HTMLElement>) {
+    if (event.key !== 'Tab') return
+    const focusables = visibleFocusables(event.currentTarget)
+    if (focusables.length === 0) return
+    const first = focusables[0], last = focusables[focusables.length - 1]
+    const active = document.activeElement
+    if (event.shiftKey && active === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+
   // Prepare other pages' headings in the background so the first keystroke stays cheap.
   useEffect(() => (currentIndex ? warmHeadingSearch(currentIndex) : undefined), [currentIndex])
 
@@ -167,17 +213,17 @@ export function CommandPalette({
       }
     } else if (event.key === 'Escape') {
       event.preventDefault()
-      onClose()
+      dismiss()
     }
   }
 
   let entryIndex = 0
 
-  return (
+  return createPortal(
     <div
       className="palette-backdrop"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose()
+        if (event.target === event.currentTarget) dismiss()
       }}
     >
       <section
@@ -185,6 +231,7 @@ export function CommandPalette({
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
+        onKeyDown={handleDialogKeyDown}
         data-palette-context-strategy={scoringExperiment?.metrics.context}
         data-palette-signal-strategy={scoringExperiment?.metrics.signals}
         data-palette-scoring-setup-ms={scoringExperiment?.metrics.setupMs}
@@ -201,6 +248,11 @@ export function CommandPalette({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={handleKeyDown}
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded={entries.length > 0}
+            aria-controls={entries.length > 0 ? listboxId : undefined}
+            aria-activedescendant={entries[selectedIndex] ? optionId(selectedIndex) : undefined}
             placeholder={placeholder}
             aria-label="Search artifacts, sites, commands, and headings"
             autoComplete="off"
@@ -212,7 +264,7 @@ export function CommandPalette({
             className="palette-close-button"
             type="button"
             aria-label="Close command palette"
-            onClick={onClose}
+            onClick={dismiss}
           >
             <Icon name="close" size={15} />
           </button>
@@ -220,15 +272,17 @@ export function CommandPalette({
 
         {emptyHistory && sections.length > 0 ? <p className="palette-hint">{EMPTY_HISTORY_HINT}</p> : null}
 
-        <div className="palette-results" role="listbox" aria-label="Search results">
-          {sections.length === 0 ? (
+        {sections.length === 0 ? (
+          <div className="palette-results">
             <p className="palette-empty">
               {emptyMessage}
             </p>
-          ) : (
-            sections.map((section) => (
-              <div className="palette-section" key={section.title}>
-                <div className="palette-section-title">{section.title}</div>
+          </div>
+        ) : (
+          <div className="palette-results" role="listbox" id={listboxId} aria-label="Search results">
+            {sections.map((section, sectionIndex) => (
+              <div className="palette-section" key={section.title} role="group" aria-labelledby={`${listboxId}-section-${sectionIndex}`}>
+                <div className="palette-section-title" id={`${listboxId}-section-${sectionIndex}`}>{section.title}</div>
                 {section.entries.map((entry) => {
                   const index = entryIndex++
                   const selected = index === selectedIndex
@@ -236,7 +290,9 @@ export function CommandPalette({
                     <button
                       className={`palette-entry${entry.current ? ' palette-entry--current' : ''}${entry.kind === 'site' ? ' palette-entry--site' : ''}${entry.kind === 'page-text' ? ' palette-entry--page-text' : ''}${selected ? ' is-selected' : ''}`}
                       key={entry.id}
+                      id={optionId(index)}
                       role="option"
+                      tabIndex={-1}
                       data-palette-entry-id={entry.id}
                       aria-selected={selected}
                       aria-current={entry.current ? 'page' : undefined}
@@ -286,9 +342,9 @@ export function CommandPalette({
                   )
                 })}
               </div>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        )}
 
         {blankInSite ? (
           <p className="palette-hint">
@@ -308,7 +364,8 @@ export function CommandPalette({
           {currentIndex ? <span><code>#</code> headings</span> : null}
         </footer>
       </section>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

@@ -1,53 +1,58 @@
-// Checks the per-top-level-folder counts shown on site picker cards.
+// Checks the per-top-level-folder summary shown on site picker cards, derived from discovery metadata.
 // Run with: npm run test:reader-shell
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { folderChipKey, folderChipLabel, folderSummaryText, summarizeFolders, topLevelFolderCounts } from './site-folder-counts.ts'
+import { folderChipKey, folderChipLabel, folderSummaryFromMetadata, folderSummaryText } from './site-folder-counts.ts'
 
-const at = (...paths) => paths.map((path) => ({ path }))
+const folders = (...pairs) => pairs.map(([name, artifactCount]) => ({ name, artifactCount }))
 
-test('counts pages per first path segment, sorted by folder name', () => {
-  assert.deepEqual(
-    topLevelFolderCounts(at('ja/a.html', 'en/a.html', 'en/b.html', 'en/deep/c.html')),
-    [{ folder: 'en', count: 3 }, { folder: 'ja', count: 1 }],
-  )
+test('folders are sorted by name and the root bucket is listed last', () => {
+  const summary = folderSummaryFromMetadata({
+    rootArtifactCount: 2,
+    topLevelFolderCount: 2,
+    topLevelFolders: folders(['ja', 1], ['en', 3]),
+  })
+  assert.deepEqual(summary, {
+    kind: 'folders',
+    folders: [{ folder: 'en', count: 3 }, { folder: 'ja', count: 1 }, { folder: '(root)', count: 2, isRoot: true }],
+  })
 })
 
-test('root pages are a separate synthetic group listed last', () => {
-  assert.deepEqual(
-    topLevelFolderCounts(at('index.html', 'en/a.html', 'about.md')),
-    [{ folder: 'en', count: 1 }, { folder: '(root)', count: 2, isRoot: true }],
-  )
+test('two folders and no root pages show per-folder counts', () => {
+  const summary = folderSummaryFromMetadata({ rootArtifactCount: 0, topLevelFolderCount: 2, topLevelFolders: folders(['en', 7], ['ja', 7]) })
+  assert.equal(summary.kind, 'folders')
+  assert.equal(folderSummaryText(summary), 'en: 7 pages, ja: 7 pages')
 })
 
 test('a real folder named root does not collide with the root bucket', () => {
-  const folders = topLevelFolderCounts(at('root/a.html', 'index.html'))
-  assert.equal(folders.length, 2)
-  assert.notEqual(folderChipKey(folders[0]), folderChipKey(folders[1]))
-  assert.deepEqual(folders.map(folderChipLabel), ['root', '(root)'])
+  const summary = folderSummaryFromMetadata({ rootArtifactCount: 1, topLevelFolderCount: 1, topLevelFolders: folders(['root', 1]) })
+  assert.equal(summary.kind, 'folders')
+  assert.notEqual(folderChipKey(summary.folders[0]), folderChipKey(summary.folders[1]))
+  assert.deepEqual(summary.folders.map(folderChipLabel), ['root', '(root)'])
 })
 
-test('no pages gives no groups', () => {
-  assert.deepEqual(topLevelFolderCounts([]), [])
+test('a single group adds nothing', () => {
+  assert.deepEqual(folderSummaryFromMetadata({ rootArtifactCount: 0, topLevelFolderCount: 1, topLevelFolders: folders(['en', 7]) }), { kind: 'none' })
+  assert.deepEqual(folderSummaryFromMetadata({ rootArtifactCount: 5, topLevelFolderCount: 0, topLevelFolders: [] }), { kind: 'none' })
 })
 
-test('two to four groups show per-folder counts', () => {
-  const folders = topLevelFolderCounts(at('en/a.html', 'ja/a.html'))
-  assert.deepEqual(summarizeFolders(folders), { kind: 'folders', folders })
+test('five folders show the folder count from topLevelFolderCount', () => {
+  const summary = folderSummaryFromMetadata({
+    rootArtifactCount: 0,
+    topLevelFolderCount: 5,
+    topLevelFolders: folders(['a', 1], ['b', 1], ['c', 1], ['d', 1], ['e', 2]),
+  })
+  assert.deepEqual(summary, { kind: 'many', folderCount: 5 })
 })
 
-test('a single group or missing breakdown adds nothing', () => {
-  assert.deepEqual(summarizeFolders(topLevelFolderCounts(at('en/a.html'))), { kind: 'none' })
-  assert.deepEqual(summarizeFolders([]), { kind: 'none' })
-  assert.deepEqual(summarizeFolders(undefined), { kind: 'none' })
+test('seventeen folders without a list still show the folder count', () => {
+  assert.deepEqual(folderSummaryFromMetadata({ rootArtifactCount: 0, topLevelFolderCount: 17 }), { kind: 'many', folderCount: 17 })
 })
 
-test('more than four groups show the folder count', () => {
-  const folders = topLevelFolderCounts(at('a/1', 'b/1', 'c/1', 'd/1', 'e/1', 'e/2'))
-  assert.deepEqual(summarizeFolders(folders), { kind: 'many', folderCount: 5 })
+test('a small folder count without a list adds nothing', () => {
+  assert.deepEqual(folderSummaryFromMetadata({ topLevelFolderCount: 3 }), { kind: 'none' })
 })
 
-test('the accessible text spells out each group', () => {
-  const folders = topLevelFolderCounts(at('en/a.html', 'en/b.html', 'ja/a.html'))
-  assert.equal(folderSummaryText(summarizeFolders(folders)), 'en: 2 pages, ja: 1 page')
+test('old metadata without the new fields adds nothing', () => {
+  assert.deepEqual(folderSummaryFromMetadata({}), { kind: 'none' })
 })

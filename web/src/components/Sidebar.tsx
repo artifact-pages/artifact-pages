@@ -27,6 +27,7 @@ export function Sidebar({
   onOpenPalette,
   onOpenArtifact,
   onOpenDirectory,
+  onOpenRoot,
   onToast,
   themeMode,
   onSetThemeMode,
@@ -48,6 +49,8 @@ export function Sidebar({
   onOpenPalette: (seed: string) => void
   onOpenArtifact: (artifact: ArtifactIndexEntry) => void
   onOpenDirectory: (path: string) => void
+  /** Opens the site root folder page (the overflow row of the root branch). */
+  onOpenRoot?: () => void
   onToast: (message: string) => void
   themeMode: ThemeMode
   onSetThemeMode: (mode: ThemeMode) => void
@@ -250,6 +253,8 @@ export function Sidebar({
                   activeDirectoryPath={directoryPath}
                   directoryHref={(directory) => artifactRouteHref(index.site.id, directory.path)}
                   onOpenDirectory={(directory) => onOpenDirectory(directory.path)}
+                  rootHref={`/${encodeURIComponent(index.site.id)}`}
+                  onOpenRoot={onOpenRoot}
                   style={treeStyle}
                   view={treeStyle === 'path-list' ? 'paths' : 'tree'}
                   expandedPaths={expandedPaths}

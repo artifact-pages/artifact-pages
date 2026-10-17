@@ -1,6 +1,7 @@
 # Keyboard focus escapes the command palette while its modal stays open
 
-- Status: Open
+- Status: Done
+- Assignee: Claude
 - Priority: P2
 - Area: Reader / command palette accessibility
 - Implementer: Claude
@@ -27,8 +28,14 @@ While the palette is modal, keyboard focus stays within it. Dismissing it or cho
 
 ## Acceptance criteria
 
-- [ ] Tab and Shift+Tab cycle within the palette for both site-list and in-site entry points.
-- [ ] Background controls cannot receive keyboard focus while the modal is open.
-- [ ] Escape and Close return focus to the opening control when it still exists; selecting a destination preserves the intended page/heading focus handoff.
-- [ ] Empty results, dynamically changing results and a palette with only commands remain operable.
-- [ ] A browser regression checks actual focused elements, not just the dialog's visible state or ARIA attributes.
+- [x] Tab and Shift+Tab cycle within the palette for both site-list and in-site entry points.
+- [x] Background controls cannot receive keyboard focus while the modal is open.
+- [x] Escape and Close return focus to the opening control when it still exists; selecting a destination preserves the intended page/heading focus handoff.
+- [x] Empty results, dynamically changing results and a palette with only commands remain operable.
+- [x] A browser regression checks actual focused elements, not just the dialog's visible state or ARIA attributes.
+
+## Verification
+
+- `web/src/components/CommandPalette.tsx`: the dialog renders through a portal into `document.body`, `#root` is `inert` while it is open (previous value restored), Tab and Shift+Tab wrap between the input and the close button (result options are `tabIndex={-1}`), and Escape, the close button and a backdrop mousedown call `dismiss()`, which closes and then focuses the remembered opener on the next animation frame. Choosing an entry keeps the previous handoff. Callers' own return-focus code is unchanged.
+- Browser regression (`web/e2e/local-serving.spec.ts`, `the site list palette keeps keyboard focus inside…` and `the in-site palette keeps keyboard focus inside…`): checks `document.activeElement` over 6 Tab and 6 Shift+Tab presses for the blank, no-results and `>` (commands) states, `#root.inert`, that focusing a background link leaves focus in the dialog, and that Escape and the close button return focus to the opener.
+- Results: `npm run build` passes, `npm run test:web-unit` passes, full e2e 227 passed (nginx stack, Chromium).

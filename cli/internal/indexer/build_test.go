@@ -255,11 +255,108 @@ func TestBuildCreatesZeroDocumentIndexForResourceOnlySite(t *testing.T) {
 	if metadata.ArtifactCount != 0 || metadata.Site != (SiteSummary{ID: "empty", Title: "Empty site"}) {
 		t.Errorf("empty site discovery metadata = %+v, want site title and count zero", metadata)
 	}
+	if metadata.RootArtifactCount != 0 || metadata.TopLevelFolderCount != 0 || metadata.ContentUpdatedAt != "" || metadata.TopLevelFolders != nil {
+		t.Errorf("empty site discovery summary = %+v, want zero counts and no content date or folders", metadata)
+	}
+	var metadataFields map[string]json.RawMessage
+	if err := json.Unmarshal(metadataBytes, &metadataFields); err != nil {
+		t.Fatalf("decode empty discovery metadata fields: %v", err)
+	}
+	for _, field := range []string{"contentUpdatedAt", "topLevelFolders"} {
+		if _, exists := metadataFields[field]; exists {
+			t.Errorf("empty site discovery metadata includes %q: %s", field, metadataFields[field])
+		}
+	}
+	for _, field := range []string{"rootArtifactCount", "topLevelFolderCount"} {
+		if got, exists := metadataFields[field]; !exists || string(got) != "0" {
+			t.Errorf("empty site discovery metadata %s = %s (present=%t), want written zero", field, got, exists)
+		}
+	}
 	if _, err := os.Stat(filepath.Join(repositoryRoot, "artifacts/assets/theme.css")); err != nil {
 		t.Errorf("Build() changed or removed the source resource: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(repositoryRoot, ".local/storage/_artifacts")); !os.IsNotExist(err) {
 		t.Errorf("Build() should write only index metadata, _artifacts exists or stat failed: %v", err)
+	}
+}
+
+func TestBuildDiscoveryMetadataSummarizesContentAndTopLevelFolders(t *testing.T) {
+	repositoryRoot := initializeGitRepository(t)
+	restoreWorkingDirectory := chdirForTest(t, repositoryRoot)
+	defer restoreWorkingDirectory()
+
+	for path, contents := range map[string]string{
+		"artifacts/a.md":      "# Root\n\nRoot content.\n",
+		"artifacts/en/x.md":   "# English X\n\nContent.\n",
+		"artifacts/en/y/z.md": "# English Z\n\nContent.\n",
+		"artifacts/ja/x.md":   "# Japanese X\n\nInitial content.\n",
+	} {
+		writeFixtureFile(t, repositoryRoot, path, contents)
+	}
+	firstCommit := time.Date(2026, 2, 3, 4, 5, 6, 0, time.UTC)
+	commitFixture(t, repositoryRoot, "add discovery summary artifacts", firstCommit)
+	latestCommit := time.Date(2026, 3, 4, 5, 6, 7, 0, time.UTC)
+	writeFixtureFile(t, repositoryRoot, "artifacts/ja/x.md", "# Japanese X\n\nUpdated content.\n")
+	commitFixture(t, repositoryRoot, "update Japanese artifact", latestCommit)
+
+	_, err := Build(context.Background(), BuildOptions{
+		SiteID: "summary", SiteTitle: "Summary", SourceDir: "artifacts", OutputDir: ".local/storage",
+	})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	metadataBytes, err := os.ReadFile(filepath.Join(repositoryRoot, ".local/storage/_indexes/summary/meta.json"))
+	if err != nil {
+		t.Fatalf("read generated discovery metadata: %v", err)
+	}
+	var metadata SiteDiscoveryMetadata
+	if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
+		t.Fatalf("decode generated discovery metadata: %v", err)
+	}
+	if metadata.ContentUpdatedAt != latestCommit.Format(time.RFC3339) {
+		t.Errorf("contentUpdatedAt = %q, want latest artifact update %q", metadata.ContentUpdatedAt, latestCommit.Format(time.RFC3339))
+	}
+	if metadata.RootArtifactCount != 1 || metadata.TopLevelFolderCount != 2 {
+		t.Errorf("discovery counts = root %d, folders %d; want root 1 and folders 2", metadata.RootArtifactCount, metadata.TopLevelFolderCount)
+	}
+	wantFolders := []TopLevelFolder{{Name: "en", ArtifactCount: 2}, {Name: "ja", ArtifactCount: 1}}
+	if !reflect.DeepEqual(metadata.TopLevelFolders, wantFolders) {
+		t.Errorf("topLevelFolders = %+v, want %+v", metadata.TopLevelFolders, wantFolders)
+	}
+}
+
+func TestBuildOmitsTopLevelFoldersWhenThereAreMoreThanSixteen(t *testing.T) {
+	repositoryRoot := initializeGitRepository(t)
+	restoreWorkingDirectory := chdirForTest(t, repositoryRoot)
+	defer restoreWorkingDirectory()
+
+	for index := 0; index < 17; index++ {
+		writeFixtureFile(t, repositoryRoot, fmt.Sprintf("artifacts/folder-%02d/page.md", index), "# Page\n")
+	}
+	commitFixture(t, repositoryRoot, "add seventeen top-level folders", time.Date(2026, 4, 5, 6, 7, 8, 0, time.UTC))
+	_, err := Build(context.Background(), BuildOptions{
+		SiteID: "many-folders", SiteTitle: "Many folders", SourceDir: "artifacts", OutputDir: ".local/storage",
+	})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	metadataBytes, err := os.ReadFile(filepath.Join(repositoryRoot, ".local/storage/_indexes/many-folders/meta.json"))
+	if err != nil {
+		t.Fatalf("read generated discovery metadata: %v", err)
+	}
+	var metadata SiteDiscoveryMetadata
+	if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
+		t.Fatalf("decode generated discovery metadata: %v", err)
+	}
+	if metadata.TopLevelFolderCount != 17 || metadata.TopLevelFolders != nil {
+		t.Errorf("discovery folder summary = count %d and folders %+v, want count 17 and omitted folders", metadata.TopLevelFolderCount, metadata.TopLevelFolders)
+	}
+	var metadataFields map[string]json.RawMessage
+	if err := json.Unmarshal(metadataBytes, &metadataFields); err != nil {
+		t.Fatalf("decode discovery metadata fields: %v", err)
+	}
+	if _, exists := metadataFields["topLevelFolders"]; exists {
+		t.Errorf("discovery metadata includes topLevelFolders for 17 folders: %s", metadataFields["topLevelFolders"])
 	}
 }
 

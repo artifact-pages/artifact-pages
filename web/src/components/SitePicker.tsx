@@ -2,9 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ThemeMode } from '../domain/theme'
 import { artifactCountLabel } from '../domain/site-count-label'
 import { hasSiteDiscoveryMetadata, type SiteCatalogEntry } from '../domain/index'
-import { folderChipKey, folderChipLabel, folderSummaryText, summarizeFolders, type FolderCount } from '../domain/site-folder-counts'
-import { compareSites, ownValue } from '../domain/site-start'
-import { useSiteFolderCounts } from '../data/use-site-folder-counts'
+import { folderChipKey, folderChipLabel, folderSummaryFromMetadata, folderSummaryText, type FolderSummary } from '../domain/site-folder-counts'
+import { compareSites } from '../domain/site-start'
 import { CommandPalette, type PaletteCommand } from './CommandPalette'
 import { Icon } from './Icon'
 import { followInApp } from './spa-link'
@@ -18,20 +17,16 @@ export function SitePicker({
   onNavigate,
   themeMode = 'system',
   onSetThemeMode,
-  folderCounts: folderCountsOverride,
 }: {
   sites: SiteCatalogEntry[]
   onNavigate: (href: string) => void
   themeMode?: ThemeMode
   onSetThemeMode?: (mode: ThemeMode) => void
-  /** Per-top-level-folder counts by site ID; when given, no site index is fetched. */
-  folderCounts?: Record<string, FolderCount[]>
 }) {
   usePageTitle(pageTitle())
   const [paletteOpen, setPaletteOpen] = useState(false)
   const paletteReturnFocus = useRef<HTMLElement | null>(null)
   const sortedSites = [...sites].sort(compareSites)
-  const { counts: folderCounts, pending: pendingCounts } = useSiteFolderCounts(sortedSites, folderCountsOverride)
   const commands: PaletteCommand[] = [
     {
       title: 'Use light theme',
@@ -119,7 +114,7 @@ export function SitePicker({
                       {entry.site.description?.trim() ? (
                         <span className="site-picker-description">{entry.site.description}</span>
                       ) : null}
-                      <FolderCountChips entry={entry} folders={ownValue(folderCounts, entry.site.id)} pending={pendingCounts.has(entry.site.id)} />
+                      {hasSiteDiscoveryMetadata(entry) ? <FolderCountChips summary={folderSummaryFromMetadata(entry)} /> : null}
                       <span className="site-picker-meta">
                         <span className="mono">/{entry.site.id}</span>
                         <span className="site-picker-meta-separator" aria-hidden="true">·</span>
@@ -156,13 +151,8 @@ export function SitePicker({
   )
 }
 
-// The chip row is reserved while a site's count is still loading so the card does not jump.
-function FolderCountChips({ entry, folders, pending }: { entry: SiteCatalogEntry; folders?: FolderCount[]; pending: boolean }) {
-  if (!hasSiteDiscoveryMetadata(entry)) return null
-  const summary = summarizeFolders(folders)
-  if (summary.kind === 'none') {
-    return pending ? <span className="site-picker-folders site-picker-folders--reserved" aria-hidden="true" /> : null
-  }
+function FolderCountChips({ summary }: { summary: FolderSummary }) {
+  if (summary.kind === 'none') return null
   return (
     <>
       <span className="site-picker-folders" aria-hidden="true">
@@ -179,7 +169,10 @@ function FolderCountChips({ entry, folders, pending }: { entry: SiteCatalogEntry
 
 function catalogStatusLabel(entry: SiteCatalogEntry) {
   if (hasSiteDiscoveryMetadata(entry)) {
-    return `${artifactCountLabel(entry.artifactCount)} · updated ${formatDate(entry.generatedAt)}`
+    const count = artifactCountLabel(entry.artifactCount)
+    // contentUpdatedAt is the content freshness; generatedAt only says when the metadata was written.
+    const updated = entry.contentUpdatedAt ? formatDate(entry.contentUpdatedAt) : undefined
+    return updated ? `${count} · updated ${updated}` : count
   }
   if (entry.status === 'not-published') return 'Registered · not published yet'
   if (entry.status === 'needs-republish') return 'Registered · needs to be republished'
@@ -188,6 +181,6 @@ function catalogStatusLabel(entry: SiteCatalogEntry) {
 
 function formatDate(value: string) {
   const date = new Date(value)
-  if (Number.isNaN(date.valueOf())) return value
+  if (Number.isNaN(date.valueOf())) return undefined
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date)
 }
