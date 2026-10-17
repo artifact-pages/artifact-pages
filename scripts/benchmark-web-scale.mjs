@@ -5,10 +5,10 @@
 // storage through the repository's nginx Compose setup, and measures the production reader with
 // Playwright Chromium. It reports what was measured; it does not judge the results.
 //
-//   npm run benchmark:web-scale -- --counts 1000,5000,10000,50000 --iterations 3
+//   env NODE_OPTIONS= npm run benchmark:web-scale -- --counts 1000,5000,10000,50000 --iterations 3
 //
 // Flags: --counts, --iterations, --port (4194), --seed, --regenerate, --skip-build, --profiles
-// (unthrottled,constrained), --only (comma list of measurement groups), --run-dir.
+// (unthrottled,constrained), --only (comma list of measurement groups), --run-dir, --keep.
 // --remote <origin> measures an already published deployment instead of local nginx: no generation, no
 // Docker, sites named bench-<count/1000>k (publish them first with `site sync`; see the report).
 import assert from 'node:assert/strict'
@@ -30,6 +30,7 @@ const options = {
   seed: 20261014,
   regenerate: false,
   'skip-build': false,
+  keep: false,
   profiles: ['unthrottled', 'constrained'],
   only: [],
   'run-dir': '',
@@ -125,16 +126,22 @@ function generateSite(count, contentRoot) {
   const rareStep = Math.max(1, Math.floor(count / 7))
   let written = 0
   const files = []
-  function page(relativePath, kind, title) {
+  function page(relativePath, kind, title, { mermaid = false, generationProbe = false, longBody = false } = {}) {
     const number = written++
     const words = Array.from({ length: 120 }, () => pick(WORDS))
     const japanese = [pick(JAPANESE), pick(JAPANESE)].join('')
     const rare = number % rareStep === 3 && number < rareStep * 7 ? ` ${RARE_TERM}` : ''
     const unique = `body-only-${String(number).padStart(6, '0')}`
-    const text = `${words.join(' ')}${rare} ${unique}`
+    const probes = `${generationProbe ? ' vanishedgenerationprobe generationprobe' : ''}${longBody ? ` ${'longbodyprobe '.repeat(20_000)}` : ''}`
+    const text = `${words.join(' ')}${rare} ${unique}${probes}`
     let bytes
     if (relativePath.endsWith('.md')) {
-      bytes = `# ${title}\n\n## Summary\n\n${text.slice(0, text.length >> 1)}\n\n## Details\n\n${text.slice(text.length >> 1)}\n\n${japanese}\n`
+      const diagram = mermaid
+        ? '\n\n## Routing diagram\n\n```mermaid\nflowchart LR\n  reader[Reader] --> app[Web reader]\n  app --> storage[Static projection]\n```\n'
+        : ''
+      bytes = longBody
+        ? `# ${title}\n\n## Near 256 KiB\n\n${text}\n\n${japanese}\n`
+        : `# ${title}\n\n## Summary\n\n${text.slice(0, text.length >> 1)}\n\n## Details\n\n${text.slice(text.length >> 1)}\n\n${japanese}${diagram}\n`
     } else {
       bytes = `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>${title}</title></head><body><main><h1>${title}</h1><h2>Summary</h2><p>${text.slice(0, text.length >> 1)}</p><h2>Details</h2><p>${text.slice(text.length >> 1)}</p><p>${japanese}</p></main></body></html>\n`
     }
@@ -143,15 +150,23 @@ function generateSite(count, contentRoot) {
   const ext = () => (random() < 0.7 ? 'html' : 'md')
   const title = (n, label) => `Report ${String(n).padStart(6, '0')} ${label} ${pick(WORDS)} ${pick(WORDS)}`
 
-  for (let i = 0; i < rootPages; i++) page(`overview-${i}.${ext()}`, 'root', title(written, 'overview'))
+  for (let i = 0; i < rootPages; i++) {
+    const extension = ext()
+    page(`overview-${i}.${i === 0 ? 'md' : extension}`, 'root', title(written, 'overview'), { mermaid: i === 0 })
+  }
   // A folder with a README: its children are listed compactly, ten rows first.
   files.push(['handbook/README.md', `# Handbook\n\nThe handbook folder has a README and ${handbook} pages listed above it.\n\n${COMMON_ENGLISH} ${COMMON_JAPANESE}\n`])
   for (let i = 0; i < handbook; i++) page(`handbook/chapter-${String(i).padStart(5, '0')}.${ext()}`, 'handbook', title(written, 'handbook'))
   // One large flat folder without a README.
-  for (let i = 0; i < flat; i++) page(`big-flat/page-${String(i).padStart(6, '0')}.${ext()}`, 'flat', title(written, 'flat'))
+  for (let i = 0; i < flat; i++) {
+    const largeBody = count >= 50000 && i === 0
+    const extension = ext()
+    page(`big-flat/page-${String(i).padStart(6, '0')}.${largeBody ? 'md' : extension}`, 'flat', title(written, 'flat'), { longBody: largeBody })
+  }
   // Nested areas and sections; some have a README, some do not.
   const areas = Math.min(20, Math.max(2, Math.ceil(nested / 50)))
   const leaves = Math.ceil(nested / 50)
+  let generationPages = count >= 50000 ? 525 : 0
   for (let leaf = 0, remaining = nested; leaf < leaves; leaf++) {
     const area = leaf % areas, section = Math.floor(leaf / areas)
     const base = `area-${String(area).padStart(2, '0')}/section-${String(section).padStart(3, '0')}`
@@ -159,7 +174,18 @@ function generateSite(count, contentRoot) {
     if (leaf % 3 === 0) files.push([`${base}/README.md`, `# Section ${area}.${section}\n\nOverview of section ${section} in area ${area}.\n`])
     const here = Math.min(50, remaining)
     remaining -= here
-    for (let i = 0; i < here; i++) page(`${base}/note-${String(i).padStart(3, '0')}.${ext()}`, 'nested', title(written, 'note'))
+    for (let i = 0; i < here; i++) {
+      const extension = ext()
+      if (generationPages > 0) {
+        const target = 525 - generationPages
+        page(`000-generation/target-${String(target).padStart(3, '0')}.md`, 'generation', title(written, 'generation'), {
+          generationProbe: true,
+        })
+        generationPages--
+      } else {
+        page(`${base}/note-${String(i).padStart(3, '0')}.${extension}`, 'nested', title(written, 'note'))
+      }
+    }
   }
   const folders = new Map()
   let htmlPages = 0, mdPages = 0, totalBytes = 0, pageBytes = 0, jpChars = 0, textChars = 0
@@ -232,7 +258,7 @@ function prepareData() {
   const manifestFile = path.join(dataRoot, 'prepare.json')
   if (!options.regenerate && existsSync(manifestFile)) {
     const previous = JSON.parse(readFileSync(manifestFile, 'utf8'))
-    if (JSON.stringify(previous.counts) === JSON.stringify(options.counts) && previous.seed === options.seed) {
+    if (JSON.stringify(previous.counts) === JSON.stringify(options.counts) && previous.seed === options.seed && previous.generatorVersion === 2) {
       log(`Reusing generated data in ${path.relative(repository, dataRoot)}`)
       return previous
     }
@@ -241,7 +267,7 @@ function prepareData() {
   mkdirSync(dataRoot, { recursive: true })
   const satellite = path.join(dataRoot, 'satellite'), admin = path.join(dataRoot, 'admin')
   mkdirSync(satellite, { recursive: true }); mkdirSync(admin, { recursive: true })
-  const report = { counts: options.counts, seed: options.seed, sites: {}, combined: {} }
+  const report = { counts: options.counts, seed: options.seed, generatorVersion: 2, sites: {}, combined: {} }
 
   for (const count of options.counts) {
     const generated = timed(() => generateSite(count, path.join(satellite, 'sites', siteIdOf(count), 'content')))
@@ -293,6 +319,81 @@ function prepareData() {
   return report
 }
 
+/** Build the changed search generation once; the browser suite swaps only its immutable search files. */
+function prepareGenerationVariant(siteId) {
+  if (options.remote) throw new Error('search-cases requires local nginx')
+  const satellite = path.join(dataRoot, 'satellite')
+  const admin = path.join(dataRoot, 'admin')
+  const sourceFile = path.join(satellite, 'sites', siteId, 'content', '000-generation', 'target-000.md')
+  git(satellite, ['checkout', '--', `sites/${siteId}/content/000-generation/target-000.md`])
+  const originalSource = readFileSync(sourceFile, 'utf8')
+  assert.match(originalSource, /vanishedgenerationprobe/, 'generation probe must exist in target-000.md')
+
+  const baseSearch = path.join(dataRoot, `storage-${siteId}`, '_indexes', siteId, 'search')
+  const baseSearchCopy = path.join(dataRoot, 'search-generation-a', siteId)
+  const baselineRoot = path.join(dataRoot, 'storage-generation-a-build')
+  const baselineConfigName = 'artifact-pages-generation-a.yaml'
+  const baselineConfigPath = path.join(admin, baselineConfigName)
+  const baselineSearch = path.join(baselineRoot, '_indexes', siteId, 'search')
+  const changedRoot = path.join(dataRoot, 'storage-generation-b')
+  const changedConfigName = 'artifact-pages-generation-b.yaml'
+  const changedConfigPath = path.join(admin, changedConfigName)
+  const changedSearch = path.join(changedRoot, '_indexes', siteId, 'search')
+  const liveSearch = baseSearch
+  rmSync(baselineRoot, { recursive: true, force: true })
+  rmSync(changedRoot, { recursive: true, force: true })
+  rmSync(path.dirname(baseSearchCopy), { recursive: true, force: true })
+  writeFileSync(baselineConfigPath, yamlConfig(baselineRoot, [siteId]))
+  const baselineConfigArg = path.relative(satellite, baselineConfigPath)
+  const baselineRegistry = JSON.parse(run(binary, ['registry', 'sync', '--config', baselineConfigName, '--format', 'json'], { cwd: admin }))
+  assert.equal(baselineRegistry.outcome, 'synced', 'registry sync generation A')
+  const baselinePublished = JSON.parse(run(binary, ['site', 'sync', '--site', siteId, '--source', `sites/${siteId}/content`, '--config', baselineConfigArg, '--format', 'json'], { cwd: satellite }))
+  assert.equal(baselinePublished.outcome, 'synced', `site sync generation A: ${baselinePublished.outcome}`)
+  assert.ok(existsSync(path.join(baselineSearch, 'manifest.json')), 'generation A manifest was not published')
+  cpSync(baselineSearch, baseSearchCopy, { recursive: true })
+  replaceSearchGeneration({ liveSearch }, baseSearchCopy)
+  rmSync(baselineRoot, { recursive: true, force: true })
+  const baseManifest = JSON.parse(readFileSync(path.join(baseSearchCopy, 'manifest.json'), 'utf8'))
+  assert.ok(Array.isArray(baseManifest.texts) && baseManifest.texts.length > 0, 'search manifest should include text packs')
+  const maxTextPackRawBytes = Math.max(0, ...baseManifest.texts.map((pack) => pack.rawBytes))
+  // The long body exceeds the per-document cap, but at 50,000 pages the site snippet budget can omit it first.
+  const limits = baseManifest.snippetLimits ?? {}
+  const longBodySnippet = limits.truncatedDocuments?.includes('big-flat/page-000000.md') ? 'truncated'
+    : limits.omittedDocuments?.includes('big-flat/page-000000.md') ? 'omitted' : 'included'
+  writeFileSync(changedConfigPath, yamlConfig(changedRoot, [siteId]))
+
+  const configArg = path.relative(satellite, changedConfigPath)
+  const registry = JSON.parse(run(binary, ['registry', 'sync', '--config', changedConfigName, '--format', 'json'], { cwd: admin }))
+  assert.equal(registry.outcome, 'synced', 'registry sync generation B')
+  writeFileSync(sourceFile, originalSource.replaceAll('vanishedgenerationprobe', 'generationchanged'))
+  try {
+    const published = JSON.parse(run(binary, ['site', 'sync', '--site', siteId, '--source', `sites/${siteId}/content`, '--config', configArg, '--format', 'json'], { cwd: satellite }))
+    assert.equal(published.outcome, 'synced', `site sync generation B: ${published.outcome}`)
+  } finally {
+    writeFileSync(sourceFile, originalSource)
+  }
+  assert.ok(existsSync(path.join(changedSearch, 'manifest.json')), 'generation B manifest was not published')
+  const changedManifest = JSON.parse(readFileSync(path.join(changedSearch, 'manifest.json'), 'utf8'))
+  assert.notEqual(changedManifest.generation, baseManifest.generation, 'generation B must have a different search generation')
+  return {
+    liveSearch, baseSearch: baseSearchCopy, changedSearch,
+    stressInput: {
+      longBodyPath: 'big-flat/page-000000.md',
+      longBodyBytes: statSync(path.join(satellite, 'sites', siteId, 'content', 'big-flat', 'page-000000.md')).size,
+      maxTextPackRawBytes,
+      longBodySnippet,
+      snippetOmittedDocuments: limits.omittedDocuments?.length ?? 0,
+      snippetTruncatedDocuments: limits.truncatedDocuments?.length ?? 0,
+      generationHitsBeforeChange: 525,
+    },
+  }
+}
+
+function replaceSearchGeneration(variant, source) {
+  rmSync(variant.liveSearch, { recursive: true, force: true })
+  cpSync(source, variant.liveSearch, { recursive: true })
+}
+
 // ---------------------------------------------------------------------------------------------
 // Serving
 // ---------------------------------------------------------------------------------------------
@@ -340,6 +441,14 @@ const INIT_SCRIPT = `(() => {
   const watched = { picker: '.site-picker-row', directory: '[data-testid="directory-page"]', workspace: '.sidebar-panel',
     results: '.search-page-result:not(.search-page-skeleton), .search-page-empty' }
   window.__t = {}
+  window.__longTasks = []
+  window.__longTasksSupported = false
+  try {
+    new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) window.__longTasks.push({ startTime: entry.startTime, duration: entry.duration })
+    }).observe({ type: 'longtask', buffered: true })
+    window.__longTasksSupported = true
+  } catch { /* Long Tasks API is not exposed in every Chromium build. */ }
   const seen = new Set()
   const check = () => {
     for (const [name, selector] of Object.entries(watched)) {
@@ -384,7 +493,7 @@ async function newSession(browser, profileName, { track = true } = {}) {
   cdp.on('Network.requestWillBeSent', (event) => requests.set(event.requestId, { url: event.request.url, type: event.type, raw: 0, encoded: 0, status: 0, done: false, at: Date.now(), active: Date.now() }))
   cdp.on('Network.responseReceived', (event) => { const r = requests.get(event.requestId); if (r) { r.status = event.response.status; r.active = Date.now(); r.fromCache = event.response.fromDiskCache || event.response.fromPrefetchCache } })
   cdp.on('Network.dataReceived', (event) => { const r = requests.get(event.requestId); if (r) { r.raw += event.dataLength; r.active = Date.now() } })
-  cdp.on('Network.loadingFinished', (event) => { const r = requests.get(event.requestId); if (r) { r.encoded = event.encodedDataLength; r.done = true } })
+  cdp.on('Network.loadingFinished', (event) => { const r = requests.get(event.requestId); if (r) { r.encoded = event.encodedDataLength; r.done = true; r.active = Date.now() } })
   cdp.on('Network.loadingFailed', (event) => { const r = requests.get(event.requestId); if (r) { r.failed = true; r.done = true } })
   let peak = 0, sampler = null
   const sample = async () => {
@@ -396,6 +505,39 @@ async function newSession(browser, profileName, { track = true } = {}) {
     /** Requests recorded since `since` (a length returned by `mark`). */
     mark: () => requests.size,
     since: (from) => [...requests.values()].slice(from),
+    async waitForTti(from, quietMs = 5000, timeoutMs = SLOW_TIMEOUT) {
+      const started = Date.now()
+      for (;;) {
+        const state = await page.evaluate(() => ({
+          readyState: document.readyState,
+          fcp: window.__fcp?.(),
+          now: performance.now(),
+          timeOrigin: performance.timeOrigin,
+          lastLongTaskEnd: Math.max(0, ...(window.__longTasks ?? []).map((task) => task.startTime + task.duration)),
+        }))
+        const current = [...requests.values()].slice(from)
+        const pending = current.filter((request) => !request.done).length
+        const lastNetworkWall = Math.max(0, ...current.map((request) => request.active))
+        const lastLongTaskWall = state.lastLongTaskEnd ? state.timeOrigin + state.lastLongTaskEnd : 0
+        const quietSince = Math.max(lastNetworkWall, lastLongTaskWall)
+        // Report when the quiet window began, not when it was confirmed (that would add quietMs to every value).
+        if (state.readyState === 'complete' && state.fcp !== null && pending <= 2 && quietSince > 0 && Date.now() - quietSince >= quietMs) return Math.max(state.fcp, quietSince - state.timeOrigin)
+        if (Date.now() - started > timeoutMs) throw new Error(`time to interactive proxy timed out after ${timeoutMs} ms`)
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      }
+    },
+    async longTasks(fromTime = 0) {
+      return page.evaluate((start) => {
+        const end = performance.now()
+        const tasks = (window.__longTasks ?? []).filter((task) => task.startTime + task.duration >= start && task.startTime <= end)
+        return {
+          supported: window.__longTasksSupported,
+          count: tasks.length,
+          durationMs: tasks.reduce((total, task) => total + task.duration, 0),
+          maxMs: Math.max(0, ...tasks.map((task) => task.duration)),
+        }
+      }, fromTime)
+    },
     heapPeak: () => peak,
     async heapAfterGC() {
       await cdp.send('HeapProfiler.collectGarbage')
@@ -494,6 +636,7 @@ async function measureFirstLoad(browser, profile, siteId) {
     const t = await page.evaluate(() => ({ picker: window.__t.picker }))
     const bytesCompletedAtPicker = sum(session.since(from).filter((r) => r.done), 'encoded')
     await session.settle()
+    t.tti = await session.waitForTti(from)
     t.fcp = await page.evaluate(() => window.__fcp())
     const all = session.since(from)
     const entryJs = all.filter((r) => entries.has(pathOf(r.url)))
@@ -501,6 +644,7 @@ async function measureFirstLoad(browser, profile, siteId) {
     return {
       fcpMs: t.fcp,
       siteListVisibleMs: t.picker,
+      timeToInteractiveProxyMs: t.tti,
       completedBytesAtListVisible: bytesCompletedAtPicker,
       transferredBytesTotal: sum(all, 'encoded'),
       rawBytesTotal: sum(all, 'raw'),
@@ -513,6 +657,75 @@ async function measureFirstLoad(browser, profile, siteId) {
       indexBytesRaw: sum(indexes, 'raw'),
       settledMs: Date.now() - started,
       heapAfterGC: await session.heapAfterGC(),
+    }
+  }
+  try {
+    const cold = await visit()
+    const warm = await visit()
+    return { cold, warm }
+  } finally { await session.close() }
+}
+
+/** First Mermaid SVG render from the generated Markdown artifact, cold and then warm in one context. */
+async function measureMermaid(browser, profile, siteId) {
+  if (options.remote) {
+    const timeout = Math.min(SLOW_TIMEOUT, 15_000)
+    const request = (url) => fetch(url, { signal: AbortSignal.timeout(timeout) })
+    const unavailable = (reason) => ({ measurable: false, reason })
+    let indexResponse
+    try { indexResponse = await request(`${origin()}/_indexes/${siteId}/index.json`) }
+    catch (error) { return unavailable(`site index unavailable: ${error.name}`) }
+    if (!indexResponse.ok) return unavailable(`site index returned HTTP ${indexResponse.status}`)
+    let index
+    try { index = await indexResponse.json() }
+    catch { return unavailable('site index was not valid JSON') }
+    const artifacts = Array.isArray(index.artifacts) ? index.artifacts : []
+    const artifact = artifacts.find((entry) => entry.path?.replace(/^\/+/, '') === 'overview-0.md')
+    if (!artifact) return unavailable('overview-0.md is not published')
+    const artifactUrl = artifact.artifactUrl ?? `/_artifacts/${siteId}/${artifact.path}`
+    let artifactResponse
+    try { artifactResponse = await request(new URL(artifactUrl, origin())) }
+    catch (error) { return unavailable(`overview-0.md unavailable: ${error.name}`) }
+    if (!artifactResponse.ok) return unavailable(`overview-0.md returned HTTP ${artifactResponse.status}`)
+    let markdown
+    try { markdown = await artifactResponse.text() }
+    catch (error) { return unavailable(`overview-0.md unavailable: ${error.name}`) }
+    if (!/```\s*mermaid\b/i.test(markdown)) return unavailable('overview-0.md has no Mermaid diagram')
+  }
+  const session = await newSession(browser, profile)
+  const { page } = session
+  const href = `${origin()}/${siteId}/overview-0.md`
+  async function visit() {
+    const from = session.mark()
+    const started = Date.now()
+    await page.goto(href, { waitUntil: 'commit' })
+    // The reader can give up instead (site index deadline); record that rather than waiting for the timeout.
+    await page.waitForFunction(() => !!document.querySelector('.markdown-diagram svg') || /Unable to load this site/.test(document.body?.innerText ?? ''), null, { timeout: SLOW_TIMEOUT })
+    const failed = await page.evaluate(() => !document.querySelector('.markdown-diagram svg'))
+    if (failed) {
+      const current = session.since(from)
+      return {
+        failed: 'reader error: unable to load this site',
+        failedAtMs: await page.evaluate(() => performance.now()),
+        abortedRequests: current.filter((r) => r.failed).map((r) => pathOf(r.url)),
+        totalEncodedBytes: sum(current, 'encoded'),
+        requests: current.length,
+        settledMs: Date.now() - started,
+      }
+    }
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    const rendered = await page.evaluate(() => ({ renderMs: performance.now(), type: document.querySelector('.markdown-diagram')?.getAttribute('data-diagram-type') ?? null }))
+    await session.settle()
+    const current = session.since(from)
+    const tasks = await session.longTasks(0)
+    return {
+      firstMermaidRenderMs: rendered.renderMs,
+      diagramType: rendered.type,
+      totalEncodedBytes: sum(current, 'encoded'),
+      totalRawBytes: sum(current, 'raw'),
+      requests: current.length,
+      settledMs: Date.now() - started,
+      mainThreadLongTasks: tasks,
     }
   }
   try {
@@ -679,6 +892,237 @@ async function measureSearch(browser, profile, siteId, query) {
   } finally { await session.close() }
 }
 
+function summarizeSearchRequests(requests, siteId) {
+  const search = requests.filter((request) => pathOf(request.url).startsWith(`/_indexes/${siteId}/search/`))
+  const byKind = {}
+  for (const request of search) {
+    const name = pathOf(request.url).split('/').pop()
+    const kind = name === 'manifest.json' ? 'manifest' : name.split('-')[0]
+    byKind[kind] ??= { count: 0, encodedBytes: 0, rawBytes: 0 }
+    byKind[kind].count += 1
+    byKind[kind].encodedBytes += request.encoded
+    byKind[kind].rawBytes += request.raw
+  }
+  return {
+    requestCount: requests.length,
+    encodedBytes: sum(requests, 'encoded'),
+    rawBytes: sum(requests, 'raw'),
+    searchRequestCount: search.length,
+    searchEncodedBytes: sum(search, 'encoded'),
+    searchRawBytes: sum(search, 'raw'),
+    searchByKind: byKind,
+  }
+}
+
+async function setSearchRoute(page, siteId, query, folder) {
+  const params = new URLSearchParams({ q: query })
+  if (folder) params.set('in', folder)
+  const route = `/${siteId}/_search?${params}`
+  const startedAt = await page.evaluate((href) => {
+    const started = performance.now()
+    history.pushState({}, '', href)
+    dispatchEvent(new PopStateEvent('popstate'))
+    return started
+  }, route)
+  await page.waitForFunction(({ query: value }) => {
+    const count = document.querySelector('.search-page-count-text')?.textContent ?? ''
+    const main = document.querySelector('.search-page-main')
+    const hasResult = !!document.querySelector('.search-page-result:not(.search-page-skeleton), .search-page-empty, .search-page-partial')
+    return count.includes(`“${value}”`) && main?.getAttribute('aria-busy') === 'false' && hasResult
+  }, { query }, { polling: 'raf', timeout: SLOW_TIMEOUT })
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+  const finishedAt = await page.evaluate(() => performance.now())
+  const summary = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll('.search-page-result:not(.search-page-skeleton)')]
+    const countText = document.querySelector('.search-page-count-text')?.textContent ?? ''
+    const match = countText.match(/^([\d,]+) pages? (?:in [^ ]+\/ )?(?:contain|contains)/)
+    return {
+      rows: rows.length,
+      countText,
+      hitsTotal: match ? Number(match[1].replace(/,/g, '')) : null,
+      firstPath: rows[0]?.querySelector('.search-page-result-path')?.textContent ?? null,
+      visiblePaths: rows.map((row) => row.querySelector('.search-page-result-path')?.textContent ?? ''),
+      hasMore: !!document.querySelector('.search-page-more'),
+      moreText: document.querySelector('.search-page-more')?.textContent ?? null,
+    }
+  })
+  return { startedAt, firstResultsMs: finishedAt - startedAt, ...summary }
+}
+
+async function measureQueryStage(session, siteId, label, query, folder) {
+  const { page } = session
+  const from = session.mark()
+  const startedAt = await page.evaluate(() => performance.now())
+  const first = await setSearchRoute(page, siteId, query, folder)
+  const requestsAtFirst = session.since(from)
+  await session.settle()
+  const requests = session.since(from)
+  const summary = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll('.search-page-result:not(.search-page-skeleton)')]
+    const paths = rows.map((row) => row.querySelector('.search-page-result-path')?.textContent ?? '')
+    return {
+      rows: rows.length,
+      paths,
+      countText: document.querySelector('.search-page-count-text')?.textContent ?? '',
+      moreText: document.querySelector('.search-page-more')?.textContent ?? null,
+    }
+  })
+  const longTasks = await session.longTasks(startedAt)
+  return {
+    label, query, folder: folder ?? null,
+    firstResultsMs: first.firstResultsMs,
+    hitsTotal: first.hitsTotal,
+    countText: first.countText,
+    rowsAtFirstResults: first.rows,
+    firstPath: first.firstPath,
+    moreButtonAtFirstResults: first.moreText,
+    requestsAtFirstResults: requestsAtFirst.length,
+    searchRequestsAtFirstResults: requestsAtFirst.filter((request) => pathOf(request.url).startsWith(`/_indexes/${siteId}/search/`)).length,
+    encodedBytesCompletedAtFirstResults: sum(requestsAtFirst.filter((request) => request.done), 'encoded'),
+    searchEncodedBytesCompletedAtFirstResults: sum(requestsAtFirst.filter((request) => request.done && pathOf(request.url).startsWith(`/_indexes/${siteId}/search/`)), 'encoded'),
+    ...summarizeSearchRequests(requests, siteId),
+    mainThreadLongTasks: longTasks,
+    settledRows: summary.rows,
+    settledCountText: summary.countText,
+    settledMoreButton: summary.moreText,
+    settledFirstPath: summary.paths[0] ?? null,
+  }
+}
+
+async function measureShowMore(session, siteId, label, expectedRows, { expectedCountText } = {}) {
+  const { page } = session
+  const before = await page.evaluate(() => ({
+    rows: document.querySelectorAll('.search-page-result:not(.search-page-skeleton)').length,
+    countText: document.querySelector('.search-page-count-text')?.textContent ?? '',
+    moreText: document.querySelector('.search-page-more')?.textContent ?? null,
+  }))
+  const moreButton = page.locator('.search-page-more')
+  if (!(await moreButton.count())) {
+    const view = await page.evaluate(() => {
+      const paths = [...document.querySelectorAll('.search-page-result:not(.search-page-skeleton) .search-page-result-path')].map((node) => node.textContent ?? '')
+      return {
+        rows: paths.length,
+        paths,
+        countText: document.querySelector('.search-page-count-text')?.textContent ?? '',
+        moreText: document.querySelector('.search-page-more')?.textContent ?? null,
+      }
+    })
+    return {
+      label,
+      timeMs: null,
+      measurable: false,
+      reason: 'show-more button is unavailable',
+      rows: view.rows,
+      countText: view.countText,
+      moreButton: view.moreText,
+      pathOrder: view.paths.every((value, index) => index === 0 || view.paths[index - 1] <= value),
+      firstPaths: view.paths.slice(0, 3),
+      lastPaths: view.paths.slice(-3),
+      ...summarizeSearchRequests([], siteId),
+      mainThreadLongTasks: { supported: false, count: 0, durationMs: 0, maxMs: 0 },
+    }
+  }
+  const from = session.mark()
+  const startedAt = await page.evaluate(() => performance.now())
+  await moreButton.click()
+  await page.waitForFunction(({ expectedRows: rows, expectedCountText: count, beforeRows, beforeCountText, beforeMoreText }) => {
+    const visible = document.querySelectorAll('.search-page-result:not(.search-page-skeleton)').length
+    const text = document.querySelector('.search-page-count-text')?.textContent ?? ''
+    const button = document.querySelector('.search-page-more')
+    const buttonText = button?.textContent ?? null
+    const expected = visible >= rows && (!count || text.includes(count))
+    const completedWithDifferentResult = button?.getAttribute('aria-disabled') !== 'true' &&
+      (visible !== beforeRows || text !== beforeCountText || buttonText !== beforeMoreText)
+    return expected || completedWithDifferentResult
+  }, { expectedRows, expectedCountText, beforeRows: before.rows, beforeCountText: before.countText, beforeMoreText: before.moreText }, { polling: 'raf', timeout: SLOW_TIMEOUT })
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+  await session.settle()
+  const requests = session.since(from)
+  const view = await page.evaluate(() => {
+    const paths = [...document.querySelectorAll('.search-page-result:not(.search-page-skeleton) .search-page-result-path')].map((node) => node.textContent ?? '')
+    const countText = document.querySelector('.search-page-count-text')?.textContent ?? ''
+    return {
+      rows: paths.length,
+      paths,
+      countText,
+      moreText: document.querySelector('.search-page-more')?.textContent ?? null,
+    }
+  })
+  const endedAt = await page.evaluate(() => performance.now())
+  const longTasks = await session.longTasks(startedAt)
+  const pathOrder = view.paths.every((path, index) => index === 0 || view.paths[index - 1] <= path)
+  return {
+    label,
+    timeMs: endedAt - startedAt,
+    rows: view.rows,
+    countText: view.countText,
+    moreButton: view.moreText,
+    pathOrder,
+    firstPaths: view.paths.slice(0, 3),
+    lastPaths: view.paths.slice(-3),
+    ...summarizeSearchRequests(requests, siteId),
+    mainThreadLongTasks: longTasks,
+  }
+}
+
+/** Search-specific interactions share one already-open reader session to isolate query/search work. */
+async function measureSearchCases(browser, profile, siteId, generationVariant) {
+  const session = await newSession(browser, profile)
+  const { page } = session
+  const result = { workspace: {}, cases: {} }
+  try {
+    const workspaceFrom = session.mark()
+    const navigationStart = Date.now()
+    await page.goto(`${origin()}/${siteId}/_search`, { waitUntil: 'commit' })
+    await page.waitForFunction(() => window.__t?.workspace !== undefined && !!document.querySelector('#search-page-input'), null, { timeout: SLOW_TIMEOUT })
+    const workspacePaintMs = await page.evaluate(() => window.__t.workspace)
+    await session.settle()
+    const workspaceRequests = session.since(workspaceFrom)
+    result.workspace = {
+      workspaceMountedMs: workspacePaintMs,
+      settledMs: Date.now() - navigationStart,
+      ...summarizeSearchRequests(workspaceRequests, siteId),
+      requests: workspaceRequests.length,
+      encodedBytes: sum(workspaceRequests, 'encoded'),
+      rawBytes: sum(workspaceRequests, 'raw'),
+    }
+
+    // Many hits also exercises path order and the visible “Show more” page.
+    result.cases.manyHitsAndPaging = await measureQueryStage(session, siteId, 'many hits', 'latency')
+    result.cases.pagingSecondPage = await measureShowMore(session, siteId, 'ordinary second page', 40)
+
+    result.cases.fewHits = await measureQueryStage(session, siteId, 'few hits', RARE_TERM)
+    result.cases.japanese = await measureQueryStage(session, siteId, 'Japanese', COMMON_JAPANESE)
+    result.cases.longBodyNearPackCap = await measureQueryStage(session, siteId, 'long body near 256 KiB pack cap', 'longbodyprobe')
+    result.cases.folderFiltered = await measureQueryStage(session, siteId, 'folder filtered', 'generationprobe', '000-generation')
+
+    result.cases.vanishedGeneration = await measureQueryStage(session, siteId, 'vanished generation', 'vanishedgenerationprobe')
+    const initialTotal = result.cases.vanishedGeneration.hitsTotal
+    result.cases.vanishedGeneration.expectations = {
+      hitsTotal: { expected: '> 500', actual: initialTotal, ok: Number.isFinite(initialTotal) && initialTotal > 500 },
+    }
+    result.cases.vanishedGeneration.pageTwo = await measureShowMore(session, siteId, 'old generation page two', 40)
+    replaceSearchGeneration(generationVariant, generationVariant.changedSearch)
+    result.cases.vanishedGeneration.waitForCacheExpiryMs = 61000
+    await page.waitForTimeout(61000)
+    result.cases.vanishedGeneration.afterRepublish = await measureShowMore(
+      session, siteId, 'page after search data changed', 60, { expectedCountText: `${initialTotal - 1} pages contain` },
+    )
+    const afterRepublish = result.cases.vanishedGeneration.afterRepublish
+    const expectedCountText = `${initialTotal - 1} pages contain`
+    const manifestFetches = afterRepublish.searchByKind.manifest?.count ?? 0
+    afterRepublish.expectations = {
+      rows: { expected: 60, actual: afterRepublish.rows, ok: afterRepublish.rows === 60 },
+      countText: { expected: expectedCountText, actual: afterRepublish.countText, ok: afterRepublish.countText.includes(expectedCountText) },
+      manifestFetches: { expected: '>= 1', actual: manifestFetches, ok: manifestFetches >= 1 },
+    }
+    return result
+  } finally {
+    replaceSearchGeneration(generationVariant, generationVariant.baseSearch)
+    await session.close()
+  }
+}
+
 /** Group 7: visit every site in sequence from the picker; heap after each. */
 async function measureSequence(browser, profile, ids) {
   const session = await newSession(browser, profile)
@@ -737,13 +1181,64 @@ function environmentInfo() {
   }
 }
 
+function writeSanitizedResults(results) {
+  const sites = {}
+  for (const [profile, value] of Object.entries(results.profiles)) {
+    sites[profile] = {}
+    for (const [siteId, bucket] of Object.entries(value.sites ?? {})) {
+      const measured = { pages: bucket.pages }
+      if (bucket.samples?.firstLoad?.length) measured.firstLoad = bucket.samples.firstLoad
+      if (bucket.mermaid?.samples) measured.mermaid = bucket.mermaid.samples
+      if (bucket.searchCases?.samples) measured.searchCases = bucket.searchCases.samples
+      sites[profile][siteId] = measured
+    }
+  }
+  const output = {
+    schemaVersion: 1,
+    measuredAt: { startedAt: results.startedAt, finishedAt: results.finishedAt },
+    conditions: {
+      pages: results.options.counts,
+      profiles: results.options.profiles,
+      iterations: results.options.iterations,
+      firstLoadAndMermaid: 'fresh browser context, then a second visit in the same context',
+      constrained: 'CPU x4, 150 ms RTT, 1.6 Mbps down, 0.75 Mbps up',
+      delivery: 'local nginx 1.29, loopback, no compression',
+      searchMethod: 'one open search workspace per iteration; query and show-more timings start after workspace paint',
+    },
+    environment: {
+      platform: process.platform,
+      architecture: results.environment.machine,
+      cpu: results.environment.cpu,
+      cores: results.environment.cores,
+      ramBytes: results.environment.ramBytes,
+      node: results.environment.node,
+      go: results.environment.go,
+      commit: results.environment.commit,
+      chromium: results.environment.chromium,
+      playwright: results.environment.playwright,
+    },
+    data: {
+      generatorVersion: results.published.generatorVersion,
+      seed: results.published.seed,
+      sites: results.published.sites,
+      searchStressInput: results.published.searchStressInput ?? null,
+    },
+    profiles: sites,
+  }
+  const serialized = JSON.stringify(output, null, 2)
+  assert.ok(!/(?:^|["\s])(?:\/Users\/|\/private\/|\/home\/|[A-Za-z]:\\)/m.test(serialized), 'sanitized results must not contain absolute paths')
+  const target = path.join(repository, 'docs', 'research', 'web-scale-benchmark-results.json')
+  writeFileSync(target, `${serialized}\n`)
+  return target
+}
+
 async function main() {
   mkdirSync(path.join(labRoot, 'bin'), { recursive: true })
   if (options.remote) remoteIndexHtml = await (await fetch(`${origin()}/`)).text()
   if (!options['skip-build'] && !options.remote) {
     log('Building the CLI from this checkout and the SPA…')
     execFileSync('go', ['build', '-o', binary, './cli/cmd/artifact-pages'], { cwd: repository, stdio: 'inherit' })
-    execFileSync('npm', ['run', 'build'], { cwd: repository, stdio: ['ignore', 'ignore', 'inherit'] })
+    execFileSync('env', ['NODE_OPTIONS=', 'npm', 'run', 'build'], { cwd: repository, stdio: ['ignore', 'ignore', 'inherit'] })
   }
   const prepared = options.remote ? { note: 'published beforehand; data shape is that of the local generator with the same seed', counts: options.counts, seed: options.seed } : prepareData()
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..*/, '')
@@ -752,27 +1247,40 @@ async function main() {
   const rawFile = path.join(labRoot, `${prefix}results-${stamp}.samples.jsonl`)
   const results = { startedAt: new Date().toISOString(), options, environment: environmentInfo(), published: prepared, profiles: {} }
   const wants = (group) => options.only.length === 0 || options.only.includes(group)
+  const wantsSearchCases = options.only.includes('search-cases') || (options.only.length === 0 && !options.remote)
   const save = () => writeFileSync(resultsFile, JSON.stringify(results, null, 2))
   const record = (profile, scope, group, iteration, value) => appendFileSync(rawFile, `${JSON.stringify({ profile, scope, group, iteration, value })}\n`)
-
-  const browser = await chromium.launch({ channel: 'chromium', args: ['--no-first-run'] })
-  results.environment.chromium = browser.version()
-  results.environment.playwright = JSON.parse(readFileSync(path.join(repository, 'node_modules', '@playwright', 'test', 'package.json'), 'utf8')).version
-  log(`Chromium ${browser.version()}, results in ${path.relative(repository, resultsFile)}`)
-
+  let browser
+  let generationVariant
+  let completed = false
   const QUERIES = [['common English', COMMON_ENGLISH], ['Japanese', COMMON_JAPANESE], ['rare', RARE_TERM], ['no hit', NO_HIT_TERM]]
   try {
+    if (wantsSearchCases) {
+      assert.ok(!options.remote, 'search-cases runs only against local nginx')
+      assert.ok(options.counts.includes(50000), 'search-cases requires --counts to include 50000')
+      generationVariant = prepareGenerationVariant('scale-50000')
+      results.published.searchStressInput = generationVariant.stressInput
+    }
+    browser = await chromium.launch({ channel: 'chromium', args: ['--no-first-run'] })
+    results.environment.chromium = browser.version()
+    results.environment.playwright = JSON.parse(readFileSync(path.join(repository, 'node_modules', '@playwright', 'test', 'package.json'), 'utf8')).version
+    log(`Chromium ${browser.version()}, results in ${path.relative(repository, resultsFile)}`)
     for (const profile of options.profiles) {
       results.profiles[profile] = { sites: {} }
       for (const count of options.counts) {
         const siteId = siteIdOf(count), layout = siteLayout(count)
         await serve(siteId)
         const bucket = (results.profiles[profile].sites[siteId] = { pages: count, layout, iterations: {} })
-        const samples = { firstLoad: [], session: [], search: Object.fromEntries(QUERIES.map(([label]) => [label, []])) }
+        const samples = { firstLoad: [], session: [], mermaid: [], searchCases: [], search: Object.fromEntries(QUERIES.map(([label]) => [label, []])) }
         for (let iteration = 1; iteration <= options.iterations; iteration++) {
           log(`${profile} ${siteId} iteration ${iteration}/${options.iterations}`)
           if (wants('first-load')) { const value = await measureFirstLoad(browser, profile, siteId); samples.firstLoad.push(value); record(profile, siteId, 'firstLoad', iteration, value) }
           if (wants('session')) { const value = await measureSiteSession(browser, profile, siteId, layout); samples.session.push(value); record(profile, siteId, 'session', iteration, value) }
+          if (wants('mermaid')) { const value = await measureMermaid(browser, profile, siteId); samples.mermaid.push(value); record(profile, siteId, 'mermaid', iteration, value) }
+          if (wantsSearchCases && count === Math.max(...options.counts)) {
+            const value = await measureSearchCases(browser, profile, siteId, generationVariant)
+            samples.searchCases.push(value); record(profile, siteId, 'searchCases', iteration, value)
+          }
           if (wants('search')) {
             for (const [label, query] of QUERIES) {
               const value = await measureSearch(browser, profile, siteId, query)
@@ -782,6 +1290,8 @@ async function main() {
         }
         if (samples.firstLoad.length) bucket.firstLoad = aggregate(samples.firstLoad)
         if (samples.session.length) bucket.session = aggregate(samples.session)
+        if (samples.mermaid.length) bucket.mermaid = { aggregate: aggregate(samples.mermaid), samples: samples.mermaid }
+        if (samples.searchCases.length) bucket.searchCases = { aggregate: aggregate(samples.searchCases), samples: samples.searchCases }
         bucket.search = Object.fromEntries(Object.entries(samples.search).filter(([, list]) => list.length).map(([label, list]) => [label, aggregate(list.map(({ label: _label, ...rest }) => rest))]))
         bucket.samples = samples
         save()
@@ -802,13 +1312,24 @@ async function main() {
         save()
       }
     }
+    completed = true
   } finally {
-    await browser.close()
+    if (browser) await browser.close()
     results.finishedAt = new Date().toISOString()
     save()
     if (!options.remote) try { compose(servedRoot || path.join(dataRoot, 'storage-all'), ['down']) } catch (error) { console.error(String(error)) }
+    if (completed) {
+      const sanitized = writeSanitizedResults(results)
+      log(`Wrote sanitized measurements to ${path.relative(repository, sanitized)}`)
+    }
+    if (!options.keep) {
+      rmSync(dataRoot, { recursive: true, force: true })
+      rmSync(resultsFile, { force: true })
+      rmSync(rawFile, { force: true })
+      log('Removed generated data and raw results; pass --keep to retain them')
+    }
   }
-  log(`Wrote ${path.relative(repository, resultsFile)}`)
+  if (options.keep) log(`Kept raw results in ${path.relative(repository, resultsFile)} and ${path.relative(repository, rawFile)}`)
 }
 
 await main()
