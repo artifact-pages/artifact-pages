@@ -251,7 +251,7 @@ export function ArtifactWorkspace({
 
   // Where focus last was among the controls that appear or disappear as the viewport crosses the
   // breakpoint, so it can follow the reader across it instead of falling back to the page.
-  const lastFocus = useRef<{ area: 'column' | 'panel' | 'bar' | 'more'; part: ReaderColumnPart; element: Element } | null>(null)
+  const lastFocus = useRef<{ area: 'column' | 'panel' | 'bar' | 'more'; part: ReaderColumnPart; element: Element; wide: boolean } | null>(null)
   useEffect(() => {
     const classify = (target: EventTarget | null) => {
       if (!(target instanceof Element)) return null
@@ -264,12 +264,17 @@ export function ArtifactWorkspace({
       if (target === detailsToggleRef.current) return { area: 'bar' as const, part: 'details' as const, element: target }
       return null
     }
-    const onFocusIn = (event: FocusEvent) => { lastFocus.current = classify(event.target) }
+    const onFocusIn = (event: FocusEvent) => {
+      const found = classify(event.target)
+      lastFocus.current = found ? { ...found, wide: columnShownRef.current } : null
+    }
     const onFocusOut = () => {
-      // An element removed by the layout change keeps its record; one that merely lost focus does not.
+      // Focus displaced by the breakpoint change keeps its record; focus that left some other way
+      // (a click on a blank area closing the More menu, say) does not, even if its element is gone.
       window.requestAnimationFrame(() => {
         const last = lastFocus.current
-        if (last?.element.isConnected && document.activeElement !== last.element) lastFocus.current = null
+        if (!last || document.activeElement === last.element) return
+        if (last.wide === columnShownRef.current || last.element.isConnected) lastFocus.current = null
       })
     }
     document.addEventListener('focusin', onFocusIn)
@@ -868,6 +873,7 @@ export function ArtifactWorkspace({
         const frame = event.currentTarget
         const firstLoad = frameLoadCount.current === 0
         frameLoadCount.current += 1
+        const loadNumber = frameLoadCount.current
         const artifactUrl = bodyArtifact.artifactUrl
         const status = firstLoad ? readFrameResponseStatus(frame) : null
         if (typeof status === 'number' && status >= 400) {
@@ -887,6 +893,9 @@ export function ArtifactWorkspace({
             .catch(() => null)
             .then((headStatus) => {
               if (controller.signal.aborted) return
+              // The result belongs to the load it was started for: ignore it once the frame has loaded
+              // again, been replaced, or left the probed artifact.
+              if (loadNumber !== frameLoadCount.current || frame !== htmlFrameRef.current || !frameShowsArtifact(frame, artifactUrl)) return
               // A probe that fails at the network level leaves the body unverified: treat it as failed.
               if (headStatus === null || headStatus >= 400) {
                 frameHeightCleanup.current?.()
@@ -1388,6 +1397,17 @@ function scrollFrameToFragment(frameWindow: Window, hash: string, host: HTMLElem
 }
 
 /** The HTTP status of the frame's document; undefined when the browser does not expose it (or reading throws). */
+/** Whether the frame is still on the artifact's own URL (an unreadable cross-origin frame is not). */
+function frameShowsArtifact(iframe: HTMLIFrameElement, artifactUrl: string) {
+  try {
+    const expected = new URL(artifactUrl, window.location.href)
+    const actual = new URL(iframe.contentWindow?.location.href ?? '')
+    return actual.origin === expected.origin && actual.pathname === expected.pathname
+  } catch {
+    return false
+  }
+}
+
 function readFrameResponseStatus(iframe: HTMLIFrameElement): number | undefined {
   try {
     const entry = iframe.contentWindow?.performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined

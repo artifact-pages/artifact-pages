@@ -8119,6 +8119,59 @@ test.describe('reader context column (ISSUE-108)', () => {
     await expect(columnOf(page)).toBeVisible()
   })
 
+  test('a late failing status probe does not hide a page the frame has since navigated to', async ({ page }) => {
+    await page.addInitScript(() => {
+      const proto = (window as unknown as { PerformanceNavigationTiming?: { prototype: object } }).PerformanceNavigationTiming?.prototype
+      if (proto) Object.defineProperty(proto, 'responseStatus', { get: () => 0, configurable: true })
+    })
+    const artifactPath = 'guides/probe-first.html'
+    await page.route('**/_indexes/sre/index.json', async (route) => {
+      const response = await route.fetch()
+      const index = await response.json() as { artifacts: Array<Record<string, unknown>> }
+      index.artifacts.push({
+        id: artifactPath, title: 'Probe first', path: artifactPath, format: 'html', filename: 'probe-first.html',
+        artifactUrl: `/_artifacts/sre/${artifactPath}`, updatedAt: '2026-10-01T00:00:00Z',
+      })
+      await route.fulfill({ response, body: JSON.stringify(index) })
+    })
+    let failProbe!: () => void
+    const gate = new Promise<void>((resolve) => { failProbe = resolve })
+    await page.route(`**/_artifacts/sre/${artifactPath}`, async (route) => {
+      if (route.request().method() === 'HEAD') {
+        await gate
+        await route.abort('connectionreset')
+        return
+      }
+      await route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: '<!doctype html><title>First</title><a id="go" href="probe-second.html">second</a>' })
+    })
+    await page.route('**/_artifacts/sre/guides/probe-second.html', (route) => route.fulfill({
+      status: 200, contentType: 'text/html; charset=utf-8', body: '<!doctype html><title>Second</title><p id="two">Second page</p>',
+    }))
+    await page.goto(`/sre/${artifactPath}`)
+    const frame = page.frameLocator('iframe.artifact-frame')
+    await frame.locator('#go').click()
+    await expect(frame.locator('#two')).toBeVisible()
+    failProbe()
+    await page.waitForTimeout(500)
+    await expect(page.getByRole('heading', { name: 'Document unavailable' })).toHaveCount(0)
+    await expect(page.locator('iframe.artifact-frame')).toBeVisible()
+    await expect(frame.locator('#two')).toBeVisible()
+  })
+
+  test('closing the More menu with a click on a blank area clears its focus record before a resize', async ({ page }) => {
+    await page.setViewportSize({ width: 500, height: 800 })
+    await page.goto(markdownPath)
+    await moreActionsButton(page).click()
+    const menu = page.getByRole('menu', { name: 'More actions' })
+    await menu.getByRole('menuitem', { name: 'Copy link' }).focus()
+    await page.mouse.click(250, 400)
+    await expect(menu).toHaveCount(0)
+    await page.setViewportSize({ width: 1440, height: 800 })
+    await expect(columnOf(page)).toBeVisible()
+    await page.waitForTimeout(400)
+    expect(await focusInColumn(page)).toBeNull()
+  })
+
   test('the column is absent on site home, folders, search, previews and missing pages', async ({ page }) => {
     await registerTextSearchSite(page)
     for (const path of [
