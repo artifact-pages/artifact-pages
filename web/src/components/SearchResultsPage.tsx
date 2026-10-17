@@ -175,11 +175,12 @@ export function SearchResultsPage({
     if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
     if (event.key === 'Enter') {
       event.preventDefault()
-      if (active >= 0 && !stale && hits[active]) onOpenHit(hits[active], byPath.get(hits[active].path)?.anchor || undefined)
-      else commitNow()
-    } else if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && hits.length > 0 && !stale) {
+      commitNow()
+    } else if (event.key === 'ArrowDown' && hits.length > 0 && !stale) {
+      // Results are links: focus moves to the first one instead of a virtual selection.
       event.preventDefault()
-      setActive((index) => event.key === 'ArrowDown' ? Math.min(index + 1, hits.length - 1) : Math.max(index - 1, -1))
+      setActive(0)
+      resultLinks()[0]?.focus()
     } else if (event.key === 'Escape') {
       event.preventDefault()
       if (draft) {
@@ -188,6 +189,26 @@ export function SearchResultsPage({
       } else {
         event.currentTarget.blur()
       }
+    }
+  }
+
+  function resultLinks() {
+    return Array.from(listRef.current?.querySelectorAll<HTMLElement>('.search-page-result-link') ?? [])
+  }
+
+  function handleLinkKeyDown(event: KeyboardEvent<HTMLAnchorElement>, position: number) {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      if (event.key === 'ArrowUp' && position === 0) {
+        inputRef.current?.focus()
+        return
+      }
+      const links = resultLinks()
+      const next = event.key === 'ArrowDown' ? Math.min(position + 1, links.length - 1) : position - 1
+      links[next]?.focus()
+    } else if (event.key === 'Escape') {
+      event.preventDefault()
+      inputRef.current?.focus()
     }
   }
 
@@ -250,7 +271,7 @@ export function SearchResultsPage({
             <p className="search-page-count" role="status">
               <span className="search-page-count-text">{count}</span>
               {hits.length > 0 && !stale ? (
-                <span className="search-page-keys" aria-hidden="true"><kbd>↑</kbd><kbd>↓</kbd> move <kbd>↵</kbd> open</span>
+                <span className="search-page-keys" aria-hidden="true"><kbd>↓</kbd> results <kbd>↑</kbd><kbd>↓</kbd> move <kbd>↵</kbd> open</span>
               ) : null}
             </p>
             <div className="search-page-body">
@@ -301,7 +322,8 @@ export function SearchResultsPage({
                               href={href}
                               className="search-page-result-link"
                               data-hit-id={hit.id}
-                              aria-current={position === active && !stale ? 'true' : undefined}
+                              onFocus={() => setActive(position)}
+                              onKeyDown={(event) => handleLinkKeyDown(event, position)}
                               onClick={(event) => followInApp(event, () => onOpenHit(hit, anchor))}
                             >
                               <span className="search-page-result-title"><Highlighted text={title} query={query} /></span>

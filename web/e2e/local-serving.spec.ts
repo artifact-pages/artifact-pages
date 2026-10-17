@@ -5030,20 +5030,34 @@ test.describe('page text search', () => {
     await expect(hits(page).nth(1)).toContainText('reports/latency-retrospective.md')
     await expect(sidebar(page).locator('.page-text-results')).toHaveCount(0)
 
-    // ↑/↓ move through the results while the field has focus; Enter opens the active one.
+    // ↓ moves real focus from the field to the first result link, ↑/↓ walk the links, and Enter is the native link activation (ISSUE-104).
     await expect(page.locator('.search-page-result a[aria-current]')).toHaveCount(0)
-    await page.keyboard.press('ArrowDown')
-    await page.keyboard.press('ArrowDown')
     const active = page.locator('.search-page-result[data-active]')
-    await expect(active).toHaveCount(1)
-    await expect(active.locator('[data-hit-id]')).toHaveAttribute('data-hit-id', 'reports/latency-retrospective.md')
-    await expect(active.locator('a')).toHaveAttribute('aria-current', 'true')
-    await page.keyboard.press('ArrowUp')
-    await expect(active.locator('[data-hit-id]')).toHaveAttribute('data-hit-id', 'incidents/checkout-latency/index.html')
-    await page.keyboard.press('ArrowUp')
     await expect(active).toHaveCount(0)
     await page.keyboard.press('ArrowDown')
+    await expect(hits(page).nth(0)).toBeFocused()
+    await expect(active.locator('[data-hit-id]')).toHaveAttribute('data-hit-id', 'incidents/checkout-latency/index.html')
     await page.keyboard.press('ArrowDown')
+    await expect(hits(page).nth(1)).toBeFocused()
+    await expect(active).toHaveCount(1)
+    await expect(active.locator('[data-hit-id]')).toHaveAttribute('data-hit-id', 'reports/latency-retrospective.md')
+    await expect(page.locator('.search-page-result a[aria-current]')).toHaveCount(0)
+    await page.keyboard.press('ArrowUp')
+    await expect(hits(page).nth(0)).toBeFocused()
+    await page.keyboard.press('ArrowUp')
+    await expect(field(page)).toBeFocused()
+    // Enter in the field commits the query; it never opens a result.
+    await page.keyboard.press('Enter')
+    await expect(page).toHaveURL(/\/textsearch\/_search\?q=latency$/)
+    await expect(field(page)).toBeFocused()
+    // Escape on a link returns to the field; the last link is a clamp for ↓.
+    await page.keyboard.press('ArrowDown')
+    await expect(hits(page).nth(0)).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(field(page)).toBeFocused()
+    await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('ArrowDown')
+    await expect(hits(page).nth(1)).toBeFocused()
     await page.keyboard.press('Enter')
     await expect(page).toHaveURL(/\/textsearch\/reports\/latency-retrospective\.md\?q=latency$/)
     await expect(page.getByTestId('markdown-document')).toBeVisible()
@@ -5057,12 +5071,12 @@ test.describe('page text search', () => {
     await expect(page).toHaveURL(/\/textsearch\/architecture\/platform-topology\/index\.html$/)
     await expect(matchNav(page)).toHaveCount(0)
 
-    // Arrow keys do nothing special while the field does not have focus.
+    // ↓ on the last link stays on it.
     await page.goto('/textsearch/_search?q=latency')
     await expect(status(page)).toHaveText('5 pages contain “latency”')
-    await hits(page).first().focus()
+    await hits(page).last().focus()
     await page.keyboard.press('ArrowDown')
-    await expect(active).toHaveCount(0)
+    await expect(hits(page).last()).toBeFocused()
   })
 
   /** Serves the text search manifest with a section table and one text pack for `long/scroll-target.html` (ISSUE-085). */
@@ -5124,16 +5138,19 @@ test.describe('page text search', () => {
     await expect(page.getByRole('alert')).toHaveCount(0)
   })
 
-  test('arrow keys and Enter still walk the results when excerpts are shown', async ({ page }) => {
+  test('arrow keys move focus along the results and Enter opens the focused one when excerpts are shown', async ({ page }) => {
     await serveExcerptData(page)
     await page.goto('/textsearch/_search?q=midmarker')
     await expect(page.locator('.search-page-result-excerpt')).toHaveCount(1)
     const active = page.locator('.search-page-result[data-active]')
     await page.keyboard.press('ArrowDown')
+    await expect(hits(page).nth(0)).toBeFocused()
     await expect(active.locator('[data-hit-id]')).toHaveAttribute('data-hit-id', 'long/scroll-target.html')
     await page.keyboard.press('ArrowDown')
+    await expect(hits(page).nth(1)).toBeFocused()
     await expect(active.locator('[data-hit-id]')).toHaveAttribute('data-hit-id', 'long/scroll-target.md')
     await page.keyboard.press('ArrowUp')
+    await expect(hits(page).nth(0)).toBeFocused()
     await expect(active.locator('[data-hit-id]')).toHaveAttribute('data-hit-id', 'long/scroll-target.html')
     await page.keyboard.press('Enter')
     await expect(page).toHaveURL(/\/textsearch\/long\/scroll-target\.html\?q=midmarker#middle-section$/)
