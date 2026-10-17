@@ -23,7 +23,7 @@ const { createSiteFullTextSearch, FullTextSearchError } = await import('./fullte
 
 const FORMATS = ['registry', 'site-metadata', 'artifact-index', 'full-text-manifest', 'preview-catalog', 'preview-manifest']
 const SHA = 'a'.repeat(40)
-const json = (body) => ({ ok: true, status: 200, json: async () => body })
+const json = (body) => ({ ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) })
 const notFound = { ok: false, status: 404, json: async () => ({}) }
 
 // Each entry builds a minimal valid payload at `version` and runs the reader; `read` resolves
