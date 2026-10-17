@@ -1,6 +1,6 @@
 # The SPA shell has generic metadata for search and share cards
 
-- Status: In progress
+- Status: Done
 - Priority: P3
 - Area: App shell
 - Implementer: Claude
@@ -23,7 +23,8 @@ The app home has a meaningful title, description and share card. Whether per-rou
 ## Acceptance criteria
 
 - [x] The shell has a descriptive title, description and Open Graph tags for the app home.
-- [ ] This issue records the owner's decision on per-route metadata and a sitemap (wanted or not, with the reason).
+- [x] This issue records the owner's decision on per-route metadata and a sitemap (wanted or not, with the reason): not wanted, see Owner decision.
+- [x] Per-route metadata and a sitemap: decided not needed on 2026-10-17, so they are not implemented.
 
 ## Verification
 
@@ -33,4 +34,4 @@ The app home has a meaningful title, description and share card. Whether per-rou
 
 ## Owner decision
 
-Pending: per-route metadata and sitemap. Recommendation recorded 2026-10-17: not wanted (internal readers; soft-404 policy ISSUE-083).
+2026-10-17: per-route metadata and sitemap are not wanted (internal readers; soft-404 policy ISSUE-083).
