@@ -8158,6 +8158,53 @@ test.describe('reader context column (ISSUE-108)', () => {
     await expect(frame.locator('#two')).toBeVisible()
   })
 
+  test('a failing status probe is also ignored while a navigation of the frame has started but not finished', async ({ page }) => {
+    await page.addInitScript(() => {
+      const proto = (window as unknown as { PerformanceNavigationTiming?: { prototype: object } }).PerformanceNavigationTiming?.prototype
+      if (proto) Object.defineProperty(proto, 'responseStatus', { get: () => 0, configurable: true })
+    })
+    const artifactPath = 'guides/probe-pending.html'
+    await page.route('**/_indexes/sre/index.json', async (route) => {
+      const response = await route.fetch()
+      const index = await response.json() as { artifacts: Array<Record<string, unknown>> }
+      index.artifacts.push({
+        id: artifactPath, title: 'Probe pending', path: artifactPath, format: 'html', filename: 'probe-pending.html',
+        artifactUrl: `/_artifacts/sre/${artifactPath}`, updatedAt: '2026-10-01T00:00:00Z',
+      })
+      await route.fulfill({ response, body: JSON.stringify(index) })
+    })
+    let failProbe!: () => void
+    const probeGate = new Promise<void>((resolve) => { failProbe = resolve })
+    let finishNavigation!: () => void
+    const navigationGate = new Promise<void>((resolve) => { finishNavigation = resolve })
+    let navigationRequested!: () => void
+    const requested = new Promise<void>((resolve) => { navigationRequested = resolve })
+    await page.route(`**/_artifacts/sre/${artifactPath}`, async (route) => {
+      if (route.request().method() === 'HEAD') {
+        await probeGate
+        await route.abort('connectionreset')
+        return
+      }
+      await route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: '<!doctype html><title>First</title><a id="go" href="probe-slow.html?v=2">slow</a><p id="one">First page</p>' })
+    })
+    await page.route('**/_artifacts/sre/guides/probe-slow.html**', async (route) => {
+      navigationRequested()
+      await navigationGate
+      await route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: '<!doctype html><title>Slow</title><p id="two">Slow page</p>' })
+    })
+    await page.goto(`/sre/${artifactPath}`)
+    const frame = page.frameLocator('iframe.artifact-frame')
+    await frame.locator('#go').click()
+    await requested
+    failProbe()
+    await page.waitForTimeout(500)
+    await expect(page.getByRole('heading', { name: 'Document unavailable' })).toHaveCount(0)
+    await expect(page.locator('iframe.artifact-frame')).toBeVisible()
+    finishNavigation()
+    await expect(frame.locator('#two')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Document unavailable' })).toHaveCount(0)
+  })
+
   test('closing the More menu with a click on a blank area clears its focus record before a resize', async ({ page }) => {
     await page.setViewportSize({ width: 500, height: 800 })
     await page.goto(markdownPath)

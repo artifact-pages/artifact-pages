@@ -157,6 +157,8 @@ export function ArtifactWorkspace({
   const focusRetryRef = useRef(false)
   // Loads seen by the current iframe mount: only the first one is the artifact's own load (ISSUE-106).
   const frameLoadCount = useRef(0)
+  // Advances when a navigation of the frame starts (or the frame is replaced), before its load finishes.
+  const frameGeneration = useRef(0)
   const frameStatusAbort = useRef<AbortController | null>(null)
   const nearbyPages = useMemo(
     () => pageNotFound && routeArtifactPath ? nearbyArtifacts(index.artifacts, routeArtifactPath) : [],
@@ -803,6 +805,7 @@ export function ArtifactWorkspace({
   // A new mount (another artifact or a retry) starts counting loads again and drops any pending status request.
   useEffect(() => {
     frameLoadCount.current = 0
+    frameGeneration.current += 1
     return () => {
       frameStatusAbort.current?.abort()
       frameStatusAbort.current = null
@@ -874,6 +877,12 @@ export function ArtifactWorkspace({
         const firstLoad = frameLoadCount.current === 0
         frameLoadCount.current += 1
         const loadNumber = frameLoadCount.current
+        const generation = frameGeneration.current
+        try {
+          const bump = () => { frameGeneration.current += 1 }
+          event.currentTarget.contentWindow?.addEventListener('beforeunload', bump)
+          event.currentTarget.contentWindow?.addEventListener('pagehide', bump)
+        } catch { /* a cross-origin frame is covered by the URL check */ }
         const artifactUrl = bodyArtifact.artifactUrl
         const status = firstLoad ? readFrameResponseStatus(frame) : null
         if (typeof status === 'number' && status >= 400) {
@@ -895,7 +904,7 @@ export function ArtifactWorkspace({
               if (controller.signal.aborted) return
               // The result belongs to the load it was started for: ignore it once the frame has loaded
               // again, been replaced, or left the probed artifact.
-              if (loadNumber !== frameLoadCount.current || frame !== htmlFrameRef.current || !frameShowsArtifact(frame, artifactUrl)) return
+              if (generation !== frameGeneration.current || loadNumber !== frameLoadCount.current || frame !== htmlFrameRef.current || !frameShowsArtifact(frame, artifactUrl)) return
               // A probe that fails at the network level leaves the body unverified: treat it as failed.
               if (headStatus === null || headStatus >= 400) {
                 frameHeightCleanup.current?.()
@@ -1124,7 +1133,11 @@ export function ArtifactWorkspace({
                 >
                   <Icon name="search" size={17} />
                 </button>
-                <ReaderMoreMenu ref={moreMenuTriggerRef} items={moreMenuItems} />
+                <ReaderMoreMenu
+                  ref={moreMenuTriggerRef}
+                  items={moreMenuItems}
+                  onDismiss={() => { if (lastFocus.current?.area === 'more') lastFocus.current = null }}
+                />
               </div>
             ) : (
               <div className="context-actions">
@@ -1402,7 +1415,7 @@ function frameShowsArtifact(iframe: HTMLIFrameElement, artifactUrl: string) {
   try {
     const expected = new URL(artifactUrl, window.location.href)
     const actual = new URL(iframe.contentWindow?.location.href ?? '')
-    return actual.origin === expected.origin && actual.pathname === expected.pathname
+    return actual.origin === expected.origin && actual.pathname === expected.pathname && actual.search === expected.search
   } catch {
     return false
   }

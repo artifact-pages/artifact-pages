@@ -29,7 +29,9 @@ export const ReaderMoreMenu = forwardRef<HTMLButtonElement, {
   label?: string
   /** Opens the menu on mount (stories only). */
   defaultOpen?: boolean
-}>(function ReaderMoreMenu({ items, label = 'More actions', defaultOpen = false }, forwardedRef) {
+  /** Called when a pointer press outside dismisses the menu (focus is not restored then). */
+  onDismiss?: () => void
+}>(function ReaderMoreMenu({ items, label = 'More actions', defaultOpen = false, onDismiss }, forwardedRef) {
   const [open, setOpen] = useState(defaultOpen)
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
@@ -49,7 +51,9 @@ export const ReaderMoreMenu = forwardRef<HTMLButtonElement, {
     if (!open) return
     if (!defaultOpen) enabledItems()[0]?.focus()
     const closeOnOutsidePointer = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
+      if (rootRef.current?.contains(event.target as Node)) return
+      setOpen(false)
+      onDismiss?.()
     }
     document.addEventListener('pointerdown', closeOnOutsidePointer)
     return () => document.removeEventListener('pointerdown', closeOnOutsidePointer)
