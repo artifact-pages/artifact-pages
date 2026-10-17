@@ -67,28 +67,32 @@ export function PreviewListContent({ siteId, groupId, navigate, showHomeLink = f
   /** The standalone page offers a way back to the site home from its empty state; the site home has its own navigation. */
   showHomeLink?: boolean
 }) {
-  const route = { siteId, groupId }
   const [attempt, setAttempt] = useState(0)
   // A load another view already made (the section badge, the standalone page before the site index arrived)
   // shows at once, without a loading state.
-  const [state, setState] = useState<PreviewListState>(() => {
-    const settled = peekPreviewList(siteId)
-    return settled ? previewListState(settled, groupId) : { status: 'loading' }
-  })
+  // The state belongs to the site, group and attempt it was computed for; for any other it is recomputed from
+  // the shared load while rendering, so a changed `?group=` never shows the previous group's results.
+  const key = `${siteId}\n${groupId ?? ''}\n${attempt}`
+  const [stored, setStored] = useState<{ key: string; state: PreviewListState } | null>(null)
+  const settledNow = peekPreviewList(siteId)
+  const state: PreviewListState = stored?.key === key
+    ? stored.state
+    : settledNow ? previewListState(settledNow, groupId) : { status: 'loading' }
   const retryRef = useRef<HTMLButtonElement>(null)
   const focusRetry = useRef(false)
 
   useEffect(() => {
     let cancelled = false
-    const settled = peekPreviewList(route.siteId)
-    setState(settled ? previewListState(settled, route.groupId) : { status: 'loading' })
-    if (!settled) {
-      loadPreviewList(route.siteId).then((result) => {
-        if (!cancelled) setState(previewListState(result, route.groupId))
+    const settled = peekPreviewList(siteId)
+    if (settled) {
+      setStored({ key, state: previewListState(settled, groupId) })
+    } else {
+      loadPreviewList(siteId).then((result) => {
+        if (!cancelled) setStored({ key, state: previewListState(result, groupId) })
       })
     }
     return () => { cancelled = true }
-  }, [route.siteId, route.groupId, attempt])
+  }, [siteId, groupId, key])
 
   // After a retry the button is replaced by the loading status; focus returns to a failed retry's button.
   useEffect(() => {
@@ -98,7 +102,7 @@ export function PreviewListContent({ siteId, groupId, navigate, showHomeLink = f
     }
   }, [state])
 
-  const siteHomeHref = `/${encodeURIComponent(route.siteId)}`
+  const siteHomeHref = `/${encodeURIComponent(siteId)}`
 
   return (
     <>
@@ -112,7 +116,7 @@ export function PreviewListContent({ siteId, groupId, navigate, showHomeLink = f
             className="text-action"
             onClick={() => {
               focusRetry.current = true
-              resetPreviewList(route.siteId)
+              resetPreviewList(siteId)
               setAttempt((n) => n + 1)
             }}
           >Try again</button>
@@ -131,7 +135,7 @@ export function PreviewListContent({ siteId, groupId, navigate, showHomeLink = f
       {state.status === 'success' && state.invalidCount > 0 ? (
         <p className="preview-availability" role="alert">Some preview catalog records did not match their revision manifests.</p>
       ) : null}
-      {state.status === 'success' && state.groups.length === 0 ? route.groupId ? (
+      {state.status === 'success' && state.groups.length === 0 ? groupId ? (
         <p className="preview-empty" role="status">This preview is no longer listed.</p>
       ) : (
         <section className="preview-empty-state" aria-label="No available previews">
@@ -163,7 +167,7 @@ export function PreviewListContent({ siteId, groupId, navigate, showHomeLink = f
               {availability === 'unknown' ? <p className="preview-availability" role="status">Availability could not be checked. Direct document links may still work.</p> : null}
               <PreviewDocumentList
                 documents={group.documents.filter(({ reason }) => reason !== 'dependency')}
-                siteId={route.siteId}
+                siteId={siteId}
                 group={group}
                 navigate={navigate}
               />
@@ -173,7 +177,7 @@ export function PreviewListContent({ siteId, groupId, navigate, showHomeLink = f
                   <p className="preview-dependency-note">These pages did not change, but a stylesheet, script, image, or other resource they use did.</p>
                   <PreviewDocumentList
                     documents={group.documents.filter(({ reason }) => reason === 'dependency')}
-                    siteId={route.siteId}
+                    siteId={siteId}
                     group={group}
                     navigate={navigate}
                   />

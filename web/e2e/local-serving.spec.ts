@@ -8444,6 +8444,40 @@ test.describe('site home sections', () => {
     await expect(sectionLink(page, 'Previews').locator('.site-section-count')).toHaveText('3')
   })
 
+  for (const mode of ['in the site home', 'standalone'] as const) {
+    test(`switching ?group= links never shows another group's results (${mode})`, async ({ page }) => {
+      if (mode === 'standalone') await page.route('**/_indexes/sre/index.json', (route) => route.fulfill({ status: 503, body: 'unavailable' }))
+      // Records every DOM state in which a shown preview group differs from the group named by the URL.
+      await page.addInitScript(() => {
+        const w = window as unknown as { __violations: string[] }
+        w.__violations = []
+        const check = () => {
+          const wanted = new URLSearchParams(location.search).get('group')
+          if (!wanted || !location.pathname.endsWith('/_previews')) return
+          for (const element of document.querySelectorAll('section.preview-group')) {
+            const shown = element.getAttribute('aria-label')?.replace(/^Preview /, '')
+            if (shown !== wanted) w.__violations.push(`${shown} shown under ${wanted}`)
+          }
+        }
+        new MutationObserver(check).observe(document, { subtree: true, childList: true, attributes: true })
+        // Also every frame, since a stale render can leave the DOM as it was and so cause no mutation.
+        const frame = () => { check(); window.requestAnimationFrame(frame) }
+        window.requestAnimationFrame(frame)
+      })
+      await page.goto('/sre/_previews?group=pr%3A42')
+      await expect(page.getByRole('region', { name: 'Preview pr:42' })).toBeVisible()
+      for (const [from, to] of [['pr:42', 'pr:43'], ['pr:43', 'pr:42']]) {
+        await page.evaluate((target) => {
+          history.pushState({}, '', `/sre/_previews?group=${encodeURIComponent(target)}`)
+          window.dispatchEvent(new PopStateEvent('popstate'))
+        }, to)
+        await expect(page.getByRole('region', { name: `Preview ${to}` })).toBeVisible()
+        await expect(page.getByRole('region', { name: `Preview ${from}` })).toHaveCount(0)
+      }
+      expect(await page.evaluate(() => (window as unknown as { __violations: string[] }).__violations)).toEqual([])
+    })
+  }
+
   test('the Previews list does not wait for a slow site index and keeps its data and scroll when it arrives', async ({ page }) => {
     await page.setViewportSize({ width: 1200, height: 360 })
     const requests: string[] = []
