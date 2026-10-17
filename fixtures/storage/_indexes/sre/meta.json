@@ -6,5 +6,34 @@
   },
   "generatedAt": "2026-09-25T00:00:00Z",
   "artifactCount": 6,
-  "artifactIndexUrl": "/_indexes/sre/index.json"
+  "artifactIndexUrl": "/_indexes/sre/index.json",
+  "contentUpdatedAt": "2026-09-24T00:00:00Z",
+  "rootArtifactCount": 0,
+  "topLevelFolderCount": 6,
+  "topLevelFolders": [
+    {
+      "name": "architecture",
+      "artifactCount": 1
+    },
+    {
+      "name": "diagrams",
+      "artifactCount": 1
+    },
+    {
+      "name": "guides",
+      "artifactCount": 1
+    },
+    {
+      "name": "incidents",
+      "artifactCount": 1
+    },
+    {
+      "name": "reports",
+      "artifactCount": 1
+    },
+    {
+      "name": "runbooks",
+      "artifactCount": 1
+    }
+  ]
 }
