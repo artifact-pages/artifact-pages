@@ -1,6 +1,7 @@
 # Reading context and source provenance stay hidden behind separate controls
 
-- Status: Open
+- Status: Done
+- Assignee: Claude
 - Priority: P2
 - Area: Web / reader context, Contents and Details
 
@@ -22,6 +23,16 @@ Readers on sufficiently wide screens can see the document's headings and source 
 
 **Order:** complete design, implementation and verification of this reader change before the official documentation rewrite/screenshots and feature descriptions are finalized. Documentation information-architecture discussion can continue. Coordinate with ISSUE-107's site-home work; neither issue authorizes a release or deploy.
 
+## Design decision (2026-10-17)
+
+- **Layout.** Variant D, chosen by the owner from the concept page: a 248 px right column with Details on top and Contents below. On a Markdown page Details scrolls away with the document and Contents sticks (about 8 px from the top of the reading pane); a heading list taller than the pane scrolls on its own. An HTML page scrolls inside its frame, so the column scrolls on its own (Details, then Contents, which sticks within the column). Publisher HTML is not changed or injected into.
+- **Breakpoint.** 1200 px of viewport width. Rationale: the 248 px column plus the expanded 252 px sidebar leave at least about 700 px for the document. Browser zoom counts as a change in viewport width.
+- **Visibility.** Automatic. There is no user toggle and no stored preference.
+- **Scope.** Only a site's document page (Markdown or HTML) at 1200 px or more. Not site home, folder or directory pages (including a folder's index body), search results, not-found and error states, or preview pages (ISSUE-109).
+- **Below 1200 px.** Unchanged (ISSUE-080 chrome): the Contents and Details buttons and the overlay panel. At 1200 px or more the buttons are not shown.
+- **Focus.** The Contents and Details shortcut and palette commands move focus to that part of the column (the current entry or the first one for Contents; the empty message when there are no headings). Narrow to wide with the overlay open: the panel closes, and focus that was inside it (or on its button) moves to the matching part of the column. Wide to narrow with focus in the column: focus moves to the matching context-bar button (the More menu button on the narrowest chrome). Activating a heading entry keeps focus on that entry. Focus is never lost to `body`.
+- **Current heading.** Contents marks the heading being read with `aria-current="location"`; for HTML this is best effort and silent when the frame cannot be read.
+
 ## Scope and design brief for Claude
 
 - Design a right sidebar using the existing product's typography, spacing, colors and light/dark themes. Decide how Contents and Details coexist, including their order, density and long-content scrolling. Do not copy the reference site's author profile, follow/donation controls or social features.
@@ -38,11 +49,11 @@ No public documentation page rewrite, external service integration, authorship/o
 
 ## Acceptance criteria
 
-- [ ] Claude presents inspectable designs for wide and narrow reading layouts, and records the chosen layout, breakpoint rationale and toggle/focus behavior before implementation.
-- [ ] At sufficient width, existing Contents and Details information is available in a persistent right column while the main document remains comfortably readable.
-- [ ] Below the chosen width threshold, the column collapses and both information groups remain explicitly accessible. Resizing/zooming and left-sidebar toggling do not create overlapping chrome, lost focus or horizontal page overflow.
-- [ ] Heading links still navigate to the intended Markdown/HTML heading; provenance values and GitHub links remain accurate. No last-committer-as-owner claim or synthetic provenance is introduced.
-- [ ] Missing headings/provenance and long labels produce useful, uncluttered states. Applicable preview, empty/error and non-document surfaces follow the recorded scope decisions.
+- [x] Claude presents inspectable designs for wide and narrow reading layouts, and records the chosen layout, breakpoint rationale and toggle/focus behavior before implementation.
+- [x] At sufficient width, existing Contents and Details information is available in a persistent right column while the main document remains comfortably readable.
+- [x] Below the chosen width threshold, the column collapses and both information groups remain explicitly accessible. Resizing/zooming and left-sidebar toggling do not create overlapping chrome, lost focus or horizontal page overflow.
+- [x] Heading links still navigate to the intended Markdown/HTML heading; provenance values and GitHub links remain accurate. No last-committer-as-owner claim or synthetic provenance is introduced.
+- [x] Missing headings/provenance and long labels produce useful, uncluttered states. Applicable preview, empty/error and non-document surfaces follow the recorded scope decisions.
 - [ ] Keyboard navigation, accessible names, focus order/return, long-column scrolling, light/dark and representative narrow/wide widths are verified in the actual product.
 - [ ] Relevant stories/regressions and applicable web/browser checks pass, fresh cross-review is complete, and this item is resolved before final documentation screenshots and reader-feature copy are produced.
 
@@ -53,4 +64,13 @@ No public documentation page rewrite, external service integration, authorship/o
 - [ISSUE-107](ISSUE-107-site-home-overview-files-preview-tabs.md): selected site-root navigation; coordinate common chrome while keeping document context separate.
 - [ISSUE-080](ISSUE-080-narrow-screen-chrome-and-scroll-cues.md): completed narrow-reader chrome work; preserve its reading-space goals.
 
-This issue is unimplemented. No performance, breakpoint or device behavior has been verified merely by filing it.
+## Verification
+
+Implemented in `web/` (2026-10-17, Claude): `ReaderContextColumn.tsx`, `useCurrentHeading.ts`, the `aside` slot of `MarkdownArtifact`, `ArtifactWorkspace.tsx` and `styles.css`. The concept variants are on the `claude-issue-108-concepts` branch.
+
+- `npm run build` and `npm run test:web-unit` pass. Storybook builds with the new stories `Wide reader · Markdown column` (light and dark) and `Wide reader · HTML column`.
+- Full e2e on compose project `claude-issue-108`, `CI=1` (one retry allowed): 248 passed, none flaky. The new tests are in `web/e2e/local-serving.spec.ts`, describe `reader context column (ISSUE-108)` (20 tests): the column at 1440 px for Markdown and HTML; Details scrolling away while Contents stays; a heading list taller than the pane scrolling on its own; the HTML column scrolling on its own; the current heading following the scroll (Markdown and HTML) and staying visible in the list; heading activation (fragment, one history step, focus kept on the entry); buttons and panels below 1200 px; both resize focus transitions; shortcut and palette focus; no-headings and missing-provenance documents; long labels; no horizontal overflow at 1200 px expanded and 1280 px collapsed; the match navigator beside the column; no column on site home, folder, search, preview and not-found routes.
+- Existing tests whose premise changed (they open the overlay panels or use the toolbar buttons) now run at 1100 px: palette Details command, heading ID conformance, HTML heading navigation, dismiss and reopen, jump-keeps-panel, stale jump check, multi-file namespace, Markdown render safety, Markdown gallery, site-home actions, and the ISSUE-080 wide toolbar test.
+- Screenshots (uncommitted, `.local/issue-108/`): 1440 px light and dark, 1280 px with the sidebar collapsed, 1100 px.
+
+Known limits: the current heading is the last one whose top has passed a reading line near the top of the pane, so at the very end of a document an entry that cannot reach that line (the last short sections) is not marked until the reader scrolls to it. HTML marking is best effort and silent when the frame cannot be read. Not done, needs the owner: a screen-reader pass (landmark names, focus announcements) and a real-device zoom check; the criterion on keyboard, accessible names, light/dark and widths stays unticked for that reason, and the final cross-review criterion stays unticked until the review is done.

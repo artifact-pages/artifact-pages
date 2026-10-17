@@ -166,6 +166,7 @@ export function MarkdownArtifact({
   highlightQuery = '',
   onMatches,
   footer,
+  aside,
 }: {
   artifact: ArtifactIndexEntry
   siteId: string
@@ -178,6 +179,8 @@ export function MarkdownArtifact({
   onMatches?: (ranges: Range[]) => void
   /** Rendered after the article inside the scrolling region (the "Read next" list). */
   footer?: ReactNode
+  /** The reader context column (ISSUE-108): rendered inside the scrolling region, beside the article, so it can scroll with it. */
+  aside?: ReactNode
 }) {
   const [source, setSource] = useState<string | null>(null)
   const [error, setError] = useState<{ status?: number } | null>(null)
@@ -275,8 +278,18 @@ export function MarkdownArtifact({
     [artifact, siteId, resolveHref],
   )
 
+  // With a column, the loading and error states keep its place so the page does not shift when the text arrives.
+  const withAside = (content: ReactNode) => aside ? (
+    <div className="markdown-scroll has-aside">
+      <div className="markdown-split">
+        <div className="markdown-split-main">{content}</div>
+        {aside}
+      </div>
+    </div>
+  ) : content
+
   if (error) {
-    return (
+    return withAside(
       <div className="markdown-state" role="alert">
         <h1>Markdown unavailable</h1>
         <p>
@@ -292,29 +305,38 @@ export function MarkdownArtifact({
         >
           Try again
         </button>
-      </div>
+      </div>,
     )
   }
 
   if (source === null) {
-    if (!loadingVisible) return <div className="markdown-state" aria-busy="true" />
-    return <div className="markdown-state" role="status">Loading document…</div>
+    if (!loadingVisible) return withAside(<div className="markdown-state" aria-busy="true" />)
+    return withAside(<div className="markdown-state" role="status">Loading document…</div>)
   }
+
+  const article = (
+    <article ref={articleRef} className="markdown-article">
+      <Markdown
+        remarkPlugins={markdownRemarkPlugins}
+        rehypePlugins={markdownRehypePlugins}
+        urlTransform={urlTransform}
+        components={markdownComponents}
+      >
+        {source}
+      </Markdown>
+    </article>
+  )
+  const footerView = footer ? <div className="markdown-footer">{footer}</div> : null
 
   return (
     <MarkdownRenderContext.Provider value={renderContext}>
-    <div className="markdown-scroll" data-testid="markdown-document" lang={language}>
-      <article ref={articleRef} className="markdown-article">
-        <Markdown
-          remarkPlugins={markdownRemarkPlugins}
-          rehypePlugins={markdownRehypePlugins}
-          urlTransform={urlTransform}
-          components={markdownComponents}
-        >
-          {source}
-        </Markdown>
-      </article>
-      {footer ? <div className="markdown-footer">{footer}</div> : null}
+    <div className={`markdown-scroll${aside ? ' has-aside' : ''}`} data-testid="markdown-document" lang={language}>
+      {aside ? (
+        <div className="markdown-split">
+          <div className="markdown-split-main">{article}{footerView}</div>
+          {aside}
+        </div>
+      ) : <>{article}{footerView}</>}
     </div>
     </MarkdownRenderContext.Provider>
   )

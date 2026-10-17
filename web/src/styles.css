@@ -3930,3 +3930,121 @@ a.breadcrumb-menu-item {
     padding-top: 22px;
   }
 }
+
+/* ---- reader context column (ISSUE-108): Details and Contents beside a document page at 1200 px or more ---- */
+.markdown-scroll.has-aside { container-type: size; }
+
+.markdown-split {
+  display: flex;
+  min-height: 100%;
+  align-items: flex-start;
+}
+
+.markdown-split-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.markdown-split-main .markdown-article,
+.markdown-split-main .markdown-footer {
+  padding-inline: clamp(24px, 4vw, 64px);
+}
+
+.reader-column {
+  width: 248px;
+  min-width: 0;
+  flex: none;
+  align-self: stretch;
+  padding: 18px 6px 24px 8px;
+  border-left: 1px solid var(--line-soft);
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+
+/* Beside an HTML frame the column scrolls on its own. */
+.reader-column-standalone {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  overflow: auto;
+  container-type: size;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--line) transparent;
+  scrollbar-width: thin;
+}
+
+.stage.has-reader-column .artifact-frame {
+  width: calc(100% - 248px);
+}
+
+.reader-column-heading {
+  margin: 0 0 6px;
+  padding: 0 9px;
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.reader-column-heading:focus-visible,
+.reader-column .toc-empty:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+
+.reader-column .artifact-details {
+  overflow: visible;
+  padding: 4px 9px 8px;
+}
+
+.reader-column .toc-link {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.reader-column .toc-link:focus-visible,
+.reader-column a:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
+.reader-column .toc-link[aria-current="location"] {
+  color: var(--text);
+  background: var(--active);
+  font-weight: 600;
+}
+
+.reader-column .toc-list { padding: 0 0 6px; }
+
+.reader-column .toc-empty { padding: 4px 9px 8px; }
+
+.reader-column-contents {
+  position: sticky;
+  top: 8px;
+  display: flex;
+  max-height: calc(100cqh - 16px);
+  flex-direction: column;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+  background: var(--surface);
+}
+
+.reader-column-contents .toc-list {
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+.stage.has-reader-column .match-nav {
+  right: 264px;
+  max-width: calc(100% - 296px);
+}
+
+@media (min-width: 1200px) {
+  .toast { max-width: min(560px, calc(100vw - 32px)); }
+}

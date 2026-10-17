@@ -152,6 +152,28 @@ export const PageNotFound: Story = {
   args: { view: 'not-found' },
 }
 
+// Wide reader (ISSUE-108): from 1200 px a document page has the persistent Details and Contents column;
+// the 'desktop' viewport is 1280 px wide. Scroll the Markdown story to see Details leave and Contents stay.
+const wideViewport = { viewport: { value: 'desktop' } }
+
+export const WideReaderMarkdown: Story = {
+  name: 'Wide reader · Markdown column',
+  args: { view: 'retrospective', theme: 'light', initialSidebarOpen: true },
+  globals: wideViewport,
+}
+
+export const WideReaderMarkdownDark: Story = {
+  name: 'Wide reader · Markdown column · dark',
+  args: { view: 'retrospective', theme: 'dark', initialSidebarOpen: true },
+  globals: wideViewport,
+}
+
+export const WideReaderHtml: Story = {
+  name: 'Wide reader · HTML column',
+  args: { view: 'artifact', theme: 'light', initialSidebarOpen: false },
+  globals: wideViewport,
+}
+
 // Narrow reader chrome (ISSUE-080): the viewport is 390 px wide, so the 620 px media rules apply.
 const narrowViewport = { viewport: { value: 'mobile1' } }
 
