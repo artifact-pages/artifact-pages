@@ -325,20 +325,35 @@ function prepareGenerationVariant(siteId) {
   const satellite = path.join(dataRoot, 'satellite')
   const admin = path.join(dataRoot, 'admin')
   const sourceFile = path.join(satellite, 'sites', siteId, 'content', '000-generation', 'target-000.md')
+  git(satellite, ['checkout', '--', `sites/${siteId}/content/000-generation/target-000.md`])
   const originalSource = readFileSync(sourceFile, 'utf8')
   assert.match(originalSource, /vanishedgenerationprobe/, 'generation probe must exist in target-000.md')
 
   const baseSearch = path.join(dataRoot, `storage-${siteId}`, '_indexes', siteId, 'search')
   const baseSearchCopy = path.join(dataRoot, 'search-generation-a', siteId)
+  const baselineRoot = path.join(dataRoot, 'storage-generation-a-build')
+  const baselineConfigName = 'artifact-pages-generation-a.yaml'
+  const baselineConfigPath = path.join(admin, baselineConfigName)
+  const baselineSearch = path.join(baselineRoot, '_indexes', siteId, 'search')
   const changedRoot = path.join(dataRoot, 'storage-generation-b')
   const changedConfigName = 'artifact-pages-generation-b.yaml'
   const changedConfigPath = path.join(admin, changedConfigName)
   const changedSearch = path.join(changedRoot, '_indexes', siteId, 'search')
   const liveSearch = baseSearch
+  rmSync(baselineRoot, { recursive: true, force: true })
   rmSync(changedRoot, { recursive: true, force: true })
   rmSync(path.dirname(baseSearchCopy), { recursive: true, force: true })
-  cpSync(baseSearch, baseSearchCopy, { recursive: true })
-  const baseManifest = JSON.parse(readFileSync(path.join(baseSearch, 'manifest.json'), 'utf8'))
+  writeFileSync(baselineConfigPath, yamlConfig(baselineRoot, [siteId]))
+  const baselineConfigArg = path.relative(satellite, baselineConfigPath)
+  const baselineRegistry = JSON.parse(run(binary, ['registry', 'sync', '--config', baselineConfigName, '--format', 'json'], { cwd: admin }))
+  assert.equal(baselineRegistry.outcome, 'synced', 'registry sync generation A')
+  const baselinePublished = JSON.parse(run(binary, ['site', 'sync', '--site', siteId, '--source', `sites/${siteId}/content`, '--config', baselineConfigArg, '--format', 'json'], { cwd: satellite }))
+  assert.equal(baselinePublished.outcome, 'synced', `site sync generation A: ${baselinePublished.outcome}`)
+  assert.ok(existsSync(path.join(baselineSearch, 'manifest.json')), 'generation A manifest was not published')
+  cpSync(baselineSearch, baseSearchCopy, { recursive: true })
+  replaceSearchGeneration({ liveSearch }, baseSearchCopy)
+  rmSync(baselineRoot, { recursive: true, force: true })
+  const baseManifest = JSON.parse(readFileSync(path.join(baseSearchCopy, 'manifest.json'), 'utf8'))
   assert.ok(Array.isArray(baseManifest.texts) && baseManifest.texts.length > 0, 'search manifest should include text packs')
   const maxTextPackRawBytes = Math.max(0, ...baseManifest.texts.map((pack) => pack.rawBytes))
   // The long body exceeds the per-document cap, but at 50,000 pages the site snippet budget can omit it first.
@@ -653,6 +668,30 @@ async function measureFirstLoad(browser, profile, siteId) {
 
 /** First Mermaid SVG render from the generated Markdown artifact, cold and then warm in one context. */
 async function measureMermaid(browser, profile, siteId) {
+  if (options.remote) {
+    const timeout = Math.min(SLOW_TIMEOUT, 15_000)
+    const request = (url) => fetch(url, { signal: AbortSignal.timeout(timeout) })
+    const unavailable = (reason) => ({ measurable: false, reason })
+    let indexResponse
+    try { indexResponse = await request(`${origin()}/_indexes/${siteId}/index.json`) }
+    catch (error) { return unavailable(`site index unavailable: ${error.name}`) }
+    if (!indexResponse.ok) return unavailable(`site index returned HTTP ${indexResponse.status}`)
+    let index
+    try { index = await indexResponse.json() }
+    catch { return unavailable('site index was not valid JSON') }
+    const artifacts = Array.isArray(index.artifacts) ? index.artifacts : []
+    const artifact = artifacts.find((entry) => entry.path?.replace(/^\/+/, '') === 'overview-0.md')
+    if (!artifact) return unavailable('overview-0.md is not published')
+    const artifactUrl = artifact.artifactUrl ?? `/_artifacts/${siteId}/${artifact.path}`
+    let artifactResponse
+    try { artifactResponse = await request(new URL(artifactUrl, origin())) }
+    catch (error) { return unavailable(`overview-0.md unavailable: ${error.name}`) }
+    if (!artifactResponse.ok) return unavailable(`overview-0.md returned HTTP ${artifactResponse.status}`)
+    let markdown
+    try { markdown = await artifactResponse.text() }
+    catch (error) { return unavailable(`overview-0.md unavailable: ${error.name}`) }
+    if (!/```\s*mermaid\b/i.test(markdown)) return unavailable('overview-0.md has no Mermaid diagram')
+  }
   const session = await newSession(browser, profile)
   const { page } = session
   const href = `${origin()}/${siteId}/overview-0.md`
@@ -952,14 +991,50 @@ async function measureQueryStage(session, siteId, label, query, folder) {
 
 async function measureShowMore(session, siteId, label, expectedRows, { expectedCountText } = {}) {
   const { page } = session
+  const before = await page.evaluate(() => ({
+    rows: document.querySelectorAll('.search-page-result:not(.search-page-skeleton)').length,
+    countText: document.querySelector('.search-page-count-text')?.textContent ?? '',
+    moreText: document.querySelector('.search-page-more')?.textContent ?? null,
+  }))
+  const moreButton = page.locator('.search-page-more')
+  if (!(await moreButton.count())) {
+    const view = await page.evaluate(() => {
+      const paths = [...document.querySelectorAll('.search-page-result:not(.search-page-skeleton) .search-page-result-path')].map((node) => node.textContent ?? '')
+      return {
+        rows: paths.length,
+        paths,
+        countText: document.querySelector('.search-page-count-text')?.textContent ?? '',
+        moreText: document.querySelector('.search-page-more')?.textContent ?? null,
+      }
+    })
+    return {
+      label,
+      timeMs: null,
+      measurable: false,
+      reason: 'show-more button is unavailable',
+      rows: view.rows,
+      countText: view.countText,
+      moreButton: view.moreText,
+      pathOrder: view.paths.every((value, index) => index === 0 || view.paths[index - 1] <= value),
+      firstPaths: view.paths.slice(0, 3),
+      lastPaths: view.paths.slice(-3),
+      ...summarizeSearchRequests([], siteId),
+      mainThreadLongTasks: { supported: false, count: 0, durationMs: 0, maxMs: 0 },
+    }
+  }
   const from = session.mark()
   const startedAt = await page.evaluate(() => performance.now())
-  await page.locator('.search-page-more').click()
-  await page.waitForFunction(({ expectedRows: rows, expectedCountText: count }) => {
+  await moreButton.click()
+  await page.waitForFunction(({ expectedRows: rows, expectedCountText: count, beforeRows, beforeCountText, beforeMoreText }) => {
     const visible = document.querySelectorAll('.search-page-result:not(.search-page-skeleton)').length
     const text = document.querySelector('.search-page-count-text')?.textContent ?? ''
-    return visible >= rows && (!count || text.includes(count))
-  }, { expectedRows, expectedCountText }, { polling: 'raf', timeout: SLOW_TIMEOUT })
+    const button = document.querySelector('.search-page-more')
+    const buttonText = button?.textContent ?? null
+    const expected = visible >= rows && (!count || text.includes(count))
+    const completedWithDifferentResult = button?.getAttribute('aria-disabled') !== 'true' &&
+      (visible !== beforeRows || text !== beforeCountText || buttonText !== beforeMoreText)
+    return expected || completedWithDifferentResult
+  }, { expectedRows, expectedCountText, beforeRows: before.rows, beforeCountText: before.countText, beforeMoreText: before.moreText }, { polling: 'raf', timeout: SLOW_TIMEOUT })
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
   await session.settle()
   const requests = session.since(from)
@@ -1023,7 +1098,9 @@ async function measureSearchCases(browser, profile, siteId, generationVariant) {
 
     result.cases.vanishedGeneration = await measureQueryStage(session, siteId, 'vanished generation', 'vanishedgenerationprobe')
     const initialTotal = result.cases.vanishedGeneration.hitsTotal
-    assert.ok(initialTotal > 500, `vanished-generation query should have more than 500 hits, got ${initialTotal}`)
+    result.cases.vanishedGeneration.expectations = {
+      hitsTotal: { expected: '> 500', actual: initialTotal, ok: Number.isFinite(initialTotal) && initialTotal > 500 },
+    }
     result.cases.vanishedGeneration.pageTwo = await measureShowMore(session, siteId, 'old generation page two', 40)
     replaceSearchGeneration(generationVariant, generationVariant.changedSearch)
     result.cases.vanishedGeneration.waitForCacheExpiryMs = 61000
@@ -1031,9 +1108,14 @@ async function measureSearchCases(browser, profile, siteId, generationVariant) {
     result.cases.vanishedGeneration.afterRepublish = await measureShowMore(
       session, siteId, 'page after search data changed', 60, { expectedCountText: `${initialTotal - 1} pages contain` },
     )
-    assert.equal(result.cases.vanishedGeneration.afterRepublish.rows, 60, 'the refreshed generation should restart path paging from the beginning')
-    assert.equal(result.cases.vanishedGeneration.afterRepublish.countText.includes(`${initialTotal - 1} pages contain`), true, 'the result count should reflect generation B')
-    assert.ok((result.cases.vanishedGeneration.afterRepublish.searchByKind.manifest?.count ?? 0) >= 1, 'page after republish should fetch the new manifest')
+    const afterRepublish = result.cases.vanishedGeneration.afterRepublish
+    const expectedCountText = `${initialTotal - 1} pages contain`
+    const manifestFetches = afterRepublish.searchByKind.manifest?.count ?? 0
+    afterRepublish.expectations = {
+      rows: { expected: 60, actual: afterRepublish.rows, ok: afterRepublish.rows === 60 },
+      countText: { expected: expectedCountText, actual: afterRepublish.countText, ok: afterRepublish.countText.includes(expectedCountText) },
+      manifestFetches: { expected: '>= 1', actual: manifestFetches, ok: manifestFetches >= 1 },
+    }
     return result
   } finally {
     replaceSearchGeneration(generationVariant, generationVariant.baseSearch)

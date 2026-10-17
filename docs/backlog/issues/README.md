@@ -106,7 +106,7 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-092](ISSUE-092-slow-site-metadata-blocks-site-list.md) | Done | P2 | One slow site metadata request holds the whole home page. |
 | [ISSUE-093](ISSUE-093-directory-and-sidebar-render-every-row.md) | Done | P2 | Directory pages and the sidebar tree render every row. |
 | [ISSUE-094](ISSUE-094-site-index-cache-never-evicts.md) | Done | P2 | Expired site-index cache entries stay in memory until the same site is read again. |
-| [ISSUE-095](ISSUE-095-home-folder-counts-load-full-indexes.md) | Open | P3 | Home folder counts load the full index of up to eight sites. |
+| [ISSUE-095](ISSUE-095-home-folder-counts-load-full-indexes.md) | Done | P3 | Home folder counts load the full index of up to eight sites. |
 | [ISSUE-096](ISSUE-096-no-security-policy-or-contributing.md) | In progress | P2 | No security policy, contributing guide or issue templates. |
 | [ISSUE-097](ISSUE-097-stale-first-reader-documents.md) | Done | P2 | README, release-readiness and the documentation track describe an outdated state. |
 | [ISSUE-098](ISSUE-098-spa-shell-metadata-for-sharing.md) | Done | P3 | The SPA shell has generic metadata for search and share cards. |
