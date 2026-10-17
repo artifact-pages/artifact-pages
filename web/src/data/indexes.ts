@@ -8,16 +8,19 @@ export class IndexLoadError extends Error {
   readonly status?: number
   /** The payload was read but its content is not a valid index (not a transport or schema-version problem). */
   readonly invalidData?: boolean
+  /** The application deadline passed before the read finished (a transient failure; retrying starts a fresh request). */
+  readonly timedOut?: boolean
 
   constructor(
     message: string,
     readonly url: string,
-    options?: ErrorOptions & { status?: number; invalidData?: boolean },
+    options?: ErrorOptions & { status?: number; invalidData?: boolean; timedOut?: boolean },
   ) {
     super(message, options)
     this.name = 'IndexLoadError'
     this.status = options?.status
     this.invalidData = options?.invalidData
+    this.timedOut = options?.timedOut
   }
 }
 
@@ -55,21 +58,71 @@ function parseSiteDiscoveryMetadata(payload: unknown, url: string, expectedSiteI
 
 /** How long a shared index read is reused. Keeps picker -> site navigation to one request, yet picks up a newer publish soon. */
 export const SITE_INDEX_CACHE_TTL_MS = 30_000
+/** At most this many shared index reads stay cached; entries still awaited by a caller are never evicted for the cap. */
+export const SITE_INDEX_CACHE_MAX_ENTRIES = 4
+/** How long the registry request (headers and body) may take. */
+export const REGISTRY_TIMEOUT_MS = 15_000
+/** How long one site index request (headers and body) may take. */
+export const SITE_INDEX_TIMEOUT_MS = 20_000
 
-type CachedIndex = { promise: Promise<SiteIndex>; startedAt: number; controller: AbortController; subscribers: number }
+type CachedIndex = {
+  promise: Promise<SiteIndex>
+  startedAt: number
+  controller: AbortController
+  /** Callers currently awaiting the promise. */
+  waiting: number
+  fulfilled: boolean
+  settled: boolean
+  timer?: ReturnType<typeof setTimeout>
+}
 const indexCache = new Map<string, CachedIndex>()
 
 /** For tests. */
 export function clearSiteIndexCache() {
+  for (const entry of indexCache.values()) clearTimeout(entry.timer)
   indexCache.clear()
+}
+
+/** For tests only: the number of cached entries. */
+export function siteIndexCacheSize() {
+  return indexCache.size
+}
+
+function dropEntry(key: string, entry: CachedIndex) {
+  clearTimeout(entry.timer)
+  entry.timer = undefined
+  if (indexCache.get(key) === entry) indexCache.delete(key)
+}
+
+function isExpired(entry: CachedIndex) {
+  return Date.now() - entry.startedAt >= SITE_INDEX_CACHE_TTL_MS
+}
+
+function sweepExpiredEntries() {
+  for (const [key, entry] of [...indexCache]) {
+    if (entry.fulfilled && entry.waiting === 0 && isExpired(entry)) dropEntry(key, entry)
+  }
+}
+
+function enforceCacheCap(keep: CachedIndex) {
+  while (indexCache.size > SITE_INDEX_CACHE_MAX_ENTRIES) {
+    let victim: [string, CachedIndex] | undefined
+    for (const candidate of indexCache) {
+      if (candidate[1] !== keep && candidate[1].waiting === 0) { victim = candidate; break }
+    }
+    if (!victim) return
+    dropEntry(victim[0], victim[1])
+  }
 }
 
 /**
  * Loads a site's artifact index. Reads through the global `fetch` are shared per URL for
  * SITE_INDEX_CACHE_TTL_MS (the site picker's count reads, the site view and the preview page reuse
- * one request); failures and aborted reads are never cached. A custom fetcher bypasses the cache.
+ * one request); failures and aborted reads are never cached. At most SITE_INDEX_CACHE_MAX_ENTRIES
+ * entries are kept, and expired entries are evicted without waiting for the same site to be read
+ * again. A custom fetcher bypasses the cache.
  * `options.signal` cancels this caller's wait; the underlying request is aborted only when every
- * caller that joined it has aborted.
+ * caller that joined it has aborted. Every request ends within SITE_INDEX_TIMEOUT_MS.
  */
 export async function loadSiteIndex(
   siteId: string,
@@ -83,64 +136,110 @@ export async function loadSiteIndex(
   const { signal } = options
   if (fetcher !== globalThis.fetch) return fetchSiteIndex(siteId, fetcher, indexUrl, signal)
 
+  sweepExpiredEntries()
   const key = `${siteId}\0${indexUrl}`
   let entry = indexCache.get(key)
-  if (!entry || Date.now() - entry.startedAt >= SITE_INDEX_CACHE_TTL_MS) {
+  if (!entry || isExpired(entry)) {
+    if (entry) dropEntry(key, entry)
     const controller = new AbortController()
+    const startedAt = Date.now()
     const created: CachedIndex = {
       controller,
-      startedAt: Date.now(),
-      subscribers: 0,
-      promise: fetchSiteIndex(siteId, fetcher, indexUrl, controller.signal).catch((error: unknown) => {
-        if (indexCache.get(key) === created) indexCache.delete(key)
-        throw error
-      }),
+      startedAt,
+      waiting: 0,
+      fulfilled: false,
+      settled: false,
+      promise: fetchSiteIndex(siteId, fetcher, indexUrl, controller.signal).then(
+        (index) => {
+          created.settled = true
+          created.fulfilled = true
+          if (indexCache.get(key) === created) {
+            created.timer = setTimeout(() => {
+              created.timer = undefined
+              if (created.waiting === 0) dropEntry(key, created)
+            }, Math.max(0, SITE_INDEX_CACHE_TTL_MS - (Date.now() - startedAt)))
+          }
+          return index
+        },
+        (error: unknown) => {
+          created.settled = true
+          dropEntry(key, created)
+          throw error
+        },
+      ),
     }
     created.promise.catch(() => undefined) // consumed by callers; this only avoids an unhandled rejection when all abort
     indexCache.set(key, created)
+    enforceCacheCap(created)
     entry = created
   }
   const joined = entry
-  joined.subscribers += 1
-  if (!signal) return joined.promise
+  joined.waiting += 1
+  let left = false
+  const leave = (aborted: boolean) => {
+    if (left) return
+    left = true
+    joined.waiting -= 1
+    if (joined.waiting > 0) return
+    if (!joined.settled) {
+      if (aborted) {
+        dropEntry(key, joined)
+        joined.controller.abort()
+      }
+    } else if (joined.fulfilled && isExpired(joined)) {
+      dropEntry(key, joined)
+    }
+  }
+  if (!signal) {
+    return joined.promise.then(
+      (index) => { leave(false); return index },
+      (error: unknown) => { leave(false); throw error },
+    )
+  }
   if (signal.aborted) {
-    release(key, joined)
+    leave(true)
     throw new IndexLoadError(`Aborted ${indexUrl}.`, indexUrl)
   }
   return new Promise<SiteIndex>((resolve, reject) => {
     const onAbort = () => {
-      release(key, joined)
+      leave(true)
       reject(new IndexLoadError(`Aborted ${indexUrl}.`, indexUrl))
     }
     signal.addEventListener('abort', onAbort, { once: true })
     joined.promise.then(
-      (index) => { signal.removeEventListener('abort', onAbort); resolve(index) },
-      (error: unknown) => { signal.removeEventListener('abort', onAbort); reject(error) },
+      (index) => { signal.removeEventListener('abort', onAbort); leave(false); resolve(index) },
+      (error: unknown) => { signal.removeEventListener('abort', onAbort); leave(false); reject(error) },
     )
   })
 }
 
-function release(key: string, entry: CachedIndex) {
-  entry.subscribers -= 1
-  if (entry.subscribers > 0) return
-  if (indexCache.get(key) === entry) indexCache.delete(key)
-  entry.controller.abort()
-}
-
 async function fetchSiteIndex(siteId: string, fetcher: Fetcher, url: string, signal?: AbortSignal): Promise<SiteIndex> {
   let payload: unknown
+  const controller = new AbortController()
+  let timedOut = false
+  const onOuterAbort = () => controller.abort()
+  if (signal?.aborted) controller.abort()
+  else signal?.addEventListener('abort', onOuterAbort, { once: true })
+  const timer = setTimeout(() => {
+    timedOut = true
+    controller.abort()
+  }, SITE_INDEX_TIMEOUT_MS)
 
   try {
-    const response = await fetcher(url, signal ? { signal } : undefined)
+    const response = await fetcher(url, { signal: controller.signal })
     if (!response.ok) {
       throw new IndexLoadError(`Request failed with status ${response.status}: ${url}.`, url, { status: response.status })
     }
     payload = await response.json()
   } catch (error) {
+    if (timedOut) throw new IndexLoadError(`Timed out loading ${url}.`, url, { timedOut: true, cause: error })
     if (error instanceof IndexLoadError) {
       throw error
     }
     throw new IndexLoadError(`Could not fetch ${url}.`, url, { cause: error })
+  } finally {
+    clearTimeout(timer)
+    signal?.removeEventListener('abort', onOuterAbort)
   }
 
   return parseSiteIndex(payload, url, siteId)
@@ -260,20 +359,11 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, task: (item: 
 
 export async function discoverSites(
   fetcher: Fetcher = fetch,
-  options: { metadataTimeoutMs?: number } = {},
+  options: { metadataTimeoutMs?: number; registryTimeoutMs?: number; signal?: AbortSignal } = {},
 ): Promise<SiteCatalogEntry[]> {
   const metadataTimeoutMs = options.metadataTimeoutMs ?? SITE_METADATA_TIMEOUT_MS
-  const registryResponse = await fetchResponse(`${INDEX_ROOT}/sites.json`, fetcher)
-  if (!registryResponse.ok) {
-    throw new IndexLoadError(`Request failed with status ${registryResponse.status}: ${INDEX_ROOT}/sites.json.`, `${INDEX_ROOT}/sites.json`, { status: registryResponse.status })
-  }
-  let payload: unknown
-  try {
-    payload = await registryResponse.json()
-  } catch (error) {
-    throw new IndexLoadError(`Invalid site registry: ${INDEX_ROOT}/sites.json.`, `${INDEX_ROOT}/sites.json`, { cause: error })
-  }
-  const registry = parseSiteRegistry(payload)
+  const { signal } = options
+  const registry = await loadSiteRegistry(fetcher, options.registryTimeoutMs ?? REGISTRY_TIMEOUT_MS, signal)
   const deadline = Date.now() + metadataTimeoutMs
   const sites = await mapWithConcurrency(registry.sites, SITE_METADATA_CONCURRENCY, async (site): Promise<SiteCatalogEntry> => {
     const registeredSummary: SiteSummary = {
@@ -282,9 +372,11 @@ export async function discoverSites(
       ...(site.description?.trim() ? { description: site.description } : {}),
     }
     const remaining = deadline - Date.now()
-    if (remaining <= 0) return { site: registeredSummary, status: 'metadata-unavailable' }
+    if (remaining <= 0 || signal?.aborted) return { site: registeredSummary, status: 'metadata-unavailable' }
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), remaining)
+    const onCallerAbort = () => controller.abort()
+    signal?.addEventListener('abort', onCallerAbort, { once: true })
     try {
       const metadata = await loadSiteDiscoveryMetadata(site.id, fetcher, controller.signal)
       return { ...metadata, site: registeredSummary, status: 'available' }
@@ -299,34 +391,78 @@ export async function discoverSites(
       }
     } finally {
       clearTimeout(timer)
+      signal?.removeEventListener('abort', onCallerAbort)
     }
   })
+  if (signal?.aborted) throw new IndexLoadError(`Aborted ${REGISTRY_URL}.`, REGISTRY_URL)
   return sites.sort((left, right) => left.site.title.localeCompare(right.site.title))
 }
 
-async function fetchResponse(url: string, fetcher: Fetcher): Promise<Response> {
+const REGISTRY_URL = `${INDEX_ROOT}/sites.json`
+
+/** Reads and validates the registry; headers and body share one deadline, and the caller can cancel. */
+async function loadSiteRegistry(fetcher: Fetcher, timeoutMs: number, callerSignal?: AbortSignal): Promise<SiteRegistryProjection> {
+  const controller = new AbortController()
+  let timedOut = false
+  const onCallerAbort = () => controller.abort()
+  if (callerSignal?.aborted) controller.abort()
+  else callerSignal?.addEventListener('abort', onCallerAbort, { once: true })
+  const timer = setTimeout(() => {
+    timedOut = true
+    controller.abort()
+  }, timeoutMs)
+  // A deadline or cancellation takes precedence over whatever error the interrupted read produced.
+  const interrupted = (cause: unknown) => {
+    if (timedOut) return new IndexLoadError(`Timed out loading ${REGISTRY_URL}.`, REGISTRY_URL, { timedOut: true, cause })
+    if (callerSignal?.aborted) return new IndexLoadError(`Aborted ${REGISTRY_URL}.`, REGISTRY_URL, { cause })
+    return undefined
+  }
+
   try {
-    return await fetcher(url)
-  } catch (error) {
-    throw new IndexLoadError(`Could not fetch ${url}.`, url, { cause: error })
+    if (callerSignal?.aborted) throw interrupted(undefined)
+    let response: Response
+    try {
+      response = await fetcher(REGISTRY_URL, { signal: controller.signal })
+    } catch (error) {
+      throw interrupted(error) ?? new IndexLoadError(`Could not fetch ${REGISTRY_URL}.`, REGISTRY_URL, { cause: error })
+    }
+    if (!response.ok) {
+      throw new IndexLoadError(`Request failed with status ${response.status}: ${REGISTRY_URL}.`, REGISTRY_URL, { status: response.status })
+    }
+    let text: string
+    try {
+      text = await response.text()
+    } catch (error) {
+      throw interrupted(error) ?? new IndexLoadError(`Could not fetch ${REGISTRY_URL}.`, REGISTRY_URL, { cause: error })
+    }
+    let payload: unknown
+    try {
+      payload = JSON.parse(text)
+    } catch (error) {
+      throw new IndexLoadError(`Invalid site registry: ${REGISTRY_URL}.`, REGISTRY_URL, { cause: error, invalidData: true })
+    }
+    return parseSiteRegistry(payload)
+  } finally {
+    clearTimeout(timer)
+    callerSignal?.removeEventListener('abort', onCallerAbort)
   }
 }
 
 function parseSiteRegistry(payload: unknown): SiteRegistryProjection {
   if (!payload || typeof payload !== 'object') {
-    throw new IndexLoadError(`Invalid site registry: ${INDEX_ROOT}/sites.json.`, `${INDEX_ROOT}/sites.json`)
+    throw new IndexLoadError(`Invalid site registry: ${REGISTRY_URL}.`, REGISTRY_URL, { invalidData: true })
   }
   assertSupportedSchema(payload, 'registry', `${INDEX_ROOT}/sites.json`)
   const registry = payload as Partial<SiteRegistryProjection>
   if (!isSupportedSchema('registry', registry.schemaVersion) || !Array.isArray(registry.sites)) {
-    throw new IndexLoadError(`Invalid site registry: ${INDEX_ROOT}/sites.json.`, `${INDEX_ROOT}/sites.json`)
+    throw new IndexLoadError(`Invalid site registry: ${REGISTRY_URL}.`, REGISTRY_URL, { invalidData: true })
   }
   const seenIDs = new Set<string>()
   const seenSources = new Set<string>()
   let previousID = ''
   for (const rawEntry of registry.sites) {
     if (!rawEntry || typeof rawEntry !== 'object') {
-      throw new IndexLoadError(`Invalid site registry: ${INDEX_ROOT}/sites.json.`, `${INDEX_ROOT}/sites.json`)
+      throw new IndexLoadError(`Invalid site registry: ${REGISTRY_URL}.`, REGISTRY_URL, { invalidData: true })
     }
     const entry = rawEntry as Partial<SiteRegistryProjection['sites'][number]>
     if (
@@ -337,7 +473,7 @@ function parseSiteRegistry(payload: unknown): SiteRegistryProjection {
       || typeof entry.sourcePath !== 'string' || !isCanonicalSourcePath(entry.sourcePath)
       || seenIDs.has(entry.id) || seenSources.has(`${entry.repository.toLowerCase()}\0${entry.sourcePath}`)
     ) {
-      throw new IndexLoadError(`Invalid site registry: ${INDEX_ROOT}/sites.json.`, `${INDEX_ROOT}/sites.json`)
+      throw new IndexLoadError(`Invalid site registry: ${REGISTRY_URL}.`, REGISTRY_URL, { invalidData: true })
     }
     previousID = entry.id
     seenIDs.add(entry.id)

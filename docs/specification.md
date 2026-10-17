@@ -179,12 +179,20 @@ Example discovery metadata:
   "schemaVersion": 1,
   "site": { "id": "sre", "title": "SRE & Platform" },
   "generatedAt": "2026-09-22T00:00:00Z",
-  "artifactCount": 1,
-  "artifactIndexUrl": "/_indexes/sre/index.json"
+  "artifactCount": 3,
+  "artifactIndexUrl": "/_indexes/sre/index.json",
+  "contentUpdatedAt": "2026-09-21T00:00:00Z",
+  "rootArtifactCount": 1,
+  "topLevelFolderCount": 1,
+  "topLevelFolders": [
+    { "name": "en", "artifactCount": 2 }
+  ]
 }
 ~~~
 
 The `artifactIndexUrl` pointer keeps the browser from hard-coding the artifact-index location. The navigation/palette implementation still publishes one complete artifact index per site. Submit-to-search full-text data is a separate projection advertised by `fullTextUrl`; see [the full-text core contract](architecture/fulltext-search.md). It does not change the navigation index loading model.
+
+`contentUpdatedAt` is the maximum `updatedAt` over the site's artifacts, formatted as RFC 3339 UTC, and is omitted when the site has no artifacts. `rootArtifactCount` counts artifacts whose `path` has no `/`. `topLevelFolderCount` counts distinct first path segments of artifact paths that contain `/`. When that count is between 1 and 16 inclusive, `topLevelFolders` contains one `{ "name", "artifactCount" }` entry per folder, sorted by `name` in byte order; it is omitted when the count is 0 or greater than 16. The two counts are always written, including 0. The reader uses these for site cards so it never loads an unvisited site's artifact index; readers ignore them when absent (metadata written by older publishers).
 
 A registered site may have no HTML or Markdown documents. Its index uses `"artifacts": []`, and its discovery metadata reports `"artifactCount": 0`. This is a published empty site, distinct from an unpublished site: `/:site` remains the site home and shows an empty state, while an explicit document route such as `/:site/index.html` is not inferred. Static resources still follow normal sync rules, and stale document objects are removed during reconciliation without removing the site from the desired registry.
 

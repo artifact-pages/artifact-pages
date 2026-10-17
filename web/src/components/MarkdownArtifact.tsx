@@ -151,6 +151,12 @@ function markdownRehypeText(node: MarkdownRehypeNode): string {
   return (node.children ?? []).map(markdownRehypeText).join('')
 }
 
+class HttpStatusError extends Error {
+  constructor(readonly status: number) {
+    super(`Request failed with status ${status}`)
+  }
+}
+
 export function MarkdownArtifact({
   artifact,
   siteId,
@@ -174,7 +180,11 @@ export function MarkdownArtifact({
   footer?: ReactNode
 }) {
   const [source, setSource] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<{ status?: number } | null>(null)
+  // Keyed on the URL so a new document starts at attempt 0 (no focus jump for a first failure).
+  const [retry, setRetry] = useState({ url: artifact.artifactUrl, attempt: 0 })
+  const attempt = retry.url === artifact.artifactUrl ? retry.attempt : 0
+  const retryRef = useRef<HTMLButtonElement>(null)
   const loadingVisible = useDelayedVisible(artifact.artifactUrl)
   const articleRef = useRef<HTMLElement>(null)
 
@@ -184,18 +194,22 @@ export function MarkdownArtifact({
     setError(null)
 
     fetch(artifact.artifactUrl, { signal: controller.signal }).then(async (response) => {
-      if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
+      if (!response.ok) throw new HttpStatusError(response.status)
       return response.text()
     }).then(
       (text) => setSource(text),
       (reason: unknown) => {
         if (controller.signal.aborted) return
-        setError(reason instanceof Error ? reason.message : 'Could not load this Markdown document.')
+        setError(reason instanceof HttpStatusError ? { status: reason.status } : {})
       },
     )
 
     return () => controller.abort()
-  }, [artifact.artifactUrl])
+  }, [artifact.artifactUrl, attempt])
+
+  useEffect(() => {
+    if (error && attempt > 0) retryRef.current?.focus()
+  }, [error, attempt])
 
   useEffect(() => {
     if (!hash || source === null) return
@@ -265,7 +279,19 @@ export function MarkdownArtifact({
     return (
       <div className="markdown-state" role="alert">
         <h1>Markdown unavailable</h1>
-        <p>{error}</p>
+        <p>
+          {error.status
+            ? `This document could not be loaded (HTTP ${error.status}). Try again in a moment.`
+            : 'This document could not be loaded. Check your connection and try again.'}
+        </p>
+        <button
+          ref={retryRef}
+          className="text-action"
+          type="button"
+          onClick={() => setRetry({ url: artifact.artifactUrl, attempt: attempt + 1 })}
+        >
+          Try again
+        </button>
       </div>
     )
   }
