@@ -393,3 +393,46 @@ test('one of two callers sharing a request aborts; the request resolves for the 
     assert.equal(calls.length, 1)
   })
 })
+
+// --- optional discovery fields (ISSUE-095, ISSUE-105) ---
+
+const discoverOne = async (extra) => {
+  const meta = { ...metaOf('alpha'), ...extra }
+  const fetcher = async (url) => json(url.endsWith('sites.json') ? registryOf(['alpha']) : meta)
+  const [entry] = await discoverSites(fetcher)
+  return entry
+}
+
+test('valid optional discovery fields are kept', async () => {
+  const extra = {
+    contentUpdatedAt: '2026-01-02T00:00:00Z',
+    rootArtifactCount: 1,
+    topLevelFolderCount: 2,
+    topLevelFolders: [{ name: 'en', artifactCount: 3 }, { name: 'ja', artifactCount: 2 }],
+  }
+  const entry = await discoverOne(extra)
+  assert.equal(entry.status, 'available')
+  for (const [key, value] of Object.entries(extra)) assert.deepEqual(entry[key], value)
+})
+
+for (const [name, extra, dropped] of [
+  ['non-string contentUpdatedAt', { contentUpdatedAt: 5 }, 'contentUpdatedAt'],
+  ['negative rootArtifactCount', { rootArtifactCount: -1 }, 'rootArtifactCount'],
+  ['fractional rootArtifactCount', { rootArtifactCount: 1.5 }, 'rootArtifactCount'],
+  ['string topLevelFolderCount', { topLevelFolderCount: '2' }, 'topLevelFolderCount'],
+  ['unsafe topLevelFolderCount', { topLevelFolderCount: 2 ** 60 }, 'topLevelFolderCount'],
+  ['non-array topLevelFolders', { topLevelFolders: {} }, 'topLevelFolders'],
+  ['folder with an empty name', { topLevelFolders: [{ name: '', artifactCount: 1 }] }, 'topLevelFolders'],
+  ['folder with a negative count', { topLevelFolders: [{ name: 'en', artifactCount: -1 }] }, 'topLevelFolders'],
+  ['folder that is not an object', { topLevelFolders: ['en'] }, 'topLevelFolders'],
+]) {
+  test(`a malformed optional field is dropped without rejecting the metadata: ${name}`, async () => {
+    const entry = await discoverOne({ contentUpdatedAt: '2026-01-02T00:00:00Z', rootArtifactCount: 0, topLevelFolderCount: 1, topLevelFolders: [{ name: 'en', artifactCount: 1 }], ...extra })
+    assert.equal(entry.status, 'available')
+    assert.equal(entry.artifactCount, 1)
+    assert.equal(entry[dropped], undefined)
+    for (const key of ['contentUpdatedAt', 'rootArtifactCount', 'topLevelFolderCount', 'topLevelFolders']) {
+      if (key !== dropped) assert.notEqual(entry[key], undefined, key)
+    }
+  })
+}

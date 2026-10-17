@@ -3,7 +3,6 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import sreIndex from '../../../fixtures/storage/_indexes/sre/index.json'
 import frontendIndex from '../../../fixtures/storage/_indexes/frontend/index.json'
 import type { SiteCatalogEntry, SiteDiscoveryMetadata, SiteIndex } from '../domain/index'
-import type { FolderCount } from '../domain/site-folder-counts'
 import { SitePicker } from './SitePicker'
 
 const sites = [sreIndex, frontendIndex].map((value) => {
@@ -20,32 +19,54 @@ const sites = [sreIndex, frontendIndex].map((value) => {
     artifactCount: index.artifacts.length,
     artifactIndexUrl: `/_indexes/${index.site.id}/index.json`,
     fullTextUrl: index.site.id === 'sre' ? '/_indexes/sre/search/manifest.json' : undefined,
+    contentUpdatedAt: index.generatedAt,
+    ...(index.site.id === 'sre'
+      ? {
+        rootArtifactCount: 0,
+        topLevelFolderCount: 6,
+        topLevelFolders: ['architecture', 'diagrams', 'guides', 'incidents', 'reports', 'runbooks'].map((name) => ({ name, artifactCount: 1 })),
+      }
+      : {}),
   }
 }) as SiteDiscoveryMetadata[]
 
-function site(id: string, title: string, description: string, artifactCount: number): SiteDiscoveryMetadata {
+function site(
+  id: string,
+  title: string,
+  description: string,
+  artifactCount: number,
+  extra: Partial<SiteDiscoveryMetadata> = {},
+): SiteDiscoveryMetadata {
   return {
     schemaVersion: 1,
     site: { id, title, description },
     generatedAt: '2026-10-09T00:00:00Z',
     artifactCount,
     artifactIndexUrl: `/_indexes/${id}/index.json`,
+    ...extra,
   }
 }
 
-const guide = site('guide', 'Guide', 'Start here: set up the registry, publish your first artifact, and read it.', 14)
-const architecture = site('architecture', 'Architecture', 'How storage, indexes, delivery and the trust model fit together.', 12)
-const handbook = site('handbook', 'Handbook', 'Team handbook with a few top-level pages and no folders.', 5)
-
-const folderCounts: Record<string, FolderCount[]> = {
-  guide: [{ folder: 'en', count: 7 }, { folder: 'ja', count: 7 }],
-  architecture: [{ folder: 'en', count: 6 }, { folder: 'ja', count: 6 }],
-  handbook: [{ folder: '(root)', count: 5, isRoot: true }],
-  sre: [
-    { folder: 'architecture', count: 1 }, { folder: 'diagrams', count: 1 }, { folder: 'guides', count: 1 },
-    { folder: 'incidents', count: 1 }, { folder: 'reports', count: 1 }, { folder: 'runbooks', count: 1 },
-  ],
-}
+const guide = site('guide', 'Guide', 'Start here: set up the registry, publish your first artifact, and read it.', 14, {
+  contentUpdatedAt: '2026-10-11T06:18:49Z',
+  rootArtifactCount: 0,
+  topLevelFolderCount: 2,
+  topLevelFolders: [{ name: 'en', artifactCount: 7 }, { name: 'ja', artifactCount: 7 }],
+})
+const architecture = site('architecture', 'Architecture', 'How storage, indexes, delivery and the trust model fit together.', 12, {
+  contentUpdatedAt: '2026-10-10T09:00:00Z',
+  rootArtifactCount: 0,
+  topLevelFolderCount: 2,
+  topLevelFolders: [{ name: 'en', artifactCount: 6 }, { name: 'ja', artifactCount: 6 }],
+})
+const handbook = site('handbook', 'Handbook', 'Team handbook with a few top-level pages and no folders.', 5, {
+  contentUpdatedAt: '2026-10-08T09:00:00Z',
+  rootArtifactCount: 5,
+  topLevelFolderCount: 0,
+  topLevelFolders: [],
+})
+// Published by a CLI that predates the freshness and folder fields: count only.
+const legacy = site('legacy', 'Legacy', 'Published before discovery metadata carried freshness and folders.', 9)
 
 const statusSites: SiteCatalogEntry[] = [
   guide,
@@ -69,7 +90,6 @@ const meta = {
   args: {
     sites,
     onNavigate: () => undefined,
-    folderCounts,
   },
   parameters: {
     layout: 'fullscreen',
@@ -108,9 +128,9 @@ export const Narrow390Dark: Story = {
   globals: { viewport: { value: 'phone390', isRotated: false } },
 }
 
-// Counts still loading (or failed): cards fall back to the metadata total.
-export const CountsNotLoaded: Story = {
-  args: { sites: [architecture, guide], folderCounts: {} },
+// Old metadata without freshness or folder fields: cards show only the count.
+export const OldMetadata: Story = {
+  args: { sites: [architecture, guide, legacy] },
 }
 
 export const Statuses: Story = {

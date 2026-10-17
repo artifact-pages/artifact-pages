@@ -53,7 +53,26 @@ function parseSiteDiscoveryMetadata(payload: unknown, url: string, expectedSiteI
     throw new IndexLoadError(`Invalid site discovery metadata: ${url}.`, url)
   }
 
-  return metadata as SiteDiscoveryMetadata
+  const optional = metadata as Record<string, unknown>
+  const result = { ...metadata } as SiteDiscoveryMetadata
+  // Optional discovery fields: a malformed one is dropped without rejecting the metadata (TD2).
+  if (!(typeof optional.contentUpdatedAt === 'string')) delete result.contentUpdatedAt
+  if (!isCount(optional.rootArtifactCount)) delete result.rootArtifactCount
+  if (!isCount(optional.topLevelFolderCount)) delete result.topLevelFolderCount
+  if (!isTopLevelFolders(optional.topLevelFolders)) delete result.topLevelFolders
+  return result
+}
+
+function isCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+}
+
+function isTopLevelFolders(value: unknown): value is { name: string; artifactCount: number }[] {
+  return Array.isArray(value) && value.every((item) => (
+    item !== null && typeof item === 'object' &&
+    typeof (item as { name?: unknown }).name === 'string' && (item as { name: string }).name !== '' &&
+    isCount((item as { artifactCount?: unknown }).artifactCount)
+  ))
 }
 
 /** How long a shared index read is reused. Keeps picker -> site navigation to one request, yet picks up a newer publish soon. */
