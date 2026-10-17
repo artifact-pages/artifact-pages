@@ -6440,17 +6440,21 @@ test.describe('directory pages', () => {
   ]
   const cappedPages = [...readmeFolder('handbook', 13), ...readmeFolder('twelve', 12)]
 
-  async function routeDirectoryIndex(page: Page, pages: readonly ExtraPage[] = extraPages) {
-    await page.route('**/_indexes/sre/index.json', async (route) => {
+  async function routeDirectoryIndex(page: Page, pages: readonly ExtraPage[] = extraPages, siteId = 'sre') {
+    await page.route(`**/_indexes/${siteId}/index.json`, async (route) => {
       const response = await route.fetch()
       const index = await response.json()
+      // Every row must point into its own site; reuse one of the site's own Markdown documents.
+      const documentUrl = siteId === 'sre'
+        ? sharedMarkdown
+        : index.artifacts.find((entry: { format: string }) => entry.format === 'markdown').artifactUrl
       index.artifacts.push(...pages.map(([path, title, updatedAt, headings]) => ({
         id: path,
         path,
         title,
         format: 'markdown',
         filename: path.split('/').at(-1),
-        artifactUrl: sharedMarkdown,
+        artifactUrl: documentUrl,
         updatedAt,
         lastCommitter: { name: 'Ada Writer' },
         toc: headings,
@@ -6482,6 +6486,108 @@ test.describe('directory pages', () => {
     await expect(publishing.locator('.directory-chip')).toHaveText(['Publish on', 'Dry runs', 'Credentials', '+2'])
     await expect(publishing.locator('.directory-chip').first()).toHaveAttribute('href', '/sre/guide/en/publishing.md#section-1')
     await expect(pages.locator('.directory-row', { hasText: 'Previews' }).locator('.directory-chip')).toHaveText(['Pull requests'])
+  })
+
+  // ISSUE-093: 5,000 pages in one folder (no README) and 5,000 children under a README.
+  const bulkNumber = (position: number) => String(position + 1).padStart(4, '0')
+  const bulkPages: ExtraPage[] = [
+    ...Array.from({ length: 5000 }, (_, position): ExtraPage => [
+      `wide/page-${bulkNumber(position)}.md`,
+      `${position % 5 < 2 ? 'Alpha' : 'Beta'} page ${bulkNumber(position)}`,
+      '2026-10-05T00:00:00Z',
+      [],
+    ]),
+    ['wideroot/README.md', 'Wide README home', '2026-10-01T00:00:00Z', toc('Welcome')],
+    ...Array.from({ length: 5000 }, (_, position): ExtraPage => [
+      `wideroot/child-${bulkNumber(position)}.md`, `Child ${bulkNumber(position)}`, '2026-10-05T00:00:00Z', [],
+    ]),
+  ]
+
+  test('a 5,000-page folder mounts at most 100 rows, pages to the last row and bounds the sidebar branch', async ({ page }) => {
+    await routeDirectoryIndex(page, bulkPages)
+    await page.goto('/sre/wide')
+
+    const directory = page.getByTestId('directory-page')
+    const rows = directory.locator('a[data-directory-page]')
+    const pager = directory.getByRole('navigation', { name: 'Pages of this folder' })
+    await expect(rows).toHaveCount(100)
+    await expect(pager).toContainText('Showing 1–100 of 5,000')
+    await expect(pager.getByRole('button', { name: 'Previous' })).toBeDisabled()
+    const branchRows = page.locator('.browse-tree a.tree-artifact[data-tree-path^="wide/"]')
+    await expect(branchRows).toHaveCount(100)
+    await expect(page.locator('.browse-tree .tree-more')).toHaveText('4900 more in wide')
+    await expect(page.locator('.browse-tree .tree-more')).toHaveAttribute('href', '/sre/wide')
+
+    await pager.getByRole('button', { name: 'Next' }).click()
+    await expect(pager).toContainText('Showing 101–200 of 5,000')
+    await expect(rows.first()).toBeFocused()
+    await expect(rows.first()).toHaveAttribute('data-directory-page', 'wide/page-0101.md')
+    expect(await rows.count()).toBeLessThanOrEqual(100)
+
+    for (let step = 0; step < 48; step += 1) await pager.getByRole('button', { name: 'Next' }).click()
+    await expect(pager).toContainText('Showing 4,901–5,000 of 5,000')
+    await expect(pager.getByRole('button', { name: 'Next' })).toBeDisabled()
+    await expect(rows).toHaveCount(100)
+    await expect(directory.locator('a[data-directory-page="wide/page-5000.md"]')).toBeVisible()
+  })
+
+  test('the sidebar keeps the open page row when it is beyond the branch limit', async ({ page }) => {
+    await routeDirectoryIndex(page, bulkPages)
+    await page.goto('/sre/wide/page-4321.md')
+
+    const branchRows = page.locator('.browse-tree a.tree-artifact[data-tree-path^="wide/"]')
+    await expect(branchRows).toHaveCount(101)
+    const active = page.locator('.browse-tree a.tree-artifact[data-tree-path="wide/page-4321.md"]')
+    await expect(active).toHaveCount(1)
+    await expect(active).toHaveAttribute('aria-current', 'page')
+    await expect(page.locator('.browse-tree .tree-more')).toHaveText('4899 more in wide')
+  })
+
+  test('a sidebar filter matching 2,000 pages mounts at most 101 rows', async ({ page }) => {
+    // The sidebar filter needs a site with page text search data.
+    await registerTextSearchSite(page)
+    await routeDirectoryIndex(page, bulkPages, 'textsearch')
+    await page.goto('/textsearch')
+    await page.getByRole('searchbox', { name: 'Filter pages in Text Search by title or path' }).fill('alpha page')
+    const results = page.locator('.filter-results a.tree-artifact')
+    await expect(results.first()).toBeVisible()
+    expect(await results.count()).toBeLessThanOrEqual(101)
+    await expect(page.locator('.filter-results .tree-more')).toContainText('more matches')
+  })
+
+  test('a filter matching 60 folders of 60 pages stays within the tree-wide row budget', async ({ page }) => {
+    const grid: ExtraPage[] = Array.from({ length: 3600 }, (_, position): ExtraPage => {
+      const folder = String(Math.floor(position / 60) + 1).padStart(2, '0')
+      const number = String((position % 60) + 1).padStart(2, '0')
+      return [`zf${folder}/p${number}.md`, `Zeta ${folder}-${number}`, '2026-10-05T00:00:00Z', []]
+    })
+    await registerTextSearchSite(page)
+    await routeDirectoryIndex(page, grid, 'textsearch')
+    await page.goto('/textsearch')
+    await page.getByRole('searchbox', { name: 'Filter pages in Text Search by title or path' }).fill('zeta')
+    const tree = page.locator('.filter-results .artifact-tree')
+    await expect(tree.locator('a.tree-artifact').first()).toBeVisible()
+    // Budgeted rows (folder and page rows) <= 400; at most one overflow row per branch (60 folders + the root).
+    const mounted = await tree.locator('.tree-directory-row, .tree-directory-button:not(.tree-directory-toggle), a.tree-artifact').count()
+    expect(mounted).toBeLessThanOrEqual(400)
+    const overflow = await tree.locator('.tree-more:not(:has-text("Some folders"))').count()
+    expect(overflow).toBeLessThanOrEqual(61)
+    await expect(tree.locator('.tree-more', { hasText: 'Some folders are not fully shown. Collapse folders or refine the filter.' })).toBeVisible()
+  })
+
+  test('a README folder with 5,000 children collapses to 10 rows and pages after Show all', async ({ page }) => {
+    await routeDirectoryIndex(page, bulkPages)
+    await page.goto('/sre/wideroot')
+
+    const directory = page.getByTestId('directory-page')
+    const rows = directory.locator('.directory-compact a')
+    await expect(rows).toHaveCount(10)
+    await expect(directory.getByRole('navigation', { name: 'Pages of this folder' })).toHaveCount(0)
+    await directory.getByRole('button', { name: /Show all/ }).click()
+    await expect(rows).toHaveCount(100)
+    const pager = directory.getByRole('navigation', { name: 'Pages of this folder' })
+    await expect(pager).toContainText('Showing 1–100 of 5,000')
+    await expect(directory.getByRole('button', { name: 'Show fewer' })).toBeVisible()
   })
 
   test('a trailing slash and percent-encoded folder names name the same directory', async ({ page }) => {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ArtifactIndexEntry } from '../domain/index'
 import { compareArtifactsByPath } from '../domain/listing-order.ts'
+import { TREE_BRANCH_ROW_LIMIT, TREE_FLAT_ROW_LIMIT, boundRows, createRowBudget, visitBranch, type RowBudget } from '../domain/row-window'
 import { buildArtifactTree, countArtifacts, flattenArtifacts, foldedIndexArtifact, type ArtifactTreeNode } from '../domain/tree'
 import { ArtifactActionsMenu } from './ArtifactActionsMenu'
 import { Icon } from './Icon'
@@ -33,6 +34,8 @@ export function ArtifactTree({
   activeDirectoryPath,
   directoryHref,
   onOpenDirectory,
+  rootHref,
+  onOpenRoot,
 }: {
   artifacts: ArtifactIndexEntry[]
   activePath?: string
@@ -55,6 +58,9 @@ export function ArtifactTree({
    */
   directoryHref?: (directory: ArtifactTreeNode) => string
   onOpenDirectory?: (directory: ArtifactTreeNode) => void
+  /** The link target of the site root folder page; used by the overflow row of the root branch. */
+  rootHref?: string
+  onOpenRoot?: () => void
 }) {
   const needsTree = view === 'tree' && style !== 'path-list'
   const [localExpandedPaths, setLocalExpandedPaths] = useState(
@@ -76,6 +82,7 @@ export function ArtifactTree({
   const items = view === 'recent'
     ? artifacts.filter((artifact) => matches(artifact, normalizedQuery))
     : filteredArtifacts
+  const flat = boundRows(items, TREE_FLAT_ROW_LIMIT, (artifact) => artifact.path === activePath)
   const isPathListView = view === 'paths' || (view === 'tree' && style === 'path-list')
 
   useEffect(() => {
@@ -111,7 +118,7 @@ export function ArtifactTree({
     )
   }
 
-  function renderNode(node: ArtifactTreeNode, depth: number): React.ReactNode {
+  function renderNode(node: ArtifactTreeNode, depth: number, budget: RowBudget): React.ReactNode {
     const directories = [...node.directories.values()].filter(
       (directory) => !normalizedQuery
         || folderMatches(directory, normalizedQuery)
@@ -123,9 +130,23 @@ export function ArtifactTree({
       (artifact) => artifact !== foldedIndex && matches(artifact, normalizedQuery),
     )
 
-    return (
-      <>
-        {directories.map((directory) => {
+    const isActiveDirectoryRow = (directory: ArtifactTreeNode) => {
+      const hiddenIndex = directoryHref && !normalizedQuery ? foldedIndexArtifact(directory) : undefined
+      return directory.path === activeDirectoryPath
+        || (hiddenIndex !== undefined && hiddenIndex.path === activePath)
+        // The folder that holds the active page or folder keeps its row too.
+        || [activePath, activeDirectoryPath].some((active) => active?.startsWith(`${directory.path}/`))
+    }
+    // Directories first, then files; the branch mounts at most TREE_BRANCH_ROW_LIMIT of them (ISSUE-093).
+    const rows = [
+      ...directories.map((directory) => ({ directory })),
+      ...files.map((artifact) => ({ artifact })),
+    ]
+    const moreHref = node.path ? directoryHref?.(node) : rootHref
+    const moreLabel = node.path ? node.label : 'this site'
+    const moreOpen = () => node.path ? onOpenDirectory?.(node) : onOpenRoot?.()
+
+    const renderDirectory = (directory: ArtifactTreeNode) => {
           const isExpanded = normalizedQuery.length > 0 || expanded.has(directory.path)
           const count = normalizedQuery
             ? countMatching(directory, normalizedQuery)
@@ -191,26 +212,65 @@ export function ArtifactTree({
               )}
               {isExpanded ? (
                 <div className={`tree-children tree-children-${style}`}>
-                  {renderNode(directory, depth + 1)}
+                  {renderNode(directory, depth + 1, budget)}
                 </div>
               ) : null}
             </div>
           )
-        })}
-        {files.map((artifact) => renderArtifact(artifact, depth, style))}
+    }
+
+    // Per-branch limit and the tree-wide budget, in depth-first render order (ISSUE-093).
+    const { items: rowNodes, hidden, showOverflow } = visitBranch(
+      budget,
+      rows,
+      {
+        limit: TREE_BRANCH_ROW_LIMIT,
+        isPinned: (row) => 'directory' in row ? isActiveDirectoryRow(row.directory) : row.artifact.path === activePath,
+      },
+      (row) => 'directory' in row ? renderDirectory(row.directory) : renderArtifact(row.artifact, depth, style),
+    )
+
+    return (
+      <>
+        {rowNodes}
+        {showOverflow ? (
+          moreHref ? (
+            <a
+              className="tree-more"
+              href={moreHref}
+              style={{ paddingInlineStart: style === 'branch-guides' ? '8px' : `${10 + depth * 14}px` }}
+              onClick={(event) => followInApp(event, moreOpen)}
+            >{hidden} more {normalizedQuery ? 'matches ' : ''}in {moreLabel}</a>
+          ) : (
+            <p className="tree-more" style={{ paddingInlineStart: style === 'branch-guides' ? '8px' : `${10 + depth * 14}px` }}>
+              {normalizedQuery
+                ? `${hidden} more matches not shown. Refine the filter to narrow the list.`
+                : `${hidden} more not shown. Use the filter to narrow the list.`}
+            </p>
+          )
+        ) : null}
       </>
     )
   }
 
+  const budget = createRowBudget()
+  const treeNodes = view === 'tree' && style !== 'path-list' && tree ? renderNode(tree, 0, budget) : null
+
   return (
     <div className={`artifact-tree tree-view-${view} tree-style-${style}`}>
-      {view === 'recent' ? items.map((artifact) => renderArtifact(artifact, 0, style)) : null}
-      {isPathListView ? (
-        <>
-          {items.map((artifact) => renderArtifact(artifact, 0, 'path-list', true))}
-        </>
+      {view === 'recent' ? flat.shown.map((artifact) => renderArtifact(artifact, 0, style)) : null}
+      {isPathListView ? flat.shown.map((artifact) => renderArtifact(artifact, 0, 'path-list', true)) : null}
+      {(view === 'recent' || isPathListView) && flat.hidden > 0 ? (
+        <p className="tree-more">
+          {normalizedQuery
+            ? `Showing ${TREE_FLAT_ROW_LIMIT} of ${items.length} matches. Refine the filter to narrow the list.`
+            : `Showing ${TREE_FLAT_ROW_LIMIT} of ${items.length}. Use the filter to narrow the list.`}
+        </p>
       ) : null}
-      {view === 'tree' && style !== 'path-list' && tree ? renderNode(tree, 0) : null}
+      {treeNodes}
+      {budget.withheld ? (
+        <p className="tree-more">Some folders are not fully shown. Collapse folders or refine the filter.</p>
+      ) : null}
     </div>
   )
 }

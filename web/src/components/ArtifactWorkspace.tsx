@@ -803,6 +803,11 @@ export function ArtifactWorkspace({
         onOpenPalette={openPalette}
         onOpenArtifact={openArtifact}
         onOpenDirectory={openDirectory}
+        onOpenRoot={() => {
+          navigateWithinWorkspace(siteHomeHref)
+          setActivePanel(null)
+          setPaletteSeed(null)
+        }}
         onToast={showToast}
         themeMode={themeMode}
         onSetThemeMode={onSetThemeMode}
