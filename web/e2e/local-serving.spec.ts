@@ -492,7 +492,7 @@ test('site cards show the description, page counts per top-level folder and a St
     contentUpdatedAt: '2026-10-03T12:00:00Z', rootArtifactCount: 2, topLevelFolderCount: 0, topLevelFolders: [],
   }))))
   await page.route('**/_indexes/guide/meta.json', (route) => route.fulfill(json(meta('guide', 5, {
-    contentUpdatedAt: '2026-10-05T12:00:00Z', rootArtifactCount: 0, topLevelFolderCount: 2, topLevelFolders: folders(['ja', 2], ['en', 3]),
+    contentUpdatedAt: '2026-10-05T12:00:00Z', rootArtifactCount: 0, topLevelFolderCount: 2, topLevelFolders: folders(['en', 3], ['ja', 2]),
   }))))
   await page.route('**/_indexes/handbook/meta.json', (route) => route.fulfill(json(meta('handbook', 3, {
     contentUpdatedAt: '2026-10-04T12:00:00Z', rootArtifactCount: 1, topLevelFolderCount: 2, topLevelFolders: folders(['en', 1], ['ja', 1]),

@@ -53,14 +53,57 @@ function parseSiteDiscoveryMetadata(payload: unknown, url: string, expectedSiteI
     throw new IndexLoadError(`Invalid site discovery metadata: ${url}.`, url)
   }
 
-  const optional = metadata as Record<string, unknown>
-  const result = { ...metadata } as SiteDiscoveryMetadata
-  // Optional discovery fields: a malformed one is dropped without rejecting the metadata (TD2).
-  if (!(typeof optional.contentUpdatedAt === 'string')) delete result.contentUpdatedAt
-  if (!isCount(optional.rootArtifactCount)) delete result.rootArtifactCount
-  if (!isCount(optional.topLevelFolderCount)) delete result.topLevelFolderCount
-  if (!isTopLevelFolders(optional.topLevelFolders)) delete result.topLevelFolders
-  return result
+  return { ...metadata, ...sanitizeOptionalDiscovery(metadata as Record<string, unknown>) } as SiteDiscoveryMetadata
+}
+
+const MAX_LISTED_TOP_LEVEL_FOLDERS = 16
+const RFC3339_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/
+
+/**
+ * Keeps each optional discovery field only when it meets the invariants of specification section 5.2
+ * and agrees with `artifactCount`; anything else is dropped (set to undefined) without rejecting the
+ * metadata (TD2: an unusable optional field disables that feature).
+ */
+function sanitizeOptionalDiscovery(meta: Record<string, unknown>) {
+  const total = meta.artifactCount as number
+  let contentUpdatedAt: string | undefined
+  if (typeof meta.contentUpdatedAt === 'string' && total > 0 && RFC3339_UTC.test(meta.contentUpdatedAt) &&
+    !Number.isNaN(Date.parse(meta.contentUpdatedAt))) {
+    contentUpdatedAt = meta.contentUpdatedAt
+  }
+  const rootArtifactCount = isCount(meta.rootArtifactCount) && meta.rootArtifactCount <= total ? meta.rootArtifactCount : undefined
+  let topLevelFolderCount = isCount(meta.topLevelFolderCount) ? meta.topLevelFolderCount : undefined
+  if (topLevelFolderCount !== undefined) {
+    const foldered = total - (rootArtifactCount ?? 0)
+    // Every folder holds at least one artifact; a count of 0 means nothing is in a folder.
+    if (topLevelFolderCount > foldered || (rootArtifactCount !== undefined && (topLevelFolderCount === 0) !== (foldered === 0))) {
+      topLevelFolderCount = undefined
+    }
+  }
+  let topLevelFolders: { name: string; artifactCount: number }[] | undefined
+  if (topLevelFolderCount !== undefined && isTopLevelFolders(meta.topLevelFolders) &&
+    topLevelFolderCount >= 1 && topLevelFolderCount <= MAX_LISTED_TOP_LEVEL_FOLDERS &&
+    meta.topLevelFolders.length === topLevelFolderCount && isStrictlyByteSorted(meta.topLevelFolders.map((folder) => folder.name))) {
+    const sum = meta.topLevelFolders.reduce((acc, folder) => acc + folder.artifactCount, 0)
+    if (meta.topLevelFolders.every((folder) => folder.artifactCount >= 1 && !folder.name.includes('/')) &&
+      (rootArtifactCount === undefined ? sum <= total : sum + rootArtifactCount === total)) {
+      topLevelFolders = meta.topLevelFolders
+    }
+  }
+  return { contentUpdatedAt, rootArtifactCount, topLevelFolderCount, topLevelFolders }
+}
+
+function isStrictlyByteSorted(names: string[]) {
+  const encoder = new TextEncoder()
+  const bytes = names.map((name) => encoder.encode(name))
+  return bytes.every((current, index) => {
+    if (index === 0) return true
+    const previous = bytes[index - 1]
+    for (let k = 0; k < Math.min(previous.length, current.length); k += 1) {
+      if (previous[k] !== current[k]) return previous[k] < current[k]
+    }
+    return previous.length < current.length
+  })
 }
 
 function isCount(value: unknown): value is number {

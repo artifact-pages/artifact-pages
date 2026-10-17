@@ -405,7 +405,8 @@ const discoverOne = async (extra) => {
 
 test('valid optional discovery fields are kept', async () => {
   const extra = {
-    contentUpdatedAt: '2026-01-02T00:00:00Z',
+    artifactCount: 6,
+    contentUpdatedAt: '2026-01-02T00:00:00.5Z',
     rootArtifactCount: 1,
     topLevelFolderCount: 2,
     topLevelFolders: [{ name: 'en', artifactCount: 3 }, { name: 'ja', artifactCount: 2 }],
@@ -415,24 +416,50 @@ test('valid optional discovery fields are kept', async () => {
   for (const [key, value] of Object.entries(extra)) assert.deepEqual(entry[key], value)
 })
 
+const base = {
+  artifactCount: 5,
+  contentUpdatedAt: '2026-01-02T00:00:00Z',
+  rootArtifactCount: 1,
+  topLevelFolderCount: 2,
+  topLevelFolders: [{ name: 'en', artifactCount: 3 }, { name: 'ja', artifactCount: 1 }],
+}
+const FIELDS = ['contentUpdatedAt', 'rootArtifactCount', 'topLevelFolderCount', 'topLevelFolders']
+
+// [name, overrides, fields that must be dropped]
 for (const [name, extra, dropped] of [
-  ['non-string contentUpdatedAt', { contentUpdatedAt: 5 }, 'contentUpdatedAt'],
-  ['negative rootArtifactCount', { rootArtifactCount: -1 }, 'rootArtifactCount'],
-  ['fractional rootArtifactCount', { rootArtifactCount: 1.5 }, 'rootArtifactCount'],
-  ['string topLevelFolderCount', { topLevelFolderCount: '2' }, 'topLevelFolderCount'],
-  ['unsafe topLevelFolderCount', { topLevelFolderCount: 2 ** 60 }, 'topLevelFolderCount'],
-  ['non-array topLevelFolders', { topLevelFolders: {} }, 'topLevelFolders'],
-  ['folder with an empty name', { topLevelFolders: [{ name: '', artifactCount: 1 }] }, 'topLevelFolders'],
-  ['folder with a negative count', { topLevelFolders: [{ name: 'en', artifactCount: -1 }] }, 'topLevelFolders'],
-  ['folder that is not an object', { topLevelFolders: ['en'] }, 'topLevelFolders'],
+  ['non-string contentUpdatedAt', { contentUpdatedAt: 5 }, ['contentUpdatedAt']],
+  ['date-only contentUpdatedAt', { contentUpdatedAt: '2026-10-01' }, ['contentUpdatedAt']],
+  ['contentUpdatedAt with an offset', { contentUpdatedAt: '2026-10-01T00:00:00+09:00' }, ['contentUpdatedAt']],
+  ['contentUpdatedAt that is not a date', { contentUpdatedAt: '2026-13-45T00:00:00Z' }, ['contentUpdatedAt']],
+  ['contentUpdatedAt on an empty site', { artifactCount: 0, rootArtifactCount: 0, topLevelFolderCount: 0, topLevelFolders: undefined }, ['contentUpdatedAt']],
+  ['negative rootArtifactCount', { rootArtifactCount: -1 }, ['rootArtifactCount']],
+  ['fractional rootArtifactCount', { rootArtifactCount: 1.5 }, ['rootArtifactCount']],
+  ['rootArtifactCount above artifactCount', { rootArtifactCount: 9 }, ['rootArtifactCount']],
+  ['string topLevelFolderCount', { topLevelFolderCount: '2' }, ['topLevelFolderCount', 'topLevelFolders']],
+  ['unsafe topLevelFolderCount', { topLevelFolderCount: 2 ** 60 }, ['topLevelFolderCount', 'topLevelFolders']],
+  ['topLevelFolderCount above the foldered artifacts', { topLevelFolderCount: 5 }, ['topLevelFolderCount', 'topLevelFolders']],
+  ['topLevelFolderCount 0 although artifacts are in folders', { topLevelFolderCount: 0 }, ['topLevelFolderCount', 'topLevelFolders']],
+  ['non-array topLevelFolders', { topLevelFolders: {} }, ['topLevelFolders']],
+  ['folder with an empty name', { topLevelFolders: [{ name: '', artifactCount: 1 }, { name: 'ja', artifactCount: 3 }] }, ['topLevelFolders']],
+  ['folder with a zero count', { topLevelFolders: [{ name: 'en', artifactCount: 4 }, { name: 'ja', artifactCount: 0 }] }, ['topLevelFolders']],
+  ['folder that is not an object', { topLevelFolders: ['en', 'ja'] }, ['topLevelFolders']],
+  ['list length differing from topLevelFolderCount', { topLevelFolderCount: 3 }, ['topLevelFolders']],
+  ['duplicate folder names', { topLevelFolders: [{ name: 'en', artifactCount: 2 }, { name: 'en', artifactCount: 2 }] }, ['topLevelFolders']],
+  ['unsorted folders', { topLevelFolders: [{ name: 'ja', artifactCount: 1 }, { name: 'en', artifactCount: 3 }] }, ['topLevelFolders']],
+  ['folder counts not adding up with the root count', { topLevelFolders: [{ name: 'en', artifactCount: 2 }, { name: 'ja', artifactCount: 1 }] }, ['topLevelFolders']],
 ]) {
-  test(`a malformed optional field is dropped without rejecting the metadata: ${name}`, async () => {
-    const entry = await discoverOne({ contentUpdatedAt: '2026-01-02T00:00:00Z', rootArtifactCount: 0, topLevelFolderCount: 1, topLevelFolders: [{ name: 'en', artifactCount: 1 }], ...extra })
+  test(`a field that breaks the specification is dropped without rejecting the metadata: ${name}`, async () => {
+    const entry = await discoverOne({ ...base, ...extra })
     assert.equal(entry.status, 'available')
-    assert.equal(entry.artifactCount, 1)
-    assert.equal(entry[dropped], undefined)
-    for (const key of ['contentUpdatedAt', 'rootArtifactCount', 'topLevelFolderCount', 'topLevelFolders']) {
-      if (key !== dropped) assert.notEqual(entry[key], undefined, key)
+    assert.equal(entry.site.id, 'alpha')
+    for (const key of FIELDS) {
+      if (dropped.includes(key)) assert.equal(entry[key], undefined, key)
     }
   })
 }
+
+test('contradictory counts leave only the folder count (5 with a 2-entry list)', async () => {
+  const entry = await discoverOne({ artifactCount: 9, rootArtifactCount: 0, topLevelFolderCount: 5, topLevelFolders: base.topLevelFolders })
+  assert.equal(entry.topLevelFolders, undefined)
+  assert.equal(entry.topLevelFolderCount, 5)
+})
