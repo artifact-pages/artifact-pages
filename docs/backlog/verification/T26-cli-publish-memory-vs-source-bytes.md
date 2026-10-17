@@ -16,7 +16,7 @@ The memory use of a publish is known as a function of source bytes, and a maximu
 ## Exit criteria
 
 - [x] Peak RSS and wall time are recorded for no-op, differential publish, dry-run and first publish at sizes near the candidate limits.
-- [x] A size guideline is documented from the measurements (owner choice, 2026-10-17): no hard maximum file size or total source size; see Owner decision.
+- [x] A maximum file size and total source size are documented from the measurements (owner choice, 2026-10-17): 512 MiB per file and 1 GiB total per publish, documented and not enforced by the CLI; see Owner decision.
 - [x] The result states whether streaming or immutable staging is needed: not pursued now (owner decision, 2026-10-17).
 
 ## Evidence
@@ -31,7 +31,7 @@ The memory use of a publish is known as a function of source bytes, and a maximu
 
 ## Owner decision
 
-2026-10-17: document a size guideline. Streaming and immutable staging are not pursued now. The guideline is in the specification (Publishable source directory, "Memory and source size") and the root README status list; it follows the [report](../../research/cli-publish-memory.md).
+2026-10-17: document a size limit (512 MiB per file, 1 GiB total per publish; the largest measured shapes), not enforced by the CLI. Streaming and immutable staging are not pursued now. The guideline is in the specification (Publishable source directory, "Memory and source size") and the root README status list; it follows the [report](../../research/cli-publish-memory.md).
 
 ## Initial local RSS baseline, 2026-10-15
 
