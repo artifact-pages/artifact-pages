@@ -1,6 +1,6 @@
 export type AppRoute =
   | { kind: 'sites' }
-  | { kind: 'site'; siteId: string; artifactPath?: string }
+  | { kind: 'site'; siteId: string; artifactPath?: string; section?: 'files' }
   | { kind: 'search'; siteId: string; query: string; folder?: string }
   | { kind: 'preview-list'; siteId: string; groupId?: string }
   | { kind: 'preview-document'; siteId: string; headSha: string; artifactPath: string; groupId?: string }
@@ -41,11 +41,27 @@ export function parseRoute(pathname: string, search = ''): AppRoute {
       }
     }
   }
-  return {
-    kind: 'site',
-    siteId,
-    artifactPath: artifactSegments.length > 0 ? artifactSegments.join('/') : undefined,
+  if (artifactSegments.length === 0) {
+    // `?section=files` selects Files on the site root (ISSUE-107); other values are corrected by the workspace.
+    const section = new URLSearchParams(search).get('section') === 'files' ? 'files' as const : undefined
+    return { kind: 'site', siteId, artifactPath: undefined, section }
   }
+  return { kind: 'site', siteId, artifactPath: artifactSegments.join('/') }
+}
+
+/** The site root's Overview section (the default when the site has an introduction). */
+export function siteHomeHref(siteId: string) {
+  return `/${encodeURIComponent(siteId)}`
+}
+
+/** The site root's Files section. */
+export function siteFilesHref(siteId: string) {
+  return `/${encodeURIComponent(siteId)}?section=files`
+}
+
+/** The site's Previews section. */
+export function sitePreviewsHref(siteId: string) {
+  return `/${encodeURIComponent(siteId)}/_previews`
 }
 
 /** The full-text results page of a site; `folder` limits it to one folder (subfolders included). */

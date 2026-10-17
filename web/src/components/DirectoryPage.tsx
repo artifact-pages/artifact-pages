@@ -4,6 +4,7 @@ import { DIRECTORY_PAGE_SIZE, clampPage, pageRange, pageTotal, splitRange } from
 import { artifactRouteHref } from '../routing'
 import { Icon } from './Icon'
 import { followInApp } from './spa-link'
+import { useRestoredScroll } from './useRestoredScroll'
 
 // Above this many children the compact list shows only the first rows (ISSUE-075, owner decision 2026-10-12).
 const COMPACT_LIST_CAP_THRESHOLD = 12
@@ -24,6 +25,8 @@ export function DirectoryPage({
   footer,
   resolveHref = (href) => href,
   onOpen,
+  hideChildren = false,
+  restoreScroll = false,
 }: {
   listing: DirectoryListing
   siteId: string
@@ -36,6 +39,10 @@ export function DirectoryPage({
   /** Resolves a logical route to the link target a row carries (for example with `?q=` kept). */
   resolveHref?: (href: string) => string
   onOpen: (href: string) => void
+  /** Shows the body without the children list (the site root's Overview). */
+  hideChildren?: boolean
+  /** Brings back the scroll offset when the page is shown again by Back or Forward (the site root's sections). */
+  restoreScroll?: boolean
 }) {
   const { folders, pages } = listing
   const routeOf = (path: string) => artifactRouteHref(siteId, path)
@@ -52,6 +59,7 @@ export function DirectoryPage({
   const { start, end } = collapsed ? { start: 0, end: COMPACT_LIST_COLLAPSED_ROWS } : pageRange(page, total)
   const range = splitRange(folders.length, pages.length, start, end)
   const scrollRoot = useRef<HTMLDivElement>(null)
+  useRestoredScroll(scrollRoot, restoreScroll)
   const focusFirstRow = useRef(false)
   useEffect(() => {
     if (!focusFirstRow.current) return
@@ -117,7 +125,7 @@ export function DirectoryPage({
           </header>
         )}
 
-        {body ? (
+        {hideChildren ? null : body ? (
           hasChildren ? (
             <nav className="directory-children" aria-labelledby="directory-children-title">
               <h2 id="directory-children-title">In this folder · {pageCountLabel(total)}</h2>

@@ -68,7 +68,7 @@ function WorkspaceStory({ view, theme, initialSidebarOpen }: WorkspaceStoryArgs)
 
   function navigate(href: string) {
     const destination = new URL(href, window.location.origin)
-    const nextRoute = parseRoute(destination.pathname)
+    const nextRoute = parseRoute(destination.pathname, destination.search)
     if (nextRoute.kind === 'site') setRoute(nextRoute)
     setLocation({ search: destination.search, hash: destination.hash })
   }
@@ -132,9 +132,23 @@ export const MarkdownView: Story = {
   args: { view: 'markdown' },
 }
 
+// The site home (ISSUE-107): compact header, Overview / Files / Previews and the site search. The story
+// site has no root README, so it opens on Files and shows no Overview link; Previews needs the preview
+// catalog, so inside Storybook it shows its retryable error state.
 export const SiteHome: Story = {
   name: 'Site home',
   args: { view: 'site-home' },
+}
+
+export const SiteHomeDark: Story = {
+  name: 'Site home · dark',
+  args: { view: 'site-home', theme: 'dark' },
+}
+
+export const SiteHomeNarrow: Story = {
+  name: 'Site home · narrow',
+  args: { view: 'site-home', initialSidebarOpen: false },
+  globals: { viewport: { value: 'mobile1' } },
 }
 
 export const DarkArtifactView: Story = {

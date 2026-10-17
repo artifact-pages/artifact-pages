@@ -32,6 +32,8 @@ export type DirectoryListing = {
 
 // First match wins. Markdown is preferred over HTML, README over index.
 const INDEX_FILE_NAMES = ['readme.md', 'index.md', 'index.html', 'index.htm']
+// The site root's introduction is Markdown only (ISSUE-107): index.html and index.htm stay ordinary documents there.
+const ROOT_INTRODUCTION_FILE_NAMES = ['readme.md', 'index.md']
 
 export function directoryPathOf(path: string) {
   return path.split('/').filter(Boolean).join('/')
@@ -44,8 +46,8 @@ function latest(left: string | undefined, right: string | undefined) {
 }
 
 /** The folder's README or index page, if it has one among its direct pages. */
-export function findIndexArtifact(pages: readonly ArtifactIndexEntry[]) {
-  for (const name of INDEX_FILE_NAMES) {
+export function findIndexArtifact(pages: readonly ArtifactIndexEntry[], names: readonly string[] = INDEX_FILE_NAMES) {
+  for (const name of names) {
     // Several files can match once case is ignored; the code-point order of the path decides, so the choice never depends on index order.
     const found = pages
       .filter((page) => (page.path.split('/').at(-1) ?? '').toLowerCase() === name)
@@ -87,13 +89,15 @@ export function resolveDirectory(
 
 /**
  * The listing of the site root: the same shape as a folder's, with an empty path
- * and name. Undefined when the site has no pages.
+ * and name. Undefined when the site has no pages. Its `indexArtifact` is the
+ * site's introduction: README.md, else index.md (never an HTML index page).
  */
 export function resolveRootDirectory(artifacts: readonly ArtifactIndexEntry[]): DirectoryListing | undefined {
   return buildListing(artifacts, '')
 }
 
 function buildListing(artifacts: readonly ArtifactIndexEntry[], path: string): DirectoryListing | undefined {
+  const indexNames = path ? INDEX_FILE_NAMES : ROOT_INTRODUCTION_FILE_NAMES
   const prefix = path ? `${path}/` : ''
   const depth = path ? path.split('/').length : 0
 
@@ -130,7 +134,7 @@ function buildListing(artifacts: readonly ArtifactIndexEntry[], path: string): D
     folder.label = folderLabel(folder.name, findIndexArtifact(folderPages.get(folder.name) ?? []))
   }
 
-  const indexArtifact = findIndexArtifact(pages)
+  const indexArtifact = findIndexArtifact(pages, indexNames)
   const name = path.split('/').at(-1) ?? path
   return {
     path,

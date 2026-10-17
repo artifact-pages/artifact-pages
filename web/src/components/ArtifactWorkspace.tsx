@@ -6,7 +6,8 @@ import { Icon } from './Icon'
 import { ArtifactDetails, focusReaderColumnPart, READER_COLUMN_QUERY, ReaderContextColumn, type ReaderColumnPart } from './ReaderContextColumn'
 import { useCurrentHeading } from './useCurrentHeading'
 import { Sidebar } from './Sidebar'
-import { RecentlyUpdated, SiteHome, SiteHomeHeader } from './SiteHome'
+import { RecentlyUpdated, SiteHome, SiteHomeFrame, SiteHomeHeader, usePreviewCount, type SiteSection } from './SiteHome'
+import { PREVIEW_LEDE, PreviewListContent } from './PreviewListPage'
 import { siteCountLabel } from '../domain/site-count-label'
 import { ThemeSwitcher } from './ThemeSwitcher'
 import { ReaderMoreMenu, type ReaderMoreMenuItem } from './ReaderMoreMenu'
@@ -31,10 +32,11 @@ import type { TreeStyle } from './ArtifactTree'
 import type { ArtifactIndexEntry, SiteCatalogEntry, SiteIndex, SiteSummary } from '../domain/index'
 import { readRecentArtifactReads, recordRecentArtifactRead, type RecentArtifactRead } from '../domain/recent-reads'
 import { themeModeIcon, type ResolvedTheme, type ThemeMode } from '../domain/theme'
-import { artifactRouteHref, searchRouteHref, type AppRoute } from '../routing'
+import { artifactRouteHref, searchRouteHref, sitePreviewsHref, type AppRoute } from '../routing'
 
 type SiteRoute = Extract<AppRoute, { kind: 'site' }>
 type SearchRoute = Extract<AppRoute, { kind: 'search' }>
+type PreviewListRoute = Extract<AppRoute, { kind: 'preview-list' }>
 type WorkspacePanel = 'contents' | 'details' | null
 
 export function ArtifactWorkspace({
@@ -56,7 +58,7 @@ export function ArtifactWorkspace({
   initialSidebarOpen,
   rankingMaxHits: rankingMaxHitsProp,
 }: {
-  route: SiteRoute | SearchRoute
+  route: SiteRoute | SearchRoute | PreviewListRoute
   pathname: string
   /** The location's query string; on a page `q` is the search whose matches the page highlights. */
   search?: string
@@ -134,17 +136,30 @@ export function ArtifactWorkspace({
     : undefined
   // A path that is not a page may be a folder: every folder is a page (ISSUE-075).
   // The site root is the root folder's directory page, with an empty path.
+  const rootListing = useMemo(() => resolveRootDirectory(index.artifacts), [index.artifacts])
   const currentDirectory = useMemo(
     () => route.kind !== 'site'
       ? undefined
       : routeArtifactPath
         ? (!currentArtifact ? resolveDirectory(index.artifacts, routeArtifactPath) : undefined)
-        : resolveRootDirectory(index.artifacts),
-    [route.kind, routeArtifactPath, currentArtifact, index.artifacts],
+        : rootListing,
+    [route.kind, routeArtifactPath, currentArtifact, index.artifacts, rootListing],
   )
   const isSiteRoot = Boolean(currentDirectory) && !routeArtifactPath
-  // The page whose content fills the stage: the open page, or a folder's README or index page.
-  const bodyArtifact = currentArtifact ?? currentDirectory?.indexArtifact
+  const previewsRoute = route.kind === 'preview-list' ? route : undefined
+  // The site home (ISSUE-107): Overview when the site has an introduction (and Files was not asked for),
+  // Files otherwise, and Previews at its own route. An introduction that is gone leaves Files in place.
+  const hasIntroduction = Boolean(rootListing?.indexArtifact)
+  const siteSection: SiteSection = previewsRoute
+    ? 'previews'
+    : route.kind === 'site' && route.section === 'files'
+      ? 'files'
+      : hasIntroduction ? 'overview' : 'files'
+  const onSiteHome = Boolean(previewsRoute) || (route.kind === 'site' && !routeArtifactPath)
+  const previewCount = usePreviewCount(index.site.id, onSiteHome)
+  // The page whose content fills the stage: the open page, or a folder's README or index page. On the
+  // site root only the Overview shows the introduction.
+  const bodyArtifact = currentArtifact ?? (isSiteRoot && siteSection !== 'overview' ? undefined : currentDirectory?.indexArtifact)
   const effectiveRecentReads = recentReads ?? storedRecentReads
   const pageNotFound = Boolean(routeArtifactPath) && !currentArtifact && !currentDirectory
   usePageNoindex(pageNotFound)
@@ -166,6 +181,8 @@ export function ArtifactWorkspace({
   )
   usePageTitle(searchRoute
     ? pageTitle(searchRoute.query ? `Search “${searchRoute.query}”` : 'Search', index.site.title)
+    : previewsRoute
+      ? pageTitle('Previews', index.site.title)
     : routeArtifactPath
       ? pageTitle(currentArtifact?.title ?? currentDirectory?.label ?? 'Page not found', index.site.title)
       : pageTitle(index.site.title))
@@ -334,6 +351,24 @@ export function ArtifactWorkspace({
     focusStageAfterPalette.current = true
     navigate(href)
     if (window.innerWidth <= 860) updateSidebarOpen(false)
+  }
+
+  // An unknown `section` value on the site root shows the default section; the address is corrected in place.
+  const sectionParam = route.kind === 'site' && !routeArtifactPath ? new URLSearchParams(search).get('section') : null
+  useEffect(() => {
+    if (sectionParam === null || sectionParam === 'files') return
+    const params = new URLSearchParams(search)
+    params.delete('section')
+    const rest = params.toString()
+    navigate(`${pathname}${rest ? `?${rest}` : ''}${hash}`, { replace: true })
+  }, [sectionParam, search, pathname, hash, navigate])
+
+  // Switching sections replaces the section's own content (and its links), so focus follows to the chosen link.
+  function openSection(href: string) {
+    navigateWithinWorkspace(href)
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>('.site-sections [aria-current="page"]')?.focus()
+    }))
   }
 
   // The results page. Its field is focused when the page opens; when it is
@@ -566,7 +601,7 @@ export function ArtifactWorkspace({
       available: Boolean(textSearchClient),
       onSelect: () => goToSearchPage(),
     },
-    { title: 'Open previews', onSelect: () => navigateWithinWorkspace(`/${encodeURIComponent(index.site.id)}/_previews`) },
+    { title: 'Open previews', onSelect: () => navigateWithinWorkspace(sitePreviewsHref(index.site.id)) },
     {
       title: 'Use light theme',
       subtitle: themeMode === 'light' ? 'Current' : undefined,
@@ -1249,22 +1284,56 @@ export function ArtifactWorkspace({
                 onSearchTitles={(query) => openPalette(query)}
                 loadExcerpts={textSearchClient ? (query, generation, paths, signal) => textSearchClient.excerpts(query, generation, paths, { signal }) : undefined}
               />
+            ) : previewsRoute ? (
+              <SiteHomeFrame
+                key={`previews:${previewsRoute.groupId ?? ''}`}
+                header={(
+                  <SiteHomeHeader
+                    index={index}
+                    pageCount={index.artifacts.length}
+                    latestUpdatedAt={rootListing?.latestUpdatedAt}
+                    current="previews"
+                    hasOverview={hasIntroduction}
+                    previewCount={previewCount}
+                    onNavigate={openSection}
+                    onOpenPalette={() => openPalette('')}
+                  />
+                )}
+              >
+                <section className="site-previews" aria-labelledby="site-previews-title">
+                  <h2 id="site-previews-title">{previewsRoute.groupId ? 'Preview link' : 'Previews'}</h2>
+                  <p className="preview-page-lede">{PREVIEW_LEDE}</p>
+                  <PreviewListContent siteId={index.site.id} groupId={previewsRoute.groupId} navigate={navigateWithinWorkspace} />
+                </section>
+              </SiteHomeFrame>
             ) : currentDirectory ? (
               <DirectoryPage
-                key={currentDirectory.path}
+                key={isSiteRoot ? `root:${siteSection}` : currentDirectory.path}
                 listing={currentDirectory}
                 siteId={index.site.id}
-                body={currentDirectory.indexArtifact ? artifactView : undefined}
+                body={(!isSiteRoot || siteSection === 'overview') && currentDirectory.indexArtifact ? artifactView : undefined}
+                hideChildren={isSiteRoot && siteSection === 'overview'}
+                restoreScroll={isSiteRoot}
                 header={isSiteRoot ? (
                   <SiteHomeHeader
                     index={index}
                     pageCount={currentDirectory.pageCount}
                     latestUpdatedAt={currentDirectory.latestUpdatedAt}
-                    onOpenPreviews={() => navigateWithinWorkspace(`/${encodeURIComponent(index.site.id)}/_previews`)}
+                    current={siteSection}
+                    hasOverview={hasIntroduction}
+                    previewCount={previewCount}
+                    onNavigate={openSection}
                     onOpenPalette={() => openPalette('')}
                   />
                 ) : undefined}
-                footer={isSiteRoot ? <RecentlyUpdated index={index} onOpenArtifact={navigateWithinWorkspace} /> : undefined}
+                footer={isSiteRoot && siteSection === 'files' ? (
+                  <>
+                    {currentDirectory.folders.length + currentDirectory.pages.length === 0 ? (
+                      <p className="empty-note">No other pages have been published to this site.</p>
+                    ) : null}
+                    <RecentlyUpdated index={index} onOpenArtifact={navigateWithinWorkspace} />
+                  </>
+                ) : undefined}
                 onOpen={navigateWithinWorkspace}
               />
             ) : artifactView ?? (routeArtifactPath ? (
@@ -1297,7 +1366,8 @@ export function ArtifactWorkspace({
             ) : (
               <SiteHome
                 index={index}
-                onOpenPreviews={() => navigateWithinWorkspace(`/${encodeURIComponent(index.site.id)}/_previews`)}
+                previewCount={previewCount}
+                onNavigate={openSection}
                 onOpenPalette={() => openPalette('')}
               />
             ))}

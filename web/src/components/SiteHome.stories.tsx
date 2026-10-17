@@ -15,6 +15,7 @@ function SiteHomeStory({ theme }: SiteHomeStoryArgs) {
   return (
     <SiteHomeView
       index={{ ...deepSreIndex, artifacts: [] }}
+      onNavigate={() => undefined}
       onOpenPalette={() => undefined}
     />
   )
