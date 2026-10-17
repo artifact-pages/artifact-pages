@@ -1218,6 +1218,7 @@ test('artifact actions pin locally without changing selection or Browse, and exp
 })
 
 test('palette commands pin and unpin the current artifact and toggle Details only while an artifact is open', async ({ page }) => {
+  await page.setViewportSize({ width: 1100, height: 800 }) // below the reader column breakpoint (ISSUE-108): Contents and Details open as panels
   await page.goto('/sre/architecture/platform-topology/index.html')
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('combobox', { name: 'Search artifacts, sites, commands, and headings' })
@@ -1983,7 +1984,7 @@ test('Markdown heading IDs match the shared fixture and Contents and palette rea
     body: fixture.markdown,
   }))
 
-  await page.setViewportSize({ width: 1280, height: 420 })
+  await page.setViewportSize({ width: 1100, height: 420 })
   await page.goto(`/sre/${artifactPath}`)
   const reader = page.locator('.markdown-article')
   const scrollport = page.locator('.markdown-scroll')
@@ -2142,6 +2143,7 @@ test('navigating inside a working HTML frame to a failing page does not mark the
 })
 
 test('HTML heading navigation keeps the URL and iframe section in sync with one history step', async ({ page }) => {
+  await page.setViewportSize({ width: 1100, height: 800 }) // below the reader column breakpoint (ISSUE-108): Contents and Details open as panels
   await page.goto('/showcase/editorial/field-notes/index.html')
 
   const artifact = page.frameLocator('iframe[title="Designing for resilience"]')
@@ -2175,13 +2177,14 @@ test('HTML heading navigation keeps the URL and iframe section in sync with one 
 })
 
 test('Contents and Details can be dismissed and reopened without losing the reading position', async ({ page }) => {
+  await page.setViewportSize({ width: 1100, height: 800 }) // below the reader column breakpoint (ISSUE-108): Contents and Details open as panels
   const iframe = page.locator('iframe[title="Designing for resilience"]')
   const iframeScrollY = () => iframe.evaluate((frame) => (frame as HTMLIFrameElement).contentWindow?.scrollY ?? -1)
   const iframeHash = () => iframe.evaluate((frame) => (frame as HTMLIFrameElement).contentWindow?.location.hash ?? null)
   const contentsButton = page.locator('.context-actions .context-button[title^="Contents"]')
   const detailsButton = page.locator('.context-actions .context-button[title="Artifact details"]')
 
-  for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
+  for (const viewport of [{ width: 1100, height: 800 }, { width: 390, height: 844 }]) {
     await page.setViewportSize(viewport)
     await page.goto('/showcase/editorial/field-notes/index.html')
     await expect(page.frameLocator('iframe[title="Designing for resilience"]')
@@ -2251,7 +2254,7 @@ test('Contents stays open after a heading jump only when the heading is not cove
 
   for (const target of targets) {
     for (const viewport of [
-      { width: 1280, height: 800, sidebar: true },
+      { width: 1100, height: 800, sidebar: true },
       { width: 390, height: 844, sidebar: false },
       { width: 1000, height: 800, sidebar: true },
       { width: 1000, height: 800, sidebar: false },
@@ -2312,7 +2315,7 @@ test('Contents stays open after a heading jump only when the heading is not cove
         await expect(entry, label).toHaveAttribute('aria-current', 'location')
         keptOpenCases += 1
         expect(target.name, label).toBe('Markdown')
-        if (viewport.width === 1280) keptOpenAtDesktop = true
+        if (viewport.width === 1100) keptOpenAtDesktop = true
       }
     }
   }
@@ -2321,7 +2324,7 @@ test('Contents stays open after a heading jump only when the heading is not cove
 })
 
 test('a stale heading-jump check never closes a reopened Contents panel', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.setViewportSize({ width: 1100, height: 800 })
   await page.goto('/sre/reports/latency-retrospective.md')
   const contentsButton = page.locator('.context-actions .context-button[title^="Contents"]')
   const contents = page.getByRole('complementary', { name: 'Contents' })
@@ -2337,6 +2340,7 @@ test('a stale heading-jump check never closes a reopened Contents panel', async 
 })
 
 test('multi-file artifacts stay in their site namespace when relative asset paths overlap', async ({ page }) => {
+  await page.setViewportSize({ width: 1100, height: 800 }) // below the reader column breakpoint (ISSUE-108): Contents and Details open as panels
   const artifactResponsePaths: string[] = []
   page.on('response', (response) => {
     const pathname = new URL(response.url()).pathname
@@ -2591,6 +2595,7 @@ test('Unicode artifact titles remain readable in navigation and search', async (
 })
 
 test('Markdown pages render safely with GFM, Mermaid, local assets, and extensionful links', async ({ page }) => {
+  await page.setViewportSize({ width: 1100, height: 800 }) // below the reader column breakpoint (ISSUE-108): Contents and Details open as panels
   const imageResponse = page.waitForResponse((response) => {
     return new URL(response.url()).pathname === '/_artifacts/sre/runbooks/assets/request-path.svg'
   })
@@ -2818,6 +2823,7 @@ test('Markdown fragments resolve across documents while HTML fragments keep thei
 })
 
 test('Markdown gallery covers typography, assets, links, safety, and fragment navigation', async ({ page }) => {
+  await page.setViewportSize({ width: 1100, height: 800 }) // below the reader column breakpoint (ISSUE-108): Contents and Details open as panels
   const requestedUrls: string[] = []
   const localAssetPaths = [
     '/_artifacts/sre/guides/assets/latency-trend.svg',
@@ -3624,6 +3630,7 @@ test('all-sites navigation is available from site home and documents with the si
 })
 
 test('site home hides artifact actions while an open artifact provides usable actions', async ({ page }) => {
+  await page.setViewportSize({ width: 1100, height: 800 }) // below the reader column breakpoint (ISSUE-108): Contents and Details open as panels
   await page.goto('/sre')
 
   const contextActions = page.locator('.context-actions')
@@ -7386,7 +7393,7 @@ test.describe('narrow chrome and scroll cues (ISSUE-080)', () => {
   })
 
   test('wide screens keep the rail and the labeled toolbar', async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.setViewportSize({ width: 1100, height: 800 })
     await page.goto(markdownPath)
     await expect(moreActionsButton(page)).toHaveCount(0)
     await page.getByRole('button', { name: 'Collapse sidebar' }).click()
@@ -7579,4 +7586,636 @@ test('leaving a preview document aborts its stalled production index read', asyn
   await expect(page).toHaveURL(/\/sre\/_previews$/)
   await aborted
   await Promise.all(stalled.map((route) => route.abort().catch(() => undefined)))
+})
+
+// ISSUE-108: a persistent Details and Contents column beside a document page at 1200 px or more.
+test.describe('reader context column (ISSUE-108)', () => {
+  test.use({ viewport: { width: 1440, height: 900 } })
+
+  const markdownPath = '/sre/guides/markdown-style-gallery.md'
+  const htmlPath = '/showcase/editorial/field-notes/index.html'
+  const columnOf = (page: Page) => page.getByRole('complementary', { name: 'Reading context' })
+  const noHorizontalOverflow = (page: Page) => page.evaluate(() => (
+    document.documentElement.scrollWidth <= document.documentElement.clientWidth
+    && document.body.scrollWidth <= document.documentElement.clientWidth
+  ))
+  const focusInColumn = (page: Page) => page.evaluate(() => {
+    const active = document.activeElement
+    return active?.closest('[data-reader-column]') ? (active.tagName === 'BUTTON' ? `button:${active.textContent}` : active.tagName) : null
+  })
+
+  test('Markdown page shows Details above Contents beside the document and no toolbar buttons', async ({ page }) => {
+    await page.goto(markdownPath)
+    const column = columnOf(page)
+    await expect(column).toBeVisible()
+    expect((await column.boundingBox())?.width).toBe(248)
+    await expect(column.getByRole('heading', { name: 'Details' })).toBeVisible()
+    await expect(column.getByText('Last committed by')).toBeVisible()
+    await expect(column.getByText('Documentation QA')).toBeVisible()
+    await expect(column.getByText('Updated', { exact: true })).toBeVisible()
+    await expect(column.getByText('Source', { exact: true })).toBeVisible()
+    await expect(column.getByRole('link', { name: /example\/markdown-qa/ })).toHaveAttribute('href', 'https://github.com/example/markdown-qa')
+    await expect(column.getByRole('region', { name: 'Contents' })).toBeVisible()
+    await expect(column.getByRole('navigation', { name: 'Artifact headings' }).getByRole('button').first()).toBeVisible()
+    const detailsTop = (await column.getByRole('heading', { name: 'Details' }).boundingBox())!.y
+    const contentsTop = (await column.getByRole('heading', { name: 'Contents' }).boundingBox())!.y
+    expect(detailsTop).toBeLessThan(contentsTop)
+    const actions = page.locator('.context-actions')
+    await expect(actions.getByRole('button', { name: 'Contents', exact: true })).toHaveCount(0)
+    await expect(actions.getByRole('button', { name: 'Details', exact: true })).toHaveCount(0)
+    expect(await noHorizontalOverflow(page)).toBe(true)
+    const article = (await page.locator('.markdown-article').boundingBox())!
+    expect(article.x + article.width).toBeLessThanOrEqual((await column.boundingBox())!.x)
+  })
+
+  test('HTML page shows the column beside the frame, which keeps its own scroll', async ({ page }) => {
+    await page.goto(htmlPath)
+    const column = columnOf(page)
+    await expect(column).toBeVisible()
+    const frame = (await page.locator('iframe.artifact-frame').boundingBox())!
+    const box = (await column.boundingBox())!
+    expect(box.width).toBe(248)
+    expect(frame.x + frame.width).toBeLessThanOrEqual(box.x + 0.5)
+    await expect(column.getByRole('navigation', { name: 'Artifact headings' }).getByRole('button')).toHaveCount(4)
+    expect(await noHorizontalOverflow(page)).toBe(true)
+    // Publisher HTML is untouched.
+    expect(await page.locator('iframe.artifact-frame').evaluate(
+      (frame) => (frame as HTMLIFrameElement).contentDocument?.querySelectorAll('[data-reader-column], .toc-list').length ?? 0,
+    )).toBe(0)
+  })
+
+  test('Markdown: Details scrolls away and Contents stays near the top of the reading pane', async ({ page }) => {
+    await page.goto(markdownPath)
+    const column = columnOf(page)
+    const pane = page.locator('.markdown-scroll')
+    await expect(column).toBeVisible()
+    await expect(column.getByRole('heading', { name: 'Contents' })).toBeVisible()
+    const paneTop = (await pane.boundingBox())!.y
+    await expect.poll(async () => ((await column.getByRole('heading', { name: 'Contents' }).boundingBox())?.y ?? 0) - paneTop).toBeGreaterThan(60)
+    await pane.evaluate((element) => element.scrollTo(0, 900))
+    await expect.poll(async () => {
+      const contents = (await column.getByRole('region', { name: 'Contents' }).boundingBox())!
+      return Math.round(contents.y - paneTop)
+    }).toBeLessThanOrEqual(10)
+    const contentsTop = (await column.getByRole('region', { name: 'Contents' }).boundingBox())!.y - paneTop
+    expect(contentsTop).toBeGreaterThanOrEqual(6)
+    expect((await column.getByRole('heading', { name: 'Details' }).boundingBox())!.y + 20).toBeLessThan(paneTop)
+    await expect(column.getByRole('navigation', { name: 'Artifact headings' })).toBeVisible()
+  })
+
+  test('Markdown: a heading list taller than the pane scrolls on its own without moving the document', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 420 })
+    await page.goto('/sre/diagrams/mermaid-catalog.md')
+    const pane = page.locator('.markdown-scroll')
+    const list = columnOf(page).getByRole('navigation', { name: 'Artifact headings' })
+    await expect(list).toBeVisible()
+    await expect.poll(() => pane.evaluate((element) => { element.scrollTo(0, 600); return element.scrollTop })).toBeGreaterThan(500)
+    await expect.poll(() => list.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true)
+    // Measured in one step so late layout shifts (diagrams rendering) cannot move the pane in between.
+    const moved = await list.evaluate((element) => {
+      const scroller = element.closest('.markdown-scroll')!
+      const before = scroller.scrollTop
+      element.scrollTop = 200
+      return { listTop: element.scrollTop, paneDelta: scroller.scrollTop - before }
+    })
+    expect(moved.listTop).toBeGreaterThan(0)
+    expect(moved.paneDelta).toBe(0)
+    await expect.poll(async () => {
+      const bounds = (await list.boundingBox())!
+      return bounds.y + bounds.height
+    }).toBeLessThanOrEqual(420)
+  })
+
+  test('HTML: the column scrolls on its own, Details first and then Contents', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 300 })
+    await page.goto(htmlPath)
+    const column = columnOf(page)
+    await expect(column).toBeVisible()
+    const frameScroll = () => page.locator('iframe.artifact-frame').evaluate((frame) => (frame as HTMLIFrameElement).contentWindow?.scrollY ?? -1)
+    await expect.poll(() => column.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true)
+    const contents = column.getByRole('region', { name: 'Contents' })
+    const columnBox = (await column.boundingBox())!
+    expect((await column.getByRole('heading', { name: 'Details' }).boundingBox())!.y).toBeLessThan((await contents.boundingBox())!.y)
+    await column.evaluate((element) => element.scrollTo(0, element.scrollHeight))
+    expect(await column.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+    expect(await frameScroll()).toBe(0)
+    await expect(contents).toBeInViewport()
+    const after = (await contents.boundingBox())!
+    expect(after.y + after.height).toBeLessThanOrEqual(columnBox.y + columnBox.height + 1)
+  })
+
+  test('the current heading follows the scroll in Markdown', async ({ page }) => {
+    await page.goto(markdownPath)
+    const column = columnOf(page)
+    const buttons = column.getByRole('navigation', { name: 'Artifact headings' }).getByRole('button')
+    await expect(buttons.first()).toBeVisible()
+    const count = await buttons.count()
+    expect(count).toBeGreaterThan(5)
+    const name = (await buttons.nth(5).textContent())!
+    await page.evaluate(async (text) => {
+      const headings = Array.from(document.querySelectorAll<HTMLElement>('.markdown-article h1, .markdown-article h2, .markdown-article h3'))
+      headings.find((heading) => heading.textContent?.trim() === text)?.scrollIntoView({ block: 'start' })
+    }, name.trim())
+    await expect(column.locator('[aria-current="location"]')).toHaveText(name)
+    await page.locator('.markdown-scroll').evaluate((element) => element.scrollTo(0, 0))
+    await expect(column.locator('[aria-current="location"]')).toHaveText((await buttons.first().textContent())!)
+  })
+
+  test('the current heading follows the scroll in an HTML frame', async ({ page }) => {
+    await page.goto(htmlPath)
+    const column = columnOf(page)
+    await expect(column.getByRole('navigation', { name: 'Artifact headings' })).toBeVisible()
+    const frame = page.locator('iframe.artifact-frame')
+    const current = column.locator('[aria-current="location"]')
+    // Scrolling is repeated until the frame has loaded and the marking has caught up.
+    await expect.poll(async () => {
+      await frame.evaluate((element) => {
+        const doc = (element as HTMLIFrameElement).contentDocument
+        const win = (element as HTMLIFrameElement).contentWindow
+        const target = doc?.getElementById('principles')
+        if (doc && win && target) win.scrollTo({ top: target.getBoundingClientRect().top + win.scrollY - 20, behavior: 'instant' })
+      })
+      return current.textContent({ timeout: 1000 }).catch(() => null)
+    }).toBe('Three useful tensions')
+    await frame.evaluate((element) => (element as HTMLIFrameElement).contentWindow!.scrollTo({ top: 0, behavior: 'instant' }))
+    await expect(column.locator('[aria-current="location"]')).toHaveText('Designing for resilience')
+  })
+
+  test('the marked entry stays visible inside the Contents list', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 420 })
+    await page.goto('/sre/diagrams/mermaid-catalog.md')
+    const list = columnOf(page).getByRole('navigation', { name: 'Artifact headings' })
+    await expect(list).toBeVisible()
+    await page.locator('.markdown-scroll').evaluate((element) => element.scrollTo(0, element.scrollHeight))
+    const current = columnOf(page).locator('[aria-current="location"]')
+    await expect(current).toBeVisible()
+    await expect.poll(async () => {
+      const entry = (await current.boundingBox())!
+      const box = (await list.boundingBox())!
+      return entry.y >= box.y - 1 && entry.y + entry.height <= box.y + box.height + 1
+    }).toBe(true)
+  })
+
+  test('activating an entry goes to the heading, updates the fragment and keeps focus on the entry', async ({ page }) => {
+    for (const path of [markdownPath, htmlPath]) {
+      await page.goto(path)
+      const entries = columnOf(page).getByRole('navigation', { name: 'Artifact headings' }).getByRole('button')
+      await expect(entries.first()).toBeVisible()
+      const entry = entries.nth(2)
+      const text = (await entry.textContent())!
+      const historyBefore = await page.evaluate(() => window.history.length)
+      await entry.click()
+      await expect(page).toHaveURL(/#[^#]+$/)
+      await expect(entry).toBeFocused()
+      expect(await page.evaluate(() => window.history.length)).toBe(historyBefore + 1)
+      if (path === htmlPath) {
+        await expect.poll(() => page.locator('iframe.artifact-frame').evaluate(
+          (frame) => (frame as HTMLIFrameElement).contentWindow?.location.hash ?? '',
+        )).toMatch(/^#.+/)
+        await expect.poll(() => page.locator('iframe.artifact-frame').evaluate(
+          (frame) => (frame as HTMLIFrameElement).contentWindow?.scrollY ?? 0,
+        )).toBeGreaterThan(0)
+      } else {
+        const heading = page.locator('.markdown-article').getByRole('heading', { name: text, exact: true }).first()
+        await expect(heading).toBeInViewport()
+      }
+      await expect(entry).toBeFocused()
+    }
+  })
+
+  test('below 1200 px the column is gone and Contents and Details open as panels', async ({ page }) => {
+    await page.setViewportSize({ width: 1100, height: 800 })
+    await page.goto(markdownPath)
+    await expect(columnOf(page)).toHaveCount(0)
+    const actions = page.locator('.context-actions')
+    await actions.getByRole('button', { name: 'Contents', exact: true }).click()
+    await expect(page.getByRole('complementary', { name: 'Contents' })).toBeVisible()
+    await actions.getByRole('button', { name: 'Details', exact: true }).click()
+    await expect(page.getByRole('complementary', { name: 'Details' })).toBeVisible()
+    expect(await noHorizontalOverflow(page)).toBe(true)
+  })
+
+  test('narrow to wide closes the overlay panel and moves focus into the matching part of the column', async ({ page }) => {
+    await page.setViewportSize({ width: 1100, height: 800 })
+    await page.goto(markdownPath)
+    await page.locator('.context-actions').getByRole('button', { name: 'Contents', exact: true }).click()
+    const panel = page.getByRole('complementary', { name: 'Contents' })
+    await panel.locator('.toc-link').nth(1).focus()
+    await page.setViewportSize({ width: 1300, height: 800 })
+    await expect(panel).toHaveCount(0)
+    await expect(columnOf(page)).toBeVisible()
+    await expect.poll(() => focusInColumn(page)).toMatch(/^button:/)
+    await expect(page.locator('.context-actions').getByRole('button', { name: 'Contents', exact: true })).toHaveCount(0)
+
+    await page.setViewportSize({ width: 1100, height: 800 })
+    await page.locator('.context-actions').getByRole('button', { name: 'Details', exact: true }).click()
+    await page.getByRole('complementary', { name: 'Details' }).getByRole('link').first().focus()
+    await page.setViewportSize({ width: 1300, height: 800 })
+    await expect(page.getByRole('complementary', { name: 'Details' })).toHaveCount(0)
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe('reader-column-details-heading')
+  })
+
+  test('wide to narrow moves focus from the column to the matching toolbar button', async ({ page }) => {
+    await page.goto(markdownPath)
+    await columnOf(page).getByRole('navigation', { name: 'Artifact headings' }).getByRole('button').nth(1).focus()
+    await page.setViewportSize({ width: 1100, height: 800 })
+    await expect(columnOf(page)).toHaveCount(0)
+    await expect(page.locator('.context-actions').getByRole('button', { name: 'Contents', exact: true })).toBeFocused()
+
+    await page.setViewportSize({ width: 1300, height: 800 })
+    await columnOf(page).getByRole('heading', { name: 'Details' }).focus()
+    await page.setViewportSize({ width: 1100, height: 800 })
+    await expect(page.locator('.context-actions').getByRole('button', { name: 'Details', exact: true })).toBeFocused()
+  })
+
+  test('the Contents shortcut and the palette commands move focus into the column', async ({ page }) => {
+    await page.goto(markdownPath)
+    const column = columnOf(page)
+    await expect(column).toBeVisible()
+    await expect(page.getByTestId('markdown-document')).toBeVisible()
+    await page.keyboard.press('Control+Shift+O')
+    await expect.poll(() => focusInColumn(page)).toMatch(/^button:/)
+    await expect(column.locator('.toc-link:focus')).toHaveCount(1)
+
+    const palette = page.getByRole('dialog', { name: 'Command palette' })
+    await page.keyboard.press('Control+k')
+    await palette.getByRole('combobox').fill('>Toggle details')
+    await palette.getByRole('option', { name: 'Toggle details' }).click()
+    await expect(palette).toBeHidden()
+    await expect(column.getByRole('heading', { name: 'Details' })).toBeFocused()
+
+    await page.keyboard.press('Control+k')
+    await palette.getByRole('combobox').fill('>Toggle contents')
+    await palette.getByRole('option', { name: 'Toggle contents' }).click()
+    await expect(palette).toBeHidden()
+    await expect.poll(() => focusInColumn(page)).toMatch(/^button:/)
+  })
+
+  test('Tab reaches the document controls before the column', async ({ page }) => {
+    await page.goto(markdownPath)
+    await expect(columnOf(page)).toBeVisible()
+    await expect(page.locator('.markdown-article')).toBeVisible()
+    const order = await page.evaluate(() => {
+      const column = document.querySelector('[data-reader-column]')!
+      const article = document.querySelector('.markdown-article')!
+      return Boolean(article.compareDocumentPosition(column) & Node.DOCUMENT_POSITION_FOLLOWING)
+    })
+    expect(order).toBe(true)
+  })
+
+  test('a document with no headings shows the empty message and the Contents command lands on it', async ({ page }) => {
+    await page.route('**/_indexes/sre/index.json', async (route) => {
+      const response = await route.fetch()
+      const index = await response.json() as { artifacts: Array<Record<string, unknown>> }
+      for (const artifact of index.artifacts) if (artifact.path === 'runbooks/service-recovery.md') artifact.toc = []
+      await route.fulfill({ response, body: JSON.stringify(index) })
+    })
+    await page.goto('/sre/runbooks/service-recovery.md')
+    const column = columnOf(page)
+    await expect(page.getByTestId('markdown-document')).toBeVisible()
+    await expect(column.getByText('This artifact does not include indexed headings.')).toBeVisible()
+    await page.keyboard.press('Control+Shift+O')
+    await expect(column.getByText('This artifact does not include indexed headings.')).toBeFocused()
+  })
+
+  test('a document without provenance shows only what exists', async ({ page }) => {
+    await page.goto('/showcase/tests/color-scheme-response/index.html')
+    const column = columnOf(page)
+    await expect(column.getByText('Updated', { exact: true })).toBeVisible()
+    await expect(column.getByText('Last committed by')).toHaveCount(0)
+    await expect(column.getByText('Source', { exact: true })).toHaveCount(0)
+    await expect(column.locator('.artifact-details a')).toHaveCount(0)
+  })
+
+  test('long headings, titles and repository names wrap inside the column', async ({ page }) => {
+    const longHeading = 'Reviewing_changes_touching_the_registry_release_workflow_and_Terraform_together_in_one_unbroken_pass'
+    await page.route('**/_indexes/sre/index.json', async (route) => {
+      const response = await route.fetch()
+      const index = await response.json() as { artifacts: Array<{ path: string, toc?: unknown[], source?: { repository: string }, lastCommitter?: { name: string } }> }
+      for (const artifact of index.artifacts) {
+        if (artifact.path !== 'reports/latency-retrospective.md') continue
+        artifact.toc = [{ level: 2, text: longHeading, id: 'md-outcome-at-a-glance' }, { level: 3, text: `${longHeading} again`, id: 'md-timeline' }]
+        if (artifact.source) artifact.source.repository = 'example/a-very-long-repository-name-that-keeps-going-and-going-without-a-break'
+        if (artifact.lastCommitter) artifact.lastCommitter.name = 'A Committer With An Extraordinarily Long Display Name That Wraps'
+      }
+      await route.fulfill({ response, body: JSON.stringify(index) })
+    })
+    await page.goto('/sre/reports/latency-retrospective.md')
+    const column = columnOf(page)
+    await expect(column.getByRole('button', { name: longHeading, exact: true })).toBeVisible()
+    expect(await column.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+    expect((await column.boundingBox())?.width).toBe(248)
+    expect(await noHorizontalOverflow(page)).toBe(true)
+  })
+
+  test('1200 px with the sidebar expanded and 1280 px with it collapsed have no horizontal overflow', async ({ page }) => {
+    await page.setViewportSize({ width: 1200, height: 800 })
+    for (const path of [markdownPath, htmlPath]) {
+      await page.goto(path)
+      await expect(columnOf(page)).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Collapse sidebar' })).toBeVisible()
+      expect(await noHorizontalOverflow(page)).toBe(true)
+      const sidebar = (await page.locator('#workspace-sidebar').boundingBox())!
+      const column = (await columnOf(page).boundingBox())!
+      expect(sidebar.x + sidebar.width).toBeLessThanOrEqual(column.x)
+      if (path === markdownPath) {
+        expect((await page.locator('.markdown-article').boundingBox())!.width).toBeGreaterThanOrEqual(600)
+      }
+    }
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.getByRole('button', { name: 'Collapse sidebar' }).click()
+    await expect(page.locator('.collapsed-rail')).toBeVisible()
+    await expect(columnOf(page)).toBeVisible()
+    expect(await noHorizontalOverflow(page)).toBe(true)
+    await page.getByRole('button', { name: 'Expand navigation' }).click()
+    await expect(page.getByRole('button', { name: 'Collapse sidebar' })).toBeVisible()
+    expect(await noHorizontalOverflow(page)).toBe(true)
+  })
+
+  test('the search-match navigator does not sit on top of the column', async ({ page }) => {
+    await registerTextSearchSite(page)
+    await page.goto('/textsearch/long/scroll-target.md?q=word')
+    await expect(page.getByTestId('markdown-document')).toBeVisible()
+    await expect(columnOf(page)).toBeVisible()
+    const navigator = page.getByRole('group', { name: 'Matches in this page' })
+    await expect(navigator).toBeVisible({ timeout: 20_000 })
+    const nav = (await navigator.boundingBox())!
+    const column = (await columnOf(page).boundingBox())!
+    expect(nav.x + nav.width).toBeLessThanOrEqual(column.x)
+  })
+
+  test('the column is absent when a Markdown document fails to load, and returns after a retry', async ({ page }) => {
+    let available = false
+    await page.route('**/_artifacts/sre/runbooks/service-recovery.md', (route) => available ? route.continue() : route.fulfill({ status: 500, body: 'broken' }))
+    await page.goto('/sre/runbooks/service-recovery.md')
+    await expect(page.getByRole('alert')).toContainText('Markdown unavailable')
+    await expect(columnOf(page)).toHaveCount(0)
+    await expect(page.locator('.context-actions').getByRole('button', { name: 'Contents', exact: true })).toBeVisible()
+    available = true
+    await page.getByRole('button', { name: 'Try again' }).click()
+    await expect(columnOf(page)).toBeVisible()
+  })
+
+  test('the column is absent when an HTML body fails to load, and returns after a retry', async ({ page }) => {
+    const artifactPath = 'guides/missing.html'
+    let available = false
+    await page.route('**/_indexes/sre/index.json', async (route) => {
+      const response = await route.fetch()
+      const index = await response.json() as { artifacts: Array<Record<string, unknown>> }
+      index.artifacts.push({
+        id: artifactPath, title: 'Missing body', path: artifactPath, format: 'html', filename: 'missing.html',
+        artifactUrl: `/_artifacts/sre/${artifactPath}`, updatedAt: '2026-10-01T00:00:00Z',
+      })
+      await route.fulfill({ response, body: JSON.stringify(index) })
+    })
+    await page.route(`**/_artifacts/sre/${artifactPath}`, (route) => available
+      ? route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: '<!doctype html><title>Back</title><p id="body">Body is back</p>' })
+      : route.fulfill({ status: 404, contentType: 'text/html; charset=utf-8', body: '<h1>404 Not Found</h1>' }))
+    await page.goto(`/sre/${artifactPath}`)
+    await expect(page.getByRole('alert').getByRole('heading', { name: 'Document unavailable' })).toBeVisible()
+    await expect(columnOf(page)).toHaveCount(0)
+    available = true
+    await page.getByRole('button', { name: 'Try again' }).click()
+    await expect(columnOf(page)).toBeVisible()
+  })
+
+  test('narrow to wide from the More menu keeps focus: the open panel maps to its column part, otherwise Contents', async ({ page }) => {
+    await page.setViewportSize({ width: 500, height: 800 })
+    await page.goto(markdownPath)
+    const more = moreActionsButton(page)
+    const menu = page.getByRole('menu', { name: 'More actions' })
+    const menuItem = (name: string) => menu.getByRole('menuitem', { name }).or(menu.getByRole('menuitemcheckbox', { name }))
+    const activeId = () => page.evaluate(() => {
+      const active = document.activeElement
+      if (!active || active === document.body) return 'body'
+      return active.closest('[data-reader-column]') ? (active.id || `column:${active.className}`) : 'outside'
+    })
+
+    // A Details panel opened from the More menu, focus on the More trigger.
+    await more.click()
+    await menuItem('Details').click()
+    await expect(page.getByRole('complementary', { name: 'Details' })).toBeVisible()
+    await expect(more).toBeFocused()
+    await page.setViewportSize({ width: 1440, height: 800 })
+    await expect(columnOf(page)).toBeVisible()
+    await expect.poll(activeId).toBe('reader-column-details-heading')
+
+    // A Contents panel with focus inside it.
+    await page.setViewportSize({ width: 500, height: 800 })
+    await expect(columnOf(page)).toHaveCount(0)
+    await more.click()
+    await menuItem('Contents').click()
+    const panel = page.getByRole('complementary', { name: 'Contents' })
+    await expect(panel).toBeVisible()
+    await panel.locator('.toc-link').nth(1).focus()
+    await page.setViewportSize({ width: 1440, height: 800 })
+    await expect(columnOf(page)).toBeVisible()
+    await expect.poll(activeId).toContain('toc-link')
+
+    // No panel open, focus on the More trigger: Contents.
+    await page.setViewportSize({ width: 500, height: 800 })
+    await expect(columnOf(page)).toHaveCount(0)
+    await more.focus()
+    await page.setViewportSize({ width: 1440, height: 800 })
+    await expect(columnOf(page)).toBeVisible()
+    await expect.poll(activeId).toContain('toc-link')
+  })
+
+  test('the column is not remounted when a Markdown document finishes loading, so focus stays', async ({ page }) => {
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    await page.route('**/_artifacts/sre/runbooks/service-recovery.md', async (route) => {
+      await gate
+      await route.continue()
+    })
+    await page.goto('/sre/runbooks/service-recovery.md', { waitUntil: 'commit' })
+    const column = columnOf(page)
+    await expect(column).toBeVisible()
+    await expect(page.getByTestId('markdown-document')).toHaveCount(0)
+    // Focus a Contents entry and mark both it and the Details heading so identity can be compared later.
+    await page.keyboard.press('Control+Shift+O')
+    await expect.poll(() => focusInColumn(page)).toMatch(/^button:/)
+    const focusedText = await page.evaluate(() => {
+      const active = document.activeElement as HTMLElement
+      active.dataset.probe = 'focus'
+      document.querySelector<HTMLElement>('#reader-column-details-heading')!.dataset.probe = 'details'
+      return active.textContent
+    })
+    release()
+    await expect(page.getByTestId('markdown-document')).toBeVisible()
+    await expect(page.locator('.markdown-article')).toBeVisible()
+    expect(await page.evaluate(() => ({
+      focusKept: document.activeElement?.getAttribute('data-probe'),
+      detailsKept: document.querySelector('#reader-column-details-heading')?.getAttribute('data-probe'),
+      text: document.activeElement?.textContent,
+      inColumn: Boolean(document.activeElement?.closest('[data-reader-column]')),
+    }))).toEqual({ focusKept: 'focus', detailsKept: 'details', text: focusedText, inColumn: true })
+  })
+
+  test('narrow to wide with an item of the open More menu focused lands on Contents in the column', async ({ page }) => {
+    await page.setViewportSize({ width: 500, height: 800 })
+    await page.goto(markdownPath)
+    await moreActionsButton(page).click()
+    const menu = page.getByRole('menu', { name: 'More actions' })
+    await expect(menu).toBeVisible()
+    await menu.getByRole('menuitem', { name: 'Copy link' }).focus()
+    await expect(menu.getByRole('menuitem', { name: 'Copy link' })).toBeFocused()
+    await page.setViewportSize({ width: 1440, height: 800 })
+    await expect(columnOf(page)).toBeVisible()
+    await expect(menu).toHaveCount(0)
+    await expect.poll(() => focusInColumn(page)).toMatch(/^button:/)
+  })
+
+  test('an HTML body whose status probe fails at the network level is reported as unavailable', async ({ page }) => {
+    // Browsers that do not expose the navigation response status (Safari) classify the first load with a HEAD request.
+    await page.addInitScript(() => {
+      const proto = (window as unknown as { PerformanceNavigationTiming?: { prototype: object } }).PerformanceNavigationTiming?.prototype
+      if (proto) Object.defineProperty(proto, 'responseStatus', { get: () => 0, configurable: true })
+    })
+    const artifactPath = 'guides/unprobed.html'
+    await page.route('**/_indexes/sre/index.json', async (route) => {
+      const response = await route.fetch()
+      const index = await response.json() as { artifacts: Array<Record<string, unknown>> }
+      index.artifacts.push({
+        id: artifactPath, title: 'Unprobed body', path: artifactPath, format: 'html', filename: 'unprobed.html',
+        artifactUrl: `/_artifacts/sre/${artifactPath}`, updatedAt: '2026-10-01T00:00:00Z', toc: [{ level: 1, text: 'Hello', id: 'hello' }],
+      })
+      await route.fulfill({ response, body: JSON.stringify(index) })
+    })
+    let probeFails = true
+    await page.route(`**/_artifacts/sre/${artifactPath}`, (route) => {
+      if (route.request().method() === 'HEAD') return probeFails ? route.abort('connectionreset') : route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8' })
+      return route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: '<!doctype html><title>Body</title><h1 id="hello">Hello</h1>' })
+    })
+    await page.goto(`/sre/${artifactPath}`)
+    const alert = page.getByRole('alert')
+    await expect(alert.getByRole('heading', { name: 'Document unavailable' })).toBeVisible()
+    await expect(alert).toContainText('The content of “Unprobed body” could not be loaded.')
+    await expect(alert).not.toContainText('HTTP')
+    await expect(alert.getByRole('button', { name: 'Try again' })).toBeVisible()
+    await expect(alert.getByRole('link', { name: /SRE/ })).toBeVisible()
+    await expect(columnOf(page)).toHaveCount(0)
+    probeFails = false
+    await alert.getByRole('button', { name: 'Try again' }).click()
+    await expect(columnOf(page)).toBeVisible()
+  })
+
+  test('a late failing status probe does not hide a page the frame has since navigated to', async ({ page }) => {
+    await page.addInitScript(() => {
+      const proto = (window as unknown as { PerformanceNavigationTiming?: { prototype: object } }).PerformanceNavigationTiming?.prototype
+      if (proto) Object.defineProperty(proto, 'responseStatus', { get: () => 0, configurable: true })
+    })
+    const artifactPath = 'guides/probe-first.html'
+    await page.route('**/_indexes/sre/index.json', async (route) => {
+      const response = await route.fetch()
+      const index = await response.json() as { artifacts: Array<Record<string, unknown>> }
+      index.artifacts.push({
+        id: artifactPath, title: 'Probe first', path: artifactPath, format: 'html', filename: 'probe-first.html',
+        artifactUrl: `/_artifacts/sre/${artifactPath}`, updatedAt: '2026-10-01T00:00:00Z',
+      })
+      await route.fulfill({ response, body: JSON.stringify(index) })
+    })
+    let failProbe!: () => void
+    const gate = new Promise<void>((resolve) => { failProbe = resolve })
+    await page.route(`**/_artifacts/sre/${artifactPath}`, async (route) => {
+      if (route.request().method() === 'HEAD') {
+        await gate
+        await route.abort('connectionreset')
+        return
+      }
+      await route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: '<!doctype html><title>First</title><a id="go" href="probe-second.html">second</a>' })
+    })
+    await page.route('**/_artifacts/sre/guides/probe-second.html', (route) => route.fulfill({
+      status: 200, contentType: 'text/html; charset=utf-8', body: '<!doctype html><title>Second</title><p id="two">Second page</p>',
+    }))
+    await page.goto(`/sre/${artifactPath}`)
+    const frame = page.frameLocator('iframe.artifact-frame')
+    await frame.locator('#go').click()
+    await expect(frame.locator('#two')).toBeVisible()
+    failProbe()
+    await page.waitForTimeout(500)
+    await expect(page.getByRole('heading', { name: 'Document unavailable' })).toHaveCount(0)
+    await expect(page.locator('iframe.artifact-frame')).toBeVisible()
+    await expect(frame.locator('#two')).toBeVisible()
+  })
+
+  test('a failing status probe is also ignored while a navigation of the frame has started but not finished', async ({ page }) => {
+    await page.addInitScript(() => {
+      const proto = (window as unknown as { PerformanceNavigationTiming?: { prototype: object } }).PerformanceNavigationTiming?.prototype
+      if (proto) Object.defineProperty(proto, 'responseStatus', { get: () => 0, configurable: true })
+    })
+    const artifactPath = 'guides/probe-pending.html'
+    await page.route('**/_indexes/sre/index.json', async (route) => {
+      const response = await route.fetch()
+      const index = await response.json() as { artifacts: Array<Record<string, unknown>> }
+      index.artifacts.push({
+        id: artifactPath, title: 'Probe pending', path: artifactPath, format: 'html', filename: 'probe-pending.html',
+        artifactUrl: `/_artifacts/sre/${artifactPath}`, updatedAt: '2026-10-01T00:00:00Z',
+      })
+      await route.fulfill({ response, body: JSON.stringify(index) })
+    })
+    let failProbe!: () => void
+    const probeGate = new Promise<void>((resolve) => { failProbe = resolve })
+    let finishNavigation!: () => void
+    const navigationGate = new Promise<void>((resolve) => { finishNavigation = resolve })
+    let navigationRequested!: () => void
+    const requested = new Promise<void>((resolve) => { navigationRequested = resolve })
+    await page.route(`**/_artifacts/sre/${artifactPath}`, async (route) => {
+      if (route.request().method() === 'HEAD') {
+        await probeGate
+        await route.abort('connectionreset')
+        return
+      }
+      await route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: '<!doctype html><title>First</title><a id="go" href="probe-slow.html?v=2">slow</a><p id="one">First page</p>' })
+    })
+    await page.route('**/_artifacts/sre/guides/probe-slow.html**', async (route) => {
+      navigationRequested()
+      await navigationGate
+      await route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: '<!doctype html><title>Slow</title><p id="two">Slow page</p>' })
+    })
+    await page.goto(`/sre/${artifactPath}`)
+    const frame = page.frameLocator('iframe.artifact-frame')
+    await frame.locator('#go').click()
+    await requested
+    failProbe()
+    await page.waitForTimeout(500)
+    await expect(page.getByRole('heading', { name: 'Document unavailable' })).toHaveCount(0)
+    await expect(page.locator('iframe.artifact-frame')).toBeVisible()
+    finishNavigation()
+    await expect(frame.locator('#two')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Document unavailable' })).toHaveCount(0)
+  })
+
+  test('closing the More menu with a click on a blank area clears its focus record before a resize', async ({ page }) => {
+    await page.setViewportSize({ width: 500, height: 800 })
+    await page.goto(markdownPath)
+    await moreActionsButton(page).click()
+    const menu = page.getByRole('menu', { name: 'More actions' })
+    await menu.getByRole('menuitem', { name: 'Copy link' }).focus()
+    await page.mouse.click(250, 400)
+    await expect(menu).toHaveCount(0)
+    await page.setViewportSize({ width: 1440, height: 800 })
+    await expect(columnOf(page)).toBeVisible()
+    await page.waitForTimeout(400)
+    expect(await focusInColumn(page)).toBeNull()
+  })
+
+  test('the column is absent on site home, folders, search, previews and missing pages', async ({ page }) => {
+    await registerTextSearchSite(page)
+    for (const path of [
+      '/sre',
+      '/sre/runbooks',
+      '/textsearch/_search?q=latency',
+      '/showcase/_previews',
+      '/showcase/_previews/0123456789abcdef0123456789abcdef01234567/notes.md',
+      '/sre/does-not-exist.md',
+    ]) {
+      await page.goto(path)
+      await expect(page.locator('body')).toBeVisible()
+      await expect(page.locator('#root')).not.toBeEmpty()
+      await page.waitForTimeout(300)
+      await expect(columnOf(page), path).toHaveCount(0)
+      await expect(page.locator('[data-reader-column]'), path).toHaveCount(0)
+    }
+  })
 })

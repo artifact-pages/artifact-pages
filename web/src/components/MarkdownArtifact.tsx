@@ -166,6 +166,8 @@ export function MarkdownArtifact({
   highlightQuery = '',
   onMatches,
   footer,
+  aside,
+  onFailedChange,
 }: {
   artifact: ArtifactIndexEntry
   siteId: string
@@ -178,6 +180,10 @@ export function MarkdownArtifact({
   onMatches?: (ranges: Range[]) => void
   /** Rendered after the article inside the scrolling region (the "Read next" list). */
   footer?: ReactNode
+  /** The reader context column (ISSUE-108): rendered inside the scrolling region, beside the article, so it can scroll with it. */
+  aside?: ReactNode
+  /** Called with true while the document failed to load (the column is not shown on an error screen). */
+  onFailedChange?: (failed: boolean) => void
 }) {
   const [source, setSource] = useState<string | null>(null)
   const [error, setError] = useState<{ status?: number } | null>(null)
@@ -206,6 +212,14 @@ export function MarkdownArtifact({
 
     return () => controller.abort()
   }, [artifact.artifactUrl, attempt])
+
+  const onFailedChangeRef = useRef(onFailedChange)
+  onFailedChangeRef.current = onFailedChange
+  useEffect(() => {
+    if (!error) return
+    onFailedChangeRef.current?.(true)
+    return () => onFailedChangeRef.current?.(false)
+  }, [error])
 
   useEffect(() => {
     if (error && attempt > 0) retryRef.current?.focus()
@@ -296,25 +310,44 @@ export function MarkdownArtifact({
     )
   }
 
-  if (source === null) {
-    if (!loadingVisible) return <div className="markdown-state" aria-busy="true" />
-    return <div className="markdown-state" role="status">Loading document…</div>
+  const loaded = source !== null
+  const article = loaded ? (
+    <article ref={articleRef} className="markdown-article">
+      <Markdown
+        remarkPlugins={markdownRemarkPlugins}
+        rehypePlugins={markdownRehypePlugins}
+        urlTransform={urlTransform}
+        components={markdownComponents}
+      >
+        {source}
+      </Markdown>
+    </article>
+  ) : loadingVisible
+    ? <div className="markdown-state" role="status">Loading document…</div>
+    : <div className="markdown-state" aria-busy="true" />
+  const footerView = loaded && footer ? <div className="markdown-footer">{footer}</div> : null
+
+  // With a column, one tree serves loading and loaded alike, so the column is never remounted
+  // (focus inside it, and Details, survive the document arriving).
+  if (aside) {
+    return (
+      <MarkdownRenderContext.Provider value={renderContext}>
+        <div className="markdown-scroll has-aside" data-testid={loaded ? 'markdown-document' : undefined} lang={loaded ? language : undefined}>
+          <div className="markdown-split">
+            <div className="markdown-split-main">{article}{footerView}</div>
+            {aside}
+          </div>
+        </div>
+      </MarkdownRenderContext.Provider>
+    )
   }
+
+  if (!loaded) return article
 
   return (
     <MarkdownRenderContext.Provider value={renderContext}>
     <div className="markdown-scroll" data-testid="markdown-document" lang={language}>
-      <article ref={articleRef} className="markdown-article">
-        <Markdown
-          remarkPlugins={markdownRemarkPlugins}
-          rehypePlugins={markdownRehypePlugins}
-          urlTransform={urlTransform}
-          components={markdownComponents}
-        >
-          {source}
-        </Markdown>
-      </article>
-      {footer ? <div className="markdown-footer">{footer}</div> : null}
+      {article}{footerView}
     </div>
     </MarkdownRenderContext.Provider>
   )

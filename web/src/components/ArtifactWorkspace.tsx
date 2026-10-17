@@ -3,6 +3,8 @@ import { ArtifactBreadcrumbs } from './ArtifactBreadcrumbs'
 import { CommandPalette, type PaletteCommand } from './CommandPalette'
 import { DirectoryPage } from './DirectoryPage'
 import { Icon } from './Icon'
+import { ArtifactDetails, focusReaderColumnPart, READER_COLUMN_QUERY, ReaderContextColumn, type ReaderColumnPart } from './ReaderContextColumn'
+import { useCurrentHeading } from './useCurrentHeading'
 import { Sidebar } from './Sidebar'
 import { RecentlyUpdated, SiteHome, SiteHomeHeader } from './SiteHome'
 import { siteCountLabel } from '../domain/site-count-label'
@@ -121,6 +123,8 @@ export function ArtifactWorkspace({
   const detailsToggleRef = useRef<HTMLButtonElement>(null)
   const moreMenuTriggerRef = useRef<HTMLButtonElement>(null)
   const narrowChrome = useMediaQuery(NARROW_CHROME_QUERY)
+  const wideReader = useMediaQuery(READER_COLUMN_QUERY)
+  const [frameLoads, setFrameLoads] = useState(0)
   const headingJumpRequest = useRef(0)
   const headingJumpTimer = useRef<number | null>(null)
   const [headingJump, setHeadingJump] = useState<'pending' | 'settled' | null>(null)
@@ -147,12 +151,14 @@ export function ArtifactWorkspace({
   // The language the open HTML artifact declares on its own <html>, keyed by the artifact it was read from.
   const [frameLanguage, setFrameLanguage] = useState<{ artifactUrl: string, lang: string | undefined } | null>(null)
   // A known HTML body whose response failed (ISSUE-106), keyed by the artifact it was read from.
-  const [frameFailure, setFrameFailure] = useState<{ artifactUrl: string, status: number } | null>(null)
+  const [frameFailure, setFrameFailure] = useState<{ artifactUrl: string, status: number | null } | null>(null)
   const [frameAttempt, setFrameAttempt] = useState(0)
   const retryFrameRef = useRef<HTMLButtonElement | null>(null)
   const focusRetryRef = useRef(false)
   // Loads seen by the current iframe mount: only the first one is the artifact's own load (ISSUE-106).
   const frameLoadCount = useRef(0)
+  // Advances when a navigation of the frame starts (or the frame is replaced), before its load finishes.
+  const frameGeneration = useRef(0)
   const frameStatusAbort = useRef<AbortController | null>(null)
   const nearbyPages = useMemo(
     () => pageNotFound && routeArtifactPath ? nearbyArtifacts(index.artifacts, routeArtifactPath) : [],
@@ -194,6 +200,21 @@ export function ArtifactWorkspace({
   }, [matchRanges, currentMatch])
   const lastRecordedArtifactId = useRef<string | null>(null)
   const currentFormat = bodyArtifact?.format
+  // The persistent Contents and Details column (ISSUE-108): a document page at a wide viewport only.
+  // Not on an error screen: a Markdown document or an HTML body that failed to load.
+  const [markdownFailedUrl, setMarkdownFailedUrl] = useState<string | null>(null)
+  const loadFailed = Boolean(currentArtifact) && (
+    markdownFailedUrl === currentArtifact?.artifactUrl || frameFailure?.artifactUrl === currentArtifact?.artifactUrl
+  )
+  const columnShown = wideReader && Boolean(currentArtifact) && route.kind === 'site' && !loadFailed
+  const currentHeading = useCurrentHeading({
+    enabled: columnShown,
+    format: currentFormat,
+    entries: bodyArtifact?.toc ?? NO_ENTRIES,
+    stageRef,
+    frameRef: htmlFrameRef,
+    frameLoads,
+  })
   const hasContents = Boolean(bodyArtifact?.toc?.length)
   const tocOpen = activePanel === 'contents'
   const detailsOpen = activePanel === 'details'
@@ -213,6 +234,83 @@ export function ArtifactWorkspace({
   const togglePanel = useCallback((panel: Exclude<WorkspacePanel, null>) => {
     setActivePanel((current) => current === panel ? null : panel)
   }, [])
+
+  // At a wide viewport Contents and Details are parts of the column: the commands move focus there.
+  const activePanelRef = useRef(activePanel)
+  activePanelRef.current = activePanel
+  const columnShownRef = useRef(columnShown)
+  columnShownRef.current = columnShown
+  const openPart = useCallback((part: ReaderColumnPart) => {
+    if (!columnShownRef.current) {
+      togglePanel(part)
+      return
+    }
+    setPaletteSeed(null)
+    // The palette still holds focus while it closes; move focus once it has gone.
+    focusReaderColumnPart(part)
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => focusReaderColumnPart(part)))
+  }, [togglePanel])
+
+  // Where focus last was among the controls that appear or disappear as the viewport crosses the
+  // breakpoint, so it can follow the reader across it instead of falling back to the page.
+  const lastFocus = useRef<{ area: 'column' | 'panel' | 'bar' | 'more'; part: ReaderColumnPart; element: Element; wide: boolean } | null>(null)
+  useEffect(() => {
+    const classify = (target: EventTarget | null) => {
+      if (!(target instanceof Element)) return null
+      const column = target.closest('[data-reader-column]')
+      if (column) return { area: 'column' as const, part: column.querySelector('.reader-column-details')?.contains(target) ? 'details' as const : 'contents' as const, element: target }
+      const panel = target.closest('.context-panel')
+      if (panel) return { area: 'panel' as const, part: panel.getAttribute('aria-label') === 'Details' ? 'details' as const : 'contents' as const, element: target }
+      if (target === moreMenuTriggerRef.current || target.closest('[role="menu"]')) return { area: 'more' as const, part: 'contents' as const, element: target }
+      if (target === contentsToggleRef.current) return { area: 'bar' as const, part: 'contents' as const, element: target }
+      if (target === detailsToggleRef.current) return { area: 'bar' as const, part: 'details' as const, element: target }
+      return null
+    }
+    const onFocusIn = (event: FocusEvent) => {
+      const found = classify(event.target)
+      lastFocus.current = found ? { ...found, wide: columnShownRef.current } : null
+    }
+    const onFocusOut = () => {
+      // Focus displaced by the breakpoint change keeps its record; focus that left some other way
+      // (a click on a blank area closing the More menu, say) does not, even if its element is gone.
+      window.requestAnimationFrame(() => {
+        const last = lastFocus.current
+        if (!last || document.activeElement === last.element) return
+        if (last.wide === columnShownRef.current || last.element.isConnected) lastFocus.current = null
+      })
+    }
+    document.addEventListener('focusin', onFocusIn)
+    document.addEventListener('focusout', onFocusOut)
+    return () => {
+      document.removeEventListener('focusin', onFocusIn)
+      document.removeEventListener('focusout', onFocusOut)
+    }
+  }, [])
+
+  const previousColumnShown = useRef(columnShown)
+  useEffect(() => {
+    const before = previousColumnShown.current
+    previousColumnShown.current = columnShown
+    if (before === columnShown) return
+    const last = lastFocus.current
+    if (columnShown) {
+      setActivePanel(null)
+      if (last && last.area !== 'column') {
+        lastFocus.current = null
+        // The More trigger stands for the panel that was open (Contents when none was).
+        const part = last.area === 'more' && activePanelRef.current === 'details' ? 'details' : last.part
+        window.requestAnimationFrame(() => focusReaderColumnPart(part))
+      }
+    } else if (last?.area === 'column') {
+      lastFocus.current = null
+      window.requestAnimationFrame(() => {
+        const toggle = last.part === 'contents' && !contentsToggleRef.current?.disabled
+          ? contentsToggleRef.current
+          : detailsToggleRef.current
+        ;(toggle ?? moreMenuTriggerRef.current)?.focus()
+      })
+    }
+  }, [columnShown])
 
   const updateExpandedPaths = useCallback((update: (current: Set<string>) => Set<string>) => {
     setExpandedPaths(update)
@@ -390,14 +488,14 @@ export function ArtifactWorkspace({
         toggleSidebar()
       } else if (modifier && event.shiftKey && key === 'o') {
         event.preventDefault()
-        togglePanel('contents')
+        openPart('contents')
       } else if (event.key === 'Escape') {
         closePalette()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [paletteSeed, closePalette, toggleSidebar, togglePanel, goToSearchPage])
+  }, [paletteSeed, closePalette, toggleSidebar, openPart, goToSearchPage])
 
   useEffect(() => {
     if (paletteSeed !== null) return
@@ -414,9 +512,9 @@ export function ArtifactWorkspace({
       } else if (modifier && key === 'b') {
         event.preventDefault()
         toggleSidebar(true)
-      } else if (modifier && event.shiftKey && key === 'o' && hasContents) {
+      } else if (modifier && event.shiftKey && key === 'o' && (hasContents || columnShown)) {
         event.preventDefault()
-        togglePanel('contents')
+        openPart('contents')
       } else if (event.key === 'Escape' && !event.defaultPrevented && activePanel !== null) {
         setActivePanel(null)
       } else if (event.key === 'Escape' && !event.defaultPrevented && navigatorVisibleRef.current) {
@@ -425,7 +523,7 @@ export function ArtifactWorkspace({
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [paletteSeed, hasContents, activePanel, openPalette, toggleSidebar, togglePanel, goToSearchPage])
+  }, [paletteSeed, hasContents, columnShown, activePanel, openPalette, toggleSidebar, openPart, goToSearchPage])
 
   const siteSummaries: SiteSummary[] = sites.length
     ? sites.map(({ site }) => site).sort((left, right) => left.title.localeCompare(right.title))
@@ -446,13 +544,13 @@ export function ArtifactWorkspace({
     {
       title: 'Toggle contents',
       shortcut: '⌘ ⇧ O',
-      available: hasContents,
-      onSelect: () => togglePanel('contents'),
+      available: hasContents || columnShown,
+      onSelect: () => openPart('contents'),
     },
     {
       title: 'Toggle details',
       available: Boolean(bodyArtifact),
-      onSelect: () => togglePanel('details'),
+      onSelect: () => openPart('details'),
     },
     {
       title: bodyArtifact && pinnedArtifactIds.includes(bodyArtifact.id) ? 'Unpin artifact' : 'Pin artifact',
@@ -607,6 +705,13 @@ export function ArtifactWorkspace({
     headingJumpTimer.current = window.setTimeout(settle, 60)
   }
 
+  // Activating a Contents entry in the column goes to the heading as the overlay does; the column stays open
+  // and focus stays on the entry.
+  function jumpFromColumn(id: string) {
+    cancelHeadingJump()
+    navigateWithinWorkspace(`${pathname}#${encodeURIComponent(id)}`)
+  }
+
   function closePanel() {
     const toggle = activePanel === 'details' ? detailsToggleRef.current : contentsToggleRef.current
     setActivePanel(null)
@@ -700,6 +805,7 @@ export function ArtifactWorkspace({
   // A new mount (another artifact or a retry) starts counting loads again and drops any pending status request.
   useEffect(() => {
     frameLoadCount.current = 0
+    frameGeneration.current += 1
     return () => {
       frameStatusAbort.current?.abort()
       frameStatusAbort.current = null
@@ -720,6 +826,10 @@ export function ArtifactWorkspace({
       navigate={(href) => navigate(href)}
       highlightQuery={highlightQuery}
       onMatches={reportMatches}
+      onFailedChange={(failed) => setMarkdownFailedUrl(failed ? bodyArtifact.artifactUrl : null)}
+      aside={columnShown && currentArtifact ? (
+        <ReaderContextColumn artifact={currentArtifact} entries={currentArtifact.toc ?? NO_ENTRIES} activeId={currentHeading} onJump={jumpFromColumn} />
+      ) : undefined}
       footer={readNextItems.length > 0 ? <ReadNext items={readNextItems} siteId={index.site.id} navigate={(href) => navigateWithinWorkspace(href)} /> : undefined}
     />
   ) : bodyArtifact && htmlArtifactUrl ? (
@@ -727,7 +837,7 @@ export function ArtifactWorkspace({
     {frameFailure?.artifactUrl === bodyArtifact.artifactUrl ? (
       <div className="markdown-state" role="alert">
         <h1>Document unavailable</h1>
-        <p>The content of “{bodyArtifact.title}” could not be loaded (HTTP {frameFailure.status}). It may have been removed or not published yet.</p>
+        <p>The content of “{bodyArtifact.title}” could not be loaded{frameFailure.status === null ? '' : ` (HTTP ${frameFailure.status})`}. It may have been removed or not published yet.</p>
         <button
           type="button"
           className="text-action"
@@ -766,6 +876,13 @@ export function ArtifactWorkspace({
         const frame = event.currentTarget
         const firstLoad = frameLoadCount.current === 0
         frameLoadCount.current += 1
+        const loadNumber = frameLoadCount.current
+        const generation = frameGeneration.current
+        try {
+          const bump = () => { frameGeneration.current += 1 }
+          event.currentTarget.contentWindow?.addEventListener('beforeunload', bump)
+          event.currentTarget.contentWindow?.addEventListener('pagehide', bump)
+        } catch { /* a cross-origin frame is covered by the URL check */ }
         const artifactUrl = bodyArtifact.artifactUrl
         const status = firstLoad ? readFrameResponseStatus(frame) : null
         if (typeof status === 'number' && status >= 400) {
@@ -785,7 +902,11 @@ export function ArtifactWorkspace({
             .catch(() => null)
             .then((headStatus) => {
               if (controller.signal.aborted) return
-              if (headStatus !== null && headStatus >= 400) {
+              // The result belongs to the load it was started for: ignore it once the frame has loaded
+              // again, been replaced, or left the probed artifact.
+              if (generation !== frameGeneration.current || loadNumber !== frameLoadCount.current || frame !== htmlFrameRef.current || !frameShowsArtifact(frame, artifactUrl)) return
+              // A probe that fails at the network level leaves the body unverified: treat it as failed.
+              if (headStatus === null || headStatus >= 400) {
                 frameHeightCleanup.current?.()
                 frameHeightCleanup.current = null
                 setFrameFailure({ artifactUrl, status: headStatus })
@@ -801,6 +922,7 @@ export function ArtifactWorkspace({
           frame.focus()
         }
         setFrameLanguage({ artifactUrl: bodyArtifact.artifactUrl, lang: readFrameLanguage(event.currentTarget) })
+        setFrameLoads((count) => count + 1)
         event.currentTarget.contentWindow?.addEventListener('keydown', forwardArtifactKeyDown, true)
         syncHtmlFrameLocation(event.currentTarget)
         highlightFrame(event.currentTarget, highlightQueryRef.current, !hash, reportMatches)
@@ -1011,7 +1133,11 @@ export function ArtifactWorkspace({
                 >
                   <Icon name="search" size={17} />
                 </button>
-                <ReaderMoreMenu ref={moreMenuTriggerRef} items={moreMenuItems} />
+                <ReaderMoreMenu
+                  ref={moreMenuTriggerRef}
+                  items={moreMenuItems}
+                  onDismiss={() => { if (lastFocus.current?.area === 'more') lastFocus.current = null }}
+                />
               </div>
             ) : (
               <div className="context-actions">
@@ -1052,7 +1178,7 @@ export function ArtifactWorkspace({
                     <span>{pinnedArtifactIds.includes(bodyArtifact.id) ? 'Pinned' : 'Pin'}</span>
                   </button>
                 ) : null}
-                {bodyArtifact ? (
+                {bodyArtifact && !columnShown ? (
                   <>
                     <button
                       ref={contentsToggleRef}
@@ -1077,7 +1203,7 @@ export function ArtifactWorkspace({
                     </button>
                   </>
                 ) : null}
-                {bodyArtifact || currentDirectory ? <span className="action-divider" /> : null}
+                {(bodyArtifact && !columnShown) || currentDirectory ? <span className="action-divider" /> : null}
                 {currentArtifact || currentDirectory ? (
                   <button
                     className="icon-button"
@@ -1104,7 +1230,7 @@ export function ArtifactWorkspace({
             )}
           </header>
 
-          <main ref={stageRef} id="main-content" tabIndex={-1} className={`stage${currentArtifact ? ' has-artifact' : ''}`} data-heading-jump={headingJump ?? undefined}>
+          <main ref={stageRef} id="main-content" tabIndex={-1} className={`stage${currentArtifact ? ' has-artifact' : ''}${columnShown ? ' has-reader-column' : ''}`} data-heading-jump={headingJump ?? undefined}>
             {searchRoute ? (
               <SearchResultsPage
                 siteTitle={index.site.title}
@@ -1186,7 +1312,11 @@ export function ArtifactWorkspace({
               />
             ) : null}
 
-            {activePanel && bodyArtifact ? (
+            {columnShown && currentArtifact && currentFormat === 'html' ? (
+              <ReaderContextColumn standalone artifact={currentArtifact} entries={currentArtifact.toc ?? NO_ENTRIES} activeId={currentHeading} onJump={jumpFromColumn} />
+            ) : null}
+
+            {activePanel && bodyArtifact && !columnShown ? (
               <aside
                 className="context-panel"
                 aria-label={panelLabel}
@@ -1280,6 +1410,17 @@ function scrollFrameToFragment(frameWindow: Window, hash: string, host: HTMLElem
 }
 
 /** The HTTP status of the frame's document; undefined when the browser does not expose it (or reading throws). */
+/** Whether the frame is still on the artifact's own URL (an unreadable cross-origin frame is not). */
+function frameShowsArtifact(iframe: HTMLIFrameElement, artifactUrl: string) {
+  try {
+    const expected = new URL(artifactUrl, window.location.href)
+    const actual = new URL(iframe.contentWindow?.location.href ?? '')
+    return actual.origin === expected.origin && actual.pathname === expected.pathname && actual.search === expected.search
+  } catch {
+    return false
+  }
+}
+
 function readFrameResponseStatus(iframe: HTMLIFrameElement): number | undefined {
   try {
     const entry = iframe.contentWindow?.performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined
@@ -1401,6 +1542,7 @@ function withSearchQuery(href: string, query: string) {
 }
 
 const NO_RANGES: Range[] = []
+const NO_ENTRIES: NonNullable<ArtifactIndexEntry['toc']> = []
 
 function findArtifact(index: SiteIndex, path: string) {
   return index.artifacts.find((artifact) => artifact.path === path || artifact.id === path)
@@ -1420,58 +1562,6 @@ function readPinnedArtifacts(): Record<string, string[]> {
     }))
   } catch {
     return {}
-  }
-}
-
-function ArtifactDetails({ artifact }: { artifact: ArtifactIndexEntry }) {
-  const committerName = artifact.lastCommitter?.name.trim()
-  const repositoryUrl = safeHttpsUrl(artifact.source?.repositoryUrl)
-
-  return (
-    <div className="artifact-details">
-      {committerName ? (
-        <section className="details-committer" aria-label="Last commit">
-          <p className="details-section-label">Last committed by</p>
-          <div className="details-committer-card">
-            <span className="details-avatar" aria-hidden="true">{Array.from(committerName)[0]?.toUpperCase()}</span>
-            <span className="details-committer-name">{committerName}</span>
-          </div>
-        </section>
-      ) : null}
-
-      <div className="details-facts">
-        <div className="details-fact">
-          <span className="details-label">Updated</span>
-          <time dateTime={artifact.updatedAt}>{formatLongDate(artifact.updatedAt)}</time>
-        </div>
-        {artifact.source ? (
-          <div className="details-fact details-source-fact">
-            <span className="details-label">Source</span>
-            <div className="details-source-value">
-              {repositoryUrl ? (
-                <a className="details-source-link" href={repositoryUrl} target="_blank" rel="noreferrer">
-                  <span>{artifact.source.repository}</span>
-                  <Icon name="external" size={12} />
-                </a>
-              ) : (
-                <span className="details-source-name">{artifact.source.repository}</span>
-              )}
-              <span className="details-source-ref">{artifact.source.ref}</span>
-            </div>
-          </div>
-        ) : null}
-      </div>
-    </div>
-  )
-}
-
-function safeHttpsUrl(value?: string) {
-  if (!value) return undefined
-  try {
-    const url = new URL(value)
-    return url.protocol === 'https:' ? url.href : undefined
-  } catch {
-    return undefined
   }
 }
 
@@ -1507,12 +1597,6 @@ function formatDate(value: string) {
   const date = new Date(value)
   if (Number.isNaN(date.valueOf())) return value
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date)
-}
-
-function formatLongDate(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.valueOf())) return value
-  return new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).format(date)
 }
 
 /**
