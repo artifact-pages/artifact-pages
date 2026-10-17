@@ -202,12 +202,21 @@ test('overlapping occurrences merge into one mark', () => {
   assert.deepEqual(markedText(excerpt), ['aaa'])
 })
 
-test('a capped section full of matches still yields an excerpt quickly', () => {
+test('a capped section full of matches yields a bounded excerpt at a capped cost', () => {
+  // The output must stay within the cluster cap and not grow with the section (structural, deterministic).
+  // The whole section is still folded and segmented, so cost grows with size; the generous 1000 ms limit
+  // (CI noise is about 100-160 ms) only catches catastrophic, e.g. quadratic, regressions.
+  const excerptOf = (length) => excerptFor([{ heading: '', anchor: '', text: 'a'.repeat(length) }], excerptTerms('a'))
+  const small = excerptOf(4096)
   const started = performance.now()
-  const excerpt = excerptFor([{ heading: '', anchor: '', text: 'a'.repeat(262144) }], excerptTerms('a'))
+  const large = excerptOf(262144)
   const elapsed = performance.now() - started
-  assert.ok(excerpt)
-  assert.ok(elapsed < 150, `took ${elapsed} ms`)
-  assert.equal(excerpt.parts.at(-1).text, '…')
-  console.log(`# 262144-char all-match section: ${Math.round(elapsed)} ms`)
+  assert.ok(elapsed < 1000, `took ${elapsed} ms`)
+  assert.ok(large)
+  assert.equal(large.parts.at(-1).text, '…')
+  const shown = large.parts.filter((part) => part.text !== '…')
+  assert.ok(large.parts.length <= 3, `${large.parts.length} parts`)
+  assert.ok(shown.reduce((sum, part) => sum + part.text.length, 0) <= EXCERPT_CLUSTERS)
+  assert.ok(shown.every((part) => part.mark), 'every shown character is a match')
+  assert.deepEqual(large, small)
 })
