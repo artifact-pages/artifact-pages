@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page, type Route } from '@playwright/test'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { gzipSync } from 'node:zlib'
@@ -1001,7 +1001,8 @@ test('registered discovery shows empty and malformed registries and refreshes re
   registryState = 'malformed'
   await page.reload()
   await expect(page.getByRole('heading', { name: 'Unable to load sites' })).toBeVisible()
-  await expect(page.getByRole('alert')).toHaveText('We could not load the site catalog. Check your connection and try again.')
+  await expect(page.getByRole('alert')).toHaveText('The site catalog is damaged or was written by an incompatible version. Ask the administrator to run the registry sync again.')
+  await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(0)
 
   registryState = 'first'
   await page.reload()
@@ -2081,6 +2082,82 @@ test('Markdown heading IDs match the shared fixture and Contents and palette rea
   await expect(page).toHaveURL(/#md-repeated-heading-1$/)
   await expect(duplicateHeading).toBeInViewport()
   await expect.poll(() => scrollport.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+})
+
+test('a known HTML document whose body fails to load shows reader guidance and can be retried', async ({ page }) => {
+  const artifactPath = 'guides/missing.html'
+  let available = false
+  await page.route('**/_indexes/sre/index.json', async (route) => {
+    const response = await route.fetch()
+    const index = await response.json() as { artifacts: Array<Record<string, unknown>> }
+    index.artifacts.push({
+      id: artifactPath,
+      title: 'Missing body',
+      path: artifactPath,
+      format: 'html',
+      filename: 'missing.html',
+      artifactUrl: `/_artifacts/sre/${artifactPath}`,
+      updatedAt: '2026-10-01T00:00:00Z',
+    })
+    await route.fulfill({ response, body: JSON.stringify(index) })
+  })
+  await page.route(`**/_artifacts/sre/${artifactPath}`, (route) => available
+    ? route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: '<!doctype html><title>Back</title><p id="body">Body is back</p>' })
+    : route.fulfill({ status: 404, contentType: 'text/html; charset=utf-8', body: '<h1>404 Not Found</h1>' }))
+
+  await page.goto(`/sre/${artifactPath}`)
+  const alert = page.getByRole('alert')
+  await expect(alert.getByRole('heading', { name: 'Document unavailable' })).toBeVisible()
+  await expect(alert).toContainText('The content of “Missing body” could not be loaded (HTTP 404).')
+  await expect(alert.getByRole('link', { name: /← / })).toBeVisible()
+  await expect(page.locator('iframe[title="Missing body"]')).toBeHidden()
+
+  // A retry while the body is still missing keeps the guidance and returns focus to the button.
+  await alert.getByRole('button', { name: 'Try again' }).click()
+  await expect(alert.getByRole('button', { name: 'Try again' })).toBeFocused()
+  await expect(alert).toContainText('HTTP 404')
+
+  available = true
+  await alert.getByRole('button', { name: 'Try again' }).click()
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  await expect(page.frameLocator('iframe[title="Missing body"]').locator('#body')).toHaveText('Body is back')
+  await expect(page.locator('iframe[title="Missing body"]')).toBeFocused()
+  await expect(page).toHaveURL(new RegExp(`/sre/${artifactPath}$`))
+})
+
+test('navigating inside a working HTML frame to a failing page does not mark the document unavailable', async ({ page }) => {
+  const artifactPath = 'guides/working.html'
+  await page.route('**/_indexes/sre/index.json', async (route) => {
+    const response = await route.fetch()
+    const index = await response.json() as { artifacts: Array<Record<string, unknown>> }
+    index.artifacts.push({
+      id: artifactPath,
+      title: 'Working body',
+      path: artifactPath,
+      format: 'html',
+      filename: 'working.html',
+      artifactUrl: `/_artifacts/sre/${artifactPath}`,
+      updatedAt: '2026-10-01T00:00:00Z',
+    })
+    await route.fulfill({ response, body: JSON.stringify(index) })
+  })
+  await page.route(`**/_artifacts/sre/${artifactPath}`, (route) => route.fulfill({
+    status: 200,
+    contentType: 'text/html; charset=utf-8',
+    body: '<!doctype html><title>Working</title><a id="go" href="/_artifacts/sre/guides/gone.html">Go</a>',
+  }))
+  await page.route('**/_artifacts/sre/guides/gone.html', (route) => route.fulfill({
+    status: 404,
+    contentType: 'text/html; charset=utf-8',
+    body: '<h1 id="gone">404 Not Found</h1>',
+  }))
+
+  await page.goto(`/sre/${artifactPath}`)
+  const frame = page.frameLocator('iframe[title="Working body"]')
+  await frame.locator('#go').click()
+  await expect(frame.locator('#gone')).toBeVisible()
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  await expect(page.locator('iframe[title="Working body"]')).toBeVisible()
 })
 
 test('HTML heading navigation keeps the URL and iframe section in sync with one history step', async ({ page }) => {
@@ -6593,17 +6670,21 @@ test.describe('directory pages', () => {
   ]
   const cappedPages = [...readmeFolder('handbook', 13), ...readmeFolder('twelve', 12)]
 
-  async function routeDirectoryIndex(page: Page, pages: readonly ExtraPage[] = extraPages) {
-    await page.route('**/_indexes/sre/index.json', async (route) => {
+  async function routeDirectoryIndex(page: Page, pages: readonly ExtraPage[] = extraPages, siteId = 'sre') {
+    await page.route(`**/_indexes/${siteId}/index.json`, async (route) => {
       const response = await route.fetch()
       const index = await response.json()
+      // Every row must point into its own site; reuse one of the site's own Markdown documents.
+      const documentUrl = siteId === 'sre'
+        ? sharedMarkdown
+        : index.artifacts.find((entry: { format: string }) => entry.format === 'markdown').artifactUrl
       index.artifacts.push(...pages.map(([path, title, updatedAt, headings]) => ({
         id: path,
         path,
         title,
         format: 'markdown',
         filename: path.split('/').at(-1),
-        artifactUrl: sharedMarkdown,
+        artifactUrl: documentUrl,
         updatedAt,
         lastCommitter: { name: 'Ada Writer' },
         toc: headings,
@@ -6635,6 +6716,108 @@ test.describe('directory pages', () => {
     await expect(publishing.locator('.directory-chip')).toHaveText(['Publish on', 'Dry runs', 'Credentials', '+2'])
     await expect(publishing.locator('.directory-chip').first()).toHaveAttribute('href', '/sre/guide/en/publishing.md#section-1')
     await expect(pages.locator('.directory-row', { hasText: 'Previews' }).locator('.directory-chip')).toHaveText(['Pull requests'])
+  })
+
+  // ISSUE-093: 5,000 pages in one folder (no README) and 5,000 children under a README.
+  const bulkNumber = (position: number) => String(position + 1).padStart(4, '0')
+  const bulkPages: ExtraPage[] = [
+    ...Array.from({ length: 5000 }, (_, position): ExtraPage => [
+      `wide/page-${bulkNumber(position)}.md`,
+      `${position % 5 < 2 ? 'Alpha' : 'Beta'} page ${bulkNumber(position)}`,
+      '2026-10-05T00:00:00Z',
+      [],
+    ]),
+    ['wideroot/README.md', 'Wide README home', '2026-10-01T00:00:00Z', toc('Welcome')],
+    ...Array.from({ length: 5000 }, (_, position): ExtraPage => [
+      `wideroot/child-${bulkNumber(position)}.md`, `Child ${bulkNumber(position)}`, '2026-10-05T00:00:00Z', [],
+    ]),
+  ]
+
+  test('a 5,000-page folder mounts at most 100 rows, pages to the last row and bounds the sidebar branch', async ({ page }) => {
+    await routeDirectoryIndex(page, bulkPages)
+    await page.goto('/sre/wide')
+
+    const directory = page.getByTestId('directory-page')
+    const rows = directory.locator('a[data-directory-page]')
+    const pager = directory.getByRole('navigation', { name: 'Pages of this folder' })
+    await expect(rows).toHaveCount(100)
+    await expect(pager).toContainText('Showing 1–100 of 5,000')
+    await expect(pager.getByRole('button', { name: 'Previous' })).toBeDisabled()
+    const branchRows = page.locator('.browse-tree a.tree-artifact[data-tree-path^="wide/"]')
+    await expect(branchRows).toHaveCount(100)
+    await expect(page.locator('.browse-tree .tree-more')).toHaveText('4900 more in wide')
+    await expect(page.locator('.browse-tree .tree-more')).toHaveAttribute('href', '/sre/wide')
+
+    await pager.getByRole('button', { name: 'Next' }).click()
+    await expect(pager).toContainText('Showing 101–200 of 5,000')
+    await expect(rows.first()).toBeFocused()
+    await expect(rows.first()).toHaveAttribute('data-directory-page', 'wide/page-0101.md')
+    expect(await rows.count()).toBeLessThanOrEqual(100)
+
+    for (let step = 0; step < 48; step += 1) await pager.getByRole('button', { name: 'Next' }).click()
+    await expect(pager).toContainText('Showing 4,901–5,000 of 5,000')
+    await expect(pager.getByRole('button', { name: 'Next' })).toBeDisabled()
+    await expect(rows).toHaveCount(100)
+    await expect(directory.locator('a[data-directory-page="wide/page-5000.md"]')).toBeVisible()
+  })
+
+  test('the sidebar keeps the open page row when it is beyond the branch limit', async ({ page }) => {
+    await routeDirectoryIndex(page, bulkPages)
+    await page.goto('/sre/wide/page-4321.md')
+
+    const branchRows = page.locator('.browse-tree a.tree-artifact[data-tree-path^="wide/"]')
+    await expect(branchRows).toHaveCount(101)
+    const active = page.locator('.browse-tree a.tree-artifact[data-tree-path="wide/page-4321.md"]')
+    await expect(active).toHaveCount(1)
+    await expect(active).toHaveAttribute('aria-current', 'page')
+    await expect(page.locator('.browse-tree .tree-more')).toHaveText('4899 more in wide')
+  })
+
+  test('a sidebar filter matching 2,000 pages mounts at most 101 rows', async ({ page }) => {
+    // The sidebar filter needs a site with page text search data.
+    await registerTextSearchSite(page)
+    await routeDirectoryIndex(page, bulkPages, 'textsearch')
+    await page.goto('/textsearch')
+    await page.getByRole('searchbox', { name: 'Filter pages in Text Search by title or path' }).fill('alpha page')
+    const results = page.locator('.filter-results a.tree-artifact')
+    await expect(results.first()).toBeVisible()
+    expect(await results.count()).toBeLessThanOrEqual(101)
+    await expect(page.locator('.filter-results .tree-more')).toContainText('more matches')
+  })
+
+  test('a filter matching 60 folders of 60 pages stays within the tree-wide row budget', async ({ page }) => {
+    const grid: ExtraPage[] = Array.from({ length: 3600 }, (_, position): ExtraPage => {
+      const folder = String(Math.floor(position / 60) + 1).padStart(2, '0')
+      const number = String((position % 60) + 1).padStart(2, '0')
+      return [`zf${folder}/p${number}.md`, `Zeta ${folder}-${number}`, '2026-10-05T00:00:00Z', []]
+    })
+    await registerTextSearchSite(page)
+    await routeDirectoryIndex(page, grid, 'textsearch')
+    await page.goto('/textsearch')
+    await page.getByRole('searchbox', { name: 'Filter pages in Text Search by title or path' }).fill('zeta')
+    const tree = page.locator('.filter-results .artifact-tree')
+    await expect(tree.locator('a.tree-artifact').first()).toBeVisible()
+    // Budgeted rows (folder and page rows) <= 400; at most one overflow row per branch (60 folders + the root).
+    const mounted = await tree.locator('.tree-directory-row, .tree-directory-button:not(.tree-directory-toggle), a.tree-artifact').count()
+    expect(mounted).toBeLessThanOrEqual(400)
+    const overflow = await tree.locator('.tree-more:not(:has-text("Some folders"))').count()
+    expect(overflow).toBeLessThanOrEqual(61)
+    await expect(tree.locator('.tree-more', { hasText: 'Some folders are not fully shown. Collapse folders or refine the filter.' })).toBeVisible()
+  })
+
+  test('a README folder with 5,000 children collapses to 10 rows and pages after Show all', async ({ page }) => {
+    await routeDirectoryIndex(page, bulkPages)
+    await page.goto('/sre/wideroot')
+
+    const directory = page.getByTestId('directory-page')
+    const rows = directory.locator('.directory-compact a')
+    await expect(rows).toHaveCount(10)
+    await expect(directory.getByRole('navigation', { name: 'Pages of this folder' })).toHaveCount(0)
+    await directory.getByRole('button', { name: /Show all/ }).click()
+    await expect(rows).toHaveCount(100)
+    const pager = directory.getByRole('navigation', { name: 'Pages of this folder' })
+    await expect(pager).toContainText('Showing 1–100 of 5,000')
+    await expect(directory.getByRole('button', { name: 'Show fewer' })).toBeVisible()
   })
 
   test('a trailing slash and percent-encoded folder names name the same directory', async ({ page }) => {
@@ -7335,4 +7518,84 @@ test('switching to another Markdown document delays its loading text again', asy
   } finally {
     releaseDocument()
   }
+})
+
+// --- load deadlines and retry actions (ISSUE-101, ISSUE-102) ---
+
+test('a catalog failure offers Try again, keeps focus on it after another failure, and recovers without a reload', async ({ page }) => {
+  let healthy = false
+  await page.route('**/_indexes/sites.json', (route) => healthy ? route.continue() : route.fulfill({ status: 503, body: 'unavailable' }))
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Unable to load sites' })).toBeVisible()
+  await expect(page.getByRole('alert')).toContainText('HTTP 503')
+  await page.getByRole('button', { name: 'Try again' }).click()
+  await expect(page.getByRole('heading', { name: 'Unable to load sites' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Try again' })).toBeFocused()
+  healthy = true
+  await page.getByRole('button', { name: 'Try again' }).click()
+  await expect(page.getByRole('link', { name: /SRE/ })).toBeVisible()
+  await expect(page).toHaveURL(/\/$/)
+})
+
+test('a site index failure offers Try again and recovers on the same route, query and fragment', async ({ page }) => {
+  let healthy = false
+  await page.route('**/_indexes/sre/index.json', (route) => healthy ? route.continue() : route.fulfill({ status: 503, body: 'unavailable' }))
+  await page.goto('/sre/runbooks/service-recovery.md?q=latency#md-request-path')
+  await expect(page.getByRole('heading', { name: 'Unable to load this site' })).toBeVisible()
+  await page.getByRole('button', { name: 'Try again' }).click()
+  await expect(page.getByRole('button', { name: 'Try again' })).toBeFocused()
+  healthy = true
+  await page.getByRole('button', { name: 'Try again' }).click()
+  await expect(page.locator('.markdown-scroll')).toBeVisible()
+  await expect(page).toHaveURL(/\/sre\/runbooks\/service-recovery\.md\?q=latency#md-request-path$/)
+})
+
+test('a Markdown failure offers Try again and the document renders afterwards', async ({ page }) => {
+  let healthy = false
+  await page.route('**/_artifacts/sre/runbooks/service-recovery.md', (route) => healthy ? route.continue() : route.fulfill({ status: 503, body: 'unavailable' }))
+  await page.goto('/sre/runbooks/service-recovery.md')
+  await expect(page.getByRole('heading', { name: 'Markdown unavailable' })).toBeVisible()
+  await expect(page.getByText('This document could not be loaded (HTTP 503). Try again in a moment.')).toBeVisible()
+  await page.getByRole('button', { name: 'Try again' }).click()
+  await expect(page.getByRole('button', { name: 'Try again' })).toBeFocused()
+  healthy = true
+  await page.getByRole('button', { name: 'Try again' }).click()
+  await expect(page.locator('.markdown-scroll')).toBeVisible()
+  await expect(page).toHaveURL(/\/sre\/runbooks\/service-recovery\.md$/)
+})
+
+test('a stalled registry times out with a message and Try again recovers', async ({ page }) => {
+  let healthy = false
+  const stalled: Route[] = []
+  await page.clock.install()
+  await page.route('**/_indexes/sites.json', (route) => {
+    if (healthy) return route.continue()
+    stalled.push(route) // never answered: the request stays pending until the application gives up
+  })
+  await page.goto('/')
+  await page.clock.runFor(15_000)
+  await expect(page.getByRole('heading', { name: 'Unable to load sites' })).toBeVisible()
+  await expect(page.getByRole('alert')).toHaveText('The site catalog is taking too long to load. Try again in a moment.')
+  healthy = true
+  await page.getByRole('button', { name: 'Try again' }).click()
+  await page.clock.runFor(1_000)
+  await expect(page.getByRole('link', { name: /SRE/ })).toBeVisible()
+  // The shared cleanup waits for in-flight handlers; release the abandoned request.
+  await Promise.all(stalled.map((route) => route.abort().catch(() => undefined)))
+})
+
+test('leaving a preview document aborts its stalled production index read', async ({ page }) => {
+  const stalled: Route[] = []
+  await page.route('**/_indexes/sre/index.json', (route) => { stalled.push(route) })
+  await page.goto(`/sre/_previews/${previewHeadSha}/guides/preview-guide.md`)
+  await expect(page.locator('.preview-reader-header h1')).toHaveText('Local preview guide')
+  await expect.poll(() => stalled.length).toBe(1)
+  const aborted = page.waitForEvent('requestfailed', (request) => request.url().endsWith('/_indexes/sre/index.json'))
+  await page.evaluate(() => {
+    window.history.pushState({}, '', '/sre/_previews')
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  })
+  await expect(page).toHaveURL(/\/sre\/_previews$/)
+  await aborted
+  await Promise.all(stalled.map((route) => route.abort().catch(() => undefined)))
 })

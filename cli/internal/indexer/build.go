@@ -111,12 +111,21 @@ type SiteIndex struct {
 }
 
 type SiteDiscoveryMetadata struct {
-	FullTextURL      string      `json:"fullTextUrl,omitempty"`
-	SchemaVersion    int         `json:"schemaVersion"`
-	Site             SiteSummary `json:"site"`
-	GeneratedAt      string      `json:"generatedAt"`
-	ArtifactCount    int         `json:"artifactCount"`
-	ArtifactIndexURL string      `json:"artifactIndexUrl"`
+	FullTextURL         string           `json:"fullTextUrl,omitempty"`
+	SchemaVersion       int              `json:"schemaVersion"`
+	Site                SiteSummary      `json:"site"`
+	GeneratedAt         string           `json:"generatedAt"`
+	ArtifactCount       int              `json:"artifactCount"`
+	ArtifactIndexURL    string           `json:"artifactIndexUrl"`
+	ContentUpdatedAt    string           `json:"contentUpdatedAt,omitempty"`
+	RootArtifactCount   int              `json:"rootArtifactCount"`
+	TopLevelFolderCount int              `json:"topLevelFolderCount"`
+	TopLevelFolders     []TopLevelFolder `json:"topLevelFolders,omitempty"`
+}
+
+type TopLevelFolder struct {
+	Name          string `json:"name"`
+	ArtifactCount int    `json:"artifactCount"`
 }
 
 type SiteSummary struct {
@@ -341,6 +350,7 @@ func BuildPrepared(ctx context.Context, prepared *PreparedBuild, outputDir strin
 		ArtifactCount:    len(index.Artifacts),
 		ArtifactIndexURL: siteIndexURL(options.SiteID),
 	}
+	metadata.ContentUpdatedAt, metadata.RootArtifactCount, metadata.TopLevelFolderCount, metadata.TopLevelFolders = summarizeDiscoveryArtifacts(index.Artifacts)
 	metadata.FullTextURL = "/_indexes/" + options.SiteID + "/search/manifest.json"
 	metadataBytes, err := json.MarshalIndent(metadata, "", "  ")
 	if err != nil {
@@ -368,6 +378,38 @@ func BuildPrepared(ctx context.Context, prepared *PreparedBuild, outputDir strin
 		MetadataBytes:    len(metadataBytes),
 		Elapsed:          time.Since(startedAt),
 	}, nil
+}
+
+func summarizeDiscoveryArtifacts(artifacts []ArtifactIndexEntry) (string, int, int, []TopLevelFolder) {
+	contentUpdatedAt := ""
+	rootArtifactCount := 0
+	folderArtifactCounts := make(map[string]int)
+	for _, artifact := range artifacts {
+		if artifact.UpdatedAt > contentUpdatedAt {
+			contentUpdatedAt = artifact.UpdatedAt
+		}
+		folder, _, nested := strings.Cut(artifact.Path, "/")
+		if !nested {
+			rootArtifactCount++
+			continue
+		}
+		folderArtifactCounts[folder]++
+	}
+
+	folderCount := len(folderArtifactCounts)
+	if folderCount == 0 || folderCount > 16 {
+		return contentUpdatedAt, rootArtifactCount, folderCount, nil
+	}
+	folderNames := make([]string, 0, folderCount)
+	for name := range folderArtifactCounts {
+		folderNames = append(folderNames, name)
+	}
+	sort.Strings(folderNames)
+	folders := make([]TopLevelFolder, 0, folderCount)
+	for _, name := range folderNames {
+		folders = append(folders, TopLevelFolder{Name: name, ArtifactCount: folderArtifactCounts[name]})
+	}
+	return contentUpdatedAt, rootArtifactCount, folderCount, folders
 }
 
 // ResolveGitSourceIdentity validates that sourceDir is inside the current Git

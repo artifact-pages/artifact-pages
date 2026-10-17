@@ -56,12 +56,12 @@ export function PreviewDocumentPage({ route, hash, navigate, siteTitle }: {
   }, [route.siteId, route.headSha, route.groupId])
 
   useEffect(() => {
-    let cancelled = false
-    loadSiteIndex(route.siteId, fetch, defaultSiteIndexUrl(route.siteId)).then(
-      (index) => { if (!cancelled) setProductionIndex(index) },
-      () => { if (!cancelled) setProductionIndex(null) },
+    const controller = new AbortController()
+    loadSiteIndex(route.siteId, fetch, defaultSiteIndexUrl(route.siteId), { signal: controller.signal }).then(
+      (index) => { if (!controller.signal.aborted) setProductionIndex(index) },
+      () => { if (!controller.signal.aborted) setProductionIndex(null) },
     )
-    return () => { cancelled = true }
+    return () => controller.abort()
   }, [route.siteId])
 
   const siteName = siteTitle ?? route.siteId

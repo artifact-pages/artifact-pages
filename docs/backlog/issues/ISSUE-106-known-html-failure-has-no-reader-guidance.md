@@ -1,9 +1,10 @@
 # A missing indexed HTML body shows only the server error inside the reader
 
-- Status: Open
+- Status: Done
 - Priority: P3
 - Area: Reader / HTML artifact failure state
 - Implementer: Claude
+- Assignee: Claude
 - Source: hands-on project review 2026-10-15, functional coverage note; monorepo `86841bb1`
 - Related: [ISSUE-102](ISSUE-102-load-errors-offer-no-retry-action.md), [T24](../verification/T24-pre-launch-browser-and-keyboard-matrix.md)
 
@@ -26,8 +27,19 @@ The reader can explain that a known HTML document's body is unavailable and expo
 
 ## Acceptance criteria
 
-- [ ] The known-HTML failure case has a reader-level explanation and an accessible recovery path, retaining navigation to the site.
-- [ ] If the body becomes available, its recovery action loads it without discarding the logical location unnecessarily.
-- [ ] Genuine unavailable content remains distinct from an unknown logical route and from intentionally authored HTML pages.
-- [ ] Successful HTML execution, relative resources, fragments and search highlighting keep working.
-- [ ] Record how failure detection behaves, including unavoidable detection limits and any added request cost; verify the reproduced 404 case.
+- [x] The known-HTML failure case has a reader-level explanation and an accessible recovery path, retaining navigation to the site.
+- [x] If the body becomes available, its recovery action loads it without discarding the logical location unnecessarily.
+- [x] Genuine unavailable content remains distinct from an unknown logical route and from intentionally authored HTML pages.
+- [x] Successful HTML execution, relative resources, fragments and search highlighting keep working.
+- [x] Record how failure detection behaves, including unavoidable detection limits and any added request cost; verify the reproduced 404 case.
+
+## Verification
+
+- Detection: the HTML iframe `onLoad` handler reads the frame's navigation entry (`contentWindow.performance.getEntriesByType('navigation')[0].responseStatus`) and treats a status of 400 or more as a failed body. The check is the first step of the handler; on failure the keydown forwarding, highlighting and height watching are skipped. It adds no request.
+- Display: the iframe is hidden (kept mounted) and a `markdown-state` alert "Document unavailable" shows the title, `HTTP <status>`, a "Try again" button and a "← <site title>" link to the site root. The toolbar, breadcrumbs and sidebar are unchanged. "Try again" remounts the iframe with the same `src` (key `<artifactUrl>#<attempt>`), so the logical URL is unchanged; after a failed retry focus returns to the button. The failure state and counter reset when the artifact changes.
+- Own load only: the failure check runs on the first `onLoad` of each iframe mount (the initial load or an explicit retry). Later in-frame navigations, for example following a link to a page that returns 404, keep the previous behaviour and never mark the document unavailable.
+- Fallback: when the navigation entry has no usable `responseStatus` (absent, 0, or reading throws), the first load issues one `fetch(artifactUrl, { method: 'HEAD', cache: 'no-store' })` and a status of 400 or more shows the same guidance. Network errors are ignored (no guidance), and the request is aborted on unmount, retry or URL change. Chromium (and Firefox 155, checked) expose `responseStatus` and add zero requests; browsers without it (WebKit, checked) make one HEAD request per opened HTML document.
+- Focus: a failed retry returns focus to "Try again"; a successful retry focuses the recovered iframe.
+- E2E (Chromium): `a known HTML document whose body fails to load shows reader guidance and can be retried` serves an indexed `guides/missing.html` with a 404 HTML body, expects the alert with HTTP 404 and the site link, retries once while still 404 (focus on the button), then serves a valid page and retries: the iframe content shows and the URL is unchanged.
+- Also ran the retry test and an in-frame-404 test in Playwright Chromium, Firefox and WebKit (temporary command-line config, not committed): 6 passed. Only WebKit lacked `responseStatus` and so exercised the HEAD fallback.
+- Full e2e on the compose project `claude-issue-106-098` (port 4396): 224 passed. The existing HTML, fragment and search-highlight tests stay green.
