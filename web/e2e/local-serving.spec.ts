@@ -8071,6 +8071,54 @@ test.describe('reader context column (ISSUE-108)', () => {
     }))).toEqual({ focusKept: 'focus', detailsKept: 'details', text: focusedText, inColumn: true })
   })
 
+  test('narrow to wide with an item of the open More menu focused lands on Contents in the column', async ({ page }) => {
+    await page.setViewportSize({ width: 500, height: 800 })
+    await page.goto(markdownPath)
+    await moreActionsButton(page).click()
+    const menu = page.getByRole('menu', { name: 'More actions' })
+    await expect(menu).toBeVisible()
+    await menu.getByRole('menuitem', { name: 'Copy link' }).focus()
+    await expect(menu.getByRole('menuitem', { name: 'Copy link' })).toBeFocused()
+    await page.setViewportSize({ width: 1440, height: 800 })
+    await expect(columnOf(page)).toBeVisible()
+    await expect(menu).toHaveCount(0)
+    await expect.poll(() => focusInColumn(page)).toMatch(/^button:/)
+  })
+
+  test('an HTML body whose status probe fails at the network level is reported as unavailable', async ({ page }) => {
+    // Browsers that do not expose the navigation response status (Safari) classify the first load with a HEAD request.
+    await page.addInitScript(() => {
+      const proto = (window as unknown as { PerformanceNavigationTiming?: { prototype: object } }).PerformanceNavigationTiming?.prototype
+      if (proto) Object.defineProperty(proto, 'responseStatus', { get: () => 0, configurable: true })
+    })
+    const artifactPath = 'guides/unprobed.html'
+    await page.route('**/_indexes/sre/index.json', async (route) => {
+      const response = await route.fetch()
+      const index = await response.json() as { artifacts: Array<Record<string, unknown>> }
+      index.artifacts.push({
+        id: artifactPath, title: 'Unprobed body', path: artifactPath, format: 'html', filename: 'unprobed.html',
+        artifactUrl: `/_artifacts/sre/${artifactPath}`, updatedAt: '2026-10-01T00:00:00Z', toc: [{ level: 1, text: 'Hello', id: 'hello' }],
+      })
+      await route.fulfill({ response, body: JSON.stringify(index) })
+    })
+    let probeFails = true
+    await page.route(`**/_artifacts/sre/${artifactPath}`, (route) => {
+      if (route.request().method() === 'HEAD') return probeFails ? route.abort('connectionreset') : route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8' })
+      return route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: '<!doctype html><title>Body</title><h1 id="hello">Hello</h1>' })
+    })
+    await page.goto(`/sre/${artifactPath}`)
+    const alert = page.getByRole('alert')
+    await expect(alert.getByRole('heading', { name: 'Document unavailable' })).toBeVisible()
+    await expect(alert).toContainText('The content of “Unprobed body” could not be loaded.')
+    await expect(alert).not.toContainText('HTTP')
+    await expect(alert.getByRole('button', { name: 'Try again' })).toBeVisible()
+    await expect(alert.getByRole('link', { name: /SRE/ })).toBeVisible()
+    await expect(columnOf(page)).toHaveCount(0)
+    probeFails = false
+    await alert.getByRole('button', { name: 'Try again' }).click()
+    await expect(columnOf(page)).toBeVisible()
+  })
+
   test('the column is absent on site home, folders, search, previews and missing pages', async ({ page }) => {
     await registerTextSearchSite(page)
     for (const path of [

@@ -151,7 +151,7 @@ export function ArtifactWorkspace({
   // The language the open HTML artifact declares on its own <html>, keyed by the artifact it was read from.
   const [frameLanguage, setFrameLanguage] = useState<{ artifactUrl: string, lang: string | undefined } | null>(null)
   // A known HTML body whose response failed (ISSUE-106), keyed by the artifact it was read from.
-  const [frameFailure, setFrameFailure] = useState<{ artifactUrl: string, status: number } | null>(null)
+  const [frameFailure, setFrameFailure] = useState<{ artifactUrl: string, status: number | null } | null>(null)
   const [frameAttempt, setFrameAttempt] = useState(0)
   const retryFrameRef = useRef<HTMLButtonElement | null>(null)
   const focusRetryRef = useRef(false)
@@ -259,7 +259,7 @@ export function ArtifactWorkspace({
       if (column) return { area: 'column' as const, part: column.querySelector('.reader-column-details')?.contains(target) ? 'details' as const : 'contents' as const, element: target }
       const panel = target.closest('.context-panel')
       if (panel) return { area: 'panel' as const, part: panel.getAttribute('aria-label') === 'Details' ? 'details' as const : 'contents' as const, element: target }
-      if (target === moreMenuTriggerRef.current) return { area: 'more' as const, part: 'contents' as const, element: target }
+      if (target === moreMenuTriggerRef.current || target.closest('[role="menu"]')) return { area: 'more' as const, part: 'contents' as const, element: target }
       if (target === contentsToggleRef.current) return { area: 'bar' as const, part: 'contents' as const, element: target }
       if (target === detailsToggleRef.current) return { area: 'bar' as const, part: 'details' as const, element: target }
       return null
@@ -829,7 +829,7 @@ export function ArtifactWorkspace({
     {frameFailure?.artifactUrl === bodyArtifact.artifactUrl ? (
       <div className="markdown-state" role="alert">
         <h1>Document unavailable</h1>
-        <p>The content of “{bodyArtifact.title}” could not be loaded (HTTP {frameFailure.status}). It may have been removed or not published yet.</p>
+        <p>The content of “{bodyArtifact.title}” could not be loaded{frameFailure.status === null ? '' : ` (HTTP ${frameFailure.status})`}. It may have been removed or not published yet.</p>
         <button
           type="button"
           className="text-action"
@@ -887,7 +887,8 @@ export function ArtifactWorkspace({
             .catch(() => null)
             .then((headStatus) => {
               if (controller.signal.aborted) return
-              if (headStatus !== null && headStatus >= 400) {
+              // A probe that fails at the network level leaves the body unverified: treat it as failed.
+              if (headStatus === null || headStatus >= 400) {
                 frameHeightCleanup.current?.()
                 frameHeightCleanup.current = null
                 setFrameFailure({ artifactUrl, status: headStatus })
