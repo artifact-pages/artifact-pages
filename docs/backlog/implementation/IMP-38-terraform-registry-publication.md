@@ -51,9 +51,9 @@ An adopter selects the Cloudflare module using a Registry `source` and an exact 
 
 ## Agent preparation and user handoff
 
-The agent can prepare the package, source migration/validation procedure, examples, and candidate version in the two existing repositories without waiting for Registry authorization or cloud access when that implementation work is assigned. At the handoff, present the tested commits, candidate version, package diff, and exact external actions requiring approval. Repository names are already owner-selected; the owner confirms the public release version, authorizes pushes/tag publication, and performs or authorizes the interactive account connection. No Registry publication is assumed to have occurred.
+Historical (pre-publication): The agent can prepare the package, source migration/validation procedure, examples, and candidate version in the two existing repositories without waiting for Registry authorization or cloud access when that implementation work is assigned. At the handoff, present the tested commits, candidate version, package diff, and exact external actions requiring approval. Repository names are already owner-selected; the owner confirms the public release version, authorizes pushes/tag publication, and performs or authorizes the interactive account connection. No Registry publication is assumed to have occurred.
 
-After authorization, execute only the approved publication steps and verify Registry retrieval. This ticket remains unfinished until those external acceptance criteria have evidence; local preparation alone is not Done. Cloudflare is the first live target; AWS preparation must not block the Cloudflare package or imply AWS proof.
+After authorization, execute only the approved publication steps and verify Registry retrieval. This ticket remains unfinished until those external acceptance criteria have evidence; local preparation alone is not Done. Cloudflare is the first live target; AWS preparation must not block the Cloudflare package or imply AWS proof. (Done 2026-10-14 for both modules; see the Registry publication evidence.)
 
 ## Evidence and references
 
