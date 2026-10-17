@@ -8,6 +8,7 @@ import {
   isSupersededRevision,
   previewGroupLabel,
   previewTagLabel,
+  verifiedIdentity,
   splitPreviewDocuments,
   verifiedPullRequest,
 } from './preview-reader.ts'
@@ -44,11 +45,20 @@ test('the PR is verified only for the group head and superseded is the opposite'
 })
 
 test('tag and group labels', () => {
-  assert.equal(previewTagLabel(identityFromGroupId('pr:7')), 'Preview · PR #7')
-  assert.equal(previewTagLabel(identityFromGroupId(`head:${head}`)), 'Preview · manual')
-  assert.equal(previewTagLabel({ kind: 'unknown' }), 'Preview')
+  assert.equal(previewTagLabel(identityFromGroupId('pr:7'), head), 'Preview · PR #7')
+  assert.equal(previewTagLabel(identityFromGroupId(`head:${head}`), head), 'Preview · manual')
+  assert.equal(previewTagLabel({ kind: 'unknown' }, head), `Preview · ${head.slice(0, 8)}`)
   assert.equal(previewGroupLabel(identityFromGroupId('pr:7'), head), 'PR #7')
-  assert.equal(previewGroupLabel({ kind: 'unknown' }, head), `Revision ${head.slice(0, 8)}`)
+  assert.equal(previewGroupLabel(identityFromGroupId(`head:${head}`), head), `Revision ${head.slice(0, 8)}`)
+  assert.equal(previewGroupLabel({ kind: 'unknown' }, head), `Preview ${head.slice(0, 8)}`)
+})
+
+test('a PR identity needs the catalog to verify this revision as the group head', () => {
+  assert.deepEqual(verifiedIdentity(pr, head, 'pr:42'), { kind: 'pull-request', groupId: 'pr:42', number: '42' })
+  assert.deepEqual(verifiedIdentity(pr, newer, 'pr:42'), { kind: 'unknown' })
+  assert.deepEqual(verifiedIdentity(undefined, head, 'pr:42'), { kind: 'unknown' })
+  assert.deepEqual(verifiedIdentity(manual, head), { kind: 'manual', groupId: `head:${head}` })
+  assert.deepEqual(verifiedIdentity(undefined, head, `head:${head}`), { kind: 'manual', groupId: `head:${head}` })
 })
 
 test('documents split into changed pages and resource dependents', () => {

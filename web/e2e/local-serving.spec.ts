@@ -8967,7 +8967,12 @@ test.describe('preview reading in the reader shell (ISSUE-109)', () => {
     await page.goto(guideUrl({ group: 'pr:42' }))
     await expect(previewTitle(page)).toHaveText('Local preview guide')
     await expect(notices(page)).toContainText(olderRevision)
-    await expect(tag(page)).toHaveText('Preview · PR #42')
+    // An older revision is not the PR's current preview, so no PR number is stated anywhere.
+    await expect(tag(page)).toHaveText(`Preview · ${previewHeadSha.slice(0, 8)}`)
+    await expect(crumbs(page).getByRole('link').nth(2)).toHaveText(`Preview ${previewHeadSha.slice(0, 8)}`)
+    await expect(crumbs(page).getByRole('link').nth(2)).toHaveAttribute('href', '/sre/_previews?group=pr%3A42')
+    await expect(notices(page)).not.toContainText('#42')
+    await expect(page.locator('main, aside').getByText('PR #42')).toHaveCount(0)
     await expect(column(page).getByText('Pull request')).toHaveCount(0)
     await expect(page.locator('main#main-content article')).toContainText('Markdown document and its image')
     const current = notices(page).getByRole('link', { name: 'Open the current preview' })
@@ -8976,6 +8981,69 @@ test.describe('preview reading in the reader shell (ISSUE-109)', () => {
     await expect(page).toHaveURL(guideUrl({ group: 'pr:42', head: newerHead }))
     await expect(page.locator('main#main-content article')).toContainText('The current preview.')
     await expect(notices(page)).toHaveCount(0)
+    await expect(column(page).getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
+  })
+
+  test('a group id the catalog does not know never names a PR', async ({ page }) => {
+    await page.goto(guideUrl({ group: 'pr:777' }))
+    await expect(previewTitle(page)).toHaveText('Local preview guide')
+    await expect(tag(page)).toHaveText(`Preview · ${previewHeadSha.slice(0, 8)}`)
+    await expect(crumbs(page).getByRole('link').nth(2)).toHaveText(`Preview ${previewHeadSha.slice(0, 8)}`)
+    await expect(page.locator('main, aside').getByText('PR #777')).toHaveCount(0)
+    await expect(column(page).getByText('Pull request')).toHaveCount(0)
+    await expect(notices(page)).toHaveCount(0)
+  })
+
+  test('a catalog older than 30 seconds is reloaded before a revision is called current or verified', async ({ page }) => {
+    await page.clock.install()
+    let advanced = false
+    await page.route('**/_previews/sre/catalog.json', async (route) => {
+      const response = await route.fetch()
+      const catalog = await response.json() as { groups: Array<{ id: string }> }
+      if (advanced) {
+        catalog.groups = catalog.groups.map((group) => group.id === 'pr:42' ? { ...group, headSha: newerHead, documents: [{ path: guidePath, title: 'Local preview guide', format: 'markdown' }] } : group)
+      }
+      await route.fulfill({ response, body: JSON.stringify(catalog) })
+    })
+    await page.route(`**/_previews/sre/revisions/${newerHead}/manifest.json`, (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        schemaVersion: 1, site: 'sre', headSha: newerHead,
+        defaultHeadSha: '1111111111111111111111111111111111111111', mergeBaseSha: 'abcdefabcdefabcdefabcdefabcdefabcdefabcd',
+        createdAt: '2026-10-01T00:00:00Z', bundleDigest: `sha256:${'0'.repeat(64)}`,
+        files: [{ path: guidePath, sha256: 'a'.repeat(64), contentType: 'text/markdown; charset=utf-8' }],
+        documents: [{ path: guidePath, title: 'Local preview guide', format: 'markdown' }],
+      }),
+    }))
+    await page.route(`**/_previews/sre/revisions/${newerHead}/files/**`, (route) => route.fulfill({
+      status: 200, contentType: 'text/markdown; charset=utf-8', body: '# Newer revision\n\nThe current preview.\n',
+    }))
+    const catalogRequests: string[] = []
+    page.on('request', (request) => { if (new URL(request.url()).pathname === '/_previews/sre/catalog.json') catalogRequests.push('x') })
+
+    await page.goto(guideUrl({ group: 'pr:42' }))
+    await expect(column(page).getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
+    await expect(tag(page)).toHaveText('Preview · PR #42')
+    expect(catalogRequests).toHaveLength(1)
+
+    // The PR moves on. Within 30 s the loaded catalog is reused; after that it is reloaded first.
+    advanced = true
+    await page.getByRole('navigation', { name: 'Preview documents' }).getByRole('link', { name: 'Local preview HTML' }).click()
+    await expect(previewTitle(page)).toHaveText('Local preview HTML')
+    expect(catalogRequests).toHaveLength(1)
+    await page.clock.fastForward(31_000)
+    await page.getByRole('navigation', { name: 'Preview documents' }).getByRole('link', { name: /Local preview guide/ }).click()
+    await expect(notices(page)).toContainText(olderRevision)
+    expect(catalogRequests).toHaveLength(2)
+    await expect(tag(page)).toHaveText(`Preview · ${previewHeadSha.slice(0, 8)}`)
+    await expect(column(page).getByText('Pull request')).toHaveCount(0)
+
+    await notices(page).getByRole('link', { name: 'Open the current preview' }).click()
+    await expect(page).toHaveURL(guideUrl({ group: 'pr:42', head: newerHead }))
+    await expect(page.locator('main#main-content article')).toContainText('The current preview.')
+    await expect(notices(page)).toHaveCount(0)
+    await expect(tag(page)).toHaveText('Preview · PR #42')
     await expect(column(page).getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
   })
 
@@ -8998,6 +9066,11 @@ test.describe('preview reading in the reader shell (ISSUE-109)', () => {
     await page.goto(guideUrl({ group: 'pr:42' }))
     await expect(page.locator('main#main-content article')).toContainText('Markdown document and its image')
     await expect(notices(page)).toContainText(catalogFailed)
+    await expect(tag(page)).toHaveText(`Preview · ${previewHeadSha.slice(0, 8)}`)
+    await expect(crumbs(page).getByRole('link').nth(2)).toHaveText(`Preview ${previewHeadSha.slice(0, 8)}`)
+    await expect(crumbs(page).getByRole('link').nth(2)).toHaveAttribute('href', '/sre/_previews?group=pr%3A42')
+    await expect(column(page).getByRole('link', { name: 'Preview list' })).toHaveAttribute('href', '/sre/_previews?group=pr%3A42')
+    await expect(page.locator('main, aside').getByText('PR #42')).toHaveCount(0)
     await expect(column(page).getByText('Pull request')).toHaveCount(0)
     await expect(revision(column(page))).toBeVisible()
     fail = false

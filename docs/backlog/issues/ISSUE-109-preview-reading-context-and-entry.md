@@ -97,6 +97,8 @@ Settled questions:
 
 The preview list and the reader share one catalog load per site visit, which closes the ISSUE-107 known limit (returning from a document refetched the catalog).
 
+Review fixes (Luna cross-review): a settled catalog is reused for 30 seconds, as for index reads; after that, current, superseded and verified statements wait for a fresh load and the reader shows the neutral state meanwhile (loads in flight stay shared). "PR #N" appears in the tag, breadcrumb, sidebar heading and Details only when the loaded catalog verifies this revision as that PR group's current head; otherwise the tag reads "Preview · <short sha>" and the breadcrumb group "Preview <short sha>", while the "Preview list" link keeps the `?group=` list.
+
 ## Acceptance criteria
 
 - [x] Record the audited entry paths and observed behavior, explicitly distinguishing already logical SPA URLs, raw-file URLs and an application preview page that lacks the shared reader shell.
@@ -119,5 +121,5 @@ Implemented in `web/` (2026-10-17, Claude): `components/PreviewReader.tsx` (read
 - Spec: the preview reader paragraphs in `docs/specification.md` (the route table and the post-MVP pre-publish preview contract) replace the earlier "quiet provenance label, no reader strip" treatment.
 - Screenshots (uncommitted, `.local/issue-109/`): 1440 px light and dark, and 390 px, for PR, manual, superseded and HTML previews.
 
-Known limits: a preview document has no indexed headings (the manifest carries none), so Contents shows its empty message. The tag reads "Preview" until the catalog has resolved a link without a group. A preview that is gone from discovery but still readable keeps its tag from the link's group only while the catalog is loading or unavailable; once the catalog is loaded and lacks the group the tag drops to "Preview". Fresh cross-review (Luna) is still to be done, so the last acceptance criterion stays unticked until it is.
+Known limits: a preview document has no indexed headings (the manifest carries none), so Contents shows its empty message. The tag shows the short revision until the catalog has verified a PR or resolved a manual group. After the review fixes: build and `test:web-unit` pass, and the full e2e (compose project `claude-issue-109`, `CI=1`) is 316 passed, none flaky, with new tests for a catalog older than 30 s (via `page.clock`), a group id the catalog does not know, and the catalog-failure identity. Fresh cross-review (Luna) is still to be done, so the last acceptance criterion stays unticked until it is.
 

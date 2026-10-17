@@ -7,11 +7,11 @@ import type { PreviewCatalog, PreviewDocument, PreviewGroup, PreviewManifest } f
 import type { ArtifactIndexEntry } from '../domain/index'
 import {
   findPreviewGroup,
-  identityFromGroupId,
   isSupersededRevision,
   previewGroupLabel,
   previewTagLabel,
   splitPreviewDocuments,
+  verifiedIdentity,
   verifiedPullRequest,
   type PreviewIdentity,
 } from '../domain/preview-reader'
@@ -71,22 +71,24 @@ export function usePreviewReader(route: PreviewDocumentRoute | undefined): Previ
   }, [siteId, headSha])
 
   const [catalogAttempt, setCatalogAttempt] = useState(0)
-  const catalogKey = `${siteId}\n${catalogAttempt}`
+  // Every navigation asks for the catalog again: a fresh one (under 30 s old) is reused, an older one is reloaded.
+  // Until then nothing is said about whether this revision is current or verified.
+  const catalogKey = `${siteId}\n${catalogAttempt}\n${headSha}\n${artifactPath}`
   const [catalogStored, setCatalogStored] = useState<{ key: string; state: CatalogState } | null>(null)
   const cachedCatalog = siteId ? peekPreviewCatalog(siteId) : undefined
   const catalog: CatalogState = catalogStored?.key === catalogKey
     ? catalogStored.state
-    : cachedCatalog ? { status: 'ready', catalog: cachedCatalog } : { status: 'loading' }
+    : cachedCatalog?.fresh ? { status: 'ready', catalog: cachedCatalog.catalog } : { status: 'loading' }
   useEffect(() => {
     if (!siteId) return
     let cancelled = false
-    const key = `${siteId}\n${catalogAttempt}`
+    const key = `${siteId}\n${catalogAttempt}\n${headSha}\n${artifactPath}`
     loadSharedPreviewCatalog(siteId).then(
       (loaded) => { if (!cancelled) setCatalogStored({ key, state: { status: 'ready', catalog: loaded } }) },
       () => { if (!cancelled) setCatalogStored({ key, state: { status: 'failed' } }) },
     )
     return () => { cancelled = true }
-  }, [siteId, catalogAttempt])
+  }, [siteId, catalogAttempt, headSha, artifactPath])
   const retryCatalog = useCallback(() => {
     if (siteId) resetPreviewList(siteId)
     setCatalogAttempt((attempt) => attempt + 1)
@@ -138,7 +140,7 @@ export function usePreviewReader(route: PreviewDocumentRoute | undefined): Previ
       ? documentState(manifestStored.manifest, artifactPath)
       : { status: 'unavailable', needsRepublish: manifestStored.error instanceof UnsupportedSchemaError }
 
-  const identity = identityFromGroupId(group?.id ?? (catalog.status === 'ready' ? undefined : route.groupId))
+  const identity = verifiedIdentity(group, headSha, route.groupId)
   const groupId = group?.id ?? route.groupId
   const siteHref = siteHomeRoute(siteId)
   const listHref = groupId && (group || catalog.status !== 'ready')
@@ -183,7 +185,7 @@ function documentState(manifest: PreviewManifest, artifactPath: string): Manifes
 
 /** The small tag that names the preview at every width; the identity is never inferred beyond the link and the catalog. */
 export function PreviewTag({ reader }: { reader: PreviewReader }) {
-  const label = previewTagLabel(reader.identity)
+  const label = previewTagLabel(reader.identity, reader.route.headSha)
   return (
     <span className="preview-tag" title={`Preview of revision ${reader.route.headSha}`} data-preview-tag="">
       <span className="preview-tag-dot" aria-hidden="true" />{label}
@@ -197,7 +199,7 @@ export function PreviewBreadcrumbs({ reader, siteTitle, navigate }: {
   navigate: (href: string) => void
 }) {
   const { route, identity } = reader
-  const groupHref = reader.group || identity.kind !== 'unknown' ? reader.listHref : sitePreviewsHref(route.siteId)
+  const groupHref = reader.listHref
   const documentLabel = reader.manifest.status === 'ready'
     ? reader.manifest.document.title
     : route.artifactPath.split('/').at(-1) ?? route.artifactPath

@@ -35,15 +35,28 @@ export function isSupersededRevision(group: PreviewGroup | undefined, headSha: s
   return Boolean(group) && group!.headSha !== headSha
 }
 
-export function previewTagLabel(identity: PreviewIdentity) {
+/**
+ * The identity a reader may state: a PR only when the loaded catalog verifies this revision as that PR group's
+ * current head; a manual group, whose id is the revision itself; otherwise nothing beyond the revision.
+ */
+export function verifiedIdentity(group: PreviewGroup | undefined, headSha: string, urlGroupId?: string): PreviewIdentity {
+  const pr = verifiedPullRequest(group, headSha)
+  if (pr && group) return { kind: 'pull-request', groupId: group.id, number: pr.number }
+  const manualId = `head:${headSha}`
+  if (group?.id === manualId || (!group && urlGroupId === manualId)) return { kind: 'manual', groupId: manualId }
+  return { kind: 'unknown' }
+}
+
+export function previewTagLabel(identity: PreviewIdentity, headSha: string) {
   if (identity.kind === 'pull-request') return `Preview · PR #${identity.number}`
   if (identity.kind === 'manual') return 'Preview · manual'
-  return 'Preview'
+  return `Preview · ${headSha.slice(0, 8)}`
 }
 
 /** The group's name in breadcrumbs and the preview list. */
 export function previewGroupLabel(identity: PreviewIdentity, headSha: string) {
-  return identity.kind === 'pull-request' ? `PR #${identity.number}` : `Revision ${headSha.slice(0, 8)}`
+  if (identity.kind === 'pull-request') return `PR #${identity.number}`
+  return identity.kind === 'manual' ? `Revision ${headSha.slice(0, 8)}` : `Preview ${headSha.slice(0, 8)}`
 }
 
 /** Changed pages first, then the documents pulled in by a changed resource. A record without a reason reads as changed. */

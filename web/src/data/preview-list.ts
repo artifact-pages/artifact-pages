@@ -39,19 +39,26 @@ export function resetPreviewList(siteId: string) {
 
 // The catalog alone, shared by the preview list and the preview reader (ISSUE-109): going from a document
 // back to the list within a visit does not fetch it again. A failed load is not kept; the next reader retries.
-const catalogs = new Map<string, { promise: Promise<PreviewCatalog>; catalog?: PreviewCatalog }>()
+type CatalogEntry = { promise: Promise<PreviewCatalog>; catalog?: PreviewCatalog; loadedAt?: number }
+const catalogs = new Map<string, CatalogEntry>()
 
-/** The settled catalog of this visit, if one has been loaded. */
-export function peekPreviewCatalog(siteId: string): PreviewCatalog | undefined {
-  return catalogs.get(siteId)?.catalog
+/** A settled catalog is reused for this long, as for index reads; after that a reader needs a fresh load. */
+export const PREVIEW_CATALOG_MAX_AGE_MS = 30_000
+
+/** The settled catalog of this visit, if one has been loaded, and whether it is still fresh enough to vouch for current status. */
+export function peekPreviewCatalog(siteId: string): { catalog: PreviewCatalog; fresh: boolean } | undefined {
+  const entry = catalogs.get(siteId)
+  if (!entry?.catalog || entry.loadedAt === undefined) return undefined
+  return { catalog: entry.catalog, fresh: Date.now() - entry.loadedAt < PREVIEW_CATALOG_MAX_AGE_MS }
 }
 
+/** Joins a load in flight or a fresh settled one; an older settled catalog starts a new load. */
 export function loadSharedPreviewCatalog(siteId: string): Promise<PreviewCatalog> {
   const existing = catalogs.get(siteId)
-  if (existing) return existing.promise
-  const entry: { promise: Promise<PreviewCatalog>; catalog?: PreviewCatalog } = { promise: undefined as unknown as Promise<PreviewCatalog> }
+  if (existing && (existing.loadedAt === undefined || Date.now() - existing.loadedAt < PREVIEW_CATALOG_MAX_AGE_MS)) return existing.promise
+  const entry: CatalogEntry = { promise: undefined as unknown as Promise<PreviewCatalog> }
   entry.promise = loadPreviewCatalog(siteId).then(
-    (catalog) => { entry.catalog = catalog; return catalog },
+    (catalog) => { entry.catalog = catalog; entry.loadedAt = Date.now(); return catalog },
     (error: unknown) => {
       if (catalogs.get(siteId) === entry) catalogs.delete(siteId)
       throw error
