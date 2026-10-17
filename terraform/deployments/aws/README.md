@@ -2,7 +2,7 @@
 
 This caller uses the root AWS module directly and is reached at its default CloudFront hostname, exposed as the `distribution_domain_name` output. It creates no ACM certificate or DNS records. For a custom domain, see the module's [caller-managed custom-domain guidance](../../modules/aws/README.md#custom-domain-with-route-53) and [`examples/route53-consumer`](../../modules/aws/examples/route53-consumer/README.md).
 
-The default AWS account is `231136241959`. The AWS provider has `allowed_account_ids` set to that account, and the root module checks that its identity matches the account in the GitHub OIDC provider ARN. Set `AWS_PROFILE=artifact-pages-verify` after `aws sso login --profile artifact-pages-verify`; the profile uses short-lived IAM Identity Center credentials. Do not export AWS access keys from `tfstate.env`. The remote S3-compatible backend is Cloudflare R2, with state key `aws-verify`. Backend access uses the separate `artifact-pages-tfstate` profile and `~/.config/artifact-pages/tfstate-aws-credentials` credentials file. The backend endpoint and credential-file path are already configured in `versions.tf`; provision the local credentials file through the operator's approved setup, and do not commit or print its values. Keep backend credentials separate from the AWS provider's SSO profile.
+The default AWS account is `231136241959`. The AWS provider has `allowed_account_ids` set to that account, and the root module checks that its identity matches the account in the GitHub OIDC provider ARN. Set `AWS_PROFILE=artifact-pages-verify` after `aws sso login --profile artifact-pages-verify`; the profile uses short-lived IAM Identity Center credentials. Do not export AWS access keys from `tfstate.env`. State is kept in the private S3 bucket `artifact-pages-verify-tfstate-231136241959` in the same account (`us-east-1`), under key `aws-verify/terraform.tfstate`, with S3 native locking. The backend uses the same `artifact-pages-verify` SSO profile and has `allowed_account_ids` set to `231136241959`. Nothing here uses production credentials, the production `artifact-pages-tfstate` bucket or files under `~/.config/artifact-pages/`; keep this deployment's local files under `~/.config/artifact-pages-verify/` (mode 700).
 
 ## Local validation
 
@@ -24,9 +24,71 @@ Both operator repositories currently use GitHub's default subject template with 
 
 Recheck a repository's prefix with `gh api repos/OWNER/REPO/actions/oidc/customization/sub --jq '.sub_claim_prefix'`. If its repository OIDC setting or the job's environment/ref changes, update the exact subject input and recreate any saved plan before review. A custom subject template can replace the default suffix, so inspect its emitted `sub` instead of assuming the environment/ref form. The general module also accepts a legacy name-based subject such as `repo:artifact-pages/admin:environment:aws-verify` when that exact string is explicitly supplied. It uses `StringEquals`; it does not match a prefix or wildcard. See the [module's OIDC subject guidance](../../modules/aws/README.md#github-oidc-subject-claims). A custom `job_workflow_ref` condition remains an optional caller choice.
 
+## State bucket
+
+The bucket was created once, outside Terraform, so this root can store its own state. Recreate it only when it is missing, using the `artifact-pages-verify` SSO profile:
+
+```sh
+env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN \
+  -u AWS_SECURITY_TOKEN -u AWS_WEB_IDENTITY_TOKEN_FILE -u AWS_ROLE_ARN \
+  -u AWS_SHARED_CREDENTIALS_FILE AWS_PROFILE=artifact-pages-verify \
+  aws s3api create-bucket --bucket artifact-pages-verify-tfstate-231136241959 --region us-east-1
+env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN \
+  -u AWS_SECURITY_TOKEN -u AWS_WEB_IDENTITY_TOKEN_FILE -u AWS_ROLE_ARN \
+  -u AWS_SHARED_CREDENTIALS_FILE AWS_PROFILE=artifact-pages-verify \
+  aws s3api put-public-access-block --bucket artifact-pages-verify-tfstate-231136241959 \
+  --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN \
+  -u AWS_SECURITY_TOKEN -u AWS_WEB_IDENTITY_TOKEN_FILE -u AWS_ROLE_ARN \
+  -u AWS_SHARED_CREDENTIALS_FILE AWS_PROFILE=artifact-pages-verify \
+  aws s3api put-bucket-ownership-controls --bucket artifact-pages-verify-tfstate-231136241959 \
+  --ownership-controls 'Rules=[{ObjectOwnership=BucketOwnerEnforced}]'
+env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN \
+  -u AWS_SECURITY_TOKEN -u AWS_WEB_IDENTITY_TOKEN_FILE -u AWS_ROLE_ARN \
+  -u AWS_SHARED_CREDENTIALS_FILE AWS_PROFILE=artifact-pages-verify \
+  aws s3api put-bucket-versioning --bucket artifact-pages-verify-tfstate-231136241959 \
+  --versioning-configuration Status=Enabled
+env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN \
+  -u AWS_SECURITY_TOKEN -u AWS_WEB_IDENTITY_TOKEN_FILE -u AWS_ROLE_ARN \
+  -u AWS_SHARED_CREDENTIALS_FILE AWS_PROFILE=artifact-pages-verify \
+  aws s3api put-bucket-encryption --bucket artifact-pages-verify-tfstate-231136241959 \
+  --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"},"BucketKeyEnabled":true}]}'
+env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN \
+  -u AWS_SECURITY_TOKEN -u AWS_WEB_IDENTITY_TOKEN_FILE -u AWS_ROLE_ARN \
+  -u AWS_SHARED_CREDENTIALS_FILE AWS_PROFILE=artifact-pages-verify \
+  aws s3api put-bucket-policy --bucket artifact-pages-verify-tfstate-231136241959 --policy file://deny-insecure-transport.json
+```
+
+Create `deny-insecure-transport.json` with this content:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyInsecureTransport",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:*",
+      "Resource": [
+        "arn:aws:s3:::artifact-pages-verify-tfstate-231136241959",
+        "arn:aws:s3:::artifact-pages-verify-tfstate-231136241959/*"
+      ],
+      "Condition": {
+        "Bool": {
+          "aws:SecureTransport": "false"
+        }
+      }
+    }
+  ]
+}
+```
+
+Versioning keeps earlier state versions; never delete the bucket while the deployment exists.
+
 ## Real saved plan
 
-Log in to the AWS SSO profile and initialize the configured remote backend. The backend must continue using its named R2 profile; do not source `tfstate.env`. The untracked `terraform.tfvars` file is optional and can be copied from `terraform.tfvars.example` for optional WAF or viewer settings. The command below keeps `-var-file=terraform.tfvars`; create that file from the example when using this command. Save plans and logs outside Git with owner-only permissions.
+Log in to the AWS SSO profile and initialize the configured remote backend. The backend uses the same SSO profile; do not source any `tfstate.env`. The untracked `terraform.tfvars` file is optional and can be copied from `terraform.tfvars.example` for optional WAF or viewer settings. The command below keeps `-var-file=terraform.tfvars`; create that file from the example when using this command. Save plans and logs outside Git with owner-only permissions.
 
 ```sh
 env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN \
@@ -34,12 +96,12 @@ env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN \
   -u AWS_SHARED_CREDENTIALS_FILE aws sso login --profile artifact-pages-verify
 env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN \
   -u AWS_SECURITY_TOKEN -u AWS_WEB_IDENTITY_TOKEN_FILE -u AWS_ROLE_ARN \
-  -u AWS_SHARED_CREDENTIALS_FILE AWS_PROFILE=artifact-pages-tfstate \
+  -u AWS_SHARED_CREDENTIALS_FILE AWS_PROFILE=artifact-pages-verify \
   mise exec terraform@1.16.4 -- terraform init -input=false
-install -d -m 700 "$HOME/.config/artifact-pages/aws-verify"
+install -d -m 700 "$HOME/.config/artifact-pages-verify/aws-verify"
 umask 077
-PLAN="$HOME/.config/artifact-pages/aws-verify/aws-verify.tfplan"
-PLAN_LOG="$HOME/.config/artifact-pages/aws-verify/aws-verify.plan.log"
+PLAN="$HOME/.config/artifact-pages-verify/aws-verify/aws-verify.tfplan"
+PLAN_LOG="$HOME/.config/artifact-pages-verify/aws-verify/aws-verify.plan.log"
 env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN \
   -u AWS_SECURITY_TOKEN -u AWS_WEB_IDENTITY_TOKEN_FILE -u AWS_ROLE_ARN \
   -u AWS_SHARED_CREDENTIALS_FILE AWS_PROFILE=artifact-pages-verify \

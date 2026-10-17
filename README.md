@@ -31,6 +31,7 @@ Pre-release (0.x, no compatibility promise yet). Released components: the CLI (b
 - The Cloudflare deployment guide is below; AWS: see the [AWS deployment guide](docs/guides/aws-deployment.md).
 - GCP is emulator-only (local tests) and not supported.
 - Windows has no CLI binaries and is unsupported.
+- The CLI holds the publish source in memory: peak memory is about twice the source bytes for large files (measured up to about 1 GiB of source). The documented limit is 512 MiB per file and 1 GiB total per publish; size runner memory accordingly; see the [memory report](docs/research/cli-publish-memory.md).
 
 The SPA discovers sites from lightweight metadata, loads only the active site's artifact index, and provides a site picker, recent-artifact home, searchable navigation tree, and command palette. HTML artifacts run in an iframe; Markdown artifacts use a sanitized native reader.
 
