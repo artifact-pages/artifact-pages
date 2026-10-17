@@ -109,15 +109,15 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-095](ISSUE-095-home-folder-counts-load-full-indexes.md) | Open | P3 | Home folder counts load the full index of up to eight sites. |
 | [ISSUE-096](ISSUE-096-no-security-policy-or-contributing.md) | In progress | P2 | No security policy, contributing guide or issue templates. |
 | [ISSUE-097](ISSUE-097-stale-first-reader-documents.md) | Done | P2 | README, release-readiness and the documentation track describe an outdated state. |
-| [ISSUE-098](ISSUE-098-spa-shell-metadata-for-sharing.md) | Open | P3 | The SPA shell has generic metadata for search and share cards. |
+| [ISSUE-098](ISSUE-098-spa-shell-metadata-for-sharing.md) | In progress | P3 | The SPA shell has generic metadata for search and share cards. |
 | [ISSUE-099](ISSUE-099-version-command-prints-cli-version-as-web.md) | Done | P3 | The version command prints the CLI version as the web app version. |
 | [ISSUE-100](ISSUE-100-app-deploy-summary-does-not-match-work.md) | Done | P3 | The app deploy change summary does not match the files written. |
 | [ISSUE-101](ISSUE-101-registry-and-site-index-loads-have-no-deadline.md) | Done | P2 | Registry and active-site index reads have no application deadline. |
 | [ISSUE-102](ISSUE-102-load-errors-offer-no-retry-action.md) | Done | P2 | Catalog, site-index and Markdown transport errors offer no retry action. |
-| [ISSUE-103](ISSUE-103-command-palette-modal-focus-escapes.md) | Open | P2 | Keyboard focus escapes the command palette while its modal stays open. |
-| [ISSUE-104](ISSUE-104-search-selection-is-not-associated-with-input.md) | Open | P2 | Arrow-selected search results are not associated with the focused input. |
+| [ISSUE-103](ISSUE-103-command-palette-modal-focus-escapes.md) | Done | P2 | Keyboard focus escapes the command palette while its modal stays open. |
+| [ISSUE-104](ISSUE-104-search-selection-is-not-associated-with-input.md) | In progress | P2 | Arrow-selected search results are not associated with the focused input. |
 | [ISSUE-105](ISSUE-105-site-picker-updated-date-stays-stale.md) | Open | P2 | Site cards present metadata-generation time as content freshness. |
-| [ISSUE-106](ISSUE-106-known-html-failure-has-no-reader-guidance.md) | Open | P3 | A missing indexed HTML body shows only the server error inside the reader. |
+| [ISSUE-106](ISSUE-106-known-html-failure-has-no-reader-guidance.md) | Done | P3 | A missing indexed HTML body shows only the server error inside the reader. |
 | [ISSUE-107](ISSUE-107-site-home-overview-files-preview-tabs.md) | Open | P2 | Site home mixes publisher introduction and tool navigation; owner selected compact overview/files/previews with persistent search. |
 | [ISSUE-108](ISSUE-108-reader-context-needs-responsive-right-sidebar.md) | Open | P2 | Contents and source details are hidden behind separate controls even on wide screens; design a responsive right sidebar before final docs work. |
 | [ISSUE-109](ISSUE-109-preview-reading-context-and-entry.md) | Open | P2 | Preview reading needs shared app context, standard reader entry links and coherent PR/revision metadata; design after ISSUE-108. |
