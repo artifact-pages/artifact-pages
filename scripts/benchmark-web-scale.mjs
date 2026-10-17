@@ -9,6 +9,8 @@
 //
 // Flags: --counts, --iterations, --port (4194), --seed, --regenerate, --skip-build, --profiles
 // (unthrottled,constrained), --only (comma list of measurement groups), --run-dir.
+// --remote <origin> measures an already published deployment instead of local nginx: no generation, no
+// Docker, sites named bench-<count/1000>k (publish them first with `site sync`; see the report).
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { appendFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
@@ -31,6 +33,7 @@ const options = {
   profiles: ['unthrottled', 'constrained'],
   only: [],
   'run-dir': '',
+  remote: '',
 }
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
@@ -41,14 +44,14 @@ for (let i = 0; i < argv.length; i++) {
   if (value === undefined) throw new Error(`Missing value for --${key}`)
   if (key === 'counts') options.counts = value.split(',').map(Number)
   else if (key === 'profiles' || key === 'only') options[key] = value.split(',').filter(Boolean)
-  else if (key === 'run-dir') options[key] = value
+  else if (key === 'run-dir' || key === 'remote') options[key] = value
   else options[key] = Number(value)
 }
 assert(options.counts.every((n) => Number.isInteger(n) && n >= 100), 'counts must be integers of at least 100')
 assert(new Set(options.counts).size === options.counts.length, 'counts must be unique')
 options.counts.sort((a, b) => a - b)
 
-const siteIdOf = (count) => `scale-${count}`
+const siteIdOf = (count) => (options.remote ? `bench-${count / 1000}k` : `scale-${count}`)
 const dataRoot = path.join(labRoot, options['run-dir'] || `data-${options.seed}`)
 const binary = path.join(labRoot, 'bin', 'artifact-pages')
 const log = (...parts) => console.log(new Date().toISOString().slice(11, 19), ...parts)
@@ -291,6 +294,7 @@ function prepareData() {
 // ---------------------------------------------------------------------------------------------
 
 function compose(storageRoot, command) {
+  if (options.remote) return ''
   mkdirSync(path.join(labRoot, 'previews'), { recursive: true })
   return execFileSync('docker', ['compose', '-p', project, '-f', path.join(repository, 'docker-compose.yml'), ...command], {
     cwd: repository,
@@ -301,6 +305,7 @@ function compose(storageRoot, command) {
 }
 let servedRoot = ''
 async function serve(name) {
+  if (options.remote) return
   const storageRoot = path.join(dataRoot, `storage-${name}`)
   if (servedRoot === storageRoot) return
   compose(storageRoot, ['up', '-d', '--force-recreate', '--quiet-pull'])
@@ -314,7 +319,7 @@ async function serve(name) {
   }
   throw new Error('nginx did not start')
 }
-const origin = () => `http://127.0.0.1:${options.port}`
+const origin = () => (options.remote ? options.remote.replace(/\/$/, '') : `http://127.0.0.1:${options.port}`)
 
 // ---------------------------------------------------------------------------------------------
 // Browser measurement
@@ -426,8 +431,9 @@ const maximum = (values) => {
 const sum = (list, key) => list.reduce((total, item) => total + (item[key] ?? 0), 0)
 const pathOf = (url) => new URL(url).pathname
 
+let remoteIndexHtml = ''
 function entryScripts() {
-  const html = readFileSync(path.join(repository, 'web', 'dist', 'index.html'), 'utf8')
+  const html = options.remote ? remoteIndexHtml : readFileSync(path.join(repository, 'web', 'dist', 'index.html'), 'utf8')
   const found = new Set()
   for (const match of html.matchAll(/(?:src|href)="([^"]+\.js)"/g)) found.add(match[1])
   return found
@@ -719,21 +725,23 @@ function environmentInfo() {
     cpu: sysctl('machdep.cpu.brand_string') ?? os.cpus()[0]?.model, cores: os.cpus().length,
     ramBytes: os.totalmem(), node: process.version, go: execFileSync('go', ['version'], { encoding: 'utf8' }).trim(),
     commit: git(repository, ['rev-parse', 'HEAD']), dirty: git(repository, ['status', '--porcelain']) !== '',
-    nginx: 'nginx:1.29-alpine via docker-compose.yml (no gzip configured)',
+    delivery: options.remote ? 'remote deployment (see report)' : 'nginx:1.29-alpine via docker-compose.yml (no gzip configured)',
   }
 }
 
 async function main() {
   mkdirSync(path.join(labRoot, 'bin'), { recursive: true })
-  if (!options['skip-build']) {
+  if (options.remote) remoteIndexHtml = await (await fetch(`${origin()}/`)).text()
+  if (!options['skip-build'] && !options.remote) {
     log('Building the CLI from this checkout and the SPA…')
     execFileSync('go', ['build', '-o', binary, './cli/cmd/artifact-pages'], { cwd: repository, stdio: 'inherit' })
     execFileSync('npm', ['run', 'build'], { cwd: repository, stdio: ['ignore', 'ignore', 'inherit'] })
   }
-  const prepared = prepareData()
+  const prepared = options.remote ? { note: 'published beforehand; data shape is that of the local generator with the same seed', counts: options.counts, seed: options.seed } : prepareData()
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..*/, '')
-  const resultsFile = path.join(labRoot, `results-${stamp}.json`)
-  const rawFile = path.join(labRoot, `results-${stamp}.samples.jsonl`)
+  const prefix = options.remote ? 'remote-' : ''
+  const resultsFile = path.join(labRoot, `${prefix}results-${stamp}.json`)
+  const rawFile = path.join(labRoot, `${prefix}results-${stamp}.samples.jsonl`)
   const results = { startedAt: new Date().toISOString(), options, environment: environmentInfo(), published: prepared, profiles: {} }
   const wants = (group) => options.only.length === 0 || options.only.includes(group)
   const save = () => writeFileSync(resultsFile, JSON.stringify(results, null, 2))
@@ -790,7 +798,7 @@ async function main() {
     await browser.close()
     results.finishedAt = new Date().toISOString()
     save()
-    try { compose(servedRoot || path.join(dataRoot, 'storage-all'), ['down']) } catch (error) { console.error(String(error)) }
+    if (!options.remote) try { compose(servedRoot || path.join(dataRoot, 'storage-all'), ['down']) } catch (error) { console.error(String(error)) }
   }
   log(`Wrote ${path.relative(repository, resultsFile)}`)
 }
