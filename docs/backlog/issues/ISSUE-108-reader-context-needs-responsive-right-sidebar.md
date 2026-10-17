@@ -48,6 +48,8 @@ No public documentation page rewrite, external service integration, authorship/o
 
 ## Related work
 
+- [ISSUE-109](ISSUE-109-preview-reading-context-and-entry.md): subsequent preview experience redesign; establish this sidebar pattern first, then apply it to richer preview metadata and app-mediated reading.
+
 - [ISSUE-107](ISSUE-107-site-home-overview-files-preview-tabs.md): selected site-root navigation; coordinate common chrome while keeping document context separate.
 - [ISSUE-080](ISSUE-080-narrow-screen-chrome-and-scroll-cues.md): completed narrow-reader chrome work; preserve its reading-space goals.
 
