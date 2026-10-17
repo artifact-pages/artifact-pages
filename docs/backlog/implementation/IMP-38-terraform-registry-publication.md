@@ -36,12 +36,18 @@ An adopter selects the Cloudflare module using a Registry `source` and an exact 
 
 - [x] The provider-specific package has a root entry module and locally resolvable nested modules; examples do not depend on sibling paths in the OSS checkout.
 - [x] Local formatting, initialization/validation, package-content checks, and an isolated consumer initialization pass. README, license, input/output docs, provider constraints, and provenance are included.
-- [ ] The existing owner-selected repositories are populated without duplicating module source-of-truth; repository visibility and Registry namespace eligibility are verified. The owner confirms the initial version, explicitly authorizes public changes, and connects GitHub to Registry for first publication.
-- [ ] The reviewed module is published with a valid immutable SemVer tag. Record the actual Registry URL, exact version, source/export commits, and publication evidence; never replace a published version's contents.
-- [ ] A clean external caller retrieves that exact module version through Registry and initializes/validates without copying OSS code. Record dependency resolution and the selected provider versions.
+- [x] The existing owner-selected repositories are populated without duplicating module source-of-truth; repository visibility and Registry namespace eligibility are verified. The owner confirms the initial version, explicitly authorizes public changes, and connects GitHub to Registry for first publication.
+  - 2026-10-14: both package repositories are public with owner-set descriptions and carry tags `v0.1.0` and `v0.1.1` (synced by `release-terraform.yml`). The owner claimed the public HCP Terraform namespace `artifact-pages`, installed the "Terraform Cloud by HashiCorp" GitHub App on the org, and authorized publication (decision D9 from Trial A triage; Cloudflare first, then AWS).
+- [x] The reviewed module is published with a valid immutable SemVer tag. Record the actual Registry URL, exact version, source/export commits, and publication evidence; never replace a published version's contents.
+  - 2026-10-14: published as `artifact-pages/artifact-pages/cloudflare` and `artifact-pages/artifact-pages/aws` at 0.1.0 and 0.1.1 (https://registry.terraform.io/modules/artifact-pages/artifact-pages/cloudflare, https://registry.terraform.io/modules/artifact-pages/artifact-pages/aws). Package v0.1.1 tag objects: Cloudflare `cdeba891`, AWS `cf57be9c`; source tags `terraform-cloudflare/v0.1.1` and `terraform-aws/v0.1.1` on `f7096315`. See the evidence section below.
+- [x] A clean external caller retrieves that exact module version through Registry and initializes/validates without copying OSS code. Record dependency resolution and the selected provider versions.
+  - 2026-10-14, re-run 2026-10-17: each package's `examples/registry-consumer` at 0.1.1 ran `terraform init -backend=false` and `validate` with Terraform 1.9.8 and downloaded the module from the Registry. Providers resolved to `cloudflare/cloudflare v5.28.0` and `hashicorp/aws v6.69.1` (no lockfile, so the latest versions the constraints allow). `validate` succeeded for both.
 - [ ] Consumer documentation uses the real published address/version and separates module selection, plan/apply review, CLI/Action selection, and explicit app deployment. Unsupported/unpublished providers remain labeled accordingly.
-- [ ] The release/check procedure covers subsequent immutable versions and independent upgrade review; module-only changes do not require a new web-app version.
+  - 2026-10-17: module READMEs and registry-consumer READMEs are updated (#147). Still open: check the Cloudflare and AWS deployment guides under `docs/guides/` for the real address and version; the AWS guide is #146, in review.
+- [x] The release/check procedure covers subsequent immutable versions and independent upgrade review; module-only changes do not require a new web-app version.
+  - 2026-10-17: Cloudflare `RELEASE.md` now has the post-release check (Registry lists the version, clean retrieval, evidence to T16), and #141 and #142 fixed the pipeline for second and later releases. Module-only changes need no web release.
 - [ ] An independent review is completed. Registry retrieval evidence is handed to T16; deployed provider behavior remains T15 rather than being inferred from successful `terraform init`.
+  - 2026-10-17: an independent review of this record is pending, and the retrieval evidence still has to be copied to T16.
 
 ## Agent preparation and user handoff
 
@@ -50,6 +56,16 @@ The agent can prepare the package, source migration/validation procedure, exampl
 After authorization, execute only the approved publication steps and verify Registry retrieval. This ticket remains unfinished until those external acceptance criteria have evidence; local preparation alone is not Done. Cloudflare is the first live target; AWS preparation must not block the Cloudflare package or imply AWS proof.
 
 ## Evidence and references
+
+### Registry publication — October 14, 2026
+
+- The owner published both modules through HCP Terraform: created an HCP account and a Personal organization, installed the "Terraform Cloud by HashiCorp" GitHub App on the `artifact-pages` org, claimed the public namespace `artifact-pages`, and published both repositories. The namespace is managed only through HCP Terraform from now on.
+- Addresses: `artifact-pages/artifact-pages/cloudflare` and `artifact-pages/artifact-pages/aws`. The Registry API (`/v1/modules/artifact-pages/artifact-pages/<provider>/versions`) lists `0.1.1` and `0.1.0` for both. `published_at`: Cloudflare 2026-10-14T07:23:24Z, AWS 2026-10-14T07:23:44Z.
+- Package repositories `terraform-cloudflare-artifact-pages` and `terraform-aws-artifact-pages` carry `v0.1.0` and `v0.1.1`; v0.1.1 tag objects `cdeba891` (Cloudflare) and `cf57be9c` (AWS). Source tags: `terraform-cloudflare/v0.1.0` (earlier), `terraform-aws/v0.1.0` on `1455c8fd`, both `v0.1.1` on `f7096315`. Synced by `release-terraform.yml` runs 38490618299, 38498112543 and 38498112571.
+- Clean retrieval (2026-10-14, re-run 2026-10-17): `examples/registry-consumer` at 0.1.1, Terraform 1.9.8, `init -backend=false` and `validate` succeeded for both; providers `cloudflare/cloudflare v5.28.0` and `hashicorp/aws v6.69.1`.
+- Production consumer: admin #19 (merged as `250c892b`) switched admin production to `source = "artifact-pages/artifact-pages/cloudflare"`, `version = "0.1.1"`. `terraform init` downloaded it from the Registry; the production plan reported No changes and the lockfile was unchanged.
+- Docs and procedure: #147 updated the module READMEs, registry-consumer READMEs and the Cloudflare `RELEASE.md`; #141 and #142 are the release-pipeline fixes. The AWS deployment guide (#146) is in review and is not part of this item.
+- Trial A: the trial agent hit a 404 on the documented Cloudflare address before publication and fell back to the Git source; publication fixed that.
 
 2026-10-14: package repositories synced: `terraform-aws` v0.1.0 and v0.1.1, `terraform-cloudflare` v0.1.1 (Cloudflare v0.1.0 earlier). Registry connection and publication still need owner approval. Two release-pipeline fixes were needed for any second release: #141 (package contract tests compare the example version with `release.json`) and #142 (the workflow validates a copy, so `terraform init` symlinks never reach the sync).
 
