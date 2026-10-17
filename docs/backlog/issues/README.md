@@ -114,8 +114,8 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-100](ISSUE-100-app-deploy-summary-does-not-match-work.md) | Done | P3 | The app deploy change summary does not match the files written. |
 | [ISSUE-101](ISSUE-101-registry-and-site-index-loads-have-no-deadline.md) | Open | P2 | Registry and active-site index reads have no application deadline. |
 | [ISSUE-102](ISSUE-102-load-errors-offer-no-retry-action.md) | Open | P2 | Catalog, site-index and Markdown transport errors offer no retry action. |
-| [ISSUE-103](ISSUE-103-command-palette-modal-focus-escapes.md) | Open | P2 | Keyboard focus escapes the command palette while its modal stays open. |
-| [ISSUE-104](ISSUE-104-search-selection-is-not-associated-with-input.md) | Open | P2 | Arrow-selected search results are not associated with the focused input. |
+| [ISSUE-103](ISSUE-103-command-palette-modal-focus-escapes.md) | Done | P2 | Keyboard focus escapes the command palette while its modal stays open. |
+| [ISSUE-104](ISSUE-104-search-selection-is-not-associated-with-input.md) | In progress | P2 | Arrow-selected search results are not associated with the focused input. |
 | [ISSUE-105](ISSUE-105-site-picker-updated-date-stays-stale.md) | Open | P2 | Site cards present metadata-generation time as content freshness. |
 | [ISSUE-106](ISSUE-106-known-html-failure-has-no-reader-guidance.md) | Open | P3 | A missing indexed HTML body shows only the server error inside the reader. |
 | [ISSUE-107](ISSUE-107-site-home-overview-files-preview-tabs.md) | Open | P2 | Site home mixes publisher introduction and tool navigation; owner selected compact overview/files/previews with persistent search. |

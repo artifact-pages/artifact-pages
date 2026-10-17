@@ -27,7 +27,7 @@ import { Icon } from './Icon'
 export type { PaletteCommand, PaletteContext } from '../domain/palette-sections'
 export type { RecentArtifactRead } from '../domain/recent-reads'
 
-const FOCUSABLE = 'input, button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+const FOCUSABLE = 'input:not([tabindex="-1"]), button:not([disabled]):not([tabindex="-1"]), a[href], [tabindex]:not([tabindex="-1"])'
 
 function visibleFocusables(root: HTMLElement) {
   return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((element) => element.getClientRects().length > 0)
