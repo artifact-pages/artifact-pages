@@ -1,6 +1,6 @@
 # T26 — CLI publish memory against source bytes
 
-- Status: In progress
+- Status: Done
 - Assignee: Codex
 - Phase: Post-launch measurement
 - Scope: peak RSS and time of `site publish` (no-op, diff, dry-run, first publish) near candidate limits
@@ -16,8 +16,8 @@ The memory use of a publish is known as a function of source bytes, and a maximu
 ## Exit criteria
 
 - [x] Peak RSS and wall time are recorded for no-op, differential publish, dry-run and first publish at sizes near the candidate limits.
-- [ ] A maximum file size and a total source size to document are proposed from the measurements.
-- [ ] The result states whether streaming or immutable staging is needed. The decision itself is taken after the measurement, not in this ticket.
+- [x] A size guideline is documented from the measurements (owner choice, 2026-10-17): no hard maximum file size or total source size; see Owner decision.
+- [x] The result states whether streaming or immutable staging is needed: not pursued now (owner decision, 2026-10-17).
 
 ## Evidence
 
@@ -27,7 +27,11 @@ The memory use of a publish is known as a function of source bytes, and a maximu
 ## Verification
 
 - [Report](../../research/cli-publish-memory.md) and [sample results](../../research/cli-publish-memory.results.json) retain all 60 timed command samples; every command returned exit status 0.
-- Measurement is complete. The size-limit and streaming/staging criteria await an owner decision and remain unchecked.
+- Measurement is complete. The owner decision of 2026-10-17 closed the size-limit and streaming/staging criteria.
+
+## Owner decision
+
+2026-10-17: document a size guideline. Streaming and immutable staging are not pursued now. The guideline is in the specification (Publishable source directory, "Memory and source size") and the root README status list; it follows the [report](../../research/cli-publish-memory.md).
 
 ## Initial local RSS baseline, 2026-10-15
 
