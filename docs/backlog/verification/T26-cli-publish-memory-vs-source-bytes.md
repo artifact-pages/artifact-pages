@@ -1,6 +1,7 @@
 # T26 — CLI publish memory against source bytes
 
-- Status: Open
+- Status: Done
+- Assignee: Codex
 - Phase: Post-launch measurement
 - Scope: peak RSS and time of `site publish` (no-op, diff, dry-run, first publish) near candidate limits
 - Implementer: Codex
@@ -14,13 +15,21 @@ The memory use of a publish is known as a function of source bytes, and a maximu
 
 ## Exit criteria
 
-- [ ] Peak RSS and wall time are recorded for no-op, differential publish, dry-run and first publish at sizes near the candidate limits.
+- [x] Peak RSS and wall time are recorded for no-op, differential publish, dry-run and first publish at sizes near the candidate limits.
 - [ ] A maximum file size and a total source size to document are proposed from the measurements.
 - [ ] The result states whether streaming or immutable staging is needed. The decision itself is taken after the measurement, not in this ticket.
 
 ## Evidence
 
-### Initial local RSS baseline, 2026-10-15
+- [CLI publish memory measurement report](../../research/cli-publish-memory.md) records the measured conditions, results, code paths and options for an owner decision.
+- Under local storage on `Mac16,10`, the run measured all 20 corpus/scenario cells three times; the largest observed peaks were 888.8 MiB for `many-small` and 2,033.5 MiB for `many-large`.
+
+## Verification
+
+- [Report](../../research/cli-publish-memory.md) and [raw results](../../../.local/cli-memory/t26-2026-10-17T07-26-10-691Z-27358/results.json) retain all 60 timed command samples; every command returned exit status 0.
+- The first exit criterion is complete. Candidate size selection and a streaming/staging decision remain owner decisions and are intentionally unchecked.
+
+## Initial local RSS baseline, 2026-10-15
 
 | Condition | Value |
 | --- | --- |

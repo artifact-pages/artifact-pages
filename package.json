@@ -16,6 +16,7 @@
     "fixtures:palette": "node scripts/benchmark-palette.mjs --generate-only",
     "benchmark:palette": "npm run build && node scripts/benchmark-palette.mjs",
     "benchmark:web-scale": "node scripts/benchmark-web-scale.mjs",
+    "benchmark:cli-publish-memory": "node scripts/benchmark-cli-publish-memory.mjs",
     "benchmark:preview-discovery": "npm run build && node scripts/benchmark-preview-discovery.mjs",
     "fulltext:load": "node scripts/fulltext-load.mjs",
     "test:fulltext": "node scripts/test-fulltext-core.mjs",
