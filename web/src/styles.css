@@ -1309,6 +1309,8 @@ mark {
   background: var(--surface);
 }
 
+.artifact-frame[hidden] { display: none; }
+
 .markdown-scroll {
   position: absolute;
   inset: 0;

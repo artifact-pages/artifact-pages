@@ -1,9 +1,10 @@
 # The SPA shell has generic metadata for search and share cards
 
-- Status: Open
+- Status: In progress
 - Priority: P3
 - Area: App shell
 - Implementer: Claude
+- Assignee: Claude
 - Source: public-launch review 2026-10-13, section 6 (last paragraph)
 
 ## Problem
@@ -21,5 +22,15 @@ The app home has a meaningful title, description and share card. Whether per-rou
 
 ## Acceptance criteria
 
-- [ ] The shell has a descriptive title, description and Open Graph tags for the app home.
+- [x] The shell has a descriptive title, description and Open Graph tags for the app home.
 - [ ] This issue records the owner's decision on per-route metadata and a sitemap (wanted or not, with the reason).
+
+## Verification
+
+- `web/index.html` keeps its `<title>` and now has a `description` meta, Open Graph tags (`og:type`, `og:site_name`, `og:title`, `og:description`) and `twitter:card` `summary` for the app home.
+- No canonical link, `og:url` or `og:image`: the same bundle is deployed to hosts chosen by each operator, so an absolute URL cannot be known at build time.
+- `npm run test:web-packaging` passes. No test asserts the content of the built `index.html` (the packaging test uses a fake one), so none was added.
+
+## Owner decision
+
+Pending: per-route metadata and sitemap. Recommendation recorded 2026-10-17: not wanted (internal readers; soft-404 policy ISSUE-083).
