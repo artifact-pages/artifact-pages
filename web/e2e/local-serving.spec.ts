@@ -2037,7 +2037,43 @@ test('a known HTML document whose body fails to load shows reader guidance and c
   await alert.getByRole('button', { name: 'Try again' }).click()
   await expect(page.getByRole('alert')).toHaveCount(0)
   await expect(page.frameLocator('iframe[title="Missing body"]').locator('#body')).toHaveText('Body is back')
+  await expect(page.locator('iframe[title="Missing body"]')).toBeFocused()
   await expect(page).toHaveURL(new RegExp(`/sre/${artifactPath}$`))
+})
+
+test('navigating inside a working HTML frame to a failing page does not mark the document unavailable', async ({ page }) => {
+  const artifactPath = 'guides/working.html'
+  await page.route('**/_indexes/sre/index.json', async (route) => {
+    const response = await route.fetch()
+    const index = await response.json() as { artifacts: Array<Record<string, unknown>> }
+    index.artifacts.push({
+      id: artifactPath,
+      title: 'Working body',
+      path: artifactPath,
+      format: 'html',
+      filename: 'working.html',
+      artifactUrl: `/_artifacts/sre/${artifactPath}`,
+      updatedAt: '2026-10-01T00:00:00Z',
+    })
+    await route.fulfill({ response, body: JSON.stringify(index) })
+  })
+  await page.route(`**/_artifacts/sre/${artifactPath}`, (route) => route.fulfill({
+    status: 200,
+    contentType: 'text/html; charset=utf-8',
+    body: '<!doctype html><title>Working</title><a id="go" href="/_artifacts/sre/guides/gone.html">Go</a>',
+  }))
+  await page.route('**/_artifacts/sre/guides/gone.html', (route) => route.fulfill({
+    status: 404,
+    contentType: 'text/html; charset=utf-8',
+    body: '<h1 id="gone">404 Not Found</h1>',
+  }))
+
+  await page.goto(`/sre/${artifactPath}`)
+  const frame = page.frameLocator('iframe[title="Working body"]')
+  await frame.locator('#go').click()
+  await expect(frame.locator('#gone')).toBeVisible()
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  await expect(page.locator('iframe[title="Working body"]')).toBeVisible()
 })
 
 test('HTML heading navigation keeps the URL and iframe section in sync with one history step', async ({ page }) => {
