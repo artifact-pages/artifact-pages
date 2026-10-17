@@ -1,6 +1,6 @@
 # Reading context and source provenance stay hidden behind separate controls
 
-- Status: Done
+- Status: In progress
 - Assignee: Claude
 - Priority: P2
 - Area: Web / reader context, Contents and Details
@@ -73,4 +73,6 @@ Implemented in `web/` (2026-10-17, Claude): `ReaderContextColumn.tsx`, `useCurre
 - Existing tests whose premise changed (they open the overlay panels or use the toolbar buttons) now run at 1100 px: palette Details command, heading ID conformance, HTML heading navigation, dismiss and reopen, jump-keeps-panel, stale jump check, multi-file namespace, Markdown render safety, Markdown gallery, site-home actions, and the ISSUE-080 wide toolbar test.
 - Screenshots (uncommitted, `.local/issue-108/`): 1440 px light and dark, 1280 px with the sidebar collapsed, 1100 px.
 
-Known limits: the current heading is the last one whose top has passed a reading line near the top of the pane, so at the very end of a document an entry that cannot reach that line (the last short sections) is not marked until the reader scrolls to it. HTML marking is best effort and silent when the frame cannot be read. Not done, needs the owner: a screen-reader pass (landmark names, focus announcements) and a real-device zoom check; the criterion on keyboard, accessible names, light/dark and widths stays unticked for that reason, and the final cross-review criterion stays unticked until the review is done.
+Known limits: the current heading is the last one whose top has passed a reading line near the top of the pane, so at the very end of a document an entry that cannot reach that line (the last short sections) is not marked until the reader scrolls to it. HTML marking is best effort and silent when the frame cannot be read. Review fixes (Luna cross-review): focus now follows the reader from the narrow More menu trigger (or a panel opened from it) into the matching column part, Contents when no panel was open; the column is not shown while a Markdown document or an HTML body has failed to load (both have e2e tests, and the column returns after a retry).
+
+Remaining before this can be Done: the owner's VoiceOver pass (landmark names, focus announcements), the real-device zoom check, and the Luna cross-review, which is complete once the review fixes are in. The criteria on keyboard, accessible names and widths, and on stories, regressions and cross-review, stay unticked until then.

@@ -150,6 +150,14 @@ export function ArtifactWorkspace({
   usePageNoindex(pageNotFound)
   // The language the open HTML artifact declares on its own <html>, keyed by the artifact it was read from.
   const [frameLanguage, setFrameLanguage] = useState<{ artifactUrl: string, lang: string | undefined } | null>(null)
+  // A known HTML body whose response failed (ISSUE-106), keyed by the artifact it was read from.
+  const [frameFailure, setFrameFailure] = useState<{ artifactUrl: string, status: number } | null>(null)
+  const [frameAttempt, setFrameAttempt] = useState(0)
+  const retryFrameRef = useRef<HTMLButtonElement | null>(null)
+  const focusRetryRef = useRef(false)
+  // Loads seen by the current iframe mount: only the first one is the artifact's own load (ISSUE-106).
+  const frameLoadCount = useRef(0)
+  const frameStatusAbort = useRef<AbortController | null>(null)
   const nearbyPages = useMemo(
     () => pageNotFound && routeArtifactPath ? nearbyArtifacts(index.artifacts, routeArtifactPath) : [],
     [pageNotFound, routeArtifactPath, index.artifacts],
@@ -191,7 +199,12 @@ export function ArtifactWorkspace({
   const lastRecordedArtifactId = useRef<string | null>(null)
   const currentFormat = bodyArtifact?.format
   // The persistent Contents and Details column (ISSUE-108): a document page at a wide viewport only.
-  const columnShown = wideReader && Boolean(currentArtifact) && route.kind === 'site'
+  // Not on an error screen: a Markdown document or an HTML body that failed to load.
+  const [markdownFailedUrl, setMarkdownFailedUrl] = useState<string | null>(null)
+  const loadFailed = Boolean(currentArtifact) && (
+    markdownFailedUrl === currentArtifact?.artifactUrl || frameFailure?.artifactUrl === currentArtifact?.artifactUrl
+  )
+  const columnShown = wideReader && Boolean(currentArtifact) && route.kind === 'site' && !loadFailed
   const currentHeading = useCurrentHeading({
     enabled: columnShown,
     format: currentFormat,
@@ -221,6 +234,8 @@ export function ArtifactWorkspace({
   }, [])
 
   // At a wide viewport Contents and Details are parts of the column: the commands move focus there.
+  const activePanelRef = useRef(activePanel)
+  activePanelRef.current = activePanel
   const columnShownRef = useRef(columnShown)
   columnShownRef.current = columnShown
   const openPart = useCallback((part: ReaderColumnPart) => {
@@ -236,7 +251,7 @@ export function ArtifactWorkspace({
 
   // Where focus last was among the controls that appear or disappear as the viewport crosses the
   // breakpoint, so it can follow the reader across it instead of falling back to the page.
-  const lastFocus = useRef<{ area: 'column' | 'panel' | 'bar'; part: ReaderColumnPart; element: Element } | null>(null)
+  const lastFocus = useRef<{ area: 'column' | 'panel' | 'bar' | 'more'; part: ReaderColumnPart; element: Element } | null>(null)
   useEffect(() => {
     const classify = (target: EventTarget | null) => {
       if (!(target instanceof Element)) return null
@@ -244,6 +259,7 @@ export function ArtifactWorkspace({
       if (column) return { area: 'column' as const, part: column.querySelector('.reader-column-details')?.contains(target) ? 'details' as const : 'contents' as const, element: target }
       const panel = target.closest('.context-panel')
       if (panel) return { area: 'panel' as const, part: panel.getAttribute('aria-label') === 'Details' ? 'details' as const : 'contents' as const, element: target }
+      if (target === moreMenuTriggerRef.current) return { area: 'more' as const, part: 'contents' as const, element: target }
       if (target === contentsToggleRef.current) return { area: 'bar' as const, part: 'contents' as const, element: target }
       if (target === detailsToggleRef.current) return { area: 'bar' as const, part: 'details' as const, element: target }
       return null
@@ -274,7 +290,9 @@ export function ArtifactWorkspace({
       setActivePanel(null)
       if (last && last.area !== 'column') {
         lastFocus.current = null
-        window.requestAnimationFrame(() => focusReaderColumnPart(last.part))
+        // The More trigger stands for the panel that was open (Contents when none was).
+        const part = last.area === 'more' && activePanelRef.current === 'details' ? 'details' : last.part
+        window.requestAnimationFrame(() => focusReaderColumnPart(part))
       }
     } else if (last?.area === 'column') {
       lastFocus.current = null
@@ -770,6 +788,27 @@ export function ArtifactWorkspace({
     () => currentArtifact && currentFormat === 'markdown' ? relatedPages(index.artifacts, currentArtifact.path) : [],
     [currentArtifact, currentFormat, index.artifacts],
   )
+  const siteHomeHref = `/${encodeURIComponent(index.site.id)}`
+  const bodyArtifactUrl = bodyArtifact?.artifactUrl
+  useEffect(() => {
+    setFrameFailure(null)
+    setFrameAttempt(0)
+    focusRetryRef.current = false
+  }, [bodyArtifactUrl])
+  // A new mount (another artifact or a retry) starts counting loads again and drops any pending status request.
+  useEffect(() => {
+    frameLoadCount.current = 0
+    return () => {
+      frameStatusAbort.current?.abort()
+      frameStatusAbort.current = null
+    }
+  }, [bodyArtifactUrl, frameAttempt])
+  useEffect(() => {
+    if (frameFailure && focusRetryRef.current) {
+      focusRetryRef.current = false
+      retryFrameRef.current?.focus()
+    }
+  }, [frameFailure])
   const artifactView = bodyArtifact && currentFormat === 'markdown' ? (
     <MarkdownArtifact
       key={bodyArtifact.artifactUrl}
@@ -779,16 +818,45 @@ export function ArtifactWorkspace({
       navigate={(href) => navigate(href)}
       highlightQuery={highlightQuery}
       onMatches={reportMatches}
+      onFailedChange={(failed) => setMarkdownFailedUrl(failed ? bodyArtifact.artifactUrl : null)}
       aside={columnShown && currentArtifact ? (
         <ReaderContextColumn artifact={currentArtifact} entries={currentArtifact.toc ?? NO_ENTRIES} activeId={currentHeading} onJump={jumpFromColumn} />
       ) : undefined}
       footer={readNextItems.length > 0 ? <ReadNext items={readNextItems} siteId={index.site.id} navigate={(href) => navigateWithinWorkspace(href)} /> : undefined}
     />
   ) : bodyArtifact && htmlArtifactUrl ? (
+    <>
+    {frameFailure?.artifactUrl === bodyArtifact.artifactUrl ? (
+      <div className="markdown-state" role="alert">
+        <h1>Document unavailable</h1>
+        <p>The content of “{bodyArtifact.title}” could not be loaded (HTTP {frameFailure.status}). It may have been removed or not published yet.</p>
+        <button
+          type="button"
+          className="text-action"
+          ref={retryFrameRef}
+          onClick={() => {
+            focusRetryRef.current = true
+            setFrameFailure(null)
+            setFrameAttempt((attempt) => attempt + 1)
+          }}
+        >
+          Try again
+        </button>
+        {' '}
+        <a
+          className="text-action"
+          href={siteHomeHref}
+          onClick={(event) => followInApp(event, () => navigateWithinWorkspace(siteHomeHref))}
+        >
+          ← {index.site.title}
+        </a>
+      </div>
+    ) : null}
     <iframe
       className="artifact-frame"
       ref={htmlFrameRef}
-      key={bodyArtifact.artifactUrl}
+      key={`${bodyArtifact.artifactUrl}#${frameAttempt}`}
+      hidden={frameFailure?.artifactUrl === bodyArtifact.artifactUrl}
       src={htmlArtifactUrl}
       title={bodyArtifact.title}
       lang={frameLanguage?.artifactUrl === bodyArtifact.artifactUrl ? frameLanguage.lang : undefined}
@@ -797,6 +865,43 @@ export function ArtifactWorkspace({
         ...(currentDirectory && directoryFrameHeight ? { ['--directory-frame-height' as string]: `${directoryFrameHeight}px` } : {}),
       }}
       onLoad={(event) => {
+        const frame = event.currentTarget
+        const firstLoad = frameLoadCount.current === 0
+        frameLoadCount.current += 1
+        const artifactUrl = bodyArtifact.artifactUrl
+        const status = firstLoad ? readFrameResponseStatus(frame) : null
+        if (typeof status === 'number' && status >= 400) {
+          frameHeightCleanup.current?.()
+          frameHeightCleanup.current = null
+          setFrameFailure({ artifactUrl, status })
+          return
+        }
+        // Without a readable status (for example Safari), one HEAD request classifies the first load.
+        const needsHead = firstLoad && status === undefined
+        if (needsHead) {
+          const controller = new AbortController()
+          frameStatusAbort.current?.abort()
+          frameStatusAbort.current = controller
+          fetch(artifactUrl, { method: 'HEAD', cache: 'no-store', signal: controller.signal })
+            .then((response) => response.status)
+            .catch(() => null)
+            .then((headStatus) => {
+              if (controller.signal.aborted) return
+              if (headStatus !== null && headStatus >= 400) {
+                frameHeightCleanup.current?.()
+                frameHeightCleanup.current = null
+                setFrameFailure({ artifactUrl, status: headStatus })
+                return
+              }
+              if (focusRetryRef.current) {
+                focusRetryRef.current = false
+                frame.focus()
+              }
+            })
+        } else if (focusRetryRef.current) {
+          focusRetryRef.current = false
+          frame.focus()
+        }
         setFrameLanguage({ artifactUrl: bodyArtifact.artifactUrl, lang: readFrameLanguage(event.currentTarget) })
         setFrameLoads((count) => count + 1)
         event.currentTarget.contentWindow?.addEventListener('keydown', forwardArtifactKeyDown, true)
@@ -807,8 +912,8 @@ export function ArtifactWorkspace({
         frameHeightCleanup.current = currentDirectory ? watchFrameHeight(event.currentTarget, setDirectoryFrameHeight) : null
       }}
     />
+    </>
   ) : null
-  const siteHomeHref = `/${encodeURIComponent(index.site.id)}`
   const moreMenuItems: ReaderMoreMenuItem[] = []
   if (bodyArtifact) {
     moreMenuItems.push(
@@ -895,6 +1000,11 @@ export function ArtifactWorkspace({
         onOpenPalette={openPalette}
         onOpenArtifact={openArtifact}
         onOpenDirectory={openDirectory}
+        onOpenRoot={() => {
+          navigateWithinWorkspace(siteHomeHref)
+          setActivePanel(null)
+          setPaletteSeed(null)
+        }}
         onToast={showToast}
         themeMode={themeMode}
         onSetThemeMode={onSetThemeMode}
@@ -1274,6 +1384,17 @@ function scrollFrameToFragment(frameWindow: Window, hash: string, host: HTMLElem
   }
   // scrollTo keeps the scroll inside the frame; scrollIntoView would also move the app page.
   frameWindow.scrollTo(0, offsetInFrame)
+}
+
+/** The HTTP status of the frame's document; undefined when the browser does not expose it (or reading throws). */
+function readFrameResponseStatus(iframe: HTMLIFrameElement): number | undefined {
+  try {
+    const entry = iframe.contentWindow?.performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined
+    const status = entry?.responseStatus
+    return typeof status === 'number' && status > 0 ? status : undefined
+  } catch {
+    return undefined
+  }
 }
 
 /** The language an HTML artifact declares on its own `<html>`; undefined when it declares none or the frame is cross-origin. */

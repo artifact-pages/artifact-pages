@@ -167,6 +167,7 @@ export function MarkdownArtifact({
   onMatches,
   footer,
   aside,
+  onFailedChange,
 }: {
   artifact: ArtifactIndexEntry
   siteId: string
@@ -181,6 +182,8 @@ export function MarkdownArtifact({
   footer?: ReactNode
   /** The reader context column (ISSUE-108): rendered inside the scrolling region, beside the article, so it can scroll with it. */
   aside?: ReactNode
+  /** Called with true while the document failed to load (the column is not shown on an error screen). */
+  onFailedChange?: (failed: boolean) => void
 }) {
   const [source, setSource] = useState<string | null>(null)
   const [error, setError] = useState<{ status?: number } | null>(null)
@@ -209,6 +212,14 @@ export function MarkdownArtifact({
 
     return () => controller.abort()
   }, [artifact.artifactUrl, attempt])
+
+  const onFailedChangeRef = useRef(onFailedChange)
+  onFailedChangeRef.current = onFailedChange
+  useEffect(() => {
+    if (!error) return
+    onFailedChangeRef.current?.(true)
+    return () => onFailedChangeRef.current?.(false)
+  }, [error])
 
   useEffect(() => {
     if (error && attempt > 0) retryRef.current?.focus()
@@ -289,7 +300,7 @@ export function MarkdownArtifact({
   ) : content
 
   if (error) {
-    return withAside(
+    return (
       <div className="markdown-state" role="alert">
         <h1>Markdown unavailable</h1>
         <p>
@@ -305,7 +316,7 @@ export function MarkdownArtifact({
         >
           Try again
         </button>
-      </div>,
+      </div>
     )
   }
 

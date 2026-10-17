@@ -1,5 +1,6 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { pageCountLabel, pageHeadings, type DirectoryListing } from '../domain/directory'
+import { DIRECTORY_PAGE_SIZE, clampPage, pageRange, pageTotal, splitRange } from '../domain/row-window'
 import { artifactRouteHref } from '../routing'
 import { Icon } from './Icon'
 import { followInApp } from './spa-link'
@@ -43,15 +44,44 @@ export function DirectoryPage({
   const capped = total > COMPACT_LIST_CAP_THRESHOLD
   const [expanded, setExpanded] = useState(false)
   const moreButton = useRef<HTMLButtonElement>(null)
-  const visibleRows = capped && !expanded ? COMPACT_LIST_COLLAPSED_ROWS : total
+  // The page index belongs to one folder: it is ignored once `listing.path` changes.
+  const [pageState, setPageState] = useState({ path: listing.path, page: 0 })
+  const page = clampPage(pageState.path === listing.path ? pageState.page : 0, total)
+  const pagerNeeded = total > DIRECTORY_PAGE_SIZE && (!body || !capped || expanded)
+  const collapsed = Boolean(body) && capped && !expanded
+  const { start, end } = collapsed ? { start: 0, end: COMPACT_LIST_COLLAPSED_ROWS } : pageRange(page, total)
+  const range = splitRange(folders.length, pages.length, start, end)
+  const scrollRoot = useRef<HTMLDivElement>(null)
+  const focusFirstRow = useRef(false)
+  useEffect(() => {
+    if (!focusFirstRow.current) return
+    focusFirstRow.current = false
+    const first = scrollRoot.current?.querySelector<HTMLElement>('a[data-directory-folder], a[data-directory-page]')
+    first?.focus()
+    first?.scrollIntoView({ block: 'nearest' })
+  }, [page, listing.path])
+
+  function goToPage(next: number) {
+    focusFirstRow.current = true
+    setPageState({ path: listing.path, page: clampPage(next, total) })
+  }
 
   function link(path: string, hash = '') {
     const route = `${routeOf(path)}${hash}`
     return { href: resolveHref(route), onClick: (event: React.MouseEvent<HTMLElement>) => followInApp(event, () => onOpen(route)) }
   }
 
-  const shownFolders = folders.slice(0, visibleRows)
-  const shownPages = pages.slice(0, Math.max(0, visibleRows - folders.length))
+  const shownFolders = folders.slice(...range.folders)
+  const shownPages = pages.slice(...range.pages)
+  const pager = pagerNeeded ? (
+    <nav className="directory-pager" aria-label="Pages of this folder">
+      <button type="button" className="text-action" disabled={page === 0} onClick={() => goToPage(page - 1)}>Previous</button>
+      <span aria-live="polite">
+        Showing {(start + 1).toLocaleString('en-US')}–{end.toLocaleString('en-US')} of {total.toLocaleString('en-US')}
+      </span>
+      <button type="button" className="text-action" disabled={page >= pageTotal(total) - 1} onClick={() => goToPage(page + 1)}>Next</button>
+    </nav>
+  ) : null
   const compactRows = [
     ...shownFolders.map((folder) => (
       <li key={folder.path}>
@@ -74,7 +104,7 @@ export function DirectoryPage({
   ]
 
   return (
-    <div className="directory-scroll" data-testid="directory-page" data-directory-variant={body ? 'index' : 'list'}>
+    <div className="directory-scroll" ref={scrollRoot} data-testid="directory-page" data-directory-variant={body ? 'index' : 'list'}>
       <div className="directory-page">
         {header ?? (
           <header className="directory-header">
@@ -92,6 +122,7 @@ export function DirectoryPage({
             <nav className="directory-children" aria-labelledby="directory-children-title">
               <h2 id="directory-children-title">In this folder · {pageCountLabel(total)}</h2>
               <ul className="directory-compact" id={COMPACT_LIST_ID}>{compactRows}</ul>
+              {pager}
               {capped ? (
                 <button
                   ref={moreButton}
@@ -109,11 +140,11 @@ export function DirectoryPage({
           ) : null
         ) : (
           <>
-            {folders.length > 0 ? (
+            {shownFolders.length > 0 ? (
               <section aria-labelledby="directory-folders-title">
                 <h2 className="directory-group-label" id="directory-folders-title">Folders</h2>
                 <ul className="directory-list">
-                  {folders.map((folder) => (
+                  {shownFolders.map((folder) => (
                     <li key={folder.path} className="directory-row">
                       <span className="directory-row-icon"><Icon name="folder" size={16} /></span>
                       <span className="directory-row-main">
@@ -128,11 +159,11 @@ export function DirectoryPage({
                 </ul>
               </section>
             ) : null}
-            {pages.length > 0 ? (
+            {shownPages.length > 0 ? (
               <section aria-labelledby="directory-pages-title">
                 <h2 className="directory-group-label" id="directory-pages-title">Pages</h2>
                 <ul className="directory-list">
-                  {pages.map((page) => {
+                  {shownPages.map((page) => {
                     const { shown, hidden } = pageHeadings(page)
                     const committer = page.lastCommitter?.name.trim()
                     return (
@@ -163,6 +194,7 @@ export function DirectoryPage({
                 </ul>
               </section>
             ) : null}
+            {pager}
           </>
         )}
 

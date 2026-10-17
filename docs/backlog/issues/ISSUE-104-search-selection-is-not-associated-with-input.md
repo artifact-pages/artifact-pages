@@ -1,6 +1,7 @@
 # Arrow-selected search results are not associated with the focused input
 
-- Status: Open
+- Status: In progress
+- Assignee: Claude
 - Priority: P2
 - Area: Reader / palette and full-text search accessibility
 - Implementer: Claude
@@ -27,8 +28,16 @@ Keyboard selection has an accessible, trackable active result, through an approp
 
 ## Acceptance criteria
 
-- [ ] In both search surfaces, arrows expose the current candidate's identity and selection through a valid accessible focus model.
+- [x] In both search surfaces, arrows expose the current candidate's identity and selection through a valid accessible focus model.
 - [ ] A main screen-reader path verifies that the selected candidate and Enter destination can be followed; record browser and assistive technology used.
-- [ ] Query changes, stale/loading results and empty lists do not retain an invalid active-result reference.
-- [ ] IME confirmation, Enter, Escape and the palette's page/heading navigation continue to work.
-- [ ] Regression checks cover the accessible relationship as well as visual highlighting.
+- [x] Query changes, stale/loading results and empty lists do not retain an invalid active-result reference.
+- [x] IME confirmation, Enter, Escape and the palette's page/heading navigation continue to work.
+- [x] Regression checks cover the accessible relationship as well as visual highlighting.
+
+## Verification
+
+- Palette (`CommandPalette.tsx`): the input is a WAI-ARIA combobox (`role="combobox"`, `aria-autocomplete="list"`, `aria-expanded`, `aria-controls`, `aria-activedescendant`) over a listbox with identified options and labelled section groups. The listbox is absent when there are no entries, so `aria-activedescendant` and `aria-controls` are never left pointing at a missing id.
+- Results page (`SearchResultsPage.tsx`): results are links, so ArrowDown in the field moves real focus to the first link, ArrowUp/ArrowDown walk the links, ArrowUp on the first link and Escape return to the field, Enter in the field only commits the query, and `aria-current` is no longer used for selection.
+- e2e (`local-serving.spec.ts`): the combobox test checks `aria-activedescendant`, `aria-selected`, and the empty state; the results-page tests check `document.activeElement`. Existing tests changed: the palette field is now located with `getByRole('combobox', …)` instead of `textbox`; `ranked results are a list of links that open from the keyboard` and `arrow keys … when excerpts are shown` no longer expect virtual selection or Enter-opens-active-hit in the field, and assert focus on the links and native Enter on a focused link instead.
+- Results: `npm run build` and `npm run test:web-unit` pass; full e2e 227 passed.
+- Open: the screen-reader criterion (a main screen-reader path that follows the selected candidate and Enter destination, recording browser and assistive technology) awaits a manual VoiceOver session by the owner. The ticket stays In progress until then.
