@@ -1,6 +1,7 @@
 # Expired site-index cache entries stay in memory until the same site is read again
 
-- Status: Open
+- Status: Done
+- Assignee: Claude
 - Priority: P2
 - Area: Web data loading
 - Implementer: Claude
@@ -24,7 +25,13 @@ Entries that are expired or no longer in use are evicted, and the cache has a si
 
 ## Acceptance criteria
 
-- [ ] Expired entries are evicted without waiting for the same key to be read again.
-- [ ] The cache has an entry-count or size cap; entries still in use (active subscribers) are kept.
-- [ ] The existing abort and reuse contract for shared in-flight requests is unchanged.
-- [ ] A unit test with a synthetic clock covers expiry, the cap and in-use retention.
+- [x] Expired entries are evicted without waiting for the same key to be read again.
+- [x] The cache has an entry-count or size cap; entries still in use (active subscribers) are kept.
+- [x] The existing abort and reuse contract for shared in-flight requests is unchanged.
+- [x] A unit test with a synthetic clock covers expiry, the cap and in-use retention.
+
+## Verification
+
+- `web/src/data/indexes.test.mjs` (synthetic clock via `mock.timers`): expiry eviction by timer and by the next-read sweep (alpha/beta/gamma leaves only gamma), cap of `SITE_INDEX_CACHE_MAX_ENTRIES` (4) evicting the oldest entry first, entries with waiting callers kept beyond the cap, shared request aborted only when every caller aborted, abort after fulfilment keeps the entry.
+- `npm run test:web-unit`: all suites pass (indexes: 25 tests).
+- `npm run build` clean; full e2e (`CI=1`, 227 tests, compose project `claude-issue-094-101-102`) passed.

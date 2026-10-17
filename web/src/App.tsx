@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ArtifactWorkspace } from './components/ArtifactWorkspace'
 import { PreviewDocumentPage } from './components/PreviewDocumentPage'
 import { PreviewListPage } from './components/PreviewListPage'
@@ -93,29 +93,34 @@ function App() {
   const { route, pathname, search, hash, navigate } = useLocation()
   const { themeMode, theme, setThemeMode } = useTheme()
   const [sites, setSites] = useState<LoadingState<SiteCatalogEntry[]>>({ status: 'loading' })
+  const [discoveryAttempt, setDiscoveryAttempt] = useState(0)
+  const retryDiscovery = () => {
+    setSites({ status: 'loading' })
+    setDiscoveryAttempt((n) => n + 1)
+  }
 
   useEffect(() => {
-    let cancelled = false
-    discoverSites().then(
+    const controller = new AbortController()
+    discoverSites(fetch, { signal: controller.signal }).then(
       (metadata) => {
-        if (!cancelled) setSites({ status: 'success', data: metadata })
+        if (!controller.signal.aborted) setSites({ status: 'success', data: metadata })
       },
       (error: unknown) => {
-        if (!cancelled) setSites({ status: 'error', error: toError(error) })
+        if (!controller.signal.aborted) setSites({ status: 'error', error: toError(error) })
       },
     )
 
-    return () => {
-      cancelled = true
-    }
-  }, [])
+    return () => controller.abort()
+  }, [discoveryAttempt])
 
   if (route.kind === 'sites') {
     if (sites.status === 'loading') return <StatusPage title="Sites" message="Loading sites…" />
     if (sites.status === 'error' && sites.error instanceof UnsupportedSchemaError) {
       return <RepublishPage scope="registry" title="Sites" onBack={() => navigate('/')} />
     }
-    if (sites.status === 'error') return <ErrorPage title="Sites" scope="catalog" error={sites.error} />
+    if (sites.status === 'error') {
+      return <ErrorPage title="Sites" scope="catalog" error={sites.error} onRetry={retryDiscovery} focusRetry={discoveryAttempt > 0} />
+    }
     return (
       <SitePicker
         sites={sites.data}
@@ -152,6 +157,7 @@ function App() {
       sites={sites.status === 'success' ? sites.data : []}
       sitesLoading={sites.status === 'loading'}
       siteDiscoveryStatus={sites.status}
+      retryDiscovery={retryDiscovery}
       navigate={navigate}
       themeMode={themeMode}
       theme={theme}
@@ -165,6 +171,7 @@ function SitePage({
   sites,
   sitesLoading,
   siteDiscoveryStatus,
+  retryDiscovery,
   pathname,
   search,
   hash,
@@ -177,6 +184,7 @@ function SitePage({
   sites: SiteCatalogEntry[]
   sitesLoading: boolean
   siteDiscoveryStatus: LoadingState<SiteCatalogEntry[]>['status']
+  retryDiscovery: () => void
   pathname: string
   search: string
   hash: string
@@ -186,6 +194,11 @@ function SitePage({
   onSetThemeMode: (mode: ThemeMode) => void
 }) {
   const [indexState, setIndexState] = useState<LoadingState<SiteIndex>>({ status: 'loading' })
+  const [indexAttempt, setIndexAttempt] = useState(0)
+  const retryIndex = () => {
+    setIndexState({ status: 'loading' })
+    setIndexAttempt((n) => n + 1)
+  }
   const registeredSite = sites.find(({ site }) => site.id === route.siteId)
   const artifactIndexUrl = registeredSite && hasSiteDiscoveryMetadata(registeredSite)
     ? registeredSite.artifactIndexUrl
@@ -203,21 +216,19 @@ function SitePage({
   useEffect(() => () => fullTextSearch?.clear(), [fullTextSearch])
 
   useEffect(() => {
-    let cancelled = false
+    const controller = new AbortController()
     setIndexState({ status: 'loading' })
-    loadSiteIndex(route.siteId, fetch, artifactIndexUrl).then(
+    loadSiteIndex(route.siteId, fetch, artifactIndexUrl, { signal: controller.signal }).then(
       (index) => {
-        if (!cancelled) setIndexState({ status: 'success', data: index })
+        if (!controller.signal.aborted) setIndexState({ status: 'success', data: index })
       },
       (error: unknown) => {
-        if (!cancelled) setIndexState({ status: 'error', error: toError(error) })
+        if (!controller.signal.aborted) setIndexState({ status: 'error', error: toError(error) })
       },
     )
 
-    return () => {
-      cancelled = true
-    }
-  }, [route.siteId, artifactIndexUrl])
+    return () => controller.abort()
+  }, [route.siteId, artifactIndexUrl, indexAttempt])
 
   if (indexState.status === 'loading') {
     return <StatusPage title={route.siteId} message="Loading site index…" />
@@ -253,10 +264,12 @@ function SitePage({
         title={registeredSite.site.title}
         heading="Site registered, but details are unavailable"
         message="This site's metadata and artifact index could not be loaded. Please try again in a moment."
+        onRetry={() => { retryDiscovery(); retryIndex() }}
+        focusRetry={indexAttempt > 0}
         onBack={() => navigate('/')}
       />
     }
-    return <ErrorPage title={route.siteId} error={indexState.error} onBack={() => navigate('/')} />
+    return <ErrorPage title={route.siteId} error={indexState.error} onRetry={retryIndex} focusRetry={indexAttempt > 0} onBack={() => navigate('/')} />
   }
 
   const index = registeredSite
@@ -308,13 +321,19 @@ function ErrorPage({
   scope = 'site',
   error,
   onBack,
+  onRetry,
+  focusRetry = false,
 }: {
   title: string
   scope?: 'catalog' | 'site'
   error: Error
   onBack?: () => void
+  onRetry?: () => void
+  focusRetry?: boolean
 }) {
   usePageTitle(pageTitle(scope === 'catalog' ? undefined : title, APP_NAME))
+  const invalidData = error instanceof IndexLoadError && error.invalidData
+  const timedOut = error instanceof IndexLoadError && error.timedOut
   return (
     <main className="status-page">
       <div className="status-content">
@@ -322,8 +341,14 @@ function ErrorPage({
         <p className="eyebrow">{title}</p>
         <h1>{scope === 'catalog' ? 'Unable to load sites' : 'Unable to load this site'}</h1>
         <p className="error-message" role="alert">
-          {scope === 'site' && error instanceof IndexLoadError && error.invalidData
-            ? "This site's index is damaged or was written by an incompatible publisher. Ask the site's publisher to republish it."
+          {invalidData
+            ? scope === 'catalog'
+              ? 'The site catalog is damaged or was written by an incompatible version. Ask the administrator to run the registry sync again.'
+              : "This site's index is damaged or was written by an incompatible publisher. Ask the site's publisher to republish it."
+            : timedOut
+            ? scope === 'catalog'
+              ? 'The site catalog is taking too long to load. Try again in a moment.'
+              : 'This site is taking too long to load. Try again in a moment.'
             : error instanceof IndexLoadError && error.status
             ? scope === 'catalog'
               ? `The site catalog could not be loaded (HTTP ${error.status}). Please try again in a moment.`
@@ -332,10 +357,19 @@ function ErrorPage({
               ? 'We could not load the site catalog. Check your connection and try again.'
               : 'We could not load this page. Check your connection and try again.'}
         </p>
+        {onRetry && !invalidData ? <RetryButton onRetry={onRetry} autoFocus={focusRetry} /> : null}
         {onBack ? <button className="text-action" onClick={onBack}>← All sites</button> : null}
       </div>
     </main>
   )
+}
+
+function RetryButton({ onRetry, autoFocus }: { onRetry: () => void; autoFocus: boolean }) {
+  const ref = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (autoFocus) ref.current?.focus()
+  }, [autoFocus])
+  return <button ref={ref} className="text-action" type="button" onClick={onRetry}>Try again</button>
 }
 
 function RegisteredSiteStatusPage({
@@ -343,11 +377,15 @@ function RegisteredSiteStatusPage({
   heading,
   message,
   onBack,
+  onRetry,
+  focusRetry = false,
 }: {
   title: string
   heading: string
   message: string
   onBack: () => void
+  onRetry?: () => void
+  focusRetry?: boolean
 }) {
   usePageTitle(pageTitle(title, APP_NAME))
   return (
@@ -357,6 +395,7 @@ function RegisteredSiteStatusPage({
         <p className="eyebrow">{title}</p>
         <h1>{heading}</h1>
         <p role="status">{message}</p>
+        {onRetry ? <RetryButton onRetry={onRetry} autoFocus={focusRetry} /> : null}
         <button className="text-action" onClick={onBack}>← All sites</button>
       </div>
     </main>

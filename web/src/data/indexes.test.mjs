@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { register } from 'node:module'
-import test from 'node:test'
+import test, { mock } from 'node:test'
 
 // The web sources use extensionless relative imports (bundler resolution); map them to .ts.
 register('data:text/javascript,' + encodeURIComponent(`
@@ -14,7 +14,10 @@ export async function resolve(specifier, context, next) {
   return next(specifier, context)
 }`))
 
-const { IndexLoadError, SITE_METADATA_CONCURRENCY, clearSiteIndexCache, discoverSites, loadSiteIndex } = await import('./indexes.ts')
+const {
+  IndexLoadError, REGISTRY_TIMEOUT_MS, SITE_INDEX_CACHE_MAX_ENTRIES, SITE_INDEX_CACHE_TTL_MS, SITE_INDEX_TIMEOUT_MS,
+  SITE_METADATA_CONCURRENCY, clearSiteIndexCache, discoverSites, loadSiteIndex, siteIndexCacheSize,
+} = await import('./indexes.ts')
 
 const fixture = JSON.parse(readFileSync(new URL('../../../fixtures/storage/_indexes/sre/index.json', import.meta.url), 'utf8'))
 const json = (body) => ({ ok: true, status: 200, json: async () => body })
@@ -151,4 +154,210 @@ test('the timeout is an overall deadline, not per batch', async () => {
   assert.ok(Date.now() - started < 500)
   assert.equal(sites.length, 10)
   assert.ok(sites.every((entry) => entry.status === 'metadata-unavailable'))
+})
+
+// --- shared index cache eviction, deadlines and cancellation (ISSUE-094, ISSUE-101) ---
+
+const settle = () => new Promise((resolve) => setImmediate(resolve))
+const indexFor = (id) => ({ ...fixture, site: { ...fixture.site, id }, artifacts: [] })
+const idOf = (url) => url.split('/')[2]
+
+/** Runs `body` with a synthetic clock and a stubbed global fetch (the shared cache path). */
+async function withClock(fetchImpl, body) {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = fetchImpl
+  mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 })
+  try {
+    await body()
+  } finally {
+    clearSiteIndexCache()
+    mock.timers.reset()
+    globalThis.fetch = originalFetch
+  }
+}
+
+const respondWithIndex = (calls) => async (url) => {
+  calls.push(url)
+  return json(indexFor(idOf(url)))
+}
+const abortable = (init) => new Promise((_, reject) => {
+  init.signal.addEventListener('abort', () => reject(new Error('aborted')))
+})
+
+test('expired entries are evicted without reading the same key again', async () => {
+  const calls = []
+  await withClock(respondWithIndex(calls), async () => {
+    mock.timers.tick(1_000)
+    await loadSiteIndex('alpha')
+    assert.equal(siteIndexCacheSize(), 1)
+    mock.timers.tick(SITE_INDEX_CACHE_TTL_MS + 2_000)
+    assert.equal(siteIndexCacheSize(), 0, 'alpha is evicted by its timer')
+    await loadSiteIndex('beta')
+    mock.timers.tick(SITE_INDEX_CACHE_TTL_MS + 1_000)
+    await loadSiteIndex('gamma')
+    assert.equal(siteIndexCacheSize(), 1)
+    await loadSiteIndex('gamma')
+    assert.equal(calls.length, 3, 'gamma is still shared')
+  })
+})
+
+test('the TTL sweep on the next read removes expired entries even if their timers have not run', async () => {
+  await withClock(respondWithIndex([]), async () => {
+    await loadSiteIndex('alpha')
+    await loadSiteIndex('beta')
+    assert.equal(siteIndexCacheSize(), 2)
+    // Move only the Date forward; the eviction timers stay pending.
+    mock.timers.reset()
+    mock.timers.enable({ apis: ['Date'], now: SITE_INDEX_CACHE_TTL_MS + 5_000 })
+    await loadSiteIndex('gamma')
+    assert.equal(siteIndexCacheSize(), 1)
+  })
+})
+
+test('the cache keeps at most SITE_INDEX_CACHE_MAX_ENTRIES entries, evicting the oldest first', async () => {
+  const calls = []
+  await withClock(respondWithIndex(calls), async () => {
+    const ids = ['site-a', 'site-b', 'site-c', 'site-d', 'site-e', 'site-f']
+    for (const id of ids) await loadSiteIndex(id)
+    assert.equal(siteIndexCacheSize(), SITE_INDEX_CACHE_MAX_ENTRIES)
+    await loadSiteIndex('site-f')
+    assert.equal(calls.length, 6, 'the newest entry is still cached')
+    await loadSiteIndex('site-c')
+    assert.equal(calls.length, 6, 'the oldest survivor is still cached')
+    await loadSiteIndex('site-a')
+    assert.equal(calls.length, 7, 'the oldest entry was evicted')
+  })
+})
+
+test('entries that callers are still waiting for are never evicted for the cap', async () => {
+  const pending = []
+  await withClock((url, init) => new Promise((resolve, reject) => {
+    pending.push(() => resolve(json(indexFor(idOf(url)))))
+    init.signal.addEventListener('abort', () => reject(new Error('aborted')))
+  }), async () => {
+    const ids = ['site-a', 'site-b', 'site-c', 'site-d', 'site-e', 'site-f']
+    const loads = ids.map((id) => loadSiteIndex(id))
+    await settle()
+    assert.equal(siteIndexCacheSize(), ids.length)
+    pending.forEach((answer) => answer())
+    await Promise.all(loads)
+    mock.timers.tick(SITE_INDEX_CACHE_TTL_MS)
+    assert.equal(siteIndexCacheSize(), 0)
+  })
+})
+
+test('a shared request is aborted only when every waiting caller has aborted', async () => {
+  let started = 0
+  let requestSignal
+  await withClock((url, init) => {
+    started += 1
+    requestSignal = init.signal
+    return abortable(init)
+  }, async () => {
+    const first = new AbortController()
+    const second = new AbortController()
+    const a = loadSiteIndex('alpha', fetch, undefined, { signal: first.signal })
+    const b = loadSiteIndex('alpha', fetch, undefined, { signal: second.signal })
+    await settle()
+    assert.equal(started, 1)
+    first.abort()
+    await assert.rejects(a, /Aborted/)
+    assert.equal(requestSignal.aborted, false)
+    assert.equal(siteIndexCacheSize(), 1)
+    second.abort()
+    await assert.rejects(b, /Aborted/)
+    assert.equal(requestSignal.aborted, true)
+    assert.equal(siteIndexCacheSize(), 0)
+  })
+})
+
+test('aborting after the request fulfilled keeps the shared entry', async () => {
+  const calls = []
+  await withClock(respondWithIndex(calls), async () => {
+    const controller = new AbortController()
+    await loadSiteIndex('alpha', fetch, undefined, { signal: controller.signal })
+    controller.abort()
+    await loadSiteIndex('alpha')
+    assert.equal(calls.length, 1)
+  })
+})
+
+test('a site index whose headers never arrive times out and the next call starts a new request', async () => {
+  let started = 0
+  await withClock((url, init) => {
+    started += 1
+    return started === 1 ? abortable(init) : Promise.resolve(json(indexFor(idOf(url))))
+  }, async () => {
+    const first = loadSiteIndex('alpha')
+    const outcome = assert.rejects(first, (error) => error instanceof IndexLoadError && error.timedOut === true)
+    await settle()
+    mock.timers.tick(SITE_INDEX_TIMEOUT_MS)
+    await outcome
+    assert.equal(siteIndexCacheSize(), 0)
+    await loadSiteIndex('alpha')
+    assert.equal(started, 2)
+  })
+})
+
+test('a site index whose body never arrives times out', async () => {
+  await withClock((url, init) => Promise.resolve({ ok: true, status: 200, json: () => abortable(init) }), async () => {
+    const outcome = assert.rejects(loadSiteIndex('alpha'), (error) => error instanceof IndexLoadError && error.timedOut === true)
+    await settle()
+    mock.timers.tick(SITE_INDEX_TIMEOUT_MS)
+    await outcome
+  })
+})
+
+test('a registry whose headers never arrive times out at the registry deadline', async () => {
+  mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 })
+  try {
+    const outcome = assert.rejects(
+      discoverSites((url, init) => abortable(init)),
+      (error) => error instanceof IndexLoadError && error.timedOut === true && error.url === '/_indexes/sites.json',
+    )
+    await settle()
+    mock.timers.tick(REGISTRY_TIMEOUT_MS)
+    await outcome
+  } finally {
+    mock.timers.reset()
+  }
+})
+
+test('a registry whose body never arrives times out at the registry deadline', async () => {
+  mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 })
+  try {
+    const outcome = assert.rejects(
+      discoverSites((url, init) => Promise.resolve({ ok: true, status: 200, json: () => abortable(init) })),
+      (error) => error instanceof IndexLoadError && error.timedOut === true,
+    )
+    await settle()
+    mock.timers.tick(REGISTRY_TIMEOUT_MS)
+    await outcome
+  } finally {
+    mock.timers.reset()
+  }
+})
+
+test('aborting discovery rejects as aborted and cancels the registry request', async () => {
+  const controller = new AbortController()
+  let requestSignal
+  const outcome = assert.rejects(
+    discoverSites((url, init) => { requestSignal = init.signal; return abortable(init) }, { signal: controller.signal }),
+    (error) => error instanceof IndexLoadError && /^Aborted/.test(error.message) && !error.timedOut,
+  )
+  await settle()
+  controller.abort()
+  await outcome
+  assert.equal(requestSignal.aborted, true)
+})
+
+test('a registry that is not JSON is invalid data, not a transport error', async () => {
+  await assert.rejects(
+    discoverSites(async () => ({ ok: true, status: 200, json: async () => { throw new SyntaxError('bad json') } })),
+    (error) => error instanceof IndexLoadError && error.invalidData === true && error.message === 'Invalid site registry: /_indexes/sites.json.',
+  )
+  await assert.rejects(
+    discoverSites(async () => json({ schemaVersion: 1, sites: 'nope' })),
+    (error) => error instanceof IndexLoadError && error.invalidData === true,
+  )
 })
