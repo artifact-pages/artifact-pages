@@ -53,7 +53,78 @@ function parseSiteDiscoveryMetadata(payload: unknown, url: string, expectedSiteI
     throw new IndexLoadError(`Invalid site discovery metadata: ${url}.`, url)
   }
 
-  return metadata as SiteDiscoveryMetadata
+  return { ...metadata, ...sanitizeOptionalDiscovery(metadata as Record<string, unknown>) } as SiteDiscoveryMetadata
+}
+
+const MAX_LISTED_TOP_LEVEL_FOLDERS = 16
+const RFC3339_UTC = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d+)?Z$/
+
+/**
+ * Keeps each optional discovery field only when it meets the invariants of specification section 5.2
+ * and agrees with `artifactCount`; anything else is dropped (set to undefined) without rejecting the
+ * metadata (TD2: an unusable optional field disables that feature).
+ */
+function sanitizeOptionalDiscovery(meta: Record<string, unknown>) {
+  const total = meta.artifactCount as number
+  let contentUpdatedAt: string | undefined
+  if (typeof meta.contentUpdatedAt === 'string' && total > 0 && isRealUtcTimestamp(meta.contentUpdatedAt)) {
+    contentUpdatedAt = meta.contentUpdatedAt
+  }
+  const rootArtifactCount = isCount(meta.rootArtifactCount) && meta.rootArtifactCount <= total ? meta.rootArtifactCount : undefined
+  let topLevelFolderCount = isCount(meta.topLevelFolderCount) ? meta.topLevelFolderCount : undefined
+  if (topLevelFolderCount !== undefined) {
+    const foldered = total - (rootArtifactCount ?? 0)
+    // Every folder holds at least one artifact; a count of 0 means nothing is in a folder.
+    if (topLevelFolderCount > foldered || (rootArtifactCount !== undefined && (topLevelFolderCount === 0) !== (foldered === 0))) {
+      topLevelFolderCount = undefined
+    }
+  }
+  let topLevelFolders: { name: string; artifactCount: number }[] | undefined
+  if (topLevelFolderCount !== undefined && isTopLevelFolders(meta.topLevelFolders) &&
+    topLevelFolderCount >= 1 && topLevelFolderCount <= MAX_LISTED_TOP_LEVEL_FOLDERS &&
+    meta.topLevelFolders.length === topLevelFolderCount && isStrictlyByteSorted(meta.topLevelFolders.map((folder) => folder.name))) {
+    const sum = meta.topLevelFolders.reduce((acc, folder) => acc + folder.artifactCount, 0)
+    if (meta.topLevelFolders.every((folder) => folder.artifactCount >= 1 && !folder.name.includes('/')) &&
+      (rootArtifactCount === undefined ? sum <= total : sum + rootArtifactCount === total)) {
+      topLevelFolders = meta.topLevelFolders
+    }
+  }
+  return { contentUpdatedAt, rootArtifactCount, topLevelFolderCount, topLevelFolders }
+}
+
+/** RFC 3339 UTC whose date and time fields exist (Date.parse would roll 02-30 over to 03-02). */
+function isRealUtcTimestamp(value: string) {
+  const match = RFC3339_UTC.exec(value)
+  if (!match) return false
+  const [year, month, day, hour, minute, second] = match.slice(1, 7).map(Number)
+  const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second))
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day &&
+    date.getUTCHours() === hour && date.getUTCMinutes() === minute && date.getUTCSeconds() === second
+}
+
+function isStrictlyByteSorted(names: string[]) {
+  const encoder = new TextEncoder()
+  const bytes = names.map((name) => encoder.encode(name))
+  return bytes.every((current, index) => {
+    if (index === 0) return true
+    const previous = bytes[index - 1]
+    for (let k = 0; k < Math.min(previous.length, current.length); k += 1) {
+      if (previous[k] !== current[k]) return previous[k] < current[k]
+    }
+    return previous.length < current.length
+  })
+}
+
+function isCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+}
+
+function isTopLevelFolders(value: unknown): value is { name: string; artifactCount: number }[] {
+  return Array.isArray(value) && value.every((item) => (
+    item !== null && typeof item === 'object' &&
+    typeof (item as { name?: unknown }).name === 'string' && (item as { name: string }).name !== '' &&
+    isCount((item as { artifactCount?: unknown }).artifactCount)
+  ))
 }
 
 /** How long a shared index read is reused. Keeps picker -> site navigation to one request, yet picks up a newer publish soon. */

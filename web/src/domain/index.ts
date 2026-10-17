@@ -12,6 +12,12 @@ export type SiteDiscoveryMetadata = {
   artifactIndexUrl: string
   /** Optional static full-text projection; fetched only by an explicit search. */
   fullTextUrl?: string
+  /** Latest content update across the site's artifacts; absent in metadata from older publishers. */
+  contentUpdatedAt?: string
+  /** Artifacts directly at the site root. */
+  rootArtifactCount?: number
+  topLevelFolderCount?: number
+  topLevelFolders?: { name: string; artifactCount: number }[]
 }
 
 export type SiteCatalogEntry =

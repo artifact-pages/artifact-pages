@@ -1,6 +1,5 @@
-// Page counts per top-level folder for the site picker (ISSUE-078).
-// Paths only: the first path segment names the folder. No language or translation
-// notion is inferred; a folder is just a folder.
+// Page counts per top-level folder for the site picker (ISSUE-078, ISSUE-095).
+// Read from discovery metadata; no language or translation notion is inferred, a folder is just a folder.
 
 import { compareNames } from './listing-order.ts'
 
@@ -16,24 +15,6 @@ export const ROOT_FOLDER_LABEL = '(root)'
 
 /** More than this many groups reads as noise on a card; show the folder count instead. */
 export const MAX_FOLDER_CHIPS = 4
-
-export function topLevelFolderCounts(artifacts: ReadonlyArray<{ path: string }>): FolderCount[] {
-  const counts = new Map<string, number>()
-  let rootCount = 0
-  for (const { path } of artifacts) {
-    const slash = path.indexOf('/')
-    if (slash <= 0) {
-      rootCount += 1
-      continue
-    }
-    const folder = path.slice(0, slash)
-    counts.set(folder, (counts.get(folder) ?? 0) + 1)
-  }
-  const result: FolderCount[] = [...counts].map(([folder, count]) => ({ folder, count }))
-    .sort((left, right) => compareNames(left.folder, right.folder))
-  if (rootCount > 0) result.push({ folder: ROOT_FOLDER_LABEL, count: rootCount, isRoot: true })
-  return result
-}
 
 export function folderChipLabel(entry: FolderCount) {
   return entry.isRoot ? ROOT_FOLDER_LABEL : entry.folder
@@ -57,6 +38,30 @@ export function summarizeFolders(folders: FolderCount[] | undefined): FolderSumm
   if (!folders || folders.length < 2) return { kind: 'none' }
   if (folders.length > MAX_FOLDER_CHIPS) return { kind: 'many', folderCount: folders.length }
   return { kind: 'folders', folders }
+}
+
+/**
+ * Summary for a site card from discovery metadata alone (no index read). With the folder list the
+ * usual rule applies; without it, only a large folder count is known and the card says so.
+ */
+export function folderSummaryFromMetadata(meta: {
+  rootArtifactCount?: number
+  topLevelFolderCount?: number
+  topLevelFolders?: { name: string; artifactCount: number }[]
+}): FolderSummary {
+  if (meta.topLevelFolders) {
+    const groups: FolderCount[] = meta.topLevelFolders
+      .map(({ name, artifactCount }) => ({ folder: name, count: artifactCount }))
+      .sort((left, right) => compareNames(left.folder, right.folder))
+    if ((meta.rootArtifactCount ?? 0) > 0) groups.push({ folder: ROOT_FOLDER_LABEL, count: meta.rootArtifactCount as number, isRoot: true })
+    if (groups.length < 2) return { kind: 'none' }
+    if (groups.length > MAX_FOLDER_CHIPS) return { kind: 'many', folderCount: meta.topLevelFolderCount ?? meta.topLevelFolders.length }
+    return { kind: 'folders', folders: groups }
+  }
+  if (meta.topLevelFolderCount !== undefined && meta.topLevelFolderCount > MAX_FOLDER_CHIPS) {
+    return { kind: 'many', folderCount: meta.topLevelFolderCount }
+  }
+  return { kind: 'none' }
 }
 
 /** Plain-text equivalent of the chips for assistive technology: "en: 7 pages, ja: 7 pages". */

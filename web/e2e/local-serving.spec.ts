@@ -533,70 +533,64 @@ test('registered discovery honors sites.json, hides unregistered storage, and lo
   await expect(page.getByRole('link', { name: /HTML Showcase/ })).toHaveCount(0)
   expect(metadataRequests.sort()).toEqual(['/_indexes/frontend/meta.json', '/_indexes/sre/meta.json'])
   expect(directoryRequests).toEqual([])
-  // The landing page lazily reads each published registered site's index once for per-folder counts, and nothing else.
-  await expect.poll(() => [...indexRequests].sort()).toEqual(['/_indexes/frontend/index.json', '/_indexes/sre/index.json'])
+  // The landing page reads discovery metadata only; no site index is requested.
+  await page.waitForTimeout(1000)
+  expect(indexRequests).toEqual([])
 
-  // Opening a site reuses the picker's read: no additional index request.
-  const requestsAfterLanding = indexRequests.length
+  // Opening a site reads exactly that site's index.
   await page.getByRole('link', { name: /SRE registered/ }).click()
   await expect(page).toHaveURL(/\/sre$/u)
   await expect(page.getByRole('heading', { name: 'SRE registered', exact: true })).toBeVisible()
-  expect(indexRequests.length).toBe(requestsAfterLanding)
+  await expect.poll(() => indexRequests).toEqual(['/_indexes/sre/index.json'])
   expect(indexRequests).not.toContain('/_indexes/orphaned/index.json')
 })
 
 test('site cards show the description, page counts per top-level folder and a Start reading link', async ({ page }) => {
-  const artifact = (id: string, path: string) => ({
-    id: path.replace(/\W+/gu, '-'),
-    title: path,
-    path,
-    format: 'html',
-    artifactUrl: `/_artifacts/${id}/${path}`,
-    updatedAt: '2026-10-01T00:00:00Z',
+  const indexRequests: string[] = []
+  page.on('request', (request) => {
+    const pathname = new URL(request.url()).pathname
+    if (/^\/_indexes\/[^/]+\/index\.json$/u.test(pathname)) indexRequests.push(pathname)
   })
-  const index = (id: string, paths: string[]) => ({
-    schemaVersion: 1,
-    site: { id, title: id },
-    generatedAt: '2026-10-09T00:00:00Z',
-    artifacts: paths.map((path) => artifact(id, path)),
-  })
-  const meta = (id: string, count: number) => ({
+  const meta = (id: string, count: number, extra: Record<string, unknown> = {}) => ({
     schemaVersion: 1,
     site: { id, title: id },
     generatedAt: '2026-10-09T00:00:00Z',
     artifactCount: count,
     artifactIndexUrl: `/_indexes/${id}/index.json`,
+    ...extra,
   })
+  const folders = (...pairs: [string, number][]) => pairs.map(([name, artifactCount]) => ({ name, artifactCount }))
   const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
   const sites = [
     { id: 'drafts', name: 'Drafts', description: 'Not yet published.' },
     { id: 'flat', name: 'Flat site', description: 'Pages without folders.' },
     { id: 'guide', name: 'Guide', description: 'Start here.' },
     { id: 'handbook', name: 'handbook', description: 'Has a root README.' },
+    { id: 'old', name: 'Old', description: 'Published by an older CLI.' },
     { id: 'wide', name: 'Wide', description: 'Many folders.' },
   ].map((site) => ({ ...site, repository: `acme/${site.id}`, sourcePath: `sites/${site.id}` }))
   await page.route('**/_indexes/sites.json', (route) => route.fulfill(json({ schemaVersion: 1, sites })))
   await page.route('**/_indexes/drafts/meta.json', (route) => route.fulfill({ status: 404, body: '{}' }))
-  await page.route('**/_indexes/flat/meta.json', (route) => route.fulfill(json(meta('flat', 2))))
-  await page.route('**/_indexes/flat/index.json', (route) => route.fulfill(json(index('flat', ['a.html', 'b.html']))))
-  await page.route('**/_indexes/guide/meta.json', (route) => route.fulfill(json(meta('guide', 5))))
-  await page.route('**/_indexes/guide/index.json', (route) => route.fulfill(json(index('guide', [
-    'en/a.html', 'en/b.html', 'en/deep/c.html', 'ja/a.html', 'ja/b.html',
-  ]))))
-  await page.route('**/_indexes/handbook/meta.json', (route) => route.fulfill(json(meta('handbook', 3))))
-  await page.route('**/_indexes/handbook/index.json', (route) => route.fulfill(json(index('handbook', [
-    'en/README.md', 'README.md', 'ja/a.html',
-  ]))))
-  await page.route('**/_indexes/wide/meta.json', (route) => route.fulfill(json(meta('wide', 5))))
-  await page.route('**/_indexes/wide/index.json', (route) => route.fulfill(json(index('wide', [
-    'a/1.html', 'b/1.html', 'c/1.html', 'd/1.html', 'e/1.html',
-  ]))))
+  await page.route('**/_indexes/flat/meta.json', (route) => route.fulfill(json(meta('flat', 2, {
+    contentUpdatedAt: '2026-10-03T12:00:00Z', rootArtifactCount: 2, topLevelFolderCount: 0, topLevelFolders: [],
+  }))))
+  await page.route('**/_indexes/guide/meta.json', (route) => route.fulfill(json(meta('guide', 5, {
+    contentUpdatedAt: '2026-10-05T12:00:00Z', rootArtifactCount: 0, topLevelFolderCount: 2, topLevelFolders: folders(['en', 3], ['ja', 2]),
+  }))))
+  await page.route('**/_indexes/handbook/meta.json', (route) => route.fulfill(json(meta('handbook', 3, {
+    contentUpdatedAt: '2026-10-04T12:00:00Z', rootArtifactCount: 1, topLevelFolderCount: 2, topLevelFolders: folders(['en', 1], ['ja', 1]),
+  }))))
+  await page.route('**/_indexes/old/meta.json', (route) => route.fulfill(json(meta('old', 4))))
+  await page.route('**/_indexes/wide/meta.json', (route) => route.fulfill(json(meta('wide', 5, {
+    contentUpdatedAt: '2026-10-06T12:00:00Z', rootArtifactCount: 0, topLevelFolderCount: 5,
+    topLevelFolders: folders(['a', 1], ['b', 1], ['c', 1], ['d', 1], ['e', 1]),
+  }))))
 
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Choose a site' })).toBeVisible()
 
   // Deterministic order: by site title (case-insensitive), not by registry order.
-  await expect(page.locator('.site-picker-main strong')).toHaveText(['Drafts', 'Flat site', 'Guide', 'handbook', 'Wide'])
+  await expect(page.locator('.site-picker-main strong')).toHaveText(['Drafts', 'Flat site', 'Guide', 'handbook', 'Old', 'Wide'])
 
   // Start reading always opens the site root, which shows the root README when there is one.
   const handbook = page.getByRole('link', { name: /handbook/ })
@@ -610,23 +604,34 @@ test('site cards show the description, page counts per top-level folder and a St
   await expect(guide.locator('.site-picker-sr-only')).toHaveText('en: 3 pages, ja: 2 pages')
   await expect(guide.locator('.site-picker-folders')).toHaveAttribute('aria-hidden', 'true')
   await expect(guide.locator('.site-picker-start')).toHaveText('Start reading')
-  await expect(guide).toContainText('5 artifacts')
+  await expect(guide).toContainText('5 artifacts · updated Oct 5')
   await expect(guide.locator('.site-picker-meta')).toContainText('/guide')
-  await expect(guide.locator('.site-picker-meta')).toContainText('updated')
+
+  await expect(handbook.locator('.site-picker-folder')).toHaveText(['en 1', 'ja 1', '(root) 1'])
 
   const flat = page.getByRole('link', { name: /Flat site/ })
-  await expect(flat).toContainText('2 artifacts')
+  await expect(flat).toContainText('2 artifacts · updated Oct 3')
   await expect(flat.locator('.site-picker-folder')).toHaveCount(0)
   await expect(flat.locator('.site-picker-start')).toBeVisible()
 
+  // Metadata from an older publisher has no freshness or folder fields: count only, no "updated".
+  const old = page.getByRole('link', { name: /Old/ })
+  await expect(old).toContainText('4 artifacts')
+  await expect(old.locator('.site-picker-meta')).not.toContainText('updated')
+  await expect(old.locator('.site-picker-folder')).toHaveCount(0)
+
   const wide = page.getByRole('link', { name: /Wide/ })
-  await expect(wide).toContainText('5 artifacts')
+  await expect(wide).toContainText('5 artifacts · updated Oct 6')
   await expect(wide.locator('.site-picker-folder')).toHaveText('5 top-level folders')
 
   const drafts = page.getByRole('link', { name: /Drafts/ })
   await expect(drafts).toContainText('Registered · not published yet')
   await expect(drafts.locator('.site-picker-start')).toHaveCount(0)
   await expect(drafts.locator('.site-picker-folder')).toHaveCount(0)
+
+  // The list is drawn from discovery metadata alone.
+  await page.waitForTimeout(1000)
+  expect(indexRequests).toEqual([])
 
   await page.setViewportSize({ width: 390, height: 844 })
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
@@ -639,16 +644,18 @@ test('site cards show the description, page counts per top-level folder and a St
   await expect(page).toHaveURL(/\/guide$/u)
 })
 
-test('the landing page reads at most 8 site indexes, 3 at a time', async ({ page }) => {
+test('the landing page requests no site index for a long site list', async ({ page }) => {
   const ids = Array.from({ length: 10 }, (_, i) => `site-${String(i).padStart(2, '0')}`)
   const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
   await page.route('**/_indexes/sites.json', (route) => route.fulfill(json({
     schemaVersion: 1,
     sites: ids.map((id) => ({ id, name: id, repository: `acme/${id}`, sourcePath: `sites/${id}` })),
   })))
-  let inFlight = 0
-  let peak = 0
-  const requested: string[] = []
+  const indexRequests: string[] = []
+  page.on('request', (request) => {
+    const pathname = new URL(request.url()).pathname
+    if (/^\/_indexes\/[^/]+\/index\.json$/u.test(pathname)) indexRequests.push(pathname)
+  })
   for (const id of ids) {
     await page.route(`**/_indexes/${id}/meta.json`, (route) => route.fulfill(json({
       schemaVersion: 1,
@@ -656,32 +663,18 @@ test('the landing page reads at most 8 site indexes, 3 at a time', async ({ page
       generatedAt: '2026-10-09T00:00:00Z',
       artifactCount: 2,
       artifactIndexUrl: `/_indexes/${id}/index.json`,
+      contentUpdatedAt: '2026-10-01T00:00:00Z',
+      rootArtifactCount: 0,
+      topLevelFolderCount: 2,
+      topLevelFolders: [{ name: 'en', artifactCount: 1 }, { name: 'ja', artifactCount: 1 }],
     })))
-    await page.route(`**/_indexes/${id}/index.json`, async (route) => {
-      requested.push(id)
-      inFlight += 1
-      peak = Math.max(peak, inFlight)
-      await new Promise((resolve) => setTimeout(resolve, 120))
-      inFlight -= 1
-      await route.fulfill(json({
-        schemaVersion: 1,
-        site: { id, title: id },
-        generatedAt: '2026-10-09T00:00:00Z',
-        artifacts: ['en/a.html', 'ja/a.html'].map((path) => ({
-          id: path, title: path, path, format: 'html', artifactUrl: `/_artifacts/${id}/${path}`, updatedAt: '2026-10-01T00:00:00Z',
-        })),
-      }))
-    })
   }
 
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Choose a site' })).toBeVisible()
-  await expect(page.getByRole('link', { name: /site-07/ }).locator('.site-picker-folder')).toHaveText(['en 1', 'ja 1'])
-  await page.waitForTimeout(500)
-  expect(requested.sort()).toEqual(ids.slice(0, 8))
-  expect(peak).toBeLessThanOrEqual(3)
-  await expect(page.getByRole('link', { name: /site-09/ }).locator('.site-picker-folder')).toHaveCount(0)
-  await expect(page.getByRole('link', { name: /site-09/ })).toContainText('2 artifacts')
+  await expect(page.getByRole('link', { name: /site-09/ }).locator('.site-picker-folder')).toHaveText(['en 1', 'ja 1'])
+  await page.waitForTimeout(1000)
+  expect(indexRequests).toEqual([])
 })
 
 test('a real folder named root is not confused with pages at the site root', async ({ page }) => {
@@ -693,25 +686,12 @@ test('a real folder named root is not confused with pages at the site root', asy
   await page.route('**/_indexes/mixed/meta.json', (route) => route.fulfill(json({
     schemaVersion: 1, site: { id: 'mixed', title: 'Mixed' }, generatedAt: '2026-10-09T00:00:00Z', artifactCount: 3,
     artifactIndexUrl: '/_indexes/mixed/index.json',
-  })))
-  await page.route('**/_indexes/mixed/index.json', (route) => route.fulfill(json({
-    schemaVersion: 1, site: { id: 'mixed', title: 'Mixed' }, generatedAt: '2026-10-09T00:00:00Z',
-    artifacts: ['root/a.html', 'root/b.html', 'index.html'].map((path) => ({
-      id: path, title: path, path, format: 'html', artifactUrl: `/_artifacts/mixed/${path}`, updatedAt: '2026-10-01T00:00:00Z',
-    })),
+    contentUpdatedAt: '2026-10-01T00:00:00Z', rootArtifactCount: 1, topLevelFolderCount: 1,
+    topLevelFolders: [{ name: 'root', artifactCount: 2 }],
   })))
   await page.goto('/')
   const chips = page.getByRole('link', { name: /Mixed/ }).locator('.site-picker-folder')
   await expect(chips).toHaveText(['root 2', '(root) 1'])
-})
-
-test('site cards keep the metadata total when a site index cannot be read', async ({ page }) => {
-  await page.route('**/_indexes/sre/index.json', (route) => route.fulfill({ status: 503, body: 'unavailable' }))
-  await page.goto('/')
-  const sre = page.getByRole('link', { name: /SRE/ })
-  await expect(sre).toContainText('6 artifacts')
-  await expect(sre.locator('.site-picker-folder')).toHaveCount(0)
-  await expect(sre.locator('.site-picker-start')).toBeVisible()
 })
 
 test('an empty registered site stays on its home route and does not affect a neighboring site', async ({ page }) => {
@@ -855,8 +835,9 @@ test('a registered site remains discoverable before and after its first publish'
   await expect(frontendBeforePublish).toContainText('Registered · not published yet')
   await expect(frontendBeforePublish).not.toContainText(/\d+ artifacts/u)
   await expect(page.getByRole('link', { name: /SRE registered/ })).toContainText('6 artifacts')
-  // Only the published site's index is read for the card counts; the unpublished site is not requested.
-  await expect.poll(() => [...indexRequests]).toEqual(['/_indexes/sre/index.json'])
+  // The landing page reads no index at all; the unpublished site is not requested either.
+  await page.waitForTimeout(500)
+  expect(indexRequests).toEqual([])
 
   const requestsAfterLanding = indexRequests.length
   await frontendBeforePublish.click()
@@ -875,7 +856,7 @@ test('a registered site remains discoverable before and after its first publish'
   await search.press('Enter')
   await expect(page).toHaveURL(/\/sre$/u)
   await expect(page.getByRole('heading', { name: 'SRE registered', exact: true })).toBeVisible()
-  // A fresh page load reads the published site once for the card and the site view reuses it.
+  // A fresh page load reads only the opened site's index.
   expect(indexRequests.slice(requestsBeforeReload)).toEqual(['/_indexes/sre/index.json'])
 
   frontendPublished = true
@@ -887,7 +868,7 @@ test('a registered site remains discoverable before and after its first publish'
   await frontendAfterPublish.click()
   await expect(page).toHaveURL(/\/frontend$/u)
   await expect(page.getByRole('heading', { name: 'Frontend registered', exact: true })).toBeVisible()
-  expect(indexRequests.slice(requestsBeforePublishedLanding).sort()).toEqual(['/_indexes/frontend/index.json', '/_indexes/sre/index.json'])
+  expect(indexRequests.slice(requestsBeforePublishedLanding)).toEqual(['/_indexes/frontend/index.json'])
 })
 
 for (const failure of ['invalid metadata', 'network failure'] as const) {

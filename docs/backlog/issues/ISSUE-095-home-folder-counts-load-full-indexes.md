@@ -1,9 +1,10 @@
 # Home folder counts load the full index of up to eight sites
 
-- Status: Open
+- Status: Done
 - Priority: P3
 - Area: Home page
 - Implementer: Claude
+- Assignee: Claude
 - Depends on: [ISSUE-094](ISSUE-094-site-index-cache-never-evicts.md) (retention of what this loads)
 - Source: public-launch review 2026-10-13, finding R5
 
@@ -26,6 +27,18 @@ Options to compare: load counts when the card becomes visible; add a small summa
 
 ## Acceptance criteria
 
-- [ ] Site cards show folder counts (or the chosen replacement) without fetching the full index of unvisited sites.
-- [ ] The README and roadmap statements about which indexes are read are accurate.
-- [ ] The chosen option is recorded with its measured transfer for a site list of eight large sites.
+- [x] Site cards show folder counts (or the chosen replacement) without fetching the full index of unvisited sites.
+- [x] The README and roadmap statements about which indexes are read are accurate.
+- [x] The chosen option is recorded with its measured transfer for a site list of eight large sites.
+
+## Resolution
+
+The chosen option is the summary projection: the CLI writes `rootArtifactCount`, `topLevelFolderCount` and `topLevelFolders` into `meta.json` (PR #157, shared with ISSUE-105). The site picker derives the card summary from that metadata (`folderSummaryFromMetadata`) and no longer requests any `index.json`; `use-site-folder-counts.ts` and its 8-site, 3-at-a-time loader are removed. Metadata from older publishers has none of the fields, so the card shows the count only. A site with more than four top-level folders shows the folder count; when `topLevelFolders` is absent but `topLevelFolderCount` is above four, the card still says so.
+
+The README (line 28) and `docs/roadmap.md` (line 33) say that only the active site's artifact index is loaded. That is true again after this change, so no wording was changed. `docs/specification.md` lines 466, 478 and 1104 were checked and are also accurate.
+
+## Verification
+
+- `npm run build` passes; `npm run test:web-unit` passes (37 tests), including `site-folder-counts.test.mjs` (folders plus root, single group, five folders, 17 folders without a list, old metadata) and `indexes.test.mjs` (valid optional fields kept, each malformed variant dropped while the metadata is accepted).
+- e2e (`local-serving.spec.ts`, compose project `claude-issue-095-105-web`): on `/` no request matches `/_indexes/<site>/index.json` after the list renders plus 1 s idle, for the card test and for a 10-site list; opening a site requests only that site's index.
+- Measured transfer. Fixture `meta.json` files: frontend 402 bytes, sre 704 bytes, showcase 912 bytes. A realistic `meta.json` with 16 top-level folders, pretty-printed as the CLI writes it, is 1,459 bytes. The 50,000-page site's `index.json` transfers 45.51 MB in `docs/research/web-scale-benchmark.md` (cold: index requests transferred). For eight large sites the site list now transfers eight `meta.json` files (about 1.5 kB each, about 12 kB in total) and zero indexes; before, it transferred up to eight indexes, which is 364 MB for eight sites of that size.

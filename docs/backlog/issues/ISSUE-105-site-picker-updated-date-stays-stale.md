@@ -1,9 +1,10 @@
 # Site cards present unchanged metadata-generation time as content freshness
 
-- Status: Open
+- Status: Done
 - Priority: P2
 - Area: Site discovery / publisher metadata and reader labels
 - Implementer: Codex + Claude
+- Assignee: Claude
 - Source: hands-on project review 2026-10-15, N5; production CLI 0.4.2 / web 0.3.2 and monorepo `86841bb1`
 - Related: [ISSUE-084](ISSUE-084-previews-entry-and-timestamp-polish.md), [ISSUE-095](ISSUE-095-home-folder-counts-load-full-indexes.md)
 
@@ -29,8 +30,17 @@ Site-card freshness labels truthfully describe the data they represent. A metada
 
 ## Acceptance criteria
 
-- [ ] The same-page-count body-change sequence no longer leaves a misleading content-update label on the card.
-- [ ] A no-op publish does not manufacture a new content update.
-- [ ] Metadata-generation, content-update and index-generation concepts are not silently conflated in the chosen display.
-- [ ] The solution does not add full-index fetching for unvisited sites solely to obtain the displayed date.
-- [ ] A regression covers a body-only change as well as unchanged publication; preserve existing projection no-op behavior where appropriate.
+- [x] The same-page-count body-change sequence no longer leaves a misleading content-update label on the card.
+- [x] A no-op publish does not manufacture a new content update.
+- [x] Metadata-generation, content-update and index-generation concepts are not silently conflated in the chosen display.
+- [x] The solution does not add full-index fetching for unvisited sites solely to obtain the displayed date.
+- [x] A regression covers a body-only change as well as unchanged publication; preserve existing projection no-op behavior where appropriate.
+
+## Resolution
+
+Content freshness is projected: `meta.json` carries `contentUpdatedAt` (CLI part: PR #157, which also covers the body-only change and no-op publish regressions). The site card shows `<count> · updated <date of contentUpdatedAt>` and, when the field is absent or not a date (older metadata), only the count. `generatedAt` is no longer shown on the card, so metadata generation time is never presented as a content update, and no index is fetched for the date.
+
+## Verification
+
+- `npm run build`, `npm run test:web-unit` pass; `indexes.test.mjs` covers parsing of `contentUpdatedAt` and dropping a malformed value.
+- e2e (`local-serving.spec.ts`): a site with `contentUpdatedAt` shows `updated Oct 5` (from `2026-10-05T12:00:00Z`) although its `generatedAt` is `2026-10-09`; a site with old metadata shows the count and no "updated".
