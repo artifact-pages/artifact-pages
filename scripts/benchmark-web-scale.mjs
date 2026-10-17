@@ -52,7 +52,11 @@ assert(new Set(options.counts).size === options.counts.length, 'counts must be u
 options.counts.sort((a, b) => a - b)
 
 const siteIdOf = (count) => (options.remote ? `bench-${count / 1000}k` : `scale-${count}`)
-const dataRoot = path.join(labRoot, options['run-dir'] || `data-${options.seed}`)
+const dataRoot = path.resolve(labRoot, options['run-dir'] || `data-${options.seed}`)
+// prepareData() deletes dataRoot; refuse anything that is not a strict child of the lab directory.
+if (!options.remote && (path.dirname(dataRoot) !== labRoot || dataRoot === labRoot)) {
+  throw new Error(`--run-dir must name a directory directly inside ${path.relative(repository, labRoot)}; got ${options['run-dir']}`)
+}
 const binary = path.join(labRoot, 'bin', 'artifact-pages')
 const log = (...parts) => console.log(new Date().toISOString().slice(11, 19), ...parts)
 
@@ -334,7 +338,7 @@ const PROFILES = {
 // the harness time an action until a condition holds.
 const INIT_SCRIPT = `(() => {
   const watched = { picker: '.site-picker-row', directory: '[data-testid="directory-page"]', workspace: '.sidebar-panel',
-    results: '.search-page-result:not(.search-page-skeleton), .search-page-empty, .search-page-message' }
+    results: '.search-page-result:not(.search-page-skeleton), .search-page-empty' }
   window.__t = {}
   const seen = new Set()
   const check = () => {
@@ -488,7 +492,7 @@ async function measureFirstLoad(browser, profile, siteId) {
     await page.goto(`${origin()}/`, { waitUntil: 'commit' })
     await page.waitForFunction(() => window.__t && window.__t.picker !== undefined, null, { timeout: SLOW_TIMEOUT })
     const t = await page.evaluate(() => ({ picker: window.__t.picker }))
-    const bytesAtPicker = sum(session.since(from).filter((r) => r.done), 'encoded')
+    const bytesCompletedAtPicker = sum(session.since(from).filter((r) => r.done), 'encoded')
     await session.settle()
     t.fcp = await page.evaluate(() => window.__fcp())
     const all = session.since(from)
@@ -497,7 +501,7 @@ async function measureFirstLoad(browser, profile, siteId) {
     return {
       fcpMs: t.fcp,
       siteListVisibleMs: t.picker,
-      transferredBytesAtListVisible: bytesAtPicker,
+      completedBytesAtListVisible: bytesCompletedAtPicker,
       transferredBytesTotal: sum(all, 'encoded'),
       rawBytesTotal: sum(all, 'raw'),
       requests: all.length,
@@ -626,7 +630,10 @@ async function measureSearch(browser, profile, siteId, query) {
   async function visit() {
     const from = session.mark()
     await page.goto(`${origin()}/${siteId}/_search?q=${encodeURIComponent(query)}`, { waitUntil: 'commit' })
-    await page.waitForFunction(() => window.__t && window.__t.results !== undefined, null, { timeout: SLOW_TIMEOUT })
+    await page.waitForFunction(() => (window.__t && window.__t.results !== undefined) || document.querySelector('.search-page-message'), null, { timeout: SLOW_TIMEOUT })
+    // An error message is not a result: the iteration is invalid and the run stops instead of recording it.
+    const errorText = await page.evaluate(() => document.querySelector('.search-page-message')?.textContent ?? null)
+    if (errorText !== null) throw new Error(`search page showed a message instead of results for "${query}" on ${siteId}: ${errorText}`)
     const t = await page.evaluate(() => ({ results: window.__t.results, workspace: window.__t.workspace }))
     const isSearch = (r) => pathOf(r.url).startsWith(`/_indexes/${siteId}/search/`)
     const atFirst = session.since(from).filter(isSearch).length
@@ -642,6 +649,7 @@ async function measureSearch(browser, profile, siteId, query) {
       rows: window.__count('.search-page-result:not(.search-page-skeleton)'),
       empty: !!document.querySelector('.search-page-empty'),
       error: document.querySelector('.search-page-message')?.textContent ?? null,
+      errorShown: !!document.querySelector('.search-page-message'),
       count: document.querySelector('.search-page-count-text')?.textContent ?? '',
       more: document.querySelector('.search-page-more')?.textContent ?? null,
       dom: window.__dom(),

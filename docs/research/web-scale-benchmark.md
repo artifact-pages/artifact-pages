@@ -50,7 +50,7 @@ Published size, from the CLI:
 | 10,000 | 8.92 MB | 529.5 kB | 567 files, 4.07 MB | 123.8 s | 185.9 s |
 | 50,000 | 45.51 MB | 2.62 MB | 1,477 files, 13.85 MB | 608.6 s | 883.6 s |
 
-The Cloudflare `index.json` files are 8.88 MB and 45.31 MB raw. Generating the 50,000-page site took 3.7 s and its local publish about 10 minutes, below the 30-minute threshold, so 50,000 was used rather than 20,000.
+The Cloudflare `index.json` files are 8.88 MB and 45.31 MB raw. Generating the 50,000-page site took 3.7 s and its local publish 608.6 s (Cloudflare: 883.6 s). The 50,000-page size was kept because the run fit the session's time.
 
 ## How to reproduce
 
@@ -84,6 +84,10 @@ With `--remote`, site IDs are `bench-<count/1000>k` and nothing is generated or 
 
 Column headers: "Local N" is the unreleased build on local nginx at N pages; "Cloudflare N" is production web 0.3.2 on Cloudflare R2 + Cache. Cold and warm are defined above. "Hits" are pages containing the term. Search times run from navigation to `/<site>/_search?q=...` until the first results (or the empty state) are painted, so they include opening the site workspace. Search tables use the production full-text results page. Terms: common English `latency`, Japanese `再試行`, rare `quokkaflux` (7 pages per site), no-hit `zzqxnohit`.
 
+"Bytes of completed responses when the list became visible" sums only responses that had finished by then; transfers still in flight at that moment are not counted.
+
+Search method: the harness waits for a result row or the no-match state. A search error message is not accepted as a result and would invalidate the run. All 288 recorded search visits (4 terms x cold and warm x 3 iterations x 12 combinations of size, profile and phase) were checked after the fact: none showed an error message, and each showed result rows or the no-match state with a hit count, so no search measurement was re-run.
+
 Memory is the JS heap reported by Chromium (`Runtime.getHeapUsage`). "After GC" is after two forced collections; "peak" is the highest value sampled every 100 ms during the session.
 
 ### Unthrottled profile
@@ -95,7 +99,7 @@ Memory is the JS heap reported by Chromium (`Runtime.getHeapUsage`). "After GC" 
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | cold: first contentful paint | 72 ms (max 108 ms) | 88 ms (max 108 ms) | 92 ms (max 100 ms) | 80 ms (max 108 ms) | 332 ms (max 1,144 ms) | 468 ms (max 492 ms) |
 | cold: site list visible | 69 ms (max 94 ms) | 80 ms (max 100 ms) | 83 ms (max 94 ms) | 72 ms (max 98 ms) | 322 ms (max 1,126 ms) | 457 ms (max 473 ms) |
-| cold: transferred when list visible | 1.60 MB | 5.20 MB | 815.8 kB (max 9.74 MB) | 815.8 kB | 285.4 kB (max 292.3 kB) | 286.1 kB (max 292.8 kB) |
+| cold: bytes of completed responses when the list became visible | 1.60 MB | 5.20 MB | 815.8 kB (max 9.74 MB) | 815.8 kB | 285.4 kB (max 292.3 kB) | 286.1 kB (max 292.8 kB) |
 | cold: transferred, total after settling | 1.60 MB | 5.20 MB | 9.74 MB | 46.32 MB | 3.10 MB (max 3.15 MB) | 3.08 MB (max 3.10 MB) |
 | cold: entry JS transferred | 748.9 kB | 748.9 kB | 748.9 kB | 748.9 kB | 234.0 kB (max 234.6 kB) | 234.6 kB (max 234.7 kB) |
 | cold: entry JS raw | 748.6 kB | 748.6 kB | 748.6 kB | 748.6 kB | 748.6 kB | 748.6 kB |
@@ -103,7 +107,7 @@ Memory is the JS heap reported by Chromium (`Runtime.getHeapUsage`). "After GC" 
 | cold: index requests transferred | 782.2 kB | 4.39 MB | 8.92 MB | 45.51 MB | 2.85 MB (max 2.90 MB) | 2.83 MB (max 2.85 MB) |
 | warm: first contentful paint | 76 ms (max 84 ms) | 80 ms (max 84 ms) | 72 ms (max 80 ms) | 68 ms (max 80 ms) | 192 ms (max 256 ms) | 240 ms (max 248 ms) |
 | warm: site list visible | 75 ms (max 84 ms) | 83 ms (max 87 ms) | 71 ms (max 78 ms) | 65 ms (max 76 ms) | 232 ms (max 264 ms) | 258 ms (max 318 ms) |
-| warm: transferred when list visible | 782.6 kB | 4.39 MB | 1.7 kB | 1.7 kB | 35.6 kB (max 43.0 kB) | 42.7 kB (max 43.0 kB) |
+| warm: bytes of completed responses when the list became visible | 782.6 kB | 4.39 MB | 1.7 kB | 1.7 kB | 35.6 kB (max 43.0 kB) | 42.7 kB (max 43.0 kB) |
 | warm: transferred, total after settling | 782.6 kB | 4.39 MB | 8.92 MB | 45.51 MB | 43.0 kB (max 43.0 kB) | 43.0 kB (max 43.1 kB) |
 | warm: entry JS transferred | 0 B | 0 B | 0 B | 0 B | 0 B | 0 B |
 | warm: entry JS raw | 748.6 kB | 748.6 kB | 748.6 kB | 748.6 kB | 748.6 kB | 748.6 kB |
@@ -248,7 +252,7 @@ First load of `/` in the same setup: cold 486 ms list visible, 3.09 MB transferr
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | cold: first contentful paint | 4,804 ms (max 4,824 ms) | 4,828 ms (max 4,832 ms) | 4,812 ms (max 4,820 ms) | 4,812 ms | 2,032 ms (max 2,200 ms) | 2,040 ms (max 2,148 ms) |
 | cold: site list visible | 4,848 ms (max 4,859 ms) | 4,881 ms (max 4,885 ms) | 4,856 ms (max 4,858 ms) | 4,854 ms (max 4,857 ms) | 2,241 ms (max 2,417 ms) | 2,258 ms (max 2,365 ms) |
-| cold: transferred when list visible | 815.8 kB | 815.8 kB | 815.8 kB | 815.8 kB | 285.1 kB (max 286.0 kB) | 285.8 kB (max 292.7 kB) |
+| cold: bytes of completed responses when the list became visible | 815.8 kB | 815.8 kB | 815.8 kB | 815.8 kB | 285.1 kB (max 286.0 kB) | 285.8 kB (max 292.7 kB) |
 | cold: transferred, total after settling | 1.60 MB | 5.20 MB | 9.74 MB | 46.32 MB | 3.07 MB (max 3.07 MB) | 3.07 MB (max 3.07 MB) |
 | cold: entry JS transferred | 748.9 kB | 748.9 kB | 748.9 kB | 748.9 kB | 233.7 kB (max 234.6 kB) | 234.4 kB (max 234.6 kB) |
 | cold: entry JS raw | 748.6 kB | 748.6 kB | 748.6 kB | 748.6 kB | 748.6 kB | 748.6 kB |
@@ -256,7 +260,7 @@ First load of `/` in the same setup: cold 486 ms list visible, 3.09 MB transferr
 | cold: index requests transferred | 782.2 kB | 4.39 MB | 8.92 MB | 45.51 MB | 2.82 MB (max 2.82 MB) | 2.82 MB (max 2.82 MB) |
 | warm: first contentful paint | 600 ms (max 604 ms) | 636 ms (max 648 ms) | 620 ms (max 640 ms) | 628 ms (max 632 ms) | 632 ms | 612 ms |
 | warm: site list visible | 648 ms (max 649 ms) | 683 ms (max 712 ms) | 669 ms (max 677 ms) | 672 ms (max 694 ms) | 844 ms (max 862 ms) | 825 ms (max 833 ms) |
-| warm: transferred when list visible | 1.7 kB | 1.7 kB | 1.7 kB | 1.7 kB | 28.8 kB (max 28.8 kB) | 28.8 kB (max 28.8 kB) |
+| warm: bytes of completed responses when the list became visible | 1.7 kB | 1.7 kB | 1.7 kB | 1.7 kB | 28.8 kB (max 28.8 kB) | 28.8 kB (max 28.8 kB) |
 | warm: transferred, total after settling | 782.6 kB | 4.39 MB | 8.92 MB | 45.51 MB | 43.0 kB (max 43.1 kB) | 43.0 kB (max 43.0 kB) |
 | warm: entry JS transferred | 0 B | 0 B | 0 B | 0 B | 0 B | 0 B |
 | warm: entry JS raw | 748.6 kB | 748.6 kB | 748.6 kB | 748.6 kB | 748.6 kB | 748.6 kB |
