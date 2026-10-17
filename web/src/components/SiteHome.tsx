@@ -1,135 +1,184 @@
-import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode, type Ref } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from 'react'
 import type { ArtifactIndexEntry, SiteIndex } from '../domain/index'
 import { RECENT_SECTION_MINIMUM_ARTIFACT_COUNT } from '../domain/navigation-sections'
-import { loadPreviewCandidates, PREVIEW_EXPLANATION, PreviewLoadError } from '../data/previews'
-import { UnsupportedSchemaError } from '../data/schema'
+import { loadPreviewCandidates, PreviewLoadError } from '../data/previews'
 import { pageCountLabel } from '../domain/directory'
-import { artifactRouteHref } from '../routing'
+import { artifactRouteHref, siteFilesHref, siteHomeHref, sitePreviewsHref } from '../routing'
 import { Icon } from './Icon'
 import { followInApp } from './spa-link'
+import { useRestoredScroll } from './useRestoredScroll'
+
+export type SiteSection = 'overview' | 'files' | 'previews'
 
 type PreviewAvailabilityState =
   | { status: 'loading' }
   | { status: 'success'; count: number }
-  | { status: 'error' }
-  | { status: 'needs-republish' }
+  | { status: 'unknown' }
 
-/** The empty site: the header and a note, because there is no root listing to show. */
-export function SiteHome({
-  index,
-  onOpenPreviews,
-  onOpenPalette,
-}: {
-  index: SiteIndex
-  onOpenPreviews?: () => void
-  onOpenPalette?: () => void
-}) {
+/**
+ * How many previews the site lists, once the catalog has loaded. Until then, and when the catalog cannot be
+ * read, there is no number (never a made-up one). The Previews section reports its own failures.
+ */
+export function usePreviewCount(siteId: string, enabled: boolean): { count: number | undefined; report: (count: number) => void } {
+  const [state, setState] = useState<{ siteId: string; availability: PreviewAvailabilityState }>({
+    siteId,
+    availability: { status: 'loading' },
+  })
+  const settled = state.siteId === siteId && state.availability.status !== 'loading'
+  useEffect(() => {
+    if (!enabled || settled) return
+    let cancelled = false
+    loadPreviewCandidates(siteId).then(
+      (candidates) => {
+        const count = candidates.filter(({ availability }) => availability === 'available' || availability === 'unknown').length
+        if (!cancelled) setState({ siteId, availability: { status: 'success', count } })
+      },
+      (error: unknown) => {
+        if (cancelled) return
+        // No catalog at all is a site without previews; any other failure leaves the count unknown.
+        if (error instanceof PreviewLoadError && error.status === 404) setState({ siteId, availability: { status: 'success', count: 0 } })
+        else setState({ siteId, availability: { status: 'unknown' } })
+      },
+    )
+    return () => { cancelled = true }
+  }, [siteId, enabled, settled])
+  const report = useCallback(
+    (count: number) => setState({ siteId, availability: { status: 'success', count } }),
+    [siteId],
+  )
+  return { count: state.siteId === siteId && state.availability.status === 'success' ? state.availability.count : undefined, report }
+}
+
+/** The frame of a site-home section: the scrolling page with the site header, the section row and the section. */
+export function SiteHomeFrame({ header, children }: { header: ReactNode; children: ReactNode }) {
+  const scroller = useRef<HTMLDivElement>(null)
+  useRestoredScroll(scroller)
   return (
-    <div className="site-home">
-      <SiteHomeHeader index={index} pageCount={index.artifacts.length} onOpenPreviews={onOpenPreviews} onOpenPalette={onOpenPalette} />
-      <p className="empty-note site-home-empty">No artifacts have been published to this site yet.</p>
+    <div className="directory-scroll" ref={scroller} data-testid="site-home-page">
+      <div className="directory-page">
+        {header}
+        {children}
+      </div>
     </div>
   )
 }
 
-/** The site root's header: identity, title, description, page count and update, previews link and page jump. */
+/** The empty site: the header, the section row and a note, because there is no root listing to show. */
+export function SiteHome({
+  index,
+  previewCount,
+  onNavigate,
+  onOpenPalette,
+}: {
+  index: SiteIndex
+  previewCount?: number
+  onNavigate?: (href: string) => void
+  onOpenPalette?: () => void
+}) {
+  return (
+    <SiteHomeFrame header={(
+      <SiteHomeHeader
+        index={index}
+        pageCount={index.artifacts.length}
+        current="files"
+        hasOverview={false}
+        previewCount={previewCount}
+        onNavigate={onNavigate}
+        onOpenPalette={onOpenPalette}
+      />
+    )}>
+      <p className="empty-note site-home-empty">No artifacts have been published to this site yet.</p>
+    </SiteHomeFrame>
+  )
+}
+
+/** The site root's compact header (title, description, page count, content update date) and its section row. */
 export function SiteHomeHeader({
   index,
   pageCount,
   latestUpdatedAt,
-  onOpenPreviews,
+  current,
+  hasOverview,
+  previewCount,
+  onNavigate,
   onOpenPalette,
 }: {
   index: SiteIndex
   pageCount: number
+  /** The newest document update in the index (content freshness, not when the metadata was generated). */
   latestUpdatedAt?: string
-  onOpenPreviews?: () => void
+  current: SiteSection
+  hasOverview: boolean
+  previewCount?: number
+  onNavigate?: (href: string) => void
   onOpenPalette?: () => void
 }) {
-  const [previewAvailability, setPreviewAvailability] = useState<PreviewAvailabilityState>({ status: 'loading' })
-  const hasPreviewEntry = Boolean(onOpenPreviews)
-  const previewsHref = `/${encodeURIComponent(index.site.id)}/_previews`
-  const noPreviews = previewAvailability.status === 'success' && previewAvailability.count === 0
   const description = index.site.description?.trim()
-  useEffect(() => {
-    if (!hasPreviewEntry) return
-
-    let cancelled = false
-    setPreviewAvailability({ status: 'loading' })
-    loadPreviewCandidates(index.site.id).then(
-      (candidates) => {
-        const count = candidates.filter(({ availability }) => availability === 'available' || availability === 'unknown').length
-        if (!cancelled) setPreviewAvailability({ status: 'success', count })
-      },
-      (error: unknown) => {
-        if (cancelled) return
-        if (error instanceof PreviewLoadError && error.status === 404) {
-          setPreviewAvailability({ status: 'success', count: 0 })
-        } else if (error instanceof UnsupportedSchemaError) {
-          setPreviewAvailability({ status: 'needs-republish' })
-        } else {
-          setPreviewAvailability({ status: 'error' })
-        }
-      },
-    )
-
-    return () => { cancelled = true }
-  }, [hasPreviewEntry, index.site.id])
-
   return (
-    <div className="site-home-heading">
-      <div className="site-home-identity">
-        <span className="site-mark" aria-hidden="true">{index.site.title.slice(0, 1).toUpperCase()}</span>
-        <span className="mono">/{index.site.id}</span>
-      </div>
-      <h1>{index.site.title}</h1>
-      {description ? <p className="site-home-description">{description}</p> : null}
-      <p className="site-home-lede">
-        {pageCountLabel(pageCount)}
-        {latestUpdatedAt ? <> · updated <time dateTime={latestUpdatedAt}>{formatFullDate(latestUpdatedAt)}</time></> : null}
-      </p>
-      {onOpenPreviews ? (
-        <div className="site-home-preview">
-          <a
-            className="site-home-preview-link"
-            href={noPreviews ? undefined : previewsHref}
-            role={noPreviews ? 'link' : undefined}
-            tabIndex={noPreviews ? 0 : undefined}
-            onClick={noPreviews ? (event) => event.preventDefault() : (event) => followInApp(event, () => onOpenPreviews?.())}
-            aria-disabled={noPreviews ? 'true' : undefined}
-            aria-describedby={noPreviews ? 'site-home-preview-status' : undefined}
-          >View previews{noPreviews ? null : <> <span aria-hidden="true">→</span></>}</a>
-          <p className="site-home-preview-status" id="site-home-preview-status" role="status">
-            {previewAvailability.status === 'loading'
-              ? 'Checking preview availability…'
-              : previewAvailability.status === 'error'
-                ? 'Preview availability could not be checked.'
-                : previewAvailability.status === 'needs-republish'
-                  ? 'Previews for this site need to be republished.'
-                  : previewAvailability.count === 0
-                  ? 'There are no available previews for this site.'
-                  : `${previewAvailability.count} preview${previewAvailability.count === 1 ? '' : 's'} listed.`}
-          </p>
-          <p className="site-home-preview-note">{PREVIEW_EXPLANATION}</p>
+    <>
+      <header className="site-home-heading">
+        <div className="site-home-title-row">
+          <span className="site-mark" aria-hidden="true">{index.site.title.slice(0, 1).toUpperCase()}</span>
+          <h1>{index.site.title}</h1>
+          <span className="mono site-home-id">/{index.site.id}</span>
         </div>
-      ) : null}
-      {onOpenPalette ? (
-        <button
-          type="button"
-          className="site-home-jump"
-          aria-keyshortcuts="Meta+K Control+K"
-          onClick={(event) => {
-            // Safari and Firefox do not focus buttons on click; focus first so closing the palette returns here.
-            event.currentTarget.focus()
-            onOpenPalette()
-          }}
-        >
-          <Icon name="search" size={16} />
-          <span>Jump to a page…</span>
-          <kbd>⌘ K</kbd>
-        </button>
-      ) : null}
-    </div>
+        {description ? <p className="site-home-description">{description}</p> : null}
+        <p className="site-home-lede">
+          {pageCountLabel(pageCount)}
+          {latestUpdatedAt ? <> · Updated <time dateTime={latestUpdatedAt}>{formatFullDate(latestUpdatedAt)}</time></> : null}
+        </p>
+      </header>
+      <div className="site-home-bar">
+        <nav className="site-sections" aria-label="Site sections">
+          {hasOverview ? <SectionLink siteId={index.site.id} section="overview" current={current} onNavigate={onNavigate}>Overview</SectionLink> : null}
+          <SectionLink siteId={index.site.id} section="files" current={current} onNavigate={onNavigate} hasOverview={hasOverview}>Files</SectionLink>
+          <SectionLink siteId={index.site.id} section="previews" current={current} onNavigate={onNavigate} count={previewCount}>Previews</SectionLink>
+        </nav>
+        {onOpenPalette ? (
+          <button
+            type="button"
+            className="site-home-search"
+            aria-label="Search this site"
+            aria-keyshortcuts="Meta+K Control+K"
+            onClick={(event) => {
+              // Safari and Firefox do not focus buttons on click; focus first so closing the palette returns here.
+              event.currentTarget.focus()
+              onOpenPalette()
+            }}
+          >
+            <Icon name="search" size={15} />
+            <span className="site-home-search-label">Search this site</span>
+            <kbd>⌘ K</kbd>
+          </button>
+        ) : null}
+      </div>
+    </>
+  )
+}
+
+function SectionLink({ siteId, section, current, onNavigate, count, hasOverview = true, children }: {
+  siteId: string
+  section: SiteSection
+  current: SiteSection
+  onNavigate?: (href: string) => void
+  count?: number
+  hasOverview?: boolean
+  children: ReactNode
+}) {
+  const href = section === 'previews'
+    ? sitePreviewsHref(siteId)
+    // Without an introduction the site root already shows Files.
+    : section === 'files' && hasOverview ? siteFilesHref(siteId) : siteHomeHref(siteId)
+  return (
+    <a
+      className="site-section-link"
+      href={href}
+      aria-current={current === section ? 'page' : undefined}
+      onClick={(event) => followInApp(event, () => onNavigate?.(href))}
+    >
+      {children}
+      {count !== undefined ? <span className="site-section-count">{count}</span> : null}
+    </a>
   )
 }
 

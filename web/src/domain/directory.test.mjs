@@ -142,6 +142,18 @@ test('the site root uses its README as the index page and leaves it out of the p
   assert.deepEqual(listing.pages.map(({ path }) => path), ['index.html', 'top.html'])
 })
 
+test('the site root prefers README.md to index.md and never embeds an HTML index page', () => {
+  const both = resolveRootDirectory([...artifacts, page('index.md', 'Index'), page('Readme.MD', 'Home')])
+  assert.equal(both.indexArtifact.path, 'Readme.MD')
+  assert.ok(both.pages.some(({ path }) => path === 'index.md'))
+  const htmlOnly = resolveRootDirectory([...artifacts, page('index.html', 'Index'), page('index.htm', 'Index')])
+  assert.equal(htmlOnly.indexArtifact, undefined)
+  assert.deepEqual(htmlOnly.pages.map(({ path }) => path), ['index.htm', 'index.html', 'top.html'])
+  // A nested folder keeps its HTML index page.
+  const nested = resolveDirectory([page('docs/index.html', 'Docs')], 'docs')
+  assert.equal(nested.indexArtifact.path, 'docs/index.html')
+})
+
 test('a site with no pages has no root directory', () => {
   assert.equal(resolveRootDirectory([]), undefined)
 })

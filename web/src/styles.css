@@ -1450,20 +1450,32 @@ mark {
   padding-bottom: 35px;
 }
 
-.site-home-identity {
+.site-home-title-row {
   display: flex;
+  min-width: 0;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 16px;
-  color: var(--text-tertiary);
-  font-size: 12px;
+  gap: 10px;
+  margin-bottom: 9px;
 }
 
-.site-home-identity .site-mark {
-  width: 18px;
-  height: 18px;
-  border-radius: 5px;
-  font-size: 9px;
+.site-home-title-row .site-mark {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+.site-home-title-row h1 {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.site-home-id {
+  flex: none;
+  color: var(--text-tertiary);
+  font-size: 12px;
 }
 
 .site-home h1,
@@ -1485,10 +1497,7 @@ mark {
 }
 
 .site-home-empty {
-  width: min(100%, 900px);
-  padding-right: 42px;
-  padding-left: 42px;
-  margin: 0 auto;
+  margin: 0;
 }
 
 /* On the site root the header and the recent list sit inside the directory page, which pads them. */
@@ -1508,6 +1517,10 @@ mark {
   padding-top: 24px;
 }
 
+.directory-page .site-home-lede {
+  margin-bottom: 14px;
+}
+
 .site-home-lede {
   max-width: 60ch;
   margin: 0 0 28px;
@@ -1516,53 +1529,96 @@ mark {
   line-height: 1.5;
 }
 
-.site-home-preview {
+/* The section row: Overview, Files and Previews as links, and the site search at the right (ISSUE-107). */
+.site-home-bar {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 10px;
-  margin: -18px 0 22px;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--line);
 }
 
-.site-home-preview-link {
-  margin: 0;
-  padding: 0;
-  color: var(--text-tertiary);
-  font-size: 12px;
+.site-sections {
+  display: flex;
+  min-width: 0;
+  gap: 4px;
+}
+
+.site-section-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 10px 10px;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 540;
   text-decoration: none;
+  white-space: nowrap;
 }
 
-.site-home-preview-link:hover {
+.site-section-link:hover {
   color: var(--text);
 }
 
-.site-home-preview-link[aria-disabled="true"],
-.site-home-preview-link[aria-disabled="true"]:hover {
-  color: var(--text-tertiary);
-  cursor: default;
-  text-decoration: none;
+.site-section-link[aria-current="page"] {
+  border-bottom-color: var(--text);
+  color: var(--text);
 }
 
-.site-home-preview-note {
-  flex-basis: 100%;
+.site-section-count {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.site-home-search {
+  display: inline-flex;
+  height: 30px;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  margin-bottom: 4px;
+  border-radius: 8px;
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+
+.site-home-search:hover {
+  color: var(--text-secondary);
+  background: var(--hover);
+}
+
+.site-home-search kbd {
+  margin-left: 2px;
+}
+
+.site-previews {
+  display: grid;
+  gap: 12px;
+}
+
+.site-previews h2 {
   margin: 0;
-  color: var(--text-tertiary);
-  font-size: 12px;
+  font-size: 18px;
+  font-weight: 620;
+  letter-spacing: -0.02em;
 }
 
-.site-home-preview-status {
+.site-previews .preview-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 14px;
+}
+
+.preview-error .preview-empty {
   margin: 0;
-  color: var(--text-tertiary);
-  font-size: 12px;
 }
-
-
-
-
-
-
-
-
 
 .artifact-list-section {
   padding-top: 2px;
@@ -2291,6 +2347,7 @@ mark {
 }
 
 .preview-page .eyebrow,
+.site-previews .eyebrow,
 .preview-reader .eyebrow {
   margin: 0 0 7px;
   color: var(--text-tertiary);
@@ -2883,6 +2940,27 @@ mark {
 
   .site-home-heading {
     padding-top: 30px;
+  }
+
+  .site-home-bar {
+    gap: 4px;
+  }
+
+  .site-section-link {
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+
+  .site-home-search {
+    width: 34px;
+    height: 34px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .site-home-search-label,
+  .site-home-search kbd {
+    display: none;
   }
 
   .site-home-heading,
@@ -3496,29 +3574,6 @@ mark {
   color: var(--text);
 }
 
-.site-home-jump {
-  display: flex;
-  width: min(100%, 680px);
-  height: 42px;
-  align-items: center;
-  gap: 10px;
-  padding: 0 11px;
-  border-radius: 9px;
-  color: var(--text-tertiary);
-  background: var(--hover);
-  font-size: 14px;
-  text-align: left;
-}
-
-.site-home-jump:hover {
-  color: var(--text-secondary);
-  background: var(--active);
-}
-
-.site-home-jump kbd {
-  margin-left: auto;
-}
-
 .site-picker-badge {
   flex: none;
   padding: 2px 8px;
@@ -3560,7 +3615,7 @@ a.breadcrumb-menu-item {
   }
 
   .page-text-search-shortcut,
-  .site-home-jump kbd {
+  .site-home-search kbd {
     display: none;
   }
 

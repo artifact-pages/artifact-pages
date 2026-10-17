@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { PreviewGroup } from '../domain/preview'
 import { UnsupportedSchemaError } from '../data/schema'
 import { loadPreviewCatalog, loadPreviewManifest, PreviewLoadError, previewRouteHref } from '../data/previews'
@@ -15,12 +15,52 @@ export function PreviewListPage({ route, navigate, siteTitle }: {
   siteTitle?: string
   navigate: (href: string) => void
 }) {
+  const siteName = siteTitle ?? route.siteId
+  usePageTitle(pageTitle('Previews', siteName))
+
+  return (
+    <main className="preview-page">
+      <header className="preview-page-header">
+        <a className="preview-back-link" href={`/${encodeURIComponent(route.siteId)}`} onClick={(event) => {
+          event.preventDefault()
+          navigate(`/${encodeURIComponent(route.siteId)}`)
+        }}>← {siteName}</a>
+        <p className="eyebrow">{siteName} · Previews</p>
+        <h1>{route.groupId ? 'Preview link' : 'Previews'}</h1>
+        <p className="preview-page-lede">{PREVIEW_LEDE}</p>
+      </header>
+      <PreviewListContent siteId={route.siteId} groupId={route.groupId} navigate={navigate} showHomeLink />
+    </main>
+  )
+}
+
+export const PREVIEW_LEDE = 'Review changed documents, and documents affected by changed resources, from a specific source revision.'
+
+/**
+ * The preview list itself: loading, error (with retry), republish, empty and expired states, and the groups.
+ * Shared by the standalone page and the Previews section of the site home (ISSUE-107).
+ */
+export function PreviewListContent({ siteId, groupId, navigate, showHomeLink = false, onCount }: {
+  siteId: string
+  groupId?: string
+  navigate: (href: string) => void
+  /** The standalone page offers a way back to the site home from its empty state; the site home has its own navigation. */
+  showHomeLink?: boolean
+  /** Called with the number of listed previews once the whole list (not a single group) has loaded. */
+  onCount?: (count: number) => void
+}) {
+  const route = { siteId, groupId }
+  const onCountRef = useRef(onCount)
+  onCountRef.current = onCount
+  const [attempt, setAttempt] = useState(0)
   const [state, setState] = useState<
     | { status: 'loading' }
     | { status: 'success'; groups: Array<{ group: PreviewGroup; availability: GroupAvailability }>; invalidCount: number; unsupportedCount: number }
     | { status: 'error'; error: Error }
     | { status: 'needs-republish' }
   >({ status: 'loading' })
+  const retryRef = useRef<HTMLButtonElement>(null)
+  const focusRetry = useRef(false)
 
   useEffect(() => {
     let cancelled = false
@@ -46,9 +86,11 @@ export function PreviewListPage({ route, navigate, siteTitle }: {
         return { group, availability: await availability }
       }))
       if (!cancelled) {
+        const listed = checked.filter(({ availability }) => availability === 'available' || availability === 'unknown')
+        if (!route.groupId) onCountRef.current?.(listed.length)
         setState({
           status: 'success',
-          groups: checked.filter(({ availability }) => availability === 'available' || availability === 'unknown')
+          groups: listed
             .sort((left, right) => right.group.updatedAt.localeCompare(left.group.updatedAt)),
           invalidCount: checked.filter(({ availability }) => availability === 'invalid').length,
           unsupportedCount: checked.filter(({ availability }) => availability === 'unsupported').length,
@@ -57,6 +99,7 @@ export function PreviewListPage({ route, navigate, siteTitle }: {
     }).catch((error: unknown) => {
       if (cancelled) return
       if (error instanceof Error && 'status' in error && error.status === 404) {
+        if (!route.groupId) onCountRef.current?.(0)
         setState({ status: 'success', groups: [], invalidCount: 0, unsupportedCount: 0 })
       } else if (error instanceof UnsupportedSchemaError) {
         setState({ status: 'needs-republish' })
@@ -65,26 +108,35 @@ export function PreviewListPage({ route, navigate, siteTitle }: {
       }
     })
     return () => { cancelled = true }
-  }, [route.siteId, route.groupId])
+  }, [route.siteId, route.groupId, attempt])
 
-  const siteName = siteTitle ?? route.siteId
-  usePageTitle(pageTitle('Previews', siteName))
+  // After a retry the button is replaced by the loading status; focus returns to a failed retry's button.
+  useEffect(() => {
+    if (state.status === 'error' && focusRetry.current) {
+      focusRetry.current = false
+      retryRef.current?.focus()
+    }
+  }, [state])
+
   const siteHomeHref = `/${encodeURIComponent(route.siteId)}`
 
   return (
-    <main className="preview-page">
-      <header className="preview-page-header">
-        <a className="preview-back-link" href={`/${encodeURIComponent(route.siteId)}`} onClick={(event) => {
-          event.preventDefault()
-          navigate(`/${encodeURIComponent(route.siteId)}`)
-        }}>← {siteName}</a>
-        <p className="eyebrow">{siteName} · Previews</p>
-        <h1>{route.groupId ? 'Preview link' : 'Previews'}</h1>
-        <p className="preview-page-lede">Review changed documents, and documents affected by changed resources, from a specific source revision.</p>
-      </header>
-
+    <>
       {state.status === 'loading' ? <p role="status">Loading previews…</p> : null}
-      {state.status === 'error' ? <p className="preview-empty" role="alert">The preview list could not be loaded.</p> : null}
+      {state.status === 'error' ? (
+        <div className="preview-error">
+          <p className="preview-empty" role="alert">The preview list could not be loaded.</p>
+          <button
+            ref={retryRef}
+            type="button"
+            className="text-action"
+            onClick={() => {
+              focusRetry.current = true
+              setAttempt((n) => n + 1)
+            }}
+          >Try again</button>
+        </div>
+      ) : null}
       {state.status === 'needs-republish' ? (
         <section className="preview-empty-state" aria-label="Previews need to be republished">
           <h2>Previews need to be republished</h2>
@@ -106,11 +158,13 @@ export function PreviewListPage({ route, navigate, siteTitle }: {
           <p className="preview-empty-explanation">
             Previews show changed documents from pull requests and manual preview builds. Once one is published for this site, its documents will appear here. If you expected a preview, check that publishing completed successfully.
           </p>
-          <a className="preview-return-link" href={siteHomeHref} onClick={(event) => {
-            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-            event.preventDefault()
-            navigate(siteHomeHref)
-          }}>Back to site home</a>
+          {showHomeLink ? (
+            <a className="preview-return-link" href={siteHomeHref} onClick={(event) => {
+              if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+              event.preventDefault()
+              navigate(siteHomeHref)
+            }}>Back to site home</a>
+          ) : null}
         </section>
       ) : null}
       {state.status === 'success' ? (
@@ -148,7 +202,7 @@ export function PreviewListPage({ route, navigate, siteTitle }: {
           ))}
         </div>
       ) : null}
-    </main>
+    </>
   )
 }
 

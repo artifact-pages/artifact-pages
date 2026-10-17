@@ -37,3 +37,12 @@ test('searchRouteHref omits empty parts', () => {
 test('canonicalPathname keeps the search route', () => {
   assert.equal(canonicalPathname('/guide//_search'), '/guide/_search')
 })
+
+test('?section=files selects Files on the site root only; other values and paths ignore it', () => {
+  assert.deepEqual(parseRoute('/guide', '?section=files'), { kind: 'site', siteId: 'guide', artifactPath: undefined, section: 'files' })
+  assert.deepEqual(parseRoute('/guide', '?section=bogus'), { kind: 'site', siteId: 'guide', artifactPath: undefined, section: undefined })
+  assert.deepEqual(parseRoute('/guide', ''), { kind: 'site', siteId: 'guide', artifactPath: undefined, section: undefined })
+  assert.deepEqual(parseRoute('/guide/a.md', '?section=files'), { kind: 'site', siteId: 'guide', artifactPath: 'a.md' })
+  // A published `_files` path is an ordinary page route, never shadowed.
+  assert.deepEqual(parseRoute('/guide/_files', ''), { kind: 'site', siteId: 'guide', artifactPath: '_files' })
+})

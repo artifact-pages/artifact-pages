@@ -245,7 +245,7 @@ test('mobile search affordances describe their scope and open the matching palet
 
   await page.getByRole('link', { name: /SRE/ }).click()
   await expect(page).toHaveURL(/\/sre$/)
-  const homeJump = page.getByTestId('directory-page').getByRole('button', { name: /Jump to a page/ })
+  const homeJump = page.getByRole('button', { name: 'Search this site' })
   await expect(homeJump).toBeVisible()
   await expect(homeJump.locator('kbd')).toBeHidden()
 
@@ -405,9 +405,9 @@ test('desktop search affordances keep keyboard shortcuts visible', async ({ page
 
   await page.getByRole('link', { name: /SRE/ }).click()
   await expect(page).toHaveURL(/\/sre$/)
-  // The site home has no inline filter; its ⌘ K button opens the palette.
+  // The site home has no inline filter; the search entry beside the section links opens the palette.
   await expect(page.getByTestId('directory-page').getByRole('searchbox')).toHaveCount(0)
-  const homeJump = page.getByTestId('directory-page').getByRole('button', { name: /Jump to a page/ })
+  const homeJump = page.getByRole('button', { name: 'Search this site' })
   await expect(homeJump).toBeVisible()
   await expect(homeJump.locator('kbd')).toHaveText('⌘ K')
   await expect(homeJump).toHaveAttribute('aria-keyshortcuts', 'Meta+K Control+K')
@@ -767,7 +767,7 @@ test('an empty registered site stays on its home route and does not affect a nei
   await emptySite.click()
   await expect(page).toHaveURL(/\/empty$/u)
   await expect(page.getByRole('heading', { name: 'Empty registered', exact: true })).toBeVisible()
-  await expect(page.locator('.site-home .site-home-lede')).toContainText('0 pages')
+  await expect(page.locator('.site-home-heading .site-home-lede')).toContainText('0 pages')
   await expect(page.getByText('No artifacts have been published to this site yet.')).toBeVisible()
   await expect(page.getByTestId('directory-page')).toHaveCount(0)
   await expect(page.locator('.artifact-frame')).toHaveCount(0)
@@ -3562,7 +3562,7 @@ test('the site home jumps to a page by name through the palette, ignoring IME En
 
   // The site home has no inline filter; finding a page by name is the palette's job.
   await expect(page.getByTestId('directory-page').getByRole('searchbox')).toHaveCount(0)
-  const homeJump = page.getByTestId('directory-page').getByRole('button', { name: /Jump to a page/ })
+  const homeJump = page.getByRole('button', { name: 'Search this site' })
   await homeJump.click()
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('combobox', { name: 'Search artifacts, sites, commands, and headings' })
@@ -3894,16 +3894,16 @@ test('published preview documents stay out of production browsing and the site-h
   await expect(browse).toBeVisible()
   await expect(recent).not.toContainText(previewOnlyTitle)
   await expect(browse).not.toContainText(previewOnlyTitle)
-  await expect(page.getByRole('status')).toHaveText('1 preview listed.')
+  const previewsLink = page.getByRole('navigation', { name: 'Site sections' }).getByRole('link', { name: /^Previews/ })
+  await expect(previewsLink.locator('.site-section-count')).toHaveText('1')
   expect(previewRequests).toContain('/_previews/showcase/catalog.json')
   expect(previewRequests).toContain(`/_previews/showcase/revisions/${previewHeadSha}/manifest.json`)
 
-  const viewPreviews = page.getByRole('link', { name: 'View previews' })
-  await expect(viewPreviews).toHaveAttribute('href', '/showcase/_previews')
-  await expectModifiedClickKeptForBrowser(page, viewPreviews)
+  await expect(previewsLink).toHaveAttribute('href', '/showcase/_previews')
+  await expectModifiedClickKeptForBrowser(page, previewsLink)
   await expect(page).toHaveURL('/showcase')
 
-  await viewPreviews.click()
+  await previewsLink.click()
   await expect(page).toHaveURL('/showcase/_previews')
   await expect(page.getByRole('region', { name: 'Preview pr:701' })).toBeVisible()
   // The time names its zone and keeps the full-precision UTC instant.
@@ -3915,7 +3915,7 @@ test('published preview documents stay out of production browsing and the site-h
   expect(previewRequests).toContain('/_previews/showcase/catalog.json')
   expect(previewRequests).toContain(`/_previews/showcase/revisions/${previewHeadSha}/manifest.json`)
 
-  await page.getByRole('link', { name: '← HTML Showcase' }).click()
+  await page.getByRole('navigation', { name: 'Site sections' }).getByRole('link', { name: 'Files' }).click()
   await expect(page).toHaveURL('/showcase')
   await expect(recent).toBeVisible()
   await expect(browse).toBeVisible()
@@ -3995,12 +3995,20 @@ test('preview list distinguishes missing groups, empty catalogs, missing catalog
   catalogState = 'error'
   await page.reload()
   await expect(page.getByRole('alert')).toHaveText('The preview list could not be loaded.')
-  await page.getByRole('link', { name: '← SRE' }).click()
+  // The failed list can be retried in place, and the count stays absent while it fails.
+  await expect(page.locator('.site-section-count')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Try again' }).click()
+  await expect(page.getByRole('alert')).toHaveText('The preview list could not be loaded.')
+  await expect(page.getByRole('button', { name: 'Try again' })).toBeFocused()
+  catalogState = 'empty'
+  await page.getByRole('button', { name: 'Try again' }).click()
+  await expect(page.getByRole('status')).toHaveText('There are no available previews for this site.')
+  await page.getByRole('navigation', { name: 'Site sections' }).getByRole('link', { name: 'Files' }).click()
   await expect(page).toHaveURL('/sre')
   await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
 })
 
-test('site home reports empty preview availability and the empty page explains how to return', async ({ page }) => {
+test('site home keeps Previews reachable when none are available and the empty section explains it', async ({ page }) => {
   await page.route('**/_previews/sre/catalog.json', (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -4009,31 +4017,31 @@ test('site home reports empty preview availability and the empty page explains h
 
   await page.goto('/sre')
   await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
-  await expect(page.getByRole('status')).toHaveText('There are no available previews for this site.')
-  const previewEntry = page.getByRole('link', { name: 'View previews' })
-  await expect(previewEntry).toHaveAttribute('aria-disabled', 'true')
-  await expect(previewEntry).not.toHaveAttribute('href')
-  await expect(previewEntry).toHaveAccessibleDescription('There are no available previews for this site.')
-  await expect(page.getByText(/^Previews are review copies of changed documents/)).toBeVisible()
-  await previewEntry.focus()
-  await expect(previewEntry).toBeFocused()
-  await page.keyboard.press('Enter')
-  await previewEntry.click({ force: true })
-  await expect(page).toHaveURL('/sre')
-
-  await page.goto('/sre/_previews')
+  const previewEntry = page.getByRole('navigation', { name: 'Site sections' }).getByRole('link', { name: /^Previews/ })
+  await expect(previewEntry).toHaveAttribute('href', '/sre/_previews')
+  await expect(previewEntry.locator('.site-section-count')).toHaveText('0')
+  await expect(page.getByText(/^Previews are review copies of changed documents/)).toHaveCount(0)
+  await previewEntry.click()
+  await expect(page).toHaveURL('/sre/_previews')
+  await expect(previewEntry).toHaveAttribute('aria-current', 'page')
   await expect(page.getByRole('status')).toHaveText('There are no available previews for this site.')
   await expect(page.getByText(/Previews show changed documents from pull requests and manual preview builds\./)).toBeVisible()
-  await page.getByRole('link', { name: 'Back to site home' }).click()
+  await page.getByRole('navigation', { name: 'Site sections' }).getByRole('link', { name: 'Files' }).click()
   await expect(page).toHaveURL('/sre')
   await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
+
+  // The standalone list (no site index to build the home from) still offers the way back.
+  await page.route('**/_indexes/sre/index.json', (route) => route.fulfill({ status: 503, body: 'unavailable' }))
+  await page.goto('/sre/_previews')
+  await expect(page.getByRole('status')).toHaveText('There are no available previews for this site.')
+  await page.getByRole('link', { name: 'Back to site home' }).click()
+  await expect(page).toHaveURL('/sre')
 })
 
 test('site home keeps the preview entry active when previews exist', async ({ page }) => {
   await page.goto('/sre')
-  await expect(page.getByRole('status')).toContainText('listed.')
-  const previewEntry = page.getByRole('link', { name: 'View previews' })
-  await expect(previewEntry).toBeEnabled()
+  const previewEntry = page.getByRole('navigation', { name: 'Site sections' }).getByRole('link', { name: /^Previews/ })
+  await expect(previewEntry.locator('.site-section-count')).toBeVisible()
   await previewEntry.click()
   await expect(page).toHaveURL('/sre/_previews')
 })
@@ -4053,11 +4061,13 @@ test('preview list loading does not block returning to the site', async ({ page 
   })
 
   await page.goto('/sre')
-  await page.getByRole('link', { name: 'View previews' }).click()
+  await page.getByRole('navigation', { name: 'Site sections' }).getByRole('link', { name: /^Previews/ }).click()
   await catalogStarted
   await expect(page.getByRole('status')).toHaveText('Loading previews…')
+  // No number is shown before the catalog has loaded.
+  await expect(page.locator('.site-section-count')).toHaveCount(0)
   try {
-    await page.getByRole('link', { name: '← SRE' }).click()
+    await page.getByRole('navigation', { name: 'Site sections' }).getByRole('link', { name: 'Files' }).click()
     await expect(page).toHaveURL('/sre')
     await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
   } finally {
@@ -4138,7 +4148,7 @@ test('the in-site palette opens previews by command without loading preview data
   })
 
   await page.goto('/sre')
-  await expect(page.getByRole('status')).toContainText('listed.')
+  await expect(page.locator('.site-section-count')).toBeVisible()
   previewRequests.length = 0
   await page.getByRole('button', { name: 'Jump to a page in SRE' }).click()
   const palette = page.getByRole('dialog', { name: 'Command palette' })
@@ -6335,10 +6345,15 @@ test.describe('release UX fixes', () => {
 
   test('preview pages show the registered site title and fall back to the site ID', async ({ page }) => {
     await page.goto('/sre/_previews')
+    await expect(page.getByRole('heading', { level: 1, name: 'SRE', exact: true })).toBeVisible()
+    await expect(page).toHaveTitle('Previews · SRE')
+
+    // Without the site index the list stands alone.
+    await page.route('**/_indexes/sre/index.json', (route) => route.fulfill({ status: 503, body: 'unavailable' }))
+    await page.goto('/sre/_previews')
     await expect(page.getByRole('link', { name: '← SRE', exact: true })).toBeVisible()
     await expect(page.getByText('SRE · Previews')).toBeVisible()
 
-    await page.unroute('**/_indexes/sites.json').catch(() => undefined)
     await page.route('**/_indexes/sites.json', (route) => route.fulfill({ status: 503, body: 'unavailable' }))
     await page.goto('/sre/_previews')
     await expect(page.getByRole('link', { name: '← sre', exact: true })).toBeVisible()
@@ -6924,17 +6939,20 @@ test.describe('directory pages', () => {
     }
   })
 
-  test('the site root is a directory page: header, list, README, then Recently updated', async ({ page }) => {
+  test('the site root shows the header, the section row and the README as Overview', async ({ page }) => {
     await routeDirectoryIndex(page, [...extraPages, ...cappedPages, ['README.md', 'Site home', '2026-10-02T00:00:00Z', toc('Welcome')]])
     await page.goto('/sre')
 
     const directory = page.getByTestId('directory-page')
     await expect(directory).toHaveAttribute('data-directory-variant', 'index')
     await expect(directory.getByRole('heading', { level: 1, name: 'SRE', exact: true })).toBeVisible()
-    await expect(directory.locator('.site-home-lede')).toContainText('pages · updated')
-    await expect(directory.getByRole('link', { name: 'View previews' })).toBeVisible()
-    await expect(directory.getByRole('button', { name: /Jump to a page/ })).toBeVisible()
+    await expect(directory.locator('.site-home-lede')).toContainText('pages · Updated')
+    const sections = directory.getByRole('navigation', { name: 'Site sections' })
+    await expect(sections.getByRole('link')).toHaveText([/^Overview$/, /^Files$/, /^Previews/])
+    await expect(sections.getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page')
+    await expect(directory.getByRole('button', { name: 'Search this site' })).toBeVisible()
     await expect(directory.locator('.browse-section')).toHaveCount(0)
+    await expect(directory.locator('.directory-children')).toHaveCount(0)
     await expect(directory.locator('.directory-readme-label')).toHaveText('README.md')
     await expect(directory.getByTestId('markdown-document')).toBeVisible()
     await expect(page).toHaveTitle('SRE')
@@ -6944,13 +6962,20 @@ test.describe('directory pages', () => {
     await expect(page.getByRole('button', { name: 'Copy site link' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Copy folder link' })).toHaveCount(0)
 
+    // Files lists the children and the recent updates, without the README.
+    await sections.getByRole('link', { name: 'Files' }).click()
+    await expect(page).toHaveURL('/sre?section=files')
+    await expect(directory).toHaveAttribute('data-directory-variant', 'list')
+    await expect(directory.locator('.directory-readme-label')).toHaveCount(0)
+    await expect(directory.getByTestId('markdown-document')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Contents' })).toHaveCount(0)
     const top = (selector: string) => directory.locator(selector).first().evaluate((element) => element.getBoundingClientRect().top)
-    const [headerTop, listTop, labelTop, recentTop] = await Promise.all([
-      top('.site-home-heading'), top('.directory-children'), top('.directory-readme-label'), top('.artifact-list-section[aria-label="Recently updated"]'),
+    const [headerTop, barTop, listTop, recentTop] = await Promise.all([
+      top('.site-home-heading'), top('.site-home-bar'), top('.directory-row'), top('.artifact-list-section[aria-label="Recently updated"]'),
     ])
-    expect(headerTop).toBeLessThan(listTop)
-    expect(listTop).toBeLessThan(labelTop)
-    expect(labelTop).toBeLessThan(recentTop)
+    expect(headerTop).toBeLessThan(barTop)
+    expect(barTop).toBeLessThan(listTop)
+    expect(listTop).toBeLessThan(recentTop)
   })
 
   test('the site root without a README shows the header and full rows', async ({ page }) => {
@@ -8217,5 +8242,376 @@ test.describe('reader context column (ISSUE-108)', () => {
       await expect(columnOf(page), path).toHaveCount(0)
       await expect(page.locator('[data-reader-column]'), path).toHaveCount(0)
     }
+  })
+})
+
+// ISSUE-107: the site home is Overview / Files / Previews with the site search beside them.
+test.describe('site home sections', () => {
+  type HomeEntry = { path: string, title: string, format?: 'markdown' | 'html', updatedAt?: string, url?: string }
+
+  /** Adds entries to (or, with `replace`, swaps all of) SRE's index; each entry's body is served by `bodies`. */
+  async function routeSreHome(
+    page: Page,
+    entries: HomeEntry[],
+    options: { replace?: boolean, bodies?: Record<string, { type: 'markdown' | 'html', body: string }> } = {},
+  ) {
+    for (const [url, { type, body }] of Object.entries(options.bodies ?? {})) {
+      await page.route(`**${url}`, (route) => route.fulfill({
+        status: 200,
+        contentType: type === 'markdown' ? 'text/markdown; charset=utf-8' : 'text/html; charset=utf-8',
+        body,
+      }))
+    }
+    await page.route('**/_indexes/sre/index.json', async (route) => {
+      const response = await route.fetch()
+      const index = await response.json()
+      if (options.replace) index.artifacts = []
+      index.artifacts.push(...entries.map((entry) => ({
+        id: entry.path,
+        path: entry.path,
+        title: entry.title,
+        format: entry.format ?? 'markdown',
+        filename: entry.path.split('/').at(-1),
+        artifactUrl: entry.url ?? `/_artifacts/sre/${entry.path}`,
+        updatedAt: entry.updatedAt ?? '2026-10-01T00:00:00Z',
+        toc: [],
+      })))
+      await route.fulfill({ response, json: index })
+    })
+  }
+
+  const readmeBodies = {
+    '/_artifacts/sre/README.md': { type: 'markdown' as const, body: '# Readme heading\n\nREADME introduction text.\n' },
+    '/_artifacts/sre/index.md': { type: 'markdown' as const, body: '# Index heading\n\nIndex introduction text.\n' },
+  }
+  const readmeEntries: HomeEntry[] = [
+    { path: 'README.md', title: 'Welcome' },
+    { path: 'index.md', title: 'Index page' },
+  ]
+  const sections = (page: Page) => page.getByRole('navigation', { name: 'Site sections' })
+  const sectionLink = (page: Page, name: string) => sections(page).getByRole('link', { name: new RegExp(`^${name}`) })
+  const searchEntry = (page: Page) => page.getByRole('button', { name: 'Search this site' })
+  const scroller = (page: Page) => page.locator('.directory-scroll')
+  const bulkEntries = (count: number): HomeEntry[] => Array.from({ length: count }, (_, position) => ({
+    path: `bulk-${String(position + 1).padStart(2, '0')}.md`,
+    title: `Bulk page ${position + 1}`,
+    updatedAt: '2026-09-01T00:00:00Z',
+  }))
+
+  test('the header shows the title, description, page count and the newest document update', async ({ page }) => {
+    await page.route('**/_indexes/sites.json', async (route) => {
+      const response = await route.fetch()
+      const registry = await response.json()
+      for (const site of registry.sites) if (site.id === 'sre') site.description = 'Reliability runbooks.'
+      await route.fulfill({ response, json: registry })
+    })
+    await routeSreHome(page, [{ path: 'late.md', title: 'Late page', updatedAt: '2026-10-15T08:00:00Z' }])
+    await page.goto('/sre')
+    const heading = page.locator('.site-home-heading')
+    await expect(heading.getByRole('heading', { level: 1, name: 'SRE', exact: true })).toBeVisible()
+    await expect(heading.getByText('Reliability runbooks.')).toBeVisible()
+    await expect(heading.locator('.site-home-lede')).toHaveText('7 pages · Updated Oct 15, 2026')
+    await expect(heading.locator('time')).toHaveAttribute('datetime', '2026-10-15T08:00:00Z')
+    // The preview explanation, the preview action and the large jump control are gone from the header.
+    await expect(page.getByText(/^Previews are review copies/)).toHaveCount(0)
+    await expect(page.getByRole('link', { name: 'View previews' })).toHaveCount(0)
+    await expect(page.locator('.directory-page').getByText('Jump to a page…')).toHaveCount(0)
+    await expect(sections(page).getByRole('link')).toHaveText([/^Files$/, /^Previews/])
+  })
+
+  test('Overview shows README.md in preference to index.md', async ({ page }) => {
+    await routeSreHome(page, readmeEntries, { bodies: readmeBodies })
+    await page.goto('/sre')
+    await expect(sections(page).getByRole('link')).toHaveText([/^Overview$/, /^Files$/, /^Previews/])
+    await expect(sectionLink(page, 'Overview')).toHaveAttribute('aria-current', 'page')
+    await expect(sectionLink(page, 'Overview')).toHaveAttribute('href', '/sre')
+    await expect(page.locator('.directory-readme-label')).toHaveText('README.md')
+    await expect(page.getByRole('heading', { name: 'Readme heading' })).toBeVisible()
+    await expect(page.getByText('Index introduction text.')).toHaveCount(0)
+    // index.md is an ordinary document in Files; README.md is the introduction and is not listed twice.
+    await sectionLink(page, 'Files').click()
+    await expect(page).toHaveURL('/sre?section=files')
+    await expect(page.locator('[data-directory-page="index.md"]')).toBeVisible()
+    await expect(page.locator('[data-directory-page="README.md"]')).toHaveCount(0)
+    await expect(page.getByRole('heading', { name: 'Readme heading' })).toHaveCount(0)
+
+    // Without README.md, index.md is the introduction (case-insensitive).
+    await page.unroute('**/_indexes/sre/index.json')
+    await routeSreHome(page, [{ path: 'INDEX.MD', title: 'Upper index', url: '/_artifacts/sre/index.md' }])
+    await page.goto('/sre')
+    await expect(page.getByRole('heading', { name: 'Index heading' })).toBeVisible()
+  })
+
+  test('root index.html is not embedded: it is listed in Files and opens at its own URL', async ({ page }) => {
+    const bodies = { '/_artifacts/sre/index.html': { type: 'html' as const, body: '<!doctype html><title>Root HTML</title><h1>Root HTML page</h1>' } }
+    await routeSreHome(page, [
+      { path: 'index.html', title: 'Root HTML page', format: 'html' },
+      { path: 'README.md', title: 'Welcome' },
+    ], { bodies: { ...bodies, '/_artifacts/sre/README.md': readmeBodies['/_artifacts/sre/README.md'] } })
+    await page.goto('/sre')
+    await expect(page.getByRole('heading', { name: 'Readme heading' })).toBeVisible()
+    await expect(page.locator('iframe.artifact-frame')).toHaveCount(0)
+    await sectionLink(page, 'Files').click()
+    await expect(page.locator('iframe.artifact-frame')).toHaveCount(0)
+    await page.locator('[data-directory-page="index.html"]').click()
+    await expect(page).toHaveURL('/sre/index.html')
+    await expect(page.locator('iframe.artifact-frame')).toBeVisible()
+    await expect(page.frameLocator('iframe.artifact-frame').getByRole('heading', { name: 'Root HTML page' })).toBeVisible()
+
+    // Alone, it does not become the introduction either.
+    await page.unroute('**/_indexes/sre/index.json')
+    await routeSreHome(page, [{ path: 'index.htm', title: 'Legacy index', format: 'html', url: '/_artifacts/sre/index.html' }])
+    await page.goto('/sre')
+    await expect(sectionLink(page, 'Files')).toHaveAttribute('aria-current', 'page')
+    await expect(page.locator('iframe.artifact-frame')).toHaveCount(0)
+    await expect(page.locator('[data-directory-page="index.htm"]')).toBeVisible()
+  })
+
+  test('nested folders keep their HTML and Markdown index bodies', async ({ page }) => {
+    await routeSreHome(page, [
+      { path: 'README.md', title: 'Welcome' },
+      { path: 'html-folder/index.html', title: 'Folder HTML', format: 'html', url: '/_artifacts/sre/index.html' },
+      { path: 'md-folder/README.md', title: 'Folder README' },
+    ], {
+      bodies: {
+        '/_artifacts/sre/index.html': { type: 'html', body: '<!doctype html><h1>Nested HTML body</h1>' },
+        '/_artifacts/sre/md-folder/README.md': { type: 'markdown', body: '# Nested markdown body\n' },
+        ...readmeBodies,
+      },
+    })
+    await page.goto('/sre/html-folder')
+    await expect(page.getByTestId('directory-page')).toHaveAttribute('data-directory-variant', 'index')
+    await expect(page.frameLocator('iframe.artifact-frame').getByRole('heading', { name: 'Nested HTML body' })).toBeVisible()
+    await page.goto('/sre/md-folder')
+    await expect(page.getByRole('heading', { name: 'Nested markdown body' })).toBeVisible()
+    await expect(page.locator('.site-sections')).toHaveCount(0)
+  })
+
+  test('without an introduction Files is the default and there is no Overview link', async ({ page }) => {
+    await page.goto('/sre')
+    await expect(sectionLink(page, 'Overview')).toHaveCount(0)
+    await expect(sectionLink(page, 'Files')).toHaveAttribute('aria-current', 'page')
+    await expect(sectionLink(page, 'Files')).toHaveAttribute('href', '/sre')
+    await page.goto('/sre?section=files')
+    await expect(sectionLink(page, 'Files')).toHaveAttribute('aria-current', 'page')
+    await expect(page.getByRole('region', { name: 'Folders' })).toBeVisible()
+  })
+
+  test('an introduction that disappears while Overview is open leaves Files in place without an error', async ({ page }) => {
+    await routeSreHome(page, readmeEntries, { bodies: readmeBodies })
+    await page.goto('/sre')
+    await expect(sectionLink(page, 'Overview')).toHaveAttribute('aria-current', 'page')
+    // A newer index without an introduction arrives (the shown address stays the same).
+    await page.unroute('**/_indexes/sre/index.json')
+    await page.reload()
+    await expect(page).toHaveURL('/sre')
+    await expect(sectionLink(page, 'Files')).toHaveAttribute('aria-current', 'page')
+    await expect(sectionLink(page, 'Overview')).toHaveCount(0)
+    await expect(page.getByRole('alert')).toHaveCount(0)
+    await expect(page.getByRole('region', { name: 'Folders' })).toBeVisible()
+  })
+
+  test('an unknown section value shows the default section and is replaced in history', async ({ page }) => {
+    await routeSreHome(page, readmeEntries, { bodies: readmeBodies })
+    await page.goto('/')
+    await page.evaluate(() => { window.history.pushState({}, '', '/sre?section=bogus'); window.dispatchEvent(new PopStateEvent('popstate')) })
+    await expect(page).toHaveURL('/sre')
+    await expect(sectionLink(page, 'Overview')).toHaveAttribute('aria-current', 'page')
+    await page.goBack()
+    // The corrected entry replaced the bogus one, so Back leaves the site.
+    await expect(page).toHaveURL('/')
+  })
+
+  test('an empty site has a zero count, no Overview, the empty message and a working Previews', async ({ page }) => {
+    await routeSreHome(page, [], { replace: true })
+    await page.goto('/sre')
+    await expect(page.locator('.site-home-lede')).toHaveText('0 pages')
+    await expect(sectionLink(page, 'Overview')).toHaveCount(0)
+    await expect(sectionLink(page, 'Files')).toHaveAttribute('aria-current', 'page')
+    await expect(page.getByText('No artifacts have been published to this site yet.')).toBeVisible()
+    await sectionLink(page, 'Previews').click()
+    await expect(page).toHaveURL('/sre/_previews')
+    await expect(page.getByRole('region', { name: 'Preview pr:42' })).toBeVisible()
+    await expect(sectionLink(page, 'Previews')).toHaveAttribute('aria-current', 'page')
+  })
+
+  test('a preview group link opens in the Previews section', async ({ page }) => {
+    await page.goto('/sre/_previews?group=pr%3A42')
+    await expect(sectionLink(page, 'Previews')).toHaveAttribute('aria-current', 'page')
+    await expect(page.getByRole('heading', { level: 2, name: 'Preview link' })).toBeVisible()
+    await expect(page.getByRole('region', { name: 'Preview pr:42' })).toBeVisible()
+    await expect(page.getByRole('region', { name: 'Preview pr:43' })).toHaveCount(0)
+  })
+
+  for (const [name, path] of [['Overview', '/sre'], ['Files', '/sre?section=files'], ['Previews', '/sre/_previews']] as const) {
+    test(`site search opens the published-site palette from ${name} and returns focus`, async ({ page }) => {
+      await routeSreHome(page, readmeEntries, { bodies: readmeBodies })
+      await page.goto(path)
+      await expect(sectionLink(page, name)).toHaveAttribute('aria-current', 'page')
+      await expect(searchEntry(page)).toHaveCount(1)
+      await searchEntry(page).click()
+      const palette = page.getByRole('dialog', { name: 'Command palette' })
+      await expect(palette.locator('.palette-scope')).toHaveText('SRE only')
+      const field = palette.getByRole('combobox', { name: 'Search artifacts, sites, commands, and headings' })
+      // It searches the published site, never preview content.
+      await field.fill('Local preview guide')
+      await expect(palette.getByRole('option', { name: /Local preview guide/ })).toHaveCount(0)
+      await field.fill('topology')
+      await expect(palette.getByRole('option', { name: /Platform topology/ })).toBeVisible()
+      await page.keyboard.press('Escape')
+      await expect(palette).toHaveCount(0)
+      await expect(searchEntry(page)).toBeFocused()
+    })
+  }
+
+  test('site search keeps the hand-off to full-text search', async ({ page }) => {
+    await registerTextSearchSite(page)
+    await page.goto('/textsearch?section=files')
+    await expect(sectionLink(page, 'Files')).toHaveAttribute('aria-current', 'page')
+    await searchEntry(page).click()
+    const palette = page.getByRole('dialog', { name: 'Command palette' })
+    const field = palette.getByRole('combobox', { name: 'Search artifacts, sites, commands, and headings' })
+    await field.fill('latency')
+    await expect(palette.getByRole('option', { name: /Search full text for “latency”/ })).toBeVisible()
+    await field.press('Control+Enter')
+    await expect(page).toHaveURL(/\/textsearch\/_search\?q=latency$/)
+  })
+
+  test('Files has no other search entry', async ({ page }) => {
+    await page.goto('/sre?section=files')
+    await expect(page.getByTestId('directory-page').getByRole('searchbox')).toHaveCount(0)
+    await expect(page.getByTestId('directory-page').getByRole('button', { name: /search|jump/i })).toHaveCount(1)
+  })
+
+  test('sections are history entries: Back and Forward restore them', async ({ page }) => {
+    await routeSreHome(page, readmeEntries, { bodies: readmeBodies })
+    await page.goto('/sre')
+    await sectionLink(page, 'Files').click()
+    await expect(page).toHaveURL('/sre?section=files')
+    await sectionLink(page, 'Previews').click()
+    await expect(page).toHaveURL('/sre/_previews')
+    await page.goBack()
+    await expect(page).toHaveURL('/sre?section=files')
+    await expect(sectionLink(page, 'Files')).toHaveAttribute('aria-current', 'page')
+    await page.goBack()
+    await expect(page).toHaveURL('/sre')
+    await expect(sectionLink(page, 'Overview')).toHaveAttribute('aria-current', 'page')
+    await expect(page.getByRole('heading', { name: 'Readme heading' })).toBeVisible()
+    await page.goForward()
+    await expect(sectionLink(page, 'Files')).toHaveAttribute('aria-current', 'page')
+    // Refresh shows the section the URL names.
+    await page.reload()
+    await expect(sectionLink(page, 'Files')).toHaveAttribute('aria-current', 'page')
+  })
+
+  test('Back from a document restores the section and its scroll position; a new section starts at the top', async ({ page }) => {
+    await routeSreHome(page, [...readmeEntries, ...bulkEntries(40)], { bodies: readmeBodies })
+    await page.goto('/sre?section=files')
+    await expect(page.locator('[data-directory-page="bulk-40.md"]')).toBeAttached()
+    await scroller(page).evaluate((element) => { element.scrollTop = 700 })
+    await expect.poll(() => scroller(page).evaluate((element) => element.scrollTop)).toBeGreaterThan(600)
+    const before = await scroller(page).evaluate((element) => element.scrollTop)
+    await page.locator('[data-directory-page="bulk-30.md"]').click()
+    await expect(page).toHaveURL('/sre/bulk-30.md')
+    await page.goBack()
+    await expect(page).toHaveURL('/sre?section=files')
+    await expect(sectionLink(page, 'Files')).toHaveAttribute('aria-current', 'page')
+    await expect.poll(() => scroller(page).evaluate((element) => element.scrollTop)).toBeGreaterThan(before - 5)
+    expect(await scroller(page).evaluate((element) => element.scrollTop)).toBeLessThan(before + 5)
+
+    // A section chosen by link starts at the top, even when it was scrolled before.
+    await sectionLink(page, 'Overview').click()
+    await expect(sectionLink(page, 'Overview')).toHaveAttribute('aria-current', 'page')
+    expect(await scroller(page).evaluate((element) => element.scrollTop)).toBe(0)
+    await sectionLink(page, 'Files').click()
+    await expect(page.locator('[data-directory-page="bulk-40.md"]')).toBeAttached()
+    expect(await scroller(page).evaluate((element) => element.scrollTop)).toBe(0)
+  })
+
+  test('section links keep modified clicks for the browser and carry real hrefs', async ({ page }) => {
+    await routeSreHome(page, readmeEntries, { bodies: readmeBodies })
+    await page.goto('/sre')
+    await expect(sectionLink(page, 'Overview')).toHaveAttribute('href', '/sre')
+    await expect(sectionLink(page, 'Files')).toHaveAttribute('href', '/sre?section=files')
+    await expect(sectionLink(page, 'Previews')).toHaveAttribute('href', '/sre/_previews')
+    await expectModifiedClickKeptForBrowser(page, sectionLink(page, 'Files'))
+    await expectModifiedClickKeptForBrowser(page, sectionLink(page, 'Previews'))
+    await expect(sectionLink(page, 'Overview')).toHaveAttribute('aria-current', 'page')
+  })
+
+  test('switching sites does not carry a section or scroll position over', async ({ page }) => {
+    await routeSreHome(page, [...readmeEntries, ...bulkEntries(40)], { bodies: readmeBodies })
+    await page.goto('/sre?section=files')
+    await expect(page.locator('[data-directory-page="bulk-40.md"]')).toBeAttached()
+    await scroller(page).evaluate((element) => { element.scrollTop = 700 })
+    await expect.poll(() => scroller(page).evaluate((element) => element.scrollTop)).toBeGreaterThan(600)
+    await page.getByRole('button', { name: 'All sites' }).click()
+    await page.getByRole('link', { name: /HTML Showcase/ }).click()
+    await expect(page).toHaveURL('/showcase')
+    await expect(page.getByRole('heading', { level: 1, name: 'HTML Showcase', exact: true })).toBeVisible()
+    await expect(sectionLink(page, 'Files')).toHaveAttribute('aria-current', 'page')
+    expect(await scroller(page).evaluate((element) => element.scrollTop)).toBe(0)
+    // The other site's introduction (none) and previews are its own.
+    await expect(sectionLink(page, 'Overview')).toHaveCount(0)
+  })
+
+  test('at 390 px all three links stay visible, search is an icon button and nothing overflows', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await routeSreHome(page, readmeEntries, { bodies: readmeBodies })
+    for (const path of ['/sre', '/sre?section=files', '/sre/_previews']) {
+      await page.goto(path)
+      await expect(sections(page).getByRole('link')).toHaveCount(3)
+      for (const name of ['Overview', 'Files', 'Previews']) await expect(sectionLink(page, name)).toBeVisible()
+      const search = searchEntry(page)
+      await expect(search).toBeVisible()
+      await expect(search.locator('.site-home-search-label')).toBeHidden()
+      const box = await search.boundingBox()
+      expect(box?.width).toBeLessThan(48)
+      const overflow = await page.evaluate(() => ({
+        page: document.documentElement.scrollWidth - window.innerWidth,
+        scroller: (document.querySelector('.directory-scroll') as HTMLElement).scrollWidth - (document.querySelector('.directory-scroll') as HTMLElement).clientWidth,
+        bar: (document.querySelector('.site-home-bar') as HTMLElement).scrollWidth - (document.querySelector('.site-home-bar') as HTMLElement).clientWidth,
+      }))
+      expect(overflow.page).toBeLessThanOrEqual(0)
+      expect(overflow.scroller).toBeLessThanOrEqual(0)
+      expect(overflow.bar).toBeLessThanOrEqual(0)
+    }
+  })
+
+  test('keyboard order is Overview, Files, Previews, search; aria-current marks one link', async ({ page }) => {
+    await routeSreHome(page, readmeEntries, { bodies: readmeBodies })
+    await page.goto('/sre')
+    await sectionLink(page, 'Overview').focus()
+    await page.keyboard.press('Tab')
+    await expect(sectionLink(page, 'Files')).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(sectionLink(page, 'Previews')).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(searchEntry(page)).toBeFocused()
+    await expect(sections(page).locator('[aria-current="page"]')).toHaveCount(1)
+    // Enter on a link switches the section, and focus follows to the new current link.
+    await sectionLink(page, 'Files').focus()
+    await page.keyboard.press('Enter')
+    await expect(page).toHaveURL('/sre?section=files')
+    await expect(sectionLink(page, 'Files')).toBeFocused()
+    await expect(sectionLink(page, 'Files')).toHaveAttribute('aria-current', 'page')
+    await expect(sections(page).locator('[aria-current="page"]')).toHaveCount(1)
+  })
+
+  test('the dark theme styles the section row', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await routeSreHome(page, readmeEntries, { bodies: readmeBodies })
+    await page.goto('/sre')
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    const luminance = (rgb: string) => {
+      const [r, g, b] = rgb.match(/\d+/g)!.map(Number)
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    }
+    const current = await sectionLink(page, 'Overview').evaluate((element) => getComputedStyle(element).color)
+    const other = await sectionLink(page, 'Files').evaluate((element) => getComputedStyle(element).color)
+    const surface = await page.locator('.directory-scroll').evaluate((element) => getComputedStyle(element).backgroundColor)
+    expect(luminance(current)).toBeGreaterThan(200)
+    expect(luminance(other)).toBeGreaterThan(110)
+    expect(luminance(surface)).toBeLessThan(60)
   })
 })

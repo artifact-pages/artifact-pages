@@ -139,12 +139,12 @@ function App() {
     )) {
       return <PageNotFoundPage onBack={() => navigate('/')} />
     }
-    const siteTitle = sites.status === 'success'
-      ? sites.data.find(({ site }) => site.id === route.siteId)?.site.title
-      : undefined
-    return route.kind === 'preview-list'
-      ? <PreviewListPage route={route} navigate={navigate} siteTitle={siteTitle} />
-      : <PreviewDocumentPage route={route} hash={hash} navigate={navigate} siteTitle={siteTitle} />
+    if (route.kind === 'preview-document') {
+      const siteTitle = sites.status === 'success'
+        ? sites.data.find(({ site }) => site.id === route.siteId)?.site.title
+        : undefined
+      return <PreviewDocumentPage route={route} hash={hash} navigate={navigate} siteTitle={siteTitle} />
+    }
   }
 
   return (
@@ -180,7 +180,7 @@ function SitePage({
   theme,
   onSetThemeMode,
 }: {
-  route: Extract<AppRoute, { kind: 'site' | 'search' }>
+  route: Extract<AppRoute, { kind: 'site' | 'search' | 'preview-list' }>
   sites: SiteCatalogEntry[]
   sitesLoading: boolean
   siteDiscoveryStatus: LoadingState<SiteCatalogEntry[]>['status']
@@ -232,6 +232,10 @@ function SitePage({
 
   if (indexState.status === 'loading') {
     return <StatusPage title={route.siteId} message="Loading site index…" />
+  }
+  if (indexState.status === 'error' && route.kind === 'preview-list' && isValidSiteId(route.siteId)) {
+    // The Previews list does not depend on the published site: without an index it stands alone.
+    return <PreviewListPage route={route} navigate={navigate} siteTitle={registeredSite?.site.title} />
   }
   if (indexState.status === 'error') {
     const invalidSiteId = !isValidSiteId(route.siteId)
