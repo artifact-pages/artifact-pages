@@ -6,6 +6,7 @@ import { SitePicker } from './components/SitePicker'
 import { UnsupportedSchemaError } from './data/schema'
 import { defaultSiteIndexUrl, discoverSites, IndexLoadError, isValidSiteId, loadSiteIndex } from './data/indexes'
 import { createSiteFullTextSearch } from './data/fulltext'
+import { resetPreviewList } from './data/preview-list'
 import { hasSiteDiscoveryMetadata, type SiteCatalogEntry, type SiteIndex } from './domain/index'
 import { isThemeMode, resolveTheme } from './domain/theme'
 import type { ResolvedTheme, ThemeMode } from './domain/theme'
@@ -214,6 +215,8 @@ function SitePage({
     }
   }, [route.siteId, fullTextUrl])
   useEffect(() => () => fullTextSearch?.clear(), [fullTextSearch])
+  // Leaving the site ends the visit's shared preview load; the next visit starts a fresh one.
+  useEffect(() => () => resetPreviewList(route.siteId), [route.siteId])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -230,6 +233,11 @@ function SitePage({
     return () => controller.abort()
   }, [route.siteId, artifactIndexUrl, indexAttempt])
 
+  if (indexState.status === 'loading' && route.kind === 'preview-list' && isValidSiteId(route.siteId)) {
+    // Previews do not wait for the site index: the list starts loading now and the page moves into the
+    // workspace when the index arrives (the load and the scroll offset carry over).
+    return <PreviewListPage route={route} navigate={navigate} siteTitle={registeredSite?.site.title} />
+  }
   if (indexState.status === 'loading') {
     return <StatusPage title={route.siteId} message="Loading site index…" />
   }

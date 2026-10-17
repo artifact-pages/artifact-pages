@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from 'react'
 import type { ArtifactIndexEntry, SiteIndex } from '../domain/index'
 import { RECENT_SECTION_MINIMUM_ARTIFACT_COUNT } from '../domain/navigation-sections'
-import { loadPreviewCandidates, PreviewLoadError } from '../data/previews'
+import { listedGroups, loadPreviewList, peekPreviewList, subscribePreviewList } from '../data/preview-list'
 import { pageCountLabel } from '../domain/directory'
 import { artifactRouteHref, siteFilesHref, siteHomeHref, sitePreviewsHref } from '../routing'
 import { Icon } from './Icon'
@@ -10,43 +10,19 @@ import { useRestoredScroll } from './useRestoredScroll'
 
 export type SiteSection = 'overview' | 'files' | 'previews'
 
-type PreviewAvailabilityState =
-  | { status: 'loading' }
-  | { status: 'success'; count: number }
-  | { status: 'unknown' }
-
 /**
- * How many previews the site lists, once the catalog has loaded. Until then, and when the catalog cannot be
- * read, there is no number (never a made-up one). The Previews section reports its own failures.
+ * How many previews the site lists, once the catalog has loaded: catalog-wide, whatever group a link filters
+ * the list to. Until then, and when the catalog cannot be read, there is no number (never a made-up one).
+ * The count shares one load with the Previews list (`data/preview-list.ts`).
  */
-export function usePreviewCount(siteId: string, enabled: boolean): { count: number | undefined; report: (count: number) => void } {
-  const [state, setState] = useState<{ siteId: string; availability: PreviewAvailabilityState }>({
-    siteId,
-    availability: { status: 'loading' },
-  })
-  const settled = state.siteId === siteId && state.availability.status !== 'loading'
+export function usePreviewCount(siteId: string, enabled: boolean): number | undefined {
+  const [, refresh] = useState(0)
+  useEffect(() => subscribePreviewList(() => refresh((n) => n + 1)), [])
   useEffect(() => {
-    if (!enabled || settled) return
-    let cancelled = false
-    loadPreviewCandidates(siteId).then(
-      (candidates) => {
-        const count = candidates.filter(({ availability }) => availability === 'available' || availability === 'unknown').length
-        if (!cancelled) setState({ siteId, availability: { status: 'success', count } })
-      },
-      (error: unknown) => {
-        if (cancelled) return
-        // No catalog at all is a site without previews; any other failure leaves the count unknown.
-        if (error instanceof PreviewLoadError && error.status === 404) setState({ siteId, availability: { status: 'success', count: 0 } })
-        else setState({ siteId, availability: { status: 'unknown' } })
-      },
-    )
-    return () => { cancelled = true }
-  }, [siteId, enabled, settled])
-  const report = useCallback(
-    (count: number) => setState({ siteId, availability: { status: 'success', count } }),
-    [siteId],
-  )
-  return { count: state.siteId === siteId && state.availability.status === 'success' ? state.availability.count : undefined, report }
+    if (enabled) void loadPreviewList(siteId)
+  }, [siteId, enabled])
+  const result = enabled ? peekPreviewList(siteId) : undefined
+  return result?.status === 'success' ? listedGroups(result.checked).length : undefined
 }
 
 /** The frame of a site-home section: the scrolling page with the site header, the section row and the section. */

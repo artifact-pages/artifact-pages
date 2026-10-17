@@ -156,8 +156,7 @@ export function ArtifactWorkspace({
       ? 'files'
       : hasIntroduction ? 'overview' : 'files'
   const onSiteHome = Boolean(previewsRoute) || (route.kind === 'site' && !routeArtifactPath)
-  // The Previews section loads the list itself and reports the count.
-  const { count: previewCount, report: reportPreviewCount } = usePreviewCount(index.site.id, onSiteHome && !previewsRoute)
+  const previewCount = usePreviewCount(index.site.id, onSiteHome)
   // The page whose content fills the stage: the open page, or a folder's README or index page. On the
   // site root only the Overview shows the introduction.
   const bodyArtifact = currentArtifact ?? (isSiteRoot && siteSection !== 'overview' ? undefined : currentDirectory?.indexArtifact)
@@ -1304,7 +1303,7 @@ export function ArtifactWorkspace({
                 <section className="site-previews" aria-labelledby="site-previews-title">
                   <h2 id="site-previews-title">{previewsRoute.groupId ? 'Preview link' : 'Previews'}</h2>
                   <p className="preview-page-lede">{PREVIEW_LEDE}</p>
-                  <PreviewListContent siteId={index.site.id} groupId={previewsRoute.groupId} navigate={navigateWithinWorkspace} onCount={reportPreviewCount} />
+                  <PreviewListContent siteId={index.site.id} groupId={previewsRoute.groupId} navigate={navigateWithinWorkspace} />
                 </section>
               </SiteHomeFrame>
             ) : currentDirectory ? (

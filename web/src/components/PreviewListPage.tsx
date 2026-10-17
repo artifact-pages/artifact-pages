@@ -1,13 +1,30 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PreviewGroup } from '../domain/preview'
-import { UnsupportedSchemaError } from '../data/schema'
-import { loadPreviewCatalog, loadPreviewManifest, PreviewLoadError, previewRouteHref } from '../data/previews'
+import { listedGroups, loadPreviewList, peekPreviewList, resetPreviewList, type CheckedGroup, type PreviewListResult } from '../data/preview-list'
+import { previewRouteHref } from '../data/previews'
 import { formatPreviewTime } from '../domain/preview-time'
 import type { AppRoute } from '../routing'
 import { pageTitle, usePageTitle } from './usePageTitle'
+import { useRestoredScroll } from './useRestoredScroll'
 
 type PreviewListRoute = Extract<AppRoute, { kind: 'preview-list' }>
-type GroupAvailability = 'available' | 'missing' | 'unknown' | 'invalid' | 'unsupported'
+type PreviewListState =
+  | { status: 'loading' }
+  | { status: 'success'; groups: CheckedGroup[]; invalidCount: number; unsupportedCount: number }
+  | { status: 'error'; error: Error }
+  | { status: 'needs-republish' }
+
+/** What one view shows of the shared catalog load: all groups, or only the one a group link names. */
+function previewListState(result: PreviewListResult, groupId?: string): PreviewListState {
+  if (result.status !== 'success') return result
+  const checked = groupId ? result.checked.filter(({ group }) => group.id === groupId) : result.checked
+  return {
+    status: 'success',
+    groups: listedGroups(checked),
+    invalidCount: checked.filter(({ availability }) => availability === 'invalid').length,
+    unsupportedCount: checked.filter(({ availability }) => availability === 'unsupported').length,
+  }
+}
 
 export function PreviewListPage({ route, navigate, siteTitle }: {
   route: PreviewListRoute
@@ -17,9 +34,12 @@ export function PreviewListPage({ route, navigate, siteTitle }: {
 }) {
   const siteName = siteTitle ?? route.siteId
   usePageTitle(pageTitle('Previews', siteName))
+  // Shares the history entry's scroll offset with the site home's Previews section, so the swap keeps the place.
+  const page = useRef<HTMLElement>(null)
+  useRestoredScroll(page)
 
   return (
-    <main className="preview-page">
+    <main className="preview-page" ref={page}>
       <header className="preview-page-header">
         <a className="preview-back-link" href={`/${encodeURIComponent(route.siteId)}`} onClick={(event) => {
           event.preventDefault()
@@ -40,73 +60,33 @@ export const PREVIEW_LEDE = 'Review changed documents, and documents affected by
  * The preview list itself: loading, error (with retry), republish, empty and expired states, and the groups.
  * Shared by the standalone page and the Previews section of the site home (ISSUE-107).
  */
-export function PreviewListContent({ siteId, groupId, navigate, showHomeLink = false, onCount }: {
+export function PreviewListContent({ siteId, groupId, navigate, showHomeLink = false }: {
   siteId: string
   groupId?: string
   navigate: (href: string) => void
   /** The standalone page offers a way back to the site home from its empty state; the site home has its own navigation. */
   showHomeLink?: boolean
-  /** Called with the number of listed previews once the whole list (not a single group) has loaded. */
-  onCount?: (count: number) => void
 }) {
   const route = { siteId, groupId }
-  const onCountRef = useRef(onCount)
-  onCountRef.current = onCount
   const [attempt, setAttempt] = useState(0)
-  const [state, setState] = useState<
-    | { status: 'loading' }
-    | { status: 'success'; groups: Array<{ group: PreviewGroup; availability: GroupAvailability }>; invalidCount: number; unsupportedCount: number }
-    | { status: 'error'; error: Error }
-    | { status: 'needs-republish' }
-  >({ status: 'loading' })
+  // A load another view already made (the section badge, the standalone page before the site index arrived)
+  // shows at once, without a loading state.
+  const [state, setState] = useState<PreviewListState>(() => {
+    const settled = peekPreviewList(siteId)
+    return settled ? previewListState(settled, groupId) : { status: 'loading' }
+  })
   const retryRef = useRef<HTMLButtonElement>(null)
   const focusRetry = useRef(false)
 
   useEffect(() => {
     let cancelled = false
-    setState({ status: 'loading' })
-    loadPreviewCatalog(route.siteId).then(async (catalog) => {
-      const groups = route.groupId
-        ? catalog.groups.filter(({ id }) => id === route.groupId)
-        : catalog.groups
-      const manifestsByHead = new Map<string, Promise<GroupAvailability>>()
-      const checked = await Promise.all(groups.map(async (group) => {
-        let availability = manifestsByHead.get(group.headSha)
-        if (!availability) {
-          availability = loadPreviewManifest(route.siteId, group.headSha).then((manifest) => (
-            sameDocuments(group.documents, manifest.documents) ? 'available' as const : 'invalid' as const
-          )).catch((error: unknown) => {
-            if (error instanceof PreviewLoadError && error.status === 404) return 'missing' as const
-            if (error instanceof UnsupportedSchemaError) return 'unsupported' as const
-            if (error instanceof PreviewLoadError && error.kind === 'invalid') return 'invalid' as const
-            return 'unknown' as const
-          })
-          manifestsByHead.set(group.headSha, availability)
-        }
-        return { group, availability: await availability }
-      }))
-      if (!cancelled) {
-        const listed = checked.filter(({ availability }) => availability === 'available' || availability === 'unknown')
-        if (!route.groupId) onCountRef.current?.(listed.length)
-        setState({
-          status: 'success',
-          groups: listed
-            .sort((left, right) => right.group.updatedAt.localeCompare(left.group.updatedAt)),
-          invalidCount: checked.filter(({ availability }) => availability === 'invalid').length,
-          unsupportedCount: checked.filter(({ availability }) => availability === 'unsupported').length,
-        })
-      }
-    }).catch((error: unknown) => {
-      if (cancelled) return
-      if (error instanceof Error && 'status' in error && error.status === 404) {
-        if (!route.groupId) onCountRef.current?.(0)
-        setState({ status: 'success', groups: [], invalidCount: 0, unsupportedCount: 0 })
-      } else if (error instanceof UnsupportedSchemaError) {
-        setState({ status: 'needs-republish' })
-      } else {
-        setState({ status: 'error', error: error instanceof Error ? error : new Error(String(error)) })
-      }
-    })
+    const settled = peekPreviewList(route.siteId)
+    setState(settled ? previewListState(settled, route.groupId) : { status: 'loading' })
+    if (!settled) {
+      loadPreviewList(route.siteId).then((result) => {
+        if (!cancelled) setState(previewListState(result, route.groupId))
+      })
+    }
     return () => { cancelled = true }
   }, [route.siteId, route.groupId, attempt])
 
@@ -132,6 +112,7 @@ export function PreviewListContent({ siteId, groupId, navigate, showHomeLink = f
             className="text-action"
             onClick={() => {
               focusRetry.current = true
+              resetPreviewList(route.siteId)
               setAttempt((n) => n + 1)
             }}
           >Try again</button>
@@ -235,12 +216,6 @@ function PreviewDocumentList({ documents, siteId, group, navigate }: {
       })}
     </ul>
   )
-}
-
-function sameDocuments(left: PreviewGroup['documents'], right: PreviewGroup['documents']) {
-  return left.length === right.length && left.every((document, index) => (
-    document.path === right[index]?.path && document.title === right[index]?.title && document.format === right[index]?.format
-  ))
 }
 
 function PreviewTimeLabel({ value }: { value: string }) {

@@ -4161,7 +4161,8 @@ test('the in-site palette opens previews by command without loading preview data
   await palette.getByRole('option', { name: /Open previews/ }).click()
   await expect(page).toHaveURL('/sre/_previews')
   await expect(page.getByRole('region', { name: 'Preview pr:42' })).toBeVisible()
-  await expect.poll(() => previewRequests.some((pathname) => pathname === '/_previews/sre/catalog.json')).toBe(true)
+  // The list joins the load the section badge already made during this visit.
+  expect(previewRequests.filter((pathname) => pathname === '/_previews/sre/catalog.json')).toEqual([])
   expect(previewRequests.every((pathname) => pathname.startsWith('/_previews/sre/'))).toBeTruthy()
   await page.getByRole('region', { name: 'Preview pr:42' }).getByRole('link', { name: /Local preview guide/ }).click()
   await expect(page).toHaveURL(new RegExp(`/sre/_previews/${previewHeadSha}/guides/preview-guide\\.md\\?group=pr%3A42$`))
@@ -8433,6 +8434,123 @@ test.describe('site home sections', () => {
     await expect(page).toHaveURL('/sre/_previews')
     await expect(page.getByRole('region', { name: 'Preview pr:42' })).toBeVisible()
     await expect(sectionLink(page, 'Previews')).toHaveAttribute('aria-current', 'page')
+  })
+
+  test('a group link shows the catalog-wide preview count', async ({ page }) => {
+    await page.goto('/sre/_previews?group=pr%3A42')
+    await expect(page.getByRole('region', { name: 'Preview pr:42' })).toBeVisible()
+    await expect(page.getByRole('region', { name: 'Preview pr:43' })).toHaveCount(0)
+    // The catalog lists three groups; the filtered view does not change the badge.
+    await expect(sectionLink(page, 'Previews').locator('.site-section-count')).toHaveText('3')
+  })
+
+  test('the Previews list does not wait for a slow site index and keeps its data and scroll when it arrives', async ({ page }) => {
+    await page.setViewportSize({ width: 1200, height: 360 })
+    const requests: string[] = []
+    page.on('request', (request) => {
+      const pathname = new URL(request.url()).pathname
+      if (pathname.startsWith('/_previews/sre/')) requests.push(pathname)
+    })
+    let releaseIndex!: () => void
+    const gate = new Promise<void>((resolve) => { releaseIndex = resolve })
+    await page.route('**/_indexes/sre/index.json', async (route) => {
+      await gate
+      await route.continue()
+    })
+    await page.goto('/sre/_previews')
+    // Standalone while the index is pending.
+    await expect(page.getByRole('region', { name: 'Preview pr:42' })).toBeVisible()
+    await expect(sections(page)).toHaveCount(0)
+    const standalone = page.locator('.preview-page')
+    await standalone.evaluate((element) => { element.scrollTop = 150 })
+    await expect.poll(() => standalone.evaluate((element) => element.scrollTop)).toBeGreaterThan(100)
+    const before = await standalone.evaluate((element) => element.scrollTop)
+    const requestsBefore = [...requests]
+    expect(requestsBefore.filter((pathname) => pathname.endsWith('/catalog.json'))).toHaveLength(1)
+
+    releaseIndex()
+    await expect(sections(page)).toBeVisible()
+    await expect(sectionLink(page, 'Previews')).toHaveAttribute('aria-current', 'page')
+    await expect(page.getByRole('region', { name: 'Preview pr:42' })).toBeVisible()
+    await expect(sectionLink(page, 'Previews').locator('.site-section-count')).toHaveText('3')
+    await expect.poll(() => scroller(page).evaluate((element) => element.scrollTop)).toBeGreaterThan(before - 60)
+    // No second load: the catalog and every manifest were requested once.
+    expect([...requests].sort()).toEqual([...requestsBefore].sort())
+    expect(new Set(requests).size).toBe(requests.length)
+  })
+
+  test('the Previews list stays standalone when the site index fails after a delay', async ({ page }) => {
+    let releaseIndex!: () => void
+    const gate = new Promise<void>((resolve) => { releaseIndex = resolve })
+    await page.route('**/_indexes/sre/index.json', async (route) => {
+      await gate
+      await route.fulfill({ status: 503, body: 'unavailable' })
+    })
+    await page.goto('/sre/_previews')
+    await expect(page.getByRole('region', { name: 'Preview pr:42' })).toBeVisible()
+    releaseIndex()
+    await page.waitForResponse((response) => new URL(response.url()).pathname === '/_indexes/sre/index.json')
+    await expect(page.getByRole('region', { name: 'Preview pr:42' })).toBeVisible()
+    await expect(page.getByRole('link', { name: '← SRE', exact: true })).toBeVisible()
+    await expect(sections(page)).toHaveCount(0)
+    await expect(page.getByRole('alert')).toHaveCount(0)
+  })
+
+  test('the badge and the list share one catalog load; Try again and leaving the site start a fresh one', async ({ page }) => {
+    await routeSreHome(page, readmeEntries, { bodies: readmeBodies })
+    const requests: string[] = []
+    page.on('request', (request) => {
+      const pathname = new URL(request.url()).pathname
+      if (pathname.startsWith('/_previews/sre/')) requests.push(pathname)
+    })
+    const catalogs = () => requests.filter((pathname) => pathname.endsWith('/catalog.json')).length
+    const manifests = () => requests.filter((pathname) => pathname.endsWith('/manifest.json'))
+    await page.goto('/sre')
+    await expect(sectionLink(page, 'Previews').locator('.site-section-count')).toHaveText('3')
+    const manifestCount = manifests().length
+    expect(catalogs()).toBe(1)
+    expect(manifestCount).toBeGreaterThan(0)
+    await sectionLink(page, 'Previews').click()
+    await expect(page.getByRole('region', { name: 'Preview pr:42' })).toBeVisible()
+    await sectionLink(page, 'Overview').click()
+    await sectionLink(page, 'Previews').click()
+    await expect(page.getByRole('region', { name: 'Preview pr:42' })).toBeVisible()
+    expect(catalogs()).toBe(1)
+    expect(manifests()).toHaveLength(manifestCount)
+    expect(new Set(manifests()).size).toBe(manifestCount)
+
+    // Leaving the site ends the visit: coming back loads again.
+    await page.getByRole('button', { name: 'All sites' }).click()
+    await expect(page).toHaveURL('/')
+    await page.goto('/sre/_previews')
+    await expect(page.getByRole('region', { name: 'Preview pr:42' })).toBeVisible()
+  })
+
+  test('a joined load that is still in progress is not repeated, and Try again loads afresh', async ({ page }) => {
+    await routeSreHome(page, readmeEntries, { bodies: readmeBodies })
+    let catalogRequests = 0
+    let releaseCatalog!: () => void
+    const gate = new Promise<void>((resolve) => { releaseCatalog = resolve })
+    let failing = true
+    await page.route('**/_previews/sre/catalog.json', async (route) => {
+      catalogRequests += 1
+      if (catalogRequests === 1) await gate
+      if (failing) await route.fulfill({ status: 503, body: 'unavailable' })
+      else await route.continue()
+    })
+    await page.goto('/sre')
+    // The badge's load is still in progress when the section opens and joins it.
+    await sectionLink(page, 'Previews').click()
+    await expect(page.getByRole('status')).toHaveText('Loading previews…')
+    expect(catalogRequests).toBe(1)
+    releaseCatalog()
+    await expect(page.getByRole('alert')).toHaveText('The preview list could not be loaded.')
+    expect(catalogRequests).toBe(1)
+    failing = false
+    await page.getByRole('button', { name: 'Try again' }).click()
+    await expect(page.getByRole('region', { name: 'Preview pr:42' })).toBeVisible()
+    expect(catalogRequests).toBe(2)
+    await expect(sectionLink(page, 'Previews').locator('.site-section-count')).toHaveText('3')
   })
 
   test('a preview group link opens in the Previews section', async ({ page }) => {
