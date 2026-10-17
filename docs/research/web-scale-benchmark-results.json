@@ -1,0 +1,3400 @@
+{
+  "schemaVersion": 1,
+  "measuredAt": {
+    "startedAt": "2026-10-17T12:22:32.811Z",
+    "finishedAt": "2026-10-17T13:16:04.555Z"
+  },
+  "conditions": {
+    "pages": [
+      1000,
+      5000,
+      10000,
+      50000
+    ],
+    "profiles": [
+      "unthrottled",
+      "constrained"
+    ],
+    "iterations": 3,
+    "firstLoadAndMermaid": "fresh browser context, then a second visit in the same context",
+    "constrained": "CPU x4, 150 ms RTT, 1.6 Mbps down, 0.75 Mbps up",
+    "delivery": "local nginx 1.29, loopback, no compression",
+    "searchMethod": "one open search workspace per iteration; query and show-more timings start after workspace paint"
+  },
+  "environment": {
+    "platform": "darwin",
+    "architecture": "arm64",
+    "cpu": "Apple M4",
+    "cores": 10,
+    "ramBytes": 34359738368,
+    "node": "v22.14.0",
+    "go": "go version go1.26.9 darwin/arm64",
+    "commit": "c7d5d2b9661f8f95193044636ff0d7a86d875de0",
+    "chromium": "153.0.8010.12",
+    "playwright": "1.63.0"
+  },
+  "data": {
+    "generatorVersion": 2,
+    "seed": 20261014,
+    "sites": {
+      "scale-1000": {
+        "pages": 1000,
+        "files": 1005,
+        "shape": {
+          "htmlPages": 673,
+          "mdPages": 327,
+          "folders": 10,
+          "readmeFolders": 5,
+          "foldersWithoutReadme": 5,
+          "maxFolderDepth": 2,
+          "japaneseShareOfCharacters": 0.044712655950178225,
+          "averagePageBytes": 1211.107,
+          "sourceBytes": 1211358
+        },
+        "layout": {
+          "rootPages": 5,
+          "handbook": 100,
+          "flat": 695,
+          "nested": 200,
+          "areas": 4,
+          "leaves": 4
+        },
+        "generateMs": 88.02595800000017
+      },
+      "scale-5000": {
+        "pages": 5000,
+        "files": 5018,
+        "shape": {
+          "htmlPages": 3561,
+          "mdPages": 1439,
+          "folders": 42,
+          "readmeFolders": 18,
+          "foldersWithoutReadme": 24,
+          "maxFolderDepth": 2,
+          "japaneseShareOfCharacters": 0.044814404202399294,
+          "averagePageBytes": 1218.4376,
+          "sourceBytes": 6092935
+        },
+        "layout": {
+          "rootPages": 5,
+          "handbook": 500,
+          "flat": 3495,
+          "nested": 1000,
+          "areas": 20,
+          "leaves": 20
+        },
+        "generateMs": 375.58354099999997
+      },
+      "scale-10000": {
+        "pages": 10000,
+        "files": 10041,
+        "shape": {
+          "htmlPages": 6994,
+          "mdPages": 3006,
+          "folders": 112,
+          "readmeFolders": 41,
+          "foldersWithoutReadme": 71,
+          "maxFolderDepth": 2,
+          "japaneseShareOfCharacters": 0.04474446686184979,
+          "averagePageBytes": 1215.7389,
+          "sourceBytes": 12159260
+        },
+        "layout": {
+          "rootPages": 5,
+          "handbook": 500,
+          "flat": 5000,
+          "nested": 4495,
+          "areas": 20,
+          "leaves": 90
+        },
+        "generateMs": 727.0367080000005
+      },
+      "scale-50000": {
+        "pages": 50000,
+        "files": 50308,
+        "shape": {
+          "htmlPages": 34513,
+          "mdPages": 15487,
+          "folders": 907,
+          "readmeFolders": 308,
+          "foldersWithoutReadme": 599,
+          "maxFolderDepth": 2,
+          "japaneseShareOfCharacters": 0.044478516142094034,
+          "averagePageBytes": 1220.02356,
+          "sourceBytes": 61016593
+        },
+        "layout": {
+          "rootPages": 5,
+          "handbook": 500,
+          "flat": 5000,
+          "nested": 44495,
+          "areas": 20,
+          "leaves": 890
+        },
+        "generateMs": 3672.9399169999997
+      }
+    },
+    "searchStressInput": {
+      "longBodyPath": "big-flat/page-000000.md",
+      "longBodyBytes": 281101,
+      "maxTextPackRawBytes": 77553,
+      "longBodySnippet": "omitted",
+      "snippetOmittedDocuments": 18956,
+      "snippetTruncatedDocuments": 0,
+      "generationHitsBeforeChange": 525
+    }
+  },
+  "profiles": {
+    "unthrottled": {
+      "scale-1000": {
+        "pages": 1000,
+        "firstLoad": [
+          {
+            "cold": {
+              "fcpMs": 788,
+              "siteListVisibleMs": 157,
+              "timeToInteractiveProxyMs": 5155.800001144409,
+              "completedBytesAtListVisible": 840759,
+              "transferredBytesTotal": 840759,
+              "rawBytesTotal": 839034,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 769242,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 567,
+                  "raw": 297
+                },
+                {
+                  "path": "/_indexes/scale-1000/meta.json",
+                  "encoded": 1150,
+                  "raw": 880
+                }
+              ],
+              "indexBytesEncoded": 1717,
+              "indexBytesRaw": 1177,
+              "settledMs": 5171,
+              "heapAfterGC": 2592436
+            },
+            "warm": {
+              "fcpMs": 112,
+              "siteListVisibleMs": 110.89999961853027,
+              "timeToInteractiveProxyMs": 5165.300001144409,
+              "completedBytesAtListVisible": 2183,
+              "transferredBytesTotal": 2183,
+              "rawBytesTotal": 839034,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 0,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 567,
+                  "raw": 297
+                },
+                {
+                  "path": "/_indexes/scale-1000/meta.json",
+                  "encoded": 1150,
+                  "raw": 880
+                }
+              ],
+              "indexBytesEncoded": 1717,
+              "indexBytesRaw": 1177,
+              "settledMs": 5173,
+              "heapAfterGC": 2591308
+            }
+          },
+          {
+            "cold": {
+              "fcpMs": 84,
+              "siteListVisibleMs": 78.80000114440918,
+              "timeToInteractiveProxyMs": 5130.700000762939,
+              "completedBytesAtListVisible": 840759,
+              "transferredBytesTotal": 840759,
+              "rawBytesTotal": 839034,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 769242,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 567,
+                  "raw": 297
+                },
+                {
+                  "path": "/_indexes/scale-1000/meta.json",
+                  "encoded": 1150,
+                  "raw": 880
+                }
+              ],
+              "indexBytesEncoded": 1717,
+              "indexBytesRaw": 1177,
+              "settledMs": 5133,
+              "heapAfterGC": 2592448
+            },
+            "warm": {
+              "fcpMs": 72,
+              "siteListVisibleMs": 69.89999961853027,
+              "timeToInteractiveProxyMs": 5125.5,
+              "completedBytesAtListVisible": 2183,
+              "transferredBytesTotal": 2183,
+              "rawBytesTotal": 839034,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 0,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 567,
+                  "raw": 297
+                },
+                {
+                  "path": "/_indexes/scale-1000/meta.json",
+                  "encoded": 1150,
+                  "raw": 880
+                }
+              ],
+              "indexBytesEncoded": 1717,
+              "indexBytesRaw": 1177,
+              "settledMs": 5129,
+              "heapAfterGC": 2591136
+            }
+          },
+          {
+            "cold": {
+              "fcpMs": 88,
+              "siteListVisibleMs": 76.29999923706055,
+              "timeToInteractiveProxyMs": 5121.89999961853,
+              "completedBytesAtListVisible": 840759,
+              "transferredBytesTotal": 840759,
+              "rawBytesTotal": 839034,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 769242,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 567,
+                  "raw": 297
+                },
+                {
+                  "path": "/_indexes/scale-1000/meta.json",
+                  "encoded": 1150,
+                  "raw": 880
+                }
+              ],
+              "indexBytesEncoded": 1717,
+              "indexBytesRaw": 1177,
+              "settledMs": 5125,
+              "heapAfterGC": 2592448
+            },
+            "warm": {
+              "fcpMs": 88,
+              "siteListVisibleMs": 87.5,
+              "timeToInteractiveProxyMs": 5153.800001144409,
+              "completedBytesAtListVisible": 2183,
+              "transferredBytesTotal": 2183,
+              "rawBytesTotal": 839034,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 0,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 567,
+                  "raw": 297
+                },
+                {
+                  "path": "/_indexes/scale-1000/meta.json",
+                  "encoded": 1150,
+                  "raw": 880
+                }
+              ],
+              "indexBytesEncoded": 1717,
+              "indexBytesRaw": 1177,
+              "settledMs": 5161,
+              "heapAfterGC": 2591296
+            }
+          }
+        ],
+        "mermaid": [
+          {
+            "cold": {
+              "firstMermaidRenderMs": 315.8999996185303,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 2421390,
+              "totalRawBytes": 2410525,
+              "requests": 35,
+              "settledMs": 1130,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 0,
+                "durationMs": 0,
+                "maxMs": 0
+              }
+            },
+            "warm": {
+              "firstMermaidRenderMs": 166.39999961853027,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 784202,
+              "totalRawBytes": 2410525,
+              "requests": 35,
+              "settledMs": 981,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 0,
+                "durationMs": 0,
+                "maxMs": 0
+              }
+            }
+          },
+          {
+            "cold": {
+              "firstMermaidRenderMs": 246.30000114440918,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 2421390,
+              "totalRawBytes": 2410525,
+              "requests": 35,
+              "settledMs": 1057,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 0,
+                "durationMs": 0,
+                "maxMs": 0
+              }
+            },
+            "warm": {
+              "firstMermaidRenderMs": 150.60000038146973,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 784202,
+              "totalRawBytes": 2410525,
+              "requests": 35,
+              "settledMs": 969,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 0,
+                "durationMs": 0,
+                "maxMs": 0
+              }
+            }
+          },
+          {
+            "cold": {
+              "firstMermaidRenderMs": 260,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 2421390,
+              "totalRawBytes": 2410525,
+              "requests": 35,
+              "settledMs": 1072,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 0,
+                "durationMs": 0,
+                "maxMs": 0
+              }
+            },
+            "warm": {
+              "firstMermaidRenderMs": 153,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 784202,
+              "totalRawBytes": 2410525,
+              "requests": 35,
+              "settledMs": 965,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 0,
+                "durationMs": 0,
+                "maxMs": 0
+              }
+            }
+          }
+        ]
+      },
+      "scale-5000": {
+        "pages": 5000,
+        "firstLoad": [
+          {
+            "cold": {
+              "fcpMs": 80,
+              "siteListVisibleMs": 70.5,
+              "timeToInteractiveProxyMs": 5151,
+              "completedBytesAtListVisible": 840345,
+              "transferredBytesTotal": 840345,
+              "rawBytesTotal": 838620,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 769242,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 567,
+                  "raw": 297
+                },
+                {
+                  "path": "/_indexes/scale-5000/meta.json",
+                  "encoded": 736,
+                  "raw": 466
+                }
+              ],
+              "indexBytesEncoded": 1303,
+              "indexBytesRaw": 763,
+              "settledMs": 5155,
+              "heapAfterGC": 2585464
+            },
+            "warm": {
+              "fcpMs": 96,
+              "siteListVisibleMs": 92.39999961853027,
+              "timeToInteractiveProxyMs": 5164.200000762939,
+              "completedBytesAtListVisible": 1769,
+              "transferredBytesTotal": 1769,
+              "rawBytesTotal": 838620,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 0,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 567,
+                  "raw": 297
+                },
+                {
+                  "path": "/_indexes/scale-5000/meta.json",
+                  "encoded": 736,
+                  "raw": 466
+                }
+              ],
+              "indexBytesEncoded": 1303,
+              "indexBytesRaw": 763,
+              "settledMs": 5170,
+              "heapAfterGC": 2583388
+            }
+          },
+          {
+            "cold": {
+              "fcpMs": 76,
+              "siteListVisibleMs": 70.89999961853027,
+              "timeToInteractiveProxyMs": 5139.200000762939,
+              "completedBytesAtListVisible": 840345,
+              "transferredBytesTotal": 840345,
+              "rawBytesTotal": 838620,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 769242,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 567,
+                  "raw": 297
+                },
+                {
+                  "path": "/_indexes/scale-5000/meta.json",
+                  "encoded": 736,
+                  "raw": 466
+                }
+              ],
+              "indexBytesEncoded": 1303,
+              "indexBytesRaw": 763,
+              "settledMs": 5143,
+              "heapAfterGC": 2585464
+            },
+            "warm": {
+              "fcpMs": 92,
+              "siteListVisibleMs": 90,
+              "timeToInteractiveProxyMs": 5123.10000038147,
+              "completedBytesAtListVisible": 1769,
+              "transferredBytesTotal": 1769,
+              "rawBytesTotal": 838620,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 0,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 567,
+                  "raw": 297
+                },
+                {
+                  "path": "/_indexes/scale-5000/meta.json",
+                  "encoded": 736,
+                  "raw": 466
+                }
+              ],
+              "indexBytesEncoded": 1303,
+              "indexBytesRaw": 763,
+              "settledMs": 5128,
+              "heapAfterGC": 2584328
+            }
+          },
+          {
+            "cold": {
+              "fcpMs": 76,
+              "siteListVisibleMs": 64.9000015258789,
+              "timeToInteractiveProxyMs": 5086.60000038147,
+              "completedBytesAtListVisible": 840345,
+              "transferredBytesTotal": 840345,
+              "rawBytesTotal": 838620,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 769242,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 567,
+                  "raw": 297
+                },
+                {
+                  "path": "/_indexes/scale-5000/meta.json",
+                  "encoded": 736,
+                  "raw": 466
+                }
+              ],
+              "indexBytesEncoded": 1303,
+              "indexBytesRaw": 763,
+              "settledMs": 5089,
+              "heapAfterGC": 2585464
+            },
+            "warm": {
+              "fcpMs": 72,
+              "siteListVisibleMs": 69,
+              "timeToInteractiveProxyMs": 5105.5,
+              "completedBytesAtListVisible": 1769,
+              "transferredBytesTotal": 1769,
+              "rawBytesTotal": 838620,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 0,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 567,
+                  "raw": 297
+                },
+                {
+                  "path": "/_indexes/scale-5000/meta.json",
+                  "encoded": 736,
+                  "raw": 466
+                }
+              ],
+              "indexBytesEncoded": 1303,
+              "indexBytesRaw": 763,
+              "settledMs": 5110,
+              "heapAfterGC": 2584168
+            }
+          }
+        ],
+        "mermaid": [
+          {
+            "cold": {
+              "firstMermaidRenderMs": 363.5,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 6027535,
+              "totalRawBytes": 6016668,
+              "requests": 35,
+              "settledMs": 1175,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 1,
+                "durationMs": 91,
+                "maxMs": 91
+              }
+            },
+            "warm": {
+              "firstMermaidRenderMs": 234.30000114440918,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 4390362,
+              "totalRawBytes": 6016668,
+              "requests": 35,
+              "settledMs": 1043,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 1,
+                "durationMs": 74,
+                "maxMs": 74
+              }
+            }
+          },
+          {
+            "cold": {
+              "firstMermaidRenderMs": 359.29999923706055,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 6027535,
+              "totalRawBytes": 6016668,
+              "requests": 35,
+              "settledMs": 1174,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 1,
+                "durationMs": 89,
+                "maxMs": 89
+              }
+            },
+            "warm": {
+              "firstMermaidRenderMs": 233.10000038146973,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 4390362,
+              "totalRawBytes": 6016668,
+              "requests": 35,
+              "settledMs": 1049,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 1,
+                "durationMs": 66,
+                "maxMs": 66
+              }
+            }
+          },
+          {
+            "cold": {
+              "firstMermaidRenderMs": 325.29999923706055,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 6027535,
+              "totalRawBytes": 6016668,
+              "requests": 35,
+              "settledMs": 1138,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 1,
+                "durationMs": 87,
+                "maxMs": 87
+              }
+            },
+            "warm": {
+              "firstMermaidRenderMs": 217.80000114440918,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 4390362,
+              "totalRawBytes": 6016668,
+              "requests": 35,
+              "settledMs": 1032,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 1,
+                "durationMs": 67,
+                "maxMs": 67
+              }
+            }
+          }
+        ]
+      },
+      "scale-10000": {
+        "pages": 10000,
+        "firstLoad": [
+          {
+            "cold": {
+              "fcpMs": 80,
+              "siteListVisibleMs": 78.79999923706055,
+              "timeToInteractiveProxyMs": 5133.299999237061,
+              "completedBytesAtListVisible": 840355,
+              "transferredBytesTotal": 840355,
+              "rawBytesTotal": 838630,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 769242,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 571,
+                  "raw": 301
+                },
+                {
+                  "path": "/_indexes/scale-10000/meta.json",
+                  "encoded": 742,
+                  "raw": 472
+                }
+              ],
+              "indexBytesEncoded": 1313,
+              "indexBytesRaw": 773,
+              "settledMs": 5138,
+              "heapAfterGC": 2585464
+            },
+            "warm": {
+              "fcpMs": 164,
+              "siteListVisibleMs": 176.0999984741211,
+              "timeToInteractiveProxyMs": 5216.099998474121,
+              "completedBytesAtListVisible": 1779,
+              "transferredBytesTotal": 1779,
+              "rawBytesTotal": 838630,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 0,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 571,
+                  "raw": 301
+                },
+                {
+                  "path": "/_indexes/scale-10000/meta.json",
+                  "encoded": 742,
+                  "raw": 472
+                }
+              ],
+              "indexBytesEncoded": 1313,
+              "indexBytesRaw": 773,
+              "settledMs": 5221,
+              "heapAfterGC": 2584340
+            }
+          },
+          {
+            "cold": {
+              "fcpMs": 76,
+              "siteListVisibleMs": 68.80000114440918,
+              "timeToInteractiveProxyMs": 5102.700000762939,
+              "completedBytesAtListVisible": 840355,
+              "transferredBytesTotal": 840355,
+              "rawBytesTotal": 838630,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 769242,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 571,
+                  "raw": 301
+                },
+                {
+                  "path": "/_indexes/scale-10000/meta.json",
+                  "encoded": 742,
+                  "raw": 472
+                }
+              ],
+              "indexBytesEncoded": 1313,
+              "indexBytesRaw": 773,
+              "settledMs": 5105,
+              "heapAfterGC": 2585432
+            },
+            "warm": {
+              "fcpMs": 80,
+              "siteListVisibleMs": 80.20000076293945,
+              "timeToInteractiveProxyMs": 5133.800001144409,
+              "completedBytesAtListVisible": 1779,
+              "transferredBytesTotal": 1779,
+              "rawBytesTotal": 838630,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 0,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 571,
+                  "raw": 301
+                },
+                {
+                  "path": "/_indexes/scale-10000/meta.json",
+                  "encoded": 742,
+                  "raw": 472
+                }
+              ],
+              "indexBytesEncoded": 1313,
+              "indexBytesRaw": 773,
+              "settledMs": 5138,
+              "heapAfterGC": 2583388
+            }
+          },
+          {
+            "cold": {
+              "fcpMs": 72,
+              "siteListVisibleMs": 66.19999885559082,
+              "timeToInteractiveProxyMs": 5111.799999237061,
+              "completedBytesAtListVisible": 840355,
+              "transferredBytesTotal": 840355,
+              "rawBytesTotal": 838630,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 769242,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 571,
+                  "raw": 301
+                },
+                {
+                  "path": "/_indexes/scale-10000/meta.json",
+                  "encoded": 742,
+                  "raw": 472
+                }
+              ],
+              "indexBytesEncoded": 1313,
+              "indexBytesRaw": 773,
+              "settledMs": 5116,
+              "heapAfterGC": 2585464
+            },
+            "warm": {
+              "fcpMs": 88,
+              "siteListVisibleMs": 84.0999984741211,
+              "timeToInteractiveProxyMs": 5129.799999237061,
+              "completedBytesAtListVisible": 1779,
+              "transferredBytesTotal": 1779,
+              "rawBytesTotal": 838630,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 0,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 571,
+                  "raw": 301
+                },
+                {
+                  "path": "/_indexes/scale-10000/meta.json",
+                  "encoded": 742,
+                  "raw": 472
+                }
+              ],
+              "indexBytesEncoded": 1313,
+              "indexBytesRaw": 773,
+              "settledMs": 5136,
+              "heapAfterGC": 2584340
+            }
+          }
+        ],
+        "mermaid": [
+          {
+            "cold": {
+              "firstMermaidRenderMs": 411.20000076293945,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 10562157,
+              "totalRawBytes": 10551287,
+              "requests": 35,
+              "settledMs": 1222,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 1,
+                "durationMs": 152,
+                "maxMs": 152
+              }
+            },
+            "warm": {
+              "firstMermaidRenderMs": 336.20000076293945,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 8925006,
+              "totalRawBytes": 10551287,
+              "requests": 35,
+              "settledMs": 1152,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 1,
+                "durationMs": 136,
+                "maxMs": 136
+              }
+            }
+          },
+          {
+            "cold": {
+              "firstMermaidRenderMs": 426.1999988555908,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 10562157,
+              "totalRawBytes": 10551287,
+              "requests": 35,
+              "settledMs": 1238,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 1,
+                "durationMs": 149,
+                "maxMs": 149
+              }
+            },
+            "warm": {
+              "firstMermaidRenderMs": 317.6999988555908,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 8925006,
+              "totalRawBytes": 10551287,
+              "requests": 35,
+              "settledMs": 1130,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 1,
+                "durationMs": 128,
+                "maxMs": 128
+              }
+            }
+          },
+          {
+            "cold": {
+              "firstMermaidRenderMs": 418.1999988555908,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 10562157,
+              "totalRawBytes": 10551287,
+              "requests": 35,
+              "settledMs": 1230,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 1,
+                "durationMs": 155,
+                "maxMs": 155
+              }
+            },
+            "warm": {
+              "firstMermaidRenderMs": 336.1000003814697,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 8925006,
+              "totalRawBytes": 10551287,
+              "requests": 35,
+              "settledMs": 1152,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 1,
+                "durationMs": 136,
+                "maxMs": 136
+              }
+            }
+          }
+        ]
+      },
+      "scale-50000": {
+        "pages": 50000,
+        "firstLoad": [
+          {
+            "cold": {
+              "fcpMs": 76,
+              "siteListVisibleMs": 70,
+              "timeToInteractiveProxyMs": 5123.800001144409,
+              "completedBytesAtListVisible": 840355,
+              "transferredBytesTotal": 840355,
+              "rawBytesTotal": 838630,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 769242,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 571,
+                  "raw": 301
+                },
+                {
+                  "path": "/_indexes/scale-50000/meta.json",
+                  "encoded": 742,
+                  "raw": 472
+                }
+              ],
+              "indexBytesEncoded": 1313,
+              "indexBytesRaw": 773,
+              "settledMs": 5128,
+              "heapAfterGC": 2585440
+            },
+            "warm": {
+              "fcpMs": 92,
+              "siteListVisibleMs": 89.39999961853027,
+              "timeToInteractiveProxyMs": 5143.60000038147,
+              "completedBytesAtListVisible": 1779,
+              "transferredBytesTotal": 1779,
+              "rawBytesTotal": 838630,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 0,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 571,
+                  "raw": 301
+                },
+                {
+                  "path": "/_indexes/scale-50000/meta.json",
+                  "encoded": 742,
+                  "raw": 472
+                }
+              ],
+              "indexBytesEncoded": 1313,
+              "indexBytesRaw": 773,
+              "settledMs": 5153,
+              "heapAfterGC": 2584340
+            }
+          },
+          {
+            "cold": {
+              "fcpMs": 80,
+              "siteListVisibleMs": 77.39999961853027,
+              "timeToInteractiveProxyMs": 5116.699998855591,
+              "completedBytesAtListVisible": 840355,
+              "transferredBytesTotal": 840355,
+              "rawBytesTotal": 838630,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 769242,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 571,
+                  "raw": 301
+                },
+                {
+                  "path": "/_indexes/scale-50000/meta.json",
+                  "encoded": 742,
+                  "raw": 472
+                }
+              ],
+              "indexBytesEncoded": 1313,
+              "indexBytesRaw": 773,
+              "settledMs": 5120,
+              "heapAfterGC": 2585464
+            },
+            "warm": {
+              "fcpMs": 92,
+              "siteListVisibleMs": 91.39999961853027,
+              "timeToInteractiveProxyMs": 5132,
+              "completedBytesAtListVisible": 1779,
+              "transferredBytesTotal": 1779,
+              "rawBytesTotal": 838630,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 0,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 571,
+                  "raw": 301
+                },
+                {
+                  "path": "/_indexes/scale-50000/meta.json",
+                  "encoded": 742,
+                  "raw": 472
+                }
+              ],
+              "indexBytesEncoded": 1313,
+              "indexBytesRaw": 773,
+              "settledMs": 5137,
+              "heapAfterGC": 2583388
+            }
+          },
+          {
+            "cold": {
+              "fcpMs": 76,
+              "siteListVisibleMs": 71.80000114440918,
+              "timeToInteractiveProxyMs": 5105.10000038147,
+              "completedBytesAtListVisible": 840355,
+              "transferredBytesTotal": 840355,
+              "rawBytesTotal": 838630,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 769242,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 571,
+                  "raw": 301
+                },
+                {
+                  "path": "/_indexes/scale-50000/meta.json",
+                  "encoded": 742,
+                  "raw": 472
+                }
+              ],
+              "indexBytesEncoded": 1313,
+              "indexBytesRaw": 773,
+              "settledMs": 5108,
+              "heapAfterGC": 2585432
+            },
+            "warm": {
+              "fcpMs": 68,
+              "siteListVisibleMs": 80.30000114440918,
+              "timeToInteractiveProxyMs": 5117.10000038147,
+              "completedBytesAtListVisible": 1779,
+              "transferredBytesTotal": 1779,
+              "rawBytesTotal": 838630,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 0,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 571,
+                  "raw": 301
+                },
+                {
+                  "path": "/_indexes/scale-50000/meta.json",
+                  "encoded": 742,
+                  "raw": 472
+                }
+              ],
+              "indexBytesEncoded": 1313,
+              "indexBytesRaw": 773,
+              "settledMs": 5123,
+              "heapAfterGC": 2583372
+            }
+          }
+        ],
+        "mermaid": [
+          {
+            "cold": {
+              "firstMermaidRenderMs": 1235.8999996185303,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 47537297,
+              "totalRawBytes": 47526425,
+              "requests": 35,
+              "settledMs": 2049,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 3,
+                "durationMs": 882,
+                "maxMs": 763
+              }
+            },
+            "warm": {
+              "firstMermaidRenderMs": 1267.1999988555908,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 45900126,
+              "totalRawBytes": 47526425,
+              "requests": 35,
+              "settledMs": 2080,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 3,
+                "durationMs": 843,
+                "maxMs": 723
+              }
+            }
+          },
+          {
+            "cold": {
+              "firstMermaidRenderMs": 1369.1000003814697,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 47537297,
+              "totalRawBytes": 47526425,
+              "requests": 35,
+              "settledMs": 2182,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 3,
+                "durationMs": 888,
+                "maxMs": 763
+              }
+            },
+            "warm": {
+              "firstMermaidRenderMs": 1102.5,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 45900126,
+              "totalRawBytes": 47526425,
+              "requests": 35,
+              "settledMs": 1916,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 2,
+                "durationMs": 784,
+                "maxMs": 714
+              }
+            }
+          },
+          {
+            "cold": {
+              "firstMermaidRenderMs": 1446.099998474121,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 47537297,
+              "totalRawBytes": 47526425,
+              "requests": 35,
+              "settledMs": 2258,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 3,
+                "durationMs": 907,
+                "maxMs": 781
+              }
+            },
+            "warm": {
+              "firstMermaidRenderMs": 1184.3999996185303,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 45900126,
+              "totalRawBytes": 47526425,
+              "requests": 35,
+              "settledMs": 2001,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 2,
+                "durationMs": 807,
+                "maxMs": 736
+              }
+            }
+          }
+        ],
+        "searchCases": [
+          {
+            "workspace": {
+              "workspaceMountedMs": 672.7999992370605,
+              "settledMs": 1498,
+              "requestCount": 7,
+              "encodedBytes": 46738136,
+              "rawBytes": 46736132,
+              "searchRequestCount": 0,
+              "searchEncodedBytes": 0,
+              "searchRawBytes": 0,
+              "searchByKind": {},
+              "requests": 7
+            },
+            "cases": {
+              "manyHitsAndPaging": {
+                "label": "many hits",
+                "query": "latency",
+                "folder": null,
+                "firstResultsMs": 304.8999996185303,
+                "hitsTotal": 20254,
+                "countText": "20,254 pages contain “latency”",
+                "rowsAtFirstResults": 20,
+                "firstPath": "000-generation/target-002.md",
+                "moreButtonAtFirstResults": "Show 20 more (20 of 20254 shown)",
+                "requestsAtFirstResults": 9,
+                "searchRequestsAtFirstResults": 6,
+                "encodedBytesCompletedAtFirstResults": 1936164,
+                "searchEncodedBytesCompletedAtFirstResults": 1927850,
+                "requestCount": 9,
+                "encodedBytes": 1936164,
+                "rawBytes": 1935022,
+                "searchRequestCount": 6,
+                "searchEncodedBytes": 1927850,
+                "searchRawBytes": 1926167,
+                "searchByKind": {
+                  "manifest": {
+                    "count": 1,
+                    "encodedBytes": 950189,
+                    "rawBytes": 949914
+                  },
+                  "root": {
+                    "count": 1,
+                    "encodedBytes": 261412,
+                    "rawBytes": 261129
+                  },
+                  "leaf": {
+                    "count": 1,
+                    "encodedBytes": 15035,
+                    "rawBytes": 14754
+                  },
+                  "sections": {
+                    "count": 1,
+                    "encodedBytes": 681632,
+                    "rawBytes": 681349
+                  },
+                  "text": {
+                    "count": 2,
+                    "encodedBytes": 19582,
+                    "rawBytes": 19021
+                  }
+                },
+                "mainThreadLongTasks": {
+                  "supported": true,
+                  "count": 2,
+                  "durationMs": 162,
+                  "maxMs": 98
+                },
+                "settledRows": 20,
+                "settledCountText": "20,254 pages contain “latency”",
+                "settledMoreButton": "Show 20 more (20 of 20254 shown)",
+                "settledFirstPath": "000-generation/target-002.md"
+              },
+              "pagingSecondPage": {
+                "label": "ordinary second page",
+                "timeMs": 961,
+                "rows": 40,
+                "countText": "20,254 pages contain “latency”",
+                "moreButton": "Show 20 more (40 of 20254 shown)",
+                "pathOrder": true,
+                "firstPaths": [
+                  "000-generation/target-002.md",
+                  "000-generation/target-006.md",
+                  "000-generation/target-009.md"
+                ],
+                "lastPaths": [
+                  "000-generation/target-086.md",
+                  "000-generation/target-087.md",
+                  "000-generation/target-090.md"
+                ],
+                "requestCount": 2,
+                "encodedBytes": 17343,
+                "rawBytes": 16783,
+                "searchRequestCount": 2,
+                "searchEncodedBytes": 17343,
+                "searchRawBytes": 16783,
+                "searchByKind": {
+                  "text": {
+                    "count": 2,
+                    "encodedBytes": 17343,
+                    "rawBytes": 16783
+                  }
+                },
+                "mainThreadLongTasks": {
+                  "supported": true,
+                  "count": 0,
+                  "durationMs": 0,
+                  "maxMs": 0
+                }
+              },
+              "fewHits": {
+                "label": "few hits",
+                "query": "quokkaflux",
+                "folder": null,
+                "firstResultsMs": 89.5,
+                "hitsTotal": 7,
+                "countText": "7 pages contain “quokkaflux”",
+                "rowsAtFirstResults": 7,
+                "firstPath": "area-01/section-023/note-016.md",
+                "moreButtonAtFirstResults": null,
+                "requestsAtFirstResults": 6,
+                "searchRequestsAtFirstResults": 5,
+                "encodedBytesCompletedAtFirstResults": 40949,
+                "searchEncodedBytesCompletedAtFirstResults": 40716,
+                "requestCount": 6,
+                "encodedBytes": 40949,
+                "rawBytes": 40698,
+                "searchRequestCount": 5,
+                "searchEncodedBytes": 40716,
+                "searchRawBytes": 39315,
+                "searchByKind": {
+                  "leaf": {
+                    "count": 1,
+                    "encodedBytes": 7668,
+                    "rawBytes": 7388
+                  },
+                  "text": {
+                    "count": 4,
+                    "encodedBytes": 33048,
+                    "rawBytes": 31927
+                  }
+                },
+                "mainThreadLongTasks": {
+                  "supported": true,
+                  "count": 0,
+                  "durationMs": 0,
+                  "maxMs": 0
+                },
+                "settledRows": 7,
+                "settledCountText": "7 pages contain “quokkaflux”",
+                "settledMoreButton": null,
+                "settledFirstPath": "area-01/section-023/note-016.md"
+              },
+              "japanese": {
+                "label": "Japanese",
+                "query": "再試行",
+                "folder": null,
+                "firstResultsMs": 115.20000076293945,
+                "hitsTotal": 7975,
+                "countText": "7,975 pages contain “再試行”",
+                "rowsAtFirstResults": 20,
+                "firstPath": "000-generation/target-004.md",
+                "moreButtonAtFirstResults": "Show 20 more (20 of 7975 shown)",
+                "requestsAtFirstResults": 21,
+                "searchRequestsAtFirstResults": 20,
+                "encodedBytesCompletedAtFirstResults": 266087,
+                "searchEncodedBytesCompletedAtFirstResults": 265854,
+                "requestCount": 21,
+                "encodedBytes": 266087,
+                "rawBytes": 261629,
+                "searchRequestCount": 20,
+                "searchEncodedBytes": 265854,
+                "searchRawBytes": 260246,
+                "searchByKind": {
+                  "leaf": {
+                    "count": 20,
+                    "encodedBytes": 265854,
+                    "rawBytes": 260246
+                  }
+                },
+                "mainThreadLongTasks": {
+                  "supported": true,
+                  "count": 0,
+                  "durationMs": 0,
+                  "maxMs": 0
+                },
+                "settledRows": 20,
+                "settledCountText": "7,975 pages contain “再試行”",
+                "settledMoreButton": "Show 20 more (20 of 7975 shown)",
+                "settledFirstPath": "000-generation/target-004.md"
+              },
+              "longBodyNearPackCap": {
+                "label": "long body near 256 KiB pack cap",
+                "query": "longbodyprobe",
+                "folder": null,
+                "firstResultsMs": 89.5999984741211,
+                "hitsTotal": 1,
+                "countText": "1 page contains “longbodyprobe”",
+                "rowsAtFirstResults": 1,
+                "firstPath": "big-flat/page-000000.md",
+                "moreButtonAtFirstResults": null,
+                "requestsAtFirstResults": 1,
+                "searchRequestsAtFirstResults": 0,
+                "encodedBytesCompletedAtFirstResults": 233,
+                "searchEncodedBytesCompletedAtFirstResults": 0,
+                "requestCount": 1,
+                "encodedBytes": 233,
+                "rawBytes": 1383,
+                "searchRequestCount": 0,
+                "searchEncodedBytes": 0,
+                "searchRawBytes": 0,
+                "searchByKind": {},
+                "mainThreadLongTasks": {
+                  "supported": true,
+                  "count": 0,
+                  "durationMs": 0,
+                  "maxMs": 0
+                },
+                "settledRows": 1,
+                "settledCountText": "1 page contains “longbodyprobe”",
+                "settledMoreButton": null,
+                "settledFirstPath": "big-flat/page-000000.md"
+              },
+              "folderFiltered": {
+                "label": "folder filtered",
+                "query": "generationprobe",
+                "folder": "000-generation",
+                "firstResultsMs": 87.70000076293945,
+                "hitsTotal": null,
+                "countText": "20 pages in 000-generation/ so far, among 20 of 525 pages that contain “generationprobe”",
+                "rowsAtFirstResults": 20,
+                "firstPath": "000-generation/target-000.md",
+                "moreButtonAtFirstResults": "Show 20 more (20 of 525 shown)",
+                "requestsAtFirstResults": 3,
+                "searchRequestsAtFirstResults": 2,
+                "encodedBytesCompletedAtFirstResults": 23827,
+                "searchEncodedBytesCompletedAtFirstResults": 23594,
+                "requestCount": 3,
+                "encodedBytes": 23827,
+                "rawBytes": 24416,
+                "searchRequestCount": 2,
+                "searchEncodedBytes": 23594,
+                "searchRawBytes": 23033,
+                "searchByKind": {
+                  "leaf": {
+                    "count": 2,
+                    "encodedBytes": 23594,
+                    "rawBytes": 23033
+                  }
+                },
+                "mainThreadLongTasks": {
+                  "supported": true,
+                  "count": 0,
+                  "durationMs": 0,
+                  "maxMs": 0
+                },
+                "settledRows": 20,
+                "settledCountText": "20 pages in 000-generation/ so far, among 20 of 525 pages that contain “generationprobe”",
+                "settledMoreButton": "Show 20 more (20 of 525 shown)",
+                "settledFirstPath": "000-generation/target-000.md"
+              },
+              "vanishedGeneration": {
+                "label": "vanished generation",
+                "query": "vanishedgenerationprobe",
+                "folder": null,
+                "firstResultsMs": 89.30000114440918,
+                "hitsTotal": 525,
+                "countText": "525 pages contain “vanishedgenerationprobe”",
+                "rowsAtFirstResults": 20,
+                "firstPath": "000-generation/target-000.md",
+                "moreButtonAtFirstResults": "Show 20 more (20 of 525 shown)",
+                "requestsAtFirstResults": 1,
+                "searchRequestsAtFirstResults": 0,
+                "encodedBytesCompletedAtFirstResults": 233,
+                "searchEncodedBytesCompletedAtFirstResults": 0,
+                "requestCount": 1,
+                "encodedBytes": 233,
+                "rawBytes": 1383,
+                "searchRequestCount": 0,
+                "searchEncodedBytes": 0,
+                "searchRawBytes": 0,
+                "searchByKind": {},
+                "mainThreadLongTasks": {
+                  "supported": true,
+                  "count": 0,
+                  "durationMs": 0,
+                  "maxMs": 0
+                },
+                "settledRows": 20,
+                "settledCountText": "525 pages contain “vanishedgenerationprobe”",
+                "settledMoreButton": "Show 20 more (20 of 525 shown)",
+                "settledFirstPath": "000-generation/target-000.md",
+                "pageTwo": {
+                  "label": "old generation page two",
+                  "timeMs": 912.1999988555908,
+                  "rows": 40,
+                  "countText": "525 pages contain “vanishedgenerationprobe”",
+                  "moreButton": "Show 20 more (40 of 525 shown)",
+                  "pathOrder": true,
+                  "firstPaths": [
+                    "000-generation/target-000.md",
+                    "000-generation/target-001.md",
+                    "000-generation/target-002.md"
+                  ],
+                  "lastPaths": [
+                    "000-generation/target-037.md",
+                    "000-generation/target-038.md",
+                    "000-generation/target-039.md"
+                  ],
+                  "requestCount": 0,
+                  "encodedBytes": 0,
+                  "rawBytes": 0,
+                  "searchRequestCount": 0,
+                  "searchEncodedBytes": 0,
+                  "searchRawBytes": 0,
+                  "searchByKind": {},
+                  "mainThreadLongTasks": {
+                    "supported": true,
+                    "count": 0,
+                    "durationMs": 0,
+                    "maxMs": 0
+                  }
+                },
+                "waitForCacheExpiryMs": 61000,
+                "afterRepublish": {
+                  "label": "page after search data changed",
+                  "timeMs": 1320.8999996185303,
+                  "rows": 60,
+                  "countText": "524 pages contain “vanishedgenerationprobe”",
+                  "moreButton": "Show 20 more (60 of 524 shown)",
+                  "pathOrder": true,
+                  "firstPaths": [
+                    "000-generation/target-001.md",
+                    "000-generation/target-002.md",
+                    "000-generation/target-003.md"
+                  ],
+                  "lastPaths": [
+                    "000-generation/target-058.md",
+                    "000-generation/target-059.md",
+                    "000-generation/target-060.md"
+                  ],
+                  "requestCount": 7,
+                  "encodedBytes": 1936669,
+                  "rawBytes": 1934706,
+                  "searchRequestCount": 7,
+                  "searchEncodedBytes": 1936669,
+                  "searchRawBytes": 1934706,
+                  "searchByKind": {
+                    "manifest": {
+                      "count": 1,
+                      "encodedBytes": 950189,
+                      "rawBytes": 949914
+                    },
+                    "root": {
+                      "count": 1,
+                      "encodedBytes": 261421,
+                      "rawBytes": 261138
+                    },
+                    "leaf": {
+                      "count": 1,
+                      "encodedBytes": 15580,
+                      "rawBytes": 15299
+                    },
+                    "sections": {
+                      "count": 1,
+                      "encodedBytes": 681641,
+                      "rawBytes": 681358
+                    },
+                    "text": {
+                      "count": 3,
+                      "encodedBytes": 27838,
+                      "rawBytes": 26997
+                    }
+                  },
+                  "mainThreadLongTasks": {
+                    "supported": true,
+                    "count": 2,
+                    "durationMs": 236,
+                    "maxMs": 155
+                  }
+                }
+              }
+            }
+          },
+          {
+            "workspace": {
+              "workspaceMountedMs": 638.8999996185303,
+              "settledMs": 1463,
+              "requestCount": 7,
+              "encodedBytes": 46738136,
+              "rawBytes": 46736132,
+              "searchRequestCount": 0,
+              "searchEncodedBytes": 0,
+              "searchRawBytes": 0,
+              "searchByKind": {},
+              "requests": 7
+            },
+            "cases": {
+              "manyHitsAndPaging": {
+                "label": "many hits",
+                "query": "latency",
+                "folder": null,
+                "firstResultsMs": 277.5,
+                "hitsTotal": 20254,
+                "countText": "20,254 pages contain “latency”",
+                "rowsAtFirstResults": 20,
+                "firstPath": "000-generation/target-002.md",
+                "moreButtonAtFirstResults": "Show 20 more (20 of 20254 shown)",
+                "requestsAtFirstResults": 9,
+                "searchRequestsAtFirstResults": 6,
+                "encodedBytesCompletedAtFirstResults": 1936164,
+                "searchEncodedBytesCompletedAtFirstResults": 1927850,
+                "requestCount": 9,
+                "encodedBytes": 1936164,
+                "rawBytes": 1935022,
+                "searchRequestCount": 6,
+                "searchEncodedBytes": 1927850,
+                "searchRawBytes": 1926167,
+                "searchByKind": {
+                  "manifest": {
+                    "count": 1,
+                    "encodedBytes": 950189,
+                    "rawBytes": 949914
+                  },
+                  "root": {
+                    "count": 1,
+                    "encodedBytes": 261412,
+                    "rawBytes": 261129
+                  },
+                  "leaf": {
+                    "count": 1,
+                    "encodedBytes": 15035,
+                    "rawBytes": 14754
+                  },
+                  "sections": {
+                    "count": 1,
+                    "encodedBytes": 681632,
+                    "rawBytes": 681349
+                  },
+                  "text": {
+                    "count": 2,
+                    "encodedBytes": 19582,
+                    "rawBytes": 19021
+                  }
+                },
+                "mainThreadLongTasks": {
+                  "supported": true,
+                  "count": 2,
+                  "durationMs": 158,
+                  "maxMs": 99
+                },
+                "settledRows": 20,
+                "settledCountText": "20,254 pages contain “latency”",
+                "settledMoreButton": "Show 20 more (20 of 20254 shown)",
+                "settledFirstPath": "000-generation/target-002.md"
+              },
+              "pagingSecondPage": {
+                "label": "ordinary second page",
+                "timeMs": 964,
+                "rows": 40,
+                "countText": "20,254 pages contain “latency”",
+                "moreButton": "Show 20 more (40 of 20254 shown)",
+                "pathOrder": true,
+                "firstPaths": [
+                  "000-generation/target-002.md",
+                  "000-generation/target-006.md",
+                  "000-generation/target-009.md"
+                ],
+                "lastPaths": [
+                  "000-generation/target-086.md",
+                  "000-generation/target-087.md",
+                  "000-generation/target-090.md"
+                ],
+                "requestCount": 2,
+                "encodedBytes": 17343,
+                "rawBytes": 16783,
+                "searchRequestCount": 2,
+                "searchEncodedBytes": 17343,
+                "searchRawBytes": 16783,
+                "searchByKind": {
+                  "text": {
+                    "count": 2,
+                    "encodedBytes": 17343,
+                    "rawBytes": 16783
+                  }
+                },
+                "mainThreadLongTasks": {
+                  "supported": true,
+                  "count": 0,
+                  "durationMs": 0,
+                  "maxMs": 0
+                }
+              },
+              "fewHits": {
+                "label": "few hits",
+                "query": "quokkaflux",
+                "folder": null,
+                "firstResultsMs": 74.10000038146973,
+                "hitsTotal": 7,
+                "countText": "7 pages contain “quokkaflux”",
+                "rowsAtFirstResults": 7,
+                "firstPath": "area-01/section-023/note-016.md",
+                "moreButtonAtFirstResults": null,
+                "requestsAtFirstResults": 6,
+                "searchRequestsAtFirstResults": 5,
+                "encodedBytesCompletedAtFirstResults": 40949,
+                "searchEncodedBytesCompletedAtFirstResults": 40716,
+                "requestCount": 6,
+                "encodedBytes": 40949,
+                "rawBytes": 40698,
+                "searchRequestCount": 5,
+                "searchEncodedBytes": 40716,
+                "searchRawBytes": 39315,
+                "searchByKind": {
+                  "leaf": {
+                    "count": 1,
+                    "encodedBytes": 7668,
+                    "rawBytes": 7388
+                  },
+                  "text": {
+                    "count": 4,
+                    "encodedBytes": 33048,
+                    "rawBytes": 31927
+                  }
+                },
+                "mainThreadLongTasks": {
+                  "supported": true,
+                  "count": 0,
+                  "durationMs": 0,
+                  "maxMs": 0
+                },
+                "settledRows": 7,
+                "settledCountText": "7 pages contain “quokkaflux”",
+                "settledMoreButton": null,
+                "settledFirstPath": "area-01/section-023/note-016.md"
+              },
+              "japanese": {
+                "label": "Japanese",
+                "query": "再試行",
+                "folder": null,
+                "firstResultsMs": 117.89999961853027,
+                "hitsTotal": 7975,
+                "countText": "7,975 pages contain “再試行”",
+                "rowsAtFirstResults": 20,
+                "firstPath": "000-generation/target-004.md",
+                "moreButtonAtFirstResults": "Show 20 more (20 of 7975 shown)",
+                "requestsAtFirstResults": 21,
+                "searchRequestsAtFirstResults": 20,
+                "encodedBytesCompletedAtFirstResults": 266087,
+                "searchEncodedBytesCompletedAtFirstResults": 265854,
+                "requestCount": 21,
+                "encodedBytes": 266087,
+                "rawBytes": 261629,
+                "searchRequestCount": 20,
+                "searchEncodedBytes": 265854,
+                "searchRawBytes": 260246,
+                "searchByKind": {
+                  "leaf": {
+                    "count": 20,
+                    "encodedBytes": 265854,
+                    "rawBytes": 260246
+                  }
+                },
+                "mainThreadLongTasks": {
+                  "supported": true,
+                  "count": 0,
+                  "durationMs": 0,
+                  "maxMs": 0
+                },
+                "settledRows": 20,
+                "settledCountText": "7,975 pages contain “再試行”",
+                "settledMoreButton": "Show 20 more (20 of 7975 shown)",
+                "settledFirstPath": "000-generation/target-004.md"
+              },
+              "longBodyNearPackCap": {
+                "label": "long body near 256 KiB pack cap",
+                "query": "longbodyprobe",
+                "folder": null,
+                "firstResultsMs": 104.5999984741211,
+                "hitsTotal": 1,
+                "countText": "1 page contains “longbodyprobe”",
+                "rowsAtFirstResults": 1,
+                "firstPath": "big-flat/page-000000.md",
+                "moreButtonAtFirstResults": null,
+                "requestsAtFirstResults": 1,
+                "searchRequestsAtFirstResults": 0,
+                "encodedBytesCompletedAtFirstResults": 233,
+                "searchEncodedBytesCompletedAtFirstResults": 0,
+                "requestCount": 1,
+                "encodedBytes": 233,
+                "rawBytes": 1383,
+                "searchRequestCount": 0,
+                "searchEncodedBytes": 0,
+                "searchRawBytes": 0,
+                "searchByKind": {},
+                "mainThreadLongTasks": {
+                  "supported": true,
+                  "count": 0,
+                  "durationMs": 0,
+                  "maxMs": 0
+                },
+                "settledRows": 1,
+                "settledCountText": "1 page contains “longbodyprobe”",
+                "settledMoreButton": null,
+                "settledFirstPath": "big-flat/page-000000.md"
+              },
+              "folderFiltered": {
+                "label": "folder filtered",
+                "query": "generationprobe",
+                "folder": "000-generation",
+                "firstResultsMs": 91.10000038146973,
+                "hitsTotal": null,
+                "countText": "20 pages in 000-generation/ so far, among 20 of 525 pages that contain “generationprobe”",
+                "rowsAtFirstResults": 20,
+                "firstPath": "000-generation/target-000.md",
+                "moreButtonAtFirstResults": "Show 20 more (20 of 525 shown)",
+                "requestsAtFirstResults": 3,
+                "searchRequestsAtFirstResults": 2,
+                "encodedBytesCompletedAtFirstResults": 23827,
+                "searchEncodedBytesCompletedAtFirstResults": 23594,
+                "requestCount": 3,
+                "encodedBytes": 23827,
+                "rawBytes": 24416,
+                "searchRequestCount": 2,
+                "searchEncodedBytes": 23594,
+                "searchRawBytes": 23033,
+                "searchByKind": {
+                  "leaf": {
+                    "count": 2,
+                    "encodedBytes": 23594,
+                    "rawBytes": 23033
+                  }
+                },
+                "mainThreadLongTasks": {
+                  "supported": true,
+                  "count": 0,
+                  "durationMs": 0,
+                  "maxMs": 0
+                },
+                "settledRows": 20,
+                "settledCountText": "20 pages in 000-generation/ so far, among 20 of 525 pages that contain “generationprobe”",
+                "settledMoreButton": "Show 20 more (20 of 525 shown)",
+                "settledFirstPath": "000-generation/target-000.md"
+              },
+              "vanishedGeneration": {
+                "label": "vanished generation",
+                "query": "vanishedgenerationprobe",
+                "folder": null,
+                "firstResultsMs": 90.10000038146973,
+                "hitsTotal": 525,
+                "countText": "525 pages contain “vanishedgenerationprobe”",
+                "rowsAtFirstResults": 20,
+                "firstPath": "000-generation/target-000.md",
+                "moreButtonAtFirstResults": "Show 20 more (20 of 525 shown)",
+                "requestsAtFirstResults": 1,
+                "searchRequestsAtFirstResults": 0,
+                "encodedBytesCompletedAtFirstResults": 233,
+                "searchEncodedBytesCompletedAtFirstResults": 0,
+                "requestCount": 1,
+                "encodedBytes": 233,
+                "rawBytes": 1383,
+                "searchRequestCount": 0,
+                "searchEncodedBytes": 0,
+                "searchRawBytes": 0,
+                "searchByKind": {},
+                "mainThreadLongTasks": {
+                  "supported": true,
+                  "count": 0,
+                  "durationMs": 0,
+                  "maxMs": 0
+                },
+                "settledRows": 20,
+                "settledCountText": "525 pages contain “vanishedgenerationprobe”",
+                "settledMoreButton": "Show 20 more (20 of 525 shown)",
+                "settledFirstPath": "000-generation/target-000.md",
+                "pageTwo": {
+                  "label": "old generation page two",
+                  "timeMs": 910.1999988555908,
+                  "rows": 40,
+                  "countText": "525 pages contain “vanishedgenerationprobe”",
+                  "moreButton": "Show 20 more (40 of 525 shown)",
+                  "pathOrder": true,
+                  "firstPaths": [
+                    "000-generation/target-000.md",
+                    "000-generation/target-001.md",
+                    "000-generation/target-002.md"
+                  ],
+                  "lastPaths": [
+                    "000-generation/target-037.md",
+                    "000-generation/target-038.md",
+                    "000-generation/target-039.md"
+                  ],
+                  "requestCount": 0,
+                  "encodedBytes": 0,
+                  "rawBytes": 0,
+                  "searchRequestCount": 0,
+                  "searchEncodedBytes": 0,
+                  "searchRawBytes": 0,
+                  "searchByKind": {},
+                  "mainThreadLongTasks": {
+                    "supported": true,
+                    "count": 0,
+                    "durationMs": 0,
+                    "maxMs": 0
+                  }
+                },
+                "waitForCacheExpiryMs": 61000,
+                "afterRepublish": {
+                  "label": "page after search data changed",
+                  "timeMs": 1161.3999996185303,
+                  "rows": 60,
+                  "countText": "524 pages contain “vanishedgenerationprobe”",
+                  "moreButton": "Show 20 more (60 of 524 shown)",
+                  "pathOrder": true,
+                  "firstPaths": [
+                    "000-generation/target-001.md",
+                    "000-generation/target-002.md",
+                    "000-generation/target-003.md"
+                  ],
+                  "lastPaths": [
+                    "000-generation/target-058.md",
+                    "000-generation/target-059.md",
+                    "000-generation/target-060.md"
+                  ],
+                  "requestCount": 7,
+                  "encodedBytes": 1936669,
+                  "rawBytes": 1934706,
+                  "searchRequestCount": 7,
+                  "searchEncodedBytes": 1936669,
+                  "searchRawBytes": 1934706,
+                  "searchByKind": {
+                    "manifest": {
+                      "count": 1,
+                      "encodedBytes": 950189,
+                      "rawBytes": 949914
+                    },
+                    "root": {
+                      "count": 1,
+                      "encodedBytes": 261421,
+                      "rawBytes": 261138
+                    },
+                    "leaf": {
+                      "count": 1,
+                      "encodedBytes": 15580,
+                      "rawBytes": 15299
+                    },
+                    "sections": {
+                      "count": 1,
+                      "encodedBytes": 681641,
+                      "rawBytes": 681358
+                    },
+                    "text": {
+                      "count": 3,
+                      "encodedBytes": 27838,
+                      "rawBytes": 26997
+                    }
+                  },
+                  "mainThreadLongTasks": {
+                    "supported": true,
+                    "count": 2,
+                    "durationMs": 167,
+                    "maxMs": 98
+                  }
+                }
+              }
+            }
+          },
+          {
+            "workspace": {
+              "workspaceMountedMs": 646.3999996185303,
+              "settledMs": 1470,
+              "requestCount": 7,
+              "encodedBytes": 46738136,
+              "rawBytes": 46736132,
+              "searchRequestCount": 0,
+              "searchEncodedBytes": 0,
+              "searchRawBytes": 0,
+              "searchByKind": {},
+              "requests": 7
+            },
+            "cases": {
+              "manyHitsAndPaging": {
+                "label": "many hits",
+                "query": "latency",
+                "folder": null,
+                "firstResultsMs": 281.9000015258789,
+                "hitsTotal": 20254,
+                "countText": "20,254 pages contain “latency”",
+                "rowsAtFirstResults": 20,
+                "firstPath": "000-generation/target-002.md",
+                "moreButtonAtFirstResults": "Show 20 more (20 of 20254 shown)",
+                "requestsAtFirstResults": 9,
+                "searchRequestsAtFirstResults": 6,
+                "encodedBytesCompletedAtFirstResults": 1936164,
+                "searchEncodedBytesCompletedAtFirstResults": 1927850,
+                "requestCount": 9,
+                "encodedBytes": 1936164,
+                "rawBytes": 1935022,
+                "searchRequestCount": 6,
+                "searchEncodedBytes": 1927850,
+                "searchRawBytes": 1926167,
+                "searchByKind": {
+                  "manifest": {
+                    "count": 1,
+                    "encodedBytes": 950189,
+                    "rawBytes": 949914
+                  },
+                  "root": {
+                    "count": 1,
+                    "encodedBytes": 261412,
+                    "rawBytes": 261129
+                  },
+                  "leaf": {
+                    "count": 1,
+                    "encodedBytes": 15035,
+                    "rawBytes": 14754
+                  },
+                  "sections": {
+                    "count": 1,
+                    "encodedBytes": 681632,
+                    "rawBytes": 681349
+                  },
+                  "text": {
+                    "count": 2,
+                    "encodedBytes": 19582,
+                    "rawBytes": 19021
+                  }
+                },
+                "mainThreadLongTasks": {
+                  "supported": true,
+                  "count": 2,
+                  "durationMs": 159,
+                  "maxMs": 102
+                },
+                "settledRows": 20,
+                "settledCountText": "20,254 pages contain “latency”",
+                "settledMoreButton": "Show 20 more (20 of 20254 shown)",
+                "settledFirstPath": "000-generation/target-002.md"
+              },
+              "pagingSecondPage": {
+                "label": "ordinary second page",
+                "timeMs": 961.7000007629395,
+                "rows": 40,
+                "countText": "20,254 pages contain “latency”",
+                "moreButton": "Show 20 more (40 of 20254 shown)",
+                "pathOrder": true,
+                "firstPaths": [
+                  "000-generation/target-002.md",
+                  "000-generation/target-006.md",
+                  "000-generation/target-009.md"
+                ],
+                "lastPaths": [
+                  "000-generation/target-086.md",
+                  "000-generation/target-087.md",
+                  "000-generation/target-090.md"
+                ],
+                "requestCount": 2,
+                "encodedBytes": 17343,
+                "rawBytes": 16783,
+                "searchRequestCount": 2,
+                "searchEncodedBytes": 17343,
+                "searchRawBytes": 16783,
+                "searchByKind": {
+                  "text": {
+                    "count": 2,
+                    "encodedBytes": 17343,
+                    "rawBytes": 16783
+                  }
+                },
+                "mainThreadLongTasks": {
+                  "supported": true,
+                  "count": 0,
+                  "durationMs": 0,
+                  "maxMs": 0
+                }
+              },
+              "fewHits": {
+                "label": "few hits",
+                "query": "quokkaflux",
+                "folder": null,
+                "firstResultsMs": 73,
+                "hitsTotal": 7,
+                "countText": "7 pages contain “quokkaflux”",
+                "rowsAtFirstResults": 7,
+                "firstPath": "area-01/section-023/note-016.md",
+                "moreButtonAtFirstResults": null,
+                "requestsAtFirstResults": 6,
+                "searchRequestsAtFirstResults": 5,
+                "encodedBytesCompletedAtFirstResults": 40949,
+                "searchEncodedBytesCompletedAtFirstResults": 40716,
+                "requestCount": 6,
+                "encodedBytes": 40949,
+                "rawBytes": 40698,
+                "searchRequestCount": 5,
+                "searchEncodedBytes": 40716,
+                "searchRawBytes": 39315,
+                "searchByKind": {
+                  "leaf": {
+                    "count": 1,
+                    "encodedBytes": 7668,
+                    "rawBytes": 7388
+                  },
+                  "text": {
+                    "count": 4,
+                    "encodedBytes": 33048,
+                    "rawBytes": 31927
+                  }
+                },
+                "mainThreadLongTasks": {
+                  "supported": true,
+                  "count": 0,
+                  "durationMs": 0,
+                  "maxMs": 0
+                },
+                "settledRows": 7,
+                "settledCountText": "7 pages contain “quokkaflux”",
+                "settledMoreButton": null,
+                "settledFirstPath": "area-01/section-023/note-016.md"
+              },
+              "japanese": {
+                "label": "Japanese",
+                "query": "再試行",
+                "folder": null,
+                "firstResultsMs": 125.80000114440918,
+                "hitsTotal": 7975,
+                "countText": "7,975 pages contain “再試行”",
+                "rowsAtFirstResults": 20,
+                "firstPath": "000-generation/target-004.md",
+                "moreButtonAtFirstResults": "Show 20 more (20 of 7975 shown)",
+                "requestsAtFirstResults": 21,
+                "searchRequestsAtFirstResults": 20,
+                "encodedBytesCompletedAtFirstResults": 266087,
+                "searchEncodedBytesCompletedAtFirstResults": 265854,
+                "requestCount": 21,
+                "encodedBytes": 266087,
+                "rawBytes": 261629,
+                "searchRequestCount": 20,
+                "searchEncodedBytes": 265854,
+                "searchRawBytes": 260246,
+                "searchByKind": {
+                  "leaf": {
+                    "count": 20,
+                    "encodedBytes": 265854,
+                    "rawBytes": 260246
+                  }
+                },
+                "mainThreadLongTasks": {
+                  "supported": true,
+                  "count": 0,
+                  "durationMs": 0,
+                  "maxMs": 0
+                },
+                "settledRows": 20,
+                "settledCountText": "7,975 pages contain “再試行”",
+                "settledMoreButton": "Show 20 more (20 of 7975 shown)",
+                "settledFirstPath": "000-generation/target-004.md"
+              },
+              "longBodyNearPackCap": {
+                "label": "long body near 256 KiB pack cap",
+                "query": "longbodyprobe",
+                "folder": null,
+                "firstResultsMs": 88.9000015258789,
+                "hitsTotal": 1,
+                "countText": "1 page contains “longbodyprobe”",
+                "rowsAtFirstResults": 1,
+                "firstPath": "big-flat/page-000000.md",
+                "moreButtonAtFirstResults": null,
+                "requestsAtFirstResults": 1,
+                "searchRequestsAtFirstResults": 0,
+                "encodedBytesCompletedAtFirstResults": 233,
+                "searchEncodedBytesCompletedAtFirstResults": 0,
+                "requestCount": 1,
+                "encodedBytes": 233,
+                "rawBytes": 1383,
+                "searchRequestCount": 0,
+                "searchEncodedBytes": 0,
+                "searchRawBytes": 0,
+                "searchByKind": {},
+                "mainThreadLongTasks": {
+                  "supported": true,
+                  "count": 0,
+                  "durationMs": 0,
+                  "maxMs": 0
+                },
+                "settledRows": 1,
+                "settledCountText": "1 page contains “longbodyprobe”",
+                "settledMoreButton": null,
+                "settledFirstPath": "big-flat/page-000000.md"
+              },
+              "folderFiltered": {
+                "label": "folder filtered",
+                "query": "generationprobe",
+                "folder": "000-generation",
+                "firstResultsMs": 103.60000038146973,
+                "hitsTotal": null,
+                "countText": "20 pages in 000-generation/ so far, among 20 of 525 pages that contain “generationprobe”",
+                "rowsAtFirstResults": 20,
+                "firstPath": "000-generation/target-000.md",
+                "moreButtonAtFirstResults": "Show 20 more (20 of 525 shown)",
+                "requestsAtFirstResults": 3,
+                "searchRequestsAtFirstResults": 2,
+                "encodedBytesCompletedAtFirstResults": 23827,
+                "searchEncodedBytesCompletedAtFirstResults": 23594,
+                "requestCount": 3,
+                "encodedBytes": 23827,
+                "rawBytes": 24416,
+                "searchRequestCount": 2,
+                "searchEncodedBytes": 23594,
+                "searchRawBytes": 23033,
+                "searchByKind": {
+                  "leaf": {
+                    "count": 2,
+                    "encodedBytes": 23594,
+                    "rawBytes": 23033
+                  }
+                },
+                "mainThreadLongTasks": {
+                  "supported": true,
+                  "count": 0,
+                  "durationMs": 0,
+                  "maxMs": 0
+                },
+                "settledRows": 20,
+                "settledCountText": "20 pages in 000-generation/ so far, among 20 of 525 pages that contain “generationprobe”",
+                "settledMoreButton": "Show 20 more (20 of 525 shown)",
+                "settledFirstPath": "000-generation/target-000.md"
+              },
+              "vanishedGeneration": {
+                "label": "vanished generation",
+                "query": "vanishedgenerationprobe",
+                "folder": null,
+                "firstResultsMs": 94.4000015258789,
+                "hitsTotal": 525,
+                "countText": "525 pages contain “vanishedgenerationprobe”",
+                "rowsAtFirstResults": 20,
+                "firstPath": "000-generation/target-000.md",
+                "moreButtonAtFirstResults": "Show 20 more (20 of 525 shown)",
+                "requestsAtFirstResults": 1,
+                "searchRequestsAtFirstResults": 0,
+                "encodedBytesCompletedAtFirstResults": 233,
+                "searchEncodedBytesCompletedAtFirstResults": 0,
+                "requestCount": 1,
+                "encodedBytes": 233,
+                "rawBytes": 1383,
+                "searchRequestCount": 0,
+                "searchEncodedBytes": 0,
+                "searchRawBytes": 0,
+                "searchByKind": {},
+                "mainThreadLongTasks": {
+                  "supported": true,
+                  "count": 0,
+                  "durationMs": 0,
+                  "maxMs": 0
+                },
+                "settledRows": 20,
+                "settledCountText": "525 pages contain “vanishedgenerationprobe”",
+                "settledMoreButton": "Show 20 more (20 of 525 shown)",
+                "settledFirstPath": "000-generation/target-000.md",
+                "pageTwo": {
+                  "label": "old generation page two",
+                  "timeMs": 909.5,
+                  "rows": 40,
+                  "countText": "525 pages contain “vanishedgenerationprobe”",
+                  "moreButton": "Show 20 more (40 of 525 shown)",
+                  "pathOrder": true,
+                  "firstPaths": [
+                    "000-generation/target-000.md",
+                    "000-generation/target-001.md",
+                    "000-generation/target-002.md"
+                  ],
+                  "lastPaths": [
+                    "000-generation/target-037.md",
+                    "000-generation/target-038.md",
+                    "000-generation/target-039.md"
+                  ],
+                  "requestCount": 0,
+                  "encodedBytes": 0,
+                  "rawBytes": 0,
+                  "searchRequestCount": 0,
+                  "searchEncodedBytes": 0,
+                  "searchRawBytes": 0,
+                  "searchByKind": {},
+                  "mainThreadLongTasks": {
+                    "supported": true,
+                    "count": 0,
+                    "durationMs": 0,
+                    "maxMs": 0
+                  }
+                },
+                "waitForCacheExpiryMs": 61000,
+                "afterRepublish": {
+                  "label": "page after search data changed",
+                  "timeMs": 1288.2000007629395,
+                  "rows": 60,
+                  "countText": "524 pages contain “vanishedgenerationprobe”",
+                  "moreButton": "Show 20 more (60 of 524 shown)",
+                  "pathOrder": true,
+                  "firstPaths": [
+                    "000-generation/target-001.md",
+                    "000-generation/target-002.md",
+                    "000-generation/target-003.md"
+                  ],
+                  "lastPaths": [
+                    "000-generation/target-058.md",
+                    "000-generation/target-059.md",
+                    "000-generation/target-060.md"
+                  ],
+                  "requestCount": 7,
+                  "encodedBytes": 1936669,
+                  "rawBytes": 1934706,
+                  "searchRequestCount": 7,
+                  "searchEncodedBytes": 1936669,
+                  "searchRawBytes": 1934706,
+                  "searchByKind": {
+                    "manifest": {
+                      "count": 1,
+                      "encodedBytes": 950189,
+                      "rawBytes": 949914
+                    },
+                    "root": {
+                      "count": 1,
+                      "encodedBytes": 261421,
+                      "rawBytes": 261138
+                    },
+                    "leaf": {
+                      "count": 1,
+                      "encodedBytes": 15580,
+                      "rawBytes": 15299
+                    },
+                    "sections": {
+                      "count": 1,
+                      "encodedBytes": 681641,
+                      "rawBytes": 681358
+                    },
+                    "text": {
+                      "count": 3,
+                      "encodedBytes": 27838,
+                      "rawBytes": 26997
+                    }
+                  },
+                  "mainThreadLongTasks": {
+                    "supported": true,
+                    "count": 2,
+                    "durationMs": 197,
+                    "maxMs": 121
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "constrained": {
+      "scale-1000": {
+        "pages": 1000,
+        "firstLoad": [
+          {
+            "cold": {
+              "fcpMs": 4948,
+              "siteListVisibleMs": 4987,
+              "timeToInteractiveProxyMs": 10005.30000114441,
+              "completedBytesAtListVisible": 840759,
+              "transferredBytesTotal": 840759,
+              "rawBytesTotal": 839034,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 769242,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 567,
+                  "raw": 297
+                },
+                {
+                  "path": "/_indexes/scale-1000/meta.json",
+                  "encoded": 1150,
+                  "raw": 880
+                }
+              ],
+              "indexBytesEncoded": 1717,
+              "indexBytesRaw": 1177,
+              "settledMs": 10010,
+              "heapAfterGC": 2634956
+            },
+            "warm": {
+              "fcpMs": 612,
+              "siteListVisibleMs": 675.7000007629395,
+              "timeToInteractiveProxyMs": 5698.5,
+              "completedBytesAtListVisible": 2183,
+              "transferredBytesTotal": 2183,
+              "rawBytesTotal": 839034,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 0,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 567,
+                  "raw": 297
+                },
+                {
+                  "path": "/_indexes/scale-1000/meta.json",
+                  "encoded": 1150,
+                  "raw": 880
+                }
+              ],
+              "indexBytesEncoded": 1717,
+              "indexBytesRaw": 1177,
+              "settledMs": 5701,
+              "heapAfterGC": 2633728
+            }
+          },
+          {
+            "cold": {
+              "fcpMs": 4936,
+              "siteListVisibleMs": 4986.200000762939,
+              "timeToInteractiveProxyMs": 9984.89999961853,
+              "completedBytesAtListVisible": 840759,
+              "transferredBytesTotal": 840759,
+              "rawBytesTotal": 839034,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 769242,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 567,
+                  "raw": 297
+                },
+                {
+                  "path": "/_indexes/scale-1000/meta.json",
+                  "encoded": 1150,
+                  "raw": 880
+                }
+              ],
+              "indexBytesEncoded": 1717,
+              "indexBytesRaw": 1177,
+              "settledMs": 9987,
+              "heapAfterGC": 2634980
+            },
+            "warm": {
+              "fcpMs": 604,
+              "siteListVisibleMs": 653.0999984741211,
+              "timeToInteractiveProxyMs": 5664.199998855591,
+              "completedBytesAtListVisible": 2183,
+              "transferredBytesTotal": 2183,
+              "rawBytesTotal": 839034,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 0,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 567,
+                  "raw": 297
+                },
+                {
+                  "path": "/_indexes/scale-1000/meta.json",
+                  "encoded": 1150,
+                  "raw": 880
+                }
+              ],
+              "indexBytesEncoded": 1717,
+              "indexBytesRaw": 1177,
+              "settledMs": 5667,
+              "heapAfterGC": 2634680
+            }
+          },
+          {
+            "cold": {
+              "fcpMs": 4948,
+              "siteListVisibleMs": 4996.5,
+              "timeToInteractiveProxyMs": 9996.30000114441,
+              "completedBytesAtListVisible": 840759,
+              "transferredBytesTotal": 840759,
+              "rawBytesTotal": 839034,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 769242,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 567,
+                  "raw": 297
+                },
+                {
+                  "path": "/_indexes/scale-1000/meta.json",
+                  "encoded": 1150,
+                  "raw": 880
+                }
+              ],
+              "indexBytesEncoded": 1717,
+              "indexBytesRaw": 1177,
+              "settledMs": 9999,
+              "heapAfterGC": 2634980
+            },
+            "warm": {
+              "fcpMs": 624,
+              "siteListVisibleMs": 667.5,
+              "timeToInteractiveProxyMs": 5696.699998855591,
+              "completedBytesAtListVisible": 2183,
+              "transferredBytesTotal": 2183,
+              "rawBytesTotal": 839034,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 0,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 567,
+                  "raw": 297
+                },
+                {
+                  "path": "/_indexes/scale-1000/meta.json",
+                  "encoded": 1150,
+                  "raw": 880
+                }
+              ],
+              "indexBytesEncoded": 1717,
+              "indexBytesRaw": 1177,
+              "settledMs": 5699,
+              "heapAfterGC": 2633728
+            }
+          }
+        ],
+        "mermaid": [
+          {
+            "cold": {
+              "firstMermaidRenderMs": 13813.19999885559,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 2421390,
+              "totalRawBytes": 2410525,
+              "requests": 35,
+              "settledMs": 14629,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 3,
+                "durationMs": 231,
+                "maxMs": 122
+              }
+            },
+            "warm": {
+              "firstMermaidRenderMs": 4720.60000038147,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 784202,
+              "totalRawBytes": 2410525,
+              "requests": 35,
+              "settledMs": 5539,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 1,
+                "durationMs": 75,
+                "maxMs": 75
+              }
+            }
+          },
+          {
+            "cold": {
+              "firstMermaidRenderMs": 13852.19999885559,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 2421390,
+              "totalRawBytes": 2410525,
+              "requests": 35,
+              "settledMs": 14665,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 4,
+                "durationMs": 294,
+                "maxMs": 130
+              }
+            },
+            "warm": {
+              "firstMermaidRenderMs": 4819.300001144409,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 784202,
+              "totalRawBytes": 2410525,
+              "requests": 35,
+              "settledMs": 5634,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 1,
+                "durationMs": 114,
+                "maxMs": 114
+              }
+            }
+          },
+          {
+            "cold": {
+              "firstMermaidRenderMs": 13817.30000114441,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 2421390,
+              "totalRawBytes": 2410525,
+              "requests": 35,
+              "settledMs": 14630,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 4,
+                "durationMs": 290,
+                "maxMs": 127
+              }
+            },
+            "warm": {
+              "firstMermaidRenderMs": 4736.39999961853,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 784202,
+              "totalRawBytes": 2410525,
+              "requests": 35,
+              "settledMs": 5552,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 1,
+                "durationMs": 79,
+                "maxMs": 79
+              }
+            }
+          }
+        ]
+      },
+      "scale-5000": {
+        "pages": 5000,
+        "firstLoad": [
+          {
+            "cold": {
+              "fcpMs": 4940,
+              "siteListVisibleMs": 4980.60000038147,
+              "timeToInteractiveProxyMs": 9972.70000076294,
+              "completedBytesAtListVisible": 840345,
+              "transferredBytesTotal": 840345,
+              "rawBytesTotal": 838620,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 769242,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 567,
+                  "raw": 297
+                },
+                {
+                  "path": "/_indexes/scale-5000/meta.json",
+                  "encoded": 736,
+                  "raw": 466
+                }
+              ],
+              "indexBytesEncoded": 1303,
+              "indexBytesRaw": 763,
+              "settledMs": 9977,
+              "heapAfterGC": 2628012
+            },
+            "warm": {
+              "fcpMs": 624,
+              "siteListVisibleMs": 671.1000003814697,
+              "timeToInteractiveProxyMs": 5688,
+              "completedBytesAtListVisible": 1769,
+              "transferredBytesTotal": 1769,
+              "rawBytesTotal": 838620,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 0,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 567,
+                  "raw": 297
+                },
+                {
+                  "path": "/_indexes/scale-5000/meta.json",
+                  "encoded": 736,
+                  "raw": 466
+                }
+              ],
+              "indexBytesEncoded": 1303,
+              "indexBytesRaw": 763,
+              "settledMs": 5691,
+              "heapAfterGC": 2626760
+            }
+          },
+          {
+            "cold": {
+              "fcpMs": 4928,
+              "siteListVisibleMs": 4969.89999961853,
+              "timeToInteractiveProxyMs": 9957.10000038147,
+              "completedBytesAtListVisible": 840345,
+              "transferredBytesTotal": 840345,
+              "rawBytesTotal": 838620,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 769242,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 567,
+                  "raw": 297
+                },
+                {
+                  "path": "/_indexes/scale-5000/meta.json",
+                  "encoded": 736,
+                  "raw": 466
+                }
+              ],
+              "indexBytesEncoded": 1303,
+              "indexBytesRaw": 763,
+              "settledMs": 9962,
+              "heapAfterGC": 2628012
+            },
+            "warm": {
+              "fcpMs": 612,
+              "siteListVisibleMs": 640.8999996185303,
+              "timeToInteractiveProxyMs": 5649.700000762939,
+              "completedBytesAtListVisible": 1769,
+              "transferredBytesTotal": 1769,
+              "rawBytesTotal": 838620,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 0,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 567,
+                  "raw": 297
+                },
+                {
+                  "path": "/_indexes/scale-5000/meta.json",
+                  "encoded": 736,
+                  "raw": 466
+                }
+              ],
+              "indexBytesEncoded": 1303,
+              "indexBytesRaw": 763,
+              "settledMs": 5653,
+              "heapAfterGC": 2626748
+            }
+          },
+          {
+            "cold": {
+              "fcpMs": 4928,
+              "siteListVisibleMs": 4970.900001525879,
+              "timeToInteractiveProxyMs": 9971.60000038147,
+              "completedBytesAtListVisible": 840345,
+              "transferredBytesTotal": 840345,
+              "rawBytesTotal": 838620,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 769242,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 567,
+                  "raw": 297
+                },
+                {
+                  "path": "/_indexes/scale-5000/meta.json",
+                  "encoded": 736,
+                  "raw": 466
+                }
+              ],
+              "indexBytesEncoded": 1303,
+              "indexBytesRaw": 763,
+              "settledMs": 9976,
+              "heapAfterGC": 2628012
+            },
+            "warm": {
+              "fcpMs": 616,
+              "siteListVisibleMs": 664,
+              "timeToInteractiveProxyMs": 5664,
+              "completedBytesAtListVisible": 1769,
+              "transferredBytesTotal": 1769,
+              "rawBytesTotal": 838620,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 0,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 567,
+                  "raw": 297
+                },
+                {
+                  "path": "/_indexes/scale-5000/meta.json",
+                  "encoded": 736,
+                  "raw": 466
+                }
+              ],
+              "indexBytesEncoded": 1303,
+              "indexBytesRaw": 763,
+              "settledMs": 5666,
+              "heapAfterGC": 2626748
+            }
+          }
+        ],
+        "mermaid": [
+          {
+            "cold": {
+              "failed": "reader error: unable to load this site",
+              "failedAtMs": 24610.5,
+              "abortedRequests": [
+                "/_indexes/scale-5000/index.json"
+              ],
+              "totalEncodedBytes": 840345,
+              "requests": 7,
+              "settledMs": 24614
+            },
+            "warm": {
+              "failed": "reader error: unable to load this site",
+              "failedAtMs": 20238.19999885559,
+              "abortedRequests": [
+                "/_indexes/scale-5000/index.json"
+              ],
+              "totalEncodedBytes": 1769,
+              "requests": 7,
+              "settledMs": 20270
+            }
+          },
+          {
+            "cold": {
+              "failed": "reader error: unable to load this site",
+              "failedAtMs": 24625.89999961853,
+              "abortedRequests": [
+                "/_indexes/scale-5000/index.json"
+              ],
+              "totalEncodedBytes": 840345,
+              "requests": 7,
+              "settledMs": 24631
+            },
+            "warm": {
+              "failed": "reader error: unable to load this site",
+              "failedAtMs": 20237.20000076294,
+              "abortedRequests": [
+                "/_indexes/scale-5000/index.json"
+              ],
+              "totalEncodedBytes": 1769,
+              "requests": 7,
+              "settledMs": 20292
+            }
+          },
+          {
+            "cold": {
+              "failed": "reader error: unable to load this site",
+              "failedAtMs": 24624,
+              "abortedRequests": [
+                "/_indexes/scale-5000/index.json"
+              ],
+              "totalEncodedBytes": 840345,
+              "requests": 7,
+              "settledMs": 24631
+            },
+            "warm": {
+              "failed": "reader error: unable to load this site",
+              "failedAtMs": 20228.60000038147,
+              "abortedRequests": [
+                "/_indexes/scale-5000/index.json"
+              ],
+              "totalEncodedBytes": 1769,
+              "requests": 7,
+              "settledMs": 20279
+            }
+          }
+        ]
+      },
+      "scale-10000": {
+        "pages": 10000,
+        "firstLoad": [
+          {
+            "cold": {
+              "fcpMs": 4932,
+              "siteListVisibleMs": 4976.200000762939,
+              "timeToInteractiveProxyMs": 9990.89999961853,
+              "completedBytesAtListVisible": 840355,
+              "transferredBytesTotal": 840355,
+              "rawBytesTotal": 838630,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 769242,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 571,
+                  "raw": 301
+                },
+                {
+                  "path": "/_indexes/scale-10000/meta.json",
+                  "encoded": 742,
+                  "raw": 472
+                }
+              ],
+              "indexBytesEncoded": 1313,
+              "indexBytesRaw": 773,
+              "settledMs": 9995,
+              "heapAfterGC": 2628012
+            },
+            "warm": {
+              "fcpMs": 612,
+              "siteListVisibleMs": 676.5,
+              "timeToInteractiveProxyMs": 5688.299999237061,
+              "completedBytesAtListVisible": 1779,
+              "transferredBytesTotal": 1779,
+              "rawBytesTotal": 838630,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 0,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 571,
+                  "raw": 301
+                },
+                {
+                  "path": "/_indexes/scale-10000/meta.json",
+                  "encoded": 742,
+                  "raw": 472
+                }
+              ],
+              "indexBytesEncoded": 1313,
+              "indexBytesRaw": 773,
+              "settledMs": 5692,
+              "heapAfterGC": 2626760
+            }
+          },
+          {
+            "cold": {
+              "fcpMs": 4928,
+              "siteListVisibleMs": 4983.199998855591,
+              "timeToInteractiveProxyMs": 9980.89999961853,
+              "completedBytesAtListVisible": 840355,
+              "transferredBytesTotal": 840355,
+              "rawBytesTotal": 838630,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 769242,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 571,
+                  "raw": 301
+                },
+                {
+                  "path": "/_indexes/scale-10000/meta.json",
+                  "encoded": 742,
+                  "raw": 472
+                }
+              ],
+              "indexBytesEncoded": 1313,
+              "indexBytesRaw": 773,
+              "settledMs": 9984,
+              "heapAfterGC": 2628012
+            },
+            "warm": {
+              "fcpMs": 612,
+              "siteListVisibleMs": 657.1999988555908,
+              "timeToInteractiveProxyMs": 5669.599998474121,
+              "completedBytesAtListVisible": 1779,
+              "transferredBytesTotal": 1779,
+              "rawBytesTotal": 838630,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 0,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 571,
+                  "raw": 301
+                },
+                {
+                  "path": "/_indexes/scale-10000/meta.json",
+                  "encoded": 742,
+                  "raw": 472
+                }
+              ],
+              "indexBytesEncoded": 1313,
+              "indexBytesRaw": 773,
+              "settledMs": 5672,
+              "heapAfterGC": 2626760
+            }
+          },
+          {
+            "cold": {
+              "fcpMs": 4944,
+              "siteListVisibleMs": 4984.700000762939,
+              "timeToInteractiveProxyMs": 9982.60000038147,
+              "completedBytesAtListVisible": 840355,
+              "transferredBytesTotal": 840355,
+              "rawBytesTotal": 838630,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 769242,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 571,
+                  "raw": 301
+                },
+                {
+                  "path": "/_indexes/scale-10000/meta.json",
+                  "encoded": 742,
+                  "raw": 472
+                }
+              ],
+              "indexBytesEncoded": 1313,
+              "indexBytesRaw": 773,
+              "settledMs": 9986,
+              "heapAfterGC": 2628012
+            },
+            "warm": {
+              "fcpMs": 676,
+              "siteListVisibleMs": 720.6999988555908,
+              "timeToInteractiveProxyMs": 5740.799999237061,
+              "completedBytesAtListVisible": 1779,
+              "transferredBytesTotal": 1779,
+              "rawBytesTotal": 838630,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 0,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 571,
+                  "raw": 301
+                },
+                {
+                  "path": "/_indexes/scale-10000/meta.json",
+                  "encoded": 742,
+                  "raw": 472
+                }
+              ],
+              "indexBytesEncoded": 1313,
+              "indexBytesRaw": 773,
+              "settledMs": 5748,
+              "heapAfterGC": 2626792
+            }
+          }
+        ],
+        "mermaid": [
+          {
+            "cold": {
+              "failed": "reader error: unable to load this site",
+              "failedAtMs": 24614.29999923706,
+              "abortedRequests": [
+                "/_indexes/scale-10000/index.json"
+              ],
+              "totalEncodedBytes": 840355,
+              "requests": 7,
+              "settledMs": 24616
+            },
+            "warm": {
+              "failed": "reader error: unable to load this site",
+              "failedAtMs": 20246.10000038147,
+              "abortedRequests": [
+                "/_indexes/scale-10000/index.json"
+              ],
+              "totalEncodedBytes": 1779,
+              "requests": 7,
+              "settledMs": 20313
+            }
+          },
+          {
+            "cold": {
+              "failed": "reader error: unable to load this site",
+              "failedAtMs": 24613.5,
+              "abortedRequests": [
+                "/_indexes/scale-10000/index.json"
+              ],
+              "totalEncodedBytes": 840355,
+              "requests": 7,
+              "settledMs": 24616
+            },
+            "warm": {
+              "failed": "reader error: unable to load this site",
+              "failedAtMs": 20244.79999923706,
+              "abortedRequests": [
+                "/_indexes/scale-10000/index.json"
+              ],
+              "totalEncodedBytes": 1779,
+              "requests": 7,
+              "settledMs": 20275
+            }
+          },
+          {
+            "cold": {
+              "failed": "reader error: unable to load this site",
+              "failedAtMs": 24633.19999885559,
+              "abortedRequests": [
+                "/_indexes/scale-10000/index.json"
+              ],
+              "totalEncodedBytes": 840355,
+              "requests": 7,
+              "settledMs": 24641
+            },
+            "warm": {
+              "failed": "reader error: unable to load this site",
+              "failedAtMs": 20249.10000038147,
+              "abortedRequests": [
+                "/_indexes/scale-10000/index.json"
+              ],
+              "totalEncodedBytes": 1779,
+              "requests": 7,
+              "settledMs": 20274
+            }
+          }
+        ]
+      },
+      "scale-50000": {
+        "pages": 50000,
+        "firstLoad": [
+          {
+            "cold": {
+              "fcpMs": 4928,
+              "siteListVisibleMs": 4976.60000038147,
+              "timeToInteractiveProxyMs": 9977.79999923706,
+              "completedBytesAtListVisible": 840355,
+              "transferredBytesTotal": 840355,
+              "rawBytesTotal": 838630,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 769242,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 571,
+                  "raw": 301
+                },
+                {
+                  "path": "/_indexes/scale-50000/meta.json",
+                  "encoded": 742,
+                  "raw": 472
+                }
+              ],
+              "indexBytesEncoded": 1313,
+              "indexBytesRaw": 773,
+              "settledMs": 9984,
+              "heapAfterGC": 2628000
+            },
+            "warm": {
+              "fcpMs": 608,
+              "siteListVisibleMs": 668.5,
+              "timeToInteractiveProxyMs": 5672.39999961853,
+              "completedBytesAtListVisible": 1779,
+              "transferredBytesTotal": 1779,
+              "rawBytesTotal": 838630,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 0,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 571,
+                  "raw": 301
+                },
+                {
+                  "path": "/_indexes/scale-50000/meta.json",
+                  "encoded": 742,
+                  "raw": 472
+                }
+              ],
+              "indexBytesEncoded": 1313,
+              "indexBytesRaw": 773,
+              "settledMs": 5675,
+              "heapAfterGC": 2626760
+            }
+          },
+          {
+            "cold": {
+              "fcpMs": 4940,
+              "siteListVisibleMs": 4983.89999961853,
+              "timeToInteractiveProxyMs": 9989.79999923706,
+              "completedBytesAtListVisible": 840355,
+              "transferredBytesTotal": 840355,
+              "rawBytesTotal": 838630,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 769242,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 571,
+                  "raw": 301
+                },
+                {
+                  "path": "/_indexes/scale-50000/meta.json",
+                  "encoded": 742,
+                  "raw": 472
+                }
+              ],
+              "indexBytesEncoded": 1313,
+              "indexBytesRaw": 773,
+              "settledMs": 9993,
+              "heapAfterGC": 2628012
+            },
+            "warm": {
+              "fcpMs": 632,
+              "siteListVisibleMs": 680.6000003814697,
+              "timeToInteractiveProxyMs": 5686.10000038147,
+              "completedBytesAtListVisible": 1779,
+              "transferredBytesTotal": 1779,
+              "rawBytesTotal": 838630,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 0,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 571,
+                  "raw": 301
+                },
+                {
+                  "path": "/_indexes/scale-50000/meta.json",
+                  "encoded": 742,
+                  "raw": 472
+                }
+              ],
+              "indexBytesEncoded": 1313,
+              "indexBytesRaw": 773,
+              "settledMs": 5689,
+              "heapAfterGC": 2626760
+            }
+          },
+          {
+            "cold": {
+              "fcpMs": 4924,
+              "siteListVisibleMs": 4970.60000038147,
+              "timeToInteractiveProxyMs": 9969.79999923706,
+              "completedBytesAtListVisible": 840355,
+              "transferredBytesTotal": 840355,
+              "rawBytesTotal": 838630,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 769242,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 571,
+                  "raw": 301
+                },
+                {
+                  "path": "/_indexes/scale-50000/meta.json",
+                  "encoded": 742,
+                  "raw": 472
+                }
+              ],
+              "indexBytesEncoded": 1313,
+              "indexBytesRaw": 773,
+              "settledMs": 9973,
+              "heapAfterGC": 2628008
+            },
+            "warm": {
+              "fcpMs": 628,
+              "siteListVisibleMs": 684.4000015258789,
+              "timeToInteractiveProxyMs": 5691.800001144409,
+              "completedBytesAtListVisible": 1779,
+              "transferredBytesTotal": 1779,
+              "rawBytesTotal": 838630,
+              "requests": 6,
+              "requestsFromCache": 0,
+              "entryJsEncodedBytes": 0,
+              "entryJsRawBytes": 768934,
+              "indexFetches": [
+                {
+                  "path": "/_indexes/sites.json",
+                  "encoded": 571,
+                  "raw": 301
+                },
+                {
+                  "path": "/_indexes/scale-50000/meta.json",
+                  "encoded": 742,
+                  "raw": 472
+                }
+              ],
+              "indexBytesEncoded": 1313,
+              "indexBytesRaw": 773,
+              "settledMs": 5695,
+              "heapAfterGC": 2626760
+            }
+          }
+        ],
+        "mermaid": [
+          {
+            "cold": {
+              "failed": "reader error: unable to load this site",
+              "failedAtMs": 24633.39999961853,
+              "abortedRequests": [
+                "/_indexes/scale-50000/index.json"
+              ],
+              "totalEncodedBytes": 840355,
+              "requests": 7,
+              "settledMs": 24639
+            },
+            "warm": {
+              "failed": "reader error: unable to load this site",
+              "failedAtMs": 20276.89999961853,
+              "abortedRequests": [
+                "/_indexes/scale-50000/index.json"
+              ],
+              "totalEncodedBytes": 1779,
+              "requests": 7,
+              "settledMs": 20361
+            }
+          },
+          {
+            "cold": {
+              "failed": "reader error: unable to load this site",
+              "failedAtMs": 24641.39999961853,
+              "abortedRequests": [
+                "/_indexes/scale-50000/index.json"
+              ],
+              "totalEncodedBytes": 840355,
+              "requests": 7,
+              "settledMs": 24644
+            },
+            "warm": {
+              "failed": "reader error: unable to load this site",
+              "failedAtMs": 20239.10000038147,
+              "abortedRequests": [
+                "/_indexes/scale-50000/index.json"
+              ],
+              "totalEncodedBytes": 1779,
+              "requests": 7,
+              "settledMs": 20282
+            }
+          },
+          {
+            "cold": {
+              "failed": "reader error: unable to load this site",
+              "failedAtMs": 24631,
+              "abortedRequests": [
+                "/_indexes/scale-50000/index.json"
+              ],
+              "totalEncodedBytes": 840355,
+              "requests": 7,
+              "settledMs": 24634
+            },
+            "warm": {
+              "failed": "reader error: unable to load this site",
+              "failedAtMs": 20244.39999961853,
+              "abortedRequests": [
+                "/_indexes/scale-50000/index.json"
+              ],
+              "totalEncodedBytes": 1779,
+              "requests": 7,
+              "settledMs": 20282
+            }
+          }
+        ]
+      }
+    }
+  }
+}
