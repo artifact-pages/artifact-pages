@@ -176,11 +176,14 @@ export function SearchResultsPage({
     if (event.key === 'Enter') {
       event.preventDefault()
       commitNow()
-    } else if (event.key === 'ArrowDown' && hits.length > 0 && !stale) {
-      // Results are links: focus moves to the first one instead of a virtual selection.
+    } else if (event.key === 'ArrowDown') {
+      // Results are links: focus moves to the first one instead of a virtual selection. It does
+      // nothing while the typed query is not committed yet or the list is stale.
       event.preventDefault()
-      setActive(0)
-      resultLinks()[0]?.focus()
+      if (hits.length > 0 && !stale && draft.trim() === query) {
+        setActive(0)
+        resultLinks()[0]?.focus()
+      }
     } else if (event.key === 'Escape') {
       event.preventDefault()
       if (draft) {
@@ -196,7 +199,16 @@ export function SearchResultsPage({
     return Array.from(listRef.current?.querySelectorAll<HTMLElement>('.search-page-result-link') ?? [])
   }
 
+  // A list that is going stale or a new query must not keep focus on an old result.
+  useEffect(() => {
+    if (listRef.current?.contains(document.activeElement)) inputRef.current?.focus()
+  }, [stale, query])
+
   function handleLinkKeyDown(event: KeyboardEvent<HTMLAnchorElement>, position: number) {
+    if (stale && (event.key === 'Enter' || event.key === ' ') && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
+      event.preventDefault()
+      return
+    }
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault()
       if (event.key === 'ArrowUp' && position === 0) {
@@ -324,7 +336,15 @@ export function SearchResultsPage({
                               data-hit-id={hit.id}
                               onFocus={() => setActive(position)}
                               onKeyDown={(event) => handleLinkKeyDown(event, position)}
-                              onClick={(event) => followInApp(event, () => onOpenHit(hit, anchor))}
+                              aria-disabled={stale ? 'true' : undefined}
+                              onClick={(event) => {
+                                // Plain activation of a stale result is ignored; modified clicks stay native.
+                                if (stale && event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+                                  event.preventDefault()
+                                  return
+                                }
+                                followInApp(event, () => onOpenHit(hit, anchor))
+                              }}
                             >
                               <span className="search-page-result-title"><Highlighted text={title} query={query} /></span>
                               <span className="search-page-result-path">{hit.path}</span>

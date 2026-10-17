@@ -5331,6 +5331,43 @@ test.describe('page text search', () => {
     expect(requests).toEqual([])
   })
 
+  test('ArrowDown does not enter the list for an uncommitted query', async ({ page }) => {
+    await page.goto('/textsearch/_search?q=latency')
+    await expect(status(page)).toHaveText('5 pages contain “latency”')
+    await expect(field(page)).toBeFocused()
+    await field(page).fill('lighthouse')
+    await page.keyboard.press('ArrowDown')
+    await expect(field(page)).toBeFocused()
+    expect(await page.evaluate(() => document.activeElement?.getAttribute('data-hit-id') ?? null)).toBeNull()
+  })
+
+  test('stale results return focus to the field and cannot be opened', async ({ page }) => {
+    await page.goto('/textsearch/_search?q=latency')
+    await expect(status(page)).toHaveText('5 pages contain “latency”')
+    const held: Array<() => Promise<void>> = []
+    let holding = true
+    await page.route('**/_indexes/textsearch/search/leaf-*', async (route) => {
+      if (!holding) return route.continue()
+      await new Promise<void>((resolve) => held.push(async () => { await route.continue(); resolve() }))
+    })
+    await field(page).fill('lighthouse')
+    await hits(page).first().focus()
+    await expect(status(page)).toHaveText('Searching 32 pages…')
+    // Going stale moved focus off the old result.
+    await expect(field(page)).toBeFocused()
+    await expect(page).toHaveURL(/\/textsearch\/_search\?q=lighthouse$/)
+    // A stale link focused by other means is disabled: Enter and a click open nothing.
+    await hits(page).first().focus()
+    await expect(hits(page).first()).toHaveAttribute('aria-disabled', 'true')
+    await page.keyboard.press('Enter')
+    await hits(page).first().click({ force: true })
+    await expect(page).toHaveURL(/\/textsearch\/_search\?q=lighthouse$/)
+    holding = false
+    await Promise.all(held.map((release) => release()))
+    await expect(status(page)).toHaveText('24 pages contain “lighthouse”')
+    await expect(hits(page).first()).not.toHaveAttribute('aria-disabled', 'true')
+  })
+
   test('a superseded query cannot overwrite the newer results', async ({ page }) => {
     await usePagedFallback(page)
     // Warm the manifest and root so the next searches differ only in the leaves they need.
