@@ -57,7 +57,7 @@ function parseSiteDiscoveryMetadata(payload: unknown, url: string, expectedSiteI
 }
 
 const MAX_LISTED_TOP_LEVEL_FOLDERS = 16
-const RFC3339_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/
+const RFC3339_UTC = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d+)?Z$/
 
 /**
  * Keeps each optional discovery field only when it meets the invariants of specification section 5.2
@@ -67,8 +67,7 @@ const RFC3339_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/
 function sanitizeOptionalDiscovery(meta: Record<string, unknown>) {
   const total = meta.artifactCount as number
   let contentUpdatedAt: string | undefined
-  if (typeof meta.contentUpdatedAt === 'string' && total > 0 && RFC3339_UTC.test(meta.contentUpdatedAt) &&
-    !Number.isNaN(Date.parse(meta.contentUpdatedAt))) {
+  if (typeof meta.contentUpdatedAt === 'string' && total > 0 && isRealUtcTimestamp(meta.contentUpdatedAt)) {
     contentUpdatedAt = meta.contentUpdatedAt
   }
   const rootArtifactCount = isCount(meta.rootArtifactCount) && meta.rootArtifactCount <= total ? meta.rootArtifactCount : undefined
@@ -91,6 +90,16 @@ function sanitizeOptionalDiscovery(meta: Record<string, unknown>) {
     }
   }
   return { contentUpdatedAt, rootArtifactCount, topLevelFolderCount, topLevelFolders }
+}
+
+/** RFC 3339 UTC whose date and time fields exist (Date.parse would roll 02-30 over to 03-02). */
+function isRealUtcTimestamp(value: string) {
+  const match = RFC3339_UTC.exec(value)
+  if (!match) return false
+  const [year, month, day, hour, minute, second] = match.slice(1, 7).map(Number)
+  const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second))
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day &&
+    date.getUTCHours() === hour && date.getUTCMinutes() === minute && date.getUTCSeconds() === second
 }
 
 function isStrictlyByteSorted(names: string[]) {

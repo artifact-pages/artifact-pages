@@ -431,6 +431,8 @@ for (const [name, extra, dropped] of [
   ['date-only contentUpdatedAt', { contentUpdatedAt: '2026-10-01' }, ['contentUpdatedAt']],
   ['contentUpdatedAt with an offset', { contentUpdatedAt: '2026-10-01T00:00:00+09:00' }, ['contentUpdatedAt']],
   ['contentUpdatedAt that is not a date', { contentUpdatedAt: '2026-13-45T00:00:00Z' }, ['contentUpdatedAt']],
+  ['contentUpdatedAt on an impossible calendar date', { contentUpdatedAt: '2026-02-30T00:00:00Z' }, ['contentUpdatedAt']],
+  ['contentUpdatedAt with hour 24', { contentUpdatedAt: '2026-02-03T24:00:00Z' }, ['contentUpdatedAt']],
   ['contentUpdatedAt on an empty site', { artifactCount: 0, rootArtifactCount: 0, topLevelFolderCount: 0, topLevelFolders: undefined }, ['contentUpdatedAt']],
   ['negative rootArtifactCount', { rootArtifactCount: -1 }, ['rootArtifactCount']],
   ['fractional rootArtifactCount', { rootArtifactCount: 1.5 }, ['rootArtifactCount']],
