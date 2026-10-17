@@ -1,6 +1,6 @@
 # T26 — CLI publish memory against source bytes
 
-- Status: Done
+- Status: In progress
 - Assignee: Codex
 - Phase: Post-launch measurement
 - Scope: peak RSS and time of `site publish` (no-op, diff, dry-run, first publish) near candidate limits
@@ -21,13 +21,13 @@ The memory use of a publish is known as a function of source bytes, and a maximu
 
 ## Evidence
 
-- [CLI publish memory measurement report](../../research/cli-publish-memory.md) records the measured conditions, results, code paths and options for an owner decision.
+- [CLI publish memory measurement report](../../research/cli-publish-memory.md) and [sample results](../../research/cli-publish-memory.results.json) record the measured conditions, results, code paths and options for an owner decision.
 - Under local storage on `Mac16,10`, the run measured all 20 corpus/scenario cells three times; the largest observed peaks were 888.8 MiB for `many-small` and 2,033.5 MiB for `many-large`.
 
 ## Verification
 
-- [Report](../../research/cli-publish-memory.md) and [raw results](../../../.local/cli-memory/t26-2026-10-17T07-26-10-691Z-27358/results.json) retain all 60 timed command samples; every command returned exit status 0.
-- The first exit criterion is complete. Candidate size selection and a streaming/staging decision remain owner decisions and are intentionally unchecked.
+- [Report](../../research/cli-publish-memory.md) and [sample results](../../research/cli-publish-memory.results.json) retain all 60 timed command samples; every command returned exit status 0.
+- Measurement is complete. The size-limit and streaming/staging criteria await an owner decision and remain unchecked.
 
 ## Initial local RSS baseline, 2026-10-15
 

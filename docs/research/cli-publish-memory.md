@@ -10,7 +10,7 @@ Under these conditions, we measured the local CLI process's peak resident memory
 | Machine | `Mac16,10`, arm64, 34,359,738,368 bytes RAM (32 GiB), from `sysctl hw.model hw.memsize` |
 | OS | macOS 26.5.1 |
 | Go | go1.26.9 darwin/arm64 |
-| CLI source commit | `3a2a3702aca7afa063cf9ff7dcd8b531f3fa98b6` |
+| CLI source commit | `3a2a3702aca7afa063cf9ff7dcd8b531f3fa98b6` (recorded base commit; CLI source is unchanged on this branch) |
 | CLI build | `go build -o <run>/artifact-pages ./cli/cmd/artifact-pages`; run-local `GOCACHE`, `GOPROXY=off`, `GOTOOLCHAIN=local` |
 | Storage target | Local filesystem provider; no cloud traffic |
 | Timing | macOS `/usr/bin/time -l`; maximum resident set size in bytes and `real` elapsed seconds |
@@ -18,9 +18,9 @@ Under these conditions, we measured the local CLI process's peak resident memory
 | Binary source generation | Deterministic AES-256-CTR byte stream, seed `artifact-pages-cli-publish-memory-t26-20261017` |
 | Harness command | `npm run benchmark:cli-publish-memory -- --repetitions 3` |
 
-First publish began with an empty storage root for each repetition. No-op publish used the same commit. Differential publish used one new commit changing one HTML page body by 1 KiB. Dry-run used a further one-file change. All 60 timed commands returned exit status 0. The raw samples and conditions are in [results.json](../../.local/cli-memory/t26-2026-10-17T07-26-10-691Z-27358/results.json).
+First publish began with an empty storage root for each repetition. No-op publish used the same commit. Differential publish used one new commit changing one HTML page body by 1 KiB. Dry-run used a further one-file change. All 60 timed commands returned exit status 0. The [committed results JSON](cli-publish-memory.results.json) retains all samples and measured numbers; verbose command stdout and stderr were omitted from this copy.
 
-The generated HTML pages were small valid documents of 8 KiB each. Source sizes and largest-file sizes below are read from `results.json`. MiB is bytes divided by 1,048,576; the scenario tables show the median and maximum of the three measured samples.
+The generated HTML pages were small valid documents of 8 KiB each. Source sizes and largest-file sizes below are read from the committed results JSON. MiB is bytes divided by 1,048,576; the scenario tables show the median and maximum of the three measured samples.
 
 | Corpus | Source shape | Files | Total source (MiB) | Largest file (MiB) |
 | --- | --- | ---: | ---: | ---: |
@@ -98,4 +98,4 @@ These candidate boundaries are options derived from the measured corpora, not su
 
 The repository verification workflow selects `ubuntu-24.04` in [.github/workflows/verify.yml](../../.github/workflows/verify.yml). GitHub's [standard hosted runner documentation](https://docs.github.com/en/actions/reference/runners/github-hosted-runners) lists 16 GB RAM for standard Linux runners on public repositories and 7 GB for private repositories. The largest measured CLI peak was about 2.0 GiB on this 32 GiB Mac. That leaves nominal capacity on either documented runner size, with materially less headroom on a 7 GB runner; the OS, Node, browser tests and other processes also need memory. This benchmark did not measure a GitHub-hosted runner.
 
-The measurements indicate that reducing in-memory duplication is relevant. The evidence favors investigating streaming for memory reduction: non-no-op large-file publishes retained the snapshot and made a second full-size byte copy. A documented size limit is the simplest operational constraint, but source-byte limits alone do not bound the higher RSS shape seen with many small documents. Streaming can lower heap use but requires a streaming storage interface and stable hashing/source-change checks across reads. Disk-backed immutable staging could preserve a fixed upload snapshot and reduce heap copies, with additional disk capacity, I/O, and temporary-file cleanup and recovery work. The measurements favor streaming as the first approach to evaluate; they do not establish immutable staging as necessary or select an implementation.
+These results provide evidence for the owner's decision by showing that non-no-op large-file publishes retained the source snapshot and made a second full-size byte copy. A documented size limit bounds accepted inputs, although the `many-small` results show that total bytes alone do not capture the higher-RSS shape with many files and documents. Streaming could reduce heap duplication, with changes needed for streaming storage and stable hashing/source-change checks across reads. Disk-backed immutable staging could preserve a fixed upload snapshot and reduce heap copies, with additional disk capacity, I/O, and temporary-file cleanup and recovery work. The measurements inform these tradeoffs but do not select an option; the size-limit and streaming/staging criteria await an owner decision.

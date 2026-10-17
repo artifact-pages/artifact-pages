@@ -26,7 +26,7 @@ const corpora = [
 ]
 
 function parseArgs(argv) {
-  const options = { repetitions: 3, corpus: null, runDir: null }
+  const options = { repetitions: 3, corpus: null, runDir: null, keep: false }
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]
     if (arg === '--repetitions') {
@@ -42,8 +42,10 @@ function parseArgs(argv) {
     } else if (arg === '--run-dir') {
       options.runDir = argv[++index]
       if (!options.runDir) throw new Error('--run-dir requires a path')
+    } else if (arg === '--keep') {
+      options.keep = true
     } else if (arg === '--help' || arg === '-h') {
-      console.log('Usage: npm run benchmark:cli-publish-memory -- [--corpus ID[,ID...]] [--repetitions N] [--run-dir PATH]')
+      console.log('Usage: npm run benchmark:cli-publish-memory -- [--corpus ID[,ID...]] [--repetitions N] [--run-dir PATH] [--keep]')
       console.log(`Corpora: ${corpora.map((corpus) => corpus.id).join(', ')}`)
       process.exit(0)
     } else {
@@ -213,13 +215,13 @@ function parseTimeOutput(platform, output) {
   return null
 }
 
-function measuredCommand(binaryPath, args, cwd, measurement) {
+function measuredCommand(binaryPath, args, cwd, measurement, tmpDir) {
   const timeArgs = process.platform === 'darwin' ? ['-l'] : process.platform === 'linux' ? ['-v'] : null
   if (!timeArgs) throw new Error(`unsupported platform for /usr/bin/time measurement: ${process.platform}`)
   const command = '/usr/bin/time'
   const result = spawnSync(command, [...timeArgs, binaryPath, ...args], {
     cwd,
-    env: process.env,
+    env: { ...process.env, TMPDIR: tmpDir },
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
   })
@@ -292,6 +294,14 @@ async function selectRunDir(providedPath) {
   const realCreated = await fs.realpath(proposed)
   if (!isStrictChild(realRoot, realCreated)) throw new Error(`created run directory escaped ${realRoot}: ${realCreated}`)
   return realCreated
+}
+
+async function removeRunPath(runDir, target, description) {
+  const realTarget = await realPathIfPresentOrNearest(target)
+  if (!isStrictChild(runDir, realTarget)) {
+    throw new Error(`refusing to delete ${description} outside the run directory: ${realTarget}`)
+  }
+  await fs.rm(target, { recursive: true, force: true })
 }
 
 async function freeBytesAt(directory) {
@@ -406,6 +416,9 @@ async function main() {
   const options = parseArgs(process.argv.slice(2))
   const runDir = await selectRunDir(options.runDir)
   const binaryPath = path.join(runDir, 'artifact-pages')
+  const tmpDir = path.join(runDir, 'tmp')
+  const goCacheDir = path.join(runDir, 'go-cache')
+  const corporaDir = path.join(runDir, 'corpora')
   const selectedCorpora = options.corpus
     ? corpora.filter((corpus) => options.corpus.includes(corpus.id))
     : corpora
@@ -413,24 +426,28 @@ async function main() {
     schemaVersion: 1,
     runId: path.basename(runDir),
     runDirectory: runDir,
-    metadata: await captureHostMetadata(),
+    metadata: null,
     corpusDefinitions: corpora,
     corpora: [],
     failures: [],
   }
-  results.metadata.repetitions = options.repetitions
-  results.metadata.buildCommand = ['go', 'build', '-o', binaryPath, './cli/cmd/artifact-pages']
-  results.metadata.buildEnvironment = {
-    GOCACHE: path.join(runDir, 'go-cache'),
-    GOPROXY: 'off',
-    GOTOOLCHAIN: 'local',
-  }
-  results.metadata.sourceGenerator = { algorithm: 'AES-256-CTR deterministic byte stream', seed }
-  await saveResults(runDir, results)
 
+  let stopped = false
   try {
+    results.metadata = await captureHostMetadata()
+    results.metadata.repetitions = options.repetitions
+    results.metadata.buildCommand = ['go', 'build', '-o', binaryPath, './cli/cmd/artifact-pages']
+    results.metadata.buildEnvironment = {
+      GOCACHE: goCacheDir,
+      GOPROXY: 'off',
+      GOTOOLCHAIN: 'local',
+    }
+    results.metadata.temporaryDirectory = tmpDir
+    results.metadata.sourceGenerator = { algorithm: 'AES-256-CTR deterministic byte stream', seed }
+    await saveResults(runDir, results)
+    await fs.mkdir(tmpDir, { recursive: true })
     run('go', ['build', '-o', binaryPath, './cli/cmd/artifact-pages'], {
-      env: { ...process.env, GOCACHE: results.metadata.buildEnvironment.GOCACHE, GOPROXY: 'off', GOTOOLCHAIN: 'local' },
+      env: { ...process.env, GOCACHE: goCacheDir, GOPROXY: 'off', GOTOOLCHAIN: 'local' },
     })
     for (const corpus of selectedCorpora) {
       const counts = corpusByteCounts(corpus)
@@ -446,78 +463,78 @@ async function main() {
         scenarios: {},
       }
       results.corpora.push(record)
-      const availableBeforeBytes = await freeBytesAt(projectRoot)
-      const estimatedPeakBytes = counts.sourceBytes * 4 + 256 * mib
-      record.diskSafety = { availableBeforeBytes, estimatedPeakBytes, reserveBytes: diskReserveBytes }
-      if (availableBeforeBytes - estimatedPeakBytes < diskReserveBytes) {
-        record.status = 'skipped: disk'
-        record.diskSafety.reason = `free bytes minus estimated peak would be below ${diskReserveBytes} bytes`
-        await saveResults(runDir, results)
-        continue
-      }
-
-      await fs.mkdir(corpusRoot, { recursive: true })
-      await initRepository(adminRoot, 'https://github.com/example/cli-memory-admin.git')
-      await initRepository(satelliteRoot, 'https://github.com/example/cli-memory-satellite.git')
-      await writeFile(adminRoot, 'artifact-pages.yaml', localDeploymentConfig(storagePath))
-      commit(adminRoot, 'configure local memory benchmark site')
-      await generateCorpus(corpus, satelliteRoot)
-      commit(satelliteRoot, `add ${corpus.id} deterministic source corpus`)
-      const baseCommit = git(satelliteRoot, ['rev-parse', 'HEAD'])
-
-      const changedPagePath = 'content/page-00000.html'
-      await writeFile(satelliteRoot, changedPagePath, htmlPage(0, 1))
-      commit(satelliteRoot, 'change one HTML body by 1 KiB')
-      const differentialCommit = git(satelliteRoot, ['rev-parse', 'HEAD'])
-      await writeFile(satelliteRoot, changedPagePath, htmlPage(0, 2))
-      commit(satelliteRoot, 'make a further 1 KiB HTML body change')
-      const dryRunCommit = git(satelliteRoot, ['rev-parse', 'HEAD'])
-      const satelliteConfig = path.relative(satelliteRoot, path.join(adminRoot, 'artifact-pages.yaml'))
-
-      for (const scenarioId of ['first-publish', 'no-op-publish', 'differential-publish', 'dry-run']) {
-        record.scenarios[scenarioId] = { samples: [] }
-      }
-      for (let repetition = 1; repetition <= options.repetitions; repetition += 1) {
-        // Every repetition begins at the same source commit with an empty local object root.
-        const realStoragePath = await realPathIfPresentOrNearest(storagePath)
-        if (!isStrictChild(runDir, realStoragePath)) {
-          throw new Error(`refusing to delete storage outside the run directory: ${realStoragePath}`)
+      try {
+        const availableBeforeBytes = await freeBytesAt(projectRoot)
+        const estimatedPeakBytes = counts.sourceBytes * 4 + 256 * mib
+        record.diskSafety = { availableBeforeBytes, estimatedPeakBytes, reserveBytes: diskReserveBytes }
+        if (availableBeforeBytes - estimatedPeakBytes < diskReserveBytes) {
+          record.status = 'skipped: disk'
+          record.diskSafety.reason = `free bytes minus estimated peak would be below ${diskReserveBytes} bytes`
+          await saveResults(runDir, results)
+          continue
         }
-        await fs.rm(storagePath, { recursive: true, force: true })
-        git(satelliteRoot, ['reset', '--hard', baseCommit])
-        run(binaryPath, ['registry', 'sync', '--config', 'artifact-pages.yaml', '--format', 'json'], { cwd: adminRoot })
 
-        const first = measuredCommand(binaryPath, cliArgs(satelliteConfig), satelliteRoot, results.metadata.measurement)
-        first.repetition = repetition
-        setExpectedOutcome(first, 'synced')
-        record.scenarios['first-publish'].samples.push(first)
-        if (first.failure) throw measuredFailure(record, 'first-publish', first)
+        await fs.mkdir(corpusRoot, { recursive: true })
+        await initRepository(adminRoot, 'https://github.com/example/cli-memory-admin.git')
+        await initRepository(satelliteRoot, 'https://github.com/example/cli-memory-satellite.git')
+        await writeFile(adminRoot, 'artifact-pages.yaml', localDeploymentConfig(storagePath))
+        commit(adminRoot, 'configure local memory benchmark site')
+        await generateCorpus(corpus, satelliteRoot)
+        commit(satelliteRoot, `add ${corpus.id} deterministic source corpus`)
+        const baseCommit = git(satelliteRoot, ['rev-parse', 'HEAD'])
 
-        const noOp = measuredCommand(binaryPath, cliArgs(satelliteConfig), satelliteRoot, results.metadata.measurement)
-        noOp.repetition = repetition
-        setExpectedOutcome(noOp, 'no-op')
-        record.scenarios['no-op-publish'].samples.push(noOp)
-        if (noOp.failure) throw measuredFailure(record, 'no-op-publish', noOp)
+        const changedPagePath = 'content/page-00000.html'
+        await writeFile(satelliteRoot, changedPagePath, htmlPage(0, 1))
+        commit(satelliteRoot, 'change one HTML body by 1 KiB')
+        const differentialCommit = git(satelliteRoot, ['rev-parse', 'HEAD'])
+        await writeFile(satelliteRoot, changedPagePath, htmlPage(0, 2))
+        commit(satelliteRoot, 'make a further 1 KiB HTML body change')
+        const dryRunCommit = git(satelliteRoot, ['rev-parse', 'HEAD'])
+        const satelliteConfig = path.relative(satelliteRoot, path.join(adminRoot, 'artifact-pages.yaml'))
 
-        git(satelliteRoot, ['reset', '--hard', differentialCommit])
-        const differential = measuredCommand(binaryPath, cliArgs(satelliteConfig), satelliteRoot, results.metadata.measurement)
-        differential.repetition = repetition
-        setExpectedOutcome(differential, 'synced')
-        record.scenarios['differential-publish'].samples.push(differential)
-        if (differential.failure) throw measuredFailure(record, 'differential-publish', differential)
+        for (const scenarioId of ['first-publish', 'no-op-publish', 'differential-publish', 'dry-run']) {
+          record.scenarios[scenarioId] = { samples: [] }
+        }
+        for (let repetition = 1; repetition <= options.repetitions; repetition += 1) {
+          // Every repetition begins at the same source commit with an empty local object root.
+          await removeRunPath(runDir, storagePath, `storage for ${corpus.id}`)
+          git(satelliteRoot, ['reset', '--hard', baseCommit])
+          run(binaryPath, ['registry', 'sync', '--config', 'artifact-pages.yaml', '--format', 'json'], { cwd: adminRoot })
 
-        git(satelliteRoot, ['reset', '--hard', dryRunCommit])
-        const dryRun = measuredCommand(binaryPath, cliArgs(satelliteConfig, { dryRun: true }), satelliteRoot, results.metadata.measurement)
-        dryRun.repetition = repetition
-        setExpectedOutcome(dryRun, 'planned')
-        record.scenarios['dry-run'].samples.push(dryRun)
-        if (dryRun.failure) throw measuredFailure(record, 'dry-run', dryRun)
+          const first = measuredCommand(binaryPath, cliArgs(satelliteConfig), satelliteRoot, results.metadata.measurement, tmpDir)
+          first.repetition = repetition
+          setExpectedOutcome(first, 'synced')
+          record.scenarios['first-publish'].samples.push(first)
+          if (first.failure) throw measuredFailure(record, 'first-publish', first)
 
+          const noOp = measuredCommand(binaryPath, cliArgs(satelliteConfig), satelliteRoot, results.metadata.measurement, tmpDir)
+          noOp.repetition = repetition
+          setExpectedOutcome(noOp, 'no-op')
+          record.scenarios['no-op-publish'].samples.push(noOp)
+          if (noOp.failure) throw measuredFailure(record, 'no-op-publish', noOp)
+
+          git(satelliteRoot, ['reset', '--hard', differentialCommit])
+          const differential = measuredCommand(binaryPath, cliArgs(satelliteConfig), satelliteRoot, results.metadata.measurement, tmpDir)
+          differential.repetition = repetition
+          setExpectedOutcome(differential, 'synced')
+          record.scenarios['differential-publish'].samples.push(differential)
+          if (differential.failure) throw measuredFailure(record, 'differential-publish', differential)
+
+          git(satelliteRoot, ['reset', '--hard', dryRunCommit])
+          const dryRun = measuredCommand(binaryPath, cliArgs(satelliteConfig, { dryRun: true }), satelliteRoot, results.metadata.measurement, tmpDir)
+          dryRun.repetition = repetition
+          setExpectedOutcome(dryRun, 'planned')
+          record.scenarios['dry-run'].samples.push(dryRun)
+          if (dryRun.failure) throw measuredFailure(record, 'dry-run', dryRun)
+
+          await saveResults(runDir, results)
+          console.log(`${corpus.id}: repetition ${repetition}/${options.repetitions} complete`)
+        }
+        record.status = 'completed'
         await saveResults(runDir, results)
-        console.log(`${corpus.id}: repetition ${repetition}/${options.repetitions} complete`)
+      } finally {
+        if (!options.keep) await removeRunPath(runDir, corpusRoot, `generated data for ${corpus.id}`)
       }
-      record.status = 'completed'
-      await saveResults(runDir, results)
     }
   } catch (error) {
     const failure = {
@@ -537,11 +554,21 @@ async function main() {
     await saveResults(runDir, results)
     console.error(`Benchmark stopped: ${failure.message}`)
     console.error(`Partial results retained at ${path.join(runDir, 'results.json')}`)
-    printMarkdown(results)
     process.exitCode = 1
-    return
+    stopped = true
+  } finally {
+    if (!options.keep) {
+      await removeRunPath(runDir, corporaDir, 'corpora directory')
+      await removeRunPath(runDir, goCacheDir, 'Go build cache')
+      await removeRunPath(runDir, binaryPath, 'built CLI binary')
+      await removeRunPath(runDir, tmpDir, 'temporary directory')
+    }
   }
 
+  if (stopped) {
+    printMarkdown(results)
+    return
+  }
   await saveResults(runDir, results)
   printMarkdown(results)
   console.log(`\nRaw results: ${path.join(runDir, 'results.json')}`)
@@ -565,7 +592,25 @@ async function saveResults(runDir, results) {
   const target = path.join(runDir, 'results.json')
   const realTarget = await realPathIfPresentOrNearest(target)
   if (!isStrictChild(runDir, realTarget)) throw new Error(`refusing to write results outside run directory: ${realTarget}`)
-  await fs.writeFile(target, `${JSON.stringify(results, null, 2)}\n`)
+  const serialized = `${JSON.stringify(sanitizeResults(results, runDir), null, 2)}\n`
+  if ([runDir, projectRoot, '/usr/bin/time', '/Users/'].some((absolutePath) => serialized.includes(absolutePath))) {
+    throw new Error('refusing to write results containing an unsanitized absolute path')
+  }
+  await fs.writeFile(target, serialized)
+}
+
+function sanitizeResults(value, runDir) {
+  if (typeof value === 'string') {
+    return value
+      .replaceAll(runDir, '<run-dir>')
+      .replaceAll(projectRoot, '<repo-root>')
+      .replaceAll('/usr/bin/time', '<system-bin>/time')
+  }
+  if (Array.isArray(value)) return value.map((item) => sanitizeResults(item, runDir))
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, sanitizeResults(item, runDir)]))
+  }
+  return value
 }
 
 try {

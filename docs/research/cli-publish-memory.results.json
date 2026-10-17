@@ -1,0 +1,1731 @@
+{
+  "schemaVersion": 1,
+  "runId": "t26-2026-10-17T07-26-10-691Z-27358",
+  "runDirectory": "<run-dir>",
+  "metadata": {
+    "capturedAt": "2026-10-17T07:26:10.719Z",
+    "platform": "darwin",
+    "architecture": "arm64",
+    "machineModel": "Mac16,10",
+    "memoryBytes": 34359738368,
+    "osVersion": "26.5.1",
+    "goVersion": "go version go1.26.9 darwin/arm64",
+    "nodeVersion": "v22.14.0",
+    "cliCommit": "3a2a3702aca7afa063cf9ff7dcd8b531f3fa98b6",
+    "provider": "local",
+    "repetitions": 3,
+    "measurement": {
+      "command": "<system-bin>/time -l",
+      "platformFormat": "darwin",
+      "rssStoredAs": "bytes",
+      "elapsedStoredAs": "seconds"
+    },
+    "diskReserveBytes": 6442450944,
+    "buildCommand": [
+      "go",
+      "build",
+      "-o",
+      "<run-dir>/artifact-pages",
+      "./cli/cmd/artifact-pages"
+    ],
+    "buildEnvironment": {
+      "GOCACHE": "<run-dir>/go-cache",
+      "GOPROXY": "off",
+      "GOTOOLCHAIN": "local"
+    },
+    "sourceGenerator": {
+      "algorithm": "AES-256-CTR deterministic byte stream",
+      "seed": "artifact-pages-cli-publish-memory-t26-20261017"
+    }
+  },
+  "corpusDefinitions": [
+    {
+      "id": "many-small",
+      "htmlPages": 5000,
+      "htmlPageBytes": 8192,
+      "binaryFiles": 5000,
+      "binaryFileBytes": 32768
+    },
+    {
+      "id": "one-large-64",
+      "htmlPages": 20,
+      "htmlPageBytes": 8192,
+      "binaryFiles": 1,
+      "binaryFileBytes": 67108864
+    },
+    {
+      "id": "one-large-256",
+      "htmlPages": 20,
+      "htmlPageBytes": 8192,
+      "binaryFiles": 1,
+      "binaryFileBytes": 268435456
+    },
+    {
+      "id": "one-large-512",
+      "htmlPages": 20,
+      "htmlPageBytes": 8192,
+      "binaryFiles": 1,
+      "binaryFileBytes": 536870912
+    },
+    {
+      "id": "many-large",
+      "htmlPages": 20,
+      "htmlPageBytes": 8192,
+      "binaryFiles": 40,
+      "binaryFileBytes": 26214400
+    }
+  ],
+  "corpora": [
+    {
+      "id": "many-small",
+      "definition": {
+        "id": "many-small",
+        "htmlPages": 5000,
+        "htmlPageBytes": 8192,
+        "binaryFiles": 5000,
+        "binaryFileBytes": 32768
+      },
+      "htmlBytes": 40960000,
+      "binaryBytes": 163840000,
+      "sourceBytes": 204800000,
+      "largestFileBytes": 32768,
+      "sourceFileCount": 10000,
+      "status": "completed",
+      "scenarios": {
+        "first-publish": {
+          "samples": [
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 786350080,
+              "timeSeconds": 152.16,
+              "outcome": "synced",
+              "repetition": 1,
+              "expectedOutcome": "synced"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 757628928,
+              "timeSeconds": 140.03,
+              "outcome": "synced",
+              "repetition": 2,
+              "expectedOutcome": "synced"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 803897344,
+              "timeSeconds": 152.22,
+              "outcome": "synced",
+              "repetition": 3,
+              "expectedOutcome": "synced"
+            }
+          ]
+        },
+        "no-op-publish": {
+          "samples": [
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 305610752,
+              "timeSeconds": 1.62,
+              "outcome": "no-op",
+              "repetition": 1,
+              "expectedOutcome": "no-op"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 206045184,
+              "timeSeconds": 4.12,
+              "outcome": "no-op",
+              "repetition": 2,
+              "expectedOutcome": "no-op"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 248299520,
+              "timeSeconds": 5.6,
+              "outcome": "no-op",
+              "repetition": 3,
+              "expectedOutcome": "no-op"
+            }
+          ]
+        },
+        "differential-publish": {
+          "samples": [
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 822018048,
+              "timeSeconds": 2.54,
+              "outcome": "synced",
+              "repetition": 1,
+              "expectedOutcome": "synced"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 760856576,
+              "timeSeconds": 2.75,
+              "outcome": "synced",
+              "repetition": 2,
+              "expectedOutcome": "synced"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 931938304,
+              "timeSeconds": 2.74,
+              "outcome": "synced",
+              "repetition": 3,
+              "expectedOutcome": "synced"
+            }
+          ]
+        },
+        "dry-run": {
+          "samples": [
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--dry-run",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 910229504,
+              "timeSeconds": 2.26,
+              "outcome": "planned",
+              "repetition": 1,
+              "expectedOutcome": "planned"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--dry-run",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 839352320,
+              "timeSeconds": 2.44,
+              "outcome": "planned",
+              "repetition": 2,
+              "expectedOutcome": "planned"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--dry-run",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 840286208,
+              "timeSeconds": 2.3,
+              "outcome": "planned",
+              "repetition": 3,
+              "expectedOutcome": "planned"
+            }
+          ]
+        }
+      },
+      "diskSafety": {
+        "availableBeforeBytes": 35945766912,
+        "estimatedPeakBytes": 1087635456,
+        "reserveBytes": 6442450944
+      }
+    },
+    {
+      "id": "one-large-64",
+      "definition": {
+        "id": "one-large-64",
+        "htmlPages": 20,
+        "htmlPageBytes": 8192,
+        "binaryFiles": 1,
+        "binaryFileBytes": 67108864
+      },
+      "htmlBytes": 163840,
+      "binaryBytes": 67108864,
+      "sourceBytes": 67272704,
+      "largestFileBytes": 67108864,
+      "sourceFileCount": 21,
+      "status": "completed",
+      "scenarios": {
+        "first-publish": {
+          "samples": [
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 165216256,
+              "timeSeconds": 0.56,
+              "outcome": "synced",
+              "repetition": 1,
+              "expectedOutcome": "synced"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 165117952,
+              "timeSeconds": 0.56,
+              "outcome": "synced",
+              "repetition": 2,
+              "expectedOutcome": "synced"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 165396480,
+              "timeSeconds": 0.58,
+              "outcome": "synced",
+              "repetition": 3,
+              "expectedOutcome": "synced"
+            }
+          ]
+        },
+        "no-op-publish": {
+          "samples": [
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 90292224,
+              "timeSeconds": 0.15,
+              "outcome": "no-op",
+              "repetition": 1,
+              "expectedOutcome": "no-op"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 90259456,
+              "timeSeconds": 0.16,
+              "outcome": "no-op",
+              "repetition": 2,
+              "expectedOutcome": "no-op"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 89915392,
+              "timeSeconds": 0.15,
+              "outcome": "no-op",
+              "repetition": 3,
+              "expectedOutcome": "no-op"
+            }
+          ]
+        },
+        "differential-publish": {
+          "samples": [
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 164347904,
+              "timeSeconds": 0.25,
+              "outcome": "synced",
+              "repetition": 1,
+              "expectedOutcome": "synced"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 165216256,
+              "timeSeconds": 0.29,
+              "outcome": "synced",
+              "repetition": 2,
+              "expectedOutcome": "synced"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 164773888,
+              "timeSeconds": 0.25,
+              "outcome": "synced",
+              "repetition": 3,
+              "expectedOutcome": "synced"
+            }
+          ]
+        },
+        "dry-run": {
+          "samples": [
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--dry-run",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 164741120,
+              "timeSeconds": 0.14,
+              "outcome": "planned",
+              "repetition": 1,
+              "expectedOutcome": "planned"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--dry-run",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 164921344,
+              "timeSeconds": 0.15,
+              "outcome": "planned",
+              "repetition": 2,
+              "expectedOutcome": "planned"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--dry-run",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 165085184,
+              "timeSeconds": 0.16,
+              "outcome": "planned",
+              "repetition": 3,
+              "expectedOutcome": "planned"
+            }
+          ]
+        }
+      },
+      "diskSafety": {
+        "availableBeforeBytes": 34983972864,
+        "estimatedPeakBytes": 537526272,
+        "reserveBytes": 6442450944
+      }
+    },
+    {
+      "id": "one-large-256",
+      "definition": {
+        "id": "one-large-256",
+        "htmlPages": 20,
+        "htmlPageBytes": 8192,
+        "binaryFiles": 1,
+        "binaryFileBytes": 268435456
+      },
+      "htmlBytes": 163840,
+      "binaryBytes": 268435456,
+      "sourceBytes": 268599296,
+      "largestFileBytes": 268435456,
+      "sourceFileCount": 21,
+      "status": "completed",
+      "scenarios": {
+        "first-publish": {
+          "samples": [
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 568492032,
+              "timeSeconds": 1,
+              "outcome": "synced",
+              "repetition": 1,
+              "expectedOutcome": "synced"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 568573952,
+              "timeSeconds": 0.85,
+              "outcome": "synced",
+              "repetition": 2,
+              "expectedOutcome": "synced"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 568147968,
+              "timeSeconds": 0.89,
+              "outcome": "synced",
+              "repetition": 3,
+              "expectedOutcome": "synced"
+            }
+          ]
+        },
+        "no-op-publish": {
+          "samples": [
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 291373056,
+              "timeSeconds": 0.26,
+              "outcome": "no-op",
+              "repetition": 1,
+              "expectedOutcome": "no-op"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 291471360,
+              "timeSeconds": 0.27,
+              "outcome": "no-op",
+              "repetition": 2,
+              "expectedOutcome": "no-op"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 291799040,
+              "timeSeconds": 0.25,
+              "outcome": "no-op",
+              "repetition": 3,
+              "expectedOutcome": "no-op"
+            }
+          ]
+        },
+        "differential-publish": {
+          "samples": [
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 568147968,
+              "timeSeconds": 0.39,
+              "outcome": "synced",
+              "repetition": 1,
+              "expectedOutcome": "synced"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 568147968,
+              "timeSeconds": 0.37,
+              "outcome": "synced",
+              "repetition": 2,
+              "expectedOutcome": "synced"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 567934976,
+              "timeSeconds": 0.4,
+              "outcome": "synced",
+              "repetition": 3,
+              "expectedOutcome": "synced"
+            }
+          ]
+        },
+        "dry-run": {
+          "samples": [
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--dry-run",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 568033280,
+              "timeSeconds": 0.25,
+              "outcome": "planned",
+              "repetition": 1,
+              "expectedOutcome": "planned"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--dry-run",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 567410688,
+              "timeSeconds": 0.35,
+              "outcome": "planned",
+              "repetition": 2,
+              "expectedOutcome": "planned"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--dry-run",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 568295424,
+              "timeSeconds": 0.26,
+              "outcome": "planned",
+              "repetition": 3,
+              "expectedOutcome": "planned"
+            }
+          ]
+        }
+      },
+      "diskSafety": {
+        "availableBeforeBytes": 34779451392,
+        "estimatedPeakBytes": 1342832640,
+        "reserveBytes": 6442450944
+      }
+    },
+    {
+      "id": "one-large-512",
+      "definition": {
+        "id": "one-large-512",
+        "htmlPages": 20,
+        "htmlPageBytes": 8192,
+        "binaryFiles": 1,
+        "binaryFileBytes": 536870912
+      },
+      "htmlBytes": 163840,
+      "binaryBytes": 536870912,
+      "sourceBytes": 537034752,
+      "largestFileBytes": 536870912,
+      "sourceFileCount": 21,
+      "status": "completed",
+      "scenarios": {
+        "first-publish": {
+          "samples": [
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 1103757312,
+              "timeSeconds": 1.51,
+              "outcome": "synced",
+              "repetition": 1,
+              "expectedOutcome": "synced"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 1105461248,
+              "timeSeconds": 1.1,
+              "outcome": "synced",
+              "repetition": 2,
+              "expectedOutcome": "synced"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 1105526784,
+              "timeSeconds": 1.15,
+              "outcome": "synced",
+              "repetition": 3,
+              "expectedOutcome": "synced"
+            }
+          ]
+        },
+        "no-op-publish": {
+          "samples": [
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 559792128,
+              "timeSeconds": 0.36,
+              "outcome": "no-op",
+              "repetition": 1,
+              "expectedOutcome": "no-op"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 560431104,
+              "timeSeconds": 0.37,
+              "outcome": "no-op",
+              "repetition": 2,
+              "expectedOutcome": "no-op"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 560234496,
+              "timeSeconds": 0.37,
+              "outcome": "no-op",
+              "repetition": 3,
+              "expectedOutcome": "no-op"
+            }
+          ]
+        },
+        "differential-publish": {
+          "samples": [
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 1106722816,
+              "timeSeconds": 0.54,
+              "outcome": "synced",
+              "repetition": 1,
+              "expectedOutcome": "synced"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 1106296832,
+              "timeSeconds": 0.48,
+              "outcome": "synced",
+              "repetition": 2,
+              "expectedOutcome": "synced"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 1106984960,
+              "timeSeconds": 0.64,
+              "outcome": "synced",
+              "repetition": 3,
+              "expectedOutcome": "synced"
+            }
+          ]
+        },
+        "dry-run": {
+          "samples": [
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--dry-run",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 1105575936,
+              "timeSeconds": 0.39,
+              "outcome": "planned",
+              "repetition": 1,
+              "expectedOutcome": "planned"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--dry-run",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 1105133568,
+              "timeSeconds": 0.4,
+              "outcome": "planned",
+              "repetition": 2,
+              "expectedOutcome": "planned"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--dry-run",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 1099857920,
+              "timeSeconds": 0.77,
+              "outcome": "planned",
+              "repetition": 3,
+              "expectedOutcome": "planned"
+            }
+          ]
+        }
+      },
+      "diskSafety": {
+        "availableBeforeBytes": 33960017920,
+        "estimatedPeakBytes": 2416574464,
+        "reserveBytes": 6442450944
+      }
+    },
+    {
+      "id": "many-large",
+      "definition": {
+        "id": "many-large",
+        "htmlPages": 20,
+        "htmlPageBytes": 8192,
+        "binaryFiles": 40,
+        "binaryFileBytes": 26214400
+      },
+      "htmlBytes": 163840,
+      "binaryBytes": 1048576000,
+      "sourceBytes": 1048739840,
+      "largestFileBytes": 26214400,
+      "sourceFileCount": 60,
+      "status": "completed",
+      "scenarios": {
+        "first-publish": {
+          "samples": [
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 2124726272,
+              "timeSeconds": 2.71,
+              "outcome": "synced",
+              "repetition": 1,
+              "expectedOutcome": "synced"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 2130771968,
+              "timeSeconds": 2.14,
+              "outcome": "synced",
+              "repetition": 2,
+              "expectedOutcome": "synced"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 2130771968,
+              "timeSeconds": 2.41,
+              "outcome": "synced",
+              "repetition": 3,
+              "expectedOutcome": "synced"
+            }
+          ]
+        },
+        "no-op-publish": {
+          "samples": [
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 1073201152,
+              "timeSeconds": 0.6,
+              "outcome": "no-op",
+              "repetition": 1,
+              "expectedOutcome": "no-op"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 1073561600,
+              "timeSeconds": 0.59,
+              "outcome": "no-op",
+              "repetition": 2,
+              "expectedOutcome": "no-op"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 1073348608,
+              "timeSeconds": 0.62,
+              "outcome": "no-op",
+              "repetition": 3,
+              "expectedOutcome": "no-op"
+            }
+          ]
+        },
+        "differential-publish": {
+          "samples": [
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 2132262912,
+              "timeSeconds": 1.02,
+              "outcome": "synced",
+              "repetition": 1,
+              "expectedOutcome": "synced"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 2131312640,
+              "timeSeconds": 0.91,
+              "outcome": "synced",
+              "repetition": 2,
+              "expectedOutcome": "synced"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 2131460096,
+              "timeSeconds": 0.92,
+              "outcome": "synced",
+              "repetition": 3,
+              "expectedOutcome": "synced"
+            }
+          ]
+        },
+        "dry-run": {
+          "samples": [
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--dry-run",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 2130886656,
+              "timeSeconds": 0.8,
+              "outcome": "planned",
+              "repetition": 1,
+              "expectedOutcome": "planned"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--dry-run",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 2130968576,
+              "timeSeconds": 0.79,
+              "outcome": "planned",
+              "repetition": 2,
+              "expectedOutcome": "planned"
+            },
+            {
+              "command": [
+                "<system-bin>/time",
+                "-l",
+                "<run-dir>/artifact-pages",
+                "site",
+                "sync",
+                "--site",
+                "memory",
+                "--source",
+                "content",
+                "--config",
+                "../admin/artifact-pages.yaml",
+                "--dry-run",
+                "--format",
+                "json"
+              ],
+              "exitStatus": 0,
+              "signal": null,
+              "rssBytes": 2131378176,
+              "timeSeconds": 0.8,
+              "outcome": "planned",
+              "repetition": 3,
+              "expectedOutcome": "planned"
+            }
+          ]
+        }
+      },
+      "diskSafety": {
+        "availableBeforeBytes": 32330166272,
+        "estimatedPeakBytes": 4463394816,
+        "reserveBytes": 6442450944
+      }
+    }
+  ],
+  "failures": []
+}
