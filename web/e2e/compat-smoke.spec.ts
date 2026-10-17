@@ -42,7 +42,7 @@ if (mode === 'smoke') {
         await page.goto(`/${site.id}/_previews`)
         await expect(page.locator('.preview-group').first()).toBeVisible()
         await page.locator('.preview-document-list a').first().click()
-        await expect(page.locator('.preview-reader-header h1')).toBeVisible()
+        await expect(page.locator('.preview-crumbs .breadcrumb-current')).toBeVisible()
       })
     }
   }

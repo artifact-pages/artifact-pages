@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { Icon } from './Icon'
 import type { ArtifactIndexEntry } from '../domain/index'
 
@@ -13,11 +13,13 @@ type TocEntry = NonNullable<ArtifactIndexEntry['toc']>[number]
  * Contents below. On a Markdown page it sits inside the scrolling document, so Details scrolls
  * away while Contents stays; beside an HTML frame it scrolls on its own (`standalone`).
  */
-export function ReaderContextColumn({ artifact, entries, activeId, standalone, onJump }: {
+export function ReaderContextColumn({ artifact, entries, activeId, standalone, details, onJump }: {
   artifact: ArtifactIndexEntry
   entries: TocEntry[]
   activeId: string | null
   standalone?: boolean
+  /** Replaces the artifact's own Details (a preview document has its own, ISSUE-109). */
+  details?: ReactNode
   onJump: (id: string) => void
 }) {
   const listRef = useRef<HTMLElement>(null)
@@ -42,7 +44,7 @@ export function ReaderContextColumn({ artifact, entries, activeId, standalone, o
     >
       <section className="reader-column-details" aria-labelledby="reader-column-details-heading">
         <h2 id="reader-column-details-heading" className="reader-column-heading" tabIndex={-1} data-reader-part="details">Details</h2>
-        <ArtifactDetails artifact={artifact} />
+        {details ?? <ArtifactDetails artifact={artifact} />}
       </section>
       <section className="reader-column-contents" aria-labelledby="reader-column-contents-heading">
         <h2 id="reader-column-contents-heading" className="reader-column-heading">Contents</h2>

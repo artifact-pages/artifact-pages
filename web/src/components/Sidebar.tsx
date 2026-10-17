@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ArtifactIndexEntry, SiteIndex, SiteSummary } from '../domain/index'
 import type { ThemeMode } from '../domain/theme'
 import { artifactSourceLinks } from '../domain/source-links'
@@ -36,6 +36,7 @@ export function Sidebar({
   onTogglePin,
   pageTextSearch,
   treeStyle = 'branch-guides',
+  previewSection,
 }: {
   id?: string
   index: SiteIndex
@@ -60,6 +61,8 @@ export function Sidebar({
   /** Present only when the site publishes page text search data. */
   pageTextSearch?: SidebarPageTextSearch
   treeStyle?: TreeStyle
+  /** A preview document is open (ISSUE-109): this replaces the published tree, which is not part of the preview. */
+  previewSection?: ReactNode
 }) {
   const [draft, setDraft] = useState('')
   const filter = draft.trim()
@@ -170,7 +173,7 @@ export function Sidebar({
           </button>
         </div>
 
-        {pageTextSearch ? (
+        {pageTextSearch && !previewSection ? (
           <SidebarFilterBar
             siteTitle={index.site.title}
             draft={draft}
@@ -197,8 +200,8 @@ export function Sidebar({
         )}
       </div>
 
-      <nav className="sidebar-body" aria-label="Artifacts">
-        {pageTextSearch && filter ? (
+      <nav className="sidebar-body" aria-label={previewSection ? 'Preview documents' : 'Artifacts'}>
+        {previewSection ? previewSection : pageTextSearch && filter ? (
           <div className="sidebar-section filter-results">
             <div className="sidebar-section-title">
               <span className="sidebar-section-label"><Icon name="search" size={12} />Titles and paths</span>
@@ -270,9 +273,11 @@ export function Sidebar({
       </nav>
 
       <footer className="sidebar-footer">
-        <span className="index-date">
-          Index generated <time dateTime={index.generatedAt}>{formatDate(index.generatedAt)}</time>
-        </span>
+        {previewSection ? <span className="index-date" /> : (
+          <span className="index-date">
+            Index generated <time dateTime={index.generatedAt}>{formatDate(index.generatedAt)}</time>
+          </span>
+        )}
         <ThemeSwitcher
           buttonClassName="icon-button theme-toggle"
           mode={themeMode}

@@ -83,7 +83,7 @@ test('configured object-backed preview round-trips encoded document and resource
   expect(documentURL.pathname).toContain('/guides/review%20r%C3%A9sum%C3%A9%20%23%252F%20%2B%3F.html')
   await page.goto(previewURL)
   await expect(page).toHaveURL(previewURL)
-  await expect(page.locator('.preview-reader-header h1')).toHaveText('Encoded local preview')
+  await expect(page.locator('.preview-crumbs .breadcrumb-current')).toHaveText('Encoded local preview')
 
   const previewFrame = page.frameLocator('iframe[title="Encoded local preview"]')
   await expect(previewFrame.getByRole('heading', { name: 'Encoded preview document' })).toBeVisible()

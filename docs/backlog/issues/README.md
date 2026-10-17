@@ -120,7 +120,7 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-106](ISSUE-106-known-html-failure-has-no-reader-guidance.md) | Done | P3 | A missing indexed HTML body shows only the server error inside the reader. |
 | [ISSUE-107](ISSUE-107-site-home-overview-files-preview-tabs.md) | Done | P2 | Site home mixes publisher introduction and tool navigation; owner selected compact overview/files/previews with persistent search. |
 | [ISSUE-108](ISSUE-108-reader-context-needs-responsive-right-sidebar.md) | In progress | P2 | Contents and source details are hidden behind separate controls even on wide screens; design a responsive right sidebar before final docs work. |
-| [ISSUE-109](ISSUE-109-preview-reading-context-and-entry.md) | Open | P2 | Preview reading needs shared app context, standard reader entry links and coherent PR/revision metadata; design after ISSUE-108. |
+| [ISSUE-109](ISSUE-109-preview-reading-context-and-entry.md) | Done | P2 | Preview reading needs shared app context, standard reader entry links and coherent PR/revision metadata; design after ISSUE-108. |
 
 ISSUE-013's verified completion record is retained in Git history.
 

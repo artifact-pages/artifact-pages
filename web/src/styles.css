@@ -2341,14 +2341,12 @@ mark {
 }
 
 .preview-back-link:hover,
-.preview-external-link:hover,
-.preview-site-link:hover {
+.preview-external-link:hover {
   color: var(--text);
 }
 
 .preview-page .eyebrow,
-.site-previews .eyebrow,
-.preview-reader .eyebrow {
+.site-previews .eyebrow {
   margin: 0 0 7px;
   color: var(--text-tertiary);
   font-size: 11px;
@@ -2357,8 +2355,7 @@ mark {
   text-transform: uppercase;
 }
 
-.preview-page h1,
-.preview-reader-header h1 {
+.preview-page h1 {
   margin: 0 0 8px;
   font-size: clamp(27px, 4vw, 38px);
   font-weight: 620;
@@ -2424,8 +2421,7 @@ mark {
   font-weight: 600;
 }
 
-.preview-group-meta,
-.preview-reader-path {
+.preview-group-meta {
   margin: 0;
   color: var(--text-tertiary);
   font-size: 11px;
@@ -2494,55 +2490,6 @@ mark {
   font-size: 11px;
 }
 
-.preview-reader {
-  display: flex;
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-  flex-direction: column;
-  background: var(--shell);
-}
-
-.preview-reader-header {
-  flex: none;
-  padding: 14px 24px 13px;
-  border-bottom: 1px solid var(--line-soft);
-  background: var(--surface);
-}
-
-.preview-reader-context {
-  display: flex;
-  min-height: 22px;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 8px;
-}
-
-.preview-reader-context .preview-back-link {
-  margin: 0;
-}
-
-.preview-reader-revision {
-  color: var(--text-tertiary);
-  font-size: 11px;
-}
-
-.preview-reader-header h1 {
-  overflow: hidden;
-  margin: 0 0 2px;
-  font-size: 20px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.preview-reader-stage {
-  position: relative;
-  min-height: 0;
-  flex: 1;
-  overflow: hidden;
-  background: var(--surface);
-}
-
 .preview-html-frame {
   background: white;
 }
@@ -2557,28 +2504,6 @@ mark {
   pointer-events: none;
 }
 
-.preview-site-link {
-  position: absolute;
-  right: 17px;
-  bottom: 12px;
-  z-index: 2;
-  padding: 5px 9px;
-  border: 1px solid var(--line-soft);
-  border-radius: 7px;
-  color: var(--text-secondary);
-  background: var(--surface);
-  font-size: 11px;
-  text-decoration: none;
-}
-
-.preview-unavailable {
-  padding-top: 35px;
-}
-
-.preview-unavailable h1 {
-  margin-top: 16px;
-}
-
 @media (max-width: 620px) {
   .preview-page {
     padding: 28px 18px 42px;
@@ -2588,14 +2513,6 @@ mark {
     padding: 15px 14px;
   }
 
-  .preview-reader-header {
-    padding: 12px 16px 10px;
-  }
-
-  .preview-reader-context {
-    flex-wrap: wrap;
-    gap: 8px 12px;
-  }
 }
 
 .site-picker-content,
@@ -4144,4 +4061,286 @@ a.tree-more {
 a.tree-more:hover {
   color: var(--text);
   text-decoration: underline;
+}
+
+/* ---- preview document in the reader shell (ISSUE-109) ---- */
+.stage-preview {
+  display: flex;
+  flex-direction: column;
+}
+
+.preview-body {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+}
+
+.preview-notices {
+  flex: none;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--hover);
+}
+
+.preview-notice {
+  margin: 0;
+  padding: 8px 14px;
+  border-left: 3px solid var(--text-tertiary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.preview-notice + .preview-notice {
+  border-top: 1px solid var(--line-soft);
+}
+
+.preview-notice a {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.preview-notice .text-action {
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.preview-tag {
+  display: inline-flex;
+  height: 22px;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  margin-left: 5px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text);
+  background: var(--hover);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.preview-tag-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text);
+}
+
+.preview-crumbs .breadcrumb-link {
+  padding: 3px 5px;
+  border-radius: 6px;
+}
+
+/* One row at a phone width: the tag stays and names the PR or manual preview, so the trail shortens to the document
+   (the site, the preview list and the group stay one tap away in Details and the sidebar). */
+@media (max-width: 620px) {
+  .preview-tag {
+    margin-left: 2px;
+  }
+
+  .preview-crumbs .breadcrumb-part:nth-child(-n+3) {
+    display: none;
+  }
+
+  .preview-crumbs .breadcrumb-part:nth-child(4) .breadcrumb-separator {
+    display: none;
+  }
+}
+
+.preview-side-id {
+  margin: 2px 10px 6px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.preview-side-id .mono {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.preview-side-group {
+  margin: 10px 10px 2px;
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+}
+
+.preview-sidebar-site {
+  margin-top: 12px;
+  padding: 12px 10px 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+.preview-sidebar-site a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.preview-sidebar-site a:hover {
+  text-decoration: underline;
+}
+
+.preview-details {
+  display: grid;
+  gap: 12px;
+}
+
+.preview-facts {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.preview-fact {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.preview-fact dt {
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+}
+
+.preview-fact dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.preview-hint {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.preview-sha {
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  background: var(--hover);
+  font-size: 11px;
+}
+
+.preview-path {
+  font-size: 11px;
+}
+
+.preview-link,
+.preview-links a,
+.preview-raw a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 3px;
+}
+
+.preview-link:hover,
+.preview-links a:hover,
+.preview-raw a:hover {
+  text-decoration-color: var(--text-secondary);
+}
+
+.preview-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.preview-links a {
+  color: var(--text-secondary);
+}
+
+.preview-more summary {
+  display: flex;
+  width: fit-content;
+  cursor: pointer;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  border-radius: 5px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  list-style: none;
+}
+
+.preview-more summary::-webkit-details-marker {
+  display: none;
+}
+
+.preview-more summary:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.preview-more summary svg {
+  transition: transform 0.12s;
+}
+
+.preview-more[open] summary svg {
+  transform: rotate(90deg);
+}
+
+.preview-more .preview-facts-more {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.preview-facts-document {
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.preview-raw {
+  display: grid;
+  gap: 2px;
+  margin: 2px 0 0;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.preview-raw a {
+  width: fit-content;
+  color: var(--text-secondary);
+}
+
+.preview-raw span {
+  color: var(--text-tertiary);
+}
+
+.preview-unavailable-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.preview-unavailable-links .context-button {
+  border: 1px solid var(--line);
+  text-decoration: none;
 }

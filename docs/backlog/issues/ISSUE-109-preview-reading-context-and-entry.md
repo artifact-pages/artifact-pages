@@ -1,6 +1,7 @@
 # Preview reading loses the shared reader context and scatters review metadata
 
-- Status: Open
+- Status: Done
+- Assignee: Claude
 - Priority: P2
 - Area: Web / preview entry, reading and review context
 
@@ -70,14 +71,53 @@ Findings:
 6. The preview list's rows pass the group id for manual groups while the CLI-produced manual URLs have no group; the two entry routes therefore return to different lists.
 7. HTML previews convert in-frame navigation only for a changed or published document; other destinations stay raw inside the frame (see the HTML row).
 
+## Selected design (2026-10-17)
+
+Owner decision: preview metadata is part of the right column's Details, as "metadata", the same idea as a published page's provenance. It is not a separate Preview section or banner. This is variant B of the concept stories (`web/src/components/concepts/PreviewReader.stories.tsx`) with its "Preview" section merged into Details.
+
+A preview document opens in the normal reader shell (left sidebar, context bar, palette, the ISSUE-108 column from 1200 px, the Contents and Details buttons and panels below). The sidebar lists this revision's documents, changed pages first and then "Affected by a resource change", with a separate "Browse the published <site>" link; the published tree is not shown. The context bar carries a small tag, "Preview · PR #N" or "Preview · manual", at every width. Breadcrumbs: site / Previews / group label / document.
+
+Metadata hierarchy in Details, in order:
+
+1. Pull request: "#N on GitHub" only when the catalog verifies the group and head belong to that PR; none for manual previews.
+2. Revision: short SHA, full SHA as accessible name and title.
+3. Built: date and time, with the caption "When this preview was built, not when the page was edited."
+4. Links: "Preview list" (the group's list) and "Published site".
+5. "More details" (disclosure): default head, merge base, "Included as" only where the manifest records a reason.
+6. Path and format.
+7. "Open the raw file" as a visually separated secondary action, captioned "Opens this revision's file on its own, outside the reader."
+
+A preview document never shows a production Updated date, source or last committer. Missing fields are omitted, never invented. Notices sit in a strip above the document: older revision, catalog unavailable, outside the preview. A missing or expired preview shows "Preview unavailable" with links to the list and the published site and no column.
+
+Settled questions:
+
+- "Open the current preview" (older revision): opens the same document path at the group's current head when that head's manifest contains it, and the group's list otherwise. The older revision keeps reading normally and shows no PR row.
+- Links without `?group=`: the reader resolves the manual group `head:<sha>` of the revision from the catalog, so the tag and "Preview list" work. It never resolves such a link to a PR (a head can belong to several groups). No CLI or Action change.
+- Pages outside the preview (an HTML preview linking to something that is neither a preview document nor published): the frame keeps its raw behaviour, and while that page is shown the strip says "This page is outside the preview."
+
+The preview list and the reader share one catalog load per site visit, which closes the ISSUE-107 known limit (returning from a document refetched the catalog).
+
 ## Acceptance criteria
 
-- [ ] Record the audited entry paths and observed behavior, explicitly distinguishing already logical SPA URLs, raw-file URLs and an application preview page that lacks the shared reader shell.
-- [ ] Claude presents and records a selected preview design after ISSUE-108, including metadata hierarchy, wide/narrow context access and PR/manual/old-revision examples.
-- [ ] Standard review entries lead into the application reader, retain explicit preview identity and provide shared reading/context affordances. Raw opening, where retained, is a distinct secondary action.
-- [ ] Available PR, revision, path, time and change-reason information is accurate and accessible; manual previews do not invent a PR, and stale catalog associations never mislabel a revision.
-- [ ] Preview-list/group/revision deep links, heading links, shared URLs, refresh, browser history and modified-click/new-tab behavior work without silently switching review scope to production or another revision.
-- [ ] Expired/missing content, optional/missing PR context, catalog failure and incompatible-format states have useful navigation/recovery; existing immutable content and trust/isolation boundaries are preserved.
+- [x] Record the audited entry paths and observed behavior, explicitly distinguishing already logical SPA URLs, raw-file URLs and an application preview page that lacks the shared reader shell.
+- [x] Claude presents and records a selected preview design after ISSUE-108, including metadata hierarchy, wide/narrow context access and PR/manual/old-revision examples.
+- [x] Standard review entries lead into the application reader, retain explicit preview identity and provide shared reading/context affordances. Raw opening, where retained, is a distinct secondary action.
+- [x] Available PR, revision, path, time and change-reason information is accurate and accessible; manual previews do not invent a PR, and stale catalog associations never mislabel a revision.
+- [x] Preview-list/group/revision deep links, heading links, shared URLs, refresh, browser history and modified-click/new-tab behavior work without silently switching review scope to production or another revision.
+- [x] Expired/missing content, optional/missing PR context, catalog failure and incompatible-format states have useful navigation/recovery; existing immutable content and trust/isolation boundaries are preserved.
 - [ ] Applicable browser regressions cover HTML and Markdown, PR and manual previews, current and older revision entries, and the identified producer path if changed. Relevant checks and fresh cross-review pass before documentation screenshots/copy are finalized.
 
 No fresh live preview reproduction or product test run is claimed by filing this issue. The user-reported direct-link symptom remains an investigation input, not an established universal raw-link bug.
+
+## Verification
+
+Implemented in `web/` (2026-10-17, Claude): `components/PreviewReader.tsx` (reader state, tag, breadcrumbs, sidebar section, Details, notices, HTML frame), `domain/preview-reader.ts`, `data/preview-list.ts` (shared catalog), `ArtifactWorkspace.tsx`, `Sidebar.tsx`, `ReaderContextColumn.tsx`, `App.tsx` and `styles.css`. `PreviewDocumentPage.tsx` is removed. The preview document no longer waits for the published site index: the shell starts on an empty index and moves onto the real one without reloading.
+
+- `npm run build` and `npm run test:web-unit` pass (the new `preview-reader.test.mjs` covers identity, group resolution, the verified PR and the superseded state). Storybook builds; the new stories are `Product/Preview reader` (PR, PR with affected pages, manual, group-less manual, older revision both ways, catalog unavailable, missing, unsupported format, narrow).
+- Full e2e on compose project `claude-issue-109`, `CI=1` (one retry allowed): 314 passed, none flaky. The new tests are in `web/e2e/local-serving.spec.ts`, describe `preview reading in the reader shell (ISSUE-109)` (18 tests): shell and column for Markdown and HTML, Details for PR, manual and group-less links, no production provenance and "Included as", sidebar groups and the published link, older revision with and without the document at the current head, catalog failure with retry, missing and unsupported previews, the tag at 390 px, the narrow Details panel, the raw action, the outside-preview notice, deep links, history, modifier click and copy link, and no catalog refetch when returning to the list.
+- Existing tests whose premise changed: the document title is now read from the breadcrumb (`.preview-crumbs .breadcrumb-current`) instead of a page header; the PR link is "#N on GitHub"; the direct-document test now expects the catalog to be requested and its failure reported; the stalled production index read is aborted when the reader leaves the site (the index is now shared with the list inside the site).
+- Spec: the preview reader paragraphs in `docs/specification.md` (the route table and the post-MVP pre-publish preview contract) replace the earlier "quiet provenance label, no reader strip" treatment.
+- Screenshots (uncommitted, `.local/issue-109/`): 1440 px light and dark, and 390 px, for PR, manual, superseded and HTML previews.
+
+Known limits: a preview document has no indexed headings (the manifest carries none), so Contents shows its empty message. The tag reads "Preview" until the catalog has resolved a link without a group. A preview that is gone from discovery but still readable keeps its tag from the link's group only while the catalog is loading or unavailable; once the catalog is loaded and lacks the group the tag drops to "Preview". Fresh cross-review (Luna) is still to be done, so the last acceptance criterion stays unticked until it is.
+
