@@ -429,11 +429,17 @@ async function loadSiteRegistry(fetcher: Fetcher, timeoutMs: number, callerSigna
     if (!response.ok) {
       throw new IndexLoadError(`Request failed with status ${response.status}: ${REGISTRY_URL}.`, REGISTRY_URL, { status: response.status })
     }
+    let text: string
+    try {
+      text = await response.text()
+    } catch (error) {
+      throw interrupted(error) ?? new IndexLoadError(`Could not fetch ${REGISTRY_URL}.`, REGISTRY_URL, { cause: error })
+    }
     let payload: unknown
     try {
-      payload = await response.json()
+      payload = JSON.parse(text)
     } catch (error) {
-      throw interrupted(error) ?? new IndexLoadError(`Invalid site registry: ${REGISTRY_URL}.`, REGISTRY_URL, { cause: error, invalidData: true })
+      throw new IndexLoadError(`Invalid site registry: ${REGISTRY_URL}.`, REGISTRY_URL, { cause: error, invalidData: true })
     }
     return parseSiteRegistry(payload)
   } finally {

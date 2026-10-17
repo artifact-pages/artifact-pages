@@ -7247,3 +7247,19 @@ test('a stalled registry times out with a message and Try again recovers', async
   // The shared cleanup waits for in-flight handlers; release the abandoned request.
   await Promise.all(stalled.map((route) => route.abort().catch(() => undefined)))
 })
+
+test('leaving a preview document aborts its stalled production index read', async ({ page }) => {
+  const stalled: Route[] = []
+  await page.route('**/_indexes/sre/index.json', (route) => { stalled.push(route) })
+  await page.goto(`/sre/_previews/${previewHeadSha}/guides/preview-guide.md`)
+  await expect(page.locator('.preview-reader-header h1')).toHaveText('Local preview guide')
+  await expect.poll(() => stalled.length).toBe(1)
+  const aborted = page.waitForEvent('requestfailed', (request) => request.url().endsWith('/_indexes/sre/index.json'))
+  await page.evaluate(() => {
+    window.history.pushState({}, '', '/sre/_previews')
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  })
+  await expect(page).toHaveURL(/\/sre\/_previews$/)
+  await aborted
+  await Promise.all(stalled.map((route) => route.abort().catch(() => undefined)))
+})

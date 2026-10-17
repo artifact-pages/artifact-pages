@@ -20,7 +20,7 @@ const {
 } = await import('./indexes.ts')
 
 const fixture = JSON.parse(readFileSync(new URL('../../../fixtures/storage/_indexes/sre/index.json', import.meta.url), 'utf8'))
-const json = (body) => ({ ok: true, status: 200, json: async () => body })
+const json = (body) => ({ ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) })
 const load = (body) => loadSiteIndex('sre', async () => json(body))
 
 const row = (overrides = {}) => ({
@@ -327,7 +327,7 @@ test('a registry whose body never arrives times out at the registry deadline', a
   mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 })
   try {
     const outcome = assert.rejects(
-      discoverSites((url, init) => Promise.resolve({ ok: true, status: 200, json: () => abortable(init) })),
+      discoverSites((url, init) => Promise.resolve({ ok: true, status: 200, text: () => abortable(init) })),
       (error) => error instanceof IndexLoadError && error.timedOut === true,
     )
     await settle()
@@ -353,11 +353,43 @@ test('aborting discovery rejects as aborted and cancels the registry request', a
 
 test('a registry that is not JSON is invalid data, not a transport error', async () => {
   await assert.rejects(
-    discoverSites(async () => ({ ok: true, status: 200, json: async () => { throw new SyntaxError('bad json') } })),
+    discoverSites(async () => ({ ok: true, status: 200, text: async () => '{not json' })),
     (error) => error instanceof IndexLoadError && error.invalidData === true && error.message === 'Invalid site registry: /_indexes/sites.json.',
   )
   await assert.rejects(
     discoverSites(async () => json({ schemaVersion: 1, sites: 'nope' })),
     (error) => error instanceof IndexLoadError && error.invalidData === true,
   )
+})
+
+test('a registry body read that fails in transport is retryable, not invalid data', async () => {
+  await assert.rejects(
+    discoverSites(async () => ({ ok: true, status: 200, text: async () => { throw new TypeError('network error') } })),
+    (error) => error instanceof IndexLoadError && !error.invalidData && !error.timedOut
+      && error.message === 'Could not fetch /_indexes/sites.json.' && error.cause instanceof TypeError,
+  )
+})
+
+test('one of two callers sharing a request aborts; the request resolves for the other', async () => {
+  const calls = []
+  let answer
+  await withClock((url, init) => {
+    calls.push(init.signal)
+    return new Promise((resolve) => { answer = () => resolve(json(indexFor(idOf(url)))) })
+  }, async () => {
+    const leaving = new AbortController()
+    const staying = new AbortController()
+    const a = loadSiteIndex('alpha', fetch, undefined, { signal: leaving.signal })
+    const b = loadSiteIndex('alpha', fetch, undefined, { signal: staying.signal })
+    await settle()
+    leaving.abort()
+    await assert.rejects(a, /Aborted/)
+    assert.equal(calls.length, 1)
+    assert.equal(calls[0].aborted, false)
+    answer()
+    assert.equal((await b).site.id, 'alpha')
+    // Both waiters have left; the fulfilled entry is still shared.
+    await loadSiteIndex('alpha')
+    assert.equal(calls.length, 1)
+  })
 })
