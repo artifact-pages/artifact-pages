@@ -19,7 +19,7 @@ When a module tag `terraform-cloudflare/vX.Y.Z` or `terraform-aws/vX.Y.Z` is pus
 - No-op guard: refuse (or no-op) when the generated tree equals the previous release's tree, so an unchanged module cannot receive a new version by accident.
 - Package repositories get a generated notice and a pull-request auto-close workflow (comment pointing to `artifact-pages/artifact-pages`), as for the Action repositories, shipped as part of the generated tree so the sync keeps them in place.
 - Resolve the TD15 open points that belong here (lock files, validation of the generated tree before tagging). Initial versions are decided: both modules start at `0.1.0`, and `release.json` records `version`, `repository`, the source tag and the source commit SHA.
-- Owner step (not an agent step): install the App `artifact-pages-release` on the two package repositories with Contents write (and Pull requests write if the auto-close workflow uses the App token; otherwise the workflow's own `GITHUB_TOKEN` suffices). It currently has Contents write only on the four Action repositories.
+- Owner step (not an agent step): install the App `artifact-pages-release` on the two package repositories with Contents write (and Pull requests write if the auto-close workflow uses the App token; otherwise the workflow's own `GITHUB_TOKEN` suffices). It currently has Contents write only on the four Action repositories. Done 2026-10-10: installed on both package repositories.
 
 ## Acceptance criteria
 
