@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ArtifactIndexEntry } from '../domain/index'
 import { compareArtifactsByPath } from '../domain/listing-order.ts'
-import { TREE_BRANCH_ROW_LIMIT, TREE_FLAT_ROW_LIMIT, boundRows } from '../domain/row-window'
+import { TREE_BRANCH_ROW_LIMIT, TREE_FLAT_ROW_LIMIT, boundRows, createRowBudget, visitBranch, type RowBudget } from '../domain/row-window'
 import { buildArtifactTree, countArtifacts, flattenArtifacts, foldedIndexArtifact, type ArtifactTreeNode } from '../domain/tree'
 import { ArtifactActionsMenu } from './ArtifactActionsMenu'
 import { Icon } from './Icon'
@@ -118,7 +118,7 @@ export function ArtifactTree({
     )
   }
 
-  function renderNode(node: ArtifactTreeNode, depth: number): React.ReactNode {
+  function renderNode(node: ArtifactTreeNode, depth: number, budget: RowBudget): React.ReactNode {
     const directories = [...node.directories.values()].filter(
       (directory) => !normalizedQuery
         || folderMatches(directory, normalizedQuery)
@@ -142,20 +142,11 @@ export function ArtifactTree({
       ...directories.map((directory) => ({ directory })),
       ...files.map((artifact) => ({ artifact })),
     ]
-    const { shown, hidden } = boundRows(
-      rows,
-      TREE_BRANCH_ROW_LIMIT,
-      (row) => 'directory' in row ? isActiveDirectoryRow(row.directory) : row.artifact.path === activePath,
-    )
-    const shownDirectories = shown.flatMap((row) => 'directory' in row ? [row.directory] : [])
-    const shownFiles = shown.flatMap((row) => 'artifact' in row ? [row.artifact] : [])
     const moreHref = node.path ? directoryHref?.(node) : rootHref
     const moreLabel = node.path ? node.label : 'this site'
     const moreOpen = () => node.path ? onOpenDirectory?.(node) : onOpenRoot?.()
 
-    return (
-      <>
-        {shownDirectories.map((directory) => {
+    const renderDirectory = (directory: ArtifactTreeNode) => {
           const isExpanded = normalizedQuery.length > 0 || expanded.has(directory.path)
           const count = normalizedQuery
             ? countMatching(directory, normalizedQuery)
@@ -221,14 +212,28 @@ export function ArtifactTree({
               )}
               {isExpanded ? (
                 <div className={`tree-children tree-children-${style}`}>
-                  {renderNode(directory, depth + 1)}
+                  {renderNode(directory, depth + 1, budget)}
                 </div>
               ) : null}
             </div>
           )
-        })}
-        {shownFiles.map((artifact) => renderArtifact(artifact, depth, style))}
-        {hidden > 0 ? (
+    }
+
+    // Per-branch limit and the tree-wide budget, in depth-first render order (ISSUE-093).
+    const { items: rowNodes, hidden, showOverflow } = visitBranch(
+      budget,
+      rows,
+      {
+        limit: TREE_BRANCH_ROW_LIMIT,
+        isPinned: (row) => 'directory' in row ? isActiveDirectoryRow(row.directory) : row.artifact.path === activePath,
+      },
+      (row) => 'directory' in row ? renderDirectory(row.directory) : renderArtifact(row.artifact, depth, style),
+    )
+
+    return (
+      <>
+        {rowNodes}
+        {showOverflow ? (
           moreHref ? (
             <a
               className="tree-more"
@@ -248,6 +253,9 @@ export function ArtifactTree({
     )
   }
 
+  const budget = createRowBudget()
+  const treeNodes = view === 'tree' && style !== 'path-list' && tree ? renderNode(tree, 0, budget) : null
+
   return (
     <div className={`artifact-tree tree-view-${view} tree-style-${style}`}>
       {view === 'recent' ? flat.shown.map((artifact) => renderArtifact(artifact, 0, style)) : null}
@@ -259,7 +267,10 @@ export function ArtifactTree({
             : `Showing ${TREE_FLAT_ROW_LIMIT} of ${items.length}. Use the filter to narrow the list.`}
         </p>
       ) : null}
-      {view === 'tree' && style !== 'path-list' && tree ? renderNode(tree, 0) : null}
+      {treeNodes}
+      {budget.withheld ? (
+        <p className="tree-more">Some folders are not fully shown. Collapse folders or refine the filter.</p>
+      ) : null}
     </div>
   )
 }

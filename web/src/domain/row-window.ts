@@ -48,3 +48,41 @@ export function boundRows<T>(rows: readonly T[], limit: number, isActive: (row: 
   if (active !== undefined) shown.push(active)
   return { shown, hidden: rows.length - shown.length }
 }
+
+/** Rows the tree view mounts in total, across all expanded branches (directory rows and artifact rows). */
+export const TREE_TOTAL_ROW_LIMIT = 400
+
+export type RowBudget = { limit: number; used: number; withheld: boolean }
+
+export function createRowBudget(limit = TREE_TOTAL_ROW_LIMIT): RowBudget {
+  return { limit, used: 0, withheld: false }
+}
+
+/**
+ * Visits the rows of one tree branch in render order, within the per-branch limit and the
+ * tree-wide budget. Pinned rows (the active page or folder and its ancestors) are always
+ * visited and do not use the budget. `visit` may recurse into child branches, which then
+ * spend the same budget. A branch reached after the budget ran out shows no overflow row.
+ */
+export function visitBranch<T, R>(
+  budget: RowBudget,
+  rows: readonly T[],
+  options: { limit: number; isPinned: (row: T) => boolean },
+  visit: (row: T) => R,
+) {
+  const exhaustedOnEntry = budget.used >= budget.limit
+  const { shown } = boundRows(rows, options.limit, options.isPinned)
+  const items: R[] = []
+  for (const row of shown) {
+    const pinned = options.isPinned(row)
+    if (pinned || budget.used < budget.limit) {
+      if (!pinned) budget.used += 1
+      items.push(visit(row))
+    } else {
+      budget.withheld = true
+    }
+  }
+  const hidden = rows.length - items.length
+  if (hidden > 0 && exhaustedOnEntry) budget.withheld = true
+  return { items, hidden, showOverflow: hidden > 0 && !exhaustedOnEntry }
+}

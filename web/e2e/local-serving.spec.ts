@@ -6554,6 +6554,26 @@ test.describe('directory pages', () => {
     await expect(page.locator('.filter-results .tree-more')).toContainText('more matches')
   })
 
+  test('a filter matching 60 folders of 60 pages stays within the tree-wide row budget', async ({ page }) => {
+    const grid: ExtraPage[] = Array.from({ length: 3600 }, (_, position): ExtraPage => {
+      const folder = String(Math.floor(position / 60) + 1).padStart(2, '0')
+      const number = String((position % 60) + 1).padStart(2, '0')
+      return [`zf${folder}/p${number}.md`, `Zeta ${folder}-${number}`, '2026-10-05T00:00:00Z', []]
+    })
+    await registerTextSearchSite(page)
+    await routeDirectoryIndex(page, grid, 'textsearch')
+    await page.goto('/textsearch')
+    await page.getByRole('searchbox', { name: 'Filter pages in Text Search by title or path' }).fill('zeta')
+    const tree = page.locator('.filter-results .artifact-tree')
+    await expect(tree.locator('a.tree-artifact').first()).toBeVisible()
+    // Budgeted rows (folder and page rows) <= 400; at most one overflow row per branch (60 folders + the root).
+    const mounted = await tree.locator('.tree-directory-row, .tree-directory-button:not(.tree-directory-toggle), a.tree-artifact').count()
+    expect(mounted).toBeLessThanOrEqual(400)
+    const overflow = await tree.locator('.tree-more:not(:has-text("Some folders"))').count()
+    expect(overflow).toBeLessThanOrEqual(61)
+    await expect(tree.locator('.tree-more', { hasText: 'Some folders are not fully shown. Collapse folders or refine the filter.' })).toBeVisible()
+  })
+
   test('a README folder with 5,000 children collapses to 10 rows and pages after Show all', async ({ page }) => {
     await routeDirectoryIndex(page, bulkPages)
     await page.goto('/sre/wideroot')

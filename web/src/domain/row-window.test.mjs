@@ -6,11 +6,14 @@ import {
   DIRECTORY_PAGE_SIZE,
   TREE_BRANCH_ROW_LIMIT,
   TREE_FLAT_ROW_LIMIT,
+  TREE_TOTAL_ROW_LIMIT,
   boundRows,
   clampPage,
+  createRowBudget,
   pageRange,
   pageTotal,
   splitRange,
+  visitBranch,
 } from './row-window.ts'
 
 test('the limits are 100 rows', () => {
@@ -62,4 +65,52 @@ test('boundRows adds the active row once when it is beyond the limit', () => {
   assert.equal(within.shown.length, 100)
   assert.equal(within.shown.filter((row) => row === 5).length, 1)
   assert.equal(within.hidden, 4900)
+})
+
+// A depth-first walk like the sidebar tree: folders first, each folder row followed by its children.
+function walk(budget, node, activePath) {
+  const rows = [...node.folders.map((folder) => ({ folder })), ...node.files.map((file) => ({ file }))]
+  const out = { rows: 0, overflow: 0, pinned: 0 }
+  const isActiveFolder = (folder) => activePath?.startsWith(`${folder.name}/`)
+  const result = visitBranch(
+    budget,
+    rows,
+    { limit: 100, isPinned: (row) => row.folder ? isActiveFolder(row.folder) : row.file === activePath },
+    (row) => {
+      out.rows += 1
+      if (row.folder ? isActiveFolder(row.folder) : row.file === activePath) out.pinned += 1
+      if (row.folder) {
+        const inner = walk(budget, row.folder, activePath)
+        out.rows += inner.rows
+        out.overflow += inner.overflow
+        out.pinned += inner.pinned
+      }
+    },
+  )
+  if (result.showOverflow) out.overflow += 1
+  return out
+}
+
+test('the tree-wide budget bounds 100 expanded folders of 50 pages and keeps the active page', () => {
+  const folders = Array.from({ length: 100 }, (_, f) => ({
+    name: `f${f}`,
+    folders: [],
+    files: Array.from({ length: 50 }, (_, p) => `f${f}/p${p}`),
+  }))
+  const budget = createRowBudget()
+  const result = walk(budget, { folders, files: [] }, 'f99/p49')
+  assert.equal(TREE_TOTAL_ROW_LIMIT, 400)
+  // Budgeted rows plus pinned rows (the last folder and its page) plus overflow rows.
+  assert.ok(result.rows <= 400 + result.pinned, `${result.rows} rows`)
+  assert.ok(result.overflow <= 100)
+  assert.equal(result.pinned, 2)
+  assert.equal(budget.withheld, true)
+})
+
+test('a small tree is not withheld', () => {
+  const budget = createRowBudget()
+  const result = walk(budget, { folders: [{ name: 'a', folders: [], files: ['a/1', 'a/2'] }], files: ['x'] }, undefined)
+  assert.equal(result.rows, 4)
+  assert.equal(result.overflow, 0)
+  assert.equal(budget.withheld, false)
 })
