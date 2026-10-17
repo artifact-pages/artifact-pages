@@ -35,6 +35,10 @@ ISSUE-075–086 come from the 2026-10-11 dogfooding of `https://artifact-pages.d
 
 ISSUE-089–098 come from the public-launch review of 2026-10-13 at `04783fb3`. It covered the monorepo source and tests, the GitHub settings of the nine organization repositories, and the production Guide in a desktop browser and at 390 px. The full local e2e suite was not rerun. Production HTTP fetches by a non-browser client were refused with Cloudflare error 1010, so CDN cache and CSP headers were not re-measured. Other findings went elsewhere: repository protection, Dependabot alerts and security updates, secret scanning, and the production health check and ownership of CI, release and publish failure notifications (OPS-006) are workspace ops items (OPS-005 and OPS-006). External adoption stays in [T16](../verification/T16-external-adoption.md) and the docs repository's DOC-14. Immutable releases and Marketplace stay in [IMP-46](../implementation/IMP-46-action-marketplace-release.md). Operator recovery is [IMP-80](../implementation/IMP-80-operator-recovery-runbook.md), and measurements are [T24](../verification/T24-pre-launch-browser-and-keyboard-matrix.md) to [T27](../verification/T27-launch-hosting-cost-model.md). The same-origin trusted-HTML model, the ISSUE-083 soft 404 and the accepted first-load wait are recorded boundaries and are not reopened. Operator-facing trust boundaries (a private repository is not a private site, source-directory hygiene, browser storage, preview withdrawal), the tested component version set, and the Cloudflare-first and AWS scope belong to the docs repository and are filed there in the docs phase. Signing and attestation are a later candidate after the first non-pre-release.
 
+ISSUE-101–106 come from the hands-on project review of 2026-10-15 at `86841bb1` and production web 0.3.2. They cover bounded loading, retry, modal focus, accessible search selection, truthful freshness labels and known-HTML failure guidance. Each issue contains its reproduction, observed/source-only limits and acceptance criteria; supplementary workspace captures are not required to understand it. Existing scale/cache issues (093–095), verification work (T24–T27), and security/operations work (OPS-005/006) remain the owning items rather than being duplicated.
+
+**Scope decision (owner, 2026-10-15):** public-facing documentation content, information architecture, provider/adoption prose and the review's A/B/C entry-page concepts are excluded from this triage. The owner will reconsider documentation from its structure together at the very end. Existing public-docs tickets are left unchanged. The product's technical backlog in this directory, reader accessibility, source metadata, measurements and operational items remain in scope.
+
 ## Repair order
 
 Work one issue at a time: mark it In progress, reproduce it, add a regression, implement, verify its acceptance criteria, then commit that concern and move on. Keep the parent summary synchronized. Retain completed records in Git history under the existing removal policy; do not remove an issue before its criteria are verified.
@@ -46,11 +50,11 @@ This is the default repair queue, not authorization to operate cloud accounts or
 ## Public launch order (2026-10-13)
 
 1. Before anything else: OPS-005 (owner), [ISSUE-089](ISSUE-089-publisher-race-test-backend-and-race-ci.md), [ISSUE-090](ISSUE-090-npm-advisories-and-no-npm-monitoring.md), [ISSUE-096](ISSUE-096-no-security-policy-or-contributing.md).
-2. Robustness: [ISSUE-091](ISSUE-091-malformed-index-rows-crash-render.md), [ISSUE-092](ISSUE-092-slow-site-metadata-blocks-site-list.md).
-3. First readers: [ISSUE-097](ISSUE-097-stale-first-reader-documents.md), [IMP-80](../implementation/IMP-80-operator-recovery-runbook.md), then the cold-start trial and [T16](../verification/T16-external-adoption.md) with DOC-14.
+2. Robustness: [ISSUE-091](ISSUE-091-malformed-index-rows-crash-render.md), [ISSUE-092](ISSUE-092-slow-site-metadata-blocks-site-list.md), then reader recovery [ISSUE-101](ISSUE-101-registry-and-site-index-loads-have-no-deadline.md)/[ISSUE-102](ISSUE-102-load-errors-offer-no-retry-action.md), accessibility [ISSUE-103](ISSUE-103-command-palette-modal-focus-escapes.md)/[ISSUE-104](ISSUE-104-search-selection-is-not-associated-with-input.md), and freshness [ISSUE-105](ISSUE-105-site-picker-updated-date-stays-stale.md).
+3. First readers: [ISSUE-097](ISSUE-097-stale-first-reader-documents.md), [IMP-80](../implementation/IMP-80-operator-recovery-runbook.md), then the cold-start trial and [T16](../verification/T16-external-adoption.md). Public-facing docs work is excluded from this repair queue and deferred to the final structural rethink (owner, 2026-10-15).
    Owner decision (2026-10-14, given when the cold-start trial A triage was approved): Terraform Registry publication ([IMP-38](../implementation/IMP-38-terraform-registry-publication.md)) happens before the public launch, because the documented Registry address returns 404 until then.
 4. Launch scope: [T24](../verification/T24-pre-launch-browser-and-keyboard-matrix.md) and [T25](../verification/T25-web-first-load-and-search-at-scale.md) decide the supported size. [ISSUE-093](ISSUE-093-directory-and-sidebar-render-every-row.md) and [ISSUE-094](ISSUE-094-site-index-cache-never-evicts.md) are required if the launch advertises large sites; otherwise the size limit is documented and they follow. OPS-006 comes before the announcement.
-5. After launch: [ISSUE-095](ISSUE-095-home-folder-counts-load-full-indexes.md), [ISSUE-098](ISSUE-098-spa-shell-metadata-for-sharing.md), [T26](../verification/T26-cli-publish-memory-vs-source-bytes.md), [T27](../verification/T27-launch-hosting-cost-model.md).
+5. After launch: [ISSUE-095](ISSUE-095-home-folder-counts-load-full-indexes.md), [ISSUE-098](ISSUE-098-spa-shell-metadata-for-sharing.md), [T26](../verification/T26-cli-publish-memory-vs-source-bytes.md), [T27](../verification/T27-launch-hosting-cost-model.md), and [ISSUE-106](ISSUE-106-known-html-failure-has-no-reader-guidance.md).
 
 ## Issue index
 
@@ -108,5 +112,20 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-098](ISSUE-098-spa-shell-metadata-for-sharing.md) | Open | P3 | The SPA shell has generic metadata for search and share cards. |
 | [ISSUE-099](ISSUE-099-version-command-prints-cli-version-as-web.md) | Done | P3 | The version command prints the CLI version as the web app version. |
 | [ISSUE-100](ISSUE-100-app-deploy-summary-does-not-match-work.md) | Done | P3 | The app deploy change summary does not match the files written. |
+| [ISSUE-101](ISSUE-101-registry-and-site-index-loads-have-no-deadline.md) | Open | P2 | Registry and active-site index reads have no application deadline. |
+| [ISSUE-102](ISSUE-102-load-errors-offer-no-retry-action.md) | Open | P2 | Catalog, site-index and Markdown transport errors offer no retry action. |
+| [ISSUE-103](ISSUE-103-command-palette-modal-focus-escapes.md) | Open | P2 | Keyboard focus escapes the command palette while its modal stays open. |
+| [ISSUE-104](ISSUE-104-search-selection-is-not-associated-with-input.md) | Open | P2 | Arrow-selected search results are not associated with the focused input. |
+| [ISSUE-105](ISSUE-105-site-picker-updated-date-stays-stale.md) | Open | P2 | Site cards present metadata-generation time as content freshness. |
+| [ISSUE-106](ISSUE-106-known-html-failure-has-no-reader-guidance.md) | Open | P3 | A missing indexed HTML body shows only the server error inside the reader. |
+| [ISSUE-107](ISSUE-107-site-home-overview-files-preview-tabs.md) | Open | P2 | Site home mixes publisher introduction and tool navigation; owner selected compact overview/files/previews with persistent search. |
+| [ISSUE-108](ISSUE-108-reader-context-needs-responsive-right-sidebar.md) | Open | P2 | Contents and source details are hidden behind separate controls even on wide screens; design a responsive right sidebar before final docs work. |
+| [ISSUE-109](ISSUE-109-preview-reading-context-and-entry.md) | Open | P2 | Preview reading needs shared app context, standard reader entry links and coherent PR/revision metadata; design after ISSUE-108. |
 
 ISSUE-013's verified completion record is retained in Git history.
+
+ISSUE-107 records the owner-selected site-home direction (2026-10-16), with a portable mock and explicit remaining behavior decisions. It is a reader product change; public documentation restructuring remains separate. Schedule it explicitly with the existing repair queue rather than treating it as a new release blocker.
+
+ISSUE-108 is owner-requested design-first reader work (2026-10-17). Complete it before the final official documentation rewrite/screenshots; IA discussion may continue. Claude owns the design stage. It does not change the release authorization or reopen ISSUE-080.
+
+ISSUE-109 follows ISSUE-108: Claude designs preview entry/reading and richer review metadata after the responsive context-sidebar work, before final preview documentation/screenshots. An existing logical SPA preview route is confirmed in source; the reported raw-link entry still needs reproduction.
