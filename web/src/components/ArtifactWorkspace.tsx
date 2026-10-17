@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ArtifactBreadcrumbs } from './ArtifactBreadcrumbs'
 import { CommandPalette, type PaletteCommand } from './CommandPalette'
 import { DirectoryPage } from './DirectoryPage'
@@ -8,6 +8,15 @@ import { useCurrentHeading } from './useCurrentHeading'
 import { Sidebar } from './Sidebar'
 import { RecentlyUpdated, SiteHome, SiteHomeFrame, SiteHomeHeader, usePreviewCount, type SiteSection } from './SiteHome'
 import { PREVIEW_LEDE, PreviewListContent } from './PreviewListPage'
+import {
+  PreviewBreadcrumbs,
+  PreviewDetails,
+  PreviewDocumentView,
+  PreviewNotices,
+  PreviewSidebarSection,
+  PreviewTag,
+  usePreviewReader,
+} from './PreviewReader'
 import { siteCountLabel } from '../domain/site-count-label'
 import { ThemeSwitcher } from './ThemeSwitcher'
 import { ReaderMoreMenu, type ReaderMoreMenuItem } from './ReaderMoreMenu'
@@ -37,6 +46,7 @@ import { artifactRouteHref, searchRouteHref, sitePreviewsHref, type AppRoute } f
 type SiteRoute = Extract<AppRoute, { kind: 'site' }>
 type SearchRoute = Extract<AppRoute, { kind: 'search' }>
 type PreviewListRoute = Extract<AppRoute, { kind: 'preview-list' }>
+type PreviewDocumentRoute = Extract<AppRoute, { kind: 'preview-document' }>
 type WorkspacePanel = 'contents' | 'details' | null
 
 export function ArtifactWorkspace({
@@ -58,7 +68,7 @@ export function ArtifactWorkspace({
   initialSidebarOpen,
   rankingMaxHits: rankingMaxHitsProp,
 }: {
-  route: SiteRoute | SearchRoute | PreviewListRoute
+  route: SiteRoute | SearchRoute | PreviewListRoute | PreviewDocumentRoute
   pathname: string
   /** The location's query string; on a page `q` is the search whose matches the page highlights. */
   search?: string
@@ -147,6 +157,9 @@ export function ArtifactWorkspace({
   )
   const isSiteRoot = Boolean(currentDirectory) && !routeArtifactPath
   const previewsRoute = route.kind === 'preview-list' ? route : undefined
+  // A preview document opens in this shell (ISSUE-109): the published tree gives way to the preview's own pages.
+  const preview = usePreviewReader(route.kind === 'preview-document' ? route : undefined)
+  const previewArtifact = preview?.artifact
   // The site home (ISSUE-107): Overview when the site has an introduction (and Files was not asked for),
   // Files otherwise, and Previews at its own route. An introduction that is gone leaves Files in place.
   const hasIntroduction = Boolean(rootListing?.indexArtifact)
@@ -159,7 +172,7 @@ export function ArtifactWorkspace({
   const previewCount = usePreviewCount(index.site.id, onSiteHome)
   // The page whose content fills the stage: the open page, or a folder's README or index page. On the
   // site root only the Overview shows the introduction.
-  const bodyArtifact = currentArtifact ?? (isSiteRoot && siteSection !== 'overview' ? undefined : currentDirectory?.indexArtifact)
+  const bodyArtifact = currentArtifact ?? previewArtifact ?? (isSiteRoot && siteSection !== 'overview' ? undefined : currentDirectory?.indexArtifact)
   const effectiveRecentReads = recentReads ?? storedRecentReads
   const pageNotFound = Boolean(routeArtifactPath) && !currentArtifact && !currentDirectory
   usePageNoindex(pageNotFound)
@@ -181,6 +194,8 @@ export function ArtifactWorkspace({
   )
   usePageTitle(searchRoute
     ? pageTitle(searchRoute.query ? `Search “${searchRoute.query}”` : 'Search', index.site.title)
+    : preview
+      ? pageTitle(previewArtifact?.title ?? 'Preview', 'Previews', index.site.title)
     : previewsRoute
       ? pageTitle('Previews', index.site.title)
     : routeArtifactPath
@@ -220,10 +235,11 @@ export function ArtifactWorkspace({
   // The persistent Contents and Details column (ISSUE-108): a document page at a wide viewport only.
   // Not on an error screen: a Markdown document or an HTML body that failed to load.
   const [markdownFailedUrl, setMarkdownFailedUrl] = useState<string | null>(null)
-  const loadFailed = Boolean(currentArtifact) && (
-    markdownFailedUrl === currentArtifact?.artifactUrl || frameFailure?.artifactUrl === currentArtifact?.artifactUrl
+  const readingArtifact = currentArtifact ?? previewArtifact
+  const loadFailed = Boolean(readingArtifact) && (
+    markdownFailedUrl === readingArtifact?.artifactUrl || frameFailure?.artifactUrl === readingArtifact?.artifactUrl
   )
-  const columnShown = wideReader && Boolean(currentArtifact) && route.kind === 'site' && !loadFailed
+  const columnShown = wideReader && Boolean(readingArtifact) && (route.kind === 'site' || route.kind === 'preview-document') && !loadFailed
   const currentHeading = useCurrentHeading({
     enabled: columnShown,
     format: currentFormat,
@@ -346,6 +362,9 @@ export function ArtifactWorkspace({
   const toggleSidebar = useCallback((restoreFocus = false) => {
     updateSidebarOpen(!sidebarOpenRef.current, restoreFocus)
   }, [updateSidebarOpen])
+
+  // A heading link keeps the page's own location; for a preview document that includes the revision's group.
+  const hereHref = route.kind === 'preview-document' ? `${pathname}${search}` : pathname
 
   function navigateWithinWorkspace(href: string) {
     focusStageAfterPalette.current = true
@@ -480,10 +499,11 @@ export function ArtifactWorkspace({
     if (initialSidebarOpen !== undefined) updateSidebarOpen(initialSidebarOpen)
   }, [initialSidebarOpen, updateSidebarOpen])
 
+  const previewDocumentKey = route.kind === 'preview-document' ? `${route.headSha}/${route.artifactPath}` : undefined
   useEffect(() => {
     setActivePanel(null)
     if (window.innerWidth <= 860) updateSidebarOpen(false)
-  }, [routeArtifactPath, route.kind, updateSidebarOpen])
+  }, [routeArtifactPath, previewDocumentKey, route.kind, updateSidebarOpen])
 
   useEffect(() => {
     if (!sidebarReveal || !sidebarOpen) return
@@ -501,10 +521,10 @@ export function ArtifactWorkspace({
   }, [sidebarReveal, sidebarOpen])
 
   useEffect(() => {
-    if (recentReads !== undefined || !bodyArtifact || lastRecordedArtifactId.current === bodyArtifact.id) return
+    if (recentReads !== undefined || !bodyArtifact || preview || lastRecordedArtifactId.current === bodyArtifact.id) return
     lastRecordedArtifactId.current = bodyArtifact.id
     setStoredRecentReads(recordRecentArtifactRead(index.site.id, bodyArtifact.id, storedRecentReads))
-  }, [bodyArtifact?.id, index.site.id, recentReads, storedRecentReads])
+  }, [bodyArtifact?.id, index.site.id, recentReads, storedRecentReads, preview])
 
   useEffect(() => {
     if (paletteSeed === null) return
@@ -589,7 +609,7 @@ export function ArtifactWorkspace({
     },
     {
       title: bodyArtifact && pinnedArtifactIds.includes(bodyArtifact.id) ? 'Unpin artifact' : 'Pin artifact',
-      available: Boolean(bodyArtifact),
+      available: Boolean(bodyArtifact) && !preview,
       onSelect: () => {
         if (bodyArtifact) toggleArtifactPin(bodyArtifact)
       },
@@ -619,7 +639,7 @@ export function ArtifactWorkspace({
     },
     {
       title: 'Copy artifact link',
-      available: Boolean(currentArtifact || currentDirectory),
+      available: Boolean(currentArtifact || currentDirectory || previewArtifact),
       onSelect: () => void copyCurrentLink(showToast),
     },
     {
@@ -704,7 +724,7 @@ export function ArtifactWorkspace({
   // targets fall back to closing. Palette jumps always close.
   function jumpToHeading(id: string, options: { keepPanelIfClear?: boolean } = {}) {
     cancelHeadingJump()
-    navigateWithinWorkspace(`${pathname}#${encodeURIComponent(id)}`)
+    navigateWithinWorkspace(`${hereHref}#${encodeURIComponent(id)}`)
     setPaletteSeed(null)
     if (!options.keepPanelIfClear) {
       setActivePanel(null)
@@ -744,7 +764,7 @@ export function ArtifactWorkspace({
   // and focus stays on the entry.
   function jumpFromColumn(id: string) {
     cancelHeadingJump()
-    navigateWithinWorkspace(`${pathname}#${encodeURIComponent(id)}`)
+    navigateWithinWorkspace(`${hereHref}#${encodeURIComponent(id)}`)
   }
 
   function closePanel() {
@@ -852,7 +872,27 @@ export function ArtifactWorkspace({
       retryFrameRef.current?.focus()
     }
   }, [frameFailure])
-  const artifactView = bodyArtifact && currentFormat === 'markdown' ? (
+  const previewColumn = columnShown && previewArtifact ? (
+    <ReaderContextColumn
+      standalone={previewArtifact.format === 'html'}
+      artifact={previewArtifact}
+      entries={NO_ENTRIES}
+      activeId={currentHeading}
+      details={preview ? <PreviewDetails reader={preview} navigate={navigateWithinWorkspace} /> : undefined}
+      onJump={jumpFromColumn}
+    />
+  ) : undefined
+  const artifactView = preview ? (
+    <PreviewDocumentView
+      reader={preview}
+      hash={hash}
+      navigate={(href) => navigate(href)}
+      productionArtifacts={index.artifacts}
+      siteTitle={index.site.title}
+      aside={previewArtifact?.format === 'markdown' ? previewColumn : undefined}
+      onFailedChange={(failed) => setMarkdownFailedUrl(failed ? previewArtifact?.artifactUrl ?? null : null)}
+    />
+  ) : bodyArtifact && currentFormat === 'markdown' ? (
     <MarkdownArtifact
       key={bodyArtifact.artifactUrl}
       artifact={bodyArtifact}
@@ -981,15 +1021,15 @@ export function ArtifactWorkspace({
         onSelect: () => togglePanel('contents'),
       },
       { id: 'details', label: 'Details', icon: 'info', checked: detailsOpen, onSelect: () => togglePanel('details') },
-      {
+      ...(preview ? [] : [{
         id: 'pin',
         label: pinnedArtifactIds.includes(bodyArtifact.id) ? 'Unpin' : 'Pin',
-        icon: 'pin',
+        icon: 'pin' as const,
         onSelect: () => toggleArtifactPin(bodyArtifact),
-      },
+      }]),
     )
   }
-  if (currentArtifact || currentDirectory) {
+  if (currentArtifact || currentDirectory || previewArtifact) {
     moreMenuItems.push({
       id: 'copy-link',
       label: 'Copy link',
@@ -1005,7 +1045,7 @@ export function ArtifactWorkspace({
       onSelect: () => { window.open(bodyArtifact.artifactUrl, '_blank', 'noopener,noreferrer') },
     })
   }
-  if (currentArtifact || (currentDirectory && !isSiteRoot)) {
+  if (currentArtifact || previewArtifact || (currentDirectory && !isSiteRoot)) {
     moreMenuItems.push({
       id: 'site-home',
       label: `${index.site.title} home`,
@@ -1018,7 +1058,7 @@ export function ArtifactWorkspace({
     id: 'all-sites',
     label: 'All sites',
     icon: 'library',
-    separatorBefore: moreMenuItems.length > 0 && !(currentArtifact || (currentDirectory && !isSiteRoot)),
+    separatorBefore: moreMenuItems.length > 0 && !(currentArtifact || previewArtifact || (currentDirectory && !isSiteRoot)),
     onSelect: () => navigateWithinWorkspace('/'),
   })
   moreMenuItems.push(...(['system', 'light', 'dark'] as const).map((mode, position) => ({
@@ -1067,6 +1107,14 @@ export function ArtifactWorkspace({
         onTogglePin={toggleArtifactPin}
         pageTextSearch={textSearchClient ? { onSearchFullText: openSearchResults } : undefined}
         treeStyle={sidebarTreeStyle}
+        previewSection={preview ? (
+          <PreviewSidebarSection
+            reader={preview}
+            siteTitle={index.site.title}
+            onOpenDocument={navigateWithinWorkspace}
+            onOpenPublished={() => navigateWithinWorkspace(siteHomeHref)}
+          />
+        ) : undefined}
       />
       {sidebarOpen ? <button className="sidebar-backdrop" aria-label="Close navigation" onClick={() => updateSidebarOpen(false, true)} /> : null}
       {!sidebarOpen && !narrowChrome ? (
@@ -1137,7 +1185,13 @@ export function ArtifactWorkspace({
                 <Icon name="sidebar" size={17} />
               </button>
             ) : null}
-            {narrowChrome && !routeArtifactPath ? <span className="reader-bar-title">{index.site.title}</span> : null}
+            {narrowChrome && !routeArtifactPath && !preview ? <span className="reader-bar-title">{index.site.title}</span> : null}
+            {preview ? (
+              <>
+                <PreviewTag reader={preview} />
+                <PreviewBreadcrumbs reader={preview} siteTitle={index.site.title} navigate={navigateWithinWorkspace} />
+              </>
+            ) : null}
             {routeArtifactPath ? (
               <ArtifactBreadcrumbs
                 artifactPath={currentArtifact?.path ?? currentDirectory?.path ?? routeArtifactPath}
@@ -1186,7 +1240,7 @@ export function ArtifactWorkspace({
                   <Icon name="library" size={14} />
                   <span>All sites</span>
                 </button>
-                {currentArtifact || (currentDirectory && !isSiteRoot) ? (
+                {currentArtifact || previewArtifact || (currentDirectory && !isSiteRoot) ? (
                   <button
                     className="context-button context-home-button"
                     type="button"
@@ -1198,7 +1252,7 @@ export function ArtifactWorkspace({
                     <span>{index.site.title} home</span>
                   </button>
                 ) : null}
-                {bodyArtifact ? (
+                {bodyArtifact && !preview ? (
                   <button
                     className={`context-button current-artifact-pin-button${pinnedArtifactIds.includes(bodyArtifact.id) ? ' is-active' : ''}`}
                     type="button"
@@ -1239,7 +1293,7 @@ export function ArtifactWorkspace({
                   </>
                 ) : null}
                 {(bodyArtifact && !columnShown) || currentDirectory ? <span className="action-divider" /> : null}
-                {currentArtifact || currentDirectory ? (
+                {currentArtifact || currentDirectory || previewArtifact ? (
                   <button
                     className="icon-button"
                     title="Copy link"
@@ -1249,7 +1303,7 @@ export function ArtifactWorkspace({
                     <Icon name="copy" size={15} />
                   </button>
                 ) : null}
-                {bodyArtifact ? (
+                {bodyArtifact && !preview ? (
                   <a
                     className="icon-button"
                     title="Open raw artifact"
@@ -1265,8 +1319,10 @@ export function ArtifactWorkspace({
             )}
           </header>
 
-          <main ref={stageRef} id="main-content" tabIndex={-1} className={`stage${currentArtifact ? ' has-artifact' : ''}${columnShown ? ' has-reader-column' : ''}`} data-heading-jump={headingJump ?? undefined}>
-            {searchRoute ? (
+          <main ref={stageRef} id="main-content" tabIndex={-1} className={`stage${readingArtifact ? ' has-artifact' : ''}${columnShown ? ' has-reader-column' : ''}${preview ? ' stage-preview' : ''}`} data-heading-jump={headingJump ?? undefined}>
+            {preview ? <PreviewNotices reader={preview} navigate={navigateWithinWorkspace} /> : null}
+            <StageBody preview={Boolean(preview)}>
+            {preview ? artifactView : searchRoute ? (
               <SearchResultsPage
                 siteTitle={index.site.title}
                 pageCount={index.artifacts.length}
@@ -1385,6 +1441,7 @@ export function ArtifactWorkspace({
             {columnShown && currentArtifact && currentFormat === 'html' ? (
               <ReaderContextColumn standalone artifact={currentArtifact} entries={currentArtifact.toc ?? NO_ENTRIES} activeId={currentHeading} onJump={jumpFromColumn} />
             ) : null}
+            {previewArtifact?.format === 'html' ? previewColumn : null}
 
             {activePanel && bodyArtifact && !columnShown ? (
               <aside
@@ -1420,11 +1477,14 @@ export function ArtifactWorkspace({
                       ))}
                     </nav>
                   )
+                ) : preview ? (
+                  <PreviewDetails reader={preview} navigate={navigateWithinWorkspace} />
                 ) : (
                   <ArtifactDetails artifact={bodyArtifact} />
                 )}
               </aside>
             ) : null}
+            </StageBody>
           </main>
         </div>
       </div>
@@ -1450,6 +1510,11 @@ export function ArtifactWorkspace({
       {toast ? <div className="toast" role="status" aria-live="polite">{toast}</div> : null}
     </div>
   )
+}
+
+/** A preview document sits below its notice strip; the body then fills the rest of the stage. */
+function StageBody({ preview, children }: { preview: boolean; children: ReactNode }) {
+  return preview ? <div className="preview-body">{children}</div> : <>{children}</>
 }
 
 // A same-document fragment navigation scrolls the frame itself, but Chromium

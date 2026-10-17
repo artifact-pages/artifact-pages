@@ -3816,6 +3816,11 @@ test('a render-time exception shows the recovery screen instead of a blank page'
 
 const previewHeadSha = '0123456789abcdef0123456789abcdef01234567'
 
+/** The open preview document's title: the last breadcrumb of the reader shell. */
+function previewTitle(page: Page) {
+  return page.locator('.preview-crumbs .breadcrumb-current')
+}
+
 test('preview list separates documents affected by a resource change', async ({ page }) => {
   const changed = { path: 'guides/changed.md', title: 'Changed guide', format: 'markdown', reason: 'changed' }
   const affected = { path: 'guides/affected.html', title: 'Affected page', format: 'html', reason: 'dependency', changedResources: ['assets/site.css'] }
@@ -4101,8 +4106,8 @@ test('site previews filter missing revisions and keep PR and manual groups disti
   })
   await markdownLink.click()
   await expect(page).toHaveURL(new RegExp(`/sre/_previews/${previewHeadSha}/guides/preview-guide\\.md\\?group=pr%3A42$`))
-  await expect(page.getByRole('link', { name: 'Return to PR #42 ↗' })).toHaveAttribute('href', 'https://github.com/acme/sre-docs/pull/42')
-  await expect(page.locator('.preview-reader-header h1')).toHaveText('Local preview guide')
+  await expect(page.getByRole('link', { name: '#42 on GitHub' })).toHaveAttribute('href', 'https://github.com/acme/sre-docs/pull/42')
+  await expect(previewTitle(page)).toHaveText('Local preview guide')
   const previewMark = page.getByRole('img', { name: 'Preview mark' })
   await expect(previewMark).toBeVisible()
   await previewImageResponse
@@ -4123,21 +4128,21 @@ test('site previews filter missing revisions and keep PR and manual groups disti
     const url = new URL(page.url())
     return `${url.pathname}${url.search}`
   }).toBe(`/sre/_previews/${previewHeadSha}/guides/review%20r%C3%A9sum%C3%A9%20%23%25%20%2B%3F.md?group=pr%3A42`)
-  await expect(page.locator('.preview-reader-header h1')).toHaveText('Encoded preview route')
+  await expect(previewTitle(page)).toHaveText('Encoded preview route')
   await page.reload()
-  await expect(page.locator('.preview-reader-header h1')).toHaveText('Encoded preview route')
+  await expect(previewTitle(page)).toHaveText('Encoded preview route')
 
   await page.goto('/sre/_previews?group=pr%3A43')
   await expect(page.getByRole('region', { name: 'Preview pr:43' })).toBeVisible()
   await expect(page.getByRole('region', { name: 'Preview pr:42' })).toHaveCount(0)
   await page.getByRole('region', { name: 'Preview pr:43' }).getByRole('link', { name: /Local preview guide/ }).click()
-  await expect(page.getByRole('link', { name: 'Return to PR #43 ↗' })).toHaveAttribute('href', 'https://github.com/acme/sre-docs/pull/43')
+  await expect(page.getByRole('link', { name: '#43 on GitHub' })).toHaveAttribute('href', 'https://github.com/acme/sre-docs/pull/43')
 
   await page.goto('/sre/_previews')
   await page.getByRole('region', { name: `Preview head:${previewHeadSha}` })
     .getByRole('link', { name: /Local preview guide/ }).click()
   await expect(page).toHaveURL(new RegExp(`/sre/_previews/${previewHeadSha}/guides/preview-guide\\.md\\?group=head%3A${previewHeadSha}$`))
-  await expect(page.getByRole('link', { name: /Return to PR/ })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: /on GitHub/ })).toHaveCount(0)
 })
 
 test('the in-site palette opens previews by command without loading preview data itself', async ({ page }) => {
@@ -4184,19 +4189,19 @@ test('preview PR context disappears when its catalog group advances or is remove
   })
 
   await page.goto(`/sre/_previews/${previewHeadSha}/guides/preview-guide.md?group=pr%3A42`)
-  await expect(page.getByRole('link', { name: 'Return to PR #42 ↗' })).toBeVisible()
+  await expect(page.getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
   catalogState = 'advanced'
   await page.reload()
-  await expect(page.locator('.preview-reader-header h1')).toHaveText('Local preview guide')
-  await expect(page.getByRole('link', { name: /Return to PR/ })).toHaveCount(0)
+  await expect(previewTitle(page)).toHaveText('Local preview guide')
+  await expect(page.getByRole('link', { name: /on GitHub/ })).toHaveCount(0)
 
   catalogState = 'removed'
   await page.reload()
-  await expect(page.locator('.preview-reader-header h1')).toHaveText('Local preview guide')
-  await expect(page.getByRole('link', { name: /Return to PR/ })).toHaveCount(0)
+  await expect(previewTitle(page)).toHaveText('Local preview guide')
+  await expect(page.getByRole('link', { name: /on GitHub/ })).toHaveCount(0)
 
   await page.goto(`/sre/_previews/${previewHeadSha}/guides/preview-guide.md?group=pr%3A43`)
-  await expect(page.getByRole('link', { name: 'Return to PR #43 ↗' })).toHaveAttribute('href', 'https://github.com/acme/sre-docs/pull/43')
+  await expect(page.getByRole('link', { name: '#43 on GitHub' })).toHaveAttribute('href', 'https://github.com/acme/sre-docs/pull/43')
 })
 
 // The reader injects preview-bridge.js after the frame loads and marks the script "ready" once it has executed;
@@ -4278,7 +4283,7 @@ test('preview HTML keeps changed-document navigation in the preview and unchange
     return url.pathname.endsWith(`/guides/modules/${name}`)
   })))
   await page.goto(`/sre/_previews/${previewHeadSha}/guides/preview.html?group=pr%3A42`)
-  await expect(page.getByRole('heading', { name: 'Local preview HTML' })).toBeVisible()
+  await expect(previewTitle(page)).toHaveText('Local preview HTML')
   const frame = page.frameLocator('iframe[title="Local preview HTML"]')
   const frameElement = page.locator('iframe[title="Local preview HTML"]')
   const frameSrc = await frameElement.getAttribute('src')
@@ -4312,7 +4317,7 @@ test('preview HTML keeps changed-document navigation in the preview and unchange
   await expect.poll(() => page.evaluate(() => localStorage.getItem('issue026-preview-storage'))).toBe('accessible')
   expect(insecureResourceReached).toBe(false)
   expect([...externalResourcePaths].sort()).toEqual(['/preview.css', '/preview.js', '/preview.svg'])
-  await expect(page.getByRole('link', { name: 'Return to PR #42 ↗' })).toBeVisible()
+  await expect(page.getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
 
   await expect.poll(() => frame.locator('html').getAttribute('data-preview-fixture')).toBe('loaded')
   const parentAccess = await frame.locator('body').evaluate(() => {
@@ -4332,7 +4337,7 @@ test('preview HTML keeps changed-document navigation in the preview and unchange
   await waitForPreviewBridge(page)
   await frame.getByRole('link', { name: 'Open the changed Markdown document with query and fragment' }).click()
   await expect(page).toHaveURL(`/sre/_previews/${previewHeadSha}/guides/preview-guide.md?group=pr%3A42&tab=summary#local-preview-guide`)
-  await expect(page.getByRole('link', { name: 'Return to PR #42 ↗' })).toBeVisible()
+  await expect(page.getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
 
   await page.goto(`/sre/_previews/${previewHeadSha}/guides/preview.html?group=pr%3A42`)
   const externalFrame = page.frameLocator('iframe[title="Local preview HTML"]')
@@ -4346,7 +4351,7 @@ test('preview HTML keeps changed-document navigation in the preview and unchange
   await waitForPreviewBridge(page)
   await changedFrame.getByRole('link', { name: 'Open the changed Markdown document', exact: true }).click()
   await expect(page).toHaveURL(new RegExp(`/sre/_previews/${previewHeadSha}/guides/preview-guide\\.md\\?group=pr%3A42$`))
-  await expect(page.getByRole('link', { name: 'Return to PR #42 ↗' })).toBeVisible()
+  await expect(page.getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
 
   await page.goto(`/sre/_previews/${previewHeadSha}/guides/preview.html?group=pr%3A42`)
   await waitForPreviewBridge(page)
@@ -4419,7 +4424,7 @@ test('preview HTML fragments reach the frame on direct load, same-document links
   const deepTarget = frame.getByRole('heading', { name: 'Deep target' })
   await expect.poll(frameHash).toBe('#deep-target')
   await expect(deepTarget).toBeInViewport()
-  await expect(page.getByRole('link', { name: 'Return to PR #42 ↗' })).toBeVisible()
+  await expect(page.getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
 
   await page.reload()
   await expect.poll(frameHash).toBe('#deep-target')
@@ -4448,7 +4453,7 @@ test('preview HTML fragments reach the frame on direct load, same-document links
   await page.frameLocator('iframe[title="Local preview HTML"]').getByRole('link', { name: 'Jump to missing target' }).click()
   await expect(page).toHaveURL(`${previewUrl}#missing-target`)
   await expect.poll(frameHash).toBe('#missing-target')
-  await expect(page.getByRole('link', { name: 'Return to PR #42 ↗' })).toBeVisible()
+  await expect(page.getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
   await expect(page.getByRole('alert')).toHaveCount(0)
   await expect(iframe).toBeVisible()
 
@@ -4460,7 +4465,7 @@ test('preview HTML fragments reach the frame on direct load, same-document links
   const changedPreviewFrame = page.locator('iframe[title="Preview fragment target"]')
   await expect.poll(() => changedPreviewFrame.evaluate((element) => (element as HTMLIFrameElement).contentWindow?.location.hash ?? null)).toBe('#changed-target')
   await expect(page.frameLocator('iframe[title="Preview fragment target"]').getByRole('heading', { name: 'Changed HTML target' })).toBeInViewport()
-  await expect(page.getByRole('link', { name: 'Return to PR #42 ↗' })).toBeVisible()
+  await expect(page.getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
 })
 
 test('preview HTML link clicked before the reader bridge runs still navigates the reader', async ({ page }) => {
@@ -4512,8 +4517,8 @@ test('preview HTML link clicked before the reader bridge runs still navigates th
   await link.click()
 
   await expect(page).toHaveURL(`/sre/_previews/${previewHeadSha}/guides/preview-target.html?group=pr%3A42&source=fixture#changed-target`)
-  await expect(page.locator('.preview-reader-header h1')).toHaveText('Preview fragment target')
-  await expect(page.locator('.preview-reader-path')).toHaveText('guides/preview-target.html')
+  await expect(previewTitle(page)).toHaveText('Preview fragment target')
+  await expect(page.locator('.preview-path')).toHaveText('guides/preview-target.html')
   await expect(page.frameLocator('iframe[title="Preview fragment target"]').getByRole('heading', { name: 'Changed HTML target' })).toBeVisible()
   await expect(page.locator('iframe')).toHaveCount(1)
   releaseBridge?.()
@@ -4522,17 +4527,17 @@ test('preview HTML link clicked before the reader bridge runs still navigates th
   const targetUrl = `/sre/_previews/${previewHeadSha}/guides/preview-target.html?group=pr%3A42&source=fixture#changed-target`
   await page.goBack()
   await expect(page).toHaveURL(previewUrl)
-  await expect(page.locator('.preview-reader-header h1')).toHaveText('Local preview HTML')
+  await expect(previewTitle(page)).toHaveText('Local preview HTML')
   await expect(page.frameLocator('iframe[title="Local preview HTML"]').getByRole('link', { name: 'Open a changed HTML document with fragment' })).toBeVisible()
   await expect(page.locator('iframe')).toHaveCount(1)
   await page.goBack()
   await expect(page).toHaveURL('/sre')
   await page.goForward()
   await expect(page).toHaveURL(previewUrl)
-  await expect(page.locator('.preview-reader-header h1')).toHaveText('Local preview HTML')
+  await expect(previewTitle(page)).toHaveText('Local preview HTML')
   await page.goForward()
   await expect(page).toHaveURL(targetUrl)
-  await expect(page.locator('.preview-reader-header h1')).toHaveText('Preview fragment target')
+  await expect(previewTitle(page)).toHaveText('Preview fragment target')
   await expect(page.frameLocator('iframe[title="Preview fragment target"]').getByRole('heading', { name: 'Changed HTML target' })).toBeVisible()
 })
 
@@ -4585,7 +4590,7 @@ test('preview HTML raw resources use native frame navigation and preserve downlo
   const download = await downloadPromise
   expect(download.suggestedFilename()).toBe('preview-mark.svg')
   expect(page.url()).toBe(parentUrl)
-  await expect(page.getByRole('heading', { name: 'Local preview HTML' })).toBeVisible()
+  await expect(previewTitle(page)).toHaveText('Local preview HTML')
 
   await page.goto(previewUrl)
   const targetPopupPromise = page.waitForEvent('popup')
@@ -4699,7 +4704,7 @@ test('a third-party opaque-origin sandbox cannot read local preview objects', as
   expect(result.readable).toBe(false)
 })
 
-test('a direct preview document resolves without catalog membership and suppresses stale PR context', async ({ page }) => {
+test('a direct preview document resolves without catalog membership and never shows a stale PR', async ({ page }) => {
   const catalogRequests: string[] = []
   page.on('request', (request) => {
     const pathname = new URL(request.url()).pathname
@@ -4708,18 +4713,17 @@ test('a direct preview document resolves without catalog membership and suppress
   await page.route('**/_previews/sre/catalog.json', (route) => route.fulfill({ status: 404, body: 'catalog unavailable' }))
 
   await page.goto(`/sre/_previews/${previewHeadSha}/guides/preview-guide.md`)
-  await expect(page.locator('.preview-reader-header h1')).toHaveText('Local preview guide')
-  await expect(page.getByRole('link', { name: /Return to PR/ })).toHaveCount(0)
-  expect(catalogRequests).toEqual([])
-  await page.reload()
-  await expect(page.locator('.preview-reader-header h1')).toHaveText('Local preview guide')
-  expect(catalogRequests).toEqual([])
+  await expect(previewTitle(page)).toHaveText('Local preview guide')
+  await expect(page.getByRole('link', { name: /on GitHub/ })).toHaveCount(0)
+  // The revision reads; only the details that need the catalog are reported missing.
+  await expect(page.getByText('Preview details could not be loaded; this revision is shown as published.')).toBeVisible()
+  expect(catalogRequests.length).toBeGreaterThan(0)
 
   const missingManifest = await page.request.get('/_previews/sre/revisions/ffffffffffffffffffffffffffffffffffffffff/manifest.json')
   expect(missingManifest.status()).toBe(404)
   await page.goto('/sre/_previews/ffffffffffffffffffffffffffffffffffffffff/guides/missing.md')
   await expect(page.getByRole('heading', { name: 'Preview unavailable' })).toBeVisible()
-  await page.getByRole('link', { name: '← Back to previews' }).click()
+  await page.getByRole('main').getByRole('link', { name: 'Preview list' }).click()
   await expect(page).toHaveURL('/sre/_previews')
 })
 
@@ -7598,18 +7602,18 @@ test('a stalled registry times out with a message and Try again recovers', async
   await Promise.all(stalled.map((route) => route.abort().catch(() => undefined)))
 })
 
-test('leaving a preview document aborts its stalled production index read', async ({ page }) => {
+test('leaving the site from a preview document aborts its stalled production index read', async ({ page }) => {
   const stalled: Route[] = []
   await page.route('**/_indexes/sre/index.json', (route) => { stalled.push(route) })
   await page.goto(`/sre/_previews/${previewHeadSha}/guides/preview-guide.md`)
-  await expect(page.locator('.preview-reader-header h1')).toHaveText('Local preview guide')
+  await expect(previewTitle(page)).toHaveText('Local preview guide')
   await expect.poll(() => stalled.length).toBe(1)
   const aborted = page.waitForEvent('requestfailed', (request) => request.url().endsWith('/_indexes/sre/index.json'))
   await page.evaluate(() => {
-    window.history.pushState({}, '', '/sre/_previews')
+    window.history.pushState({}, '', '/')
     window.dispatchEvent(new PopStateEvent('popstate'))
   })
-  await expect(page).toHaveURL(/\/sre\/_previews$/)
+  await expect(page).toHaveURL(/\/$/)
   await aborted
   await Promise.all(stalled.map((route) => route.abort().catch(() => undefined)))
 })
@@ -8765,5 +8769,490 @@ test.describe('site home sections', () => {
     expect(luminance(current)).toBeGreaterThan(200)
     expect(luminance(other)).toBeGreaterThan(110)
     expect(luminance(surface)).toBeLessThan(60)
+  })
+})
+
+// ISSUE-109: a preview document opens in the normal reader shell, with the preview's metadata in Details.
+test.describe('preview reading in the reader shell (ISSUE-109)', () => {
+  test.use({ viewport: { width: 1440, height: 900 } })
+
+  const newerHead = 'b'.repeat(40)
+  const guidePath = 'guides/preview-guide.md'
+  const guideUrl = (options: { group?: string; head?: string; path?: string } = {}) => {
+    const group = options.group === undefined ? '' : `?group=${encodeURIComponent(options.group)}`
+    return `/sre/_previews/${options.head ?? previewHeadSha}/${options.path ?? guidePath}${group}`
+  }
+  const column = (page: Page) => page.getByRole('complementary', { name: 'Reading context' })
+  const tag = (page: Page) => page.locator('[data-preview-tag]')
+  const crumbs = (page: Page) => page.getByRole('navigation', { name: 'Preview path' })
+  const sidebar = (page: Page) => page.getByRole('complementary', { name: 'SRE navigation' })
+  const notices = (page: Page) => page.locator('.preview-notices')
+  const revision = (details: Locator) => details.locator('.preview-fact').filter({ hasText: /^Revision/ }).locator('.preview-sha')
+  const olderRevision = 'This is an older revision of this preview.'
+  const catalogFailed = 'Preview details could not be loaded; this revision is shown as published.'
+
+  /** Rewrites the real catalog: `pr:42` points at another head, and that head has a manifest and a document. */
+  async function advancePullRequest(page: Page, options: { documents?: Array<Record<string, unknown>> } = {}) {
+    const documents = options.documents ?? [{ path: guidePath, title: 'Local preview guide', format: 'markdown' }]
+    await page.route('**/_previews/sre/catalog.json', async (route) => {
+      const response = await route.fetch()
+      const catalog = await response.json() as { groups: Array<{ id: string }> }
+      catalog.groups = catalog.groups.map((group) => group.id === 'pr:42' ? { ...group, headSha: newerHead, documents } : group)
+      await route.fulfill({ response, body: JSON.stringify(catalog) })
+    })
+    await page.route(`**/_previews/sre/revisions/${newerHead}/manifest.json`, (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        schemaVersion: 1, site: 'sre', headSha: newerHead,
+        defaultHeadSha: '1111111111111111111111111111111111111111', mergeBaseSha: 'abcdefabcdefabcdefabcdefabcdefabcdefabcd',
+        createdAt: '2026-10-01T00:00:00Z', bundleDigest: `sha256:${'0'.repeat(64)}`,
+        files: documents.map(({ path }) => ({ path, sha256: 'a'.repeat(64), contentType: 'text/markdown; charset=utf-8' })),
+        documents,
+      }),
+    }))
+    await page.route(`**/_previews/sre/revisions/${newerHead}/files/**`, (route) => route.fulfill({
+      status: 200,
+      contentType: 'text/markdown; charset=utf-8',
+      body: '# Newer revision\n\nThe current preview.\n',
+    }))
+  }
+
+  /** Serves a revision manifest with the given documents over the real one. */
+  async function routeManifest(page: Page, documents: Array<Record<string, unknown>>) {
+    await page.route(`**/_previews/sre/revisions/${previewHeadSha}/manifest.json`, async (route) => {
+      const response = await route.fetch()
+      const manifest = await response.json() as { files: Array<Record<string, unknown>>; documents: unknown }
+      manifest.documents = documents
+      await route.fulfill({ response, body: JSON.stringify(manifest) })
+    })
+  }
+
+  test('a Markdown preview opens in the reader shell with the column, the palette and its identity', async ({ page }) => {
+    await page.goto(guideUrl({ group: 'pr:42' }))
+    await expect(previewTitle(page)).toHaveText('Local preview guide')
+    await expect(page.locator('.preview-reader')).toHaveCount(0)
+    await expect(sidebar(page)).toBeVisible()
+    await expect(page.locator('.context-bar')).toBeVisible()
+    await expect(tag(page)).toHaveText('Preview · PR #42')
+    await expect(crumbs(page).getByRole('link')).toHaveText(['SRE', 'Previews', 'PR #42'])
+    await expect(crumbs(page).getByRole('link', { name: 'Previews' })).toHaveAttribute('href', '/sre/_previews')
+    await expect(crumbs(page).getByRole('link', { name: 'PR #42' })).toHaveAttribute('href', '/sre/_previews?group=pr%3A42')
+    await expect(column(page)).toBeVisible()
+    await expect(column(page).getByRole('heading', { name: 'Details' })).toBeVisible()
+    await expect(column(page).getByRole('heading', { name: 'Contents' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Contents' })).toHaveCount(0)
+    await page.getByRole('button', { name: 'Jump to a page in SRE' }).click()
+    await expect(page.getByRole('dialog', { name: 'Command palette' })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.locator('main#main-content article')).toContainText('Markdown document and its image')
+  })
+
+  test('an HTML preview opens in the same shell with the column beside its frame', async ({ page }) => {
+    await page.goto(guideUrl({ group: 'pr:42', path: 'guides/preview.html' }))
+    await expect(previewTitle(page)).toHaveText('Local preview HTML')
+    await expect(page.locator('.preview-reader')).toHaveCount(0)
+    await expect(sidebar(page)).toBeVisible()
+    await expect(tag(page)).toHaveText('Preview · PR #42')
+    const frame = page.locator('iframe[title="Local preview HTML"]')
+    await expect(frame).toBeVisible()
+    await expect(frame).toHaveAttribute('src', `/_previews/sre/revisions/${previewHeadSha}/files/guides/preview.html`)
+    await expect(column(page)).toBeVisible()
+    const [frameBox, columnBox] = await Promise.all([frame.boundingBox(), column(page).boundingBox()])
+    expect(frameBox!.x + frameBox!.width).toBeLessThanOrEqual(columnBox!.x + 1)
+    await expect(column(page).getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
+    await expect(page.frameLocator('iframe[title="Local preview HTML"]').getByRole('heading', { name: 'Local preview HTML' })).toBeVisible()
+  })
+
+  test('Details of a PR preview list the PR, revision, build time, links, extra fields, path and the raw action', async ({ page }) => {
+    await page.goto(guideUrl({ group: 'pr:42' }))
+    const details = column(page)
+    await expect(details.getByRole('link', { name: '#42 on GitHub' })).toHaveAttribute('href', 'https://github.com/acme/sre-docs/pull/42')
+    await expect(details.getByRole('link', { name: '#42 on GitHub' })).toHaveAttribute('target', '_blank')
+    await expect(revision(details)).toHaveAttribute('title', previewHeadSha)
+    await expect(revision(details)).toContainText(previewHeadSha.slice(0, 12))
+    // The full revision is the accessible name; the short form is what is drawn.
+    await expect(revision(details).locator('[aria-hidden="true"]')).toHaveText(previewHeadSha.slice(0, 12))
+    await expect(revision(details).locator('.page-text-visually-hidden')).toHaveText(previewHeadSha)
+    const built = details.locator('time')
+    await expect(built).toHaveAttribute('datetime', '2026-09-27T00:00:00.000Z')
+    await expect(built).toHaveAttribute('title', '2026-09-27 00:00:00 UTC')
+    await expect(details).toContainText('When this preview was built, not when the page was edited.')
+    await expect(details.getByRole('link', { name: 'Preview list' })).toHaveAttribute('href', '/sre/_previews?group=pr%3A42')
+    await expect(details.getByRole('link', { name: 'Published site' })).toHaveAttribute('href', '/sre')
+
+    const more = details.locator('details.preview-more')
+    await expect(more).not.toHaveAttribute('open', '')
+    await expect(details.getByText('Default head')).toBeHidden()
+    await more.getByText('More details').click()
+    await expect(details.getByText('Default head')).toBeVisible()
+    await expect(details.getByText('1111111111111111111111111111111111111111').first()).toBeAttached()
+    await expect(details.getByText('Merge base')).toBeVisible()
+    // The fixture manifest records no reason, so no "Included as" is invented.
+    await expect(details.getByText('Included as')).toHaveCount(0)
+    await expect(details.locator('.preview-path')).toHaveText(guidePath)
+    await expect(details.getByText('Markdown', { exact: true })).toBeVisible()
+
+    const raw = details.getByRole('link', { name: 'Open the raw file' })
+    await expect(raw).toHaveAttribute('href', `/_previews/sre/revisions/${previewHeadSha}/files/${guidePath}`)
+    await expect(raw).toHaveAttribute('target', '_blank')
+    await expect(details).toContainText("Opens this revision's file on its own, outside the reader.")
+    const popup = page.waitForEvent('popup')
+    await raw.click()
+    expect(new URL((await popup).url()).pathname).toBe(`/_previews/sre/revisions/${previewHeadSha}/files/${guidePath}`)
+  })
+
+  test('Details never show a production date, source or committer, and "Included as" appears only when the manifest says so', async ({ page }) => {
+    await routeManifest(page, [
+      { path: guidePath, title: 'Local preview guide', format: 'markdown', reason: 'dependency', changedResources: ['assets/preview.css'] },
+    ])
+    await page.goto(guideUrl({ group: 'pr:42' }))
+    const details = column(page)
+    await expect(details.getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
+    for (const label of ['Updated', 'Source', 'Last committed by']) await expect(details.getByText(label, { exact: true })).toHaveCount(0)
+    await details.getByText('More details').click()
+    await expect(details.getByText('Included as')).toBeVisible()
+    await expect(details.getByText('Resource dependency')).toBeVisible()
+    await expect(details.getByText('Uses changed assets/preview.css')).toBeVisible()
+  })
+
+  test('a manual preview shows its tag and group, and no pull request', async ({ page }) => {
+    await page.goto(guideUrl({ group: `head:${previewHeadSha}` }))
+    await expect(tag(page)).toHaveText('Preview · manual')
+    await expect(crumbs(page).getByRole('link').nth(2)).toHaveText(`Revision ${previewHeadSha.slice(0, 8)}`)
+    const details = column(page)
+    await expect(revision(details)).toBeVisible()
+    await expect(details.getByText('Pull request')).toHaveCount(0)
+    await expect(details.getByRole('link', { name: /on GitHub/ })).toHaveCount(0)
+    await expect(details.getByRole('link', { name: 'Preview list' })).toHaveAttribute('href', `/sre/_previews?group=head%3A${previewHeadSha}`)
+  })
+
+  test('a link without a group resolves the manual group from the catalog and never a pull request', async ({ page }) => {
+    await page.goto(guideUrl())
+    await expect(previewTitle(page)).toHaveText('Local preview guide')
+    // The same head also belongs to PR groups, which are not guessed.
+    await expect(tag(page)).toHaveText('Preview · manual')
+    await expect(column(page).getByText('Pull request')).toHaveCount(0)
+    await expect(column(page).getByRole('link', { name: 'Preview list' })).toHaveAttribute('href', `/sre/_previews?group=head%3A${previewHeadSha}`)
+    await expect(notices(page)).toHaveCount(0)
+    await page.getByRole('navigation', { name: 'Preview documents' }).getByRole('link', { name: 'Local preview HTML' }).click()
+    await expect(page).toHaveURL(guideUrl({ group: `head:${previewHeadSha}`, path: 'guides/preview.html' }))
+  })
+
+  test('the sidebar lists the preview documents, changed pages first, and links to the published site', async ({ page }) => {
+    await routeManifest(page, [
+      { path: 'guides/preview.html', title: 'Local preview HTML', format: 'html', reason: 'dependency', changedResources: ['assets/preview.css'] },
+      { path: guidePath, title: 'Local preview guide', format: 'markdown', reason: 'changed' },
+    ])
+    await page.goto(guideUrl({ group: 'pr:42' }))
+    const nav = page.getByRole('navigation', { name: 'Preview documents' })
+    await expect(nav.getByRole('group', { name: 'Changed pages' }).getByRole('link')).toHaveText([/Local preview guide/])
+    await expect(nav.getByRole('group', { name: 'Affected by a resource change' }).getByRole('link')).toHaveText(['Local preview HTML'])
+    const labels = await nav.locator('.preview-side-group').allTextContents()
+    expect(labels).toEqual(['Changed pages', 'Affected by a resource change'])
+    await expect(nav.getByRole('link', { name: /Local preview guide/ })).toHaveAttribute('aria-current', 'page')
+    await expect(nav.getByRole('link', { name: 'Local preview HTML' })).toHaveAttribute('href', guideUrl({ group: 'pr:42', path: 'guides/preview.html' }))
+    const published = nav.getByRole('link', { name: 'Browse the published SRE' })
+    await expect(published).toHaveAttribute('href', '/sre')
+    // The published tree is not part of the preview.
+    await expect(sidebar(page).getByText('Pinned')).toHaveCount(0)
+    await expect(nav.getByText('Latency retrospective')).toHaveCount(0)
+    await published.click()
+    await expect(page).toHaveURL('/sre')
+    await expect(page.locator('[data-preview-tag]')).toHaveCount(0)
+  })
+
+  test('an older revision says so, and opens the same document at the current head when it has it', async ({ page }) => {
+    await advancePullRequest(page)
+    await page.goto(guideUrl({ group: 'pr:42' }))
+    await expect(previewTitle(page)).toHaveText('Local preview guide')
+    await expect(notices(page)).toContainText(olderRevision)
+    // An older revision is not the PR's current preview, so no PR number is stated anywhere.
+    await expect(tag(page)).toHaveText(`Preview · ${previewHeadSha.slice(0, 8)}`)
+    await expect(crumbs(page).getByRole('link').nth(2)).toHaveText(`Preview ${previewHeadSha.slice(0, 8)}`)
+    await expect(crumbs(page).getByRole('link').nth(2)).toHaveAttribute('href', '/sre/_previews?group=pr%3A42')
+    await expect(notices(page)).not.toContainText('#42')
+    await expect(page.locator('main, aside').getByText('PR #42')).toHaveCount(0)
+    await expect(column(page).getByText('Pull request')).toHaveCount(0)
+    await expect(page.locator('main#main-content article')).toContainText('Markdown document and its image')
+    const current = notices(page).getByRole('link', { name: 'Open the current preview' })
+    await expect(current).toHaveAttribute('href', guideUrl({ group: 'pr:42', head: newerHead }))
+    await current.click()
+    await expect(page).toHaveURL(guideUrl({ group: 'pr:42', head: newerHead }))
+    await expect(page.locator('main#main-content article')).toContainText('The current preview.')
+    await expect(notices(page)).toHaveCount(0)
+    await expect(column(page).getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
+  })
+
+  test('a group id the catalog does not know never names a PR', async ({ page }) => {
+    await page.goto(guideUrl({ group: 'pr:777' }))
+    await expect(previewTitle(page)).toHaveText('Local preview guide')
+    await expect(tag(page)).toHaveText(`Preview · ${previewHeadSha.slice(0, 8)}`)
+    await expect(crumbs(page).getByRole('link').nth(2)).toHaveText(`Preview ${previewHeadSha.slice(0, 8)}`)
+    await expect(page.locator('main, aside').getByText('PR #777')).toHaveCount(0)
+    await expect(column(page).getByText('Pull request')).toHaveCount(0)
+    await expect(notices(page)).toHaveCount(0)
+  })
+
+  test('a catalog older than 30 seconds is reloaded before a revision is called current or verified', async ({ page }) => {
+    await page.clock.install()
+    let advanced = false
+    await page.route('**/_previews/sre/catalog.json', async (route) => {
+      const response = await route.fetch()
+      const catalog = await response.json() as { groups: Array<{ id: string }> }
+      if (advanced) {
+        catalog.groups = catalog.groups.map((group) => group.id === 'pr:42' ? { ...group, headSha: newerHead, documents: [{ path: guidePath, title: 'Local preview guide', format: 'markdown' }] } : group)
+      }
+      await route.fulfill({ response, body: JSON.stringify(catalog) })
+    })
+    await page.route(`**/_previews/sre/revisions/${newerHead}/manifest.json`, (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        schemaVersion: 1, site: 'sre', headSha: newerHead,
+        defaultHeadSha: '1111111111111111111111111111111111111111', mergeBaseSha: 'abcdefabcdefabcdefabcdefabcdefabcdefabcd',
+        createdAt: '2026-10-01T00:00:00Z', bundleDigest: `sha256:${'0'.repeat(64)}`,
+        files: [{ path: guidePath, sha256: 'a'.repeat(64), contentType: 'text/markdown; charset=utf-8' }],
+        documents: [{ path: guidePath, title: 'Local preview guide', format: 'markdown' }],
+      }),
+    }))
+    await page.route(`**/_previews/sre/revisions/${newerHead}/files/**`, (route) => route.fulfill({
+      status: 200, contentType: 'text/markdown; charset=utf-8', body: '# Newer revision\n\nThe current preview.\n',
+    }))
+    const catalogRequests: string[] = []
+    page.on('request', (request) => { if (new URL(request.url()).pathname === '/_previews/sre/catalog.json') catalogRequests.push('x') })
+
+    await page.goto(guideUrl({ group: 'pr:42' }))
+    await expect(column(page).getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
+    await expect(tag(page)).toHaveText('Preview · PR #42')
+    expect(catalogRequests).toHaveLength(1)
+
+    // The PR moves on. Within 30 s the loaded catalog is reused; after that it is reloaded first.
+    advanced = true
+    await page.getByRole('navigation', { name: 'Preview documents' }).getByRole('link', { name: 'Local preview HTML' }).click()
+    await expect(previewTitle(page)).toHaveText('Local preview HTML')
+    expect(catalogRequests).toHaveLength(1)
+    await page.clock.fastForward(31_000)
+    await page.getByRole('navigation', { name: 'Preview documents' }).getByRole('link', { name: /Local preview guide/ }).click()
+    await expect(notices(page)).toContainText(olderRevision)
+    expect(catalogRequests).toHaveLength(2)
+    await expect(tag(page)).toHaveText(`Preview · ${previewHeadSha.slice(0, 8)}`)
+    await expect(column(page).getByText('Pull request')).toHaveCount(0)
+
+    await notices(page).getByRole('link', { name: 'Open the current preview' }).click()
+    await expect(page).toHaveURL(guideUrl({ group: 'pr:42', head: newerHead }))
+    await expect(page.locator('main#main-content article')).toContainText('The current preview.')
+    await expect(notices(page)).toHaveCount(0)
+    await expect(tag(page)).toHaveText('Preview · PR #42')
+    await expect(column(page).getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
+  })
+
+  test('returning to a long-open tab revalidates a catalog older than 30 seconds', async ({ page }) => {
+    await page.clock.install()
+    let advanced = false
+    await page.route('**/_previews/sre/catalog.json', async (route) => {
+      const response = await route.fetch()
+      const catalog = await response.json() as { groups: Array<{ id: string }> }
+      if (advanced) catalog.groups = catalog.groups.map((group) => group.id === 'pr:42' ? { ...group, headSha: newerHead } : group)
+      await route.fulfill({ response, body: JSON.stringify(catalog) })
+    })
+    await page.route(`**/_previews/sre/revisions/${newerHead}/manifest.json`, (route) => route.fulfill({ status: 404, body: 'gone' }))
+    await page.goto(guideUrl({ group: 'pr:42' }))
+    await expect(column(page).getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
+    await expect(tag(page)).toHaveText('Preview · PR #42')
+
+    // The head changes while the tab is hidden; coming back inside 30 s changes nothing.
+    advanced = true
+    const show = () => page.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' })
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' })
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await show()
+    await expect(tag(page)).toHaveText('Preview · PR #42')
+    await expect(notices(page)).toHaveCount(0)
+
+    await page.clock.fastForward(31_000)
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' })
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await show()
+    await expect(notices(page)).toContainText(olderRevision)
+    await expect(tag(page)).toHaveText(`Preview · ${previewHeadSha.slice(0, 8)}`)
+    await expect(column(page).getByText('Pull request')).toHaveCount(0)
+  })
+
+  test('an older revision falls back to the preview list when the current head lacks the document', async ({ page }) => {
+    await advancePullRequest(page, { documents: [{ path: 'guides/other.md', title: 'Other page', format: 'markdown' }] })
+    await page.goto(guideUrl({ group: 'pr:42' }))
+    await expect(notices(page)).toContainText(olderRevision)
+    const current = notices(page).getByRole('link', { name: 'Open the current preview' })
+    await expect(current).toHaveAttribute('href', '/sre/_previews?group=pr%3A42')
+    await current.click()
+    await expect(page).toHaveURL('/sre/_previews?group=pr%3A42')
+    await expect(page.getByRole('link', { name: /Other page/ })).toBeVisible()
+  })
+
+  test('a catalog failure keeps the revision readable, omits the PR row and recovers with Try again', async ({ page }) => {
+    let fail = true
+    await page.route('**/_previews/sre/catalog.json', (route) => (
+      fail ? route.fulfill({ status: 503, body: 'unavailable' }) : route.continue()
+    ))
+    await page.goto(guideUrl({ group: 'pr:42' }))
+    await expect(page.locator('main#main-content article')).toContainText('Markdown document and its image')
+    await expect(notices(page)).toContainText(catalogFailed)
+    await expect(tag(page)).toHaveText(`Preview · ${previewHeadSha.slice(0, 8)}`)
+    await expect(crumbs(page).getByRole('link').nth(2)).toHaveText(`Preview ${previewHeadSha.slice(0, 8)}`)
+    await expect(crumbs(page).getByRole('link').nth(2)).toHaveAttribute('href', '/sre/_previews?group=pr%3A42')
+    await expect(column(page).getByRole('link', { name: 'Preview list' })).toHaveAttribute('href', '/sre/_previews?group=pr%3A42')
+    await expect(page.locator('main, aside').getByText('PR #42')).toHaveCount(0)
+    await expect(column(page).getByText('Pull request')).toHaveCount(0)
+    await expect(revision(column(page))).toBeVisible()
+    fail = false
+    await notices(page).getByRole('button', { name: 'Try again' }).click()
+    await expect(notices(page)).toHaveCount(0)
+    await expect(column(page).getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
+  })
+
+  test('a missing or expired preview shows Preview unavailable inside the shell, without the column', async ({ page }) => {
+    await page.goto('/sre/_previews/ffffffffffffffffffffffffffffffffffffffff/guides/missing.md?group=pr%3A99')
+    await expect(page.getByRole('heading', { name: 'Preview unavailable' })).toBeVisible()
+    await expect(page.getByRole('main').getByRole('link', { name: 'Preview list' })).toHaveAttribute('href', '/sre/_previews?group=pr%3A99')
+    await expect(page.getByRole('main').getByRole('link', { name: 'Published site' })).toHaveAttribute('href', '/sre')
+    await expect(column(page)).toHaveCount(0)
+    await expect(sidebar(page)).toBeVisible()
+    await expect(sidebar(page).getByRole('link', { name: 'Browse the published SRE' })).toBeVisible()
+    await expect(tag(page)).toBeVisible()
+  })
+
+  test('an unsupported preview format keeps its message inside the shell', async ({ page }) => {
+    await page.route(`**/_previews/sre/revisions/${previewHeadSha}/manifest.json`, (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ schemaVersion: 99, site: 'sre', headSha: previewHeadSha }),
+    }))
+    await page.goto(guideUrl({ group: 'pr:42' }))
+    await expect(page.getByRole('heading', { name: 'This preview needs to be republished' })).toBeVisible()
+    await expect(sidebar(page)).toBeVisible()
+    await expect(column(page)).toHaveCount(0)
+  })
+
+  test('the Preview tag stays visible at a phone width, while scrolling, with the document title in the bar', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await routeLongGuide(page)
+    await page.goto(guideUrl({ group: 'pr:42' }))
+    await expect(tag(page)).toHaveText('Preview · PR #42')
+    const inViewport = async () => {
+      const box = (await tag(page).boundingBox())!
+      return box.x >= 0 && box.x + box.width <= 390 && box.y >= 0
+    }
+    expect(await inViewport()).toBe(true)
+    await page.locator('.markdown-scroll').evaluate((element) => { element.scrollTop = 900 })
+    expect(await inViewport()).toBe(true)
+    await expect(crumbs(page).locator('.breadcrumb-current')).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+    await page.goto(guideUrl({ group: `head:${previewHeadSha}` }))
+    await expect(tag(page)).toHaveText('Preview · manual')
+  })
+
+  async function routeLongGuide(page: Page) {
+    await page.route(`**/_previews/sre/revisions/${previewHeadSha}/files/${guidePath}`, (route) => route.fulfill({
+      status: 200,
+      contentType: 'text/markdown; charset=utf-8',
+      body: `# Long guide\n\n${Array.from({ length: 60 }, (_, line) => `Paragraph ${line} of the long preview document.\n`).join('\n')}`,
+    }))
+  }
+
+  test('below 1200 px Details opens as a panel with the preview metadata, and the narrow menu reaches it', async ({ page }) => {
+    await page.setViewportSize({ width: 1000, height: 800 })
+    await page.goto(guideUrl({ group: 'pr:42' }))
+    await expect(previewTitle(page)).toHaveText('Local preview guide')
+    await expect(column(page)).toHaveCount(0)
+    await page.getByRole('button', { name: 'Details' }).click()
+    const panel = page.getByRole('complementary', { name: 'Details' })
+    await expect(panel.getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
+    await expect(panel.getByRole('link', { name: 'Open the raw file' })).toBeVisible()
+    await expect(panel.getByText('Updated')).toHaveCount(0)
+
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.reload()
+    await clickToolbarAction(page, page.getByRole('button', { name: 'Details' }), 'Details')
+    const narrowPanel = page.getByRole('complementary', { name: 'Details' })
+    await expect(narrowPanel.getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
+    await expect(narrowPanel.getByRole('link', { name: 'Preview list' })).toBeVisible()
+    await expect(narrowPanel.getByText('Opens this revision\'s file on its own, outside the reader.')).toBeVisible()
+  })
+
+  test('an HTML page outside the preview keeps its raw behaviour and the notice says so', async ({ page }) => {
+    const previewUrl = guideUrl({ group: 'pr:42', path: 'guides/preview.html' })
+    await page.goto(previewUrl)
+    await waitForPreviewBridge(page)
+    await expect(notices(page)).toHaveCount(0)
+    await page.frameLocator('iframe[title="Local preview HTML"]').getByRole('link', { name: 'Open the preview SVG resource' }).click()
+    await expect(notices(page)).toContainText('This page is outside the preview.')
+    await expect(page).toHaveURL(previewUrl)
+    await expect(column(page)).toBeVisible()
+    // Back moves the frame itself to the previous page: the notice goes, the reader's address never changed.
+    await page.evaluate(() => window.history.back())
+    await expect(notices(page)).toHaveCount(0)
+    await expect(page).toHaveURL(previewUrl)
+    await expect(page.frameLocator('iframe[title="Local preview HTML"]').getByRole('heading', { name: 'Local preview HTML' })).toBeVisible()
+  })
+
+  test('deep links, history, modifier clicks, reload and copied links keep the revision and group', async ({ context, page }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    const url = guideUrl({ group: 'pr:42' })
+    await page.goto(`${url}#local-preview-guide`)
+    await expect(previewTitle(page)).toHaveText('Local preview guide')
+    await page.reload()
+    expect(new URL(page.url()).pathname + new URL(page.url()).search + new URL(page.url()).hash).toBe(`${url}#local-preview-guide`)
+    await expect(tag(page)).toHaveText('Preview · PR #42')
+
+    const htmlLink = page.getByRole('navigation', { name: 'Preview documents' }).getByRole('link', { name: 'Local preview HTML' })
+    await expectModifiedClickKeptForBrowser(page, htmlLink)
+    await htmlLink.click()
+    await expect(page).toHaveURL(guideUrl({ group: 'pr:42', path: 'guides/preview.html' }))
+    await expect(previewTitle(page)).toHaveText('Local preview HTML')
+    await page.goBack()
+    await expect(page).toHaveURL(`${url}#local-preview-guide`)
+    await expect(previewTitle(page)).toHaveText('Local preview guide')
+    await page.goForward()
+    await expect(previewTitle(page)).toHaveText('Local preview HTML')
+
+    await page.getByRole('button', { name: 'Copy artifact link' }).click()
+    await expect(page.getByRole('status').filter({ hasText: 'Link copied to clipboard.' })).toBeVisible()
+    const copied = new URL(await page.evaluate(() => navigator.clipboard.readText()))
+    expect(`${copied.pathname}${copied.search}`).toBe(guideUrl({ group: 'pr:42', path: 'guides/preview.html' }))
+  })
+
+  test('returning from a preview document to the list does not fetch the catalog again', async ({ page }) => {
+    const catalogRequests: string[] = []
+    page.on('request', (request) => {
+      const { pathname } = new URL(request.url())
+      if (pathname === '/_previews/sre/catalog.json') catalogRequests.push(pathname)
+    })
+    await page.goto('/sre/_previews')
+    await expect(page.getByRole('region', { name: 'Preview pr:42' })).toBeVisible()
+    await page.getByRole('region', { name: 'Preview pr:42' }).getByRole('link', { name: /Local preview guide/ }).click()
+    await expect(previewTitle(page)).toHaveText('Local preview guide')
+    await expect(column(page).getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
+    await column(page).getByRole('link', { name: 'Preview list' }).click()
+    await expect(page).toHaveURL('/sre/_previews?group=pr%3A42')
+    await expect(page.getByRole('region', { name: 'Preview pr:42' })).toBeVisible()
+    await page.goBack()
+    await expect(previewTitle(page)).toHaveText('Local preview guide')
+    expect(catalogRequests).toHaveLength(1)
+
+    // A direct entry loads the catalog once for the reader; the list then reuses it.
+    catalogRequests.length = 0
+    await page.goto(guideUrl({ group: 'pr:42' }))
+    await expect(column(page).getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
+    await column(page).getByRole('link', { name: 'Preview list' }).click()
+    await expect(page.getByRole('region', { name: 'Preview pr:42' })).toBeVisible()
+    expect(catalogRequests).toHaveLength(1)
   })
 })

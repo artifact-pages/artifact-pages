@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ArtifactWorkspace } from './components/ArtifactWorkspace'
-import { PreviewDocumentPage } from './components/PreviewDocumentPage'
 import { PreviewListPage } from './components/PreviewListPage'
 import { SitePicker } from './components/SitePicker'
 import { UnsupportedSchemaError } from './data/schema'
@@ -140,12 +139,6 @@ function App() {
     )) {
       return <PageNotFoundPage onBack={() => navigate('/')} />
     }
-    if (route.kind === 'preview-document') {
-      const siteTitle = sites.status === 'success'
-        ? sites.data.find(({ site }) => site.id === route.siteId)?.site.title
-        : undefined
-      return <PreviewDocumentPage route={route} hash={hash} navigate={navigate} siteTitle={siteTitle} />
-    }
   }
 
   return (
@@ -167,6 +160,8 @@ function App() {
   )
 }
 
+const NO_PUBLISHED_ARTIFACTS: SiteIndex['artifacts'] = []
+
 function SitePage({
   route,
   sites,
@@ -181,7 +176,7 @@ function SitePage({
   theme,
   onSetThemeMode,
 }: {
-  route: Extract<AppRoute, { kind: 'site' | 'search' | 'preview-list' }>
+  route: Extract<AppRoute, { kind: 'site' | 'search' | 'preview-list' | 'preview-document' }>
   sites: SiteCatalogEntry[]
   sitesLoading: boolean
   siteDiscoveryStatus: LoadingState<SiteCatalogEntry[]>['status']
@@ -238,14 +233,14 @@ function SitePage({
     // workspace when the index arrives (the load and the scroll offset carry over).
     return <PreviewListPage route={route} navigate={navigate} siteTitle={registeredSite?.site.title} />
   }
-  if (indexState.status === 'loading') {
+  if (indexState.status === 'loading' && route.kind !== 'preview-document') {
     return <StatusPage title={route.siteId} message="Loading site index…" />
   }
   if (indexState.status === 'error' && route.kind === 'preview-list' && isValidSiteId(route.siteId)) {
     // The Previews list does not depend on the published site: without an index it stands alone.
     return <PreviewListPage route={route} navigate={navigate} siteTitle={registeredSite?.site.title} />
   }
-  if (indexState.status === 'error') {
+  if (indexState.status === 'error' && route.kind !== 'preview-document') {
     const invalidSiteId = !isValidSiteId(route.siteId)
     const missingIndex = indexState.error instanceof IndexLoadError && indexState.error.status === 404
     if (missingIndex && siteDiscoveryStatus === 'loading') {
@@ -284,16 +279,21 @@ function SitePage({
     return <ErrorPage title={route.siteId} error={indexState.error} onRetry={retryIndex} focusRetry={indexAttempt > 0} onBack={() => navigate('/')} />
   }
 
+  // A preview document does not wait for, or depend on, the published site: until its index arrives (or when it
+  // cannot be read) the shell is built on an empty one, and the reader moves onto the real one without reloading.
+  const publishedIndex: SiteIndex = indexState.status === 'success'
+    ? indexState.data
+    : { schemaVersion: 1, site: { id: route.siteId, title: route.siteId }, generatedAt: new Date(0).toISOString(), artifacts: NO_PUBLISHED_ARTIFACTS }
   const index = registeredSite
     ? {
-        ...indexState.data,
+        ...publishedIndex,
         site: {
-          ...indexState.data.site,
+          ...publishedIndex.site,
           title: registeredSite.site.title,
           description: registeredSite.site.description,
         },
       }
-    : indexState.data
+    : publishedIndex
 
   return (
     <ArtifactWorkspace

@@ -1,4 +1,4 @@
-import type { PreviewGroup } from '../domain/preview'
+import type { PreviewCatalog, PreviewGroup } from '../domain/preview'
 import { UnsupportedSchemaError } from './schema'
 import { loadPreviewCatalog, loadPreviewManifest, PreviewLoadError } from './previews'
 
@@ -33,7 +33,39 @@ export function peekPreviewList(siteId: string): PreviewListResult | undefined {
 }
 
 export function resetPreviewList(siteId: string) {
+  catalogs.delete(siteId)
   if (entries.delete(siteId)) notify()
+}
+
+// The catalog alone, shared by the preview list and the preview reader (ISSUE-109): going from a document
+// back to the list within a visit does not fetch it again. A failed load is not kept; the next reader retries.
+type CatalogEntry = { promise: Promise<PreviewCatalog>; catalog?: PreviewCatalog; loadedAt?: number }
+const catalogs = new Map<string, CatalogEntry>()
+
+/** A settled catalog is reused for this long, as for index reads; after that a reader needs a fresh load. */
+export const PREVIEW_CATALOG_MAX_AGE_MS = 30_000
+
+/** The settled catalog of this visit, if one has been loaded, and whether it is still fresh enough to vouch for current status. */
+export function peekPreviewCatalog(siteId: string): { catalog: PreviewCatalog; fresh: boolean } | undefined {
+  const entry = catalogs.get(siteId)
+  if (!entry?.catalog || entry.loadedAt === undefined) return undefined
+  return { catalog: entry.catalog, fresh: Date.now() - entry.loadedAt < PREVIEW_CATALOG_MAX_AGE_MS }
+}
+
+/** Joins a load in flight or a fresh settled one; an older settled catalog starts a new load. */
+export function loadSharedPreviewCatalog(siteId: string): Promise<PreviewCatalog> {
+  const existing = catalogs.get(siteId)
+  if (existing && (existing.loadedAt === undefined || Date.now() - existing.loadedAt < PREVIEW_CATALOG_MAX_AGE_MS)) return existing.promise
+  const entry: CatalogEntry = { promise: undefined as unknown as Promise<PreviewCatalog> }
+  entry.promise = loadPreviewCatalog(siteId).then(
+    (catalog) => { entry.catalog = catalog; entry.loadedAt = Date.now(); return catalog },
+    (error: unknown) => {
+      if (catalogs.get(siteId) === entry) catalogs.delete(siteId)
+      throw error
+    },
+  )
+  catalogs.set(siteId, entry)
+  return entry.promise
 }
 
 /** Starts the site's load, or joins the one already started or settled in this visit. */
@@ -52,7 +84,7 @@ export function loadPreviewList(siteId: string): Promise<PreviewListResult> {
 
 async function fetchPreviewList(siteId: string): Promise<PreviewListResult> {
   try {
-    const catalog = await loadPreviewCatalog(siteId)
+    const catalog = await loadSharedPreviewCatalog(siteId)
     const manifestsByHead = new Map<string, Promise<GroupAvailability>>()
     const checked = await Promise.all(catalog.groups.map(async (group) => {
       let availability = manifestsByHead.get(group.headSha)
