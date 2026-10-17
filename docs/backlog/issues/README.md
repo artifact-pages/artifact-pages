@@ -104,7 +104,7 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-090](ISSUE-090-npm-advisories-and-no-npm-monitoring.md) | Done | P2 | npm has known advisories (source-map-js, katex) and nothing monitors them continuously. |
 | [ISSUE-091](ISSUE-091-malformed-index-rows-crash-render.md) | Done | P2 | Malformed artifact index rows pass loading and crash rendering; there is no error boundary. |
 | [ISSUE-092](ISSUE-092-slow-site-metadata-blocks-site-list.md) | Done | P2 | One slow site metadata request holds the whole home page. |
-| [ISSUE-093](ISSUE-093-directory-and-sidebar-render-every-row.md) | Open | P2 | Directory pages and the sidebar tree render every row. |
+| [ISSUE-093](ISSUE-093-directory-and-sidebar-render-every-row.md) | Done | P2 | Directory pages and the sidebar tree render every row. |
 | [ISSUE-094](ISSUE-094-site-index-cache-never-evicts.md) | Open | P2 | Expired site-index cache entries stay in memory until the same site is read again. |
 | [ISSUE-095](ISSUE-095-home-folder-counts-load-full-indexes.md) | Open | P3 | Home folder counts load the full index of up to eight sites. |
 | [ISSUE-096](ISSUE-096-no-security-policy-or-contributing.md) | In progress | P2 | No security policy, contributing guide or issue templates. |

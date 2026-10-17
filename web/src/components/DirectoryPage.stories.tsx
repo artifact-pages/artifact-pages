@@ -43,9 +43,16 @@ const documentationPages = [
   ...Array.from({ length: 14 }, (_, position) => page(`handbook/topic-${String(position + 1).padStart(2, '0')}.md`, `Topic ${position + 1}`, '2026-10-05T09:00:00Z')),
 ]
 
+// ISSUE-093: 5,000 pages in one folder without a README, and 5,000 children under a README.
+const largeFolderPages = [
+  ...Array.from({ length: 5000 }, (_, position) => page(`large/page-${String(position + 1).padStart(4, '0')}.md`, `Page ${position + 1}`, '2026-10-05T09:00:00Z')),
+  page('large-readme/README.md', 'Large README home', '2026-10-01T09:00:00Z', ['Welcome']),
+  ...Array.from({ length: 5000 }, (_, position) => page(`large-readme/child-${String(position + 1).padStart(4, '0')}.md`, `Child ${position + 1}`, '2026-10-05T09:00:00Z')),
+]
+
 const directoryIndex: SiteIndex = {
   ...deepSreIndex,
-  artifacts: [...deepSreIndex.artifacts, ...documentationPages],
+  artifacts: [...deepSreIndex.artifacts, ...documentationPages, ...largeFolderPages],
 }
 
 const VIEWS = {
@@ -55,6 +62,8 @@ const VIEWS = {
   'one-page': 'solo',
   readme: 'docs',
   'readme-many': 'handbook',
+  'large-list': 'large',
+  'large-readme': 'large-readme',
   'site-root': undefined,
   'html-index': 'incidents/checkout-latency',
 } as const
@@ -141,3 +150,5 @@ export const ReadmeManyChildren: Story = { name: 'README with more than 12 child
 export const SiteRoot: Story = { name: 'Site root', args: { view: 'site-root' } }
 export const SiteRootDark: Story = { args: { view: 'site-root', theme: 'dark' } }
 export const HtmlIndexBody: Story = { name: 'index.html body', args: { view: 'html-index' } }
+export const FiveThousandPages: Story = { name: '5,000 pages (paged)', args: { view: 'large-list' } }
+export const FiveThousandPagesReadme: Story = { name: '5,000 children with README (paged)', args: { view: 'large-readme' } }
