@@ -16,6 +16,8 @@ To show per-folder counts on site cards, the home page loads the full `index.jso
 1. `web/src/data/use-site-folder-counts.ts` defines `MAX_COUNTED_SITES = 8` and `COUNT_CONCURRENCY = 3` (lines 7-8) and loads each index through `loadSiteIndex` after first paint; the work is bounded and cancelable.
 2. `README.md:28` and `docs/roadmap.md:33` say only the active site's artifact index is loaded.
 
+3. Source recheck at `86841bb1` on 2026-10-15 confirms the same 8-site cap, concurrency 3 and post-paint full-index reads. Per-card transferred bytes were not measured in this review. The newly confirmed freshness-label issue is tracked separately in [ISSUE-105](ISSUE-105-site-picker-updated-date-stays-stale.md); solving it must not add another full-index read just for the date.
+
 ## Expected outcome
 
 Folder counts no longer require the full index of an unvisited site, and the documentation matches the behavior.

@@ -16,6 +16,8 @@ The module-global index cache checks its 30 s TTL only when the same key is read
 2. A successful entry keeps its promise; the subscriber count is not decremented on success and the abort listener is removed, so a later unmount abort does not evict it.
 3. With a synthetic clock advanced 62 s, reading alpha, then beta, then gamma leaves all three keys in the map after three fetch calls (public-launch review 2026-10-13, workspace-local report).
 
+4. Rechecked at `86841bb1` on 2026-10-15 with an instrumented copy of the module and a synthetic clock: alpha at t=1 s, beta at t=32 s, gamma at t=63 s left all three keys retained after three fetch calls; TTL remained 30,000 ms. Supplementary workspace evidence: `reviews/2026-10-15-project/reproductions.json` and `reproduce.mjs`. No production cache was modified.
+
 ## Expected outcome
 
 Entries that are expired or no longer in use are evicted, and the cache has a size bound, without breaking the shared-request contract.
