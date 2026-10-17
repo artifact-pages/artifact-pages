@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page, type Route } from '@playwright/test'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { gzipSync } from 'node:zlib'
@@ -918,7 +918,8 @@ test('registered discovery shows empty and malformed registries and refreshes re
   registryState = 'malformed'
   await page.reload()
   await expect(page.getByRole('heading', { name: 'Unable to load sites' })).toBeVisible()
-  await expect(page.getByRole('alert')).toHaveText('We could not load the site catalog. Check your connection and try again.')
+  await expect(page.getByRole('alert')).toHaveText('The site catalog is damaged or was written by an incompatible version. Ask the administrator to run the registry sync again.')
+  await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(0)
 
   registryState = 'first'
   await page.reload()
@@ -7181,4 +7182,84 @@ test('switching to another Markdown document delays its loading text again', asy
   } finally {
     releaseDocument()
   }
+})
+
+// --- load deadlines and retry actions (ISSUE-101, ISSUE-102) ---
+
+test('a catalog failure offers Try again, keeps focus on it after another failure, and recovers without a reload', async ({ page }) => {
+  let healthy = false
+  await page.route('**/_indexes/sites.json', (route) => healthy ? route.continue() : route.fulfill({ status: 503, body: 'unavailable' }))
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Unable to load sites' })).toBeVisible()
+  await expect(page.getByRole('alert')).toContainText('HTTP 503')
+  await page.getByRole('button', { name: 'Try again' }).click()
+  await expect(page.getByRole('heading', { name: 'Unable to load sites' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Try again' })).toBeFocused()
+  healthy = true
+  await page.getByRole('button', { name: 'Try again' }).click()
+  await expect(page.getByRole('link', { name: /SRE/ })).toBeVisible()
+  await expect(page).toHaveURL(/\/$/)
+})
+
+test('a site index failure offers Try again and recovers on the same route, query and fragment', async ({ page }) => {
+  let healthy = false
+  await page.route('**/_indexes/sre/index.json', (route) => healthy ? route.continue() : route.fulfill({ status: 503, body: 'unavailable' }))
+  await page.goto('/sre/runbooks/service-recovery.md?q=latency#md-request-path')
+  await expect(page.getByRole('heading', { name: 'Unable to load this site' })).toBeVisible()
+  await page.getByRole('button', { name: 'Try again' }).click()
+  await expect(page.getByRole('button', { name: 'Try again' })).toBeFocused()
+  healthy = true
+  await page.getByRole('button', { name: 'Try again' }).click()
+  await expect(page.locator('.markdown-scroll')).toBeVisible()
+  await expect(page).toHaveURL(/\/sre\/runbooks\/service-recovery\.md\?q=latency#md-request-path$/)
+})
+
+test('a Markdown failure offers Try again and the document renders afterwards', async ({ page }) => {
+  let healthy = false
+  await page.route('**/_artifacts/sre/runbooks/service-recovery.md', (route) => healthy ? route.continue() : route.fulfill({ status: 503, body: 'unavailable' }))
+  await page.goto('/sre/runbooks/service-recovery.md')
+  await expect(page.getByRole('heading', { name: 'Markdown unavailable' })).toBeVisible()
+  await expect(page.getByText('This document could not be loaded (HTTP 503). Try again in a moment.')).toBeVisible()
+  await page.getByRole('button', { name: 'Try again' }).click()
+  await expect(page.getByRole('button', { name: 'Try again' })).toBeFocused()
+  healthy = true
+  await page.getByRole('button', { name: 'Try again' }).click()
+  await expect(page.locator('.markdown-scroll')).toBeVisible()
+  await expect(page).toHaveURL(/\/sre\/runbooks\/service-recovery\.md$/)
+})
+
+test('a stalled registry times out with a message and Try again recovers', async ({ page }) => {
+  let healthy = false
+  const stalled: Route[] = []
+  await page.clock.install()
+  await page.route('**/_indexes/sites.json', (route) => {
+    if (healthy) return route.continue()
+    stalled.push(route) // never answered: the request stays pending until the application gives up
+  })
+  await page.goto('/')
+  await page.clock.runFor(15_000)
+  await expect(page.getByRole('heading', { name: 'Unable to load sites' })).toBeVisible()
+  await expect(page.getByRole('alert')).toHaveText('The site catalog is taking too long to load. Try again in a moment.')
+  healthy = true
+  await page.getByRole('button', { name: 'Try again' }).click()
+  await page.clock.runFor(1_000)
+  await expect(page.getByRole('link', { name: /SRE/ })).toBeVisible()
+  // The shared cleanup waits for in-flight handlers; release the abandoned request.
+  await Promise.all(stalled.map((route) => route.abort().catch(() => undefined)))
+})
+
+test('leaving a preview document aborts its stalled production index read', async ({ page }) => {
+  const stalled: Route[] = []
+  await page.route('**/_indexes/sre/index.json', (route) => { stalled.push(route) })
+  await page.goto(`/sre/_previews/${previewHeadSha}/guides/preview-guide.md`)
+  await expect(page.locator('.preview-reader-header h1')).toHaveText('Local preview guide')
+  await expect.poll(() => stalled.length).toBe(1)
+  const aborted = page.waitForEvent('requestfailed', (request) => request.url().endsWith('/_indexes/sre/index.json'))
+  await page.evaluate(() => {
+    window.history.pushState({}, '', '/sre/_previews')
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  })
+  await expect(page).toHaveURL(/\/sre\/_previews$/)
+  await aborted
+  await Promise.all(stalled.map((route) => route.abort().catch(() => undefined)))
 })
