@@ -89,6 +89,22 @@ export function usePreviewReader(route: PreviewDocumentRoute | undefined): Previ
     )
     return () => { cancelled = true }
   }, [siteId, catalogAttempt, headSha, artifactPath])
+  // A page left open keeps what it loaded, with no polling. When the reader comes back to it, a catalog older
+  // than the freshness window is revalidated, and the neutral state shows until that settles.
+  useEffect(() => {
+    if (!siteId) return
+    const revalidate = () => {
+      if (document.visibilityState === 'hidden') return
+      const peeked = peekPreviewCatalog(siteId)
+      if (!peeked || !peeked.fresh) setCatalogAttempt((attempt) => attempt + 1)
+    }
+    document.addEventListener('visibilitychange', revalidate)
+    window.addEventListener('focus', revalidate)
+    return () => {
+      document.removeEventListener('visibilitychange', revalidate)
+      window.removeEventListener('focus', revalidate)
+    }
+  }, [siteId])
   const retryCatalog = useCallback(() => {
     if (siteId) resetPreviewList(siteId)
     setCatalogAttempt((attempt) => attempt + 1)

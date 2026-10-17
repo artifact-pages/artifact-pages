@@ -9047,6 +9047,45 @@ test.describe('preview reading in the reader shell (ISSUE-109)', () => {
     await expect(column(page).getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
   })
 
+  test('returning to a long-open tab revalidates a catalog older than 30 seconds', async ({ page }) => {
+    await page.clock.install()
+    let advanced = false
+    await page.route('**/_previews/sre/catalog.json', async (route) => {
+      const response = await route.fetch()
+      const catalog = await response.json() as { groups: Array<{ id: string }> }
+      if (advanced) catalog.groups = catalog.groups.map((group) => group.id === 'pr:42' ? { ...group, headSha: newerHead } : group)
+      await route.fulfill({ response, body: JSON.stringify(catalog) })
+    })
+    await page.route(`**/_previews/sre/revisions/${newerHead}/manifest.json`, (route) => route.fulfill({ status: 404, body: 'gone' }))
+    await page.goto(guideUrl({ group: 'pr:42' }))
+    await expect(column(page).getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
+    await expect(tag(page)).toHaveText('Preview · PR #42')
+
+    // The head changes while the tab is hidden; coming back inside 30 s changes nothing.
+    advanced = true
+    const show = () => page.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' })
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' })
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await show()
+    await expect(tag(page)).toHaveText('Preview · PR #42')
+    await expect(notices(page)).toHaveCount(0)
+
+    await page.clock.fastForward(31_000)
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' })
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await show()
+    await expect(notices(page)).toContainText(olderRevision)
+    await expect(tag(page)).toHaveText(`Preview · ${previewHeadSha.slice(0, 8)}`)
+    await expect(column(page).getByText('Pull request')).toHaveCount(0)
+  })
+
   test('an older revision falls back to the preview list when the current head lacks the document', async ({ page }) => {
     await advancePullRequest(page, { documents: [{ path: 'guides/other.md', title: 'Other page', format: 'markdown' }] })
     await page.goto(guideUrl({ group: 'pr:42' }))

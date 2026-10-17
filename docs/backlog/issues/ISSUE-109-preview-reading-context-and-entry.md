@@ -97,7 +97,7 @@ Settled questions:
 
 The preview list and the reader share one catalog load per site visit, which closes the ISSUE-107 known limit (returning from a document refetched the catalog).
 
-Review fixes (Luna cross-review): a settled catalog is reused for 30 seconds, as for index reads; after that, current, superseded and verified statements wait for a fresh load and the reader shows the neutral state meanwhile (loads in flight stay shared). "PR #N" appears in the tag, breadcrumb, sidebar heading and Details only when the loaded catalog verifies this revision as that PR group's current head; otherwise the tag reads "Preview · <short sha>" and the breadcrumb group "Preview <short sha>", while the "Preview list" link keeps the `?group=` list.
+Review fixes (Luna cross-review): a settled catalog is reused for 30 seconds, as for index reads; after that, current, superseded and verified statements wait for a fresh load and the reader shows the neutral state meanwhile (loads in flight stay shared). "PR #N" appears in the tag, breadcrumb, sidebar heading and Details only when the loaded catalog verifies this revision as that PR group's current head; otherwise the tag reads "Preview · <short sha>" and the breadcrumb group "Preview <short sha>", while the "Preview list" link keeps the `?group=` list. An open page is not polled; when the tab becomes visible again (or the window regains focus) and the catalog is older than 30 s, it is revalidated, neutral meanwhile (e2e with `page.clock` and a simulated visibility change).
 
 ## Acceptance criteria
 
