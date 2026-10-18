@@ -1,0 +1,134 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyS3OutsideTheNewProofBucket",
+      "Effect": "Deny",
+      "Action": "s3:*",
+      "NotResource": ["{{PROOF_BUCKET_ARN}}", "{{PROOF_BUCKET_ARN}}/*", "{{TERRAFORM_ERROR_OBJECT_ARN}}"]
+    },
+    {
+      "Sid": "DenyPreservedProductionBucket",
+      "Effect": "Deny",
+      "Action": "*",
+      "Resource": [
+        "arn:aws:s3:::artifact-pages-231136241959-us-east-1",
+        "arn:aws:s3:::artifact-pages-231136241959-us-east-1/*"
+      ]
+    },
+    {
+      "Sid": "DenyNonCreationCloudFrontActionsOutsideSealedProofResources",
+      "Effect": "Deny",
+      "Action": "cloudfront:*",
+      "NotResource": ["{{PROOF_DISTRIBUTION_ARN}}", "{{PROOF_OAC_ARN}}", "{{PROOF_FUNCTION_ARN}}", "{{PROOF_CACHE_POLICY_ARNS}}", "{{PROOF_RESPONSE_HEADERS_POLICY_ARN}}"]
+    },
+    {
+      "Sid": "DenyCloudFrontCreationOnTheProvisionerIdentity",
+      "Effect": "Deny",
+      "Action": ["cloudfront:CreateDistribution", "cloudfront:CreateFunction", "cloudfront:CreateOriginAccessControl", "cloudfront:CreateCachePolicy", "cloudfront:CreateResponseHeadersPolicy"],
+      "Resource": "*"
+    },
+    {
+      "Sid": "DenyPreservedProductionDistribution",
+      "Effect": "Deny",
+      "Action": "*",
+      "Resource": "arn:aws:cloudfront::231136241959:distribution/ECFTIR5GVPQDF"
+    },
+    {
+      "Sid": "DenyEveryCloudFrontResourcePresentAtInventory",
+      "Effect": "Deny",
+      "Action": "cloudfront:*",
+      "Resource": "{{INVENTORIED_CLOUDFRONT_RESOURCE_ARNS}}"
+    },
+    {
+      "Sid": "DenyModificationOfProvisionerInventoryOperatorAndOwnerBoundary",
+      "Effect": "Deny",
+      "Action": ["iam:UpdateAssumeRolePolicy", "iam:PutRolePolicy", "iam:DeleteRolePolicy", "iam:PutRolePermissionsBoundary", "iam:DeleteRolePermissionsBoundary", "iam:AttachRolePolicy", "iam:DetachRolePolicy", "iam:DeleteRole"],
+      "Resource": ["{{PROVISIONER_ROLE_ARN}}", "{{INVENTORY_ROLE_ARN}}", "{{TEST_OPERATOR_ROLE_ARN}}", "{{OWNER_BOUNDARY_ARN}}"]
+    },
+    {
+      "Sid": "DenyRolePassingAndRoleChaining",
+      "Effect": "Deny",
+      "Action": ["iam:PassRole", "sts:AssumeRole", "sts:TagSession", "sts:SetSourceIdentity"],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ManageExactProofBucketAndItsConfiguration",
+      "Effect": "Allow",
+      "Action": [
+        "s3:CreateBucket", "s3:DeleteBucket", "s3:ListBucket", "s3:ListBucketVersions", "s3:GetBucketLocation",
+        "s3:GetBucketTagging", "s3:PutBucketTagging", "s3:DeleteBucketTagging",
+        "s3:GetBucketPublicAccessBlock", "s3:PutBucketPublicAccessBlock", "s3:DeletePublicAccessBlock",
+        "s3:GetBucketOwnershipControls", "s3:PutBucketOwnershipControls", "s3:DeleteBucketOwnershipControls",
+        "s3:GetEncryptionConfiguration", "s3:PutEncryptionConfiguration", "s3:DeleteBucketEncryption",
+        "s3:GetBucketVersioning", "s3:PutBucketVersioning",
+        "s3:GetBucketLifecycleConfiguration", "s3:PutLifecycleConfiguration", "s3:DeleteBucketLifecycle",
+        "s3:GetBucketPolicy", "s3:PutBucketPolicy", "s3:DeleteBucketPolicy",
+        "s3:GetBucketAcl", "s3:GetBucketCORS", "s3:GetBucketWebsite", "s3:GetAccelerateConfiguration",
+        "s3:GetBucketRequestPayment", "s3:GetBucketLogging", "s3:GetBucketReplication", "s3:GetBucketObjectLockConfiguration"
+      ],
+      "Resource": "{{PROOF_BUCKET_ARN}}"
+    },
+    {
+      "Sid": "ManageExactTerraformErrorObject",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:GetObjectTagging", "s3:PutObjectTagging", "s3:DeleteObjectTagging"],
+      "Resource": "{{TERRAFORM_ERROR_OBJECT_ARN}}"
+    },
+    {
+      "Sid": "CreateOnlyNamedPublisherRolesWithFixedBoundary",
+      "Effect": "Allow",
+      "Action": "iam:CreateRole",
+      "Resource": "{{PUBLISHER_ROLE_ARNS}}",
+      "Condition": {"ArnEquals": {"iam:PermissionsBoundary": "{{OWNER_BOUNDARY_ARN}}"}}
+    },
+    {
+      "Sid": "ManageOnlyNamedPublisherRoles",
+      "Effect": "Allow",
+      "Action": ["iam:GetRole", "iam:UpdateRole", "iam:UpdateRoleDescription", "iam:UpdateAssumeRolePolicy", "iam:DeleteRole", "iam:TagRole", "iam:UntagRole", "iam:ListRolePolicies", "iam:ListAttachedRolePolicies", "iam:GetRolePolicy", "iam:PutRolePolicy", "iam:DeleteRolePolicy"],
+      "Resource": "{{PUBLISHER_ROLE_ARNS}}"
+    },
+    {
+      "Sid": "ReadOnlyExistingGithubOidcProvider",
+      "Effect": "Allow",
+      "Action": "iam:GetOpenIDConnectProvider",
+      "Resource": "arn:aws:iam::231136241959:oidc-provider/token.actions.githubusercontent.com"
+    },
+    {
+      "Sid": "ManageOnlySealedProofDistribution",
+      "Effect": "Allow",
+      "Action": ["cloudfront:GetDistribution", "cloudfront:GetDistributionConfig", "cloudfront:UpdateDistribution", "cloudfront:DeleteDistribution", "cloudfront:TagResource", "cloudfront:UntagResource", "cloudfront:ListTagsForResource"],
+      "Resource": "{{PROOF_DISTRIBUTION_ARN}}"
+    },
+    {
+      "Sid": "ManageOnlySealedProofOriginAccessControl",
+      "Effect": "Allow",
+      "Action": ["cloudfront:GetOriginAccessControl", "cloudfront:UpdateOriginAccessControl", "cloudfront:DeleteOriginAccessControl", "cloudfront:ListTagsForResource"],
+      "Resource": "{{PROOF_OAC_ARN}}"
+    },
+    {
+      "Sid": "ManageOnlySealedProofCachePolicies",
+      "Effect": "Allow",
+      "Action": ["cloudfront:GetCachePolicy", "cloudfront:UpdateCachePolicy", "cloudfront:DeleteCachePolicy", "cloudfront:ListTagsForResource"],
+      "Resource": "{{PROOF_CACHE_POLICY_ARNS}}"
+    },
+    {
+      "Sid": "ManageOnlySealedProofResponseHeadersPolicy",
+      "Effect": "Allow",
+      "Action": ["cloudfront:GetResponseHeadersPolicy", "cloudfront:UpdateResponseHeadersPolicy", "cloudfront:DeleteResponseHeadersPolicy", "cloudfront:ListTagsForResource"],
+      "Resource": "{{PROOF_RESPONSE_HEADERS_POLICY_ARN}}"
+    },
+    {
+      "Sid": "ManageOnlySealedProofFunction",
+      "Effect": "Allow",
+      "Action": ["cloudfront:DescribeFunction", "cloudfront:GetFunction", "cloudfront:UpdateFunction", "cloudfront:PublishFunction", "cloudfront:DeleteFunction", "cloudfront:TagResource", "cloudfront:UntagResource", "cloudfront:ListTagsForResource"],
+      "Resource": "{{PROOF_FUNCTION_ARN}}"
+    },
+    {
+      "Sid": "ReadCallerIdentity",
+      "Effect": "Allow",
+      "Action": "sts:GetCallerIdentity",
+      "Resource": "*"
+    }
+  ]
+}

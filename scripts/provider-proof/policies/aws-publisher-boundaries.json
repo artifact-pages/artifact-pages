@@ -1,0 +1,73 @@
+{
+  "admin": {
+    "Version": "2012-10-17",
+    "Statement": [
+      {"Sid": "DenyS3OutsideProofBucket", "Effect": "Deny", "Action": "s3:*", "NotResource": ["{{PROOF_BUCKET_ARN}}", "{{PROOF_BUCKET_ARN}}/*"]},
+      {"Sid": "DenyPreservedProductionBucket", "Effect": "Deny", "Action": "*", "Resource": ["arn:aws:s3:::artifact-pages-231136241959-us-east-1", "arn:aws:s3:::artifact-pages-231136241959-us-east-1/*"]},
+      {"Sid": "DenyCloudFrontOutsideProofDistribution", "Effect": "Deny", "Action": "cloudfront:*", "NotResource": "{{PROOF_DISTRIBUTION_ARN}}"},
+      {"Sid": "DenyPreservedProductionDistribution", "Effect": "Deny", "Action": "*", "Resource": "arn:aws:cloudfront::231136241959:distribution/ECFTIR5GVPQDF"},
+      {"Sid": "DenyIamAndStsEscalation", "Effect": "Deny", "Action": ["iam:*", "sts:AssumeRole", "sts:TagSession", "sts:SetSourceIdentity"], "Resource": "*"},
+      {
+        "Sid": "ManageApplicationAndRegistryKeys",
+        "Effect": "Allow",
+        "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+        "Resource": [
+          "{{PROOF_BUCKET_ARN}}/index.html", "{{PROOF_BUCKET_ARN}}/preview-bridge.js", "{{PROOF_BUCKET_ARN}}/LICENSE", "{{PROOF_BUCKET_ARN}}/THIRD_PARTY_NOTICES.txt", "{{PROOF_BUCKET_ARN}}/assets/*",
+          "{{PROOF_BUCKET_ARN}}/_indexes/sites.json", "{{PROOF_BUCKET_ARN}}/_control/locks/registry.json", "{{PROOF_BUCKET_ARN}}/_control/locks/application.json",
+          "{{PROOF_BUCKET_ARN}}/_control/registry-cleanup.json", "{{PROOF_BUCKET_ARN}}/_control/app-cache/retry.json", "{{PROOF_BUCKET_ARN}}/_control/versions/registry.json", "{{PROOF_BUCKET_ARN}}/_control/versions/app.json"
+        ]
+      },
+      {
+        "Sid": "LifeSiteIsTheOnlyAdminSiteNamespace",
+        "Effect": "Allow",
+        "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+        "Resource": ["{{PROOF_BUCKET_ARN}}/_indexes/proof-life-20261018/*", "{{PROOF_BUCKET_ARN}}/_artifacts/proof-life-20261018/*", "{{PROOF_BUCKET_ARN}}/_previews/proof-life-20261018/*", "{{PROOF_BUCKET_ARN}}/_control/sites/proof-life-20261018/*"]
+      },
+      {
+        "Sid": "ListOnlyAdminKeysAndLifeSite",
+        "Effect": "Allow",
+        "Action": "s3:ListBucket",
+        "Resource": "{{PROOF_BUCKET_ARN}}",
+        "Condition": {"StringLike": {"s3:prefix": ["index.html", "preview-bridge.js", "LICENSE", "THIRD_PARTY_NOTICES.txt", "assets/*", "_indexes/sites.json", "_indexes/proof-life-20261018/*", "_artifacts/proof-life-20261018/*", "_previews/proof-life-20261018/*", "_control/locks/registry.json", "_control/locks/application.json", "_control/registry-cleanup.json", "_control/app-cache/retry.json", "_control/versions/registry.json", "_control/versions/app.json", "_control/sites/proof-life-20261018/*"]}}
+      },
+      {"Sid": "InvalidateOnlyProofDistribution", "Effect": "Allow", "Action": ["cloudfront:CreateInvalidation", "cloudfront:GetInvalidation", "cloudfront:GetDistribution"], "Resource": "{{PROOF_DISTRIBUTION_ARN}}"},
+      {"Sid": "ReadCallerIdentity", "Effect": "Allow", "Action": "sts:GetCallerIdentity", "Resource": "*"}
+    ]
+  },
+  "satellite": {
+    "Version": "2012-10-17",
+    "Statement": [
+      {"Sid": "DenyS3OutsideProofBucket", "Effect": "Deny", "Action": "s3:*", "NotResource": ["{{PROOF_BUCKET_ARN}}", "{{PROOF_BUCKET_ARN}}/*"]},
+      {"Sid": "DenyPreservedProductionBucket", "Effect": "Deny", "Action": "*", "Resource": ["arn:aws:s3:::artifact-pages-231136241959-us-east-1", "arn:aws:s3:::artifact-pages-231136241959-us-east-1/*"]},
+      {"Sid": "DenyCloudFrontOutsideProofDistribution", "Effect": "Deny", "Action": "cloudfront:*", "NotResource": "{{PROOF_DISTRIBUTION_ARN}}"},
+      {"Sid": "DenyPreservedProductionDistribution", "Effect": "Deny", "Action": "*", "Resource": "arn:aws:cloudfront::231136241959:distribution/ECFTIR5GVPQDF"},
+      {"Sid": "DenyIamAndStsEscalation", "Effect": "Deny", "Action": ["iam:*", "sts:AssumeRole", "sts:TagSession", "sts:SetSourceIdentity"], "Resource": "*"},
+      {
+        "Sid": "ReadExactRegistryAndAppVersion",
+        "Effect": "Allow",
+        "Action": "s3:GetObject",
+        "Resource": ["{{PROOF_BUCKET_ARN}}/_indexes/sites.json", "{{PROOF_BUCKET_ARN}}/_control/versions/app.json"]
+      },
+      {
+        "Sid": "ReadWriteOnlyOwnSiteNamespaces",
+        "Effect": "Allow",
+        "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+        "Resource": [
+          "{{PROOF_BUCKET_ARN}}/_indexes/{{SITE_ID}}/*",
+          "{{PROOF_BUCKET_ARN}}/_artifacts/{{SITE_ID}}/*",
+          "{{PROOF_BUCKET_ARN}}/_previews/{{SITE_ID}}/*",
+          "{{PROOF_BUCKET_ARN}}/_control/sites/{{SITE_ID}}/*"
+        ]
+      },
+      {
+        "Sid": "ListOnlyOwnSiteAndExactSharedKeys",
+        "Effect": "Allow",
+        "Action": "s3:ListBucket",
+        "Resource": "{{PROOF_BUCKET_ARN}}",
+        "Condition": {"StringLike": {"s3:prefix": ["_indexes/{{SITE_ID}}/*", "_artifacts/{{SITE_ID}}/*", "_previews/{{SITE_ID}}/*", "_control/sites/{{SITE_ID}}/*"]}}
+      },
+      {"Sid": "InvalidateOnlyProofDistribution", "Effect": "Allow", "Action": ["cloudfront:CreateInvalidation", "cloudfront:GetInvalidation"], "Resource": "{{PROOF_DISTRIBUTION_ARN}}"},
+      {"Sid": "ReadCallerIdentity", "Effect": "Allow", "Action": "sts:GetCallerIdentity", "Resource": "*"}
+    ]
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "inventory": {
+    "Version": "2012-10-17",
+    "Statement": [{"Effect": "Allow", "Principal": {"AWS": "{{OWNER_SSO_ROLE_ARN}}"}, "Action": "sts:AssumeRole"}]
+  },
+  "provisioner": {
+    "Version": "2012-10-17",
+    "Statement": [{"Effect": "Allow", "Principal": {"AWS": "{{OWNER_SSO_ROLE_ARN}}"}, "Action": "sts:AssumeRole"}]
+  },
+  "testOperator": {
+    "Version": "2012-10-17",
+    "Statement": [{"Effect": "Allow", "Principal": {"AWS": "{{OWNER_SSO_ROLE_ARN}}"}, "Action": "sts:AssumeRole"}]
+  },
+  "adminPublisher": {
+    "Version": "2012-10-17",
+    "Statement": [{
+      "Effect": "Allow",
+      "Principal": {"Federated": "arn:aws:iam::231136241959:oidc-provider/token.actions.githubusercontent.com"},
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {"StringEquals": {"token.actions.githubusercontent.com:aud": "sts.amazonaws.com", "token.actions.githubusercontent.com:sub": "{{ADMIN_OIDC_SUBJECT}}"}}
+    }]
+  },
+  "satellitePublisher": {
+    "Version": "2012-10-17",
+    "Statement": [{
+      "Effect": "Allow",
+      "Principal": {"Federated": "arn:aws:iam::231136241959:oidc-provider/token.actions.githubusercontent.com"},
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {"StringEquals": {"token.actions.githubusercontent.com:aud": "sts.amazonaws.com", "token.actions.githubusercontent.com:sub": "{{EXACT_SITE_OIDC_SUBJECT}}"}}
+    }]
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyMutationOfPreservedDistribution",
+      "Effect": "Deny",
+      "Action": "*",
+      "Resource": "arn:aws:cloudfront::231136241959:distribution/ECFTIR5GVPQDF"
+    },
+    {
+      "Sid": "DenyMutationOfEveryCloudFrontResourcePresentAtInventory",
+      "Effect": "Deny",
+      "Action": "cloudfront:*",
+      "Resource": "{{INVENTORIED_CLOUDFRONT_RESOURCE_ARNS}}"
+    },
+    {
+      "Sid": "AllowTaggedFutureDistributionFunctionAndTagOperations",
+      "Effect": "Allow",
+      "Action": [
+        "cloudfront:CreateDistribution",
+        "cloudfront:CreateFunction",
+        "cloudfront:TagResource"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "ForAllValues:StringEquals": {"aws:TagKeys": ["artifact-pages-proof-run", "artifact-pages-proof-owner"]},
+        "StringEquals": {"aws:RequestTag/artifact-pages-proof-run": "20261018"}
+      }
+    },
+    {
+      "Sid": "AllowOnlyNamedUntaggedFutureResourceCreationActions",
+      "Effect": "Allow",
+      "Action": ["cloudfront:CreateOriginAccessControl", "cloudfront:CreateCachePolicy", "cloudfront:CreateResponseHeadersPolicy"],
+      "Resource": "*"
+    }
+  ]
+}
