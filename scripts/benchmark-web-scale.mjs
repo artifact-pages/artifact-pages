@@ -16,7 +16,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { appendFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { gzipSync } from 'node:zlib'
+import { gzipSync, gunzipSync } from 'node:zlib'
 import { chromium } from '@playwright/test'
 
 const repository = path.resolve(import.meta.dirname, '..')
@@ -354,10 +354,16 @@ function applyGeneratedJSONGzipDelivery() {
       for (const relative of ['index.json', 'search/manifest.json']) {
         const filename = path.join(indexDirectory, relative)
         if (!existsSync(filename)) continue
-        const plain = readFileSync(filename)
-        const stored = gzipSync(plain, { level: 9, mtime: 0 })
-        writeFileSync(filename, stored)
-        objects.push({ storage: storageName, site: siteId, path: `/_indexes/${siteId}/${relative}`, decodedBytes: plain.length, storedBytes: stored.length })
+        const existing = readFileSync(filename)
+        const alreadyGzipped = isGzipBytes(existing)
+        const decoded = alreadyGzipped ? gunzipSync(existing) : existing
+        assert.ok(!isGzipBytes(decoded), `${filename} contains nested gzip data; expected JSON or one gzip layer`)
+        const stored = alreadyGzipped ? existing : gzipSync(decoded, { level: 9, mtime: 0 })
+        if (!alreadyGzipped) writeFileSync(filename, stored)
+        objects.push({
+          storage: storageName, site: siteId, path: `/_indexes/${siteId}/${relative}`,
+          decodedBytes: decoded.length, storedBytes: stored.length, alreadyGzipped,
+        })
       }
     }
   }
@@ -655,6 +661,17 @@ const maximum = (values) => {
 }
 const sum = (list, key) => list.reduce((total, item) => total + (item[key] ?? 0), 0)
 const pathOf = (url) => new URL(url).pathname
+const isGzipBytes = (bytes) => bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b
+
+async function waitForCompletedRequest(session, urlPath, from, timeoutMs = SLOW_TIMEOUT) {
+  const started = Date.now()
+  for (;;) {
+    const found = [...session.requests.entries()].slice(from).find(([, request]) => pathOf(request.url) === urlPath)
+    if (found?.[1].done) return { requestId: found[0], ...found[1] }
+    if (Date.now() - started >= timeoutMs) throw new Error(`timed out waiting for ${urlPath}`)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+}
 
 let remoteIndexHtml = ''
 function entryScripts() {
@@ -941,6 +958,24 @@ async function measureSearch(browser, profile, siteId, query) {
   async function visit() {
     const from = session.mark()
     await page.goto(`${origin()}/${siteId}/_search?q=${encodeURIComponent(query)}`, { waitUntil: 'commit' })
+    // The app discovers full-text availability from meta.json while its site
+    // index loads. Until discovery finishes, the search page can briefly render
+    // the permanent "published without page text search" state. Wait for the
+    // discovery response and the available search control before measuring the
+    // query, so that transient state cannot mask a slow manifest request.
+    const metadataRequest = await waitForCompletedRequest(session, `/_indexes/${siteId}/meta.json`, from)
+    if (metadataRequest.failed || metadataRequest.status !== 200) {
+      throw new Error(`site discovery metadata request failed for ${siteId}: HTTP ${metadataRequest.status || 'network error'}`)
+    }
+    let metadata
+    try {
+      const response = await session.cdp.send('Network.getResponseBody', { requestId: metadataRequest.requestId })
+      metadata = JSON.parse(response.base64Encoded ? Buffer.from(response.body, 'base64').toString('utf8') : response.body)
+    } catch (error) {
+      throw new Error(`could not inspect fetched site discovery metadata for ${siteId}: ${error.message}`)
+    }
+    assert.equal(metadata.fullTextUrl, `/_indexes/${siteId}/search/manifest.json`, `${siteId} discovery metadata must publish page text search`)
+    await page.waitForFunction(() => !!document.querySelector('#search-page-input'), null, { timeout: SLOW_TIMEOUT })
     await page.waitForFunction(() => (window.__t && window.__t.results !== undefined) || document.querySelector('.search-page-message'), null, { timeout: SLOW_TIMEOUT })
     // An error message is not a result: the iteration is invalid and the run stops instead of recording it.
     const errorText = await page.evaluate(() => document.querySelector('.search-page-message')?.textContent ?? null)
