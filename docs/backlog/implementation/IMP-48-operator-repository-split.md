@@ -1,6 +1,7 @@
 # IMP-48 — Split production operation into admin and docs repositories
 
-- Status: Open
+- Status: In progress
+- Assignee: Codex
 - Lanes: Infra / Cloudflare, Docs / Adoption
 - Execution: Collaborative. Creating repositories, adding the `artifact-pages.stream` zone, Terraform applies, credential setup and any production registry change need owner approval.
 - Depends on: [TD5](../technical-design/TD5-verification-environment-and-operator-repositories.md) (Done); released references follow [IMP-45](IMP-45-unified-release-and-compatibility.md) and [IMP-38](IMP-38-terraform-registry-publication.md).
@@ -8,7 +9,7 @@
 
 ## Goal
 
-`artifact-pages.dev` is operated from `tasuku43/artifact-pages-admin` and the docs satellite `tasuku43/artifact-pages-docs`, which consume released packages like any adopter. This repository keeps a complete verification path on `artifact-pages.stream`.
+`artifact-pages.dev` is operated from `artifact-pages/admin` and the docs satellite `artifact-pages/docs`, which consume released packages like any adopter. This repository keeps a complete verification path on `artifact-pages.stream`.
 
 ## Slices
 
@@ -37,5 +38,13 @@
 
 - [ ] This repository applies, deploys, publishes and previews on `artifact-pages.stream` without touching the `artifact-pages.dev` zone, bucket or state.
 - [ ] The admin repository's first plan against production is a no-change plan, and the cut-over keeps both sites reachable at the same URLs.
-- [ ] The docs repository publishes `guide` and `architecture` through the Action; the registry names it as their repository.
+- [x] The docs repository publishes `guide` and `architecture` through the Action; the registry names it as their repository (organization cutover 2026-10-06; subsequent released-component operator runs recorded in T15/IMP-38).
 - [ ] No production config, Terraform caller or public-site source remains in this repository.
+
+## Backend decision and reconciliation — 2026-10-18 (Sol)
+
+**Delete the obsolete monorepo `docs/public` public-site sources in a follow-up cleanup.** The external docs repository is the source of truth; retaining a second editable source recreates drift. This PR records the decision only. Keep technical specifications, architecture contracts, backlog/evidence and independently useful test fixtures in the monorepo. Before deletion, enumerate references, move any actual test-only dependency into a named fixture, update local docs commands/config references, and verify no build/CI fixture depends on the removed source. Coordinate public-docs ownership with Claude; do not rewrite or migrate the live docs site in this cleanup.
+
+The original progress entries are dated history, not current absence claims. The split/cutover shipped on 2026-10-06 into the organization repositories; production consumes released Actions and CLI, and admin #19 (`250c892b`) switched to Registry Cloudflare 0.1.1 with a No changes plan ([IMP-38](IMP-38-terraform-registry-publication.md)). The original cutover's first no-change plan is not located; the later plan is convergence evidence, not a retroactive first-plan claim. The October 3 credential/zone limitations were superseded by the shipped operator split and the October 17 isolated verification-account rebuild (#148); [T15](../verification/T15-provider-delivery.md) retains the live proof boundaries.
+
+Remaining: source/reference cleanup above and attach the original cutover/no-change and isolated verification records to the unchecked criteria. Do not recreate repositories or repeat production cutover to repair bookkeeping. Account/secret/settings changes, applies, registry mutation, production deploys and any paid operation remain explicit owner gates.

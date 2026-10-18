@@ -6,7 +6,7 @@ Each ticket records one independently verifiable contract or measurement. Status
 | --- | --- | --- |
 | [T4](T4-serving-boundary.md) | In progress | Serving routes and cache |
 | [T5](T5-concurrency-recovery.md) | In progress | Concurrency and recovery |
-| [T6](T6-resources-navigation.md) | Open | Preview resources and navigation |
+| [T6](T6-resources-navigation.md) | Done | Preview resources and navigation |
 | [T7](T7-discovery-performance.md) | Done | Preview discovery performance |
 | [T8](T8-stale-reference-cleanup.md) | In progress | Stale-reference cleanup |
 | [T13](T13-registered-flow.md) | Done | Registered admin and satellite flow |

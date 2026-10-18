@@ -1,6 +1,7 @@
 # T14 — Production reconciliation and race safety
 
 - Status: In progress
+- Assignee: Codex
 - Phase: Provider-backed deployment
 
 ## Proof needed
@@ -8,7 +9,7 @@
 - [x] Test both normal site publish/unregister lock orderings with a deterministic local backend.
 - [x] Verify separate site IDs can hold their own locks concurrently; this proves lock isolation, not concurrent `PublishSite` calls.
 - [x] Verify interrupted site locks require guarded recovery and stale ETags or competing recovery attempts cannot release a newer lock.
-- [ ] Run concurrent `PublishSite` calls for different sites and prove cross-process/provider conditional-write races do not lose updates.
+- [ ] Run concurrent production `PublishSite` calls for different sites across processes/providers and prove updates survive. Independent lock scopes and same-site preview races already have evidence; neither substitutes for this production case.
 - [x] Inject a `meta.json` upload failure before stale deletion and prove a retry converges.
 - [x] Inject a partial stale-artifact deletion and prove a retry converges.
 - [x] Verify unregister retries removed-site cleanup after listing/delete/invalidation failures, including the complete catalog/site/preview invalidation set on an already-converged origin (ISSUE-020 local fake-backend evidence below).
@@ -18,7 +19,8 @@
 - [x] Exercise AWS pagination, continuation-token errors, malformed listing responses, continuation-page API failure, 1,000-key delete batches, and per-object delete failures.
 - [x] Verify exact site-prefix isolation, unchanged registry/app/control/other-site objects, `.git` omission, symlink/special-file rejection, source bytes and paths, and MIME/disposition/encoding/cache metadata.
 - [x] Reject equal local source/target roots and either containment direction before lock creation; also cover symlinked target parents and ignored generated files when the target is separate (completed ISSUE-014).
-- [ ] Run real AWS S3 and Cloudflare R2 conditional-write/recovery smoke tests; verify provider cache and invalidation behavior.
+- [x] Record real R2 conditional-write and named preview recovery smoke evidence (T15 and October 2 recovery record).
+- [ ] Run remaining live AWS conditional-write/recovery and production-publish recovery cases; finish provider cache/invalidation coverage beyond the existing samples.
 - [x] Cover zero-document desired-state convergence (completed ISSUE-018): publish `artifacts: []` with `artifactCount: 0`, retain source resources and live previews, preserve registry/app/control/neighbor boundaries, and retry after partial stale deletion.
 
 ## Evidence
@@ -31,7 +33,7 @@ The local source/output boundary gate was completed as ISSUE-014. `TestPublishSi
 
 `internal/publisher/site_reconcile_test.go` verifies artifact bytes and paths, metadata ordering, both prefix listings before writes, exact-prefix boundaries, source entry rejection, metadata repair, retry after a metadata upload failure, and retry after partial stale deletion. `TestPublishSiteRetriesAfterArtifactAndIndexUploadFailures` injects an artifact replacement failure and an existing `index.json` replacement failure; each failed attempt preserves stale content and the previous failed object, then a retry publishes the replacement and removes stale content last. The focused verification command `go test ./internal/publisher -run '^TestPublishSiteRetriesAfterArtifactAndIndexUploadFailures$' -count=1` passed. Its invalid-UTF-8 filesystem integration case is skipped on Darwin because the filesystem rejects such a filename; the shared validator is unit-tested in `internal/indexer/build_test.go`.
 
-`internal/publisher/aws_reconcile_adapter_test.go` covers multi-page S3 listing, malformed and incomplete responses, deletion batches, per-object failures, and HTTP/cache metadata forwarding. `internal/publisher/aws_reconcile_failure_test.go` verifies that an API failure on the continuation page aborts `PublishSite` before content writes or stale deletion. The shared registry-apply retry test covers removed-site cleanup after post-write failures, but does not directly exercise the forced `UnregisterSite` command path.
+`internal/publisher/aws_reconcile_adapter_test.go` covers multi-page S3 listing, malformed and incomplete responses, deletion batches, per-object failures, and HTTP/cache metadata forwarding. `internal/publisher/aws_reconcile_failure_test.go` verifies that an API failure on the continuation page aborts `PublishSite` before content writes or stale deletion. The shared registry-apply retry test covers removed-site cleanup after post-write failures, and the later `TestUnregisterSiteRetriesForcedCleanupWhenRegistrationIsAlreadyAbsent` below directly exercises forced `UnregisterSite` cleanup.
 
 `internal/publisher/s3_compatible_head_test.go` verifies that ambiguous S3-compatible `HeadObject` 404s are confirmed through a complete exact-key listing: `NoSuchKey` is preserved, `NoSuchBucket` skips listing, longer prefix neighbors count as absence, an exact listed key preserves the original HEAD error, and list failures preserve that same error. `go test ./internal/publisher -run '^TestS3CompatibleHeadObjectConfirmsAmbiguous404ByExactKey$' -count=1` and `go test -race ./...` passed. This shared adapter evidence covers AWS, Cloudflare/R2, and MinIO implementations locally; it does not replace live-provider race evidence.
 
@@ -48,3 +50,7 @@ The ISSUE-018 verification run passed `go test -race -count=1 ./internal/publish
 ## Implementation links
 
 [IMP-22 site locks](../implementation/IMP-22-site-locks.md), [IMP-23 registry registration](../implementation/IMP-23-registry-apply.md), [IMP-24 publisher eligibility](../implementation/IMP-24-publisher-eligibility.md), [IMP-25 production reconciliation](../implementation/IMP-25-production-reconciler.md), [IMP-27 registry unregister](../implementation/IMP-27-admin-unregister.md), and [IMP-29 AWS adapter](../implementation/IMP-29-aws-production-adapter.md) provide the implementation paths whose broader race and provider evidence is tracked here.
+
+## Reconciliation — 2026-10-18
+
+[T5](T5-concurrency-recovery.md) / [Cloudflare recovery proof](../cloudflare-preview-recovery-proof.md) credit real R2 CAS, preview new-head races, partial-upload recovery and stale-owner rejection. [T15](T15-provider-delivery.md) credits Cloudflare warm withdrawal and AWS update/unregister samples. Earlier blanket absence claims do not apply to those completed samples. None proves concurrent actual production `PublishSite` across different sites/processes, all production interruption points, or reference-role CDN retry/freshness. Those remain open with AWS recovery and are one coordinated owner-gated plan, not separate duplicate experiments.

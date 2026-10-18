@@ -1,7 +1,8 @@
 # T6 — Preview resources and navigation
 
-- Status: Open
-- Phase: Phase 1 local preview product; broader browser compatibility remains open
+- Status: Done
+- Assignee: Codex
+- Phase: Phase 1 local preview product (complete); live delivery remains T15
 
 ## Contract to prove
 
@@ -23,9 +24,9 @@ Changed HTML and Markdown documents render from their head snapshot with local d
 - [x] Verify Markdown fragment navigation when linking to another Markdown document (ISSUE-030; regression and evidence below).
 - [x] Exercise the settled non-loopback-equivalent same-origin delivery contract with local/transitive module execution, iframe CSS containment, intentional parent-DOM/test-key storage access, production-equivalent HTTPS resource behavior, HTTP blocking, and unchanged Markdown sanitization ([TD3](../technical-design/TD3-preview-origin-delivery.md); ISSUE-026).
 
-## Reopened scope
+## Reopened scope (historical; closed 2026-10-18)
 
-Reopened on 2026-09-28 after the full-codebase review exposed supported-resource and navigation gaps not covered by earlier fixtures. Checked items retain their narrower historical local evidence, not complete fragment or provider-reader compatibility. Port each issue's reproduction into committed regressions before closing this item again. Do not claim live provider evidence from local browser tests.
+Reopened on 2026-09-28 after the full-codebase review exposed supported-resource and navigation gaps not covered by earlier fixtures. Checked items retain their narrower historical local evidence, not complete fragment or provider-reader compatibility. Each listed reproduction now has a committed regression and checked evidence below. Closed by Sol on 2026-10-18 against these local/emulator criteria; broader browser/device coverage remains T24 and live delivery remains T15. Do not claim live provider evidence from local browser tests.
 
 ## Evidence
 

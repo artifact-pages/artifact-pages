@@ -1,6 +1,7 @@
 # T5 — Concurrency and recovery
 
 - Status: In progress
+- Assignee: Codex
 - Phase: Phase 1 local proof; provider recovery remains post-MVP
 
 ## Contract to prove
@@ -16,7 +17,8 @@ The shared site lock and retry-safe catalog replacement preserve the Phase 1 pub
 - [x] Inject failure after bundle upload, after manifest completion, and before catalog update; retry without advertising an incomplete revision.
 - [x] Reject a same-head retry that changes selected documents or bytes.
 - [x] Retry a same preview head after only the default-branch HEAD advances, retaining revision provenance and discovery group context.
-- [ ] Exercise provider conditional lock/immutable-object races and stale-lock recovery without losing an unrelated group's catalog update.
+- [x] Exercise the named Cloudflare/R2 conditional-write, distinct-new-head CLI race, partial-upload recovery and stale-owner rejection samples (October 1–2 records below).
+- [ ] Exercise AWS conditional lock/immutable-object races and recovery, plus remaining interruption points on each provider without losing unrelated groups.
 
 ## Evidence
 
@@ -30,4 +32,10 @@ The lock wait bound now also covers repeated conditional-write conflicts without
 
 ## Implementation links
 
-[IMP-01 records](../implementation/IMP-01-preview-records.md), [IMP-04 provenance](../implementation/IMP-04-pr-provenance.md), [IMP-05 publication](../implementation/IMP-05-publication.md), [IMP-16 unregister](../implementation/IMP-16-unregister.md), [IMP-11 CLI](../implementation/IMP-11-cli.md), [IMP-12 storage adapter](../implementation/IMP-12-provider-boundary.md), [IMP-24 publisher eligibility](../implementation/IMP-24-publisher-eligibility.md), and [IMP-25 production reconciliation](../implementation/IMP-25-production-reconciler.md) provide the operations and fault points. Keep T5 open until the remaining preview, cross-process, and provider recovery evidence exists.
+[IMP-01 records](../implementation/IMP-01-preview-records.md), [IMP-04 provenance](../implementation/IMP-04-pr-provenance.md), [IMP-05 publication](../implementation/IMP-05-publication.md), [IMP-16 unregister](../implementation/IMP-16-unregister.md), [IMP-11 CLI](../implementation/IMP-11-cli.md), [IMP-12 storage adapter](../implementation/IMP-12-provider-boundary.md), [IMP-24 publisher eligibility](../implementation/IMP-24-publisher-eligibility.md), and [IMP-25 production reconciliation](../implementation/IMP-25-production-reconciler.md) provide the operations and fault points. Keep T5 open for the remaining AWS and untested provider interruption/recovery cases; local preview and cross-process checks listed above are complete.
+
+## Reconciled live evidence — 2026-10-18
+
+The [October 2 Cloudflare recovery proof](../cloudflare-preview-recovery-proof.md) already establishes two CLI processes publishing distinct new heads with both groups retained, SIGKILL after partial file upload followed by observed-ETag recovery/retry, and stale-owner rejection before catalog replacement followed by retry. All four advertised manifests/file hashes matched, unregister cleaned the site, and original inventory/registry preservation passed. [T15](T15-provider-delivery.md) also records real R2 immutable-create/stale-ETag/competing-If-Match samples. Earlier statements that real R2 races/recovery are wholly unverified are historical and superseded for these cases only.
+
+Remaining: live AWS equivalents and untested interruption points (after manifest/before catalog, catalog-write failure/retry) on each provider, with original-group and neighbor preservation. Share runs with T14/T15; do not repeat completed Cloudflare cases without a version/coverage reason. Owner-approved disposable scope is required before new cloud mutations.
