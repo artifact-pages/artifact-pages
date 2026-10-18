@@ -394,12 +394,17 @@ func TestPublishSiteWholeControlRequestsCompareR2GetOnlyAndAWSHeadThenGet(t *tes
 	if err != nil || result.Outcome != "synced" {
 		t.Fatalf("initial R2 PublishSite() = %+v, err=%v", result, err)
 	}
-	// Start both measured paths from the exact same committed state and origin
-	// projection so only the selected private-state read mode varies.
+	// Seed AWS from R2's committed state and projection, then let AWS commit
+	// its own generated-JSON policy before measuring no-op request counts.
 	awsStore.copyPersistentObjectsFrom(r2Store)
+	awsMigration, err := PublishSite(ctx, awsBackend, options)
+	if err != nil || awsMigration.Outcome != "synced" {
+		t.Fatalf("AWS policy migration = %+v, err=%v; want synced", awsMigration, err)
+	}
 
 	// A HEAD-first AWS no-op uses one metadata request. R2's selected GET-only
-	// mode uses one Class B request too, but reads the state body.
+	// mode uses one Class B request too, but reads the state body. Exclude the
+	// one-time AWS migration above from these steady-state no-op counts.
 	r2Store.resetCounts()
 	awsStore.resetCounts()
 	r2CDN.reset()
