@@ -1,6 +1,6 @@
 # ISSUE-112 — Large AWS generated JSON loses compressed delivery
 
-- Status: In progress
+- Status: Done
 - Assignee: Codex
 - Priority: P2
 - Area: AWS / CLI generated reader-data delivery
