@@ -51,7 +51,9 @@ node scripts/benchmark-fulltext.mjs
 
 ## 測定結果
 
-Node v22.14.0、headless Chromium 153.0.8010.12。実文書は `fixtures/storage/_artifacts` と `docs/public/sites/guide` の20文書。正規化後の本文は合計45.5 KB。
+Node v22.14.0、headless Chromium 153.0.8010.12。調査時の実文書は、コミット済み artifact fixtures と当時この repository にあった guide source の合計20文書。正規化後の本文は45.5 KBだった。
+
+Guide source の所有権移管後、benchmark script は `fixtures/storage/_artifacts` のみを使う。上の測定値は2026-10-01時点の記録で、現在の script からは同じ20文書 corpus を再生成しない。現在の公開 source は [artifact-pages/docs](https://github.com/artifact-pages/docs) にある。
 
 合成 corpus はこの20文書を繰り返し、個別の識別子と一部に検索語を足したもの。1文書の本文は平均約2.3 KB。語彙・長さ・圧縮率が偏るため、実運用の分布やサイズ上限を予測するデータではない。
 

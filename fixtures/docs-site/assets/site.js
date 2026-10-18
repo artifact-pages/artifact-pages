@@ -1,8 +1,7 @@
-/* Git Artifact Pages — ドキュメントサイト共通スクリプト
+/* Git Artifact Pages — docs-site behavior fixture for Storybook and iframe integration checks.
    すべて任意の強化です。JavaScriptが無効でも、全ページと図の全要素を読めます。
    <html lang> で日本語と英語の文言・例を切り替えます。
-   正本は docs/public/shared/assets/ です。サイトごとに配信範囲（CSP）が分かれるため、各サイトの assets/ へは
-   npm run docs:sync-assets で写し、直接編集しないでください（npm run docs:check-assets で一致を確認できます）。 */
+   The live documentation source is maintained in artifact-pages/docs. */
 (() => {
   'use strict';
 
@@ -739,7 +738,7 @@
 })();
 
 /* ── architecture site ─────────────────────────────
-   docs/public/sites/architecture/ の図（.fig）と、guideの図（.figure）のための任意の強化です。JavaScriptが無効でも図は枠の中でスクロールできます。
+   Optional behavior for architecture (.fig) and guide (.figure) diagrams. Frames remain scrollable without JavaScript.
    幅の広い図は狭い画面で枠の中だけが横にスクロールします。実際にスクロールする枠だけをキーボードで
    フォーカスできるようにし（tabindex="0"）、末尾が隠れている間は右端を薄くして続きがあることを示します。 */
 (() => {

@@ -6168,9 +6168,9 @@ test.describe('page text search', () => {
     await page.close()
   })
 
-  test('in-frame links of the documentation script carry the committed search to same-site routes only', async ({ page }) => {
-    // docs/public/shared/assets/site.js is embedded by the documentation sites; load it into an artifact frame.
-    const docsScript = readFileSync('docs/public/shared/assets/site.js', 'utf8').replace(/<\/script/gi, '<\\/script')
+  test('in-frame links of the docs-site fixture script carry the committed search to same-site routes only', async ({ page }) => {
+    // This frozen fixture models the embedded docs script without depending on the docs repository checkout.
+    const docsScript = readFileSync('fixtures/docs-site/assets/site.js', 'utf8').replace(/<\/script/gi, '<\\/script')
     await page.route('**/_artifacts/textsearch/long/scroll-target.html', (route) => route.fulfill({
       contentType: 'text/html',
       body: `<!doctype html><html><head><meta charset="utf-8"><title>Docs</title></head><body>

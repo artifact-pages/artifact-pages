@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 
-// The published docs sites are served from docs/public/sites via Storybook's staticDirs (/docs-sites).
-// Inside the app, site.js copies the app's <html data-theme>; here each frame gets it directly.
+// The reader-facing docs sources live in artifact-pages/docs. This synthetic Storybook example
+// uses the frozen docs-site asset fixture under fixtures/docs-site instead of published pages.
 type Theme = 'light' | 'dark'
 
 const frameStyle = (theme: Theme) => ({
@@ -16,8 +16,8 @@ const elementsDocument = (theme: Theme) => `<!doctype html>
 <html lang="ja" class="js" data-theme="${theme}">
 <head>
   <meta charset="utf-8">
-  <link rel="stylesheet" href="/docs-sites/guide/assets/site.css">
-  <script src="/docs-sites/guide/assets/site.js" defer></script>
+  <link rel="stylesheet" href="/docs-site-fixture/assets/site.css">
+  <script src="/docs-site-fixture/assets/site.js" defer></script>
   <style>
     .sb-group { padding-block: 32px; border-top: 1px solid var(--line-soft); }
     .sb-group > .eyebrow { margin-bottom: 18px; }
@@ -60,8 +60,8 @@ const elementsDocument = (theme: Theme) => `<!doctype html>
         <p>各リポジトリが、担当するサイトを <code>--site</code> で明示して公開します。<strong>公開のたびに索引を作ります。</strong></p>
         <div class="term">
           <div class="term-head"><span>TERMINAL / EACH REPOSITORY</span><button class="copy-btn" type="button">コピー</button></div>
-<pre><span class="c"># docs/public/sites/ja を、サイト ja へ</span>
-<span class="p">$</span> <span data-copy>artifact-pages <span class="v">site sync</span> --site ja</span></pre>
+<pre><span class="c"># sites/guide/ja を、guide サイトへ</span>
+<span class="p">$</span> <span data-copy>artifact-pages <span class="v">site sync</span> --site guide</span></pre>
         </div>
         <div class="term">
           <div class="term-head"><span>.artifact-pages.yaml / ADMIN</span></div>
@@ -117,7 +117,7 @@ const elementsDocument = (theme: Theme) => `<!doctype html>
         <li><div><h3>サイトを登録する</h3><p>設定ファイルに書いて登録します。</p></div></li>
         <li><div><h3>公開する</h3><p>各リポジトリから公開します。</p></div></li>
       </ol>
-      <pre class="filetree"><b>docs/public/sites/ja/</b>
+      <pre class="filetree"><b>sites/guide/ja/</b>
 ├── what-is-git-artifact-pages.html
 └── assets/
     ├── site.css
@@ -133,46 +133,17 @@ const elementsDocument = (theme: Theme) => `<!doctype html>
 </body>
 </html>`
 
-function PageFrame({ theme, src }: { theme: Theme; src: string }) {
-  return (
-    <div style={{ height: '100vh' }}>
-      <iframe
-        key={theme}
-        title="Docs page"
-        src={src}
-        style={frameStyle(theme)}
-        onLoad={(event) => {
-          const root = event.currentTarget.contentDocument?.documentElement
-          if (root) root.dataset.theme = theme
-        }}
-      />
-    </div>
-  )
-}
-
 function ElementsFrame({ theme }: { theme: Theme }) {
   return <iframe title={`Docs elements (${theme})`} srcDoc={elementsDocument(theme)} style={frameStyle(theme)} />
 }
 
 const meta = {
-  title: 'Docs site/Guide',
+  title: 'Docs site/Guide elements (fixture)',
   parameters: { layout: 'fullscreen' },
 } satisfies Meta
 
 export default meta
 type Story = StoryObj<typeof meta>
-
-export const Page: StoryObj<{ theme: Theme }> = {
-  args: { theme: 'light' },
-  argTypes: { theme: { control: 'inline-radio', options: ['light', 'dark'] } },
-  render: ({ theme }) => <PageFrame theme={theme} src="/docs-sites/guide/ja/what-is-git-artifact-pages.html" />,
-}
-
-export const PageDark: StoryObj<{ theme: Theme }> = {
-  ...Page,
-  name: 'Page (dark)',
-  args: { theme: 'dark' },
-}
 
 export const Elements: Story = {
   render: () => (

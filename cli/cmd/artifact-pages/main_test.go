@@ -507,7 +507,7 @@ sites:
     name: English
     description: Product documentation
     repository: artifact-pages/artifact-pages
-    sourcePath: docs/public/sites/en
+    sourcePath: docs/guide/en
 `
 	target := `schemaVersion: 1
 provider: local

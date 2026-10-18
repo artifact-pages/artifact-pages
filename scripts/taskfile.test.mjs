@@ -11,7 +11,7 @@ function run(args, cwd = root) {
 }
 
 test('site sync requires an explicit site and source before building', { skip: !available }, () => {
-  for (const vars of [[], ['SITE=guide'], ['SOURCE=docs/public/sites/guide']]) {
+  for (const vars of [[], ['SITE=smoke'], ['SOURCE=fixtures/actions-smoke/site']]) {
     const result = run(['cli:site:sync', ...vars]);
     assert.notEqual(result.status, 0);
     assert.match(result.output, /missing required variables/);
@@ -21,12 +21,12 @@ test('site sync requires an explicit site and source before building', { skip: !
 
 test('Cloudflare tasks use the fixed base-then-overlay config stack', { skip: !available }, () => {
   for (const [task, vars] of [
-    ['site:sync', ['SITE=guide', 'SOURCE=docs/public/sites/guide']],
+    ['site:sync', ['SITE=smoke', 'SOURCE=fixtures/actions-smoke/site']],
     ['registry:sync', []],
     ['app:remove', []],
-    ['preview:remove', ['SITE=guide', 'GROUP=pr:42']],
+    ['preview:remove', ['SITE=smoke', 'GROUP=pr:42']],
     ['app:deploy', []],
-    ['preview:publish', ['SITE=guide', 'SOURCE=docs/public/sites/guide', 'BASE_URL=https://artifact-pages.dev']],
+    ['preview:publish', ['SITE=smoke', 'SOURCE=fixtures/actions-smoke/site', 'BASE_URL=http://localhost:4179']],
   ]) {
     const result = run(['--dry', `cli:${task}:cloudflare`, ...vars, 'DRY_RUN=true']);
     assert.equal(result.status, 0, result.output);
@@ -40,7 +40,7 @@ test('ordinary site sync preserves quoting and optional config', { skip: !availa
   assert.equal(result.status, 0, result.output);
   assert.match(result.output, /--source 'docs\/path with spaces'/);
   assert.match(result.output, /--config 'config with spaces.yaml'/);
-  const normal = run(['--dry', 'cli:site:sync', 'SITE=guide', 'SOURCE=docs/public/sites/guide']);
+  const normal = run(['--dry', 'cli:site:sync', 'SITE=smoke', 'SOURCE=fixtures/actions-smoke/site']);
   assert.equal(normal.status, 0, normal.output);
   assert.doesNotMatch(normal.output, /--config|--dry-run/);
 });
@@ -52,7 +52,7 @@ test('deployment input and dry-run values are validated', { skip: !available }, 
   const archive = run(['--dry', 'cli:app:deploy', 'ARCHIVE=a.tar.gz', 'DRY_RUN=true']);
   assert.equal(archive.status, 0, archive.output);
   assert.match(archive.output, /--archive a.tar.gz/);
-  const result = run(['cli:site:sync', 'SITE=guide', 'SOURCE=docs/public/sites/guide', 'DRY_RUN=maybe']);
+  const result = run(['cli:site:sync', 'SITE=smoke', 'SOURCE=fixtures/actions-smoke/site', 'DRY_RUN=maybe']);
   assert.notEqual(result.status, 0);
   assert.doesNotMatch(result.output, /go build/);
 });
@@ -78,14 +78,14 @@ test('every CLI subcommand has a corresponding task', { skip: !available }, () =
 test('new tasks validate required inputs without running the CLI', { skip: !available }, () => {
   for (const [name, vars] of [
     ['preview:remove', ['SITE=guide']],
-    ['preview:publish', ['SITE=guide', 'SOURCE=docs/public/sites/guide']],
-    ['index:build', ['SITE=guide', 'SOURCE=docs/public/sites/guide']],
+    ['preview:publish', ['SITE=smoke', 'SOURCE=fixtures/actions-smoke/site']],
+    ['index:build', ['SITE=smoke', 'SOURCE=fixtures/actions-smoke/site']],
     ['config:set-default', []],
     ['lock:inspect', []],
     ['lock:inspect', ['SITE=guide', 'SCOPE=registry']],
     ['lock:recover', ['SITE=guide']],
     ['lock:recover', ['SITE=guide', 'OBSERVED_ETAG=abc', 'DRY_RUN=true']],
-    ['index:build', ['SITE=guide', 'SOURCE=docs/public/sites/guide', 'OUT=.local/index', 'DRY_RUN=true']],
+    ['index:build', ['SITE=smoke', 'SOURCE=fixtures/actions-smoke/site', 'OUT=.local/index', 'DRY_RUN=true']],
     ['config:set-default', ['LOCATOR=artifact-pages.yaml', 'DRY_RUN=true']],
   ]) {
     const result = run([`cli:${name}`, ...vars]);
@@ -97,9 +97,9 @@ test('new tasks validate required inputs without running the CLI', { skip: !avai
 test('new tasks map variables onto CLI arguments safely', { skip: !available }, () => {
   for (const [name, vars, expected] of [
     ['registry:sync', ['DRY_RUN=true'], /registry sync.*--dry-run/],
-    ['preview:remove', ['SITE=guide', 'GROUP=pr:42', 'DRY_RUN=true'], /preview remove --site guide --group pr:42.*--dry-run/],
+    ['preview:remove', ['SITE=smoke', 'GROUP=pr:42', 'DRY_RUN=true'], /preview remove --site smoke --group pr:42.*--dry-run/],
     ['app:remove', ['DRY_RUN=true'], /app remove.*--dry-run/],
-    ['preview:publish', ['SITE=guide', 'SOURCE=docs/public/sites/guide', 'BASE_URL=https://artifact-pages.dev', 'PULL_REQUEST=42', 'HEAD=feature', 'DEFAULT_REF=origin/main', 'INCLUDE=assets/*.css', 'DRY_RUN=true'], /preview publish.*--head feature.*--default-ref origin\/main.*--pull-request 42.*--include 'assets\/\*.css'.*--dry-run/],
+    ['preview:publish', ['SITE=smoke', 'SOURCE=fixtures/actions-smoke/site', 'BASE_URL=http://localhost:4179', 'PULL_REQUEST=42', 'HEAD=feature', 'DEFAULT_REF=origin/main', 'INCLUDE=assets/*.css', 'DRY_RUN=true'], /preview publish.*--head feature.*--default-ref origin\/main.*--pull-request 42.*--include 'assets\/\*.css'.*--dry-run/],
     ['index:build', ['SITE=guide', 'SOURCE=docs/path with spaces', 'OUT=.local/index output'], /index build --site guide --source 'docs\/path with spaces' --out '.local\/index output'/],
     ['config:set-default', ['LOCATOR=github://acme/admin/config.yaml?ref=main'], /config set-default 'github:\/\/acme\/admin\/config.yaml\?ref=main'/],
     ['lock:inspect', ['SITE=guide'], /lock inspect --scope site --site guide/],

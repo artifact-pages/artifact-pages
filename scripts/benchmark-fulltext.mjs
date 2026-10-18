@@ -72,7 +72,7 @@ assert(probes.find(({ id }) => id.endsWith('.html')).text.includes('再試行と
 assert(probes.find(({ id }) => id.endsWith('.md')).text.includes('retryBudget = 3'))
 assert(probes.find(({ id }) => id.endsWith('.md')).text.includes('timeout 30'))
 const extractionStart = performance.now()
-const real = extract(['fixtures/storage/_artifacts', 'docs/public/sites/guide'])
+const real = extract(['fixtures/storage/_artifacts'])
 const extractionMs = performance.now() - extractionStart
 const realIndex = build(real)
 const queries = ['cache', 'retry', 'timeout', '検索', '再試行', 'ＡＰＩ', 'API cache', '本', 'no-such-body-token', '']

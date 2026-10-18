@@ -12,13 +12,15 @@ task web:serve
 
 Local serving defaults to port 4179 and `.local/public-site/storage`, matching the local deployment config. `task web:serve PORT=4180 STORAGE=./.local/other/storage` changes only serving; keep the selected CLI config's `local.root` aligned with STORAGE. It does not register sites, publish documents, or deploy a bundle to storage.
 
+The public guide and architecture sources live in the [artifact-pages/docs repository](https://github.com/artifact-pages/docs); their publish workflows and local config live there too. The Taskfile examples here use this repository's committed `smoke` fixture and are for local task and CLI development.
+
 ## Publish and deploy
 
 Publishing requires both SITE and SOURCE. Every mutation task builds the CLI before invoking it. CONFIG is optional for ordinary tasks; without it the CLI uses its own config resolution rules. DRY_RUN accepts only `true` or `false` and defaults to `false`.
 
 ~~~sh
-task cli:site:sync SITE=guide SOURCE=docs/public/sites/guide DRY_RUN=true
-task cli:site:sync SITE=guide SOURCE=docs/public/sites/guide
+task cli:site:sync SITE=smoke SOURCE=fixtures/actions-smoke/site DRY_RUN=true
+task cli:site:sync SITE=smoke SOURCE=fixtures/actions-smoke/site
 task cli:registry:sync DRY_RUN=true
 task cli:app:deploy ARCHIVE=.local/releases/artifact-pages-web-v1.2.3.tar.gz DRY_RUN=true
 task cli:app:deploy VERSION=1.2.3 DRY_RUN=true
@@ -30,7 +32,7 @@ Registry sync reconciles the complete desired `sites` mapping and removes sites 
 
 ~~~sh
 task cli:registry:sync:cloudflare DRY_RUN=true
-task cli:site:sync:cloudflare SITE=guide SOURCE=docs/public/sites/guide DRY_RUN=true
+task cli:site:sync:cloudflare SITE=smoke SOURCE=fixtures/actions-smoke/site DRY_RUN=true
 task cli:app:deploy:cloudflare VERSION=1.2.3 DRY_RUN=true
 ~~~
 
@@ -48,17 +50,16 @@ task cli:registry:sync DRY_RUN=true
 task cli:registry:sync:cloudflare DRY_RUN=true
 
 task cli:app:remove DRY_RUN=true
-task cli:preview:remove SITE=guide GROUP=pr:42 DRY_RUN=true
-task cli:preview:remove:cloudflare SITE=guide GROUP=pr:42 DRY_RUN=true
+task cli:preview:remove SITE=smoke GROUP=pr:42 DRY_RUN=true
+task cli:preview:remove:cloudflare SITE=smoke GROUP=pr:42 DRY_RUN=true
 
-task cli:preview:publish SITE=guide SOURCE=docs/public/sites/guide BASE_URL=http://localhost:4179 DRY_RUN=true
-task cli:preview:publish:cloudflare SITE=guide SOURCE=docs/public/sites/guide BASE_URL=https://artifact-pages.dev PULL_REQUEST=42 DRY_RUN=true
+task cli:preview:publish SITE=smoke SOURCE=fixtures/actions-smoke/site BASE_URL=http://localhost:4179 DRY_RUN=true
 
 # Local index output, not a publish operation.
-task cli:index:build SITE=guide SOURCE=docs/public/sites/guide OUT=.local/index-only
+task cli:index:build SITE=smoke SOURCE=fixtures/actions-smoke/site OUT=.local/index-only
 task cli:config:set-default LOCATOR=artifact-pages.yaml
 
-task cli:lock:inspect SITE=guide
+task cli:lock:inspect SITE=smoke
 task cli:lock:inspect:cloudflare SCOPE=registry
 # Only after confirming the owner is stale; preserve the observed ETag exactly.
 task cli:lock:recover:cloudflare SCOPE=registry OBSERVED_ETAG='"observed-etag"'
