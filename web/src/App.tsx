@@ -309,6 +309,8 @@ function SitePage({
       onSetThemeMode={onSetThemeMode}
       index={index}
       fullTextSearch={fullTextSearch}
+      siteDiscoveryStatus={siteDiscoveryStatus}
+      onRetryDiscovery={retryDiscovery}
     />
   )
 }
