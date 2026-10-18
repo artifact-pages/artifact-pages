@@ -48,3 +48,5 @@ A large index on a slow but working connection either loads or shows an explanat
 ## Decision
 
 Owner, 2026-10-18: option 3. The total 20 s deadline stays as it is. The implied minimum throughput and the reliance on compressed delivery are documented as a constraint in the [specification](../../specification.md#8-browser-ux) ("Site index load deadline"). No code change.
+
+On AWS, CloudFront compresses only objects between 1,000 and 10,000,000 bytes and the CLI stores `index.json` uncompressed, so a site index above 10 MB is delivered uncompressed.
