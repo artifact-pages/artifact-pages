@@ -1,7 +1,8 @@
 # At 50,000 pages, 38% of documents get no search snippet and later folders lose snippets first
 
-- Status: Open
+- Status: Done
 - Priority: P3
+- Assignee: Claude
 - Area: Search / snippet packs (writer budget and results page)
 - Source: T25 extended local measurements 2026-10-17, build `c7d5d2b9`
 - Related: [TD20](../technical-design/TD20-search-results-page-and-snippet-packs.md) (defines the 256 KiB per-document and 32 MiB per-site limits), [ISSUE-085](ISSUE-085-page-text-search-snippets.md) (snippets in results), [T25](../verification/T25-web-first-load-and-search-at-scale.md)
@@ -35,7 +36,12 @@ At the site sizes the launch advertises, a reader can tell why a result has no s
 
 ## Acceptance criteria
 
-- [ ] The owner chooses an option (or keeps the behaviour with documentation).
-- [ ] For a 50,000-page benchmark site, the share of documents without a snippet and the order of omission match the chosen behaviour, checked in the manifest.
-- [ ] The reader shows omitted results consistently (for example, a note or an excerpt-less layout) and this is covered by a test.
-- [ ] The T25 report records the re-measurement.
+- [x] The owner chooses an option (or keeps the behaviour with documentation): option 3, see Decision.
+- [x] ~~For a 50,000-page benchmark site, the share of documents without a snippet and the order of omission match the chosen behaviour, checked in the manifest.~~ (not applicable: owner chose option 3 on 2026-10-18)
+- [x] ~~The reader shows omitted results consistently (for example, a note or an excerpt-less layout) and this is covered by a test.~~ (not applicable: owner chose option 3 on 2026-10-18)
+- [x] ~~The T25 report records the re-measurement.~~ (not applicable: owner chose option 3 on 2026-10-18)
+- [x] The constraint is documented in the specification (§8) and linked from this ticket.
+
+## Decision
+
+Owner, 2026-10-18: option 3. The 32 MiB site and 256 KiB document limits and the path-order omission stay as they are. The behaviour, the T25 figure and what readers see are documented as a constraint in the [specification](../../specification.md#search) ("Snippet budget at scale"). No code change.
