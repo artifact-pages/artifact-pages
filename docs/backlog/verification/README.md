@@ -23,4 +23,4 @@ Each ticket records one independently verifiable contract or measurement. Status
 | [T24](T24-pre-launch-browser-and-keyboard-matrix.md) | Open | Pre-launch browser, phone and keyboard matrix |
 | [T25](T25-web-first-load-and-search-at-scale.md) | In progress | Web first load and search at the advertised site size |
 | [T26](T26-cli-publish-memory-vs-source-bytes.md) | Done | CLI publish peak memory against source bytes |
-| [T27](T27-launch-hosting-cost-model.md) | Open | Launch hosting cost model from recorded request counts and storage |
+| [T27](T27-launch-hosting-cost-model.md) | In progress | Launch hosting cost model from recorded request counts and storage |
