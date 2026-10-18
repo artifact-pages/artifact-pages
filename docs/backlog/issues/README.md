@@ -124,7 +124,7 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-109](ISSUE-109-preview-reading-context-and-entry.md) | Done | P2 | Preview reading needs shared app context, standard reader entry links and coherent PR/revision metadata; design after ISSUE-108. |
 | [ISSUE-110](ISSUE-110-site-index-deadline-covers-body-download.md) | Done | P2 | The site index deadline covers the body download, so a large index on a slow link fails every time and Try again cannot recover. |
 | [ISSUE-111](ISSUE-111-snippet-budget-omits-late-documents-at-scale.md) | Done | P3 | At 50,000 pages, 38% of documents get no search snippet because of the 32 MiB site budget, and later folders lose snippets first. |
-| [ISSUE-112](ISSUE-112-aws-large-generated-json-delivery.md) | Open | P2 | AWS large generated JSON exceeds CloudFront's automatic-compression window; pre-encode site index and search manifest with a settled CLI 0.5.0 boundary. |
+| [ISSUE-112](ISSUE-112-aws-large-generated-json-delivery.md) | In progress | P2 | AWS large generated JSON exceeds CloudFront's automatic-compression window; pre-encode site index and search manifest with a settled CLI 0.5.0 boundary. |
 
 ISSUE-013's verified completion record is retained in Git history.
 

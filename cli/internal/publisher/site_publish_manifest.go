@@ -1,6 +1,8 @@
 package publisher
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -11,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/artifact-pages/artifact-pages/cli/internal/indexer"
 )
@@ -52,12 +55,49 @@ type sitePublishDiff struct {
 	transaction      *sitePublishTransaction
 }
 
-func sitePublishBuildOptions(siteID, title, description, sourceDir, ref string, identity indexer.GitSourceIdentity) indexer.BuildOptions {
+func sitePublishBuildOptions(siteID, title, description, sourceDir, ref string, identity indexer.GitSourceIdentity, backend DeploymentBackend) indexer.BuildOptions {
+	inputPolicy := sitePublishInputPolicy
+	if selectedSiteGeneratedJSONEncoding(backend) == "gzip" {
+		inputPolicy += ";aws-generated-json-gzip-v1"
+	}
 	return indexer.BuildOptions{
 		SiteID: siteID, SiteTitle: title, SiteDescription: description, SourceDir: sourceDir,
 		Repository: identity.Repository, RepositoryURL: identity.RepositoryURL, Ref: ref,
-		RejectSymlinks: true, InputPolicy: sitePublishInputPolicy,
+		RejectSymlinks: true, InputPolicy: inputPolicy,
 	}
+}
+
+func encodeSiteGeneratedJSON(backend DeploymentBackend, relative string, plain []byte) ([]byte, string, error) {
+	encoding := ""
+	if relative == "index.json" || relative == "search/manifest.json" {
+		encoding = selectedSiteGeneratedJSONEncoding(backend)
+	}
+	return encodeSiteGeneratedJSONWithEncoding(relative, plain, encoding)
+}
+
+func encodeSiteGeneratedJSONWithEncoding(relative string, plain []byte, encoding string) ([]byte, string, error) {
+	if encoding == "" {
+		return plain, "", nil
+	}
+	if encoding != "gzip" || (relative != "index.json" && relative != "search/manifest.json") {
+		return nil, "", fmt.Errorf("unsupported generated site JSON encoding %q for %s", encoding, relative)
+	}
+	var compressed bytes.Buffer
+	writer, err := gzip.NewWriterLevel(&compressed, gzip.BestCompression)
+	if err != nil {
+		return nil, "", fmt.Errorf("create gzip writer for generated site %s: %w", relative, err)
+	}
+	writer.Header.ModTime = time.Time{}
+	writer.Header.Name = ""
+	writer.Header.Comment = ""
+	writer.Header.OS = 255
+	if _, err := writer.Write(plain); err != nil {
+		return nil, "", fmt.Errorf("gzip generated site %s: %w", relative, err)
+	}
+	if err := writer.Close(); err != nil {
+		return nil, "", fmt.Errorf("finish gzip generated site %s: %w", relative, err)
+	}
+	return compressed.Bytes(), "gzip", nil
 }
 
 func loadSitePublishSnapshot(ctx context.Context, backend ConditionalObjectBackend, siteID string, prepared *indexer.PreparedBuild, reconcile bool, retry siteCacheRetry, retryETag string) (sitePublishSnapshot, error) {
@@ -294,6 +334,10 @@ func buildSitePublishDiff(ctx context.Context, backend ConditionalObjectBackend,
 		if readErr != nil {
 			return sitePublishDiff{}, fmt.Errorf("read generated site %s: %w", file.name, readErr)
 		}
+		data, encoding, encodeErr := encodeSiteGeneratedJSON(backend, file.name, data)
+		if encodeErr != nil {
+			return sitePublishDiff{}, encodeErr
+		}
 		key := "_indexes/" + siteID + "/" + file.name
 		contentType, cache := "application/json; charset=utf-8", indexCacheControl
 		if strings.HasSuffix(file.name, ".gz") {
@@ -301,7 +345,7 @@ func buildSitePublishDiff(ctx context.Context, backend ConditionalObjectBackend,
 		}
 		desired = append(desired, desiredSiteObject{
 			key: key, relative: file.name, digest: sha256Hex(data), data: data,
-			object: Object{ContentType: contentType, ContentDisposition: "inline", Cache: cache, Metadata: map[string]string{"artifact-pages-site": siteID}},
+			object: Object{ContentType: contentType, ContentDisposition: "inline", ContentEncoding: encoding, Cache: cache, Metadata: map[string]string{"artifact-pages-site": siteID}},
 		})
 	}
 	sourceCount := len(prepared.SourceFiles())
@@ -466,9 +510,24 @@ func preserveGeneratedAt(ctx context.Context, backend ConditionalObjectBackend, 
 		if err != nil {
 			return fmt.Errorf("read deployed site %s for generatedAt preservation: %w", object.key, err)
 		}
-		if sameGeneratedProjection(current.Bytes, object.data) {
-			object.data = current.Bytes
-			object.digest = sha256Hex(current.Bytes)
+		currentBytes := current.Bytes
+		if previous.ContentEncoding != "" {
+			decoded, decodeErr := decodeSiteGeneratedJSON(currentBytes, previous.ContentEncoding)
+			if decodeErr != nil {
+				return fmt.Errorf("decode deployed site %s for generatedAt preservation: %w", object.key, decodeErr)
+			}
+			currentBytes = decoded
+		}
+		desiredBytes, decodeErr := decodeSiteGeneratedJSON(object.data, object.object.ContentEncoding)
+		if decodeErr != nil {
+			return fmt.Errorf("decode generated site %s for generatedAt preservation: %w", object.key, decodeErr)
+		}
+		if sameGeneratedProjection(currentBytes, desiredBytes) {
+			object.data, _, err = encodeSiteGeneratedJSONWithEncoding(object.relative, currentBytes, object.object.ContentEncoding)
+			if err != nil {
+				return fmt.Errorf("encode deployed site %s for generatedAt preservation: %w", object.key, err)
+			}
+			object.digest = sha256Hex(object.data)
 		}
 	}
 	return nil
@@ -534,7 +593,7 @@ func rowFromHead(siteID, key string, info ObjectInfo) (sitePublishObject, bool) 
 	if info.ContentDisposition == "" {
 		info.ContentDisposition = "inline"
 	}
-	if info.ContentType != expectedType || info.ContentDisposition != expectedDisposition || info.ContentEncoding != expectedEncoding || info.CacheControl != expectedCache {
+	if info.ContentType != expectedType || info.ContentDisposition != expectedDisposition || !validSitePublishContentEncoding(siteID, key, info.ContentEncoding, expectedEncoding) || info.CacheControl != expectedCache {
 		return sitePublishObject{}, false
 	}
 	return sitePublishObject{

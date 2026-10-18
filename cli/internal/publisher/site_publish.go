@@ -128,7 +128,7 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 		if err := rejectLocalSourceOverlap(conditional, sourceDir); err != nil {
 			return Result{}, err
 		}
-		preparedOptions := sitePublishBuildOptions(options.SiteID, entry.Name, entry.Description, sourceDir, options.Ref, identity)
+		preparedOptions := sitePublishBuildOptions(options.SiteID, entry.Name, entry.Description, sourceDir, options.Ref, identity, conditional)
 		preparedOptions.PriorState = sitePriorStateLoader(conditional, options.SiteID)
 		prepared, err := indexer.PrepareBuild(operationCtx, preparedOptions)
 		if err != nil {
@@ -389,6 +389,10 @@ func buildSitePlan(ctx context.Context, backend ConditionalObjectBackend, siteID
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("read generated site %s: %w", generated.name, err)
 		}
+		data, encoding, err := encodeSiteGeneratedJSON(backend, generated.name, data)
+		if err != nil {
+			return nil, nil, nil, err
+		}
 		key := indexPrefix + generated.name
 		if !artifactChanged && !strings.HasPrefix(generated.name, "search/") {
 			current, _, readErr := backend.GetObject(ctx, key)
@@ -407,7 +411,7 @@ func buildSitePlan(ctx context.Context, backend ConditionalObjectBackend, siteID
 			key: key, relative: generated.name, data: data,
 			digest: sha256Hex(data), object: Object{
 				ContentType: contentType, ContentDisposition: "inline",
-				Cache: cache, Metadata: map[string]string{"artifact-pages-site": siteID},
+				ContentEncoding: encoding, Cache: cache, Metadata: map[string]string{"artifact-pages-site": siteID},
 			},
 		})
 	}

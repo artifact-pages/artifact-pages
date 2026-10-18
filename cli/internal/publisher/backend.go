@@ -83,6 +83,20 @@ type publishStateReadPolicy interface {
 	publishStateReadMode() publishStateReadMode
 }
 
+// siteGeneratedJSONEncodingPolicy identifies an adapter's selected HTTP
+// representation for the two large generated JSON objects. It is intentionally
+// an adapter capability, rather than a hostname or generic compression option.
+type siteGeneratedJSONEncodingPolicy interface {
+	siteGeneratedJSONContentEncoding() string
+}
+
+func selectedSiteGeneratedJSONEncoding(backend DeploymentBackend) string {
+	if policy, ok := backend.(siteGeneratedJSONEncodingPolicy); ok {
+		return policy.siteGeneratedJSONContentEncoding()
+	}
+	return ""
+}
+
 func selectedPublishStateReadMode(backend DeploymentBackend) publishStateReadMode {
 	if policy, ok := backend.(publishStateReadPolicy); ok && policy.publishStateReadMode() == publishStateReadGetOnly {
 		return publishStateReadGetOnly
