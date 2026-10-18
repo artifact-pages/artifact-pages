@@ -152,9 +152,9 @@ func TestCloudflareGenerationIsDeterministicCheckableAndLocal(t *testing.T) {
 		t.Fatal("site-sync does not pass the config from its own admin commit")
 	}
 	for _, reference := range []string{
-		"artifact-pages/publish-action@8d66d7a606fc047715d25e8acdb8f09309ad4991 # v0.2.0",
-		"artifact-pages/preview-action@d4d96885d0d430bbe1591d3cc11207d92e680339 # v0.2.0",
-		"artifact-pages/registry-action@47ff737c5751748608afc3a1cd4763696f319f45 # v0.2.0",
+		"artifact-pages/publish-action@a95973781144589aeb03362ccfe93a3f809623ab # v0.3.0",
+		"artifact-pages/preview-action@838f97d870537aaeeb04f90c97bdcd116015575e # v0.3.0",
+		"artifact-pages/registry-action@d5abdecf0383f610b34b16f4a5b681699828d96d # v0.3.0",
 	} {
 		if !strings.Contains(action+registry, reference) {
 			t.Errorf("generated files missing pinned Action %q", reference)
@@ -202,6 +202,7 @@ func TestAWSGenerationDerivesRolesFromConfigAtRuntime(t *testing.T) {
 		t.Fatalf("AWS setup created the retired role map: stat err=%v", err)
 	}
 	action := string(snapshot[".github/actions/site-sync/action.yml"])
+	generated := action + string(snapshot[".github/workflows/registry.yml"])
 	for _, expected := range []string{
 		"artifact-pages_v${cli_version}_linux_amd64",
 		"artifact-pages_v${cli_version}_checksums.txt",
@@ -215,9 +216,12 @@ func TestAWSGenerationDerivesRolesFromConfigAtRuntime(t *testing.T) {
 		"aws.accountId matches the role's AWS account",
 		"role-to-assume: ${{ steps.role.outputs['role-arn'] }}",
 		"aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0",
+		"artifact-pages/publish-action@a95973781144589aeb03362ccfe93a3f809623ab # v0.3.0",
+		"artifact-pages/preview-action@838f97d870537aaeeb04f90c97bdcd116015575e # v0.3.0",
+		"artifact-pages/registry-action@d5abdecf0383f610b34b16f4a5b681699828d96d # v0.3.0",
 		"aws-region: us-east-1",
 	} {
-		if !strings.Contains(action, expected) {
+		if !strings.Contains(generated, expected) {
 			t.Errorf("AWS composite action missing %q", expected)
 		}
 	}

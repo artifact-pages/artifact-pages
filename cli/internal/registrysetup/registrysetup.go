@@ -70,13 +70,13 @@ type actionPin struct {
 	Version string
 }
 
-// These values are the peeled commits of the published v0.2.0 tags, read on
-// 2026-10-12. Keeping the values in source makes setup reproducible and usable
+// These values are the peeled commits of the published v0.3.0 tags, read on
+// 2026-10-18. Keeping the values in source makes setup reproducible and usable
 // without network access. Update this table only with a reviewed release.
 var pins = map[string]actionPin{
-	"artifact-pages/publish-action":         {SHA: "8d66d7a606fc047715d25e8acdb8f09309ad4991", Version: "v0.2.0"},
-	"artifact-pages/preview-action":         {SHA: "d4d96885d0d430bbe1591d3cc11207d92e680339", Version: "v0.2.0"},
-	"artifact-pages/registry-action":        {SHA: "47ff737c5751748608afc3a1cd4763696f319f45", Version: "v0.2.0"},
+	"artifact-pages/publish-action":         {SHA: "a95973781144589aeb03362ccfe93a3f809623ab", Version: "v0.3.0"},
+	"artifact-pages/preview-action":         {SHA: "838f97d870537aaeeb04f90c97bdcd116015575e", Version: "v0.3.0"},
+	"artifact-pages/registry-action":        {SHA: "d5abdecf0383f610b34b16f4a5b681699828d96d", Version: "v0.3.0"},
 	"aws-actions/configure-aws-credentials": {SHA: "e1253824e5c10ff9df46874f81ed3ec929e19cfd", Version: "v6.3.0"},
 }
 
