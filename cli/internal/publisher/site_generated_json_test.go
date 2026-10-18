@@ -5,16 +5,49 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/artifact-pages/artifact-pages/cli/internal/fulltext"
+	"github.com/artifact-pages/artifact-pages/cli/internal/indexer"
 )
 
 type awsGeneratedJSONTestBackend struct{ *siteReconcileBackend }
 
 func (*awsGeneratedJSONTestBackend) siteGeneratedJSONContentEncoding() string { return "gzip" }
+
+func TestSitePublishInputFingerprintIncludesAWSGeneratedJSONPolicy(t *testing.T) {
+	root := createPublisherCheckout(t, "git@github.com:acme/sre.git")
+	writePublisherFixture(t, root, "docs/artifacts/guide.md", []byte("# Guide\n\nPolicy fingerprint fixture."))
+	identity := indexer.GitSourceIdentity{
+		Repository: "acme/sre", RepositoryURL: "https://github.com/acme/sre", SourcePath: "docs/artifacts",
+	}
+	const releasedPlainPolicy = "publisher-site-projection-v1;http-policy-v1;index-schema-v1;fulltext-policy-v2"
+	plainOptions := sitePublishBuildOptions("sre", "SRE", "", filepath.Join(root, "docs/artifacts"), "", identity, &cloudflareBackend{})
+	awsOptions := sitePublishBuildOptions("sre", "SRE", "", filepath.Join(root, "docs/artifacts"), "", identity, &awsBackend{})
+	fixedTime := time.Date(2026, time.October, 18, 0, 0, 0, 0, time.UTC)
+	plainOptions.Now = func() time.Time { return fixedTime }
+	awsOptions.Now = func() time.Time { return fixedTime }
+	if sitePublishInputPolicy != releasedPlainPolicy || plainOptions.InputPolicy != releasedPlainPolicy {
+		t.Fatalf("non-AWS input policy = %q and base policy = %q; want released policy %q", plainOptions.InputPolicy, sitePublishInputPolicy, releasedPlainPolicy)
+	}
+	if awsOptions.InputPolicy != releasedPlainPolicy+";aws-generated-json-gzip-v1" {
+		t.Fatalf("AWS input policy = %q; want generated-JSON gzip policy", awsOptions.InputPolicy)
+	}
+	plainPrepared, err := indexer.PrepareBuild(context.Background(), plainOptions)
+	if err != nil {
+		t.Fatalf("prepare non-AWS inputs: %v", err)
+	}
+	awsPrepared, err := indexer.PrepareBuild(context.Background(), awsOptions)
+	if err != nil {
+		t.Fatalf("prepare AWS inputs: %v", err)
+	}
+	if plainPrepared.InputRoot() == awsPrepared.InputRoot() {
+		t.Fatalf("identical source inputs have the same plain/AWS root %q", plainPrepared.InputRoot())
+	}
+}
 
 func TestSiteGeneratedJSONEncodingIsAdapterSelectedAndDeterministic(t *testing.T) {
 	plain := []byte(`{"schemaVersion":1,"synthetic":true}`)
