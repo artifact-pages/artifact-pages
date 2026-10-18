@@ -8,9 +8,32 @@ This guide connects an existing private R2 bucket to a Cloudflare custom domain,
 
 Create one private R2 bucket for the application and the changing projection. The bucket holds `index.html`, `preview-bridge.js`, `assets/*`, `/_indexes/*`, `/_artifacts/*`, `/_previews/*`, and private `/_control/*` coordination objects.
 
+Call the module from your own Terraform configuration. Lead with the Terraform Registry:
+
+```hcl
+module "artifact_pages" {
+  source  = "artifact-pages/artifact-pages/cloudflare"
+  version = "0.1.1"
+
+  account_id             = var.cloudflare_account_id
+  zone_id                = var.cloudflare_zone_id
+  bucket_name            = "artifact-pages"
+  public_hostname        = "artifacts.example.com"
+  preview_retention_days = 14
+}
+```
+
+The alternative is the Git source of the generated package, [artifact-pages/terraform-cloudflare-artifact-pages](https://github.com/artifact-pages/terraform-cloudflare-artifact-pages). Use it without a `version` argument:
+
+```hcl
+source = "git::https://github.com/artifact-pages/terraform-cloudflare-artifact-pages.git?ref=v0.1.1"
+```
+
+The module is published on the Terraform Registry as [artifact-pages/artifact-pages/cloudflare](https://registry.terraform.io/modules/artifact-pages/artifact-pages/cloudflare). The caller owns the Cloudflare provider configuration (`cloudflare/cloudflare`, `>= 5.24.0, < 6.0.0`). `account_id`, `zone_id`, `public_hostname` and `preview_retention_days` are required; every other input has a default, including `bucket_name` (`artifact-pages`). The module creates the private R2 bucket named by `bucket_name` and attaches delivery and preview retention to it, so import an already existing bucket into `module.artifact_pages.cloudflare_r2_bucket.origin` before the first apply, or use the in-repository example below. Its outputs are `bucket_name`, `public_base_url` and `artifact_pages_deployment_config_yaml`, the non-secret CLI deployment configuration of §2. The other inputs described below (`connect_custom_domain`, `waf_custom_rules`, the `existing_*_rules` preservation inputs, `registry_reader`) are inputs of the same module; see its [README](../../terraform/modules/cloudflare/README.md).
+
 Use [the Cloudflare delivery Terraform reference](../../terraform/modules/cloudflare/modules/delivery/README.md) to attach `artifacts.example.com` (replace it with your hostname) and configure the route, origin-cache, response-header, and unchanged-delivery rules. The delivery module manages the bucket's `r2.dev` domain and keeps it disabled (`cloudflare_r2_managed_domain`), even for a bucket created elsewhere. The setting is create-only and cannot be imported, so verify after the first apply that `r2.dev` is disabled. The Cloudflare provider cannot import an existing R2 custom domain, so set `connect_custom_domain = false` when the hostname is already connected and verify its enabled/TLS settings separately. Configure a Cloudflare Access application separately if the whole hostname should require authentication. Access is a host-level viewer boundary; the publisher does not implement per-site authorization.
 
-The in-repository [Cloudflare caller example](../../examples/cloudflare/terraform) composes the delivery and [Cloudflare R2 retention module](../../terraform/modules/cloudflare/modules/retention/README.md) against the same existing bucket. The local deployment root under `terraform/deployments/cloudflare` instead calls the root entry module `terraform/modules/cloudflare`. Set `preview_retention_days` in the caller's `terraform.tfvars`; preview retention belongs to provider infrastructure and is not a CLI YAML setting. The retention resource owns the complete bucket lifecycle rule set. Inspect existing rules and merge every rule that must remain before applying it; lifecycle deletion is asynchronous and is not an immediate revocation mechanism.
+For work inside this repository, the in-repository [Cloudflare caller example](../../examples/cloudflare/terraform) composes the delivery and [Cloudflare R2 retention module](../../terraform/modules/cloudflare/modules/retention/README.md) against the same existing bucket. The local deployment root under `terraform/deployments/cloudflare` instead calls the root entry module `terraform/modules/cloudflare`. Set `preview_retention_days` in the caller's `terraform.tfvars`; preview retention belongs to provider infrastructure and is not a CLI YAML setting. The retention resource owns the complete bucket lifecycle rule set. Inspect existing rules and merge every rule that must remain before applying it; lifecycle deletion is asynchronous and is not an immediate revocation mechanism.
 
 The delivery module owns the complete zone root rulesets for the transform, cache, response-header, and configuration-settings phases. It owns the custom-firewall phase only when `waf_custom_rules` is set; the input defaults to `null`, which leaves that phase unmanaged. A configured policy owns the complete custom-firewall phase root and enables `prevent_destroy`; see the module README before retiring it. The configuration-settings rule turns off the edge features that rewrite HTML (email obfuscation, Rocket Loader, Automatic HTTPS Rewrites, Fonts, analytics injection, Polish) for the Artifact Pages hostname only, so artifacts and previews are delivered byte-for-byte; a zone that already has Configuration Rules must import that root and pass its rules through `existing_config_rules`. Review existing rules and import/merge them before applying; see its README for the exact resource addresses and preservation inputs. A Terraform apply uses `CLOUDFLARE_API_TOKEN` through the environment or a secret manager, with only the R2 custom/managed domain, R2 lifecycle, and zone Rulesets permissions needed by these modules, which include Transform Rules Edit, Cache Rules Edit, and Config Rules Edit. Zone WAF Edit is required only when `waf_custom_rules` is set. This infrastructure credential is separate from runtime CLI credentials. A CLI publisher uses either an explicit primary R2 key pair, with `CF_API_TOKEN` needed only for cache purge, or a single account `CF_API_TOKEN` from which the R2 credentials are derived (see §2). None of these credential values belong in Terraform variables, YAML, or the repository.
 
@@ -138,7 +161,7 @@ A role scoped to the exact registry and app-record objects, the exact lock, vers
 
 ## 3. Deploy the app and register sites
 
-From the admin repository, configure the Terraform provider token for infrastructure changes and then deploy the application bundle and reconcile the complete site registration set:
+From the admin repository, configure the Terraform provider token for infrastructure changes and then deploy the application bundle and reconcile the complete site registration set. If the admin repository calls the Registry module from §1, run `terraform init`, `plan` and `apply` in its own Terraform directory and skip the `terraform` lines below, which run the in-repository example and apply when you work inside this repository:
 
 ```sh
 terraform -chdir=examples/cloudflare/terraform init
