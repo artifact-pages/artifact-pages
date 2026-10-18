@@ -2,6 +2,8 @@
 
 Each ticket records one independently verifiable contract or measurement. Status lives in the ticket and is repeated here for navigation; update both when it changes.
 
+Shared execution preparation: [October 18 provider-proof plan](provider-proof-plan-2026-10-18.md) and [hosted fixture preparation](hosted-fixture-preparation-2026-10-18.md). These plans add no completed proof or execution authority; statuses remain in the existing tickets.
+
 | Ticket | Status | Verification |
 | --- | --- | --- |
 | [T4](T4-serving-boundary.md) | In progress | Serving routes and cache |

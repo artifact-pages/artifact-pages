@@ -40,3 +40,7 @@ Local serving is only an analogue. T15 records sampled Cloudflare/AWS freshness/
 [T22](T22-cache-purge-retry.md) closes the invalidation retry defect at its stated local/fake boundary. [T15](T15-provider-delivery.md) records Cloudflare October 1–2 canonical warm-URL removal/revalidation and AWS October 14 update (14 s)/unregister (10 s) observations; these are samples, not a global freshness guarantee. The [Cloudflare recovery record](../cloudflare-preview-recovery-proof.md) also proves one enforced runtime HTTP-fetch refusal, superseding the earlier rewritten-fixture limitation for that sample.
 
 Remaining: warm-browser fixed-name app assets across upgrade **and rollback**, full mutable/removed-object cache matrix, deployed invalidation-only failure/retry behavior and the missing route/resource cases on each provider. Use the coordinated plan in [workstreams](../workstreams.md#backend-next-wave-2026-10-18); cloud runs, deployment/rollback and disposable site mutations require a concrete owner approval. Keep In progress.
+
+## Coordinated execution plan
+
+The [October 18 provider-proof plan](provider-proof-plan-2026-10-18.md) owns the remaining shared execution matrix (P3, P7, P8), pinned inputs, commands, preservation/cleanup guards and itemized owner approvals. This is preparation only; no new provider result or execution approval is claimed.

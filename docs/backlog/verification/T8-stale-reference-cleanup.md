@@ -31,3 +31,7 @@ The local reader hides a catalog candidate when its manifest is confirmed missin
 ## Remaining — reconciled 2026-10-18
 
 Credit [Cloudflare lifecycle/reconciliation proof](../cloudflare-preview-lifecycle-proof.md): confirmed origin manifest deletion, main publication pruning only the missing revision, retained revision unchanged, warm list withdrawal and eventual direct-link unavailability. Natural lifecycle deletion timing is still unproven; simulated deletion is not expiry evidence. The parent provider checkbox stays open for AWS origin cleanup and deployed read-error/catalog-write-failure retry on each provider. Reuse one approved disposable scope with T5/T14/T15; preserve unknown/unavailable candidates and neighboring objects. No cloud execution is authorized by this record.
+
+## Coordinated execution plan
+
+The [October 18 provider-proof plan](provider-proof-plan-2026-10-18.md) owns the remaining shared execution matrix (P6, P9), pinned inputs, commands, preservation/cleanup guards and itemized owner approvals. This is preparation only; no new provider result or execution approval is claimed.

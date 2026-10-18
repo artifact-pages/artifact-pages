@@ -1,0 +1,235 @@
+# Coordinated provider proof and hosted fixture approval plan — October 18, 2026
+
+Prepared by Codex Sol for [Backend next wave items 2 and 4](../workstreams.md#backend-next-wave-2026-10-18). **Plan only; nothing here grants execution approval.** No cloud commands, account reads, applies, deployment, identity, fixture or settings changes were performed to prepare it. The owner may approve the numbered requests independently. Existing ticket statuses and assignees remain unchanged. The [hosted fixture preparation](hosted-fixture-preparation-2026-10-18.md) supplies item 2's exact repository delta.
+
+## Scope and decisions
+
+One evidence ledger serves T4/T5/T8/T14/T15 and IMP-73's custom-prefix runtime gate; each uncovered criterion appears once below. An execution can attach evidence to several tickets without repeating a test. Proof is per provider, version and egress, never a worldwide propagation or availability promise. GCP remains emulator-only; IMP-44/WAF, T16 adoption, release/Registry/Marketplace publication and production rollout are excluded. The accepted trusted same-origin HTML contract does not promise hostile-script or parent/storage isolation.
+
+Use a **new disposable AWS stack** in account `231136241959` to prove actual new-bucket bootstrap and custom-prefix setup together. Do not empty or alter the current AWS verification stack. Use the **existing Cloudflare verification deployment** in the separate account, with a coordinated app-deployment freeze, rather than attach a second module/state to its zone-root rulesets. Do not repurpose production for provider experiments. Lifecycle observation has a finite observation window, not a promise that the provider expires on schedule.
+
+Local harness implementation is future Luna work under Claude main, with cross review. This document fixes its inputs, commands and assertions; it does not pretend the proposed harness already exists. Before external execution, seal and review its exact diff and manifest (no unresolved placeholders), local failure tests and cleanup tests. Approval A4 covers obtaining inventory; A5–A9 authorize only the described bounds, and still require review/owner acceptance of any actual Terraform plan or not-yet-released pin. A changed resource list, identity, pin policy, cap or cleanup boundary returns to the owner.
+
+## Credited evidence (do not rerun without a coverage/version reason)
+
+| Existing sample | Credit / precise limit |
+| --- | --- |
+| [T4 local proof](T4-serving-boundary.md#evidence), [T6](T6-resources-navigation.md), [T17](T17-local-preview-retirement-e2e.md) | TD3 iframe/resources, sanitized Markdown, raw misses, local withdrawal and Actions parity. Emulator proof is complete at its boundary. |
+| [Cloudflare recovery](../cloudflare-preview-recovery-proof.md) October 2 | Distinct-new-head two-CLI race; SIGKILL after partial upload; observed-ETag recovery; stale-owner rejection; complete manifests/hashes; preserved original groups/neighbors. Also one runtime HTTP-fetch CSP refusal. |
+| [Cloudflare scoped credentials](../cloudflare-scoped-credentials-proof.md) | Registry reader/site writer separation and named native read/write denials; temporary 15-minute credentials, not all current scopes or token expiry. |
+| [Cloudflare lifecycle/reconciliation](../cloudflare-preview-lifecycle-proof.md) October 1–2 | Explicit manifest deletion, ordinary main publish prunes only missing revision, retained revision unchanged, warm list/direct-link revalidation. Natural expiry is **not** established. |
+| [T15 AWS October 13–14](T15-provider-delivery.md#aws-github-oidc-runs--october-14-2026-jst), #133/#137/#143 | Default CloudFront TLS, notices, configured OIDC admin/satellite success, negative subjects and write/delete boundaries, bootstrap on an **emptied** bucket. Update 14 s/unregister 10 s were SSO samples, not reference-role bounds. |
+| [T22](T22-cache-purge-retry.md) | Completed local/fake invalidation-only retry convergence. Deployed cache request/propagation remains below. |
+| [IMP-64](../implementation/IMP-64-generate-sync-terraform-packages.md), [IMP-73](../implementation/IMP-73-registry-setup-command.md) | Actual module sync/Registry delivery, generator/local tests; Stage D public no-write run `38114003134` and caller branch denial; default-prefix OIDC. Hosted guards and uncovered fixture cases only are in F64/F73. |
+
+Do not repeat historical Cloudflare production samples merely to obtain a newer date. New rows exercise missing scenarios or the isolated verify deployment. Current version records are inspected, not inferred from earlier prose.
+
+## Pin sheet and sealing rules
+
+| Component | Selected immutable baseline |
+| --- | --- |
+| Plan/source and local harness starting point | monorepo `b0d314e590cbb19aa563d56882527b47d5c44eb3` |
+| Released writer and registry-setup generator | CLI `v0.4.4`, source `060f28883abb25442f3cb1e9108f0de4570362fa`; verify release asset checksum and version/revision |
+| Web B / web A for warm upgrade/rollback | `web/v0.3.2` → `5e046db3a92ecdd90dde5b6eb9dc867c067dd1a1`; `web/v0.3.1` → `04783fb399c877dbe456f3355c2484348e174e88`; obtain archives/manifests/checksums and record SHA-256 |
+| Official Actions v0.2.0 | publish `8d66d7a606fc047715d25e8acdb8f09309ad4991`; preview `d4d96885d0d430bbe1591d3cc11207d92e680339`; registry `47ff737c5751748608afc3a1cd4763696f319f45`; app-deploy `8ee0d56d20bc46e2ee555b73f4cc402852f158f5` |
+| AWS OIDC Action | `aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd` (v6.3.0) |
+| Reference modules | Registry `artifact-pages/artifact-pages/aws` and `artifact-pages/artifact-pages/cloudflare`, exact `0.1.1`, monorepo source tags both peel to `f7096315531d2c124f9b2f64ff5f2393ff63ea7b`; resolve package commits and release.json through approved reads, compare generated payload |
+| Terraform / provider binaries | Terraform **1.16.4** (live verify tooling recorded by ops); AWS **6.66.0**, Cloudflare **5.26.0**, copy committed lockfiles and use `-lockfile=readonly`; no upgrade; Terraform 1.9.8 local CI is credited separately |
+| Browser and tools | Playwright and Chromium from baseline `package-lock.json` via `npm ci`; Go 1.26.0; Node 24; AWS CLI 2.27.41; record exact installed versions/image IDs in sealed manifest |
+| Future gzip lane only | CLI **0.5.0**, four Actions **v0.3.0**, bootstrap 0.5.0 / range `>=0.5.0 <0.6.0`; **not published at planning time**. A9 blocked until ISSUE-112 ships and exact released CLI source/asset SHA and all four Action SHAs/release.json are added to a reviewed pin-sheet amendment. Never use `main`, `latest` or invented release hashes. |
+
+Resolve all v0.2.0 published Action release.json ranges under A4; expected bootstrap 0.4.0/range `>=0.4.0 <0.5.0`. Full SHA pins in generated workflows are package-repository SHAs, not the monorepo's Action tag objects. Failure to match is a stop. Record the source config and synthetic Git fixture commit SHAs, web digest, harness commit/digest, generated workflow SHA, provider locks, root config hash, approved plan hash, account/zone/bucket/distribution/role IDs and timestamp in `manifest.json`. An artifact's release tag alone is insufficient.
+
+## Account and resource inventory (A4 before all provider work)
+
+Read-only workspace sources: workspace `STATUS.md` **In flight / infra lane and October 17–18 log**, `ops/README.md`, `ops/aws-guide-facts.md`, `ops/OPS-007-retire-stream-verification-environment.md`. Earlier Snapshot/Next paragraphs still say AWS was destroyed or Registry unpublished; later records supersede them. This is planning context, not a fresh cloud inventory.
+
+| Scope | Known context / guard |
+| --- | --- |
+| Production, forbidden target | Cloudflare account `9ac354c8aa31d424224d8c4f3aa8ba2a`, `artifact-pages.dev`, bucket `artifact-pages`, state `admin-production`; no publish, registry, token or Terraform mutations here |
+| Cloudflare verify, allowed after approval | Account `21a0acb78621cc00cfa655a276d77b74`, zone name `artifact-pages.stream`, rebuilt after OPS-007; verify-only state/secrets under `~/.config/artifact-pages-verify/`. Zone ID, bucket and active domain must be discovered/checked under A4, not copied from retired production-account verify. |
+| Existing AWS verify, preserve | Account `231136241959`, us-east-1, bucket `artifact-pages-231136241959-us-east-1`, distribution `ECFTIR5GVPQDF`, `https://d3qg4cc5j20soe.cloudfront.net`, prefix `artifact-pages-aws-verify`; 25 state resources and state key `aws-verify/terraform.tfstate` after October 17 move. Read inventory only; no state relocation, apply, app deployment or cleanup. |
+| New AWS proof, A5 | Bucket `ap-proof-231136241959-20261018`, prefix `ap-proof-20261018`, default CloudFront hostname, no alias/ACM/DNS/WAF; fresh local Terraform state under protected evidence `aws-proof/terraform.tfstate` (never production/verify state). Existing OIDC provider ARN `arn:aws:iam::231136241959:oidc-provider/token.actions.githubusercontent.com` is read/reused, not created/deleted. |
+| GitHub provider fixture, A5 | New public `artifact-pages/provider-proof-20261018`, exact environments `proof-admin` / `proof-site-a` / `proof-site-b` / `proof-neighbor`, branch `main` only and owner required reviewer; no production secrets. Separate sealed branch `codex-provider-proof-20261018` preparation PR; merge fixture-only content after review. |
+| Sites, both proofs | `proof-a-20261018`, `proof-b-20261018`, `proof-neighbor-20261018`, `proof-life-20261018`; fixture repo above, source directories `sites/a`, `sites/b`, `sites/neighbor`, `sites/life`. No pre-existing registration may use these names. |
+
+AWS Terraform: `preview_retention_days=1`, `price_class=PriceClass_100`, `viewer_protocol_policy=redirect-to-https`, no WAF. Admin trust is the exact GitHub subject for `proof-admin`; satellite map a/b/neighbor gets its matching exact environment subject (life runs under admin). Read the new repo's numeric owner/repo IDs and OIDC `sub_claim_prefix`; freeze concrete immutable subjects before plan. No wildcards, no branch subject fallback, no trust changes on existing roles. Roles: `ap-proof-20261018-admin-publisher` and `ap-proof-20261018-<site>-publisher` using the module's hash rule if necessary. Only these roles/policies can be created/deleted. Use existing `artifact-pages-verify` SSO profile for apply and inventory after owner login; role tests use OIDC and assert STS identity before access. Sessions <=1 hour, no long-lived AWS key creation. Cloudflare uses verify-only parent credentials; mint 15-minute scoped children with current `_control/sites/<site>/` grants plus read-only `_control/versions/app.json` and separate registry reader. No production token, parent permission expansion or token logging.
+
+A4 commands are **future commands requiring A4**, including curl/browser requests. `$E` is a new mode-0700 evidence directory, credentials loaded privately without shell tracing; never `cat` or `source` arbitrary files into logs. `~/.config/artifact-pages-verify/` contents may be **listed, never printed**. An operator-controlled loader supplies needed values directly in memory to subprocesses; reject inherited production credentials. `$CF_ACCOUNT` must equal the verify ID and `$CF_ZONE_NAME` must equal `artifact-pages.stream` before any request. The loader checks the effective target of each CLI config, not only environment names.
+
+```sh
+aws --profile artifact-pages-verify sts get-caller-identity > "$E/aws-identity.json"
+aws --profile artifact-pages-verify s3api list-buckets > "$E/aws-buckets.json"
+aws --profile artifact-pages-verify cloudfront get-distribution --id ECFTIR5GVPQDF > "$E/aws-existing-distribution.json"
+aws --profile artifact-pages-verify iam get-open-id-connect-provider --open-id-connect-provider-arn arn:aws:iam::231136241959:oidc-provider/token.actions.githubusercontent.com > "$E/oidc-provider.json"
+terraform -chdir="$CF_ROOT" state list > "$E/cf-state-addresses.txt"
+terraform -chdir="$CF_ROOT" plan -refresh-only -detailed-exitcode -out="$E/cf-refresh.plan" > "$E/cf-refresh.log"
+aws --endpoint-url "$R2_ENDPOINT" s3api list-objects-v2 --bucket "$CF_BUCKET" > "$E/cf-objects.json"
+node "$H/proof.mjs" cloudflare-api-get --path "/accounts/$CF_ACCOUNT/r2/buckets/$CF_BUCKET/lifecycle" --manifest "$E/manifest.json" --approval A4 --out "$E/cf-lifecycle.json"
+```
+
+The proposed `cloudflare-api-get` helper permits only the sealed verify account/bucket lifecycle GET endpoint; it records authoritative lifecycle without exposing authorization. Other paths or unsupported-operation fail closed, not as absence. An authenticated API helper must load Authorization internally rather than expose it in command arguments. Complete **all** listing pages; save object versions/delete markers for AWS. Snapshot keys/size/ETag/LastModified/content SHA-256/HTTP and user metadata, registry bytes and private control record digests, state serial/lineage/hash, active delivery config and lifecycle rule. Capture existing readers' app version and registry/site version records. Treat 403/timeout/invalid JSON/partial listing as errors. Initial proposed names must be absent (bucket 403 is not absence); any collision stops, never adopts/deletes.
+
+Inventory returns a reviewed manifest with ownership and untouched retained prefixes. Preserve old `release-smoke` natural-lifecycle objects and any T18/T19/T25 retained work, whatever account currently owns them; do not rewrite, age-reset, delete or claim expiry based on elapsed time. No `rm --recursive` of a shared bucket. Cloudflare app proof requires a freeze agreed with the environment's current owner; unexpected active writers, held locks, pending retries, schema mismatches, drift or retention ownership conflicts stop A6. No state repair/apply is implicit in A4.
+
+## One uncovered-criterion ledger
+
+Each row is the sole definition of that outstanding proof; instructions below execute these IDs. Record provider-specific pass/fail/not-run, commands, identity, request IDs, origin and browser timestamps, and preservation/cleanup verdict. Attach one sanitized evidence record to every linked ticket. A checked parent requires all its relevant cells, not merely an experiment finishing.
+
+| ID | Uncovered criterion and expected result | Tickets / approval |
+| --- | --- | --- |
+| P1 | AWS **existing-neighbor** index/artifact/preview/control GET denied under satellite a, paired with admin-confirmed existing objects and allowed own-site GET. No absent-key 403 inference. Native R2 current scoped child equivalents pair with own reads; reuse older sampled denials where unchanged. | [T15](T15-provider-delivery.md#proof-needed); A5/A6 |
+| P2 | AWS fresh bucket absent registry/site/lock reads: save actual S3 error/status/request ID and exact-prefix listing under reference admin/satellite; bootstrap app→registry→site using unchanged policies. Generated setup derives custom-prefix satellite ARN, OIDC assumes it, released Action executes CLI 0.4.4. No privilege widening. | [T15](T15-provider-delivery.md#proof-needed), [IMP-73](../implementation/IMP-73-registry-setup-command.md#acceptance-criteria); A5 |
+| P3 | Both providers' uncovered production/preview logical direct/reload and nested HTML/Markdown/CSS/image/font/transitive-module matrix; raw missing resources 404; JSON/HTML/Markdown MIME, inline disposition, index/catalog/manifest/artifact cache, hashed assets and fixed files correct; control never returns private bytes; anonymous direct origin denied. Enforced production/preview CSP allows same-origin modules and intended HTTPS resources, refuses runtime HTTP and opaque/null/wildcard CORS access; Markdown scripts do not execute. Trusted HTML parent access remains allowed. | [T4](T4-serving-boundary.md#exit-criteria), [T15](T15-provider-delivery.md#proof-needed); A5/A6 |
+| P4 | AWS live If-None-Match/If-Match races, same-site different-new-head two-process CLI preview publication, killed partial-upload recovery and stale-owner rejection, plus **both providers'** remaining after-manifest/before-catalog interruption and catalog-write failure/retry. Complete immutable manifests/file hashes, both groups retained; stale process fails before catalog replacement. Cloudflare completed race/partial/stale-owner rows are credited above, not repeated. | [T5](T5-concurrency-recovery.md#exit-criteria), [T14](T14-production-reconciliation.md#proof-needed), [T15](T15-provider-delivery.md); A7 |
+| P5 | Both providers: separate production `site sync` processes for a/b overlap in the actual publish critical section, update both outputs, preserve registry/app/neighbor. Production failure matrix: artifact PUT, index replacement, meta upload before stale deletion, partial stale delete, either initial prefix listing failure and continuation-page failure, lock loss before preview reconciliation. Each aborts at contract boundary and retry converges without stale-owner catalog write or unrelated deletion. | [T14](T14-production-reconciliation.md#proof-needed), [T5](T5-concurrency-recovery.md); A7 |
+| P6 | AWS origin missing-manifest cleanup and both providers' deployed origin-read-error, failed production switch, and post-switch catalog-write-failure retries. Confirmed missing revision alone is pruned by ordinary main sync; retained open/merged/closed/manual-labeled groups survive; 403/503/timeout keeps unknown candidates and fails cleanup. Warm browser hides confirmed-missing manifest before pruning. Cloudflare successful simulated cleanup is credited, not rerun alone. | [T8](T8-stale-reference-cleanup.md#exit-criteria), [T14](T14-production-reconciliation.md), [T15](T15-provider-delivery.md); A7 |
+| P7 | Both providers: reference-identity update/unregister, mutable site/catalog/manifest and removed HTML/Markdown/resource requests at canonical warm URLs; record origin commit, invalidation request/acceptance/completion and edge visibility. Registry/app/site/unregister **invalidation-only** failure retains retry record; identical retry still issues invalidation after origin converged, then clears record. No unexplained cache-busting, stale retry loss or neighbor invalidation. | [T4](T4-serving-boundary.md#exit-criteria), [T14](T14-production-reconciliation.md), [T15](T15-provider-delivery.md#proof-needed); A7 |
+| P8 | Both providers: same browser/profile already warm on web A, deploy B then roll back A; reload canonical routes and verify actual fixed-name index.html/preview-bridge.js/notices and hashed asset references execute/render the selected version without mixed-generation failures. Restore original deployed version/config. Origin byte checks alone do not pass. | [T4](T4-serving-boundary.md#exit-criteria), [T15](T15-provider-delivery.md); A5/A6 |
+| P9 | Both providers: observe **natural** lifecycle deletion, complete HEAD+listing agreement, interval from last-present to first-absent and requested eligibility separately; ordinary publish reconciles any surviving catalog. Catalog expiry itself is recorded, no false pruning claim. No rewrite or manual delete before observation ends. | [T8](T8-stale-reference-cleanup.md), [T15](T15-provider-delivery.md); A8 |
+| P10 | After ISSUE-112 ships only: AWS small and >10,000,000-byte decoded index/search manifest at same keys store deterministic gzip/metadata; raw S3 gzip hashes decode to builder JSON; CDN cold/warm `gzip` requests and browser JSON/full-text reads decode correctly, same-URL update/revalidation/invalidation works. Synthetic large manifest labeled synthetic. Plain→gzip unchanged-source migration, next no-op, metadata repair/recovery and released 0.4.4 pre-write rejection preserve neighbors. No claim that 1.6 Mbps always transfers a 2.63 MB object within 20 s; record live timing and retain the local controlled acceptance as a separate gate. | [ISSUE-112](../issues/ISSUE-112-aws-large-generated-json-delivery.md#acceptance-criteria), [T15](T15-provider-delivery.md); A9 |
+
+## Execution sequence and exact command contract
+
+### Local preparation and immutable evidence
+
+Luna prepares `.local/provider-proof-20261018/` from the baseline: `manifest.json`, generated Terraform root, synthetic Git source, `bin/artifact-pages` verified release, `configs/{aws,cf,web-a,web-b,remove}.yaml`, `commands.sh`, runner/Go harness and browser assertions. They are **test artifacts**, no new CLI/product surface. Check in the reviewed harness/pin manifest in a follow-up PR before running; raw credentials/state stay outside Git. `commands.sh` must refuse no approval ID, target mismatch, unsealed hashes, collisions, expired scope or cap exhaustion. The following `proof.mjs` and `TestCoordinatedProviderProof` interfaces are a **required implementation brief**, not existing commands; native CLI shapes below already exist. No external run may start until these interfaces pass local MinIO/fake and cleanup tests.
+
+Harness subcommands fixed by this plan:
+
+```sh
+node "$H/proof.mjs" seal --manifest "$E/manifest.json" --offline
+node "$H/proof.mjs" inventory --manifest "$E/manifest.json" --approval A4
+node "$H/proof.mjs" bootstrap-aws --manifest "$E/manifest.json" --approval A5
+node "$H/proof.mjs" delivery --provider aws --cases P1,P3,P8 --manifest "$E/manifest.json" --approval A5
+node "$H/proof.mjs" delivery --provider cloudflare --cases P1,P3,P8 --manifest "$E/manifest.json" --approval A6
+node "$H/proof.mjs" failures --provider aws --cases P4,P5,P6,P7 --manifest "$E/manifest.json" --approval A7
+node "$H/proof.mjs" failures --provider cloudflare --cases P4,P5,P6,P7 --manifest "$E/manifest.json" --approval A7
+node "$H/proof.mjs" lifecycle --provider aws --observe-only --manifest "$E/manifest.json" --approval A8
+node "$H/proof.mjs" lifecycle --provider cloudflare --observe-only --manifest "$E/manifest.json" --approval A8
+node "$H/proof.mjs" gzip --manifest "$E/gzip-manifest.json" --approval A9
+node "$H/proof.mjs" cleanup --manifest "$E/manifest.json" --approval "$CLEANUP_APPROVAL"
+```
+
+Each command is noninteractive and emits only redacted evidence paths/booleans. `seal` performs no download/account access. Missing approval is an error; these string IDs are not proof of approval: `manifest.json` must carry the actual owner decision and exact allowed steps/time window. Each external command stops at interruption points below; approval never overrides a mismatch. Scope cleanup approval is the same A5/A6/A7/A8/A9 that authorized creating the object, not a broad “cleanup everything” grant.
+
+### AWS provisioning / hosted runtime (P1/P2/P3/P8; A5)
+
+Create only the named repo/environments after A4 has established name availability. Capture public repo IDs/OIDC prefix, create exact subjects and freeze the module root with source/version above, lockfile and variables. Generated setup uses non-default `aws.namePrefix: ap-proof-20261018`; configure helper's selected ARN and compare to Terraform output before allowing STS. The fixture workflows checkout source, use generated publish/preview workflow/composite (full sealed SHA) and official Action pins; admin uses app-deploy/registry Actions. Record the job summary executed version and STS ARN; do not rely on bootstrap version. Required owner review of each environment dispatch precedes credentials.
+
+```sh
+terraform -chdir="$AWS_ROOT" init -lockfile=readonly
+terraform -chdir="$AWS_ROOT" plan -out="$E/aws-create.plan" -var-file="$E/aws-proof.tfvars"
+terraform -chdir="$AWS_ROOT" show -json "$E/aws-create.plan" > "$E/aws-create-plan.json"
+shasum -a 256 "$E/aws-create.plan"
+# STOP: owner accepts this exact resource list and plan hash; no previous saved plan reused.
+terraform -chdir="$AWS_ROOT" apply "$E/aws-create.plan"
+terraform -chdir="$AWS_ROOT" output -json > "$E/aws-outputs.json"
+gh workflow run proof.yml --repo artifact-pages/provider-proof-20261018 --ref main -f case=bootstrap-admin
+gh workflow run proof.yml --repo artifact-pages/provider-proof-20261018 --ref main -f case=bootstrap-site-a
+```
+
+Expected resource list consists solely of one new S3 bucket/configuration/lifecycle/error object, one CloudFront distribution/OAC/function/cache/header policies, one admin and three satellite roles/policies and module guards. No replacements/changes of existing resources, no OIDC provider management, backend changes, DNS/ACM/WAF or unexpected costs. Full concrete addresses/count are reviewed from this fresh plan, not guessed from the older 22/25-resource deployments. A failure leaves state/logs protected; re-plan remaining delta and obtain approval before a recovery apply.
+
+Before first writer, under admin and satellite credentials run `s3api head-object` and `get-object` on absent `_indexes/sites.json`, `_control/sites/proof-a-20261018/lock.json`, `_indexes/proof-a-20261018/index.json`, and complete allowed-prefix `list-objects-v2`; record errors separately without `|| true` hiding them. Admin bootstraps app and registry; satellite then publishes a. Denied and confirmed-absent reads must not be conflated. Never widen IAM for a passing bootstrap. Seed known neighbor index/artifact/manifest/control marker under admin, confirm SHA and exact existence, then run a's native GET probes and own-prefix positives; no destructive negative probe targets an existing neighbor key. P1 reads must fail AccessDenied while own reads succeed. Preserve prior default-prefix evidence; this is the generated custom-prefix case.
+
+### Publication and browser matrix (A5/A6)
+
+Synthetic fixture includes `nested/index.html`, `nested/readme.md` with inert script payload, CSS importing CSS, ESM importing a nested module, image/font/data files and a runtime-generated HTTP fetch that cannot be rewritten during build; known allowed HTTPS resource must be on an explicitly approved controlled public endpoint (use the same verify endpoint) with no external telemetry. Use real source changes and full fetch history to build preview heads; record main/head/merge-base. Direct logical and raw preview URLs are read before catalog selection and on reload. Include spaces, Unicode and reserved URL characters using existing fixture resource cases. CSP tests inspect enforced header, `securitypolicyviolation` and actual loaded modules/resource values; report-only CSP is a failure. Check raw missing document/resource 404 and `/_control/` **marker bytes absent**, allowing the accepted SPA fallback. Never put a real secret into that marker.
+
+Native CLI commands expanded by the sealed harness, from synthetic Git source cwd (config paths absolute):
+
+```sh
+"$AP" registry sync --config "$CONFIG" --dry-run --format json
+"$AP" registry sync --config "$CONFIG" --format json
+"$AP" site sync --config "$CONFIG" --site proof-a-20261018 --source sites/a --dry-run --format json
+"$AP" site sync --config "$CONFIG" --site proof-a-20261018 --source sites/a --format json
+"$AP" preview publish --config "$CONFIG" --site proof-a-20261018 --source sites/a --dry-run --format json
+"$AP" preview publish --config "$CONFIG" --site proof-a-20261018 --source sites/a --format json
+curl --fail --silent --show-error --dump-header "$E/index.headers" "$BASE/_indexes/proof-a-20261018/index.json" --output "$E/index.body"
+```
+
+Preview source is the sealed non-main branch/commit with explicit registered repository identity and default branch; manual preview unless a hosted PR is explicitly in the fixture manifest. Authentic PR return-link provenance is not claimed from a synthetic local Git fixture. Use a fresh Playwright Chromium profile for initial matrix, a retained profile for mutable/removed/warm app cases, at the existing approved egress only. Record browser version/egress; real-device or alternate-egress checks require separate owner participation and approval and are not authorized by A1–A9. Before each write save/approve dry-run changes; **all** registry configs retain every pre-existing site. A6 never changes Cloudflare zone-root infrastructure or lifecycle rules; if existing policy cannot support the case, stop for a new plan, not a hidden apply.
+
+P8 commands (same on each target): deploy verified web A from `web-a.yaml`, warm the browser and fixed names, deploy B from `web-b.yaml`, reload and assert B, then deploy A and assert rollback. Each config differs only in `web.version`; both pin CLI 0.4.4. Use `app deploy --config FILE --dry-run --format json`, then the same without dry-run. Finally deploy the originally inventoried version (normally 0.3.2) and re-check its exact bundle hashes/browser. Do not use `--accept-breaking`, remove control/version records, or manually delete/retain hashed assets to mask the publisher's actual deployment behavior; record any failure of the warm session. Save screenshots/HAR with auth headers stripped, actual fixed-file bytes/digests and resource execution assertions. A fixed file identical in A/B proves revalidation only; require a changed fixed file (index.html) to establish the selected generation. Rollback is an actual deploy needing A5/A6, not implicit permission to touch production.
+
+### Controlled failures, overlapping processes and cache retries (A7)
+
+Use test-only Go wrapper around the **real** backend, not an alternate fake cloud. Real provider calls and provider error results are recorded with request IDs. Explicitly label injected client refusal/response loss as injected; only actual provider responses establish live service semantics. Do not add production fault flags, alter shared IAM to simulate denial, forge provider 503 responses, or claim injected read failures prove a service outage. Shared listing pagination/per-object failures remain deterministic evidence unless a real response is observed.
+
+Luna's proposed `TestCoordinatedProviderProof` reads a sealed manifest and scenario selector; every subcase has a 3-minute deadline, observer barriers with 30-second timeout, SIGCONT/kill cleanup and exact-key guard. CLI process pauses use a test transport/observer companion with real calls, never arbitrary sleeps. The **release binary** is used for success/retry/version claims; instrumented source baseline binary is labeled as such for precise fault barriers. Both must use identical config/fixture and provider adapter code; release behavior after recovery is checked independently.
+
+```sh
+ARTIFACT_PAGES_PROOF_MANIFEST="$E/manifest.json" ARTIFACT_PAGES_PROOF_CASE=P4 go test ./cli/internal/publisher -run '^TestCoordinatedProviderProof$' -count=1 -timeout=20m
+"$AP" lock inspect --config "$CONFIG" --site proof-a-20261018 --format json > "$E/lock-observed.json"
+"$AP" lock recover --config "$CONFIG" --site proof-a-20261018 --observed-etag "$OBSERVED_ETAG" --format json
+"$AP" site sync --config "$CONFIG" --site proof-a-20261018 --source sites/a --reconcile --dry-run --format json
+"$AP" site sync --config "$CONFIG" --site proof-a-20261018 --source sites/a --reconcile --format json
+```
+
+Run P4–P7 serially by case/provider; within a scenario only the designated competing processes overlap. AWS CAS can reuse the existing opt-in `TestAWSProductionBackendSmoke` with its exact environment/confirmation contract in [aws_live_smoke_test.go](../../../cli/internal/publisher/aws_live_smoke_test.go); it cleans **all versions/delete markers** in its random key prefix and needs the authorized test operator's version cleanup privileges, not satellite permission broadening. The existing preview-flow smoke remaps lock/catalog to a random namespace and explicitly excludes interruption/lock-loss; it cannot substitute for actual CLI cases here.
+
+Required fault schedule:
+
+| Cases | Precise barrier / fault and recovery |
+| --- | --- |
+| P4 AWS race | Start two separate CLI processes at different new heads/groups under same site; pause a after first immutable PUT, observe b waiting on held lock with no writes, release a, both complete; confirm both manifests/files/catalog groups. Then SIGKILL another head after first successful file PUT; no catalog advert; inspect stopped owner, guarded ETag recovery, same-head retry. Recover/reacquire while old writer paused, resume it, require stale-owner rejection. |
+| P4 both remaining | After completed manifest PUT but before catalog PUT: kill writer, keep complete unadvertised revision, guarded recover and retry. Separately refuse the next exact catalog PUT before sending; failed attempt does not advertise head; retry uses immutable completed bytes unchanged and adds it once. |
+| P5 concurrency | Pause production a after first successful artifact PUT, start b and observe b successfully writing its own site before releasing a (proves overlap, not only locks); both complete. Compare both builder projections, private state, neighbor/app/registry guards. |
+| P5 production recovery | Separate runs refuse one exact artifact/index/meta PUT; fail after first stale DELETE; refuse each initial listing / continuation page before mutation; steal/reacquire lock after production commit before preview cleanup. Check index/meta/content ordering and no stale deletion before switch, recorded partial deletion preserved as recoverable state, retry completes and second retry no-op. Continuation case seeds >1,000 objects under a (within cap). |
+| P6 cleanup | Admin deletes only a disposable revision's completion manifest, with another intact and unknown/error candidate in same catalog. Inject 403, 503 and timeout reads one at a time; never call them absence. Fail production write before switch, then fail catalog write after successful switch in a separate run. Retry normal site sync; assert keep/remove reasons and exact catalog before/after; warm reader availability distinguishes missing from unknown. |
+| P7 invalidation | First seed canonical warm responses, then refuse only the cache request after successful registry/app/site/unregister origin changes. Save pending retry bytes/ETag and origin hashes. Remove refusal, identical dry-run must not write/clear, real retry must submit exact pending path set even when object diff is zero; save real CloudFront invalidation ID/completion or Cloudflare purge success, clear record only on success. Refusing the request client-side proves deployed retry with a real successful second call, not provider outage behavior. |
+
+Never recover an active unknown lock. Stop known child processes, capture ETag directly from `lock inspect`, require owner approval A7 for that named recovery, and use that exact ETag; mismatch stops and re-inspects. No unconditional delete/free-lock overwrite. SIGKILL stage does not authorize continuing after an unexplained owner change.
+
+P7 freshness measurement: canonical URLs without cache-busting query, GET every 5 s for <=5 minutes per transition, <=60 probes per URL; save Date/Age/ETag/Cache-Control/Vary/Content-Encoding/cache result. Record observed interval, not a fabricated global SLA. CloudFront await `aws cloudfront wait invalidation-completed --distribution-id "$DIST" --id "$INVALIDATION"`; stop if 15-minute waiter budget exceeded. Assert actual origin state via authenticated reads and complete lists. After accepted invalidation, failure to converge within the test's 5-minute observation bound is a failed/unfinished sample requiring investigation, not proof of a new documented product guarantee. All reference-role operations use the new OIDC roles (AWS) or verify-only scoped identities/purge token (Cloudflare).
+
+### Natural expiry (P9; A8)
+
+Publish the life site/revision **once**, record complete exact key list/ETags/LastModified and lifecycle configuration/header, then leave untouched. AWS new stack rule is one whole day; Cloudflare uses its **current** rule without changes. If current Cloudflare eligibility exceeds the 7-day window, report not-run/blocked on a separate policy decision rather than shorten a shared rule. Every 3 hours, for at most 7 days, HEAD exact keys and complete prefix listing, using bounded read identity. A successful empty listing plus confirmed missing exact objects establishes absence; 403/network errors do not. Save `[last-present, first-absent]` UTC interval and catalog result. No heartbeat beyond this window without fresh approval.
+
+At actual expiry run normal site sync once to prune surviving stale catalog references. If catalog also expired, record converged absence, no pruning claim. At window end stop observation; if not expired, leave P9 open and use approved exact-scope cleanup **after recording censored observation**. Do not claim manual cleanup is natural deletion. Older retained experiments remain untouched; no setup mode on their helper. Owner may separately authorize read-only observation of their exact seven keys after locating an intact original state; it is not needed for this new bounded test.
+
+### Gzip follow-up (P10; A9, blocked until release)
+
+Do not delay or reinterpret baseline results for this future lane. Before A9 amend pins with actually obtainable CLI 0.5.0/four Actions 0.3.0, verify all declared ranges, local ISSUE-112 acceptance and migration/recovery checks. Recreate a disposable AWS stack if A5's has already been destroyed (fresh plan/approval required; no stale saved plan). Use only sites a/b, no existing verify or production writer migration. Quiesce old writers, snapshot **complete** pre-migration projection and matching control state, and prohibit 0.4 writers after migration except the deliberate dry-run/pre-write rejection check.
+
+```sh
+aws s3api head-object --bucket "$BUCKET" --key "_indexes/$SITE/index.json" > "$E/gzip-index-head.json"
+aws s3api get-object --bucket "$BUCKET" --key "_indexes/$SITE/index.json" "$E/gzip-index.raw" > "$E/gzip-index-get.json"
+gzip -t "$E/gzip-index.raw"
+gzip -dc "$E/gzip-index.raw" > "$E/gzip-index.decoded.json"
+curl --fail --silent --show-error -H 'Accept-Encoding: gzip' --dump-header "$E/cdn-gzip.headers" "$BASE/_indexes/$SITE/index.json" --output "$E/cdn-gzip.raw"
+curl --fail --silent --show-error --compressed --dump-header "$E/cdn-decoded.headers" "$BASE/_indexes/$SITE/index.json" --output "$E/cdn-decoded.json"
+```
+
+Repeat for the exact search manifest key emitted by the builder (freeze it in manifest, do not invent a key), small and large decoded fixtures, cold first URL and same-URL warm reads before/after an update. No `--compressed` for raw origin/hash evidence. Check Content-Type application/json, Content-Encoding gzip, inline disposition/cache, stored length/hash and decoded JSON equality; gzip concatenation/corruption constraints belong to local acceptance. Opaque search pack encoding/hash contract and source artifact bytes remain unchanged. Record CDN representation separately if it transforms compression. Browser JSON/full-text reads must work at unchanged URLs. A failed timing threshold is reported; no deadline or throughput policy changed. Supported writer rollback is >=0.5.0 with the encoding policy, content reverted by compatible writer; independent web rollback remains allowed. Never delete control state to downgrade. Full pre-0.5 projection/control restore is exceptional and needs a new owner recovery plan.
+
+## Cost, interruption and cleanup contract
+
+These are **authorization ceilings and conservative planning allowances**, not quoted tariffs/free-tier guarantees. No paid load test, new domain, WAF, account subscription, billing setup or plan upgrade. Verify current rate/remaining free allowance under A4 with owner billing context before apply; no assumption of a free tier. Enforce usage ceilings in harness even when budget dashboards lag.
+
+- Overall provider work: <=12 operator hours excluding owner waiting and lifecycle polling; <=7 days retained lifetime; <=1 GiB objects per provider, <=5 GiB CDN transfer/provider, <=50,000 storage operations/provider, <=5,000 viewer requests/provider, <=200 CloudFront invalidation paths total across A5/A7/A9. Estimate $1–15 total, combined hard spend cap **$20** (A4–A9); stop before either cap, no automatic increase. Per-request caps below are subordinate to total. Logs include cumulative calls/bytes/minutes and censored measurements.
+- A5 <=4 hours, AWS estimate $0–5/cap $5; A6 <=2 hours CF estimate $0–2/cap $2; A7 <=4 hours combined estimate $0–6/cap $6; A8 <=7 days/1 operator hour estimate $0–1/cap $1; A9 <=1 hour estimate $0–5/cap $5. A4 <=30 minutes estimate $0–1/cap $1. Hosted fixture A1–A3 costs are separate, <=$7 total. No price-dependent automation that can exceed caps.
+- Stop before each apply, app version switch, fault barrier/guarded recovery, visibility/access change and lifecycle setup until its corresponding approval is recorded. Additional stops: changed inventories, unknown writer, pending retry, hash drift, failure to restore baseline, lost credentials, scope/budget/deadline exceeded or any assertion mismatch. Do not advance to another scenario to “get more evidence” after a preservation failure.
+- On interruption terminate only recorded child PIDs/runner jobs, revoke/let expire only created sessions, retain retry/state and exact key list. Recovery remains guarded; no broad delete. Report last completed operation, residual keys/locks, pending invalidations and next safe action. An interrupted cleanup is not success.
+
+Cleanup sequence, authorized only for resources created in the approved scope:
+
+1. Stop test writers/observers, save result ledger and remaining inventory. Resolve pending transactions with the compatible writer before rollback. Restore Cloudflare app/config to inventoried original release, assert browser plus origin digests. Do not overwrite concurrent owner changes; stop for reconciliation instead.
+2. For Cloudflare, build `remove.yaml` from the captured registry **minus only four proof registrations** (all original entries retained); run `registry sync --config "$REMOVE_CONFIG" --dry-run --format json`, review only expected proof deletions/purge paths, then actual sync. Check all exact proof index/artifact/preview prefixes empty, no retry journals left, and original registry bytes/objects/metadata unchanged. Free proof locks/tombstones may remain if normal CLI retains them: list explicitly and remove only by separately reviewed exact-key cleanup if needed; do not rewrite original control records to force a byte match.
+3. For AWS proof only, inventory all object versions/delete markers and generate a bounded **explicit key/version deletion manifest**; guard bucket ARN/account, proof prefixes, Terraform-managed `_errors/not-found.html` and app paths. Empty only this wholly new bucket immediately before its destroy; never empty current AWS verify or CF shared bucket. `aws s3api delete-objects --bucket "$BUCKET" --delete "file://$E/delete-batch.json"` in <=1,000-entry batches; inspect per-object errors and relist all versions/markers. Destroy plan from proof state only: `terraform -chdir="$AWS_ROOT" plan -destroy -out="$E/aws-destroy.plan" -var-file="$E/aws-proof.tfvars"`; **owner reviews exact addresses/hash**, then `terraform -chdir="$AWS_ROOT" apply "$E/aws-destroy.plan"`. Do not auto-enable force_destroy or delete the pre-existing OIDC provider. CloudFront disable/delete can take time; allow up to 60 minutes extra cleanup wall time within approval, then report retained billing resources rather than abandon silently.
+4. Revoke only temporary R2 child credentials (or wait <=15 min), remove proof-only GitHub variables/environments and branches after evidence capture. New provider fixture repo remains private/inert, workflows disabled; making it private is included in A5. No deletion of repositories or runs/PR evidence; never broaden secrets/App access. Existing admin/docs/Actions/package repos unchanged except A1's precise PR/branch operations.
+5. Re-inventory original states/distribution IDs and non-test objects, registry and app hashes, HTTP metadata, lifecycle config and neighbor guards; verify new AWS resources absent and no unaccounted versions/markers. Record retained state/evidence path, costs/time, free proof lock residue if any and cleanup outcome. Link sanitized report from each ledger row's tickets; keep not-run/failed criteria open. No secrets, state, raw authenticated HAR, identity tokens or private API payloads in Git.
+
+## Owner approvals requested
+
+- A1 — Two IMP-64 package guard PRs/comments/closures and branch cleanup; <=45 min, <=$2; blast radius: test branches/PRs in the two generated module repos only, no tags/settings.
+- A2 — IMP-73 public fixture preparation, registry PR and caller-environment proof including owner deployment review; <=90 min, <=$3; blast radius: two named fixture repos, dummy secrets, branches/PRs and verification environment only.
+- A3 — IMP-73 private/private omitted-environment proof and private inert retention; <=45 min, <=$2; blast radius: visibility and repo-local Actions access/dummy secrets of the same two fixture repos only.
+- A4 — Provider inventory, target/pin/billing checks and read probes; <=30 min, <=$1; blast radius: read-only verify accounts/environments and public release/repository metadata, no production writes.
+- A5 — Fresh AWS proof stack, custom-prefix OIDC fixture, bootstrap/delivery and warm web upgrade/rollback plus reviewed destroy; <=4 h plus <=60 min teardown, <=$5; blast radius: new named AWS resources and provider-proof fixture repo only.
+- A6 — Cloudflare verify disposable sites/scoped identities, delivery and warm web upgrade/rollback with restoration; <=2 h, <=$2; blast radius: artifact-pages.stream verify bucket/app and four proof sites only, no zone-policy or production changes.
+- A7 — Both-provider races, controlled failures, guarded recovery, origin reconciliation and invalidation retries; <=4 h, <=$6; blast radius: approved proof sites/control records and verify-only cache invalidations, no existing neighbor writes.
+- A8 — Natural lifecycle observation and exact-scope cleanup; <=7 days and <=1 h operator time, <=$1; blast radius: new life-site objects on the two approved proof targets, no retained experiment or policy changes.
+- A9 — Post-ISSUE-112 released-pin amendment and AWS gzip delivery/migration proof; <=1 h, <=$5; blast radius: disposable AWS proof sites only; blocked until compatible CLI/Actions ship, recreation or exceptional downgrade needs fresh approval.
