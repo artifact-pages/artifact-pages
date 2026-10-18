@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -34,6 +37,11 @@ import {
 } from './seals.mjs';
 import { loadOwnerTrustAnchor, ownerTrustAnchorEnrolled } from './approval-validation.mjs';
 import { main } from './proof.mjs';
+import { INVOCATIONS, EXECUTION_PATHS, assertInvocationMatchesTransition, getExecutionPath } from './invocation-registry.mjs';
+import { credentialClassDefinition, PrivateCredentialLoader } from './credential-loader.mjs';
+import { createVerificationRecordStore, makeTargetConfirmation, PROBE_DEFINITIONS, requireCredentialVerification, targetConfirmationDigest, verifyCredential } from './credential-verification.mjs';
+import { buildChildEnvironment, resolveInvocation, runSupervisedInvocation, terminateActiveChildren, assertNoActiveChildren } from './launcher.mjs';
+import { assertNoWildcardAllows, policyDocumentDigest, readPolicyTemplate, renderAwsPolicySet, renderPolicyTemplate } from './policy-templates.mjs';
 
 const LOCAL = 'http://127.0.0.1:19876';
 const expiry = '2030-01-01T00:00:00.000Z';
@@ -902,6 +910,7 @@ test('owner SSH approval uses the pinned anchor and both entry points enforce on
 });
 
 async function createShellGuardFixture(root, overrides = {}) {
+  const { sealArtifacts = {}, ...manifestOverrides } = overrides;
   const workspace = path.join(root, 'workspace');
   const runtime = path.join(root, 'runtime');
   await mkdir(workspace, { recursive: true });
@@ -944,7 +953,7 @@ async function createShellGuardFixture(root, overrides = {}) {
     cleanup: { acceptedDestroyPlanDigest: 'destroy-plan-digest', cfLifecycleRestored: true, writerVersion: '0.5.0', requiredWriterRange: '>=0.5.0 <0.6.0' },
     reviewedDeltas: {},
     endpoints: { 'aws-s3': { [TARGETS.preservedAwsBucket]: 'https://s3.us-east-1.amazonaws.com' } },
-    ...overrides,
+    ...manifestOverrides,
     approvalWindows: { ...approvalWindows, ...(overrides.approvalWindows ?? {}) },
   };
   const manifestPath = path.join(runtime, 'manifest.json');
@@ -965,7 +974,7 @@ async function createShellGuardFixture(root, overrides = {}) {
   await seals.appendSeal({ manifestPath, stage: 'bootstrap', now: new Date(sealBaseMs).toISOString() });
   for (const stage of ['discovery', 'inventory', 'create-plan', 'post-apply']) {
     const offset = { discovery: 1, inventory: 2, 'create-plan': 3, 'post-apply': 4 }[stage];
-    await seals.appendSeal({ manifestPath, stage, artifacts: ['evidence.txt'], now: new Date(sealBaseMs + offset * 1000).toISOString() });
+    await seals.appendSeal({ manifestPath, stage, artifacts: sealArtifacts[stage] ?? ['evidence.txt'], now: new Date(sealBaseMs + offset * 1000).toISOString() });
   }
   const helpers = await copiedModule(harness, 'approval-helpers.mjs');
   async function addApproval(approvalId, command) {
@@ -1078,10 +1087,10 @@ test('commands.sh refuses missing approvals, target mismatch, changed hashes, co
     cwd: process.cwd(), encoding: 'utf8', env: { PATH: process.env.PATH ?? '/usr/bin:/bin' },
   });
   assert.equal(external.status, 2);
-  assert.match(external.stderr, /UNMODIFIED_SUBPROCESS_BLOCKED_REQUIRES_ENFORCING_BROKER/);
+  assert.match(external.stderr, /ARBITRARY_COMMAND_PAYLOAD_REJECTED/);
 });
 
-test('every non-plan phase stops at the enforcing broker', async (t) => {
+test('non-plan phases require credential verification or a reviewed execution path', async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'provider-proof-run-interface-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const fixture = await createShellGuardFixture(root);
@@ -1111,9 +1120,9 @@ test('every non-plan phase stops at the enforcing broker', async (t) => {
       cwd: process.cwd(), encoding: 'utf8', env: { PATH: process.env.PATH ?? '/usr/bin:/bin' },
     });
     assert.equal(result.status, 2, `${command}: ${result.stderr}`);
-    assert.match(result.stderr, /ENFORCING_BROKER_REQUIRED/);
-    assert.doesNotMatch(result.stdout, /credentials|token|secret/i);
-    assert.doesNotMatch(result.stderr, /credentials|token|secret/i);
+    assert.match(result.stderr, new RegExp(EXECUTION_PATHS[command]?.implemented ? 'LEAST_PRIVILEGE_CREDENTIALS_REQUIRED' : 'EXECUTION_PATH_NOT_IMPLEMENTED'));
+    assert.doesNotMatch(result.stdout, /(?:AWS_[A-Z_]+|CF_VERIFY_[A-Z_]+|token|secret|access key)/i);
+    assert.doesNotMatch(result.stderr, /(?:AWS_[A-Z_]+|CF_VERIFY_[A-Z_]+|token|secret|access key)/i);
   }
 
   const planOnly = spawnSync('sh', [commands, 'run', 'inventory', '--manifest', manifestPath, '--approval', 'A4', '--plan-only'], {
@@ -1142,7 +1151,7 @@ test('guarded requests reserve request and payload budgets before credentials', 
   await assertDeniedBeforeCredential(fakeHarness('delivery:aws', fixtureManifest({ scopeExpiresAt: '2020-01-01T00:00:00Z' })), proofAwsPut(), 'APPROVAL_EXPIRED');
 });
 
-test('subprocess execution stops without a sealed enforcing broker and rejects context overrides', async () => {
+test('subprocess execution requires verified credentials and an implemented path, and rejects context overrides', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'provider-proof-command-'));
   try {
     const manifest = fixtureManifest();
@@ -1180,6 +1189,386 @@ test('inherited credentials are rejected before guard, phase, and external capab
   assert.equal(await main(['seal', '--manifest', manifestPath, '--offline'], env), 0);
 });
 
+test('fixed invocation registry uses argument vectors and leaves unimplemented paths closed', () => {
+  for (const [id, invocation] of Object.entries(INVOCATIONS)) {
+    assert.ok(id.length > 0);
+    assert.ok(Array.isArray(invocation.argv));
+    assert.ok(invocation.argv.every((argument) => typeof argument === 'string'));
+    assert.doesNotMatch(invocation.argv.join('\0'), /(?:\|\||&&|;|`|\$\()/u);
+  }
+  assert.throws(() => assertInvocationMatchesTransition('aws.delivery.site-a', 'delivery:cloudflare'), /INVOCATION_TRANSITION_MISMATCH/);
+  assert.throws(() => getExecutionPath('failures:aws'), /EXECUTION_PATH_NOT_IMPLEMENTED/);
+  assert.throws(() => getExecutionPath('delivery:cloudflare'), /EXECUTION_PATH_NOT_IMPLEMENTED/);
+  assert.throws(() => getExecutionPath('lifecycle:aws:observe-only'), /EXECUTION_PATH_NOT_IMPLEMENTED/);
+  assert.deepEqual(EXECUTION_PATHS['cleanup:post-a7'].invocationIds, []);
+});
+
+test('reviewed policy templates render without unresolved scope and keep documented wildcard creates isolated', async () => {
+  const bindings = policyTemplateBindings();
+  const rendered = await renderAwsPolicySet(bindings);
+  assert.equal(Object.keys(rendered.digests).length, 8);
+  for (const digest of Object.values(rendered.digests)) assert.match(digest, /^[a-f0-9]{64}$/u);
+
+  const inventory = rendered.documents.inventory;
+  const inventoryRead = inventory.Statement.find((statement) => statement.Sid === 'ReadEnumeratedBucketObjectsAndVersions');
+  assert.ok(inventoryRead.Resource.includes(bindings.PRESERVED_BUCKET_ARN));
+  const inventoryListDeny = inventory.Statement.find((statement) => statement.Sid === 'DenyAllOtherBuckets');
+  assert.ok(!JSON.stringify(inventoryListDeny).includes('ListAllMyBuckets'));
+
+  const provisioner = rendered.documents.provisioner;
+  assert.ok(provisioner.Statement.some((statement) => statement.Sid === 'DenyCloudFrontCreationOnTheProvisionerIdentity'));
+  assert.ok(!provisioner.Statement.some((statement) => statement.Effect === 'Allow' && statement.Resource === '*' && JSON.stringify(statement.Action ?? []).includes('CreateDistribution')));
+  const creation = rendered.documents.cloudfrontCreation;
+  assert.ok(creation.Statement.some((statement) => statement.Effect === 'Deny' && JSON.stringify(statement.Resource).includes('ECFTIR5GVPQDF')));
+  assertNoWildcardAllows(creation, {
+    allowedWildcardActions: ['cloudfront:CreateDistribution', 'cloudfront:CreateFunction', 'cloudfront:CreateOriginAccessControl', 'cloudfront:CreateCachePolicy', 'cloudfront:CreateResponseHeadersPolicy', 'cloudfront:TagResource'],
+  });
+
+  const sessions = rendered.documents.sessionProfiles;
+  for (const [name, session] of Object.entries(sessions)) {
+    const hasVersionDelete = JSON.stringify(session).includes('s3:DeleteObjectVersion');
+    assert.equal(hasVersionDelete, name === 'final-cleanup', `${name} version-delete scope`);
+  }
+  assert.ok(rendered.documents.publisherSatelliteBoundary.Statement.some((statement) => statement.Effect === 'Deny' && JSON.stringify(statement.Resource ?? statement.NotResource ?? []).includes('ECFTIR5GVPQDF')));
+
+  const cloudflare = await readPolicyTemplate('cloudflare-credential-scopes.json');
+  assert.equal(cloudflare.verifyAccountId, '21a0acb78621cc00cfa655a276d77b74');
+  assert.equal(cloudflare.productionAccountIdExcluded, '9ac354c8aa31d424224d8c4f3aa8ba2a');
+  assert.equal(cloudflare.temporaryCredentials.ttlSeconds, 900);
+  assert.equal(cloudflare.temporaryCredentials.siteWriter.credentialClass, 'cloudflare-site-a-writer');
+  assert.equal(cloudflare.temporaryCredentials.cachePurge.credentialClass, 'cloudflare-cache-purge');
+  assert.match(cloudflare.parentTokens.lifecycleAdministrator.residualAuthority, /account-wide/u);
+  assert.match(cloudflare.parentTokens.cachePurge.residualAuthority, /not restricted to the proof URL list/u);
+  assert.equal(policyDocumentDigest(inventory), rendered.digests.inventory);
+});
+
+test('Cloudflare scope templates reject unbound placeholders and preserve parent/child separation', async () => {
+  const template = await readPolicyTemplate('cloudflare-credential-scopes.json');
+  assert.throws(() => renderPolicyTemplate(template, { VERIFIED_SHARED_BUCKET: 'verify-bucket' }), /POLICY_TEMPLATE_UNBOUND/);
+  const rendered = renderPolicyTemplate(template, { VERIFIED_SHARED_BUCKET: 'verify-bucket', VERIFIED_ZONE_ID: 'zone-verified', SITE_ID: 'proof-a-20261018' });
+  assert.equal(rendered.temporaryCredentials.siteWriter.bucket, 'verify-bucket');
+  assert.equal(rendered.temporaryCredentials.cachePurge.zoneId, 'zone-verified');
+  assert.equal(rendered.controls.parentCredentialsNeverReachChild, true);
+  assert.equal(rendered.controls.noPermanentSharedBucketWriterForSiteRuns, true);
+  assert.equal(rendered.temporaryCredentials.productionAccountIdForbidden, '9ac354c8aa31d424224d8c4f3aa8ba2a');
+  assert.ok(!Object.entries(rendered.temporaryCredentials).some(([key, value]) => key === 'accountId' && value === rendered.temporaryCredentials.productionAccountIdForbidden));
+});
+
+test('private credential loader enforces fixed class, account and expiry; child environment is isolated', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'provider-proof-child-env-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const source = awsInventoryCredentialSource();
+  const loader = new PrivateCredentialLoader({ loadPrivateCredential: async () => source, now: () => approvalNow });
+  const credential = await loader.load('aws-inventory', { minimumLifetimeMs: 60_000 });
+  assert.equal(credential.credentialClass, 'aws-inventory');
+  assert.equal(credential.credentialSource, 'aws-sso-assumed-role');
+  assert.ok(Object.isFrozen(credential.environment));
+  assert.deepEqual(Object.keys(credential.environment).sort(), ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN']);
+  await assert.rejects(new PrivateCredentialLoader({
+    loadPrivateCredential: async () => ({ ...source, accountId: '9ac354c8aa31d424224d8c4f3aa8ba2a' }), now: () => approvalNow,
+  }).load('aws-inventory'), /LEAST_PRIVILEGE_CREDENTIALS_REQUIRED/);
+  await assert.rejects(new PrivateCredentialLoader({
+    loadPrivateCredential: async () => ({ ...source, expiresAt: '2026-10-18T00:00:30.000Z' }), now: () => approvalNow,
+  }).load('aws-inventory', { minimumLifetimeMs: 60_000 }), /LEAST_PRIVILEGE_CREDENTIALS_REQUIRED/);
+  await assert.rejects(new PrivateCredentialLoader({
+    loadPrivateCredential: async () => ({ ...source, environment: { ...source.environment, AWS_PROFILE: 'owner-sso' } }), now: () => approvalNow,
+  }).load('aws-inventory'), /LEAST_PRIVILEGE_CREDENTIALS_REQUIRED/);
+  await assert.rejects(new PrivateCredentialLoader({
+    loadPrivateCredential: async () => ({ ...source, credentialSource: 'github-actions-oidc' }), now: () => approvalNow,
+  }).load('aws-inventory'), /LEAST_PRIVILEGE_CREDENTIALS_REQUIRED/);
+  const oidcCredential = await new PrivateCredentialLoader({
+    loadPrivateCredential: async () => ({
+      ...source,
+      credentialClass: 'aws-satellite-a',
+      credentialSource: 'github-actions-oidc',
+      instanceId: 'aws-oidc-satellite-a-0001',
+      principalArn: 'arn:aws:sts::231136241959:assumed-role/ap-proof-20261018-a-publisher/run-0001',
+    }), now: () => approvalNow,
+  }).load('aws-satellite-a');
+  assert.equal(oidcCredential.credentialSource, 'github-actions-oidc');
+
+  const invocation = { id: 'aws.inventory.identity', credentialClass: 'aws-inventory', runtimeRoot: root };
+  const environment = await buildChildEnvironment({ invocation, credential, isolationRoot: path.join(root, 'isolated'), parentEnvironment: { PATH: '/usr/bin:/bin' } });
+  assert.equal(environment.AWS_EC2_METADATA_DISABLED, 'true');
+  assert.equal(environment.AWS_ACCESS_KEY_ID, source.environment.AWS_ACCESS_KEY_ID);
+  assert.ok(environment.HOME.startsWith(path.join(root, 'isolated')));
+  assert.ok(environment.AWS_CONFIG_FILE.startsWith(path.join(root, 'isolated')));
+  assert.equal(environment.AWS_PROFILE, undefined);
+  for (const inherited of [
+    { PATH: '/usr/bin:/bin', AWS_PROFILE: 'artifact-pages-verify' },
+    { PATH: '/usr/bin:/bin', AWS_WEB_IDENTITY_TOKEN_FILE: '/tmp/token' },
+    { PATH: '/usr/bin:/bin', AWS_CONTAINER_CREDENTIALS_FULL_URI: 'http://169.254.170.2/token' },
+    { PATH: '/usr/bin:/bin', HTTP_PROXY: 'http://proxy.invalid' },
+    { PATH: '/usr/bin:/bin', AWS_ENDPOINT_URL: 'https://example.invalid' },
+    { PATH: '/usr/bin:/bin', CF_VERIFY_API_TOKEN: 'unrelated-token' },
+    { PATH: '/usr/bin:/bin', GH_TOKEN: 'unrelated-token' },
+    { PATH: '/usr/bin:/bin', SSH_AUTH_SOCK: '/tmp/ssh-agent.sock' },
+  ]) {
+    await assert.rejects(buildChildEnvironment({ invocation, credential, isolationRoot: path.join(root, 'isolated'), parentEnvironment: inherited }), /INHERITED_CREDENTIAL_FALLBACK/);
+  }
+});
+
+test('credential verification binds signed transition, provider identity, exact policy/resources and probe evidence', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'provider-proof-credential-record-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const setup = await createCredentialGateFixture(root, { command: 'inventory', approvalId: 'A4', policy: awsInventoryPolicy() });
+  const credential = await new setup.modules.loader.PrivateCredentialLoader({ loadPrivateCredential: async () => awsInventoryCredentialSource() }).load('aws-inventory');
+  const calls = [];
+  const recordDirectory = path.join(root, 'verification-records');
+  const recordStore = createVerificationRecordStore(recordDirectory);
+  const invocationDigest = 'e'.repeat(64);
+  const record = await setup.modules.verification.verifyCredential({
+    manifest: setup.manifest,
+    capability: setup.capability,
+    invocationId: 'aws.inventory.identity',
+    invocationDigest,
+    credential,
+    policyInspector: async ({ identityCredential, expected }) => {
+      assert.equal(identityCredential.instanceId, credential.instanceId);
+      return awsInventoryReadback(expected);
+    },
+    probeTransport: async ({ operation: op, probeId }) => {
+      calls.push({ probeId, operation: op });
+      return { status: 200, requestId: `fake-${probeId}` };
+    },
+    recordStore,
+    now: () => approvalNow,
+  });
+  assert.equal(record.schemaVersion, 1);
+  assert.equal(record.transition, 'inventory');
+  assert.equal(record.invocationId, 'aws.inventory.identity');
+  assert.equal(record.invocationDigest, invocationDigest);
+  assert.equal(record.credentialInstanceId, credential.instanceId);
+  assert.equal(record.credentialSource, 'aws-sso-assumed-role');
+  assert.equal(record.probes.length, 4);
+  assert.ok(record.probes.every((probe) => probe.outcome === 'positive' && probe.requestId));
+  assert.deepEqual(await recordStore.read(record.digest), record);
+  assert.equal((await stat(recordDirectory)).mode & 0o777, 0o700);
+  assert.equal((await stat(path.join(recordDirectory, `${record.digest}.json`))).mode & 0o777, 0o600);
+  assert.doesNotMatch(JSON.stringify(record), /AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN|fake-access|fake-secret|fake-session/u);
+  assert.equal(
+    setup.modules.verification.requireCredentialVerification({ record, manifest: setup.manifest, capability: setup.capability, invocationId: 'aws.inventory.identity', invocationDigest, credential, now: approvalNow }),
+    record,
+  );
+});
+
+test('credential renewal, policy drift, seal drift and stale verification each close the execution gate', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'provider-proof-stale-record-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const setup = await createCredentialGateFixture(root, { command: 'inventory', approvalId: 'A4', policy: awsInventoryPolicy() });
+  const credential = await new setup.modules.loader.PrivateCredentialLoader({ loadPrivateCredential: async () => awsInventoryCredentialSource() }).load('aws-inventory');
+  const record = await makeAwsInventoryRecord(setup, credential);
+  const verify = (candidate, manifest = setup.manifest, now = approvalNow) => setup.modules.verification.requireCredentialVerification({
+    record, manifest, capability: setup.capability, invocationId: 'aws.inventory.identity',
+    invocationDigest: 'e'.repeat(64), credential: candidate, now,
+  });
+  assert.throws(() => verify({ ...credential, instanceId: 'aws-session-renewed-0002' }), /LEAST_PRIVILEGE_CREDENTIALS_REQUIRED/);
+  assert.throws(() => verify({ ...credential, policyDigests: { ...credential.policyDigests, boundary: 'f'.repeat(64) } }), /LEAST_PRIVILEGE_CREDENTIALS_REQUIRED/);
+  assert.throws(() => verify(credential, { ...setup.manifest, activeSealDigest: 'f'.repeat(64) }), /LEAST_PRIVILEGE_CREDENTIALS_REQUIRED/);
+  assert.throws(() => verify(credential, setup.manifest, approvalNow + 6 * 60 * 1000), /LEAST_PRIVILEGE_CREDENTIALS_REQUIRED/);
+  assert.throws(() => verify({ ...credential, expiresAt: '2026-10-18T00:00:10.000Z' }, setup.manifest, approvalNow), /LEAST_PRIVILEGE_CREDENTIALS_REQUIRED/);
+});
+
+test('wrong account, bucket, distribution, zone and preserved-resource grants fail credential verification', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'provider-proof-scope-drift-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const setup = await createCredentialGateFixture(root, { command: 'bootstrap-aws', approvalId: 'A5', policy: awsProvisionerPolicy() });
+  const source = awsProvisionerCredentialSource();
+  const credential = await new setup.modules.loader.PrivateCredentialLoader({ loadPrivateCredential: async () => source }).load('aws-provisioner');
+  const verifyWith = (readback) => setup.modules.verification.verifyCredential({
+    manifest: setup.manifest, capability: setup.capability, invocationId: 'aws.provisioner.plan',
+    invocationDigest: 'd'.repeat(64), credential, policyInspector: async () => readback,
+    probeTransport: async () => ({ status: 200 }), recordStore: { async write() {} }, now: () => approvalNow,
+  });
+  await assert.rejects(new setup.modules.loader.PrivateCredentialLoader({
+    loadPrivateCredential: async () => ({ ...source, accountId: '9ac354c8aa31d424224d8c4f3aa8ba2a' }), now: () => approvalNow,
+  }).load('aws-provisioner'), /LEAST_PRIVILEGE_CREDENTIALS_REQUIRED/);
+  await assert.rejects(verifyWith(awsProvisionerReadback(setup.manifest.policy.credentialExpectations['aws-provisioner'], {
+    bucketArn: 'arn:aws:s3:::artifact-pages-231136241959-us-east-1',
+  })), /LEAST_PRIVILEGE_CREDENTIALS_REQUIRED/);
+  await assert.rejects(verifyWith(awsProvisionerReadback(setup.manifest.policy.credentialExpectations['aws-provisioner'], {
+    distributionArn: 'arn:aws:cloudfront::231136241959:distribution/ECFTIR5GVPQDF',
+  })), /LEAST_PRIVILEGE_CREDENTIALS_REQUIRED/);
+
+  const cloudflarePolicy = cloudflareWriterPolicy();
+  const cloudflareSetup = await createCredentialGateFixture(path.join(root, 'cloudflare'), { command: 'delivery:cloudflare', approvalId: 'A6', policy: cloudflarePolicy });
+  const cloudflareSource = cloudflareWriterCredentialSource();
+  const cloudflareCredential = await new cloudflareSetup.modules.loader.PrivateCredentialLoader({ loadPrivateCredential: async () => cloudflareSource, now: () => approvalNow }).load('cloudflare-site-a-writer');
+  const expected = cloudflareSetup.manifest.policy.credentialExpectations['cloudflare-site-a-writer'];
+  await assert.rejects(cloudflareSetup.modules.verification.verifyCredential({
+    manifest: cloudflareSetup.manifest,
+    capability: cloudflareSetup.capability,
+    invocationId: 'cloudflare.delivery.site-a',
+    invocationDigest: 'c'.repeat(64),
+    credential: cloudflareCredential,
+    policyInspector: async () => cloudflareWriterReadback(expected, { zoneId: 'wrong-zone' }),
+    probeTransport: async () => ({ status: 200 }),
+    recordStore: { async write() {} },
+    now: () => approvalNow,
+  }), /LEAST_PRIVILEGE_CREDENTIALS_REQUIRED/);
+});
+
+test('hosted OIDC delivery credentials are policy-read and probed before the write invocation', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'provider-proof-hosted-oidc-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const policy = awsSatellitePolicy();
+  const setup = await createCredentialGateFixture(root, { command: 'delivery:aws', approvalId: 'A5', policy });
+  const source = awsSatelliteCredentialSource();
+  const credential = await new setup.modules.loader.PrivateCredentialLoader({
+    loadPrivateCredential: async () => source,
+    now: () => approvalNow,
+  }).load('aws-satellite-a');
+  const record = await setup.modules.verification.verifyCredential({
+    manifest: setup.manifest,
+    capability: setup.capability,
+    invocationId: 'aws.delivery.site-a',
+    invocationDigest: '8'.repeat(64),
+    credential,
+    policyInspector: async ({ expected, identityCredential }) => {
+      assert.equal(identityCredential.credentialSource, 'github-actions-oidc');
+      return {
+        identity: { accountId: expected.accountId, roleArn: expected.roleArn, principalArn: source.principalArn },
+        policyDigests: structuredClone(expected.policyDigests),
+        resourceBindings: structuredClone(expected.resourceBindings),
+      };
+    },
+    probeTransport: async ({ probeId }) => {
+      const definition = PROBE_DEFINITIONS.find((probe) => probe.id === probeId);
+      return definition.kind === 'positive'
+        ? { status: 200, requestId: `hosted-positive-${probeId}` }
+        : { status: 403, errorCode: 'AccessDenied', requestId: `hosted-denied-${probeId}` };
+    },
+    recordStore: { async write() {} },
+    now: () => approvalNow,
+  });
+  assert.equal(record.credentialSource, 'github-actions-oidc');
+  assert.equal(record.identity.roleArn, policy.credentialExpectations['aws-satellite-a'].roleArn);
+  assert.ok(record.probes.some((probe) => probe.id === 'aws.publisher.neighbor-index-denied' && probe.outcome === 'denied'));
+  assert.doesNotMatch(JSON.stringify(record), /fake-secret|fake-session/u);
+});
+
+test('negative probes require a provider authorization response; 404, timeout and malformed results do not pass', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'provider-proof-negative-probes-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const setup = await createCredentialGateFixture(root, { command: 'bootstrap-aws', approvalId: 'A5', policy: awsProvisionerPolicy() });
+  const credential = await new setup.modules.loader.PrivateCredentialLoader({ loadPrivateCredential: async () => awsProvisionerCredentialSource() }).load('aws-provisioner');
+  const expected = setup.manifest.policy.credentialExpectations['aws-provisioner'];
+  const verify = (responseFor) => setup.modules.verification.verifyCredential({
+    manifest: setup.manifest,
+    capability: setup.capability,
+    invocationId: 'aws.provisioner.plan',
+    invocationDigest: 'd'.repeat(64),
+    credential,
+    policyInspector: async () => awsProvisionerReadback(expected),
+    probeTransport: async ({ probeId }) => responseFor(probeId),
+    recordStore: { async write() {} },
+    now: () => approvalNow,
+  });
+  await assert.rejects(verify((probeId) => probeId === 'aws.provisioner.preserved-object-denied'
+    ? { status: 404, errorCode: 'NoSuchKey', requestId: 'not-a-denial' }
+    : { status: 200, requestId: 'positive-control' }), /NEGATIVE_PROBE_NOT_DENIED/);
+  await assert.rejects(verify((probeId) => probeId === 'aws.provisioner.preserved-object-denied'
+    ? { status: 403, errorCode: 'AccessDenied', requestId: 'denied' }
+    : probeId === 'aws.provisioner.preserved-distribution-denied' ? null : { status: 200 }), /PROBE_RESULT_INVALID/);
+  let storedAfterTimeout = false;
+  await assert.rejects(setup.modules.verification.verifyCredential({
+    manifest: setup.manifest,
+    capability: setup.capability,
+    invocationId: 'aws.provisioner.plan',
+    invocationDigest: 'd'.repeat(64),
+    credential,
+    policyInspector: async () => awsProvisionerReadback(expected),
+    probeTransport: async () => new Promise(() => {}),
+    probeTimeoutMs: 5,
+    recordStore: { async write() { storedAfterTimeout = true; } },
+    now: () => approvalNow,
+  }), /PROBE_TIMEOUT/);
+  assert.equal(storedAfterTimeout, false);
+  assert.ok(PROBE_DEFINITIONS.filter((probe) => /(?:PutObject|DeleteObject|DeleteObjects)/u.test(probe.operation)).every((probe) => probe.stage === 'canary'));
+  assert.ok(PROBE_DEFINITIONS.filter((probe) => probe.provider === 'aws' && probe.credentialClass !== 'aws-inventory'
+    && probe.targetRef === 'awsPreservedBucket').every((probe) => probe.operation === 'ListBucket' && probe.expectedErrorCode === 'AccessDenied'));
+});
+
+test('supervised launcher accepts only the sealed descriptor and terminates recorded container children', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'provider-proof-launcher-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const runtime = path.join(root, 'runtime');
+  const toolDirectory = path.join(runtime, 'tools');
+  await mkdir(toolDirectory, { recursive: true });
+  const executablePath = path.join(toolDirectory, 'aws-cli');
+  const executableBytes = Buffer.from('sealed fake AWS CLI image payload\n');
+  await writeFile(executablePath, executableBytes, { mode: 0o700 });
+  const base = await createShellGuardFixture(root, {
+    policy: awsInventoryPolicy(),
+    execution: { tools: { awsCli: { path: 'tools/aws-cli', sha256: createHash('sha256').update(executableBytes).digest('hex') } }, roots: {} },
+    sealArtifacts: { 'post-apply': ['evidence.txt', 'tools/aws-cli'] },
+  });
+  const setup = await completeCredentialGateFixture(base, { command: 'inventory', approvalId: 'A4' });
+  const invocation = await setup.modules.launcher.resolveInvocation('aws.inventory.identity', {
+    runtimeRoot: setup.runtime, manifest: setup.manifest, activeSeal: setup.activeSeal,
+  });
+  const credential = await new setup.modules.loader.PrivateCredentialLoader({ loadPrivateCredential: async () => awsInventoryCredentialSource() }).load('aws-inventory');
+  const record = await makeAwsInventoryRecord(setup, credential, invocation.invocationDigest);
+
+  let launchedResolve;
+  const launched = new Promise((resolve) => { launchedResolve = resolve; });
+  const child = new EventEmitter();
+  child.pid = 993821;
+  child.stdout = new PassThrough();
+  child.stderr = new PassThrough();
+  const signals = [];
+  const killGroup = async (candidate, signal) => {
+    signals.push(signal);
+    candidate.emit('close', null, signal);
+  };
+  const run = setup.modules.launcher.runSupervisedInvocation({
+    invocation: { ...invocation, argv: ['s3api', 'delete-bucket', '--bucket', 'artifact-pages-231136241959-us-east-1'] },
+    manifest: setup.manifest,
+    capability: setup.capability,
+    credential,
+    verificationRecord: record,
+    parentEnvironment: { PATH: '/usr/bin:/bin' },
+    launchContainer: async () => {
+      launchedResolve();
+      return child;
+    },
+    killGroup,
+    now: () => approvalNow,
+  });
+  await assert.rejects(run, /INVOCATION_DESCRIPTOR_CHANGED/);
+  assert.deepEqual(signals, [], 'tampered argv was rejected before the container adapter ran');
+
+  let actualChild = new EventEmitter();
+  actualChild.pid = 993822;
+  actualChild.stdout = new PassThrough();
+  actualChild.stderr = new PassThrough();
+  let runPromise = setup.modules.launcher.runSupervisedInvocation({
+    invocation,
+    manifest: setup.manifest,
+    capability: setup.capability,
+    credential,
+    verificationRecord: record,
+    parentEnvironment: { PATH: '/usr/bin:/bin' },
+    launchContainer: async ({ shell, readOnlyInputs, hostCredentials, dockerSocket }) => {
+      assert.equal(shell, false);
+      assert.equal(readOnlyInputs, true);
+      assert.equal(hostCredentials, false);
+      assert.equal(dockerSocket, false);
+      launchedResolve();
+      return actualChild;
+    },
+    killGroup,
+    now: () => approvalNow,
+  });
+  const childExit = assert.rejects(runPromise, /CHILD_EXITED_NONZERO/);
+  await launched;
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(await setup.modules.launcher.terminateActiveChildren(killGroup), 1);
+  await childExit;
+  assert.deepEqual(signals, ['SIGTERM']);
+  assert.doesNotThrow(() => setup.modules.launcher.assertNoActiveChildren());
+});
+
 test('proof.mjs and policy.mjs have no direct child_process dependency', async () => {
   const forbidden = [
     /\bimport\b[^\n]*\bfrom\s*['"](?:node:)?child_process['"]/u,
@@ -1192,3 +1581,285 @@ test('proof.mjs and policy.mjs have no direct child_process dependency', async (
     for (const pattern of forbidden) assert.doesNotMatch(source, pattern, `${filename} should not load child_process directly`);
   }
 });
+
+async function createCredentialGateFixture(root, { command, approvalId, policy }) {
+  const fixture = await createShellGuardFixture(root, { policy });
+  return completeCredentialGateFixture(fixture, { command, approvalId });
+}
+
+async function completeCredentialGateFixture(fixture, { command, approvalId }) {
+  if (!(approvalId === 'A5' && command === 'delivery:aws')) await fixture.addApproval(approvalId, command);
+  const [seals, copiedPolicy, verification, loader, launcher, registry] = await Promise.all([
+    copiedModule(fixture.harness, 'seals.mjs'),
+    copiedModule(fixture.harness, 'policy.mjs'),
+    copiedModule(fixture.harness, 'credential-verification.mjs'),
+    copiedModule(fixture.harness, 'credential-loader.mjs'),
+    copiedModule(fixture.harness, 'launcher.mjs'),
+    copiedModule(fixture.harness, 'invocation-registry.mjs'),
+  ]);
+  const activeSeal = await seals.requireActiveSeal(fixture.manifestPath);
+  const rawManifest = JSON.parse(await readFile(fixture.manifestPath, 'utf8'));
+  const manifest = { ...rawManifest, activeSealDigest: activeSeal.digest, activeSeal, sealChainVerified: true };
+  const approval = await seals.verifyApprovalFile({ manifestPath: fixture.manifestPath, approvalId, command, now: approvalNow });
+  const capability = copiedPolicy.resolveCommandCapability(command, manifest, approval, approvalNow);
+  return { ...fixture, modules: { seals, policy: copiedPolicy, verification, loader, launcher, registry }, manifest, capability, activeSeal };
+}
+
+function awsInventoryPolicy() {
+  const roleArn = 'arn:aws:iam::231136241959:role/ap-proof-20261018-inventory';
+  const policyDigests = { identity: 'a'.repeat(64), inlinePolicy: 'b'.repeat(64), boundary: 'c'.repeat(64) };
+  const resourceBindings = {
+    roleArn,
+    bucketArns: [
+      'arn:aws:s3:::artifact-pages-231136241959-us-east-1',
+      'arn:aws:s3:::ap-proof-231136241959-20261018',
+    ],
+    distributionArns: [
+      'arn:aws:cloudfront::231136241959:distribution/ECFTIR5GVPQDF',
+      'arn:aws:cloudfront::231136241959:distribution/E2PROOF20261018',
+    ],
+  };
+  return {
+    version: 1,
+    denyByDefault: true,
+    credentialExpectations: {
+      'aws-inventory': { provider: 'aws', accountId: '231136241959', roleArn, policyDigests, resourceBindings },
+    },
+    verificationTargets: {
+      awsAccount: { provider: 'aws', accountId: '231136241959' },
+      awsPreservedBucket: confirmedAwsPreservedBucket(),
+      awsPreservedObject: confirmedAwsPreservedObject(),
+      awsPreservedDistribution: confirmedAwsPreservedDistribution(),
+    },
+  };
+}
+
+function awsProvisionerPolicy() {
+  const roleArn = 'arn:aws:iam::231136241959:role/ap-proof-20261018-provisioner';
+  const policyDigests = { identity: '1'.repeat(64), permissions: '2'.repeat(64), boundary: '3'.repeat(64) };
+  const resourceBindings = {
+    roleArn,
+    bucketArn: 'arn:aws:s3:::ap-proof-231136241959-20261018',
+    distributionArn: 'arn:aws:cloudfront::231136241959:distribution/E2PROOF20261018',
+  };
+  return {
+    version: 1,
+    denyByDefault: true,
+    credentialExpectations: {
+      'aws-provisioner': { provider: 'aws', accountId: '231136241959', roleArn, policyDigests, resourceBindings },
+    },
+    verificationTargets: {
+      awsAccount: { provider: 'aws', accountId: '231136241959' },
+      awsPreservedBucket: confirmedAwsPreservedBucket(),
+      awsPreservedObject: confirmedAwsPreservedObject(),
+      awsPreservedDistribution: confirmedAwsPreservedDistribution(),
+    },
+  };
+}
+
+function cloudflareWriterPolicy() {
+  const resourceBindings = {
+    bucket: 'artifact-pages-stream-verify',
+    accountId: '21a0acb78621cc00cfa655a276d77b74',
+    zoneId: 'zone-verify-20261018',
+    sitePrefixes: [
+      '_indexes/proof-a-20261018/', '_artifacts/proof-a-20261018/',
+      '_previews/proof-a-20261018/', '_control/sites/proof-a-20261018/',
+    ],
+  };
+  return {
+    version: 1,
+    denyByDefault: true,
+    credentialExpectations: {
+      'cloudflare-site-a-writer': {
+        provider: 'cloudflare', accountId: '21a0acb78621cc00cfa655a276d77b74',
+        policyDigests: { temporaryCredentialScope: '4'.repeat(64) }, resourceBindings,
+      },
+    },
+    verificationTargets: {},
+  };
+}
+
+function awsSatellitePolicy() {
+  const roleArn = 'arn:aws:iam::231136241959:role/ap-proof-20261018-a-publisher';
+  const bucketArn = 'arn:aws:s3:::ap-proof-231136241959-20261018';
+  const distributionArn = 'arn:aws:cloudfront::231136241959:distribution/E2PROOF20261018';
+  return {
+    version: 1,
+    denyByDefault: true,
+    credentialExpectations: {
+      'aws-satellite-a': {
+        provider: 'aws', accountId: '231136241959', roleArn,
+        policyDigests: { identity: '8'.repeat(64), permissions: '9'.repeat(64), boundary: 'a'.repeat(64) },
+        resourceBindings: { roleArn, bucketArns: [bucketArn], distributionArns: [distributionArn], prefixes: [
+          '_indexes/proof-a-20261018/', '_artifacts/proof-a-20261018/', '_previews/proof-a-20261018/', '_control/sites/proof-a-20261018/',
+        ] },
+      },
+    },
+    verificationTargets: {
+      awsAccount: { provider: 'aws', accountId: '231136241959' },
+      awsOwnIndex: { provider: 'aws', accountId: '231136241959', bucket: 'ap-proof-231136241959-20261018', key: '_indexes/proof-a-20261018/index.json' },
+      awsPreservedBucket: confirmedAwsPreservedBucket(),
+      awsPreservedObject: confirmedAwsPreservedObject(),
+      awsPreservedDistribution: confirmedAwsPreservedDistribution(),
+      awsNeighborIndex: confirmedAwsKey('proof-b-20261018', '_indexes/proof-b-20261018/index.json'),
+      awsNeighborArtifact: confirmedAwsKey('proof-b-20261018', '_artifacts/proof-b-20261018/report.json'),
+      awsNeighborPreview: confirmedAwsKey('proof-b-20261018', '_previews/proof-b-20261018/index.html'),
+      awsNeighborControl: confirmedAwsKey('proof-b-20261018', '_control/sites/proof-b-20261018/lock.json'),
+    },
+  };
+}
+
+function awsInventoryCredentialSource(overrides = {}) {
+  const expectation = awsInventoryPolicy().credentialExpectations['aws-inventory'];
+  return {
+    credentialClass: 'aws-inventory', provider: 'aws', credentialSource: 'aws-sso-assumed-role', accountId: expectation.accountId,
+    instanceId: 'aws-session-inventory-0001', expiresAt: '2030-01-01T00:00:00.000Z',
+    principalArn: 'arn:aws:sts::231136241959:assumed-role/ap-proof-20261018-inventory/session-0001',
+    policyDigests: structuredClone(expectation.policyDigests),
+    resourceBindings: structuredClone(expectation.resourceBindings),
+    environment: { AWS_ACCESS_KEY_ID: 'fake-access', AWS_SECRET_ACCESS_KEY: 'fake-secret', AWS_SESSION_TOKEN: 'fake-session' },
+    ...overrides,
+  };
+}
+
+function awsProvisionerCredentialSource(overrides = {}) {
+  const expectation = awsProvisionerPolicy().credentialExpectations['aws-provisioner'];
+  return {
+    credentialClass: 'aws-provisioner', provider: 'aws', credentialSource: 'aws-sso-assumed-role', accountId: expectation.accountId,
+    instanceId: 'aws-session-provisioner-0001', expiresAt: '2030-01-01T00:00:00.000Z',
+    principalArn: 'arn:aws:sts::231136241959:assumed-role/ap-proof-20261018-provisioner/session-0001',
+    policyDigests: structuredClone(expectation.policyDigests),
+    resourceBindings: structuredClone(expectation.resourceBindings),
+    environment: { AWS_ACCESS_KEY_ID: 'fake-access', AWS_SECRET_ACCESS_KEY: 'fake-secret', AWS_SESSION_TOKEN: 'fake-session' },
+    ...overrides,
+  };
+}
+
+function awsSatelliteCredentialSource(overrides = {}) {
+  const expected = awsSatellitePolicy().credentialExpectations['aws-satellite-a'];
+  return {
+    credentialClass: 'aws-satellite-a', provider: 'aws', credentialSource: 'github-actions-oidc', accountId: expected.accountId,
+    instanceId: 'aws-oidc-satellite-a-0001', expiresAt: '2026-10-18T01:00:00.000Z',
+    principalArn: 'arn:aws:sts::231136241959:assumed-role/ap-proof-20261018-a-publisher/hosted-run-0001',
+    policyDigests: structuredClone(expected.policyDigests),
+    resourceBindings: structuredClone(expected.resourceBindings),
+    environment: { AWS_ACCESS_KEY_ID: 'fake-access', AWS_SECRET_ACCESS_KEY: 'fake-secret', AWS_SESSION_TOKEN: 'fake-session' },
+    ...overrides,
+  };
+}
+
+function cloudflareWriterCredentialSource(overrides = {}) {
+  const expectation = cloudflareWriterPolicy().credentialExpectations['cloudflare-site-a-writer'];
+  return {
+    credentialClass: 'cloudflare-site-a-writer', provider: 'cloudflare', credentialSource: 'cloudflare-r2-temporary-session', accountId: expectation.accountId,
+    instanceId: 'cf-session-site-a-0001', expiresAt: '2026-10-18T00:15:00.000Z',
+    principalArn: 'cloudflare:verify:temporary-session:site-a-0001',
+    policyDigests: structuredClone(expectation.policyDigests),
+    resourceBindings: structuredClone(expectation.resourceBindings),
+    environment: {
+      CF_VERIFY_R2_ACCESS_KEY_ID: 'fake-r2-access',
+      CF_VERIFY_R2_SECRET_ACCESS_KEY: 'fake-r2-secret',
+      CF_VERIFY_R2_SESSION_TOKEN: 'fake-r2-session',
+    },
+    ...overrides,
+  };
+}
+
+function awsInventoryReadback(expected, overrides = {}) {
+  return {
+    identity: { accountId: expected.accountId, principalArn: awsInventoryCredentialSource().principalArn, roleArn: expected.roleArn },
+    policyDigests: structuredClone(expected.policyDigests),
+    resourceBindings: { ...structuredClone(expected.resourceBindings), ...overrides },
+  };
+}
+
+function awsProvisionerReadback(expected, overrides = {}) {
+  return {
+    identity: { accountId: expected.accountId, principalArn: awsProvisionerCredentialSource().principalArn, roleArn: expected.roleArn },
+    policyDigests: structuredClone(expected.policyDigests),
+    resourceBindings: { ...structuredClone(expected.resourceBindings), ...overrides },
+  };
+}
+
+function cloudflareWriterReadback(expected, overrides = {}) {
+  return {
+    identity: { accountId: expected.accountId, principalArn: cloudflareWriterCredentialSource().principalArn },
+    policyDigests: structuredClone(expected.policyDigests),
+    resourceBindings: { ...structuredClone(expected.resourceBindings), ...overrides },
+  };
+}
+
+function confirmedAwsPreservedObject() {
+  return makeTargetConfirmation({
+    provider: 'aws', accountId: '231136241959', bucket: 'artifact-pages-231136241959-us-east-1', key: 'evidence/existing-object.json',
+  }, { requestId: 'inventory-object-readback', etag: '"existing-etag"', sha256: '5'.repeat(64) });
+}
+
+function confirmedAwsPreservedBucket() {
+  return makeTargetConfirmation({
+    provider: 'aws', accountId: '231136241959', bucket: 'artifact-pages-231136241959-us-east-1',
+  }, { requestId: 'inventory-bucket-readback', etag: '"bucket-configuration-etag"', sha256: '7'.repeat(64) });
+}
+
+function confirmedAwsKey(site, key) {
+  return makeTargetConfirmation({
+    provider: 'aws', accountId: '231136241959', bucket: 'ap-proof-231136241959-20261018', site, key,
+  }, { requestId: `inventory-${site}-${key}`, etag: '"proof-etag"', sha256: 'b'.repeat(64) });
+}
+
+function confirmedAwsPreservedDistribution() {
+  return makeTargetConfirmation({
+    provider: 'aws', accountId: '231136241959', distributionId: 'ECFTIR5GVPQDF',
+  }, { requestId: 'inventory-distribution-readback', etag: '"distribution-etag"', sha256: '6'.repeat(64) });
+}
+
+async function makeAwsInventoryRecord(setup, credential, invocationDigest = 'e'.repeat(64)) {
+  const expected = setup.manifest.policy.credentialExpectations['aws-inventory'];
+  let record;
+  await setup.modules.verification.verifyCredential({
+    manifest: setup.manifest,
+    capability: setup.capability,
+    invocationId: 'aws.inventory.identity',
+    invocationDigest,
+    credential,
+    policyInspector: async () => awsInventoryReadback(expected),
+    probeTransport: async ({ probeId }) => ({ status: 200, requestId: `fake-${probeId}` }),
+    recordStore: { async write(candidate) { record = candidate; } },
+    now: () => approvalNow,
+  });
+  return record;
+}
+
+function policyTemplateBindings() {
+  const proofBucket = 'arn:aws:s3:::ap-proof-231136241959-20261018';
+  const proofDistribution = 'arn:aws:cloudfront::231136241959:distribution/E2PROOF20261018';
+  const proofRoleBase = 'arn:aws:iam::231136241959:role/ap-proof-20261018-';
+  const proofPolicyBase = 'arn:aws:iam::231136241959:policy/ap-proof-20261018-';
+  return {
+    OWNER_SSO_ROLE_ARN: 'arn:aws:iam::231136241959:role/aws-reserved/sso.amazonaws.com/us-east-1/Owner',
+    INVENTORY_ROLE_ARN: `${proofRoleBase}inventory`,
+    PROVISIONER_ROLE_ARN: `${proofRoleBase}provisioner`,
+    TEST_OPERATOR_ROLE_ARN: `${proofRoleBase}test-operator`,
+    OWNER_BOUNDARY_ARN: `${proofPolicyBase}boundary`,
+    PRESERVED_BUCKET_ARN: 'arn:aws:s3:::artifact-pages-231136241959-us-east-1',
+    PRESERVED_DISTRIBUTION_ARN: 'arn:aws:cloudfront::231136241959:distribution/ECFTIR5GVPQDF',
+    PROOF_BUCKET_ARN: proofBucket,
+    PROOF_DISTRIBUTION_ARN: proofDistribution,
+    PROOF_OAC_ARN: 'arn:aws:cloudfront::231136241959:origin-access-control/E2OAC20261018',
+    PROOF_FUNCTION_ARN: 'arn:aws:cloudfront::231136241959:function/ap-proof-20261018-viewer',
+    PROOF_CACHE_POLICY_ARNS: ['1', '2', '3', '4'].map((suffix) => `arn:aws:cloudfront::231136241959:cache-policy/E2CACHE${suffix}`),
+    PROOF_RESPONSE_HEADERS_POLICY_ARN: 'arn:aws:cloudfront::231136241959:response-headers-policy/E2HEADER20261018',
+    TERRAFORM_ERROR_OBJECT_ARN: `${proofBucket}/terraform.tfstate.tflock`,
+    PUBLISHER_ROLE_ARNS: ['admin-publisher', 'a-publisher', 'b-publisher', 'neighbor-publisher'].map((role) => `${proofRoleBase}${role}`),
+    PROOF_ROLE_ARNS: ['inventory', 'provisioner', 'test-operator', 'admin-publisher', 'a-publisher', 'b-publisher', 'neighbor-publisher'].map((role) => `${proofRoleBase}${role}`),
+    PROOF_POLICY_ARNS: [`${proofPolicyBase}boundary`, `${proofPolicyBase}operator`, `${proofPolicyBase}publisher`],
+    INVENTORIED_CLOUDFRONT_RESOURCE_ARNS: ['arn:aws:cloudfront::231136241959:distribution/ECFTIR5GVPQDF', 'arn:aws:cloudfront::231136241959:origin-access-control/E2OLD'],
+    INVENTORY_STATE_OBJECT_ARN: 'arn:aws:s3:::artifact-pages-231136241959-us-east-1/aws-verify/terraform.tfstate',
+    ADMIN_OIDC_SUBJECT: 'repo:artifact-pages/provider-proof-20261018:environment:proof-admin',
+    EXACT_SITE_OIDC_SUBJECT: 'repo:artifact-pages/provider-proof-20261018:environment:proof-site-a',
+    SITE_ID: 'proof-a-20261018',
+    VERIFIED_SHARED_BUCKET: 'artifact-pages-stream-verify',
+    VERIFIED_ZONE_ID: 'zone-verify-20261018',
+  };
+}

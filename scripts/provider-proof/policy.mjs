@@ -1,4 +1,5 @@
 import { fingerprintKey, verifyApprovalRecord } from './approval-validation.mjs';
+import path from 'node:path';
 
 export { fingerprintKey, verifyApprovalRecord };
 
@@ -95,6 +96,18 @@ export class AuthorizationError extends Error {
     this.name = 'AuthorizationError';
     this.code = code;
   }
+}
+
+export function requireExternalCapability(capability) {
+  if (!capability || capability[CAPABILITY_MARK] !== true || capability.localTest === true
+    || capability.manifest?.testOnly === true || !capability.manifest?.sealChainVerified
+    || !capability.manifest?.activeSealDigest || capability.sealDigest !== capability.manifest.activeSealDigest) {
+    throw new AuthorizationError('UNTRUSTED_CAPABILITY');
+  }
+  const rule = commandRules[capability.command];
+  if (!rule) throw new AuthorizationError('UNKNOWN_COMMAND');
+  if (rule.approval && !capability.approval) throw new AuthorizationError('OWNER_APPROVAL_REQUIRED', rule.approval);
+  return capability;
 }
 
 export function resolveCommandCapability(command, manifest, approvalRecord, now = Date.now()) {
@@ -868,21 +881,41 @@ export function validateDiscoveryCandidates({ candidates, approvedAccountId, tru
   return candidate;
 }
 
-export function validateChildEnvironment(environment, { allowProofCredentials = false } = {}) {
+export function validateChildEnvironment(environment, {
+  allowProofCredentials = false,
+  allowedCredentialKeys = [],
+  isolatedRoot,
+} = {}) {
   const forbidden = [
     'AWS_PROFILE', 'AWS_SHARED_CREDENTIALS_FILE', 'AWS_CONFIG_FILE', 'AWS_WEB_IDENTITY_TOKEN_FILE',
     'AWS_CONTAINER_CREDENTIALS_RELATIVE_URI', 'AWS_CONTAINER_CREDENTIALS_FULL_URI', 'AWS_EC2_METADATA_SERVICE_ENDPOINT',
-    'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN',
+    'AWS_ROLE_ARN', 'AWS_ROLE_SESSION_NAME', 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN',
+    'AWS_ENDPOINT_URL', 'AWS_ENDPOINT_URL_S3', 'AWS_CA_BUNDLE', 'CLOUDFLARE_API_TOKEN', 'CF_API_TOKEN',
+    'CF_R2_ACCESS_KEY_ID', 'CF_R2_SECRET_ACCESS_KEY', 'CF_R2_SESSION_TOKEN',
+    'CF_VERIFY_API_TOKEN', 'CF_VERIFY_R2_ACCESS_KEY_ID', 'CF_VERIFY_R2_SECRET_ACCESS_KEY', 'CF_VERIFY_R2_SESSION_TOKEN',
+    'CF_VERIFY_R2_REGISTRY_READER_ACCESS_KEY_ID', 'CF_VERIFY_R2_REGISTRY_READER_SECRET_ACCESS_KEY', 'CF_VERIFY_R2_REGISTRY_READER_SESSION_TOKEN',
+    'GITHUB_TOKEN', 'GH_TOKEN', 'ACTIONS_ID_TOKEN_REQUEST_TOKEN', 'ACTIONS_ID_TOKEN_REQUEST_URL', 'SSH_AUTH_SOCK', 'SSH_AGENT_PID',
   ];
   for (const key of forbidden) {
-    if (environment[key] && !(allowProofCredentials && ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN'].includes(key))) {
+    const credentialAllowed = allowProofCredentials && allowedCredentialKeys.includes(key);
+    const isolatedAwsConfig = allowProofCredentials && ['AWS_SHARED_CREDENTIALS_FILE', 'AWS_CONFIG_FILE'].includes(key)
+      && typeof isolatedRoot === 'string' && isInside(isolatedRoot, path.resolve(environment[key] ?? ''));
+    if (environment[key] && !credentialAllowed && !isolatedAwsConfig) {
       throw new AuthorizationError('INHERITED_CREDENTIAL_FALLBACK', key);
     }
   }
-  if (environment.ARTIFACT_PAGES_PROOF_BUCKET_OVERRIDE
-    && environment.ARTIFACT_PAGES_PROOF_BUCKET_OVERRIDE !== TARGETS.proofAwsBucket) {
-    throw new AuthorizationError('SMOKE_BUCKET_OVERRIDE_DENIED');
+  if (environment.ARTIFACT_PAGES_PROOF_BUCKET_OVERRIDE) throw new AuthorizationError('SMOKE_BUCKET_OVERRIDE_DENIED');
+  if (allowProofCredentials && (environment.AWS_EC2_METADATA_DISABLED !== 'true'
+    || !isInside(isolatedRoot ?? '', path.resolve(environment.HOME ?? ''))
+    || !isInside(isolatedRoot ?? '', path.resolve(environment.TMPDIR ?? '')))) {
+    throw new AuthorizationError('ISOLATED_CHILD_ENVIRONMENT_REQUIRED');
   }
+}
+
+function isInside(parent, candidate) {
+  if (!parent) return false;
+  const relative = path.relative(path.resolve(parent), path.resolve(candidate));
+  return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
 }
 
 export function validateEffectiveConfig(config, { provider, target }) {

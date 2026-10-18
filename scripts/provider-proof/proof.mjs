@@ -4,6 +4,9 @@ import { readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { attachApproval, prepareApproval } from './approval-helpers.mjs';
 import { appendSeal, requireActiveSeal, verifyApprovalFile } from './seals.mjs';
+import { assertInvocationMatchesTransition, getExecutionPath, getInvocation } from './invocation-registry.mjs';
+import { resolveInvocation, runSupervisedInvocation } from './launcher.mjs';
+import { createVerificationRecordStore, verifyCredential } from './credential-verification.mjs';
 import {
   AuthorizationError,
   TARGETS,
@@ -17,25 +20,26 @@ import {
 
 const valueOptions = new Set([
   '--manifest', '--stage', '--artifact', '--provider', '--cases', '--approval', '--path', '--out',
-  '--command', '--operation', '--phase', '--writer-version', '--plan-digest', '--expires-at', '--signature', '--payload',
+  '--command', '--operation', '--phase', '--writer-version', '--plan-digest', '--expires-at', '--signature', '--payload', '--invocation',
 ]);
 const booleanOptions = new Set(['--offline', '--setup', '--observe-only', '--reconcile', '--plan-only']);
 
-export async function main(argv = process.argv.slice(2), environment = process.env) {
+export async function main(argv = process.argv.slice(2), environment = process.env, services = {}) {
   try {
     const [subcommand, ...rest] = argv;
-    if (!subcommand) throw new Error('USAGE: proof.mjs <seal|approval-prepare|approval-attach|inventory|bootstrap-aws|delivery|failures|lifecycle|gzip|cleanup|cloudflare-api-get|guard|external>');
+    if (!subcommand) throw new Error('USAGE: proof.mjs <seal|approval-prepare|approval-attach|verify-credentials|inventory|bootstrap-aws|delivery|failures|lifecycle|gzip|cleanup|cloudflare-api-get|guard|external>');
     const args = parseOptions(rest);
     rejectContextOverrides(environment);
     if (subcommand === 'seal') return await commandSeal(args);
     if (subcommand === 'approval-prepare') return await commandApprovalPrepare(args);
     if (subcommand === 'approval-attach') return await commandApprovalAttach(args);
     if (subcommand === 'guard') return await commandGuard(args, environment);
+    if (subcommand === 'verify-credentials') return await commandVerifyCredentials(args, environment, services);
     if (subcommand === 'external') {
       validateChildEnvironment(environment);
       return commandExternal(args);
     }
-    return await commandPhase(subcommand, args, environment);
+    return await commandPhase(subcommand, args, environment, services);
   } catch (error) {
     const code = error?.code ?? 'PROOF_HARNESS_ERROR';
     process.stderr.write(`${code}\n`);
@@ -67,7 +71,7 @@ async function commandGuard(args, environment) {
   return 0;
 }
 
-async function commandPhase(subcommand, args, environment) {
+async function commandPhase(subcommand, args, environment, services) {
   requireValues(args, ['--manifest']);
   const { command, approval } = commandFor(subcommand, args);
   if (approval && args['--approval'] !== approval) throw new AuthorizationError('APPROVAL_ID_MISMATCH');
@@ -83,12 +87,87 @@ async function commandPhase(subcommand, args, environment) {
     process.stdout.write(`${JSON.stringify({ ok: true, command, phase: capability.phase, context: capability.context, sealDigest: capability.sealDigest, planOnly: true })}\n`);
     return 0;
   }
-  throw new AuthorizationError('ENFORCING_BROKER_REQUIRED');
+  if (subcommand === 'external') throw new AuthorizationError('ARBITRARY_COMMAND_PAYLOAD_REJECTED');
+  const path = getExecutionPath(command);
+  if (!args['--invocation']) throw new AuthorizationError('LEAST_PRIVILEGE_CREDENTIALS_REQUIRED', 'fixed invocation is required');
+  const invocation = assertInvocationMatchesTransition(args['--invocation'], capability.command);
+  if (!path.invocationIds.includes(args['--invocation'])) throw new AuthorizationError('EXECUTION_PATH_NOT_IMPLEMENTED');
+  const result = await executeVerifiedInvocation({
+    manifestPath: args['--manifest'], manifest, capability, invocationId: args['--invocation'], services,
+  });
+  process.stdout.write(`${JSON.stringify({ ok: true, command, invocationId: invocation.id, verificationDigest: result.verificationDigest, exitCode: result.exitCode })}\n`);
+  return 0;
 }
 
 function commandExternal(args) {
   requireValues(args, ['--manifest', '--command']);
-  throw new AuthorizationError('UNMODIFIED_SUBPROCESS_BLOCKED_REQUIRES_ENFORCING_BROKER');
+  throw new AuthorizationError('ARBITRARY_COMMAND_PAYLOAD_REJECTED');
+}
+
+async function commandVerifyCredentials(args, environment, services) {
+  requireValues(args, ['--manifest', '--approval', '--invocation']);
+  validateChildEnvironment(environment);
+  const descriptor = getInvocation(args['--invocation']);
+  if (args['--approval'] !== approvalForCommand(descriptor.transition)) throw new AuthorizationError('APPROVAL_ID_MISMATCH');
+  const { manifest, capability } = await loadCapability(args['--manifest'], descriptor.transition, args['--approval']);
+  if (descriptor.transition !== capability.command) throw new AuthorizationError('INVOCATION_TRANSITION_MISMATCH');
+  const result = await verifyInvocationCredentials({
+    manifestPath: args['--manifest'], manifest, capability, invocationId: args['--invocation'], services,
+  });
+  process.stdout.write(`${JSON.stringify({ ok: true, invocationId: args['--invocation'], verificationDigest: result.record.digest, verifiedAt: result.record.verifiedAt, expiresAt: result.record.credentialExpiresAt })}\n`);
+  return 0;
+}
+
+async function verifyInvocationCredentials({ manifestPath, manifest, capability, invocationId, services }) {
+  if (!hasCredentialVerificationServices(services)) throw new AuthorizationError('EXECUTION_PATH_NOT_IMPLEMENTED', 'provider identity/policy inspector and probe adapter are unavailable');
+  const invocation = await resolveInvocation(invocationId, {
+    runtimeRoot: path.dirname(path.resolve(manifestPath)),
+    manifest,
+    activeSeal: manifest.activeSeal,
+  });
+  const minimumLifetimeMs = invocation.timeoutMs + (manifest.teardownReserveMs ?? 60000);
+  const credential = await services.credentialLoader.load(invocation.credentialClass, { minimumLifetimeMs });
+  const recordStore = services.recordStore ?? createVerificationRecordStore(path.join(path.dirname(path.resolve(manifestPath)), 'verification-records'));
+  const record = await verifyCredential({
+    manifest, capability, invocationId, invocationDigest: invocation.invocationDigest,
+    credential, policyInspector: services.policyInspector, probeTransport: services.probeTransport,
+    recordStore, now: services.now,
+  });
+  return { invocation, credential, record, recordStore };
+}
+
+async function executeVerifiedInvocation({ manifestPath, manifest, capability, invocationId, services }) {
+  if (typeof services.launchContainer !== 'function') {
+    throw new AuthorizationError('EXECUTION_PATH_NOT_IMPLEMENTED', 'reviewed Linux container runner is unavailable');
+  }
+  const verification = await verifyInvocationCredentials({ manifestPath, manifest, capability, invocationId, services });
+  const result = await runSupervisedInvocation({
+    invocation: verification.invocation,
+    manifest,
+    capability,
+    credential: verification.credential,
+    verificationRecord: verification.record,
+    parentEnvironment: services.parentEnvironment ?? process.env,
+    launchContainer: services.launchContainer,
+    killGroup: services.killGroup,
+    now: services.now,
+  });
+  return result;
+}
+
+function hasCredentialVerificationServices(services) {
+  return typeof services?.credentialLoader?.load === 'function'
+    && typeof services?.policyInspector === 'function'
+    && typeof services?.probeTransport === 'function';
+}
+
+function approvalForCommand(command) {
+  const approved = { inventory: 'A4', 'cloudflare-api-get': 'A4', 'bootstrap-aws': 'A5', 'delivery:aws': 'A5', 'delivery:cloudflare': 'A6', 'failures:aws': 'A7', 'failures:cloudflare': 'A7' };
+  if (command.startsWith('lifecycle:')) return 'A8';
+  if (command === 'gzip') return 'A9';
+  if (command === 'cleanup:post-a7') return 'A7';
+  if (command === 'cleanup:final-a8') return 'A8';
+  return approved[command];
 }
 
 async function commandApprovalPrepare(args) {

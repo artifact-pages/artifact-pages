@@ -1,0 +1,117 @@
+{
+  "profiles": {
+    "a7-proof": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "WriteOnlyA7SitePrefixes",
+          "Effect": "Allow",
+          "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+          "Resource": [
+            "{{PROOF_BUCKET_ARN}}/_indexes/proof-a-20261018/*", "{{PROOF_BUCKET_ARN}}/_artifacts/proof-a-20261018/*", "{{PROOF_BUCKET_ARN}}/_previews/proof-a-20261018/*", "{{PROOF_BUCKET_ARN}}/_control/sites/proof-a-20261018/*",
+            "{{PROOF_BUCKET_ARN}}/_indexes/proof-b-20261018/*", "{{PROOF_BUCKET_ARN}}/_artifacts/proof-b-20261018/*", "{{PROOF_BUCKET_ARN}}/_previews/proof-b-20261018/*", "{{PROOF_BUCKET_ARN}}/_control/sites/proof-b-20261018/*",
+            "{{PROOF_BUCKET_ARN}}/_indexes/proof-neighbor-20261018/*", "{{PROOF_BUCKET_ARN}}/_artifacts/proof-neighbor-20261018/*", "{{PROOF_BUCKET_ARN}}/_previews/proof-neighbor-20261018/*", "{{PROOF_BUCKET_ARN}}/_control/sites/proof-neighbor-20261018/*"
+          ]
+        },
+        {
+          "Sid": "ListOnlyA7SitePrefixes",
+          "Effect": "Allow",
+          "Action": "s3:ListBucket",
+          "Resource": "{{PROOF_BUCKET_ARN}}",
+          "Condition": {"StringLike": {"s3:prefix": [
+            "_indexes/proof-a-20261018/*", "_artifacts/proof-a-20261018/*", "_previews/proof-a-20261018/*", "_control/sites/proof-a-20261018/*",
+            "_indexes/proof-b-20261018/*", "_artifacts/proof-b-20261018/*", "_previews/proof-b-20261018/*", "_control/sites/proof-b-20261018/*",
+            "_indexes/proof-neighbor-20261018/*", "_artifacts/proof-neighbor-20261018/*", "_previews/proof-neighbor-20261018/*", "_control/sites/proof-neighbor-20261018/*"
+          ]}}
+        },
+        {
+          "Sid": "ReadOnlyProofBucketConfigurationAndDistribution",
+          "Effect": "Allow",
+          "Action": ["s3:GetBucketLocation", "s3:GetBucketVersioning", "s3:GetBucketLifecycleConfiguration", "cloudfront:GetDistribution", "cloudfront:GetInvalidation"],
+          "Resource": ["{{PROOF_BUCKET_ARN}}", "{{PROOF_DISTRIBUTION_ARN}}"]
+        },
+        {"Sid": "ReadCallerIdentity", "Effect": "Allow", "Action": "sts:GetCallerIdentity", "Resource": "*"}
+      ]
+    },
+    "a8-observer": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "ObserveOnlyLifePrefix",
+          "Effect": "Allow",
+          "Action": ["s3:GetObject", "s3:GetObjectVersion", "s3:GetObjectVersionTagging"],
+          "Resource": "{{PROOF_BUCKET_ARN}}/_previews/proof-life-20261018/*"
+        },
+        {
+          "Sid": "ListOnlyLifePrefixAndVersions",
+          "Effect": "Allow",
+          "Action": ["s3:ListBucket", "s3:ListBucketVersions"],
+          "Resource": "{{PROOF_BUCKET_ARN}}",
+          "Condition": {"StringLike": {"s3:prefix": ["_previews/proof-life-20261018/", "_previews/proof-life-20261018/*"]}}
+        },
+        {"Sid": "ReadCallerIdentity", "Effect": "Allow", "Action": "sts:GetCallerIdentity", "Resource": "*"}
+      ]
+    },
+    "a8-reconciliation": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "ReconcileOnlyLifePrefixAfterObservation",
+          "Effect": "Allow",
+          "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+          "Resource": ["{{PROOF_BUCKET_ARN}}/_indexes/proof-life-20261018/*", "{{PROOF_BUCKET_ARN}}/_artifacts/proof-life-20261018/*", "{{PROOF_BUCKET_ARN}}/_previews/proof-life-20261018/*", "{{PROOF_BUCKET_ARN}}/_control/sites/proof-life-20261018/*"]
+        },
+        {
+          "Sid": "ListOnlyLifePrefix",
+          "Effect": "Allow",
+          "Action": "s3:ListBucket",
+          "Resource": "{{PROOF_BUCKET_ARN}}",
+          "Condition": {"StringLike": {"s3:prefix": ["_indexes/proof-life-20261018/*", "_artifacts/proof-life-20261018/*", "_previews/proof-life-20261018/*", "_control/sites/proof-life-20261018/*"]}}
+        },
+        {"Sid": "ReadCallerIdentity", "Effect": "Allow", "Action": "sts:GetCallerIdentity", "Resource": "*"}
+      ]
+    },
+    "a9-gzip": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "WriteOnlyA9SiteAndControlPrefixes",
+          "Effect": "Allow",
+          "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+          "Resource": [
+            "{{PROOF_BUCKET_ARN}}/_indexes/proof-a-20261018/*", "{{PROOF_BUCKET_ARN}}/_artifacts/proof-a-20261018/*", "{{PROOF_BUCKET_ARN}}/_previews/proof-a-20261018/*", "{{PROOF_BUCKET_ARN}}/_control/sites/proof-a-20261018/*",
+            "{{PROOF_BUCKET_ARN}}/_indexes/proof-b-20261018/*", "{{PROOF_BUCKET_ARN}}/_artifacts/proof-b-20261018/*", "{{PROOF_BUCKET_ARN}}/_previews/proof-b-20261018/*", "{{PROOF_BUCKET_ARN}}/_control/sites/proof-b-20261018/*",
+            "{{PROOF_BUCKET_ARN}}/_control/versions/app.json", "{{PROOF_BUCKET_ARN}}/_control/versions/registry.json"
+          ]
+        },
+        {
+          "Sid": "ListOnlyA9SitePrefixes",
+          "Effect": "Allow",
+          "Action": "s3:ListBucket",
+          "Resource": "{{PROOF_BUCKET_ARN}}",
+          "Condition": {"StringLike": {"s3:prefix": ["_indexes/proof-a-20261018/*", "_artifacts/proof-a-20261018/*", "_previews/proof-a-20261018/*", "_control/sites/proof-a-20261018/*", "_indexes/proof-b-20261018/*", "_artifacts/proof-b-20261018/*", "_previews/proof-b-20261018/*", "_control/sites/proof-b-20261018/*"]}}
+        },
+        {"Sid": "ReadCallerIdentity", "Effect": "Allow", "Action": "sts:GetCallerIdentity", "Resource": "*"}
+      ]
+    },
+    "final-cleanup": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "DeleteVersionsOnlyInProofNamespaces",
+          "Effect": "Allow",
+          "Action": ["s3:ListBucketVersions", "s3:GetObjectVersion", "s3:DeleteObjectVersion"],
+          "Resource": [
+            "{{PROOF_BUCKET_ARN}}",
+            "{{PROOF_BUCKET_ARN}}/_indexes/proof-a-20261018/*", "{{PROOF_BUCKET_ARN}}/_artifacts/proof-a-20261018/*", "{{PROOF_BUCKET_ARN}}/_previews/proof-a-20261018/*", "{{PROOF_BUCKET_ARN}}/_control/sites/proof-a-20261018/*",
+            "{{PROOF_BUCKET_ARN}}/_indexes/proof-b-20261018/*", "{{PROOF_BUCKET_ARN}}/_artifacts/proof-b-20261018/*", "{{PROOF_BUCKET_ARN}}/_previews/proof-b-20261018/*", "{{PROOF_BUCKET_ARN}}/_control/sites/proof-b-20261018/*",
+            "{{PROOF_BUCKET_ARN}}/_indexes/proof-neighbor-20261018/*", "{{PROOF_BUCKET_ARN}}/_artifacts/proof-neighbor-20261018/*", "{{PROOF_BUCKET_ARN}}/_previews/proof-neighbor-20261018/*", "{{PROOF_BUCKET_ARN}}/_control/sites/proof-neighbor-20261018/*",
+            "{{PROOF_BUCKET_ARN}}/_indexes/proof-life-20261018/*", "{{PROOF_BUCKET_ARN}}/_artifacts/proof-life-20261018/*", "{{PROOF_BUCKET_ARN}}/_previews/proof-life-20261018/*", "{{PROOF_BUCKET_ARN}}/_control/sites/proof-life-20261018/*",
+            "{{PROOF_BUCKET_ARN}}/_indexes/sites.json", "{{PROOF_BUCKET_ARN}}/index.html", "{{PROOF_BUCKET_ARN}}/preview-bridge.js", "{{PROOF_BUCKET_ARN}}/assets/*"
+          ]
+        },
+        {"Sid": "ReadCallerIdentity", "Effect": "Allow", "Action": "sts:GetCallerIdentity", "Resource": "*"}
+      ]
+    }
+  }
+}

@@ -12,7 +12,7 @@ The checked-in local harness is under [`scripts/provider-proof/`](../../../scrip
 
 ## Approval record and A8-short
 
-Owner decisions recorded on 2026-10-18: A4–A7 approved; A8 approved in the shortened form below; A9 approved conditional on released CLI v0.5.0 and all four Actions v0.3.0, with reviewed immutable pins. Release publication itself is outside these approvals. Keep four gates distinct: **harness merged**, **broker coverage reviewed**, **concrete transition signed**, and **provider proof obtained**. None substitutes for the next.
+Owner decisions recorded on 2026-10-18: A4–A7 approved; A8 approved in the shortened form below; A9 approved conditional on released CLI v0.5.0 and all four Actions v0.3.0, with reviewed immutable pins. Release publication itself is outside these approvals. Keep four gates distinct: **harness and launcher reviewed; credential scope verified; concrete transition SSH-signed; provider proof obtained**. None substitutes for another.
 
 Owner approval uses only the checked-in pinned SSH trust anchor. After enrollment by PR, prepare one canonical payload for the exact `approvalId` and command, present its scope, active seal, plan/artifact hashes, expiry and payload digest in chat, and obtain the owner’s approval there. The owner inspects and signs the prepared payload on their terminal with `ssh-keygen -Y sign -f "$HOME/.ssh/<owner-key>" -n artifact-pages-provider-proof <payload>`. Use `commands.sh run approval-attach` to verify the resulting SSH signature against principal `owner` and attach it without changing payload fields. Signing remains owner-operated. Each transition has a separate immutable record; changed scope, seal, command or expiry creates another record and keeps earlier records. The current unenrolled anchor makes both prepare and attach fail closed until its enrollment PR is merged.
 
@@ -65,21 +65,7 @@ Read-only workspace sources: workspace `STATUS.md` **In flight / infra lane and 
 
 AWS Terraform: `preview_retention_days=1`, `price_class=PriceClass_100`, `viewer_protocol_policy=redirect-to-https`, no WAF. Admin trust is the exact GitHub subject for `proof-admin`; satellite map a/b/neighbor gets its matching exact environment subject (life runs under admin). Read the new repo's numeric owner/repo IDs and OIDC `sub_claim_prefix`; freeze concrete immutable subjects before plan. No wildcards, no branch subject fallback, no trust changes on existing roles. Roles: `ap-proof-20261018-admin-publisher` and `ap-proof-20261018-<site>-publisher` using the module's hash rule if necessary. In addition, A5 creates one test-only operator role `ap-proof-20261018-test-operator` and its policy outside the reference module, with trust limited to the exact inventoried SSO role ARN; no changes to that existing SSO role or the reference OIDC role trust. Only these new roles/policies can be created/deleted. Use existing `artifact-pages-verify` SSO profile for A4 inventory and A5/A8 Terraform plan/apply after owner login; test identities and containment are specified below. Sessions <=1 hour, no long-lived AWS key creation. Cloudflare uses verify-only parent credentials; mint 15-minute scoped children with current `_control/sites/<site>/` grants plus read-only `_control/versions/app.json` and separate registry reader. No production token, parent permission expansion or token logging.
 
-A4 commands are **future command payloads requiring A4**, including curl/browser requests. Pass every command outside the harness through `commands.sh external --manifest "$E/manifest.json" --command '<command>'`; it currently fails closed until the enforcing broker is implemented, sealed and reviewed. Harness commands use `commands.sh run`. `$E` is a new mode-0700 evidence directory. The supervised launcher and its eventual Linux-container runner must receive credentials through the host loader, without shell tracing; never `cat` or `source` arbitrary files into logs. `~/.config/artifact-pages-verify/` contents may be **listed, never printed**. Reject inherited production credentials. `$CF_ACCOUNT` must equal the verify ID and `$CF_ZONE_NAME` must equal `artifact-pages.stream` before any request. The loader checks the effective target of each CLI config, not only environment names.
-
-```sh
-"$H/commands.sh" external --manifest "$E/manifest.json" --command 'aws --profile artifact-pages-verify sts get-caller-identity > "$E/aws-identity.json"'
-"$H/commands.sh" external --manifest "$E/manifest.json" --command 'aws --profile artifact-pages-verify s3api list-buckets > "$E/aws-buckets.json"'
-"$H/commands.sh" external --manifest "$E/manifest.json" --command 'aws --profile artifact-pages-verify cloudfront get-distribution --id ECFTIR5GVPQDF > "$E/aws-existing-distribution.json"'
-"$H/commands.sh" external --manifest "$E/manifest.json" --command 'aws --profile artifact-pages-verify iam get-open-id-connect-provider --open-id-connect-provider-arn arn:aws:iam::231136241959:oidc-provider/token.actions.githubusercontent.com > "$E/oidc-provider.json"'
-"$H/commands.sh" external --manifest "$E/manifest.json" --command 'terraform version -json > "$E/terraform-version.json"'
-"$H/commands.sh" external --manifest "$E/manifest.json" --command 'aws --version > "$E/aws-cli-version.txt" 2>&1'
-"$H/commands.sh" external --manifest "$E/manifest.json" --command 'terraform -chdir="$CF_ROOT" init -reconfigure -lockfile=readonly -backend-config="$E/cf-backend.hcl" > "$E/cf-init.log"'
-"$H/commands.sh" external --manifest "$E/manifest.json" --command 'terraform -chdir="$CF_ROOT" state list > "$E/cf-state-addresses.txt"'
-"$H/commands.sh" external --manifest "$E/manifest.json" --command 'terraform -chdir="$CF_ROOT" plan -refresh-only -lock=false -detailed-exitcode -out="$E/cf-refresh.plan" > "$E/cf-refresh.log"'
-"$H/commands.sh" external --manifest "$E/manifest.json" --command 'aws --endpoint-url "$R2_ENDPOINT" s3api list-objects-v2 --bucket "$CF_BUCKET" > "$E/cf-objects.json"'
-"$H/commands.sh" run cloudflare-api-get --path "/accounts/$CF_ACCOUNT/r2/buckets/$CF_BUCKET/lifecycle" --manifest "$E/manifest.json" --approval A4 --out "$E/cf-lifecycle.json"
-```
+A4 provider invocations are selected only by the fixed registry: `aws.inventory.identity`, `aws.inventory.buckets`, `aws.inventory.preserved-distribution`, `aws.inventory.oidc-provider`, and `aws.inventory.terraform-version`. The CLI accepts invocation IDs, never shell command strings; unknown IDs and unsupported adapter paths fail with `EXECUTION_PATH_NOT_IMPLEMENTED`. `$E` is a new mode-0700 evidence directory. Credentials come from the private loader without shell tracing; never `cat` or `source` arbitrary files into logs. `~/.config/artifact-pages-verify/` contents may be **listed, never printed**. Reject inherited production credentials. The loader verifies the effective target of each sealed CLI configuration, not only environment names. Existing Cloudflare state refresh and API inventory require their own fixed, reviewed invocation descriptors before they are executable.
 
 A4 confirms the installed Terraform **1.16.4** and AWS CLI **2.27.41** against these ops-record-derived selections; record the actual versions, and stop for a reviewed pin amendment if they differ. `$CF_ROOT` is an isolated local copy of the verification root, initialized against the **existing** verify backend using a privately prepared `$E/cf-backend.hcl` with the inventoried endpoint/bucket/key. Never initialize a missing state/backend, migrate state or run apply during A4. Init writes only local provider/backend metadata; `-lock=false` prevents a remote lock write during the refresh-only plan. Coordinate a no-writer inventory window and compare state serial/hash before and after; any change invalidates the unlocked snapshot and stops the proof.
 
@@ -108,7 +94,11 @@ Each row is the sole definition of that outstanding proof; instructions below ex
 
 ### Local preparation and immutable evidence
 
-`.local/provider-proof-20261018/` holds runtime-only `manifest.json`, seals, fake fixtures and sanitized evidence. Checked-in code is under `scripts/provider-proof/`; it is a harness, not a product CLI surface. Credentials and raw provider state stay outside Git. `commands.sh` rejects missing or invalid signed approval records, target mismatch, changed seal/artifact hashes, inventory collisions, expired scope, inherited credential fallbacks and exhausted caps. The current `external` path deliberately refuses unmodified AWS, Cloudflare, Terraform and GitHub subprocesses until an enforcing request broker is supplied and its digest is sealed. Configuration checks alone do not establish request interception. The fake transport and Go test prove only local authorization behavior; they are not provider evidence and do not authorize external execution.
+`.local/provider-proof-20261018/` holds runtime-only `manifest.json`, seals, fake fixtures, credential-verification records and sanitized evidence. Checked-in code is under `scripts/provider-proof/`; it is a harness, not a product CLI surface. Credentials and raw provider state stay outside Git. `commands.sh` rejects missing or invalid signed approval records, target mismatch, changed seal/artifact hashes, inventory collisions, expired scope, inherited credential fallbacks and exhausted caps. Released tools authenticate directly with verified least-privilege credentials. The harness controls fixed invocation selection, sealed inputs, credential selection, approval windows, deadlines and cleanup; provider authorization controls the requests those credentials can perform. The fake transport and Go test prove only local authorization behavior; they are not provider evidence.
+
+An executable transition requires a valid active seal and owner SSH-signed approval for the exact command, scope, artifacts and expiry; a fixed invocation with verified executable, configuration, working-directory, source and saved-plan digests; a reviewed identity, policy and resource binding; fresh credential-verification evidence from the same credentials supplied to the child; successful positive controls and required provider-denied negative probes; a successful preservation checkpoint; and enough remaining credential lifetime, approval time, usage allowance and teardown reserve. Missing or stale verification fails with `LEAST_PRIVILEGE_CREDENTIALS_REQUIRED`. A known command without a reviewed implementation fails with `EXECUTION_PATH_NOT_IMPLEMENTED`. No environment variable, manifest boolean, `guard` success or operator assertion bypasses either gate.
+
+Verification records bind the run, active seal, transition, invocation digest, provider identity, credential-instance identifier, policy digests, concrete resource bindings, probe results, verification time and credential expiry. They contain no credential material. Renewed credentials or changed policies, bindings, plans, configurations or seals require verification again. Probes are explicitly authorized preliminary operations: they require the applicable signed transition, do not recursively require a completed credential-verification record, and permit only the originally approved invocation.
 
 The command-derived capabilities implement the staged table from Sol's decision:
 
@@ -133,41 +123,22 @@ Harness subcommands fixed by this plan:
 "$H/commands.sh" run seal --manifest "$E/manifest.json" --offline
 "$H/commands.sh" run approval-prepare --manifest "$E/manifest.json" --approval A5 --command delivery:aws --expires-at "$A5_EXPIRES_AT"
 "$H/commands.sh" run approval-attach --manifest "$E/manifest.json" --approval A5 --command delivery:aws --payload "$A5_PAYLOAD" --signature "$A5_SIGNATURE"
-"$H/commands.sh" run inventory --manifest "$E/manifest.json" --approval A4
-"$H/commands.sh" run bootstrap-aws --manifest "$E/manifest.json" --approval A5
-"$H/commands.sh" run delivery --provider aws --cases P1,P3,P8 --manifest "$E/manifest.json" --approval A5
-"$H/commands.sh" run delivery --provider cloudflare --cases P1,P3,P8 --manifest "$E/manifest.json" --approval A6
-"$H/commands.sh" run failures --provider aws --cases P4,P5,P6,P7 --manifest "$E/manifest.json" --approval A7
-"$H/commands.sh" run failures --provider cloudflare --cases P4,P5,P6,P7 --manifest "$E/manifest.json" --approval A7
-"$H/commands.sh" run lifecycle --provider aws --setup --manifest "$E/manifest.json" --approval A8
-"$H/commands.sh" run lifecycle --provider cloudflare --setup --manifest "$E/manifest.json" --approval A8
-"$H/commands.sh" run lifecycle --provider aws --observe-only --manifest "$E/manifest.json" --approval A8
-"$H/commands.sh" run lifecycle --provider cloudflare --observe-only --manifest "$E/manifest.json" --approval A8
-"$H/commands.sh" run lifecycle --provider aws --reconcile --manifest "$E/manifest.json" --approval A8
-"$H/commands.sh" run lifecycle --provider cloudflare --reconcile --manifest "$E/manifest.json" --approval A8
-"$H/commands.sh" run cloudflare-api-get --path "/accounts/$CF_ACCOUNT/r2/buckets/$CF_BUCKET/lifecycle" --manifest "$E/manifest.json" --approval A4 --out "$E/cf-lifecycle.json"
-"$H/commands.sh" run gzip --manifest "$E/gzip-manifest.json" --approval A9
-"$H/commands.sh" run cleanup --phase post-a7 --manifest "$E/manifest.json" --approval A7
-"$H/commands.sh" run cleanup --phase final-a8 --manifest "$E/manifest.json" --approval A8
+"$H/commands.sh" run inventory --invocation aws.inventory.identity --manifest "$E/manifest.json" --approval A4
+"$H/commands.sh" run bootstrap-aws --invocation aws.provisioner.plan --manifest "$E/manifest.json" --approval A5
+"$H/commands.sh" run delivery --provider aws --cases P1,P3,P8 --invocation aws.delivery.site-a --manifest "$E/manifest.json" --approval A5
+"$H/commands.sh" run delivery --provider cloudflare --cases P1,P3,P8 --invocation cloudflare.delivery.site-a --manifest "$E/manifest.json" --approval A6
+"$H/commands.sh" run lifecycle --provider aws --reconcile --invocation aws.reconciliation.site-a --manifest "$E/manifest.json" --approval A8
+"$H/commands.sh" run gzip --invocation aws.gzip.site-a --manifest "$E/gzip-manifest.json" --approval A9
+"$H/commands.sh" run cleanup --phase final-a8 --invocation aws.cleanup.versions --manifest "$E/manifest.json" --approval A8
 ```
 
-Each command is noninteractive and emits only redacted status, paths and digests. `seal` performs no download/account access and appends a content-addressed record; it never rewrites an earlier seal or the manifest. Each owner record binds one transition to the prior seal digest, command, exact scope and expiry. The command selects its capability; environment variables and caller-supplied context cannot select a more powerful identity. Phase commands remain blocked without an enforcing broker, and approval never overrides a mismatch. Cleanup is staged: A7 removes only a/b/neighbor registrations; A8 retains life objects and the AWS stack through observation, then authorizes final life cleanup and AWS destroy with a separate exact plan-hash review. `post-a7` rejects life keys and stack resources; `final-a8` rejects execution before a completion/censor timestamp, the lifecycle restoration and A9 completed/not-run outcome. A5 does not authorize early stack destruction. If A8 is not approved, do not create the life experiment or provision the stack for this coordinated run; obtain both A5 and A8 decisions before provisioning. No approval is a broad “cleanup everything” grant.
+Each command is noninteractive and emits only redacted status, paths and digests. `seal` performs no download/account access and appends a content-addressed record; it never rewrites an earlier seal or the manifest. Each owner record binds one transition to the prior seal digest, command, exact scope and expiry. The command selects its capability; environment variables and caller-supplied context cannot select a more powerful identity. Every execution requires the credential-verification gate and a registry invocation ID. `failures:*`, lifecycle setup, `cloudflare-api-get`, `cleanup:post-a7`, and any invocation without a reviewed implementation fail with `EXECUTION_PATH_NOT_IMPLEMENTED`; they cannot be replaced with direct commands. Approval never overrides a mismatch. Cleanup is staged: A7 removes only a/b/neighbor registrations; A8 retains life objects and the AWS stack through observation, then authorizes final life cleanup and AWS destroy with separate exact-plan review. `post-a7` rejects life keys and stack resources; `final-a8` rejects execution before a completion/censor timestamp, lifecycle restoration and A9 completed/not-run outcome. A5 does not authorize early stack destruction. If A8 is not approved, do not create the life experiment or provision the stack for this coordinated run; obtain both A5 and A8 decisions before provisioning. No approval is a broad “cleanup everything” grant.
 
 ### AWS provisioning / hosted runtime (P1/P2/P3/P8; A5)
 
 Create only the named repo/environments after A4 has established name availability. Capture public repo IDs/OIDC prefix, create exact subjects and freeze the module root with source/version above, lockfile and variables. Generated setup uses non-default `aws.namePrefix: ap-proof-20261018`; configure helper's selected ARN and compare to Terraform output before allowing STS. The fixture workflows checkout source, use generated publish/preview workflow/composite (full sealed SHA) and official Action pins; admin uses app-deploy/registry Actions. Record the job summary executed version and STS ARN; do not rely on bootstrap version. Required owner review of each environment dispatch precedes credentials.
 
-```sh
-"$H/commands.sh" external --manifest "$E/manifest.json" --command 'terraform -chdir="$AWS_ROOT" init -lockfile=readonly'
-"$H/commands.sh" external --manifest "$E/manifest.json" --command 'terraform -chdir="$AWS_ROOT" plan -out="$E/aws-create.plan" -var-file="$E/aws-proof.tfvars"'
-"$H/commands.sh" external --manifest "$E/manifest.json" --command 'terraform -chdir="$AWS_ROOT" show -json "$E/aws-create.plan" > "$E/aws-create-plan.json"'
-"$H/commands.sh" external --manifest "$E/manifest.json" --command 'shasum -a 256 "$E/aws-create.plan"'
-# STOP: owner accepts this exact resource list and plan hash; no previous saved plan reused.
-"$H/commands.sh" external --manifest "$E/manifest.json" --command 'terraform -chdir="$AWS_ROOT" apply "$E/aws-create.plan"'
-"$H/commands.sh" external --manifest "$E/manifest.json" --command 'terraform -chdir="$AWS_ROOT" output -json > "$E/aws-outputs.json"'
-"$H/commands.sh" external --manifest "$E/manifest.json" --command 'gh workflow run proof.yml --repo artifact-pages/provider-proof-20261018 --ref main -f case=bootstrap-admin'
-"$H/commands.sh" external --manifest "$E/manifest.json" --command 'gh workflow run proof.yml --repo artifact-pages/provider-proof-20261018 --ref main -f case=bootstrap-site-a'
-```
+The reviewed registry contains `aws.provisioner.plan` and `aws.provisioner.apply`; the latter accepts only the saved plan sealed and signed after exact-address/hash review. Plan display, output readback and hosted workflow dispatch require separate reviewed invocation descriptors and fail with `EXECUTION_PATH_NOT_IMPLEMENTED` until registered. Never pass Terraform, GitHub or shell command strings to the harness.
 
 Expected resource list consists solely of one new S3 bucket/configuration/lifecycle/error object, one CloudFront distribution/OAC/function/cache/header policies, one admin and three satellite roles/policies and module guards, plus the test-only operator role/policy specified above. No replacements/changes of existing resources, no OIDC provider management, backend changes, DNS/ACM/WAF or unexpected costs. Full concrete addresses/count are reviewed from this fresh plan, not guessed from the older 22/25-resource deployments. A failure leaves state/logs protected; re-plan remaining delta and obtain approval before a recovery apply.
 
@@ -177,17 +148,7 @@ Before first writer, under admin and satellite credentials run `s3api head-objec
 
 Synthetic fixture includes `nested/index.html`, `nested/readme.md` with inert script payload, CSS importing CSS, ESM importing a nested module, image/font/data files and a runtime-generated HTTP fetch that cannot be rewritten during build; known allowed HTTPS resource must be on an explicitly approved controlled public endpoint (use the same verify endpoint) with no external telemetry. Use real source changes and full fetch history to build preview heads; record main/head/merge-base. Direct logical and raw preview URLs are read before catalog selection and on reload. Include spaces, Unicode and reserved URL characters using existing fixture resource cases. CSP tests inspect enforced header, `securitypolicyviolation` and actual loaded modules/resource values; report-only CSP is a failure. Check raw missing document/resource 404 and `/_control/` **marker bytes absent**, allowing the accepted SPA fallback. Never put a real secret into that marker.
 
-Native CLI commands expanded by the sealed harness, from synthetic Git source cwd (config paths absolute):
-
-```sh
-"$H/commands.sh" external --manifest "$E/manifest.json" --command '"$AP" registry sync --config "$CONFIG" --dry-run --format json'
-"$H/commands.sh" external --manifest "$E/manifest.json" --command '"$AP" registry sync --config "$CONFIG" --format json'
-"$H/commands.sh" external --manifest "$E/manifest.json" --command '"$AP" site sync --config "$CONFIG" --site proof-a-20261018 --source sites/a --dry-run --format json'
-"$H/commands.sh" external --manifest "$E/manifest.json" --command '"$AP" site sync --config "$CONFIG" --site proof-a-20261018 --source sites/a --format json'
-"$H/commands.sh" external --manifest "$E/manifest.json" --command '"$AP" preview publish --config "$CONFIG" --site proof-a-20261018 --source sites/a --head "$PREVIEW_HEAD_SHA" --default-ref "$PREVIEW_DEFAULT_REF" --dry-run --format json'
-"$H/commands.sh" external --manifest "$E/manifest.json" --command '"$AP" preview publish --config "$CONFIG" --site proof-a-20261018 --source sites/a --head "$PREVIEW_HEAD_SHA" --default-ref "$PREVIEW_DEFAULT_REF" --format json'
-"$H/commands.sh" external --manifest "$E/manifest.json" --command 'curl --fail --silent --show-error --dump-header "$E/index.headers" "$BASE/_indexes/proof-a-20261018/index.json" --output "$E/index.body"'
-```
+The reviewed site-publication descriptors are `aws.delivery.site-a` and `cloudflare.delivery.site-a`. Registry/app dry-runs, preview publication, browser fetches and hosted workflow dispatch are separate paths; until each has an exact executable/argv/cwd/input/output descriptor and reviewed adapter, it fails with `EXECUTION_PATH_NOT_IMPLEMENTED`. These operations never accept shell payloads.
 
 Preview source is the sealed non-main branch/commit with explicit registered repository identity. Set `PREVIEW_HEAD_SHA` to the full sealed head SHA and `PREVIEW_DEFAULT_REF=refs/heads/main` in the synthetic repository, pin its resolved main SHA in the manifest, and verify both plus merge-base before every invocation; do not rely on nonexistent `origin/HEAD`. The preview is manual unless a hosted PR is explicitly in the fixture manifest. Authentic PR return-link provenance is not claimed from a synthetic local Git fixture. Use a fresh Playwright Chromium profile for initial matrix, a retained profile for mutable/removed/warm app cases, at the existing approved egress only. Record browser version/egress; real-device or alternate-egress checks require separate owner participation and approval and are not authorized by A1–A9. Before each write save/approve dry-run changes; **all** registry configs retain every pre-existing site. A6 proof capabilities cannot mutate lifecycle. The exact temporary Cloudflare life-prefix rule is a separate A8-short lifecycle-owner transaction, even when it is scheduled during A6; if ownership, current state or preservation-safe plans cannot be established, stop for a new review.
 
@@ -201,12 +162,34 @@ P8 commands (same on each target): deploy verified web A from `web-a.yaml`, warm
 | --- | --- |
 | A4 inventory; A5 create; A8 final destroy | Owner-authenticated `artifact-pages-verify` SSO Terraform/operator identity; inventory may read the explicitly preserved stack, but mutation plans contain only new proof resources. |
 | P1/P2 AWS access boundaries/bootstrap; P3/P8 AWS publication; P7 successful reference-role update/unregister/invalidation | Hosted job assumes the exact new admin/satellite OIDC role appropriate to that operation; no SSO fallback. |
-| P4/P5/P6 and P7 local injected-failure runs, `go test`, `TestAWSProductionBackendSmoke`, local `lock inspect/recover` and retry commands | The broker holds short-lived sessions; children receive non-provider placeholder credentials. These local results are operator-session evidence. P7 additionally repeats the converged success path in hosted OIDC jobs for its reference-role claim. |
+| P4/P5/P6 and P7 local injected-failure runs, `go test`, `TestAWSProductionBackendSmoke`, local `lock inspect/recover` and retry commands | SSO-derived, proof-only test-operator sessions with mandatory per-phase session policies. These local results are operator-session evidence. P7 additionally repeats the converged success path in hosted OIDC jobs for its reference-role claim. |
 | P9 AWS HEAD/list observations and final reconciliation | Proof-only operator session for observations, hosted admin OIDC for ordinary reconciliation while fixture remains public/active; final infrastructure teardown uses the separate SSO Terraform identity. |
 | P10 future local AWS gzip reads/writes | Same proof-only operator session, regenerated against the approved recreated stack if needed; any hosted Action claim uses its pinned new OIDC workflow. |
 | Cloudflare cases | Inventoried verify-only scoped R2 children/registry reader and verify-zone purge token, as specified above; no AWS SSO/OIDC credentials. |
 
-The new operator role policy and **each** `AssumeRole` inline session policy allow only required S3 object/version operations on `arn:aws:s3:::ap-proof-231136241959-20261018/*`, listing/lifecycle reads on `arn:aws:s3:::ap-proof-231136241959-20261018`, and invalidation submit/read on `arn:aws:cloudfront::231136241959:distribution/<sealed-proof-distribution-id>`. No wildcard distribution, other bucket, IAM change, role chaining or existing verify resource grant. Freeze actual distribution ARN after creation before issuing sessions. Sessions expire within one hour; loader keeps STS token responses in memory, never prints them. This test role is not a claimed adopter/reference policy. It is created/destroyed in the separately reviewed proof Terraform root under A5/A8.
+Create these AWS identities: `ap-proof-20261018-inventory` for A4 inventory/preservation snapshots only; `ap-proof-20261018-provisioner` for owner-supervised proof Terraform plan/apply/destroy; `ap-proof-20261018-test-operator` for local proof operations with mandatory phase/session restriction; `ap-proof-20261018-admin-publisher` for the exact hosted admin OIDC subject; three generated satellite roles for exact hosted a/b/neighbor OIDC subjects and their own site; and a separately renewed, read-only life-site observation session. No test, publisher, observer, browser or Go-test process receives SSO source credentials or provisioner credentials. AWS sessions last at most one hour and are renewed only through the supervised loader. No IAM users or access keys are created.
+
+The inventory role trusts only the inventoried owner SSO role. It permits `sts:GetCallerIdentity`, `s3:ListAllMyBuckets` for names, enumerated bucket-configuration reads, `s3:ListBucket`, `s3:ListBucketVersions`, `s3:GetObject`, `s3:GetObjectVersion` and required object metadata/tag reads on the preserved and proof buckets; `cloudfront:GetDistribution`, `cloudfront:GetDistributionConfig` and `cloudfront:ListTagsForResource` on the preserved and bound proof distributions; exact existing GitHub OIDC provider and proof role/policy reads; and the exact remote state object only if required. A `NotAction` deny closes all actions outside that read set. It is the intentional exception for preserved-resource reads. Snapshot subprocesses receive only this identity, separately from proof runners.
+
+The test-operator role policy defines the maximum proof envelope; every assumption also supplies a narrower phase session policy. It permits only proof-prefix object GET/PUT/DELETE, conditioned prefix listing, necessary proof-bucket location/lifecycle/versioning reads, invalidation create/read on the sealed proof distribution, and caller identity. Normal proof sessions do not receive `DeleteObjectVersion`, bucket configuration writes, IAM, role assumption, or infrastructure create/delete permissions. Version deletion belongs only to the separately approved final-cleanup session. A7 excludes life-site writes; A8 observation allows life-prefix GET/HEAD/list only, including AWS version listing where required; A9 allows only approved a/b and necessary control scopes.
+
+Hosted roles retain the reference module allow statements and exact OIDC audience/subject matching. Admin operations use the admin role; site publication uses the matching satellite. Satellites can GET the exact registry and application-version keys, GET/PUT/DELETE and conditioned-list only their own `_indexes`, `_artifacts`, `_previews` and `_control/sites/<site>/` namespaces, and invalidate the proof distribution. They receive no bucket configuration or IAM rights. Proof-only permission boundaries are narrowing overlays around those reference allow policies; evidence must label them as overlays.
+
+Every AWS mutating identity has explicit denies for S3 outside `ap-proof-231136241959-20261018`, CloudFront outside the concrete sealed proof resources, the preserved bucket `artifact-pages-231136241959-us-east-1` and distribution `ECFTIR5GVPQDF`, IAM/STS privilege escalation, all other buckets/distributions and production targets. The inventory identity is the read-only preserved-resource exception. IAM cannot prevent anonymous reads of public production websites; browser target restrictions remain a harness control.
+
+The owner creates the inventory role, provisioner role, immutable proof permissions boundary and initially inert test-operator role using existing SSO credentials. This sealed bootstrap transaction is owner supervised; SSO credentials are never given to agent/test subprocesses. Review exact trust documents, policies, role names, boundary, commands and cleanup ownership before execution; capture policy readback and audit/request IDs. The provisioner cannot modify itself, its trust, the inventory role, test operator or owner boundary; cannot create users, keys, OIDC providers, instance profiles or attach arbitrary managed policies; and cannot pass or assume roles. It may manage only exact new admin/satellite roles, with `CreateRole` requiring the fixed proof boundary. Reviewed Terraform inputs and owner plan acceptance constrain policy/trust documents because IAM does not generally validate their contents against the saved plan.
+
+The separate owner-supervised CloudFront creation session may use only named create actions on `"*"`, fixed request tags where supported and explicit denies for every inventoried resource. It can create more resources than intended if misused, so it is a documented bootstrap exception and never a test credential. After creation, capture IDs/state/configuration, seal and review concrete bindings, then replace creation authority with exact-resource policy. Unbound IDs never authorize ordinary proof access.
+
+The provisioner action matrix is enumerated in the checked-in IAM templates: exact proof bucket create/delete/list/location/tagging; bucket public-access, ownership, encryption, versioning, lifecycle and policy reads/writes/deletes; Terraform refresh reads for ACL, CORS, website, acceleration, request-payment, logging, replication and object-lock; object GET/PUT/DELETE/tagging only on the exact Terraform error object; role management only for exact new publisher roles; `iam:GetOpenIDConnectProvider` on the existing GitHub provider; exact proof distribution GET/config/update/delete/tagging; exact OAC GET/update/delete; four exact cache policies GET/update/delete; exact response-header policy and function management; and `sts:GetCallerIdentity`. Final JSON enumerates actions individually and splits creation/runtime/destroy permissions. Missing actions stop review; no `s3:*`, `iam:*` or `cloudfront:*` allow repairs a failure. S3 lifecycle IAM names are `s3:GetBucketLifecycleConfiguration` and `s3:PutLifecycleConfiguration`, not SDK operation spellings.
+
+Cloudflare credential classes remain separate: A4 bucket-scoped Object Read snapshots, separate verify-account R2 configuration reads, and zone reads as needed; 15-minute site-writer R2 children bound to the selected site prefixes; a separate read-only registry reader for `_indexes/sites.json` and `_control/versions/app.json`; app/registry transaction children restricted to reviewed shared keys and locks; A7 children excluding life and unrelated site writes; A8 observer HEAD/GET/list only with renewal per window; reconciliation writer issued only after completion/censoring; a separate zone-scoped `Cache Purge` token for `artifact-pages.stream`; and an owner-only account-wide R2 lifecycle administrator used only for the reviewed A8 add/restore transaction. Parents remain inside the private loader; only temporary children reach runners. Production account `9ac354c8aa31d424224d8c4f3aa8ba2a` is excluded from every token policy.
+
+Keep the existing Cloudflare verify deployment and shared bucket. A permanent Object Read/Write token scoped to that bucket can reach other keys and is not a site-runner credential. App/registry children may affect shared keys and inventoried original-site locks in their exact scope. Cache Purge is zone-wide and may purge other `artifact-pages.stream` URLs. R2 lifecycle administration can alter other buckets/configuration in the verify account, and lifecycle PUT replaces the bucket's complete rule set. Use the existing owning state, review complete before/after rules, then revoke that token. These are recorded residual authorities; provider authorization does not constrain JSON contents, purge URLs emitted by an external binary or lifecycle rule semantics.
+
+Run unmodified Terraform, AWS CLI and artifact-pages CLI through a dedicated supervisor with reviewed executable/argv/cwd/input/output descriptors; never `eval` shell strings. Build child environments from an allowlist in isolated HOME/config directories, pinned executables/providers, with inherited profiles, credential processes, SSO caches, web-identity files, metadata sources, proxy variables, endpoint overrides, SSH agents, GitHub tokens and unrelated Cloudflare credentials removed. Disable AWS metadata discovery. Supply only credentials selected for that invocation. Reject profile/assume-role/provider overrides in sealed Terraform configuration. Mount sealed inputs read-only and only necessary workspaces writable; do not mount host credential directories, Docker socket or owner signing key. Direct HTTPS uses normal certificate verification; no local CA, signing proxy, placeholder credentials or broker network topology is required.
+
+Before every phase and every renewed credential, read identity and authoritative policy metadata (separately where needed; `GetCallerIdentity` alone does not prove scope), compare trust/inline/attached/boundary/session-policy digests, resource bindings and expiry with the seal, run allowed read/list controls, and run forbidden reads against independently confirmed existing targets. Only the expected authorization error proves a denial; timeout, 404, malformed response and endpoint errors do not. Record provider code, request ID if supplied and sanitized target. AWS proof credentials must receive AccessDenied for preserved bucket GET/list and preserved distribution GET; satellite a must be denied existing b/neighbor artifact/index/preview/control reads while own-site reads succeed. R2 writers must be denied existing neighbor objects, unauthorized registry/control keys, prefix-boundary siblings and unrelated known verify buckets. Registry readers are limited to exact read keys. Inspect account/zone policy for production exclusion without contacting production. AWS policy simulation supplements live probes for write/delete/lifecycle/IAM/invalidation denials. Never use destructive negative probes against preserved objects, lifecycle configuration or preserved distributions. After initial verification, use only disposable canaries for positive writes and denied cross-site writes/deletes; unexpected success stops the phase as a boundary failure.
 
 **Staged target authorization.** Each external command requires an owner-reviewed seal for the next transition. Bootstrap seals permit only enumerated discovery operations against known verification anchors; unbound identifiers authorize no resource access. Discovered Cloudflare targets require a reviewed binding before content/lifecycle inventory. Completed inventory is sealed before provisioning. A5's reviewed create plan binds provider-assigned identifiers to exact Terraform addresses; actual identifiers require post-apply binding and owner review before proof requests.
 
@@ -214,23 +197,21 @@ Inventory and preservation use separate read-only capabilities for the explicitl
 
 Cloudflare lifecycle addition and restoration are dedicated A8-short operations, including when setup is scheduled during A6. They use the existing lifecycle owner/state, fresh reviewed plans and full preservation-checked API readback. A6 alone grants no lifecycle mutation. Necessary existing-backend state/lock writes are confined to this reviewed lifecycle transaction.
 
-Request authorization precedes credential use in guarded clients. The real Fetch adapter sets `redirect: 'manual'`; the supervised request path rejects upstream redirect statuses before returning a response or forwarding credentials to another destination. A retry starts from the original operation, ignores any `response.retryOperation`, and preserves its target, method, semantic headers (including conditions) and body bytes. It reauthorizes and charges every attempt; signing timestamps and signatures may change. Automatic retries default to zero and are limited to explicitly supported read operations, so no write is presumed safe to retry.
+The harness does not intercept requests from released subprocesses. It cannot enforce their HTTP bodies, individual retry attempts, invalidation paths or exact internal operation counts. Internal guarded clients retain per-operation authorization; do not attribute that protection to external binaries. The real Fetch adapter sets `redirect: 'manual'`; guarded-client retries start from the original operation, ignore any `response.retryOperation`, preserve target/method/semantic headers/body bytes, reauthorize and charge each attempt. Automatic retries default to zero and are limited to explicitly supported reads.
 
-On `guard`, phase and `external` paths, validate inherited environment before loading a capability, inspecting seals or doing credential-capable work. Offline sealing remains usable independently. A future launcher must also validate the separately constructed child environment immediately before spawn: parent environment checks reject inherited credentials and context overrides, while child checks verify the approved placeholder and tool settings. Released subprocesses require sealed inputs, isolated credentials and enforcing containment appropriate to their context; the harness distinguishes these controls from internal pre-sign interception. Unknown operations, targets, drift or unenforceable execution paths fail closed. The current `commands.sh external` path blocks unmodified released CLI/Terraform/GitHub subprocesses because no request-level broker is implemented here; passing config hashes and a narrowed IAM policy is not claimed as wire-level interception. Do not replace this stop with a direct command.
+On `guard`, phase and `external` paths, validate inherited environment before loading capabilities, inspecting seals or doing credential-capable work. Offline sealing remains available independently. Validate the separately constructed child environment immediately before spawn: parent checks reject inherited credentials/context overrides and child checks verify only the selected credential class and isolated tool settings. Sealed inputs and workspaces use read-only/read-write mounts as declared by the fixed invocation. Unknown operations, targets, policy drift, stale verification and execution paths without reviewed implementations fail closed.
 
 The local fake suite attempts S3 GET/PUT/DELETE against `artifact-pages-231136241959-us-east-1` and invalidation against `ECFTIR5GVPQDF` from proof capabilities; every request fails with zero credential-loader calls and zero outbound requests. It also tests malicious configuration, smoke-test bucket override, the sealed proof-bucket/distribution positive controls, and role/session-policy exclusion of the preserved ARNs. These are in-process containment tests; no live probe targets the preserved stack.
 
 ### Controlled failures, overlapping processes and cache retries (A7)
 
-`TestCoordinatedProviderProof` is the local fake-backed coordinator test. It reads a local `testOnly` manifest fixture and scenario selector, sets a three-minute deadline, uses observer barriers with a 30-second timeout and exact-key guard, and never resolves credentials or contacts a provider. The separate Node suite verifies the chained seals and signatures. These results prove harness behavior only. Provider-backed fault injection remains blocked until a separate request-level broker can guard the actual signed requests, redirects and retries; the current code makes no claim to pre-sign interception inside an unmodified CLI or Terraform binary. Do not add production fault flags, alter shared IAM to simulate denial, forge provider 503 responses or claim a fake failure proves a provider outage. Real provider responses and request IDs must be collected only through that future enforcing path.
+`TestCoordinatedProviderProof` is the local fake-backed coordinator test. It reads a local `testOnly` manifest fixture and scenario selector, sets a three-minute deadline, uses observer barriers with a 30-second timeout and exact-key guard, and never resolves credentials or contacts a provider. The separate Node suite verifies chained seals/signatures and fake credential verification/supervision. These results prove harness behavior only. Without the broker, precise failure injection inside an unmodified CLI remains unsupported unless independently implemented and demonstrated. Process interruption and concurrent CLI publication remain available, but timing inferred from external observation is not an exact internal barrier. Guarded Go/backend tests may establish backend behavior; they do not substitute for released-CLI evidence. Keep unsupported P4–P7 cells `not-run` or blocked with the exact missing execution mechanism. Do not add production fault flags, alter shared IAM to simulate denial, forge provider 503 responses or claim a fake failure proves a provider outage. Real provider responses and request IDs must come from provider-backed evidence.
 
 ```sh
 ARTIFACT_PAGES_PROOF_MANIFEST="$E/local-test/manifest.json" ARTIFACT_PAGES_PROOF_CASE=P4 go test ./scripts/provider-proof-go -run '^TestCoordinatedProviderProof$' -count=1 -timeout=20m
-"$H/commands.sh" external --manifest "$E/manifest.json" --command '"$AP" lock inspect --config "$CONFIG" --site proof-a-20261018 --format json > "$E/lock-observed.json"'
-"$H/commands.sh" external --manifest "$E/manifest.json" --command '"$AP" lock recover --config "$CONFIG" --site proof-a-20261018 --observed-etag "$OBSERVED_ETAG" --format json'
-"$H/commands.sh" external --manifest "$E/manifest.json" --command '"$AP" site sync --config "$CONFIG" --site proof-a-20261018 --source sites/a --reconcile --dry-run --format json'
-"$H/commands.sh" external --manifest "$E/manifest.json" --command '"$AP" site sync --config "$CONFIG" --site proof-a-20261018 --source sites/a --reconcile --format json'
 ```
+
+The opaque CLI fault barriers and lock inspection/recovery commands currently have no reviewed invocation descriptors. They remain `not-run`/blocked under `EXECUTION_PATH_NOT_IMPLEMENTED` until implemented and demonstrated; the Go fake does not substitute for released-CLI evidence.
 
 Run P4–P7 serially by case/provider; within a scenario only the designated competing processes overlap. AWS CAS can reuse the existing opt-in `TestAWSProductionBackendSmoke` with its exact environment/confirmation contract in [aws_live_smoke_test.go](../../../cli/internal/publisher/aws_live_smoke_test.go); it cleans **all versions/delete markers** in its random key prefix and needs the authorized test operator's version cleanup privileges, not satellite permission broadening. The existing preview-flow smoke remaps lock/catalog to a random namespace and explicitly excludes interruption/lock-loss; it cannot substitute for actual CLI cases here.
 
@@ -247,7 +228,7 @@ Required fault schedule:
 
 Never recover an active unknown lock. Stop known child processes, capture ETag directly from `lock inspect`, require owner approval A7 for that named recovery, and use that exact ETag; mismatch stops and re-inspects. No unconditional delete/free-lock overwrite. SIGKILL stage does not authorize continuing after an unexplained owner change.
 
-P7 freshness measurement: canonical URLs without cache-busting query, GET every 5 s for <=5 minutes per transition, <=60 probes per URL; save Date/Age/ETag/Cache-Control/Vary/Content-Encoding/cache result. Record observed interval, not a fabricated global SLA. Wait through `"$H/commands.sh" external --manifest "$E/manifest.json" --command 'aws cloudfront wait invalidation-completed --distribution-id "$DIST" --id "$INVALIDATION"'`; stop if 15-minute waiter budget is exceeded. Assert actual origin state via authenticated reads and complete lists. After accepted invalidation, failure to converge within the test's 5-minute observation bound is a failed/unfinished sample requiring investigation, not proof of a new documented product guarantee. Only the hosted AWS operations in the identity table establish reference-role evidence through the new OIDC roles; local fault/recovery runs use the proof-only SSO-derived session and are labeled separately. Cloudflare operations use verify-only scoped identities/purge token.
+P7 freshness measurement: canonical URLs without cache-busting query, GET every 5 s for <=5 minutes per transition, <=60 probes per URL; save Date/Age/ETag/Cache-Control/Vary/Content-Encoding/cache result. Record observed interval, not a fabricated global SLA. Invalidation completion polling is a fixed invocation still to be reviewed; it fails with `EXECUTION_PATH_NOT_IMPLEMENTED` until then. Assert actual origin state via authenticated reads and complete lists. After accepted invalidation, failure to converge within the test's 5-minute observation bound is a failed/unfinished sample requiring investigation, not proof of a new documented product guarantee. Only hosted AWS operations establish reference-role evidence through the new OIDC roles; local fault/recovery runs use the proof-only SSO-derived session and are labeled separately. Cloudflare operations use verify-only scoped identities and the separate purge token.
 
 ### Sequencing (A8-short and A9)
 
@@ -317,22 +298,15 @@ Manual deletion begins only after the observation’s completion/censor timestam
 
 ### Gzip follow-up (P10; A9, blocked until release)
 
-```sh
-"$H/commands.sh" external --manifest "$E/manifest.json" --command 'aws s3api head-object --bucket "$BUCKET" --key "_indexes/$SITE/index.json" > "$E/gzip-index-head.json"'
-"$H/commands.sh" external --manifest "$E/manifest.json" --command 'aws s3api get-object --bucket "$BUCKET" --key "_indexes/$SITE/index.json" "$E/gzip-index.raw" > "$E/gzip-index-get.json"'
-"$H/commands.sh" external --manifest "$E/manifest.json" --command 'gzip -t "$E/gzip-index.raw"'
-"$H/commands.sh" external --manifest "$E/manifest.json" --command 'gzip -dc "$E/gzip-index.raw" > "$E/gzip-index.decoded.json"'
-"$H/commands.sh" external --manifest "$E/manifest.json" --command 'curl --fail --silent --show-error -H '\''Accept-Encoding: gzip'\'' --dump-header "$E/cdn-gzip.headers" "$BASE/_indexes/$SITE/index.json" --output "$E/cdn-gzip.raw"'
-"$H/commands.sh" external --manifest "$E/manifest.json" --command 'curl --fail --silent --show-error --compressed --dump-header "$E/cdn-decoded.headers" "$BASE/_indexes/$SITE/index.json" --output "$E/cdn-decoded.json"'
-```
+The fixed writer invocation is `aws.gzip.site-a`. Origin reads, raw gzip decoding, CDN fetches and browser checks are not part of that write invocation; each requires its own reviewed descriptor and otherwise remains closed with `EXECUTION_PATH_NOT_IMPLEMENTED`.
 
 Repeat for the exact search manifest key emitted by the builder (freeze it in manifest, do not invent a key), small and large decoded fixtures, cold first URL and same-URL warm reads before/after an update. No `--compressed` for raw origin/hash evidence. Check Content-Type application/json, Content-Encoding gzip, inline disposition/cache, stored length/hash and decoded JSON equality; gzip concatenation/corruption constraints belong to local acceptance. Opaque search pack encoding/hash contract and source artifact bytes remain unchanged. Record CDN representation separately if it transforms compression. Browser JSON/full-text reads must work at unchanged URLs. A failed timing threshold is reported; no deadline or throughput policy changed. Supported writer rollback is >=0.5.0 with the encoding policy, content reverted by compatible writer; independent web rollback remains allowed. Never delete control state to downgrade. Full pre-0.5 projection/control restore is exceptional and needs a new owner recovery plan.
 
 ## Cost, interruption and cleanup contract
 
-These are **authorization ceilings and conservative planning allowances**, not quoted tariffs/free-tier guarantees. No paid load test, new domain, WAF, account subscription, billing setup or plan upgrade. Verify current rate/remaining free allowance under A4 with owner billing context before apply; no assumption of a free tier. Enforce usage ceilings in harness even when budget dashboards lag.
+These are **authorization ceilings and conservative planning allowances**, not quoted tariffs/free-tier guarantees. No paid load test, new domain, WAF, account subscription, billing setup or plan upgrade. Verify current rate/remaining free allowance under A4 with owner billing context before apply; no assumption of a free tier. Enforce harness-controlled usage ceilings even when budget dashboards lag. External subprocess retries and per-request cost cannot be fully accounted for, and provider credentials do not enforce a hard dollar cap.
 
-- Overall provider work: <=14 operator hours including up to one hour final teardown, excluding owner waiting and unattended lifecycle polling; <=120 hours / five days retained lifetime from first AWS resource creation through final teardown; <=1 GiB objects per provider, <=5 GiB CDN transfer/provider, <=50,000 storage operations/provider, <=5,000 viewer requests/provider, <=200 CloudFront invalidation paths total across A5/A7/A9. Estimate $1–15 total, combined hard spend cap **$20** (A4–A9); stop before either cap, no automatic increase. Per-request caps below are subordinate to total. Logs include cumulative calls/bytes/minutes and censored measurements.
+- Overall provider work: <=14 operator hours including up to one hour final teardown, excluding owner waiting and unattended lifecycle polling; <=120 hours / five days retained lifetime from first AWS resource creation through final teardown; <=1 GiB objects per provider, <=5 GiB CDN transfer/provider, <=50,000 storage operations/provider, <=5,000 viewer requests/provider, <=200 CloudFront invalidation paths total across A5/A7/A9. Estimate $1–15 total, combined authorization ceiling **$20** (A4–A9); stop before either cap, no automatic increase. These are conservative planning ceilings, not provider-enforced spending caps. Per-request caps below are subordinate to total. Logs include harness-controlled calls, subprocess bounds, bytes/minutes and censored measurements; they do not claim complete per-request accounting of opaque SDK retries.
 - A5 <=4 hours, AWS estimate $0–5/cap $5; A6 <=2 hours CF estimate $0–2/cap $2; A7 <=4 hours combined estimate $0–6/cap $6; A8-short <=48 hours after latest eligibility and <=108 hours from AWS creation/1 operator hour plus <=60 minutes final teardown estimate $0–1/cap $1; A9 <=1 hour estimate $0–5/cap $5. A4 <=30 minutes estimate $0–1/cap $1. Hosted fixture A1–A3 costs are separate, <=$7 total. No price-dependent automation that can exceed caps.
 - Stop before each apply, app version switch, fault barrier/guarded recovery, visibility/access change and lifecycle setup until its corresponding approval is recorded. Additional stops: changed inventories, unknown writer, pending retry, hash drift, failure to restore baseline, lost credentials, scope/budget/deadline exceeded or any assertion mismatch. Do not advance to another scenario to “get more evidence” after a preservation failure.
 - When any per-approval or overall time window is exhausted, stop starting work, pause at the next safe interruption point (cancel immediately if safe), report completed work/residual resources/cost and obtain renewed approval before continuing; no automatic extension. Reserve time for this safety stop before the budget expires; it authorizes no further experiment or unapproved cleanup. If the 120-hour/five-day lifetime cannot be met, stop at the A8-short deadline, notify the owner before it expires and request an explicit cleanup/retention extension; do not silently exceed the cap or delete uncensored life data to hide the overrun.
@@ -354,7 +328,7 @@ All references elsewhere to seven days of A8 observation or nine days of retaine
 
 These phases are for the **main Claude session on the host**. Codex’s sandbox is not the execution environment: it cannot provide the required port binding, reliable GitHub API access or operator credential access. The host supervises Linux containers under Docker Desktop on the Mac; record host and container details separately so local container execution is not described as macOS execution.
 
-The local `proof.mjs`, `commands.sh`, chained seals, guarded transport and `TestCoordinatedProviderProof` are checked in and covered by fake-transport tests. Harness commands go through `commands.sh run`; all other command payloads go through `commands.sh external`, which currently validates inherited environment and stops before execution because an enforcing provider broker is not part of this change. Do not bypass that launcher. The static boundary regression checks only direct dependencies from `proof.mjs` and `policy.mjs`: neither may import, re-export, dynamically import or `require` either `child_process` spelling. This is not a transitive dependency claim: `seals.mjs` launches Git, and SSH approval verification may launch `ssh-keygen` with a narrowly specified verification command.
+The local `proof.mjs`, `commands.sh`, chained seals, credential-verification records, fixed invocation registry, supervised-launch contract, guarded transport and `TestCoordinatedProviderProof` are checked in and covered by fake tests. Harness commands go through `commands.sh run`; arbitrary payloads through `commands.sh external` fail with `ARBITRARY_COMMAND_PAYLOAD_REJECTED`. Do not bypass the launcher. The static boundary regression checks only direct dependencies from `proof.mjs` and `policy.mjs`: neither may import, re-export, dynamically import or `require` either `child_process` spelling. This is not a transitive dependency claim: `seals.mjs` launches Git, and SSH approval verification may launch `ssh-keygen` with a narrowly specified verification command.
 
 Use the plan’s protected `$E`, `$H`, `$AWS_ROOT`, `$CF_ROOT` and verified binary paths. The host loader supplies credentials privately; never print credential files or use unrestricted SSO credentials in test children.
 
@@ -368,14 +342,14 @@ Use the plan’s protected `$E`, `$H`, `$AWS_ROOT`, `$CF_ROOT` and verified bina
 
    **GO:** no value required by the next step is unresolved; typed unbound identifiers cannot be request targets; cleanup branches and deadlines are tested.
 
-   **STOP:** missing broker for provider execution, unresolved next-step inputs, expired scope or containment failure.
+   **STOP:** missing or stale credential verification, execution path not implemented, unresolved next-step inputs, expired scope or containment failure.
 
    **Owner:** confirm the recorded amendment and boundaries. A1–A3, including the separate IMP-73 deployment review, remain unapproved and must not run.
 
 2. **A4 — inventory on the host.**
 
    ```sh
-   "$H/commands.sh" run inventory --manifest "$E/manifest.json" --approval A4
+   "$H/commands.sh" run inventory --invocation aws.inventory.identity --manifest "$E/manifest.json" --approval A4
    ```
 
    Verify AWS account `231136241959`, preserved distribution `ECFTIR5GVPQDF`, Cloudflare verify account `21a0acb78621cc00cfa655a276d77b74`, current lifecycle ownership, name availability, tooling, pins, billing and the Cloudflare freeze.
@@ -387,25 +361,18 @@ Use the plan’s protected `$E`, `$H`, `$AWS_ROOT`, `$CF_ROOT` and verified bina
 3. **A5 — new AWS stack, baseline proof and early life seed.**
 
    ```sh
-   "$H/commands.sh" run bootstrap-aws --manifest "$E/manifest.json" --approval A5
-   "$H/commands.sh" run delivery --provider aws --cases P1,P3,P8 \
+   "$H/commands.sh" run bootstrap-aws --invocation aws.provisioner.plan --manifest "$E/manifest.json" --approval A5
+   "$H/commands.sh" run delivery --provider aws --cases P1,P3,P8 --invocation aws.delivery.site-a \
      --manifest "$E/manifest.json" --approval A5
-   "$H/commands.sh" run lifecycle --provider aws --setup \
-     --manifest "$E/manifest.json" --approval A8
    ```
+
+   Lifecycle setup has no reviewed invocation and remains closed with `EXECUTION_PATH_NOT_IMPLEMENTED`.
 
    **Owner present:** exact create-plan/hash review, protected environment approvals and planned app switches. Confirm fresh-bucket error evidence precedes the first writer. Record AWS creation time and life baseline immediately.
 
 4. **A6 — Cloudflare baseline proof and early life seed.**
 
-   ```sh
-   "$H/commands.sh" run delivery --provider cloudflare --cases P1,P3,P8 \
-     --manifest "$E/manifest.json" --approval A6
-   "$H/commands.sh" run lifecycle --provider cloudflare --setup \
-     --manifest "$E/manifest.json" --approval A8
-   ```
-
-   The setup extension must pause for the prefix-only lifecycle plan review, apply through the existing owner and verify API readback before seeding.
+   Cloudflare site sync needs both an R2 child and a separate zone purge token, but the multi-identity invocation is not implemented; delivery remains closed with `EXECUTION_PATH_NOT_IMPLEMENTED`. Cloudflare lifecycle setup and API readback also remain closed.
 
    **Owner present:** lifecycle plan/hash and app-switch review.
 
@@ -413,41 +380,17 @@ Use the plan’s protected `$E`, `$H`, `$AWS_ROOT`, `$CF_ROOT` and verified bina
 
 5. **A7 — controlled failures, then the release-readiness gate.**
 
-   ```sh
-   "$H/commands.sh" run failures --provider aws --cases P4,P5,P6,P7 \
-     --manifest "$E/manifest.json" --approval A7
-   "$H/commands.sh" run failures --provider cloudflare --cases P4,P5,P6,P7 \
-     --manifest "$E/manifest.json" --approval A7
-   ```
-
-   **Owner present:** reviewed fault barriers and named guarded lock recoveries. Verify preservation after each case.
+   **P4–P7 released-CLI failure cases:** record unsupported cells as `not-run` until each fault barrier has an exact invocation descriptor. Calling `failures` returns `EXECUTION_PATH_NOT_IMPLEMENTED`. Do not replace it with Go-only evidence.
 
    At completion, record A9 ready/not-ready. **If not ready, record censor/not-run outcomes and go directly to teardown.** Otherwise:
 
-   ```sh
-   "$H/commands.sh" run cleanup --phase post-a7 \
-     --manifest "$E/manifest.json" --approval A7
-   ```
-
-   **GO:** cleanup preserves AWS A9 inputs and all unfinished life experiments.
+   `cleanup:post-a7` also remains closed until its descriptor is reviewed. **GO:** any future implementation must preserve AWS A9 inputs and all unfinished life experiments.
 
 6. **A8-short — finish bounded observation and reconciliation.**
 
-   ```sh
-   "$H/commands.sh" run lifecycle --provider aws --observe-only \
-     --manifest "$E/manifest.json" --approval A8
-   "$H/commands.sh" run lifecycle --provider cloudflare --observe-only \
-     --manifest "$E/manifest.json" --approval A8
-   ```
+   A bounded HEAD/list observer is not implemented for either provider; record the observation as not-run until those fixed paths exist.
 
-   Run observers concurrently under the host supervisor; each performs the bounded three-hour polling schedule.
-
-   ```sh
-   "$H/commands.sh" run lifecycle --provider aws --reconcile \
-     --manifest "$E/manifest.json" --approval A8
-   "$H/commands.sh" run lifecycle --provider cloudflare --reconcile \
-     --manifest "$E/manifest.json" --approval A8
-   ```
+   AWS life reconciliation has a fixed path; Cloudflare reconciliation remains closed until its separate R2/cache credential flow is implemented.
 
    **GO:** each observation is explicitly complete or censored before reconciliation. Restore/remove finished Cloudflare proof resources immediately. Owner review is required for its lifecycle restoration plan.
 
@@ -455,7 +398,7 @@ Use the plan’s protected `$E`, `$H`, `$AWS_ROOT`, `$CF_ROOT` and verified bina
 
    ```sh
    "$H/commands.sh" run seal --manifest "$E/gzip-manifest.json" --offline
-   "$H/commands.sh" run gzip --manifest "$E/gzip-manifest.json" --approval A9
+   "$H/commands.sh" run gzip --invocation aws.gzip.site-a --manifest "$E/gzip-manifest.json" --approval A9
    ```
 
    **GO:** actual released pins reviewed, full pre-migration snapshot captured, containment regenerated, and life observation closed. Require raw-origin gzip/hash checks, decoded JSON equality, cold/warm CDN and browser reads, migration/no-op/repair/recovery checks, old-writer rejection and neighbor preservation. Observe the one-hour/$5 ceiling.
@@ -463,19 +406,13 @@ Use the plan’s protected `$E`, `$H`, `$AWS_ROOT`, `$CF_ROOT` and verified bina
 8. **Immediate teardown — normal and early-exit branches.**
 
    ```sh
-   "$H/commands.sh" run cleanup --phase final-a8 \
+   "$H/commands.sh" run cleanup --phase final-a8 --invocation aws.cleanup.versions \
      --manifest "$E/manifest.json" --approval A8
    ```
 
    The revised command must require recorded A8 outcomes and A9 completed/not-run status, use the compatible writer, restore Cloudflare lifecycle, and pause before AWS destruction:
 
-   ```sh
-   "$H/commands.sh" external --manifest "$E/manifest.json" --command 'terraform -chdir="$AWS_ROOT" plan -destroy -out="$E/aws-destroy.plan" -var-file="$E/aws-proof.tfvars"'
-   "$H/commands.sh" external --manifest "$E/manifest.json" --command 'terraform -chdir="$AWS_ROOT" show -json "$E/aws-destroy.plan" > "$E/aws-destroy-plan.json"'
-   "$H/commands.sh" external --manifest "$E/manifest.json" --command 'shasum -a 256 "$E/aws-destroy.plan"'
-   # STOP: owner reviews exact addresses and this hash.
-   "$H/commands.sh" external --manifest "$E/manifest.json" --command 'terraform -chdir="$AWS_ROOT" apply "$E/aws-destroy.plan"'
-   ```
+   The `aws.cleanup.destroy` descriptor accepts only a previously sealed plan after a fresh owner-signed hash review. Destroy-plan generation/display/hash operations need separate descriptors; execution remains closed until those are reviewed and implemented.
 
    **Owner present:** fresh destroy-plan acceptance. Finish with absent-resource checks, preserved-resource comparisons and the sanitized evidence/cost report.
 
@@ -484,9 +421,9 @@ Use the plan’s protected `$E`, `$H`, `$AWS_ROOT`, `$CF_ROOT` and verified bina
 - A1 — Not approved. Two IMP-64 package guard PRs/comments/closures and branch cleanup; <=45 min, <=$2; blast radius: test branches/PRs in the two generated module repos only, no tags/settings.
 - A2 — Not approved. IMP-73 public fixture preparation, registry PR and caller-environment proof including owner deployment review; <=90 min, <=$3; blast radius: two named fixture repos, dummy secrets, branches/PRs and verification environment only.
 - A3 — Not approved. IMP-73 private/private omitted-environment proof and private inert retention; <=45 min, <=$2; blast radius: visibility and repo-local Actions access/dummy secrets of the same two fixture repos only.
-- A4 — Approved 2026-10-18. Provider inventory, target/pin/tool-version/billing checks and read probes; <=30 min, <=$1; blast radius: read-only verify accounts/environments and public release/repository metadata, no production writes. Execution remains blocked until the enforcing broker and the applicable tool path are built, locally verified, sealed and reviewed; this recorded approval does not authorize bypassing that gate.
-- A5 — Approved 2026-10-18. Fresh AWS proof stack, proof-only operator role/session policy, custom-prefix OIDC fixture, bootstrap/delivery and warm web upgrade/rollback; <=4 h, <=$5; blast radius: new named AWS resources and provider-proof fixture repo, including final private visibility/workflow disablement after A8; final stack destroy is authorized by A8 only. Execution remains blocked until the enforcing broker and the applicable tool path are built, locally verified, sealed and reviewed; this recorded approval does not authorize bypassing that gate.
-- A6 — Approved 2026-10-18. Cloudflare verify disposable sites/scoped identities, delivery and warm web upgrade/rollback with restoration; <=2 h, <=$2; blast radius: artifact-pages.stream verify bucket/app and four proof sites only, no zone-policy or production changes. Execution remains blocked until the enforcing broker and the applicable tool path are built, locally verified, sealed and reviewed; this recorded approval does not authorize bypassing that gate.
-- A7 — Approved 2026-10-18. Both-provider races, controlled failures, guarded recovery, origin reconciliation and invalidation retries; <=4 h, <=$6; blast radius: approved proof sites/control records and verify-only cache invalidations, no existing neighbor writes. Execution remains blocked until the enforcing broker and the applicable tool path are built, locally verified, sealed and reviewed; this recorded approval does not authorize bypassing that gate.
-- A8-short — Approved 2026-10-18. One-day natural lifecycle experiment, final life-site cleanup and AWS proof-stack destroy after observation ends or is censored, with fresh destroy-plan hash review; <=48 h after latest eligibility and <=108 h from AWS creation, <=1 h operator time plus <=60 min teardown within the 120-hour/five-day retention cap, <=$1; blast radius: new life-site objects on both proof targets and all A5-created AWS resources only; no retained experiment or policy changes except the exact temporary Cloudflare life-prefix rule addition and restoration described above. Execution remains blocked until the enforcing broker and the applicable tool path are built, locally verified, sealed and reviewed; this recorded approval does not authorize bypassing that gate.
-- A9 — Approved after release, 2026-10-18. Post-ISSUE-112 released-pin amendment and AWS gzip delivery/migration proof; <=1 h, <=$5; blast radius: disposable AWS proof sites only; blocked until compatible CLI/Actions ship, recreation or exceptional downgrade needs fresh approval. Execution remains blocked until the enforcing broker and the applicable tool path are built, locally verified, sealed and reviewed; this recorded approval does not authorize bypassing that gate.
+- A4 — Approved 2026-10-18. Read-only inventory, preservation, target/pin/tool/billing checks, policy inspection and read probes; ≤30 minutes/≤$1. Dedicated read-only identities only. Owner bootstrap of missing identities is a separately sealed administrative prerequisite, not an A4 read operation. Execution requires the reviewed credential-verification gate, fresh provider probe evidence, and the owner’s SSH-signed concrete transition; historical approval alone does not satisfy these gates.
+- A5 — Approved 2026-10-18. Fresh named AWS proof stack, bounded owner bootstrap/provisioning, proof-only operator and OIDC identities, custom-prefix bootstrap/delivery, warm upgrade/rollback, and fixture scope already recorded; ≤4 hours/≤$5. CloudFront creation authority is an explicit owner-supervised exception. Concrete resource IDs and narrowed policies require post-create sealing before proof writes. Execution requires the reviewed credential-verification gate, fresh provider probe evidence, and the owner’s SSH-signed concrete transition; historical approval alone does not satisfy these gates.
+- A6 — Approved 2026-10-18. Existing Cloudflare verify delivery, four proof sites, scoped children, and reviewed shared app/registry upgrade/rollback; ≤2 hours/≤$2. Shared-key and verify-zone purge authority are recorded residual risks. No lifecycle or zone-policy mutation. Execution requires the reviewed credential-verification gate, fresh provider probe evidence, and the owner’s SSH-signed concrete transition; historical approval alone does not satisfy these gates.
+- A7 — Approved 2026-10-18. Both-provider concurrency, supported controlled failures/recovery, reconciliation, and invalidation retries; ≤4 hours/≤$6. Credentials exclude life writes and unrelated site writes. Unsupported exact fault scenarios remain unproven. Execution requires the reviewed credential-verification gate, fresh provider probe evidence, and the owner’s SSH-signed concrete transition; historical approval alone does not satisfy these gates.
+- A8-short — Approved 2026-10-18. Existing one-day experiment, life cleanup, exact owner-operated Cloudflare lifecycle addition/restoration, and final AWS teardown. Preserve the merged amendment’s limits: observation ends by latest eligibility +48 hours or AWS creation +108 hours; infrastructure retention ≤120 hours; ≤1 operator hour plus ≤60 minutes teardown; ≤$1. Observation uses read-only credentials. Lifecycle administration and fresh destroy plans require their own signed transitions. Execution requires the reviewed credential-verification gate, fresh provider probe evidence, and the owner’s SSH-signed concrete transition; historical approval alone does not satisfy these gates.
+- A9 — Approved conditionally 2026-10-18. Released-pin amendment and AWS gzip proof; ≤1 hour/≤$5. Verify actual released CLI/Action hashes and compatibility before signing. Use newly verified phase credentials; retain the merged readiness/cleanup branches. Recreation or exceptional downgrade requires the existing fresh approval. Execution requires the reviewed credential-verification gate, fresh provider probe evidence, and the owner’s SSH-signed concrete transition; historical approval alone does not satisfy these gates.

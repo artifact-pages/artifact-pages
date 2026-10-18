@@ -24,7 +24,7 @@ case "$mode" in
     subcommand=$1
     shift
     case "$subcommand" in
-      seal|approval-prepare|approval-attach|inventory|bootstrap-aws|delivery|failures|lifecycle|gzip|cleanup|cloudflare-api-get)
+      seal|approval-prepare|approval-attach|verify-credentials|inventory|bootstrap-aws|delivery|failures|lifecycle|gzip|cleanup|cloudflare-api-get)
         exec node "$PROOF" "$subcommand" "$@"
         ;;
       *)
