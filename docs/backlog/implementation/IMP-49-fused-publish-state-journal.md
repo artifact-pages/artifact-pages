@@ -3,7 +3,7 @@
 - Status: Done
 - Phase: Provider-neutral publisher
 - Design: [TD6](../technical-design/TD6-fused-publish-state.md)
-- Product contract: [Specification §5.3](../../specification.md#per-site-publish-state-and-reconciliation)
+- Product contract: [Specification §5.3](../../specification.md#per-site-sync-state-and-reconciliation)
 - Verification: [T20](../verification/T20-publish-state-and-candidate.md)
 
 Replace the duplicated full-manifest pending write with a compact transaction record in the existing per-site cache-retry journal. Keep the committed flat object inventory and make provider read behavior an explicit capability.

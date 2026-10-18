@@ -1,9 +1,10 @@
 # TD15 — Source of truth for the Terraform provider modules
 
-- Status: In progress
+- Status: Done
+- Assignee: Codex
 - Phase: Reusable distribution
-- Decision: The owner chose **option 1** on 2026-10-06: the monorepo is the source of truth for the Terraform modules, and the package repositories `artifact-pages/terraform-cloudflare-artifact-pages` and `artifact-pages/terraform-aws-artifact-pages` are generated and synced, like the Action repositories ([TD14](TD14-one-repository-per-action.md)). On 2026-10-07 the owner confirmed option 1 and **amended versioning**: each module has its own SemVer, independent of the product version, released by a per-module tag in the monorepo (not by a product release). See "Decision (2026-10-07)" and the "Decision history". The contract below is settled except for the points listed under "Open points", so the item stays In progress.
-- Related issue: [ISSUE-069](../issues/ISSUE-069-cloudflare-edge-rewrites-artifact-html.md) (its fix exists only in the package repository)
+- Decision: The owner chose **option 1** on 2026-10-06: the monorepo is the source of truth for the Terraform modules, and the package repositories `artifact-pages/terraform-cloudflare-artifact-pages` and `artifact-pages/terraform-aws-artifact-pages` are generated and synced, like the Action repositories ([TD14](TD14-one-repository-per-action.md)). On 2026-10-07 the owner confirmed option 1 and **amended versioning**: each module has its own SemVer, independent of the product version, released by a per-module tag in the monorepo (not by a product release). See "Decision (2026-10-07)" and the "Decision history". The contract is settled; the 2026-10-18 reconciliation below records the implemented resolutions. Hosted guard proof remains in IMP-64, not this design.
+- Related issue: [ISSUE-069](../issues/ISSUE-069-cloudflare-edge-rewrites-artifact-html.md) (the historical package-only fix was reconciled by IMP-63)
 - Related implementation: [IMP-66](../implementation/IMP-66-per-site-control-prefix-and-aws-iam.md) (precondition for decoupled AWS releases), [IMP-63](../implementation/IMP-63-consolidate-terraform-modules.md), [IMP-64](../implementation/IMP-64-generate-sync-terraform-packages.md), [IMP-65](../implementation/IMP-65-admin-module-source-switch.md), [IMP-38](../implementation/IMP-38-terraform-registry-publication.md), [IMP-39](../implementation/IMP-39-aws-cloudflare-dns-acm.md), [IMP-44](../implementation/IMP-44-aws-waf-custom-rules.md)
 - Related design: [TD14](TD14-one-repository-per-action.md) (monorepo as source, generated published repositories), [TD2](TD2-component-release-policy.md) (one product version; Terraform modules are a scoped exception as of 2026-10-07; the product version was later split into independent series by [TD17](TD17-config-pinned-component-versions.md))
 
@@ -64,7 +65,7 @@ The owner confirmed option 1 and changed the versioning rule.
    - `release.json` (`version`, `repository`) recording the source release, as in the Action repositories.
    Module-internal references to sibling nested modules use relative `./modules/...` paths. Examples reference the module by its Registry address with an exact `version` in the generated copy and by relative path in the monorepo copy; the generator performs that single rewrite.
 3. **Never edited directly.** The package repositories carry a README note that they are generated; direct commits are overwritten by the next sync.
-4. **Sync mechanism (amended 2026-10-07).** A new workflow `.github/workflows/release-terraform.yml` (separate from `release.yml`) triggers on a per-module tag (see 5), runs the generator `scripts/build-terraform-package-repos.mjs` for that one module, and a sync script modelled on `scripts/sync-action-repos.sh`: replace `main` of the matching package repository, commit, tag `vX.Y.Z`, push. The token is minted from the organization App `artifact-pages-release` with `actions/create-github-app-token`, scoped to the one package repository. The App currently has Contents write only on the four Action repositories; installing it on `terraform-cloudflare-artifact-pages` and `terraform-aws-artifact-pages` is an **owner step**. A re-run with identical content is a no-op and any difference at an existing tag fails, as in TD14. Product releases (`vX.Y.Z`) no longer touch the package repositories.
+4. **Sync mechanism (amended 2026-10-07).** A new workflow `.github/workflows/release-terraform.yml` (separate from `release.yml`) triggers on a per-module tag (see 5), runs the generator `scripts/build-terraform-package-repos.mjs` for that one module, and a sync script modelled on `scripts/sync-action-repos.sh`: replace `main` of the matching package repository, commit, tag `vX.Y.Z`, push. The token is minted from the organization App `artifact-pages-release` with `actions/create-github-app-token`, scoped to the one package repository. At design time the App had Contents write only on the four Action repositories; installing it on `terraform-cloudflare-artifact-pages` and `terraform-aws-artifact-pages` was an **owner step** (completed 2026-10-10 per IMP-64). A re-run with identical content is a no-op and any difference at an existing tag fails, as in TD14. Product releases (`vX.Y.Z`) no longer touch the package repositories.
 5. **Versioning (amended 2026-10-07).** Each module has its own SemVer series, independent of the product version and of the other module. A module release is cut by pushing an annotated tag in the monorepo:
    - `terraform-cloudflare/vX.Y.Z` for `terraform/modules/cloudflare`;
    - `terraform-aws/vX.Y.Z` for `terraform/modules/aws`.
@@ -76,20 +77,18 @@ The owner confirmed option 1 and changed the versioning rule.
    - **Generated-repository PR policy.** As for the Action repositories, each package repository carries a notice that it is generated and that pull requests go to the monorepo, plus an auto-close workflow for pull requests opened against it (closed with a comment pointing to `artifact-pages/artifact-pages`). Direct commits are overwritten by the next sync.
 8. **ISSUE-069.** Its acceptance criteria refer to `terraform/modules/cloudflare` once IMP-63 ports `unchanged_delivery`.
 
-## Open points
+## Resolved points (reconciled 2026-10-18, Sol)
 
-- Resolved 2026-10-07: tagging an unchanged package. A module is released only by an explicit per-module tag and only when it changed; the sync is a no-op on identical content.
-- Whether the lock files (`.terraform.lock.hcl`) are committed in the monorepo and copied, or generated at sync time (decide in IMP-64 once the Registry-shaped layout exists).
-- How the generated examples' exact-version rewrite is verified before the tag exists (proposal: the sync job validates the generated tree with a local-source variant first; decide in IMP-64).
-- Registry namespace authority and publication (IMP-38, owner).
-- Whether the AWS package is advertised at the first synced release or follows the Cloudflare package (IMP-38 scope; AWS proof is not implied). Independent versions make a staggered start straightforward.
-- ~~Implementation of the per-site control prefix and prefix-level AWS IAM, including the CLI key-layout migration ([IMP-66](../implementation/IMP-66-per-site-control-prefix-and-aws-iam.md), after `cli-sync-remove`); until then AWS is not fully decoupled from CLI releases.~~ Resolved 2026-10-14 (IMP-66 step 3): AWS is decoupled from CLI releases.
-- Resolved 2026-10-07: initial versions. Both modules start at `0.1.0` (`terraform-cloudflare/v0.1.0`, `terraform-aws/v0.1.0`). The generated `release.json` records `version`, `repository`, the monorepo source tag and the source commit SHA (simplest traceable option: the sync writes what the tag already identifies).
+- Tracked module lockfiles are copied with the tracked source by `scripts/build-terraform-package-repos.mjs`; sync does not generate dependency locks. Provider upgrades are reviewed source changes.
+- Example rewriting is verified by `scripts/build-terraform-package-repos.test.mjs`. `.github/workflows/release-terraform.yml` validates an isolated copy of the generated package through its `scripts/validate.sh` before syncing (#142); validation artifacts/symlinks cannot enter the published tree. The local consumer validates before a new Registry version exists; Registry retrieval is a post-publication check.
+- Namespace authority and initial order are established: the owner published both modules under `artifact-pages` at 0.1.0/0.1.1 on 2026-10-14. [IMP-38](../implementation/IMP-38-terraform-registry-publication.md) records exact tags, commits, runs and clean Registry retrieval. AWS publication does not imply the remaining T15 proof.
+- Initial versions, changed-content-only release, independent per-module tags and provenance were settled on 2026-10-07. IMP-66 step 3 finished on 2026-10-14; AWS requires CLI 0.4.0+ and is decoupled from CLI releases.
+- Generated PR notices/guards are settled design. The remaining hosted auto-close demonstration is implementation verification in [IMP-64](../implementation/IMP-64-generate-sync-terraform-packages.md), not an open design choice.
 
 ## Exit criteria
 
 - [x] The owner chooses an option and records it here with the date (option 1, 2026-10-06).
 - [x] If option 1: implementation slices cover reconciliation ([IMP-63](../implementation/IMP-63-consolidate-terraform-modules.md)), the generator and sync ([IMP-64](../implementation/IMP-64-generate-sync-terraform-packages.md)) and the admin switch ([IMP-65](../implementation/IMP-65-admin-module-source-switch.md)); the versioning rule is recorded above; ISSUE-069's acceptance criteria refer to the surviving module (to be updated by IMP-63).
 - [x] The owner confirms option 1 and the versioning rule (2026-10-07: independent module SemVer, per-module tags).
-- [ ] The open points above are resolved (or consciously deferred) and the status moves to Done.
-- [x] [IMP-38](../implementation/IMP-38-terraform-registry-publication.md) publication is blocked on IMP-63 to IMP-65, which the item records.
+- [x] The open points above are resolved and recorded (2026-10-18); the status is Done.
+- [x] [IMP-38](../implementation/IMP-38-terraform-registry-publication.md) publication prerequisites IMP-63 to IMP-65 are recorded; actual publication is established in IMP-38.

@@ -1,10 +1,11 @@
 # IMP-44 — Optional operator-configured AWS WAF custom rules
 
-- Status: In progress
+- Status: Deferred
+- Assignee: Codex
 - Phase: Provider-backed deployment / reusable distribution
 - Primary lane: Infra
 - Execution: Design accepted and local implementation authorized on October 2, 2026, through the pre-plan boundary. Agent-led local checks only; Terraform plan (including mocked plans), live changes and publication require further authorization.
-- Module repository: `/Users/tasuku/work/github.com/tasuku43/terraform-aws-artifact-pages`
+- Module source: `terraform/modules/aws` (TD15); the former standalone checkout path below is historical.
 - Requires: The existing self-contained AWS CloudFront delivery module. Coordinate with [IMP-38](IMP-38-terraform-registry-publication.md); neither Cloudflare WAF completion nor public Registry publication is a prerequisite to design.
 - Related: [TD1](../technical-design/TD1-site-viewer-access.md), [T15](../verification/T15-provider-delivery.md), [Cloudflare counterpart](IMP-43-cloudflare-waf-custom-rules.md), [workstreams](../workstreams.md).
 - Requested on: October 2, 2026 (JST).
@@ -213,3 +214,9 @@ The owner requested main integration. The authoritative AWS module implementatio
 Formatting and staged diff checks passed. Revalidation with Terraform 1.9.8 and the locked AWS provider 6.66.0 passed after backend-free, readonly-lock initialization in a fresh local provider cache; the earlier shared cache had a checksum mismatch. The dependency lock was not changed. The October 2 current/floor 89/89 test results and independent review remain the implementation evidence; no source change was made during this integration.
 
 The tracking repository was fast-forwarded to its current `origin/main` before recording this evidence. This step commits to local main only; remote pushes, tags, publication, Terraform plans and applies were not performed. IMP-44 remains In progress for the previously recorded plan-stage acceptance criteria and T15 delivery proof.
+
+## Backend decision — 2026-10-18 (Sol)
+
+**Defer the evaluated-plan stage.** The current AWS verification profile deliberately has no WAF (owner decision, October 13); no adopter requirement presently justifies spending the next verification wave on this optional policy. Existing pre-plan implementation and current/floor 89/89 console/source checks remain credited, together with independent review. They do not establish evaluated resource blocks, plan-stopping preconditions, drift, retirement ordering or live protection; leave the unchecked acceptance criteria open.
+
+Revisit when an operator requests the accepted WAF capability or a release proposes advertising it. Start with isolated, backend-free mocked plan validation at the documented floor/current versions, without refresh, real credentials, account data reads or state access; update the harness for the then-supported provider versions and obtain independent review. Any real-account plan/access, policy attachment, apply/import/retirement, paid resource, release or settings change requires a concrete owner-approved scope. No such execution is authorized by this deferral. Delivery/propagation/rollback proof stays in T15. The implementation is now in the monorepo under TD15 and published package generation; earlier package-divergence/local-main wording is historical, not a request for another source copy.

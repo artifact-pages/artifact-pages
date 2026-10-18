@@ -1,6 +1,7 @@
 # TD20 — Search results page and build-time snippet packs
 
-- Status: Open
+- Status: Done
+- Assignee: Codex
 - Phase: Reusable distribution
 - Decision: Direction accepted by the owner on 2026-10-11 (results page, build-time packs); pack size and h4 handling confirmed with the defaults on 2026-10-12.
 - Related design: [TD2](TD2-component-release-policy.md) (additive schema changes), [TD19](TD19-navigation-metadata-in-the-site-index.md) (index metadata; same additive approach)
@@ -13,7 +14,7 @@ How does the reader show where a page matched, in a space wide enough to read, w
 
 Today a body-only hit in the sidebar reads "Text" and nothing more, and the sidebar is too narrow for anything longer. No UI can fix that alone: the v1 index stores postings, not text.
 
-## Current state
+## Baseline before implementation (historical)
 
 **Format v1** (`cli/internal/fulltext/build.go`, `web/src/domain/fulltext-codec.ts`, `docs/architecture/fulltext-search.md`):
 
@@ -43,12 +44,12 @@ Today a body-only hit in the sidebar reads "Text" and nothing more, and the side
 - **Stability.** Content-addressed objects are only cheap if a republish leaves untouched objects byte-identical.
 - **Ownership.** The format and the indexer are Codex-owned (`cli/`); the UI and client-side snippet code are Claude-owned (`web/`).
 
-## Proposal (author's recommendation)
+## Accepted design (2026-10-11, amended 2026-10-12)
 
 ### 1. UX split
 
 - **Sidebar filter: title and path only.** It becomes navigation again and needs no search data. It ends with a row "Search full text for “q” ↵" that opens the results page.
-- **Results page** in the main content area at `/<site>/_search?q=…&in=<folder>`. This follows the `_previews` precedent. The first segments `_previews` and `_search` are reserved so the reader's route namespace and directory pages stay unambiguous: a directory page for a `_search/` folder would be shadowed by the search route, and documents under `_previews/` would be shadowed by the preview routes. The specification reserves both and the indexer rejects them ([ISSUE-088](ISSUE-088-indexer-rejects-reserved-first-segments.md)). Per result: title, path, the heading the match sits under (linking to its anchor), one or more highlighted snippets. Folder facets with counts replace the "Search only in <dir>/" chip (`in` carries the choice). Results update as the reader types (debounced; stale responses dropped as the core contract already requires), and the URL is shareable; Back returns to the previous query or page.
+- **Results page** in the main content area at `/<site>/_search?q=…&in=<folder>`. This follows the `_previews` precedent. The first segments `_previews` and `_search` are reserved so the reader's route namespace and directory pages stay unambiguous: a directory page for a `_search/` folder would be shadowed by the search route, and documents under `_previews/` would be shadowed by the preview routes. The specification reserves both and the indexer rejects them ([ISSUE-088](../issues/ISSUE-088-indexer-rejects-reserved-first-segments.md)). Per result: title, path, the heading the match sits under (linking to its anchor), one or more highlighted snippets. Folder facets with counts replace the "Search only in <dir>/" chip (`in` carries the choice). Results update as the reader types (debounced; stale responses dropped as the core contract already requires), and the URL is shareable; Back returns to the previous query or page.
 - **⌘K palette** keeps jumping to titles and headings and gets a "Search full text" fallback entry.
 - **Destination page:** the existing highlight is extended with a "1/5 ↑↓" match navigator. A result link carries `?q=` so the target highlights and scrolls as it does today.
 - ISSUE-085 is subsumed; ISSUE-077 ranking stays and snippets add a body-hit order (more matching sections first, then path). (Amended 2026-10-12: snippets do not reorder hits; see the Reader procedure in docs/architecture/fulltext-search.md.)
@@ -128,4 +129,6 @@ AWS figures are CloudFront pay-as-you-go (Japan) after the free 10M requests and
 
 ## Settled contract
 
-None yet.
+The authoritative [full-text format and reader procedure](../../architecture/fulltext-search.md) records the settled additive v1 contract (#106, defaults #121): h1–h3 sections; original display text and grapheme-aware matching; deterministic 16/64/256 KiB packs; a 32 MiB site budget; content-addressed opaque gzip with no HTTP Content-Encoding; and no snippet-based reordering. Its limits and fallback rules supersede provisional wording in the historical proposal above. The owner retained the budget/omission constraint on 2026-10-18 (ISSUE-111).
+
+[IMP-77](../implementation/IMP-77-fulltext-section-table-and-text-packs.md) records the shipped writer/publisher and fixtures; [ISSUE-085](../issues/ISSUE-085-page-text-search-snippets.md) and [ISSUE-087](../issues/ISSUE-087-page-text-search-results-page.md) record the shipped reader/results. No design question remains. Closed by Sol on 2026-10-18; this closure makes no additional scale or provider-proof claim.

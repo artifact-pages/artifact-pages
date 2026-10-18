@@ -1,6 +1,7 @@
 # T4 — Serving routes and cache
 
 - Status: In progress
+- Assignee: Codex
 - Phase: Phase 1 local analogue; provider serving remains post-MVP
 
 ## Contract to prove
@@ -15,7 +16,7 @@ Direct preview URLs work without catalog membership; a missing raw file is a rea
 - [x] Verify iframe CSS containment and intentionally allowed parent-DOM/test-key storage access with benign preview fixtures; verify Markdown script sanitization separately. Former parent-isolation and blanket blocked-fetch assertions are not the accepted HTML contract.
 - [ ] Verify browser/CDN cache behavior for mutable catalog responses and removed objects.
 - [ ] Verify fixed-name app assets in an already-cached browser during upgrade and rollback, not only origin bytes ([application bundle deployment guide](../../guides/app-bundle-deployment.md)).
-- [ ] Inject invalidation-only failure for registry registration and app deployment, then retry and record request/freshness behavior. The review observed retries becoming no-ops; determine whether each mutable-path contract converges. Keep this proof separate from the resolved unregister-cleanup retry defect.
+- [x] Inject invalidation-only failure for registry registration and app deployment and prove retry convergence at the local/fake boundary ([T22](T22-cache-purge-retry.md), Done). Deployed request/freshness propagation remains in the unchecked provider criteria; the former retry-no-op defect is resolved.
 - [ ] Verify provider route and cache behavior for catalog, manifest, HTML/Markdown, local resources, and removed objects. Do not treat customer-managed viewer-access policy as a product feature or completion criterion.
 
 ## Evidence
@@ -28,8 +29,14 @@ On 2026-09-27, the focused Playwright boundary checks passed under the former mo
 
 The provider source/local slice is recorded in [IMP-14](../implementation/IMP-14-provider-serving.md). `npm run test:provider-delivery` checks AWS CloudFront route behavior and Cloudflare Ruleset source for raw preview paths, SPA exclusions, non-cached raw misses, and cache-policy wiring. Local nginx browser tests verify preview catalog, manifest, HTML/Markdown, CSS, script, image, and font response behavior. The Cloudflare MinIO + purge-mock profile verifies local unregister removal and neighbor isolation. None of these exercises a real CDN cache; viewer-access policy, if configured, is customer-managed and outside this product verification.
 
-Local serving is only an analogue. CDN freshness/removal and invalidation propagation remain unverified. T4 does not test application-level public/restricted site behavior because Artifact Pages has no such policy. An operator who adds an external edge gate verifies that configuration in their own environment. See the [proof matrix](../../architecture/preview-publishing-contract.html#proof).
+Local serving is only an analogue. T15 records sampled Cloudflare/AWS freshness/removal and invalidation observations; the complete matrix and propagation bounds remain open. T4 does not test application-level public/restricted site behavior because Artifact Pages has no such policy. An operator who adds an external edge gate verifies that configuration in their own environment. See the [proof matrix](../../architecture/preview-publishing-contract.html#proof).
 
 ## Implementation links
 
 [IMP-01 records](../implementation/IMP-01-preview-records.md), [IMP-07 local serving](../implementation/IMP-07-local-serving.md), [IMP-08 reader](../implementation/IMP-08-preview-reader.md), [IMP-10 PR return link](../implementation/IMP-10-pr-return-link.md), [IMP-14 provider serving](../implementation/IMP-14-provider-serving.md), [IMP-15 retention](../implementation/IMP-15-provider-retention.md), and [IMP-13 Action](../implementation/IMP-13-action.md) supply the surfaces to verify. Local route tests alone cannot satisfy the provider CDN route, cache, and invalidation proof.
+
+## Reconciled evidence and remaining — 2026-10-18
+
+[T22](T22-cache-purge-retry.md) closes the invalidation retry defect at its stated local/fake boundary. [T15](T15-provider-delivery.md) records Cloudflare October 1–2 canonical warm-URL removal/revalidation and AWS October 14 update (14 s)/unregister (10 s) observations; these are samples, not a global freshness guarantee. The [Cloudflare recovery record](../cloudflare-preview-recovery-proof.md) also proves one enforced runtime HTTP-fetch refusal, superseding the earlier rewritten-fixture limitation for that sample.
+
+Remaining: warm-browser fixed-name app assets across upgrade **and rollback**, full mutable/removed-object cache matrix, deployed invalidation-only failure/retry behavior and the missing route/resource cases on each provider. Use the coordinated plan in [workstreams](../workstreams.md#backend-next-wave-2026-10-18); cloud runs, deployment/rollback and disposable site mutations require a concrete owner approval. Keep In progress.
