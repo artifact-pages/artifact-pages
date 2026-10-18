@@ -1,7 +1,8 @@
 # The site index deadline covers the body download, so a large index on a slow link fails every time
 
-- Status: Open
+- Status: Done
 - Priority: P2
+- Assignee: Claude
 - Area: Web / site-index loading
 - Source: T25 extended local measurements 2026-10-17, build `c7d5d2b9`
 - Related: [ISSUE-101](ISSUE-101-registry-and-site-index-loads-have-no-deadline.md) (introduced the deadline), [ISSUE-102](ISSUE-102-load-errors-offer-no-retry-action.md) (Try again), [T25](../verification/T25-web-first-load-and-search-at-scale.md)
@@ -39,7 +40,11 @@ A large index on a slow but working connection either loads or shows an explanat
 
 ## Acceptance criteria
 
-- [ ] The owner chooses an option (or keeps the current behaviour with documentation).
-- [ ] With the constrained profile (1.6 Mbps) and the 5,000-page uncompressed local index, the first Mermaid render and a site open either succeed or show the documented outcome, in a repeatable test.
-- [ ] A stalled connection (no bytes) still fails within a bounded time and "Try again" recovers once the connection works.
-- [ ] The T25 report records the re-measurement.
+- [x] The owner chooses an option (or keeps the current behaviour with documentation): option 3, see Decision.
+- [ ] Not applicable under option 3 (no behaviour change): with the constrained profile (1.6 Mbps) and the 5,000-page uncompressed local index, the first Mermaid render and a site open either succeed or show the documented outcome, in a repeatable test.
+- [ ] Not applicable under option 3 (no behaviour change): a stalled connection (no bytes) still fails within a bounded time and "Try again" recovers once the connection works.
+- [ ] Not applicable under option 3 (nothing changes to re-measure): the T25 report records the re-measurement.
+
+## Decision
+
+Owner, 2026-10-18: option 3. The total 20 s deadline stays as it is. The implied minimum throughput and the reliance on compressed delivery are documented as a constraint in the [specification](../../specification.md#8-browser-ux) ("Site index load deadline"). No code change.

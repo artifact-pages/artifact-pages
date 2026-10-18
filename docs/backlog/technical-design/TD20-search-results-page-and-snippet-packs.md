@@ -79,7 +79,7 @@ Manifest additions (both optional, same `ObjectRef` shape and the same URL, leng
 - Stability also needs deterministic gzip: fixed compression level, no mtime, no file name (the v1 objects already satisfy this), so identical input gives identical bytes and hash.
 - Same delivery as the leaves: `application/octet-stream`, no `Content-Encoding`, the immutable cache policy, reconciled with the rest of the owned search prefix.
 
-**Limits.** A per-document text cap (proposed 256 KiB of display text (UTF-8 bytes); longer sections are truncated) and a per-site cap on total raw pack bytes (proposed 32 MiB). Exceeding a cap never fails the publish and is never silent: the CLI prints a warning, and the manifest records that snippets were omitted for the site, or which documents were truncated. With `sections` and `texts` omitted the UI falls back to v1 behaviour ("Text", no snippet); the sidebar and ranking are unaffected.
+**Limits.** A per-document text cap (proposed 256 KiB of display text (UTF-8 bytes); longer sections are truncated) and a per-site cap on total raw pack bytes (proposed 32 MiB). Exceeding a cap never fails the publish and is never silent: the CLI prints a warning, and the manifest records that snippets were omitted for the site, or which documents were truncated. (Owner 2026-10-18: the 32 MiB site budget and its path-order omission stay fixed as an accepted constraint, see [ISSUE-111](../issues/ISSUE-111-snippet-budget-omits-late-documents-at-scale.md) and the specification's "Snippet budget at scale".) With `sections` and `texts` omitted the UI falls back to v1 behaviour ("Text", no snippet); the sidebar and ranking are unaffected.
 
 ### 4. Runtime cost
 
