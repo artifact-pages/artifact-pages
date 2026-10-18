@@ -14,6 +14,7 @@ const CREDENTIAL_CLASSES = Object.freeze({
     variables: ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN'],
   },
   'aws-admin-publisher': {
+    implemented: false,
     provider: 'aws', accountId: '231136241959', credentialSource: 'github-actions-oidc',
     variables: ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN'],
   },
@@ -22,18 +23,22 @@ const CREDENTIAL_CLASSES = Object.freeze({
     variables: ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN'],
   },
   'aws-observer': {
+    implemented: false,
     provider: 'aws', accountId: '231136241959', credentialSource: 'aws-sso-assumed-role',
     variables: ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN'],
   },
   'aws-reconcile': {
+    implemented: false,
     provider: 'aws', accountId: '231136241959', credentialSource: 'github-actions-oidc',
     variables: ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN'],
   },
   'aws-a9-writer': {
+    implemented: false,
     provider: 'aws', accountId: '231136241959', credentialSource: 'aws-sso-assumed-role',
     variables: ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN'],
   },
   'aws-final-cleanup': {
+    implemented: false,
     provider: 'aws', accountId: '231136241959', credentialSource: 'aws-sso-assumed-role',
     variables: ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN'],
   },
@@ -46,6 +51,7 @@ const CREDENTIAL_CLASSES = Object.freeze({
     variables: ['CF_VERIFY_R2_ACCESS_KEY_ID', 'CF_VERIFY_R2_SECRET_ACCESS_KEY', 'CF_VERIFY_R2_SESSION_TOKEN'],
   },
   'cloudflare-cache-purge': {
+    implemented: false,
     provider: 'cloudflare', accountId: '21a0acb78621cc00cfa655a276d77b74', credentialSource: 'cloudflare-zone-api-token',
     variables: ['CF_VERIFY_API_TOKEN'],
   },
@@ -54,6 +60,7 @@ const CREDENTIAL_CLASSES = Object.freeze({
     variables: ['CF_VERIFY_R2_ACCESS_KEY_ID', 'CF_VERIFY_R2_SECRET_ACCESS_KEY', 'CF_VERIFY_R2_SESSION_TOKEN'],
   },
   'cloudflare-reconcile': {
+    implemented: false,
     provider: 'cloudflare', accountId: '21a0acb78621cc00cfa655a276d77b74', credentialSource: 'cloudflare-r2-temporary-session',
     variables: ['CF_VERIFY_R2_ACCESS_KEY_ID', 'CF_VERIFY_R2_SECRET_ACCESS_KEY', 'CF_VERIFY_R2_SESSION_TOKEN'],
   },
@@ -66,9 +73,11 @@ const SECRET_KEYS = new Set([
   'CF_VERIFY_R2_REGISTRY_READER_SESSION_TOKEN', 'CF_VERIFY_API_TOKEN',
 ]);
 
+export const CREDENTIAL_CLASS_NAMES = Object.freeze(Object.keys(CREDENTIAL_CLASSES));
+
 export function credentialClassDefinition(credentialClass) {
   const definition = CREDENTIAL_CLASSES[credentialClass];
-  if (!definition) throw new AuthorizationError('EXECUTION_PATH_NOT_IMPLEMENTED', credentialClass);
+  if (!definition || definition.implemented === false) throw new AuthorizationError('EXECUTION_PATH_NOT_IMPLEMENTED', credentialClass);
   return definition;
 }
 

@@ -182,7 +182,7 @@ export async function verifyCredential({
   return record;
 }
 
-export function requireCredentialVerification({ record, manifest, capability, invocationId, invocationDigest, credential, now = Date.now(), minimumLifetimeMs = 60000, maxVerificationAgeMs = DEFAULT_VERIFICATION_MAX_AGE_MS }) {
+export async function requireCredentialVerification({ record, recordStore, manifest, capability, invocationId, invocationDigest, credential, now = Date.now(), minimumLifetimeMs = 60000, maxVerificationAgeMs = DEFAULT_VERIFICATION_MAX_AGE_MS }) {
   requireExternalCapability(capability);
   if (capability.manifest !== manifest) throw new AuthorizationError('LEAST_PRIVILEGE_CREDENTIALS_REQUIRED');
   const invocation = assertInvocationMatchesTransition(invocationId, capability.command);
@@ -190,6 +190,20 @@ export function requireCredentialVerification({ record, manifest, capability, in
     throw new AuthorizationError('LEAST_PRIVILEGE_CREDENTIALS_REQUIRED');
   }
   if (!isVerificationRecord(record)) throw new AuthorizationError('LEAST_PRIVILEGE_CREDENTIALS_REQUIRED');
+  const requiredProbeIds = PROBE_DEFINITIONS
+    .filter((probe) => probe.credentialClass === credential.credentialClass && probe.stage === 'preflight')
+    .map((probe) => probe.id);
+  const actualProbeIds = record.probes.map((probe) => probe.id);
+  const actualProbeIdSet = new Set(actualProbeIds);
+  const requiredProbeOutcomes = new Map(PROBE_DEFINITIONS
+    .filter((probe) => probe.credentialClass === credential.credentialClass && probe.stage === 'preflight')
+    .map((probe) => [probe.id, probe.kind === 'positive' ? 'positive' : 'denied']));
+  if (requiredProbeIds.length === 0 || actualProbeIds.length !== requiredProbeIds.length
+    || actualProbeIdSet.size !== requiredProbeIds.length
+    || requiredProbeIds.some((probeId) => !actualProbeIdSet.has(probeId))
+    || record.probes.some((probe) => requiredProbeOutcomes.get(probe.id) !== probe.outcome)) {
+    throw new AuthorizationError('LEAST_PRIVILEGE_CREDENTIALS_REQUIRED');
+  }
   const { digest, ...content } = record;
   if (digest !== canonicalDigest(content)
     || record.runId !== manifest.runId
@@ -211,6 +225,16 @@ export function requireCredentialVerification({ record, manifest, capability, in
     || now - Date.parse(record.verifiedAt) > maxVerificationAgeMs
     || Date.parse(record.credentialExpiresAt) - now < minimumLifetimeMs
     || !record.probes.every((probe) => ['positive', 'denied'].includes(probe.outcome))) {
+    throw new AuthorizationError('LEAST_PRIVILEGE_CREDENTIALS_REQUIRED');
+  }
+  if (typeof recordStore?.read !== 'function') throw new AuthorizationError('LEAST_PRIVILEGE_CREDENTIALS_REQUIRED');
+  let stored;
+  try {
+    stored = await recordStore.read(record.digest);
+  } catch {
+    throw new AuthorizationError('LEAST_PRIVILEGE_CREDENTIALS_REQUIRED');
+  }
+  if (!stored || canonicalDigest(stored) !== canonicalDigest(record)) {
     throw new AuthorizationError('LEAST_PRIVILEGE_CREDENTIALS_REQUIRED');
   }
   return record;
@@ -341,12 +365,15 @@ function hasForbiddenResource(bindings, credentialClass) {
   const production = values.includes('9ac354c8aa31d424224d8c4f3aa8ba2a')
     || values.includes('artifact-pages.dev')
     || values.includes('artifact-pages')
-    || values.includes('arn:aws:s3:::artifact-pages')
-    || values.includes('arn:aws:s3:::artifact-pages/*');
+    || hasForbiddenArnPrefix(values, 'arn:aws:s3:::artifact-pages');
   const preservedAws = values.includes('artifact-pages-231136241959-us-east-1') || values.includes('ECFTIR5GVPQDF')
-    || values.includes('arn:aws:s3:::artifact-pages-231136241959-us-east-1')
-    || values.includes('arn:aws:cloudfront::231136241959:distribution/ECFTIR5GVPQDF');
+    || hasForbiddenArnPrefix(values, 'arn:aws:s3:::artifact-pages-231136241959-us-east-1')
+    || hasForbiddenArnPrefix(values, 'arn:aws:cloudfront::231136241959:distribution/ECFTIR5GVPQDF');
   return production || (preservedAws && credentialClass !== 'aws-inventory');
+}
+
+function hasForbiddenArnPrefix(values, forbiddenArn) {
+  return values.some((value) => value === forbiddenArn || value.startsWith(`${forbiddenArn}/`));
 }
 
 function stringValues(value, output = []) {

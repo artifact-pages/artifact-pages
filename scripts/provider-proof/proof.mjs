@@ -5,7 +5,7 @@ import path from 'node:path';
 import { attachApproval, prepareApproval } from './approval-helpers.mjs';
 import { appendSeal, requireActiveSeal, verifyApprovalFile } from './seals.mjs';
 import { assertInvocationMatchesTransition, getExecutionPath, getInvocation } from './invocation-registry.mjs';
-import { resolveInvocation, runSupervisedInvocation } from './launcher.mjs';
+import { requireSealedPreservationCheckpoint, resolveInvocation, runSupervisedInvocation } from './launcher.mjs';
 import { createVerificationRecordStore, verifyCredential } from './credential-verification.mjs';
 import {
   AuthorizationError,
@@ -88,10 +88,10 @@ async function commandPhase(subcommand, args, environment, services) {
     return 0;
   }
   if (subcommand === 'external') throw new AuthorizationError('ARBITRARY_COMMAND_PAYLOAD_REJECTED');
-  const path = getExecutionPath(command);
+  const executionPath = getExecutionPath(command);
   if (!args['--invocation']) throw new AuthorizationError('LEAST_PRIVILEGE_CREDENTIALS_REQUIRED', 'fixed invocation is required');
   const invocation = assertInvocationMatchesTransition(args['--invocation'], capability.command);
-  if (!path.invocationIds.includes(args['--invocation'])) throw new AuthorizationError('EXECUTION_PATH_NOT_IMPLEMENTED');
+  if (!executionPath.invocationIds.includes(args['--invocation'])) throw new AuthorizationError('EXECUTION_PATH_NOT_IMPLEMENTED');
   const result = await executeVerifiedInvocation({
     manifestPath: args['--manifest'], manifest, capability, invocationId: args['--invocation'], services,
   });
@@ -140,6 +140,7 @@ async function executeVerifiedInvocation({ manifestPath, manifest, capability, i
   if (typeof services.launchContainer !== 'function') {
     throw new AuthorizationError('EXECUTION_PATH_NOT_IMPLEMENTED', 'reviewed Linux container runner is unavailable');
   }
+  requireSealedPreservationCheckpoint(manifest);
   const verification = await verifyInvocationCredentials({ manifestPath, manifest, capability, invocationId, services });
   const result = await runSupervisedInvocation({
     invocation: verification.invocation,
@@ -147,6 +148,7 @@ async function executeVerifiedInvocation({ manifestPath, manifest, capability, i
     capability,
     credential: verification.credential,
     verificationRecord: verification.record,
+    recordStore: verification.recordStore,
     parentEnvironment: services.parentEnvironment ?? process.env,
     launchContainer: services.launchContainer,
     killGroup: services.killGroup,

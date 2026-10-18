@@ -25,6 +25,12 @@
           ]}}
         },
         {
+          "Sid": "InvalidateOnlyA7ProofDistribution",
+          "Effect": "Allow",
+          "Action": "cloudfront:CreateInvalidation",
+          "Resource": "{{PROOF_DISTRIBUTION_ARN}}"
+        },
+        {
           "Sid": "ReadOnlyProofBucketConfigurationAndDistribution",
           "Effect": "Allow",
           "Action": ["s3:GetBucketLocation", "s3:GetBucketVersioning", "s3:GetBucketLifecycleConfiguration", "cloudfront:GetDistribution", "cloudfront:GetInvalidation"],

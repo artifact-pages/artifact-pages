@@ -60,6 +60,10 @@ export function assertProofPolicyContainsDenies(document, proofBindings = {}) {
     'arn:aws:s3:::artifact-pages-231136241959-us-east-1/*',
     'arn:aws:cloudfront::231136241959:distribution/ECFTIR5GVPQDF',
   ];
+  const allActionDenies = all.filter((item) => item.Effect === 'Deny' && asList(item.Action).includes('*'));
+  if (protectedTargets.some((target) => !allActionDenies.some((statement) => denyMatchesResource(statement, target)))) {
+    throw new AuthorizationError('PRESERVED_RESOURCE_DENY_MISSING');
+  }
   if (protectedTargets.some((target) => !policyText.includes(target))) throw new AuthorizationError('PRESERVED_RESOURCE_DENY_MISSING');
   const proofBucketArn = proofBindings.PROOF_BUCKET_ARN;
   const proofDistributionArn = proofBindings.PROOF_DISTRIBUTION_ARN;
@@ -158,4 +162,16 @@ function statements(document) {
 
 function asList(value) {
   return value === undefined ? [] : Array.isArray(value) ? value : [value];
+}
+
+function denyMatchesResource(statement, resource) {
+  if (statement.Resource !== undefined) return asList(statement.Resource).some((pattern) => wildcardMatch(pattern, resource));
+  if (statement.NotResource !== undefined) return !asList(statement.NotResource).some((pattern) => wildcardMatch(pattern, resource));
+  return false;
+}
+
+function wildcardMatch(pattern, value) {
+  if (typeof pattern !== 'string') return false;
+  const expression = pattern.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&').replace(/\\\*/gu, '.*').replace(/\\\?/gu, '.');
+  return new RegExp(`^${expression}$`, 'u').test(value);
 }

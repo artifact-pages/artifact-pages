@@ -4,7 +4,7 @@
     {
       "Sid": "DenyMutationOfPreservedDistribution",
       "Effect": "Deny",
-      "Action": "cloudfront:*",
+      "Action": "*",
       "Resource": "arn:aws:cloudfront::231136241959:distribution/ECFTIR5GVPQDF"
     },
     {

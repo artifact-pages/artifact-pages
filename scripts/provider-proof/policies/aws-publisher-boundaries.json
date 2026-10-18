@@ -3,9 +3,9 @@
     "Version": "2012-10-17",
     "Statement": [
       {"Sid": "DenyS3OutsideProofBucket", "Effect": "Deny", "Action": "s3:*", "NotResource": ["{{PROOF_BUCKET_ARN}}", "{{PROOF_BUCKET_ARN}}/*"]},
-      {"Sid": "DenyPreservedProductionBucket", "Effect": "Deny", "Action": "s3:*", "Resource": ["arn:aws:s3:::artifact-pages-231136241959-us-east-1", "arn:aws:s3:::artifact-pages-231136241959-us-east-1/*"]},
+      {"Sid": "DenyPreservedProductionBucket", "Effect": "Deny", "Action": "*", "Resource": ["arn:aws:s3:::artifact-pages-231136241959-us-east-1", "arn:aws:s3:::artifact-pages-231136241959-us-east-1/*"]},
       {"Sid": "DenyCloudFrontOutsideProofDistribution", "Effect": "Deny", "Action": "cloudfront:*", "NotResource": "{{PROOF_DISTRIBUTION_ARN}}"},
-      {"Sid": "DenyPreservedProductionDistribution", "Effect": "Deny", "Action": "cloudfront:*", "Resource": "arn:aws:cloudfront::231136241959:distribution/ECFTIR5GVPQDF"},
+      {"Sid": "DenyPreservedProductionDistribution", "Effect": "Deny", "Action": "*", "Resource": "arn:aws:cloudfront::231136241959:distribution/ECFTIR5GVPQDF"},
       {"Sid": "DenyIamAndStsEscalation", "Effect": "Deny", "Action": ["iam:*", "sts:AssumeRole", "sts:TagSession", "sts:SetSourceIdentity"], "Resource": "*"},
       {
         "Sid": "ManageApplicationAndRegistryKeys",
@@ -38,9 +38,9 @@
     "Version": "2012-10-17",
     "Statement": [
       {"Sid": "DenyS3OutsideProofBucket", "Effect": "Deny", "Action": "s3:*", "NotResource": ["{{PROOF_BUCKET_ARN}}", "{{PROOF_BUCKET_ARN}}/*"]},
-      {"Sid": "DenyPreservedProductionBucket", "Effect": "Deny", "Action": "s3:*", "Resource": ["arn:aws:s3:::artifact-pages-231136241959-us-east-1", "arn:aws:s3:::artifact-pages-231136241959-us-east-1/*"]},
+      {"Sid": "DenyPreservedProductionBucket", "Effect": "Deny", "Action": "*", "Resource": ["arn:aws:s3:::artifact-pages-231136241959-us-east-1", "arn:aws:s3:::artifact-pages-231136241959-us-east-1/*"]},
       {"Sid": "DenyCloudFrontOutsideProofDistribution", "Effect": "Deny", "Action": "cloudfront:*", "NotResource": "{{PROOF_DISTRIBUTION_ARN}}"},
-      {"Sid": "DenyPreservedProductionDistribution", "Effect": "Deny", "Action": "cloudfront:*", "Resource": "arn:aws:cloudfront::231136241959:distribution/ECFTIR5GVPQDF"},
+      {"Sid": "DenyPreservedProductionDistribution", "Effect": "Deny", "Action": "*", "Resource": "arn:aws:cloudfront::231136241959:distribution/ECFTIR5GVPQDF"},
       {"Sid": "DenyIamAndStsEscalation", "Effect": "Deny", "Action": ["iam:*", "sts:AssumeRole", "sts:TagSession", "sts:SetSourceIdentity"], "Resource": "*"},
       {
         "Sid": "ReadExactRegistryAndAppVersion",

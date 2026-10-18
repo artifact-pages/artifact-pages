@@ -1,14 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
-import { lstat, mkdir, open, readFile, readdir, realpath, stat } from 'node:fs/promises';
+import { lstat, mkdir, open, readFile, readdir, realpath, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { canonicalDigest, sha256 } from './canonical.mjs';
+import { canonicalDigest, canonicalJson, sha256 } from './canonical.mjs';
 import { credentialClassDefinition, credentialMaterialKeys } from './credential-loader.mjs';
 import { requireCredentialVerification } from './credential-verification.mjs';
 import { assertInvocationMatchesTransition, getInvocation } from './invocation-registry.mjs';
-import { AuthorizationError, requireExternalCapability, validateChildEnvironment } from './policy.mjs';
+import { AuthorizationError, requireExternalCapability, validateCapsAndExpiry, validateChildEnvironment } from './policy.mjs';
 
 const ACTIVE_CHILDREN = new Map();
+const USAGE_BASELINES = new WeakMap();
 const MAX_CAPTURE_BYTES = 4 * 1024 * 1024;
 const FORCE_KILL_DELAY_MS = 500;
 const BASE_CHILD_ENV = Object.freeze({
@@ -53,7 +54,15 @@ export async function resolveInvocation(id, { runtimeRoot, manifest, activeSeal 
 
   const inputDigests = await resolveSealedInputs(root, descriptor.inputs ?? [], manifest, activeSeal);
   const cwd = await resolveWorkingDirectory(descriptor.cwdRoot, root, manifest, inputDigests);
-  const outputPaths = descriptor.outputs.map((relative) => resolveRuntimePath(root, relative));
+  const capturePaths = {};
+  for (const [stream, relative] of Object.entries(descriptor.captures ?? {})) {
+    if (!['stdout', 'stderr'].includes(stream) || typeof relative !== 'string') throw new LauncherError('INVOCATION_CAPTURE_INVALID');
+    capturePaths[stream] = resolveRuntimePath(root, relative);
+  }
+  const artifactPaths = (descriptor.artifacts ?? []).map((relative) => resolveRuntimePath(root, relative));
+  if (Object.values(capturePaths).some((capture) => artifactPaths.includes(capture))) {
+    throw new LauncherError('INVOCATION_ARTIFACT_CAPTURE_COLLISION');
+  }
   const argv = [...descriptor.argv];
   if (argv.some((item) => typeof item !== 'string')) throw new LauncherError('INVOCATION_ARGUMENT_INVALID');
   if (argv.some((item) => /^(?:--profile(?:=|$)|--endpoint-url(?:=|$)|--role-arn(?:=|$)|--role-session-name(?:=|$)|--web-identity-token-file(?:=|$))/u.test(item))) {
@@ -66,7 +75,8 @@ export async function resolveInvocation(id, { runtimeRoot, manifest, activeSeal 
     cwd,
     cwdRoot: descriptor.cwdRoot,
     inputDigests,
-    outputPaths,
+    capturePaths,
+    artifactPaths,
     timeoutMs: descriptor.timeoutMs,
     credentialClass: descriptor.credentialClass,
     provider: descriptor.provider,
@@ -122,6 +132,7 @@ export async function runSupervisedInvocation({
   capability,
   credential,
   verificationRecord,
+  recordStore,
   parentEnvironment = process.env,
   launchContainer,
   killGroup = killProcessGroup,
@@ -141,9 +152,11 @@ export async function runSupervisedInvocation({
   }
   invocation = canonicalInvocation;
   assertInvocationMatchesTransition(invocation.id, capability.command);
+  requireSealedPreservationCheckpoint(manifest);
   if (typeof launchContainer !== 'function') throw new LauncherError('EXECUTION_PATH_NOT_IMPLEMENTED', 'reviewed Linux container runner is unavailable');
-  const record = requireCredentialVerification({
+  const record = await requireCredentialVerification({
     record: verificationRecord,
+    recordStore,
     manifest,
     capability,
     invocationId: invocation.id,
@@ -152,6 +165,9 @@ export async function runSupervisedInvocation({
     now: now(),
     minimumLifetimeMs: invocation.timeoutMs + (manifest.teardownReserveMs ?? 60000),
   });
+  if (containsCredentialMaterial(verificationRecord)) {
+    throw new LauncherError('CREDENTIAL_MATERIAL_IN_VERIFICATION_RECORD');
+  }
   const environment = await buildChildEnvironment({
     invocation,
     credential,
@@ -165,11 +181,14 @@ export async function runSupervisedInvocation({
     || remainingApprovalMs < invocation.timeoutMs + teardownReserveMs) {
     throw new AuthorizationError('LEAST_PRIVILEGE_CREDENTIALS_REQUIRED', 'remaining lifetime or teardown reserve is insufficient');
   }
-  if (Object.keys(verificationRecord).some((key) => /secret|token|password/i.test(key))) {
-    throw new LauncherError('CREDENTIAL_MATERIAL_IN_VERIFICATION_RECORD');
-  }
-
-  for (const output of invocation.outputPaths) await ensureRuntimeParent(invocation.runtimeRoot, output);
+  for (const capture of Object.values(invocation.capturePaths)) await ensureRuntimeParent(invocation.runtimeRoot, capture);
+  const usageReservation = await reserveInvocationUsage({
+    runtimeRoot: invocation.runtimeRoot,
+    manifest,
+    capability,
+    invocation,
+    now: now(),
+  });
   let child;
   try {
     child = await launchContainer({
@@ -207,17 +226,18 @@ export async function runSupervisedInvocation({
   });
 
   let timer;
-  let forceTimer;
   let timedOut = false;
+  let childClosed = false;
   const exit = new Promise((resolve, reject) => {
     child.once('error', () => reject(new LauncherError('CHILD_PROCESS_ERROR')));
-    child.once('close', (code, signal) => resolve({ code, signal }));
+    child.once('close', (code, signal) => {
+      childClosed = true;
+      resolve({ code, signal });
+    });
   });
   const deadline = new Promise((resolve) => {
-    timer = setTimeout(async () => {
+    timer = setTimeout(() => {
       timedOut = true;
-      await killGroup(child, 'SIGTERM').catch(() => {});
-      forceTimer = setTimeout(() => { void killGroup(child, 'SIGKILL'); }, FORCE_KILL_DELAY_MS);
       resolve({ deadline: true });
     }, invocation.timeoutMs);
     timer.unref?.();
@@ -226,15 +246,24 @@ export async function runSupervisedInvocation({
   let result;
   try {
     result = await Promise.race([exit, deadline]);
-    if (result.deadline) result = await exit;
+    if (result.deadline) {
+      await killGroup(child, 'SIGTERM').catch(() => {});
+      const afterTerm = await Promise.race([exit, delay(FORCE_KILL_DELAY_MS).then(() => ({ graceExpired: true }))]);
+      if (afterTerm.graceExpired) {
+        await killGroup(child, 'SIGKILL').catch(() => {});
+        result = await Promise.race([exit, delay(FORCE_KILL_DELAY_MS).then(() => ({ hardDeadline: true }))]);
+        if (result.hardDeadline) throw new LauncherError('CHILD_CLOSE_TIMEOUT');
+      } else {
+        result = afterTerm;
+      }
+    }
   } catch (error) {
     await killGroup(child, 'SIGTERM').catch(() => {});
     await killGroup(child, 'SIGKILL').catch(() => {});
     throw error;
   } finally {
     clearTimeout(timer);
-    clearTimeout(forceTimer);
-    ACTIVE_CHILDREN.delete(child.pid);
+    if (childClosed) ACTIVE_CHILDREN.delete(child.pid);
   }
 
   const values = Object.values(credential.environment);
@@ -244,8 +273,8 @@ export async function runSupervisedInvocation({
     await terminateActiveChildren(killGroup);
     throw new LauncherError('CHILD_OUTPUT_LIMIT_EXCEEDED');
   }
-  if (invocation.outputPaths[0]) await writePrivateFile(invocation.outputPaths[0], stdout);
-  if (invocation.outputPaths[1]) await writePrivateFile(invocation.outputPaths[1], stderr);
+  if (invocation.capturePaths.stdout) await writePrivateFile(invocation.capturePaths.stdout, stdout);
+  if (invocation.capturePaths.stderr) await writePrivateFile(invocation.capturePaths.stderr, stderr);
   if (timedOut) throw new LauncherError('CHILD_DEADLINE_EXCEEDED');
   if (result.code !== 0) throw new LauncherError('CHILD_EXITED_NONZERO', String(result.code ?? result.signal ?? 'unknown'));
 
@@ -256,7 +285,8 @@ export async function runSupervisedInvocation({
     exitCode: result.code,
     stdoutSha256: sha256(stdout),
     stderrSha256: sha256(stderr),
-    outputPaths: invocation.outputPaths.map((item) => path.relative(invocation.runtimeRoot, item)),
+    capturePaths: Object.fromEntries(Object.entries(invocation.capturePaths).map(([stream, item]) => [stream, path.relative(invocation.runtimeRoot, item)])),
+    usageReservationDigest: usageReservation.digest,
     credentialExpiresAt: credential.expiresAt,
   });
 }
@@ -274,6 +304,116 @@ export async function terminateActiveChildren(killGroup = killProcessGroup) {
 
 export function assertNoActiveChildren() {
   if (ACTIVE_CHILDREN.size) throw new LauncherError('RECORDED_CHILDREN_REMAIN', String(ACTIVE_CHILDREN.size));
+}
+
+export function requireSealedPreservationCheckpoint(manifest) {
+  const checkpoint = manifest?.preservationCheckpoint;
+  const artifact = manifest?.activeSeal?.artifacts?.find((item) => item.path === checkpoint?.path);
+  if (manifest?.activeSealDigest !== manifest?.activeSeal?.digest
+    || checkpoint?.status !== 'passed'
+    || typeof checkpoint.path !== 'string'
+    || !/^[a-f0-9]{64}$/u.test(checkpoint.sha256 ?? '')
+    || artifact?.sha256 !== checkpoint.sha256) {
+    throw new AuthorizationError('PRESERVATION_CHECKPOINT_REQUIRED');
+  }
+  return checkpoint.sha256;
+}
+
+async function reserveInvocationUsage({ runtimeRoot, manifest, capability, invocation, now }) {
+  if (!manifest?.caps || !manifest?.usage || !Number.isFinite(now)) throw new AuthorizationError('CAP_USAGE_REQUIRED');
+  const directory = path.join(runtimeRoot, 'usage-reservations');
+  await createNoSymlinkDirectory(runtimeRoot, directory);
+  const info = await lstat(directory).catch(() => null);
+  if (!info?.isDirectory() || info.isSymbolicLink() || (info.mode & 0o077) !== 0) {
+    throw new LauncherError('USAGE_RESERVATION_STORE_NOT_PRIVATE');
+  }
+  const lockPath = path.join(directory, '.reservation.lock');
+  let lockHandle;
+  try {
+    lockHandle = await open(lockPath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+  } catch (error) {
+    if (error?.code === 'EEXIST') throw new AuthorizationError('USAGE_RESERVATION_IN_PROGRESS');
+    throw error;
+  }
+
+  try {
+    const baseline = USAGE_BASELINES.get(manifest) ?? structuredClone(manifest.usage);
+    USAGE_BASELINES.set(manifest, baseline);
+    const totals = await readUsageReservations(directory, manifest.runId);
+    const reservationUsage = {
+      requests: 1,
+      bytes: invocation.descriptor.usageBytes ?? 0,
+      operatorMinutes: Math.ceil(invocation.timeoutMs / 60_000),
+    };
+    const dimensions = new Set([...Object.keys(baseline), ...Object.keys(reservationUsage)]);
+    const candidateUsage = Object.fromEntries([...dimensions].map((name) => [
+      name,
+      (baseline[name] ?? 0) + (totals[name] ?? 0) + (reservationUsage[name] ?? 0),
+    ]));
+    validateCapsAndExpiry(manifest, { expiresAt: capability.approvalExpiresAt }, candidateUsage, now);
+
+    const content = {
+      schemaVersion: 1,
+      reservationId: randomUUID(),
+      runId: manifest.runId,
+      transition: capability.command,
+      invocationId: invocation.id,
+      reservedAt: new Date(now).toISOString(),
+      usage: reservationUsage,
+    };
+    const record = { ...content, digest: canonicalDigest(content) };
+    await writePrivateFile(path.join(directory, `${record.digest}.json`), canonicalJson(record));
+    Object.assign(manifest.usage, candidateUsage);
+    return record;
+  } finally {
+    await lockHandle.close().catch(() => {});
+    await rm(lockPath, { force: true }).catch(() => {});
+  }
+}
+
+async function readUsageReservations(directory, runId) {
+  const totals = { requests: 0, bytes: 0, operatorMinutes: 0 };
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    if (!entry.name.endsWith('.json')) continue;
+    if (!entry.isFile() || entry.isSymbolicLink()) throw new LauncherError('USAGE_RESERVATION_LEDGER_INVALID');
+    const filename = path.join(directory, entry.name);
+    const fileInfo = await lstat(filename).catch(() => null);
+    if (!fileInfo?.isFile() || fileInfo.isSymbolicLink() || (fileInfo.mode & 0o077) !== 0) {
+      throw new LauncherError('USAGE_RESERVATION_LEDGER_INVALID');
+    }
+    let record;
+    try {
+      record = JSON.parse(await readFile(filename, 'utf8'));
+    } catch {
+      throw new LauncherError('USAGE_RESERVATION_LEDGER_INVALID');
+    }
+    const { digest, ...content } = record ?? {};
+    if (record?.schemaVersion !== 1 || record.runId !== runId || digest !== canonicalDigest(content)
+      || !record.usage || typeof record.usage !== 'object') {
+      throw new LauncherError('USAGE_RESERVATION_LEDGER_INVALID');
+    }
+    for (const [name, value] of Object.entries(record.usage)) {
+      if (!Number.isFinite(value) || value < 0 || !Object.hasOwn(totals, name)) {
+        throw new LauncherError('USAGE_RESERVATION_LEDGER_INVALID');
+      }
+      totals[name] += value;
+    }
+  }
+  return totals;
+}
+
+function containsCredentialMaterial(value) {
+  if (Array.isArray(value)) return value.some(containsCredentialMaterial);
+  if (value && typeof value === 'object') {
+    return Object.entries(value).some(([key, nested]) => /(?:secret|token|password|private.?key|credential.?value|access.?key.?id)/iu.test(key)
+      || containsCredentialMaterial(nested));
+  }
+  return typeof value === 'string'
+    && /(?:AKIA[0-9A-Z]{16}|Bearer\s+\S+|-----BEGIN (?:RSA |EC )?PRIVATE KEY-----)/u.test(value);
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 function validateParentEnvironment(environment) {
@@ -416,8 +556,22 @@ async function createNoSymlinkDirectory(parent, directory) {
 
 function redact(buffer, secrets) {
   let result = buffer.toString('utf8');
+  const variants = new Set();
   for (const secret of secrets) {
-    if (typeof secret === 'string' && secret) result = result.split(secret).join('[REDACTED]');
+    if (typeof secret !== 'string' || !secret) continue;
+    const urlForm = new URLSearchParams([['value', secret]]).toString().slice('value='.length);
+    const encoded = encodeURIComponent(secret);
+    const base64 = Buffer.from(secret, 'utf8').toString('base64');
+    variants.add(secret);
+    variants.add(encoded);
+    variants.add(encoded.replace(/%[0-9A-F]{2}/gu, (part) => part.toLowerCase()));
+    variants.add(urlForm);
+    variants.add(base64);
+    variants.add(base64.replace(/=+$/u, ''));
+    variants.add(Buffer.from(secret, 'utf8').toString('base64url'));
+  }
+  for (const secret of [...variants].filter(Boolean).sort((left, right) => right.length - left.length)) {
+    result = result.split(secret).join('[REDACTED]');
   }
   result = result
     .replace(/\bAKIA[0-9A-Z]{16}\b/gu, '[REDACTED_AWS_ACCESS_KEY]')

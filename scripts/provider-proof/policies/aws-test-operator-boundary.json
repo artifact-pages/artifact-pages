@@ -10,7 +10,7 @@
     {
       "Sid": "DenyPreservedProductionBucket",
       "Effect": "Deny",
-      "Action": "s3:*",
+      "Action": "*",
       "Resource": [
         "arn:aws:s3:::artifact-pages-231136241959-us-east-1",
         "arn:aws:s3:::artifact-pages-231136241959-us-east-1/*"
@@ -25,7 +25,7 @@
     {
       "Sid": "DenyPreservedProductionDistribution",
       "Effect": "Deny",
-      "Action": "cloudfront:*",
+      "Action": "*",
       "Resource": "arn:aws:cloudfront::231136241959:distribution/ECFTIR5GVPQDF"
     },
     {
