@@ -39,3 +39,7 @@ The lock wait bound now also covers repeated conditional-write conflicts without
 The [October 2 Cloudflare recovery proof](../cloudflare-preview-recovery-proof.md) already establishes two CLI processes publishing distinct new heads with both groups retained, SIGKILL after partial file upload followed by observed-ETag recovery/retry, and stale-owner rejection before catalog replacement followed by retry. All four advertised manifests/file hashes matched, unregister cleaned the site, and original inventory/registry preservation passed. [T15](T15-provider-delivery.md) also records real R2 immutable-create/stale-ETag/competing-If-Match samples. Earlier statements that real R2 races/recovery are wholly unverified are historical and superseded for these cases only.
 
 Remaining: live AWS equivalents and untested interruption points (after manifest/before catalog, catalog-write failure/retry) on each provider, with original-group and neighbor preservation. Share runs with T14/T15; do not repeat completed Cloudflare cases without a version/coverage reason. Owner-approved disposable scope is required before new cloud mutations.
+
+## Coordinated execution plan
+
+The [October 18 provider-proof plan](provider-proof-plan-2026-10-18.md) owns the remaining shared execution matrix (P4, P5), pinned inputs, commands, preservation/cleanup guards and itemized owner approvals. This is preparation only; no new provider result or execution approval is claimed.

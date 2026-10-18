@@ -44,3 +44,7 @@ The owner installed `artifact-pages-release` on both package repositories on 202
 ## Remaining (reconciled 2026-10-18)
 
 Only hosted guard proof remains: in **each** generated package repository, verify the generated notice and `.github/workflows/close-generated-pull-requests.yml`, then open a disposable PR and record the run, redirect comment and automatic closure. No module change, tag, sync or cloud operation is needed. Source tests and the real release syncs already establish generation/delivery of the guard, not that its hosted permissions work. Obtain authorization for the concrete test PR/comment operations before execution; this bookkeeping PR does not authorize them. Do not change repository settings; if permissions prevent closure, record the failure and request a separate owner settings decision.
+
+## Prepared owner handoff — 2026-10-18
+
+See [exact hosted fixture preparation](../verification/hosted-fixture-preparation-2026-10-18.md) (F64 / approval A1) and the [consolidated approval list](../verification/provider-proof-plan-2026-10-18.md#owner-approvals-requested). Branches/PRs, immutable pins, assertions, exact repository/settings/secret mutations and cleanup boundaries are specified there. No fixture execution or new authorization is asserted; this item remains In progress.

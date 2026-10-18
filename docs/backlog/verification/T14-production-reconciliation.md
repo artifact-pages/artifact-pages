@@ -54,3 +54,7 @@ The ISSUE-018 verification run passed `go test -race -count=1 ./internal/publish
 ## Reconciliation — 2026-10-18
 
 [T5](T5-concurrency-recovery.md) / [Cloudflare recovery proof](../cloudflare-preview-recovery-proof.md) credit real R2 CAS, preview new-head races, partial-upload recovery and stale-owner rejection. [T15](T15-provider-delivery.md) credits Cloudflare warm withdrawal and AWS update/unregister samples. Earlier blanket absence claims do not apply to those completed samples. None proves concurrent actual production `PublishSite` across different sites/processes, all production interruption points, or reference-role CDN retry/freshness. Those remain open with AWS recovery and are one coordinated owner-gated plan, not separate duplicate experiments.
+
+## Coordinated execution plan
+
+The [October 18 provider-proof plan](provider-proof-plan-2026-10-18.md) owns the remaining shared execution matrix (P4–P7), pinned inputs, commands, preservation/cleanup guards and itemized owner approvals. This is preparation only; no new provider result or execution approval is claimed.

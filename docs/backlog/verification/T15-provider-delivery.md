@@ -206,3 +206,7 @@ Still required:
 - ISSUE-112 stored gzip metadata/bytes and CDN decode/refresh proof after implementation. Local controlled delivery is not live AWS evidence.
 
 Prepare one coordinated, version-pinned disposable proof plan in [workstreams](../workstreams.md#backend-next-wave-2026-10-18), with expected results, preservation checks, bounded costs, cleanup/rollback and exact evidence destinations. Running cloud commands (including account reads/plans), provisioning, fixture publication/deletion, identity/settings changes and deployments requires fresh explicit owner approval for that scope. Retained experiments are not implicit cleanup targets. Optional IMP-44 WAF plan/live work is Deferred and excluded; alternate egress/device checks remain owner gates if requested. Releases/Registry/Marketplace publication remain separately approved, and T16 is not closed by these samples.
+
+## Coordinated execution plan
+
+The [October 18 provider-proof plan](provider-proof-plan-2026-10-18.md) owns the remaining shared execution matrix (P1–P10), pinned inputs, commands, preservation/cleanup guards and itemized owner approvals. This is preparation only; no new provider result or execution approval is claimed.
