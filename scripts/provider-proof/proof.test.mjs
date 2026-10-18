@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import test from 'node:test';
-import { generateKeyPairSync, sign } from 'node:crypto';
 import {
   AuthorizationError,
   PHASE,
@@ -24,14 +24,15 @@ import {
   validateLifecycleChange,
   verifyApprovalRecord,
 } from './policy.mjs';
-import { GuardedTransport } from './guarded-transport.mjs';
+import { GuardedTransport, createFetchTransport } from './guarded-transport.mjs';
 import {
   appendSeal,
-  approvalSigningBytes,
+  canonicalJson,
   canonicalDigest,
   readSealChain,
   verifyApprovalFile,
 } from './seals.mjs';
+import { loadOwnerTrustAnchor, ownerTrustAnchorEnrolled } from './approval-validation.mjs';
 import { main } from './proof.mjs';
 
 const LOCAL = 'http://127.0.0.1:19876';
@@ -162,6 +163,38 @@ function fakeHarness(command, manifest = fixtureManifest(), options = {}) {
     get credentialLoads() { return credentialLoads; },
     outbound,
   };
+}
+
+async function makeSSHKey(root) {
+  const privateKeyPath = path.join(root, 'owner-test-key');
+  const result = spawnSync('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-f', privateKeyPath], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  return { privateKeyPath, publicKey: (await readFile(`${privateKeyPath}.pub`, 'utf8')).trim() };
+}
+
+async function copyTestHarness(root, publicKey) {
+  const source = path.resolve('scripts/provider-proof');
+  const destination = path.join(root, 'harness');
+  await cp(source, destination, { recursive: true, filter: (sourcePath) => !sourcePath.endsWith('proof.test.mjs') });
+  await writeFile(path.join(destination, 'trust-anchor.json'), `${JSON.stringify({
+    schemaVersion: 1,
+    keyId: 'owner',
+    algorithm: 'ssh-ed25519',
+    status: 'enrolled',
+    publicKey,
+    fingerprint: fingerprintKey(publicKey),
+  }, null, 2)}\n`);
+  return destination;
+}
+
+async function sshSign(privateKeyPath, payloadPath, namespace = 'artifact-pages-provider-proof') {
+  const result = spawnSync('ssh-keygen', ['-Y', 'sign', '-f', privateKeyPath, '-n', namespace, payloadPath], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  return readFile(`${payloadPath}.sig`);
+}
+
+async function copiedModule(harnessPath, filename) {
+  return import(pathToFileURL(path.join(harnessPath, filename)).href);
 }
 
 async function assertDeniedBeforeCredential(harness, op, code) {
@@ -515,19 +548,84 @@ test('malicious config, smoke overrides, inherited credential fallbacks, and alt
   await assertDeniedBeforeCredential(userInfoLoopback, { ...proofAwsPut(), endpoint: 'http://127.0.0.1:19876@evil.invalid' }, 'ENDPOINT_MISMATCH');
 });
 
-test('redirects, retries, pagination, mixed-target batches, and raw bypasses are reauthorized', async () => {
+test('redirects stop before a second dispatch; retries preserve original requests and reauthorize each attempt', async () => {
   const redirect = fakeHarness('delivery:aws', fixtureManifest(), { responses: [{ status: 302, headers: { location: 'https://unrelated.invalid/_artifacts/proof-a-20261018/index.html' } }] });
-  await assert.rejects(redirect.client.request(operation('aws-s3', 'GetObject', { accountId: TARGETS.awsAccount, bucket: TARGETS.proofAwsBucket }, { key: '_artifacts/proof-a-20261018/index.html' })), /ENDPOINT_MISMATCH/);
+  await assert.rejects(redirect.client.request(operation('aws-s3', 'GetObject', { accountId: TARGETS.awsAccount, bucket: TARGETS.proofAwsBucket }, { key: '_artifacts/proof-a-20261018/index.html' })), /UPSTREAM_REDIRECT_REJECTED/);
   assert.equal(redirect.credentialLoads, 1);
-  assert.equal(redirect.outbound.length, 1, 'only the allowed pre-redirect request may be sent');
+  assert.equal(redirect.outbound.length, 1, 'redirect responses are rejected without a second request');
   assert.equal(redirect.outbound.some(({ operation: op }) => op.endpoint.includes('unrelated.invalid')), false);
+  const redirectWithoutLocation = fakeHarness('delivery:aws', fixtureManifest(), { responses: [{ status: 301 }] });
+  await assert.rejects(redirectWithoutLocation.client.request(operation('aws-s3', 'GetObject', { accountId: TARGETS.awsAccount, bucket: TARGETS.proofAwsBucket }, { key: '_artifacts/proof-a-20261018/index.html' })), /UPSTREAM_REDIRECT_REJECTED/);
+  assert.equal(redirectWithoutLocation.outbound.length, 1);
 
+  const original = operation('aws-s3', 'GetObject', { accountId: TARGETS.awsAccount, bucket: TARGETS.proofAwsBucket }, { key: '_indexes/proof-a-20261018/index.json' });
+  const proposedTarget = operation('aws-s3', 'GetObject', { accountId: TARGETS.awsAccount, bucket: TARGETS.proofAwsBucket }, { key: '_artifacts/proof-a-20261018/index.html' });
   const retry = fakeHarness('delivery:aws', fixtureManifest(), { maxRetries: 1, responses: [
-    { status: 503, retryable: true, retryOperation: preservedAwsGet() },
+    { status: 503, retryable: true, retryOperation: proposedTarget },
+    { status: 200 },
   ] });
-  await assert.rejects(retry.client.request(proofAwsPut()), /PRESERVED_RESOURCE_DENIED_TO_PROOF/);
-  assert.equal(retry.credentialLoads, 1);
-  assert.equal(retry.outbound.length, 1, 'the retry target must be rejected before a second request');
+  const result = await retry.client.request(original);
+  assert.equal(result.status, 200);
+  assert.equal(retry.credentialLoads, 2, 'each retry gets a fresh authorization and credential load');
+  assert.equal(retry.outbound.length, 2);
+  assert.deepEqual(retry.outbound.map(({ operation: op }) => op), [original, original], 'a response cannot replace the original operation');
+
+  const defaultRetry = fakeHarness('delivery:aws', fixtureManifest(), { responses: [
+    { status: 503, retryable: true }, { status: 200 },
+  ] });
+  await defaultRetry.client.request(original);
+  assert.equal(defaultRetry.outbound.length, 1, 'automatic retries are disabled by default');
+
+  const protectedRetry = fakeHarness('delivery:aws', fixtureManifest(), { maxRetries: 1, responses: [
+    { status: 503, retryable: true }, { status: 200 },
+  ] });
+  const conditional = {
+    ...original,
+    headers: { 'If-Match': 'etag-1', 'content-type': 'application/json' },
+    payload: { condition: 'same-version', body: 'same-bytes' },
+  };
+  let signingTimestamp = 0;
+  protectedRetry.client = new GuardedTransport({
+    capability: capabilityForLocalTest('delivery:aws', fixtureManifest()),
+    credentialLoader: async () => ({ fake: true }),
+    serializer: async (op) => ({
+      method: op.method,
+      url: `${op.endpoint}${op.path ?? ''}`,
+      endpoint: op.endpoint,
+      body: JSON.stringify(op.payload),
+      headers: { ...op.headers, 'x-amz-date': String(++signingTimestamp) },
+      operation: structuredClone(op),
+    }),
+    signer: async (wire) => ({ ...wire, headers: { ...wire.headers, authorization: `signature-${Math.random()}` } }),
+    maxRetries: 1,
+    transport: async (wire, op) => {
+      protectedRetry.outbound.push({ wire, operation: op });
+      return protectedRetry.outbound.length === 1 ? { status: 503 } : { status: 200 };
+    },
+  });
+  await protectedRetry.client.request(conditional);
+  const [firstWire, secondWire] = protectedRetry.outbound.map(({ wire }) => wire);
+  assert.equal(firstWire.url, secondWire.url);
+  assert.equal(firstWire.method, secondWire.method);
+  assert.equal(firstWire.body, secondWire.body);
+  assert.equal(firstWire.headers['If-Match'], secondWire.headers['If-Match']);
+  assert.notEqual(firstWire.headers['x-amz-date'], secondWire.headers['x-amz-date']);
+  assert.notEqual(firstWire.headers.authorization, secondWire.headers.authorization);
+
+  let fetchOptions;
+  const fetchTransport = createFetchTransport(async (_url, options) => {
+    fetchOptions = options;
+    return { status: 302, headers: new Headers({ location: 'https://elsewhere.invalid/' }), arrayBuffer: async () => new ArrayBuffer(0) };
+  });
+  const fetchResult = await fetchTransport({ method: 'GET', url: 'https://example.invalid/', headers: { authorization: 'secret' } });
+  assert.equal(fetchOptions.redirect, 'manual');
+  assert.equal(fetchResult.status, 302);
+
+  const writeRetry = fakeHarness('delivery:aws', fixtureManifest(), { maxRetries: 2, responses: [
+    { status: 503, retryable: true }, { status: 200 },
+  ] });
+  await writeRetry.client.request(proofAwsPut());
+  assert.equal(writeRetry.outbound.length, 1, 'writes are not in the automatic retry allowlist');
 
   const pagination = fakeHarness('inventory', fixtureManifest(), { responses: [
     { status: 200, items: [{ key: '_indexes/existing/index.json' }], nextOperation: operation('aws-s3', 'GetObject', { accountId: TARGETS.awsAccount, bucket: 'unrelated-bucket' }, { key: 'x' }) },
@@ -568,7 +666,7 @@ test('redirects, retries, pagination, mixed-target batches, and raw bypasses are
       operation: { ...op, resource: { ...op.resource, bucket: TARGETS.preservedAwsBucket } },
     }),
   });
-  await assertDeniedBeforeCredential(serializedTarget, proofAwsPut(), 'PRESERVED_RESOURCE_DENIED_TO_PROOF');
+  await assertDeniedBeforeCredential(serializedTarget, proofAwsPut(), 'OPERATION_INTENT_CHANGED');
 
   const signedTarget = fakeHarness('delivery:aws', fixtureManifest(), {
     signer: async (wire) => ({
@@ -576,7 +674,7 @@ test('redirects, retries, pagination, mixed-target batches, and raw bypasses are
       operation: { ...wire.operation, resource: { ...wire.operation.resource, bucket: TARGETS.preservedAwsBucket } },
     }),
   });
-  await assert.rejects(signedTarget.client.request(proofAwsPut()), /PRESERVED_RESOURCE_DENIED_TO_PROOF/);
+  await assert.rejects(signedTarget.client.request(proofAwsPut()), /OPERATION_INTENT_CHANGED/);
   assert.equal(signedTarget.credentialLoads, 1);
   assert.equal(signedTarget.outbound.length, 0, 'the signed non-allowed target must be rejected before dispatch');
 });
@@ -657,7 +755,7 @@ test('IAM role and session policies independently exclude preserved bucket and d
   assert.throws(() => assertPolicyExcludesPreserved({ Statement: [{ Effect: 'Allow', Action: 'cloudfront:CreateInvalidation', Resource: `arn:aws:cloudfront::${TARGETS.awsAccount}:distribution/*`, Condition: { StringEquals: { 'aws:RequestedRegion': 'us-east-1' } } }] }), /SESSION_POLICY_INCLUDES_PRESERVED_ARN/);
 });
 
-test('seal and reseal produce an immutable chained ledger; tamper, skipped stages, and stale approvals fail', async (t) => {
+test('seal and reseal produce an immutable chained ledger; tamper and skipped stages fail closed', async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'provider-proof-seals-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const manifestPath = path.join(root, 'manifest.json');
@@ -668,7 +766,6 @@ test('seal and reseal produce an immutable chained ledger; tamper, skipped stage
     sealDirectory: 'seals',
     policy: { version: 1, denyByDefault: true },
     approvalPolicy: { signaturesRequired: true },
-    reviewKeys: {},
   };
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   await writeFile(path.join(root, 'plan.txt'), 'baseline plan\n');
@@ -691,60 +788,117 @@ test('seal and reseal produce an immutable chained ledger; tamper, skipped stage
   await writeFile(second.path, secondSealBytes);
   await writeFile(path.join(root, 'plan.txt'), 'tampered plan\n');
   await assert.rejects(readSealChain({ manifestPath }), /SEALED_ARTIFACT_CHANGED/);
-
-  const keyPair = generateKeyPairSync('ed25519');
-  const pub = keyPair.publicKey.export({ type: 'spki', format: 'pem' }).toString();
-  const baseRecord = {
-    id: 'A4', command: 'inventory', transition: 'inventory', sealDigest: third.record.digest,
-    approvedAt: '2026-10-18T00:00:00.000Z', expiresAt: expiry,
-    reviewerKeyId: 'owner', reviewerKeyFingerprint: fingerprintKey(pub),
-  };
-  const approval = { ...baseRecord, signature: sign(null, approvalSigningBytes(baseRecord), keyPair.privateKey).toString('base64') };
-  const verifiedManifest = { ...manifest, activeSealDigest: third.record.digest, reviewKeys: { owner: pub } };
-  assert.equal(verifyApprovalRecord(approval, verifiedManifest, 'A4', 'inventory', approvalNow), true);
-  assert.equal(verifyApprovalRecord({ ...approval, sealDigest: 'stale' }, verifiedManifest, 'A4', 'inventory', approvalNow), false);
-  assert.equal(verifyApprovalRecord({ ...approval, expiresAt: '2020-01-01T00:00:00Z' }, verifiedManifest, 'A4', 'inventory', approvalNow), false);
-  assert.equal(verifyApprovalRecord(undefined, verifiedManifest, 'A4', 'inventory', approvalNow), false);
 });
 
-test('signed approval files are bound to the exact active seal and transition', async (t) => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'provider-proof-approval-'));
-  t.after(() => rm(root, { recursive: true, force: true }));
-  await writeFile(path.join(root, 'source.txt'), 'sealed source\n');
+async function createApprovalFixture(root, { approvalId = 'A4', command = 'inventory', manifestOverrides = {} } = {}) {
+  const workspace = path.join(root, 'workspace');
+  const runtime = path.join(root, 'runtime');
+  await mkdir(workspace, { recursive: true });
+  await mkdir(runtime, { recursive: true });
+  await writeFile(path.join(workspace, 'proof-source.js'), 'export const sealed = true;\n');
   const git = (args) => {
-    const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+    const result = spawnSync('git', args, { cwd: workspace, encoding: 'utf8' });
     assert.equal(result.status, 0, result.stderr);
     return result.stdout.trim();
   };
   git(['init', '--quiet']);
   git(['config', 'user.name', 'Provider Proof Test']);
   git(['config', 'user.email', 'proof-test@example.invalid']);
-  git(['add', 'source.txt']);
+  git(['add', 'proof-source.js']);
   git(['commit', '--quiet', '-m', 'approval fixture']);
-  await mkdir(path.join(root, 'approvals'), { recursive: true });
-  const manifestPath = path.join(root, 'manifest.json');
-  const keyPair = generateKeyPairSync('ed25519');
-  const pub = keyPair.publicKey.export({ type: 'spki', format: 'pem' }).toString();
+  const keyPair = await makeSSHKey(root);
+  const harness = await copyTestHarness(root, keyPair.publicKey);
+  const manifestPath = path.join(runtime, 'manifest.json');
   const manifest = {
     schemaVersion: 1,
-    runId: 'approval-test',
-    policy: {},
-    approvalPolicy: {},
-    reviewKeys: { owner: pub },
-    workspaceRoot: '.',
+    runId: `approval-${path.basename(root)}`,
+    workspaceRoot: '../workspace',
     baselineCommit: git(['rev-parse', 'HEAD']),
-    sourceFiles: ['source.txt'],
+    sourceFiles: ['proof-source.js'],
+    policy: { version: 1, denyByDefault: true },
+    approvalPolicy: { signaturesRequired: true },
+    scopeExpiresAt: expiry,
+    approvalWindows: { [approvalId]: { expiresAt: expiry } },
+    ...manifestOverrides,
   };
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
-  const seal = await appendSeal({ manifestPath, artifacts: [], now: '2026-10-18T00:00:00Z' });
-  const record = { id: 'A4', command: 'inventory', transition: 'inventory', sealDigest: seal.record.digest, approvedAt: '2026-10-18T00:00:00.000Z', expiresAt: expiry, reviewerKeyId: 'owner', reviewerKeyFingerprint: fingerprintKey(pub) };
-  const signed = { ...record, signature: sign(null, approvalSigningBytes(record), keyPair.privateKey).toString('base64') };
-  await writeFile(path.join(root, 'approvals', 'A4.json'), `${JSON.stringify(signed, null, 2)}\n`);
-  assert.equal((await verifyApprovalFile({ manifestPath, approvalId: 'A4', command: 'inventory', now: approvalNow })).sealDigest, seal.record.digest);
-  await assert.rejects(verifyApprovalFile({ manifestPath, approvalId: 'A4', command: 'gzip', now: approvalNow }), /OWNER_APPROVAL_INVALID/);
-  const bad = { ...signed, sealDigest: 'old-seal' };
-  await writeFile(path.join(root, 'approvals', 'A4.json'), `${JSON.stringify(bad, null, 2)}\n`);
-  await assert.rejects(verifyApprovalFile({ manifestPath, approvalId: 'A4', command: 'inventory', now: approvalNow }), /OWNER_APPROVAL_INVALID/);
+  const copiedSeals = await copiedModule(harness, 'seals.mjs');
+  const active = await copiedSeals.appendSeal({ manifestPath, stage: 'bootstrap', now: '2026-10-17T00:00:00.000Z' });
+  const helpers = await copiedModule(harness, 'approval-helpers.mjs');
+  const prepared = await helpers.prepareApproval({ manifestPath, approvalId, command, expiresAt: expiry, now: '2026-10-18T00:00:00.000Z' });
+  await sshSign(keyPair.privateKeyPath, prepared.payloadPath);
+  const attached = await helpers.attachApproval({ manifestPath, approvalId, command, payloadPath: prepared.payloadPath, now: approvalNow });
+  return { workspace, runtime, harness, manifestPath, manifest, activeSeal: active.record, keyPair, prepared, attached, helpers };
+}
+
+async function signRecord(keyPair, record, namespace = 'artifact-pages-provider-proof') {
+  const payloadPath = path.join(path.dirname(keyPair.privateKeyPath), `signed-${Math.random().toString(16).slice(2)}.payload.json`);
+  await writeFile(payloadPath, canonicalJson(record));
+  const signature = await sshSign(keyPair.privateKeyPath, payloadPath, namespace);
+  await rm(payloadPath, { force: true });
+  await rm(`${payloadPath}.sig`, { force: true });
+  return { ...record, signature: signature.toString('base64') };
+}
+
+async function verifyFileWithCopiedHarness(fixture, approvalId, command, now = approvalNow) {
+  const copiedSeals = await copiedModule(fixture.harness, 'seals.mjs');
+  return copiedSeals.verifyApprovalFile({ manifestPath: fixture.manifestPath, approvalId, command, now });
+}
+
+test('owner SSH approval uses the pinned anchor and both entry points enforce one exact schema', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'provider-proof-approval-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const fixture = await createApprovalFixture(root);
+  const copiedPolicy = await copiedModule(fixture.harness, 'policy.mjs');
+  const copiedSeals = await copiedModule(fixture.harness, 'seals.mjs');
+  const record = JSON.parse(await readFile(fixture.attached.approvalFile, 'utf8'));
+  const verifiedManifest = {
+    ...fixture.manifest,
+    activeSealDigest: fixture.activeSeal.digest,
+    activeSeal: fixture.activeSeal,
+    sealChainVerified: true,
+  };
+  assert.equal(copiedPolicy.verifyApprovalRecord(record, verifiedManifest, 'A4', 'inventory', approvalNow), true);
+  assert.equal((await verifyFileWithCopiedHarness(fixture, 'A4', 'inventory')).sealDigest, fixture.activeSeal.digest);
+  assert.equal(ownerTrustAnchorEnrolled(), false);
+  assert.equal(loadOwnerTrustAnchor().status, 'unenrolled');
+  assert.equal(verifyApprovalRecord(record, verifiedManifest, 'A4', 'inventory', approvalNow), false, 'production uses only the checked-in unenrolled anchor');
+  await assert.rejects(verifyApprovalFile({ manifestPath: fixture.manifestPath, approvalId: 'A4', command: 'inventory', now: approvalNow }), /OWNER_APPROVAL_INVALID/);
+
+  const legacyManifestPath = path.join(root, 'legacy-manifest.json');
+  await writeFile(legacyManifestPath, `${JSON.stringify({ ...fixture.manifest, reviewKeys: { owner: fixture.keyPair.publicKey } }, null, 2)}\n`);
+  await assert.rejects(appendSeal({ manifestPath: legacyManifestPath }), /MANIFEST_REVIEW_KEYS_REJECTED/);
+  assert.equal(copiedPolicy.verifyApprovalRecord(record, { ...verifiedManifest, reviewKeys: { owner: fixture.keyPair.publicKey } }, 'A4', 'inventory', approvalNow), false);
+
+  const productionAttempt = spawnSync('node', [path.resolve('scripts/provider-proof/proof.mjs'), 'approval-prepare', '--manifest', fixture.manifestPath, '--approval', 'A4', '--command', 'inventory', '--expires-at', expiry], {
+    cwd: process.cwd(), encoding: 'utf8', env: { PATH: process.env.PATH ?? '/usr/bin:/bin', ARTIFACT_PAGES_OWNER_PUBLIC_KEY: fixture.keyPair.publicKey },
+  });
+  assert.equal(productionAttempt.status, 2);
+  assert.match(productionAttempt.stderr, /OWNER_TRUST_ANCHOR_UNENROLLED/);
+
+  const originalBytes = await readFile(fixture.attached.approvalFile);
+  const changedRecord = async (candidate) => {
+    await writeFile(fixture.attached.approvalFile, `${JSON.stringify(candidate, null, 2)}\n`);
+    assert.equal(copiedPolicy.verifyApprovalRecord(candidate, verifiedManifest, 'A4', 'inventory', approvalNow), false);
+    await assert.rejects(copiedSeals.verifyApprovalFile({ manifestPath: fixture.manifestPath, approvalId: 'A4', command: 'inventory', now: approvalNow }), /OWNER_APPROVAL_INVALID/);
+    await writeFile(fixture.attached.approvalFile, originalBytes);
+  };
+
+  await changedRecord(await signRecord(fixture.keyPair, { ...record, approvedAt: 'malformed-date' }));
+  await changedRecord(await signRecord(fixture.keyPair, { ...record, expiresAt: 'malformed-date' }));
+  await changedRecord(await signRecord(fixture.keyPair, { ...record, reviewerKeyFingerprint: 'SHA256:wrong' }));
+  await changedRecord(await signRecord(fixture.keyPair, { ...record, sealDigest: '0'.repeat(64) }));
+  await changedRecord(await signRecord(fixture.keyPair, { ...record, scopeDigest: '1'.repeat(64) }));
+  await changedRecord({ ...record, signature: 'not base64' });
+  const wrongNamespace = await signRecord(fixture.keyPair, Object.fromEntries(Object.entries(record).filter(([key]) => key !== 'signature')), 'wrong-namespace');
+  await changedRecord(wrongNamespace);
+  await changedRecord({ ...record, expiresAt: '2029-12-31T23:59:59.000Z' });
+  await changedRecord({ ...record, testOnly: false });
+  await assert.rejects(copiedSeals.verifyApprovalFile({ manifestPath: fixture.manifestPath, approvalId: 'A4', command: 'gzip', now: approvalNow }), /OWNER_APPROVAL_REQUIRED/);
+
+  const preparedAgain = await fixture.helpers.prepareApproval({ manifestPath: fixture.manifestPath, approvalId: 'A4', command: 'inventory', expiresAt: '2029-12-31T23:59:59.000Z', now: '2026-10-18T00:00:00.000Z' });
+  assert.notEqual(preparedAgain.payloadPath, fixture.prepared.payloadPath);
+  assert.equal((await readFile(fixture.attached.approvalFile)).equals(originalBytes), true, 'preparing a replacement leaves the earlier approval record intact');
 });
 
 async function createShellGuardFixture(root, overrides = {}) {
@@ -752,7 +906,6 @@ async function createShellGuardFixture(root, overrides = {}) {
   const runtime = path.join(root, 'runtime');
   await mkdir(workspace, { recursive: true });
   await mkdir(runtime, { recursive: true });
-  await mkdir(path.join(runtime, 'approvals'), { recursive: true });
   await writeFile(path.join(workspace, 'proof-source.js'), 'export const sealed = true;\n');
   await writeFile(path.join(runtime, 'evidence.txt'), 'local signed-approval fixture\n');
   const git = (args) => {
@@ -765,12 +918,13 @@ async function createShellGuardFixture(root, overrides = {}) {
   git(['config', 'user.email', 'proof-test@example.invalid']);
   git(['add', 'proof-source.js']);
   git(['commit', '--quiet', '-m', 'shell guard fixture']);
-  const keyPair = generateKeyPairSync('ed25519');
-  const publicKey = keyPair.publicKey.export({ type: 'spki', format: 'pem' }).toString();
+  const keyPair = await makeSSHKey(root);
+  const harness = await copyTestHarness(root, keyPair.publicKey);
+  const scopeExpiresAt = overrides.scopeExpiresAt ?? expiry;
+  const approvalWindows = Object.fromEntries(['A4', 'A5', 'A6', 'A7', 'A8', 'A9'].map((id) => [id, { expiresAt: scopeExpiresAt }]));
   const manifest = {
     schemaVersion: 1,
     runId: `shell-guard-${path.basename(root)}`,
-    testOnly: false,
     sealDirectory: 'seals',
     approvalDirectory: 'approvals',
     workspaceRoot: '../workspace',
@@ -778,14 +932,20 @@ async function createShellGuardFixture(root, overrides = {}) {
     sourceFiles: ['proof-source.js'],
     policy: { version: 1, denyByDefault: true },
     approvalPolicy: { signaturesRequired: true },
-    reviewKeys: { owner: publicKey },
-    scopeExpiresAt: '2030-01-01T00:00:00.000Z',
-    approvalWindows: { A5: { expiresAt: '2030-01-01T00:00:00.000Z' } },
+    scopeExpiresAt,
+    approvalWindows,
     caps: { requests: 10, bytes: 1000, operatorMinutes: 60 },
     usage: { requests: 0, bytes: 0, operatorMinutes: 0 },
-    bindings: {},
+    approvalState: { A7: { expiresAt: scopeExpiresAt } },
+    bindings: { cloudflare: { reviewed: true, bucket: 'local-fake-r2-bucket', zoneId: 'zone-test' } },
+    lifecycle: { observationOutcome: 'complete', observationClosedAt: '2026-10-18T01:00:00.000Z' },
+    a9Status: 'not-run',
+    approvedDestroyPlanDigest: 'destroy-plan-digest',
+    cleanup: { acceptedDestroyPlanDigest: 'destroy-plan-digest', cfLifecycleRestored: true, writerVersion: '0.5.0', requiredWriterRange: '>=0.5.0 <0.6.0' },
+    reviewedDeltas: {},
     endpoints: { 'aws-s3': { [TARGETS.preservedAwsBucket]: 'https://s3.us-east-1.amazonaws.com' } },
     ...overrides,
+    approvalWindows: { ...approvalWindows, ...(overrides.approvalWindows ?? {}) },
   };
   const manifestPath = path.join(runtime, 'manifest.json');
   const operationPath = path.join(runtime, 'operation.json');
@@ -798,25 +958,30 @@ async function createShellGuardFixture(root, overrides = {}) {
     resource: { accountId: TARGETS.awsAccount, bucket: TARGETS.preservedAwsBucket },
     key: '_indexes/existing/index.json',
   }, null, 2)}\n`);
-  await appendSeal({ manifestPath, stage: 'bootstrap' });
+  const chosenExpiry = Math.min(Date.parse(manifest.scopeExpiresAt), Date.parse(manifest.approvalWindows.A5.expiresAt));
+  const approvedAtMs = Math.min(approvalNow, chosenExpiry - 2 * 24 * 60 * 60 * 1000);
+  const sealBaseMs = approvedAtMs - 60_000;
+  const seals = await copiedModule(harness, 'seals.mjs');
+  await seals.appendSeal({ manifestPath, stage: 'bootstrap', now: new Date(sealBaseMs).toISOString() });
   for (const stage of ['discovery', 'inventory', 'create-plan', 'post-apply']) {
-    const { record } = await appendSeal({ manifestPath, stage, artifacts: ['evidence.txt'] });
-    if (stage === 'post-apply') {
-      const approval = {
-        id: 'A5',
-        command: 'delivery:aws',
-        transition: 'delivery:aws',
-        sealDigest: record.digest,
-        approvedAt: '2026-10-18T00:00:00.000Z',
-        expiresAt: '2030-01-01T00:00:00.000Z',
-        reviewerKeyId: 'owner',
-        reviewerKeyFingerprint: fingerprintKey(publicKey),
-      };
-      const signed = { ...approval, signature: sign(null, approvalSigningBytes(approval), keyPair.privateKey).toString('base64') };
-      await writeFile(path.join(runtime, 'approvals', 'A5.json'), `${JSON.stringify(signed, null, 2)}\n`);
-    }
+    const offset = { discovery: 1, inventory: 2, 'create-plan': 3, 'post-apply': 4 }[stage];
+    await seals.appendSeal({ manifestPath, stage, artifacts: ['evidence.txt'], now: new Date(sealBaseMs + offset * 1000).toISOString() });
   }
-  return { workspace, runtime, manifestPath, operationPath };
+  const helpers = await copiedModule(harness, 'approval-helpers.mjs');
+  async function addApproval(approvalId, command) {
+    const windowExpiry = manifest.approvalWindows?.[approvalId]?.expiresAt ?? manifest.scopeExpiresAt;
+    const prepared = await helpers.prepareApproval({
+      manifestPath,
+      approvalId,
+      command,
+      expiresAt: windowExpiry,
+      now: new Date(approvedAtMs).toISOString(),
+    });
+    await sshSign(keyPair.privateKeyPath, prepared.payloadPath);
+    return helpers.attachApproval({ manifestPath, approvalId, command, payloadPath: prepared.payloadPath, now: approvedAtMs });
+  }
+  await addApproval('A5', 'delivery:aws');
+  return { workspace, runtime, harness, commandsPath: path.join(harness, 'commands.sh'), manifestPath, operationPath, manifest, keyPair, addApproval };
 }
 
 test('bootstrap seals hash the committed source tree and fail on source or worktree drift', async (t) => {
@@ -862,7 +1027,7 @@ test('commands.sh refuses missing approvals, target mismatch, changed hashes, co
   const root = await mkdtemp(path.join(os.tmpdir(), 'provider-proof-cli-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const fixture = await createShellGuardFixture(root);
-  const commands = path.resolve('scripts/provider-proof/commands.sh');
+  const commands = fixture.commandsPath;
   const invoke = ({ approval = 'A5', args = [] } = {}) => spawnSync('sh', [commands, 'guard', '--manifest', fixture.manifestPath, '--command', 'delivery:aws', '--approval', approval, '--operation', fixture.operationPath, ...args], {
     cwd: process.cwd(), encoding: 'utf8', env: { PATH: process.env.PATH ?? '/usr/bin:/bin' },
   });
@@ -882,15 +1047,15 @@ test('commands.sh refuses missing approvals, target mismatch, changed hashes, co
 
   const collisionRoot = path.join(root, 'collision');
   const collisionFixture = await createShellGuardFixture(collisionRoot, { collisions: ['proof-a-20261018'] });
-  const collision = spawnSync('sh', [commands, 'guard', '--manifest', collisionFixture.manifestPath, '--command', 'delivery:aws', '--approval', 'A5', '--operation', collisionFixture.operationPath], {
+  const collision = spawnSync('sh', [collisionFixture.commandsPath, 'guard', '--manifest', collisionFixture.manifestPath, '--command', 'delivery:aws', '--approval', 'A5', '--operation', collisionFixture.operationPath], {
     cwd: process.cwd(), encoding: 'utf8', env: { PATH: process.env.PATH ?? '/usr/bin:/bin' },
   });
   assert.equal(collision.status, 2);
   assert.match(collision.stderr, /RESOURCE_COLLISION/);
 
   const expiredRoot = path.join(root, 'expired');
-  const expiredFixture = await createShellGuardFixture(expiredRoot, { scopeExpiresAt: '2020-01-01T00:00:00Z' });
-  const expired = spawnSync('sh', [commands, 'guard', '--manifest', expiredFixture.manifestPath, '--command', 'delivery:aws', '--approval', 'A5', '--operation', expiredFixture.operationPath], {
+  const expiredFixture = await createShellGuardFixture(expiredRoot, { scopeExpiresAt: '2020-01-01T00:00:00.000Z' });
+  const expired = spawnSync('sh', [expiredFixture.commandsPath, 'guard', '--manifest', expiredFixture.manifestPath, '--command', 'delivery:aws', '--approval', 'A5', '--operation', expiredFixture.operationPath], {
     cwd: process.cwd(), encoding: 'utf8', env: { PATH: process.env.PATH ?? '/usr/bin:/bin' },
   });
   assert.equal(expired.status, 2);
@@ -898,7 +1063,7 @@ test('commands.sh refuses missing approvals, target mismatch, changed hashes, co
 
   const exhaustedRoot = path.join(root, 'exhausted');
   const exhaustedFixture = await createShellGuardFixture(exhaustedRoot, { usage: { requests: 11 } });
-  const exhausted = spawnSync('sh', [commands, 'guard', '--manifest', exhaustedFixture.manifestPath, '--command', 'delivery:aws', '--approval', 'A5', '--operation', exhaustedFixture.operationPath], {
+  const exhausted = spawnSync('sh', [exhaustedFixture.commandsPath, 'guard', '--manifest', exhaustedFixture.manifestPath, '--command', 'delivery:aws', '--approval', 'A5', '--operation', exhaustedFixture.operationPath], {
     cwd: process.cwd(), encoding: 'utf8', env: { PATH: process.env.PATH ?? '/usr/bin:/bin' },
   });
   assert.equal(exhausted.status, 2);
@@ -916,40 +1081,46 @@ test('commands.sh refuses missing approvals, target mismatch, changed hashes, co
   assert.match(external.stderr, /UNMODIFIED_SUBPROCESS_BLOCKED_REQUIRES_ENFORCING_BROKER/);
 });
 
-test('commands.sh run recognizes every fixed phase interface and stops on testOnly manifests', async (t) => {
+test('every non-plan phase stops at the enforcing broker', async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'provider-proof-run-interface-'));
   t.after(() => rm(root, { recursive: true, force: true }));
-  const manifestPath = path.join(root, 'manifest.json');
-  await writeFile(manifestPath, `${JSON.stringify({
-    schemaVersion: 1,
-    runId: 'phase-interface-test',
-    testOnly: true,
-    policy: { denyByDefault: true },
-    approvalPolicy: { signaturesRequired: true },
-  })}\n`);
-  const commands = path.resolve('scripts/provider-proof/commands.sh');
+  const fixture = await createShellGuardFixture(root);
+  const manifestPath = fixture.manifestPath;
+  const commands = fixture.commandsPath;
   const phases = [
-    ['inventory', ['--manifest', manifestPath, '--approval', 'A4']],
-    ['bootstrap-aws', ['--manifest', manifestPath, '--approval', 'A5']],
-    ['delivery', ['--provider', 'aws', '--cases', 'P1', '--manifest', manifestPath, '--approval', 'A5']],
-    ['failures', ['--provider', 'cloudflare', '--cases', 'P4', '--manifest', manifestPath, '--approval', 'A7']],
-    ['lifecycle', ['--provider', 'aws', '--setup', '--manifest', manifestPath, '--approval', 'A8']],
-    ['lifecycle', ['--provider', 'aws', '--observe-only', '--manifest', manifestPath, '--approval', 'A8']],
-    ['lifecycle', ['--provider', 'cloudflare', '--reconcile', '--manifest', manifestPath, '--approval', 'A8']],
-    ['gzip', ['--manifest', manifestPath, '--approval', 'A9']],
-    ['cleanup', ['--phase', 'post-a7', '--manifest', manifestPath, '--approval', 'A7']],
-    ['cleanup', ['--phase', 'final-a8', '--manifest', manifestPath, '--approval', 'A8']],
-    ['cloudflare-api-get', ['--path', `/accounts/${TARGETS.cloudflareVerifyAccount}/r2/buckets/local-fake-r2-bucket/lifecycle`, '--manifest', manifestPath, '--approval', 'A4']],
+    ['A4', 'inventory', ['inventory', '--manifest', manifestPath, '--approval', 'A4']],
+    ['A5', 'bootstrap-aws', ['bootstrap-aws', '--manifest', manifestPath, '--approval', 'A5']],
+    ['A5', 'delivery:aws', ['delivery', '--provider', 'aws', '--cases', 'P1', '--manifest', manifestPath, '--approval', 'A5']],
+    ['A6', 'delivery:cloudflare', ['delivery', '--provider', 'cloudflare', '--cases', 'P1', '--manifest', manifestPath, '--approval', 'A6']],
+    ['A7', 'failures:aws', ['failures', '--provider', 'aws', '--cases', 'P4', '--manifest', manifestPath, '--approval', 'A7']],
+    ['A7', 'failures:cloudflare', ['failures', '--provider', 'cloudflare', '--cases', 'P4', '--manifest', manifestPath, '--approval', 'A7']],
+    ['A8', 'lifecycle:aws:setup', ['lifecycle', '--provider', 'aws', '--setup', '--manifest', manifestPath, '--approval', 'A8']],
+    ['A8', 'lifecycle:cloudflare:setup', ['lifecycle', '--provider', 'cloudflare', '--setup', '--manifest', manifestPath, '--approval', 'A8']],
+    ['A8', 'lifecycle:aws:observe-only', ['lifecycle', '--provider', 'aws', '--observe-only', '--manifest', manifestPath, '--approval', 'A8']],
+    ['A8', 'lifecycle:cloudflare:observe-only', ['lifecycle', '--provider', 'cloudflare', '--observe-only', '--manifest', manifestPath, '--approval', 'A8']],
+    ['A8', 'lifecycle:aws:reconcile', ['lifecycle', '--provider', 'aws', '--reconcile', '--manifest', manifestPath, '--approval', 'A8']],
+    ['A8', 'lifecycle:cloudflare:reconcile', ['lifecycle', '--provider', 'cloudflare', '--reconcile', '--manifest', manifestPath, '--approval', 'A8']],
+    ['A9', 'gzip', ['gzip', '--manifest', manifestPath, '--approval', 'A9']],
+    ['A7', 'cleanup:post-a7', ['cleanup', '--phase', 'post-a7', '--manifest', manifestPath, '--approval', 'A7']],
+    ['A8', 'cleanup:final-a8', ['cleanup', '--phase', 'final-a8', '--manifest', manifestPath, '--approval', 'A8']],
+    ['A4', 'cloudflare-api-get', ['cloudflare-api-get', '--path', `/accounts/${TARGETS.cloudflareVerifyAccount}/r2/buckets/local-fake-r2-bucket/lifecycle`, '--manifest', manifestPath, '--approval', 'A4', '--out', path.join(fixture.runtime, 'lifecycle.json')]],
   ];
-  for (const [subcommand, args] of phases) {
-    const result = spawnSync('sh', [commands, 'run', subcommand, ...args], {
+  for (const [approvalId, command, args] of phases) {
+    if (command !== 'delivery:aws') await fixture.addApproval(approvalId, command);
+    const result = spawnSync('sh', [commands, 'run', ...args], {
       cwd: process.cwd(), encoding: 'utf8', env: { PATH: process.env.PATH ?? '/usr/bin:/bin' },
     });
-    assert.equal(result.status, 2, `${subcommand}: ${result.stderr}`);
-    assert.match(result.stderr, /TEST_FIXTURE_CANNOT_AUTHORIZE_EXTERNAL_WORK/);
+    assert.equal(result.status, 2, `${command}: ${result.stderr}`);
+    assert.match(result.stderr, /ENFORCING_BROKER_REQUIRED/);
     assert.doesNotMatch(result.stdout, /credentials|token|secret/i);
     assert.doesNotMatch(result.stderr, /credentials|token|secret/i);
   }
+
+  const planOnly = spawnSync('sh', [commands, 'run', 'inventory', '--manifest', manifestPath, '--approval', 'A4', '--plan-only'], {
+    cwd: process.cwd(), encoding: 'utf8', env: { PATH: process.env.PATH ?? '/usr/bin:/bin' },
+  });
+  assert.equal(planOnly.status, 0, planOnly.stderr);
+  assert.match(planOnly.stdout, /"planOnly":true/);
 });
 
 test('caps and expiry are checked independently of approval strings', () => {
@@ -983,5 +1154,41 @@ test('subprocess execution stops without a sealed enforcing broker and rejects c
     assert.equal(contextCode, 2);
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('inherited credentials are rejected before guard, phase, and external capability work; offline seal remains usable', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'provider-proof-env-order-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const commands = path.resolve('scripts/provider-proof/commands.sh');
+  const missingManifest = path.join(root, 'missing-manifest.json');
+  const env = { PATH: process.env.PATH ?? '/usr/bin:/bin', AWS_PROFILE: 'artifact-pages-verify' };
+  const calls = [
+    ['guard', ['guard', '--manifest', missingManifest, '--command', 'delivery:aws', '--approval', 'A5', '--operation', path.join(root, 'missing-operation.json')]],
+    ['phase', ['run', 'inventory', '--manifest', missingManifest, '--approval', 'A4']],
+    ['external', ['external', '--manifest', missingManifest, '--command', 'aws s3api list-buckets']],
+  ];
+  for (const [label, args] of calls) {
+    const result = spawnSync('sh', [commands, ...args], { cwd: process.cwd(), encoding: 'utf8', env });
+    assert.equal(result.status, 2, `${label}: ${result.stderr}`);
+    assert.match(result.stderr, /INHERITED_CREDENTIAL_FALLBACK/);
+    assert.doesNotMatch(result.stderr, /ENOENT|INVALID_MANIFEST/);
+  }
+
+  const manifestPath = path.join(root, 'offline-manifest.json');
+  await writeFile(manifestPath, `${JSON.stringify({ schemaVersion: 1, runId: 'offline-seal', testOnly: true, policy: {}, approvalPolicy: {} })}\n`);
+  assert.equal(await main(['seal', '--manifest', manifestPath, '--offline'], env), 0);
+});
+
+test('proof.mjs and policy.mjs have no direct child_process dependency', async () => {
+  const forbidden = [
+    /\bimport\b[^\n]*\bfrom\s*['"](?:node:)?child_process['"]/u,
+    /\bexport\b[^\n]*\bfrom\s*['"](?:node:)?child_process['"]/u,
+    /\bimport\s*\(\s*['"](?:node:)?child_process['"]\s*\)/u,
+    /\brequire\s*\(\s*['"](?:node:)?child_process['"]\s*\)/u,
+  ];
+  for (const filename of ['proof.mjs', 'policy.mjs']) {
+    const source = await readFile(new URL(`./${filename}`, import.meta.url), 'utf8');
+    for (const pattern of forbidden) assert.doesNotMatch(source, pattern, `${filename} should not load child_process directly`);
   }
 });

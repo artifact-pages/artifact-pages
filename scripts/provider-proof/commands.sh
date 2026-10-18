@@ -18,13 +18,13 @@ case "$mode" in
     ;;
   run)
     if [ "$#" -lt 1 ]; then
-      printf '%s\n' 'USAGE: commands.sh run <proof.mjs-subcommand> [sealed options]' >&2
+      printf '%s\n' 'USAGE: commands.sh run <proof.mjs-subcommand> [options]' >&2
       exit 2
     fi
     subcommand=$1
     shift
     case "$subcommand" in
-      inventory|bootstrap-aws|delivery|failures|lifecycle|gzip|cleanup|cloudflare-api-get)
+      seal|approval-prepare|approval-attach|inventory|bootstrap-aws|delivery|failures|lifecycle|gzip|cleanup|cloudflare-api-get)
         exec node "$PROOF" "$subcommand" "$@"
         ;;
       *)

@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "keyId": "owner",
+  "algorithm": "ssh-ed25519",
+  "status": "unenrolled",
+  "publicKey": null,
+  "fingerprint": null
+}

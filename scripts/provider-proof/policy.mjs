@@ -1,5 +1,6 @@
-import { createHash } from 'node:crypto';
-import { verifyApprovalSignature } from './seals.mjs';
+import { fingerprintKey, verifyApprovalRecord } from './approval-validation.mjs';
+
+export { fingerprintKey, verifyApprovalRecord };
 
 export const TARGETS = Object.freeze({
   awsAccount: '231136241959',
@@ -133,21 +134,6 @@ export function capabilityForLocalTest(command, manifest) {
     sealDigest: manifest.activeSealDigest ?? 'local-test-seal',
     manifest,
   });
-}
-
-export function verifyApprovalRecord(record, manifest, approvalId, command, now = Date.now()) {
-  if (!record || record.testOnly === true || record.id !== approvalId) return false;
-  if (record.sealDigest !== manifest.activeSealDigest || record.command !== command) return false;
-  if (!Number.isFinite(Date.parse(record.expiresAt)) || Date.parse(record.expiresAt) <= now) return false;
-  if (!Number.isFinite(Date.parse(record.approvedAt)) || Date.parse(record.approvedAt) > now) return false;
-  if (record.transition !== command || !record.signature || !record.reviewerKeyId) return false;
-  const key = manifest.reviewKeys?.[record.reviewerKeyId];
-  if (!key || fingerprintKey(key) !== record.reviewerKeyFingerprint) return false;
-  return verifyApprovalSignature(record, key);
-}
-
-export function fingerprintKey(publicKey) {
-  return createHash('sha256').update(String(publicKey)).digest('hex');
 }
 
 export function authorizeOperation(capability, operation) {

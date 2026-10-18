@@ -1,5 +1,11 @@
 import { AuthorizationError, authorizeOperation, validateCapsAndExpiry } from './policy.mjs';
 
+const AUTOMATIC_RETRY_ACTIONS = new Set([
+  'GetObject', 'HeadObject', 'ListObjectsV2', 'ListObjectVersions',
+  'GetBucketLifecycleConfiguration', 'GetBucketVersioning', 'GetDistribution',
+  'GetDistributionConfig', 'GetCallerIdentity', 'GetBucketMetadata', 'GetZoneMetadata', 'HeadBucket',
+]);
+
 export class GuardedTransport {
   #capability;
   #credentialLoader;
@@ -27,13 +33,21 @@ export class GuardedTransport {
   }
 
   async request(operation) {
-    let current = cloneOperation(operation);
+    const original = cloneOperation(operation);
+    let expectedWireIntent;
     for (let attempt = 0; ; attempt += 1) {
+      const current = cloneOperation(original);
       authorizeOperation(this.#capability, current);
       const wire = await this.#serializer(current);
       const finalOperation = operationFromWire(wire, current);
+      assertSameOperation(current, finalOperation);
       authorizeOperation(this.#capability, finalOperation);
       assertWireTarget(wire, finalOperation);
+      const wireIntent = semanticWireIntent(wire);
+      if (expectedWireIntent === undefined) expectedWireIntent = wireIntent;
+      else if (JSON.stringify(wireIntent) !== JSON.stringify(expectedWireIntent)) {
+        throw new AuthorizationError('RETRY_REQUEST_CHANGED');
+      }
       const reservedBytes = this.#reserveBudget(wire);
       const credentials = await this.#credentialLoader({
         identityClass: this.#capability.context,
@@ -42,23 +56,18 @@ export class GuardedTransport {
       });
       const signed = await this.#signer(wire, credentials, finalOperation);
       const signedOperation = operationFromWire(signed, current);
+      assertSameOperation(current, signedOperation);
+      assertSameWireIntent(wire, signed);
       authorizeOperation(this.#capability, signedOperation);
       assertWireTarget(signed, signedOperation);
       this.#reconcileSignedBudget(signed, reservedBytes);
       const response = await this.#transport(signed, signedOperation);
 
       if (isRedirect(response)) {
-        const redirected = redirectOperation(current, response);
-        // The source request has already completed. The redirected target is
-        // independently checked before credentials are loaded or a second
-        // request is dispatched.
-        authorizeOperation(this.#capability, redirected);
-        current = redirected;
-        continue;
+        throw new AuthorizationError('UPSTREAM_REDIRECT_REJECTED');
       }
 
-      if (isRetryable(response) && attempt < this.#maxRetries) {
-        current = response.retryOperation ? cloneOperation(response.retryOperation) : cloneOperation(current);
+      if (isRetryable(response) && attempt < this.#maxRetries && supportsAutomaticRetry(original)) {
         continue;
       }
       return response;
@@ -117,6 +126,23 @@ export class GuardedTransport {
   }
 }
 
+export function createFetchTransport(fetchImpl = globalThis.fetch) {
+  if (typeof fetchImpl !== 'function') throw new TypeError('Fetch is unavailable');
+  return async (wire) => {
+    const response = await fetchImpl(wire.url, {
+      method: wire.method,
+      headers: wire.headers,
+      body: wire.body,
+      redirect: 'manual',
+    });
+    return {
+      status: response.status,
+      headers: Object.fromEntries(response.headers.entries()),
+      body: await response.arrayBuffer(),
+    };
+  };
+}
+
 function cloneOperation(operation) {
   if (!operation || typeof operation !== 'object') throw new AuthorizationError('INVALID_OPERATION');
   return structuredClone(operation);
@@ -154,6 +180,57 @@ function operationFromWire(wire, original) {
   return operation;
 }
 
+function assertSameOperation(expected, actual) {
+  if (JSON.stringify(canonicalValue(actual)) !== JSON.stringify(canonicalValue(expected))) {
+    throw new AuthorizationError('OPERATION_INTENT_CHANGED');
+  }
+}
+
+function assertSameWireIntent(beforeSigning, signed) {
+  if (JSON.stringify(semanticWireIntent(beforeSigning)) !== JSON.stringify(semanticWireIntent(signed))) {
+    throw new AuthorizationError('SIGNED_REQUEST_INTENT_CHANGED');
+  }
+}
+
+function semanticWireIntent(wire) {
+  return {
+    method: wire.method,
+    url: wire.url,
+    body: bodyBytes(wire.body)?.toString('base64') ?? null,
+    headers: semanticHeaders(wire.headers),
+  };
+}
+
+function bodyBytes(body) {
+  if (body === undefined || body === null) return null;
+  if (typeof body === 'string') return Buffer.from(body, 'utf8');
+  if (Buffer.isBuffer(body) || body instanceof Uint8Array) return Buffer.from(body);
+  throw new AuthorizationError('INVALID_WIRE_BODY');
+}
+
+function semanticHeaders(headers) {
+  if (!headers) return {};
+  const entries = typeof headers.entries === 'function'
+    ? [...headers.entries()]
+    : Array.isArray(headers) ? headers : Object.entries(headers);
+  const volatile = new Set([
+    'authorization', 'proxy-authorization', 'date', 'x-amz-date', 'x-amz-security-token',
+    'x-amz-signature', 'x-amz-credential', 'x-amz-session-token',
+  ]);
+  return Object.fromEntries(entries
+    .map(([name, value]) => [String(name).toLowerCase(), String(value)])
+    .filter(([name]) => !volatile.has(name))
+    .sort(([left], [right]) => left.localeCompare(right)));
+}
+
+function canonicalValue(value) {
+  if (Array.isArray(value)) return value.map(canonicalValue);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalValue(value[key])]));
+  }
+  return value;
+}
+
 function assertWireTarget(wire, operation) {
   let url;
   try {
@@ -171,21 +248,15 @@ function assertWireTarget(wire, operation) {
 }
 
 function isRedirect(response) {
-  return [301, 302, 303, 307, 308].includes(response?.status) && Boolean(response?.headers?.location);
-}
-
-function redirectOperation(operation, response) {
-  const redirectedUrl = new URL(response.headers.location, operation.endpoint);
-  return {
-    ...operation,
-    endpoint: redirectedUrl.origin,
-    path: `${redirectedUrl.pathname}${redirectedUrl.search}`,
-    endpointOverride: false,
-  };
+  return [300, 301, 302, 303, 305, 307, 308].includes(response?.status);
 }
 
 function isRetryable(response) {
   return response?.retryable === true || [408, 429, 500, 502, 503, 504].includes(response?.status);
+}
+
+function supportsAutomaticRetry(operation) {
+  return AUTOMATIC_RETRY_ACTIONS.has(operation?.action) && ['GET', 'HEAD'].includes(operation?.method);
 }
 
 async function passthroughSigner(wire) {

@@ -1,7 +1,11 @@
-import { createHash, createPublicKey, verify as verifySignature } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { open, readFile, readdir, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { canonicalDigest, canonicalJson, sha256 } from './canonical.mjs';
+import { verifyApprovalRecord } from './approval-validation.mjs';
+
+export { canonicalDigest, canonicalJson, sha256 } from './canonical.mjs';
+export { approvalSigningBytes } from './approval-validation.mjs';
 
 export const SEAL_STAGES = Object.freeze([
   'bootstrap', 'discovery', 'inventory', 'create-plan', 'post-apply',
@@ -28,33 +32,6 @@ export class SealError extends Error {
     super(detail ? `${code}: ${detail}` : code);
     this.name = 'SealError';
     this.code = code;
-  }
-}
-
-export function canonicalJson(value) {
-  return `${JSON.stringify(canonicalValue(value))}\n`;
-}
-
-export function canonicalDigest(value) {
-  return sha256(Buffer.from(canonicalJson(value), 'utf8'));
-}
-
-export function sha256(bytes) {
-  return createHash('sha256').update(bytes).digest('hex');
-}
-
-export function approvalSigningBytes(record) {
-  const { signature, signatureVerified, testOnly, ...signed } = record;
-  return Buffer.from(canonicalJson(signed), 'utf8');
-}
-
-export function verifyApprovalSignature(record, publicKey) {
-  try {
-    const key = createPublicKey(publicKey);
-    const signature = Buffer.from(record.signature, 'base64');
-    return verifySignature(null, approvalSigningBytes(record), key, signature);
-  } catch {
-    return false;
   }
 }
 
@@ -141,20 +118,42 @@ export async function verifyApprovalFile({ manifestPath, approvalId, command, no
   const absoluteManifest = path.resolve(manifestPath);
   const manifest = await readJson(absoluteManifest);
   if (manifest.testOnly === true) throw new SealError('TEST_FIXTURE_CANNOT_AUTHORIZE_EXTERNAL_WORK');
+  if (Object.hasOwn(manifest, 'reviewKeys')) throw new SealError('MANIFEST_REVIEW_KEYS_REJECTED');
   const active = await requireActiveSeal(absoluteManifest);
-  const approvalPath = path.resolve(path.dirname(absoluteManifest), manifest.approvalDirectory ?? 'approvals', `${approvalId}.json`);
-  if (!isInside(path.dirname(absoluteManifest), approvalPath)) throw new SealError('APPROVAL_PATH_OUTSIDE_RUNTIME');
-  const record = await readJson(approvalPath).catch((error) => {
+  if (typeof approvalId !== 'string' || !approvalId || typeof command !== 'string' || !command) throw new SealError('OWNER_APPROVAL_REQUIRED');
+  const transitionDirectory = path.resolve(
+    path.dirname(absoluteManifest),
+    manifest.approvalDirectory ?? 'approvals',
+    Buffer.from(approvalId).toString('hex'),
+    Buffer.from(command).toString('hex'),
+  );
+  if (!isInside(path.dirname(absoluteManifest), transitionDirectory)) throw new SealError('APPROVAL_PATH_OUTSIDE_RUNTIME');
+  const entries = await readdir(transitionDirectory, { withFileTypes: true }).catch((error) => {
     if (error?.code === 'ENOENT') throw new SealError('OWNER_APPROVAL_REQUIRED');
     throw error;
   });
-  const key = manifest.reviewKeys?.[record.reviewerKeyId];
-  if (!key || record.id !== approvalId || record.command !== command || record.transition !== command
-      || record.sealDigest !== active.digest || Date.parse(record.expiresAt) <= now || Date.parse(record.approvedAt) > now
-      || !verifyApprovalSignature(record, key)) {
-    throw new SealError('OWNER_APPROVAL_INVALID');
+  const candidates = entries.filter((entry) => entry.isFile()
+    && entry.name.startsWith(`${active.digest}-`) && entry.name.endsWith('.json'));
+  const verifiedManifest = {
+    ...manifest,
+    activeSealDigest: active.digest,
+    activeSeal: active,
+    sealChainVerified: true,
+  };
+  const validRecords = [];
+  for (const candidate of candidates) {
+    let record;
+    try {
+      record = await readJson(path.join(transitionDirectory, candidate.name));
+    } catch {
+      throw new SealError('OWNER_APPROVAL_INVALID');
+    }
+    if (verifyApprovalRecord(record, verifiedManifest, approvalId, command, now)) validRecords.push(record);
   }
-  return record;
+  if (!validRecords.length) throw new SealError(candidates.length ? 'OWNER_APPROVAL_INVALID' : 'OWNER_APPROVAL_REQUIRED');
+  validRecords.sort((left, right) => Date.parse(right.approvedAt) - Date.parse(left.approvedAt));
+  if (validRecords.length > 1 && validRecords[0].approvedAt === validRecords[1].approvedAt) throw new SealError('OWNER_APPROVAL_AMBIGUOUS');
+  return validRecords[0];
 }
 
 export async function hashWorkspaceDiff(cwd) {
@@ -165,6 +164,7 @@ export async function hashWorkspaceDiff(cwd) {
 
 function validateManifestShape(manifest) {
   if (!manifest || manifest.schemaVersion !== 1 || typeof manifest.runId !== 'string') throw new SealError('INVALID_MANIFEST');
+  if (manifest.testOnly !== true && Object.hasOwn(manifest, 'reviewKeys')) throw new SealError('MANIFEST_REVIEW_KEYS_REJECTED');
   rejectCredentialMaterial(manifest);
   if (!manifest.policy || !manifest.approvalPolicy) throw new SealError('MANIFEST_POLICY_REQUIRED');
 }
@@ -289,14 +289,6 @@ async function writeImmutable(file, text) {
   } finally {
     await handle?.close();
   }
-}
-
-function canonicalValue(value) {
-  if (Array.isArray(value)) return value.map(canonicalValue);
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalValue(value[key])]));
-  }
-  return value;
 }
 
 function isInside(parent, candidate) {

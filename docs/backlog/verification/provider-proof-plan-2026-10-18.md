@@ -8,11 +8,13 @@ One evidence ledger serves T4/T5/T8/T14/T15 and IMP-73's custom-prefix runtime g
 
 Use a **new disposable AWS stack** in account `231136241959` to prove actual new-bucket bootstrap and custom-prefix setup together. Do not empty or alter the current AWS verification stack. Use the **existing Cloudflare verification deployment** in the separate account, with a coordinated app-deployment freeze, rather than attach a second module/state to its zone-root rulesets. Do not repurpose production for provider experiments. Lifecycle observation has a finite observation window, not a promise that the provider expires on schedule.
 
-The checked-in local harness is under [`scripts/provider-proof/`](../../../scripts/provider-proof/); ignored runtime evidence belongs under `.local/provider-proof-20261018/`. Its fake-transport and Go coordinator tests make no provider requests. Before external execution, owner-review each immutable chained seal and its exact transition. Values that are not yet known are typed unbound fields and cannot be request targets; there must be no unresolved value needed by the next authorized step. Approval IDs alone are not approval evidence: each transition needs a signed record bound to the active seal digest, command and expiry. Existing A4–A9 scopes still require the plan’s owner review of actual Terraform plans, A9 pins and cleanup hashes. A changed resource list, identity, pin policy, cap or cleanup boundary returns to the owner.
+The checked-in local harness is under [`scripts/provider-proof/`](../../../scripts/provider-proof/); ignored runtime evidence belongs under `.local/provider-proof-20261018/`. Its fake-transport and Go coordinator tests make no provider requests. The checked-in `trust-anchor.json` is currently **unenrolled**; production approval verification fails closed until the owner adds the SSH Ed25519 public key and its `SHA256:` fingerprint (computed from the SSH public-key blob) in a reviewed PR. Manifests cannot select or replace the owner key. Before external execution, owner-review each immutable chained seal and its exact transition. Values that are not yet known are typed unbound fields and cannot be request targets; there must be no unresolved value needed by the next authorized step. Approval IDs alone are not approval evidence: each transition needs an SSH-signed record bound to the active seal digest, exact command, scope digest and expiry. Existing A4–A9 scopes still require the plan’s owner review of actual Terraform plans, A9 pins and cleanup hashes. A changed resource list, identity, pin policy, cap or cleanup boundary returns to the owner.
 
 ## Approval record and A8-short
 
-Owner decisions recorded on 2026-10-18: A4–A7 approved; A8 approved in the shortened form below; A9 approved conditional on released CLI v0.5.0 and all four Actions v0.3.0, with reviewed immutable pins. Release publication itself is outside these approvals.
+Owner decisions recorded on 2026-10-18: A4–A7 approved; A8 approved in the shortened form below; A9 approved conditional on released CLI v0.5.0 and all four Actions v0.3.0, with reviewed immutable pins. Release publication itself is outside these approvals. Keep four gates distinct: **harness merged**, **broker coverage reviewed**, **concrete transition signed**, and **provider proof obtained**. None substitutes for the next.
+
+Owner approval uses only the checked-in pinned SSH trust anchor. After enrollment by PR, prepare one canonical payload for the exact `approvalId` and command, present its scope, active seal, plan/artifact hashes, expiry and payload digest in chat, and obtain the owner’s approval there. The owner inspects and signs the prepared payload on their terminal with `ssh-keygen -Y sign -f "$HOME/.ssh/<owner-key>" -n artifact-pages-provider-proof <payload>`. Use `commands.sh run approval-attach` to verify the resulting SSH signature against principal `owner` and attach it without changing payload fields. Signing remains owner-operated. Each transition has a separate immutable record; changed scope, seal, command or expiry creates another record and keeps earlier records. The current unenrolled anchor makes both prepare and attach fail closed until its enrollment PR is merged.
 
 **A8-short —** One-day natural-expiry experiment, life-site cleanup, restoration of the temporary Cloudflare lifecycle addition, and immediate AWS proof-stack destruction at the sequencing gates below. Maximum observation: 48 hours after the latest applicable eligibility time, additionally bounded by 108 hours from first AWS resource creation. Maximum retained infrastructure lifetime: **120 hours / five days**, replacing nine days. Retain the existing A8 ceilings of one operator hour, up to 60 minutes final teardown and $1; all overall usage and spend caps remain unchanged.
 
@@ -43,7 +45,7 @@ Do not repeat historical Cloudflare production samples merely to obtain a newer 
 | AWS OIDC Action | `aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd` (v6.3.0) |
 | Reference modules | Registry `artifact-pages/artifact-pages/aws` and `artifact-pages/artifact-pages/cloudflare`, exact `0.1.1`, monorepo source tags both peel to `f7096315531d2c124f9b2f64ff5f2393ff63ea7b`; resolve package commits and release.json through approved reads, compare generated payload |
 | Terraform / provider binaries | Terraform **1.16.4** (live verify tooling recorded by ops); AWS **6.66.0**, Cloudflare **5.26.0**, copy committed lockfiles and use `-lockfile=readonly`; no upgrade; Terraform 1.9.8 local CI is credited separately |
-| Browser and tools | Playwright and Chromium from baseline `package-lock.json` via `npm ci`; Go 1.26.0; Node 24; AWS CLI 2.27.41; record exact installed versions/image IDs in sealed manifest |
+| Browser and tools | Playwright and Chromium from baseline `package-lock.json` via `npm ci`; Go 1.26.0; Node 24; AWS CLI 2.27.41. AWS CLI, Terraform and provider-facing tools run in Linux containers under Docker Desktop on the owner’s Mac; evidence records host macOS, container image digest, guest architecture and exact tool versions in the sealed manifest. Hosted GitHub jobs are recorded separately as hosted-runner evidence. |
 | Future gzip lane only | CLI **0.5.0**, four Actions **v0.3.0**, bootstrap 0.5.0 / range `>=0.5.0 <0.6.0`; **not published at planning time**. A9 blocked until ISSUE-112 ships and exact released CLI source/asset SHA and all four Action SHAs/release.json are added to a reviewed pin-sheet amendment. Never use `main`, `latest` or invented release hashes. |
 
 Resolve all v0.2.0 published Action release.json ranges under A4; expected bootstrap 0.4.0/range `>=0.4.0 <0.5.0`. Full SHA pins in generated workflows are package-repository SHAs, not the monorepo's Action tag objects. Failure to match is a stop. Record the source config and synthetic Git fixture commit SHAs, web digest, harness commit/digest, generated workflow SHA, provider locks, root config hash, approved plan hash, account/zone/bucket/distribution/role IDs and timestamp in `manifest.json`. An artifact's release tag alone is insufficient.
@@ -63,20 +65,20 @@ Read-only workspace sources: workspace `STATUS.md` **In flight / infra lane and 
 
 AWS Terraform: `preview_retention_days=1`, `price_class=PriceClass_100`, `viewer_protocol_policy=redirect-to-https`, no WAF. Admin trust is the exact GitHub subject for `proof-admin`; satellite map a/b/neighbor gets its matching exact environment subject (life runs under admin). Read the new repo's numeric owner/repo IDs and OIDC `sub_claim_prefix`; freeze concrete immutable subjects before plan. No wildcards, no branch subject fallback, no trust changes on existing roles. Roles: `ap-proof-20261018-admin-publisher` and `ap-proof-20261018-<site>-publisher` using the module's hash rule if necessary. In addition, A5 creates one test-only operator role `ap-proof-20261018-test-operator` and its policy outside the reference module, with trust limited to the exact inventoried SSO role ARN; no changes to that existing SSO role or the reference OIDC role trust. Only these new roles/policies can be created/deleted. Use existing `artifact-pages-verify` SSO profile for A4 inventory and A5/A8 Terraform plan/apply after owner login; test identities and containment are specified below. Sessions <=1 hour, no long-lived AWS key creation. Cloudflare uses verify-only parent credentials; mint 15-minute scoped children with current `_control/sites/<site>/` grants plus read-only `_control/versions/app.json` and separate registry reader. No production token, parent permission expansion or token logging.
 
-A4 commands are **future commands requiring A4**, including curl/browser requests. `$E` is a new mode-0700 evidence directory, credentials loaded privately without shell tracing; never `cat` or `source` arbitrary files into logs. `~/.config/artifact-pages-verify/` contents may be **listed, never printed**. An operator-controlled loader supplies needed values directly in memory to subprocesses; reject inherited production credentials. `$CF_ACCOUNT` must equal the verify ID and `$CF_ZONE_NAME` must equal `artifact-pages.stream` before any request. The loader checks the effective target of each CLI config, not only environment names.
+A4 commands are **future command payloads requiring A4**, including curl/browser requests. Pass every command outside the harness through `commands.sh external --manifest "$E/manifest.json" --command '<command>'`; it currently fails closed until the enforcing broker is implemented, sealed and reviewed. Harness commands use `commands.sh run`. `$E` is a new mode-0700 evidence directory. The supervised launcher and its eventual Linux-container runner must receive credentials through the host loader, without shell tracing; never `cat` or `source` arbitrary files into logs. `~/.config/artifact-pages-verify/` contents may be **listed, never printed**. Reject inherited production credentials. `$CF_ACCOUNT` must equal the verify ID and `$CF_ZONE_NAME` must equal `artifact-pages.stream` before any request. The loader checks the effective target of each CLI config, not only environment names.
 
 ```sh
-aws --profile artifact-pages-verify sts get-caller-identity > "$E/aws-identity.json"
-aws --profile artifact-pages-verify s3api list-buckets > "$E/aws-buckets.json"
-aws --profile artifact-pages-verify cloudfront get-distribution --id ECFTIR5GVPQDF > "$E/aws-existing-distribution.json"
-aws --profile artifact-pages-verify iam get-open-id-connect-provider --open-id-connect-provider-arn arn:aws:iam::231136241959:oidc-provider/token.actions.githubusercontent.com > "$E/oidc-provider.json"
-terraform version -json > "$E/terraform-version.json"
-aws --version > "$E/aws-cli-version.txt" 2>&1
-terraform -chdir="$CF_ROOT" init -reconfigure -lockfile=readonly -backend-config="$E/cf-backend.hcl" > "$E/cf-init.log"
-terraform -chdir="$CF_ROOT" state list > "$E/cf-state-addresses.txt"
-terraform -chdir="$CF_ROOT" plan -refresh-only -lock=false -detailed-exitcode -out="$E/cf-refresh.plan" > "$E/cf-refresh.log"
-aws --endpoint-url "$R2_ENDPOINT" s3api list-objects-v2 --bucket "$CF_BUCKET" > "$E/cf-objects.json"
-node "$H/proof.mjs" cloudflare-api-get --path "/accounts/$CF_ACCOUNT/r2/buckets/$CF_BUCKET/lifecycle" --manifest "$E/manifest.json" --approval A4 --out "$E/cf-lifecycle.json"
+"$H/commands.sh" external --manifest "$E/manifest.json" --command 'aws --profile artifact-pages-verify sts get-caller-identity > "$E/aws-identity.json"'
+"$H/commands.sh" external --manifest "$E/manifest.json" --command 'aws --profile artifact-pages-verify s3api list-buckets > "$E/aws-buckets.json"'
+"$H/commands.sh" external --manifest "$E/manifest.json" --command 'aws --profile artifact-pages-verify cloudfront get-distribution --id ECFTIR5GVPQDF > "$E/aws-existing-distribution.json"'
+"$H/commands.sh" external --manifest "$E/manifest.json" --command 'aws --profile artifact-pages-verify iam get-open-id-connect-provider --open-id-connect-provider-arn arn:aws:iam::231136241959:oidc-provider/token.actions.githubusercontent.com > "$E/oidc-provider.json"'
+"$H/commands.sh" external --manifest "$E/manifest.json" --command 'terraform version -json > "$E/terraform-version.json"'
+"$H/commands.sh" external --manifest "$E/manifest.json" --command 'aws --version > "$E/aws-cli-version.txt" 2>&1'
+"$H/commands.sh" external --manifest "$E/manifest.json" --command 'terraform -chdir="$CF_ROOT" init -reconfigure -lockfile=readonly -backend-config="$E/cf-backend.hcl" > "$E/cf-init.log"'
+"$H/commands.sh" external --manifest "$E/manifest.json" --command 'terraform -chdir="$CF_ROOT" state list > "$E/cf-state-addresses.txt"'
+"$H/commands.sh" external --manifest "$E/manifest.json" --command 'terraform -chdir="$CF_ROOT" plan -refresh-only -lock=false -detailed-exitcode -out="$E/cf-refresh.plan" > "$E/cf-refresh.log"'
+"$H/commands.sh" external --manifest "$E/manifest.json" --command 'aws --endpoint-url "$R2_ENDPOINT" s3api list-objects-v2 --bucket "$CF_BUCKET" > "$E/cf-objects.json"'
+"$H/commands.sh" run cloudflare-api-get --path "/accounts/$CF_ACCOUNT/r2/buckets/$CF_BUCKET/lifecycle" --manifest "$E/manifest.json" --approval A4 --out "$E/cf-lifecycle.json"
 ```
 
 A4 confirms the installed Terraform **1.16.4** and AWS CLI **2.27.41** against these ops-record-derived selections; record the actual versions, and stop for a reviewed pin amendment if they differ. `$CF_ROOT` is an isolated local copy of the verification root, initialized against the **existing** verify backend using a privately prepared `$E/cf-backend.hcl` with the inventoried endpoint/bucket/key. Never initialize a missing state/backend, migrate state or run apply during A4. Init writes only local provider/backend metadata; `-lock=false` prevents a remote lock write during the refresh-only plan. Coordinate a no-writer inventory window and compare state serial/hash before and after; any change invalidates the unlocked snapshot and stops the proof.
@@ -128,23 +130,25 @@ Proof runners cannot inherit inventory or preservation capabilities. Production,
 Harness subcommands fixed by this plan:
 
 ```sh
-node "$H/proof.mjs" seal --manifest "$E/manifest.json" --offline
-node "$H/proof.mjs" inventory --manifest "$E/manifest.json" --approval A4
-node "$H/proof.mjs" bootstrap-aws --manifest "$E/manifest.json" --approval A5
-node "$H/proof.mjs" delivery --provider aws --cases P1,P3,P8 --manifest "$E/manifest.json" --approval A5
-node "$H/proof.mjs" delivery --provider cloudflare --cases P1,P3,P8 --manifest "$E/manifest.json" --approval A6
-node "$H/proof.mjs" failures --provider aws --cases P4,P5,P6,P7 --manifest "$E/manifest.json" --approval A7
-node "$H/proof.mjs" failures --provider cloudflare --cases P4,P5,P6,P7 --manifest "$E/manifest.json" --approval A7
-node "$H/proof.mjs" lifecycle --provider aws --setup --manifest "$E/manifest.json" --approval A8
-node "$H/proof.mjs" lifecycle --provider cloudflare --setup --manifest "$E/manifest.json" --approval A8
-node "$H/proof.mjs" lifecycle --provider aws --observe-only --manifest "$E/manifest.json" --approval A8
-node "$H/proof.mjs" lifecycle --provider cloudflare --observe-only --manifest "$E/manifest.json" --approval A8
-node "$H/proof.mjs" lifecycle --provider aws --reconcile --manifest "$E/manifest.json" --approval A8
-node "$H/proof.mjs" lifecycle --provider cloudflare --reconcile --manifest "$E/manifest.json" --approval A8
-node "$H/proof.mjs" cloudflare-api-get --path "/accounts/$CF_ACCOUNT/r2/buckets/$CF_BUCKET/lifecycle" --manifest "$E/manifest.json" --approval A4 --out "$E/cf-lifecycle.json"
-node "$H/proof.mjs" gzip --manifest "$E/gzip-manifest.json" --approval A9
-node "$H/proof.mjs" cleanup --phase post-a7 --manifest "$E/manifest.json" --approval A7
-node "$H/proof.mjs" cleanup --phase final-a8 --manifest "$E/manifest.json" --approval A8
+"$H/commands.sh" run seal --manifest "$E/manifest.json" --offline
+"$H/commands.sh" run approval-prepare --manifest "$E/manifest.json" --approval A5 --command delivery:aws --expires-at "$A5_EXPIRES_AT"
+"$H/commands.sh" run approval-attach --manifest "$E/manifest.json" --approval A5 --command delivery:aws --payload "$A5_PAYLOAD" --signature "$A5_SIGNATURE"
+"$H/commands.sh" run inventory --manifest "$E/manifest.json" --approval A4
+"$H/commands.sh" run bootstrap-aws --manifest "$E/manifest.json" --approval A5
+"$H/commands.sh" run delivery --provider aws --cases P1,P3,P8 --manifest "$E/manifest.json" --approval A5
+"$H/commands.sh" run delivery --provider cloudflare --cases P1,P3,P8 --manifest "$E/manifest.json" --approval A6
+"$H/commands.sh" run failures --provider aws --cases P4,P5,P6,P7 --manifest "$E/manifest.json" --approval A7
+"$H/commands.sh" run failures --provider cloudflare --cases P4,P5,P6,P7 --manifest "$E/manifest.json" --approval A7
+"$H/commands.sh" run lifecycle --provider aws --setup --manifest "$E/manifest.json" --approval A8
+"$H/commands.sh" run lifecycle --provider cloudflare --setup --manifest "$E/manifest.json" --approval A8
+"$H/commands.sh" run lifecycle --provider aws --observe-only --manifest "$E/manifest.json" --approval A8
+"$H/commands.sh" run lifecycle --provider cloudflare --observe-only --manifest "$E/manifest.json" --approval A8
+"$H/commands.sh" run lifecycle --provider aws --reconcile --manifest "$E/manifest.json" --approval A8
+"$H/commands.sh" run lifecycle --provider cloudflare --reconcile --manifest "$E/manifest.json" --approval A8
+"$H/commands.sh" run cloudflare-api-get --path "/accounts/$CF_ACCOUNT/r2/buckets/$CF_BUCKET/lifecycle" --manifest "$E/manifest.json" --approval A4 --out "$E/cf-lifecycle.json"
+"$H/commands.sh" run gzip --manifest "$E/gzip-manifest.json" --approval A9
+"$H/commands.sh" run cleanup --phase post-a7 --manifest "$E/manifest.json" --approval A7
+"$H/commands.sh" run cleanup --phase final-a8 --manifest "$E/manifest.json" --approval A8
 ```
 
 Each command is noninteractive and emits only redacted status, paths and digests. `seal` performs no download/account access and appends a content-addressed record; it never rewrites an earlier seal or the manifest. Each owner record binds one transition to the prior seal digest, command, exact scope and expiry. The command selects its capability; environment variables and caller-supplied context cannot select a more powerful identity. Phase commands remain blocked without an enforcing broker, and approval never overrides a mismatch. Cleanup is staged: A7 removes only a/b/neighbor registrations; A8 retains life objects and the AWS stack through observation, then authorizes final life cleanup and AWS destroy with a separate exact plan-hash review. `post-a7` rejects life keys and stack resources; `final-a8` rejects execution before a completion/censor timestamp, the lifecycle restoration and A9 completed/not-run outcome. A5 does not authorize early stack destruction. If A8 is not approved, do not create the life experiment or provision the stack for this coordinated run; obtain both A5 and A8 decisions before provisioning. No approval is a broad “cleanup everything” grant.
@@ -154,15 +158,15 @@ Each command is noninteractive and emits only redacted status, paths and digests
 Create only the named repo/environments after A4 has established name availability. Capture public repo IDs/OIDC prefix, create exact subjects and freeze the module root with source/version above, lockfile and variables. Generated setup uses non-default `aws.namePrefix: ap-proof-20261018`; configure helper's selected ARN and compare to Terraform output before allowing STS. The fixture workflows checkout source, use generated publish/preview workflow/composite (full sealed SHA) and official Action pins; admin uses app-deploy/registry Actions. Record the job summary executed version and STS ARN; do not rely on bootstrap version. Required owner review of each environment dispatch precedes credentials.
 
 ```sh
-terraform -chdir="$AWS_ROOT" init -lockfile=readonly
-terraform -chdir="$AWS_ROOT" plan -out="$E/aws-create.plan" -var-file="$E/aws-proof.tfvars"
-terraform -chdir="$AWS_ROOT" show -json "$E/aws-create.plan" > "$E/aws-create-plan.json"
-shasum -a 256 "$E/aws-create.plan"
+"$H/commands.sh" external --manifest "$E/manifest.json" --command 'terraform -chdir="$AWS_ROOT" init -lockfile=readonly'
+"$H/commands.sh" external --manifest "$E/manifest.json" --command 'terraform -chdir="$AWS_ROOT" plan -out="$E/aws-create.plan" -var-file="$E/aws-proof.tfvars"'
+"$H/commands.sh" external --manifest "$E/manifest.json" --command 'terraform -chdir="$AWS_ROOT" show -json "$E/aws-create.plan" > "$E/aws-create-plan.json"'
+"$H/commands.sh" external --manifest "$E/manifest.json" --command 'shasum -a 256 "$E/aws-create.plan"'
 # STOP: owner accepts this exact resource list and plan hash; no previous saved plan reused.
-terraform -chdir="$AWS_ROOT" apply "$E/aws-create.plan"
-terraform -chdir="$AWS_ROOT" output -json > "$E/aws-outputs.json"
-gh workflow run proof.yml --repo artifact-pages/provider-proof-20261018 --ref main -f case=bootstrap-admin
-gh workflow run proof.yml --repo artifact-pages/provider-proof-20261018 --ref main -f case=bootstrap-site-a
+"$H/commands.sh" external --manifest "$E/manifest.json" --command 'terraform -chdir="$AWS_ROOT" apply "$E/aws-create.plan"'
+"$H/commands.sh" external --manifest "$E/manifest.json" --command 'terraform -chdir="$AWS_ROOT" output -json > "$E/aws-outputs.json"'
+"$H/commands.sh" external --manifest "$E/manifest.json" --command 'gh workflow run proof.yml --repo artifact-pages/provider-proof-20261018 --ref main -f case=bootstrap-admin'
+"$H/commands.sh" external --manifest "$E/manifest.json" --command 'gh workflow run proof.yml --repo artifact-pages/provider-proof-20261018 --ref main -f case=bootstrap-site-a'
 ```
 
 Expected resource list consists solely of one new S3 bucket/configuration/lifecycle/error object, one CloudFront distribution/OAC/function/cache/header policies, one admin and three satellite roles/policies and module guards, plus the test-only operator role/policy specified above. No replacements/changes of existing resources, no OIDC provider management, backend changes, DNS/ACM/WAF or unexpected costs. Full concrete addresses/count are reviewed from this fresh plan, not guessed from the older 22/25-resource deployments. A failure leaves state/logs protected; re-plan remaining delta and obtain approval before a recovery apply.
@@ -176,13 +180,13 @@ Synthetic fixture includes `nested/index.html`, `nested/readme.md` with inert sc
 Native CLI commands expanded by the sealed harness, from synthetic Git source cwd (config paths absolute):
 
 ```sh
-"$AP" registry sync --config "$CONFIG" --dry-run --format json
-"$AP" registry sync --config "$CONFIG" --format json
-"$AP" site sync --config "$CONFIG" --site proof-a-20261018 --source sites/a --dry-run --format json
-"$AP" site sync --config "$CONFIG" --site proof-a-20261018 --source sites/a --format json
-"$AP" preview publish --config "$CONFIG" --site proof-a-20261018 --source sites/a --head "$PREVIEW_HEAD_SHA" --default-ref "$PREVIEW_DEFAULT_REF" --dry-run --format json
-"$AP" preview publish --config "$CONFIG" --site proof-a-20261018 --source sites/a --head "$PREVIEW_HEAD_SHA" --default-ref "$PREVIEW_DEFAULT_REF" --format json
-curl --fail --silent --show-error --dump-header "$E/index.headers" "$BASE/_indexes/proof-a-20261018/index.json" --output "$E/index.body"
+"$H/commands.sh" external --manifest "$E/manifest.json" --command '"$AP" registry sync --config "$CONFIG" --dry-run --format json'
+"$H/commands.sh" external --manifest "$E/manifest.json" --command '"$AP" registry sync --config "$CONFIG" --format json'
+"$H/commands.sh" external --manifest "$E/manifest.json" --command '"$AP" site sync --config "$CONFIG" --site proof-a-20261018 --source sites/a --dry-run --format json'
+"$H/commands.sh" external --manifest "$E/manifest.json" --command '"$AP" site sync --config "$CONFIG" --site proof-a-20261018 --source sites/a --format json'
+"$H/commands.sh" external --manifest "$E/manifest.json" --command '"$AP" preview publish --config "$CONFIG" --site proof-a-20261018 --source sites/a --head "$PREVIEW_HEAD_SHA" --default-ref "$PREVIEW_DEFAULT_REF" --dry-run --format json'
+"$H/commands.sh" external --manifest "$E/manifest.json" --command '"$AP" preview publish --config "$CONFIG" --site proof-a-20261018 --source sites/a --head "$PREVIEW_HEAD_SHA" --default-ref "$PREVIEW_DEFAULT_REF" --format json'
+"$H/commands.sh" external --manifest "$E/manifest.json" --command 'curl --fail --silent --show-error --dump-header "$E/index.headers" "$BASE/_indexes/proof-a-20261018/index.json" --output "$E/index.body"'
 ```
 
 Preview source is the sealed non-main branch/commit with explicit registered repository identity. Set `PREVIEW_HEAD_SHA` to the full sealed head SHA and `PREVIEW_DEFAULT_REF=refs/heads/main` in the synthetic repository, pin its resolved main SHA in the manifest, and verify both plus merge-base before every invocation; do not rely on nonexistent `origin/HEAD`. The preview is manual unless a hosted PR is explicitly in the fixture manifest. Authentic PR return-link provenance is not claimed from a synthetic local Git fixture. Use a fresh Playwright Chromium profile for initial matrix, a retained profile for mutable/removed/warm app cases, at the existing approved egress only. Record browser version/egress; real-device or alternate-egress checks require separate owner participation and approval and are not authorized by A1–A9. Before each write save/approve dry-run changes; **all** registry configs retain every pre-existing site. A6 proof capabilities cannot mutate lifecycle. The exact temporary Cloudflare life-prefix rule is a separate A8-short lifecycle-owner transaction, even when it is scheduled during A6; if ownership, current state or preservation-safe plans cannot be established, stop for a new review.
@@ -197,7 +201,7 @@ P8 commands (same on each target): deploy verified web A from `web-a.yaml`, warm
 | --- | --- |
 | A4 inventory; A5 create; A8 final destroy | Owner-authenticated `artifact-pages-verify` SSO Terraform/operator identity; inventory may read the explicitly preserved stack, but mutation plans contain only new proof resources. |
 | P1/P2 AWS access boundaries/bootstrap; P3/P8 AWS publication; P7 successful reference-role update/unregister/invalidation | Hosted job assumes the exact new admin/satellite OIDC role appropriate to that operation; no SSO fallback. |
-| P4/P5/P6 and P7 local injected-failure runs, `go test`, `TestAWSProductionBackendSmoke`, local `lock inspect/recover` and retry commands | SSO is used only by the parent credential loader to assume `ap-proof-20261018-test-operator` with the mandatory inline session policy below. Child processes receive only that short-lived session; these results are operator-session evidence. P7 additionally repeats the converged success path in hosted OIDC jobs for its reference-role claim. |
+| P4/P5/P6 and P7 local injected-failure runs, `go test`, `TestAWSProductionBackendSmoke`, local `lock inspect/recover` and retry commands | The broker holds short-lived sessions; children receive non-provider placeholder credentials. These local results are operator-session evidence. P7 additionally repeats the converged success path in hosted OIDC jobs for its reference-role claim. |
 | P9 AWS HEAD/list observations and final reconciliation | Proof-only operator session for observations, hosted admin OIDC for ordinary reconciliation while fixture remains public/active; final infrastructure teardown uses the separate SSO Terraform identity. |
 | P10 future local AWS gzip reads/writes | Same proof-only operator session, regenerated against the approved recreated stack if needed; any hosted Action claim uses its pinned new OIDC workflow. |
 | Cloudflare cases | Inventoried verify-only scoped R2 children/registry reader and verify-zone purge token, as specified above; no AWS SSO/OIDC credentials. |
@@ -210,7 +214,9 @@ Inventory and preservation use separate read-only capabilities for the explicitl
 
 Cloudflare lifecycle addition and restoration are dedicated A8-short operations, including when setup is scheduled during A6. They use the existing lifecycle owner/state, fresh reviewed plans and full preservation-checked API readback. A6 alone grants no lifecycle mutation. Necessary existing-backend state/lock writes are confined to this reviewed lifecycle transaction.
 
-Request authorization precedes credential use in guarded clients. Released subprocesses require sealed inputs, isolated credentials and enforcing containment appropriate to their context; the harness distinguishes these controls from internal pre-sign interception. Unknown operations, targets, drift or unenforceable execution paths fail closed. The current `commands.sh external` path blocks unmodified released CLI/Terraform/GitHub subprocesses because no request-level broker is implemented here; passing config hashes and a narrowed IAM policy is not claimed as wire-level interception. Do not replace this stop with a direct command.
+Request authorization precedes credential use in guarded clients. The real Fetch adapter sets `redirect: 'manual'`; the supervised request path rejects upstream redirect statuses before returning a response or forwarding credentials to another destination. A retry starts from the original operation, ignores any `response.retryOperation`, and preserves its target, method, semantic headers (including conditions) and body bytes. It reauthorizes and charges every attempt; signing timestamps and signatures may change. Automatic retries default to zero and are limited to explicitly supported read operations, so no write is presumed safe to retry.
+
+On `guard`, phase and `external` paths, validate inherited environment before loading a capability, inspecting seals or doing credential-capable work. Offline sealing remains usable independently. A future launcher must also validate the separately constructed child environment immediately before spawn: parent environment checks reject inherited credentials and context overrides, while child checks verify the approved placeholder and tool settings. Released subprocesses require sealed inputs, isolated credentials and enforcing containment appropriate to their context; the harness distinguishes these controls from internal pre-sign interception. Unknown operations, targets, drift or unenforceable execution paths fail closed. The current `commands.sh external` path blocks unmodified released CLI/Terraform/GitHub subprocesses because no request-level broker is implemented here; passing config hashes and a narrowed IAM policy is not claimed as wire-level interception. Do not replace this stop with a direct command.
 
 The local fake suite attempts S3 GET/PUT/DELETE against `artifact-pages-231136241959-us-east-1` and invalidation against `ECFTIR5GVPQDF` from proof capabilities; every request fails with zero credential-loader calls and zero outbound requests. It also tests malicious configuration, smoke-test bucket override, the sealed proof-bucket/distribution positive controls, and role/session-policy exclusion of the preserved ARNs. These are in-process containment tests; no live probe targets the preserved stack.
 
@@ -220,10 +226,10 @@ The local fake suite attempts S3 GET/PUT/DELETE against `artifact-pages-23113624
 
 ```sh
 ARTIFACT_PAGES_PROOF_MANIFEST="$E/local-test/manifest.json" ARTIFACT_PAGES_PROOF_CASE=P4 go test ./scripts/provider-proof-go -run '^TestCoordinatedProviderProof$' -count=1 -timeout=20m
-"$AP" lock inspect --config "$CONFIG" --site proof-a-20261018 --format json > "$E/lock-observed.json"
-"$AP" lock recover --config "$CONFIG" --site proof-a-20261018 --observed-etag "$OBSERVED_ETAG" --format json
-"$AP" site sync --config "$CONFIG" --site proof-a-20261018 --source sites/a --reconcile --dry-run --format json
-"$AP" site sync --config "$CONFIG" --site proof-a-20261018 --source sites/a --reconcile --format json
+"$H/commands.sh" external --manifest "$E/manifest.json" --command '"$AP" lock inspect --config "$CONFIG" --site proof-a-20261018 --format json > "$E/lock-observed.json"'
+"$H/commands.sh" external --manifest "$E/manifest.json" --command '"$AP" lock recover --config "$CONFIG" --site proof-a-20261018 --observed-etag "$OBSERVED_ETAG" --format json'
+"$H/commands.sh" external --manifest "$E/manifest.json" --command '"$AP" site sync --config "$CONFIG" --site proof-a-20261018 --source sites/a --reconcile --dry-run --format json'
+"$H/commands.sh" external --manifest "$E/manifest.json" --command '"$AP" site sync --config "$CONFIG" --site proof-a-20261018 --source sites/a --reconcile --format json'
 ```
 
 Run P4–P7 serially by case/provider; within a scenario only the designated competing processes overlap. AWS CAS can reuse the existing opt-in `TestAWSProductionBackendSmoke` with its exact environment/confirmation contract in [aws_live_smoke_test.go](../../../cli/internal/publisher/aws_live_smoke_test.go); it cleans **all versions/delete markers** in its random key prefix and needs the authorized test operator's version cleanup privileges, not satellite permission broadening. The existing preview-flow smoke remaps lock/catalog to a random namespace and explicitly excludes interruption/lock-loss; it cannot substitute for actual CLI cases here.
@@ -241,7 +247,7 @@ Required fault schedule:
 
 Never recover an active unknown lock. Stop known child processes, capture ETag directly from `lock inspect`, require owner approval A7 for that named recovery, and use that exact ETag; mismatch stops and re-inspects. No unconditional delete/free-lock overwrite. SIGKILL stage does not authorize continuing after an unexplained owner change.
 
-P7 freshness measurement: canonical URLs without cache-busting query, GET every 5 s for <=5 minutes per transition, <=60 probes per URL; save Date/Age/ETag/Cache-Control/Vary/Content-Encoding/cache result. Record observed interval, not a fabricated global SLA. CloudFront await `aws cloudfront wait invalidation-completed --distribution-id "$DIST" --id "$INVALIDATION"`; stop if 15-minute waiter budget exceeded. Assert actual origin state via authenticated reads and complete lists. After accepted invalidation, failure to converge within the test's 5-minute observation bound is a failed/unfinished sample requiring investigation, not proof of a new documented product guarantee. Only the hosted AWS operations in the identity table establish reference-role evidence through the new OIDC roles; local fault/recovery runs use the proof-only SSO-derived session and are labeled separately. Cloudflare operations use verify-only scoped identities/purge token.
+P7 freshness measurement: canonical URLs without cache-busting query, GET every 5 s for <=5 minutes per transition, <=60 probes per URL; save Date/Age/ETag/Cache-Control/Vary/Content-Encoding/cache result. Record observed interval, not a fabricated global SLA. Wait through `"$H/commands.sh" external --manifest "$E/manifest.json" --command 'aws cloudfront wait invalidation-completed --distribution-id "$DIST" --id "$INVALIDATION"'`; stop if 15-minute waiter budget is exceeded. Assert actual origin state via authenticated reads and complete lists. After accepted invalidation, failure to converge within the test's 5-minute observation bound is a failed/unfinished sample requiring investigation, not proof of a new documented product guarantee. Only the hosted AWS operations in the identity table establish reference-role evidence through the new OIDC roles; local fault/recovery runs use the proof-only SSO-derived session and are labeled separately. Cloudflare operations use verify-only scoped identities/purge token.
 
 ### Sequencing (A8-short and A9)
 
@@ -312,12 +318,12 @@ Manual deletion begins only after the observation’s completion/censor timestam
 ### Gzip follow-up (P10; A9, blocked until release)
 
 ```sh
-aws s3api head-object --bucket "$BUCKET" --key "_indexes/$SITE/index.json" > "$E/gzip-index-head.json"
-aws s3api get-object --bucket "$BUCKET" --key "_indexes/$SITE/index.json" "$E/gzip-index.raw" > "$E/gzip-index-get.json"
-gzip -t "$E/gzip-index.raw"
-gzip -dc "$E/gzip-index.raw" > "$E/gzip-index.decoded.json"
-curl --fail --silent --show-error -H 'Accept-Encoding: gzip' --dump-header "$E/cdn-gzip.headers" "$BASE/_indexes/$SITE/index.json" --output "$E/cdn-gzip.raw"
-curl --fail --silent --show-error --compressed --dump-header "$E/cdn-decoded.headers" "$BASE/_indexes/$SITE/index.json" --output "$E/cdn-decoded.json"
+"$H/commands.sh" external --manifest "$E/manifest.json" --command 'aws s3api head-object --bucket "$BUCKET" --key "_indexes/$SITE/index.json" > "$E/gzip-index-head.json"'
+"$H/commands.sh" external --manifest "$E/manifest.json" --command 'aws s3api get-object --bucket "$BUCKET" --key "_indexes/$SITE/index.json" "$E/gzip-index.raw" > "$E/gzip-index-get.json"'
+"$H/commands.sh" external --manifest "$E/manifest.json" --command 'gzip -t "$E/gzip-index.raw"'
+"$H/commands.sh" external --manifest "$E/manifest.json" --command 'gzip -dc "$E/gzip-index.raw" > "$E/gzip-index.decoded.json"'
+"$H/commands.sh" external --manifest "$E/manifest.json" --command 'curl --fail --silent --show-error -H '\''Accept-Encoding: gzip'\'' --dump-header "$E/cdn-gzip.headers" "$BASE/_indexes/$SITE/index.json" --output "$E/cdn-gzip.raw"'
+"$H/commands.sh" external --manifest "$E/manifest.json" --command 'curl --fail --silent --show-error --compressed --dump-header "$E/cdn-decoded.headers" "$BASE/_indexes/$SITE/index.json" --output "$E/cdn-decoded.json"'
 ```
 
 Repeat for the exact search manifest key emitted by the builder (freeze it in manifest, do not invent a key), small and large decoded fixtures, cold first URL and same-URL warm reads before/after an update. No `--compressed` for raw origin/hash evidence. Check Content-Type application/json, Content-Encoding gzip, inline disposition/cache, stored length/hash and decoded JSON equality; gzip concatenation/corruption constraints belong to local acceptance. Opaque search pack encoding/hash contract and source artifact bytes remain unchanged. Record CDN representation separately if it transforms compression. Browser JSON/full-text reads must work at unchanged URLs. A failed timing threshold is reported; no deadline or throughput policy changed. Supported writer rollback is >=0.5.0 with the encoding policy, content reverted by compatible writer; independent web rollback remains allowed. Never delete control state to downgrade. Full pre-0.5 projection/control restore is exceptional and needs a new owner recovery plan.
@@ -346,9 +352,9 @@ All references elsewhere to seven days of A8 observation or nine days of retaine
 
 ## Ordered host runbook
 
-These phases are for the **main Claude session on the host**. Codex’s sandbox is not the execution environment: it cannot provide the required port binding, reliable GitHub API access or operator credential access.
+These phases are for the **main Claude session on the host**. Codex’s sandbox is not the execution environment: it cannot provide the required port binding, reliable GitHub API access or operator credential access. The host supervises Linux containers under Docker Desktop on the Mac; record host and container details separately so local container execution is not described as macOS execution.
 
-The local `proof.mjs`, `commands.sh`, chained seals, guarded transport and `TestCoordinatedProviderProof` are checked in and covered by fake-transport tests. These commands validate scope and stop before external execution because an enforcing provider broker is not part of this change. The runbook below remains the owner-reviewed provider procedure; do not invoke its direct AWS/Cloudflare/Terraform/GitHub commands from this worktree until the broker is implemented, sealed and reviewed.
+The local `proof.mjs`, `commands.sh`, chained seals, guarded transport and `TestCoordinatedProviderProof` are checked in and covered by fake-transport tests. Harness commands go through `commands.sh run`; all other command payloads go through `commands.sh external`, which currently validates inherited environment and stops before execution because an enforcing provider broker is not part of this change. Do not bypass that launcher. The static boundary regression checks only direct dependencies from `proof.mjs` and `policy.mjs`: neither may import, re-export, dynamically import or `require` either `child_process` spelling. This is not a transitive dependency claim: `seals.mjs` launches Git, and SSH approval verification may launch `ssh-keygen` with a narrowly specified verification command.
 
 Use the plan’s protected `$E`, `$H`, `$AWS_ROOT`, `$CF_ROOT` and verified binary paths. The host loader supplies credentials privately; never print credential files or use unrestricted SSO credentials in test children.
 
@@ -357,7 +363,7 @@ Use the plan’s protected `$E`, `$H`, `$AWS_ROOT`, `$CF_ROOT` and verified bina
    Complete the reviewed harness, host-side local/fake tests, zero-outbound containment tests, exact phase commands and approval manifest.
 
    ```sh
-   node "$H/proof.mjs" seal --manifest "$E/manifest.json" --offline
+   "$H/commands.sh" run seal --manifest "$E/manifest.json" --offline
    ```
 
    **GO:** no value required by the next step is unresolved; typed unbound identifiers cannot be request targets; cleanup branches and deadlines are tested.
@@ -369,7 +375,7 @@ Use the plan’s protected `$E`, `$H`, `$AWS_ROOT`, `$CF_ROOT` and verified bina
 2. **A4 — inventory on the host.**
 
    ```sh
-   node "$H/proof.mjs" inventory --manifest "$E/manifest.json" --approval A4
+   "$H/commands.sh" run inventory --manifest "$E/manifest.json" --approval A4
    ```
 
    Verify AWS account `231136241959`, preserved distribution `ECFTIR5GVPQDF`, Cloudflare verify account `21a0acb78621cc00cfa655a276d77b74`, current lifecycle ownership, name availability, tooling, pins, billing and the Cloudflare freeze.
@@ -381,10 +387,10 @@ Use the plan’s protected `$E`, `$H`, `$AWS_ROOT`, `$CF_ROOT` and verified bina
 3. **A5 — new AWS stack, baseline proof and early life seed.**
 
    ```sh
-   node "$H/proof.mjs" bootstrap-aws --manifest "$E/manifest.json" --approval A5
-   node "$H/proof.mjs" delivery --provider aws --cases P1,P3,P8 \
+   "$H/commands.sh" run bootstrap-aws --manifest "$E/manifest.json" --approval A5
+   "$H/commands.sh" run delivery --provider aws --cases P1,P3,P8 \
      --manifest "$E/manifest.json" --approval A5
-   node "$H/proof.mjs" lifecycle --provider aws --setup \
+   "$H/commands.sh" run lifecycle --provider aws --setup \
      --manifest "$E/manifest.json" --approval A8
    ```
 
@@ -393,9 +399,9 @@ Use the plan’s protected `$E`, `$H`, `$AWS_ROOT`, `$CF_ROOT` and verified bina
 4. **A6 — Cloudflare baseline proof and early life seed.**
 
    ```sh
-   node "$H/proof.mjs" delivery --provider cloudflare --cases P1,P3,P8 \
+   "$H/commands.sh" run delivery --provider cloudflare --cases P1,P3,P8 \
      --manifest "$E/manifest.json" --approval A6
-   node "$H/proof.mjs" lifecycle --provider cloudflare --setup \
+   "$H/commands.sh" run lifecycle --provider cloudflare --setup \
      --manifest "$E/manifest.json" --approval A8
    ```
 
@@ -408,9 +414,9 @@ Use the plan’s protected `$E`, `$H`, `$AWS_ROOT`, `$CF_ROOT` and verified bina
 5. **A7 — controlled failures, then the release-readiness gate.**
 
    ```sh
-   node "$H/proof.mjs" failures --provider aws --cases P4,P5,P6,P7 \
+   "$H/commands.sh" run failures --provider aws --cases P4,P5,P6,P7 \
      --manifest "$E/manifest.json" --approval A7
-   node "$H/proof.mjs" failures --provider cloudflare --cases P4,P5,P6,P7 \
+   "$H/commands.sh" run failures --provider cloudflare --cases P4,P5,P6,P7 \
      --manifest "$E/manifest.json" --approval A7
    ```
 
@@ -419,7 +425,7 @@ Use the plan’s protected `$E`, `$H`, `$AWS_ROOT`, `$CF_ROOT` and verified bina
    At completion, record A9 ready/not-ready. **If not ready, record censor/not-run outcomes and go directly to teardown.** Otherwise:
 
    ```sh
-   node "$H/proof.mjs" cleanup --phase post-a7 \
+   "$H/commands.sh" run cleanup --phase post-a7 \
      --manifest "$E/manifest.json" --approval A7
    ```
 
@@ -428,18 +434,18 @@ Use the plan’s protected `$E`, `$H`, `$AWS_ROOT`, `$CF_ROOT` and verified bina
 6. **A8-short — finish bounded observation and reconciliation.**
 
    ```sh
-   node "$H/proof.mjs" lifecycle --provider aws --observe-only \
+   "$H/commands.sh" run lifecycle --provider aws --observe-only \
      --manifest "$E/manifest.json" --approval A8
-   node "$H/proof.mjs" lifecycle --provider cloudflare --observe-only \
+   "$H/commands.sh" run lifecycle --provider cloudflare --observe-only \
      --manifest "$E/manifest.json" --approval A8
    ```
 
    Run observers concurrently under the host supervisor; each performs the bounded three-hour polling schedule.
 
    ```sh
-   node "$H/proof.mjs" lifecycle --provider aws --reconcile \
+   "$H/commands.sh" run lifecycle --provider aws --reconcile \
      --manifest "$E/manifest.json" --approval A8
-   node "$H/proof.mjs" lifecycle --provider cloudflare --reconcile \
+   "$H/commands.sh" run lifecycle --provider cloudflare --reconcile \
      --manifest "$E/manifest.json" --approval A8
    ```
 
@@ -448,8 +454,8 @@ Use the plan’s protected `$E`, `$H`, `$AWS_ROOT`, `$CF_ROOT` and verified bina
 7. **A9 — released gzip lane on the retained AWS stack.**
 
    ```sh
-   node "$H/proof.mjs" seal --manifest "$E/gzip-manifest.json" --offline
-   node "$H/proof.mjs" gzip --manifest "$E/gzip-manifest.json" --approval A9
+   "$H/commands.sh" run seal --manifest "$E/gzip-manifest.json" --offline
+   "$H/commands.sh" run gzip --manifest "$E/gzip-manifest.json" --approval A9
    ```
 
    **GO:** actual released pins reviewed, full pre-migration snapshot captured, containment regenerated, and life observation closed. Require raw-origin gzip/hash checks, decoded JSON equality, cold/warm CDN and browser reads, migration/no-op/repair/recovery checks, old-writer rejection and neighbor preservation. Observe the one-hour/$5 ceiling.
@@ -457,20 +463,18 @@ Use the plan’s protected `$E`, `$H`, `$AWS_ROOT`, `$CF_ROOT` and verified bina
 8. **Immediate teardown — normal and early-exit branches.**
 
    ```sh
-   node "$H/proof.mjs" cleanup --phase final-a8 \
+   "$H/commands.sh" run cleanup --phase final-a8 \
      --manifest "$E/manifest.json" --approval A8
    ```
 
    The revised command must require recorded A8 outcomes and A9 completed/not-run status, use the compatible writer, restore Cloudflare lifecycle, and pause before AWS destruction:
 
    ```sh
-   terraform -chdir="$AWS_ROOT" plan -destroy \
-     -out="$E/aws-destroy.plan" -var-file="$E/aws-proof.tfvars"
-   terraform -chdir="$AWS_ROOT" show -json "$E/aws-destroy.plan" \
-     > "$E/aws-destroy-plan.json"
-   shasum -a 256 "$E/aws-destroy.plan"
+   "$H/commands.sh" external --manifest "$E/manifest.json" --command 'terraform -chdir="$AWS_ROOT" plan -destroy -out="$E/aws-destroy.plan" -var-file="$E/aws-proof.tfvars"'
+   "$H/commands.sh" external --manifest "$E/manifest.json" --command 'terraform -chdir="$AWS_ROOT" show -json "$E/aws-destroy.plan" > "$E/aws-destroy-plan.json"'
+   "$H/commands.sh" external --manifest "$E/manifest.json" --command 'shasum -a 256 "$E/aws-destroy.plan"'
    # STOP: owner reviews exact addresses and this hash.
-   terraform -chdir="$AWS_ROOT" apply "$E/aws-destroy.plan"
+   "$H/commands.sh" external --manifest "$E/manifest.json" --command 'terraform -chdir="$AWS_ROOT" apply "$E/aws-destroy.plan"'
    ```
 
    **Owner present:** fresh destroy-plan acceptance. Finish with absent-resource checks, preserved-resource comparisons and the sanitized evidence/cost report.
@@ -480,9 +484,9 @@ Use the plan’s protected `$E`, `$H`, `$AWS_ROOT`, `$CF_ROOT` and verified bina
 - A1 — Not approved. Two IMP-64 package guard PRs/comments/closures and branch cleanup; <=45 min, <=$2; blast radius: test branches/PRs in the two generated module repos only, no tags/settings.
 - A2 — Not approved. IMP-73 public fixture preparation, registry PR and caller-environment proof including owner deployment review; <=90 min, <=$3; blast radius: two named fixture repos, dummy secrets, branches/PRs and verification environment only.
 - A3 — Not approved. IMP-73 private/private omitted-environment proof and private inert retention; <=45 min, <=$2; blast radius: visibility and repo-local Actions access/dummy secrets of the same two fixture repos only.
-- A4 — Approved 2026-10-18. Provider inventory, target/pin/tool-version/billing checks and read probes; <=30 min, <=$1; blast radius: read-only verify accounts/environments and public release/repository metadata, no production writes.
-- A5 — Approved 2026-10-18. Fresh AWS proof stack, proof-only operator role/session policy, custom-prefix OIDC fixture, bootstrap/delivery and warm web upgrade/rollback; <=4 h, <=$5; blast radius: new named AWS resources and provider-proof fixture repo, including final private visibility/workflow disablement after A8; final stack destroy is authorized by A8 only.
-- A6 — Approved 2026-10-18. Cloudflare verify disposable sites/scoped identities, delivery and warm web upgrade/rollback with restoration; <=2 h, <=$2; blast radius: artifact-pages.stream verify bucket/app and four proof sites only, no zone-policy or production changes.
-- A7 — Approved 2026-10-18. Both-provider races, controlled failures, guarded recovery, origin reconciliation and invalidation retries; <=4 h, <=$6; blast radius: approved proof sites/control records and verify-only cache invalidations, no existing neighbor writes.
-- A8-short — Approved 2026-10-18. One-day natural lifecycle experiment, final life-site cleanup and AWS proof-stack destroy after observation ends or is censored, with fresh destroy-plan hash review; <=48 h after latest eligibility and <=108 h from AWS creation, <=1 h operator time plus <=60 min teardown within the 120-hour/five-day retention cap, <=$1; blast radius: new life-site objects on both proof targets and all A5-created AWS resources only; no retained experiment or policy changes except the exact temporary Cloudflare life-prefix rule addition and restoration described above.
-- A9 — Approved after release, 2026-10-18. Post-ISSUE-112 released-pin amendment and AWS gzip delivery/migration proof; <=1 h, <=$5; blast radius: disposable AWS proof sites only; blocked until compatible CLI/Actions ship, recreation or exceptional downgrade needs fresh approval.
+- A4 — Approved 2026-10-18. Provider inventory, target/pin/tool-version/billing checks and read probes; <=30 min, <=$1; blast radius: read-only verify accounts/environments and public release/repository metadata, no production writes. Execution remains blocked until the enforcing broker and the applicable tool path are built, locally verified, sealed and reviewed; this recorded approval does not authorize bypassing that gate.
+- A5 — Approved 2026-10-18. Fresh AWS proof stack, proof-only operator role/session policy, custom-prefix OIDC fixture, bootstrap/delivery and warm web upgrade/rollback; <=4 h, <=$5; blast radius: new named AWS resources and provider-proof fixture repo, including final private visibility/workflow disablement after A8; final stack destroy is authorized by A8 only. Execution remains blocked until the enforcing broker and the applicable tool path are built, locally verified, sealed and reviewed; this recorded approval does not authorize bypassing that gate.
+- A6 — Approved 2026-10-18. Cloudflare verify disposable sites/scoped identities, delivery and warm web upgrade/rollback with restoration; <=2 h, <=$2; blast radius: artifact-pages.stream verify bucket/app and four proof sites only, no zone-policy or production changes. Execution remains blocked until the enforcing broker and the applicable tool path are built, locally verified, sealed and reviewed; this recorded approval does not authorize bypassing that gate.
+- A7 — Approved 2026-10-18. Both-provider races, controlled failures, guarded recovery, origin reconciliation and invalidation retries; <=4 h, <=$6; blast radius: approved proof sites/control records and verify-only cache invalidations, no existing neighbor writes. Execution remains blocked until the enforcing broker and the applicable tool path are built, locally verified, sealed and reviewed; this recorded approval does not authorize bypassing that gate.
+- A8-short — Approved 2026-10-18. One-day natural lifecycle experiment, final life-site cleanup and AWS proof-stack destroy after observation ends or is censored, with fresh destroy-plan hash review; <=48 h after latest eligibility and <=108 h from AWS creation, <=1 h operator time plus <=60 min teardown within the 120-hour/five-day retention cap, <=$1; blast radius: new life-site objects on both proof targets and all A5-created AWS resources only; no retained experiment or policy changes except the exact temporary Cloudflare life-prefix rule addition and restoration described above. Execution remains blocked until the enforcing broker and the applicable tool path are built, locally verified, sealed and reviewed; this recorded approval does not authorize bypassing that gate.
+- A9 — Approved after release, 2026-10-18. Post-ISSUE-112 released-pin amendment and AWS gzip delivery/migration proof; <=1 h, <=$5; blast radius: disposable AWS proof sites only; blocked until compatible CLI/Actions ship, recreation or exceptional downgrade needs fresh approval. Execution remains blocked until the enforcing broker and the applicable tool path are built, locally verified, sealed and reviewed; this recorded approval does not authorize bypassing that gate.

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
-import { readFile, writeFile, realpath } from 'node:fs/promises';
+import { readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { appendSeal, readSealChain, requireActiveSeal, verifyApprovalFile } from './seals.mjs';
+import { attachApproval, prepareApproval } from './approval-helpers.mjs';
+import { appendSeal, requireActiveSeal, verifyApprovalFile } from './seals.mjs';
 import {
   AuthorizationError,
   TARGETS,
@@ -17,19 +17,24 @@ import {
 
 const valueOptions = new Set([
   '--manifest', '--stage', '--artifact', '--provider', '--cases', '--approval', '--path', '--out',
-  '--command', '--operation', '--phase', '--writer-version', '--plan-digest',
+  '--command', '--operation', '--phase', '--writer-version', '--plan-digest', '--expires-at', '--signature', '--payload',
 ]);
 const booleanOptions = new Set(['--offline', '--setup', '--observe-only', '--reconcile', '--plan-only']);
 
 export async function main(argv = process.argv.slice(2), environment = process.env) {
   try {
     const [subcommand, ...rest] = argv;
-    if (!subcommand) throw new Error('USAGE: proof.mjs <seal|inventory|bootstrap-aws|delivery|failures|lifecycle|gzip|cleanup|cloudflare-api-get|guard|external>');
+    if (!subcommand) throw new Error('USAGE: proof.mjs <seal|approval-prepare|approval-attach|inventory|bootstrap-aws|delivery|failures|lifecycle|gzip|cleanup|cloudflare-api-get|guard|external>');
     const args = parseOptions(rest);
     rejectContextOverrides(environment);
     if (subcommand === 'seal') return await commandSeal(args);
+    if (subcommand === 'approval-prepare') return await commandApprovalPrepare(args);
+    if (subcommand === 'approval-attach') return await commandApprovalAttach(args);
     if (subcommand === 'guard') return await commandGuard(args, environment);
-    if (subcommand === 'external') return commandExternal(args);
+    if (subcommand === 'external') {
+      validateChildEnvironment(environment);
+      return commandExternal(args);
+    }
     return await commandPhase(subcommand, args, environment);
   } catch (error) {
     const code = error?.code ?? 'PROOF_HARNESS_ERROR';
@@ -53,8 +58,8 @@ async function commandSeal(args) {
 
 async function commandGuard(args, environment) {
   requireValues(args, ['--manifest', '--command', '--operation']);
-  const { manifest, capability } = await loadCapability(args['--manifest'], args['--command'], args['--approval']);
   validateChildEnvironment(environment);
+  const { manifest, capability } = await loadCapability(args['--manifest'], args['--command'], args['--approval']);
   const operation = JSON.parse(await readFile(args['--operation'], 'utf8'));
   authorizeOperation(capability, operation);
   validateCapsAndExpiry(manifest, manifest.approvalWindows?.[args['--approval']] ?? { expiresAt: manifest.scopeExpiresAt }, manifest.usage);
@@ -67,8 +72,8 @@ async function commandPhase(subcommand, args, environment) {
   const { command, approval } = commandFor(subcommand, args);
   if (approval && args['--approval'] !== approval) throw new AuthorizationError('APPROVAL_ID_MISMATCH');
   if (args['--approval'] && args['--approval'] !== approval) throw new AuthorizationError('APPROVAL_ID_MISMATCH');
-  const { manifest, capability } = await loadCapability(args['--manifest'], command, args['--approval']);
   validateChildEnvironment(environment);
+  const { manifest, capability } = await loadCapability(args['--manifest'], command, args['--approval']);
   validateCommandSpecificArgs(subcommand, args, manifest);
   if (subcommand === 'cleanup') {
     validateCleanupState(manifest, args['--phase'], { writerVersion: args['--writer-version'] ?? manifest.cleanup?.writerVersion });
@@ -86,21 +91,66 @@ function commandExternal(args) {
   throw new AuthorizationError('UNMODIFIED_SUBPROCESS_BLOCKED_REQUIRES_ENFORCING_BROKER');
 }
 
+async function commandApprovalPrepare(args) {
+  requireValues(args, ['--manifest', '--approval', '--command', '--expires-at']);
+  const prepared = await prepareApproval({
+    manifestPath: args['--manifest'],
+    approvalId: args['--approval'],
+    command: args['--command'],
+    expiresAt: args['--expires-at'],
+    outPath: args['--out'],
+  });
+  process.stdout.write(`${JSON.stringify({
+    ok: true,
+    approvalId: prepared.record.id,
+    command: prepared.record.command,
+    scopeDigest: prepared.scopeDigest,
+    activeSealDigest: prepared.activeSealDigest,
+    artifactHashes: prepared.artifacts,
+    expiresAt: prepared.record.expiresAt,
+    payloadPath: path.relative(process.cwd(), prepared.payloadPath),
+    payloadDigest: prepared.payloadDigest,
+    signCommand: prepared.signCommand,
+  })}\n`);
+  return 0;
+}
+
+async function commandApprovalAttach(args) {
+  requireValues(args, ['--manifest', '--approval', '--command']);
+  const attached = await attachApproval({
+    manifestPath: args['--manifest'],
+    approvalId: args['--approval'],
+    command: args['--command'],
+    payloadPath: args['--payload'],
+    signaturePath: args['--signature'],
+    outPath: args['--out'],
+  });
+  process.stdout.write(`${JSON.stringify({
+    ok: true,
+    approvalId: args['--approval'],
+    command: args['--command'],
+    sealDigest: attached.sealDigest,
+    payloadDigest: attached.payloadDigest,
+    approvalFile: path.relative(process.cwd(), attached.approvalFile),
+  })}\n`);
+  return 0;
+}
+
 async function loadCapability(manifestPath, command, approvalId) {
   const absolute = path.resolve(manifestPath);
   const manifest = JSON.parse(await readFile(absolute, 'utf8'));
   if (manifest.testOnly === true) throw new AuthorizationError('TEST_FIXTURE_CANNOT_AUTHORIZE_EXTERNAL_WORK');
+  if (Object.hasOwn(manifest, 'reviewKeys')) throw new AuthorizationError('MANIFEST_REVIEW_KEYS_REJECTED');
   const scopeExpiry = Date.parse(manifest.scopeExpiresAt);
   if (!Number.isFinite(scopeExpiry) || scopeExpiry <= Date.now()) throw new AuthorizationError('SCOPE_EXPIRED');
   if ((manifest.collisions?.length ?? 0) > 0 || (manifest.inventory?.collisions?.length ?? 0) > 0) throw new AuthorizationError('RESOURCE_COLLISION');
   if (!manifest.caps || !manifest.usage) throw new AuthorizationError('CAP_USAGE_REQUIRED');
   validateCapsAndExpiry(manifest, manifest.approvalWindows?.[approvalId] ?? { expiresAt: manifest.scopeExpiresAt }, manifest.usage);
-  const chain = await readSealChain({ manifestPath: absolute, verifyArtifacts: true });
-  if (!chain.length) throw new AuthorizationError('UNSEALED_MANIFEST');
   const active = await requireActiveSeal(absolute);
   const verifiedManifest = {
     ...manifest,
     activeSealDigest: active.digest,
+    activeSeal: active,
     sealChainVerified: true,
   };
   let approvalRecord = null;
@@ -191,6 +241,8 @@ function rejectContextOverrides(environment) {
   }
 }
 
-if (import.meta.url === pathToFileURL(path.resolve(process.argv[1] ?? '')).href) {
+const invokedModulePath = process.argv[1] ? await realpath(process.argv[1]).catch(() => null) : null;
+const currentModulePath = await realpath(new URL(import.meta.url)).catch(() => null);
+if (invokedModulePath && currentModulePath && invokedModulePath === currentModulePath) {
   process.exitCode = await main();
 }
