@@ -5,7 +5,7 @@ import type { SearchExcerpt } from '../domain/fulltext-snippets'
 import { folderFacets } from '../domain/search-facets'
 import { scopeHits } from '../domain/search-ranking'
 import { searchTerms } from '../domain/text-highlight'
-import type { SearchAvailability } from '../domain/search-availability'
+import type { DiscoveryErrorDescription, SearchAvailability } from '../domain/search-availability'
 import { Icon } from './Icon'
 import { followInApp } from './spa-link'
 import { describePageTextSearchError, PAGE_TEXT_SEARCH_PAGE_SIZE, type PageTextSearchState } from './usePageTextSearch'
@@ -24,6 +24,7 @@ export function SearchResultsPage({
   pageCount,
   artifacts,
   availability,
+  discoveryError,
   onRetryDiscovery,
   query,
   folder,
@@ -43,6 +44,8 @@ export function SearchResultsPage({
   artifacts: ArtifactIndexEntry[]
   /** `unavailable` is a site published without page text search; `loading` and `discovery-error` mean that is not known yet (ISSUE-113). */
   availability: SearchAvailability
+  /** The guidance when `availability` is `discovery-error`. */
+  discoveryError: DiscoveryErrorDescription
   onRetryDiscovery?: () => void
   /** The query in the URL. */
   query: string
@@ -397,9 +400,9 @@ export function SearchResultsPage({
         ) : availability === 'discovery-error' ? (
           <div className="search-page-main">
             <div className="page-text-search-message search-page-message" role="alert">
-              <strong>Search data could not be loaded</strong>
-              <span>The site&apos;s details could not be loaded. Check your connection. If trying again does not help, reload the page.</span>
-              {onRetryDiscovery ? <button type="button" className="page-text-search-retry" onClick={onRetryDiscovery}>Try again</button> : null}
+              <strong>{discoveryError.title}</strong>
+              <span>{discoveryError.detail}</span>
+              {onRetryDiscovery && discoveryError.retryable ? <button type="button" className="page-text-search-retry" onClick={onRetryDiscovery}>Try again</button> : null}
             </div>
           </div>
         ) : (

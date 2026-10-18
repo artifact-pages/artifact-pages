@@ -27,7 +27,7 @@ import { relatedPages } from '../domain/related-pages'
 import { MatchNavigator } from './MatchNavigator'
 import { SEARCH_PAGE_INPUT_ID, SearchResultsPage } from './SearchResultsPage'
 import { usePageTextSearch } from './usePageTextSearch'
-import { searchAvailability, type DiscoveryStatus } from '../domain/search-availability'
+import { describeDiscoveryError, searchAvailability, type DiscoveryStatus } from '../domain/search-availability'
 import { pageTitle, usePageTitle } from './usePageTitle'
 import { usePageNoindex } from './usePageNoindex'
 import { followInApp } from './spa-link'
@@ -58,6 +58,7 @@ export function ArtifactWorkspace({
   sites,
   sitesLoading,
   siteDiscoveryStatus,
+  siteDiscoveryError,
   onRetryDiscovery,
   navigate,
   themeMode,
@@ -80,6 +81,8 @@ export function ArtifactWorkspace({
   sitesLoading: boolean
   /** Status of the catalog load that carries each site's discovery metadata (and its `fullTextUrl`); default: derived from `sitesLoading`. */
   siteDiscoveryStatus?: DiscoveryStatus
+  /** Why discovery failed; classifies the guidance on the results page. */
+  siteDiscoveryError?: Error
   onRetryDiscovery?: () => void
   navigate: (href: string, options?: { replace?: boolean }) => void
   themeMode: ThemeMode
@@ -1336,6 +1339,7 @@ export function ArtifactWorkspace({
                 pageCount={index.artifacts.length}
                 artifacts={index.artifacts}
                 availability={searchState}
+                discoveryError={describeDiscoveryError(siteDiscoveryError)}
                 onRetryDiscovery={onRetryDiscovery}
                 query={searchRoute.query}
                 folder={searchRoute.folder}

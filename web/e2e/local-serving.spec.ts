@@ -5441,6 +5441,16 @@ test.describe('page text search', () => {
     await page.unrouteAll({ behavior: 'wait' })
   })
 
+  test('an unsupported registry format on the results page gives administrator guidance without a retry (ISSUE-113)', async ({ page }) => {
+    await page.route('**/_indexes/sites.json', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ schemaVersion: 999, sites: [] }) }))
+    await page.goto('/textsearch/_search?q=latency')
+    await expect(page.getByRole('alert')).toContainText('Ask the administrator')
+    await expect(page.getByRole('alert')).not.toContainText('Check your connection')
+    await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(0)
+    await expect(page.getByText('Page text search is not available')).toHaveCount(0)
+    await page.unrouteAll({ behavior: 'wait' })
+  })
+
   test('ArrowDown does not enter the list for an uncommitted query', async ({ page }) => {
     await page.goto('/textsearch/_search?q=latency')
     await expect(status(page)).toHaveText('5 pages contain “latency”')

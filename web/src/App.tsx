@@ -151,6 +151,7 @@ function App() {
       sites={sites.status === 'success' ? sites.data : []}
       sitesLoading={sites.status === 'loading'}
       siteDiscoveryStatus={sites.status}
+      siteDiscoveryError={sites.status === 'error' ? sites.error : undefined}
       retryDiscovery={retryDiscovery}
       navigate={navigate}
       themeMode={themeMode}
@@ -167,6 +168,7 @@ function SitePage({
   sites,
   sitesLoading,
   siteDiscoveryStatus,
+  siteDiscoveryError,
   retryDiscovery,
   pathname,
   search,
@@ -180,6 +182,7 @@ function SitePage({
   sites: SiteCatalogEntry[]
   sitesLoading: boolean
   siteDiscoveryStatus: LoadingState<SiteCatalogEntry[]>['status']
+  siteDiscoveryError?: Error
   retryDiscovery: () => void
   pathname: string
   search: string
@@ -310,6 +313,7 @@ function SitePage({
       index={index}
       fullTextSearch={fullTextSearch}
       siteDiscoveryStatus={siteDiscoveryStatus}
+      siteDiscoveryError={siteDiscoveryError}
       onRetryDiscovery={retryDiscovery}
     />
   )
