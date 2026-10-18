@@ -5411,6 +5411,46 @@ test.describe('page text search', () => {
     expect(requests).toEqual([])
   })
 
+  test('a cold results page waits for site discovery instead of saying search is unavailable (ISSUE-113)', async ({ page }) => {
+    let release: () => void = () => {}
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    await page.route('**/_indexes/textsearch/meta.json', async (route) => {
+      await gate
+      await route.continue()
+    })
+    await page.goto('/textsearch/_search?q=latency')
+    await expect(page.getByRole('status').filter({ hasText: 'Loading search' })).toBeVisible()
+    await expect(page.getByText('Page text search is not available')).toHaveCount(0)
+    await expect(page.getByText('published without page text search')).toHaveCount(0)
+    release()
+    await expect(page.locator('#search-page-input')).toBeVisible()
+    await expect(page.locator('.search-page-result').first()).toBeVisible()
+    await expect(page.getByText('Page text search is not available')).toHaveCount(0)
+    await page.unrouteAll({ behavior: 'wait' })
+  })
+
+  test('a failed discovery on the results page offers a retry instead of saying search is unavailable (ISSUE-113)', async ({ page }) => {
+    let failing = true
+    await page.route('**/_indexes/sites.json', (route) => failing ? route.fulfill({ status: 500, body: 'error' }) : route.fallback())
+    await page.goto('/textsearch/_search?q=latency')
+    await expect(page.getByRole('alert')).toContainText('Search data could not be loaded')
+    await expect(page.getByText('Page text search is not available')).toHaveCount(0)
+    failing = false
+    await page.getByRole('button', { name: 'Try again' }).click()
+    await expect(page.locator('.search-page-result').first()).toBeVisible()
+    await page.unrouteAll({ behavior: 'wait' })
+  })
+
+  test('an unsupported registry format on the results page gives administrator guidance without a retry (ISSUE-113)', async ({ page }) => {
+    await page.route('**/_indexes/sites.json', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ schemaVersion: 999, sites: [] }) }))
+    await page.goto('/textsearch/_search?q=latency')
+    await expect(page.getByRole('alert')).toContainText('Ask the administrator')
+    await expect(page.getByRole('alert')).not.toContainText('Check your connection')
+    await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(0)
+    await expect(page.getByText('Page text search is not available')).toHaveCount(0)
+    await page.unrouteAll({ behavior: 'wait' })
+  })
+
   test('ArrowDown does not enter the list for an uncommitted query', async ({ page }) => {
     await page.goto('/textsearch/_search?q=latency')
     await expect(status(page)).toHaveText('5 pages contain “latency”')

@@ -27,6 +27,7 @@ import { relatedPages } from '../domain/related-pages'
 import { MatchNavigator } from './MatchNavigator'
 import { SEARCH_PAGE_INPUT_ID, SearchResultsPage } from './SearchResultsPage'
 import { usePageTextSearch } from './usePageTextSearch'
+import { describeDiscoveryError, searchAvailability, type DiscoveryStatus } from '../domain/search-availability'
 import { pageTitle, usePageTitle } from './usePageTitle'
 import { usePageNoindex } from './usePageNoindex'
 import { followInApp } from './spa-link'
@@ -56,6 +57,9 @@ export function ArtifactWorkspace({
   hash,
   sites,
   sitesLoading,
+  siteDiscoveryStatus,
+  siteDiscoveryError,
+  onRetryDiscovery,
   navigate,
   themeMode,
   theme,
@@ -75,6 +79,11 @@ export function ArtifactWorkspace({
   hash: string
   sites: SiteCatalogEntry[]
   sitesLoading: boolean
+  /** Status of the catalog load that carries each site's discovery metadata (and its `fullTextUrl`); default: derived from `sitesLoading`. */
+  siteDiscoveryStatus?: DiscoveryStatus
+  /** Why discovery failed; classifies the guidance on the results page. */
+  siteDiscoveryError?: Error
+  onRetryDiscovery?: () => void
   navigate: (href: string, options?: { replace?: boolean }) => void
   themeMode: ThemeMode
   theme: ResolvedTheme
@@ -95,6 +104,8 @@ export function ArtifactWorkspace({
   const [paletteSeed, setPaletteSeed] = useState<string | null>(null)
   const textSearchClient = fullTextSearch?.available ? fullTextSearch : undefined
   const searchRoute = route.kind === 'search' ? route : undefined
+  const discoveryStatus: DiscoveryStatus = siteDiscoveryStatus ?? (sitesLoading ? 'loading' : 'success')
+  const searchState = searchAvailability(discoveryStatus, sites.find(({ site }) => site.id === index.site.id), Boolean(textSearchClient))
   const routeArtifactPath = route.kind === 'site' ? route.artifactPath : undefined
   // The search whose matches the open page highlights (`?q=` on a page route).
   const pageQuery = useMemo(
@@ -1327,7 +1338,9 @@ export function ArtifactWorkspace({
                 siteTitle={index.site.title}
                 pageCount={index.artifacts.length}
                 artifacts={index.artifacts}
-                available={Boolean(textSearchClient)}
+                availability={searchState}
+                discoveryError={describeDiscoveryError(siteDiscoveryError)}
+                onRetryDiscovery={onRetryDiscovery}
                 query={searchRoute.query}
                 folder={searchRoute.folder}
                 state={textSearch.state}

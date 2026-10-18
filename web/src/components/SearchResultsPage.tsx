@@ -5,6 +5,7 @@ import type { SearchExcerpt } from '../domain/fulltext-snippets'
 import { folderFacets } from '../domain/search-facets'
 import { scopeHits } from '../domain/search-ranking'
 import { searchTerms } from '../domain/text-highlight'
+import type { DiscoveryErrorDescription, SearchAvailability } from '../domain/search-availability'
 import { Icon } from './Icon'
 import { followInApp } from './spa-link'
 import { describePageTextSearchError, PAGE_TEXT_SEARCH_PAGE_SIZE, type PageTextSearchState } from './usePageTextSearch'
@@ -22,7 +23,9 @@ export function SearchResultsPage({
   siteTitle,
   pageCount,
   artifacts,
-  available,
+  availability,
+  discoveryError,
+  onRetryDiscovery,
   query,
   folder,
   state,
@@ -39,8 +42,11 @@ export function SearchResultsPage({
   /** Pages in the site, named while searching. */
   pageCount: number
   artifacts: ArtifactIndexEntry[]
-  /** False for a site published without page text search. */
-  available: boolean
+  /** `unavailable` is a site published without page text search; `loading` and `discovery-error` mean that is not known yet (ISSUE-113). */
+  availability: SearchAvailability
+  /** The guidance when `availability` is `discovery-error`. */
+  discoveryError: DiscoveryErrorDescription
+  onRetryDiscovery?: () => void
   /** The query in the URL. */
   query: string
   /** The folder the list is limited to (`in` in the URL); subfolders included. */
@@ -60,6 +66,7 @@ export function SearchResultsPage({
   /** Loads excerpts for result paths of one query and generation. Absent: no excerpts. */
   loadExcerpts?: (query: string, generation: string, paths: readonly string[], signal: AbortSignal) => Promise<ReadonlyMap<string, SearchExcerpt | null>>
 }) {
+  const available = availability === 'available'
   const [draft, setDraft] = useState(query)
   const [composing, setComposing] = useState(false)
   const [active, setActive] = useState(-1)
@@ -386,6 +393,18 @@ export function SearchResultsPage({
               </div>
             </div>
           </>
+        ) : availability === 'loading' ? (
+          <div className="search-page-main" aria-busy="true">
+            <p className="search-page-count" role="status">Loading search…</p>
+          </div>
+        ) : availability === 'discovery-error' ? (
+          <div className="search-page-main">
+            <div className="page-text-search-message search-page-message" role="alert">
+              <strong>{discoveryError.title}</strong>
+              <span>{discoveryError.detail}</span>
+              {onRetryDiscovery && discoveryError.retryable ? <button type="button" className="page-text-search-retry" onClick={onRetryDiscovery}>Try again</button> : null}
+            </div>
+          </div>
         ) : (
           <div className="search-page-main">
             <ErrorMessage error={new FullTextSearchError('unavailable', 'Full-text search is not enabled for this site')} onRetry={() => {}} />
