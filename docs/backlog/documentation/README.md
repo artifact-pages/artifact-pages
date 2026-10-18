@@ -8,7 +8,7 @@ Each ticket is one page (or one structural change). Until 2026-10-01 pages were 
 
 ## Site lineup
 
-Sites are divided by the reader's purpose, not by language. Translations live inside one site (see [`docs/public/sites/AGENTS.md`](../../public/sites/AGENTS.md)).
+Sites are divided by the reader's purpose, not by language. Translations live inside one site; current source and contributor guidance is in the [artifact-pages/docs repository](https://github.com/artifact-pages/docs).
 
 | Site ID | Display name | Reader's purpose | Status |
 | --- | --- | --- | --- |
@@ -68,6 +68,6 @@ Batch of 2026-10-02: DOC-02 (reading-features revision), DOC-04â€“07 and DOC-08â
 These surfaced while planning the sites. They are not yet product issues; file them in [issues](../issues/README.md) if the owner confirms them.
 
 - Registry site `name` and `description` cannot be localized, so a bilingual site shows one language in the picker and palette.
-- One site with `ja/` and `en/` mixes both languages in Browse, Recently updated, and page search. Language filtering is explicitly undecided in `docs/public/sites/AGENTS.md`.
+- One site with `ja/` and `en/` mixes both languages in Browse, Recently updated, and page search. Language filtering was explicitly undecided in the archived contributor guidance for the former monorepo copy.
 - Each site keeps its own copy of the shared CSS and JavaScript. Per-site CSP blocks cross-site asset paths only over plain HTTP; over HTTPS the copies are a convention, not something CSP enforces.
 - From the 2026-10-01 beginner review of the reader (documentation-side, not product issues): the guide pages use smooth scrolling, so a Contents jump to a distant heading takes about one to two seconds and looks unresponsive at first; and the overview page's autoplay palette sample looks identical to the real palette, so a first-time reader may not tell them apart despite the "sample" note.

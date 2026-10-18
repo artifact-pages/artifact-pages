@@ -1,4 +1,4 @@
-/* Git Artifact Pages — ドキュメントサイト共通スタイル（正本は docs/public/shared/assets/。各サイトへは npm run docs:sync-assets で写す）
+/* Git Artifact Pages — docs-site visual fixture. The live source is maintained in artifact-pages/docs.
    色・線・角丸は閲覧アプリ（web/src/styles.css）のトークンに揃えています。
    ライト/ダークは prefers-color-scheme に追従し、<html data-theme="light|dark"> があればそれを優先します
    （閲覧アプリ内では site.js がアプリのテーマを写します）。各トークンは light-dark(ライト, ダーク) です。 */
@@ -597,7 +597,7 @@ td:first-child { white-space: nowrap; font-weight: 600; }
 }
 
 /* ── architecture site ─────────────────────────────
-   docs/public/sites/architecture/ のページだけが使う追加です（<body class="arch">）。
+   architecture site pages use this addition (<body class="arch">).
    既存の規則は変えず、.arch の中でアクセント色を青系に替えてサイトの区別をつけます。
    図（.fig）は狭い画面では枠の中で横にスクロールし、ページ全体は横にはみ出しません。 */
 .arch {

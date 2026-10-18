@@ -35,7 +35,7 @@ Pre-release (0.x, no compatibility promise yet). Released components: the CLI (b
 
 The SPA discovers sites from lightweight metadata, loads only the active site's artifact index, and provides a site picker, recent-artifact home, searchable navigation tree, and command palette. HTML artifacts run in an iframe; Markdown artifacts use a sanitized native reader.
 
-For adoption, publishing and reading, see the published guide at <https://artifact-pages.dev/guide>. Deployment is covered in the [Cloudflare deployment guide](docs/guides/cloudflare-deployment.md). The optional GitHub Actions are documented in the [GitHub Actions guide](docs/guides/github-actions.md). Each Action has its own repository, generated from `actions/<name>/` on that Action's own release and tagged with its own version: [`artifact-pages/publish-action`](https://github.com/artifact-pages/publish-action), [`preview-action`](https://github.com/artifact-pages/preview-action), [`registry-action`](https://github.com/artifact-pages/registry-action) and [`app-deploy-action`](https://github.com/artifact-pages/app-deploy-action). Reference an exact release tag, as the templates do.
+For adoption, publishing and reading, see the published guide at <https://artifact-pages.dev/guide>. The public guide and architecture sources are maintained in the [artifact-pages/docs repository](https://github.com/artifact-pages/docs). Deployment is covered in the [Cloudflare deployment guide](docs/guides/cloudflare-deployment.md). The optional GitHub Actions are documented in the [GitHub Actions guide](docs/guides/github-actions.md). Each Action has its own repository, generated from `actions/<name>/` on that Action's own release and tagged with its own version: [`artifact-pages/publish-action`](https://github.com/artifact-pages/publish-action), [`preview-action`](https://github.com/artifact-pages/preview-action), [`registry-action`](https://github.com/artifact-pages/registry-action) and [`app-deploy-action`](https://github.com/artifact-pages/app-deploy-action). Reference an exact release tag, as the templates do.
 
 To report a vulnerability see [SECURITY.md](SECURITY.md); to contribute see [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -54,7 +54,7 @@ Run the isolated UI design workspace with:
 npm run storybook
 ~~~
 
-Storybook uses the same React components and CSS as the application, with the committed site indexes and artifact fixtures. Site Home uses full-path labels, while the artifact sidebar uses subtle branch guides. The **Product / Workspace** stories cover site home, artifact viewing, light and dark themes, and the collapsed Reader rail. **Navigation** stories cover the site picker and command-palette search modes.
+Storybook uses the same React components and CSS as the application, with the committed site indexes and artifact fixtures. Its synthetic docs-elements example uses the named docs-site fixture assets; the published docs pages are maintained in the external docs repository. Site Home uses full-path labels, while the artifact sidebar uses subtle branch guides. The **Product / Workspace** stories cover site home, artifact viewing, light and dark themes, and the collapsed Reader rail. **Navigation** stories cover the site picker and command-palette search modes.
 
 Create a production build with:
 

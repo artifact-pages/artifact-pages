@@ -31,7 +31,7 @@ sites:
   docs:
     name: Documentation
     repository: acme/docs
-    sourcePath: docs/public
+    sourcePath: docs
 `
 
 const awsConfig = `schemaVersion: 1
@@ -45,7 +45,7 @@ sites:
   docs:
     name: Documentation
     repository: acme/docs
-    sourcePath: docs/public
+    sourcePath: docs
   guide:
     name: Guide
     repository: acme/guide
@@ -332,7 +332,7 @@ func TestGenerationRefusesUnmanagedFilesAndSymlinkEscapesBeforeWriting(t *testin
 func TestConfigAndRepositoryInputsAreExplicitAndSafe(t *testing.T) {
 	t.Run("missing sites mapping", func(t *testing.T) {
 		root := t.TempDir()
-		writeFixture(t, root, strings.Replace(cloudflareConfig, "sites:\n  docs:\n    name: Documentation\n    repository: acme/docs\n    sourcePath: docs/public\n", "", 1), "")
+		writeFixture(t, root, strings.Replace(cloudflareConfig, "sites:\n  docs:\n    name: Documentation\n    repository: acme/docs\n    sourcePath: docs\n", "", 1), "")
 		_, err := runFixture(t, root, "cloudflare", false)
 		if err == nil || !strings.Contains(err.Error(), "include a sites mapping") {
 			t.Fatalf("generation error = %v", err)
@@ -340,7 +340,7 @@ func TestConfigAndRepositoryInputsAreExplicitAndSafe(t *testing.T) {
 	})
 	t.Run("empty sites is accepted", func(t *testing.T) {
 		root := t.TempDir()
-		configText := strings.Replace(cloudflareConfig, "sites:\n  docs:\n    name: Documentation\n    repository: acme/docs\n    sourcePath: docs/public\n", "sites: {}\n", 1)
+		configText := strings.Replace(cloudflareConfig, "sites:\n  docs:\n    name: Documentation\n    repository: acme/docs\n    sourcePath: docs\n", "sites: {}\n", 1)
 		if err := os.WriteFile(filepath.Join(root, "artifact-pages.yaml"), []byte(configText), 0o600); err != nil {
 			t.Fatal(err)
 		}

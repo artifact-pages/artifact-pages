@@ -8,7 +8,7 @@
 
 ## Purpose
 
-Replace the current top-level `en` and `ja` sites with one `guide` site that holds both languages, following [`docs/public/sites/AGENTS.md`](../../public/sites/AGENTS.md), and give the documentation sites a single source for shared CSS and JavaScript.
+Replace the current top-level `en` and `ja` sites with one `guide` site that holds both languages, following the contributor guidance that applied to the former monorepo copy, and give the documentation sites a single source for shared CSS and JavaScript.
 
 ## Scope
 

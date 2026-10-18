@@ -16,7 +16,7 @@ const gzip = (bytes) => gzipSync(bytes, { level: 9 })
 const brotli = (bytes, quality = 5) => brotliCompressSync(bytes, { params: { [constants.BROTLI_PARAM_QUALITY]: quality } })
 const stats = (bytes) => ({ raw: bytes.length, gzip: gzip(bytes).length, brotli5: brotli(bytes).length })
 const extract = (roots) => JSON.parse(execFileSync('go', ['run', './scripts/fulltext-corpus', ...roots], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }))
-const real = extract(['fixtures/storage/_artifacts', 'docs/public/sites/guide'])
+const real = extract(['fixtures/storage/_artifacts'])
 const editorial = extract(['docs'])
 const queries = ['cache', 'retry', 'timeout', '検索', '再試行', 'ＡＰＩ', 'API cache', '本', 'no-such-body-token', 'unique-7', 'foo.bar', '🧪試験', '']
 const expected = (records, query) => {
@@ -51,7 +51,7 @@ const diverse = Array.from({ length: 10000 }, (_, i) => ({
 const clauses = ['監視データを確認する。', '障害の原因を調査する。', '応答時間を測定する。', '再試行の上限を設定する。', '変更履歴を参照する。', '検索結果を共有する。', 'キャッシュの状態を確認する。', '接続先の負荷を調べる。', '復旧手順を実行する。', '担当者に調査を引き継ぐ。', '利用状況を記録する。', '設定値を比較する。']
 const japanese = Array.from({ length: 10000 }, (_, i) => ({ id: `japanese/report-${i}.html`, text: Array.from({ length: 24 }, () => clauses[random() % clauses.length]).join('') }))
 const corpora = [
-  ['real-published', real], ['repository-editorial', editorial],
+  ['committed-artifacts', real], ['repository-editorial', editorial],
   ['repeated-10000', repeated], ['varied-10000', diverse], ['japanese-unsegmented-10000', japanese],
 ]
 const report = { date: '2026-10-01', runtime: process.version, queries, corpora: [] }

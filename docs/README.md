@@ -2,6 +2,8 @@
 
 Start with the [thesis](thesis.md) for the product's purpose, the [specification](specification.md) for its contract, and the [roadmap](roadmap.md) for implementation status. The specification takes precedence over exploratory diagrams and UI studies.
 
+The reader-facing guide and architecture sites are maintained in the [artifact-pages/docs repository](https://github.com/artifact-pages/docs) and served at <https://artifact-pages.dev/guide>.
+
 ## Repository and product architecture
 
 - [Static full-text search core](architecture/fulltext-search.md) — always-on build/publish, callable browser API and versioned format; detailed palette UX deferred.

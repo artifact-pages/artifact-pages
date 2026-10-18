@@ -43,7 +43,7 @@ sites:
     name: English
     description: Product documentation
     repository: artifact-pages/artifact-pages
-    sourcePath: docs/public/sites/en
+    sourcePath: docs/guide/en
   sre:
     name: SRE
     repository: acme/platform
@@ -87,7 +87,7 @@ sites:
   en:
     name: English
     repository: artifact-pages/artifact-pages
-    sourcePath: docs/public/sites/en
+    sourcePath: docs/guide/en
 `)
 	resolved, err = ParseLayers([][]byte{base, local, replacement})
 	if err != nil {
@@ -428,7 +428,7 @@ sites:
     name: English
     description: Public product docs
     repository: artifact-pages/artifact-pages
-    sourcePath: docs/public/sites/en
+    sourcePath: docs/guide/en
 `
 	target := `schemaVersion: 1
 provider: local
