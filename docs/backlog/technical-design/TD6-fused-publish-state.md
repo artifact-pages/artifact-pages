@@ -5,7 +5,7 @@
 - Decided: 2026-10-04
 - Related implementation: [IMP-49](../implementation/IMP-49-fused-publish-state-journal.md)
 - Related verification: [T20](../verification/T20-publish-state-and-candidate.md), [T19](../verification/T19-publish-state-layout-cost.md)
-- Product contract: [Specification §5.3](../../specification.md#per-site-publish-state-and-reconciliation)
+- Product contract: [Specification §5.3](../../specification.md#per-site-sync-state-and-reconciliation)
 
 ## Decision
 
