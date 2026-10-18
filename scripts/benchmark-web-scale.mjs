@@ -7,7 +7,7 @@
 //
 //   env NODE_OPTIONS= npm run benchmark:web-scale -- --counts 1000,5000,10000,50000 --iterations 3
 //
-// Flags: --counts, --iterations, --port (4194), --seed, --regenerate, --skip-build, --profiles
+// Flags: --counts, --iterations, --port (4194), --seed, --regenerate, --skip-build, --generate-only, --profiles
 // (unthrottled,constrained), --only (comma list of measurement groups), --run-dir, --keep.
 // --remote <origin> measures an already published deployment instead of local nginx: no generation, no
 // Docker, sites named bench-<count/1000>k (publish them first with `site sync`; see the report).
@@ -30,6 +30,7 @@ const options = {
   seed: 20261014,
   regenerate: false,
   'skip-build': false,
+  'generate-only': false,
   keep: false,
   profiles: ['unthrottled', 'constrained'],
   only: [],
@@ -317,6 +318,28 @@ function prepareData() {
   }
   writeFileSync(manifestFile, JSON.stringify(report, null, 2))
   return report
+}
+
+function generateSourcesOnly() {
+  rmSync(dataRoot, { recursive: true, force: true })
+  const satellite = path.join(dataRoot, 'satellite')
+  mkdirSync(satellite, { recursive: true })
+  const sites = {}
+  for (const count of options.counts) {
+    const generated = generateSite(count, path.join(satellite, 'sites', siteIdOf(count), 'content'))
+    sites[siteIdOf(count)] = generated
+    log(`${siteIdOf(count)}: wrote ${generated.pages} pages (${generated.files} source files)`)
+  }
+  git(satellite, ['init', '--initial-branch=main'])
+  git(satellite, ['remote', 'add', 'origin', 'https://github.com/example/web-scale-satellite.git'])
+  git(satellite, ['config', 'user.name', 'Web Scale Benchmark'])
+  git(satellite, ['config', 'user.email', 'web-scale@example.invalid'])
+  git(satellite, ['add', '--all'])
+  git(satellite, ['commit', '--quiet', '--message', 'synthetic sites'], {
+    GIT_AUTHOR_DATE: '2026-10-01T00:00:00Z',
+    GIT_COMMITTER_DATE: '2026-10-01T00:00:00Z',
+  })
+  return { counts: options.counts, seed: options.seed, generatorVersion: 2, sites }
 }
 
 /** Build the changed search generation once; the browser suite swaps only its immutable search files. */
@@ -1234,6 +1257,13 @@ function writeSanitizedResults(results) {
 
 async function main() {
   mkdirSync(path.join(labRoot, 'bin'), { recursive: true })
+  if (options['generate-only']) {
+    const prepared = generateSourcesOnly()
+    const target = path.join(dataRoot, 'prepare.json')
+    writeFileSync(target, JSON.stringify(prepared, null, 2) + '\n')
+    log(`Generated source fixtures only in ${path.relative(repository, dataRoot)}`)
+    return
+  }
   if (options.remote) remoteIndexHtml = await (await fetch(`${origin()}/`)).text()
   if (!options['skip-build'] && !options.remote) {
     log('Building the CLI from this checkout and the SPA…')
