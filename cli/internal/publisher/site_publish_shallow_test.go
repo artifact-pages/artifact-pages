@@ -1,6 +1,7 @@
 package publisher
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -8,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/artifact-pages/artifact-pages/cli/internal/indexer"
 )
 
 func shallowGit(t *testing.T, dir string, env []string, args ...string) string {
@@ -157,6 +160,87 @@ func TestPublishSiteFromShallowCloneMatchesFullClone(t *testing.T) {
 	if again := publishFrom(t, shallowCheckout, deployed, false); again.Outcome != "no-op" {
 		t.Fatalf("repeat shallow publish outcome = %q, want no-op", again.Outcome)
 	}
+}
+
+func TestAWSGzipMigrationPreservesPriorAttributionFromShallowCheckout(t *testing.T) {
+	origin := t.TempDir()
+	shallowGit(t, origin, nil, "init", "-q", "-b", "main")
+	shallowGit(t, origin, nil, "config", "user.name", "T")
+	shallowGit(t, origin, nil, "config", "user.email", "t@example.invalid")
+	shallowWrite(t, origin, "docs/artifacts/history.md", "# History\n\nOriginal content.\n")
+	shallowCommitAs(t, origin, "Alice", 1)
+	for day := 2; day <= 8; day++ {
+		shallowWrite(t, origin, "elsewhere/filler.txt", fmt.Sprintf("filler %d", day))
+		shallowCommitAs(t, origin, "Filler", day)
+	}
+
+	backend := newSiteReconcileBackend()
+	seedPublisherRegistry(t, backend.lockMemoryBackend, registeredSREManifest)
+	fullCheckout := cloneRegistered(t, origin, 0)
+	initial := publishFromBackend(t, fullCheckout, backend, false)
+	if initial.Outcome != "synced" {
+		t.Fatalf("initial plain publish outcome = %q", initial.Outcome)
+	}
+	plainObject, _, err := backend.GetObject(t.Context(), "_indexes/sre/index.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var plainIndex indexer.SiteIndex
+	if err := json.Unmarshal(plainObject.Bytes, &plainIndex); err != nil {
+		t.Fatal(err)
+	}
+	if len(plainIndex.Artifacts) != 1 || plainIndex.Artifacts[0].LastCommitter == nil || plainIndex.Artifacts[0].LastCommitter.Name != "Alice" {
+		t.Fatalf("initial attribution = %+v", plainIndex.Artifacts)
+	}
+
+	shallowCheckout := cloneRegistered(t, origin, 1)
+	aws := &awsGeneratedJSONTestBackend{backend}
+	migrated := publishFromBackend(t, shallowCheckout, aws, false)
+	if migrated.Outcome != "synced" {
+		t.Fatalf("AWS shallow migration outcome = %q", migrated.Outcome)
+	}
+	if shallowGit(t, shallowCheckout, nil, "rev-parse", "--is-shallow-repository") != "true" {
+		t.Fatal("migration unexpectedly deepened the shallow checkout")
+	}
+	encoded, _, err := backend.GetObject(t.Context(), "_indexes/sre/index.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if encoded.ContentEncoding != "gzip" {
+		t.Fatalf("migrated index Content-Encoding = %q", encoded.ContentEncoding)
+	}
+	decoded, err := decodeSiteGeneratedJSON(encoded.Bytes, encoded.ContentEncoding)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var migratedIndex indexer.SiteIndex
+	if err := json.Unmarshal(decoded, &migratedIndex); err != nil {
+		t.Fatal(err)
+	}
+	if len(migratedIndex.Artifacts) != 1 || migratedIndex.Artifacts[0].UpdatedAt != plainIndex.Artifacts[0].UpdatedAt ||
+		migratedIndex.Artifacts[0].LastCommitter == nil || migratedIndex.Artifacts[0].LastCommitter.Name != "Alice" {
+		t.Fatalf("migration changed shallow-checkout Git attribution: before=%+v after=%+v", plainIndex.Artifacts, migratedIndex.Artifacts)
+	}
+	if result := publishFromBackend(t, shallowCheckout, aws, false); result.Outcome != "no-op" {
+		t.Fatalf("post-migration shallow publish outcome = %q, want no-op", result.Outcome)
+	}
+}
+
+func publishFromBackend(t *testing.T, checkout string, backend DeploymentBackend, dryRun bool) Result {
+	t.Helper()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(checkout); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(previous) }()
+	result, err := PublishSite(t.Context(), backend, SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts", DryRun: dryRun})
+	if err != nil {
+		t.Fatalf("PublishSite(%s) error = %v", checkout, err)
+	}
+	return result
 }
 
 func TestPublishSiteFirstPublishFromShallowCloneUnshallows(t *testing.T) {

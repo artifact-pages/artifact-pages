@@ -462,10 +462,17 @@ func validateSitePublishRow(site string, row sitePublishObject) error {
 	if err != nil {
 		return err
 	}
-	if row.ContentType != expectedType || row.ContentDisposition != expectedDisposition || row.ContentEncoding != expectedEncoding || row.CacheControl != expectedCache {
+	if row.ContentType != expectedType || row.ContentDisposition != expectedDisposition || !validSitePublishContentEncoding(site, row.Key, row.ContentEncoding, expectedEncoding) || row.CacheControl != expectedCache {
 		return fmt.Errorf("key %q has unknown HTTP policy", row.Key)
 	}
 	return nil
+}
+
+func validSitePublishContentEncoding(site, key, actual, expected string) bool {
+	if key == "_indexes/"+site+"/index.json" || key == "_indexes/"+site+"/search/manifest.json" {
+		return actual == "" || actual == "gzip"
+	}
+	return actual == expected
 }
 
 func validateSitePublishOwnedKey(site, key string) error {

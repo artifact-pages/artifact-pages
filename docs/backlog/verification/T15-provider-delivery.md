@@ -210,3 +210,14 @@ Prepare one coordinated, version-pinned disposable proof plan in [workstreams](.
 ## Coordinated execution plan
 
 The [October 18 provider-proof plan](provider-proof-plan-2026-10-18.md) owns the remaining shared execution matrix (P1–P10), pinned inputs, commands, preservation/cleanup guards and itemized owner approvals. This is preparation only; no new provider result or execution approval is claimed.
+
+### ISSUE-112 bounded AWS delivery check — prepared, not run (2026-10-18)
+
+This is a plan for owner approval, not AWS evidence. Run only after the CLI 0.5.0 release and all four v0.3.0 Actions are published, the site owner confirms a disposable site, and every writer for that site is pinned to CLI 0.5.0 or later with older runs stopped. No existing operator site is an implicit fixture.
+
+1. Use one owner-approved disposable site and two bounded generated inputs: one small index/manifest and one decoded index and manifest each larger than 10,000,000 bytes. Record the source repository/head, site ID, CLI version and effective Action `release.json` versions. Avoid changing Terraform, account policies, identities or public registry membership beyond the separately approved disposable-site setup.
+2. After each publish, read the two exact S3 keys and record raw stored byte count and SHA-256. Verify each is one valid gzip member whose decoded JSON matches its generated source, and that object metadata reports `Content-Type: application/json; charset=utf-8`, `Content-Encoding: gzip`, inline disposition, the existing index cache policy, and stored-byte SHA/size. Confirm `meta.json`, artifacts and opaque search `.gz` objects remain unchanged and have no HTTP `Content-Encoding`.
+3. Fetch the same index and manifest URLs through the configured CDN with gzip accepted, both cold and warm. Record status, response headers, transfer bytes and decoded JSON/schema. Confirm the URL does not change and the migrated paths are invalidated; include a normal reader browser load and search. Separate stored S3 bytes, CDN transfer bytes and decoded browser data in the evidence.
+4. Compare the selected site's object/state inventory and a neighboring site's snapshot before and after. Exercise the approved cleanup for the disposable site and retain the exact command outputs, CDN request evidence, hashes, and cleanup result under the coordinated T15 workstream record. Keep the run to these two fixtures and the named URLs; stop on any unexpected neighbor/control/app change or writer-version mismatch.
+
+No live command, fixture publication or cleanup was performed for ISSUE-112 in the local implementation work.

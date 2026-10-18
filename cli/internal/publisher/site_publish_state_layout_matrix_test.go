@@ -2498,7 +2498,7 @@ func layoutValidateSiteRow(site string, row sitePublishObject) error {
 	if err != nil {
 		return err
 	}
-	if row.ContentType != expectedType || row.ContentDisposition != expectedDisposition || row.ContentEncoding != expectedEncoding || row.CacheControl != expectedCache {
+	if row.ContentType != expectedType || row.ContentDisposition != expectedDisposition || !validSitePublishContentEncoding(site, row.Key, row.ContentEncoding, expectedEncoding) || row.CacheControl != expectedCache {
 		return fmt.Errorf("state row HTTP policy mismatch for %q", row.Key)
 	}
 	return nil

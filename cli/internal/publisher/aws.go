@@ -220,6 +220,8 @@ func (backend *awsBackend) PlanInvalidation(paths []string) []string {
 	return awsSiteInvalidationPaths(paths)
 }
 
+func (*awsBackend) siteGeneratedJSONContentEncoding() string { return "gzip" }
+
 // CloudFront cannot invalidate a tilde path, and literal '*' resource URLs
 // cannot be expressed as an exact invalidation. Bulk site publishes also must
 // not send an unbounded exact-path batch. Coalesce only the affected site's

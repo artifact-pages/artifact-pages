@@ -12,6 +12,12 @@ Parts of this flow were exercised on a disposable verification deployment (see t
 - **CLI 0.4.0 or later.** The module grants site roles access only to the per-site control prefix `_control/sites/<site>/`, which older CLIs do not use. The module version and the CLI version are otherwise independent.
 - **Optional, for a custom domain:** a hostname you control and an ACM certificate in `us-east-1`. The module never creates DNS records.
 
+### Large generated JSON delivery
+
+CLI 0.5.0 and later store the AWS site's generated `index.json` and, when full-text output exists, `search/manifest.json` as deterministic gzip bytes with `Content-Encoding: gzip` at their existing URLs. The objects keep their JSON content type and cache policy. The local builder remains plain JSON, and opaque search `.gz` objects are not HTTP-encoded again. The AWS automatic-compression configuration remains in place for other objects.
+
+Before migrating an existing AWS site, release and pin all four Actions to metadata that accepts CLI 0.5.0, update local and scheduled writers for that site, and stop any in-flight older writer. Once the first gzip representation is committed, keep all writers at CLI 0.5.0 or later. Released CLI 0.4.4 may return a successful no-op on unchanged input when its committed root matches; it leaves content unchanged, and this does not establish writer compatibility. It rejects encoded rows before content mutation when changed input requires state validation or when a shallow checkout loads prior state. Migrated AWS state has a different input-policy fingerprint, so unchanged source also misses the old matching-root fast path and is rejected. Explicit reconciliation validates state and rejects encoded rows too. Recover a pending transaction with a compatible writer before rollback. Do not delete private control records to force a downgrade: returning below 0.5.0 requires a quiesced restore of the complete pre-migration projection and its matching control records, a fresh reviewed recovery plan, and owner approval. There is no automated reverse migration or compression-disable option. The reader's 20-second index deadline is unchanged, so the actual delivered bytes and available throughput still determine whether a site meets it.
+
 ## 1. Prepare AWS
 
 Call the module from your own Terraform configuration. Lead with the Terraform Registry:

@@ -7,8 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -128,7 +126,7 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 		if err := rejectLocalSourceOverlap(conditional, sourceDir); err != nil {
 			return Result{}, err
 		}
-		preparedOptions := sitePublishBuildOptions(options.SiteID, entry.Name, entry.Description, sourceDir, options.Ref, identity)
+		preparedOptions := sitePublishBuildOptions(options.SiteID, entry.Name, entry.Description, sourceDir, options.Ref, identity, conditional)
 		preparedOptions.PriorState = sitePriorStateLoader(conditional, options.SiteID)
 		prepared, err := indexer.PrepareBuild(operationCtx, preparedOptions)
 		if err != nil {
@@ -323,159 +321,6 @@ func registrySite(projection registry.Projection, siteID string) (registry.Entry
 	return registry.Entry{}, false
 }
 
-func buildSitePlan(ctx context.Context, backend ConditionalObjectBackend, siteID, title, description, sourceDir string, identity indexer.GitSourceIdentity) ([]Change, []string, []desiredSiteObject, error) {
-	artifactPrefix := "_artifacts/" + siteID + "/"
-	indexPrefix := "_indexes/" + siteID + "/"
-	artifacts, err := collectSiteArtifacts(sourceDir, artifactPrefix, siteID)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	buildDir, err := os.MkdirTemp("", "artifact-pages-site-build-")
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("create temporary site build directory: %w", err)
-	}
-	defer os.RemoveAll(buildDir)
-	build, err := indexer.Build(ctx, indexer.BuildOptions{
-		SiteID: siteID, SiteTitle: title, SiteDescription: description, SourceDir: sourceDir, OutputDir: buildDir,
-		Repository: identity.Repository, RepositoryURL: identity.RepositoryURL,
-	})
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("build site index: %w", err)
-	}
-	if err := verifySiteArtifactSnapshot(sourceDir, artifactPrefix, siteID, artifacts); err != nil {
-		return nil, nil, nil, err
-	}
-	oldArtifacts, err := backend.ListKeys(ctx, artifactPrefix)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("list deployed site artifacts: %w", err)
-	}
-	oldIndexes, err := backend.ListKeys(ctx, indexPrefix)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("list deployed site index objects: %w", err)
-	}
-	changes := make([]Change, 0)
-	keep := make(map[string]struct{}, len(artifacts))
-	sourceArtifactCount := len(artifacts)
-	artifactChanged := false
-	for _, desired := range artifacts {
-		keep[desired.key] = struct{}{}
-		info, headErr := backend.HeadObject(ctx, desired.key)
-		if errors.Is(headErr, ErrObjectNotFound) {
-			changes = append(changes, Change{Action: "create", Path: desired.key})
-			artifactChanged = true
-			continue
-		}
-		if headErr != nil {
-			return nil, nil, nil, fmt.Errorf("inspect deployed object %s: %w", desired.key, headErr)
-		}
-		if !siteObjectMetadataMatches(info, desired) {
-			changes = append(changes, Change{Action: "update", Path: desired.key})
-			artifactChanged = true
-		}
-	}
-	stale := make([]string, 0)
-	for _, key := range oldArtifacts {
-		if _, exists := keep[key]; !exists {
-			stale = append(stale, key)
-			changes = append(changes, Change{Action: "remove", Path: key})
-		}
-	}
-	generatedFiles := []struct{ path, name string }{{build.OutputPath, "index.json"}, {build.MetadataPath, "meta.json"}}
-	for _, filename := range build.SearchFiles {
-		generatedFiles = append(generatedFiles, struct{ path, name string }{filename, "search/" + filepath.Base(filename)})
-	}
-	for _, generated := range generatedFiles {
-		data, err := os.ReadFile(generated.path)
-		if err != nil {
-			return nil, nil, nil, fmt.Errorf("read generated site %s: %w", generated.name, err)
-		}
-		key := indexPrefix + generated.name
-		if !artifactChanged && !strings.HasPrefix(generated.name, "search/") {
-			current, _, readErr := backend.GetObject(ctx, key)
-			if readErr == nil && sameGeneratedProjection(current.Bytes, data) {
-				data = current.Bytes
-			} else if readErr != nil && !errors.Is(readErr, ErrObjectNotFound) {
-				return nil, nil, nil, fmt.Errorf("read deployed site %s: %w", generated.name, readErr)
-			}
-		}
-		contentType, cache := "application/json; charset=utf-8", indexCacheControl
-		if strings.HasSuffix(generated.name, ".gz") {
-			contentType, cache = "application/octet-stream", immutableCache
-		}
-		keep[key] = struct{}{}
-		artifacts = append(artifacts, desiredSiteObject{
-			key: key, relative: generated.name, data: data,
-			digest: sha256Hex(data), object: Object{
-				ContentType: contentType, ContentDisposition: "inline",
-				Cache: cache, Metadata: map[string]string{"artifact-pages-site": siteID},
-			},
-		})
-	}
-	for _, key := range oldIndexes {
-		if strings.HasPrefix(key, indexPrefix+"search/") {
-			if _, exists := keep[key]; !exists {
-				stale = append(stale, key)
-				changes = append(changes, Change{Action: "remove", Path: key})
-			}
-		}
-	}
-	// Source bytes first, immutable search blobs next, then index and manifest,
-	// with discovery metadata last. Never expose a manifest before its blobs.
-	sort.Slice(artifacts[sourceArtifactCount:], func(i, j int) bool {
-		a, b := artifacts[sourceArtifactCount+i], artifacts[sourceArtifactCount+j]
-		rank := func(name string) int {
-			if strings.HasSuffix(name, ".gz") {
-				return 0
-			}
-			if name == "index.json" {
-				return 1
-			}
-			if name == "search/manifest.json" {
-				return 2
-			}
-			return 3
-		}
-		if rank(a.relative) != rank(b.relative) {
-			return rank(a.relative) < rank(b.relative)
-		}
-		return a.key < b.key
-	})
-	for _, desired := range artifacts[sourceArtifactCount:] {
-		info, headErr := backend.HeadObject(ctx, desired.key)
-		if errors.Is(headErr, ErrObjectNotFound) {
-			changes = append(changes, Change{Action: "create", Path: desired.key})
-			continue
-		}
-		if headErr != nil {
-			return nil, nil, nil, fmt.Errorf("inspect deployed object %s: %w", desired.key, headErr)
-		}
-		if !siteObjectMetadataMatches(info, desired) {
-			changes = append(changes, Change{Action: "update", Path: desired.key})
-		}
-	}
-	sort.Strings(stale)
-	sort.Slice(changes, func(i, j int) bool {
-		if changes[i].Path == changes[j].Path {
-			return changes[i].Action < changes[j].Action
-		}
-		return changes[i].Path < changes[j].Path
-	})
-	return changes, stale, artifacts, nil
-}
-
-func siteObjectMetadataMatches(info ObjectInfo, desired desiredSiteObject) bool {
-	if info.Metadata["artifact-pages-sha256"] != desired.digest ||
-		info.ContentType != desired.object.ContentType || info.ContentEncoding != desired.object.ContentEncoding ||
-		info.CacheControl != desired.object.Cache {
-		return false
-	}
-	if info.ContentDisposition == desired.object.ContentDisposition {
-		return true
-	}
-	// An omitted disposition has the same browser behavior as inline.
-	return info.ContentDisposition == "" && desired.object.ContentDisposition == "inline"
-}
-
 func sameGeneratedProjection(current, desired []byte) bool {
 	var currentValue map[string]any
 	var desiredValue map[string]any
@@ -487,74 +332,6 @@ func sameGeneratedProjection(current, desired []byte) bool {
 	currentJSON, currentErr := json.Marshal(currentValue)
 	desiredJSON, desiredErr := json.Marshal(desiredValue)
 	return currentErr == nil && desiredErr == nil && string(currentJSON) == string(desiredJSON)
-}
-
-func collectSiteArtifacts(root, prefix, siteID string) ([]desiredSiteObject, error) {
-	desired := make([]desiredSiteObject, 0)
-	err := filepath.WalkDir(root, func(filePath string, entry fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if entry.Name() == ".git" {
-			if entry.Type()&os.ModeSymlink != 0 || (!entry.IsDir() && !entry.Type().IsRegular()) {
-				return fmt.Errorf("unsupported filesystem entry in site source: %s", filePath)
-			}
-			if entry.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if entry.Type()&os.ModeSymlink != 0 {
-			return fmt.Errorf("site source must not contain symbolic links: %s", filePath)
-		}
-		if entry.IsDir() {
-			return nil
-		}
-		if !entry.Type().IsRegular() {
-			return fmt.Errorf("unsupported filesystem entry in site source: %s", filePath)
-		}
-		relative, err := filepath.Rel(root, filePath)
-		if err != nil {
-			return fmt.Errorf("resolve site path %s: %w", filePath, err)
-		}
-		relative = filepath.ToSlash(relative)
-		if err := indexer.ValidateUTF8RelativePath(relative); err != nil {
-			return fmt.Errorf("site source %w", err)
-		}
-		data, err := os.ReadFile(filePath)
-		if err != nil {
-			return fmt.Errorf("read site file %s: %w", relative, err)
-		}
-		desired = append(desired, desiredSiteObject{
-			key: prefix + relative, relative: relative, sourcePath: filePath,
-			digest: sha256Hex(data), object: Object{
-				ContentType: contentType(relative), ContentDisposition: "inline", Cache: artifactCacheControl,
-				Metadata: map[string]string{"artifact-pages-site": siteID},
-			},
-		})
-		return nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("inspect site source: %w", err)
-	}
-	sort.Slice(desired, func(i, j int) bool { return desired[i].key < desired[j].key })
-	return desired, nil
-}
-
-func verifySiteArtifactSnapshot(root, prefix, siteID string, expected []desiredSiteObject) error {
-	current, err := collectSiteArtifacts(root, prefix, siteID)
-	if err != nil {
-		return err
-	}
-	if len(current) != len(expected) {
-		return errors.New("site source changed while preparing publish; retry with a stable working tree")
-	}
-	for index := range expected {
-		if current[index].key != expected[index].key || current[index].digest != expected[index].digest {
-			return errors.New("site source changed while preparing publish; retry with a stable working tree")
-		}
-	}
-	return nil
 }
 
 type ChangeAction string

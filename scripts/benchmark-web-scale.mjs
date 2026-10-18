@@ -16,7 +16,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { appendFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { gzipSync } from 'node:zlib'
+import { gzipSync, gunzipSync } from 'node:zlib'
 import { chromium } from '@playwright/test'
 
 const repository = path.resolve(import.meta.dirname, '..')
@@ -31,6 +31,7 @@ const options = {
   regenerate: false,
   'skip-build': false,
   'generate-only': false,
+  'gzip-generated-json': false,
   keep: false,
   profiles: ['unthrottled', 'constrained'],
   only: [],
@@ -342,6 +343,57 @@ function generateSourcesOnly() {
   return { counts: options.counts, seed: options.seed, generatorVersion: 2, sites }
 }
 
+function applyGeneratedJSONGzipDelivery() {
+  if (options.remote) throw new Error('--gzip-generated-json requires the local nginx fixture')
+  const objects = []
+  const siteIds = options.counts.map(siteIdOf)
+  const storageNames = [...siteIds, 'all']
+  for (const storageName of storageNames) {
+    for (const siteId of siteIds) {
+      const indexDirectory = path.join(dataRoot, `storage-${storageName}`, '_indexes', siteId)
+      for (const relative of ['index.json', 'search/manifest.json']) {
+        const filename = path.join(indexDirectory, relative)
+        if (!existsSync(filename)) continue
+        const existing = readFileSync(filename)
+        const alreadyGzipped = isGzipBytes(existing)
+        const decoded = alreadyGzipped ? gunzipSync(existing) : existing
+        assert.ok(!isGzipBytes(decoded), `${filename} contains nested gzip data; expected JSON or one gzip layer`)
+        const stored = alreadyGzipped ? existing : gzipSync(decoded, { level: 9, mtime: 0 })
+        if (!alreadyGzipped) writeFileSync(filename, stored)
+        objects.push({
+          storage: storageName, site: siteId, path: `/_indexes/${siteId}/${relative}`,
+          decodedBytes: decoded.length, storedBytes: stored.length, alreadyGzipped,
+        })
+      }
+    }
+  }
+  assert.ok(objects.length > 0, 'no generated index or full-text manifest was found to encode')
+  const marker = '  location ^~ /_indexes/ {'
+  let config = readFileSync(path.join(repository, 'docker/nginx/default.conf'), 'utf8')
+  assert.ok(config.includes(marker), 'nginx config has no content-plane index location')
+  const exactLocations = siteIds.map((siteId) => [
+    `  location = /_indexes/${siteId}/index.json {`,
+    `    alias /usr/share/nginx/storage/_indexes/${siteId}/index.json;`,
+    '    default_type application/json;',
+    '    charset utf-8;',
+    '    charset_types application/json;',
+    '    add_header Content-Encoding gzip always;',
+    '    add_header Cache-Control "public, max-age=0, s-maxage=60, must-revalidate" always;',
+    '  }',
+    `  location = /_indexes/${siteId}/search/manifest.json {`,
+    `    alias /usr/share/nginx/storage/_indexes/${siteId}/search/manifest.json;`,
+    '    default_type application/json;',
+    '    charset utf-8;',
+    '    charset_types application/json;',
+    '    add_header Content-Encoding gzip always;',
+    '    add_header Cache-Control "public, max-age=0, s-maxage=60, must-revalidate" always;',
+    '  }',
+  ].join('\n')).join('\n')
+  config = config.replace(marker, `${exactLocations}\n${marker}`)
+  writeFileSync(path.join(dataRoot, 'nginx-gzip.conf'), config)
+  return { encoding: 'gzip', level: 9, objects }
+}
+
 /** Build the changed search generation once; the browser suite swaps only its immutable search files. */
 function prepareGenerationVariant(siteId) {
   if (options.remote) throw new Error('search-cases requires local nginx')
@@ -427,7 +479,8 @@ function compose(storageRoot, command) {
   return execFileSync('docker', ['compose', '-p', project, '-f', path.join(repository, 'docker-compose.yml'), ...command], {
     cwd: repository,
     encoding: 'utf8',
-    env: { ...process.env, WEB_PORT: String(options.port), WEB_ROOT: path.join(repository, 'web', 'dist'), STORAGE_ROOT: storageRoot, PREVIEW_ROOT: path.join(labRoot, 'previews') },
+    env: { ...process.env, WEB_PORT: String(options.port), WEB_ROOT: path.join(repository, 'web', 'dist'), STORAGE_ROOT: storageRoot, PREVIEW_ROOT: path.join(labRoot, 'previews'),
+      NGINX_CONF: options['gzip-generated-json'] ? path.join(dataRoot, 'nginx-gzip.conf') : path.join(repository, 'docker/nginx/default.conf') },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
 }
@@ -514,7 +567,16 @@ async function newSession(browser, profileName, { track = true } = {}) {
   if (profile.cpuRate > 1) await cdp.send('Emulation.setCPUThrottlingRate', { rate: profile.cpuRate })
   const requests = new Map()
   cdp.on('Network.requestWillBeSent', (event) => requests.set(event.requestId, { url: event.request.url, type: event.type, raw: 0, encoded: 0, status: 0, done: false, at: Date.now(), active: Date.now() }))
-  cdp.on('Network.responseReceived', (event) => { const r = requests.get(event.requestId); if (r) { r.status = event.response.status; r.active = Date.now(); r.fromCache = event.response.fromDiskCache || event.response.fromPrefetchCache } })
+  cdp.on('Network.responseReceived', (event) => {
+    const r = requests.get(event.requestId)
+    if (r) {
+      r.status = event.response.status
+      r.contentEncoding = event.response.headers?.['Content-Encoding'] ?? event.response.headers?.['content-encoding'] ?? ''
+      r.contentType = event.response.headers?.['Content-Type'] ?? event.response.headers?.['content-type'] ?? ''
+      r.active = Date.now()
+      r.fromCache = event.response.fromDiskCache || event.response.fromPrefetchCache
+    }
+  })
   cdp.on('Network.dataReceived', (event) => { const r = requests.get(event.requestId); if (r) { r.raw += event.dataLength; r.active = Date.now() } })
   cdp.on('Network.loadingFinished', (event) => { const r = requests.get(event.requestId); if (r) { r.encoded = event.encodedDataLength; r.done = true; r.active = Date.now() } })
   cdp.on('Network.loadingFailed', (event) => { const r = requests.get(event.requestId); if (r) { r.failed = true; r.done = true } })
@@ -599,6 +661,17 @@ const maximum = (values) => {
 }
 const sum = (list, key) => list.reduce((total, item) => total + (item[key] ?? 0), 0)
 const pathOf = (url) => new URL(url).pathname
+const isGzipBytes = (bytes) => bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b
+
+async function waitForCompletedRequest(session, urlPath, from, timeoutMs = SLOW_TIMEOUT) {
+  const started = Date.now()
+  for (;;) {
+    const found = [...session.requests.entries()].slice(from).find(([, request]) => pathOf(request.url) === urlPath)
+    if (found?.[1].done) return { requestId: found[0], ...found[1] }
+    if (Date.now() - started >= timeoutMs) throw new Error(`timed out waiting for ${urlPath}`)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+}
 
 let remoteIndexHtml = ''
 function entryScripts() {
@@ -727,9 +800,11 @@ async function measureMermaid(browser, profile, siteId) {
     const failed = await page.evaluate(() => !document.querySelector('.markdown-diagram svg'))
     if (failed) {
       const current = session.since(from)
+      const siteIndex = generatedJSONRequest(current, `/_indexes/${siteId}/index.json`)
       return {
         failed: 'reader error: unable to load this site',
         failedAtMs: await page.evaluate(() => performance.now()),
+        siteIndex,
         abortedRequests: current.filter((r) => r.failed).map((r) => pathOf(r.url)),
         totalEncodedBytes: sum(current, 'encoded'),
         requests: current.length,
@@ -741,11 +816,13 @@ async function measureMermaid(browser, profile, siteId) {
     await session.settle()
     const current = session.since(from)
     const tasks = await session.longTasks(0)
+    const siteIndex = generatedJSONRequest(current, `/_indexes/${siteId}/index.json`)
     return {
       firstMermaidRenderMs: rendered.renderMs,
       diagramType: rendered.type,
       totalEncodedBytes: sum(current, 'encoded'),
       totalRawBytes: sum(current, 'raw'),
+      siteIndex,
       requests: current.length,
       settledMs: Date.now() - started,
       mainThreadLongTasks: tasks,
@@ -756,6 +833,21 @@ async function measureMermaid(browser, profile, siteId) {
     const warm = await visit()
     return { cold, warm }
   } finally { await session.close() }
+}
+
+function generatedJSONRequest(requests, urlPath) {
+  const request = requests.find((item) => pathOf(item.url) === urlPath)
+  if (!request) return null
+  return {
+    path: urlPath,
+    status: request.status,
+    contentType: request.contentType,
+    contentEncoding: request.contentEncoding,
+    encodedBytes: request.encoded,
+    decodedBytes: request.raw,
+    bodyCompleteMs: request.done && !request.failed ? request.active - request.at : null,
+    failed: Boolean(request.failed),
+  }
 }
 
 /** Groups 2-5: open the site from a cold deep link, then sidebar and directory pages in the same session. */
@@ -866,6 +958,24 @@ async function measureSearch(browser, profile, siteId, query) {
   async function visit() {
     const from = session.mark()
     await page.goto(`${origin()}/${siteId}/_search?q=${encodeURIComponent(query)}`, { waitUntil: 'commit' })
+    // The app discovers full-text availability from meta.json while its site
+    // index loads. Until discovery finishes, the search page can briefly render
+    // the permanent "published without page text search" state. Wait for the
+    // discovery response and the available search control before measuring the
+    // query, so that transient state cannot mask a slow manifest request.
+    const metadataRequest = await waitForCompletedRequest(session, `/_indexes/${siteId}/meta.json`, from)
+    if (metadataRequest.failed || metadataRequest.status !== 200) {
+      throw new Error(`site discovery metadata request failed for ${siteId}: HTTP ${metadataRequest.status || 'network error'}`)
+    }
+    let metadata
+    try {
+      const response = await session.cdp.send('Network.getResponseBody', { requestId: metadataRequest.requestId })
+      metadata = JSON.parse(response.base64Encoded ? Buffer.from(response.body, 'base64').toString('utf8') : response.body)
+    } catch (error) {
+      throw new Error(`could not inspect fetched site discovery metadata for ${siteId}: ${error.message}`)
+    }
+    assert.equal(metadata.fullTextUrl, `/_indexes/${siteId}/search/manifest.json`, `${siteId} discovery metadata must publish page text search`)
+    await page.waitForFunction(() => !!document.querySelector('#search-page-input'), null, { timeout: SLOW_TIMEOUT })
     await page.waitForFunction(() => (window.__t && window.__t.results !== undefined) || document.querySelector('.search-page-message'), null, { timeout: SLOW_TIMEOUT })
     // An error message is not a result: the iteration is invalid and the run stops instead of recording it.
     const errorText = await page.evaluate(() => document.querySelector('.search-page-message')?.textContent ?? null)
@@ -875,6 +985,13 @@ async function measureSearch(browser, profile, siteId, query) {
     const atFirst = session.since(from).filter(isSearch).length
     await session.settle()
     const searchRequests = session.since(from).filter(isSearch)
+    const manifestDelivery = generatedJSONRequest(searchRequests, `/_indexes/${siteId}/search/manifest.json`)
+    const siteIndexDelivery = generatedJSONRequest(session.since(from), `/_indexes/${siteId}/index.json`)
+    if (!options.remote) {
+      const expectedEncoding = options['gzip-generated-json'] ? 'gzip' : ''
+      assert.equal(siteIndexDelivery?.contentEncoding, expectedEncoding, 'reader site-index request must use the selected stored representation')
+      assert.equal(manifestDelivery?.contentEncoding, expectedEncoding, 'reader full-text manifest request must use the selected stored representation')
+    }
     const kinds = {}
     for (const r of searchRequests) {
       const name = pathOf(r.url).split('/').pop(), kind = name === 'manifest.json' ? 'manifest' : name.split('-')[0]
@@ -901,6 +1018,8 @@ async function measureSearch(browser, profile, siteId, query) {
       dom: summary.dom,
       searchFetches: searchRequests.length,
       searchFetchesAtFirstResults: atFirst,
+      searchManifest: manifestDelivery,
+      siteIndex: siteIndexDelivery,
       searchEncoded: sum(searchRequests, 'encoded'),
       searchRaw: sum(searchRequests, 'raw'),
       searchByKind: kinds,
@@ -1195,12 +1314,18 @@ function aggregate(samples) {
 
 function environmentInfo() {
   const sysctl = (name) => { try { return execFileSync('sysctl', ['-n', name], { encoding: 'utf8' }).trim() } catch { return null } }
+  let cliVersion = null
+  if (!options.remote && existsSync(binary)) {
+    try { cliVersion = JSON.parse(execFileSync(binary, ['version', '--format', 'json'], { encoding: 'utf8' })).version } catch { /* version is optional for remote/stale local runs */ }
+  }
   return {
     machine: os.arch(), uname: execFileSync('uname', ['-a'], { encoding: 'utf8' }).trim(),
     cpu: sysctl('machdep.cpu.brand_string') ?? os.cpus()[0]?.model, cores: os.cpus().length,
-    ramBytes: os.totalmem(), node: process.version, go: execFileSync('go', ['version'], { encoding: 'utf8' }).trim(),
+    ramBytes: os.totalmem(), node: process.version, go: execFileSync('go', ['version'], { encoding: 'utf8' }).trim(), cliVersion,
     commit: git(repository, ['rev-parse', 'HEAD']), dirty: git(repository, ['status', '--porcelain']) !== '',
-    delivery: options.remote ? 'remote deployment (see report)' : 'nginx:1.29-alpine via docker-compose.yml (no gzip configured)',
+    delivery: options.remote ? 'remote deployment (see report)' : options['gzip-generated-json']
+      ? 'local nginx fixture; generated index.json and search/manifest.json served with stored gzip and Content-Encoding: gzip; working-tree CLI reports its version constant, while this policy has a 0.5.0 minimum-writer floor'
+      : 'nginx:1.29-alpine via docker-compose.yml (plain generated JSON)',
   }
 }
 
@@ -1225,7 +1350,7 @@ function writeSanitizedResults(results) {
       iterations: results.options.iterations,
       firstLoadAndMermaid: 'fresh browser context, then a second visit in the same context',
       constrained: 'CPU x4, 150 ms RTT, 1.6 Mbps down, 0.75 Mbps up',
-      delivery: 'local nginx 1.29, loopback, no compression',
+      delivery: results.environment.delivery,
       searchMethod: 'one open search workspace per iteration; query and show-more timings start after workspace paint',
     },
     environment: {
@@ -1236,6 +1361,7 @@ function writeSanitizedResults(results) {
       ramBytes: results.environment.ramBytes,
       node: results.environment.node,
       go: results.environment.go,
+      cliVersion: results.environment.cliVersion,
       commit: results.environment.commit,
       chromium: results.environment.chromium,
       playwright: results.environment.playwright,
@@ -1245,6 +1371,7 @@ function writeSanitizedResults(results) {
       seed: results.published.seed,
       sites: results.published.sites,
       searchStressInput: results.published.searchStressInput ?? null,
+      generatedJSONDelivery: results.published.generatedJSONDelivery ?? null,
     },
     profiles: sites,
   }
@@ -1271,6 +1398,8 @@ async function main() {
     execFileSync('env', ['NODE_OPTIONS=', 'npm', 'run', 'build'], { cwd: repository, stdio: ['ignore', 'ignore', 'inherit'] })
   }
   const prepared = options.remote ? { note: 'published beforehand; data shape is that of the local generator with the same seed', counts: options.counts, seed: options.seed } : prepareData()
+  if (options['gzip-generated-json']) prepared.generatedJSONDelivery = { candidateWriterFloor: '0.5.0', ...applyGeneratedJSONGzipDelivery() }
+  else prepared.generatedJSONDelivery = { candidateWriterFloor: '0.5.0', encoding: 'identity; prior plain representation' }
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..*/, '')
   const prefix = options.remote ? 'remote-' : ''
   const resultsFile = path.join(labRoot, `${prefix}results-${stamp}.json`)
@@ -1306,7 +1435,16 @@ async function main() {
           log(`${profile} ${siteId} iteration ${iteration}/${options.iterations}`)
           if (wants('first-load')) { const value = await measureFirstLoad(browser, profile, siteId); samples.firstLoad.push(value); record(profile, siteId, 'firstLoad', iteration, value) }
           if (wants('session')) { const value = await measureSiteSession(browser, profile, siteId, layout); samples.session.push(value); record(profile, siteId, 'session', iteration, value) }
-          if (wants('mermaid')) { const value = await measureMermaid(browser, profile, siteId); samples.mermaid.push(value); record(profile, siteId, 'mermaid', iteration, value) }
+          if (wants('mermaid')) {
+            const value = await measureMermaid(browser, profile, siteId)
+            if (options['gzip-generated-json'] && profile === 'constrained' && count === Math.max(...options.counts)) {
+              assert.equal(value.cold.failed, undefined, 'the current reader must open the synthetic 50,000-page site')
+              assert.equal(value.cold.siteIndex?.status, 200, 'site index request must succeed')
+              assert.equal(value.cold.siteIndex?.contentEncoding, 'gzip', 'site index must be delivered with Content-Encoding: gzip')
+              assert.ok(value.cold.siteIndex?.bodyCompleteMs <= 20_000, `cold site-index body took ${value.cold.siteIndex?.bodyCompleteMs} ms`)
+            }
+            samples.mermaid.push(value); record(profile, siteId, 'mermaid', iteration, value)
+          }
           if (wantsSearchCases && count === Math.max(...options.counts)) {
             const value = await measureSearchCases(browser, profile, siteId, generationVariant)
             samples.searchCases.push(value); record(profile, siteId, 'searchCases', iteration, value)

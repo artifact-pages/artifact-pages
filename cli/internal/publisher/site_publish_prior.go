@@ -44,16 +44,30 @@ func sitePriorStateLoader(backend ConditionalObjectBackend, siteID string) index
 		artifactPrefix := "_artifacts/" + siteID + "/"
 		indexKey := "_indexes/" + siteID + "/index.json"
 		prior := &indexer.PriorSiteState{Files: map[string]string{}, Documents: map[string]indexer.PriorDocument{}}
-		indexDigest := ""
+		var indexRow *sitePublishObject
 		for _, row := range state.Committed.Objects {
 			if strings.HasPrefix(row.Key, artifactPrefix) {
 				prior.Files[strings.TrimPrefix(row.Key, artifactPrefix)] = row.SHA256
 			} else if row.Key == indexKey {
-				indexDigest = row.SHA256
+				copy := row
+				indexRow = &copy
 			}
 		}
-		if indexDigest == "" {
+		if indexRow == nil {
 			return nil, nil
+		}
+		info, err = backend.HeadObject(ctx, indexKey)
+		if errors.Is(err, ErrObjectNotFound) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, fmt.Errorf("inspect deployed site index: %w", err)
+		}
+		if info.Size != indexRow.Size || info.Metadata["artifact-pages-sha256"] != indexRow.SHA256 {
+			return nil, nil
+		}
+		if err := validatePriorSiteIndexMetadata(siteID, *indexRow, info.ContentType, info.ContentDisposition, info.ContentEncoding, info.CacheControl, info.Metadata); err != nil {
+			return nil, fmt.Errorf("validate deployed site index metadata: %w", err)
 		}
 		indexObject, _, err := backend.GetObject(ctx, indexKey)
 		if errors.Is(err, ErrObjectNotFound) {
@@ -62,12 +76,19 @@ func sitePriorStateLoader(backend ConditionalObjectBackend, siteID string) index
 		if err != nil {
 			return nil, fmt.Errorf("read deployed site index: %w", err)
 		}
-		if sha256Hex(indexObject.Bytes) != indexDigest {
+		if int64(len(indexObject.Bytes)) != indexRow.Size || sha256Hex(indexObject.Bytes) != indexRow.SHA256 {
 			return nil, nil
 		}
+		if err := validatePriorSiteIndexMetadata(siteID, *indexRow, indexObject.ContentType, indexObject.ContentDisposition, indexObject.ContentEncoding, indexObject.Cache, indexObject.Metadata); err != nil {
+			return nil, fmt.Errorf("validate deployed site index metadata: %w", err)
+		}
+		plain, err := decodeSiteGeneratedJSON(indexObject.Bytes, indexRow.ContentEncoding)
+		if err != nil {
+			return nil, fmt.Errorf("decode deployed site index: %w", err)
+		}
 		var deployed indexer.SiteIndex
-		if err := json.Unmarshal(indexObject.Bytes, &deployed); err != nil {
-			return nil, nil
+		if err := json.Unmarshal(plain, &deployed); err != nil {
+			return nil, fmt.Errorf("decode deployed site index JSON: %w", err)
 		}
 		for _, entry := range deployed.Artifacts {
 			updatedAt, parseErr := time.Parse(time.RFC3339, entry.UpdatedAt)
@@ -82,4 +103,15 @@ func sitePriorStateLoader(backend ConditionalObjectBackend, siteID string) index
 		}
 		return prior, nil
 	}
+}
+
+func validatePriorSiteIndexMetadata(site string, row sitePublishObject, contentType, disposition, encoding, cache string, metadata map[string]string) error {
+	if contentType != row.ContentType || (disposition != row.ContentDisposition && !(disposition == "" && row.ContentDisposition == "inline")) ||
+		encoding != row.ContentEncoding || cache != row.CacheControl || metadata["artifact-pages-site"] != site || metadata["artifact-pages-sha256"] != row.SHA256 {
+		return errors.New("deployed site index HTTP or object metadata does not match committed publish state")
+	}
+	if encoding != "" && encoding != "gzip" {
+		return fmt.Errorf("unsupported deployed site index content encoding %q", encoding)
+	}
+	return nil
 }

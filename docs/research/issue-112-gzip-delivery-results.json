@@ -1,0 +1,262 @@
+{
+  "schemaVersion": 1,
+  "measuredAt": {
+    "startedAt": "2026-10-18T04:29:40.605Z",
+    "finishedAt": "2026-10-18T04:38:46.797Z"
+  },
+  "conditions": {
+    "pages": [
+      50000
+    ],
+    "profiles": [
+      "constrained"
+    ],
+    "iterations": 3,
+    "firstLoadAndMermaid": "fresh browser context, then a second visit in the same context",
+    "constrained": "CPU x4, 150 ms RTT, 1.6 Mbps down, 0.75 Mbps up",
+    "delivery": "local nginx fixture; generated index.json and search/manifest.json served with stored gzip and Content-Encoding: gzip; working-tree CLI reports its version constant, while this policy has a 0.5.0 minimum-writer floor",
+    "searchMethod": "one open search workspace per iteration; query and show-more timings start after workspace paint"
+  },
+  "environment": {
+    "platform": "darwin",
+    "architecture": "arm64",
+    "cpu": "Apple M4",
+    "cores": 10,
+    "ramBytes": 34359738368,
+    "node": "v22.14.0",
+    "go": "go version go1.26.9 darwin/arm64",
+    "cliVersion": "0.4.4",
+    "commit": "89056946cc1e249dcc980ac2d5829809923594a2",
+    "chromium": "153.0.8010.12",
+    "playwright": "1.63.0"
+  },
+  "data": {
+    "generatorVersion": 2,
+    "seed": 20261014,
+    "sites": {
+      "scale-50000": {
+        "pages": 50000,
+        "files": 50308,
+        "shape": {
+          "htmlPages": 34513,
+          "mdPages": 15487,
+          "folders": 907,
+          "readmeFolders": 308,
+          "foldersWithoutReadme": 599,
+          "maxFolderDepth": 2,
+          "japaneseShareOfCharacters": 0.044478516142094034,
+          "averagePageBytes": 1220.02356,
+          "sourceBytes": 61016593
+        },
+        "layout": {
+          "rootPages": 5,
+          "handbook": 500,
+          "flat": 5000,
+          "nested": 44495,
+          "areas": 20,
+          "leaves": 890
+        },
+        "generateMs": 5410.932833000001
+      }
+    },
+    "searchStressInput": null,
+    "generatedJSONDelivery": {
+      "candidateWriterFloor": "0.5.0",
+      "encoding": "gzip",
+      "level": 9,
+      "objects": [
+        {
+          "storage": "scale-50000",
+          "site": "scale-50000",
+          "path": "/_indexes/scale-50000/index.json",
+          "decodedBytes": 45897502,
+          "storedBytes": 2482693,
+          "alreadyGzipped": true
+        },
+        {
+          "storage": "scale-50000",
+          "site": "scale-50000",
+          "path": "/_indexes/scale-50000/search/manifest.json",
+          "decodedBytes": 949914,
+          "storedBytes": 129750,
+          "alreadyGzipped": true
+        },
+        {
+          "storage": "all",
+          "site": "scale-50000",
+          "path": "/_indexes/scale-50000/index.json",
+          "decodedBytes": 45897502,
+          "storedBytes": 2482693,
+          "alreadyGzipped": true
+        },
+        {
+          "storage": "all",
+          "site": "scale-50000",
+          "path": "/_indexes/scale-50000/search/manifest.json",
+          "decodedBytes": 949914,
+          "storedBytes": 129750,
+          "alreadyGzipped": true
+        }
+      ]
+    }
+  },
+  "profiles": {
+    "constrained": {
+      "scale-50000": {
+        "pages": 50000,
+        "mermaid": [
+          {
+            "cold": {
+              "firstMermaidRenderMs": 25856.39999961853,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 4135725,
+              "totalRawBytes": 47539586,
+              "siteIndex": {
+                "path": "/_indexes/scale-50000/index.json",
+                "status": 200,
+                "contentType": "application/json; charset=utf-8",
+                "contentEncoding": "gzip",
+                "encodedBytes": 2483048,
+                "decodedBytes": 45897502,
+                "bodyCompleteMs": 12825,
+                "failed": false
+              },
+              "requests": 35,
+              "settledMs": 26671,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 8,
+                "durationMs": 3861,
+                "maxMs": 2981
+              }
+            },
+            "warm": {
+              "firstMermaidRenderMs": 4950.299999237061,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 2616,
+              "totalRawBytes": 47539586,
+              "siteIndex": {
+                "path": "/_indexes/scale-50000/index.json",
+                "status": 200,
+                "contentType": "application/json; charset=utf-8",
+                "contentEncoding": "gzip",
+                "encodedBytes": 271,
+                "decodedBytes": 45897502,
+                "bodyCompleteMs": 582,
+                "failed": false
+              },
+              "requests": 35,
+              "settledMs": 5764,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 7,
+                "durationMs": 4165,
+                "maxMs": 3157
+              }
+            }
+          },
+          {
+            "cold": {
+              "firstMermaidRenderMs": 25988.10000038147,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 4135725,
+              "totalRawBytes": 47539586,
+              "siteIndex": {
+                "path": "/_indexes/scale-50000/index.json",
+                "status": 200,
+                "contentType": "application/json; charset=utf-8",
+                "contentEncoding": "gzip",
+                "encodedBytes": 2483048,
+                "decodedBytes": 45897502,
+                "bodyCompleteMs": 12828,
+                "failed": false
+              },
+              "requests": 35,
+              "settledMs": 26805,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 8,
+                "durationMs": 4003,
+                "maxMs": 3141
+              }
+            },
+            "warm": {
+              "firstMermaidRenderMs": 4762.89999961853,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 2616,
+              "totalRawBytes": 47539586,
+              "siteIndex": {
+                "path": "/_indexes/scale-50000/index.json",
+                "status": 200,
+                "contentType": "application/json; charset=utf-8",
+                "contentEncoding": "gzip",
+                "encodedBytes": 271,
+                "decodedBytes": 45897502,
+                "bodyCompleteMs": 510,
+                "failed": false
+              },
+              "requests": 35,
+              "settledMs": 5608,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 7,
+                "durationMs": 4032,
+                "maxMs": 3102
+              }
+            }
+          },
+          {
+            "cold": {
+              "firstMermaidRenderMs": 26061.69999885559,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 4135725,
+              "totalRawBytes": 47539586,
+              "siteIndex": {
+                "path": "/_indexes/scale-50000/index.json",
+                "status": 200,
+                "contentType": "application/json; charset=utf-8",
+                "contentEncoding": "gzip",
+                "encodedBytes": 2483048,
+                "decodedBytes": 45897502,
+                "bodyCompleteMs": 12843,
+                "failed": false
+              },
+              "requests": 35,
+              "settledMs": 26876,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 8,
+                "durationMs": 4054,
+                "maxMs": 3128
+              }
+            },
+            "warm": {
+              "firstMermaidRenderMs": 4929.5,
+              "diagramType": "flowchart",
+              "totalEncodedBytes": 2616,
+              "totalRawBytes": 47539586,
+              "siteIndex": {
+                "path": "/_indexes/scale-50000/index.json",
+                "status": 200,
+                "contentType": "application/json; charset=utf-8",
+                "contentEncoding": "gzip",
+                "encodedBytes": 271,
+                "decodedBytes": 45897502,
+                "bodyCompleteMs": 537,
+                "failed": false
+              },
+              "requests": 35,
+              "settledMs": 5747,
+              "mainThreadLongTasks": {
+                "supported": true,
+                "count": 7,
+                "durationMs": 4213,
+                "maxMs": 3212
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
