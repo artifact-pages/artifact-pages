@@ -37,9 +37,10 @@ At the site sizes the launch advertises, a reader can tell why a result has no s
 ## Acceptance criteria
 
 - [x] The owner chooses an option (or keeps the behaviour with documentation): option 3, see Decision.
-- [ ] Not applicable under option 3 (no behaviour change; the T25 measurement already shows the path-order omission): for a 50,000-page benchmark site, the share of documents without a snippet and the order of omission match the chosen behaviour, checked in the manifest.
-- [ ] Not applicable under option 3 (no behaviour change): the reader shows omitted results consistently (for example, a note or an excerpt-less layout) and this is covered by a test.
-- [ ] Not applicable under option 3 (nothing changes to re-measure): the T25 report records the re-measurement.
+- [x] ~~For a 50,000-page benchmark site, the share of documents without a snippet and the order of omission match the chosen behaviour, checked in the manifest.~~ (not applicable: owner chose option 3 on 2026-10-18)
+- [x] ~~The reader shows omitted results consistently (for example, a note or an excerpt-less layout) and this is covered by a test.~~ (not applicable: owner chose option 3 on 2026-10-18)
+- [x] ~~The T25 report records the re-measurement.~~ (not applicable: owner chose option 3 on 2026-10-18)
+- [x] The constraint is documented in the specification (§8) and linked from this ticket.
 
 ## Decision
 

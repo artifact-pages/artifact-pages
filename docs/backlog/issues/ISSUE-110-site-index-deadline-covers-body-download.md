@@ -41,9 +41,10 @@ A large index on a slow but working connection either loads or shows an explanat
 ## Acceptance criteria
 
 - [x] The owner chooses an option (or keeps the current behaviour with documentation): option 3, see Decision.
-- [ ] Not applicable under option 3 (no behaviour change): with the constrained profile (1.6 Mbps) and the 5,000-page uncompressed local index, the first Mermaid render and a site open either succeed or show the documented outcome, in a repeatable test.
-- [ ] Not applicable under option 3 (no behaviour change): a stalled connection (no bytes) still fails within a bounded time and "Try again" recovers once the connection works.
-- [ ] Not applicable under option 3 (nothing changes to re-measure): the T25 report records the re-measurement.
+- [x] ~~With the constrained profile (1.6 Mbps) and the 5,000-page uncompressed local index, the first Mermaid render and a site open either succeed or show the documented outcome, in a repeatable test.~~ (not applicable: owner chose option 3 on 2026-10-18)
+- [x] ~~A stalled connection (no bytes) still fails within a bounded time and "Try again" recovers once the connection works.~~ (not applicable: owner chose option 3 on 2026-10-18)
+- [x] ~~The T25 report records the re-measurement.~~ (not applicable: owner chose option 3 on 2026-10-18)
+- [x] The constraint is documented in the specification (§8) and linked from this ticket.
 
 ## Decision
 
