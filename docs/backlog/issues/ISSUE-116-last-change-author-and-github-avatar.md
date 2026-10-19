@@ -1,0 +1,115 @@
+# Show the latest change's Git author and GitHub avatar in Details
+
+- Status: Open
+- Priority: P2
+- Area: Publish-time artifact attribution / reader Details
+
+## Problem
+
+Details currently identifies the latest relevant change by its Git committer name. GitHub can commit a person's squash commit as `GitHub` (web-flow), so readers see the service instead of the author. The owner requested the person's name and real GitHub avatar on 2026-10-19. ISSUE-114's byline work is in progress in another worktree and currently uses an initial-letter circle because the index has no avatar information.
+
+This is a correctness problem in reader metadata, outside P1's core-workflow disruption. This issue delivers the publisher/index contract and fixtures; reader consumption follows separately. Do not edit `web/` or take over ISSUE-114.
+
+## Evidence and reproduction
+
+1. In a repository with a tracked publishable document, make its latest relevant commit with different author and committer identities, for example author `Alice Example` and committer `GitHub`.
+2. Build its site index and inspect that artifact's `lastCommitter.name`.
+3. The current implementation emits `GitHub`; there is no account or avatar field. A reader using that name therefore identifies the service.
+
+Confirmed in source on 2026-10-19:
+
+- [`build.go`](../../../cli/internal/indexer/build.go): `readArtifactGitHistory` reads `%ct`, `%cn`, `%H`; `ArtifactCommitter` contains only `name`. The newest committer timestamp wins. The document/resource ownership calculation is `artifactPathsForFile`.
+- [`prepare.go`](../../../cli/internal/indexer/prepare.go) fingerprints the resolved name; working-tree changes can advance `updatedAt` while retaining the committed identity.
+- [`history.go`](../../../cli/internal/indexer/history.go) and [`site_publish_prior.go`](../../../cli/internal/publisher/site_publish_prior.go) carry deployed `updatedAt` and committer names through shallow builds. Simply changing `%cn` to `%an` would both mislabel the existing field and retain stale `GitHub` values during migration.
+- [`actions/publish/action.yml`](../../../actions/publish/action.yml) already passes the workflow's `GITHUB_TOKEN` to the CLI. No new token input or permission beyond repository `contents: read` is needed.
+- [Specification §8, Right sidebar](../../specification.md#right-sidebar) explicitly defines committer attribution, disclaims GitHub resolution, and excludes commit emails from the public index.
+
+The reproduction above is a deterministic source-backed case, not a claim that a live production index was inspected. ISSUE-114's current byline state is owner-reported; its unmerged files are not present in this worktree.
+
+## Expected outcome
+
+A published artifact supplies the Git author of its latest relevant committed change, optionally enriched with the GitHub account associated with that exact commit. The byline can show that name and the account's avatar without a browser API lookup or exposing email. Missing associations remain missing. This is commit attribution, not proof of personal identity or a claim about the document's original author.
+
+### Identity and history selection (settled)
+
+- Add `lastAuthor`; its `name` is the selected commit's raw Git author name (`%an`, without mailmap substitution). Keep `lastCommitter.name` as the raw Git committer name (`%cn`) of that same commit. Do not relabel or overwrite `lastCommitter` with an author.
+- Preserve the existing attribution scope: the document plus non-document resources assigned by the nearest containing document directory; a resource contributes only to documents which themselves have Git history. Do not replace this with referenced-resource analysis.
+- Consider commits reachable from the checked-out `HEAD`, using full path history, with renames treated as deletion/addition. For each commit, relevant paths are its changed paths; for a merge compare its tree against its **first parent**, not all parents. A root commit compares against the empty tree. Select the relevant commit with the greatest committer timestamp (`%ct`); equal timestamps choose the lexicographically smallest full lowercase commit SHA. Take author, committer and SHA together from this one selected commit. Author dates never choose the winner or replace `updatedAt`.
+- This explicitly includes a merge's first-parent changes (including conflict resolutions), unlike the current default log's omitted merge diffs. A merge with no first-parent changes contributes nothing. For a normal merge, the merge commit's Git author is the attribution, commonly the person merging; do not claim that person wrote each imported line. Do not look through a selected merge to substitute the PR author.
+- A squash is one commit: use its primary Git author. Rebase/fast-forward commits use their recorded Git authors. Ignore `Co-authored-by` trailers for this single-person byline; never select the workflow actor, PR opener, reviewer, merger API identity, or token owner instead of the selected Git author.
+- Keep bot authors, including bot-authored squash/merge commits, as bots. Do not skip automation to find an earlier human or substitute a co-author. A GitHub association for a bot may supply the bot's real avatar. If Git records the author itself as `GitHub`, retain that name rather than inventing a human.
+- `updatedAt` retains the existing commit-time/working-tree/mtime precedence, using the selected commit above as its Git contribution. For a tracked document with local edits, `lastAuthor` and `lastCommitter` still describe the latest committed change even when the displayed update time comes from local files. Untracked/ignored generated documents without their own history have neither identity field, even if adjacent resources have history. Omit `lastAuthor` if its Git name is empty/whitespace; never fall back to email or an inferred human.
+
+### Public JSON contract (settled)
+
+Keep artifact-index `schemaVersion: 1`. Add only the optional artifact field below; registry, discovery metadata, full-text and preview formats do not change. Example fragment (the SHA is illustrative):
+
+~~~json
+{
+  "updatedAt": "2026-10-19T00:00:00Z",
+  "lastCommitter": { "name": "GitHub" },
+  "lastAuthor": {
+    "name": "Alice Example",
+    "commitSha": "0123456789abcdef0123456789abcdef01234567",
+    "github": {
+      "login": "octocat",
+      "avatarUrl": "https://avatars.githubusercontent.com/u/1?v=4"
+    }
+  }
+}
+~~~
+
+`lastAuthor.name` and `lastAuthor.commitSha` are required when the object exists. `commitSha` is the full lowercase object ID of the selected commit (40 hex for SHA-1, 64 for SHA-256 repositories), not `HEAD` unless it won selection. `github` is optional; when present, its `login` is required and its `avatarUrl` is optional. Missing values are omitted, not `null` or empty strings. No `email`, email hash, profile display name, profile URL, bot flag, or co-author list is added. The Git name remains the display name even when the GitHub login differs.
+
+### GitHub enrichment, privacy and availability (settled)
+
+- Resolve only GitHub.com repositories. Require the effective source repository URL to identify `https://github.com/<owner>/<repo>` and the checkout's `origin` (HTTPS or SSH) to identify that same repository, case-insensitively. Metadata overrides alone must not cause credentialed requests to another repository. Other hosts, including GitHub Enterprise Server, receive Git names/SHA only; never send their data or credentials to GitHub.com.
+- Use the first nonempty `GITHUB_TOKEN`, then `GH_TOKEN`, for `GET https://api.github.com/repos/{owner}/{repo}/commits/{full-SHA}?per_page=1`, with JSON accept headers and API version `2026-03-10`. No unauthenticated requests, interactive login, new CLI flag, config key, Action input, PAT requirement, or account-search endpoint. Standalone/local builds with neither token perform no enrichment requests. The existing Git-depth fetch credential rules remain separate; `ARTIFACT_PAGES_FETCH_TOKEN` is not an enrichment credential.
+- Accept only HTTP 200 with a response `sha` matching the requested SHA and a non-null **top-level `author`** account. Its `login` supplies `github.login`; its `avatar_url` supplies `github.avatarUrl`. Do not use top-level `committer`, nested `commit.author.email`, or a user profile's display name. A null author or blank/invalid login leaves `github` absent. Accept logins consisting of ASCII letters, digits and hyphens, optionally ending in `[bot]`, with no whitespace or URL syntax.
+- Accept an avatar URL only when it is HTTPS, host exactly `avatars.githubusercontent.com`, with no credentials, fragment or nonstandard port, and a nonempty absolute path. Preserve its returned path/query; do not construct a URL from a name, login, numeric ID or email. Invalid/missing avatar means login only. The later reader applies the same URL policy. Reject redirects for API requests, and never attach the API token to an avatar request.
+- Do not parse even GitHub noreply addresses to infer a login or construct an avatar. Both `ID+LOGIN@users.noreply.github.com` and legacy `LOGIN@users.noreply.github.com` require the same commit API association; Git strings alone are not account verification. Ordinary/private author emails need no special handling because lookup is by repository and SHA. Do not send email search queries, use Gravatar, or publish raw API responses. Discard email fields; do not persist emails, email hashes, tokens or response bodies in public indexes, private state, fixtures or diagnostics.
+- Enrich each distinct missing `(repository, commitSha)` once per invocation, shared across artifacts. Sort missing SHAs lexicographically; make requests sequentially, at most 100 requests and 30 seconds total, with a 5-second per-request timeout and a 1 MiB response-body cap. No pagination, automatic retries or sleeping until quota resets: only the first page's commit/account metadata is used.
+- A 404/422, null author, invalid response or oversize response omits that SHA's enrichment and continues within the budget. A 401/403/429, exhausted rate-limit header, transport failure, timeout or 5xx stops further enrichment for this invocation. Do not publish guessed replacements. Preserve any valid results already obtained; unresolved commits still publish their Git name/SHA. Emit at most one sanitized warning summarizing lookup failures/budget omissions and counts; a deliberately missing token, unsupported host or null author is normal absence. Enrichment failure never fails an otherwise valid build/sync or changes its exit code; parent-context cancellation still cancels the command.
+- The publish Action uses its existing workflow token with `contents: read`; no settings or permission changes are part of this issue. A direct CLI caller can provide either supported token environment variable. Dry-run may perform these read-only lookups under the same limits and never writes a cache or changes provider state.
+
+GitHub's [commit endpoint](https://docs.github.com/en/rest/commits/commits#get-a-commit) distinguishes the Git metadata from the associated top-level account and supports repository contents-read access. Its [rate-limit documentation](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api#primary-rate-limit-for-github_token-in-github-actions) documents a shared workflow-token quota; the bounds above are this product's own smaller work budget, not a promise of available quota. GitHub also documents [both noreply formats](https://docs.github.com/en/account-and-profile/reference/email-addresses-reference).
+
+### Migration, shallow history and compatibility (settled)
+
+- Treat `lastAuthor` as additive under specification §5.3: older readers ignore it and continue using `lastCommitter`; newer readers accept old indexes without it. Do not bump the public index schema or redefine a required field. The CLI's artifact-index compatibility declaration remains version 1.
+- Advance the prepared-build input policy from 2 to 3; fingerprint the complete selected `lastAuthor` (including GitHub data) alongside existing fields. Migration must not take the old input-root no-op and leave every artifact without an author. Capture enrichment once during preparation, before fingerprinting; rendering/reconciliation consumes that frozen result without another API call.
+- Carry forward the complete author object, SHA and committer together only from a digest-verified deployed index produced under this selection contract, with the existing unchanged-attribution-scope rules. A visible candidate replaces the prior selection when it wins the timestamp/SHA ordering above, including an equal-timestamp tie. A valid `lastAuthor` is evidence of the new selection contract. An old committer-only entry cannot establish an author: recompute it from Git, deepening/unshallowing by the existing rules as needed, even when its files are unchanged. Do not copy `lastCommitter.name` into `lastAuthor` or trust shallow boundary commits. Preserve the existing documented byte-identical-history limitation.
+- For both full and shallow site sync, reuse validated GitHub enrichment from that trusted prior index only when repository and selected commit SHA still match. This is a published association snapshot, not a live profile directory; keep it until a different relevant commit wins. Do not refresh a successful association each run. Retry missing login/avatar data on later runs within the same budget; an unsuccessful retry retains any already validated login. When filling a missing avatar, replace the account pair only with a valid login and avatar from the same successful response; never combine components from different accounts. With no trusted snapshot, a tokenless/offline build has no GitHub enrichment. Git name/SHA remain derivable offline from sufficient local history; avatar completeness is not a full-clone equivalence guarantee.
+- Prior-index readers must check schema before consuming fields, retain digest/HTTP-metadata validation for plain and gzip indexes, and ignore unknown fields. A malformed optional author object cannot be carried forward: re-derive its Git identity; a malformed optional account/avatar is unavailable and may be resolved again. The later web reader similarly treats invalid optional attribution as absent rather than rejecting the site. Unsupported schemas/control formats still fail closed before projection writes under §5.3; enrichment's optional failure policy does not bypass those checks.
+- No object key, HTTP policy, private-state layout or required state field changes. Keep private publish-state schema 1. [IMP-77](../implementation/IMP-77-fulltext-section-table-and-text-packs.md)'s older-CLI failure came from newly unsupported search-object keys; that mechanism is **not relevant** to this additive metadata. Do not claim older CLIs will reject `lastAuthor`: they may ignore/drop it on a subsequent sync. During 0.x, operators pin one CLI per site and use the new writer to preserve the feature; a rollback can remove attribution enrichment and the reader falls back. Existing unsupported-version checks must remain intact. No release, deploy or operator-repository mutation is authorized by this ticket.
+
+### Reader handoff (behaviour for a later web ticket)
+
+- In the production Details byline, prefer valid `lastAuthor.name`; otherwise retain `lastCommitter.name` as the legacy fallback. If neither exists, omit the identity/name/avatar portion and retain the available Updated date. Do not label the preferred identity “Last committed by”; use the name with “Updated <date>”, as in ISSUE-114. The date always uses artifact `updatedAt`, never API/profile time or index `generatedAt`.
+- Use only `lastAuthor.github.avatarUrl` under the URL policy above. No browser-side GitHub API calls or derived avatar URLs. When the URL is absent/invalid, fails to load, or is blocked, use the existing initial-letter fallback from the displayed name. An avatar failure must not prevent reading, show a broken-image icon, or change the name/date. Request avatars without credentials and with `referrerPolicy="no-referrer"`; the remote image request reveals the reader's IP to the avatar host. Do not proxy/download avatars into the static projection in this slice.
+- The avatar is decorative beside the visible name (empty alt text). Login is metadata, not a replacement display name or a new profile link. Never pair a legacy committer fallback with an unrelated author avatar. Preview Details remain unchanged; no production attribution is inferred for preview documents.
+
+## Acceptance criteria
+
+- [ ] A tracked document with author `Alice Example` and committer `GitHub` emits `lastAuthor.name: "Alice Example"`, the selected full SHA, and unchanged `lastCommitter.name: "GitHub"`. Author and committer dates deliberately differ; selection and update date follow the rules above.
+- [ ] Git-history fixtures prove ordinary, squash, rebase/fast-forward, first-parent merge changes, merge conflict resolution, empty merge, co-authored and bot cases; shared-resource attribution, equal-timestamp tie-breaking, untracked/generated documents and tracked working-tree updates retain the specified behaviour.
+- [ ] Stubbed commit API tests prove correct top-level author association with both ordinary and noreply Git emails, bot accounts, absent token, unsupported/mismatched hosts, null account, invalid login/avatar, wrong SHA, token precedence, redirect rejection and sanitized diagnostics. No test requires live GitHub credentials/network.
+- [ ] API tests prove SHA deduplication, deterministic ordering, all request/time/body limits, no retries/pagination, and the status/error outcomes above. Auth, network and quota failures still yield a usable name-only index; later retries can fill missing enrichment.
+- [ ] Extend `cli/internal/indexer/build_test.go`, `shallow_test.go`, prepared-input/fingerprint tests, `cli/internal/publisher/site_publish_prior.go`'s tests and `site_generated_json_test.go`: legacy committer-only indexes cannot be carried as authors; full/shallow results agree on Git identity; trusted enrichment is reused for the same repository/SHA; plain/gzip prior data are validated; migration republishes once and a repeated identical prepared result becomes a no-op. Unknown public fields remain readable, and unsupported schemas/control records fail before projection mutation.
+- [ ] Update representative committed indexes under `fixtures/storage/_indexes/{sre,frontend,showcase}/index.json` to include resolved-avatar, name-only, bot, legacy committer-only and no-history cases across the fixture set. Names/emails/tokens are synthetic or existing public fixture identities; use the public Octocat account for a real avatar URL, with no API response dumps. Keep web work for the follow-up; existing readers/tests must still accept the additive fixtures.
+- [ ] Implementation promotes this contract into the specification sentences listed below and updates the roadmap's Phase 2 attribution summary. Reader handoff remains explicit; this backend issue can close after the index contract, tests and fixtures pass, without changing `web/` or asserting reader work is complete.
+
+## Specification changes required during implementation
+
+Do not edit the specification in this design PR. The implementation must update:
+
+- **§5.2, “Example artifact index”**: add the `lastAuthor` example and its required/optional field and omission rules.
+- **§5.3, fingerprint paragraph** beginning “The committed input root is a domain-separated fingerprint”: include author/SHA/enrichment and the input-policy migration. Keep additive-schema, unknown-field and fail-closed rules; explain the older-writer limitation rather than promising unsupported rejection.
+- **§5.3, “Publishable source directory”** sentence beginning “Documents with Git history provide commit-based `updatedAt` and `lastCommitter` metadata”, and the no-history omission sentence: add author attribution, merge/tie rules, local-edit behaviour and enrichment availability/privacy limits.
+- **§5.3, “Shallow checkouts”** sentences beginning “A document keeps its deployed `updatedAt` and `lastCommitter`” and “A visible non-boundary commit newer than the deployed value”: define the new-contract carry-forward prerequisite, atomic author/committer/SHA metadata, old-index re-derivation and optional account snapshot reuse; retain the accepted byte-identical-history limitation and separate Git-fetch failure contract.
+- **§8, “Right sidebar”**, the Details bullet and sentences beginning “`lastCommitter.name` is the committer name…” and “Commit email addresses are not included…”: describe author-first byline, legacy fallback, real-avatar source/fallback and email exclusion. Coordinate with ISSUE-114's author; do not overwrite its unrelated responsive-sidebar changes. This reader-facing paragraph is the contract for the later web ticket, not evidence of an implemented reader.
+- **§12, “Publish-time metadata”**, “last committer recorded by Git” and paragraph beginning “The initial local builder records the Git committer name…”: describe `lastAuthor`, preserved committer semantics and bounded optional GitHub resolution at build time.
+
+## Open questions
+
+None for implementation. Author-first attribution (including truthful bot attribution), merge authorship, optional account enrichment and legacy fallback are decided above. Releases, external rollout and the later reader ticket remain separately scheduled work.

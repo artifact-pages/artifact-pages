@@ -128,6 +128,7 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-113](ISSUE-113-results-page-claims-no-search-while-discovery-loads.md) | Done | P2 | The full-text results page says the site was published without page text search while its discovery metadata is still loading. |
 | [ISSUE-114](ISSUE-114-reader-column-hierarchy-and-byline.md) | In progress | P3 | The reader column's Contents list reads flat and Details spend space on little information; owner picked rail-and-dots Contents and a byline with a source-file link. |
 | [ISSUE-115](ISSUE-115-remove-open-raw-artifact.md) | In progress | P3 | "Open raw artifact" and the preview "Open the raw file" add actions readers do not need; owner decided to remove them everywhere. |
+| [ISSUE-116](ISSUE-116-last-change-author-and-github-avatar.md) | Open | P2 | Details identifies GitHub’s committer service instead of the latest change’s author and lacks a real GitHub avatar. |
 
 ISSUE-013's verified completion record is retained in Git history.
 
