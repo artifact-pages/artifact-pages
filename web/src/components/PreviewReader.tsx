@@ -33,7 +33,7 @@ type CatalogState = { status: 'loading' } | { status: 'ready'; catalog: PreviewC
 export type PreviewReader = {
   route: PreviewDocumentRoute
   manifest: ManifestState
-  /** The document as a reader entry: its URL is the raw file of this revision, which only the frame and the raw action use. */
+  /** The document as a reader entry: its URL is the raw file of this revision, which only the frame uses. */
   artifact?: ArtifactIndexEntry
   catalog: CatalogState
   /** The catalog group this link belongs to, if the catalog has one. */
@@ -368,12 +368,6 @@ export function PreviewDetails({ reader, navigate }: { reader: PreviewReader; na
         <div className="preview-fact"><dt>Path</dt><dd className="mono preview-path">{document.path}</dd></div>
         <div className="preview-fact"><dt>Format</dt><dd>{document.format === 'markdown' ? 'Markdown' : 'HTML'}</dd></div>
       </dl>
-      <p className="preview-raw">
-        <a href={reader.artifact.artifactUrl} target="_blank" rel="noreferrer noopener">
-          Open the raw file<Icon name="external" size={11} />
-        </a>
-        <span>Opens this revision&apos;s file on its own, outside the reader.</span>
-      </p>
     </div>
   )
 }

@@ -108,7 +108,6 @@ export function Sidebar({
       pinned: pinnedArtifactIds.includes(artifact.id),
       sourceUrl: sourceLinks.sourceUrl,
       historyUrl: sourceLinks.historyUrl,
-      rawUrl: safeRawArtifactUrl(artifact.artifactUrl),
       onTogglePin: () => onTogglePin(artifact),
       onCopyLink: () => void copyArtifactLink(artifact),
     }
@@ -286,16 +285,6 @@ export function Sidebar({
       </footer>
     </aside>
   )
-}
-
-function safeRawArtifactUrl(value: string) {
-  try {
-    const url = new URL(value, window.location.origin)
-    if (url.origin !== window.location.origin || !url.pathname.startsWith('/_artifacts/')) return undefined
-    return url.href
-  } catch {
-    return undefined
-  }
 }
 
 function folderAncestors(path?: string) {

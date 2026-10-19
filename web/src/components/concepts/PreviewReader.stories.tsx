@@ -222,17 +222,6 @@ function NavLinks({ s }: { s: Scenario }) {
   )
 }
 
-function RawLink() {
-  return (
-    <p className="pv-raw">
-      <a href="#raw" target="_blank" rel="noreferrer noopener" onClick={(e) => e.preventDefault()}>
-        Open the raw file<Icon name="external" size={11} />
-      </a>
-      <span>Opens this revision&apos;s file on its own, outside the reader.</span>
-    </p>
-  )
-}
-
 /** The exceptional-state message. Normal PR and manual previews have none. */
 function NoticeText({ s }: { s: Scenario }) {
   if (s.key === 'superseded') {
@@ -424,7 +413,6 @@ function PreviewSection({ s, open, onToggle }: { s: Scenario; open: boolean; onT
       <PrimaryFacts s={s} />
       <NavLinks s={s} />
       <PreviewMore s={s} open={open} onToggle={onToggle} />
-      <RawLink />
     </section>
   )
 }
@@ -520,8 +508,7 @@ function Frame({ variant, s, width, open: initialOpen, shot }: { variant: Varian
               {open && s.available ? (
                 <div className="pv-banner-more">
                   <ExpandedFacts s={s} />
-                  <RawLink />
-                </div>
+                            </div>
               ) : null}
             </section>
           ) : null}
@@ -585,7 +572,6 @@ function Frame({ variant, s, width, open: initialOpen, shot }: { variant: Varian
                   <PrimaryFacts s={s} />
                   <NavLinks s={s} />
                   <ExpandedFacts s={s} />
-                  {s.available ? <RawLink /> : null}
                 </div>
               </aside>
             ) : null}

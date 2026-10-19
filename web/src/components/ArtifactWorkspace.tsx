@@ -653,13 +653,6 @@ export function ArtifactWorkspace({
       available: Boolean(currentArtifact || currentDirectory || previewArtifact),
       onSelect: () => void copyCurrentLink(showToast),
     },
-    {
-      title: 'Open raw artifact',
-      available: Boolean(bodyArtifact),
-      onSelect: () => {
-        if (bodyArtifact) window.open(bodyArtifact.artifactUrl, '_blank', 'noopener,noreferrer')
-      },
-    },
   ]
 
   function showToast(message: string) {
@@ -1048,14 +1041,6 @@ export function ArtifactWorkspace({
       onSelect: () => void copyCurrentLink(showToast),
     })
   }
-  if (bodyArtifact) {
-    moreMenuItems.push({
-      id: 'raw',
-      label: 'Open raw artifact',
-      icon: 'external',
-      onSelect: () => { window.open(bodyArtifact.artifactUrl, '_blank', 'noopener,noreferrer') },
-    })
-  }
   if (currentArtifact || previewArtifact || (currentDirectory && !isSiteRoot)) {
     moreMenuItems.push({
       id: 'site-home',
@@ -1313,18 +1298,6 @@ export function ArtifactWorkspace({
                   >
                     <Icon name="copy" size={15} />
                   </button>
-                ) : null}
-                {bodyArtifact && !preview ? (
-                  <a
-                    className="icon-button"
-                    title="Open raw artifact"
-                    aria-label="Open raw artifact"
-                    href={bodyArtifact.artifactUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    <Icon name="external" size={15} />
-                  </a>
                 ) : null}
               </div>
             )}
