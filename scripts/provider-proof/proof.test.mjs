@@ -868,10 +868,17 @@ test('owner SSH approval uses the pinned anchor and both entry points enforce on
   };
   assert.equal(copiedPolicy.verifyApprovalRecord(record, verifiedManifest, 'A4', 'inventory', approvalNow), true);
   assert.equal((await verifyFileWithCopiedHarness(fixture, 'A4', 'inventory')).sealDigest, fixture.activeSeal.digest);
-  assert.equal(ownerTrustAnchorEnrolled(), false);
-  assert.equal(loadOwnerTrustAnchor().status, 'unenrolled');
-  assert.equal(verifyApprovalRecord(record, verifiedManifest, 'A4', 'inventory', approvalNow), false, 'production uses only the checked-in unenrolled anchor');
-  await assert.rejects(verifyApprovalFile({ manifestPath: fixture.manifestPath, approvalId: 'A4', command: 'inventory', now: approvalNow }), /OWNER_APPROVAL_INVALID/);
+  const productionAnchor = loadOwnerTrustAnchor();
+  assert.equal(ownerTrustAnchorEnrolled(), true);
+  assert.equal(productionAnchor.status, 'enrolled');
+  assert.equal(productionAnchor.fingerprint, fingerprintKey(productionAnchor.publicKey));
+  assert.notEqual(fingerprintKey(fixture.keyPair.publicKey), productionAnchor.fingerprint, 'the fixture key is not the enrolled owner key');
+  assert.equal(record.reviewerKeyFingerprint, fingerprintKey(fixture.keyPair.publicKey));
+  assert.equal(verifyApprovalRecord(record, verifiedManifest, 'A4', 'inventory', approvalNow), false, 'production accepts only the checked-in owner key');
+  await assert.rejects(
+    verifyApprovalFile({ manifestPath: fixture.manifestPath, approvalId: 'A4', command: 'inventory', now: approvalNow }),
+    (error) => error.code === 'OWNER_APPROVAL_INVALID',
+  );
 
   const legacyManifestPath = path.join(root, 'legacy-manifest.json');
   await writeFile(legacyManifestPath, `${JSON.stringify({ ...fixture.manifest, reviewKeys: { owner: fixture.keyPair.publicKey } }, null, 2)}\n`);
@@ -881,8 +888,34 @@ test('owner SSH approval uses the pinned anchor and both entry points enforce on
   const productionAttempt = spawnSync('node', [path.resolve('scripts/provider-proof/proof.mjs'), 'approval-prepare', '--manifest', fixture.manifestPath, '--approval', 'A4', '--command', 'inventory', '--expires-at', expiry], {
     cwd: process.cwd(), encoding: 'utf8', env: { PATH: process.env.PATH ?? '/usr/bin:/bin', ARTIFACT_PAGES_OWNER_PUBLIC_KEY: fixture.keyPair.publicKey },
   });
-  assert.equal(productionAttempt.status, 2);
-  assert.match(productionAttempt.stderr, /OWNER_TRUST_ANCHOR_UNENROLLED/);
+  assert.equal(productionAttempt.status, 0, productionAttempt.stderr);
+  const preparedByProduction = JSON.parse(productionAttempt.stdout);
+  const productionPayloadPath = path.resolve(process.cwd(), preparedByProduction.payloadPath);
+  const relativePayloadPath = path.relative(root, productionPayloadPath);
+  assert.ok(relativePayloadPath && !relativePayloadPath.startsWith(`..${path.sep}`) && relativePayloadPath !== '..', 'production prepare writes inside the test temp root');
+  const productionPayload = JSON.parse(await readFile(productionPayloadPath, 'utf8'));
+  assert.equal(productionPayload.reviewerKeyFingerprint, productionAnchor.fingerprint, 'the environment override must not replace the checked-in anchor');
+
+  const unenrolledRoot = path.join(root, 'unenrolled');
+  await mkdir(unenrolledRoot, { recursive: true });
+  const unenrolledHarness = await copyTestHarness(unenrolledRoot, fixture.keyPair.publicKey);
+  await writeFile(path.join(unenrolledHarness, 'trust-anchor.json'), `${JSON.stringify({
+    schemaVersion: 1,
+    keyId: 'owner',
+    algorithm: 'ssh-ed25519',
+    status: 'unenrolled',
+    publicKey: null,
+    fingerprint: null,
+  }, null, 2)}\n`);
+  const unenrolledHelpers = await copiedModule(unenrolledHarness, 'approval-helpers.mjs');
+  await assert.rejects(
+    unenrolledHelpers.prepareApproval({ manifestPath: fixture.manifestPath, approvalId: 'A4', command: 'inventory', expiresAt: expiry, now: '2026-10-18T00:00:00.000Z' }),
+    (error) => error.code === 'OWNER_TRUST_ANCHOR_UNENROLLED',
+  );
+  await assert.rejects(
+    unenrolledHelpers.attachApproval({ manifestPath: fixture.manifestPath, approvalId: 'A4', command: 'inventory', payloadPath: fixture.prepared.payloadPath, now: approvalNow }),
+    (error) => error.code === 'OWNER_TRUST_ANCHOR_UNENROLLED',
+  );
 
   const originalBytes = await readFile(fixture.attached.approvalFile);
   const changedRecord = async (candidate) => {
