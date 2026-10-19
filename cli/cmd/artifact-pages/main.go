@@ -486,6 +486,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	}
 	writeIndexReport(stdout, *siteID, result, outputPath, metadataPath)
 	writeSnippetLimitWarnings(stderr, result.SnippetTruncated, result.SnippetOmitted)
+	writeAttributionWarning(stderr, result.AttributionWarning)
 	return nil
 }
 
@@ -919,6 +920,7 @@ func runSiteSync(ctx context.Context, args []string, stdout, stderr io.Writer) e
 	if err != nil {
 		return withResolvedResult(err, result, resolved)
 	}
+	writeAttributionWarning(stderr, result.AttributionWarning)
 	if *format == "json" {
 		return encodeDeploymentResult(stdout, result, resolved)
 	}

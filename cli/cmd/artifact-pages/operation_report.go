@@ -217,6 +217,13 @@ func writeSnippetLimitWarnings(w io.Writer, truncated, omitted []string) {
 	writePaths(omitted, "search excerpts omit %d %s because the site's page text exceeds 33554432 bytes:")
 }
 
+func writeAttributionWarning(w io.Writer, warning string) {
+	if strings.TrimSpace(warning) == "" {
+		return
+	}
+	fmt.Fprintf(w, "  %s %s\n", reportTone("Warning:", "update", terminalColor(w)), warning)
+}
+
 func writeConfigReport(w io.Writer, locator, path string) {
 	reportHeader(w, "config set-default", "saved", false)
 	fmt.Fprintf(w, "  Locator   %s\n  Saved in  %s\n\n  Updated only the user's default locator. No deployment changes.\n", reportText(locator), reportText(path))

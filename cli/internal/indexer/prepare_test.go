@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -75,6 +77,104 @@ func TestPrepareBuildFingerprintTracksOutputInputsAndIgnoresCleanCheckoutMtime(t
 	}
 	if policyInput.InputRoot() == first.InputRoot() {
 		t.Fatal("publisher policy change did not change the input root")
+	}
+}
+
+func TestPrepareBuildFingerprintIncludesGitAttributionButExcludesGitHubSnapshot(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "stub-token")
+	t.Setenv("GH_TOKEN", "")
+	repositoryRoot := initializeGitRepository(t)
+	restoreWorkingDirectory := chdirForTest(t, repositoryRoot)
+	defer restoreWorkingDirectory()
+	runGit(t, repositoryRoot, "remote", "add", "origin", "git@github.com:acme/repo.git")
+	writeFixtureFile(t, repositoryRoot, "content/index.html", "<h1>Report</h1>")
+	commitFixtureWithIdentities(t, repositoryRoot, "publish report", time.Date(2026, 3, 4, 5, 6, 7, 0, time.UTC),
+		"Alice", "alice@example.invalid", "GitHub", "web-flow@example.invalid")
+	sha := gitOutputForTest(t, repositoryRoot, "rev-parse", "HEAD")
+	makeConfig := func(login string) *githubEnrichmentConfig {
+		config := githubTestConfig(func(request *http.Request) (*http.Response, error) {
+			return responseFor(request, http.StatusOK, githubResponse(sha, login, "https://avatars.githubusercontent.com/u/1?v=4"), nil), nil
+		})
+		return &config
+	}
+	options := BuildOptions{SiteID: "sre", SourceDir: "content", RepositoryURL: "https://github.com/acme/repo", githubEnrichment: makeConfig("octocat")}
+	first, err := PrepareBuild(context.Background(), options)
+	if err != nil {
+		t.Fatalf("PrepareBuild(first) error = %v", err)
+	}
+	if buildInputPolicyVersion != 4 || first.documents[0].lastAuthor == nil || first.documents[0].lastAuthor.CommitSHA != sha || first.documents[0].lastAuthor.GitHub == nil || first.documents[0].lastAuthor.GitHub.Login != "octocat" {
+		t.Fatalf("prepared author or policy = policy %d, author %+v", buildInputPolicyVersion, first.documents[0].lastAuthor)
+	}
+	options.githubEnrichment = makeConfig("octo-cat")
+	second, err := PrepareBuild(context.Background(), options)
+	if err != nil {
+		t.Fatalf("PrepareBuild(second) error = %v", err)
+	}
+	if second.InputRoot() != first.InputRoot() {
+		t.Fatal("GitHub account change altered the Git-input fingerprint")
+	}
+	third, err := PrepareBuild(context.Background(), options)
+	if err != nil {
+		t.Fatalf("PrepareBuild(third) error = %v", err)
+	}
+	if third.InputRoot() != second.InputRoot() || !third.Reusable() {
+		t.Fatalf("identical prepared enrichment was not reusable: second=%q third=%q reusable=%v", second.InputRoot(), third.InputRoot(), third.Reusable())
+	}
+
+	options.DeferGitHubEnrichment = true
+	deferred, err := PrepareBuild(context.Background(), options)
+	if err != nil {
+		t.Fatalf("PrepareBuild(deferred) error = %v", err)
+	}
+	if deferred.documents[0].lastAuthor == nil || deferred.documents[0].lastAuthor.GitHub != nil || deferred.InputRoot() != first.InputRoot() {
+		t.Fatalf("deferred build author/root = %+v/%s, want Git-only author and stable root", deferred.documents[0].lastAuthor, deferred.InputRoot())
+	}
+	if err := deferred.EnrichGitHub(context.Background(), nil); err != nil {
+		t.Fatalf("EnrichGitHub() error = %v", err)
+	}
+	if deferred.documents[0].lastAuthor.GitHub == nil || deferred.documents[0].lastAuthor.GitHub.Login != "octo-cat" || deferred.InputRoot() != first.InputRoot() {
+		t.Fatalf("same-root enrichment = %+v, root %s", deferred.documents[0].lastAuthor, deferred.InputRoot())
+	}
+}
+
+func TestPrepareBuildOmitsBlankAuthorAndRederivesWithoutChangingRoot(t *testing.T) {
+	repositoryRoot := initializeGitRepository(t)
+	restoreWorkingDirectory := chdirForTest(t, repositoryRoot)
+	defer restoreWorkingDirectory()
+	writeFixtureFile(t, repositoryRoot, "content/index.html", "<title>Blank author</title><h1>Blank author</h1>")
+	runGit(t, repositoryRoot, "add", "--all")
+	date := time.Date(2026, 5, 6, 7, 8, 9, 0, time.UTC).Unix()
+	commit := fmt.Sprintf("tree %s\nauthor    <blank@example.invalid> %d +0000\ncommitter GitHub <web-flow@example.invalid> %d +0000\n\nblank author\n", gitOutputForTest(t, repositoryRoot, "write-tree"), date, date)
+	command := exec.Command("git", "hash-object", "-t", "commit", "-w", "--stdin")
+	command.Dir = repositoryRoot
+	command.Stdin = strings.NewReader(commit)
+	commitSHA, err := command.Output()
+	if err != nil {
+		t.Fatalf("write blank-author commit: %v", err)
+	}
+	runGit(t, repositoryRoot, "update-ref", "HEAD", strings.TrimSpace(string(commitSHA)))
+	options := BuildOptions{SiteID: "sre", SourceDir: "content", OutputDir: ".local/output", RejectSymlinks: true}
+	options.PriorState = func(context.Context) (*PriorSiteState, error) {
+		return &PriorSiteState{Documents: map[string]PriorDocument{
+			"index.html": {UpdatedAt: time.Date(2026, 5, 6, 7, 8, 9, 0, time.UTC), LastCommitter: "GitHub"},
+		}}, nil
+	}
+	first, err := PrepareBuild(context.Background(), options)
+	if err != nil {
+		t.Fatalf("PrepareBuild(first) error = %v", err)
+	}
+	second, err := PrepareBuild(context.Background(), options)
+	if err != nil {
+		t.Fatalf("PrepareBuild(second) error = %v", err)
+	}
+	if len(first.documents) != 1 || first.documents[0].lastAuthor != nil || first.documents[0].lastCommitter != "GitHub" {
+		t.Fatalf("blank Git author emitted attribution %+v; want omitted author and preserved committer", first.documents)
+	}
+	if first.InputRoot() == "" || second.InputRoot() != first.InputRoot() || !first.Reusable() || !second.Reusable() {
+		t.Fatalf("repeated blank-author derivation changed publish root/reusability: %q/%v then %q/%v", first.InputRoot(), first.Reusable(), second.InputRoot(), second.Reusable())
+	}
+	if len(second.documents) != 1 || second.documents[0].lastAuthor != nil || second.documents[0].lastCommitter != "GitHub" {
+		t.Fatalf("second derivation did not preserve blank-author omission: %+v", second.documents)
 	}
 }
 

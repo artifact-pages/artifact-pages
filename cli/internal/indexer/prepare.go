@@ -15,9 +15,11 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/artifact-pages/artifact-pages/cli/internal/gitdepth"
 )
 
-const buildInputPolicyVersion = 2
+const buildInputPolicyVersion = 4
 
 // SourceFileSnapshot is one regular source file captured by PrepareBuild.
 // Bytes are the exact immutable bytes used by both index construction and
@@ -36,6 +38,7 @@ type preparedDocument struct {
 	artifact      discoveredArtifact
 	updatedAt     time.Time
 	lastCommitter string
+	lastAuthor    *ArtifactAuthor
 }
 
 // PreparedBuild is an immutable local snapshot with all Git-derived metadata
@@ -47,25 +50,80 @@ type PreparedBuild struct {
 	reusable  bool
 	files     []SourceFileSnapshot
 
-	options        BuildOptions
-	outputRoot     string
-	repositoryRoot string
-	relativeSource string
-	gitInfo        gitMetadata
-	documents      []preparedDocument
-	fileByRelative map[string]SourceFileSnapshot
-	scannedFiles   int
-	indexTime      time.Time
+	options            BuildOptions
+	outputRoot         string
+	repositoryRoot     string
+	relativeSource     string
+	gitInfo            gitMetadata
+	documents          []preparedDocument
+	fileByRelative     map[string]SourceFileSnapshot
+	scannedFiles       int
+	indexTime          time.Time
+	attributionWarning string
 }
 
-// InputRoot is a stable hash of all inputs that affect the generated
-// projection, excluding the transaction-time generatedAt field.
+// NeedsGitHubAssociation reports whether this prepared Git snapshot can reuse or resolve
+// an account association under the source/origin trust rule.
+func (prepared *PreparedBuild) NeedsGitHubAssociation() bool {
+	source, sourceOK := parseGitHubSourceRepository(prepared.gitInfo.repositoryURL)
+	origin, originOK := parseGitHubOrigin(prepared.gitInfo.originRemote)
+	if !sourceOK || !originOK || !strings.EqualFold(source.key(), origin.key()) {
+		return false
+	}
+	for _, document := range prepared.documents {
+		if document.lastAuthor != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// EnrichGitHub attaches optional account snapshots after a publisher has ruled out an ordinary no-op.
+// The association is output metadata and deliberately does not change InputRoot.
+func (prepared *PreparedBuild) EnrichGitHub(ctx context.Context, prior *PriorSiteState) error {
+	updates := make(map[string]artifactGitUpdate, len(prepared.documents))
+	for _, document := range prepared.documents {
+		updates[document.artifact.relative] = artifactGitUpdate{lastAuthor: cloneArtifactAuthor(document.lastAuthor)}
+	}
+	config := defaultGitHubEnrichmentConfig()
+	if prepared.options.githubEnrichment != nil {
+		config = *prepared.options.githubEnrichment
+	}
+	warning, err := enrichGitAuthors(ctx, prepared.gitInfo, updates, prior, config)
+	if err != nil {
+		return err
+	}
+	for i := range prepared.documents {
+		prepared.documents[i].lastAuthor = cloneArtifactAuthor(updates[prepared.documents[i].artifact.relative].lastAuthor)
+	}
+	prepared.attributionWarning = warning
+	return nil
+}
+
+func gitAuthorName(author *ArtifactAuthor) string {
+	if author == nil {
+		return ""
+	}
+	return author.Name
+}
+func gitAuthorSHA(author *ArtifactAuthor) string {
+	if author == nil {
+		return ""
+	}
+	return author.CommitSHA
+}
+
+// InputRoot is a stable hash of deterministic publish inputs and projection
+// policy. Optional GitHub account snapshots and generatedAt are excluded.
 func (prepared *PreparedBuild) InputRoot() string { return prepared.inputRoot }
 
 // Reusable reports whether the resolved metadata can be safely reused on a
 // matching input root. It is false when Build's current contract uses the
 // invocation clock for an absent tracked dependency.
 func (prepared *PreparedBuild) Reusable() bool { return prepared.reusable }
+
+// AttributionWarning is a sanitized summary of optional GitHub lookup failures.
+func (prepared *PreparedBuild) AttributionWarning() string { return prepared.attributionWarning }
 
 // SourceFiles returns a copy of the snapshot's public file metadata. Bytes
 // remain private so callers cannot mutate content after its fingerprint was
@@ -111,9 +169,11 @@ type fingerprintFile struct {
 }
 
 type fingerprintDocument struct {
-	Path          string `json:"path"`
-	UpdatedAt     string `json:"updatedAt"`
-	LastCommitter string `json:"lastCommitter,omitempty"`
+	Path           string `json:"path"`
+	UpdatedAt      string `json:"updatedAt"`
+	LastCommitter  string `json:"lastCommitter,omitempty"`
+	LastAuthorName string `json:"lastAuthorName,omitempty"`
+	LastAuthorSHA  string `json:"lastAuthorSha,omitempty"`
 }
 
 type sourceFileReader func(string) ([]byte, error)
@@ -207,15 +267,37 @@ func prepareBuild(ctx context.Context, options BuildOptions, captureMode sourceC
 	if err := ValidateUTF8RelativePath(relativeSource); err != nil {
 		return nil, fmt.Errorf("source path %w", err)
 	}
-	gitUpdates, err := resolveGitUpdates(ctx, repositoryRoot, relativeSource, artifacts, files, options.PriorState)
+	var prior *PriorSiteState
+	shallow, err := gitdepth.IsShallow(ctx, repositoryRoot)
+	if err != nil {
+		return nil, fmt.Errorf("detect shallow Git checkout: %w", err)
+	}
+	if options.PriorState != nil && (!options.DeferGitHubEnrichment || shallow) {
+		prior, err = options.PriorState(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("read deployed site state: %w", err)
+		}
+	}
+	gitUpdates, err := resolveGitUpdates(ctx, repositoryRoot, relativeSource, artifacts, files, prior)
 	if err != nil {
 		return nil, err
+	}
+	gitInfo := resolveGitMetadata(ctx, repositoryRoot, options)
+	githubConfig := defaultGitHubEnrichmentConfig()
+	if options.githubEnrichment != nil {
+		githubConfig = *options.githubEnrichment
+	}
+	attributionWarning := ""
+	if !options.DeferGitHubEnrichment {
+		attributionWarning, err = enrichGitAuthors(ctx, gitInfo, gitUpdates, prior, githubConfig)
+		if err != nil {
+			return nil, err
+		}
 	}
 	workingTreeUpdates, clockDependent, err := artifactWorkingTreeUpdatesFromSnapshot(ctx, repositoryRoot, relativeSource, artifacts, files, indexTime)
 	if err != nil {
 		return nil, err
 	}
-	gitInfo := resolveGitMetadata(ctx, repositoryRoot, options)
 	title := strings.TrimSpace(options.SiteTitle)
 	if title == "" {
 		title = humanize(path.Base(options.SiteID))
@@ -229,16 +311,17 @@ func prepareBuild(ctx context.Context, options BuildOptions, captureMode sourceC
 	options.SourceDir = sourcePath
 	options.OutputDir = outputRoot
 	prepared := &PreparedBuild{
-		reusable:       len(clockDependent) == 0,
-		files:          files,
-		fileByRelative: make(map[string]SourceFileSnapshot, len(files)),
-		options:        options,
-		outputRoot:     outputRoot,
-		repositoryRoot: repositoryRoot,
-		relativeSource: relativeSource,
-		gitInfo:        gitInfo,
-		scannedFiles:   scannedFiles,
-		indexTime:      indexTime,
+		reusable:           len(clockDependent) == 0,
+		files:              files,
+		fileByRelative:     make(map[string]SourceFileSnapshot, len(files)),
+		options:            options,
+		outputRoot:         outputRoot,
+		repositoryRoot:     repositoryRoot,
+		relativeSource:     relativeSource,
+		gitInfo:            gitInfo,
+		scannedFiles:       scannedFiles,
+		indexTime:          indexTime,
+		attributionWarning: attributionWarning,
 	}
 	for _, file := range files {
 		if captureMode.indexOnly && !isDocumentPath(file.RelativePath) {
@@ -260,7 +343,10 @@ func prepareBuild(ctx context.Context, options BuildOptions, captureMode sourceC
 				return nil, fmt.Errorf("read modification time for artifact %q: artifact directory contains no files", artifact.relative)
 			}
 		}
-		prepared.documents = append(prepared.documents, preparedDocument{artifact: artifact, updatedAt: updatedAt, lastCommitter: gitUpdate.lastCommitter})
+		prepared.documents = append(prepared.documents, preparedDocument{
+			artifact: artifact, updatedAt: updatedAt, lastCommitter: gitUpdate.lastCommitter,
+			lastAuthor: cloneArtifactAuthor(gitUpdate.lastAuthor),
+		})
 	}
 	if !captureMode.indexOnly {
 		prepared.inputRoot, err = fingerprintPreparedBuild(prepared)
@@ -530,7 +616,7 @@ func artifactWorkingTreeUpdatesFromSnapshot(ctx context.Context, repositoryRoot,
 
 func fingerprintPreparedBuild(prepared *PreparedBuild) (string, error) {
 	fingerprint := inputFingerprint{
-		Domain: "artifact-pages-site-input-v2", Policy: buildInputPolicyVersion,
+		Domain: "artifact-pages-site-input-v4", Policy: buildInputPolicyVersion,
 		Publisher: prepared.options.InputPolicy, SiteID: prepared.options.SiteID,
 		Title: prepared.options.SiteTitle, Description: prepared.options.SiteDescription,
 		FullText: true, SourcePath: prepared.relativeSource,
@@ -544,7 +630,8 @@ func fingerprintPreparedBuild(prepared *PreparedBuild) (string, error) {
 	for _, document := range prepared.documents {
 		fingerprint.Documents = append(fingerprint.Documents, fingerprintDocument{
 			Path: document.artifact.relative, UpdatedAt: document.updatedAt.UTC().Format(time.RFC3339),
-			LastCommitter: document.lastCommitter,
+			LastCommitter:  document.lastCommitter,
+			LastAuthorName: gitAuthorName(document.lastAuthor), LastAuthorSHA: gitAuthorSHA(document.lastAuthor),
 		})
 	}
 	encoded, err := json.Marshal(fingerprint)

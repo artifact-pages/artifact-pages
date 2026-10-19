@@ -72,25 +72,31 @@ type BuildOptions struct {
 	// affect published bytes but are outside the indexer's own schema.
 	InputPolicy    string
 	RejectSymlinks bool
-	Now            func() time.Time
+	// DeferGitHubEnrichment lets a publisher decide its no-op before optional lookups.
+	DeferGitHubEnrichment bool
+	Now                   func() time.Time
 	// PriorState, when set, lets a shallow checkout carry forward Git
 	// metadata from the currently deployed site instead of fetching full
-	// history. It is consulted only for shallow repositories.
+	// history.
 	PriorState PriorStateLoader
+	// githubEnrichment is an internal test seam; CLI callers use the fixed API
+	// endpoint and budgets from defaultGitHubEnrichmentConfig.
+	githubEnrichment *githubEnrichmentConfig
 }
 
 type BuildResult struct {
-	SearchFiles      []string
-	SearchBytes      int
-	SnippetTruncated []string
-	SnippetOmitted   []string
-	FilesScanned     int
-	ArtifactsIndexed int
-	OutputPath       string
-	OutputBytes      int
-	MetadataPath     string
-	MetadataBytes    int
-	Elapsed          time.Duration
+	SearchFiles        []string
+	SearchBytes        int
+	SnippetTruncated   []string
+	SnippetOmitted     []string
+	AttributionWarning string
+	FilesScanned       int
+	ArtifactsIndexed   int
+	OutputPath         string
+	OutputBytes        int
+	MetadataPath       string
+	MetadataBytes      int
+	Elapsed            time.Duration
 }
 
 // GitSourceIdentity describes the GitHub repository and repository-relative
@@ -143,12 +149,24 @@ type ArtifactIndexEntry struct {
 	ArtifactURL   string             `json:"artifactUrl"`
 	UpdatedAt     string             `json:"updatedAt"`
 	LastCommitter *ArtifactCommitter `json:"lastCommitter,omitempty"`
+	LastAuthor    *ArtifactAuthor    `json:"lastAuthor,omitempty"`
 	Source        *ArtifactSource    `json:"source,omitempty"`
 	TOC           []TOCEntry         `json:"toc,omitempty"`
 }
 
 type ArtifactCommitter struct {
 	Name string `json:"name"`
+}
+
+type ArtifactAuthor struct {
+	Name      string                 `json:"name"`
+	CommitSHA string                 `json:"commitSha"`
+	GitHub    *ArtifactGitHubAccount `json:"github,omitempty"`
+}
+
+type ArtifactGitHubAccount struct {
+	Login     string `json:"login"`
+	AvatarURL string `json:"avatarUrl,omitempty"`
 }
 
 type ArtifactSource struct {
@@ -176,12 +194,15 @@ type discoveredArtifact struct {
 type gitMetadata struct {
 	repository    string
 	repositoryURL string
+	originRemote  string
 	ref           string
 }
 
 type artifactGitUpdate struct {
 	updatedAt     time.Time
 	lastCommitter string
+	commitSHA     string
+	lastAuthor    *ArtifactAuthor
 }
 
 func Build(ctx context.Context, options BuildOptions) (BuildResult, error) {
@@ -284,6 +305,9 @@ func BuildPrepared(ctx context.Context, prepared *PreparedBuild, outputDir strin
 		if document.lastCommitter != "" {
 			entry.LastCommitter = &ArtifactCommitter{Name: document.lastCommitter}
 		}
+		if document.lastAuthor != nil {
+			entry.LastAuthor = cloneArtifactAuthor(document.lastAuthor)
+		}
 		if gitInfo.repository != "" {
 			repositoryFilePath := artifact.relative
 			if relativeSource != "." {
@@ -366,17 +390,18 @@ func BuildPrepared(ctx context.Context, prepared *PreparedBuild, outputDir strin
 	}
 
 	return BuildResult{
-		SearchFiles:      searchFiles,
-		SearchBytes:      searchBytes,
-		SnippetTruncated: snippetTruncated,
-		SnippetOmitted:   snippetOmitted,
-		FilesScanned:     scannedFiles,
-		ArtifactsIndexed: len(index.Artifacts),
-		OutputPath:       indexPath,
-		OutputBytes:      len(serialized),
-		MetadataPath:     metadataPath,
-		MetadataBytes:    len(metadataBytes),
-		Elapsed:          time.Since(startedAt),
+		SearchFiles:        searchFiles,
+		SearchBytes:        searchBytes,
+		SnippetTruncated:   snippetTruncated,
+		SnippetOmitted:     snippetOmitted,
+		AttributionWarning: prepared.attributionWarning,
+		FilesScanned:       scannedFiles,
+		ArtifactsIndexed:   len(index.Artifacts),
+		OutputPath:         indexPath,
+		OutputBytes:        len(serialized),
+		MetadataPath:       metadataPath,
+		MetadataBytes:      len(metadataBytes),
+		Elapsed:            time.Since(startedAt),
 	}, nil
 }
 
@@ -903,6 +928,8 @@ type artifactGitHistory struct {
 	visible map[string]artifactGitUpdate
 	// boundaryTime is the newest boundary commit touching each document.
 	boundaryTime map[string]time.Time
+	// documentHistory records documents with a reachable commit of their own.
+	documentHistory map[string]struct{}
 }
 
 func readArtifactGitHistory(ctx context.Context, repositoryRoot, sourcePath string, artifacts []discoveredArtifact, boundaries map[string]struct{}) (artifactGitHistory, error) {
@@ -912,7 +939,7 @@ func readArtifactGitHistory(ctx context.Context, repositoryRoot, sourcePath stri
 	if pathspec == "" {
 		pathspec = "."
 	}
-	command := exec.CommandContext(ctx, "git", "log", "-z", "--format=%ct%x1f%cn%x1f%H", "--name-only", "--no-renames", "--", filepath.FromSlash(pathspec))
+	command := exec.CommandContext(ctx, "git", "log", "--full-history", "--diff-merges=first-parent", "-z", "--format=%ct%x1f%cn%x1f%an%x1f%H", "--name-only", "--no-renames", "--", filepath.FromSlash(pathspec))
 	command.Dir = repositoryRoot
 	output, err := command.CombinedOutput()
 	if err != nil {
@@ -920,24 +947,22 @@ func readArtifactGitHistory(ctx context.Context, repositoryRoot, sourcePath stri
 	}
 
 	result := artifactGitHistory{
-		latest:       make(map[string]artifactGitUpdate, len(artifacts)),
-		visible:      make(map[string]artifactGitUpdate),
-		boundaryTime: make(map[string]time.Time),
+		latest:          make(map[string]artifactGitUpdate, len(artifacts)),
+		visible:         make(map[string]artifactGitUpdate),
+		boundaryTime:    make(map[string]time.Time),
+		documentHistory: make(map[string]struct{}, len(artifactFiles)),
 	}
-	documentHistory := make(map[string]struct{}, len(artifactFiles))
 	parts := bytes.Split(output, []byte{0})
 	var currentCommitTime time.Time
 	var currentCommitter string
+	var currentAuthor string
+	var currentSHA string
 	currentBoundary := false
-	for index, part := range parts {
+	for _, part := range parts {
 		value := string(part)
-		header := bytes.Split(part, []byte{0x1f})
-		if len(header) == 3 && len(parts) > index+1 && bytes.HasPrefix(parts[index+1], []byte{'\n'}) {
-			if seconds, parseErr := strconv.ParseInt(string(header[0]), 10, 64); parseErr == nil {
-				currentCommitTime = time.Unix(seconds, 0).UTC()
-				currentCommitter = string(header[1])
-				_, currentBoundary = boundaries[strings.TrimSpace(string(header[2]))]
-			}
+		if timestamp, committer, author, sha, ok := parseArtifactGitHistoryHeader(part); ok {
+			currentCommitTime, currentCommitter, currentAuthor, currentSHA = timestamp, committer, author, sha
+			_, currentBoundary = boundaries[currentSHA]
 			continue
 		}
 		if currentCommitTime.IsZero() {
@@ -956,32 +981,50 @@ func readArtifactGitHistory(ctx context.Context, repositoryRoot, sourcePath stri
 			relativeFile = strings.TrimPrefix(relativeFile, prefix)
 		}
 		if artifactPath, isArtifactFile := artifactFiles[relativeFile]; isArtifactFile {
-			documentHistory[artifactPath] = struct{}{}
+			result.documentHistory[artifactPath] = struct{}{}
 		}
 		for _, artifactPath := range artifactPathsForFile(relativeFile, artifactDirectories, artifactFiles) {
-			update := result.latest[artifactPath]
-			if currentCommitTime.After(update.updatedAt) {
-				update.updatedAt = currentCommitTime
-				update.lastCommitter = currentCommitter
+			update := artifactGitUpdate{
+				updatedAt: currentCommitTime, lastCommitter: currentCommitter, commitSHA: currentSHA,
+			}
+			if strings.TrimSpace(currentAuthor) != "" {
+				update.lastAuthor = &ArtifactAuthor{Name: currentAuthor, CommitSHA: currentSHA}
+			}
+			if currentCommitTime.After(result.latest[artifactPath].updatedAt) ||
+				(currentCommitTime.Equal(result.latest[artifactPath].updatedAt) && update.commitSHA != "" && (result.latest[artifactPath].commitSHA == "" || update.commitSHA < result.latest[artifactPath].commitSHA)) {
 				result.latest[artifactPath] = update
 			}
 			if currentBoundary {
 				if currentCommitTime.After(result.boundaryTime[artifactPath]) {
 					result.boundaryTime[artifactPath] = currentCommitTime
 				}
-			} else if visible := result.visible[artifactPath]; currentCommitTime.After(visible.updatedAt) {
-				result.visible[artifactPath] = artifactGitUpdate{updatedAt: currentCommitTime, lastCommitter: currentCommitter}
+			} else if visible := result.visible[artifactPath]; currentCommitTime.After(visible.updatedAt) ||
+				(currentCommitTime.Equal(visible.updatedAt) && update.commitSHA != "" && (visible.commitSHA == "" || update.commitSHA < visible.commitSHA)) {
+				result.visible[artifactPath] = update
 			}
 		}
 	}
 	for _, artifact := range artifacts {
-		if _, hasDocumentHistory := documentHistory[artifact.relative]; !hasDocumentHistory {
+		if _, hasDocumentHistory := result.documentHistory[artifact.relative]; !hasDocumentHistory {
 			delete(result.latest, artifact.relative)
 			delete(result.visible, artifact.relative)
 			delete(result.boundaryTime, artifact.relative)
 		}
 	}
 	return result, nil
+}
+
+func parseArtifactGitHistoryHeader(part []byte) (time.Time, string, string, string, bool) {
+	header := bytes.Split(part, []byte{0x1f})
+	if len(header) != 4 {
+		return time.Time{}, "", "", "", false
+	}
+	seconds, err := strconv.ParseInt(string(header[0]), 10, 64)
+	sha := strings.ToLower(strings.TrimSpace(string(header[3])))
+	if err != nil || !gitObjectIDPattern.MatchString(sha) {
+		return time.Time{}, "", "", "", false
+	}
+	return time.Unix(seconds, 0).UTC(), string(header[1]), string(header[2]), sha, true
 }
 
 func artifactWorkingTreeUpdates(ctx context.Context, repositoryRoot, sourcePath string, artifacts []discoveredArtifact, deletedAt time.Time) (map[string]time.Time, error) {
@@ -1090,8 +1133,9 @@ func latestArtifactFileModTime(directory string) (time.Time, error) {
 
 func resolveGitMetadata(ctx context.Context, repositoryRoot string, options BuildOptions) gitMetadata {
 	remote, _ := gitOutput(ctx, repositoryRoot, "config", "--get", "remote.origin.url")
-	remoteRepository, remoteURL := parseRepositoryRemote(strings.TrimSpace(remote))
-	metadata := gitMetadata{repository: remoteRepository, repositoryURL: remoteURL}
+	remote = strings.TrimSpace(remote)
+	remoteRepository, remoteURL := parseRepositoryRemote(remote)
+	metadata := gitMetadata{repository: remoteRepository, repositoryURL: remoteURL, originRemote: remote}
 	if options.Repository != "" {
 		metadata.repository = strings.TrimSpace(options.Repository)
 	}

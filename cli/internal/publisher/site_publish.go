@@ -127,7 +127,25 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 			return Result{}, err
 		}
 		preparedOptions := sitePublishBuildOptions(options.SiteID, entry.Name, entry.Description, sourceDir, options.Ref, identity, conditional)
-		preparedOptions.PriorState = sitePriorStateLoader(conditional, options.SiteID)
+		if options.nowForTest != nil {
+			preparedOptions.Now = options.nowForTest
+		}
+		preparedOptions.DeferGitHubEnrichment = true
+		priorObjects := make(map[string]Object)
+		priorLoader := sitePriorStateLoaderWithCache(conditional, options.SiteID, priorObjects)
+		var preparedPrior *indexer.PriorSiteState
+		priorLoaded := false
+		preparedOptions.PriorState = func(ctx context.Context) (*indexer.PriorSiteState, error) {
+			if !priorLoaded {
+				var loadErr error
+				preparedPrior, loadErr = priorLoader(ctx)
+				if loadErr != nil {
+					return nil, loadErr
+				}
+				priorLoaded = true
+			}
+			return preparedPrior, nil
+		}
 		prepared, err := indexer.PrepareBuild(operationCtx, preparedOptions)
 		if err != nil {
 			return Result{}, fmt.Errorf("prepare site publish inputs: %w", err)
@@ -143,12 +161,29 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 		if err != nil {
 			return Result{}, err
 		}
+		if !snapshot.fastPath {
+			snapshot.priorObjects = priorObjects
+			if prepared.NeedsGitHubAssociation() && !priorLoaded {
+				preparedPrior, err = loadPriorSiteIndex(operationCtx, conditional, options.SiteID, snapshot.state, snapshot.priorObjects)
+				if err != nil {
+					return Result{}, fmt.Errorf("read deployed site index for attribution: %w", err)
+				}
+				priorLoaded = true
+			}
+			if err := prepared.EnrichGitHub(operationCtx, preparedPrior); err != nil {
+				return Result{}, fmt.Errorf("enrich site attribution: %w", err)
+			}
+		}
 		diff, err := buildSitePublishDiff(operationCtx, conditional, options.SiteID, prepared, snapshot, options.Reconcile)
 		if err != nil {
 			return Result{}, err
 		}
 		emptyPreviewChanges := []preview.CatalogReconciliationChange{}
-		result := Result{Operation: "site sync", Site: options.SiteID, Changes: diff.changes, PreviewChanges: &emptyPreviewChanges, BuildSkipped: diff.buildSkipped}
+		result := Result{
+			Operation: "site sync", Site: options.SiteID, Changes: diff.changes,
+			PreviewChanges: &emptyPreviewChanges, BuildSkipped: diff.buildSkipped,
+			AttributionWarning: prepared.AttributionWarning(),
+		}
 		if len(diff.snippetTruncated) > 0 || len(diff.snippetOmitted) > 0 {
 			result.SnippetLimits = &SnippetLimitsReport{
 				TruncatedDocuments: append([]string{}, diff.snippetTruncated...),

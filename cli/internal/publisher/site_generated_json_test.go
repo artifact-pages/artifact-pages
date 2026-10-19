@@ -358,6 +358,74 @@ func TestPriorSiteIndexReadsPlainAndGzipAndRejectsCorruption(t *testing.T) {
 	}
 }
 
+func TestPriorSiteIndexChecksSchemaAndValidatesOptionalAuthorIndependently(t *testing.T) {
+	sha := strings.Repeat("a", 40)
+	for _, test := range []struct {
+		name             string
+		body             string
+		encoding         string
+		wantAuthor       bool
+		wantLogin        string
+		wantAvatar       string
+		wantRepository   string
+		wantErrorSnippet string
+	}{
+		{
+			name:     "unknown public fields and valid snapshot",
+			body:     `{"schemaVersion":1,"futureIndexField":{"ignored":true},"site":{"id":"sre"},"generatedAt":"2026-01-01T00:00:00Z","artifacts":[{"id":"report.html","path":"report.html","updatedAt":"2026-01-01T00:00:00Z","lastCommitter":{"name":"Alice"},"lastAuthor":{"name":"Alice","commitSha":"` + sha + `","github":{"login":"octocat","avatarUrl":"https://avatars.githubusercontent.com/u/1?v=4"},"futureAuthorField":1},"source":{"repositoryUrl":"https://github.com/acme/repo"},"futureArtifactField":true}]}`,
+			encoding: "gzip", wantAuthor: true, wantLogin: "octocat", wantAvatar: "https://avatars.githubusercontent.com/u/1?v=4", wantRepository: "https://github.com/acme/repo",
+		},
+		{
+			name: "malformed author is unavailable",
+			body: `{"schemaVersion":1,"artifacts":[{"path":"report.html","updatedAt":"2026-01-01T00:00:00Z","lastCommitter":{"name":"Alice"},"lastAuthor":{"name":7,"commitSha":"` + sha + `"}}]}`,
+		},
+		{
+			name:       "malformed avatar keeps validated login for retry",
+			body:       `{"schemaVersion":1,"artifacts":[{"path":"report.html","updatedAt":"2026-01-01T00:00:00Z","lastCommitter":{"name":"Alice"},"lastAuthor":{"name":"Alice","commitSha":"` + sha + `","github":{"login":"octocat","avatarUrl":"http://avatars.githubusercontent.com/u/1"}}}]}`,
+			wantAuthor: true, wantLogin: "octocat",
+		},
+		{
+			name:             "unsupported schema checked before artifact shape",
+			body:             `{"schemaVersion":2,"artifacts":"not an array"}`,
+			wantErrorSnippet: "unsupported schemaVersion 2",
+		},
+		{
+			name:             "missing schema fails closed",
+			body:             `{"artifacts":[]}`,
+			wantErrorSnippet: "missing or non-integer schemaVersion",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			backend := newLockMemoryBackend()
+			body := []byte(test.body)
+			if test.encoding == "gzip" {
+				body = testGzipMember(t, body)
+			}
+			seedPriorIndexState(t, backend, body, test.encoding, "")
+			prior, err := sitePriorStateLoader(backend, "sre")(context.Background())
+			if test.wantErrorSnippet != "" {
+				if err == nil || !strings.Contains(err.Error(), test.wantErrorSnippet) {
+					t.Fatalf("prior loader error = %v, want %q", err, test.wantErrorSnippet)
+				}
+				return
+			}
+			if err != nil || prior == nil {
+				t.Fatalf("prior loader = %+v, %v", prior, err)
+			}
+			document := prior.Documents["report.html"]
+			if (document.LastAuthor != nil) != test.wantAuthor {
+				t.Fatalf("prior author = %+v, want present %v", document.LastAuthor, test.wantAuthor)
+			}
+			if test.wantAuthor && (document.LastAuthor.GitHub == nil || document.LastAuthor.GitHub.Login != test.wantLogin || document.LastAuthor.GitHub.AvatarURL != test.wantAvatar) {
+				t.Fatalf("prior GitHub account = %+v, want login %q and avatar %q", document.LastAuthor.GitHub, test.wantLogin, test.wantAvatar)
+			}
+			if document.RepositoryURL != test.wantRepository {
+				t.Fatalf("prior document repository URL = %q, want %q", document.RepositoryURL, test.wantRepository)
+			}
+		})
+	}
+}
+
 func seedPriorIndexState(t *testing.T, backend *lockMemoryBackend, body []byte, encoding, mutateMetadata string) {
 	t.Helper()
 	key := "_indexes/sre/index.json"
