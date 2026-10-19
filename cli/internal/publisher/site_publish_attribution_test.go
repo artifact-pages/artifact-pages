@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/artifact-pages/artifact-pages/cli/internal/indexer"
 )
@@ -277,5 +278,85 @@ func TestNoOpRequestMatrixIgnoresGitHubAssociationAndToken(t *testing.T) {
 				})
 			}
 		}
+	}
+}
+
+func TestBlankAuthorOmissionCanBeReDerivedWithoutRepublishing(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "")
+	t.Setenv("GH_TOKEN", "")
+	root := createPublisherCheckout(t, "git@github.com:acme/sre.git")
+	treeCommand := exec.Command("git", "rev-parse", "HEAD^{tree}")
+	treeCommand.Dir = root
+	treeBytes, err := treeCommand.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	date := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC).Unix()
+	commit := fmt.Sprintf("tree %s\nauthor    <blank@example.invalid> %d +0000\ncommitter GitHub <web-flow@example.invalid> %d +0000\n\nwhitespace author\n", strings.TrimSpace(string(treeBytes)), date, date)
+	commitCommand := exec.Command("git", "hash-object", "-t", "commit", "-w", "--stdin")
+	commitCommand.Dir = root
+	commitCommand.Stdin = strings.NewReader(commit)
+	commitBytes, err := commitCommand.Output()
+	if err != nil {
+		t.Fatalf("write whitespace-author commit: %v", err)
+	}
+	blankSHA := strings.TrimSpace(string(commitBytes))
+	if err := runPublisherGitAt(root, "update-ref", "HEAD", blankSHA); err != nil {
+		t.Fatal(err)
+	}
+	nameCommand := exec.Command("git", "show", "-s", "--format=%an", "HEAD")
+	nameCommand.Dir = root
+	nameBytes, err := nameCommand.Output()
+	if err != nil || strings.TrimSpace(string(nameBytes)) != "" {
+		t.Fatalf("Git author name = %q, %v; want whitespace-only author", nameBytes, err)
+	}
+
+	backend := newSitePublishProbeBackend()
+	seedPublisherRegistry(t, backend.lockMemoryBackend, registeredSREManifest)
+	options := SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts"}
+	first, err := PublishSite(context.Background(), backend, options)
+	if err != nil || first.Outcome != "synced" {
+		t.Fatalf("initial publish = %+v, %v", first, err)
+	}
+	indexObject, _, err := backend.GetObject(context.Background(), "_indexes/sre/index.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var index struct {
+		Artifacts []map[string]json.RawMessage `json:"artifacts"`
+	}
+	if err := json.Unmarshal(indexObject.Bytes, &index); err != nil {
+		t.Fatal(err)
+	}
+	if len(index.Artifacts) == 0 {
+		t.Fatal("published index has no artifacts")
+	}
+	for _, artifact := range index.Artifacts {
+		if _, exists := artifact["lastAuthor"]; exists {
+			t.Fatalf("blank-author artifact emitted lastAuthor: %s", artifact["lastAuthor"])
+		}
+	}
+	stateObject, stateETag, err := backend.GetObject(context.Background(), sitePublishStateKey("sre"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := decodeSitePublishState("sre", sitePublishStateInfo(stateObject, stateETag), stateObject.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := PublishSite(context.Background(), backend, options)
+	if err != nil || second.Outcome != "no-op" || !second.BuildSkipped {
+		t.Fatalf("repeated blank-author publish = %+v, %v; want no-op after re-derivation", second, err)
+	}
+	stateAfterObject, stateAfterETag, err := backend.GetObject(context.Background(), sitePublishStateKey("sre"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stateAfter, err := decodeSitePublishState("sre", sitePublishStateInfo(stateAfterObject, stateAfterETag), stateAfterObject.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stateAfter.Committed.InputRoot != state.Committed.InputRoot {
+		t.Fatalf("repeated blank-author derivation changed input root: %s -> %s", state.Committed.InputRoot, stateAfter.Committed.InputRoot)
 	}
 }

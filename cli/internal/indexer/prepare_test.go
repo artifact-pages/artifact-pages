@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
@@ -133,6 +134,47 @@ func TestPrepareBuildFingerprintIncludesGitAttributionButExcludesGitHubSnapshot(
 	}
 	if deferred.documents[0].lastAuthor.GitHub == nil || deferred.documents[0].lastAuthor.GitHub.Login != "octo-cat" || deferred.InputRoot() != first.InputRoot() {
 		t.Fatalf("same-root enrichment = %+v, root %s", deferred.documents[0].lastAuthor, deferred.InputRoot())
+	}
+}
+
+func TestPrepareBuildOmitsBlankAuthorAndRederivesWithoutChangingRoot(t *testing.T) {
+	repositoryRoot := initializeGitRepository(t)
+	restoreWorkingDirectory := chdirForTest(t, repositoryRoot)
+	defer restoreWorkingDirectory()
+	writeFixtureFile(t, repositoryRoot, "content/index.html", "<title>Blank author</title><h1>Blank author</h1>")
+	runGit(t, repositoryRoot, "add", "--all")
+	date := time.Date(2026, 5, 6, 7, 8, 9, 0, time.UTC).Unix()
+	commit := fmt.Sprintf("tree %s\nauthor    <blank@example.invalid> %d +0000\ncommitter GitHub <web-flow@example.invalid> %d +0000\n\nblank author\n", gitOutputForTest(t, repositoryRoot, "write-tree"), date, date)
+	command := exec.Command("git", "hash-object", "-t", "commit", "-w", "--stdin")
+	command.Dir = repositoryRoot
+	command.Stdin = strings.NewReader(commit)
+	commitSHA, err := command.Output()
+	if err != nil {
+		t.Fatalf("write blank-author commit: %v", err)
+	}
+	runGit(t, repositoryRoot, "update-ref", "HEAD", strings.TrimSpace(string(commitSHA)))
+	options := BuildOptions{SiteID: "sre", SourceDir: "content", OutputDir: ".local/output", RejectSymlinks: true}
+	options.PriorState = func(context.Context) (*PriorSiteState, error) {
+		return &PriorSiteState{Documents: map[string]PriorDocument{
+			"index.html": {UpdatedAt: time.Date(2026, 5, 6, 7, 8, 9, 0, time.UTC), LastCommitter: "GitHub"},
+		}}, nil
+	}
+	first, err := PrepareBuild(context.Background(), options)
+	if err != nil {
+		t.Fatalf("PrepareBuild(first) error = %v", err)
+	}
+	second, err := PrepareBuild(context.Background(), options)
+	if err != nil {
+		t.Fatalf("PrepareBuild(second) error = %v", err)
+	}
+	if len(first.documents) != 1 || first.documents[0].lastAuthor != nil || first.documents[0].lastCommitter != "GitHub" {
+		t.Fatalf("blank Git author emitted attribution %+v; want omitted author and preserved committer", first.documents)
+	}
+	if first.InputRoot() == "" || second.InputRoot() != first.InputRoot() || !first.Reusable() || !second.Reusable() {
+		t.Fatalf("repeated blank-author derivation changed publish root/reusability: %q/%v then %q/%v", first.InputRoot(), first.Reusable(), second.InputRoot(), second.Reusable())
+	}
+	if len(second.documents) != 1 || second.documents[0].lastAuthor != nil || second.documents[0].lastCommitter != "GitHub" {
+		t.Fatalf("second derivation did not preserve blank-author omission: %+v", second.documents)
 	}
 }
 

@@ -244,6 +244,9 @@ func lookupGitHubCommitAuthor(parent context.Context, client *http.Client, token
 	}
 	defer response.Body.Close()
 	rateExhausted := strings.TrimSpace(response.Header.Get("X-RateLimit-Remaining")) == "0"
+	if response.StatusCode >= 300 && response.StatusCode < 400 {
+		return nil, "stop", fmt.Errorf("GitHub API returned HTTP %d", response.StatusCode)
+	}
 	switch response.StatusCode {
 	case http.StatusUnauthorized, http.StatusForbidden, http.StatusTooManyRequests:
 		return nil, "stop", fmt.Errorf("GitHub API returned HTTP %d", response.StatusCode)
@@ -253,14 +256,8 @@ func lookupGitHubCommitAuthor(parent context.Context, client *http.Client, token
 		}
 		return nil, "invalid", fmt.Errorf("GitHub API returned HTTP %d", response.StatusCode)
 	}
-	if response.StatusCode >= 500 {
-		return nil, "stop", fmt.Errorf("GitHub API returned HTTP %d", response.StatusCode)
-	}
 	if response.StatusCode != http.StatusOK {
-		if rateExhausted {
-			return nil, "stop", fmt.Errorf("GitHub API returned HTTP %d", response.StatusCode)
-		}
-		return nil, "invalid", fmt.Errorf("GitHub API returned HTTP %d", response.StatusCode)
+		return nil, "stop", fmt.Errorf("GitHub API returned HTTP %d", response.StatusCode)
 	}
 
 	body, err := io.ReadAll(io.LimitReader(response.Body, config.maxBodyBytes+1))

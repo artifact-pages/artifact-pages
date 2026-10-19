@@ -222,6 +222,7 @@ func TestGitHubLookupOutcomesAndSanitizedWarning(t *testing.T) {
 		{name: "uppercase sha mismatch", status: 200, body: githubResponse(strings.Repeat("C", 40), "octocat", ""), wantWarning: true, wantCalls: 1},
 		{name: "invalid login", status: 200, body: githubResponse(sha, "octocat/example", ""), wantWarning: true, wantCalls: 1},
 		{name: "invalid avatar keeps login", status: 200, body: githubResponse(sha, "octocat", "http://avatars.githubusercontent.com/u/1"), wantWarning: true, wantLogin: "octocat", wantCalls: 1},
+		{name: "avatar hostname case is accepted and preserved", status: 200, body: githubResponse(sha, "octocat", "https://AVATARS.GITHUBUSERCONTENT.COM/u/1?v=4"), wantLogin: "octocat", wantAvatar: "https://AVATARS.GITHUBUSERCONTENT.COM/u/1?v=4", wantCalls: 1},
 		{name: "no avatar means login only", status: 200, body: githubResponse(sha, "octocat", ""), wantLogin: "octocat", wantCalls: 1},
 		{name: "bot account", status: 200, body: githubResponse(sha, "dependabot[bot]", "https://avatars.githubusercontent.com/u/2"), wantLogin: "dependabot[bot]", wantAvatar: "https://avatars.githubusercontent.com/u/2", wantCalls: 1},
 		{name: "unauthorized stops", status: 401, body: `secret body`, wantWarning: true, wantCalls: 1},
@@ -413,6 +414,11 @@ func TestGitHubNotFoundContinuesButServerAndRateFailuresStop(t *testing.T) {
 	}{
 		{name: "404 continues", firstCode: 404, wantCalls: 2, wantSecond: true},
 		{name: "422 continues", firstCode: 422, wantCalls: 2, wantSecond: true},
+		{name: "404 exhausted rate limit stops", firstCode: 404, firstHead: map[string]string{"X-RateLimit-Remaining": "0"}, wantCalls: 1},
+		{name: "redirect stops without following", firstCode: 302, firstHead: map[string]string{"Location": "https://api.github.test/followed"}, wantCalls: 1},
+		{name: "400 stops", firstCode: 400, wantCalls: 1},
+		{name: "410 stops", firstCode: 410, wantCalls: 1},
+		{name: "451 stops", firstCode: 451, wantCalls: 1},
 		{name: "500 stops", firstCode: 500, wantCalls: 1},
 		{name: "403 stops", firstCode: 403, wantCalls: 1},
 		{name: "exhausted header stops", firstCode: 200, firstHead: map[string]string{"X-RateLimit-Remaining": "0"}, wantCalls: 1, wantFirst: true},
@@ -426,7 +432,7 @@ func TestGitHubNotFoundContinuesButServerAndRateFailuresStop(t *testing.T) {
 					if test.firstCode == 200 {
 						return responseFor(request, 200, githubResponse(sha1, "octocat", "https://avatars.githubusercontent.com/u/1"), test.firstHead), nil
 					}
-					return responseFor(request, test.firstCode, "failure", nil), nil
+					return responseFor(request, test.firstCode, "failure", test.firstHead), nil
 				}
 				return responseFor(request, 200, githubResponse(sha, "octocat", "https://avatars.githubusercontent.com/u/1"), nil), nil
 			})
@@ -517,6 +523,7 @@ func TestGitHubAvatarURLAndLoginValidation(t *testing.T) {
 	for _, raw := range []string{
 		"https://avatars.githubusercontent.com/u/1?v=4",
 		"https://avatars.githubusercontent.com:443/u/1",
+		"https://AVATARS.GITHUBUSERCONTENT.COM/u/1?v=4",
 	} {
 		if !ValidGitHubAvatarURL(raw) {
 			t.Errorf("valid avatar rejected: %q", raw)
