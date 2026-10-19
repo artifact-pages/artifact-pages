@@ -195,6 +195,15 @@ func TestBuildAttributesFirstParentMergeChangesAndConflictResolution(t *testing.
 	})
 }
 
+func TestArtifactGitHistoryHeaderWithoutTrailingNewline(t *testing.T) {
+	const sha = "0123456789abcdef0123456789abcdef01234567"
+	header := []byte("1792497600\x1fGitHub\x1fMerge Author\x1f" + sha)
+	timestamp, committer, author, gotSHA, ok := parseArtifactGitHistoryHeader(header)
+	if !ok || timestamp.Unix() != 1792497600 || committer != "GitHub" || author != "Merge Author" || gotSHA != sha {
+		t.Fatalf("parsed terminal history header = %v, %q, %q, %q, %t", timestamp, committer, author, gotSHA, ok)
+	}
+}
+
 func TestBuildKeepsPrimaryAuthorsForSquashRebaseCoauthorAndBotCommits(t *testing.T) {
 	t.Run("squash primary author", func(t *testing.T) {
 		root := initializeGitRepository(t)

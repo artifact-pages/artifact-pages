@@ -484,6 +484,10 @@ func TestPublishSiteWholeControlRequestsCompareR2GetOnlyAndAWSHeadThenGet(t *tes
 			t.Fatalf("%s changed flow made %d projection GETs; want at most the generatedAt index/meta reads", report.Provider, generatedAtReads)
 		}
 	}
+	if r2ChangedReport.ObjectRequests["GET.projection"] > 1 || awsChangedReport.ObjectRequests["GET.projection"] > 1 ||
+		r2ChangedReport.ObjectRequests["HEAD.projection"] != 0 || awsChangedReport.ObjectRequests["HEAD.projection"] != 0 {
+		t.Fatalf("changed projection reads R2=%v AWS=%v; want at most one GET and no HEAD for either", r2ChangedReport.ObjectRequests, awsChangedReport.ObjectRequests)
+	}
 	if r2ChangedReport.StateBodyReadBytes <= 0 || awsChangedReport.StateBodyReadBytes <= 0 {
 		t.Fatalf("changed state body bytes R2/AWS = %d/%d; want both state GETs to read bytes", r2ChangedReport.StateBodyReadBytes, awsChangedReport.StateBodyReadBytes)
 	}

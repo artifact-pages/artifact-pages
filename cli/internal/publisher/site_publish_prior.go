@@ -108,19 +108,6 @@ func loadPriorSiteIndex(ctx context.Context, backend ConditionalObjectBackend, s
 	if indexRow == nil {
 		return nil, nil
 	}
-	info, err := backend.HeadObject(ctx, indexKey)
-	if errors.Is(err, ErrObjectNotFound) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("inspect deployed site index: %w", err)
-	}
-	if info.Size != indexRow.Size || info.Metadata["artifact-pages-sha256"] != indexRow.SHA256 {
-		return nil, nil
-	}
-	if err := validatePriorSiteIndexMetadata(siteID, *indexRow, info.ContentType, info.ContentDisposition, info.ContentEncoding, info.CacheControl, info.Metadata); err != nil {
-		return nil, fmt.Errorf("validate deployed site index metadata: %w", err)
-	}
 	indexObject, _, err := backend.GetObject(ctx, indexKey)
 	if errors.Is(err, ErrObjectNotFound) {
 		return nil, nil

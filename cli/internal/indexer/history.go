@@ -65,13 +65,13 @@ func resolveGitUpdates(ctx context.Context, repositoryRoot, sourcePath string, a
 	for _, file := range files {
 		fileHashes[file.RelativePath] = file.SHA256
 	}
-	priorCommitTimes, err := readPriorCommitTimes(ctx, repositoryRoot, prior)
-	if err != nil {
-		return nil, err
-	}
 	unchanged := make(map[string]struct{})
 	fullyUnshallowed := false
 	for step := 0; ; step++ {
+		priorCommitTimes, err := readPriorCommitTimes(ctx, repositoryRoot, prior)
+		if err != nil {
+			return nil, err
+		}
 		boundaries, err := gitdepth.Boundaries(ctx, repositoryRoot)
 		if err != nil {
 			return nil, err

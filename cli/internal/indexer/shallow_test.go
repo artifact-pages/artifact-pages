@@ -2,13 +2,84 @@ package indexer
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/artifact-pages/artifact-pages/cli/internal/gitdepth"
 )
+
+func TestShallowMergeBoundaryDeepensPastEqualTimestampAndUsesMerge(t *testing.T) {
+	origin := initializeGitRepository(t)
+	baseTime := time.Unix(300, 0).UTC()
+	original := "<h1>Base</h1>\n"
+	writeFixtureFile(t, origin, "content/report.html", original)
+	baseSHA := commitWithGitDates(t, origin, "base", "Base Author", "base@example.invalid", "Base Committer", "base-committer@example.invalid", baseTime, baseTime)
+	baseDigest := sha256.Sum256([]byte(original))
+	runGit(t, origin, "checkout", "-b", "feature")
+	writeFixtureFile(t, origin, "content/report.html", "<h1>Feature</h1>\n")
+	featureTime := time.Unix(200, 0).UTC()
+	commitWithGitDates(t, origin, "feature report", "Feature Author", "feature@example.invalid", "Feature Committer", "feature-committer@example.invalid", featureTime, featureTime)
+	runGit(t, origin, "checkout", "main")
+	writeFixtureFile(t, origin, "content/report.html", "<h1>Main</h1>\n")
+	mainTime := baseTime.Add(-time.Second)
+	mainSHA := commitWithGitDates(t, origin, "main report", "Main Author", "main@example.invalid", "Main Committer", "main-committer@example.invalid", mainTime, mainTime)
+	command := exec.Command("git", "merge", "--no-ff", "feature", "-m", "merge report")
+	command.Dir = origin
+	command.Env = append(os.Environ(), "GIT_AUTHOR_NAME=Merge Author", "GIT_AUTHOR_EMAIL=merge@example.invalid", "GIT_COMMITTER_NAME=Merge Committer", "GIT_COMMITTER_EMAIL=merge-committer@example.invalid", "GIT_AUTHOR_DATE="+baseTime.Format(time.RFC3339), "GIT_COMMITTER_DATE="+baseTime.Format(time.RFC3339))
+	if output, err := command.CombinedOutput(); err == nil || !strings.Contains(string(output), "CONFLICT") {
+		t.Fatalf("expected merge conflict, got err=%v output=%s", err, output)
+	}
+	writeFixtureFile(t, origin, "content/report.html", "<h1>Merge resolution</h1>\n")
+	runGit(t, origin, "add", "--all")
+	mergeCommit := exec.Command("git", "commit", "--quiet", "-m", "merge report")
+	mergeCommit.Dir = origin
+	mergeCommit.Env = append(os.Environ(), "GIT_AUTHOR_NAME=Merge Author", "GIT_AUTHOR_EMAIL=merge@example.invalid", "GIT_COMMITTER_NAME=Merge Committer", "GIT_COMMITTER_EMAIL=merge-committer@example.invalid", "GIT_AUTHOR_DATE="+baseTime.Format(time.RFC3339), "GIT_COMMITTER_DATE="+baseTime.Format(time.RFC3339))
+	if output, err := mergeCommit.CombinedOutput(); err != nil {
+		t.Fatalf("commit resolved merge: %v\n%s", err, output)
+	}
+	mergeSHA := gitOutputForTest(t, origin, "rev-parse", "HEAD")
+
+	clone := cloneForShallowTest(t, origin, 1)
+	if got := gitOutputForTest(t, clone, "rev-parse", "--is-shallow-repository"); got != "true" {
+		t.Fatalf("depth-one clone shallow = %s", got)
+	}
+	boundaries, err := gitdepth.Boundaries(context.Background(), clone)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mergeBoundaryHistory, err := readArtifactGitHistory(context.Background(), clone, "content", []discoveredArtifact{{relative: "report.html", fileRelative: "report.html"}}, boundaries)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := mergeBoundaryHistory.boundaryTime["report.html"]; !ok {
+		t.Fatalf("shallow merge boundary was treated as root/empty: %+v", mergeBoundaryHistory)
+	}
+	if _, ok := mergeBoundaryHistory.visible["report.html"]; ok {
+		t.Fatal("shallow merge boundary was incorrectly treated as a visible non-boundary commit")
+	}
+	prior := &PriorSiteState{
+		Files: map[string]string{"report.html": hex.EncodeToString(baseDigest[:])},
+		Documents: map[string]PriorDocument{"report.html": {
+			UpdatedAt: baseTime, LastCommitter: "Base Committer",
+			LastAuthor: &ArtifactAuthor{Name: "Base Author", CommitSHA: baseSHA},
+		}},
+	}
+	loader := func(context.Context) (*PriorSiteState, error) { return prior, nil }
+	got := prepareMetadata(t, clone, loader)["report.html"]
+	if got.Author != "Merge Author" || got.CommitSHA != mergeSHA || !got.UpdatedAt.Equal(baseTime) {
+		t.Fatalf("resolved shallow merge = %+v, want merge %s at tied timestamp", got, mergeSHA)
+	}
+	if fetched := commitCount(t, clone); fetched <= 2 {
+		t.Fatalf("history deepening fetched only %d commits; expected equal-time boundary to require another deepen after first parent %s appeared", fetched, mainSHA)
+	}
+}
 
 type shallowMetadata struct {
 	UpdatedAt time.Time

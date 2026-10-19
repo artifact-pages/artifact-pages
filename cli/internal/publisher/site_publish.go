@@ -160,7 +160,7 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 		}
 		if !snapshot.fastPath {
 			snapshot.priorObjects = priorObjects
-			if !priorLoaded {
+			if prepared.NeedsGitHubAssociation() && !priorLoaded {
 				preparedPrior, err = loadPriorSiteIndex(operationCtx, conditional, options.SiteID, snapshot.state, snapshot.priorObjects)
 				if err != nil {
 					return Result{}, fmt.Errorf("read deployed site index for attribution: %w", err)

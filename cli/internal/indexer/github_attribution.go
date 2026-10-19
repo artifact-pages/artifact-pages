@@ -80,7 +80,7 @@ func enrichGitAuthors(ctx context.Context, metadata gitMetadata, updates map[str
 	currentRepository, currentOK := parseGitHubSourceRepository(metadata.repositoryURL)
 	originRepository, originOK := parseGitHubOrigin(metadata.originRemote)
 	repositoryMatches := currentOK && originOK && strings.EqualFold(currentRepository.key(), originRepository.key())
-	if currentOK && prior != nil {
+	if repositoryMatches && prior != nil {
 		for path, update := range updates {
 			if update.lastAuthor == nil {
 				continue
@@ -197,7 +197,7 @@ func enrichGitAuthors(ctx context.Context, metadata gitMetadata, updates map[str
 
 	for path, key := range keysByPath {
 		update := updates[path]
-		if update.lastAuthor == nil {
+		if update.lastAuthor == nil || hasCompleteGitHubAccount(update.lastAuthor.GitHub) {
 			continue
 		}
 		if account := results[key]; account != nil {

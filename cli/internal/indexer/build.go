@@ -958,17 +958,11 @@ func readArtifactGitHistory(ctx context.Context, repositoryRoot, sourcePath stri
 	var currentAuthor string
 	var currentSHA string
 	currentBoundary := false
-	for index, part := range parts {
+	for _, part := range parts {
 		value := string(part)
-		header := bytes.Split(part, []byte{0x1f})
-		if len(header) == 4 && len(parts) > index+1 && bytes.HasPrefix(parts[index+1], []byte{'\n'}) {
-			if seconds, parseErr := strconv.ParseInt(string(header[0]), 10, 64); parseErr == nil {
-				currentCommitTime = time.Unix(seconds, 0).UTC()
-				currentCommitter = string(header[1])
-				currentAuthor = string(header[2])
-				currentSHA = strings.ToLower(strings.TrimSpace(string(header[3])))
-				_, currentBoundary = boundaries[currentSHA]
-			}
+		if timestamp, committer, author, sha, ok := parseArtifactGitHistoryHeader(part); ok {
+			currentCommitTime, currentCommitter, currentAuthor, currentSHA = timestamp, committer, author, sha
+			_, currentBoundary = boundaries[currentSHA]
 			continue
 		}
 		if currentCommitTime.IsZero() {
@@ -1018,6 +1012,19 @@ func readArtifactGitHistory(ctx context.Context, repositoryRoot, sourcePath stri
 		}
 	}
 	return result, nil
+}
+
+func parseArtifactGitHistoryHeader(part []byte) (time.Time, string, string, string, bool) {
+	header := bytes.Split(part, []byte{0x1f})
+	if len(header) != 4 {
+		return time.Time{}, "", "", "", false
+	}
+	seconds, err := strconv.ParseInt(string(header[0]), 10, 64)
+	sha := strings.ToLower(strings.TrimSpace(string(header[3])))
+	if err != nil || !gitObjectIDPattern.MatchString(sha) {
+		return time.Time{}, "", "", "", false
+	}
+	return time.Unix(seconds, 0).UTC(), string(header[1]), string(header[2]), sha, true
 }
 
 func artifactWorkingTreeUpdates(ctx context.Context, repositoryRoot, sourcePath string, artifacts []discoveredArtifact, deletedAt time.Time) (map[string]time.Time, error) {

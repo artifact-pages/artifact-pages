@@ -62,6 +62,22 @@ type PreparedBuild struct {
 	attributionWarning string
 }
 
+// NeedsGitHubAssociation reports whether this prepared Git snapshot can reuse or resolve
+// an account association under the source/origin trust rule.
+func (prepared *PreparedBuild) NeedsGitHubAssociation() bool {
+	source, sourceOK := parseGitHubSourceRepository(prepared.gitInfo.repositoryURL)
+	origin, originOK := parseGitHubOrigin(prepared.gitInfo.originRemote)
+	if !sourceOK || !originOK || !strings.EqualFold(source.key(), origin.key()) {
+		return false
+	}
+	for _, document := range prepared.documents {
+		if document.lastAuthor != nil {
+			return true
+		}
+	}
+	return false
+}
+
 // EnrichGitHub attaches optional account snapshots after a publisher has ruled out an ordinary no-op.
 // The association is output metadata and deliberately does not change InputRoot.
 func (prepared *PreparedBuild) EnrichGitHub(ctx context.Context, prior *PriorSiteState) error {
