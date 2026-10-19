@@ -1,6 +1,7 @@
 # IMP-81 — Real-provider release regression workflow
 
 - Status: Open
+- Implementer: Codex
 - Lanes: CLI / release, provider verification
 - Depends on: [October 20 provider-proof decision](../verification/provider-proof-plan-2026-10-18.md#superseding-execution-decision--october-20-2026), existing release verification and owner-approved verification environment access
 - Verification: [T28](../verification/T28-provider-release-regression.md)

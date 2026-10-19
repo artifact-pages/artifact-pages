@@ -27,10 +27,14 @@ The inventory policy applies these deltas:
 
 1. It binds the preserved bucket and distribution to the exact IDs above and removes the nonexistent proof-distribution binding.
 2. It uses `s3:GetLifecycleConfiguration` and `s3:GetReplicationConfiguration` for the inventory reads.
-3. It permits `s3:GetObject` only on `arn:aws:s3:::artifact-pages-verify-tfstate-231136241959/aws-verify/terraform.tfstate`. It permits `s3:ListBucket` on the state bucket only when `s3:prefix` exactly matches `aws-verify/terraform.tfstate`. It grants no state writes or `.tflock` access.
-4. It scopes IAM reads to the exact inventory role and existing verification roles and policies. It does not enumerate account roles or policies.
+3. It permits `s3:GetObject` only on `arn:aws:s3:::artifact-pages-verify-tfstate-231136241959/aws-verify/terraform.tfstate`. It permits `s3:ListBucket` on the state bucket only for the exact state key prefix or Terraform's `env:/` workspace-enumeration prefix during backend initialization. It grants no state writes or `.tflock` access.
+4. It scopes IAM role reads to exact inventoried role ARNs and IAM policy reads to exact inventoried policy ARNs. This includes any attached AWS-managed policy ARN discovered in the first read batch; it does not enumerate account roles or policies.
 5. It adds CloudFront reads for the preserved distribution's exact Origin Access Control, cache policy, response headers policy, and function references, with `DenyAllOtherDistributions` exceptions for those exact ARNs.
 6. Its unconditional `DenyOutsideEnumeratedInventoryReads` `NotAction` list is generated from the union of all `Allow` actions. The list has no wildcard actions; scoped `Allow` statements still determine which resources can be read.
+
+The AWS provider is locked to 6.66.0 for the AWS root. The full `terraform plan -refresh-only` refreshes the declared S3 bucket and bucket-configuration resources, S3 object and bucket-policy resources, CloudFront distribution/OAC/function/cache-policy/response-headers-policy resources, IAM roles and inline policies, and optional module-managed WAF resources. The inventory policy includes the provider's read calls for those resource types: S3 bucket ACL, notification, object-lock configuration, website, logging and the other listed bucket settings; IAM role tags, instance profiles, inline/attached policies and policy tags; CloudFront tags for each exact distribution and associated resource; and WAFv2 web ACL/IP set reads for exact optional resource ARNs. These reads remain scoped to the preserved bucket and distribution, the exact associated-resource ARNs, exact role/policy ARNs, and exact WAF ARNs. The WAF ARN placeholders apply only if the first read batch confirms module-managed WAF resources in the state.
+
+If refresh returns `AccessDenied`, record the denied action and relevant resource ARN, stop the refresh, and propose a policy amendment in chat for owner review. Do not widen the policy silently or retry with broader access.
 
 The policy contains placeholders until IDs are read. Replace them with values from the first inventory read batch, then review the rendered policy and concrete second-batch command list in chat before running those reads. Repeat each CloudFront placeholder entry for every distinct associated resource ARN found. Do not use the policy while a placeholder remains:
 
@@ -41,6 +45,8 @@ The policy contains placeholders until IDs are read. Replace them with values fr
 - `<INVENTORY_ROLE_ARN from first inventory read>` — the active inventory role ARN.
 - `<EXISTING_VERIFICATION_ROLE_ARN from first inventory read>` — repeat this entry for every exact existing verification role ARN.
 - `<EXISTING_VERIFICATION_POLICY_ARN from first inventory read>` — repeat this entry for every exact existing verification policy ARN.
+- `<ATTACHED_AWS_MANAGED_POLICY_ARN from first inventory read>` — repeat this entry for each attached AWS-managed policy discovered in the first read batch, using its exact `arn:aws:iam::aws:policy/...` ARN for subsequent policy reads.
+- `<WAF_WEB_ACL_ARN from first inventory read>`, `<WAF_IP_SET_IPV4_ARN from first inventory read>`, and `<WAF_IP_SET_IPV6_ARN from first inventory read>` — exact ARNs for module-managed WAF resources if those optional resources are present in the state.
 
 The action-name corrections above follow the decision report and were not validated against AWS during this repository change. A4 itself makes no remote-state writes, locking, migration, repair, or apply. Production credentials and production requests are out of scope. The Cloudflare verification account is `21a0acb78621cc00cfa655a276d77b74` and its zone is `artifact-pages.stream`; the production account `9ac354c8aa31d424224d8c4f3aa8ba2a`, bucket `artifact-pages`, and zone `artifact-pages.dev` are excluded.
 

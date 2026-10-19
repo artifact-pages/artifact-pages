@@ -14,9 +14,11 @@
       "Sid": "ReadPreservedBucketConfiguration",
       "Effect": "Allow",
       "Action": [
+        "s3:GetBucketAcl",
         "s3:GetBucketLocation",
         "s3:GetBucketVersioning",
         "s3:GetLifecycleConfiguration",
+        "s3:GetBucketNotification",
         "s3:GetBucketPublicAccessBlock",
         "s3:GetBucketOwnershipControls",
         "s3:GetEncryptionConfiguration",
@@ -29,7 +31,7 @@
         "s3:GetBucketRequestPayment",
         "s3:GetBucketLogging",
         "s3:GetReplicationConfiguration",
-        "s3:GetObjectLockConfiguration"
+        "s3:GetBucketObjectLockConfiguration"
       ],
       "Resource": "arn:aws:s3:::artifact-pages-231136241959-us-east-1"
     },
@@ -105,21 +107,47 @@
       "Resource": "arn:aws:iam::231136241959:oidc-provider/token.actions.githubusercontent.com"
     },
     {
-      "Sid": "ReadExactInventoriedRolesAndPolicies",
+      "Sid": "ReadExactInventoriedRoles",
       "Effect": "Allow",
       "Action": [
         "iam:GetRole",
         "iam:ListRolePolicies",
         "iam:ListAttachedRolePolicies",
         "iam:GetRolePolicy",
-        "iam:GetPolicy",
-        "iam:GetPolicyVersion",
-        "iam:ListPolicyVersions"
+        "iam:ListRoleTags",
+        "iam:ListInstanceProfilesForRole"
       ],
       "Resource": [
         "<INVENTORY_ROLE_ARN from first inventory read>",
-        "<EXISTING_VERIFICATION_ROLE_ARN from first inventory read>",
-        "<EXISTING_VERIFICATION_POLICY_ARN from first inventory read>"
+        "<EXISTING_VERIFICATION_ROLE_ARN from first inventory read>"
+      ]
+    },
+    {
+      "Sid": "ReadExactInventoriedPolicies",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetPolicy",
+        "iam:GetPolicyVersion",
+        "iam:ListPolicyVersions",
+        "iam:ListPolicyTags"
+      ],
+      "Resource": [
+        "<EXISTING_VERIFICATION_POLICY_ARN from first inventory read>",
+        "<ATTACHED_AWS_MANAGED_POLICY_ARN from first inventory read>"
+      ]
+    },
+    {
+      "Sid": "ReadOptionalModuleManagedWafResources",
+      "Effect": "Allow",
+      "Action": [
+        "wafv2:GetIPSet",
+        "wafv2:GetWebACL",
+        "wafv2:ListTagsForResource"
+      ],
+      "Resource": [
+        "<WAF_WEB_ACL_ARN from first inventory read>",
+        "<WAF_IP_SET_IPV4_ARN from first inventory read>",
+        "<WAF_IP_SET_IPV6_ARN from first inventory read>"
       ]
     },
     {
@@ -135,7 +163,10 @@
       "Resource": "arn:aws:s3:::artifact-pages-verify-tfstate-231136241959",
       "Condition": {
         "StringEquals": {
-          "s3:prefix": "aws-verify/terraform.tfstate"
+          "s3:prefix": [
+            "aws-verify/terraform.tfstate",
+            "env:/"
+          ]
         }
       }
     },
@@ -144,8 +175,12 @@
       "Effect": "Deny",
       "Action": [
         "s3:GetAccelerateConfiguration",
+        "s3:GetBucketAcl",
         "s3:GetBucketCORS",
         "s3:GetBucketLocation",
+        "s3:GetBucketLogging",
+        "s3:GetBucketNotification",
+        "s3:GetBucketObjectLockConfiguration",
         "s3:GetBucketOwnershipControls",
         "s3:GetBucketPolicy",
         "s3:GetBucketPolicyStatus",
@@ -161,7 +196,6 @@
         "s3:GetObjectTagging",
         "s3:GetObjectVersion",
         "s3:GetObjectVersionTagging",
-        "s3:GetObjectLockConfiguration",
         "s3:GetReplicationConfiguration",
         "s3:ListBucket",
         "s3:ListBucketVersions"
@@ -204,12 +238,18 @@
         "iam:GetRole",
         "iam:GetRolePolicy",
         "iam:ListAttachedRolePolicies",
+        "iam:ListInstanceProfilesForRole",
+        "iam:ListPolicyTags",
         "iam:ListPolicyVersions",
         "iam:ListRolePolicies",
+        "iam:ListRoleTags",
         "s3:GetAccelerateConfiguration",
+        "s3:GetBucketAcl",
         "s3:GetBucketCORS",
         "s3:GetBucketLocation",
         "s3:GetBucketLogging",
+        "s3:GetBucketNotification",
+        "s3:GetBucketObjectLockConfiguration",
         "s3:GetBucketOwnershipControls",
         "s3:GetBucketPolicy",
         "s3:GetBucketPolicyStatus",
@@ -222,7 +262,6 @@
         "s3:GetLifecycleConfiguration",
         "s3:GetObject",
         "s3:GetObjectAttributes",
-        "s3:GetObjectLockConfiguration",
         "s3:GetObjectTagging",
         "s3:GetObjectVersion",
         "s3:GetObjectVersionTagging",
@@ -230,7 +269,10 @@
         "s3:ListAllMyBuckets",
         "s3:ListBucket",
         "s3:ListBucketVersions",
-        "sts:GetCallerIdentity"
+        "sts:GetCallerIdentity",
+        "wafv2:GetIPSet",
+        "wafv2:GetWebACL",
+        "wafv2:ListTagsForResource"
       ],
       "Resource": "*"
     }

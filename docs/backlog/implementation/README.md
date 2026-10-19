@@ -49,9 +49,9 @@ Decided 2026-10-10 in [TD18](../technical-design/TD18-admin-provided-site-workfl
 
 ## Recurring provider release regression
 
-| Ticket | Status | Execution / outcome |
-| --- | --- | --- |
-| [IMP-81](IMP-81-provider-release-regression-workflow.md) | Open | `provider-regression.yml`: verified publication → supported real-provider regression → rollout gate; dedicated sites/exclusive windows on existing verification stacks require explicit future authorization. Evidence is [T28](../verification/T28-provider-release-regression.md). |
+| Ticket | Status | Implementer | Execution / outcome |
+| --- | --- | --- | --- |
+| [IMP-81](IMP-81-provider-release-regression-workflow.md) | Open | Codex | `provider-regression.yml`: verified publication → supported real-provider regression → rollout gate; dedicated sites/exclusive windows on existing verification stacks require explicit future authorization. Evidence is [T28](../verification/T28-provider-release-regression.md). |
 
 ## Optional operator-managed edge policy
 
