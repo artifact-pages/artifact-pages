@@ -51,6 +51,15 @@ export type ArtifactCommitter = {
   name: string
 }
 
+export type ArtifactAuthor = {
+  name: string
+  commitSha: string
+  github?: {
+    login: string
+    avatarUrl?: string
+  }
+}
+
 export type ArtifactSource = {
   repository: string
   repositoryUrl?: string
@@ -70,6 +79,7 @@ export type ArtifactIndexEntry = {
   artifactUrl: string
   updatedAt: string
   lastCommitter?: ArtifactCommitter
+  lastAuthor?: ArtifactAuthor
   source?: ArtifactSource
   toc?: TocEntry[]
 }

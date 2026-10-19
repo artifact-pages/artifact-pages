@@ -1,6 +1,7 @@
-import { useEffect, useRef, type ReactNode, type Ref } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react'
 import { Icon } from './Icon'
 import type { ArtifactIndexEntry } from '../domain/index'
+import { artifactByline } from '../domain/author-byline'
 import { artifactSourceLinks } from '../domain/source-links'
 
 export type ReaderColumnPart = 'contents' | 'details'
@@ -113,9 +114,32 @@ export function ContentsList({ entries, activeId, onJump, navRef }: {
   )
 }
 
+/** The decorative byline circle: the author's GitHub avatar, or the name's initial when there is none or it fails to load. */
+function DetailsAvatar({ name, avatarUrl }: { name: string, avatarUrl?: string }) {
+  const [failedUrl, setFailedUrl] = useState<string>()
+  const showImage = avatarUrl !== undefined && failedUrl !== avatarUrl
+  return (
+    <span className="details-avatar" aria-hidden="true">
+      {showImage ? (
+        <img
+          className="details-avatar-image"
+          src={avatarUrl}
+          alt=""
+          width={24}
+          height={24}
+          decoding="async"
+          crossOrigin="anonymous"
+          referrerPolicy="no-referrer"
+          onError={() => setFailedUrl(avatarUrl)}
+        />
+      ) : Array.from(name)[0]?.toUpperCase()}
+    </span>
+  )
+}
+
 /** Details of a published document: a byline and a direct link to its source file (ISSUE-114). */
 export function ArtifactDetails({ artifact }: { artifact: ArtifactIndexEntry }) {
-  const committerName = artifact.lastCommitter?.name.trim()
+  const { name: authorName, avatarUrl } = artifactByline(artifact)
   const source = artifact.source
   const sourceUrl = source ? artifactSourceLinks(artifact).sourceUrl : undefined
   const filePath = source?.filePath
@@ -124,9 +148,9 @@ export function ArtifactDetails({ artifact }: { artifact: ArtifactIndexEntry }) 
   return (
     <div className="artifact-details">
       <div className="details-byline">
-        {committerName ? <span className="details-avatar" aria-hidden="true">{Array.from(committerName)[0]?.toUpperCase()}</span> : null}
+        {authorName ? <DetailsAvatar name={authorName} avatarUrl={avatarUrl} /> : null}
         <span className="details-who">
-          {committerName ? <span className="details-committer-name" title={committerName}>{committerName}</span> : null}
+          {authorName ? <span className="details-committer-name" title={authorName}>{authorName}</span> : null}
           <span className="details-updated">
             Updated <time dateTime={artifact.updatedAt}>{formatLongDate(artifact.updatedAt)}</time>
           </span>
