@@ -48,4 +48,4 @@ None. The hosted guard proof is complete; no module change, tag, sync or cloud o
 
 ## Prepared owner handoff — 2026-10-18
 
-See [exact hosted fixture preparation](../verification/hosted-fixture-preparation-2026-10-18.md) (F64 / approval A1) and the [consolidated approval list](../verification/provider-proof-plan-2026-10-18.md#owner-approvals-requested). A1's two hosted guard proofs are complete and all IMP-64 acceptance criteria are met. Separate F73 A2/A3 fixture execution remains staged under its own approved boundaries.
+See [exact hosted fixture preparation](../verification/hosted-fixture-preparation-2026-10-18.md) (F64 / approval A1) and the [consolidated approval list](../verification/provider-proof-plan-2026-10-18.md#owner-approval-status). A1's two hosted guard proofs are complete and all IMP-64 acceptance criteria are met. Separate F73 A2/A3 fixture execution remains staged under its own approved boundaries.

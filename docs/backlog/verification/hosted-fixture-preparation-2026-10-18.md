@@ -1,6 +1,6 @@
 # Hosted fixture preparation — October 18, 2026
 
-Plan only, prepared by Codex Sol for [workstream item 2](../workstreams.md#backend-next-wave-2026-10-18). [IMP-64](../implementation/IMP-64-generate-sync-terraform-packages.md) and [IMP-73](../implementation/IMP-73-registry-setup-command.md) remain In progress / Codex. No fixture, settings or credential mutation was executed. Approval IDs and the consolidated request list are in the [coordinated plan](provider-proof-plan-2026-10-18.md#owner-approvals-requested).
+Plan only, prepared by Codex Sol for [workstream item 2](../workstreams.md#backend-next-wave-2026-10-18). [IMP-64](../implementation/IMP-64-generate-sync-terraform-packages.md) and [IMP-73](../implementation/IMP-73-registry-setup-command.md) remain In progress / Codex. No fixture, settings or credential mutation was executed. Approval IDs and the consolidated request list are in the [coordinated plan](provider-proof-plan-2026-10-18.md#owner-approval-status).
 
 ## Immutable inputs and preparation gate
 
