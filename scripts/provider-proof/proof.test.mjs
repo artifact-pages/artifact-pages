@@ -1297,6 +1297,60 @@ test('reviewed policy templates render without unresolved scope and keep documen
   assert.equal(policyDocumentDigest(inventory), rendered.digests.inventory);
 });
 
+test('policy review requires unconditional boundary denies and narrowly scoped Allow wildcards', async () => {
+  const protectedResources = [
+    'arn:aws:s3:::artifact-pages-231136241959-us-east-1',
+    'arn:aws:s3:::artifact-pages-231136241959-us-east-1/*',
+    'arn:aws:cloudfront::231136241959:distribution/ECFTIR5GVPQDF',
+  ];
+  const proofBindings = {
+    PROOF_BUCKET_ARN: 'arn:aws:s3:::ap-proof-231136241959-20261018',
+    PROOF_DISTRIBUTION_ARN: 'arn:aws:cloudfront::231136241959:distribution/E2PROOF20261018',
+  };
+  const boundaryDeny = {
+    Effect: 'Deny', Action: '*',
+    Resource: [...protectedResources, proofBindings.PROOF_BUCKET_ARN, proofBindings.PROOF_DISTRIBUTION_ARN],
+  };
+  assert.equal(assertProofPolicyContainsDenies({ Statement: [boundaryDeny] }, proofBindings), true);
+  for (const condition of [{ Bool: { 'aws:SecureTransport': 'false' } }, {}, null]) {
+    assert.throws(() => assertProofPolicyContainsDenies({
+      Statement: [{ ...boundaryDeny, Condition: condition }],
+    }, proofBindings), /PRESERVED_RESOURCE_DENY_MISSING|PROOF_BUCKET_BOUNDARY_MISSING/u);
+  }
+  assert.equal(assertProofPolicyContainsDenies({
+    Statement: [{ ...boundaryDeny, Condition: {} }, boundaryDeny],
+  }, proofBindings), true, 'a separate unconditional Deny supplies the required evidence');
+  assert.throws(() => assertProofPolicyContainsDenies({
+    Statement: [
+      { ...boundaryDeny, Resource: protectedResources },
+      { Effect: 'Deny', Action: '*', Resource: [proofBindings.PROOF_BUCKET_ARN, proofBindings.PROOF_DISTRIBUTION_ARN], Condition: null },
+    ],
+  }, proofBindings), /PROOF_BUCKET_BOUNDARY_MISSING/u);
+
+  const allowed = (action, resource, extra = {}) => ({ Statement: [{ Effect: 'Allow', Action: action, Resource: resource, ...extra }] });
+  assert.equal(assertNoWildcardAllows(allowed('s3:GetObject', 'arn:aws:s3:::proof-bucket/*')), true);
+  assert.equal(assertNoWildcardAllows(allowed('s3:GetObject', 'arn:aws:s3:::proof-bucket/_indexes/proof-site/*')), true);
+  assert.equal(assertNoWildcardAllows(allowed('sts:GetCallerIdentity', '*', { Condition: { Bool: { 'aws:SecureTransport': 'true' } } }), {
+    allowedWildcardActions: ['sts:GetCallerIdentity'],
+  }), true, 'the exact-action Resource:* exception remains unchanged with a Condition');
+
+  for (const resource of [
+    'arn:aws:s3:::proof-*/objects/*',
+    'arn:aws:s3:::proof-bucket/objects/prefix*tail',
+    'arn:aws:s3:::proof-bucket/objects/prefix?tail',
+    'arn:aws:cloudfront::231136241959:distribution/E2PROOF*',
+    'arn:aws:iam::*:role/proof',
+    'arn:aws:iam::231136241959:role/proof-*',
+  ]) {
+    assert.throws(() => assertNoWildcardAllows(allowed('s3:GetObject', resource)), /WILDCARD_ALLOW_NOT_REVIEWED/u, resource);
+  }
+  for (const action of ['s3:Get*', 's3:GetObject?']) {
+    assert.throws(() => assertNoWildcardAllows(allowed(action, 'arn:aws:s3:::proof-bucket/objects/key')), /WILDCARD_ALLOW_NOT_REVIEWED/u);
+  }
+  assert.throws(() => assertNoWildcardAllows(allowed('s3:GetObject', '*', { Condition: { Bool: { 'aws:SecureTransport': 'true' } } })), /WILDCARD_ALLOW_NOT_REVIEWED/u);
+  assert.throws(() => assertNoWildcardAllows(allowed('s3:GetObject', undefined, { NotResource: 'arn:aws:s3:::proof-bucket/private/*' })), /WILDCARD_ALLOW_NOT_REVIEWED/u);
+});
+
 test('Cloudflare scope templates reject unbound placeholders and preserve parent/child separation', async () => {
   const template = await readPolicyTemplate('cloudflare-credential-scopes.json');
   assert.throws(() => renderPolicyTemplate(template, { VERIFIED_SHARED_BUCKET: 'verify-bucket' }), /POLICY_TEMPLATE_UNBOUND/);
@@ -1433,6 +1487,104 @@ test('credential verification binds signed transition, provider identity, exact 
     credential,
     now: approvalNow,
   }), /LEAST_PRIVILEGE_CREDENTIALS_REQUIRED/);
+});
+
+test('verify-credentials checks the sealed preservation checkpoint before loading credentials or probing', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'provider-proof-preservation-gate-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const evidenceSha256 = createHash('sha256').update('local signed-approval fixture\n').digest('hex');
+  const missingCheckpoint = Symbol('missing checkpoint');
+  const createSetup = async (fixtureRoot, checkpoint = { status: 'passed', path: 'evidence.txt', sha256: evidenceSha256 }) => {
+    const toolDirectory = path.join(fixtureRoot, 'runtime', 'tools');
+    await mkdir(toolDirectory, { recursive: true });
+    const executablePath = path.join(toolDirectory, 'aws-cli');
+    const executableBytes = Buffer.from('sealed fake AWS CLI image payload\n');
+    await writeFile(executablePath, executableBytes, { mode: 0o700 });
+    const fixtureOptions = {
+      policy: awsInventoryPolicy(),
+      execution: { tools: { awsCli: { path: 'tools/aws-cli', sha256: createHash('sha256').update(executableBytes).digest('hex') } }, roots: {} },
+      sealArtifacts: { 'post-apply': ['evidence.txt', 'tools/aws-cli'] },
+    };
+    fixtureOptions.preservationCheckpoint = checkpoint === missingCheckpoint ? undefined : checkpoint;
+    const fixture = await createShellGuardFixture(fixtureRoot, fixtureOptions);
+    return completeCredentialGateFixture(fixture, { command: 'inventory', approvalId: 'A4' });
+  };
+  const validSetup = await createSetup(path.join(root, 'valid'));
+  const counts = { loader: 0, inspector: 0, probes: 0, writes: 0 };
+  const invoke = async (setup, services) => {
+    const harnessProof = await copiedModule(setup.harness, 'proof.mjs');
+    const captured = { stdout: '', stderr: '' };
+    const stdoutWrite = process.stdout.write;
+    const stderrWrite = process.stderr.write;
+    process.stdout.write = (chunk) => { captured.stdout += Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk); return true; };
+    process.stderr.write = (chunk) => { captured.stderr += Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk); return true; };
+    try {
+      const exitCode = await harnessProof.main([
+        'verify-credentials', '--manifest', setup.manifestPath, '--approval', 'A4', '--invocation', 'aws.inventory.identity',
+      ], { PATH: '/usr/bin:/bin' }, services);
+      return { exitCode, ...captured };
+    } finally {
+      process.stdout.write = stdoutWrite;
+      process.stderr.write = stderrWrite;
+    }
+  };
+  const cases = [
+    ['missing', missingCheckpoint],
+    ['failed', { status: 'failed', path: 'evidence.txt', sha256: evidenceSha256 }],
+    ['path mismatch', { status: 'passed', path: 'other-evidence.txt', sha256: evidenceSha256 }],
+    ['hash mismatch', { status: 'passed', path: 'evidence.txt', sha256: 'f'.repeat(64) }],
+  ];
+  for (const [index, [name, checkpoint]] of cases.entries()) {
+    const setup = await createSetup(path.join(root, `invalid-${index}`), checkpoint);
+    const credential = await new setup.modules.loader.PrivateCredentialLoader({
+      loadPrivateCredential: async () => awsInventoryCredentialSource(),
+    }).load('aws-inventory');
+    const services = {
+      credentialLoader: { async load() { counts.loader += 1; return credential; } },
+      policyInspector: async ({ expected }) => { counts.inspector += 1; return awsInventoryReadback(expected); },
+      probeTransport: async ({ probeId }) => { counts.probes += 1; return { status: 200, requestId: `checkpoint-${probeId}` }; },
+      recordStore: { async write() { counts.writes += 1; } },
+      now: () => approvalNow,
+    };
+    Object.assign(counts, { loader: 0, inspector: 0, probes: 0, writes: 0 });
+    const result = await invoke(setup, services);
+    assert.equal(result.exitCode, 2, `${name} checkpoint uses the established authorization exit code`);
+    assert.match(result.stderr, /PRESERVATION_CHECKPOINT_REQUIRED/u, name);
+    assert.deepEqual(counts, { loader: 0, inspector: 0, probes: 0, writes: 0 }, `${name} checkpoint stops before every credential or probe service`);
+
+    if (name === 'failed') {
+      const failedManifest = setup.manifest;
+      const directCapability = setup.capability;
+      const directCounts = { inspector: 0, probes: 0, writes: 0 };
+      await assert.rejects(setup.modules.verification.verifyCredential({
+        manifest: failedManifest,
+        capability: directCapability,
+        invocationId: 'aws.inventory.identity',
+        invocationDigest: 'e'.repeat(64),
+        credential,
+        policyInspector: async () => { directCounts.inspector += 1; return {}; },
+        probeTransport: async () => { directCounts.probes += 1; return { status: 200, requestId: 'should-not-run' }; },
+        recordStore: { async write() { directCounts.writes += 1; } },
+        now: () => approvalNow,
+      }), /PRESERVATION_CHECKPOINT_REQUIRED/u);
+      assert.deepEqual(directCounts, { inspector: 0, probes: 0, writes: 0 }, 'direct verification also stops before inspection and probes');
+    }
+  }
+
+  const validCredential = await new validSetup.modules.loader.PrivateCredentialLoader({
+    loadPrivateCredential: async () => awsInventoryCredentialSource(),
+  }).load('aws-inventory');
+  const validServices = {
+    credentialLoader: { async load() { counts.loader += 1; return validCredential; } },
+    policyInspector: async ({ expected }) => { counts.inspector += 1; return awsInventoryReadback(expected); },
+    probeTransport: async ({ probeId }) => { counts.probes += 1; return { status: 200, requestId: `checkpoint-${probeId}` }; },
+    recordStore: { async write() { counts.writes += 1; } },
+    now: () => approvalNow,
+  };
+  Object.assign(counts, { loader: 0, inspector: 0, probes: 0, writes: 0 });
+  const positiveControl = await invoke(validSetup, validServices);
+  assert.equal(positiveControl.exitCode, 0, positiveControl.stderr);
+  assert.deepEqual(counts, { loader: 1, inspector: 1, probes: 4, writes: 1 }, 'a valid sealed checkpoint permits normal verification');
 });
 
 test('credential renewal, policy drift, seal drift and stale verification each close the execution gate', async (t) => {
@@ -1614,6 +1766,11 @@ test('supervised launcher accepts only the sealed descriptor and terminates reco
     runtimeRoot: setup.runtime, manifest: setup.manifest, activeSeal: setup.activeSeal,
   });
   const credential = await new setup.modules.loader.PrivateCredentialLoader({ loadPrivateCredential: async () => awsInventoryCredentialSource() }).load('aws-inventory');
+  const fakeSecret = 'proof!"\\/雪☃';
+  const redactionCredential = {
+    ...credential,
+    environment: { ...credential.environment, AWS_SESSION_TOKEN: fakeSecret },
+  };
   const record = await makeAwsInventoryRecord(setup, credential, invocation.invocationDigest);
   assert.equal(requireSealedPreservationCheckpoint(setup.manifest), setup.manifest.preservationCheckpoint.sha256);
   assert.throws(() => requireSealedPreservationCheckpoint({ ...setup.manifest, preservationCheckpoint: undefined }), /PRESERVATION_CHECKPOINT_REQUIRED/);
@@ -1629,7 +1786,7 @@ test('supervised launcher accepts only the sealed descriptor and terminates reco
     invocation,
     manifest: exhaustedManifest,
     capability: exhaustedCapability,
-    credential,
+    credential: redactionCredential,
     verificationRecord: record,
     recordStore: setup.recordStore,
     parentEnvironment: { PATH: '/usr/bin:/bin' },
@@ -1675,7 +1832,7 @@ test('supervised launcher accepts only the sealed descriptor and terminates reco
     invocation,
     manifest: setup.manifest,
     capability: setup.capability,
-    credential,
+    credential: redactionCredential,
     verificationRecord: record,
     recordStore: setup.recordStore,
     parentEnvironment: { PATH: '/usr/bin:/bin' },
@@ -1692,29 +1849,237 @@ test('supervised launcher accepts only the sealed descriptor and terminates reco
   });
   const childExit = assert.rejects(runPromise, /CHILD_EXITED_NONZERO/);
   await launched;
-  actualChild.stdout.write('fake child stdout\n');
-  const fakeSecret = credential.environment.AWS_SESSION_TOKEN;
+  const jsonSecret = JSON.stringify(fakeSecret).slice(1, -1);
+  const mixedUnicodeSecret = [...fakeSecret].map((character, index) => index % 2 === 0
+    ? character
+    : `\\u${character.charCodeAt(0).toString(16).padStart(4, '0').toUpperCase()}`).join('');
   const encodedFakeSecret = [
     fakeSecret,
     encodeURIComponent(fakeSecret),
     new URLSearchParams([['value', fakeSecret]]).toString().slice('value='.length),
     Buffer.from(fakeSecret).toString('base64'),
     Buffer.from(fakeSecret).toString('base64url'),
+    Buffer.from(fakeSecret, 'utf8').toString('hex'),
+    Buffer.from(fakeSecret, 'utf8').toString('hex').toUpperCase(),
+    jsonSecret,
+    jsonSecret.replaceAll('/', '\\/'),
+    fakeSecret.replaceAll('/', '\\/'),
+    mixedUnicodeSecret,
   ];
-  actualChild.stderr.write(`fake child stderr ${encodedFakeSecret.join(' ')}\n`);
+  const stdoutPayload = `fake child stdout before ${encodedFakeSecret.join(' ')} after\n`;
+  const stderrPayload = `fake child stderr before ${encodedFakeSecret.join(' ')} after\n`;
+  const splitChunks = (stream, payload) => {
+    const rawSecretOffset = payload.indexOf(fakeSecret);
+    const splitOffset = rawSecretOffset + Math.min(5, fakeSecret.length - 1);
+    stream.write(payload.slice(0, splitOffset));
+    stream.write(payload.slice(splitOffset));
+  };
+  splitChunks(actualChild.stdout, stdoutPayload);
+  splitChunks(actualChild.stderr, stderrPayload);
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(await setup.modules.launcher.terminateActiveChildren(killGroup), 1);
   await childExit;
-  assert.equal(await readFile(path.join(setup.runtime, invocation.descriptor.captures.stdout), 'utf8'), 'fake child stdout\n');
+  const capturedStdout = await readFile(path.join(setup.runtime, invocation.descriptor.captures.stdout), 'utf8');
   const capturedStderr = await readFile(path.join(setup.runtime, invocation.descriptor.captures.stderr), 'utf8');
-  assert.match(capturedStderr, /fake child stderr/u);
-  for (const secretForm of encodedFakeSecret) assert.ok(!capturedStderr.includes(secretForm), 'raw, base64, and URL-encoded credential forms are redacted');
+  for (const [stream, captured] of [['stdout', capturedStdout], ['stderr', capturedStderr]]) {
+    assert.match(captured, new RegExp(`fake child ${stream} before \\[REDACTED\\]`, 'u'));
+    assert.match(captured, / after\n/u);
+    for (const secretForm of encodedFakeSecret) assert.ok(!captured.includes(secretForm), `${stream} redacts raw, encoded, hex, and JSON-escaped credentials`);
+  }
   assert.equal(setup.manifest.usage.requests, 1);
   assert.equal(setup.manifest.usage.operatorMinutes, 1);
   const reservationFiles = await readdir(path.join(setup.runtime, 'usage-reservations'));
   assert.equal(reservationFiles.filter((filename) => filename.endsWith('.json')).length, 1);
   assert.deepEqual(signals, ['SIGTERM']);
   assert.doesNotThrow(() => setup.modules.launcher.assertNoActiveChildren());
+});
+
+test('supervisor enforces each 4 MiB capture boundary and allows usage reservations exactly at both caps', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'provider-proof-capture-cap-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const setup = await createSupervisedFixture(root, { caps: { requests: 4, bytes: 1000, operatorMinutes: 4 } });
+  const maxBytes = 4 * 1024 * 1024;
+  const capture = (stream) => path.join(setup.runtime, setup.invocation.descriptor.captures[stream]);
+
+  for (const [index, stream] of ['stdout', 'stderr'].entries()) {
+    if (index > 0) {
+      await rm(capture('stdout'), { force: true });
+      await rm(capture('stderr'), { force: true });
+    }
+    const { child, promise } = await startFakeInvocation(setup, {
+      pid: 994100 + index,
+      killGroup: async () => assert.fail('an in-limit child must not be stopped'),
+    });
+    child[stream].write(Buffer.alloc(maxBytes, 0x41));
+    await new Promise((resolve) => setImmediate(resolve));
+    child.emit('close', 0, null);
+    await promise;
+    assert.equal((await stat(capture(stream))).size, maxBytes, `${stream} at the exact cap is captured`);
+  }
+
+  for (const [index, stream] of ['stdout', 'stderr'].entries()) {
+    await rm(capture('stdout'), { force: true });
+    await rm(capture('stderr'), { force: true });
+    const signals = [];
+    const { child, promise } = await startFakeInvocation(setup, {
+      pid: 994110 + index,
+      killGroup: async (candidate, signal) => { signals.push(signal); candidate.emit('close', null, signal); },
+    });
+    const outputFailure = assert.rejects(promise, /CHILD_OUTPUT_LIMIT_EXCEEDED/u);
+    child[stream].write(Buffer.alloc(maxBytes + 1, 0x42));
+    await outputFailure;
+    assert.deepEqual(signals, ['SIGTERM'], `${stream} overflow immediately starts bounded termination`);
+    await assert.rejects(stat(capture('stdout')), { code: 'ENOENT' });
+    await assert.rejects(stat(capture('stderr')), { code: 'ENOENT' });
+  }
+
+  assert.equal(setup.manifest.usage.requests, 4, 'the request cap is inclusive');
+  assert.equal(setup.manifest.usage.operatorMinutes, 4, 'the operator-minute cap is inclusive');
+  const reservationDirectory = path.join(setup.runtime, 'usage-reservations');
+  assert.equal((await readdir(reservationDirectory)).filter((filename) => filename.endsWith('.json')).length, 4);
+  let launchesAfterCap = 0;
+  await assert.rejects(setup.modules.launcher.runSupervisedInvocation({
+    invocation: setup.invocation,
+    manifest: setup.manifest,
+    capability: setup.capability,
+    credential: setup.credential,
+    verificationRecord: setup.record,
+    recordStore: setup.recordStore,
+    parentEnvironment: { PATH: '/usr/bin:/bin' },
+    launchContainer: async () => { launchesAfterCap += 1; return createFakeChild(994120); },
+    now: () => approvalNow,
+  }), /CAP_EXHAUSTED/u);
+  assert.equal(launchesAfterCap, 0, 'exceeding the reservation cap is rejected before launch');
+  assert.doesNotThrow(() => setup.modules.launcher.assertNoActiveChildren());
+});
+
+test('supervisor escalates deadlines and retains children until close is observed', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'provider-proof-deadline-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const setup = await createSupervisedFixture(root);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const advance = async (milliseconds) => {
+    await new Promise((resolve) => setImmediate(resolve));
+    t.mock.timers.tick(milliseconds);
+    await new Promise((resolve) => setImmediate(resolve));
+  };
+
+  const termSignals = [];
+  const termExit = await startFakeInvocation(setup, {
+    pid: 994201,
+    killGroup: async (child, signal) => { termSignals.push(signal); if (signal === 'SIGTERM') child.emit('close', null, signal); },
+  });
+  const termFailure = assert.rejects(termExit.promise, /CHILD_DEADLINE_EXCEEDED/u);
+  await advance(setup.invocation.timeoutMs);
+  await termFailure;
+  assert.deepEqual(termSignals, ['SIGTERM']);
+  assert.doesNotThrow(() => setup.modules.launcher.assertNoActiveChildren());
+
+  await rm(path.join(setup.runtime, setup.invocation.descriptor.captures.stdout), { force: true });
+  await rm(path.join(setup.runtime, setup.invocation.descriptor.captures.stderr), { force: true });
+  const killSignals = [];
+  const killExit = await startFakeInvocation(setup, {
+    pid: 994202,
+    killGroup: async (child, signal) => { killSignals.push(signal); if (signal === 'SIGKILL') child.emit('close', null, signal); },
+  });
+  const killFailure = assert.rejects(killExit.promise, /CHILD_DEADLINE_EXCEEDED/u);
+  await advance(setup.invocation.timeoutMs);
+  await advance(500);
+  await killFailure;
+  assert.deepEqual(killSignals, ['SIGTERM', 'SIGKILL']);
+  assert.doesNotThrow(() => setup.modules.launcher.assertNoActiveChildren());
+
+  await rm(path.join(setup.runtime, setup.invocation.descriptor.captures.stdout), { force: true });
+  await rm(path.join(setup.runtime, setup.invocation.descriptor.captures.stderr), { force: true });
+  const stuckSignals = [];
+  const stuck = await startFakeInvocation(setup, {
+    pid: 994203,
+    killGroup: async (_child, signal) => { stuckSignals.push(signal); },
+  });
+  const stuckFailure = assert.rejects(stuck.promise, /CHILD_CLOSE_TIMEOUT/u);
+  await advance(setup.invocation.timeoutMs);
+  await advance(500);
+  await advance(500);
+  await stuckFailure;
+  assert.deepEqual(stuckSignals, ['SIGTERM', 'SIGKILL']);
+  assert.throws(() => setup.modules.launcher.assertNoActiveChildren(), /RECORDED_CHILDREN_REMAIN/u);
+
+  const cleanupFailure = assert.rejects(setup.modules.launcher.terminateActiveChildren(async (_child, signal) => {
+    stuckSignals.push(signal);
+  }), /CHILD_CLOSE_TIMEOUT/u);
+  await advance(500);
+  await advance(500);
+  await cleanupFailure;
+  assert.deepEqual(stuckSignals, ['SIGTERM', 'SIGKILL', 'SIGTERM', 'SIGKILL']);
+  assert.throws(() => setup.modules.launcher.assertNoActiveChildren(), /RECORDED_CHILDREN_REMAIN/u);
+  stuck.child.emit('close', null, 'SIGKILL');
+  assert.doesNotThrow(() => setup.modules.launcher.assertNoActiveChildren(), 'a later close event clears child tracking');
+});
+
+test('usage reservations remain consumed after spawn failure and timeout, including after manifest reload', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'provider-proof-reservation-failures-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const caps = { requests: 1, bytes: 1000, operatorMinutes: 1 };
+  const spawnSetup = await createSupervisedFixture(path.join(root, 'spawn'), { caps });
+  const initialUsage = structuredClone(spawnSetup.manifest.usage);
+  await assert.rejects(spawnSetup.modules.launcher.runSupervisedInvocation({
+    invocation: spawnSetup.invocation,
+    manifest: spawnSetup.manifest,
+    capability: spawnSetup.capability,
+    credential: spawnSetup.credential,
+    verificationRecord: spawnSetup.record,
+    recordStore: spawnSetup.recordStore,
+    parentEnvironment: { PATH: '/usr/bin:/bin' },
+    launchContainer: async () => { throw new Error('fake spawn failure'); },
+    now: () => approvalNow,
+  }), /CHILD_SPAWN_FAILED/u);
+  assert.deepEqual(spawnSetup.manifest.usage, { requests: 1, bytes: 0, operatorMinutes: 1 });
+  const spawnReload = { ...spawnSetup.manifest, usage: initialUsage };
+  const spawnReloadCapability = { ...spawnSetup.capability, manifest: spawnReload };
+  let launchAfterSpawnReload = 0;
+  await assert.rejects(spawnSetup.modules.launcher.runSupervisedInvocation({
+    invocation: spawnSetup.invocation,
+    manifest: spawnReload,
+    capability: spawnReloadCapability,
+    credential: spawnSetup.credential,
+    verificationRecord: spawnSetup.record,
+    recordStore: spawnSetup.recordStore,
+    parentEnvironment: { PATH: '/usr/bin:/bin' },
+    launchContainer: async () => { launchAfterSpawnReload += 1; return createFakeChild(994301); },
+    now: () => approvalNow,
+  }), /CAP_EXHAUSTED/u);
+  assert.equal(launchAfterSpawnReload, 0, 'the persisted spawn-failure reservation closes the reloaded manifest');
+
+  const timeoutSetup = await createSupervisedFixture(path.join(root, 'timeout'), { caps });
+  const timeoutInitialUsage = structuredClone(timeoutSetup.manifest.usage);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const signals = [];
+  const timed = await startFakeInvocation(timeoutSetup, {
+    pid: 994302,
+    killGroup: async (child, signal) => { signals.push(signal); if (signal === 'SIGTERM') child.emit('close', null, signal); },
+  });
+  const timeoutFailure = assert.rejects(timed.promise, /CHILD_DEADLINE_EXCEEDED/u);
+  t.mock.timers.tick(timeoutSetup.invocation.timeoutMs);
+  await new Promise((resolve) => setImmediate(resolve));
+  await timeoutFailure;
+  assert.deepEqual(signals, ['SIGTERM']);
+  assert.deepEqual(timeoutSetup.manifest.usage, { requests: 1, bytes: 0, operatorMinutes: 1 });
+  const timeoutReload = { ...timeoutSetup.manifest, usage: timeoutInitialUsage };
+  const timeoutReloadCapability = { ...timeoutSetup.capability, manifest: timeoutReload };
+  let launchAfterTimeoutReload = 0;
+  await assert.rejects(timeoutSetup.modules.launcher.runSupervisedInvocation({
+    invocation: timeoutSetup.invocation,
+    manifest: timeoutReload,
+    capability: timeoutReloadCapability,
+    credential: timeoutSetup.credential,
+    verificationRecord: timeoutSetup.record,
+    recordStore: timeoutSetup.recordStore,
+    parentEnvironment: { PATH: '/usr/bin:/bin' },
+    launchContainer: async () => { launchAfterTimeoutReload += 1; return createFakeChild(994303); },
+    now: () => approvalNow,
+  }), /CAP_EXHAUSTED/u);
+  assert.equal(launchAfterTimeoutReload, 0, 'the persisted timeout reservation is included after manifest reload');
+  assert.doesNotThrow(() => timeoutSetup.modules.launcher.assertNoActiveChildren());
 });
 
 test('proof.mjs and policy.mjs have no direct child_process dependency', async () => {
@@ -1733,6 +2098,59 @@ test('proof.mjs and policy.mjs have no direct child_process dependency', async (
 async function createCredentialGateFixture(root, { command, approvalId, policy }) {
   const fixture = await createShellGuardFixture(root, { policy });
   return completeCredentialGateFixture(fixture, { command, approvalId });
+}
+
+async function createSupervisedFixture(root, { caps } = {}) {
+  const runtime = path.join(root, 'runtime');
+  const toolDirectory = path.join(runtime, 'tools');
+  await mkdir(toolDirectory, { recursive: true });
+  const executablePath = path.join(toolDirectory, 'aws-cli');
+  const executableBytes = Buffer.from('sealed fake AWS CLI image payload\n');
+  await writeFile(executablePath, executableBytes, { mode: 0o700 });
+  const fixture = await createShellGuardFixture(root, {
+    policy: awsInventoryPolicy(),
+    ...(caps ? { caps } : {}),
+    execution: { tools: { awsCli: { path: 'tools/aws-cli', sha256: createHash('sha256').update(executableBytes).digest('hex') } }, roots: {} },
+    sealArtifacts: { 'post-apply': ['evidence.txt', 'tools/aws-cli'] },
+  });
+  const setup = await completeCredentialGateFixture(fixture, { command: 'inventory', approvalId: 'A4' });
+  const invocation = await setup.modules.launcher.resolveInvocation('aws.inventory.identity', {
+    runtimeRoot: setup.runtime, manifest: setup.manifest, activeSeal: setup.activeSeal,
+  });
+  const credential = await new setup.modules.loader.PrivateCredentialLoader({
+    loadPrivateCredential: async () => awsInventoryCredentialSource(),
+  }).load('aws-inventory');
+  const record = await makeAwsInventoryRecord(setup, credential, invocation.invocationDigest);
+  return { ...setup, invocation, credential, record };
+}
+
+function createFakeChild(pid) {
+  const child = new EventEmitter();
+  child.pid = pid;
+  child.stdout = new PassThrough();
+  child.stderr = new PassThrough();
+  return child;
+}
+
+async function startFakeInvocation(setup, { pid, killGroup, manifest = setup.manifest, capability = setup.capability }) {
+  let resolveLaunched;
+  const launched = new Promise((resolve) => { resolveLaunched = resolve; });
+  const child = createFakeChild(pid);
+  const promise = setup.modules.launcher.runSupervisedInvocation({
+    invocation: setup.invocation,
+    manifest,
+    capability,
+    credential: setup.credential,
+    verificationRecord: setup.record,
+    recordStore: setup.recordStore,
+    parentEnvironment: { PATH: '/usr/bin:/bin' },
+    launchContainer: async () => { resolveLaunched(); return child; },
+    killGroup,
+    now: () => approvalNow,
+  });
+  await launched;
+  await new Promise((resolve) => setImmediate(resolve));
+  return { child, promise };
 }
 
 async function completeCredentialGateFixture(fixture, { command, approvalId }) {

@@ -7,6 +7,9 @@ import { credentialClassDefinition, credentialMaterialKeys } from './credential-
 import { requireCredentialVerification } from './credential-verification.mjs';
 import { assertInvocationMatchesTransition, getInvocation } from './invocation-registry.mjs';
 import { AuthorizationError, requireExternalCapability, validateCapsAndExpiry, validateChildEnvironment } from './policy.mjs';
+import { requireSealedPreservationCheckpoint } from './preservation.mjs';
+
+export { requireSealedPreservationCheckpoint } from './preservation.mjs';
 
 const ACTIVE_CHILDREN = new Map();
 const USAGE_BASELINES = new WeakMap();
@@ -207,75 +210,93 @@ export async function runSupervisedInvocation({
   if (!child || !Number.isInteger(child.pid) || !child.stdout || !child.stderr || typeof child.once !== 'function') {
     throw new LauncherError('CHILD_SPAWN_INTERFACE_INVALID');
   }
-  ACTIVE_CHILDREN.set(child.pid, child);
-
   const stdoutChunks = [];
   const stderrChunks = [];
   let stdoutBytes = 0;
   let stderrBytes = 0;
   let captureOverflow = false;
+  let resolveOutputLimit;
+  const outputLimit = new Promise((resolve) => { resolveOutputLimit = resolve; });
+  let terminationPromise;
+  let terminationReason;
+  let childClosed = false;
+  let resolveChildClosed;
+  const childClose = new Promise((resolve) => { resolveChildClosed = resolve; });
+  const requestTermination = (reason) => {
+    if (terminationPromise) return;
+    terminationReason = reason;
+    terminationPromise = terminateChildAndWait({ child, close: childClose, isClosed: () => childClosed }, killGroup);
+  };
+  const trackedChild = { child, close: childClose, isClosed: () => childClosed };
+  ACTIVE_CHILDREN.set(child.pid, trackedChild);
   child.stdout.on('data', (chunk) => {
     stdoutBytes += chunk.length;
+    if (captureOverflow) return;
     if (stdoutBytes <= MAX_CAPTURE_BYTES) stdoutChunks.push(Buffer.from(chunk));
-    else captureOverflow = true;
+    else {
+      captureOverflow = true;
+      requestTermination('output');
+      resolveOutputLimit({ outputLimit: true });
+    }
   });
   child.stderr.on('data', (chunk) => {
     stderrBytes += chunk.length;
+    if (captureOverflow) return;
     if (stderrBytes <= MAX_CAPTURE_BYTES) stderrChunks.push(Buffer.from(chunk));
-    else captureOverflow = true;
+    else {
+      captureOverflow = true;
+      requestTermination('output');
+      resolveOutputLimit({ outputLimit: true });
+    }
   });
 
   let timer;
-  let timedOut = false;
-  let childClosed = false;
   const exit = new Promise((resolve, reject) => {
     child.once('error', () => reject(new LauncherError('CHILD_PROCESS_ERROR')));
     child.once('close', (code, signal) => {
       childClosed = true;
-      resolve({ code, signal });
+      const result = { code, signal };
+      resolveChildClosed(result);
+      if (ACTIVE_CHILDREN.get(child.pid) === trackedChild) ACTIVE_CHILDREN.delete(child.pid);
+      resolve(result);
     });
   });
   const deadline = new Promise((resolve) => {
     timer = setTimeout(() => {
-      timedOut = true;
+      requestTermination('deadline');
       resolve({ deadline: true });
     }, invocation.timeoutMs);
     timer.unref?.();
   });
 
   let result;
+  let terminationRequested = false;
   try {
-    result = await Promise.race([exit, deadline]);
-    if (result.deadline) {
-      await killGroup(child, 'SIGTERM').catch(() => {});
-      const afterTerm = await Promise.race([exit, delay(FORCE_KILL_DELAY_MS).then(() => ({ graceExpired: true }))]);
-      if (afterTerm.graceExpired) {
-        await killGroup(child, 'SIGKILL').catch(() => {});
-        result = await Promise.race([exit, delay(FORCE_KILL_DELAY_MS).then(() => ({ hardDeadline: true }))]);
-        if (result.hardDeadline) throw new LauncherError('CHILD_CLOSE_TIMEOUT');
-      } else {
-        result = afterTerm;
-      }
-    }
+    const first = await Promise.race([exit, deadline, outputLimit]);
+    if (terminationPromise) {
+      terminationRequested = true;
+      result = await terminationPromise;
+      if (!result) throw new LauncherError('CHILD_CLOSE_TIMEOUT');
+    } else result = first;
   } catch (error) {
-    await killGroup(child, 'SIGTERM').catch(() => {});
-    await killGroup(child, 'SIGKILL').catch(() => {});
+    if (!terminationRequested && !childClosed) {
+      terminationRequested = true;
+      requestTermination('error');
+      const closed = await terminationPromise;
+      if (!closed) throw new LauncherError('CHILD_CLOSE_TIMEOUT');
+    }
     throw error;
   } finally {
     clearTimeout(timer);
-    if (childClosed) ACTIVE_CHILDREN.delete(child.pid);
   }
 
+  if (captureOverflow) throw new LauncherError('CHILD_OUTPUT_LIMIT_EXCEEDED');
   const values = Object.values(credential.environment);
   const stdout = redact(Buffer.concat(stdoutChunks), values);
   const stderr = redact(Buffer.concat(stderrChunks), values);
-  if (captureOverflow || stdoutBytes > MAX_CAPTURE_BYTES || stderrBytes > MAX_CAPTURE_BYTES) {
-    await terminateActiveChildren(killGroup);
-    throw new LauncherError('CHILD_OUTPUT_LIMIT_EXCEEDED');
-  }
   if (invocation.capturePaths.stdout) await writePrivateFile(invocation.capturePaths.stdout, stdout);
   if (invocation.capturePaths.stderr) await writePrivateFile(invocation.capturePaths.stderr, stderr);
-  if (timedOut) throw new LauncherError('CHILD_DEADLINE_EXCEEDED');
+  if (terminationReason === 'deadline') throw new LauncherError('CHILD_DEADLINE_EXCEEDED');
   if (result.code !== 0) throw new LauncherError('CHILD_EXITED_NONZERO', String(result.code ?? result.signal ?? 'unknown'));
 
   return Object.freeze({
@@ -293,30 +314,13 @@ export async function runSupervisedInvocation({
 
 export async function terminateActiveChildren(killGroup = killProcessGroup) {
   const current = [...ACTIVE_CHILDREN.values()];
-  await Promise.all(current.map(async (child) => {
-    await killGroup(child, 'SIGTERM');
-    await new Promise((resolve) => setTimeout(resolve, FORCE_KILL_DELAY_MS));
-    if (ACTIVE_CHILDREN.has(child.pid)) await killGroup(child, 'SIGKILL');
-    ACTIVE_CHILDREN.delete(child.pid);
-  }));
+  const results = await Promise.all(current.map((tracked) => terminateChildAndWait(tracked, killGroup)));
+  if (results.some((result) => !result)) throw new LauncherError('CHILD_CLOSE_TIMEOUT');
   return current.length;
 }
 
 export function assertNoActiveChildren() {
   if (ACTIVE_CHILDREN.size) throw new LauncherError('RECORDED_CHILDREN_REMAIN', String(ACTIVE_CHILDREN.size));
-}
-
-export function requireSealedPreservationCheckpoint(manifest) {
-  const checkpoint = manifest?.preservationCheckpoint;
-  const artifact = manifest?.activeSeal?.artifacts?.find((item) => item.path === checkpoint?.path);
-  if (manifest?.activeSealDigest !== manifest?.activeSeal?.digest
-    || checkpoint?.status !== 'passed'
-    || typeof checkpoint.path !== 'string'
-    || !/^[a-f0-9]{64}$/u.test(checkpoint.sha256 ?? '')
-    || artifact?.sha256 !== checkpoint.sha256) {
-    throw new AuthorizationError('PRESERVATION_CHECKPOINT_REQUIRED');
-  }
-  return checkpoint.sha256;
 }
 
 async function reserveInvocationUsage({ runtimeRoot, manifest, capability, invocation, now }) {
@@ -557,11 +561,14 @@ async function createNoSymlinkDirectory(parent, directory) {
 function redact(buffer, secrets) {
   let result = buffer.toString('utf8');
   const variants = new Set();
+  const mixedJsonPatterns = [];
   for (const secret of secrets) {
     if (typeof secret !== 'string' || !secret) continue;
     const urlForm = new URLSearchParams([['value', secret]]).toString().slice('value='.length);
     const encoded = encodeURIComponent(secret);
     const base64 = Buffer.from(secret, 'utf8').toString('base64');
+    const hex = Buffer.from(secret, 'utf8').toString('hex');
+    const json = JSON.stringify(secret).slice(1, -1);
     variants.add(secret);
     variants.add(encoded);
     variants.add(encoded.replace(/%[0-9A-F]{2}/gu, (part) => part.toLowerCase()));
@@ -569,6 +576,14 @@ function redact(buffer, secrets) {
     variants.add(base64);
     variants.add(base64.replace(/=+$/u, ''));
     variants.add(Buffer.from(secret, 'utf8').toString('base64url'));
+    variants.add(hex);
+    variants.add(hex.toUpperCase());
+    variants.add(json);
+    variants.add(json.replaceAll('/', '\\/'));
+    mixedJsonPatterns.push(mixedJsonSecretPattern(secret));
+  }
+  for (const pattern of mixedJsonPatterns.sort((left, right) => right.secretLength - left.secretLength)) {
+    result = result.replace(new RegExp(pattern.source, 'gu'), '[REDACTED]');
   }
   for (const secret of [...variants].filter(Boolean).sort((left, right) => right.length - left.length)) {
     result = result.split(secret).join('[REDACTED]');
@@ -579,6 +594,37 @@ function redact(buffer, secrets) {
     .replace(/(AWS_SECRET_ACCESS_KEY\s*[=:]\s*)\S+/giu, '$1[REDACTED]')
     .replace(/(AWS_SESSION_TOKEN\s*[=:]\s*)\S+/giu, '$1[REDACTED]');
   return Buffer.from(result, 'utf8');
+}
+
+function mixedJsonSecretPattern(secret) {
+  const tokens = [...secret].map((character) => {
+    const alternatives = [escapeRegExp(character)];
+    const jsonCharacter = JSON.stringify(character).slice(1, -1);
+    if (jsonCharacter !== character) alternatives.push(escapeRegExp(jsonCharacter));
+    if (character === '/') alternatives.push('\\/');
+    const unicodeUnits = [];
+    for (let index = 0; index < character.length; index += 1) {
+      const hex = character.charCodeAt(index).toString(16).padStart(4, '0');
+      const caseFlexibleHex = [...hex].map((digit) => /[a-f]/u.test(digit) ? `[${digit}${digit.toUpperCase()}]` : digit).join('');
+      unicodeUnits.push(`\\\\u${caseFlexibleHex}`);
+    }
+    alternatives.push(unicodeUnits.join(''));
+    return `(?:${[...new Set(alternatives)].join('|')})`;
+  });
+  return { source: tokens.join(''), secretLength: secret.length };
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+}
+
+async function terminateChildAndWait({ child, close, isClosed }, killGroup) {
+  if (isClosed()) return close;
+  await killGroup(child, 'SIGTERM').catch(() => {});
+  const afterTerm = await Promise.race([close, delay(FORCE_KILL_DELAY_MS).then(() => null)]);
+  if (afterTerm) return afterTerm;
+  await killGroup(child, 'SIGKILL').catch(() => {});
+  return Promise.race([close, delay(FORCE_KILL_DELAY_MS).then(() => null)]);
 }
 
 async function killProcessGroup(child, signal) {

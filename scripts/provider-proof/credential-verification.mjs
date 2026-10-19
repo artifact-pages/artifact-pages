@@ -3,6 +3,7 @@ import path from 'node:path';
 import { canonicalDigest } from './canonical.mjs';
 import { assertInvocationMatchesTransition, getInvocation } from './invocation-registry.mjs';
 import { AuthorizationError, requireExternalCapability } from './policy.mjs';
+import { requireSealedPreservationCheckpoint } from './preservation.mjs';
 
 export const VERIFICATION_RECORD_VERSION = 1;
 export const DEFAULT_VERIFICATION_MAX_AGE_MS = 5 * 60 * 1000;
@@ -97,6 +98,7 @@ export async function verifyCredential({
     || capability.manifest !== manifest) {
     throw new CredentialVerificationError('SIGNED_TRANSITION_REQUIRED');
   }
+  requireSealedPreservationCheckpoint(manifest);
   if (!invocationId || !/^[a-f0-9]{64}$/u.test(invocationDigest ?? '')) throw new CredentialVerificationError('INVOCATION_BINDING_REQUIRED');
   const invocation = getInvocation(invocationId);
   if (invocation.transition !== capability.command) throw new CredentialVerificationError('INVOCATION_TRANSITION_MISMATCH');

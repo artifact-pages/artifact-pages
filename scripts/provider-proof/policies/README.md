@@ -16,6 +16,8 @@ The CloudFront creation session is a documented exception because the named crea
 
 `aws-provisioner-role-policy.json` uses IAM action names, not SDK method names. S3 lifecycle authorization uses `s3:GetBucketLifecycleConfiguration` and `s3:PutLifecycleConfiguration`. Terraform provider 6.66.0 refresh reads listed in the plan are included individually. A missing action is a review stop; there is no wildcard service allow.
 
+The local policy checks count only unconditional Deny statements as preserved-resource or proof-boundary evidence. Allow actions cannot contain `*` or `?`; resource wildcards are limited to one terminal `/*` on a concrete S3 bucket ARN, plus the existing exact-action `Resource: "*"` exceptions. These checks are intentionally narrower than a general IAM policy evaluator.
+
 ## Cloudflare
 
 `cloudflare-credential-scopes.json` separates bucket-scoped parent tokens, 15-minute prefix/object children, registry readers, a distinct zone-wide Cache Purge token, and the owner-operated account-wide lifecycle administrator. Parent R2 credentials stay in the private loader. The production account ID is excluded. The file records shared-key, zone-wide purge, and account-wide lifecycle authority as residual scope rather than representing it as path-limited.
