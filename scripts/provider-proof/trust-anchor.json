@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "keyId": "owner",
   "algorithm": "ssh-ed25519",
-  "status": "unenrolled",
-  "publicKey": null,
-  "fingerprint": null
+  "status": "enrolled",
+  "publicKey": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFnkEo9b3VcpltAQeWgPqtmI+fF6Cf7nF8eGkFZ8lwVR",
+  "fingerprint": "SHA256:Lw4hldSCL16q1Xjx9E6Mm2eTjloWf7KBDpjcuVKN6Sw"
 }
