@@ -4315,8 +4315,7 @@ a.tree-more:hover {
 }
 
 .preview-link,
-.preview-links a,
-.preview-raw a {
+.preview-links a {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -4327,8 +4326,7 @@ a.tree-more:hover {
 }
 
 .preview-link:hover,
-.preview-links a:hover,
-.preview-raw a:hover {
+.preview-links a:hover {
   text-decoration-color: var(--text-secondary);
 }
 
@@ -4383,25 +4381,6 @@ a.tree-more:hover {
 .preview-facts-document {
   padding-top: 12px;
   border-top: 1px solid var(--line-soft);
-}
-
-.preview-raw {
-  display: grid;
-  gap: 2px;
-  margin: 2px 0 0;
-  padding-top: 10px;
-  border-top: 1px dashed var(--line);
-  font-size: 11px;
-  line-height: 1.4;
-}
-
-.preview-raw a {
-  width: fit-content;
-  color: var(--text-secondary);
-}
-
-.preview-raw span {
-  color: var(--text-tertiary);
 }
 
 .preview-unavailable-links {

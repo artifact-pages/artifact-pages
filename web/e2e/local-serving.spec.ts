@@ -1163,10 +1163,7 @@ test('artifact actions pin locally without changing selection or Browse, and exp
     'href',
     'https://github.com/example/payments/commits/main/incidents/checkout-latency/index.html',
   )
-  await expect(menu.getByRole('menuitem', { name: 'Open raw artifact' })).toHaveAttribute(
-    'href',
-    new URL('/_artifacts/sre/incidents/checkout-latency/index.html', appOrigin).href,
-  )
+  await expect(menu.getByRole('menuitem', { name: 'Open raw artifact' })).toHaveCount(0)
   await page.keyboard.press('Escape')
   await expect(menu).toHaveCount(0)
   await expect(browseActions).toBeFocused()
@@ -3645,12 +3642,11 @@ test('site home hides artifact actions while an open artifact provides usable ac
   const contentsButton = contextActions.getByRole('button', { name: 'Contents', exact: true })
   const detailsButton = contextActions.getByRole('button', { name: 'Details', exact: true })
   const copyButton = contextActions.getByRole('button', { name: 'Copy artifact link' })
-  const rawLink = contextActions.getByRole('link', { name: 'Open raw artifact' })
 
   await expect(contentsButton).toBeEnabled()
   await expect(detailsButton).toBeEnabled()
   await expect(copyButton).toBeEnabled()
-  await expect(rawLink).toHaveAttribute('href', '/_artifacts/sre/incidents/checkout-latency/index.html')
+  await expect(contextActions.getByRole('link', { name: 'Open raw artifact' })).toHaveCount(0)
 
   await detailsButton.click()
   await expect(page.getByRole('complementary', { name: 'Details' })).toBeVisible()
@@ -8960,13 +8956,8 @@ test.describe('preview reading in the reader shell (ISSUE-109)', () => {
     await expect(details.locator('.preview-path')).toHaveText(guidePath)
     await expect(details.getByText('Markdown', { exact: true })).toBeVisible()
 
-    const raw = details.getByRole('link', { name: 'Open the raw file' })
-    await expect(raw).toHaveAttribute('href', `/_previews/sre/revisions/${previewHeadSha}/files/${guidePath}`)
-    await expect(raw).toHaveAttribute('target', '_blank')
-    await expect(details).toContainText("Opens this revision's file on its own, outside the reader.")
-    const popup = page.waitForEvent('popup')
-    await raw.click()
-    expect(new URL((await popup).url()).pathname).toBe(`/_previews/sre/revisions/${previewHeadSha}/files/${guidePath}`)
+    await expect(details.getByRole('link', { name: 'Open the raw file' })).toHaveCount(0)
+    await expect(details).not.toContainText('Opens this revision')
   })
 
   test('Details never show a production date, source or committer, and "Included as" appears only when the manifest says so', async ({ page }) => {
@@ -9242,7 +9233,7 @@ test.describe('preview reading in the reader shell (ISSUE-109)', () => {
     await page.getByRole('button', { name: 'Details' }).click()
     const panel = page.getByRole('complementary', { name: 'Details' })
     await expect(panel.getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
-    await expect(panel.getByRole('link', { name: 'Open the raw file' })).toBeVisible()
+    await expect(panel.getByRole('link', { name: 'Open the raw file' })).toHaveCount(0)
     await expect(panel.getByText('Updated')).toHaveCount(0)
 
     await page.setViewportSize({ width: 390, height: 844 })
@@ -9251,7 +9242,7 @@ test.describe('preview reading in the reader shell (ISSUE-109)', () => {
     const narrowPanel = page.getByRole('complementary', { name: 'Details' })
     await expect(narrowPanel.getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
     await expect(narrowPanel.getByRole('link', { name: 'Preview list' })).toBeVisible()
-    await expect(narrowPanel.getByText('Opens this revision\'s file on its own, outside the reader.')).toBeVisible()
+    await expect(narrowPanel.getByText('Opens this revision\'s file on its own, outside the reader.')).toHaveCount(0)
   })
 
   test('an HTML page outside the preview keeps its raw behaviour and the notice says so', async ({ page }) => {

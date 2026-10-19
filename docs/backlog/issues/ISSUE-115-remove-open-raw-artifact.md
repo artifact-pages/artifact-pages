@@ -20,8 +20,8 @@ The reader offers no action that opens the raw published or preview file. Readin
 
 ## Acceptance criteria
 
-- [ ] No "Open raw artifact" toolbar button, More menu item, command palette command or sidebar row action exists, on documents, directory pages and the not-found view.
-- [ ] Preview Details no longer show "Open the raw file" or its caption; the rest of the preview Details order is unchanged.
-- [ ] Raw file URLs that the reader itself needs (HTML frames, preview frames, Markdown fetches) keep working; only the user-facing actions go. Code that only served those actions is removed.
-- [ ] `docs/specification.md` no longer lists the action (More menu list, sidebar row actions and the "raw/source/history actions" sentence, the directory-page sentence, preview Details); historical backlog items are left as they are.
-- [ ] Unit, e2e and story coverage updated; verify and e2e pass.
+- [x] No "Open raw artifact" toolbar button, More menu item, command palette command or sidebar row action exists, on documents, directory pages and the not-found view.
+- [x] Preview Details no longer show "Open the raw file" or its caption; the rest of the preview Details order is unchanged.
+- [x] Raw file URLs that the reader itself needs (HTML frames, preview frames, Markdown fetches) keep working; only the user-facing actions go. Code that only served those actions is removed.
+- [x] `docs/specification.md` no longer lists the action (More menu list, sidebar row actions and the "raw/source/history actions" sentence, the directory-page sentence, preview Details); historical backlog items are left as they are.
+- [x] Unit, e2e and story coverage updated; verify and e2e pass.

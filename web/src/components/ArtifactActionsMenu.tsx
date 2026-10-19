@@ -8,7 +8,6 @@ export function ArtifactActionsMenu({
   pinned,
   sourceUrl,
   historyUrl,
-  rawUrl,
   onTogglePin,
   onCopyLink,
 }: {
@@ -16,7 +15,6 @@ export function ArtifactActionsMenu({
   pinned: boolean
   sourceUrl?: string
   historyUrl?: string
-  rawUrl?: string
   onTogglePin: () => void
   onCopyLink: () => void
 }) {
@@ -175,7 +173,6 @@ export function ArtifactActionsMenu({
           </button>
           <MenuLink href={sourceUrl} label="Open source" icon="external" onNavigate={() => close()} />
           <MenuLink href={historyUrl} label="View history" icon="history" onNavigate={() => close()} />
-          <MenuLink href={rawUrl} label="Open raw artifact" icon="external" onNavigate={() => close()} />
         </div>,
         document.body,
       ) : null}

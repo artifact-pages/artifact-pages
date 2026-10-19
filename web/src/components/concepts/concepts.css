@@ -746,9 +746,6 @@ a.page-text-result { text-decoration: none; }
 .pv-more-banner { display: inline-flex; margin: 0; }
 .pv-inline-button { padding: 0 6px; border: 1px solid var(--line); border-radius: 5px; color: var(--text); font-size: 12px; }
 
-.pv-raw { display: grid; gap: 2px; margin: 12px 0 0; padding-top: 10px; border-top: 1px dashed var(--line); font-size: 11px; line-height: 1.4; }
-.pv-raw a { display: inline-flex; width: fit-content; align-items: center; gap: 4px; color: var(--text-secondary); text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
-.pv-raw span { color: var(--text-tertiary); }
 
 .pv-notice {
   margin: 0; padding: 8px 14px; border-bottom: 1px solid var(--line-soft); border-left: 3px solid var(--text-tertiary);

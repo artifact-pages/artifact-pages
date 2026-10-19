@@ -14,7 +14,6 @@ export type ArtifactRowActions = {
   pinned: boolean
   sourceUrl?: string
   historyUrl?: string
-  rawUrl?: string
   onTogglePin: () => void
   onCopyLink: () => void
 }
@@ -331,7 +330,6 @@ function ArtifactRow({
           pinned={actions.pinned}
           sourceUrl={actions.sourceUrl}
           historyUrl={actions.historyUrl}
-          rawUrl={actions.rawUrl}
           onTogglePin={actions.onTogglePin}
           onCopyLink={actions.onCopyLink}
         />
