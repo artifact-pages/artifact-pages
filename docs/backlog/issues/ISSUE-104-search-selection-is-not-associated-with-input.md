@@ -1,6 +1,6 @@
 # Arrow-selected search results are not associated with the focused input
 
-- Status: In progress
+- Status: Done
 - Assignee: Claude
 - Priority: P2
 - Area: Reader / palette and full-text search accessibility
@@ -29,7 +29,7 @@ Keyboard selection has an accessible, trackable active result, through an approp
 ## Acceptance criteria
 
 - [x] In both search surfaces, arrows expose the current candidate's identity and selection through a valid accessible focus model.
-- [ ] A main screen-reader path verifies that the selected candidate and Enter destination can be followed; record browser and assistive technology used.
+- [x] A main screen-reader path verifies that the selected candidate and Enter destination can be followed; record browser and assistive technology used.
 - [x] Query changes, stale/loading results and empty lists do not retain an invalid active-result reference.
 - [x] IME confirmation, Enter, Escape and the palette's page/heading navigation continue to work.
 - [x] Regression checks cover the accessible relationship as well as visual highlighting.
@@ -40,4 +40,4 @@ Keyboard selection has an accessible, trackable active result, through an approp
 - Results page (`SearchResultsPage.tsx`): results are links, so ArrowDown in the field moves real focus to the first link, ArrowUp/ArrowDown walk the links, ArrowUp on the first link and Escape return to the field, Enter in the field only commits the query, and `aria-current` is no longer used for selection.
 - e2e (`local-serving.spec.ts`): the combobox test checks `aria-activedescendant`, `aria-selected`, and the empty state; the results-page tests check `document.activeElement`. Existing tests changed: the palette field is now located with `getByRole('combobox', …)` instead of `textbox`; `ranked results are a list of links that open from the keyboard` and `arrow keys … when excerpts are shown` no longer expect virtual selection or Enter-opens-active-hit in the field, and assert focus on the links and native Enter on a focused link instead.
 - Results: `npm run build` and `npm run test:web-unit` pass; full e2e 227 passed.
-- Open: the screen-reader criterion (a main screen-reader path that follows the selected candidate and Enter destination, recording browser and assistive technology) awaits a manual VoiceOver session by the owner. The ticket stays In progress until then.
+- Screen reader (owner, 2026-10-19): production web 0.4.0 (https://artifact-pages.dev, admin App deploy run 39256651234) on macOS 26.5.1, Safari 26.5, VoiceOver. In the palette, VoiceOver announced the selected candidate while moving with the arrow keys, Enter opened the announced page, and Escape returned focus to where it was. No issues found.

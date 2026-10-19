@@ -1,6 +1,6 @@
 # Reading context and source provenance stay hidden behind separate controls
 
-- Status: In progress
+- Status: Done
 - Assignee: Claude
 - Priority: P2
 - Area: Web / reader context, Contents and Details
@@ -54,8 +54,8 @@ No public documentation page rewrite, external service integration, authorship/o
 - [x] Below the chosen width threshold, the column collapses and both information groups remain explicitly accessible. Resizing/zooming and left-sidebar toggling do not create overlapping chrome, lost focus or horizontal page overflow.
 - [x] Heading links still navigate to the intended Markdown/HTML heading; provenance values and GitHub links remain accurate. No last-committer-as-owner claim or synthetic provenance is introduced.
 - [x] Missing headings/provenance and long labels produce useful, uncluttered states. Applicable preview, empty/error and non-document surfaces follow the recorded scope decisions.
-- [ ] Keyboard navigation, accessible names, focus order/return, long-column scrolling, light/dark and representative narrow/wide widths are verified in the actual product.
-- [ ] Relevant stories/regressions and applicable web/browser checks pass, fresh cross-review is complete, and this item is resolved before final documentation screenshots and reader-feature copy are produced.
+- [x] Keyboard navigation, accessible names, focus order/return, long-column scrolling, light/dark and representative narrow/wide widths are verified in the actual product.
+- [x] Relevant stories/regressions and applicable web/browser checks pass, fresh cross-review is complete, and this item is resolved before final documentation screenshots and reader-feature copy are produced.
 
 ## Related work
 
@@ -75,4 +75,4 @@ Implemented in `web/` (2026-10-17, Claude): `ReaderContextColumn.tsx`, `useCurre
 
 Known limits: the current heading is the last one whose top has passed a reading line near the top of the pane, so at the very end of a document an entry that cannot reach that line (the last short sections) is not marked until the reader scrolls to it. HTML marking is best effort and silent when the frame cannot be read. Review fixes (Luna cross-review): focus now follows the reader from the narrow More menu trigger (or a panel opened from it) into the matching column part, Contents when no panel was open; the column is not shown while a Markdown document or an HTML body has failed to load (both have e2e tests, and the column returns after a retry).
 
-Remaining before this can be Done: the owner's VoiceOver pass (landmark names, focus announcements), the real-device zoom check, and the Luna cross-review, which is complete once the review fixes are in. The criteria on keyboard, accessible names and widths, and on stories, regressions and cross-review, stay unticked until then.
+Owner check (2026-10-19): production web 0.4.0 (https://artifact-pages.dev, admin App deploy run 39256651234) on macOS 26.5.1, Safari 26.5, VoiceOver; zoom also on the owner's iPhone (model and iOS version not recorded). The "Reading context" landmark appears in the VoiceOver rotor; Tab order runs from Details links into the Contents headings and activating a heading moves to it; Details scrolls away while Contents stays; light and dark are legible. Browser zoom at 125/150/175 % collapses the column into the Contents/Details buttons without overlap or horizontal scrolling, and pinch zoom on the iPhone shows no breakage. No issues found. This is not the ISSUE-080/T24 real-phone check, which stays open. Together with the e2e coverage above (narrow-panel focus return, the HTML column), and the Luna cross-review (run locally, so it left no PR comments) whose fixes landed as the review-fix commits squashed into #162, the remaining criteria are met.
