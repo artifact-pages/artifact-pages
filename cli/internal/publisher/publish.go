@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/artifact-pages/artifact-pages/cli/internal/preview"
 )
@@ -32,6 +33,8 @@ type SitePublishOptions struct {
 	SourceDir string
 	Ref       string
 	DryRun    bool
+	// nowForTest controls prepared generatedAt timestamps in deterministic tests.
+	nowForTest func() time.Time
 }
 
 type Result struct {

@@ -127,6 +127,9 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 			return Result{}, err
 		}
 		preparedOptions := sitePublishBuildOptions(options.SiteID, entry.Name, entry.Description, sourceDir, options.Ref, identity, conditional)
+		if options.nowForTest != nil {
+			preparedOptions.Now = options.nowForTest
+		}
 		preparedOptions.DeferGitHubEnrichment = true
 		priorObjects := make(map[string]Object)
 		priorLoader := sitePriorStateLoaderWithCache(conditional, options.SiteID, priorObjects)

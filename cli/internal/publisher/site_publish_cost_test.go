@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudfront"
@@ -35,17 +36,18 @@ type sitePublishCostStoredObject struct {
 type sitePublishCostS3 struct {
 	mu sync.Mutex
 
-	objects   map[string]sitePublishCostStoredObject
-	nextETag  int
-	requests  map[string]int
-	readByte  map[string]int64
-	writeByte map[string]int64
-	events    []string
+	objects       map[string]sitePublishCostStoredObject
+	nextETag      int
+	requests      map[string]int
+	requestsByKey map[string]int
+	readByte      map[string]int64
+	writeByte     map[string]int64
+	events        []string
 }
 
 func newSitePublishCostS3() *sitePublishCostS3 {
 	return &sitePublishCostS3{
-		objects: make(map[string]sitePublishCostStoredObject), requests: make(map[string]int),
+		objects: make(map[string]sitePublishCostStoredObject), requests: make(map[string]int), requestsByKey: make(map[string]int),
 		readByte: make(map[string]int64), writeByte: make(map[string]int64),
 	}
 }
@@ -74,6 +76,7 @@ func (client *sitePublishCostS3) resetCounts() {
 	client.mu.Lock()
 	defer client.mu.Unlock()
 	client.requests = make(map[string]int)
+	client.requestsByKey = make(map[string]int)
 	client.readByte = make(map[string]int64)
 	client.writeByte = make(map[string]int64)
 	client.events = nil
@@ -83,6 +86,7 @@ func (client *sitePublishCostS3) recordLocked(operation, key string, readBytes, 
 	category := sitePublishCostCategory(key)
 	client.requests[operation+"."+category]++
 	client.requests[operation+".total"]++
+	client.requestsByKey[operation+" "+key]++
 	client.readByte[category] += readBytes
 	client.writeByte[category] += writtenBytes
 	client.events = append(client.events, operation+"."+category)
@@ -230,10 +234,14 @@ func (client *sitePublishCostS3) snapshot() sitePublishCostSnapshot {
 	defer client.mu.Unlock()
 	result := sitePublishCostSnapshot{
 		Requests: make(map[string]int, len(client.requests)), ReadBytes: make(map[string]int64, len(client.readByte)),
-		WriteBytes: make(map[string]int64, len(client.writeByte)), Events: append([]string(nil), client.events...),
+		RequestsByKey: make(map[string]int, len(client.requestsByKey)),
+		WriteBytes:    make(map[string]int64, len(client.writeByte)), Events: append([]string(nil), client.events...),
 	}
 	for key, value := range client.requests {
 		result.Requests[key] = value
+	}
+	for key, value := range client.requestsByKey {
+		result.RequestsByKey[key] = value
 	}
 	for key, value := range client.readByte {
 		result.ReadBytes[key] = value
@@ -281,10 +289,11 @@ func sitePublishCostCloneMetadata(metadata map[string]string) map[string]string 
 }
 
 type sitePublishCostSnapshot struct {
-	Requests   map[string]int
-	ReadBytes  map[string]int64
-	WriteBytes map[string]int64
-	Events     []string
+	Requests      map[string]int
+	RequestsByKey map[string]int
+	ReadBytes     map[string]int64
+	WriteBytes    map[string]int64
+	Events        []string
 }
 
 type sitePublishCostReport struct {
@@ -473,21 +482,8 @@ func TestPublishSiteWholeControlRequestsCompareR2GetOnlyAndAWSHeadThenGet(t *tes
 		r2ChangedReport.ObjectRequests["DELETE.projection"] != awsChangedReport.ObjectRequests["DELETE.projection"] {
 		t.Fatalf("changed projection writes/deletes R2=%d/%d AWS=%d/%d; want matching artifact/index mutations", r2ChangedReport.ObjectRequests["PUT.projection"], r2ChangedReport.ObjectRequests["DELETE.projection"], awsChangedReport.ObjectRequests["PUT.projection"], awsChangedReport.ObjectRequests["DELETE.projection"])
 	}
-	// The generated index and metadata include a volatile generatedAt value.
-	// When sequential provider runs cross an RFC3339 second, preserveGeneratedAt
-	// reads prior index/metadata objects whose generatedAt-bearing bytes differ
-	// before deciding whether to retain their deployed bytes. Count these as
-	// projection reads; they are independent of the state-read policy compared.
-	for _, report := range []sitePublishCostReport{r2ChangedReport, awsChangedReport} {
-		generatedAtReads := report.ObjectRequests["GET.projection"]
-		if generatedAtReads < 0 || generatedAtReads > 2 {
-			t.Fatalf("%s changed flow made %d projection GETs; want at most the generatedAt index/meta reads", report.Provider, generatedAtReads)
-		}
-	}
-	if r2ChangedReport.ObjectRequests["GET.projection"] > 1 || awsChangedReport.ObjectRequests["GET.projection"] > 1 ||
-		r2ChangedReport.ObjectRequests["HEAD.projection"] != 0 || awsChangedReport.ObjectRequests["HEAD.projection"] != 0 {
-		t.Fatalf("changed projection reads R2=%v AWS=%v; want at most one GET and no HEAD for either", r2ChangedReport.ObjectRequests, awsChangedReport.ObjectRequests)
-	}
+	assertChangedProjectionReadBudget(t, r2ChangedReport, r2ChangedSnapshot)
+	assertChangedProjectionReadBudget(t, awsChangedReport, awsChangedSnapshot)
 	if r2ChangedReport.StateBodyReadBytes <= 0 || awsChangedReport.StateBodyReadBytes <= 0 {
 		t.Fatalf("changed state body bytes R2/AWS = %d/%d; want both state GETs to read bytes", r2ChangedReport.StateBodyReadBytes, awsChangedReport.StateBodyReadBytes)
 	}
@@ -506,6 +502,104 @@ func TestPublishSiteWholeControlRequestsCompareR2GetOnlyAndAWSHeadThenGet(t *tes
 	}
 	if err := sitePublishCostAssertWriteOrdering(awsChangedSnapshot.Events); err != nil {
 		t.Fatalf("AWS write ordering: %v", err)
+	}
+}
+
+func assertChangedProjectionReadBudget(t *testing.T, report sitePublishCostReport, snapshot sitePublishCostSnapshot) {
+	t.Helper()
+	indexKey := "_indexes/sre/index.json"
+	metaKey := "_indexes/sre/meta.json"
+	indexGets := snapshot.RequestsByKey["GET "+indexKey]
+	metaGets := snapshot.RequestsByKey["GET "+metaKey]
+	projectionGets := report.ObjectRequests["GET.projection"]
+	if projectionGets < 1 || projectionGets > 2 || report.ObjectRequests["HEAD.projection"] != 0 {
+		t.Fatalf("%s changed projection reads = GET %d HEAD %d; want 1-2 GETs and no HEADs", report.Provider, projectionGets, report.ObjectRequests["HEAD.projection"])
+	}
+	if indexGets != 1 || metaGets > 1 || projectionGets != indexGets+metaGets {
+		t.Fatalf("%s changed projection GETs by key = index %d meta %d total %d; want index=1, meta=0-1, total=index+meta", report.Provider, indexGets, metaGets, projectionGets)
+	}
+	for request, count := range snapshot.RequestsByKey {
+		if !strings.HasPrefix(request, "GET ") && !strings.HasPrefix(request, "HEAD ") {
+			continue
+		}
+		key := strings.TrimPrefix(strings.TrimPrefix(request, "GET "), "HEAD ")
+		if sitePublishCostCategory(key) != "projection" || count == 0 {
+			continue
+		}
+		if (strings.HasPrefix(request, "GET ") && key != indexKey && key != metaKey) || strings.HasPrefix(request, "HEAD ") {
+			t.Errorf("%s changed flow made unexpected projection read %q=%d", report.Provider, request, count)
+		}
+	}
+}
+
+func TestChangedProjectionReadBudgetGeneratedAtClockCases(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		changedAt   time.Time
+		wantGets    int
+		wantMetaGet int
+	}{
+		{name: "same RFC3339 second", changedAt: time.Date(2026, 10, 20, 12, 0, 0, 900_000_000, time.UTC), wantGets: 1, wantMetaGet: 0},
+		{name: "crossed RFC3339 second", changedAt: time.Date(2026, 10, 20, 12, 0, 1, 100_000_000, time.UTC), wantGets: 2, wantMetaGet: 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("GITHUB_TOKEN", "")
+			t.Setenv("GH_TOKEN", "")
+			_ = createPublisherCheckout(t, "git@github.com:acme/sre.git")
+			initialAt := time.Date(2026, 10, 20, 12, 0, 0, 100_000_000, time.UTC)
+			clockValues := []time.Time{initialAt, test.changedAt}
+			clockCalls := 0
+			options := SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts", Ref: "baseline", nowForTest: func() time.Time {
+				if clockCalls >= len(clockValues) {
+					return clockValues[len(clockValues)-1]
+				}
+				value := clockValues[clockCalls]
+				clockCalls++
+				return value
+			}}
+			store := newSitePublishCostS3()
+			registryBytes, _, err := testRegistryBuild(t, []byte(registeredSREManifest))
+			if err != nil {
+				t.Fatal(err)
+			}
+			store.seed("_indexes/sites.json", Object{Bytes: registryBytes, ContentType: "application/json; charset=utf-8", Cache: indexCacheControl})
+			cdn := &sitePublishCostCloudFront{}
+			backend, err := newAWSBackend(awsClients{s3: store, cloudFront: cdn}, AWSOptions{Bucket: "cost-test", DistributionID: "E123COST"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			initial, err := PublishSite(context.Background(), backend, options)
+			if err != nil || initial.Outcome != "synced" {
+				t.Fatalf("initial publish = %+v, %v", initial, err)
+			}
+			if clockCalls != 1 {
+				t.Fatalf("clock called %d times after initial publish, want 1", clockCalls)
+			}
+			store.resetCounts()
+			options.Ref = "release"
+			changed, err := PublishSite(context.Background(), backend, options)
+			if err != nil || changed.Outcome != "synced" {
+				t.Fatalf("changed publish = %+v, %v", changed, err)
+			}
+			if clockCalls != 2 {
+				t.Fatalf("clock called %d times after changed publish, want 2", clockCalls)
+			}
+			snapshot := store.snapshot()
+			report := sitePublishCostMakeReport("AWS", test.name, snapshot, cdn.calls())
+			assertChangedProjectionReadBudget(t, report, snapshot)
+			if got := snapshot.Requests["GET.projection"]; got != test.wantGets {
+				t.Fatalf("projection GETs = %d, want %d; requests by key: %v", got, test.wantGets, snapshot.RequestsByKey)
+			}
+			if got := snapshot.RequestsByKey["GET _indexes/sre/index.json"]; got != 1 {
+				t.Fatalf("prior index GETs = %d, want exactly 1; requests by key: %v", got, snapshot.RequestsByKey)
+			}
+			if got := snapshot.RequestsByKey["GET _indexes/sre/meta.json"]; got != test.wantMetaGet {
+				t.Fatalf("meta.json GETs = %d, want %d; requests by key: %v", got, test.wantMetaGet, snapshot.RequestsByKey)
+			}
+			if snapshot.Requests["HEAD.projection"] != 0 {
+				t.Fatalf("projection HEADs = %d, want zero", snapshot.Requests["HEAD.projection"])
+			}
+		})
 	}
 }
 
