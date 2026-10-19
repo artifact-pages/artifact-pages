@@ -131,7 +131,7 @@ ISSUE-013's verified completion record is retained in Git history.
 
 ISSUE-107 records the owner-selected site-home direction (2026-10-16), with a portable mock and explicit remaining behavior decisions. It is a reader product change; public documentation restructuring remains separate. Schedule it explicitly with the existing repair queue rather than treating it as a new release blocker.
 
-ISSUE-108 is owner-requested design-first reader work (2026-10-17). Complete it before the final official documentation rewrite/screenshots; IA discussion may continue. Claude owns the design stage. It does not change the release authorization or reopen ISSUE-080.
+ISSUE-108 is owner-requested design-first reader work (2026-10-17). Complete it before the final official documentation rewrite/screenshots; IA discussion may continue. Claude owns the design stage. It does not change the release authorization or reopen ISSUE-080. Done 2026-10-19 (web 0.4.0, owner checks); final documentation work is no longer blocked by it.
 
 ISSUE-109 follows ISSUE-108: Claude designs preview entry/reading and richer review metadata after the responsive context-sidebar work, before final preview documentation/screenshots. An existing logical SPA preview route is confirmed in source; the reported raw-link entry still needs reproduction.
 
