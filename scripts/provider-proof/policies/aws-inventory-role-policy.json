@@ -4,16 +4,19 @@
     {
       "Sid": "ReadIdentityAndEnumerateBucketNames",
       "Effect": "Allow",
-      "Action": ["sts:GetCallerIdentity", "s3:ListAllMyBuckets"],
+      "Action": [
+        "sts:GetCallerIdentity",
+        "s3:ListAllMyBuckets"
+      ],
       "Resource": "*"
     },
     {
-      "Sid": "ReadEnumeratedBucketConfiguration",
+      "Sid": "ReadPreservedBucketConfiguration",
       "Effect": "Allow",
       "Action": [
         "s3:GetBucketLocation",
         "s3:GetBucketVersioning",
-        "s3:GetBucketLifecycleConfiguration",
+        "s3:GetLifecycleConfiguration",
         "s3:GetBucketPublicAccessBlock",
         "s3:GetBucketOwnershipControls",
         "s3:GetEncryptionConfiguration",
@@ -25,19 +28,22 @@
         "s3:GetAccelerateConfiguration",
         "s3:GetBucketRequestPayment",
         "s3:GetBucketLogging",
-        "s3:GetBucketReplication",
-        "s3:GetBucketObjectLockConfiguration"
+        "s3:GetReplicationConfiguration",
+        "s3:GetObjectLockConfiguration"
       ],
-      "Resource": ["{{PRESERVED_BUCKET_ARN}}", "{{PROOF_BUCKET_ARN}}"]
+      "Resource": "arn:aws:s3:::artifact-pages-231136241959-us-east-1"
     },
     {
-      "Sid": "ReadEnumeratedBucketObjectsAndVersions",
+      "Sid": "ReadPreservedBucketObjectsAndVersions",
       "Effect": "Allow",
-      "Action": ["s3:ListBucket", "s3:ListBucketVersions"],
-      "Resource": ["{{PRESERVED_BUCKET_ARN}}", "{{PROOF_BUCKET_ARN}}"]
+      "Action": [
+        "s3:ListBucket",
+        "s3:ListBucketVersions"
+      ],
+      "Resource": "arn:aws:s3:::artifact-pages-231136241959-us-east-1"
     },
     {
-      "Sid": "ReadEnumeratedObjectMetadataAndTags",
+      "Sid": "ReadPreservedObjectMetadataAndTags",
       "Effect": "Allow",
       "Action": [
         "s3:GetObject",
@@ -46,13 +52,51 @@
         "s3:GetObjectVersionTagging",
         "s3:GetObjectAttributes"
       ],
-      "Resource": ["{{PRESERVED_BUCKET_ARN}}/*", "{{PROOF_BUCKET_ARN}}/*"]
+      "Resource": "arn:aws:s3:::artifact-pages-231136241959-us-east-1/*"
     },
     {
-      "Sid": "ReadPreservedAndBoundProofDistributions",
+      "Sid": "CheckProposedProofBucketAvailability",
       "Effect": "Allow",
-      "Action": ["cloudfront:GetDistribution", "cloudfront:GetDistributionConfig", "cloudfront:ListTagsForResource"],
-      "Resource": ["{{PRESERVED_DISTRIBUTION_ARN}}", "{{PROOF_DISTRIBUTION_ARN}}"]
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::ap-proof-231136241959-20261018"
+    },
+    {
+      "Sid": "ReadPreservedDistribution",
+      "Effect": "Allow",
+      "Action": [
+        "cloudfront:GetDistribution",
+        "cloudfront:GetDistributionConfig"
+      ],
+      "Resource": "arn:aws:cloudfront::231136241959:distribution/ECFTIR5GVPQDF"
+    },
+    {
+      "Sid": "ReadAssociatedCloudFrontResources",
+      "Effect": "Allow",
+      "Action": [
+        "cloudfront:GetOriginAccessControl",
+        "cloudfront:GetCachePolicy",
+        "cloudfront:GetResponseHeadersPolicy",
+        "cloudfront:DescribeFunction",
+        "cloudfront:GetFunction"
+      ],
+      "Resource": [
+        "arn:aws:cloudfront::231136241959:origin-access-control/<OAC_ID from get-distribution-config>",
+        "<CACHE_POLICY_ARN from get-distribution-config>",
+        "<RESPONSE_HEADERS_POLICY_ARN from get-distribution-config>",
+        "<FUNCTION_ARN from get-distribution-config>"
+      ]
+    },
+    {
+      "Sid": "ReadTagsForPreservedDistributionAndAssociatedResources",
+      "Effect": "Allow",
+      "Action": "cloudfront:ListTagsForResource",
+      "Resource": [
+        "arn:aws:cloudfront::231136241959:distribution/ECFTIR5GVPQDF",
+        "arn:aws:cloudfront::231136241959:origin-access-control/<OAC_ID from get-distribution-config>",
+        "<CACHE_POLICY_ARN from get-distribution-config>",
+        "<RESPONSE_HEADERS_POLICY_ARN from get-distribution-config>",
+        "<FUNCTION_ARN from get-distribution-config>"
+      ]
     },
     {
       "Sid": "ReadExistingGithubOidcProvider",
@@ -61,7 +105,7 @@
       "Resource": "arn:aws:iam::231136241959:oidc-provider/token.actions.githubusercontent.com"
     },
     {
-      "Sid": "ReadExactProofRolesAndPolicies",
+      "Sid": "ReadExactInventoriedRolesAndPolicies",
       "Effect": "Allow",
       "Action": [
         "iam:GetRole",
@@ -72,33 +116,123 @@
         "iam:GetPolicyVersion",
         "iam:ListPolicyVersions"
       ],
-      "Resource": ["{{PROOF_ROLE_ARNS}}", "{{PROOF_POLICY_ARNS}}"]
+      "Resource": [
+        "<INVENTORY_ROLE_ARN from first inventory read>",
+        "<EXISTING_VERIFICATION_ROLE_ARN from first inventory read>",
+        "<EXISTING_VERIFICATION_POLICY_ARN from first inventory read>"
+      ]
     },
     {
       "Sid": "ReadOnlyInventoriedTerraformStateObject",
       "Effect": "Allow",
       "Action": "s3:GetObject",
-      "Resource": "{{INVENTORY_STATE_OBJECT_ARN}}"
+      "Resource": "arn:aws:s3:::artifact-pages-verify-tfstate-231136241959/aws-verify/terraform.tfstate"
+    },
+    {
+      "Sid": "ListOnlyInventoriedTerraformStateKey",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::artifact-pages-verify-tfstate-231136241959",
+      "Condition": {
+        "StringEquals": {
+          "s3:prefix": "aws-verify/terraform.tfstate"
+        }
+      }
     },
     {
       "Sid": "DenyAllOtherBuckets",
       "Effect": "Deny",
       "Action": [
-        "s3:GetBucketLocation", "s3:GetBucketVersioning", "s3:GetBucketLifecycleConfiguration",
-        "s3:GetBucketPublicAccessBlock", "s3:GetBucketOwnershipControls", "s3:GetEncryptionConfiguration",
-        "s3:GetBucketTagging", "s3:GetBucketPolicy", "s3:GetBucketPolicyStatus", "s3:GetBucketCORS",
-        "s3:GetBucketWebsite", "s3:GetAccelerateConfiguration", "s3:GetBucketRequestPayment",
-        "s3:GetBucketLogging", "s3:GetBucketReplication", "s3:GetBucketObjectLockConfiguration",
-        "s3:ListBucket", "s3:ListBucketVersions", "s3:GetObject", "s3:GetObjectVersion",
-        "s3:GetObjectTagging", "s3:GetObjectVersionTagging", "s3:GetObjectAttributes"
+        "s3:GetAccelerateConfiguration",
+        "s3:GetBucketCORS",
+        "s3:GetBucketLocation",
+        "s3:GetBucketOwnershipControls",
+        "s3:GetBucketPolicy",
+        "s3:GetBucketPolicyStatus",
+        "s3:GetBucketPublicAccessBlock",
+        "s3:GetBucketRequestPayment",
+        "s3:GetBucketTagging",
+        "s3:GetBucketVersioning",
+        "s3:GetBucketWebsite",
+        "s3:GetEncryptionConfiguration",
+        "s3:GetLifecycleConfiguration",
+        "s3:GetObject",
+        "s3:GetObjectAttributes",
+        "s3:GetObjectTagging",
+        "s3:GetObjectVersion",
+        "s3:GetObjectVersionTagging",
+        "s3:GetObjectLockConfiguration",
+        "s3:GetReplicationConfiguration",
+        "s3:ListBucket",
+        "s3:ListBucketVersions"
       ],
-      "NotResource": ["{{PRESERVED_BUCKET_ARN}}", "{{PRESERVED_BUCKET_ARN}}/*", "{{PROOF_BUCKET_ARN}}", "{{PROOF_BUCKET_ARN}}/*", "{{INVENTORY_STATE_OBJECT_ARN}}"]
+      "NotResource": [
+        "arn:aws:s3:::artifact-pages-231136241959-us-east-1",
+        "arn:aws:s3:::artifact-pages-231136241959-us-east-1/*",
+        "arn:aws:s3:::ap-proof-231136241959-20261018",
+        "arn:aws:s3:::artifact-pages-verify-tfstate-231136241959",
+        "arn:aws:s3:::artifact-pages-verify-tfstate-231136241959/aws-verify/terraform.tfstate"
+      ]
     },
     {
       "Sid": "DenyAllOtherDistributions",
       "Effect": "Deny",
       "Action": "cloudfront:*",
-      "NotResource": ["{{PRESERVED_DISTRIBUTION_ARN}}", "{{PROOF_DISTRIBUTION_ARN}}"]
+      "NotResource": [
+        "arn:aws:cloudfront::231136241959:distribution/ECFTIR5GVPQDF",
+        "arn:aws:cloudfront::231136241959:origin-access-control/<OAC_ID from get-distribution-config>",
+        "<CACHE_POLICY_ARN from get-distribution-config>",
+        "<RESPONSE_HEADERS_POLICY_ARN from get-distribution-config>",
+        "<FUNCTION_ARN from get-distribution-config>"
+      ]
+    },
+    {
+      "Sid": "DenyOutsideEnumeratedInventoryReads",
+      "Effect": "Deny",
+      "NotAction": [
+        "cloudfront:DescribeFunction",
+        "cloudfront:GetCachePolicy",
+        "cloudfront:GetDistribution",
+        "cloudfront:GetDistributionConfig",
+        "cloudfront:GetFunction",
+        "cloudfront:GetOriginAccessControl",
+        "cloudfront:GetResponseHeadersPolicy",
+        "cloudfront:ListTagsForResource",
+        "iam:GetOpenIDConnectProvider",
+        "iam:GetPolicy",
+        "iam:GetPolicyVersion",
+        "iam:GetRole",
+        "iam:GetRolePolicy",
+        "iam:ListAttachedRolePolicies",
+        "iam:ListPolicyVersions",
+        "iam:ListRolePolicies",
+        "s3:GetAccelerateConfiguration",
+        "s3:GetBucketCORS",
+        "s3:GetBucketLocation",
+        "s3:GetBucketLogging",
+        "s3:GetBucketOwnershipControls",
+        "s3:GetBucketPolicy",
+        "s3:GetBucketPolicyStatus",
+        "s3:GetBucketPublicAccessBlock",
+        "s3:GetBucketRequestPayment",
+        "s3:GetBucketTagging",
+        "s3:GetBucketVersioning",
+        "s3:GetBucketWebsite",
+        "s3:GetEncryptionConfiguration",
+        "s3:GetLifecycleConfiguration",
+        "s3:GetObject",
+        "s3:GetObjectAttributes",
+        "s3:GetObjectLockConfiguration",
+        "s3:GetObjectTagging",
+        "s3:GetObjectVersion",
+        "s3:GetObjectVersionTagging",
+        "s3:GetReplicationConfiguration",
+        "s3:ListAllMyBuckets",
+        "s3:ListBucket",
+        "s3:ListBucketVersions",
+        "sts:GetCallerIdentity"
+      ],
+      "Resource": "*"
     }
   ]
 }

@@ -47,7 +47,7 @@ Implementation belongs to Luna via the Claude main session. These choices are se
 
 ## Prepared live follow-up
 
-The [coordinated provider-proof plan, P10 / A9](../verification/provider-proof-plan-2026-10-18.md) specifies the bounded stored-gzip/CDN proof after this issue ships. It requires a reviewed amendment pinning actually released CLI 0.5.0 / Actions v0.3.0, then separate owner execution approval. Baseline provider proofs continue on CLI 0.4.4; no release, migration or live rollout is authorized here.
+The [coordinated provider-proof plan, P10 / A9](../verification/provider-proof-plan-2026-10-18.md) specifies the bounded stored-gzip/CDN proof after this issue ships. Under the [October 20 decision](../verification/provider-proof-plan-2026-10-18.md#superseding-execution-decision--october-20-2026), Claude main reviews the actually released CLI 0.5.0 / Actions v0.3.0 tuple (source/asset checksums, full Action SHAs and release.json ranges), then obtains chat OK A9 for the exact commands and pre-migration snapshot; no harness or signed pin amendment is required. The ≥0.5.0 writer floor and compatible-writer rollback/cleanup boundary remain; never delete control state to downgrade. Baseline provider proofs continue on CLI 0.4.4; no release, migration or live rollout is authorized here.
 
 ## Evidence
 

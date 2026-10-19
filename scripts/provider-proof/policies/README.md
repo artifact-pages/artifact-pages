@@ -1,25 +1,58 @@
-# Reviewed provider credential templates
+# Provider proof policy documents
 
-These files are reviewed proof-only templates. They are not deployed policy and contain no credentials. Render unresolved values from the signed, inventoried bindings, review the rendered documents and digests, and obtain the applicable signed transition before an owner executes any account mutation.
+These are reviewable templates for the one-off provider verification. They contain no credentials and are not deployed policies by themselves. Approval is chat-based: the owner reviews and approves each phase separately. Before each phase, show the concrete commands, rendered policies, credential identities, targets, evidence locations, and caps. Creating a missing role or token is a separate administrative prerequisite and needs its own approval.
 
-## AWS
+## Policy file purposes
 
-- `aws-trust-documents.json` contains exact owner SSO trust and exact hosted OIDC audience/subject trust. Subject placeholders must be replaced with full immutable subjects observed from the fixture; wildcard subjects are rejected.
-- `aws-inventory-role-policy.json` is read-only. It intentionally reads the existing AWS verification bucket and distribution. It is the only role allowed to read preserved resources. Explicit allows define its read set; all other AWS actions remain implicitly denied.
-- `aws-provisioner-role-policy.json` is the proof provisioner's immutable policy/boundary template. It manages only the named proof resources and new publisher roles; the fixed boundary is required at role creation. It explicitly denies CloudFront create actions. Creation of CloudFront resources that do not yet have ARNs uses the separate, owner-supervised `aws-cloudfront-creation-session.json` exception.
-- `aws-test-operator-boundary.json` supplies the maximum proof envelope. Normal phase sessions are narrowed by `aws-session-profiles.json`; the `final-cleanup` profile is the only profile that includes `s3:DeleteObjectVersion`.
-- `aws-publisher-boundaries.json` is a narrowing overlay around the reference module allow policies. The admin boundary covers app/registry and the life site used by the A8 owner run. Each satellite boundary is rendered with one exact site ID. Admin does not receive a/b/neighbor satellite write scope.
-- Every mutating boundary explicitly denies the preserved bucket, preserved distribution, out-of-scope S3/CloudFront resources, and IAM/STS privilege escalation. The production account's R2 bucket and production zone are absent from all credentials.
-- The credential loader binds a fixed source class to each identity. Verification records retain `aws-sso-assumed-role` or `github-actions-oidc`; local SSO-derived evidence must never be presented as hosted/reference-role evidence. Hosted OIDC invocations run the same identity, policy and probe checks before the write invocation.
+### AWS
 
-The CloudFront creation session is a documented exception because the named create operations cannot all be resource-scoped before AWS assigns identifiers. It contains only individually named create actions plus the `TagResource` authorization required by `CreateDistributionWithTags`. Fixed request-tag conditions apply to distribution/function/tag operations where AWS supports them; OAC/cache/response-header creation actions have no such condition key in the current authorization reference. The inventoried existing CloudFront resources and preserved distribution are explicitly denied. This is an owner-supervised session, never a proof-runner credential. After creation, concrete IDs are sealed and reviewed, then exact-resource policies replace creation authority.
+- `aws-trust-documents.json` describes the exact owner SSO role allowed to assume the operator roles and the GitHub OIDC trust conditions. OIDC trust requires audience `sts.amazonaws.com` and an exact repository/environment subject; replace each subject placeholder with the full subject observed for that fixture. Do not use wildcard subjects.
+- `aws-inventory-role-policy.json` is the read-only A4 inventory policy. It limits reads to the preserved AWS deployment, exact inventoried verification roles and policies, the proposed proof-bucket availability check, and the exact Terraform state object.
+- `aws-provisioner-role-policy.json` is the owner-supervised Terraform provisioning policy for the new verification resources and publisher roles. It is not an inventory policy and must be reviewed against the concrete create plan.
+- `aws-cloudfront-creation-session.json` is a separately supervised exception for CloudFront create operations that cannot be scoped to resource ARNs before AWS assigns IDs. Use it only for the reviewed create plan; after inventory, use policies scoped to the resulting resource ARNs.
+- `aws-test-operator-boundary.json` is the maximum permissions boundary for proof operator sessions. `aws-session-profiles.json` narrows individual phase sessions; only its final-cleanup profile includes `s3:DeleteObjectVersion`.
+- `aws-publisher-boundaries.json` narrows the reference module's publisher permissions. The admin boundary covers app and registry operations; each satellite boundary is rendered for one exact site ID.
 
-`aws-provisioner-role-policy.json` uses IAM action names, not SDK method names. S3 lifecycle authorization uses `s3:GetBucketLifecycleConfiguration` and `s3:PutLifecycleConfiguration`. Terraform provider 6.66.0 refresh reads listed in the plan are included individually. A missing action is a review stop; there is no wildcard service allow.
+### Cloudflare
 
-The local policy checks count only unconditional Deny statements as preserved-resource or proof-boundary evidence. Allow actions cannot contain `*` or `?`; resource wildcards are limited to one terminal `/*` on a concrete S3 bucket ARN, plus the existing exact-action `Resource: "*"` exceptions. These checks are intentionally narrower than a general IAM policy evaluator.
+- `cloudflare-credential-scopes.json` describes separate verification-account credentials for R2 content, R2 configuration, backend-state reads, short-lived site writers, registry reads, zone cache purge, and the lifecycle administrator. It records residual scope such as zone-wide purge and account-wide lifecycle authority. No production credential is included.
 
-## Cloudflare
+The complete read-only Cloudflare permission set for refreshing every deployed ruleset is not established here. Confirm the read-only permission groups before a full Terraform refresh; do not substitute edit permissions or guess permission IDs.
 
-`cloudflare-credential-scopes.json` separates bucket-scoped parent tokens, 15-minute prefix/object children, registry readers, a distinct zone-wide Cache Purge token, and the owner-operated account-wide lifecycle administrator. Parent R2 credentials stay in the private loader. The production account ID is excluded. The file records shared-key, zone-wide purge, and account-wide lifecycle authority as residual scope rather than representing it as path-limited.
+## A4 inventory amendments
 
-The descriptors use Cloudflare's named permission groups and R2 temporary credential operation/path fields. R2 children use explicit actions signed locally, because path and operation restrictions must apply together. Registry reads stay separate from writable paths. See [R2 token permissions](https://developers.cloudflare.com/r2/api/tokens/), [R2 temporary credentials](https://developers.cloudflare.com/r2/api/s3/temporary-credentials/), and [Cloudflare API token permissions](https://developers.cloudflare.com/fundamentals/api/reference/permissions/).
+The A4 AWS inventory target is account `231136241959`. The preserved bucket is `artifact-pages-231136241959-us-east-1`; the preserved CloudFront distribution is `ECFTIR5GVPQDF`. The proposed proof bucket is `ap-proof-231136241959-20261018`. Its exact `s3:ListBucket` permission is for the planned `head-bucket` availability check. AWS maps that check to `s3:ListBucket`, which can also reveal key names if the bucket is occupied; the planned invocation must not list objects, and the inventory role has no object-content read or write access to that bucket. If it is occupied or the result is inconclusive, stop and never adopt it.
+
+The inventory policy applies these deltas:
+
+1. It binds the preserved bucket and distribution to the exact IDs above and removes the nonexistent proof-distribution binding.
+2. It uses `s3:GetLifecycleConfiguration` and `s3:GetReplicationConfiguration` for the inventory reads.
+3. It permits `s3:GetObject` only on `arn:aws:s3:::artifact-pages-verify-tfstate-231136241959/aws-verify/terraform.tfstate`. It permits `s3:ListBucket` on the state bucket only when `s3:prefix` exactly matches `aws-verify/terraform.tfstate`. It grants no state writes or `.tflock` access.
+4. It scopes IAM reads to the exact inventory role and existing verification roles and policies. It does not enumerate account roles or policies.
+5. It adds CloudFront reads for the preserved distribution's exact Origin Access Control, cache policy, response headers policy, and function references, with `DenyAllOtherDistributions` exceptions for those exact ARNs.
+6. Its unconditional `DenyOutsideEnumeratedInventoryReads` `NotAction` list is generated from the union of all `Allow` actions. The list has no wildcard actions; scoped `Allow` statements still determine which resources can be read.
+
+The policy contains placeholders until IDs are read. Replace them with values from the first inventory read batch, then review the rendered policy and concrete second-batch command list in chat before running those reads. Repeat each CloudFront placeholder entry for every distinct associated resource ARN found. Do not use the policy while a placeholder remains:
+
+- `<OAC_ID from get-distribution-config>` — Origin Access Control ID.
+- `<CACHE_POLICY_ARN from get-distribution-config>` — exact cache policy ARN, including its owning account where applicable.
+- `<RESPONSE_HEADERS_POLICY_ARN from get-distribution-config>` — exact response headers policy ARN.
+- `<FUNCTION_ARN from get-distribution-config>` — exact CloudFront function ARN.
+- `<INVENTORY_ROLE_ARN from first inventory read>` — the active inventory role ARN.
+- `<EXISTING_VERIFICATION_ROLE_ARN from first inventory read>` — repeat this entry for every exact existing verification role ARN.
+- `<EXISTING_VERIFICATION_POLICY_ARN from first inventory read>` — repeat this entry for every exact existing verification policy ARN.
+
+The action-name corrections above follow the decision report and were not validated against AWS during this repository change. A4 itself makes no remote-state writes, locking, migration, repair, or apply. Production credentials and production requests are out of scope. The Cloudflare verification account is `21a0acb78621cc00cfa655a276d77b74` and its zone is `artifact-pages.stream`; the production account `9ac354c8aa31d424224d8c4f3aa8ba2a`, bucket `artifact-pages`, and zone `artifact-pages.dev` are excluded.
+
+## Approval, evidence, and credential handling
+
+For A4, the owner sees the rendered policies, credential identities, complete expanded command list, evidence locations, expected targets, and caps before saying OK. Repeat phase-specific review before each later phase. Keep raw provider responses in a private evidence directory. Use `umask 077` and create a new evidence directory with mode `0700`. Keep secrets out of command arguments, stdout, stderr, logs, and repository files; do not log authorization headers or credential material. Save each command's output and error separately, with UTC timestamps, exit status, and request IDs where available.
+
+## Preservation, lifecycle, and cleanup rules
+
+- A4 and final comparisons preserve the original AWS objects, versions, state, distribution configuration, Cloudflare registry membership, and unrelated provider configuration. Compare raw object bytes/hashes, versions, metadata, tags, and configuration; record expected operational changes separately. Any unrelated change stops the run for review.
+- The temporary Cloudflare lifecycle rule is `proof-life-20261018-expire`, enabled, scoped to `_previews/proof-life-20261018/`, expiring objects at 86,400 seconds and aborting incomplete multipart uploads at 604,800 seconds. Compare complete rule sets sorted by ID. Adding the temporary rule must leave every baseline rule unchanged and include exactly one matching temporary rule. Restoration removes only that rule and must make the complete policy equal the baseline.
+- After A7, remove only the temporary `proof-a-20261018`, `proof-b-20261018`, and `proof-neighbor-20261018` site data. Preserve `proof-life-20261018` and do not destroy the AWS proof stack. Keep the life prefix read-only during observation. After observation is recorded as complete or censored, A9 is recorded as completed or not-run, and the Cloudflare lifecycle policy is restored exactly, review a fresh destroy plan. Only then clean up the life site and destroy the enumerated proof resources under the separately approved phase.
+- Never mutate the preserved AWS bucket or distribution, unrelated resources, or production account resources.
+
+The combined run limits are 14 operator hours, $20, five elapsed days, 1 GiB stored per provider, 5 GiB CDN transfer per provider, 50,000 storage operations per provider, 5,000 viewer requests per provider, and 200 CloudFront invalidation paths. Keep a plain usage ledger with conservative allowances for retries. Stop before exceeding a cap; if A4 inventory cannot fit its 30-minute allowance, request an owner amendment before continuing.

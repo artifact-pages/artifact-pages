@@ -1,5 +1,8 @@
 # Cloudflare-first release execution
 
+Current execution-method pointer (2026-10-20): [superseding provider-proof decision](verification/provider-proof-plan-2026-10-18.md#superseding-execution-decision--october-20-2026), with future post-publication/pre-rollout regression in [IMP-81](implementation/IMP-81-provider-release-regression-workflow.md) / [T28](verification/T28-provider-release-regression.md). The dated release narrative below remains historical.
+
+
 > **Historical record (October 5, 2026).** This page describes the state before the repositories moved to the artifact-pages organization (personal repository, bundled product version, private operator repositories). It is no longer maintained. For current releases see [GitHub Releases](https://github.com/artifact-pages/artifact-pages/releases); for the current launch order see [Public launch order](issues/README.md#public-launch-order-2026-10-13).
 
 [Component lanes and dependencies](workstreams.md) · [Delegation and owner handoffs](delegation.md)
