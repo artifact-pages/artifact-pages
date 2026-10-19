@@ -419,8 +419,8 @@ func TestPriorSiteIndexChecksSchemaAndValidatesOptionalAuthorIndependently(t *te
 			if test.wantAuthor && (document.LastAuthor.GitHub == nil || document.LastAuthor.GitHub.Login != test.wantLogin || document.LastAuthor.GitHub.AvatarURL != test.wantAvatar) {
 				t.Fatalf("prior GitHub account = %+v, want login %q and avatar %q", document.LastAuthor.GitHub, test.wantLogin, test.wantAvatar)
 			}
-			if prior.RepositoryURL != test.wantRepository {
-				t.Fatalf("prior repository URL = %q, want %q", prior.RepositoryURL, test.wantRepository)
+			if document.RepositoryURL != test.wantRepository {
+				t.Fatalf("prior document repository URL = %q, want %q", document.RepositoryURL, test.wantRepository)
 			}
 		})
 	}

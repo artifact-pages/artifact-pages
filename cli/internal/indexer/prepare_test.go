@@ -79,7 +79,7 @@ func TestPrepareBuildFingerprintTracksOutputInputsAndIgnoresCleanCheckoutMtime(t
 	}
 }
 
-func TestPrepareBuildFingerprintIncludesSelectedAuthorAndGitHubSnapshot(t *testing.T) {
+func TestPrepareBuildFingerprintIncludesGitAttributionButExcludesGitHubSnapshot(t *testing.T) {
 	t.Setenv("GITHUB_TOKEN", "stub-token")
 	t.Setenv("GH_TOKEN", "")
 	repositoryRoot := initializeGitRepository(t)
@@ -101,7 +101,7 @@ func TestPrepareBuildFingerprintIncludesSelectedAuthorAndGitHubSnapshot(t *testi
 	if err != nil {
 		t.Fatalf("PrepareBuild(first) error = %v", err)
 	}
-	if buildInputPolicyVersion != 3 || first.documents[0].lastAuthor == nil || first.documents[0].lastAuthor.CommitSHA != sha || first.documents[0].lastAuthor.GitHub == nil || first.documents[0].lastAuthor.GitHub.Login != "octocat" {
+	if buildInputPolicyVersion != 4 || first.documents[0].lastAuthor == nil || first.documents[0].lastAuthor.CommitSHA != sha || first.documents[0].lastAuthor.GitHub == nil || first.documents[0].lastAuthor.GitHub.Login != "octocat" {
 		t.Fatalf("prepared author or policy = policy %d, author %+v", buildInputPolicyVersion, first.documents[0].lastAuthor)
 	}
 	options.githubEnrichment = makeConfig("octo-cat")
@@ -109,8 +109,8 @@ func TestPrepareBuildFingerprintIncludesSelectedAuthorAndGitHubSnapshot(t *testi
 	if err != nil {
 		t.Fatalf("PrepareBuild(second) error = %v", err)
 	}
-	if second.InputRoot() == first.InputRoot() {
-		t.Fatal("GitHub account change did not change the prepared input fingerprint")
+	if second.InputRoot() != first.InputRoot() {
+		t.Fatal("GitHub account change altered the Git-input fingerprint")
 	}
 	third, err := PrepareBuild(context.Background(), options)
 	if err != nil {
@@ -118,6 +118,21 @@ func TestPrepareBuildFingerprintIncludesSelectedAuthorAndGitHubSnapshot(t *testi
 	}
 	if third.InputRoot() != second.InputRoot() || !third.Reusable() {
 		t.Fatalf("identical prepared enrichment was not reusable: second=%q third=%q reusable=%v", second.InputRoot(), third.InputRoot(), third.Reusable())
+	}
+
+	options.DeferGitHubEnrichment = true
+	deferred, err := PrepareBuild(context.Background(), options)
+	if err != nil {
+		t.Fatalf("PrepareBuild(deferred) error = %v", err)
+	}
+	if deferred.documents[0].lastAuthor == nil || deferred.documents[0].lastAuthor.GitHub != nil || deferred.InputRoot() != first.InputRoot() {
+		t.Fatalf("deferred build author/root = %+v/%s, want Git-only author and stable root", deferred.documents[0].lastAuthor, deferred.InputRoot())
+	}
+	if err := deferred.EnrichGitHub(context.Background(), nil); err != nil {
+		t.Fatalf("EnrichGitHub() error = %v", err)
+	}
+	if deferred.documents[0].lastAuthor.GitHub == nil || deferred.documents[0].lastAuthor.GitHub.Login != "octo-cat" || deferred.InputRoot() != first.InputRoot() {
+		t.Fatalf("same-root enrichment = %+v, root %s", deferred.documents[0].lastAuthor, deferred.InputRoot())
 	}
 }
 

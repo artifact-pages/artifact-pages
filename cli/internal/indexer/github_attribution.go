@@ -17,7 +17,7 @@ import (
 
 const (
 	githubAPIBaseURL           = "https://api.github.com"
-	githubAPIVersion           = "2026-03-10"
+	githubAPIVersion           = "2022-11-28"
 	githubAPIRequestLimit      = 100
 	githubAPIResponseBodyLimit = 1 << 20
 )
@@ -80,16 +80,14 @@ func enrichGitAuthors(ctx context.Context, metadata gitMetadata, updates map[str
 	currentRepository, currentOK := parseGitHubSourceRepository(metadata.repositoryURL)
 	originRepository, originOK := parseGitHubOrigin(metadata.originRemote)
 	repositoryMatches := currentOK && originOK && strings.EqualFold(currentRepository.key(), originRepository.key())
-	priorRepository, priorOK := parseGitHubSourceRepository(priorRepositoryURL(prior))
-	canReusePrior := currentOK && priorOK && strings.EqualFold(currentRepository.key(), priorRepository.key())
-
-	if canReusePrior && prior != nil {
+	if currentOK && prior != nil {
 		for path, update := range updates {
 			if update.lastAuthor == nil {
 				continue
 			}
 			deployed, ok := prior.Documents[path]
-			if !ok || deployed.LastAuthor == nil || deployed.LastAuthor.CommitSHA != update.lastAuthor.CommitSHA || deployed.LastAuthor.GitHub == nil {
+			priorRepository, priorOK := parseGitHubSourceRepository(deployed.RepositoryURL)
+			if !ok || !priorOK || !strings.EqualFold(currentRepository.key(), priorRepository.key()) || deployed.LastAuthor == nil || deployed.LastAuthor.CommitSHA != update.lastAuthor.CommitSHA || deployed.LastAuthor.GitHub == nil {
 				continue
 			}
 			update.lastAuthor.GitHub = cloneGitHubAccount(deployed.LastAuthor.GitHub)
@@ -383,13 +381,6 @@ func firstGitHubToken() string {
 		return token
 	}
 	return strings.TrimSpace(os.Getenv("GH_TOKEN"))
-}
-
-func priorRepositoryURL(prior *PriorSiteState) string {
-	if prior == nil {
-		return ""
-	}
-	return prior.RepositoryURL
 }
 
 func parseGitHubSourceRepository(raw string) (githubRepository, bool) {

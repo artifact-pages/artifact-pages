@@ -126,6 +126,8 @@ func (backend *sitePublishProbeBackend) DeleteObjects(ctx context.Context, keys 
 }
 
 func TestPublishSiteNoOpSkipsBuildManifestAndProjectionInventory(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "")
+	t.Setenv("GH_TOKEN", "")
 	createPublisherCheckout(t, "git@github.com:acme/sre.git")
 	backend := newSitePublishProbeBackend()
 	seedPublisherRegistry(t, backend.lockMemoryBackend, registeredSREManifest)

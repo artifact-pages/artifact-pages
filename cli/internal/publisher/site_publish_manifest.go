@@ -37,6 +37,7 @@ type sitePublishSnapshot struct {
 	retry           siteCacheRetry
 	retryETag       string
 	retryExists     bool
+	priorObjects    map[string]Object
 	activeTx        *sitePublishTransaction
 	activeTouched   []string
 }
@@ -372,7 +373,7 @@ func buildSitePublishDiff(ctx context.Context, backend ConditionalObjectBackend,
 	oldRows := snapshot.state.Committed.Objects
 	oldMap := rowsMap(oldRows)
 	if snapshot.exists || len(snapshot.actualKeys) > 0 {
-		if err := preserveGeneratedAt(ctx, backend, desired, oldMap); err != nil {
+		if err := preserveGeneratedAt(ctx, backend, desired, oldMap, snapshot.priorObjects); err != nil {
 			return sitePublishDiff{}, err
 		}
 	}
@@ -493,7 +494,7 @@ func preparedSiteObjects(prepared *indexer.PreparedBuild, siteID string) ([]desi
 	return desired, nil
 }
 
-func preserveGeneratedAt(ctx context.Context, backend ConditionalObjectBackend, desired []desiredSiteObject, old map[string]sitePublishObject) error {
+func preserveGeneratedAt(ctx context.Context, backend ConditionalObjectBackend, desired []desiredSiteObject, old map[string]sitePublishObject, cached map[string]Object) error {
 	for index := range desired {
 		object := &desired[index]
 		if object.key != "_indexes/"+siteIDFromKey(object.key)+"/index.json" && object.key != "_indexes/"+siteIDFromKey(object.key)+"/meta.json" {
@@ -503,7 +504,13 @@ func preserveGeneratedAt(ctx context.Context, backend ConditionalObjectBackend, 
 		if !exists || previous.SHA256 == object.digest {
 			continue
 		}
-		current, _, err := backend.GetObject(ctx, object.key)
+		var current Object
+		var err error
+		if cachedObject, ok := cached[object.key]; ok {
+			current = cachedObject
+		} else {
+			current, _, err = backend.GetObject(ctx, object.key)
+		}
 		if errors.Is(err, ErrObjectNotFound) {
 			continue
 		}

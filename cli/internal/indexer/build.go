@@ -72,10 +72,12 @@ type BuildOptions struct {
 	// affect published bytes but are outside the indexer's own schema.
 	InputPolicy    string
 	RejectSymlinks bool
-	Now            func() time.Time
+	// DeferGitHubEnrichment lets a publisher decide its no-op before optional lookups.
+	DeferGitHubEnrichment bool
+	Now                   func() time.Time
 	// PriorState, when set, lets a shallow checkout carry forward Git
 	// metadata from the currently deployed site instead of fetching full
-	// history. It is also read in full clones to reuse a trusted account snapshot.
+	// history.
 	PriorState PriorStateLoader
 	// githubEnrichment is an internal test seam; CLI callers use the fixed API
 	// endpoint and budgets from defaultGitHubEnrichmentConfig.

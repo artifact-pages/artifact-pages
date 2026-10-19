@@ -17,7 +17,6 @@ import (
 // PriorSiteState is the digest-verified deployed index and its committed source
 // inventory, used for shallow history carry-forward and GitHub association reuse.
 type PriorSiteState struct {
-	RepositoryURL string
 	// Files maps source-relative paths to the SHA-256 (hex) of deployed bytes.
 	Files map[string]string
 	// Documents maps document paths to their deployed Git metadata.
@@ -26,6 +25,7 @@ type PriorSiteState struct {
 
 // PriorDocument is the Git metadata a document was last deployed with.
 type PriorDocument struct {
+	RepositoryURL string
 	UpdatedAt     time.Time
 	LastCommitter string
 	LastAuthor    *ArtifactAuthor

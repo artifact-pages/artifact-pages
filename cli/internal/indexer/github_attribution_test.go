@@ -68,7 +68,7 @@ func TestGitHubCommitLookupUsesTopLevelAuthorAndPinnedRequestContract(t *testing
 		if request.Header.Get("Authorization") != "Bearer primary-token" {
 			t.Errorf("Authorization = %q, want GITHUB_TOKEN precedence", request.Header.Get("Authorization"))
 		}
-		if request.Header.Get("Accept") != "application/vnd.github+json" || request.Header.Get("X-GitHub-Api-Version") != "2026-03-10" {
+		if request.Header.Get("Accept") != "application/vnd.github+json" || request.Header.Get("X-GitHub-Api-Version") != "2022-11-28" {
 			t.Errorf("request headers = %#v", request.Header)
 		}
 		return responseFor(request, http.StatusOK, githubResponse(sha, "octocat", "https://avatars.githubusercontent.com/u/1?v=4"), nil), nil
@@ -471,8 +471,8 @@ func TestGitHubTrustedSnapshotIsReusedAndIncompleteSnapshotCanRetry(t *testing.T
 	t.Setenv("GITHUB_TOKEN", "test-token")
 	sha := strings.Repeat("f", 40)
 	basePrior := func(account *ArtifactGitHubAccount) *PriorSiteState {
-		return &PriorSiteState{RepositoryURL: "https://github.com/acme/repo", Documents: map[string]PriorDocument{
-			"one.md": {LastAuthor: &ArtifactAuthor{Name: "Alice", CommitSHA: sha, GitHub: account}},
+		return &PriorSiteState{Documents: map[string]PriorDocument{
+			"one.md": {RepositoryURL: "https://github.com/acme/repo", LastAuthor: &ArtifactAuthor{Name: "Alice", CommitSHA: sha, GitHub: account}},
 		}}
 	}
 	metadata := githubTestMetadata("https://github.com/acme/repo", "git@github.com:acme/repo.git")
@@ -566,5 +566,37 @@ func TestGitHubSourceAndOriginRepositoryParsing(t *testing.T) {
 		if _, ok := parseGitHubOrigin(raw); ok {
 			t.Errorf("invalid origin accepted: %q", raw)
 		}
+	}
+}
+
+func TestGitHubSnapshotReuseRequiresMatchingPriorSourceRepository(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "test-token")
+	sha := strings.Repeat("c", 40)
+	metadata := githubTestMetadata("https://github.com/acme/repo", "git@github.com:acme/repo.git")
+	for _, test := range []struct{ name, priorRepository string }{
+		{name: "missing source repository"},
+		{name: "mismatched source repository", priorRepository: "https://github.com/other/repo"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			calls := 0
+			config := githubTestConfig(func(request *http.Request) (*http.Response, error) {
+				calls++
+				return responseFor(request, 503, "unavailable", nil), nil
+			})
+			prior := &PriorSiteState{Documents: map[string]PriorDocument{
+				"one.md": {RepositoryURL: test.priorRepository, LastAuthor: &ArtifactAuthor{
+					Name: "Alice", CommitSHA: sha,
+					GitHub: &ArtifactGitHubAccount{Login: "octocat", AvatarURL: "https://avatars.githubusercontent.com/u/1?v=4"},
+				}},
+			}}
+			updates := map[string]artifactGitUpdate{"one.md": githubTestUpdate(sha, "Alice")}
+			warning, err := enrichGitAuthors(context.Background(), metadata, updates, prior, config)
+			if err != nil || calls != 1 || warning == "" {
+				t.Fatalf("warning=%q err=%v requests=%d; want lookup because prior source.repositoryUrl is not a matching GitHub repository", warning, err, calls)
+			}
+			if author := updates["one.md"].lastAuthor; author == nil || author.GitHub != nil {
+				t.Fatalf("untrusted prior association was reused: %+v", author)
+			}
+		})
 	}
 }
