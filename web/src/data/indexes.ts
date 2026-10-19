@@ -1,4 +1,5 @@
 import { assertSupportedSchema, isSupportedSchema, UnsupportedSchemaError } from './schema'
+import { isAllowedAvatarUrl } from '../domain/author-byline'
 import type { ArtifactIndexEntry, SiteCatalogEntry, SiteDiscoveryMetadata, SiteIndex, SiteRegistryProjection, SiteSummary } from '../domain/index'
 
 const INDEX_ROOT = '/_indexes'
@@ -340,6 +341,7 @@ function parseSiteIndex(payload: unknown, url: string, expectedSiteId: string): 
   const seenPaths = new Set<string>()
   for (const row of index.artifacts as unknown[]) {
     if (!isValidArtifactRow(row, expectedSiteId) || seenIds.has(row.id) || seenPaths.has(row.path)) throw invalid()
+    sanitizeLastAuthor(row)
     seenIds.add(row.id)
     seenPaths.add(row.path)
   }
@@ -353,6 +355,24 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isOptionalString(value: unknown) {
   return value === undefined || typeof value === 'string'
+}
+
+// A malformed `lastAuthor` never rejects the row (ISSUE-117): the whole value is dropped when its
+// name or commit is unusable, and only `github` / `avatarUrl` are dropped when just they are.
+function sanitizeLastAuthor(row: ArtifactIndexEntry) {
+  const value: unknown = row.lastAuthor
+  if (value === undefined) return
+  if (!isRecord(value) || typeof value.name !== 'string' || !value.name.trim() || typeof value.commitSha !== 'string') {
+    delete row.lastAuthor
+    return
+  }
+  const github = value.github
+  if (github === undefined) return
+  if (!isRecord(github) || typeof github.login !== 'string' || !github.login) {
+    delete value.github
+  } else if (github.avatarUrl !== undefined && !isAllowedAvatarUrl(github.avatarUrl)) {
+    delete github.avatarUrl
+  }
 }
 
 function isValidArtifactRow(row: unknown, siteId: string): row is ArtifactIndexEntry {

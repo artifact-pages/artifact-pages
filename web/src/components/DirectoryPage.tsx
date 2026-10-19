@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { artifactByline } from '../domain/author-byline'
 import { pageCountLabel, pageHeadings, type DirectoryListing } from '../domain/directory'
 import { DIRECTORY_PAGE_SIZE, clampPage, pageRange, pageTotal, splitRange } from '../domain/row-window'
 import { artifactRouteHref } from '../routing'
@@ -173,7 +174,7 @@ export function DirectoryPage({
                 <ul className="directory-list">
                   {shownPages.map((page) => {
                     const { shown, hidden } = pageHeadings(page)
-                    const committer = page.lastCommitter?.name.trim()
+                    const committer = artifactByline(page).name
                     return (
                       <li key={page.id} className="directory-row">
                         <span className="directory-row-icon"><Icon name="file" size={16} /></span>

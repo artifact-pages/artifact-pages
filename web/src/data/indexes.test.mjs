@@ -465,3 +465,51 @@ test('contradictory counts leave only the folder count (5 with a 2-entry list)',
   assert.equal(entry.topLevelFolders, undefined)
   assert.equal(entry.topLevelFolderCount, 5)
 })
+
+test('lastAuthor: a full author with a GitHub avatar is kept as given (ISSUE-117)', async () => {
+  const lastAuthor = { name: 'Octocat', commitSha: 'a'.repeat(40), github: { login: 'octocat', avatarUrl: 'https://avatars.githubusercontent.com/u/583231?v=4' } }
+  const index = await load(indexWith([row({ lastAuthor, lastCommitter: { name: 'GitHub' } })]))
+  assert.deepEqual(index.artifacts[0].lastAuthor, lastAuthor)
+  assert.deepEqual(index.artifacts[0].lastCommitter, { name: 'GitHub' })
+})
+
+test('lastAuthor: name-only, legacy committer-only and absent rows parse unchanged', async () => {
+  const nameOnly = { name: 'Alice', commitSha: 'b'.repeat(64) }
+  const index = await load(indexWith([
+    row({ id: 'a', path: 'a.html', artifactUrl: '/_artifacts/sre/a.html', lastAuthor: nameOnly }),
+    row({ id: 'b', path: 'b.html', artifactUrl: '/_artifacts/sre/b.html', lastCommitter: { name: 'Maya' } }),
+    row({ id: 'c', path: 'c.html', artifactUrl: '/_artifacts/sre/c.html' }),
+  ]))
+  assert.deepEqual(index.artifacts[0].lastAuthor, nameOnly)
+  assert.equal(index.artifacts[1].lastAuthor, undefined)
+  assert.deepEqual(index.artifacts[1].lastCommitter, { name: 'Maya' })
+  assert.equal('lastAuthor' in index.artifacts[2], false)
+})
+
+test('lastAuthor: a malformed value is dropped without rejecting the row', async () => {
+  const sha = 'a'.repeat(40)
+  for (const bad of ['Alice', null, [], { name: 7, commitSha: sha }, { name: 'A' }, { name: 'A', commitSha: 3 }, { name: '  ', commitSha: sha }]) {
+    const index = await load(indexWith([row({ lastAuthor: bad, lastCommitter: { name: 'Maya' } })]))
+    assert.equal(index.artifacts.length, 1)
+    assert.equal(index.artifacts[0].lastAuthor, undefined, JSON.stringify(bad))
+    assert.deepEqual(index.artifacts[0].lastCommitter, { name: 'Maya' })
+  }
+})
+
+test('lastAuthor: a malformed github is dropped alone and a bad avatarUrl is dropped alone', async () => {
+  const sha = 'a'.repeat(40)
+  for (const github of ['octocat', null, {}, { login: '' }, { login: 4, avatarUrl: 'https://avatars.githubusercontent.com/u/1' }]) {
+    const index = await load(indexWith([row({ lastAuthor: { name: 'A', commitSha: sha, github } })]))
+    assert.deepEqual(index.artifacts[0].lastAuthor, { name: 'A', commitSha: sha }, JSON.stringify(github))
+  }
+  for (const avatarUrl of ['http://avatars.githubusercontent.com/u/1', 'https://example.com/u/1', 'https://avatars.githubusercontent.com/', 7, '']) {
+    const index = await load(indexWith([row({ lastAuthor: { name: 'A', commitSha: sha, github: { login: 'octocat', avatarUrl } } })]))
+    assert.deepEqual(index.artifacts[0].lastAuthor, { name: 'A', commitSha: sha, github: { login: 'octocat' } }, String(avatarUrl))
+  }
+})
+
+test('lastAuthor: the committed fixtures keep their resolved avatar, bot and name-only authors', async () => {
+  const index = await load(fixture)
+  const withAvatar = index.artifacts.find((a) => a.lastAuthor?.github?.avatarUrl)
+  assert.equal(withAvatar.lastAuthor.github.login, 'octocat')
+})

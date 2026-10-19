@@ -2385,7 +2385,7 @@ test('multi-file artifacts stay in their site namespace when relative asset path
   const details = page.getByRole('complementary', { name: 'Details' })
   await expect(details).toBeVisible()
   await expect(details.getByText('Last committed by')).toHaveCount(0)
-  await expect(details.getByText('Maya Chen', { exact: true })).toBeVisible()
+  await expect(details.getByText('Octocat', { exact: true })).toBeVisible()
   await expect(details.getByText('Sep 22, 2026')).toBeVisible()
   const sourceLink = details.getByRole('link', { name: /\.md|\.html/ })
   await expect(sourceLink).toHaveAttribute('href', /^https:\/\/github\.com\/example\/payments\/blob\/[^/]+\/.+/)
@@ -7978,6 +7978,49 @@ test.describe('reader context column (ISSUE-108)', () => {
     await expect(column.locator('.details-avatar')).toHaveCount(0)
     await expect(column.locator('.details-source')).toHaveCount(0)
     await expect(column.locator('.artifact-details a')).toHaveCount(0)
+  })
+
+  test('Details show the author with a real GitHub avatar, or the initial when it cannot load (ISSUE-117)', async ({ page }) => {
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64')
+    const avatarRequests: Array<{ referer: string | undefined }> = []
+    await page.route('https://avatars.githubusercontent.com/**', async (route) => {
+      avatarRequests.push({ referer: route.request().headers().referer })
+      await route.fulfill({ status: 200, contentType: 'image/png', headers: { 'access-control-allow-origin': '*' }, body: png })
+    })
+    await page.goto('/sre/incidents/checkout-latency/index.html')
+    const column = columnOf(page)
+    const avatar = column.locator('.details-avatar img')
+    await expect(column.getByText('Octocat', { exact: true })).toBeVisible()
+    await expect(avatar).toBeVisible()
+    await expect(avatar).toHaveAttribute('src', 'https://avatars.githubusercontent.com/u/583231?v=4')
+    await expect(avatar).toHaveAttribute('referrerpolicy', 'no-referrer')
+    await expect(avatar).toHaveAttribute('alt', '')
+    await expect(column.locator('.details-avatar')).toHaveAttribute('aria-hidden', 'true')
+    await expect(column.locator('.details-updated')).toContainText('Updated')
+    await expect(column.getByText('Maya Chen')).toHaveCount(0)
+    expect(avatarRequests.length).toBeGreaterThan(0)
+    expect(avatarRequests.every((request) => request.referer === undefined)).toBe(true)
+  })
+
+  test('a blocked avatar falls back to the initial without changing the name or date (ISSUE-117)', async ({ page }) => {
+    await page.route('https://avatars.githubusercontent.com/**', (route) => route.abort())
+    await page.goto('/sre/incidents/checkout-latency/index.html')
+    const column = columnOf(page)
+    await expect(column.getByText('Octocat', { exact: true })).toBeVisible()
+    await expect(column.locator('.details-avatar')).toHaveText('O')
+    await expect(column.locator('.details-avatar img')).toHaveCount(0)
+    await expect(column.locator('.details-updated')).toContainText('Sep 22, 2026')
+  })
+
+  test('a legacy committer-only page shows the committer without an avatar image (ISSUE-117)', async ({ page }) => {
+    let avatarRequested = false
+    await page.route('https://avatars.githubusercontent.com/**', async (route) => { avatarRequested = true; await route.abort() })
+    await page.goto('/sre/architecture/platform-topology/index.html')
+    const column = columnOf(page)
+    await expect(column.getByText('Platform Team', { exact: true })).toBeVisible()
+    await expect(column.locator('.details-avatar')).toHaveText('P')
+    await expect(column.locator('.details-avatar img')).toHaveCount(0)
+    expect(avatarRequested).toBe(false)
   })
 
   test('long headings, titles and repository names wrap inside the column', async ({ page }) => {
