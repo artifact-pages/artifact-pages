@@ -1,6 +1,7 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode, type Ref } from 'react'
 import { Icon } from './Icon'
 import type { ArtifactIndexEntry } from '../domain/index'
+import { artifactSourceLinks } from '../domain/source-links'
 
 export type ReaderColumnPart = 'contents' | 'details'
 
@@ -51,20 +52,7 @@ export function ReaderContextColumn({ artifact, entries, activeId, standalone, d
         {entries.length === 0 ? (
           <p className="toc-empty" tabIndex={-1} data-reader-part="contents-empty">This artifact does not include indexed headings.</p>
         ) : (
-          <nav ref={listRef} className="toc-list" aria-label="Artifact headings">
-            {entries.map((entry) => (
-              <button
-                className={`toc-link${entry.level >= 3 ? ' toc-level-3' : ''}`}
-                key={`${entry.id}:${entry.text}`}
-                type="button"
-                title={entry.text}
-                aria-current={activeId === entry.id ? 'location' : undefined}
-                onClick={() => onJump(entry.id)}
-              >
-                {entry.text}
-              </button>
-            ))}
-          </nav>
+          <ContentsList navRef={listRef} entries={entries} activeId={activeId} onJump={onJump} />
         )}
       </section>
     </aside>
@@ -85,56 +73,87 @@ export function focusReaderColumnPart(part: ReaderColumnPart): boolean {
   return document.activeElement === target
 }
 
-export function ArtifactDetails({ artifact }: { artifact: ArtifactIndexEntry }) {
-  const committerName = artifact.lastCommitter?.name.trim()
-  const repositoryUrl = safeHttpsUrl(artifact.source?.repositoryUrl)
-
+/**
+ * The Contents list: chapters as dots on a vertical rail, with the part already read marked
+ * (ISSUE-114). Shared by the reader column and the narrow-screen Contents panel.
+ */
+export function ContentsList({ entries, activeId, onJump, navRef }: {
+  entries: TocEntry[]
+  activeId: string | null
+  onJump: (id: string) => void
+  navRef?: Ref<HTMLElement>
+}) {
+  const activeIndex = activeId === null ? -1 : entries.findIndex((entry) => entry.id === activeId)
+  let parentIndex = -1
+  for (let i = activeIndex; i >= 0; i -= 1) {
+    if (entries[i].level < 3) { parentIndex = i; break }
+  }
   return (
-    <div className="artifact-details">
-      {committerName ? (
-        <section className="details-committer" aria-label="Last commit">
-          <p className="details-section-label">Last committed by</p>
-          <div className="details-committer-card">
-            <span className="details-avatar" aria-hidden="true">{Array.from(committerName)[0]?.toUpperCase()}</span>
-            <span className="details-committer-name">{committerName}</span>
+    <nav ref={navRef} className="toc-list toc-rail" aria-label="Artifact headings">
+      {entries.map((entry, i) => {
+        const classes = ['toc-item', entry.level >= 3 ? 'toc-item-3' : 'toc-item-2']
+        if (i === activeIndex) classes.push('is-current')
+        else if (activeIndex >= 0 && i < activeIndex) classes.push('is-done')
+        if (i === parentIndex && i !== activeIndex) classes.push('is-parent')
+        return (
+          <div className={classes.join(' ')} key={`${entry.id}:${entry.text}`}>
+            <button
+              className={`toc-link${entry.level >= 3 ? ' toc-level-3' : ''}`}
+              type="button"
+              title={entry.text}
+              aria-current={i === activeIndex ? 'location' : undefined}
+              onClick={() => onJump(entry.id)}
+            >
+              {entry.text}
+            </button>
           </div>
-        </section>
-      ) : null}
-
-      <div className="details-facts">
-        <div className="details-fact">
-          <span className="details-label">Updated</span>
-          <time dateTime={artifact.updatedAt}>{formatLongDate(artifact.updatedAt)}</time>
-        </div>
-        {artifact.source ? (
-          <div className="details-fact details-source-fact">
-            <span className="details-label">Source</span>
-            <div className="details-source-value">
-              {repositoryUrl ? (
-                <a className="details-source-link" href={repositoryUrl} target="_blank" rel="noreferrer">
-                  <span>{artifact.source.repository}</span>
-                  <Icon name="external" size={12} />
-                </a>
-              ) : (
-                <span className="details-source-name">{artifact.source.repository}</span>
-              )}
-              <span className="details-source-ref">{artifact.source.ref}</span>
-            </div>
-          </div>
-        ) : null}
-      </div>
-    </div>
+        )
+      })}
+    </nav>
   )
 }
 
-function safeHttpsUrl(value?: string) {
-  if (!value) return undefined
-  try {
-    const url = new URL(value)
-    return url.protocol === 'https:' ? url.href : undefined
-  } catch {
-    return undefined
-  }
+/** Details of a published document: a byline and a direct link to its source file (ISSUE-114). */
+export function ArtifactDetails({ artifact }: { artifact: ArtifactIndexEntry }) {
+  const committerName = artifact.lastCommitter?.name.trim()
+  const source = artifact.source
+  const sourceUrl = source ? artifactSourceLinks(artifact).sourceUrl : undefined
+  const filePath = source?.filePath
+  const sourceLabel = filePath || source?.repository
+
+  return (
+    <div className="artifact-details">
+      <div className="details-byline">
+        {committerName ? <span className="details-avatar" aria-hidden="true">{Array.from(committerName)[0]?.toUpperCase()}</span> : null}
+        <span className="details-who">
+          {committerName ? <span className="details-committer-name" title={committerName}>{committerName}</span> : null}
+          <span className="details-updated">
+            Updated <time dateTime={artifact.updatedAt}>{formatLongDate(artifact.updatedAt)}</time>
+          </span>
+        </span>
+      </div>
+      {source ? (
+        <div className="details-source">
+          {sourceUrl ? (
+            <a className="details-file" href={sourceUrl} target="_blank" rel="noreferrer">
+              <Icon name="file" size={13} />
+              <span className={filePath ? 'details-path' : 'details-path-name'}>{sourceLabel}</span>
+              <Icon name="external" size={12} />
+            </a>
+          ) : (
+            <span className="details-file">
+              <Icon name="file" size={13} />
+              <span className={filePath ? 'details-path' : 'details-path-name'}>{sourceLabel}</span>
+            </span>
+          )}
+          <span className="details-repo">
+            {filePath ? <span className="details-repo-name">{source.repository}</span> : null}
+            <span className="details-source-ref">{source.ref}</span>
+          </span>
+        </div>
+      ) : null}
+    </div>
+  )
 }
 
 function formatLongDate(value: string) {

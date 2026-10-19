@@ -576,7 +576,7 @@ indexed Markdown or HTML documents navigate to their extension-preserving applic
 The optional right panel has two views, toggled from the workspace header:
 
 - **Contents** displays table-of-contents metadata and navigates to heading anchors in the artifact.
-- **Details** displays the last Git committer, last-updated date, and source repository link/ref.
+- **Details** displays a byline with the last Git committer and the last-updated date, and a link to the page's source file on the Git host (`source.filePath`, falling back to the repository) with the repository name and ref.
 
 Both views use the same overlay panel so opening metadata does not narrow or reflow the artifact. `updatedAt` describes the artifact's last relevant source update, not the index generation time. `lastCommitter.name` is the committer name recorded in Git for that latest relevant source change; it is not a claim about the artifact's original author or a resolved GitHub account. Commit email addresses are not included in the public index. `source.repositoryUrl` is the canonical clickable repository URL, while `repository` remains its display name. `source.filePath` is the exact source file path relative to the Git repository root; unlike the artifact route path, it includes the configured `sourcePath` prefix. It lets the reader open the correct source file or file-specific Git history without guessing that the published source root is the repository root.
 

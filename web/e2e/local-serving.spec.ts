@@ -2387,13 +2387,14 @@ test('multi-file artifacts stay in their site namespace when relative asset path
   await detailsButton.click()
   const details = page.getByRole('complementary', { name: 'Details' })
   await expect(details).toBeVisible()
-  await expect(details.getByText('Last committed by')).toBeVisible()
+  await expect(details.getByText('Last committed by')).toHaveCount(0)
   await expect(details.getByText('Maya Chen', { exact: true })).toBeVisible()
-  await expect(details.getByRole('link', { name: /example\/payments/ })).toHaveAttribute(
-    'href',
-    'https://github.com/example/payments',
-  )
   await expect(details.getByText('Sep 22, 2026')).toBeVisible()
+  const sourceLink = details.getByRole('link', { name: /\.md|\.html/ })
+  await expect(sourceLink).toHaveAttribute('href', /^https:\/\/github\.com\/example\/payments\/blob\/[^/]+\/.+/)
+  await expect(sourceLink).toHaveAttribute('target', '_blank')
+  await expect(sourceLink).toHaveAttribute('rel', 'noreferrer')
+  await expect(details.getByText('example/payments', { exact: true })).toBeVisible()
 
   await page.getByRole('button', { name: 'Contents', exact: true }).click()
   await expect(details).toBeHidden()
@@ -7665,6 +7666,8 @@ test.describe('reader context column (ISSUE-108)', () => {
   const markdownPath = '/sre/guides/markdown-style-gallery.md'
   const htmlPath = '/showcase/editorial/field-notes/index.html'
   const columnOf = (page: Page) => page.getByRole('complementary', { name: 'Reading context' })
+  // clamp(256px, 21vw, 312px)
+  const columnWidth = (viewportWidth: number) => Math.min(312, Math.max(256, viewportWidth * 0.21))
   const noHorizontalOverflow = (page: Page) => page.evaluate(() => (
     document.documentElement.scrollWidth <= document.documentElement.clientWidth
     && document.body.scrollWidth <= document.documentElement.clientWidth
@@ -7678,13 +7681,13 @@ test.describe('reader context column (ISSUE-108)', () => {
     await page.goto(markdownPath)
     const column = columnOf(page)
     await expect(column).toBeVisible()
-    expect((await column.boundingBox())?.width).toBe(248)
+    expect((await column.boundingBox())?.width).toBeCloseTo(columnWidth(1440), 0)
     await expect(column.getByRole('heading', { name: 'Details' })).toBeVisible()
-    await expect(column.getByText('Last committed by')).toBeVisible()
+    await expect(column.getByText('Last committed by')).toHaveCount(0)
     await expect(column.getByText('Documentation QA')).toBeVisible()
-    await expect(column.getByText('Updated', { exact: true })).toBeVisible()
-    await expect(column.getByText('Source', { exact: true })).toBeVisible()
-    await expect(column.getByRole('link', { name: /example\/markdown-qa/ })).toHaveAttribute('href', 'https://github.com/example/markdown-qa')
+    await expect(column.locator('.details-updated')).toContainText('Updated')
+    await expect(column.getByText('example/markdown-qa', { exact: true })).toBeVisible()
+    await expect(column.getByRole('link', { name: /guides\/markdown-style-gallery\.md/ })).toHaveAttribute('href', 'https://github.com/example/markdown-qa/blob/main/guides/markdown-style-gallery.md')
     await expect(column.getByRole('region', { name: 'Contents' })).toBeVisible()
     await expect(column.getByRole('navigation', { name: 'Artifact headings' }).getByRole('button').first()).toBeVisible()
     const detailsTop = (await column.getByRole('heading', { name: 'Details' }).boundingBox())!.y
@@ -7698,13 +7701,36 @@ test.describe('reader context column (ISSUE-108)', () => {
     expect(article.x + article.width).toBeLessThanOrEqual((await column.boundingBox())!.x)
   })
 
+  test('Contents sit on a rail and mark the part already read (ISSUE-114)', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await page.goto(markdownPath)
+    const column = columnOf(page)
+    expect((await column.boundingBox())?.width).toBeCloseTo(columnWidth(1280), 0)
+    expect((await page.locator('#workspace-sidebar').boundingBox())?.width).toBeCloseTo(columnWidth(1280), 0)
+    const items = column.locator('.toc-rail .toc-item')
+    expect(await items.count()).toBeGreaterThan(2)
+    await column.locator('.toc-link').nth(2).click()
+    const current = column.locator('.toc-rail .toc-item.is-current')
+    await expect(current).toHaveCount(1)
+    await expect(current.locator('.toc-link')).toHaveAttribute('aria-current', 'location')
+    expect(await column.locator('.toc-rail .toc-item.is-done').count()).toBe(
+      await current.evaluate((element) => Array.from(element.parentElement!.children).indexOf(element)),
+    )
+    // Dots appear only on level-2 entries; level-3 entries carry none until they are current.
+    const dots = await items.evaluateAll((elements) => elements.map((element) => ({
+      level3: element.classList.contains('toc-item-3') && !element.classList.contains('is-current'),
+      dot: getComputedStyle(element, '::before').content !== 'none',
+    })))
+    for (const entry of dots) if (entry.level3) expect(entry.dot).toBe(false)
+  })
+
   test('HTML page shows the column beside the frame, which keeps its own scroll', async ({ page }) => {
     await page.goto(htmlPath)
     const column = columnOf(page)
     await expect(column).toBeVisible()
     const frame = (await page.locator('iframe.artifact-frame').boundingBox())!
     const box = (await column.boundingBox())!
-    expect(box.width).toBe(248)
+    expect(box.width).toBeCloseTo(columnWidth(1440), 0)
     expect(frame.x + frame.width).toBeLessThanOrEqual(box.x + 0.5)
     await expect(column.getByRole('navigation', { name: 'Artifact headings' }).getByRole('button')).toHaveCount(4)
     expect(await noHorizontalOverflow(page)).toBe(true)
@@ -7951,9 +7977,10 @@ test.describe('reader context column (ISSUE-108)', () => {
   test('a document without provenance shows only what exists', async ({ page }) => {
     await page.goto('/showcase/tests/color-scheme-response/index.html')
     const column = columnOf(page)
-    await expect(column.getByText('Updated', { exact: true })).toBeVisible()
+    await expect(column.locator('.details-updated')).toContainText('Updated')
     await expect(column.getByText('Last committed by')).toHaveCount(0)
-    await expect(column.getByText('Source', { exact: true })).toHaveCount(0)
+    await expect(column.locator('.details-avatar')).toHaveCount(0)
+    await expect(column.locator('.details-source')).toHaveCount(0)
     await expect(column.locator('.artifact-details a')).toHaveCount(0)
   })
 
@@ -7974,7 +8001,7 @@ test.describe('reader context column (ISSUE-108)', () => {
     const column = columnOf(page)
     await expect(column.getByRole('button', { name: longHeading, exact: true })).toBeVisible()
     expect(await column.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
-    expect((await column.boundingBox())?.width).toBe(248)
+    expect((await column.boundingBox())?.width).toBeCloseTo(columnWidth(1440), 0)
     expect(await noHorizontalOverflow(page)).toBe(true)
   })
 

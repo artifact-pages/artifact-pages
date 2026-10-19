@@ -126,6 +126,7 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-111](ISSUE-111-snippet-budget-omits-late-documents-at-scale.md) | Done | P3 | At 50,000 pages, 38% of documents get no search snippet because of the 32 MiB site budget, and later folders lose snippets first. |
 | [ISSUE-112](ISSUE-112-aws-large-generated-json-delivery.md) | Done | P2 | AWS large generated JSON exceeds CloudFront's automatic-compression window; pre-encode site index and search manifest with a settled CLI 0.5.0 boundary. |
 | [ISSUE-113](ISSUE-113-results-page-claims-no-search-while-discovery-loads.md) | Done | P2 | The full-text results page says the site was published without page text search while its discovery metadata is still loading. |
+| [ISSUE-114](ISSUE-114-reader-column-hierarchy-and-byline.md) | In progress | P3 | The reader column's Contents list reads flat and Details spend space on little information; owner picked rail-and-dots Contents and a byline with a source-file link. |
 
 ISSUE-013's verified completion record is retained in Git history.
 
