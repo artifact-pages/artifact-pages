@@ -161,6 +161,12 @@ func TestBuildAttributesFirstParentMergeChangesAndConflictResolution(t *testing.
 		commitWithGitDates(t, root, "main", "Main", "main@example.invalid", "Main", "main-committer@example.invalid", time.Unix(30, 0).UTC(), time.Unix(30, 0).UTC())
 		command := exec.Command("git", "merge", "--no-ff", "feature", "-m", "conflicting merge")
 		command.Dir = root
+		conflictAttemptTime := time.Unix(35, 0).UTC().Format(time.RFC3339)
+		command.Env = append(os.Environ(),
+			"GIT_AUTHOR_NAME=Conflict Resolver", "GIT_AUTHOR_EMAIL=resolver@example.invalid",
+			"GIT_COMMITTER_NAME=GitHub", "GIT_COMMITTER_EMAIL=web-flow@example.invalid",
+			"GIT_AUTHOR_DATE="+conflictAttemptTime, "GIT_COMMITTER_DATE="+conflictAttemptTime,
+		)
 		if output, err := command.CombinedOutput(); err == nil || !strings.Contains(string(output), "CONFLICT") {
 			t.Fatalf("expected content conflict, got err=%v output=%s", err, output)
 		}

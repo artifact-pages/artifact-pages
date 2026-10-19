@@ -429,10 +429,15 @@ jobs:
         run: |
           # The publish deepened the checkout; compare with what the complete history says.
           test "$(git rev-parse --is-shallow-repository)" = false
-          expected="$(git log -1 --format=%ct -- fixtures/actions-smoke/site/overview.html)"
-          actual="$(date -u -d "$(jq -r '.artifacts[] | select(.path == "overview.html") | .updatedAt' "$STORAGE/_indexes/smoke/index.json")" +%s)"
-          test "$expected" = "$actual"
-          test "$(git log -1 --format=%cn -- fixtures/actions-smoke/site/overview.html)" = "$(jq -r '.artifacts[] | select(.path == "overview.html") | .lastCommitter.name' "$STORAGE/_indexes/smoke/index.json")"
+          expected="$(git log --no-patch --full-history --diff-merges=first-parent --format='%ct%x09%H' -- fixtures/actions-smoke/site/overview.html | LC_ALL=C awk -F '\t' 'NF == 2 && (($1 + 0) > maxTime || (($1 + 0) == maxTime && ($2 < sha || sha == ""))) { maxTime = $1 + 0; sha = $2 } END { if (sha == "") exit 1; print maxTime "\t" sha }')"
+          expected_time="${expected%%$'\t'*}"
+          expected_sha="${expected#*$'\t'}"
+          artifact="$(jq -c '.artifacts[] | select(.path == "overview.html")' "$STORAGE/_indexes/smoke/index.json")"
+          actual_time="$(date -u -d "$(jq -r '.updatedAt' <<<"$artifact")" +%s)"
+          test "$expected_time" = "$actual_time"
+          test "$(git show -s --format=%cn "$expected_sha")" = "$(jq -r '.lastCommitter.name' <<<"$artifact")"
+          test "$(git show -s --format=%an "$expected_sha")" = "$(jq -r '.lastAuthor.name' <<<"$artifact")"
+          test "$expected_sha" = "$(jq -r '.lastAuthor.commitSha' <<<"$artifact")"
       - name: Repeat the site sync
         id: site-repeat
         uses: ./actions/publish
