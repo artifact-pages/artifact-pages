@@ -47,6 +47,12 @@ Decided 2026-10-10 in [TD18](../technical-design/TD18-admin-provided-site-workfl
 | [IMP-79](IMP-79-legacy-site-control-records-rebuild-automatically.md) | Done | Codex | Merged in [#108](https://github.com/artifact-pages/artifact-pages/pull/108); on 2026-10-12 the verification bucket rebuilt four legacy `verify-scale-*` records automatically, with backups under `legacy/`. |
 | [IMP-80](IMP-80-operator-recovery-runbook.md) | Done | Claude | Operator recovery runbook (`docs/guides/operator-recovery.md`) from the 2026-10-13 public-launch review; Codex reviews technical accuracy. |
 
+## Recurring provider release regression
+
+| Ticket | Status | Implementer | Execution / outcome |
+| --- | --- | --- | --- |
+| [IMP-81](IMP-81-provider-release-regression-workflow.md) | Open | Codex | `provider-regression.yml`: verified publication → supported real-provider regression → rollout gate; dedicated sites/exclusive windows on existing verification stacks require explicit future authorization. Evidence is [T28](../verification/T28-provider-release-regression.md). |
+
 ## Optional operator-managed edge policy
 
 | Ticket | Status | Lane | Execution / next step |

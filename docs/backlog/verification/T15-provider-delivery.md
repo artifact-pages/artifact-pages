@@ -209,7 +209,7 @@ Prepare one coordinated, version-pinned disposable proof plan in [workstreams](.
 
 ## Coordinated execution plan
 
-The [October 18 provider-proof plan](provider-proof-plan-2026-10-18.md) owns the remaining shared execution matrix (P1–P10), pinned inputs, commands, preservation/cleanup guards and itemized owner approvals. This is preparation only; no new provider result or execution approval is claimed.
+The [October 18 provider-proof plan](provider-proof-plan-2026-10-18.md) owns the remaining shared execution matrix (P1–P10), pinned inputs, commands, preservation/cleanup guards and itemized owner approvals. The [October 20 superseding decision](provider-proof-plan-2026-10-18.md#superseding-execution-decision--october-20-2026) makes Claude main the direct executor with reviewed commands and chat OK under the existing A4–A9 scopes; the harness/signature/registry gates are retired. Hosted OIDC evidence remains required for reference-role claims. Unsupported P4–P7 fault cells stay open/not-run; no criteria close without actual evidence. Recurring supported P1–P8/P10 and P9 configuration checks coverage is planned in [T28](T28-provider-release-regression.md), separately from the one-off fresh-bucket/bootstrap, natural-expiry timing and migration proofs. This edit records no new provider result.
 
 ### ISSUE-112 bounded AWS delivery check — prepared, not run (2026-10-18)
 

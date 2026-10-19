@@ -2,7 +2,7 @@
 
 Each ticket records one independently verifiable contract or measurement. Status lives in the ticket and is repeated here for navigation; update both when it changes.
 
-Shared execution preparation: [October 18 provider-proof plan](provider-proof-plan-2026-10-18.md) and [hosted fixture preparation](hosted-fixture-preparation-2026-10-18.md). These plans add no completed proof or execution authority; statuses remain in the existing tickets.
+Shared execution preparation: [October 18 provider-proof plan](provider-proof-plan-2026-10-18.md) and [hosted fixture preparation](hosted-fixture-preparation-2026-10-18.md). The [October 20 decision](provider-proof-plan-2026-10-18.md#superseding-execution-decision--october-20-2026) retires the harness/signatures/registry gates: Claude main executes direct reviewed commands with chat OK within the existing A1–A9 scopes and caps. Unsupported P4–P7 faults stay open/not-run; full Cloudflare refresh waits for owner-confirmed read-only groups. No new proof is claimed. Future post-publication/pre-rollout regression is [IMP-81](../implementation/IMP-81-provider-release-regression-workflow.md) / [T28](T28-provider-release-regression.md), with separate future live authorization.
 
 | Ticket | Status | Verification |
 | --- | --- | --- |
@@ -26,3 +26,4 @@ Shared execution preparation: [October 18 provider-proof plan](provider-proof-pl
 | [T25](T25-web-first-load-and-search-at-scale.md) | In progress | Web first load and search at the advertised site size |
 | [T26](T26-cli-publish-memory-vs-source-bytes.md) | Done | CLI publish peak memory against source bytes |
 | [T27](T27-launch-hosting-cost-model.md) | In progress | Launch hosting cost model from recorded request counts and storage |
+| [T28](T28-provider-release-regression.md) | Open | Post-publication real-provider release regression and preservation/cleanup evidence |
