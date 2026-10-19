@@ -3,7 +3,7 @@ import { ArtifactBreadcrumbs } from './ArtifactBreadcrumbs'
 import { CommandPalette, type PaletteCommand } from './CommandPalette'
 import { DirectoryPage } from './DirectoryPage'
 import { Icon } from './Icon'
-import { ArtifactDetails, focusReaderColumnPart, READER_COLUMN_QUERY, ReaderContextColumn, type ReaderColumnPart } from './ReaderContextColumn'
+import { ArtifactDetails, ContentsList, focusReaderColumnPart, READER_COLUMN_QUERY, ReaderContextColumn, type ReaderColumnPart } from './ReaderContextColumn'
 import { useCurrentHeading } from './useCurrentHeading'
 import { Sidebar } from './Sidebar'
 import { RecentlyUpdated, SiteHome, SiteHomeFrame, SiteHomeHeader, usePreviewCount, type SiteSection } from './SiteHome'
@@ -1477,18 +1477,11 @@ export function ArtifactWorkspace({
                   tocEntries.length === 0 ? (
                     <p className="toc-empty">This artifact does not include indexed headings.</p>
                   ) : (
-                    <nav className="toc-list" aria-label="Artifact headings">
-                      {tocEntries.map((entry) => (
-                        <button
-                          className={`toc-link${entry.level >= 3 ? ' toc-level-3' : ''}`}
-                          key={`${entry.id}:${entry.text}`}
-                          aria-current={activeHeading?.artifactId === bodyArtifact.id && activeHeading.id === entry.id ? 'location' : undefined}
-                          onClick={() => jumpToHeading(entry.id, { keepPanelIfClear: true })}
-                        >
-                          {entry.text}
-                        </button>
-                      ))}
-                    </nav>
+                    <ContentsList
+                      entries={tocEntries}
+                      activeId={activeHeading?.artifactId === bodyArtifact.id ? activeHeading.id : null}
+                      onJump={(id) => jumpToHeading(id, { keepPanelIfClear: true })}
+                    />
                   )
                 ) : preview ? (
                   <PreviewDetails reader={preview} navigate={navigateWithinWorkspace} />
