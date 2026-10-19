@@ -105,11 +105,11 @@ The sealed manifest records `preservationCheckpoint: { status: "passed", path, s
 Implementation is on the local `codex-proof-gate-hardening` branch. Commit and PR references are pending the main-session handoff; this worktree remains uncommitted.
 
 - [x] The standalone credential-verification path and direct credential verification require a valid sealed preservation checkpoint before credential loading, inspection, or probes.
-- [x] Policy review counts only unconditional Deny statements for required preserved-resource and proof-boundary evidence, and rejects unreviewed Allow wildcards.
-- [x] Capture redaction covers UTF-8 hex and JSON escaped secret forms in stdout and stderr, including split chunks.
-- [x] Fake-child coverage verifies TERM/KILL escalation, close tracking, both 4 MiB capture limits, and usage reservations through launch failure and timeout.
+- [x] Policy review counts only unconditional Deny statements for required preserved-resource and proof-boundary evidence, and rejects unreviewed Allow wildcards, including `NotAction`; array forms are covered.
+- [x] Capture redaction covers UTF-8 hex and JSON escaped secret forms for multiple overlapping secrets in stdout and stderr, including split chunks.
+- [x] Fake-child coverage verifies TERM/KILL escalation, first-cause error precedence, grace-timer cleanup, overflow close timeout, close tracking, both 4 MiB capture limits, and usage reservations through launch failure and timeout.
 
-Local results: Node 24.18.0 passed all 39 tests; Go 1.26.9 passed the package's five scenarios; the final `git diff --check` passed. The capture limit is not evidence of a provider transfer-byte cap.
+Local results: Node 24.18.0 passed all 40 tests; Go 1.26.7 passed `go test ./scripts/provider-proof-go` (1.26.0 is not installed in the local mise toolset); the final `git diff --check` passed. The capture limit is not evidence of a provider transfer-byte cap.
 
 > PR #179 follow-ups completed with local fake-backed evidence: checkpoint precedes credential loading and probes; required Deny evidence is unconditional and Allow wildcard scope is checked; capture redaction covers hex and JSON escapes; supervisor escalation, close tracking, output limits and usage reservations have regression coverage. No live provider evidence is claimed. A4–A9 remain subject to trust-anchor enrollment, reviewed adapters, fresh seals, exact SSH-signed transitions and their existing execution gates.
 

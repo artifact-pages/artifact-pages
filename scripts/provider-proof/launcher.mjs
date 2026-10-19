@@ -290,7 +290,10 @@ export async function runSupervisedInvocation({
     clearTimeout(timer);
   }
 
-  if (captureOverflow) throw new LauncherError('CHILD_OUTPUT_LIMIT_EXCEEDED');
+  if (captureOverflow) {
+    if (terminationReason === 'deadline') throw new LauncherError('CHILD_DEADLINE_EXCEEDED');
+    throw new LauncherError('CHILD_OUTPUT_LIMIT_EXCEEDED');
+  }
   const values = Object.values(credential.environment);
   const stdout = redact(Buffer.concat(stdoutChunks), values);
   const stderr = redact(Buffer.concat(stderrChunks), values);
@@ -416,8 +419,18 @@ function containsCredentialMaterial(value) {
     && /(?:AKIA[0-9A-Z]{16}|Bearer\s+\S+|-----BEGIN (?:RSA |EC )?PRIVATE KEY-----)/u.test(value);
 }
 
-function delay(milliseconds) {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+async function waitForCloseOrDelay(close, milliseconds) {
+  let timer;
+  const delay = new Promise((resolve) => {
+    timer = setTimeout(resolve, milliseconds);
+    timer.unref?.();
+  });
+  const result = await Promise.race([close, delay.then(() => null)]);
+  if (result) {
+    timer?.unref?.();
+    clearTimeout(timer);
+  }
+  return result;
 }
 
 function validateParentEnvironment(environment) {
@@ -621,10 +634,10 @@ function escapeRegExp(value) {
 async function terminateChildAndWait({ child, close, isClosed }, killGroup) {
   if (isClosed()) return close;
   await killGroup(child, 'SIGTERM').catch(() => {});
-  const afterTerm = await Promise.race([close, delay(FORCE_KILL_DELAY_MS).then(() => null)]);
+  const afterTerm = await waitForCloseOrDelay(close, FORCE_KILL_DELAY_MS);
   if (afterTerm) return afterTerm;
   await killGroup(child, 'SIGKILL').catch(() => {});
-  return Promise.race([close, delay(FORCE_KILL_DELAY_MS).then(() => null)]);
+  return waitForCloseOrDelay(close, FORCE_KILL_DELAY_MS);
 }
 
 async function killProcessGroup(child, signal) {

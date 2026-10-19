@@ -39,7 +39,9 @@ export function assertNoWildcardAllows(document, { allowedWildcardActions = [] }
   const allowWildcard = new Set(allowedWildcardActions);
   for (const statement of statements(document)) {
     if (statement.Effect !== 'Allow') continue;
-    if (Object.hasOwn(statement, 'NotResource')) throw new AuthorizationError('WILDCARD_ALLOW_NOT_REVIEWED');
+    if (Object.hasOwn(statement, 'NotAction') || Object.hasOwn(statement, 'NotResource')) {
+      throw new AuthorizationError('WILDCARD_ALLOW_NOT_REVIEWED');
+    }
     const actions = asList(statement.Action);
     if (actions.some((action) => typeof action !== 'string' || action.includes('*') || action.includes('?'))) {
       throw new AuthorizationError('WILDCARD_ALLOW_NOT_REVIEWED');

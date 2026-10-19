@@ -1330,9 +1330,17 @@ test('policy review requires unconditional boundary denies and narrowly scoped A
   const allowed = (action, resource, extra = {}) => ({ Statement: [{ Effect: 'Allow', Action: action, Resource: resource, ...extra }] });
   assert.equal(assertNoWildcardAllows(allowed('s3:GetObject', 'arn:aws:s3:::proof-bucket/*')), true);
   assert.equal(assertNoWildcardAllows(allowed('s3:GetObject', 'arn:aws:s3:::proof-bucket/_indexes/proof-site/*')), true);
+  assert.equal(assertNoWildcardAllows(allowed(
+    ['s3:GetObject', 's3:ListBucket'],
+    ['arn:aws:s3:::proof-bucket/*', 'arn:aws:s3:::proof-bucket'],
+  )), true, 'array forms with reviewed actions and resources remain accepted');
   assert.equal(assertNoWildcardAllows(allowed('sts:GetCallerIdentity', '*', { Condition: { Bool: { 'aws:SecureTransport': 'true' } } }), {
     allowedWildcardActions: ['sts:GetCallerIdentity'],
   }), true, 'the exact-action Resource:* exception remains unchanged with a Condition');
+  assert.equal(assertNoWildcardAllows(allowed(
+    'sts:GetCallerIdentity', ['*', 'arn:aws:iam::231136241959:role/proof'],
+  ), { allowedWildcardActions: ['sts:GetCallerIdentity'] }), true,
+  'Resource:* inside an array is accepted for an exact-action allowlist');
 
   for (const resource of [
     'arn:aws:s3:::proof-*/objects/*',
@@ -1347,8 +1355,22 @@ test('policy review requires unconditional boundary denies and narrowly scoped A
   for (const action of ['s3:Get*', 's3:GetObject?']) {
     assert.throws(() => assertNoWildcardAllows(allowed(action, 'arn:aws:s3:::proof-bucket/objects/key')), /WILDCARD_ALLOW_NOT_REVIEWED/u);
   }
+  assert.throws(() => assertNoWildcardAllows(allowed(
+    ['s3:GetObject', 's3:Get*'], 'arn:aws:s3:::proof-bucket/objects/key',
+  )), /WILDCARD_ALLOW_NOT_REVIEWED/u, 'wildcards in Action arrays are rejected');
+  assert.throws(() => assertNoWildcardAllows(allowed(
+    's3:GetObject', ['*', 'arn:aws:s3:::proof-bucket/objects/key'],
+  )), /WILDCARD_ALLOW_NOT_REVIEWED/u, 'Resource:* arrays need exact-action allowlisting');
+  assert.throws(() => assertNoWildcardAllows(allowed(
+    ['sts:GetCallerIdentity', 's3:GetObject'], ['*', 'arn:aws:s3:::proof-bucket/objects/key'],
+  ), { allowedWildcardActions: ['sts:GetCallerIdentity'] }), /WILDCARD_ALLOW_NOT_REVIEWED/u,
+  'every action paired with Resource:* must be on the exact-action allowlist');
   assert.throws(() => assertNoWildcardAllows(allowed('s3:GetObject', '*', { Condition: { Bool: { 'aws:SecureTransport': 'true' } } })), /WILDCARD_ALLOW_NOT_REVIEWED/u);
   assert.throws(() => assertNoWildcardAllows(allowed('s3:GetObject', undefined, { NotResource: 'arn:aws:s3:::proof-bucket/private/*' })), /WILDCARD_ALLOW_NOT_REVIEWED/u);
+  for (const notAction of ['s3:GetObject', ['s3:GetObject', 's3:ListBucket']]) {
+    assert.throws(() => assertNoWildcardAllows(allowed(undefined, 'arn:aws:s3:::proof-bucket/key', { NotAction: notAction })),
+      /WILDCARD_ALLOW_NOT_REVIEWED/u, `Allow NotAction is rejected for ${Array.isArray(notAction) ? 'array' : 'string'} form`);
+  }
 });
 
 test('Cloudflare scope templates reject unbound placeholders and preserve parent/child separation', async () => {
@@ -1767,9 +1789,14 @@ test('supervised launcher accepts only the sealed descriptor and terminates reco
   });
   const credential = await new setup.modules.loader.PrivateCredentialLoader({ loadPrivateCredential: async () => awsInventoryCredentialSource() }).load('aws-inventory');
   const fakeSecret = 'proof!"\\/雪☃';
+  const longerFakeSecret = `${fakeSecret}-extended`;
   const redactionCredential = {
     ...credential,
-    environment: { ...credential.environment, AWS_SESSION_TOKEN: fakeSecret },
+    environment: {
+      ...credential.environment,
+      AWS_SESSION_TOKEN: fakeSecret,
+      AWS_SECRET_ACCESS_KEY: longerFakeSecret,
+    },
   };
   const record = await makeAwsInventoryRecord(setup, credential, invocation.invocationDigest);
   assert.equal(requireSealedPreservationCheckpoint(setup.manifest), setup.manifest.preservationCheckpoint.sha256);
@@ -1849,25 +1876,28 @@ test('supervised launcher accepts only the sealed descriptor and terminates reco
   });
   const childExit = assert.rejects(runPromise, /CHILD_EXITED_NONZERO/);
   await launched;
-  const jsonSecret = JSON.stringify(fakeSecret).slice(1, -1);
-  const mixedUnicodeSecret = [...fakeSecret].map((character, index) => index % 2 === 0
-    ? character
-    : `\\u${character.charCodeAt(0).toString(16).padStart(4, '0').toUpperCase()}`).join('');
-  const encodedFakeSecret = [
-    fakeSecret,
-    encodeURIComponent(fakeSecret),
-    new URLSearchParams([['value', fakeSecret]]).toString().slice('value='.length),
-    Buffer.from(fakeSecret).toString('base64'),
-    Buffer.from(fakeSecret).toString('base64url'),
-    Buffer.from(fakeSecret, 'utf8').toString('hex'),
-    Buffer.from(fakeSecret, 'utf8').toString('hex').toUpperCase(),
-    jsonSecret,
-    jsonSecret.replaceAll('/', '\\/'),
-    fakeSecret.replaceAll('/', '\\/'),
-    mixedUnicodeSecret,
-  ];
-  const stdoutPayload = `fake child stdout before ${encodedFakeSecret.join(' ')} after\n`;
-  const stderrPayload = `fake child stderr before ${encodedFakeSecret.join(' ')} after\n`;
+  const secretForms = (secret) => {
+    const jsonSecret = JSON.stringify(secret).slice(1, -1);
+    const mixedUnicodeSecret = [...secret].map((character, index) => index % 2 === 0
+      ? character
+      : `\\u${character.charCodeAt(0).toString(16).padStart(4, '0').toUpperCase()}`).join('');
+    return [
+      secret,
+      encodeURIComponent(secret),
+      new URLSearchParams([['value', secret]]).toString().slice('value='.length),
+      Buffer.from(secret).toString('base64'),
+      Buffer.from(secret).toString('base64url'),
+      Buffer.from(secret, 'utf8').toString('hex'),
+      Buffer.from(secret, 'utf8').toString('hex').toUpperCase(),
+      jsonSecret,
+      jsonSecret.replaceAll('/', '\\/'),
+      secret.replaceAll('/', '\\/'),
+      mixedUnicodeSecret,
+    ];
+  };
+  const encodedFakeSecrets = [...new Set([fakeSecret, longerFakeSecret].flatMap(secretForms))];
+  const stdoutPayload = `fake child stdout before ${encodedFakeSecrets.join(' ')} after\n`;
+  const stderrPayload = `fake child stderr before ${encodedFakeSecrets.join(' ')} after\n`;
   const splitChunks = (stream, payload) => {
     const rawSecretOffset = payload.indexOf(fakeSecret);
     const splitOffset = rawSecretOffset + Math.min(5, fakeSecret.length - 1);
@@ -1884,7 +1914,7 @@ test('supervised launcher accepts only the sealed descriptor and terminates reco
   for (const [stream, captured] of [['stdout', capturedStdout], ['stderr', capturedStderr]]) {
     assert.match(captured, new RegExp(`fake child ${stream} before \\[REDACTED\\]`, 'u'));
     assert.match(captured, / after\n/u);
-    for (const secretForm of encodedFakeSecret) assert.ok(!captured.includes(secretForm), `${stream} redacts raw, encoded, hex, and JSON-escaped credentials`);
+    for (const secretForm of encodedFakeSecrets) assert.ok(!captured.includes(secretForm), `${stream} redacts multiple overlapping secrets in encoded forms`);
   }
   assert.equal(setup.manifest.usage.requests, 1);
   assert.equal(setup.manifest.usage.operatorMinutes, 1);
@@ -2014,6 +2044,113 @@ test('supervisor escalates deadlines and retains children until close is observe
   assert.throws(() => setup.modules.launcher.assertNoActiveChildren(), /RECORDED_CHILDREN_REMAIN/u);
   stuck.child.emit('close', null, 'SIGKILL');
   assert.doesNotThrow(() => setup.modules.launcher.assertNoActiveChildren(), 'a later close event clears child tracking');
+});
+
+test('supervisor preserves the first termination cause, lets close timeout win, and clears grace timers', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'provider-proof-termination-order-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const setup = await createSupervisedFixture(root, { caps: { requests: 5, bytes: 1000, operatorMinutes: 5 } });
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+
+  const fakeSetTimeout = globalThis.setTimeout;
+  const fakeClearTimeout = globalThis.clearTimeout;
+  const pendingTimers = new Map();
+  globalThis.setTimeout = (callback, milliseconds, ...args) => {
+    let timer;
+    timer = fakeSetTimeout((...callbackArgs) => {
+      pendingTimers.delete(timer);
+      callback(...callbackArgs);
+    }, milliseconds, ...args);
+    pendingTimers.set(timer, milliseconds);
+    return timer;
+  };
+  globalThis.clearTimeout = (timer) => {
+    pendingTimers.delete(timer);
+    return fakeClearTimeout(timer);
+  };
+  t.after(() => {
+    globalThis.setTimeout = fakeSetTimeout;
+    globalThis.clearTimeout = fakeClearTimeout;
+  });
+
+  const maxBytes = 4 * 1024 * 1024;
+  const captureFiles = Object.values(setup.invocation.descriptor.captures).map((capture) => path.join(setup.runtime, capture));
+  const removeCaptures = async () => Promise.all(captureFiles.map((filename) => rm(filename, { force: true })));
+  const assertCapturesAbsent = async () => {
+    for (const filename of captureFiles) await assert.rejects(stat(filename), { code: 'ENOENT' });
+  };
+  const advance = async (milliseconds) => {
+    await new Promise((resolve) => setImmediate(resolve));
+    t.mock.timers.tick(milliseconds);
+    await new Promise((resolve) => setImmediate(resolve));
+  };
+
+  const deadlineSignals = [];
+  const deadlineFirst = await startFakeInvocation(setup, {
+    pid: 994211,
+    killGroup: async (child, signal) => {
+      deadlineSignals.push(signal);
+      if (signal === 'SIGKILL') child.emit('close', null, signal);
+    },
+  });
+  const deadlineFailure = assert.rejects(deadlineFirst.promise, /CHILD_DEADLINE_EXCEEDED/u);
+  await advance(setup.invocation.timeoutMs);
+  deadlineFirst.child.stdout.write(Buffer.alloc(maxBytes + 1, 0x43));
+  await advance(500);
+  await deadlineFailure;
+  assert.deepEqual(deadlineSignals, ['SIGTERM', 'SIGKILL']);
+  await assertCapturesAbsent();
+
+  await removeCaptures();
+  const outputSignals = [];
+  const outputFirst = await startFakeInvocation(setup, {
+    pid: 994212,
+    killGroup: async (child, signal) => {
+      outputSignals.push(signal);
+      if (signal === 'SIGKILL') child.emit('close', null, signal);
+    },
+  });
+  const outputFailure = assert.rejects(outputFirst.promise, /CHILD_OUTPUT_LIMIT_EXCEEDED/u);
+  outputFirst.child.stderr.write(Buffer.alloc(maxBytes + 1, 0x44));
+  await advance(500);
+  await outputFailure;
+  assert.deepEqual(outputSignals, ['SIGTERM', 'SIGKILL']);
+  await assertCapturesAbsent();
+
+  await removeCaptures();
+  const stuckSignals = [];
+  const stuckOverflow = await startFakeInvocation(setup, {
+    pid: 994213,
+    killGroup: async (_child, signal) => { stuckSignals.push(signal); },
+  });
+  const closeFailure = assert.rejects(stuckOverflow.promise, /CHILD_CLOSE_TIMEOUT/u);
+  stuckOverflow.child.stdout.write(Buffer.alloc(maxBytes + 1, 0x45));
+  await advance(500);
+  await advance(500);
+  await closeFailure;
+  assert.deepEqual(stuckSignals, ['SIGTERM', 'SIGKILL']);
+  await assertCapturesAbsent();
+  assert.throws(() => setup.modules.launcher.assertNoActiveChildren(), /RECORDED_CHILDREN_REMAIN/u);
+  stuckOverflow.child.emit('close', null, 'SIGKILL');
+  assert.doesNotThrow(() => setup.modules.launcher.assertNoActiveChildren());
+
+  const closeSignals = [];
+  const closeBeforeGrace = await startFakeInvocation(setup, {
+    pid: 994214,
+    killGroup: async (child, signal) => {
+      closeSignals.push(signal);
+      child.emit('close', null, signal);
+    },
+  });
+  const closeExitFailure = assert.rejects(closeBeforeGrace.promise, /CHILD_EXITED_NONZERO/u);
+  assert.equal(await setup.modules.launcher.terminateActiveChildren(async (child, signal) => {
+    closeSignals.push(signal);
+    child.emit('close', null, signal);
+  }), 1);
+  await closeExitFailure;
+  assert.deepEqual(closeSignals, ['SIGTERM']);
+  assert.equal([...pendingTimers.values()].filter((milliseconds) => milliseconds === 500).length, 0,
+    'no 500 ms grace timer remains pending after close wins');
 });
 
 test('usage reservations remain consumed after spawn failure and timeout, including after manifest reload', async (t) => {
