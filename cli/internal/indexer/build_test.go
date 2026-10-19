@@ -520,6 +520,9 @@ func TestBuildUpdatedAtTracksUncommittedAndCommittedAssetChanges(t *testing.T) {
 		if artifact.LastCommitter == nil || artifact.LastCommitter.Name != "Index Builder Test" {
 			t.Errorf("uncommitted artifact lastCommitter for %q = %+v, want the last committed Git identity", artifact.ID, artifact.LastCommitter)
 		}
+		if artifact.LastAuthor == nil || artifact.LastAuthor.Name != "Index Builder Test" {
+			t.Errorf("uncommitted artifact lastAuthor for %q = %+v, want the last committed Git author", artifact.ID, artifact.LastAuthor)
+		}
 	}
 
 	secondCommit := time.Date(2026, 3, 3, 11, 0, 0, 0, time.UTC)
@@ -534,6 +537,9 @@ func TestBuildUpdatedAtTracksUncommittedAndCommittedAssetChanges(t *testing.T) {
 		}
 		if artifact.LastCommitter == nil || artifact.LastCommitter.Name != "Stylesheet Committer" {
 			t.Errorf("asset update lastCommitter for %q = %+v, want committer of the stylesheet change", artifact.ID, artifact.LastCommitter)
+		}
+		if artifact.LastAuthor == nil || artifact.LastAuthor.Name != "Stylesheet Author" {
+			t.Errorf("asset update lastAuthor for %q = %+v, want author of the stylesheet change", artifact.ID, artifact.LastAuthor)
 		}
 	}
 
@@ -638,8 +644,14 @@ func TestBuildGitMetadataRequiresDocumentHistory(t *testing.T) {
 			if artifact.LastCommitter == nil || artifact.LastCommitter.Name != want.committer {
 				t.Errorf("tracked artifact %q lastCommitter = %+v, want %q from its shared resource history", want.path, artifact.LastCommitter, want.committer)
 			}
+			if artifact.LastAuthor == nil || artifact.LastAuthor.Name != "Resource Author" {
+				t.Errorf("tracked artifact %q lastAuthor = %+v, want author of its shared resource history", want.path, artifact.LastAuthor)
+			}
 		} else if artifact.LastCommitter != nil {
 			t.Errorf("artifact without document history %q lastCommitter = %+v, want omitted", want.path, artifact.LastCommitter)
+		}
+		if !want.wantCommitter && artifact.LastAuthor != nil {
+			t.Errorf("artifact without document history %q lastAuthor = %+v, want omitted", want.path, artifact.LastAuthor)
 		}
 	}
 }

@@ -162,6 +162,89 @@ func TestPublishSiteFromShallowCloneMatchesFullClone(t *testing.T) {
 	}
 }
 
+func TestPreparedInputPolicyMigrationRebuildsLegacyAttributionThenNoOps(t *testing.T) {
+	origin := t.TempDir()
+	shallowGit(t, origin, nil, "init", "-q", "-b", "main")
+	shallowGit(t, origin, nil, "config", "user.name", "T")
+	shallowGit(t, origin, nil, "config", "user.email", "t@example.invalid")
+	shallowWrite(t, origin, "docs/artifacts/report.html", "<h1>Report</h1>\n")
+	shallowCommitAs(t, origin, "GitHub", 1)
+	backend := newSiteReconcileBackend()
+	seedPublisherRegistry(t, backend.lockMemoryBackend, registeredSREManifest)
+	checkout := cloneRegistered(t, origin, 0)
+	initial := publishFromBackend(t, checkout, backend, false)
+	if initial.Outcome != "synced" {
+		t.Fatalf("initial publish outcome = %q", initial.Outcome)
+	}
+
+	indexKey := "_indexes/sre/index.json"
+	indexObject, _, err := backend.GetObject(t.Context(), indexKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var legacyIndex map[string]any
+	if err := json.Unmarshal(indexObject.Bytes, &legacyIndex); err != nil {
+		t.Fatal(err)
+	}
+	artifacts, ok := legacyIndex["artifacts"].([]any)
+	if !ok || len(artifacts) != 1 {
+		t.Fatalf("legacy test index artifacts = %#v", legacyIndex["artifacts"])
+	}
+	delete(artifacts[0].(map[string]any), "lastAuthor")
+	legacyBytes, err := json.MarshalIndent(legacyIndex, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyBytes = append(legacyBytes, '\n')
+	indexObject.Bytes = legacyBytes
+	indexObject.Metadata = map[string]string{"artifact-pages-site": "sre", "artifact-pages-sha256": sha256Hex(legacyBytes)}
+	if err := backend.PutObject(t.Context(), indexKey, indexObject); err != nil {
+		t.Fatal(err)
+	}
+
+	stateObject, stateETag, err := backend.GetObject(t.Context(), sitePublishStateKey("sre"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := decodeSitePublishState("sre", sitePublishStateInfo(stateObject, stateETag), stateObject.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.Committed.InputRoot = strings.Repeat("0", 64) // prior prepared-input policy 2 fingerprint
+	for index := range state.Committed.Objects {
+		if state.Committed.Objects[index].Key == indexKey {
+			state.Committed.Objects[index].SHA256 = sha256Hex(legacyBytes)
+			state.Committed.Objects[index].Size = int64(len(legacyBytes))
+		}
+	}
+	stateUpload, err := buildSitePublishStateObject("sre", state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := backend.PutObject(t.Context(), sitePublishStateKey("sre"), stateUpload); err != nil {
+		t.Fatal(err)
+	}
+
+	migrated := publishFromBackend(t, checkout, backend, false)
+	if migrated.Outcome != "synced" || migrated.BuildSkipped {
+		t.Fatalf("legacy policy migration = %+v, want one rebuilt publish", migrated)
+	}
+	storedIndex, _, err := backend.GetObject(t.Context(), indexKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var migratedIndex indexer.SiteIndex
+	if err := json.Unmarshal(storedIndex.Bytes, &migratedIndex); err != nil {
+		t.Fatal(err)
+	}
+	if len(migratedIndex.Artifacts) != 1 || migratedIndex.Artifacts[0].LastAuthor == nil || migratedIndex.Artifacts[0].LastAuthor.Name != "GitHub" {
+		t.Fatalf("migrated author = %+v", migratedIndex.Artifacts)
+	}
+	if repeated := publishFromBackend(t, checkout, backend, false); repeated.Outcome != "no-op" || !repeated.BuildSkipped {
+		t.Fatalf("identical migrated prepared input = %+v, want no-op", repeated)
+	}
+}
+
 func TestAWSGzipMigrationPreservesPriorAttributionFromShallowCheckout(t *testing.T) {
 	origin := t.TempDir()
 	shallowGit(t, origin, nil, "init", "-q", "-b", "main")
@@ -189,7 +272,7 @@ func TestAWSGzipMigrationPreservesPriorAttributionFromShallowCheckout(t *testing
 	if err := json.Unmarshal(plainObject.Bytes, &plainIndex); err != nil {
 		t.Fatal(err)
 	}
-	if len(plainIndex.Artifacts) != 1 || plainIndex.Artifacts[0].LastCommitter == nil || plainIndex.Artifacts[0].LastCommitter.Name != "Alice" {
+	if len(plainIndex.Artifacts) != 1 || plainIndex.Artifacts[0].LastCommitter == nil || plainIndex.Artifacts[0].LastCommitter.Name != "Alice" || plainIndex.Artifacts[0].LastAuthor == nil || plainIndex.Artifacts[0].LastAuthor.Name != "Alice" || plainIndex.Artifacts[0].LastAuthor.CommitSHA == "" {
 		t.Fatalf("initial attribution = %+v", plainIndex.Artifacts)
 	}
 
@@ -218,7 +301,9 @@ func TestAWSGzipMigrationPreservesPriorAttributionFromShallowCheckout(t *testing
 		t.Fatal(err)
 	}
 	if len(migratedIndex.Artifacts) != 1 || migratedIndex.Artifacts[0].UpdatedAt != plainIndex.Artifacts[0].UpdatedAt ||
-		migratedIndex.Artifacts[0].LastCommitter == nil || migratedIndex.Artifacts[0].LastCommitter.Name != "Alice" {
+		migratedIndex.Artifacts[0].LastCommitter == nil || migratedIndex.Artifacts[0].LastCommitter.Name != "Alice" ||
+		migratedIndex.Artifacts[0].LastAuthor == nil || migratedIndex.Artifacts[0].LastAuthor.Name != plainIndex.Artifacts[0].LastAuthor.Name ||
+		migratedIndex.Artifacts[0].LastAuthor.CommitSHA != plainIndex.Artifacts[0].LastAuthor.CommitSHA {
 		t.Fatalf("migration changed shallow-checkout Git attribution: before=%+v after=%+v", plainIndex.Artifacts, migratedIndex.Artifacts)
 	}
 	if result := publishFromBackend(t, shallowCheckout, aws, false); result.Outcome != "no-op" {

@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-const buildInputPolicyVersion = 2
+const buildInputPolicyVersion = 3
 
 // SourceFileSnapshot is one regular source file captured by PrepareBuild.
 // Bytes are the exact immutable bytes used by both index construction and
@@ -36,6 +36,7 @@ type preparedDocument struct {
 	artifact      discoveredArtifact
 	updatedAt     time.Time
 	lastCommitter string
+	lastAuthor    *ArtifactAuthor
 }
 
 // PreparedBuild is an immutable local snapshot with all Git-derived metadata
@@ -47,15 +48,16 @@ type PreparedBuild struct {
 	reusable  bool
 	files     []SourceFileSnapshot
 
-	options        BuildOptions
-	outputRoot     string
-	repositoryRoot string
-	relativeSource string
-	gitInfo        gitMetadata
-	documents      []preparedDocument
-	fileByRelative map[string]SourceFileSnapshot
-	scannedFiles   int
-	indexTime      time.Time
+	options            BuildOptions
+	outputRoot         string
+	repositoryRoot     string
+	relativeSource     string
+	gitInfo            gitMetadata
+	documents          []preparedDocument
+	fileByRelative     map[string]SourceFileSnapshot
+	scannedFiles       int
+	indexTime          time.Time
+	attributionWarning string
 }
 
 // InputRoot is a stable hash of all inputs that affect the generated
@@ -66,6 +68,9 @@ func (prepared *PreparedBuild) InputRoot() string { return prepared.inputRoot }
 // matching input root. It is false when Build's current contract uses the
 // invocation clock for an absent tracked dependency.
 func (prepared *PreparedBuild) Reusable() bool { return prepared.reusable }
+
+// AttributionWarning is a sanitized summary of optional GitHub lookup failures.
+func (prepared *PreparedBuild) AttributionWarning() string { return prepared.attributionWarning }
 
 // SourceFiles returns a copy of the snapshot's public file metadata. Bytes
 // remain private so callers cannot mutate content after its fingerprint was
@@ -111,9 +116,10 @@ type fingerprintFile struct {
 }
 
 type fingerprintDocument struct {
-	Path          string `json:"path"`
-	UpdatedAt     string `json:"updatedAt"`
-	LastCommitter string `json:"lastCommitter,omitempty"`
+	Path          string          `json:"path"`
+	UpdatedAt     string          `json:"updatedAt"`
+	LastCommitter string          `json:"lastCommitter,omitempty"`
+	LastAuthor    *ArtifactAuthor `json:"lastAuthor,omitempty"`
 }
 
 type sourceFileReader func(string) ([]byte, error)
@@ -207,7 +213,23 @@ func prepareBuild(ctx context.Context, options BuildOptions, captureMode sourceC
 	if err := ValidateUTF8RelativePath(relativeSource); err != nil {
 		return nil, fmt.Errorf("source path %w", err)
 	}
-	gitUpdates, err := resolveGitUpdates(ctx, repositoryRoot, relativeSource, artifacts, files, options.PriorState)
+	var prior *PriorSiteState
+	if options.PriorState != nil {
+		prior, err = options.PriorState(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("read deployed site state: %w", err)
+		}
+	}
+	gitUpdates, err := resolveGitUpdates(ctx, repositoryRoot, relativeSource, artifacts, files, prior)
+	if err != nil {
+		return nil, err
+	}
+	gitInfo := resolveGitMetadata(ctx, repositoryRoot, options)
+	githubConfig := defaultGitHubEnrichmentConfig()
+	if options.githubEnrichment != nil {
+		githubConfig = *options.githubEnrichment
+	}
+	attributionWarning, err := enrichGitAuthors(ctx, gitInfo, gitUpdates, prior, githubConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -215,7 +237,6 @@ func prepareBuild(ctx context.Context, options BuildOptions, captureMode sourceC
 	if err != nil {
 		return nil, err
 	}
-	gitInfo := resolveGitMetadata(ctx, repositoryRoot, options)
 	title := strings.TrimSpace(options.SiteTitle)
 	if title == "" {
 		title = humanize(path.Base(options.SiteID))
@@ -229,16 +250,17 @@ func prepareBuild(ctx context.Context, options BuildOptions, captureMode sourceC
 	options.SourceDir = sourcePath
 	options.OutputDir = outputRoot
 	prepared := &PreparedBuild{
-		reusable:       len(clockDependent) == 0,
-		files:          files,
-		fileByRelative: make(map[string]SourceFileSnapshot, len(files)),
-		options:        options,
-		outputRoot:     outputRoot,
-		repositoryRoot: repositoryRoot,
-		relativeSource: relativeSource,
-		gitInfo:        gitInfo,
-		scannedFiles:   scannedFiles,
-		indexTime:      indexTime,
+		reusable:           len(clockDependent) == 0,
+		files:              files,
+		fileByRelative:     make(map[string]SourceFileSnapshot, len(files)),
+		options:            options,
+		outputRoot:         outputRoot,
+		repositoryRoot:     repositoryRoot,
+		relativeSource:     relativeSource,
+		gitInfo:            gitInfo,
+		scannedFiles:       scannedFiles,
+		indexTime:          indexTime,
+		attributionWarning: attributionWarning,
 	}
 	for _, file := range files {
 		if captureMode.indexOnly && !isDocumentPath(file.RelativePath) {
@@ -260,7 +282,10 @@ func prepareBuild(ctx context.Context, options BuildOptions, captureMode sourceC
 				return nil, fmt.Errorf("read modification time for artifact %q: artifact directory contains no files", artifact.relative)
 			}
 		}
-		prepared.documents = append(prepared.documents, preparedDocument{artifact: artifact, updatedAt: updatedAt, lastCommitter: gitUpdate.lastCommitter})
+		prepared.documents = append(prepared.documents, preparedDocument{
+			artifact: artifact, updatedAt: updatedAt, lastCommitter: gitUpdate.lastCommitter,
+			lastAuthor: cloneArtifactAuthor(gitUpdate.lastAuthor),
+		})
 	}
 	if !captureMode.indexOnly {
 		prepared.inputRoot, err = fingerprintPreparedBuild(prepared)
@@ -530,7 +555,7 @@ func artifactWorkingTreeUpdatesFromSnapshot(ctx context.Context, repositoryRoot,
 
 func fingerprintPreparedBuild(prepared *PreparedBuild) (string, error) {
 	fingerprint := inputFingerprint{
-		Domain: "artifact-pages-site-input-v2", Policy: buildInputPolicyVersion,
+		Domain: "artifact-pages-site-input-v3", Policy: buildInputPolicyVersion,
 		Publisher: prepared.options.InputPolicy, SiteID: prepared.options.SiteID,
 		Title: prepared.options.SiteTitle, Description: prepared.options.SiteDescription,
 		FullText: true, SourcePath: prepared.relativeSource,
@@ -544,7 +569,7 @@ func fingerprintPreparedBuild(prepared *PreparedBuild) (string, error) {
 	for _, document := range prepared.documents {
 		fingerprint.Documents = append(fingerprint.Documents, fingerprintDocument{
 			Path: document.artifact.relative, UpdatedAt: document.updatedAt.UTC().Format(time.RFC3339),
-			LastCommitter: document.lastCommitter,
+			LastCommitter: document.lastCommitter, LastAuthor: cloneArtifactAuthor(document.lastAuthor),
 		})
 	}
 	encoded, err := json.Marshal(fingerprint)

@@ -39,7 +39,15 @@
           "text": "Follow-up",
           "id": "follow-up"
         }
-      ]
+      ],
+      "lastAuthor": {
+        "name": "Octocat",
+        "commitSha": "1111111111111111111111111111111111111111",
+        "github": {
+          "login": "octocat",
+          "avatarUrl": "https://avatars.githubusercontent.com/u/583231?v=4"
+        }
+      }
     },
     {
       "id": "architecture/platform-topology/index.html",

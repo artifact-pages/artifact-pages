@@ -35,23 +35,24 @@ type SitePublishOptions struct {
 }
 
 type Result struct {
-	Operation         string                                 `json:"operation"`
-	Outcome           string                                 `json:"outcome"`
-	Site              string                                 `json:"site,omitempty"`
-	GroupID           string                                 `json:"groupId,omitempty"`
-	Changes           []Change                               `json:"changes"`
-	PreviewChanges    *[]preview.CatalogReconciliationChange `json:"previewChanges,omitempty"`
-	RegistryUpdated   *bool                                  `json:"registryUpdated,omitempty"`
-	Lock              *LockSnapshot                          `json:"lock,omitempty"`
-	Version           string                                 `json:"version,omitempty"`
-	FilesPublished    int                                    `json:"filesPublished,omitempty"`
-	FilesRemoved      int                                    `json:"filesRemoved,omitempty"`
-	InvalidationID    string                                 `json:"invalidationId,omitempty"`
-	InvalidationPaths []string                               `json:"invalidationPaths,omitempty"`
-	SourceDirty       bool                                   `json:"sourceDirty,omitempty"`
-	BuildSkipped      bool                                   `json:"buildSkipped,omitempty"`
-	LegacyControl     *LegacyControl                         `json:"legacyControl,omitempty"`
-	SnippetLimits     *SnippetLimitsReport                   `json:"snippetLimits,omitempty"`
+	Operation          string                                 `json:"operation"`
+	Outcome            string                                 `json:"outcome"`
+	Site               string                                 `json:"site,omitempty"`
+	GroupID            string                                 `json:"groupId,omitempty"`
+	Changes            []Change                               `json:"changes"`
+	PreviewChanges     *[]preview.CatalogReconciliationChange `json:"previewChanges,omitempty"`
+	RegistryUpdated    *bool                                  `json:"registryUpdated,omitempty"`
+	Lock               *LockSnapshot                          `json:"lock,omitempty"`
+	Version            string                                 `json:"version,omitempty"`
+	FilesPublished     int                                    `json:"filesPublished,omitempty"`
+	FilesRemoved       int                                    `json:"filesRemoved,omitempty"`
+	InvalidationID     string                                 `json:"invalidationId,omitempty"`
+	InvalidationPaths  []string                               `json:"invalidationPaths,omitempty"`
+	SourceDirty        bool                                   `json:"sourceDirty,omitempty"`
+	BuildSkipped       bool                                   `json:"buildSkipped,omitempty"`
+	LegacyControl      *LegacyControl                         `json:"legacyControl,omitempty"`
+	SnippetLimits      *SnippetLimitsReport                   `json:"snippetLimits,omitempty"`
+	AttributionWarning string                                 `json:"-"`
 }
 
 type SnippetLimitsReport struct {

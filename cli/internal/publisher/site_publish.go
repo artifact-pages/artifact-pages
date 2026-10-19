@@ -148,7 +148,11 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 			return Result{}, err
 		}
 		emptyPreviewChanges := []preview.CatalogReconciliationChange{}
-		result := Result{Operation: "site sync", Site: options.SiteID, Changes: diff.changes, PreviewChanges: &emptyPreviewChanges, BuildSkipped: diff.buildSkipped}
+		result := Result{
+			Operation: "site sync", Site: options.SiteID, Changes: diff.changes,
+			PreviewChanges: &emptyPreviewChanges, BuildSkipped: diff.buildSkipped,
+			AttributionWarning: prepared.AttributionWarning(),
+		}
 		if len(diff.snippetTruncated) > 0 || len(diff.snippetOmitted) > 0 {
 			result.SnippetLimits = &SnippetLimitsReport{
 				TruncatedDocuments: append([]string{}, diff.snippetTruncated...),

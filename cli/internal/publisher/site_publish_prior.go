@@ -86,23 +86,100 @@ func sitePriorStateLoader(backend ConditionalObjectBackend, siteID string) index
 		if err != nil {
 			return nil, fmt.Errorf("decode deployed site index: %w", err)
 		}
-		var deployed indexer.SiteIndex
+		var header struct {
+			SchemaVersion json.RawMessage `json:"schemaVersion"`
+		}
+		if err := json.Unmarshal(plain, &header); err != nil {
+			return nil, fmt.Errorf("decode deployed site index JSON: %w", err)
+		}
+		var schemaVersion int
+		if len(header.SchemaVersion) == 0 || json.Unmarshal(header.SchemaVersion, &schemaVersion) != nil {
+			return nil, errors.New("deployed site index has a missing or non-integer schemaVersion")
+		}
+		if schemaVersion != 1 {
+			return nil, fmt.Errorf("deployed site index uses unsupported schemaVersion %d; this CLI reads schemaVersion 1", schemaVersion)
+		}
+		var deployed struct {
+			Artifacts []json.RawMessage `json:"artifacts"`
+		}
 		if err := json.Unmarshal(plain, &deployed); err != nil {
 			return nil, fmt.Errorf("decode deployed site index JSON: %w", err)
 		}
-		for _, entry := range deployed.Artifacts {
+		repositoryURL := ""
+		repositoryConflict := false
+		for _, rawEntry := range deployed.Artifacts {
+			var entry struct {
+				Path          string          `json:"path"`
+				UpdatedAt     string          `json:"updatedAt"`
+				LastCommitter json.RawMessage `json:"lastCommitter"`
+				LastAuthor    json.RawMessage `json:"lastAuthor"`
+				Source        json.RawMessage `json:"source"`
+			}
+			if err := json.Unmarshal(rawEntry, &entry); err != nil {
+				continue
+			}
 			updatedAt, parseErr := time.Parse(time.RFC3339, entry.UpdatedAt)
 			if parseErr != nil || entry.Path == "" {
 				continue
 			}
-			document := indexer.PriorDocument{UpdatedAt: updatedAt.UTC()}
-			if entry.LastCommitter != nil {
-				document.LastCommitter = entry.LastCommitter.Name
+			document := indexer.PriorDocument{UpdatedAt: updatedAt.UTC(), LastAuthor: decodePriorAuthor(entry.LastAuthor)}
+			if len(entry.LastCommitter) != 0 && string(entry.LastCommitter) != "null" {
+				var committer struct {
+					Name string `json:"name"`
+				}
+				if json.Unmarshal(entry.LastCommitter, &committer) == nil {
+					document.LastCommitter = committer.Name
+				}
+			}
+			var source struct {
+				RepositoryURL string `json:"repositoryUrl"`
+			}
+			if len(entry.Source) != 0 && string(entry.Source) != "null" && json.Unmarshal(entry.Source, &source) == nil && source.RepositoryURL != "" {
+				if repositoryURL == "" {
+					repositoryURL = source.RepositoryURL
+				} else if !strings.EqualFold(repositoryURL, source.RepositoryURL) {
+					repositoryConflict = true
+				}
 			}
 			prior.Documents[entry.Path] = document
 		}
+		if !repositoryConflict {
+			prior.RepositoryURL = repositoryURL
+		}
 		return prior, nil
 	}
+}
+
+func decodePriorAuthor(raw json.RawMessage) *indexer.ArtifactAuthor {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil
+	}
+	var value struct {
+		Name      string          `json:"name"`
+		CommitSHA string          `json:"commitSha"`
+		GitHub    json.RawMessage `json:"github"`
+	}
+	if json.Unmarshal(raw, &value) != nil || strings.TrimSpace(value.Name) == "" || !indexer.ValidGitCommitSHA(value.CommitSHA) {
+		return nil
+	}
+	author := &indexer.ArtifactAuthor{Name: value.Name, CommitSHA: value.CommitSHA}
+	if len(value.GitHub) != 0 && string(value.GitHub) != "null" {
+		var account struct {
+			Login     json.RawMessage `json:"login"`
+			AvatarURL json.RawMessage `json:"avatarUrl"`
+		}
+		if json.Unmarshal(value.GitHub, &account) == nil {
+			var login string
+			if json.Unmarshal(account.Login, &login) == nil && indexer.ValidGitHubLogin(login) {
+				author.GitHub = &indexer.ArtifactGitHubAccount{Login: login}
+				var avatarURL string
+				if json.Unmarshal(account.AvatarURL, &avatarURL) == nil && indexer.ValidGitHubAvatarURL(avatarURL) {
+					author.GitHub.AvatarURL = avatarURL
+				}
+			}
+		}
+	}
+	return author
 }
 
 func validatePriorSiteIndexMetadata(site string, row sitePublishObject, contentType, disposition, encoding, cache string, metadata map[string]string) error {

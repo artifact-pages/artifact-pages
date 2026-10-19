@@ -84,7 +84,14 @@
           "text": "Signals to watch",
           "id": "signals"
         }
-      ]
+      ],
+      "lastAuthor": {
+        "name": "Dependabot[bot]",
+        "commitSha": "3333333333333333333333333333333333333333",
+        "github": {
+          "login": "dependabot[bot]"
+        }
+      }
     },
     {
       "id": "handbook/inclusive-components/index.html",

@@ -13,6 +13,8 @@ import (
 type shallowMetadata struct {
 	UpdatedAt time.Time
 	Committer string
+	Author    string
+	CommitSHA string
 }
 
 func shallowTestTime(day int) time.Time {
@@ -68,7 +70,12 @@ func prepareMetadata(t *testing.T, root string, loader PriorStateLoader) map[str
 	}
 	result := make(map[string]shallowMetadata)
 	for _, document := range prepared.documents {
-		result[document.artifact.relative] = shallowMetadata{document.updatedAt, document.lastCommitter}
+		metadata := shallowMetadata{UpdatedAt: document.updatedAt, Committer: document.lastCommitter}
+		if document.lastAuthor != nil {
+			metadata.Author = document.lastAuthor.Name
+			metadata.CommitSHA = document.lastAuthor.CommitSHA
+		}
+		result[document.artifact.relative] = metadata
 	}
 	return result
 }
@@ -91,7 +98,10 @@ func priorFromOrigin(t *testing.T, origin string) PriorStateLoader {
 		prior.Files[file.RelativePath] = file.SHA256
 	}
 	for _, document := range prepared.documents {
-		prior.Documents[document.artifact.relative] = PriorDocument{UpdatedAt: document.updatedAt, LastCommitter: document.lastCommitter}
+		prior.Documents[document.artifact.relative] = PriorDocument{
+			UpdatedAt: document.updatedAt, LastCommitter: document.lastCommitter,
+			LastAuthor: cloneArtifactAuthor(document.lastAuthor),
+		}
 	}
 	return func(context.Context) (*PriorSiteState, error) { return prior, nil }
 }
@@ -195,6 +205,29 @@ func TestShallowWithoutTrustworthyPriorStateUnshallows(t *testing.T) {
 				t.Fatal("checkout should have been unshallowed")
 			}
 		})
+	}
+}
+
+func TestShallowLegacyCommitterOnlyPriorRecomputesAuthorFromGit(t *testing.T) {
+	origin := seedShallowOrigin(t)
+	legacyLoader := priorFromOrigin(t, origin)
+	legacyPrior, err := legacyLoader(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for path, document := range legacyPrior.Documents {
+		document.LastAuthor = nil
+		legacyPrior.Documents[path] = document
+	}
+	legacyLoader = func(context.Context) (*PriorSiteState, error) { return legacyPrior, nil }
+	shallowFiller(t, origin, 12, 4)
+	clone := cloneForShallowTest(t, origin, 1)
+	got := prepareMetadata(t, clone, legacyLoader)
+	if gitOutputForTest(t, clone, "rev-parse", "--is-shallow-repository") != "false" {
+		t.Fatal("committer-only deployed index was trusted instead of deepening Git history")
+	}
+	if got["a.md"].Author != "Alice" || got["b.md"].Author != "Bob" || got["guide/index.html"].Author != "Carol" {
+		t.Fatalf("legacy index did not derive current Git authors: %+v", got)
 	}
 }
 

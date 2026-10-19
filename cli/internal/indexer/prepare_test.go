@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -75,6 +76,48 @@ func TestPrepareBuildFingerprintTracksOutputInputsAndIgnoresCleanCheckoutMtime(t
 	}
 	if policyInput.InputRoot() == first.InputRoot() {
 		t.Fatal("publisher policy change did not change the input root")
+	}
+}
+
+func TestPrepareBuildFingerprintIncludesSelectedAuthorAndGitHubSnapshot(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "stub-token")
+	t.Setenv("GH_TOKEN", "")
+	repositoryRoot := initializeGitRepository(t)
+	restoreWorkingDirectory := chdirForTest(t, repositoryRoot)
+	defer restoreWorkingDirectory()
+	runGit(t, repositoryRoot, "remote", "add", "origin", "git@github.com:acme/repo.git")
+	writeFixtureFile(t, repositoryRoot, "content/index.html", "<h1>Report</h1>")
+	commitFixtureWithIdentities(t, repositoryRoot, "publish report", time.Date(2026, 3, 4, 5, 6, 7, 0, time.UTC),
+		"Alice", "alice@example.invalid", "GitHub", "web-flow@example.invalid")
+	sha := gitOutputForTest(t, repositoryRoot, "rev-parse", "HEAD")
+	makeConfig := func(login string) *githubEnrichmentConfig {
+		config := githubTestConfig(func(request *http.Request) (*http.Response, error) {
+			return responseFor(request, http.StatusOK, githubResponse(sha, login, "https://avatars.githubusercontent.com/u/1?v=4"), nil), nil
+		})
+		return &config
+	}
+	options := BuildOptions{SiteID: "sre", SourceDir: "content", RepositoryURL: "https://github.com/acme/repo", githubEnrichment: makeConfig("octocat")}
+	first, err := PrepareBuild(context.Background(), options)
+	if err != nil {
+		t.Fatalf("PrepareBuild(first) error = %v", err)
+	}
+	if buildInputPolicyVersion != 3 || first.documents[0].lastAuthor == nil || first.documents[0].lastAuthor.CommitSHA != sha || first.documents[0].lastAuthor.GitHub == nil || first.documents[0].lastAuthor.GitHub.Login != "octocat" {
+		t.Fatalf("prepared author or policy = policy %d, author %+v", buildInputPolicyVersion, first.documents[0].lastAuthor)
+	}
+	options.githubEnrichment = makeConfig("octo-cat")
+	second, err := PrepareBuild(context.Background(), options)
+	if err != nil {
+		t.Fatalf("PrepareBuild(second) error = %v", err)
+	}
+	if second.InputRoot() == first.InputRoot() {
+		t.Fatal("GitHub account change did not change the prepared input fingerprint")
+	}
+	third, err := PrepareBuild(context.Background(), options)
+	if err != nil {
+		t.Fatalf("PrepareBuild(third) error = %v", err)
+	}
+	if third.InputRoot() != second.InputRoot() || !third.Reusable() {
+		t.Fatalf("identical prepared enrichment was not reusable: second=%q third=%q reusable=%v", second.InputRoot(), third.InputRoot(), third.Reusable())
 	}
 }
 

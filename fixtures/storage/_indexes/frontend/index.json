@@ -39,7 +39,11 @@
           "text": "Usage",
           "id": "usage"
         }
-      ]
+      ],
+      "lastAuthor": {
+        "name": "Frontend Team",
+        "commitSha": "2222222222222222222222222222222222222222"
+      }
     }
   ]
 }
