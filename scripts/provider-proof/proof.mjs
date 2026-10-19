@@ -5,8 +5,9 @@ import path from 'node:path';
 import { attachApproval, prepareApproval } from './approval-helpers.mjs';
 import { appendSeal, requireActiveSeal, verifyApprovalFile } from './seals.mjs';
 import { assertInvocationMatchesTransition, getExecutionPath, getInvocation } from './invocation-registry.mjs';
-import { requireSealedPreservationCheckpoint, resolveInvocation, runSupervisedInvocation } from './launcher.mjs';
+import { resolveInvocation, runSupervisedInvocation } from './launcher.mjs';
 import { createVerificationRecordStore, verifyCredential } from './credential-verification.mjs';
+import { requireSealedPreservationCheckpoint } from './preservation.mjs';
 import {
   AuthorizationError,
   TARGETS,
@@ -119,6 +120,7 @@ async function commandVerifyCredentials(args, environment, services) {
 }
 
 async function verifyInvocationCredentials({ manifestPath, manifest, capability, invocationId, services }) {
+  requireSealedPreservationCheckpoint(manifest);
   if (!hasCredentialVerificationServices(services)) throw new AuthorizationError('EXECUTION_PATH_NOT_IMPLEMENTED', 'provider identity/policy inspector and probe adapter are unavailable');
   const invocation = await resolveInvocation(invocationId, {
     runtimeRoot: path.dirname(path.resolve(manifestPath)),

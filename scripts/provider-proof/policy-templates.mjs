@@ -39,28 +39,38 @@ export function assertNoWildcardAllows(document, { allowedWildcardActions = [] }
   const allowWildcard = new Set(allowedWildcardActions);
   for (const statement of statements(document)) {
     if (statement.Effect !== 'Allow') continue;
-    const resources = asList(statement.Resource);
-    if (resources.includes('*')) {
-      const actions = asList(statement.Action);
-      if (actions.some((action) => !allowWildcard.has(action))) throw new AuthorizationError('WILDCARD_ALLOW_NOT_REVIEWED');
+    if (Object.hasOwn(statement, 'NotAction') || Object.hasOwn(statement, 'NotResource')) {
+      throw new AuthorizationError('WILDCARD_ALLOW_NOT_REVIEWED');
     }
     const actions = asList(statement.Action);
-    if (actions.includes('*') || actions.some((action) => /:[*]$/u.test(action))) throw new AuthorizationError('WILDCARD_ALLOW_NOT_REVIEWED');
+    if (actions.some((action) => typeof action !== 'string' || action.includes('*') || action.includes('?'))) {
+      throw new AuthorizationError('WILDCARD_ALLOW_NOT_REVIEWED');
+    }
+    const resources = asList(statement.Resource);
+    for (const resource of resources) {
+      if (typeof resource !== 'string') throw new AuthorizationError('WILDCARD_ALLOW_NOT_REVIEWED');
+      if (resource === '*') {
+        if (actions.some((action) => !allowWildcard.has(action))) throw new AuthorizationError('WILDCARD_ALLOW_NOT_REVIEWED');
+      } else if (/[*?]/u.test(resource) && !isS3TerminalObjectWildcard(resource)) {
+        throw new AuthorizationError('WILDCARD_ALLOW_NOT_REVIEWED');
+      }
+    }
   }
   return true;
 }
 
 export function assertProofPolicyContainsDenies(document, proofBindings = {}) {
   const all = statements(document);
-  const denyResources = all.filter((item) => item.Effect === 'Deny').flatMap((item) => asList(item.Resource));
-  const denyNotResources = all.filter((item) => item.Effect === 'Deny').flatMap((item) => asList(item.NotResource));
+  const unconditionalDenies = all.filter((item) => item.Effect === 'Deny' && !Object.hasOwn(item, 'Condition'));
+  const denyResources = unconditionalDenies.flatMap((item) => asList(item.Resource));
+  const denyNotResources = unconditionalDenies.flatMap((item) => asList(item.NotResource));
   const policyText = JSON.stringify({ denyResources, denyNotResources });
   const protectedTargets = [
     'arn:aws:s3:::artifact-pages-231136241959-us-east-1',
     'arn:aws:s3:::artifact-pages-231136241959-us-east-1/*',
     'arn:aws:cloudfront::231136241959:distribution/ECFTIR5GVPQDF',
   ];
-  const allActionDenies = all.filter((item) => item.Effect === 'Deny' && asList(item.Action).includes('*'));
+  const allActionDenies = unconditionalDenies.filter((item) => asList(item.Action).includes('*'));
   if (protectedTargets.some((target) => !allActionDenies.some((statement) => denyMatchesResource(statement, target)))) {
     throw new AuthorizationError('PRESERVED_RESOURCE_DENY_MISSING');
   }
@@ -70,6 +80,10 @@ export function assertProofPolicyContainsDenies(document, proofBindings = {}) {
   if (proofBucketArn && !policyText.includes(proofBucketArn)) throw new AuthorizationError('PROOF_BUCKET_BOUNDARY_MISSING');
   if (proofDistributionArn && !policyText.includes(proofDistributionArn)) throw new AuthorizationError('PROOF_DISTRIBUTION_BOUNDARY_MISSING');
   return true;
+}
+
+function isS3TerminalObjectWildcard(resource) {
+  return /^arn:[^:*?]+:s3:::[a-z0-9][a-z0-9.-]{1,61}[a-z0-9](?:\/[^*?]*)?\/\*$/u.test(resource);
 }
 
 export async function renderAwsPolicySet(bindings) {

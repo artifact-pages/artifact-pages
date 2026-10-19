@@ -100,6 +100,21 @@ An executable transition requires a valid active seal and owner SSH-signed appro
 
 The sealed manifest records `preservationCheckpoint: { status: "passed", path, sha256 }`. Execution requires the active seal to contain that exact path and SHA-256; absent, failed, or mismatched checkpoints refuse before credential probes or child launch. The signed manifest stays immutable. Before launch, the supervisor reserves one request unit and the invocation's full timeout rounded up to operator minutes against `manifest.caps`; it appends a private, digest-checked record under `usage-reservations/` and increments the in-memory usage snapshot. Reservations remain consumed if launch fails or is interrupted. Opaque subprocess transfer bytes have no reviewed per-invocation upper bound and are not estimated by this reservation; the existing byte accounting and its stated limits remain in force.
 
+#### PR #179 local gate hardening
+
+Implementation is on the local `codex-proof-gate-hardening` branch. Commit and PR references are pending the main-session handoff; this worktree remains uncommitted.
+
+- [x] The standalone credential-verification path and direct credential verification require a valid sealed preservation checkpoint before credential loading, inspection, or probes.
+- [x] Policy review counts only unconditional Deny statements for required preserved-resource and proof-boundary evidence, and rejects unreviewed Allow wildcards, including `NotAction`; array forms are covered.
+- [x] Capture redaction covers UTF-8 hex and JSON escaped secret forms for multiple overlapping secrets in stdout and stderr, including split chunks.
+- [x] Fake-child coverage verifies TERM/KILL escalation, first-cause error precedence, grace-timer cleanup, overflow close timeout, close tracking, both 4 MiB capture limits, and usage reservations through launch failure and timeout.
+
+Local results: Node 24.18.0 passed all 40 tests; Go 1.26.7 passed `go test ./scripts/provider-proof-go` (1.26.0 is not installed in the local mise toolset); the final `git diff --check` passed. The capture limit is not evidence of a provider transfer-byte cap.
+
+> PR #179 follow-ups completed with local fake-backed evidence: checkpoint precedes credential loading and probes; required Deny evidence is unconditional and Allow wildcard scope is checked; capture redaction covers hex and JSON escapes; supervisor escalation, close tracking, output limits and usage reservations have regression coverage. No live provider evidence is claimed. A4–A9 remain subject to trust-anchor enrollment, reviewed adapters, fresh seals, exact SSH-signed transitions and their existing execution gates.
+
+No T4/T5/T8/T14/T15 or A4–A9 provider-proof status changed.
+
 Verification records bind the run, active seal, transition, invocation digest, provider identity, credential-instance identifier, policy digests, concrete resource bindings, probe results, verification time and credential expiry. They contain no credential material. Renewed credentials or changed policies, bindings, plans, configurations or seals require verification again. Probes are explicitly authorized preliminary operations: they require the applicable signed transition, do not recursively require a completed credential-verification record, and permit only the originally approved invocation. Credential verification probes are outside the request/byte/operator-minute caps because their injected transport does not use the existing guarded-transport accounting; they still require the signed transition and validated targets. Do not treat those probes as cost-free provider evidence.
 
 The command-derived capabilities implement the staged table from Sol's decision:
