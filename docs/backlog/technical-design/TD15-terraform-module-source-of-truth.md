@@ -83,7 +83,7 @@ The owner confirmed option 1 and changed the versioning rule.
 - Example rewriting is verified by `scripts/build-terraform-package-repos.test.mjs`. `.github/workflows/release-terraform.yml` validates an isolated copy of the generated package through its `scripts/validate.sh` before syncing (#142); validation artifacts/symlinks cannot enter the published tree. The local consumer validates before a new Registry version exists; Registry retrieval is a post-publication check.
 - Namespace authority and initial order are established: the owner published both modules under `artifact-pages` at 0.1.0/0.1.1 on 2026-10-14. [IMP-38](../implementation/IMP-38-terraform-registry-publication.md) records exact tags, commits, runs and clean Registry retrieval. AWS publication does not imply the remaining T15 proof.
 - Initial versions, changed-content-only release, independent per-module tags and provenance were settled on 2026-10-07. IMP-66 step 3 finished on 2026-10-14; AWS requires CLI 0.4.0+ and is decoupled from CLI releases.
-- Generated PR notices/guards are settled design. The remaining hosted auto-close demonstration is implementation verification in [IMP-64](../implementation/IMP-64-generate-sync-terraform-packages.md), not an open design choice.
+- Generated PR notices/guards are settled design. The hosted auto-close demonstration is done 2026-10-18 (A1; see [IMP-64](../implementation/IMP-64-generate-sync-terraform-packages.md)); it was implementation verification, not an open design choice.
 
 ## Exit criteria
 

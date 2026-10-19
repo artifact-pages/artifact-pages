@@ -1,6 +1,6 @@
 # Coordinated provider proof and hosted fixture approval plan — October 18, 2026
 
-Prepared by Codex Sol for [Backend next wave items 2 and 4](../workstreams.md#backend-next-wave-2026-10-18). Owner decisions and their scope are recorded below; this plan authorizes no work beyond those decisions. No cloud commands, account reads, applies, deployment, identity, fixture or settings changes were performed to prepare it. A1–A3 remain unapproved. Existing ticket statuses and assignees remain unchanged. The [hosted fixture preparation](hosted-fixture-preparation-2026-10-18.md) supplies item 2's exact repository delta.
+Prepared by Codex Sol for [Backend next wave items 2 and 4](../workstreams.md#backend-next-wave-2026-10-18). Owner decisions and their scope are recorded below; this plan authorizes no work beyond those decisions. No cloud commands, account reads, applies, deployment, identity, fixture or settings changes were performed to prepare it. A1–A3 were approved on 2026-10-18. Ticket status changes are recorded in their source items. The [hosted fixture preparation](hosted-fixture-preparation-2026-10-18.md) supplies item 2's exact repository delta.
 
 ## Scope and decisions
 
@@ -346,7 +346,7 @@ Use the plan’s protected `$E`, `$H`, `$AWS_ROOT`, `$CF_ROOT` and verified bina
 
    **STOP:** missing or stale credential verification, execution path not implemented, unresolved next-step inputs, expired scope or containment failure.
 
-   **Owner:** confirm the recorded amendment and boundaries. A1–A3, including the separate IMP-73 deployment review, remain unapproved and must not run.
+   **Owner:** confirm the recorded amendment and boundaries. A1–A3, including the separate IMP-73 deployment review, were approved on 2026-10-18; execution remains subject to their staged gates and exact fixture boundaries.
 
 2. **A4 — inventory on the host.**
 
@@ -420,9 +420,9 @@ Use the plan’s protected `$E`, `$H`, `$AWS_ROOT`, `$CF_ROOT` and verified bina
 
 ## Owner approval status
 
-- A1 — Not approved. Two IMP-64 package guard PRs/comments/closures and branch cleanup; <=45 min, <=$2; blast radius: test branches/PRs in the two generated module repos only, no tags/settings.
-- A2 — Not approved. IMP-73 public fixture preparation, registry PR and caller-environment proof including owner deployment review; <=90 min, <=$3; blast radius: two named fixture repos, dummy secrets, branches/PRs and verification environment only.
-- A3 — Not approved. IMP-73 private/private omitted-environment proof and private inert retention; <=45 min, <=$2; blast radius: visibility and repo-local Actions access/dummy secrets of the same two fixture repos only.
+- A1 — Approved and executed 2026-10-18. Two IMP-64 package guard PRs/comments/closures and branch cleanup; <=45 min, <=$2; blast radius: test branches/PRs in the two generated module repos only, no tags/settings. Evidence: [IMP-64](../implementation/IMP-64-generate-sync-terraform-packages.md).
+- A2 — Approved and executed 2026-10-18. IMP-73 public fixture preparation, registry PR and caller-environment proof including owner deployment review; <=90 min, <=$3; blast radius: two named fixture repos, dummy secrets, branches/PRs and verification environment only. Evidence: [hosted fixture execution record](hosted-fixture-preparation-2026-10-18.md#execution-record).
+- A3 — Approved and executed 2026-10-18. IMP-73 private/private omitted-environment proof and private inert retention; <=45 min, <=$2; blast radius: visibility and repo-local Actions access/dummy secrets of the same two fixture repos only. Evidence: [hosted fixture execution record](hosted-fixture-preparation-2026-10-18.md#execution-record).
 - A4 — Approved 2026-10-18. Read-only inventory, preservation, target/pin/tool/billing checks, policy inspection and read probes; ≤30 minutes/≤$1. Dedicated read-only identities only. Owner bootstrap of missing identities is a separately sealed administrative prerequisite, not an A4 read operation. Execution requires the reviewed credential-verification gate, fresh provider probe evidence, and the owner’s SSH-signed concrete transition; historical approval alone does not satisfy these gates.
 - A5 — Approved 2026-10-18. Fresh named AWS proof stack, bounded owner bootstrap/provisioning, proof-only operator and OIDC identities, custom-prefix bootstrap/delivery, warm upgrade/rollback, and fixture scope already recorded; ≤4 hours/≤$5. CloudFront creation authority is an explicit owner-supervised exception. Concrete resource IDs and narrowed policies require post-create sealing before proof writes. Execution requires the reviewed credential-verification gate, fresh provider probe evidence, and the owner’s SSH-signed concrete transition; historical approval alone does not satisfy these gates.
 - A6 — Approved 2026-10-18. Existing Cloudflare verify delivery, four proof sites, scoped children, and reviewed shared app/registry upgrade/rollback; ≤2 hours/≤$2. Shared-key and verify-zone purge authority are recorded residual risks. No lifecycle or zone-policy mutation. Execution requires the reviewed credential-verification gate, fresh provider probe evidence, and the owner’s SSH-signed concrete transition; historical approval alone does not satisfy these gates.
