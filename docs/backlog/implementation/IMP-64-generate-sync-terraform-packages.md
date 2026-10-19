@@ -1,6 +1,6 @@
 # IMP-64 — Generate and sync a Terraform package repository on a per-module tag
 
-- Status: In progress
+- Status: Done
 - Assignee: Codex
 - Lanes: CLI / release, Terraform
 - Depends on: [IMP-63](IMP-63-consolidate-terraform-modules.md), [TD15](../technical-design/TD15-terraform-module-source-of-truth.md) (re-scoped 2026-10-07), [TD14](../technical-design/TD14-one-repository-per-action.md) (mechanism to reuse)
@@ -32,19 +32,20 @@ When a module tag `terraform-cloudflare/vX.Y.Z` or `terraform-aws/vX.Y.Z` is pus
 - [x] A second run with identical content is a no-op; different content at an existing tag fails; an unchanged module is not released under a new version (no-op guard).
 - [x] After the owner installs the App, a real module release syncs the package repository; it contains no content that is absent from the monorepo.
   - 2026-10-14: real syncs ran for both modules; the package mains are 40b0ed7f (aws) and 6fcd1de5 (cloudflare), and each release.json names its source tag and commit. Second-release fixes: #141, #142.
-- [ ] Each package repository carries the generated-repository notice and the PR auto-close workflow, verified by opening and closing a test pull request.
+- [x] Each package repository carries the generated-repository notice and the PR auto-close workflow, verified by opening and closing a test pull request.
+  - 2026-10-18 hosted guard proof: AWS main `40b0ed7f`, Cloudflare main `6fcd1de5`; both guard workflows matched generator output. AWS [PR #1](https://github.com/artifact-pages/terraform-aws-artifact-pages/pull/1) was closed unmerged at 08:32:47Z after run [39111857316](https://github.com/artifact-pages/terraform-aws-artifact-pages/actions/runs/39111857316) succeeded and comment [issuecomment-6247674523](https://github.com/artifact-pages/terraform-aws-artifact-pages/pull/1#issuecomment-6247674523) linked to the monorepo. Cloudflare [PR #2](https://github.com/artifact-pages/terraform-cloudflare-artifact-pages/pull/2) was closed unmerged at 08:32:50Z after run [39111861452](https://github.com/artifact-pages/terraform-cloudflare-artifact-pages/actions/runs/39111861452) succeeded and comment [issuecomment-6247675033](https://github.com/artifact-pages/terraform-cloudflare-artifact-pages/pull/2#issuecomment-6247675033) linked to the monorepo. Both test branches were deleted.
 - [x] The release documentation ([release readiness](../release-readiness.md)) lists the new workflow, the tag shapes and the owner step.
 
 ## Results
 
 Local implementation and verification are complete for the source-controlled portion. `npm run test:terraform-packages` passes 15 tests, the existing Action release test passes 13 tests, and generated Cloudflare and AWS package trees both pass their full `scripts/validate.sh` under Terraform 1.9.8. The package comparison normalizes only `release.json` version/source metadata and the Registry consumer's exact module version; README, LICENSE, generated workflow and executable-mode changes remain content changes. Release tags accept only plain `X.Y.Z`, matching TD15's `vX.Y.Z` package tag contract; prerelease/build suffixes are rejected.
 
-The owner installed `artifact-pages-release` on both package repositories on 2026-10-10 with Contents write and Metadata read. The generated pull-request guard uses each package repository's own `GITHUB_TOKEN`, so the App does not need Pull requests write. Historical (2026-10-10): No first module tag, real package sync, Registry publication or test pull request was run: the owner's approval for an actual tag/sync remains pending, and acceptance criteria 1, 7 and 8 stay open for that external proof. Superseded 2026-10-14: tags, syncs and Registry publication done; the hosted test-pull-request proof is still unverified; no open test PR is asserted.
+The owner installed `artifact-pages-release` on both package repositories on 2026-10-10 with Contents write and Metadata read. The generated pull-request guard uses each package repository's own `GITHUB_TOKEN`, so the App does not need Pull requests write. Historical (2026-10-10): No first module tag, real package sync, Registry publication or test pull request was run: approval for an actual tag/sync was pending. Superseded 2026-10-14: tags, syncs and Registry publication were done; hosted test-pull-request proof remained open. Superseded 2026-10-18: hosted guard proof completed as recorded in acceptance criterion 7; no test PR was merged or left open.
 
 ## Remaining (reconciled 2026-10-18)
 
-Only hosted guard proof remains: in **each** generated package repository, verify the generated notice and `.github/workflows/close-generated-pull-requests.yml`, then open a disposable PR and record the run, redirect comment and automatic closure. No module change, tag, sync or cloud operation is needed. Source tests and the real release syncs already establish generation/delivery of the guard, not that its hosted permissions work. Obtain authorization for the concrete test PR/comment operations before execution; this bookkeeping PR does not authorize them. Do not change repository settings; if permissions prevent closure, record the failure and request a separate owner settings decision.
+None. The hosted guard proof is complete; no module change, tag, sync or cloud operation was needed.
 
 ## Prepared owner handoff — 2026-10-18
 
-See [exact hosted fixture preparation](../verification/hosted-fixture-preparation-2026-10-18.md) (F64 / approval A1) and the [consolidated approval list](../verification/provider-proof-plan-2026-10-18.md#owner-approvals-requested). Branches/PRs, immutable pins, assertions, exact repository/settings/secret mutations and cleanup boundaries are specified there. No fixture execution or new authorization is asserted; this item remains In progress.
+See [exact hosted fixture preparation](../verification/hosted-fixture-preparation-2026-10-18.md) (F64 / approval A1) and the [consolidated approval list](../verification/provider-proof-plan-2026-10-18.md#owner-approval-status). A1's two hosted guard proofs are complete and all IMP-64 acceptance criteria are met. Separate F73 A2/A3 fixture execution remains staged under its own approved boundaries.
