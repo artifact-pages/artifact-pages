@@ -51,4 +51,4 @@ No redirects were followed. These are observed edge responses consistent with th
 
 ## Remaining boundaries
 
-Natural lifecycle disappearance remains with its separate observer. OIDC, retained-history deletion, universal delivery/WAF enforcement and module publication are not established by this record. The parent's matrix remains the source of release-scope decisions.
+Natural lifecycle disappearance was left to a separate observer; that observation was dropped on 2026-10-20 (not pursued, not passed). OIDC, retained-history deletion, universal delivery/WAF enforcement and module publication are not established by this record. The parent's matrix remains the source of release-scope decisions.

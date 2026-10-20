@@ -20,7 +20,7 @@
 - [ ] Demonstrate normal completion and a supported failure/interruption path: resolve recorded transactions, clean only run-owned keys/versions, restore original registrations/app and compare complete unrelated object/configuration baselines. Report and fail on residue, unknown writers or unexpected drift; do not mask these with broad deletion.
 - [ ] Link sanitized hosted run/evidence and usage/residue reports for both providers. Raw state/control snapshots remain private; retained artifacts contain no credentials or authorization headers. Independently review the evidence and link recurring results to the relevant original tickets without closing their unproven cells.
 
-Fresh-bucket bootstrap and natural-expiry timing remain one-off proofs and are repeated after relevant changes, not on every release. Writer-policy changes require a migration/old-writer rejection lane; routine gzip smoke does not establish migration. Changes to infrastructure/bootstrap or lifecycle policies require their corresponding one-off rerun before rollout. Existing A1–A9 caps authorize no future regression run; obtain that future authorization separately.
+Fresh-bucket bootstrap remains a one-off proof (natural-expiry observation was dropped on 2026-10-20; P9 not pursued, not passed) and is repeated after relevant changes, not on every release. Writer-policy changes require a migration/old-writer rejection lane; routine gzip smoke does not establish migration. Changes to infrastructure/bootstrap or lifecycle policies require their corresponding one-off rerun before rollout. Existing A1–A9 caps authorize no future regression run; obtain that future authorization separately.
 
 ## Evidence
 
