@@ -1,6 +1,6 @@
 # "Open raw artifact" adds a toolbar button and menu items readers do not need
 
-- Status: In progress
+- Status: Done
 - Assignee: Claude
 - Priority: P3
 - Area: Reader toolbar, More menu, command palette, sidebar row actions, preview Details
@@ -25,3 +25,5 @@ The reader offers no action that opens the raw published or preview file. Readin
 - [x] Raw file URLs that the reader itself needs (HTML frames, preview frames, Markdown fetches) keep working; only the user-facing actions go. Code that only served those actions is removed.
 - [x] `docs/specification.md` no longer lists the action (More menu list, sidebar row actions and the "raw/source/history actions" sentence, the directory-page sentence, preview Details); historical backlog items are left as they are.
 - [x] Unit, e2e and story coverage updated; verify and e2e pass.
+
+Production check (2026-10-20, Claude): web 0.4.1 on https://artifact-pages.dev (admin #24, App deploy run 39345078565). The reader toolbar on a guide page shows All sites, Guide home, Pin and copy link only; no Open raw artifact action remains.
