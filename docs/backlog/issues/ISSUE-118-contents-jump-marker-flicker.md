@@ -25,6 +25,6 @@ Activating an entry marks it at once and the marker stays on it while the naviga
 
 - [ ] Activating a Contents entry (click or keyboard) marks that entry current immediately, and the marker does not pass through intermediate entries while the resulting navigation scroll runs, in Markdown and in same-origin HTML.
 - [ ] Once the scroll has settled, normal tracking resumes. The reader's own scrolling (wheel, touch, keyboard scrolling, scrollbar drag) resumes tracking at once. Tracking never stays stuck: a target that cannot reach the reading line (near the end of the document) keeps the clicked entry current after settling until the reader scrolls, and timers end the held state even when no scroll end event arrives.
-- [ ] Ordinary reading scroll, heading navigation targets, focus behaviour, the narrow-layout Contents panel and the HTML (best effort) and Markdown cases keep working; `prefers-reduced-motion` is respected as before.
-- [ ] No visual redesign of the rail or dots.
-- [ ] Regression coverage proves no intermediate entry becomes current during the navigation scroll and that tracking resumes afterwards and on user scroll.
+- [x] Ordinary reading scroll, heading navigation targets, focus behaviour, the narrow-layout Contents panel and the HTML (best effort) and Markdown cases keep working; `prefers-reduced-motion` is respected as before.
+- [x] No visual redesign of the rail or dots.
+- [x] Regression coverage proves no intermediate entry becomes current during the navigation scroll and that tracking resumes afterwards and on user scroll.
