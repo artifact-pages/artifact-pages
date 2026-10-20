@@ -7891,6 +7891,65 @@ test.describe('reader context column (ISSUE-108)', () => {
     await expect(column.locator('[aria-current="location"]')).toHaveText('Designing for resilience')
   })
 
+  // The authored HTML of the docs sites sets `html { scroll-behavior: smooth }`, so a fragment jump inside the frame
+  // passes every heading on the way (ISSUE-118).
+  async function smoothTallHtml(page: Page) {
+    await page.route('**/showcase/editorial/field-notes/index.html', async (route) => {
+      const response = await route.fetch()
+      const body = (await response.text()).replace('</head>', '<style>html { scroll-behavior: smooth; } h2, h3 { margin-top: 900px; }</style></head>')
+      await route.fulfill({ response, body })
+    })
+  }
+  const recordMarker = (page: Page) => page.evaluate(() => {
+    const seen: string[] = []
+    ;(window as unknown as { __marked: string[] }).__marked = seen
+    const note = () => {
+      const text = document.querySelector('[data-reader-column] [aria-current="location"]')?.textContent ?? ''
+      if (seen[seen.length - 1] !== text) seen.push(text)
+    }
+    new MutationObserver(note).observe(document.querySelector('[data-reader-column]')!, { subtree: true, childList: true, attributes: true, characterData: true })
+  })
+
+  for (const mode of ['click', 'Enter'] as const) {
+    test(`activating a far Contents entry by ${mode} keeps the marker on it in an HTML frame with smooth scrolling (ISSUE-118)`, async ({ page }) => {
+      await smoothTallHtml(page)
+      await page.goto(htmlPath)
+      const column = columnOf(page)
+      const buttons = column.getByRole('navigation', { name: 'Artifact headings' }).getByRole('button')
+      await expect(buttons.first()).toBeVisible()
+      const current = column.locator('[aria-current="location"]')
+      await expect(current).toHaveText((await buttons.first().textContent())!)
+      const count = await buttons.count()
+      expect(count).toBeGreaterThan(3)
+      const target = buttons.nth(count - 1)
+      const name = (await target.textContent())!
+      const frame = page.locator('iframe.artifact-frame')
+      const frameTop = () => frame.evaluate((element) => (element as HTMLIFrameElement).contentWindow!.scrollY)
+      await recordMarker(page)
+      if (mode === 'click') {
+        await target.click()
+      } else {
+        await target.focus()
+        await page.keyboard.press('Enter')
+      }
+      await expect(current).toHaveText(name)
+      let previous = -1
+      await expect.poll(async () => {
+        const top = await frameTop()
+        const settled = top === previous
+        previous = top
+        return settled && top > 0
+      }, { intervals: [300] }).toBe(true)
+      await page.waitForTimeout(500)
+      expect(await page.evaluate(() => (window as unknown as { __marked: string[] }).__marked)).toEqual([name.trim()])
+      await expect(current).toHaveText(name)
+      // The reader's own scroll inside the frame resumes tracking.
+      await frame.hover()
+      await page.mouse.wheel(0, -100000)
+      await expect(current).toHaveText((await buttons.first().textContent())!)
+    })
+  }
+
   test('the marked entry stays visible inside the Contents list', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 420 })
     await page.goto('/sre/diagrams/mermaid-catalog.md')
