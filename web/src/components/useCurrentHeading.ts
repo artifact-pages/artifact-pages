@@ -7,6 +7,8 @@ const READING_LINE = 96
 const SCROLL_IDLE_MS = 200
 /** How long to wait for the first scroll event of a navigation (none arrives when the target is already in place). */
 const SCROLL_START_MS = 500
+/** Reader input counts toward ending a pin only if the pane scrolls within this time. */
+const INPUT_ARM_MS = 400
 /** Keys that scroll the document. */
 const SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' ', 'Spacebar'])
 
@@ -78,6 +80,14 @@ export function useCurrentHeading({ enabled, format, entries, stageRef, frameRef
     }
     // A pointer pressed on the scroller itself (its scrollbar or blank area), until it is released.
     let pointerOnScroller = false
+    // Reader input that may scroll the reading pane: the pin ends only if the pane then really scrolls.
+    let armed = false
+    let armedTimer = 0
+    const arm = () => {
+      armed = true
+      window.clearTimeout(armedTimer)
+      armedTimer = window.setTimeout(() => { armed = false }, INPUT_ARM_MS)
+    }
     const pick = (find: (id: string) => Element | null, paneTop: number) => {
       let picked: string | null = null
       for (const [position, entry] of entries.entries()) {
@@ -114,6 +124,8 @@ export function useCurrentHeading({ enabled, format, entries, stageRef, frameRef
     const release = () => {
       window.clearTimeout(holdTimer.current)
       holdTimer.current = 0
+      armed = false
+      window.clearTimeout(armedTimer)
       if (!hold.current) return
       hold.current = null
       schedule()
@@ -122,16 +134,17 @@ export function useCurrentHeading({ enabled, format, entries, stageRef, frameRef
       const held = hold.current
       if (!held) {
         schedule()
-      } else if (held.phase === 'settled' || pointerOnScroller) {
+      } else if (held.phase === 'settled' || pointerOnScroller || armed) {
         release()
       } else {
         settleSoon(SCROLL_IDLE_MS)
       }
     }
-    // Wheel and touch scrolling of the reading pane release the pin at once.
     // The Contents column sits inside the stage but is not the reading pane: input there never scrolls the document.
-    const inColumn = (target: EventTarget | null) => target instanceof Element && target.closest('[data-reader-column]') !== null
-    const onUserScroll = (event: Event) => { if (hold.current && !inColumn(event.target)) release() }
+    // Targets inside the HTML frame belong to another realm, so elements are recognised by duck typing, not instanceof.
+    const asElement = (target: EventTarget | null) => target !== null && typeof (target as Element).closest === 'function' ? target as Element : null
+    const inColumn = (target: EventTarget | null) => asElement(target)?.closest('[data-reader-column]') != null
+    const onUserScroll = (event: Event) => { if (hold.current && !inColumn(event.target)) arm() }
     // Scroll keys count only with focus inside the reading pane.
     const onKey = (event: KeyboardEvent) => { if (SCROLL_KEYS.has(event.key)) onUserScroll(event) }
     const pointerEnds = ['pointerup', 'pointercancel', 'lostpointercapture'] as const
@@ -155,7 +168,7 @@ export function useCurrentHeading({ enabled, format, entries, stageRef, frameRef
     const stage = stageRef.current
     if (format === 'markdown' && stage) {
       stage.addEventListener('scroll', onScroll, { capture: true, passive: true })
-      userInputTarget(stage, (element) => element instanceof Element && element.classList.contains('markdown-scroll'))
+      userInputTarget(stage, (element) => asElement(element)?.classList.contains('markdown-scroll') === true)
       const observer = new MutationObserver(schedule)
       observer.observe(stage, { childList: true, subtree: true })
       window.addEventListener('resize', schedule)
@@ -169,7 +182,7 @@ export function useCurrentHeading({ enabled, format, entries, stageRef, frameRef
         const frameWindow = frameRef.current?.contentWindow
         if (frameWindow) {
           frameWindow.addEventListener('scroll', onScroll, { passive: true })
-          userInputTarget(frameWindow, (element) => element instanceof Element && element === frameWindow.document.documentElement)
+          userInputTarget(frameWindow, (element) => element === frameWindow.document.documentElement)
           frameWindow.addEventListener('resize', schedule)
           cleanups.push(
             () => frameWindow.removeEventListener('scroll', onScroll),
@@ -183,6 +196,7 @@ export function useCurrentHeading({ enabled, format, entries, stageRef, frameRef
     schedule()
     return () => {
       if (frame) window.cancelAnimationFrame(frame)
+      window.clearTimeout(armedTimer)
       for (const cleanup of cleanups) cleanup()
     }
   }, [enabled, format, entries, stageRef, frameRef, frameLoads, settleSoon])

@@ -7993,6 +7993,25 @@ test.describe('reader context column (ISSUE-108)', () => {
     expect(marked.slice(1)).toEqual([name.trim()].slice(0, marked.length - 1))
   })
 
+  test('a wheel at the scroll boundary keeps the clicked entry marked; scrolling away resumes tracking (ISSUE-118)', async ({ page }) => {
+    await page.goto(markdownPath)
+    const column = columnOf(page)
+    const buttons = column.getByRole('navigation', { name: 'Artifact headings' }).getByRole('button')
+    await expect(buttons.first()).toBeVisible()
+    const last = buttons.nth((await buttons.count()) - 1)
+    const name = (await last.textContent())!
+    await last.click()
+    const scroller = page.locator('.markdown-scroll')
+    await expect.poll(() => scroller.evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop), { timeout: 5000 }).toBeLessThan(2)
+    await page.waitForTimeout(800)
+    await page.mouse.move(400, 400)
+    await page.mouse.wheel(0, 600) // nothing below: the pane does not move
+    await page.waitForTimeout(800)
+    await expect(column.locator('[aria-current="location"]')).toHaveText(name)
+    await page.mouse.wheel(0, -100000)
+    await expect(column.locator('[aria-current="location"]')).toHaveText((await buttons.first().textContent())!)
+  })
+
   test('the marked entry stays visible inside the Contents list', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 420 })
     await page.goto('/sre/diagrams/mermaid-catalog.md')
