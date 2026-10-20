@@ -1,6 +1,6 @@
 # The reader column's Contents list reads flat and its Details spend space on little information
 
-- Status: In progress
+- Status: Done
 - Assignee: Claude
 - Priority: P3
 - Area: Reader right column (ISSUE-108), Contents and Details panels
@@ -32,3 +32,5 @@ Contents shows chapters as dots on a vertical rail with the read part marked; De
 - [x] Column width is `clamp(256px, 21vw, 312px)`, defined once as a custom property and used everywhere the old 248 px was hard-coded (column, HTML frame width, match navigation offset and max width).
 - [x] Left sidebar expanded width equals the right column width, `clamp(256px, 21vw, 312px)`; collapsed rail and narrow drawer unchanged.
 - [x] `docs/specification.md` "Right sidebar" Details sentence describes the byline and source-file link; unit/e2e tests and Storybook stories that cover the column, Details and Contents are updated; verify and e2e pass.
+
+Production check (2026-10-20, Claude): web 0.4.1 on https://artifact-pages.dev (admin #24, App deploy run 39345078565). On guide `en/getting-started.html` the right column shows the byline with the source-file link to `sites/guide/en/getting-started.html` (artifact-pages/docs, main chip) and the rail-and-dots Contents; dark theme, 1280 px wide.

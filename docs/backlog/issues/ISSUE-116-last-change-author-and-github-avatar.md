@@ -1,6 +1,6 @@
 # Show the latest change's Git author and GitHub avatar in Details
 
-- Status: In progress
+- Status: Done
 - Assignee: Codex
 - Priority: P2
 - Area: Publish-time artifact attribution / reader Details
@@ -126,6 +126,10 @@ Do not edit the specification in this design PR. The implementation must update:
 - **§5.3, “Shallow checkouts”** sentences beginning “A document keeps its deployed `updatedAt` and `lastCommitter`” and “A visible non-boundary commit newer than the deployed value”: define the new-contract carry-forward prerequisite, atomic author/committer/SHA metadata, old-index re-derivation and optional account snapshot reuse; retain the accepted byte-identical-history limitation and separate Git-fetch failure contract.
 - **§8, “Right sidebar”**, the Details bullet and sentences beginning “`lastCommitter.name` is the committer name…” and “Commit email addresses are not included…”: describe author-first byline, legacy fallback, real-avatar source/fallback and email exclusion. Coordinate with ISSUE-114's author; do not overwrite its unrelated responsive-sidebar changes. This reader-facing paragraph is the contract for the later web ticket, not evidence of an implemented reader.
 - **§12, “Publish-time metadata”**, “last committer recorded by Git” and paragraph beginning “The initial local builder records the Git committer name…”: describe `lastAuthor`, preserved committer semantics and bounded optional GitHub resolution at build time.
+
+## Production check
+
+Production check (2026-10-20, Claude): CLI 0.5.2 (release run 39343599961, admin #24). The docs publish run 39347145433 on CLI 0.5.2 wrote `lastAuthor` for all 14 guide and 12 architecture artifacts, e.g. name Tasuku Yamashita, login `tasuku43`, avatar `https://avatars.githubusercontent.com/u/43329036?v=4`; `lastCommitter.name` stays `GitHub`.
 
 ## Open questions
 
