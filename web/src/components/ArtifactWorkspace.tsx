@@ -251,7 +251,7 @@ export function ArtifactWorkspace({
     markdownFailedUrl === readingArtifact?.artifactUrl || frameFailure?.artifactUrl === readingArtifact?.artifactUrl
   )
   const columnShown = wideReader && Boolean(readingArtifact) && (route.kind === 'site' || route.kind === 'preview-document') && !loadFailed
-  const currentHeading = useCurrentHeading({
+  const { current: currentHeading, pin: pinHeading } = useCurrentHeading({
     enabled: columnShown,
     format: currentFormat,
     entries: bodyArtifact?.toc ?? NO_ENTRIES,
@@ -768,6 +768,7 @@ export function ArtifactWorkspace({
   // and focus stays on the entry.
   function jumpFromColumn(id: string) {
     cancelHeadingJump()
+    pinHeading(id)
     navigateWithinWorkspace(`${hereHref}#${encodeURIComponent(id)}`)
   }
 
