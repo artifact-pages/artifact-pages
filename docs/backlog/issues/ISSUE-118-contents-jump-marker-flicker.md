@@ -30,3 +30,5 @@ Activating an entry marks it at once and the marker stays on it while the naviga
 - [x] Ordinary reading scroll, heading navigation targets, focus behaviour, the narrow-layout Contents panel and the HTML (best effort) and Markdown cases keep working; `prefers-reduced-motion` is respected as before.
 - [x] No visual redesign of the rail or dots.
 - [x] Regression coverage proves no intermediate entry becomes current during the navigation scroll and that tracking resumes afterwards and on user scroll.
+
+Known limit (accepted by Claude main, 2026-10-21, after Luna review round 5): while a jump's smooth scroll is still moving, wheel, touch or scroll-key input over a nested scroller (a wide code block or table) or an embedded control arms the release, and the next reading-pane animation frame then ends the pin, so the marker can resume tracking for the rest of that scroll. It needs deliberate input during a sub-second window and only falls back to the previous tracking behaviour; telling such input apart from input that scrolls the reading pane is not worth the extra complexity.
