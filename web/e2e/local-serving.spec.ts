@@ -2222,6 +2222,38 @@ test('in dark theme a loading HTML frame never paints white and is revealed on l
   await expect(frame).toHaveCSS('opacity', '1')
 })
 
+test('returning to the same HTML artifact from a Markdown page hides the new frame until it loads (ISSUE-119)', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' })
+  let hold = false
+  let release: () => void = () => {}
+  await page.route('**/_artifacts/sre/incidents/checkout-latency/index.html', async (route) => {
+    if (hold) await new Promise<void>((resolve) => { release = resolve })
+    await route.fallback()
+  })
+  await page.goto('/sre/incidents/checkout-latency/index.html')
+  const frame = page.locator('iframe').first()
+  await expect(frame).toHaveCSS('opacity', '1')
+  await page.evaluate(() => {
+    window.history.pushState({}, '', '/sre/diagrams/mermaid-catalog.md')
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  })
+  await expect(page.locator('iframe')).toHaveCount(0)
+  hold = true
+  await page.evaluate(() => {
+    window.history.pushState({}, '', '/sre/incidents/checkout-latency/index.html')
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  })
+  const again = page.locator('iframe').first()
+  try {
+    await expect(again).toBeAttached()
+    await expect(again).toHaveCSS('opacity', '0')
+  } finally {
+    release()
+    hold = false
+  }
+  await expect(again).toHaveCSS('opacity', '1')
+})
+
 test('a slow HTML frame is revealed after the safety timeout without a load (ISSUE-119)', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'dark' })
   const { release } = await routeSlowHtmlArtifact(page, 'guides/slower.html', 'Slower body')

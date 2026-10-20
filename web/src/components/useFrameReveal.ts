@@ -19,7 +19,11 @@ export function useFrameReveal(frameKey: string | undefined) {
   const [revealedKey, setRevealedKey] = useState<string | undefined>(undefined)
   const reveal = useCallback(() => setRevealedKey(frameKey), [frameKey])
   useEffect(() => {
-    if (frameKey === undefined) return
+    if (frameKey === undefined) {
+      // The frame is gone (a Markdown or directory page is open): returning to the same key mounts a new iframe.
+      setRevealedKey(undefined)
+      return
+    }
     const timer = window.setTimeout(() => setRevealedKey(frameKey), FRAME_REVEAL_TIMEOUT_MS)
     return () => window.clearTimeout(timer)
   }, [frameKey])
