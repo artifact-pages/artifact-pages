@@ -7813,6 +7813,64 @@ test.describe('reader context column (ISSUE-108)', () => {
     await expect(column.locator('[aria-current="location"]')).toHaveText((await buttons.first().textContent())!)
   })
 
+  test('activating a far Contents entry keeps the marker on it during the scroll and tracking resumes (ISSUE-118)', async ({ page }) => {
+    await page.goto(markdownPath)
+    const column = columnOf(page)
+    const buttons = column.getByRole('navigation', { name: 'Artifact headings' }).getByRole('button')
+    await expect(buttons.first()).toBeVisible()
+    const count = await buttons.count()
+    expect(count).toBeGreaterThan(8)
+    // A smooth scroll makes the document pass every heading on the way, as a slow navigation does.
+    await page.addStyleTag({ content: '.markdown-scroll { scroll-behavior: smooth !important; }' })
+    const current = column.locator('[aria-current="location"]')
+    await expect(current).toHaveText((await buttons.first().textContent())!)
+    const target = count - 2
+    const name = (await buttons.nth(target).textContent())!
+    await page.evaluate(() => {
+      const seen: string[] = []
+      ;(window as unknown as { __marked: string[] }).__marked = seen
+      const note = () => {
+        const text = document.querySelector('[data-reader-column] [aria-current="location"]')?.textContent ?? ''
+        if (seen[seen.length - 1] !== text) seen.push(text)
+      }
+      new MutationObserver(note).observe(document.querySelector('[data-reader-column]')!, { subtree: true, childList: true, attributes: true, characterData: true })
+    })
+    await buttons.nth(target).click()
+    await expect(current).toHaveText(name)
+    // Wait until the scroll has settled.
+    let previous = -1
+    await expect.poll(async () => {
+      const top = await page.locator('.markdown-scroll').evaluate((element) => element.scrollTop)
+      const settled = top === previous
+      previous = top
+      return settled && top > 0
+    }, { intervals: [300] }).toBe(true)
+    await page.waitForTimeout(500)
+    const marked = await page.evaluate(() => (window as unknown as { __marked: string[] }).__marked)
+    expect(marked).toEqual([name.trim()])
+    await expect(current).toHaveText(name)
+    // The reader's own scrolling resumes tracking at once.
+    await page.mouse.move(400, 400)
+    await page.mouse.wheel(0, -100000)
+    await expect(current).toHaveText((await buttons.first().textContent())!)
+  })
+
+  test('the clicked Contents entry stays marked after the scroll until the reader scrolls (ISSUE-118)', async ({ page }) => {
+    await page.goto(markdownPath)
+    const column = columnOf(page)
+    const buttons = column.getByRole('navigation', { name: 'Artifact headings' }).getByRole('button')
+    await expect(buttons.first()).toBeVisible()
+    const count = await buttons.count()
+    const last = buttons.nth(count - 1)
+    const name = (await last.textContent())!
+    await last.click()
+    await expect(column.locator('[aria-current="location"]')).toHaveText(name)
+    await page.waitForTimeout(800)
+    await expect(column.locator('[aria-current="location"]')).toHaveText(name)
+    await page.locator('.markdown-scroll').evaluate((element) => element.scrollTo(0, 0))
+    await expect(column.locator('[aria-current="location"]')).toHaveText((await buttons.first().textContent())!)
+  })
+
   test('the current heading follows the scroll in an HTML frame', async ({ page }) => {
     await page.goto(htmlPath)
     const column = columnOf(page)
@@ -7831,6 +7889,210 @@ test.describe('reader context column (ISSUE-108)', () => {
     }).toBe('Three useful tensions')
     await frame.evaluate((element) => (element as HTMLIFrameElement).contentWindow!.scrollTo({ top: 0, behavior: 'instant' }))
     await expect(column.locator('[aria-current="location"]')).toHaveText('Designing for resilience')
+  })
+
+  // The authored HTML of the docs sites sets `html { scroll-behavior: smooth }`, so a fragment jump inside the frame
+  // passes every heading on the way (ISSUE-118).
+  async function smoothTallHtml(page: Page, delayMs = 0) {
+    await page.route('**/showcase/editorial/field-notes/index.html', async (route) => {
+      const response = await route.fetch()
+      if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs))
+      const body = (await response.text()).replace('</head>', '<style>html { scroll-behavior: smooth; } h2, h3 { margin-top: 900px; }</style></head>')
+      await route.fulfill({ response, body })
+    })
+  }
+  const recordMarker = (page: Page) => page.evaluate(() => {
+    const seen: string[] = []
+    ;(window as unknown as { __marked: string[] }).__marked = seen
+    const note = () => {
+      const text = document.querySelector('[data-reader-column] [aria-current="location"]')?.textContent ?? ''
+      if (seen[seen.length - 1] !== text) seen.push(text)
+    }
+    new MutationObserver(note).observe(document.querySelector('[data-reader-column]')!, { subtree: true, childList: true, attributes: true, characterData: true })
+  })
+
+  for (const mode of ['click', 'Enter'] as const) {
+    test(`activating a far Contents entry by ${mode} keeps the marker on it in an HTML frame with smooth scrolling (ISSUE-118)`, async ({ page }) => {
+      await smoothTallHtml(page)
+      await page.goto(htmlPath)
+      const column = columnOf(page)
+      const buttons = column.getByRole('navigation', { name: 'Artifact headings' }).getByRole('button')
+      await expect(buttons.first()).toBeVisible()
+      const current = column.locator('[aria-current="location"]')
+      await expect(current).toHaveText((await buttons.first().textContent())!)
+      const count = await buttons.count()
+      expect(count).toBeGreaterThan(3)
+      const target = buttons.nth(count - 1)
+      const name = (await target.textContent())!
+      const frame = page.locator('iframe.artifact-frame')
+      const frameTop = () => frame.evaluate((element) => (element as HTMLIFrameElement).contentWindow!.scrollY)
+      await recordMarker(page)
+      if (mode === 'click') {
+        await target.click()
+      } else {
+        await target.focus()
+        await page.keyboard.press('Enter')
+      }
+      await expect(current).toHaveText(name)
+      let previous = -1
+      await expect.poll(async () => {
+        const top = await frameTop()
+        const settled = top === previous
+        previous = top
+        return settled && top > 0
+      }, { intervals: [300] }).toBe(true)
+      await page.waitForTimeout(500)
+      expect(await page.evaluate(() => (window as unknown as { __marked: string[] }).__marked)).toEqual([name.trim()])
+      await expect(current).toHaveText(name)
+      // The reader's own scroll inside the frame resumes tracking.
+      await frame.hover()
+      await page.mouse.wheel(0, -100000)
+      await expect(current).toHaveText((await buttons.first().textContent())!)
+    })
+  }
+
+  test('a Contents entry activated before the HTML frame has loaded keeps the marker on it (ISSUE-118)', async ({ page }) => {
+    await smoothTallHtml(page, 1200)
+    await page.goto(htmlPath)
+    const column = columnOf(page)
+    const buttons = column.getByRole('navigation', { name: 'Artifact headings' }).getByRole('button')
+    await expect(buttons.first()).toBeVisible()
+    const count = await buttons.count()
+    const target = buttons.nth(count - 1)
+    const name = (await target.textContent())!
+    await recordMarker(page)
+    await target.click()
+    const frame = page.locator('iframe.artifact-frame')
+    await expect.poll(() => frame.evaluate((element) => (element as HTMLIFrameElement).contentWindow?.scrollY ?? 0), { timeout: 15000 }).toBeGreaterThan(0)
+    await page.waitForTimeout(1500)
+    expect(await page.evaluate(() => (window as unknown as { __marked: string[] }).__marked)).toEqual([name.trim()])
+    await expect(column.locator('[aria-current="location"]')).toHaveText(name)
+  })
+
+  test('keys and clicks that do not scroll the reading pane do not release the pin (ISSUE-118)', async ({ page }) => {
+    await page.goto(markdownPath)
+    const column = columnOf(page)
+    const buttons = column.getByRole('navigation', { name: 'Artifact headings' }).getByRole('button')
+    await expect(buttons.first()).toBeVisible()
+    await page.addStyleTag({ content: '.markdown-scroll { scroll-behavior: smooth !important; }' })
+    const target = buttons.nth((await buttons.count()) - 2)
+    const name = (await target.textContent())!
+    await recordMarker(page)
+    await target.click()
+    await page.keyboard.press('ArrowDown') // focus is on the Contents entry, not in the reading pane
+    // A press on the document text (not its scrollbar) does not scroll it.
+    await page.locator('.markdown-article p').first().evaluate((paragraph) => {
+      paragraph.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+      paragraph.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))
+    })
+    await page.waitForTimeout(1500)
+    const marked = await page.evaluate(() => (window as unknown as { __marked: string[] }).__marked)
+    // The marker moves from the entry it was on straight to the chosen one and stays there.
+    expect(marked.at(-1)).toBe(name.trim())
+    expect(marked.length).toBeLessThanOrEqual(2)
+    expect(marked.slice(1)).toEqual([name.trim()].slice(0, marked.length - 1))
+  })
+
+  // Resolves once the reading pane has stopped moving and growing (late images or diagrams can still shift layout).
+  const waitForPaneAtRest = async (page: Page) => {
+    const scroller = page.locator('.markdown-scroll')
+    let previous = ''
+    let stableReads = 0
+    await expect.poll(async () => {
+      const state = await scroller.evaluate((element) => `${element.scrollTop}/${element.scrollHeight}/${element.clientHeight}`)
+      stableReads = state === previous ? stableReads + 1 : 0
+      previous = state
+      return stableReads
+    }, { intervals: [100], timeout: 10000 }).toBeGreaterThanOrEqual(8)
+  }
+
+  test('a wheel at the scroll boundary keeps the clicked entry marked; scrolling away resumes tracking (ISSUE-118)', async ({ page }) => {
+    await page.goto(markdownPath)
+    const column = columnOf(page)
+    const buttons = column.getByRole('navigation', { name: 'Artifact headings' }).getByRole('button')
+    await expect(buttons.first()).toBeVisible()
+    const last = buttons.nth((await buttons.count()) - 1)
+    const name = (await last.textContent())!
+    await last.click()
+    const scroller = page.locator('.markdown-scroll')
+    await expect.poll(() => scroller.evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop), { timeout: 5000 }).toBeLessThan(2)
+    await waitForPaneAtRest(page)
+    // The pin has settled by now and the pane is at its end.
+    expect(await scroller.evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop)).toBeLessThan(2)
+    const before = await scroller.evaluate((element) => element.scrollTop)
+    await page.mouse.move(400, 400)
+    await page.mouse.wheel(0, 600) // nothing below: the pane does not move
+    await page.waitForTimeout(600) // longer than the input arming window, so a wrongly released pin would show
+    expect(await scroller.evaluate((element) => element.scrollTop)).toBe(before)
+    await expect(column.locator('[aria-current="location"]')).toHaveText(name)
+    await page.mouse.wheel(0, -100000)
+    await expect(column.locator('[aria-current="location"]')).toHaveText((await buttons.first().textContent())!)
+  })
+
+  test('scrolling a nested scroller inside the document does not move the pin (ISSUE-118)', async ({ page }) => {
+    await page.goto(markdownPath)
+    const column = columnOf(page)
+    const buttons = column.getByRole('navigation', { name: 'Artifact headings' }).getByRole('button')
+    await expect(buttons.first()).toBeVisible()
+    await page.locator('.markdown-article').evaluate((article) => {
+      const box = document.createElement('div')
+      box.id = 'issue-118-wide'
+      box.style.cssText = 'width: 120px; overflow-x: auto;'
+      const wide = document.createElement('div')
+      wide.style.cssText = 'width: 1200px; height: 10px;'
+      box.append(wide)
+      article.append(box)
+    })
+    const last = buttons.nth((await buttons.count()) - 1)
+    const name = (await last.textContent())!
+    await last.click()
+    await expect(column.locator('[aria-current="location"]')).toHaveText(name)
+    await waitForPaneAtRest(page)
+    await page.locator('#issue-118-wide').evaluate((element) => element.scrollTo(300, 0))
+    await page.mouse.move(400, 400)
+    await page.waitForTimeout(600)
+    await expect(column.locator('[aria-current="location"]')).toHaveText(name)
+    expect(await page.locator('#issue-118-wide').evaluate((element) => element.scrollLeft)).toBeGreaterThan(0)
+  })
+
+  test('after a jump to a reachable heading settles, a content change re-measures normally (ISSUE-118)', async ({ page }) => {
+    await page.goto(markdownPath)
+    const column = columnOf(page)
+    const buttons = column.getByRole('navigation', { name: 'Artifact headings' }).getByRole('button')
+    await expect(buttons.first()).toBeVisible()
+    await page.addStyleTag({ content: '.markdown-scroll { overflow-anchor: none; }' })
+    const target = buttons.nth(2)
+    const name = (await target.textContent())!
+    await target.click()
+    const current = column.locator('[aria-current="location"]')
+    await expect(current).toHaveText(name)
+    await page.waitForTimeout(1000)
+    // Content above the heading pushes it under the reading line without any scroll.
+    await page.locator('.markdown-article').evaluate((article) => {
+      const spacer = document.createElement('div')
+      spacer.style.height = '4000px'
+      article.prepend(spacer)
+    })
+    await expect(current).not.toHaveText(name)
+  })
+
+  test('scrolling the Contents list does not move the marker of a held entry (ISSUE-118)', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 420 })
+    await page.goto('/sre/diagrams/mermaid-catalog.md')
+    const column = columnOf(page)
+    const list = column.getByRole('navigation', { name: 'Artifact headings' })
+    const buttons = list.getByRole('button')
+    await expect(buttons.first()).toBeVisible()
+    const last = buttons.nth((await buttons.count()) - 1)
+    const name = (await last.textContent())!
+    await last.click()
+    await page.waitForTimeout(1200)
+    const current = column.locator('[aria-current="location"]')
+    await expect(current).toHaveText(name)
+    expect(await list.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true)
+    await list.evaluate((element) => element.scrollTo(0, 0))
+    await page.waitForTimeout(600)
+    await expect(current).toHaveText(name)
   })
 
   test('the marked entry stays visible inside the Contents list', async ({ page }) => {
