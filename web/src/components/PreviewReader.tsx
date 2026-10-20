@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useFrameReveal } from './useFrameReveal'
 import { artifactRouteHref, siteHomeHref as siteHomeRoute, sitePreviewsHref, type AppRoute } from '../routing'
 import { loadPreviewManifest, previewFileUrl, previewRouteHref } from '../data/previews'
 import { loadSharedPreviewCatalog, peekPreviewCatalog, resetPreviewList } from '../data/preview-list'
@@ -515,6 +516,8 @@ function PreviewHtmlDocument({
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const loadCheckRef = useRef<AbortController | null>(null)
   const [loadState, setLoadState] = useState<'checking' | 'loaded' | 'failed'>('checking')
+  // Unpainted until the document loads, so the reader surface shows instead of a light flash (ISSUE-119).
+  const { revealed: frameRevealed, reveal: revealFrame } = useFrameReveal(artifactUrl)
 
   useEffect(() => {
     return () => loadCheckRef.current?.abort()
@@ -596,10 +599,12 @@ function PreviewHtmlDocument({
         src={artifactUrl}
         title={title}
         referrerPolicy="strict-origin"
+        style={frameRevealed ? undefined : { opacity: 0 }}
         onError={() => {
           if (isCurrentPreviewDocument(iframeRef.current, artifactUrl)) setLoadState('failed')
         }}
         onLoad={() => {
+          revealFrame()
           if (!isCurrentPreviewDocument(iframeRef.current, artifactUrl)) {
             // A click before the bridge ran moved the frame itself to another raw file; follow it as a reader navigation.
             const frameHref = readFrameHref(iframeRef.current)

@@ -2139,6 +2139,105 @@ test('navigating inside a working HTML frame to a failing page does not mark the
   await expect(page.locator('iframe[title="Working body"]')).toBeVisible()
 })
 
+/** Routes a slow HTML artifact into the SRE site; the returned `release` sends the held response. */
+async function routeSlowHtmlArtifact(page: Page, artifactPath: string, title: string) {
+  let release: () => void = () => {}
+  const gate = new Promise<void>((resolve) => { release = resolve })
+  await page.route('**/_indexes/sre/index.json', async (route) => {
+    const response = await route.fetch()
+    const index = await response.json() as { artifacts: Array<Record<string, unknown>> }
+    index.artifacts.push({
+      id: artifactPath,
+      title,
+      path: artifactPath,
+      format: 'html',
+      filename: artifactPath.split('/').pop(),
+      artifactUrl: `/_artifacts/sre/${artifactPath}`,
+      updatedAt: '2026-10-01T00:00:00Z',
+    })
+    await route.fulfill({ response, body: JSON.stringify(index) })
+  })
+  await page.route(`**/_artifacts/sre/${artifactPath}`, async (route) => {
+    await gate
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/html; charset=utf-8',
+      body: '<!doctype html><title>Slow</title><p id="body">Slow body</p>',
+    })
+  })
+  return { release }
+}
+
+/** Screenshots part of an element and reports whether every sampled pixel equals the reader surface colour. */
+async function framePaintsOnlyReaderSurface(page: Page, frame: Locator) {
+  const box = await frame.boundingBox()
+  if (!box) return false
+  const png = await page.screenshot({
+    clip: { x: box.x + 20, y: box.y + 20, width: Math.min(200, box.width - 40), height: Math.min(200, box.height - 40) },
+  })
+  return page.evaluate(async (base64) => {
+    const probe = document.createElement('div')
+    probe.style.background = 'var(--surface)'
+    document.body.append(probe)
+    const expected = getComputedStyle(probe).backgroundColor
+    probe.remove()
+    const bitmap = await createImageBitmap(await (await fetch(`data:image/png;base64,${base64}`)).blob())
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height)
+    const context = canvas.getContext('2d')!
+    context.drawImage(bitmap, 0, 0)
+    const { data } = context.getImageData(0, 0, bitmap.width, bitmap.height)
+    const [r, g, b] = expected.match(/\d+/g)!.map(Number)
+    for (let i = 0; i < data.length; i += 4) {
+      if (Math.abs(data[i] - r) > 2 || Math.abs(data[i + 1] - g) > 2 || Math.abs(data[i + 2] - b) > 2) return false
+    }
+    return true
+  }, png.toString('base64'))
+}
+
+test('in dark theme a loading HTML frame never paints white and is revealed on load (ISSUE-119)', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' })
+  const { release } = await routeSlowHtmlArtifact(page, 'guides/slow.html', 'Slow body')
+  await page.goto('/sre/incidents/checkout-latency/index.html')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await expect(page.frameLocator('iframe').locator('body')).toBeVisible()
+
+  // Navigate inside the reader to a page whose response is held back.
+  await page.evaluate(() => {
+    window.history.pushState({}, '', '/sre/guides/slow.html')
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  })
+  const frame = page.locator('iframe[title="Slow body"]')
+  await expect(frame).toBeAttached()
+  try {
+    // Firefox and Safari paint a light canvas for a frame whose scheme differs from its document (Chromium does not), so the
+    // frame itself stays unpainted until it loads; the pixel check holds in every browser.
+    await expect(frame).toHaveCSS('opacity', '0')
+    await expect.poll(() => framePaintsOnlyReaderSurface(page, frame)).toBe(true)
+    await page.waitForTimeout(300)
+    expect(await framePaintsOnlyReaderSurface(page, frame)).toBe(true)
+  } finally {
+    release()
+  }
+  await expect(page.frameLocator('iframe[title="Slow body"]').locator('#body')).toHaveText('Slow body')
+  await expect(frame).toHaveCSS('opacity', '1')
+})
+
+test('a slow HTML frame is revealed after the safety timeout without a load (ISSUE-119)', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' })
+  const { release } = await routeSlowHtmlArtifact(page, 'guides/slower.html', 'Slower body')
+  await page.goto('/sre/guides/slower.html')
+  const frame = page.locator('iframe[title="Slower body"]')
+  await expect(frame).toBeAttached()
+  try {
+    await expect(frame).toHaveCSS('opacity', '0')
+    // The response is still held: only the timeout can reveal the frame.
+    await expect(frame).toHaveCSS('opacity', '1', { timeout: 5000 })
+  } finally {
+    release()
+  }
+  await expect(page.frameLocator('iframe[title="Slower body"]').locator('#body')).toHaveText('Slow body')
+})
+
 test('HTML heading navigation keeps the URL and iframe section in sync with one history step', async ({ page }) => {
   await page.setViewportSize({ width: 1100, height: 800 }) // below the reader column breakpoint (ISSUE-108): Contents and Details open as panels
   await page.goto('/showcase/editorial/field-notes/index.html')

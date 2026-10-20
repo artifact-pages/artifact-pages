@@ -130,6 +130,7 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-115](ISSUE-115-remove-open-raw-artifact.md) | Done | P3 | "Open raw artifact" and the preview "Open the raw file" add actions readers do not need; owner decided to remove them everywhere. |
 | [ISSUE-116](ISSUE-116-last-change-author-and-github-avatar.md) | Done | P2 | Details identifies GitHub’s committer service instead of the latest change’s author and lacks a real GitHub avatar. |
 | [ISSUE-117](ISSUE-117-reader-author-avatar-byline.md) | Done | P2 | The reader's Details byline ignores `lastAuthor` and shows no real GitHub avatar (reader half of ISSUE-116). |
+| [ISSUE-119](ISSUE-119-dark-theme-frame-white-flash.md) | In progress | P3 | In the dark theme the artifact frame flashes white when a page opens (Firefox and Safari paint a light canvas for a color-scheme mismatch). |
 
 ISSUE-013's verified completion record is retained in Git history.
 
