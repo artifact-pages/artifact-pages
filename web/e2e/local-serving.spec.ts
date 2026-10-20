@@ -8012,6 +8012,46 @@ test.describe('reader context column (ISSUE-108)', () => {
     await expect(column.locator('[aria-current="location"]')).toHaveText((await buttons.first().textContent())!)
   })
 
+  test('after a jump to a reachable heading settles, a content change re-measures normally (ISSUE-118)', async ({ page }) => {
+    await page.goto(markdownPath)
+    const column = columnOf(page)
+    const buttons = column.getByRole('navigation', { name: 'Artifact headings' }).getByRole('button')
+    await expect(buttons.first()).toBeVisible()
+    await page.addStyleTag({ content: '.markdown-scroll { overflow-anchor: none; }' })
+    const target = buttons.nth(2)
+    const name = (await target.textContent())!
+    await target.click()
+    const current = column.locator('[aria-current="location"]')
+    await expect(current).toHaveText(name)
+    await page.waitForTimeout(1000)
+    // Content above the heading pushes it under the reading line without any scroll.
+    await page.locator('.markdown-article').evaluate((article) => {
+      const spacer = document.createElement('div')
+      spacer.style.height = '4000px'
+      article.prepend(spacer)
+    })
+    await expect(current).not.toHaveText(name)
+  })
+
+  test('scrolling the Contents list does not move the marker of a held entry (ISSUE-118)', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 420 })
+    await page.goto('/sre/diagrams/mermaid-catalog.md')
+    const column = columnOf(page)
+    const list = column.getByRole('navigation', { name: 'Artifact headings' })
+    const buttons = list.getByRole('button')
+    await expect(buttons.first()).toBeVisible()
+    const last = buttons.nth((await buttons.count()) - 1)
+    const name = (await last.textContent())!
+    await last.click()
+    await page.waitForTimeout(1200)
+    const current = column.locator('[aria-current="location"]')
+    await expect(current).toHaveText(name)
+    expect(await list.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true)
+    await list.evaluate((element) => element.scrollTo(0, 0))
+    await page.waitForTimeout(600)
+    await expect(current).toHaveText(name)
+  })
+
   test('the marked entry stays visible inside the Contents list', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 420 })
     await page.goto('/sre/diagrams/mermaid-catalog.md')

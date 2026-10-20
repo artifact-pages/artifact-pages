@@ -39,16 +39,22 @@ export function useCurrentHeading({ enabled, format, entries, stageRef, frameRef
   const [current, setCurrent] = useState<string | null>(null)
   // The pin lives outside the effect: the effect is re-created when the HTML frame (re)loads, and
   // a pin made before that must keep holding the marker while the navigation scroll starts.
-  // 'moving': the navigation scroll is running; 'settled': it ended, the pin holds until the next scroll.
+  // 'moving': the navigation scroll is running; 'settled': it ended, the pin holds until the next reading-pane scroll or a measurement that returns the target.
   const hold = useRef<{ id: string, phase: 'moving' | 'settled' } | null>(null)
   const holdTimer = useRef(0)
   const entriesRef = useRef(entries)
   entriesRef.current = entries
+  // Set by the effect: measure once when a navigation scroll has settled.
+  const settled = useCallback(() => settledImpl.current?.(), [])
+  const settledImpl = useRef<(() => void) | null>(null)
   const settleSoon = useCallback((ms: number) => {
     window.clearTimeout(holdTimer.current)
     holdTimer.current = window.setTimeout(() => {
       holdTimer.current = 0
-      if (hold.current) hold.current.phase = 'settled'
+      if (hold.current) {
+        hold.current.phase = 'settled'
+        settled()
+      }
     }, ms)
   }, [])
   const pin = useCallback((id: string) => {
@@ -88,7 +94,21 @@ export function useCurrentHeading({ enabled, format, entries, stageRef, frameRef
       window.clearTimeout(armedTimer)
       armedTimer = window.setTimeout(() => { armed = false }, INPUT_ARM_MS)
     }
-    const pick = (find: (id: string) => Element | null, paneTop: number) => {
+    // The heading being read, or undefined when the document cannot be measured.
+    const readingHeading = (): string | null | undefined => {
+      const find = format === 'markdown'
+        ? (id: string) => document.getElementById(id) ?? document.getElementById(`md-${id}`)
+        : (id: string) => frameRef.current?.contentDocument?.getElementById(id) ?? null
+      let paneTop = 0
+      if (format === 'markdown') {
+        const scroller = stageRef.current?.querySelector('.markdown-scroll')
+        if (!scroller) return undefined
+        paneTop = scroller.getBoundingClientRect().top
+      } else if (format === 'html') {
+        if (!frameRef.current?.contentDocument) return undefined
+      } else {
+        return undefined
+      }
       let picked: string | null = null
       for (const [position, entry] of entries.entries()) {
         const element = find(entry.id)
@@ -96,23 +116,24 @@ export function useCurrentHeading({ enabled, format, entries, stageRef, frameRef
         if (picked === null && position === 0) picked = entry.id
         if (element.getBoundingClientRect().top - paneTop <= READING_LINE) picked = entry.id
       }
-      setCurrent((previous) => previous === picked ? previous : picked)
+      return picked
     }
     const measure = () => {
       frame = 0
-      if (hold.current) return
       try {
-        if (format === 'markdown') {
-          const stage = stageRef.current
-          const scroller = stage?.querySelector('.markdown-scroll')
-          if (!scroller) return
-          pick((id) => document.getElementById(id) ?? document.getElementById(`md-${id}`), scroller.getBoundingClientRect().top)
-        } else if (format === 'html') {
-          const iframe = frameRef.current
-          const frameDocument = iframe?.contentDocument
-          if (!iframe || !frameDocument) return
-          pick((id) => frameDocument.getElementById(id), 0)
+        const held = hold.current
+        if (held?.phase === 'moving') return
+        const picked = readingHeading()
+        if (picked === undefined) return
+        if (held) {
+          // Settled pin: it ends only when the measurement itself returns the target (it can reach the
+          // reading line) or the target is gone; otherwise the clicked entry stays marked.
+          if (picked !== held.id && entries.some((entry) => entry.id === held.id)) return
+          window.clearTimeout(holdTimer.current)
+          holdTimer.current = 0
+          hold.current = null
         }
+        setCurrent((previous) => previous === picked ? previous : picked)
       } catch {
         // A frame that cannot be read marks nothing.
       }
@@ -130,7 +151,14 @@ export function useCurrentHeading({ enabled, format, entries, stageRef, frameRef
       hold.current = null
       schedule()
     }
-    const onScroll = () => {
+    // The Contents column sits inside the stage but is not the reading pane: input there never scrolls the document.
+    // Targets inside the HTML frame belong to another realm, so elements are recognised by duck typing, not instanceof.
+    const asElement = (target: EventTarget | null) => target !== null && typeof (target as Element).closest === 'function' ? target as Element : null
+    const inColumn = (target: EventTarget | null) => asElement(target)?.closest('[data-reader-column]') != null
+    settledImpl.current = schedule
+    const onScroll = (event?: Event) => {
+      // The Contents list (and any other scroller inside the column) is not the reading pane.
+      if (inColumn(event?.target ?? null)) return
       const held = hold.current
       if (!held) {
         schedule()
@@ -140,10 +168,6 @@ export function useCurrentHeading({ enabled, format, entries, stageRef, frameRef
         settleSoon(SCROLL_IDLE_MS)
       }
     }
-    // The Contents column sits inside the stage but is not the reading pane: input there never scrolls the document.
-    // Targets inside the HTML frame belong to another realm, so elements are recognised by duck typing, not instanceof.
-    const asElement = (target: EventTarget | null) => target !== null && typeof (target as Element).closest === 'function' ? target as Element : null
-    const inColumn = (target: EventTarget | null) => asElement(target)?.closest('[data-reader-column]') != null
     const onUserScroll = (event: Event) => { if (hold.current && !inColumn(event.target)) arm() }
     // Scroll keys count only with focus inside the reading pane.
     const onKey = (event: KeyboardEvent) => { if (SCROLL_KEYS.has(event.key)) onUserScroll(event) }
@@ -197,6 +221,7 @@ export function useCurrentHeading({ enabled, format, entries, stageRef, frameRef
     return () => {
       if (frame) window.cancelAnimationFrame(frame)
       window.clearTimeout(armedTimer)
+      settledImpl.current = null
       for (const cleanup of cleanups) cleanup()
     }
   }, [enabled, format, entries, stageRef, frameRef, frameLoads, settleSoon])
