@@ -7893,9 +7893,10 @@ test.describe('reader context column (ISSUE-108)', () => {
 
   // The authored HTML of the docs sites sets `html { scroll-behavior: smooth }`, so a fragment jump inside the frame
   // passes every heading on the way (ISSUE-118).
-  async function smoothTallHtml(page: Page) {
+  async function smoothTallHtml(page: Page, delayMs = 0) {
     await page.route('**/showcase/editorial/field-notes/index.html', async (route) => {
       const response = await route.fetch()
+      if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs))
       const body = (await response.text()).replace('</head>', '<style>html { scroll-behavior: smooth; } h2, h3 { margin-top: 900px; }</style></head>')
       await route.fulfill({ response, body })
     })
@@ -7949,6 +7950,48 @@ test.describe('reader context column (ISSUE-108)', () => {
       await expect(current).toHaveText((await buttons.first().textContent())!)
     })
   }
+
+  test('a Contents entry activated before the HTML frame has loaded keeps the marker on it (ISSUE-118)', async ({ page }) => {
+    await smoothTallHtml(page, 1200)
+    await page.goto(htmlPath)
+    const column = columnOf(page)
+    const buttons = column.getByRole('navigation', { name: 'Artifact headings' }).getByRole('button')
+    await expect(buttons.first()).toBeVisible()
+    const count = await buttons.count()
+    const target = buttons.nth(count - 1)
+    const name = (await target.textContent())!
+    await recordMarker(page)
+    await target.click()
+    const frame = page.locator('iframe.artifact-frame')
+    await expect.poll(() => frame.evaluate((element) => (element as HTMLIFrameElement).contentWindow?.scrollY ?? 0), { timeout: 15000 }).toBeGreaterThan(0)
+    await page.waitForTimeout(1500)
+    expect(await page.evaluate(() => (window as unknown as { __marked: string[] }).__marked)).toEqual([name.trim()])
+    await expect(column.locator('[aria-current="location"]')).toHaveText(name)
+  })
+
+  test('keys and clicks that do not scroll the reading pane do not release the pin (ISSUE-118)', async ({ page }) => {
+    await page.goto(markdownPath)
+    const column = columnOf(page)
+    const buttons = column.getByRole('navigation', { name: 'Artifact headings' }).getByRole('button')
+    await expect(buttons.first()).toBeVisible()
+    await page.addStyleTag({ content: '.markdown-scroll { scroll-behavior: smooth !important; }' })
+    const target = buttons.nth((await buttons.count()) - 2)
+    const name = (await target.textContent())!
+    await recordMarker(page)
+    await target.click()
+    await page.keyboard.press('ArrowDown') // focus is on the Contents entry, not in the reading pane
+    // A press on the document text (not its scrollbar) does not scroll it.
+    await page.locator('.markdown-article p').first().evaluate((paragraph) => {
+      paragraph.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+      paragraph.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))
+    })
+    await page.waitForTimeout(1500)
+    const marked = await page.evaluate(() => (window as unknown as { __marked: string[] }).__marked)
+    // The marker moves from the entry it was on straight to the chosen one and stays there.
+    expect(marked.at(-1)).toBe(name.trim())
+    expect(marked.length).toBeLessThanOrEqual(2)
+    expect(marked.slice(1)).toEqual([name.trim()].slice(0, marked.length - 1))
+  })
 
   test('the marked entry stays visible inside the Contents list', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 420 })
