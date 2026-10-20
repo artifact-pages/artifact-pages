@@ -7993,6 +7993,19 @@ test.describe('reader context column (ISSUE-108)', () => {
     expect(marked.slice(1)).toEqual([name.trim()].slice(0, marked.length - 1))
   })
 
+  // Resolves once the reading pane has stopped moving and growing (late images or diagrams can still shift layout).
+  const waitForPaneAtRest = async (page: Page) => {
+    const scroller = page.locator('.markdown-scroll')
+    let previous = ''
+    let stableReads = 0
+    await expect.poll(async () => {
+      const state = await scroller.evaluate((element) => `${element.scrollTop}/${element.scrollHeight}/${element.clientHeight}`)
+      stableReads = state === previous ? stableReads + 1 : 0
+      previous = state
+      return stableReads
+    }, { intervals: [100], timeout: 10000 }).toBeGreaterThanOrEqual(8)
+  }
+
   test('a wheel at the scroll boundary keeps the clicked entry marked; scrolling away resumes tracking (ISSUE-118)', async ({ page }) => {
     await page.goto(markdownPath)
     const column = columnOf(page)
@@ -8003,13 +8016,43 @@ test.describe('reader context column (ISSUE-108)', () => {
     await last.click()
     const scroller = page.locator('.markdown-scroll')
     await expect.poll(() => scroller.evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop), { timeout: 5000 }).toBeLessThan(2)
-    await page.waitForTimeout(800)
+    await waitForPaneAtRest(page)
+    // The pin has settled by now and the pane is at its end.
+    expect(await scroller.evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop)).toBeLessThan(2)
+    const before = await scroller.evaluate((element) => element.scrollTop)
     await page.mouse.move(400, 400)
     await page.mouse.wheel(0, 600) // nothing below: the pane does not move
-    await page.waitForTimeout(800)
+    await page.waitForTimeout(600) // longer than the input arming window, so a wrongly released pin would show
+    expect(await scroller.evaluate((element) => element.scrollTop)).toBe(before)
     await expect(column.locator('[aria-current="location"]')).toHaveText(name)
     await page.mouse.wheel(0, -100000)
     await expect(column.locator('[aria-current="location"]')).toHaveText((await buttons.first().textContent())!)
+  })
+
+  test('scrolling a nested scroller inside the document does not move the pin (ISSUE-118)', async ({ page }) => {
+    await page.goto(markdownPath)
+    const column = columnOf(page)
+    const buttons = column.getByRole('navigation', { name: 'Artifact headings' }).getByRole('button')
+    await expect(buttons.first()).toBeVisible()
+    await page.locator('.markdown-article').evaluate((article) => {
+      const box = document.createElement('div')
+      box.id = 'issue-118-wide'
+      box.style.cssText = 'width: 120px; overflow-x: auto;'
+      const wide = document.createElement('div')
+      wide.style.cssText = 'width: 1200px; height: 10px;'
+      box.append(wide)
+      article.append(box)
+    })
+    const last = buttons.nth((await buttons.count()) - 1)
+    const name = (await last.textContent())!
+    await last.click()
+    await expect(column.locator('[aria-current="location"]')).toHaveText(name)
+    await waitForPaneAtRest(page)
+    await page.locator('#issue-118-wide').evaluate((element) => element.scrollTo(300, 0))
+    await page.mouse.move(400, 400)
+    await page.waitForTimeout(600)
+    await expect(column.locator('[aria-current="location"]')).toHaveText(name)
+    expect(await page.locator('#issue-118-wide').evaluate((element) => element.scrollLeft)).toBeGreaterThan(0)
   })
 
   test('after a jump to a reachable heading settles, a content change re-measures normally (ISSUE-118)', async ({ page }) => {

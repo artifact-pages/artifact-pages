@@ -157,8 +157,15 @@ export function useCurrentHeading({ enabled, format, entries, stageRef, frameRef
     const inColumn = (target: EventTarget | null) => asElement(target)?.closest('[data-reader-column]') != null
     settledImpl.current = schedule
     const onScroll = (event?: Event) => {
-      // The Contents list (and any other scroller inside the column) is not the reading pane.
-      if (inColumn(event?.target ?? null)) return
+      // Only the reading pane's own scroll counts. The stage's capturing listener also sees the Contents list and
+      // nested scrollers (wide code blocks, tables, diagrams); they never move the pin. Scrolls in the HTML frame
+      // reach this listener only from its document, because element scroll events do not bubble to the window.
+      const target = event?.target ?? null
+      if (inColumn(target)) return
+      if (format === 'markdown' && asElement(target)?.classList.contains('markdown-scroll') !== true) {
+        if (!hold.current) schedule()
+        return
+      }
       const held = hold.current
       if (!held) {
         schedule()
