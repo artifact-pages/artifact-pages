@@ -5,6 +5,7 @@ import { DirectoryPage } from './DirectoryPage'
 import { Icon } from './Icon'
 import { ArtifactDetails, ContentsList, focusReaderColumnPart, READER_COLUMN_QUERY, ReaderContextColumn, type ReaderColumnPart } from './ReaderContextColumn'
 import { useCurrentHeading } from './useCurrentHeading'
+import { useFrameReveal } from './useFrameReveal'
 import { Sidebar } from './Sidebar'
 import { RecentlyUpdated, SiteHome, SiteHomeFrame, SiteHomeHeader, usePreviewCount, type SiteSection } from './SiteHome'
 import { PREVIEW_LEDE, PreviewListContent } from './PreviewListPage'
@@ -781,6 +782,8 @@ export function ArtifactWorkspace({
   const htmlArtifactUrl = bodyArtifact && currentFormat === 'html'
     ? bodyArtifact.artifactUrl
     : undefined
+  // The frame stays unpainted until its document loads, so the reader surface shows instead of a light flash (ISSUE-119).
+  const { revealed: frameRevealed, reveal: revealFrame } = useFrameReveal(htmlArtifactUrl ? `${htmlArtifactUrl}#${frameAttempt}` : undefined)
   const syncHtmlFrameLocation = useCallback((iframe = htmlFrameRef.current) => {
     if (!iframe || !htmlArtifactUrl) return
     const frameWindow = iframe.contentWindow
@@ -950,9 +953,11 @@ export function ArtifactWorkspace({
       lang={frameLanguage?.artifactUrl === bodyArtifact.artifactUrl ? frameLanguage.lang : undefined}
       style={{
         colorScheme: theme,
+        ...(frameRevealed ? {} : { opacity: 0 }),
         ...(currentDirectory && directoryFrameHeight ? { ['--directory-frame-height' as string]: `${directoryFrameHeight}px` } : {}),
       }}
       onLoad={(event) => {
+        revealFrame()
         const frame = event.currentTarget
         const firstLoad = frameLoadCount.current === 0
         frameLoadCount.current += 1
