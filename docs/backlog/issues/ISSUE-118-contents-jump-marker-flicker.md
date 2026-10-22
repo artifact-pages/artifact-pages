@@ -1,6 +1,6 @@
 # The Contents marker flickers along the rail when a far entry is activated
 
-- Status: In progress
+- Status: Done
 - Assignee: Claude
 - Priority: P3
 - Area: Web / reader context, Contents
@@ -32,3 +32,5 @@ Activating an entry marks it at once and the marker stays on it while the naviga
 - [x] Regression coverage proves no intermediate entry becomes current during the navigation scroll and that tracking resumes afterwards and on user scroll.
 
 Known limit (accepted by Claude main, 2026-10-21, after Luna review round 5): while a jump's smooth scroll is still moving, wheel, touch or scroll-key input over a nested scroller (a wide code block or table) or an embedded control arms the release, and the next reading-pane animation frame then ends the pin, so the marker can resume tracking for the rest of that scroll. It needs deliberate input during a sub-second window and only falls back to the previous tracking behaviour; telling such input apart from input that scrolls the reading pane is not worth the extra complexity.
+
+Production check (2026-10-23): web 0.4.2 on https://artifact-pages.dev (admin #25, App deploy run 39867577366). Claude in Chrome, dark theme, guide `en/configuration.html`: activating the last, first and a middle Contents entry changed `aria-current` once, straight to the clicked entry, with no intermediate entry marked. The owner confirmed in their browser that the dots no longer flicker on a far jump.
