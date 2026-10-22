@@ -2,7 +2,7 @@ module github.com/artifact-pages/artifact-pages
 
 go 1.26.0
 
-toolchain go1.26.9
+toolchain go1.26.10
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.47.1
