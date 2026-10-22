@@ -1,6 +1,6 @@
 # Dark theme: the artifact frame flashes white when a page opens
 
-- Status: In progress
+- Status: Done
 - Assignee: Claude
 - Priority: P3
 - Area: Web / reader artifact frame
@@ -30,4 +30,6 @@ In the dark theme the frame area never shows white while an HTML page opens or c
 - [x] The preview reader's iframe gets the same treatment.
 - [x] No visible change other than removing the flash (no fade).
 - [x] e2e in `web/e2e/local-serving.spec.ts`: in dark theme, navigating to an HTML artifact whose response is held leaves the frame region painting only the reader surface colour and the frame hidden until load; a held response is revealed by the timeout. Both fail without the change. (Chromium cannot show the white itself, so the tests assert the hidden state plus the pixel colour.)
-- [ ] Production check in the owner's browser after release (dark theme, `artifact-pages.dev/guide/ja/configuration.html` to another page); then close this issue.
+- [x] Production check in the owner's browser after release (dark theme, `artifact-pages.dev/guide/ja/configuration.html` to another page); then close this issue.
+
+Production check (2026-10-23): web 0.4.2 on https://artifact-pages.dev (admin #25, App deploy run 39867577366). Claude in Chrome, dark theme, guide `en/publishing.html` to `ja/configuration.html`: the new frame started at opacity 0 and was revealed after its document loaded. The owner confirmed in their browser that page changes no longer flash white.
