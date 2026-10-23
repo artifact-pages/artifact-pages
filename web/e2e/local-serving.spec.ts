@@ -9805,7 +9805,50 @@ test.describe('Browse tree indentation (ISSUE-120)', () => {
     return box!.x
   }
 
+  /** Every non-root row's ::before connector starts at the parent's vertical guide and ends left of the row content. */
+  async function expectConnectors(browse: Locator) {
+    const rows = await browse.evaluate(async (root) => {
+      // Chevron rotation transitions move the icon's box; measure once they settle.
+      await Promise.all(root.getAnimations({ subtree: true }).map((animation) => animation.finished.catch(() => undefined)))
+      const out: { label: string, depth: number, guideX: number, left: number, right: number, contentX: number }[] = []
+      const els = root.querySelectorAll<HTMLElement>('.tree-artifact[data-tree-depth], .tree-directory-row[data-tree-depth], .tree-directory-button[data-tree-depth]')
+      for (const el of els) {
+        const depth = Number(el.dataset.treeDepth)
+        if (!(depth >= 1 && depth <= 3)) continue
+        const style = getComputedStyle(el, '::before')
+        if (style.display === 'none' || style.content === 'none' || style.content === 'normal') continue
+        const container = el.closest('.tree-children-branch-guides')
+        if (!container) continue
+        const rect = el.getBoundingClientRect()
+        if (rect.width === 0) continue
+        const left = rect.left + parseFloat(style.left)
+        const right = left + parseFloat(style.width)
+        const content = el.classList.contains('tree-artifact')
+          ? el.querySelector('.tree-label')
+          : el.querySelector('svg, .tree-label')
+        if (!content) continue
+        out.push({
+          label: el.dataset.treePath ?? el.textContent ?? '',
+          depth,
+          guideX: container.getBoundingClientRect().left,
+          left,
+          right,
+          contentX: content.getBoundingClientRect().left,
+        })
+      }
+      return out
+    })
+    expect(rows.length, 'connectors are rendered').toBeGreaterThan(0)
+    expect(new Set(rows.map((row) => row.depth)), 'depths 1 to 3 have connectors').toEqual(new Set([1, 2, 3]))
+    for (const row of rows) {
+      expect(Math.abs(row.left - row.guideX), `connector of ${row.label} starts at the guide`).toBeLessThanOrEqual(1)
+      expect(row.right, `connector of ${row.label} ends left of its content`).toBeLessThanOrEqual(row.contentX)
+      expect(row.right, `connector of ${row.label} has length`).toBeGreaterThan(row.left)
+    }
+  }
+
   async function expectHierarchy(browse: Locator) {
+    await expectConnectors(browse)
     // Root level: the page lines up with the folder names.
     const rootFolderX = await titleX(browse, 'alpha', 'folder')
     expect(Math.abs(await titleX(browse, 'overview.md', 'page') - rootFolderX)).toBeLessThanOrEqual(1)

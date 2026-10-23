@@ -13,6 +13,7 @@ In the sidebar Browse tree, a page inside an expanded folder starts its title fu
 
 1. Owner report, 2026-10-23 (production web 0.4.2, `ja` site, dark theme): under 「体験と機能」 the pages 「資料を公開・レビューする」 etc. start left of 「体験と機能」; the same under 「インフラを構築する」.
 2. Source (`branch-guides`, the style the sidebar uses): a folder row is a 4 px margin + 22 px chevron toggle + 2 px link padding, so its name starts at 28 px; `.tree-children-branch-guides` indents children by 14 px and a page row pads 8 px, so a child page's title starts at 22 px, 6 px left of the parent's name. Every depth repeats this. The `quiet` style has the same mismatch (`10 + depth * 14` against `5 + depth * 14 + 24`).
+3. Owner report, 2026-10-23 (production web 0.4.3, `ja` site): the horizontal connectors are drawn left of the vertical guide (x 12 to 26 with the guide at 26) instead of running from the guide toward the row. Cause: the connector rule in `web/src/styles.css` used `left: -14px; width: 14px`.
 
 ## Expected outcome
 
@@ -21,7 +22,7 @@ At every depth, a child's title (page or folder) starts to the right of its pare
 ## Acceptance criteria
 
 - [x] In the Browse tree (`branch-guides`), for depths 0 to 3, a child title starts at least 8 px right of its parent folder's name, and sibling page and folder titles share one start x (±1 px).
-- [x] The branch guide lines and their horizontal connectors still meet the rows they belong to; hover, active and focus backgrounds, the row actions menu, the count, the MD tag and ellipsis on long titles keep working at the 260–320 px sidebar widths and in the narrow-layout drawer.
+- [ ] The branch guide lines and their horizontal connectors meet the rows they belong to: each connector starts at the guide and ends 8 px before the row's title (page) or chevron (folder); hover, active and focus backgrounds, the row actions menu, the count, the MD tag and ellipsis on long titles keep working at the 260–320 px sidebar widths and in the narrow-layout drawer.
 - [x] The `quiet` style follows the same rule; `path-list` and the flat lists (Pinned, filter results, Recent) are unchanged.
 - [x] Regression coverage measures the title positions (e2e or a layout test) so a later change cannot reverse the hierarchy again.
 
