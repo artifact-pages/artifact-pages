@@ -114,7 +114,7 @@ export function DirectoryPage({
 
   return (
     <div className="directory-scroll" ref={scrollRoot} data-testid="directory-page" data-directory-variant={body ? 'index' : 'list'}>
-      <div className="directory-page">
+      <div className={`directory-page${header ? '' : ' directory-page-folder'}`}>
         {header ?? (
           <header className="directory-header">
             <p className="directory-eyebrow">Folder · {listing.path}/</p>
