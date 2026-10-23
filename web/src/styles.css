@@ -542,12 +542,16 @@ kbd {
 .tree-style-branch-guides .tree-artifact[data-tree-depth]:not([data-tree-depth="0"])::before {
   position: absolute;
   top: 50%;
-  left: -14px;
-  width: 14px;
+  left: 0;
+  width: 8px;
   height: 1px;
   background: var(--line-soft);
   content: "";
   transform: translateY(-50%);
+}
+
+.tree-style-branch-guides .tree-artifact[data-tree-depth]:not([data-tree-depth="0"])::before {
+  width: 20px;
 }
 
 .tree-artifact {
