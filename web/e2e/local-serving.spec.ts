@@ -9750,3 +9750,102 @@ test.describe('preview reading in the reader shell (ISSUE-109)', () => {
     expect(catalogRequests).toHaveLength(1)
   })
 })
+
+test.describe('Browse tree indentation (ISSUE-120)', () => {
+  // The fixtures are shallow, so the SRE index gains a branch four folders deep:
+  // a root page beside the folders, and pages beside sub-folders at every depth.
+  const deepPaths = [
+    'overview.md',
+    'alpha/one.md',
+    'alpha/beta/two.md',
+    'alpha/beta/gamma/three.md',
+    'alpha/beta/gamma/delta/four.md',
+    'alpha/beta/gamma/delta/five.md',
+  ]
+  const folders = ['alpha', 'alpha/beta', 'alpha/beta/gamma', 'alpha/beta/gamma/delta']
+
+  async function routeDeepIndex(page: Page) {
+    await page.route('**/_indexes/sre/index.json', async (route) => {
+      const response = await route.fetch()
+      const index = await response.json()
+      const template = index.artifacts[0]
+      index.artifacts.push(...deepPaths.map((path) => ({
+        ...template,
+        id: path,
+        title: `Deep ${path}`,
+        path,
+        format: 'markdown',
+        filename: path.split('/').pop(),
+        artifactUrl: `/_artifacts/sre/${path}`,
+        toc: [],
+      })))
+      await route.fulfill({ response, json: index })
+    })
+  }
+
+  async function expandDeepTree(page: Page) {
+    await page.goto('/sre')
+    const browse = page.locator('.browse-tree')
+    for (const folder of folders) {
+      const toggle = browse.locator(`.tree-directory-toggle[data-tree-path="${folder}"]`)
+      await expect(toggle).toBeVisible()
+      if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click()
+      await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    }
+    return browse
+  }
+
+  /** Left edge of the title text of a folder row or a page row. */
+  async function titleX(browse: Locator, path: string, kind: 'folder' | 'page') {
+    const label = kind === 'folder'
+      ? browse.locator(`a[data-tree-folder="${path}"] .tree-label`)
+      : browse.locator(`.tree-artifact[data-tree-path="${path}"] .tree-label`)
+    const box = await label.first().boundingBox()
+    expect(box, `${kind} ${path} is laid out`).not.toBeNull()
+    return box!.x
+  }
+
+  async function expectHierarchy(browse: Locator) {
+    // Root level: the page lines up with the folder names.
+    const rootFolderX = await titleX(browse, 'alpha', 'folder')
+    expect(Math.abs(await titleX(browse, 'overview.md', 'page') - rootFolderX)).toBeLessThanOrEqual(1)
+
+    // Depths 0 to 3: children start right of the parent, and sibling pages and folders share one start x.
+    for (let depth = 0; depth < folders.length; depth += 1) {
+      const parentX = await titleX(browse, folders[depth], 'folder')
+      const childPages = deepPaths.filter((path) => path.split('/').length === depth + 2 && path.startsWith(`${folders[depth]}/`))
+      expect(childPages.length, `pages in ${folders[depth]}`).toBeGreaterThan(0)
+      const childXs = await Promise.all(childPages.map((path) => titleX(browse, path, 'page')))
+      if (depth + 1 < folders.length) childXs.push(await titleX(browse, folders[depth + 1], 'folder'))
+      for (const x of childXs) {
+        expect(x - parentX, `child of ${folders[depth]} starts right of its name`).toBeGreaterThanOrEqual(8)
+        expect(Math.abs(x - childXs[0]), `siblings in ${folders[depth]} share a start x`).toBeLessThanOrEqual(1)
+      }
+    }
+  }
+
+  test('child titles start right of the parent folder name and siblings share one x', async ({ page }) => {
+    await routeDeepIndex(page)
+    const browse = await expandDeepTree(page)
+    await expectHierarchy(browse)
+  })
+
+  test('the alignment holds at the narrowest sidebar widths and in the drawer', async ({ page }) => {
+    await routeDeepIndex(page)
+    await page.setViewportSize({ width: 320, height: 760 })
+    await page.goto('/sre')
+    await page.getByRole('button', { name: 'Expand navigation' }).first().click()
+    const browse = page.locator('.browse-tree')
+    for (const folder of folders) {
+      const toggle = browse.locator(`.tree-directory-toggle[data-tree-path="${folder}"]`)
+      await expect(toggle).toBeVisible()
+      if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click()
+    }
+    await expectHierarchy(browse)
+    // Long titles still truncate inside the row instead of overflowing it.
+    const row = browse.locator('.tree-artifact[data-tree-path="alpha/beta/gamma/delta/four.md"]')
+    const rowBox = (await row.boundingBox())!
+    const labelBox = (await row.locator('.tree-label').first().boundingBox())!
+    expect(labelBox.x + labelBox.width).toBeLessThanOrEqual(rowBox.x + rowBox.width)
+  })
+})
