@@ -100,7 +100,7 @@ export function ArtifactTree({
     })
   }
 
-  function renderArtifact(artifact: ArtifactIndexEntry, depth: number, rowStyle: TreeStyle, showPath = false) {
+  function renderArtifact(artifact: ArtifactIndexEntry, depth: number, rowStyle: TreeStyle, showPath = false, inTree = false) {
     return (
       <ArtifactRow
         key={artifact.id}
@@ -110,6 +110,7 @@ export function ArtifactTree({
         style={rowStyle}
         query={normalizedQuery}
         showPath={showPath}
+        inTree={inTree}
         onOpenArtifact={onOpenArtifact}
         href={artifactHref(artifact)}
         actions={getArtifactActions?.(artifact)}
@@ -198,7 +199,7 @@ export function ArtifactTree({
               ) : (
                 <button
                   className="tree-directory-button"
-                  style={{ paddingInlineStart: style === 'branch-guides' ? '8px' : `${9 + depth * 14}px` }}
+                  style={{ paddingInlineStart: style === 'branch-guides' ? '10px' : `${11 + depth * 14}px` }}
                   data-tree-depth={depth}
                   data-tree-path={directory.path}
                   aria-expanded={isExpanded}
@@ -226,7 +227,7 @@ export function ArtifactTree({
         limit: TREE_BRANCH_ROW_LIMIT,
         isPinned: (row) => 'directory' in row ? isActiveDirectoryRow(row.directory) : row.artifact.path === activePath,
       },
-      (row) => 'directory' in row ? renderDirectory(row.directory) : renderArtifact(row.artifact, depth, style),
+      (row) => 'directory' in row ? renderDirectory(row.directory) : renderArtifact(row.artifact, depth, style, false, true),
     )
 
     return (
@@ -281,6 +282,7 @@ function ArtifactRow({
   style,
   query,
   showPath = false,
+  inTree = false,
   onOpenArtifact,
   href,
   actions,
@@ -291,6 +293,8 @@ function ArtifactRow({
   style: TreeStyle
   query: string
   showPath?: boolean
+  /** A row in the Browse tree, where it lines up with the folder names; flat lists keep their own padding. */
+  inTree?: boolean
   onOpenArtifact: (artifact: ArtifactIndexEntry) => void
   href: string
   actions?: ArtifactRowActions
@@ -305,7 +309,7 @@ function ArtifactRow({
       <a
         href={href}
         className={`tree-artifact${active ? ' is-active' : ''}${withPath ? ' tree-path-row' : ''}`}
-        style={{ paddingInlineStart: style === 'branch-guides' ? '8px' : `${10 + depth * 14}px` }}
+        style={{ paddingInlineStart: artifactRowPadding(style, depth, inTree) }}
         data-tree-depth={depth}
         data-tree-path={artifact.path}
         title={artifact.path}
@@ -336,6 +340,15 @@ function ArtifactRow({
       ) : null}
     </div>
   )
+}
+
+/**
+ * Browse tree page rows take the space of a folder row's chevron slot (4 + 22 + 2 px, or 5 + depth * 14 + 24 px in the
+ * quiet style), so page and folder titles share one start x (ISSUE-120). Flat lists keep the old padding.
+ */
+function artifactRowPadding(style: TreeStyle, depth: number, inTree: boolean) {
+  if (style === 'branch-guides') return inTree ? '28px' : '8px'
+  return `${(inTree ? 29 : 10) + depth * 14}px`
 }
 
 function rootPaths(artifacts: ArtifactIndexEntry[]) {
