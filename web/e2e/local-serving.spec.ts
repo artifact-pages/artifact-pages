@@ -7049,6 +7049,37 @@ test.describe('directory pages', () => {
     await expect(page.getByRole('button', { name: 'Contents' })).toBeEnabled()
   })
 
+  test('a folder view uses one centred column of at most 1180 px (ISSUE-121)', async ({ page }) => {
+    await routeDirectoryIndex(page)
+    const edges = (selector: string) => page.locator(`[data-testid="directory-page"] ${selector}`).first().evaluate((element) => {
+      const box = element.getBoundingClientRect()
+      return { left: Math.round(box.left), right: Math.round(box.right) }
+    })
+    const near = (actual: number, expected: number) => expect(Math.abs(actual - expected)).toBeLessThanOrEqual(1)
+
+    for (const [width, path, withBody] of [[1935, '/sre/docs', true], [1280, '/sre/docs', true], [1935, '/sre/guide/en', false]] as const) {
+      await page.setViewportSize({ width, height: 900 })
+      await page.goto(path)
+      await expect(page.getByTestId('directory-page')).toHaveAttribute('data-directory-variant', withBody ? 'index' : 'list')
+      const main = await page.locator('main.stage').evaluate((element) => {
+        const box = element.getBoundingClientRect()
+        return { left: box.left, right: box.right }
+      })
+      const column = await edges('.directory-page')
+      const padding = Math.min(56, Math.max(20, width * 0.04))
+      near(column.right - column.left, Math.min(main.right - main.left, 1180))
+      near(column.left - main.left, main.right - column.right)
+      const header = await edges('.directory-header')
+      near(header.left, column.left + padding)
+      near(header.right, column.right - padding)
+      for (const selector of withBody ? ['.directory-children', '.directory-readme-label', '.directory-body'] : ['.directory-list']) {
+        const part = await edges(selector)
+        near(part.left, header.left)
+        near(part.right, header.right)
+      }
+    }
+  })
+
   test('a folder with a README is labelled by its title and its README row is folded into the folder', async ({ page }) => {
     await routeDirectoryIndex(page)
     await page.goto('/sre/docs')

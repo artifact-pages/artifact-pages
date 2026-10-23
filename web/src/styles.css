@@ -3745,6 +3745,12 @@ a.breadcrumb-menu-item {
   margin: 0 auto;
 }
 
+/* A folder's page uses the docs site's column: 1180 px at most, with the same side padding (ISSUE-121). The site root keeps the narrower column. */
+.directory-page-folder {
+  width: min(100%, 1180px);
+  padding-inline: clamp(20px, 4vw, 56px);
+}
+
 .directory-eyebrow {
   margin: 0 0 6px;
   color: var(--text-tertiary);
