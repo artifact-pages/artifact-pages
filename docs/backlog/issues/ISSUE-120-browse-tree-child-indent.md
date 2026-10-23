@@ -22,5 +22,5 @@ At every depth, a child's title (page or folder) starts to the right of its pare
 
 - [x] In the Browse tree (`branch-guides`), for depths 0 to 3, a child title starts at least 8 px right of its parent folder's name, and sibling page and folder titles share one start x (±1 px).
 - [x] The branch guide lines and their horizontal connectors still meet the rows they belong to; hover, active and focus backgrounds, the row actions menu, the count, the MD tag and ellipsis on long titles keep working at the 260–320 px sidebar widths and in the narrow-layout drawer.
-- [x] The `quiet` style follows the same rule; `path-list` and the flat lists (Pinned, filter results, Recent) are unchanged.
+- [ ] The `quiet` style follows the same rule; `path-list` and the flat lists (Pinned, filter results, Recent) are unchanged.
 - [x] Regression coverage measures the title positions (e2e or a layout test) so a later change cannot reverse the hierarchy again.
