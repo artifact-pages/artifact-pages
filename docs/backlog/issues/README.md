@@ -135,6 +135,8 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-120](ISSUE-120-browse-tree-child-indent.md) | Done | P3 | Browse tree child pages start left of their folder's name. |
 | [ISSUE-121](ISSUE-121-folder-view-column-width.md) | Done | P3 | The folder view column is at most 860 px wide and looks off-centre in a wide window; widen it to the docs column (1180 px). |
 | [ISSUE-122](ISSUE-122-contents-level-3-indent.md) | Done | P3 | Contents level-3 entries are not indented under their level-2 entry. |
+| [ISSUE-123](ISSUE-123-unpublished-registration-blocks-app-deploy.md) | Open | P1 | Never-published registrations fail app-deploy compatibility checks, including dry-run. |
+| [ISSUE-124](ISSUE-124-scoped-app-deploy-lock-permissions.md) | Open | P2 | Scoped app-deploy guidance omits registry/all-site locks and free-lock side effects. |
 
 ISSUE-013's verified completion record is retained in Git history.
 
