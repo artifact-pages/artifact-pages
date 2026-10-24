@@ -134,7 +134,7 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-119](ISSUE-119-dark-theme-frame-white-flash.md) | Done | P3 | In the dark theme the artifact frame flashes white when a page opens (Firefox and Safari paint a light canvas for a color-scheme mismatch). |
 | [ISSUE-120](ISSUE-120-browse-tree-child-indent.md) | Done | P3 | Browse tree child pages start left of their folder's name. |
 | [ISSUE-121](ISSUE-121-folder-view-column-width.md) | Done | P3 | The folder view column is at most 860 px wide and looks off-centre in a wide window; widen it to the docs column (1180 px). |
-| [ISSUE-122](ISSUE-122-contents-level-3-indent.md) | In progress | P3 | Contents level-3 entries are not indented under their level-2 entry. |
+| [ISSUE-122](ISSUE-122-contents-level-3-indent.md) | Done | P3 | Contents level-3 entries are not indented under their level-2 entry. |
 
 ISSUE-013's verified completion record is retained in Git history.
 
