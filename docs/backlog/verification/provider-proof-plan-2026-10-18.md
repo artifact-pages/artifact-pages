@@ -112,7 +112,7 @@ P1/P3/P8 passes cover these Cloudflare samples only. P4–P7 aggregate criteria 
 
 FINAL contains **109 keys**, none extra/missing. All object hashes equal A4 except `_control/versions/registry.json`, whose only JSON delta is `cliVersion` **0.4.2 → 0.4.4** (D6, last writer; no hand-restored control record). Content-Type, Cache-Control, Disposition, Encoding and metadata equal A4 for all 109. Rewritten identical objects have newer LastModified. API configuration matches except Cloudflare-managed ruleset changes already present at S0; the five owned rulesets and five entrypoints match. Terraform state ETag remains `11170c55…`; no apply or production operation was performed.
 
-**Retirement not established:** the restoration notes still list owner revocation of the A6 issuer/purge tokens, subsequent local credential-file deletion and fixture-worktree removal as pending. A4 read tokens were retained through this comparison (expiry October 27). No revocation, fixture retirement or removal of the external freeze marker is inferred; this text-only task performs none of those actions. The fixture repository/environments remain retained under the October 24 decision.
+**Retirement update:** The fixture worktree was removed on 2026-10-25. Pending: owner deletion of `ap-proof-a6-r2-issuer-20261024` and `ap-proof-a6-purge-20261024`, then deletion of the local secret files. The owner will revoke the A4 read tokens, or they expire on 2026-10-27. This text-only task performs none of those cleanup actions. The fixture repository/environments remain retained under the October 24 decision.
 
 ## Historical approval and execution record (superseded where conflicting)
 

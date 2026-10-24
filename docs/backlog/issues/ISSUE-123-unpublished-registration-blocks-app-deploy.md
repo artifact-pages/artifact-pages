@@ -18,7 +18,9 @@ An operator who registers a site before its first publish cannot deploy the app 
 
 ## Expected outcome
 
-Backend decision for this follow-up: a registration with **confirmed absent published projection and absent format record** has no stored format to validate and should not block app deployment. Dry-run and write use the same classification under existing consistency/locking rules. Do not infer never-published status merely from a missing version record: existing production or preview content with unknown formats must still fail closed. Denied, unavailable or incomplete origin reads must remain errors. No automatic republish, unregister, control-record deletion or broad override is appropriate.
+Backend decision for this follow-up: a registration with **confirmed absent published projection and absent format record** has no stored format to validate and should not block app deployment. Dry-run and write use the same classification, but only the write path protects it with deployment locks. Dry-run returns `operation()` before application, registry or site lock acquisition (`publish.go`, before line 252); it reports a read-only snapshot and cannot guarantee that state will remain unchanged for a later write. Do not infer never-published status merely from a missing version record: existing production or preview content with unknown formats must still fail closed. Denied, unavailable or incomplete origin reads must remain errors. No automatic republish, unregister, control-record deletion or broad override is appropriate.
+
+Permission dependency: confirming an absent published projection requires reads/listings of `_indexes/<id>/` and `_artifacts/<id>/` for every registered site, in addition to the relevant format/control and preview reads. The documented scoped app credential (runbook D4) does not grant those production-prefix reads for all registered sites. The proposed repair therefore depends on extending the documented read scope or another reviewed way to establish absence; it cannot treat AccessDenied as empty. Coordinate the permission contract and scoped examples with [ISSUE-124](ISSUE-124-scoped-app-deploy-lock-permissions.md), for both dry-run and write.
 
 This records the proposed repair outcome; accepted behavior remains in `docs/specification.md`, which must be updated when the repair is adopted.
 
@@ -26,4 +28,5 @@ This records the proposed repair outcome; accepted behavior remains in `docs/spe
 
 - [ ] A compatible bundle deploy and dry-run succeed without `--accept-breaking` when an otherwise compatible registry contains a confirmed empty, never-published site; registration stays unchanged.
 - [ ] Published production or preview content without a valid format record still blocks deploy; incompatible records and denied/unavailable absence checks still fail safely.
-- [ ] Regression coverage distinguishes those states and prevents publication between the empty-site check and deployment from bypassing compatibility validation.
+- [ ] Permission guidance/examples cover the absence-check reads for every registered site, including `_indexes/<id>/` and `_artifacts/<id>/`; the former D4 scope fails safely when those reads are denied.
+- [ ] Regression coverage distinguishes those states and, on the write path, prevents publication between the empty-site check and deployment from bypassing compatibility validation. Dry-run acquires no application, registry or site locks and reports only the observed snapshot.
