@@ -490,17 +490,27 @@ func TestDeployAppConvergesLegacyHeadersForSameBundle(t *testing.T) {
 	}
 	backend.store.objects.mu.Unlock()
 	backend.store.appPuts = nil
-	result, err := DeployApp(context.Background(), backend, AppDeployOptions{ArchivePath: archive})
-	if err != nil {
-		t.Fatalf("legacy-header DeployApp() error = %v", err)
+	backend.failInvalidation = true
+	if _, err := DeployApp(context.Background(), backend, AppDeployOptions{ArchivePath: archive}); err == nil || !strings.Contains(err.Error(), "retry app deploy") {
+		t.Fatalf("legacy-header DeployApp() error = %v; want invalidation retry error", err)
 	}
-	if result.Outcome != "deployed" || len(backend.store.appPuts) != len(bundle.files) {
-		t.Fatalf("same-bundle policy adoption result = %#v, writes = %v", result, backend.store.appPuts)
+	if len(backend.store.appPuts) != len(bundle.files) {
+		t.Fatalf("header adoption writes = %v; want %d files", backend.store.appPuts, len(bundle.files))
 	}
 	for _, file := range bundle.files {
 		object := backend.store.objects.objects[file.path]
 		if object.Cache != appFileCacheControl(file.path) {
 			t.Errorf("%s Cache-Control = %q", file.path, object.Cache)
 		}
+	}
+	backend.failInvalidation = false
+	backend.store.appPuts = nil
+	retry, err := DeployApp(context.Background(), backend, AppDeployOptions{ArchivePath: archive})
+	if err != nil || retry.Outcome != "deployed" || len(backend.store.appPuts) != 0 {
+		t.Fatalf("app policy retry = %#v, err=%v, writes=%v", retry, err, backend.store.appPuts)
+	}
+	noop, err := DeployApp(context.Background(), backend, AppDeployOptions{ArchivePath: archive})
+	if err != nil || noop.Outcome != "no-op" {
+		t.Fatalf("post-convergence DeployApp() = %#v, err=%v; want no-op", noop, err)
 	}
 }

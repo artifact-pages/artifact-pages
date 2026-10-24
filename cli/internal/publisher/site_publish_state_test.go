@@ -381,3 +381,11 @@ func TestSitePublishStateAcceptsPreviousClassHeadersButRejectsArbitraryTTL(t *te
 		t.Fatal("arbitrary TTL was accepted")
 	}
 }
+
+func TestSitePublishStateRejectsMalformedObjectHeader(t *testing.T) {
+	state := validSitePublishState()
+	state.Committed.Objects[0].CacheControl = ""
+	if _, err := encodeSitePublishState(state); err == nil {
+		t.Fatal("site publish state with an empty object Cache-Control was accepted")
+	}
+}

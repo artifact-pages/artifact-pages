@@ -107,10 +107,7 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 		plan, removed, changedExisting := diffRegistries(current, desired, currentETag == "")
 		registryHeaderChanged := false
 		if currentETag != "" {
-			// Older registry fixtures/deployments may have no Cache-Control value.
-			// Treat absence as stale metadata that must be rewritten; reject any
-			// non-empty value outside the explicit legacy/current class policies.
-			if currentCache != "" && !cacheControlAccepted(cacheClassSiteRoot, currentCache) {
+			if !cacheControlAccepted(cacheClassSiteRoot, currentCache) {
 				return result, errors.New("deployed registry has an unsupported Cache-Control policy")
 			}
 			registryHeaderChanged = currentCache != cacheControl(cacheClassSiteRoot)
@@ -337,7 +334,23 @@ func readCurrentRegistry(ctx context.Context, backend ConditionalObjectBackend) 
 	if err != nil {
 		return registry.Projection{}, "", "", fmt.Errorf("validate deployed registry: %w", err)
 	}
-	return projection, etag, object.Cache, nil
+	cacheControl := object.Cache
+	if cacheControl == "" {
+		// A local directory projection has no HTTP headers unless its metadata
+		// sidecar exists. HeadObject supplies the class policy it infers for that
+		// local representation; provider objects with a missing header fail closed.
+		if _, local := backend.(*DirectoryBackend); local {
+			info, headErr := backend.HeadObject(ctx, "_indexes/sites.json")
+			if headErr != nil {
+				return registry.Projection{}, "", "", fmt.Errorf("inspect deployed registry metadata: %w", headErr)
+			}
+			if info.ETag != etag {
+				return registry.Projection{}, "", "", errors.New("deployed registry changed between GET and HEAD; retry registry sync")
+			}
+			cacheControl = info.CacheControl
+		}
+	}
+	return projection, etag, cacheControl, nil
 }
 
 func diffRegistries(current, desired registry.Projection, firstApply bool) (changes []Change, removed, changedExisting []string) {

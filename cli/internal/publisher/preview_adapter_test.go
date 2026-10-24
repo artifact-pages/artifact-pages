@@ -234,8 +234,8 @@ func TestObjectPreviewStoreCreatesImmutableObjectsOnce(t *testing.T) {
 			fileWrites = append(fileWrites, write.condition)
 		}
 	}
-	if len(fileWrites) != 3 {
-		t.Fatalf("immutable conditional-write attempts = %d, want initial write plus two retries", len(fileWrites))
+	if len(fileWrites) != 1 {
+		t.Fatalf("immutable conditional-write attempts = %d, want only initial PUT (retries must reuse by GET)", len(fileWrites))
 	}
 	for index, condition := range fileWrites {
 		if !condition.IfNoneMatch || condition.IfMatchETag != "" {
@@ -785,7 +785,7 @@ func TestObjectPreviewStoreDoesNotDeleteAfterPartialSiteListing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	seedMemoryObject(backend.lockMemoryBackend, "_indexes/sites.json", registryBytes)
+	seedMemoryObjectWithObject(backend.lockMemoryBackend, "_indexes/sites.json", Object{Bytes: registryBytes, Cache: cacheControl(cacheClassSiteRoot)})
 	for key, contents := range map[string][]byte{
 		"_artifacts/sre/old.html":                        []byte("old SRE artifact"),
 		"_indexes/sre/index.json":                        []byte(`{"site":"sre"}`),
