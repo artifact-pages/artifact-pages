@@ -4,6 +4,10 @@ These are independently reviewable slices for the accepted product contract. IMP
 
 ## Follow-up defects and readiness
 
+| Ticket | Status | Assignee | Outcome |
+| --- | --- | --- | --- |
+| [IMP-83](IMP-83-modal-contents-focus.md) | In progress | Codex | UI/UX S1: temporary Contents keyboard focus, dismissal and destination hand-off; persistent column unchanged. Owner-authorized standalone exception. |
+
 The 2026-09-28 full-codebase review found 24 confirmed defects after the original local completion checkpoints. The [active issue index](../issues/README.md#issue-index) tracks the remaining defects and their regression criteria as repairs land; verified completed issues are retained in Git history under the issue policy. Keep the existing IMP records as historical delivery evidence, not a bug-free claim; do not create duplicate implementation tickets for the same independently actionable defect. A larger new slice is appropriate only after an accepted design introduces genuinely new work.
 
 Use the [priority-ordered, one-at-a-time repair queue](../issues/README.md#repair-order) before declaring release readiness. [TD3](../technical-design/TD3-preview-origin-delivery.md) is settled: preview HTML uses the production-equivalent trusted same-origin model. ISSUE-026's reader/profile fixes and regressions are complete; broader cache, recovery and live-provider proof remains in [T4](../verification/T4-serving-boundary.md), [T14](../verification/T14-production-reconciliation.md), and [T15](../verification/T15-provider-delivery.md). [T6](../verification/T6-resources-navigation.md) remains open for its other resource and navigation checks. Passing the earlier suites does not close newly demonstrated gaps.
