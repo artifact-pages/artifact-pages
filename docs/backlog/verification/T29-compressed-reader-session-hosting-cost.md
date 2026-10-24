@@ -24,6 +24,8 @@
 
 ## Evidence
 
+Follow-up: the 2026-10-24 owner-approved [IMP-82](../implementation/IMP-82-cli-owned-cache-policy.md) removes invalidation and adopts a fixed CLI-owned cache policy. [T30](T30-cache-freshness-and-root-latency.md) measures provider freshness/root latency; its class-based origin-rate/cost follow-up feeds [T27](T27-launch-hosting-cost-model.md). This ticket remains Done for the fixed-condition local re-estimate below; its uniform miss-rate scenarios do not establish long-tail body hit rates or live provider behavior.
+
 [Hosting cost model](../../research/hosting-cost-model.md) contains the current S/M/L × miss-rate tables, component subtotals, C/W/R vectors, per-object compression audit, 304/header accounting, complete one-factor sensitivity table, and legacy waterfall. The October 18 inputs are retained in the [legacy snapshot](../../research/hosting-cost-model-legacy-2026-10-18.md).
 
 - [Reader measurement results](../../research/hosting-cost-reader-session-results.json): three iterations for 1k/5k/50k, fresh context, three document actions separated by 45 seconds, reload, separate quiet search clients, and CDP response/header evidence. The 648 retained responses include 61 304 responses; all 61 have If-None-Match and/or If-Modified-Since evidence. The run records Darwin arm64 / Apple M4, Node v22.14.0, Go 1.26.10, CLI 0.5.2, Chromium 153.0.8010.12, Playwright 1.63.0, nginx 1.29-alpine, generator v2 / seed 20261014, and a clean source tree at `b9847b9e0a6104ca2428486f8bd56460821cba95`.

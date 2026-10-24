@@ -28,3 +28,4 @@ Shared execution preparation: [October 18 provider-proof plan](provider-proof-pl
 | [T27](T27-launch-hosting-cost-model.md) | In progress | Launch hosting cost model from recorded request counts and storage |
 | [T28](T28-provider-release-regression.md) | Open | Post-publication real-provider release regression and preservation/cleanup evidence |
 | [T29](T29-compressed-reader-session-hosting-cost.md) | Done | Compressed reader-session hosting cost re-estimate |
+| [T30](T30-cache-freshness-and-root-latency.md) | Open | No-invalidation delivery proof and 5-or-0-second shared-root latency decision for [IMP-82](../implementation/IMP-82-cli-owned-cache-policy.md); T29 baseline / T27 cost follow-up |

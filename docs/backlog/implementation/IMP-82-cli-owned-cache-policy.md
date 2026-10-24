@@ -1,0 +1,66 @@
+# IMP-82 — Remove CDN invalidation and make CLI cache policy authoritative
+
+- Status: Open
+- Assignee: Codex
+- Lanes: CLI / publisher, provider adapters, Terraform, Actions, specification / operator migration
+- Verification: [T30](../verification/T30-cache-freshness-and-root-latency.md); cost baseline [T29](../verification/T29-compressed-reader-session-hosting-cost.md), remaining cost scope [T27](../verification/T27-launch-hosting-cost-model.md)
+- Source: Owner-approved design, 2026-10-24 (Sol design, owner decisions recorded in this item): long-tail internal-document workload; invalidation removed for everyone with no switch; TTLs are fixed CLI policy values rather than overrides, because simplicity was chosen over flexibility; content-addressed storage rejected for now
+
+## Goal and design
+
+Remove CDN invalidation for every user and make one fixed, versioned CLI object-class policy authoritative for Cache-Control. Reference Terraform modules respect origin headers. The owner approved this design on 2026-10-24; the final fixed-policy decision supersedes the earlier overridable-default proposal. This item records the implementation handoff; Phase 1 must put the accepted product contract in `docs/specification.md`.
+
+The workload is internal document management: people open long-tail pages when needed, so body requests are expected to be mostly cold. This is a workload assumption, not a measured universal miss rate; shared roots, app assets, search blobs and HTML resources must be evaluated separately. Removing publish-driven invalidation saves its cost, permissions and recovery work without introducing a new storage model. The r3 class-based model estimates AWS S/M/L at $0.10/$2.10/$37.41 per month for D-LT versus $4.05/$117.50/$162.18 with invalidation; R2 D-LT gross is $0.09/$1.89/$5.96 (dedicated-free $0/$0/$1.25). These are scenario estimates using T29's fixed prices and assumed class miss rates, not live measurements or bills.
+
+| Object class | Fixed shared-cache freshness |
+| --- | --- |
+| `/_indexes/sites.json`, per-site `meta.json`, per-site `index.json` | 5 seconds; release measurement may reduce individual root classes to 0 through the CLI policy |
+| Search manifest | 0 |
+| Path-addressed artifacts and resources | 0 |
+| Preview catalog, revision manifest and files | 0 |
+| App shell and fixed-name app files | 0 |
+| Existing content-hashed search blobs and app assets | 1 year, immutable |
+| Private control records | `no-store` |
+
+Mutable content uses `public, max-age=0, s-maxage=<class TTL>, must-revalidate, stale-if-error=0`, without stale-while-revalidate. App shell / fixed-name app files use `no-cache, max-age=0, must-revalidate, stale-if-error=0`; immutable objects use `public, max-age=31536000, immutable`. Mutable browser freshness is always 0. TTL 0 requires origin checking on a new network fetch; it does not promise a 304, automatic refresh of an open reader, or recovery of bytes already delivered to a browser.
+
+## Scope and non-goals
+
+Cover the common CLI cache policy, all publishers and provider adapters, AWS and Cloudflare reference modules, generated workflows / Action credential guidance, specification, module docs, migration runbook and a limited preview metadata migration helper. Cover site sync/reconcile, registry sync and omission, app deploy/remove, preview publish/remove, dry-run/results and recovery. Keep source bytes, relative resource resolution, same-origin scripts and existing raw artifact paths.
+
+Do not add TTL overrides to `artifact-pages.yaml`, Actions or Terraform inputs; a central cache-policy record, distribution permissions or automatic per-site TTL tuning; an invalidation-retention switch; content-addressed artifact storage, HTML/CSS/JS rewriting, a Service Worker, generation trees or new GC. Existing hashed search blobs/app assets remain immutable. Revisit content-addressed artifacts only in a separate design when snapshot sharing, deduplication or large shared resources become demonstrated requirements. Do not add a general-purpose CLI migration command.
+
+## Acceptance criteria — Phase 1: prepare without the frozen verification environment
+
+This phase needs no verification credentials, environment unfreeze, live apply, production change or publication. Complete and review the local implementation and migration artifacts; Phase 1 completion alone does not make this item Done.
+
+- [ ] Generate all class headers from one CLI policy definition, distinguishing search manifest from site index. Match the table above, preserve private `no-store` and immutable objects, and introduce no external TTL input.
+- [ ] Remove invalidation planning, execution, batching/compaction, retry state, adapter APIs, credential requirements and dry-run/result contract fields from every affected command. Local tests assert zero purge/invalidation calls for dry-run, no-op, changed and retry paths, including registry omission, app remove and preview removal; no retention switch remains.
+- [ ] Preserve conditional storage writes, site transaction ID/base generation/touched keys/CAS recovery, locks, version records, app bundle repair and durable registry/preview partial-deletion recovery. Do not delete `site-cache.json` wholesale: it also holds origin transaction recovery. Migrate valid old journals, retiring only purge-only intent; malformed/unsupported records remain fail-closed.
+- [ ] Include cache-policy revision in the publish input fingerprint so CLI policy adoption invalidates the fast-path no-op. Treat header-only differences as desired-state changes even when bytes are unchanged. Validate normal old publish state under its old policy before migration rather than rejecting it against new constants. Test registry/site/app header convergence, interrupted metadata updates and retry; preserve source `updatedAt`.
+- [ ] AWS module replaces class-specific 60/300/0-second caps and the immutable-only cache policy with a common origin-respecting policy (`min_ttl=0`, `default_ttl=0`, `max_ttl=31536000`). The maximum is a technical ceiling, not a class TTL. Preserve path behaviors for routing/security, error-cache settings and control-object protection. Remove admin/satellite `cloudfront:CreateInvalidation` while preserving storage/OIDC scope. Validate locally; do not apply.
+- [ ] Cloudflare module retains edge and browser `respect_origin`, with no class TTL override rules or new TTL inputs. Update local adapter/module tests and fixtures to the same policy, preserving routing and security boundaries.
+- [ ] Locally prove explicit R2 credentials work without an additional purge token and single-token mode needs no Cache Purge permission; keep R2 credential derivation intact. Prepare generated workflow/Action credential changes and operator migration PR content; distinguish purge-only credentials from shared/Terraform management tokens.
+- [ ] Provide a one-time preview metadata helper with the runbook. Under the existing site lock, validated catalog/ownership records bound the objects it may touch. Preserve bytes, manifest content, `createdAt` and SHA identity. Test lock/ownership rejection, interruption and retry convergence. Document any one-time Last-Modified/lifecycle retention extension; ordinary same-head preview retry must not acquire metadata rewrites or retention extension.
+- [ ] Update specification cache table, command success conditions, journals/cleanup, registry omission, preview remove, credentials and dry-run/results. Document CLI ownership and adoption by compatible writer version, reference modules' origin-respecting behavior, TTL-0 limits, open-tab/search in-memory state, deletion limits and the obligation to verify custom CDN overrides. Update module/operator guides; record Phase 2 evidence as pending.
+- [ ] Prepare and independently review the migration/rollback runbook and local regression evidence. Sequence: stop old writers and resolve pending origin work; unify CLI versions while preserving source/journals; apply compatible delivery modules; converge registry/site (`site sync --reconcile`)/app headers; run the limited preview helper; wait for delivery propagation and expiry of the largest old mutable TTL (300 seconds for the reference setup, actual old value for custom CDNs); verify no old headers remain; then retire purge credentials. No migration purge. Rollback includes journal/state compatibility, delivery policy, headers, writer pins and any old purge permissions/credentials needed by the old CLI.
+- [ ] Prepare the T30 run brief and update future regression expectations in [IMP-81](IMP-81-provider-release-regression-workflow.md) / [T28](../verification/T28-provider-release-regression.md) to the accepted no-invalidation contract when implementing it; retain historical purge evidence such as [T22](../verification/T22-cache-purge-retry.md) as history rather than a current requirement.
+
+## Acceptance criteria — Phase 2: provider proof and owner-controlled rollout
+
+- [ ] After explicit unfreeze and run approval, complete the Cloudflare `artifact-pages.stream` proof in T30: TTL 0/5/immutable behavior, compression, validators, negative caching/OCC/rule conflicts, representative HTML resources and freshness after publish/delete/search-generation changes. Verify every affected command makes zero purge calls with the reduced credential scope. Record actual evidence and independent review.
+- [ ] Complete T30's root latency decision, selecting 5 or 0 seconds per root class with owner approval. Make any resulting change only in the CLI's versioned policy and matching specification/tests before the release; retain 5 seconds as the approved starting value until evidence supports a change. Do not expand to 15/60 seconds without a new owner decision.
+- [ ] If AWS proof is authorized, obtain a fresh reviewed plan/recreation approval and record separate CloudFront/S3 evidence, especially TTL-0 conditional fetch, compression and negative caching, and operation without `CreateInvalidation`. Otherwise explicitly record AWS as not run/unverified, its owner gate and rollout restriction; Cloudflare proof cannot establish AWS readiness.
+- [ ] Refresh the cost report/calculation using T29's reader vectors split by URL class and T30's observed or explicitly modeled origin rates, with T27's remaining exclusions visible. Do not apply the old uniform 10% miss assumption to long-tail artifacts or treat all app assets as cold. Distinguish assumptions from measurements and retain model provenance.
+- [ ] After approved releases and production migration authorization, execute the reviewed runbook on `artifact-pages.dev` and operator repositories (`admin` / `docs`): compatible module first, all writers unified, origin recovery preserved, every managed object's headers converged including old previews, old TTL expired and edge behavior checked. Record interruption/retry and rollback readiness; metadata changes alone do not mean existing edge entries have expired.
+- [ ] After zero-invalidation evidence and migration verification, retire approved purge-only secrets, workflow wiring and AWS invalidation permissions. Preserve single-token R2 derivation and shared/management credentials needed for other work; record retirement scope and evidence.
+
+Phase 2 requires linked Cloudflare results, the TTL decision, cost follow-up, production rollout and credential-retirement evidence. For the optional AWS lane, require either separate results or an explicit owner-recorded deferral with its rollout restriction. Do not close this item on code completion or an unexecuted plan.
+
+## Owner-only steps
+
+- Unfreeze the verification environment; approve exact targets, changes, execution windows and measurement/spend bounds. Existing A6/A7 preservation/freeze arrangements do not authorize this run.
+- Approve any AWS recreation plan/apply and its independent proof/rollout scope; AWS resources were destroyed, so no existing runnable stack is assumed.
+- Adopt the final measured 5-or-0-second root policy; any wider freshness budget requires a new decision.
+- Approve CLI/Action/module releases, tags and package/Registry/Marketplace publication as applicable. Prepare changes first; this ticket grants no publication authority.
+- Approve production apply/app deploy, operator repository rollout and credential/permission retirement. Review the concrete migration and rollback handoff before execution.
