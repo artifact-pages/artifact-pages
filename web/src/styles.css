@@ -1803,6 +1803,19 @@ mark {
   backdrop-filter: blur(22px) saturate(1.6);
 }
 
+/* The native top layer excludes the page and its iframe from keyboard navigation. */
+.contents-dialog {
+  position: fixed;
+  left: auto;
+  bottom: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: var(--text);
+  font: inherit;
+}
+.contents-dialog::backdrop { background: transparent; }
+
 .context-panel-header {
   display: flex;
   min-height: 39px;

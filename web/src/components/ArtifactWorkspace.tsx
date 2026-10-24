@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ArtifactBreadcrumbs } from './ArtifactBreadcrumbs'
 import { CommandPalette, type PaletteCommand } from './CommandPalette'
+import { ContentsDialog } from './ContentsDialog'
 import { DirectoryPage } from './DirectoryPage'
 import { Icon } from './Icon'
 import { ArtifactDetails, ContentsList, focusReaderColumnPart, READER_COLUMN_QUERY, ReaderContextColumn, type ReaderColumnPart } from './ReaderContextColumn'
@@ -149,10 +150,8 @@ export function ArtifactWorkspace({
   const narrowChrome = useMediaQuery(NARROW_CHROME_QUERY)
   const wideReader = useMediaQuery(READER_COLUMN_QUERY)
   const [frameLoads, setFrameLoads] = useState(0)
-  const headingJumpRequest = useRef(0)
-  const headingJumpTimer = useRef<number | null>(null)
   const [headingJump, setHeadingJump] = useState<'pending' | 'settled' | null>(null)
-  const [activeHeading, setActiveHeading] = useState<{ artifactId: string, id: string } | null>(null)
+  const [headingFocus, setHeadingFocus] = useState<{ artifactUrl: string, id: string } | null>(null)
   const currentArtifact = routeArtifactPath
     ? findArtifact(index, routeArtifactPath)
     : undefined
@@ -265,20 +264,52 @@ export function ArtifactWorkspace({
   const detailsOpen = activePanel === 'details'
   const panelLabel = activePanel === 'details' ? 'Details' : 'Contents'
 
-  // Any panel change, artifact change or unmount invalidates a pending jump check.
+  // A selection belongs to this document only. Cancelling/reopening a panel invalidates it.
   useEffect(() => {
-    return () => {
-      headingJumpRequest.current += 1
-      if (headingJumpTimer.current !== null) window.clearTimeout(headingJumpTimer.current)
-      headingJumpTimer.current = null
-      setActiveHeading(null)
-      setHeadingJump((current) => current === 'pending' ? null : current)
-    }
-  }, [activePanel, bodyArtifact?.id])
+    setHeadingFocus(null)
+    setHeadingJump(null)
+  }, [bodyArtifact?.artifactUrl])
 
   const togglePanel = useCallback((panel: Exclude<WorkspacePanel, null>) => {
+    setHeadingFocus(null)
     setActivePanel((current) => current === panel ? null : panel)
   }, [])
+
+  useEffect(() => {
+    if (!headingFocus || activePanel || columnShown || paletteSeed !== null || headingFocus.artifactUrl !== bodyArtifact?.artifactUrl) return
+    let frame = 0
+    let timer = 0
+    let attempts = 0
+    const focus = () => {
+      let target: HTMLElement | null = null
+      try {
+        const source = currentFormat === 'html' ? htmlFrameRef.current?.contentDocument : document
+        const anchor = source?.getElementById(headingFocus.id)
+        // HTML TOCs may anchor a section around the heading rather than the heading itself.
+        target = anchor?.closest<HTMLElement>('h1, h2, h3, h4, h5, h6')
+          ?? anchor?.querySelector<HTMLElement>('h1, h2, h3, h4, h5, h6')
+          ?? anchor ?? null
+      } catch { /* cross-origin frames keep their existing isolation */ }
+      if (target) {
+        const hadTabIndex = target.hasAttribute('tabindex')
+        if (!hadTabIndex) target.setAttribute('tabindex', '-1')
+        target.focus({ preventScroll: true })
+        if (!hadTabIndex) target.addEventListener('blur', () => target?.removeAttribute('tabindex'), { once: true })
+        setHeadingJump('settled')
+        setHeadingFocus(null)
+      } else if (++attempts < 20) {
+        timer = window.setTimeout(focus, 50)
+      } else {
+        focusStageAfterPalette.current = false
+        ;(htmlFrameRef.current ?? stageRef.current)?.focus({ preventScroll: true })
+        setHeadingJump('settled')
+        setHeadingFocus(null)
+      }
+    }
+    // Let the native modal close/restore focus and the fragment scroll finish first.
+    frame = window.requestAnimationFrame(() => { frame = window.requestAnimationFrame(focus) })
+    return () => { window.cancelAnimationFrame(frame); window.clearTimeout(timer) }
+  }, [headingFocus, activePanel, columnShown, paletteSeed, bodyArtifact?.artifactUrl, currentFormat, frameLoads])
 
   // At a wide viewport Contents and Details are parts of the column: the commands move focus there.
   const activePanelRef = useRef(activePanel)
@@ -339,6 +370,7 @@ export function ArtifactWorkspace({
     if (before === columnShown) return
     const last = lastFocus.current
     if (columnShown) {
+      setHeadingFocus(null)
       setActivePanel(null)
       if (last && last.area !== 'column') {
         lastFocus.current = null
@@ -437,6 +469,10 @@ export function ArtifactWorkspace({
       ? activeElement
       : null
     focusStageAfterPalette.current = false
+    // Dismiss the native modal before opening the portal palette. Details keeps its existing
+    // toggle state so its palette command can still close an already open Details panel.
+    setActivePanel((current) => current === 'contents' ? null : current)
+    setHeadingFocus(null)
     setPaletteSeed(seed)
   }, [])
 
@@ -583,7 +619,7 @@ export function ArtifactWorkspace({
         event.preventDefault()
         openPart('contents')
       } else if (event.key === 'Escape' && !event.defaultPrevented && activePanel !== null) {
-        setActivePanel(null)
+        closePanel()
       } else if (event.key === 'Escape' && !event.defaultPrevented && navigatorVisibleRef.current) {
         closeNavigatorRef.current()
       }
@@ -710,59 +746,18 @@ export function ArtifactWorkspace({
   }
 
   function cancelHeadingJump() {
-    headingJumpRequest.current += 1
-    if (headingJumpTimer.current !== null) window.clearTimeout(headingJumpTimer.current)
-    headingJumpTimer.current = null
-    setActiveHeading(null)
+    setHeadingFocus(null)
+    setHeadingJump(null)
   }
 
-  function closePanelAfterJump() {
-    setHeadingJump('settled')
-    setActivePanel(null)
-    ;(contentsToggleRef.current ?? moreMenuTriggerRef.current)?.focus()
-  }
-
-  // Contents stays open after a jump only when the target heading is not
-  // covered by the (absolutely positioned) panel. HTML artifacts always close
-  // (their headings end up under the panel, and measuring would only delay the
-  // close); Markdown headings are measured once the scroll settles. Unmeasurable
-  // targets fall back to closing. Palette jumps always close.
-  function jumpToHeading(id: string, options: { keepPanelIfClear?: boolean } = {}) {
-    cancelHeadingJump()
+  // A temporary Contents panel always yields to the selected heading. The persistent column
+  // uses jumpFromColumn instead, retaining its list and the focused entry.
+  function jumpToHeading(id: string) {
+    setHeadingJump('pending')
+    if (bodyArtifact) setHeadingFocus({ artifactUrl: bodyArtifact.artifactUrl, id })
     navigateWithinWorkspace(`${hereHref}#${encodeURIComponent(id)}`)
     setPaletteSeed(null)
-    if (!options.keepPanelIfClear) {
-      setActivePanel(null)
-      return
-    }
-    if (currentFormat !== 'markdown') {
-      closePanelAfterJump()
-      return
-    }
-    const request = headingJumpRequest.current
-    const artifactId = bodyArtifact?.id ?? ''
-    setHeadingJump('pending')
-    // Wait for the scroll to settle (heading position unchanged between polls).
-    let previousTop: number | null = null
-    let attempts = 0
-    const settle = () => {
-      headingJumpTimer.current = null
-      if (request !== headingJumpRequest.current) return
-      const top = headingTop(id)
-      attempts += 1
-      if ((top === null && attempts < 5) || (top !== null && top !== previousTop && attempts < 20)) {
-        previousTop = top
-        headingJumpTimer.current = window.setTimeout(settle, 60)
-        return
-      }
-      if (headingIsClearOfPanel(id)) {
-        setHeadingJump('settled')
-        setActiveHeading({ artifactId, id })
-      } else {
-        closePanelAfterJump()
-      }
-    }
-    headingJumpTimer.current = window.setTimeout(settle, 60)
+    setActivePanel(null)
   }
 
   // Activating a Contents entry in the column goes to the heading as the overlay does; the column stays open
@@ -775,8 +770,9 @@ export function ArtifactWorkspace({
 
   function closePanel() {
     const toggle = activePanel === 'details' ? detailsToggleRef.current : contentsToggleRef.current
+    setHeadingFocus(null)
     setActivePanel(null)
-    ;(toggle ?? moreMenuTriggerRef.current)?.focus()
+    window.requestAnimationFrame(() => (toggle ?? moreMenuTriggerRef.current)?.focus())
   }
 
   const htmlArtifactUrl = bodyArtifact && currentFormat === 'html'
@@ -1435,38 +1431,27 @@ export function ArtifactWorkspace({
             ) : null}
             {previewArtifact?.format === 'html' ? previewColumn : null}
 
-            {activePanel && bodyArtifact && !columnShown ? (
-              <aside
-                className="context-panel"
-                aria-label={panelLabel}
-              >
+            {activePanel && bodyArtifact && !columnShown ? activePanel === 'contents' ? (
+              <ContentsDialog host={stageRef} onDismiss={closePanel}>
                 <div className="context-panel-header">
-                  <span>{panelLabel}</span>
-                  <button
-                    className="context-panel-close"
-                    type="button"
-                    title={`Close ${panelLabel}`}
-                    aria-label={`Close ${panelLabel}`}
-                    onClick={closePanel}
-                  >
+                  <span>Contents</span>
+                  <button className="context-panel-close" type="button" title="Close Contents" aria-label="Close Contents" onClick={closePanel}>
                     <Icon name="close" size={14} />
                   </button>
                 </div>
-                {activePanel === 'contents' ? (
-                  tocEntries.length === 0 ? (
-                    <p className="toc-empty">This artifact does not include indexed headings.</p>
-                  ) : (
-                    <ContentsList
-                      entries={tocEntries}
-                      activeId={activeHeading?.artifactId === bodyArtifact.id ? activeHeading.id : null}
-                      onJump={(id) => jumpToHeading(id, { keepPanelIfClear: true })}
-                    />
-                  )
-                ) : preview ? (
-                  <PreviewDetails reader={preview} navigate={navigateWithinWorkspace} />
-                ) : (
-                  <ArtifactDetails artifact={bodyArtifact} />
-                )}
+                {tocEntries.length === 0 ? (
+                  <p className="toc-empty">This artifact does not include indexed headings.</p>
+                ) : <ContentsList entries={tocEntries} activeId={null} onJump={jumpToHeading} />}
+              </ContentsDialog>
+            ) : (
+              <aside className="context-panel" aria-label={panelLabel}>
+                <div className="context-panel-header">
+                  <span>{panelLabel}</span>
+                  <button className="context-panel-close" type="button" title={`Close ${panelLabel}`} aria-label={`Close ${panelLabel}`} onClick={closePanel}>
+                    <Icon name="close" size={14} />
+                  </button>
+                </div>
+                {preview ? <PreviewDetails reader={preview} navigate={navigateWithinWorkspace} /> : <ArtifactDetails artifact={bodyArtifact} />}
               </aside>
             ) : null}
             </StageBody>
@@ -1614,28 +1599,6 @@ function highlightFrame(iframe: HTMLIFrameElement, query: string, scrollToFirst:
 const frameHighlightCleanup = new WeakMap<HTMLIFrameElement, () => void>()
 /** Scrolls a directory page to the first search match in its HTML index frame; re-run once the frame has its full height. */
 const hostMatchScroll = new WeakMap<HTMLIFrameElement, () => void>()
-
-function headingTop(id: string) {
-  try {
-    const target = document.getElementById(id)
-    return target ? Math.round(target.getBoundingClientRect().top) : null
-  } catch {
-    return null
-  }
-}
-
-// Measures the heading's text (not its full-width block box).
-function headingIsClearOfPanel(id: string) {
-  const panel = document.querySelector('.context-panel')?.getBoundingClientRect()
-  const target = document.getElementById(id)
-  if (!panel || !target) return false
-  const range = target.ownerDocument.createRange()
-  range.selectNodeContents(target)
-  const heading = range.getBoundingClientRect()
-  if (heading.width === 0 && heading.height === 0) return false
-  return heading.right <= panel.left || heading.left >= panel.right
-    || heading.bottom <= panel.top || heading.top >= panel.bottom
-}
 
 /** Observes an HTML page's document height so a frame inside a scrolling page can show all of it. */
 function watchFrameHeight(iframe: HTMLIFrameElement, onHeight: (height: number) => void) {

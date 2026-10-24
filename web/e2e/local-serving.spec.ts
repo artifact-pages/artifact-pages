@@ -14,6 +14,9 @@ function moreActionsButton(page: Page) {
 
 /** Runs a secondary toolbar action: its button on wide screens, its More menu item on narrow ones. */
 async function clickToolbarAction(page: Page, desktop: Locator, menuName: string | RegExp) {
+  // Contents is modal: dismiss it before choosing a different toolbar action.
+  const contentsDialog = page.getByRole('dialog', { name: 'Contents', exact: true })
+  if (await contentsDialog.isVisible()) await contentsDialog.getByRole('button', { name: 'Close Contents' }).click()
   if (!isNarrowChrome(page)) {
     await desktop.click()
     return
@@ -1997,9 +2000,8 @@ test('Markdown heading IDs match the shared fixture and Contents and palette rea
   await expect(reader.locator('#md-widget-1')).toHaveText('Widget element anchor')
 
   await page.getByRole('button', { name: 'Contents', exact: true }).click()
-  const contents = page.getByRole('complementary', { name: 'Contents' })
-  // Contents stays open only when the jumped-to heading is clear of it, so
-  // let that decision settle and reopen the panel if it closed.
+  const contents = page.getByRole('dialog', { name: 'Contents' })
+  // Each selection closes temporary Contents; reopen after destination focus settles.
   const reopenContents = async () => {
     await expect(page.locator('.stage')).toHaveAttribute('data-heading-jump', 'settled')
     if (!(await contents.isVisible())) await page.getByRole('button', { name: 'Contents', exact: true }).click()
@@ -2281,7 +2283,7 @@ test('HTML heading navigation keeps the URL and iframe section in sync with one 
   const practiceHeading = artifact.getByRole('heading', { name: 'Practice over prediction' })
   await expect(artifact.getByRole('heading', { name: 'Designing for resilience' })).toBeVisible()
   await page.getByRole('button', { name: 'Contents', exact: true }).click()
-  await page.getByRole('complementary', { name: 'Contents' })
+  await page.getByRole('dialog', { name: 'Contents' })
     .getByRole('button', { name: 'Practice over prediction' }).click()
 
   await expect(page).toHaveURL(/#practice$/)
@@ -2330,7 +2332,7 @@ test('Contents and Details can be dismissed and reopened without losing the read
     )).toBeLessThanOrEqual(2)
 
     await clickToolbarAction(page, contentsButton, 'Contents')
-    const contents = page.getByRole('complementary', { name: 'Contents' })
+    const contents = page.getByRole('dialog', { name: 'Contents' })
     const closeContents = contents.getByRole('button', { name: 'Close Contents' })
     await expect(closeContents).toBeVisible()
     await expect(closeContents).toBeInViewport()
@@ -2362,109 +2364,76 @@ test('Contents and Details can be dismissed and reopened without losing the read
     await contents.getByRole('button', { name: 'Practice over prediction' }).click()
     await expect(page).toHaveURL(/#practice$/)
     await expect.poll(iframeHash).toBe('#practice')
-    // Narrow screens always close the panel; wider outcomes are covered by the geometry test.
-    if (viewport.width === 390) await expect(contents).toBeHidden()
+    // Temporary Contents closes at every width below the persistent column.
+    await expect(contents).toBeHidden()
     await expect(page.frameLocator('iframe[title="Designing for resilience"]')
       .getByRole('heading', { name: 'Practice over prediction' })).toBeInViewport()
   }
 })
 
-test('Contents stays open after a heading jump only when the heading is not covered by the panel', async ({ page }) => {
-  const targets = [
-    { name: 'HTML', path: '/showcase/editorial/field-notes/index.html', frameTitle: 'Designing for resilience' },
-    { name: 'Markdown', path: '/sre/reports/latency-retrospective.md', frameTitle: null },
-  ]
-  const intersects = (a: { x: number, y: number, width: number, height: number }, b: typeof a) => (
-    a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
-  )
-  let keptOpenCases = 0
-  let keptOpenAtDesktop = false
-
-  for (const target of targets) {
-    for (const viewport of [
-      { width: 1100, height: 800, sidebar: true },
-      { width: 390, height: 844, sidebar: false },
-      { width: 1000, height: 800, sidebar: true },
-      { width: 1000, height: 800, sidebar: false },
-      { width: 900, height: 800, sidebar: true },
-      { width: 800, height: 800, sidebar: false },
-    ]) {
-      await page.setViewportSize({ width: viewport.width, height: viewport.height })
-      await page.goto(target.path)
-      const collapse = page.getByRole('button', { name: 'Collapse sidebar' })
+test('temporary Contents keeps keyboard focus inside, dismisses to its trigger, and yields to the selected heading', async ({ page }) => {
+  for (const path of ['/showcase/editorial/field-notes/index.html', '/sre/reports/latency-retrospective.md']) {
+    for (const width of [390, 1100]) {
+      await page.setViewportSize({ width, height: 844 })
+      await page.goto(path)
       await expect(page.locator('.stage.has-artifact')).toBeVisible()
-      if (await collapse.isVisible() !== viewport.sidebar) await page.keyboard.press('Control+b')
-      if (viewport.sidebar) await expect(collapse).toBeVisible()
-      else await expect(collapse).toBeHidden()
+      const toggle = page.locator('.context-actions .context-button[title^="Contents"]')
+      const contents = page.getByRole('dialog', { name: 'Contents', exact: true })
+      const close = contents.getByRole('button', { name: 'Close Contents' })
+      await clickToolbarAction(page, toggle, 'Contents')
+      await expect(close).toBeFocused()
+      await page.keyboard.press('Shift+Tab')
+      await expect(contents.locator('.toc-link').last()).toBeFocused()
+      await page.keyboard.press('Tab')
+      await expect(close).toBeFocused()
+      await page.keyboard.press('Escape')
+      await expect(contents).toBeHidden()
+      await expect(toolbarFocusTarget(page, toggle)).toBeFocused()
 
-      const contentsToggle = page.locator('.context-actions .context-button[title^="Contents"]')
-      await clickToolbarAction(page, contentsToggle, 'Contents')
-      const contents = page.getByRole('complementary', { name: 'Contents' })
-      await expect(contents).toBeVisible()
-      const panelBox = (await contents.boundingBox())!
-      const entries = contents.locator('.toc-link')
-      const entry = entries.nth(Math.min(2, (await entries.count()) - 1))
+      await clickToolbarAction(page, toggle, 'Contents')
+      await page.mouse.click(5, 150) // outside the panel, including over the iframe/drawer area
+      await expect(contents).toBeHidden()
+      await expect(toolbarFocusTarget(page, toggle)).toBeFocused()
+
+      await clickToolbarAction(page, toggle, 'Contents')
+      const entry = contents.locator('.toc-link').nth(2)
+      const name = (await entry.textContent())!
       await entry.click()
-      const id = await page.evaluate(() => decodeURIComponent(window.location.hash.slice(1)))
-      expect(id).not.toBe('')
-      await expect(page.locator('.stage')).toHaveAttribute('data-heading-jump', 'settled')
+      await expect(contents).toBeHidden()
+      await expect(page).toHaveURL(/#[^#]+$/)
+      const heading = path.endsWith('.html')
+        ? page.frameLocator('iframe[title="Designing for resilience"]').getByRole('heading', { name, exact: true })
+        : page.locator('.markdown-article').getByRole('heading', { name, exact: true }).first()
+      await expect(heading).toBeFocused()
+      await expect(heading).toBeInViewport()
 
-      const headingBox = await (async () => {
-        if (target.frameTitle) {
-          return page.locator(`iframe[title="${target.frameTitle}"]`).evaluate((frame, headingId) => {
-            const heading = (frame as HTMLIFrameElement).contentDocument!.getElementById(headingId)!
-            const range = heading.ownerDocument.createRange()
-            range.selectNodeContents(heading)
-            const rect = range.getBoundingClientRect()
-            const offset = frame.getBoundingClientRect()
-            return { x: rect.x + offset.x, y: rect.y + offset.y, width: rect.width, height: rect.height }
-          }, id)
-        }
-        return page.locator(`[id="${id}"]`).evaluate((node) => {
-          const range = node.ownerDocument.createRange()
-          range.selectNodeContents(node)
-          const rect = range.getBoundingClientRect()
-          return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
-        })
-      })()
-
-      const label = `${target.name} ${viewport.width}px sidebar ${viewport.sidebar ? 'open' : 'closed'}`
-      if (target.frameTitle) {
-        // HTML artifacts always close, and focus moves to the Contents toggle.
-        await expect(contents, label).toBeHidden()
-        await expect(toolbarFocusTarget(page, contentsToggle), label).toBeFocused()
-      } else if (intersects(headingBox, panelBox)) {
-        await expect(contents, label).toBeHidden()
-        await expect(toolbarFocusTarget(page, contentsToggle), label).toBeFocused()
-      } else {
-        expect(viewport.width, label).toBeGreaterThan(620)
-        await expect(contents, label).toBeVisible()
-        await expect(entry, label).toBeFocused()
-        await expect(entry, label).toHaveAttribute('aria-current', 'location')
-        keptOpenCases += 1
-        expect(target.name, label).toBe('Markdown')
-        if (viewport.width === 1100) keptOpenAtDesktop = true
-      }
+      // Reopening after a jump cancels any pending destination focus.
+      await clickToolbarAction(page, toggle, 'Contents')
+      await expect(close).toBeFocused()
+      await expect(heading).not.toBeFocused()
+      await close.click()
+      await expect(toolbarFocusTarget(page, toggle)).toBeFocused()
     }
   }
-  expect(keptOpenCases).toBeGreaterThan(0)
-  expect(keptOpenAtDesktop).toBe(true)
 })
 
-test('a stale heading-jump check never closes a reopened Contents panel', async ({ page }) => {
-  await page.setViewportSize({ width: 1100, height: 800 })
+test('Contents opened by shortcut or palette takes focus without stranding the reader behind a modal', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/sre/reports/latency-retrospective.md')
-  const contentsButton = page.locator('.context-actions .context-button[title^="Contents"]')
-  const contents = page.getByRole('complementary', { name: 'Contents' })
-  await contentsButton.click()
-  await contents.locator('.toc-link').nth(2).click()
-  await contents.getByRole('button', { name: 'Close Contents' }).click()
-  await contentsButton.click()
-  await expect(contents).toBeVisible()
-  // The cancelled check would have decided within ~1.2s; the panel must stay.
-  await page.waitForTimeout(1500)
-  await expect(contents).toBeVisible()
-  await expect(contents.locator('.toc-link[aria-current]')).toHaveCount(0)
+  await expect(page.getByTestId('markdown-document')).toBeVisible()
+  await page.keyboard.press('Control+Shift+O')
+  const contents = page.getByRole('dialog', { name: 'Contents', exact: true })
+  await expect(contents.getByRole('button', { name: 'Close Contents' })).toBeFocused()
+  await page.keyboard.press('Control+k')
+  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  await expect(contents).toBeHidden()
+  await palette.getByRole('combobox').fill('>Toggle contents')
+  await palette.getByRole('option', { name: /Toggle contents/ }).click()
+  await expect(palette).toBeHidden()
+  await expect(contents.getByRole('button', { name: 'Close Contents' })).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(contents).toBeHidden()
+  await expect(page.getByRole('button', { name: 'More actions' })).toBeFocused()
 })
 
 test('multi-file artifacts stay in their site namespace when relative asset paths overlap', async ({ page }) => {
@@ -2527,15 +2496,15 @@ test('multi-file artifacts stay in their site namespace when relative asset path
   await page.getByRole('button', { name: 'Contents', exact: true }).click()
   await expect(details).toBeHidden()
   await expect(page.getByRole('button', { name: 'Contents', exact: true })).toHaveAttribute('aria-pressed', 'true')
-  await page.getByRole('button', { name: 'Contents', exact: true }).click()
-  await expect(page.getByRole('complementary', { name: 'Contents' })).toBeHidden()
+  await page.getByRole('dialog', { name: 'Contents' }).getByRole('button', { name: 'Close Contents' }).click()
+  await expect(page.getByRole('dialog', { name: 'Contents' })).toBeHidden()
   await detailsButton.click()
   await expect(details).toBeVisible()
   await detailsButton.click()
   await expect(details).toBeHidden()
 
   await page.getByRole('button', { name: 'Contents', exact: true }).click()
-  const contents = page.getByRole('complementary', { name: 'Contents' })
+  const contents = page.getByRole('dialog', { name: 'Contents' })
   await expect(contents).toBeVisible()
   await contents.getByRole('button', { name: 'Root cause' }).click()
   await expect(page).toHaveURL(/#root-cause$/)
@@ -2746,7 +2715,7 @@ test('Markdown pages render safely with GFM, Mermaid, local assets, and extensio
   expect(await page.evaluate(() => (window as Window & { __markdownScriptShouldNotRun?: boolean }).__markdownScriptShouldNotRun)).toBeUndefined()
 
   await page.getByRole('button', { name: 'Contents', exact: true }).click()
-  const contents = page.getByRole('complementary', { name: 'Contents' })
+  const contents = page.getByRole('dialog', { name: 'Contents' })
   await contents.getByRole('button', { name: 'Request path' }).click()
   await expect(page).toHaveURL(/#md-request-path$/)
   await expect(reader.getByRole('heading', { name: 'Request path' })).toBeInViewport()
@@ -3046,7 +3015,7 @@ test('Markdown gallery covers typography, assets, links, safety, and fragment na
   await expect(relatedRunbook).toHaveAttribute('href', '/sre/runbooks/service-recovery.md')
   const contentsButton = page.getByRole('button', { name: 'Contents', exact: true })
   await contentsButton.click()
-  const contents = page.getByRole('complementary', { name: 'Contents' })
+  const contents = page.getByRole('dialog', { name: 'Contents' })
   await contents.getByRole('button', { name: '障害対応 — 日本語の見出し' }).click()
   const japaneseHeading = reader.getByRole('heading', { level: 3, name: '障害対応 — 日本語の見出し' })
   await expect(japaneseHeading).toHaveAttribute('id', 'md-障害対応--日本語の見出し')
@@ -3782,7 +3751,7 @@ test('site home hides artifact actions while an open artifact provides usable ac
   await detailsButton.click()
   await expect(page.getByRole('complementary', { name: 'Details' })).toBeVisible()
   await contentsButton.click()
-  await expect(page.getByRole('complementary', { name: 'Contents' })).toBeVisible()
+  await expect(page.getByRole('dialog', { name: 'Contents' })).toBeVisible()
 })
 
 test('unknown sites show a clear not-found state and safe recovery action', async ({ page }) => {
@@ -7480,11 +7449,13 @@ test.describe('narrow chrome and scroll cues (ISSUE-080)', () => {
 
     await more.click()
     await menu.getByRole('menuitemcheckbox', { name: 'Contents' }).click()
-    const contents = page.getByRole('complementary', { name: 'Contents' })
+    const contents = page.getByRole('dialog', { name: 'Contents' })
     await expect(contents).toBeVisible()
+    await expect(contents.getByRole('button', { name: 'Close Contents' })).toBeFocused()
+    await page.keyboard.press('Escape')
     await expect(more).toBeFocused()
     await more.click()
-    await expect(menu.getByRole('menuitemcheckbox', { name: 'Contents' })).toHaveAttribute('aria-checked', 'true')
+    await expect(menu.getByRole('menuitemcheckbox', { name: 'Contents' })).toHaveAttribute('aria-checked', 'false')
     await menu.getByRole('menuitemcheckbox', { name: 'Details' }).click()
     const details = page.getByRole('complementary', { name: 'Details' })
     await expect(details).toBeVisible()
@@ -8331,7 +8302,8 @@ test.describe('reader context column (ISSUE-108)', () => {
     await expect(columnOf(page)).toHaveCount(0)
     const actions = page.locator('.context-actions')
     await actions.getByRole('button', { name: 'Contents', exact: true }).click()
-    await expect(page.getByRole('complementary', { name: 'Contents' })).toBeVisible()
+    await expect(page.getByRole('dialog', { name: 'Contents' })).toBeVisible()
+    await page.keyboard.press('Escape')
     await actions.getByRole('button', { name: 'Details', exact: true }).click()
     await expect(page.getByRole('complementary', { name: 'Details' })).toBeVisible()
     expect(await noHorizontalOverflow(page)).toBe(true)
@@ -8341,7 +8313,7 @@ test.describe('reader context column (ISSUE-108)', () => {
     await page.setViewportSize({ width: 1100, height: 800 })
     await page.goto(markdownPath)
     await page.locator('.context-actions').getByRole('button', { name: 'Contents', exact: true }).click()
-    const panel = page.getByRole('complementary', { name: 'Contents' })
+    const panel = page.getByRole('dialog', { name: 'Contents' })
     await panel.locator('.toc-link').nth(1).focus()
     await page.setViewportSize({ width: 1300, height: 800 })
     await expect(panel).toHaveCount(0)
@@ -8591,7 +8563,7 @@ test.describe('reader context column (ISSUE-108)', () => {
     await expect(columnOf(page)).toHaveCount(0)
     await more.click()
     await menuItem('Contents').click()
-    const panel = page.getByRole('complementary', { name: 'Contents' })
+    const panel = page.getByRole('dialog', { name: 'Contents' })
     await expect(panel).toBeVisible()
     await panel.locator('.toc-link').nth(1).focus()
     await page.setViewportSize({ width: 1440, height: 800 })
