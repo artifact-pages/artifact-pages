@@ -18,7 +18,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { gzipSync, gunzipSync } from 'node:zlib'
 import { chromium } from '@playwright/test'
-import { objectSizes as measureObjectSizes } from './calculate-hosting-cost.mjs'
+import { objectSizes as measureObjectSizes, sanitizedRequestHeaders, conditionalHeaderEvidence } from './calculate-hosting-cost.mjs'
 
 const repository = path.resolve(import.meta.dirname, '..')
 const labRoot = path.join(repository, '.local', 'web-scale')
@@ -613,7 +613,26 @@ async function newSession(browser, profileName, { track = true } = {}) {
   if (profile.network) await cdp.send('Network.emulateNetworkConditions', profile.network)
   if (profile.cpuRate > 1) await cdp.send('Emulation.setCPUThrottlingRate', { rate: profile.cpuRate })
   const requests = new Map()
-  cdp.on('Network.requestWillBeSent', (event) => requests.set(event.requestId, { url: event.request.url, type: event.type, raw: 0, encoded: 0, status: 0, done: false, at: Date.now(), active: Date.now() }))
+  const pendingRequestHeaders = new Map()
+  const requestRecord = (event) => {
+    const r = { url: event.request.url, type: event.type, raw: 0, encoded: 0, status: 0, done: false,
+      at: Date.now(), active: Date.now(), requestHeaders: event.request.headers ?? {}, requestHeadersSource: 'requestWillBeSent' }
+    const extra = pendingRequestHeaders.get(event.requestId)
+    if (extra) {
+      r.requestHeaders = extra.headers
+      r.requestHeadersSource = 'requestWillBeSentExtraInfo'
+      pendingRequestHeaders.delete(event.requestId)
+    }
+    requests.set(event.requestId, r)
+  }
+  cdp.on('Network.requestWillBeSent', requestRecord)
+  cdp.on('Network.requestWillBeSentExtraInfo', (event) => {
+    const r = requests.get(event.requestId)
+    if (r) {
+      r.requestHeaders = event.headers ?? {}
+      r.requestHeadersSource = 'requestWillBeSentExtraInfo'
+    } else pendingRequestHeaders.set(event.requestId, { headers: event.headers ?? {} })
+  })
   cdp.on('Network.responseReceived', (event) => {
     const r = requests.get(event.requestId)
     if (r) {
@@ -632,7 +651,6 @@ async function newSession(browser, profileName, { track = true } = {}) {
     const r = requests.get(event.requestId)
     if (r) {
       r.extraStatus = event.statusCode
-      r.requestHeaders = event.requestHeaders ?? {}
       r.responseHeaders = event.headers ?? {}
       r.resourceIPAddressSpace = event.resourceIPAddressSpace ?? ''
       r.cacheStorageCacheName = event.cacheStorageCacheName ?? ''
@@ -1111,8 +1129,9 @@ function requestVector(requests) {
       decodedBytes: r.raw, contentType: r.contentType, contentEncoding: r.contentEncoding, cacheControl: r.cacheControl ?? '',
       httpMetadata: Object.fromEntries(['content-length', 'etag', 'last-modified', 'vary', 'date'].map((name) => [name,
         Object.entries(r.responseHeaders ?? {}).find(([key]) => key.toLowerCase() === name)?.[1] ?? ''])),
-      requestHeaders: { 'if-none-match': r.requestHeaders?.['If-None-Match'] ?? r.requestHeaders?.['if-none-match'] ?? '',
-        'if-modified-since': r.requestHeaders?.['If-Modified-Since'] ?? r.requestHeaders?.['if-modified-since'] ?? '' },
+      requestHeaders: sanitizedRequestHeaders(r.requestHeaders),
+      requestHeadersSource: r.requestHeadersSource ?? 'absent',
+      conditionalHeaderEvidence: conditionalHeaderEvidence(r.requestHeaders, r.requestHeadersSource),
       fromCache: Boolean(r.fromCache), fromDiskCache: Boolean(r.fromDiskCache), fromPrefetchCache: Boolean(r.fromPrefetchCache),
       fromServiceWorker: Boolean(r.fromServiceWorker), cacheStorageCacheName: r.cacheStorageCacheName ?? '',
       resourceIPAddressSpace: r.resourceIPAddressSpace ?? '', failed: Boolean(r.failed) })),

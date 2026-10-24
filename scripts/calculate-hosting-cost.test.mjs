@@ -1,6 +1,20 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { transferCostGB, classifyResponses, originReads, sessionVector, lWeighted, invalidationCost, objectSizes, compressedResponseBytes, calculate, cloudFrontViewerRequestCost, r2AfterFreeAllowance } from './calculate-hosting-cost.mjs'
+import { readFileSync } from 'node:fs'
+import { transferCostGB, classifyResponses, originReads, sessionVector, lWeighted, invalidationCost, objectSizes, compressedResponseBytes, calculate, cloudFrontViewerRequestCost, r2AfterFreeAllowance, conditionalHeaderEvidence, sanitizedRequestHeaders, parseLegacyModel } from './calculate-hosting-cost.mjs'
+
+test('request header evidence records conditional values or explicit absence', () => {
+  const headers = sanitizedRequestHeaders({ 'If-None-Match': '"abc"', 'If-Modified-Since': 'Tue, 01 Jan 2030 00:00:00 GMT', Cookie: 'secret' })
+  assert.equal(headers.Cookie, '[REDACTED]')
+  assert.deepEqual(conditionalHeaderEvidence(headers, 'requestWillBeSentExtraInfo'), {
+    source: 'requestWillBeSentExtraInfo',
+    ifNoneMatch: { present: true, value: '"abc"' },
+    ifModifiedSince: { present: true, value: 'Tue, 01 Jan 2030 00:00:00 GMT' },
+  })
+  assert.deepEqual(conditionalHeaderEvidence({}, 'absent'), {
+    source: 'absent', ifNoneMatch: { present: false, value: null }, ifModifiedSince: { present: false, value: null },
+  })
+})
 
 test('CloudFront transfer free allowance and tier edges', () => {
   assert.equal(transferCostGB(1000), 0)
@@ -84,4 +98,42 @@ test('calculator emits nine rows and uses the L 30:1 publisher mix', () => {
   assert.equal(l.aws.invalidationPaths, 26021)
   assert.ok(Number.isFinite(l.aws.transfer))
   assert.equal(result.sensitivities.length, 3 * 12)
+  const brotli = result.sensitivities.find((x) => x.scenario === 'S' && x.compression === 'brotli5').rows[2]
+  assert.deepEqual(brotli.sensitivity, { q: 3, reloads: 0, reloadIndexChanged: false, headerBytes: 1024, compression: 'brotli5', missRate: 1 })
+  const changedReload = result.sensitivities.find((x) => x.scenario === 'S' && x.reloads === 1 && x.reloadIndexChanged === true).rows[1]
+  assert.equal(changedReload.assumptions.reloadIndexChanged, true)
+  assert.equal(changedReload.assumptions.reloads, 1)
+  assert.equal(changedReload.assumptions.missRate, 0.5)
+})
+
+test('sequential legacy waterfall reconciles all scenarios, misses, and price series', () => {
+  const reader = JSON.parse(readFileSync('docs/research/hosting-cost-reader-session-results.json', 'utf8'))
+  const committed = JSON.parse(readFileSync('docs/research/hosting-cost-model-results.json', 'utf8'))
+  const legacyMarkdown = readFileSync('docs/research/hosting-cost-model-legacy-2026-10-18.md', 'utf8')
+  const publishers = { plain: {}, aws: {} }
+  for (const provider of ['plain', 'aws']) for (const size of [1000, 5000, 50000]) {
+    const evidence = committed.evidence.publisher[provider][size]
+    publishers[provider][size] = { ...evidence, phases: evidence.phaseSummaries.map((phase) => ({ ...phase,
+      invalidationPathCount: phase.invalidationPathCount, awsProviderPathCount: phase.awsProviderPathCount })) }
+  }
+  const result = calculate(reader, publishers, { legacyMarkdown })
+  const legacy = parseLegacyModel(legacyMarkdown)
+  assert.equal(result.decomposition.stages.length, 9)
+  assert.deepEqual(result.decomposition.order, ['compression', 'sessionReuse', 'searchTreatment', 'requestCount', 'storage'])
+  const expectedSeries = ['awsUS', 'awsPC100', 'r2Gross', 'r2AfterDedicatedFree']
+  for (const row of result.decomposition.stages) {
+    const old = legacy.totals.get(`${row.scenario}:${row.missRate}`)
+    const next = result.scenarios.find((x) => x.scenario === row.scenario && x.missRate === row.missRate)
+    const expectedOld = { awsUS: old.awsUS, awsPC100: old.awsPC, r2Gross: old.r2Gross, r2AfterDedicatedFree: old.r2Net }
+    const expectedNew = { awsUS: next.aws.usCanada, awsPC100: next.aws.pc100Upper, r2Gross: next.r2.gross, r2AfterDedicatedFree: next.r2.afterDedicatedFreeAllowance }
+    for (const series of expectedSeries) {
+      assert.equal(Number(row.legacyTable[series].toFixed(2)), expectedOld[series])
+      assert.equal(Number(row.legacy[series].toFixed(2)), expectedOld[series])
+      assert.ok(Math.abs(row.new[series] - expectedNew[series]) < 1e-8, `${row.scenario} ${row.missRate} ${series} new endpoint`)
+      const delta = row.steps.reduce((sum, step) => sum + step.delta[series], 0)
+      assert.ok(Math.abs(delta - (row.new[series] - row.legacy[series])) < 1e-8, `${row.scenario} ${row.missRate} ${series} waterfall sum`)
+    }
+    assert.equal(row.steps.length, 5)
+  }
+  assert.equal(result.decomposition.stages.find((x) => x.scenario === 'L' && x.missRate === 0.1).steps[0].delta.awsUS < 0, true)
 })
