@@ -76,17 +76,14 @@ func TestReadAppCacheRetryAbsentAndValid(t *testing.T) {
 		}
 	})
 
-	t.Run("valid with additive field", func(t *testing.T) {
+	t.Run("unknown field fails closed", func(t *testing.T) {
 		backend := &appCacheRetryTestBackend{
 			getObject: Object{Bytes: []byte(`{"schemaVersion":1,"paths":["/index.html"],"futureField":{"enabled":true}}`)},
 			getETag:   `"current-etag"`,
 		}
 		record, etag, err := readAppCacheRetry(context.Background(), backend)
-		if err != nil {
-			t.Fatalf("readAppCacheRetry() error = %v", err)
-		}
-		if record.SchemaVersion != 1 || len(record.Paths) != 1 || record.Paths[0] != "/index.html" || etag != `"current-etag"` {
-			t.Fatalf("readAppCacheRetry() = %#v, %q; want schema 1, /index.html, and the observed ETag", record, etag)
+		if err == nil {
+			t.Fatalf("readAppCacheRetry() = %#v, %q; want unknown field rejection", record, etag)
 		}
 		if backend.getKey != appCacheRetryObjectKey || backend.putCalls != 0 {
 			t.Fatalf("read key = %q, writes = %d; want key %q and no writes", backend.getKey, backend.putCalls, appCacheRetryObjectKey)
@@ -137,53 +134,6 @@ func TestReadAppCacheRetryRejectsInvalidRecordsWithoutWriting(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestWriteAppCacheRetryUsesConditionalCreateOrUpdate(t *testing.T) {
-	tests := []struct {
-		name      string
-		etag      string
-		condition ObjectCondition
-	}{
-		{name: "create", condition: ObjectCondition{IfNoneMatch: true}},
-		{name: "update", etag: `"current-etag"`, condition: ObjectCondition{IfMatchETag: `"current-etag"`}},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			backend := &appCacheRetryTestBackend{putETag: `"next-etag"`}
-			record := appCacheRetry{SchemaVersion: appCacheRetrySchema, Paths: []string{"/index.html"}}
-			etag, err := writeAppCacheRetry(context.Background(), backend, record, test.etag)
-			if err != nil {
-				t.Fatalf("writeAppCacheRetry() error = %v", err)
-			}
-			if etag != `"next-etag"` || backend.putCalls != 1 || backend.putKey != appCacheRetryObjectKey || backend.putCondition != test.condition {
-				t.Fatalf("write result = %q, calls = %d, key = %q, condition = %#v", etag, backend.putCalls, backend.putKey, backend.putCondition)
-			}
-			if backend.putObject.ContentType != "application/json; charset=utf-8" || backend.putObject.Cache != "no-store" || string(backend.putObject.Bytes) != `{"schemaVersion":1,"paths":["/index.html"]}` {
-				t.Fatalf("written object = %#v", backend.putObject)
-			}
-		})
-	}
-}
-
-func TestWriteAppCacheRetryValidatesBeforePutAndDoesNotRetryFailures(t *testing.T) {
-	t.Run("invalid record", func(t *testing.T) {
-		backend := &appCacheRetryTestBackend{}
-		_, err := writeAppCacheRetry(context.Background(), backend, appCacheRetry{SchemaVersion: 1, Paths: []string{"/elsewhere"}}, "")
-		if err == nil || backend.putCalls != 0 {
-			t.Fatalf("writeAppCacheRetry() error = %v, calls = %d; want validation error and no PUT", err, backend.putCalls)
-		}
-	})
-
-	t.Run("conditional PUT error", func(t *testing.T) {
-		putErr := errors.New("conditional write failed")
-		backend := &appCacheRetryTestBackend{putETag: `"must-not-fall-back"`, putErr: putErr}
-		_, err := writeAppCacheRetry(context.Background(), backend, appCacheRetry{SchemaVersion: 1, Paths: []string{"/index.html"}}, "")
-		if !errors.Is(err, putErr) || backend.putCalls != 1 {
-			t.Fatalf("writeAppCacheRetry() error = %v, calls = %d; want the PUT error and exactly one call", err, backend.putCalls)
-		}
-	})
 }
 
 func TestClearAppCacheRetryDeletesOnlyJournalKey(t *testing.T) {

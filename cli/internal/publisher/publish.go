@@ -134,7 +134,7 @@ func DeployApp(ctx context.Context, backend DeploymentBackend, options AppDeploy
 		if err := validateCompatibility(); err != nil {
 			return Result{}, err
 		}
-		retry, retryETag, err := readAppCacheRetry(ctx, conditional)
+		_, retryETag, err := readAppCacheRetry(ctx, conditional)
 		if err != nil {
 			return Result{}, err
 		}
@@ -157,13 +157,6 @@ func DeployApp(ctx context.Context, backend DeploymentBackend, options AppDeploy
 			}
 		}
 
-		needsInvalidation := len(changed) > 0 || len(retry.Paths) > 0
-		invalidationPaths := append([]string(nil), retry.Paths...)
-		if len(changed) > 0 {
-			invalidationPaths = append(invalidationPaths, "/index.html")
-		}
-		invalidationPaths = uniqueSorted(invalidationPaths)
-		plannedPaths := plannedInvalidationPaths(backend, invalidationPaths)
 		result = Result{
 			Operation: "app deploy", Changes: []Change{},
 			Version: bundle.manifest.Version, SourceDirty: bundle.manifest.SourceDirty,
@@ -171,31 +164,23 @@ func DeployApp(ctx context.Context, backend DeploymentBackend, options AppDeploy
 		if options.DryRun {
 			result.Changes = plan
 			result.FilesPublished = len(changed)
-			result.InvalidationPaths = plannedPaths
-			if needsInvalidation {
+			if len(changed) > 0 {
 				result.Outcome = "planned"
 			} else {
 				result.Outcome = "no-op"
 			}
 			return result, nil
 		}
-		if !needsInvalidation {
+		if retryETag != "" {
+			if err := clearAppCacheRetry(ctx, backend); err != nil {
+				return result, fmt.Errorf("retire validated application invalidation record: %w", err)
+			}
+		}
+		if len(changed) == 0 {
 			result.Outcome = "no-op"
 			return result, nil
 		}
-		if err := validateInvalidation(backend, invalidationPaths); err != nil {
-			return result, err
-		}
-
-		// Persist the retry intent before the first application-object write.
-		// A response lost after this conditional write leaves a safe cache-only
-		// retry for the next invocation.
-		journal := retry
 		if len(changed) > 0 {
-			journal = appCacheRetry{SchemaVersion: appCacheRetrySchema, Paths: invalidationPaths}
-			if _, err := writeAppCacheRetry(ctx, conditional, journal, retryETag); err != nil {
-				return result, err
-			}
 			if len(bundle.manifest.Reads) > 0 {
 				if err := stageVersionRecord(ctx, conditional, appVersionsKey, versionRecord{SchemaVersion: 1, WebVersion: bundle.manifest.Version, Reads: bundle.manifest.Reads}); err != nil {
 					return result, err
@@ -219,29 +204,9 @@ func DeployApp(ctx context.Context, backend DeploymentBackend, options AppDeploy
 				return result, err
 			}
 		}
-		invalidationID, err := backend.Invalidate(ctx, invalidationPaths)
-		if err != nil {
-			return result, fmt.Errorf("application objects may be updated but cache revalidation failed; retry app deploy: %w", err)
-		}
-		if err := clearAppCacheRetry(ctx, backend); err != nil {
-			// DeleteObjects has no compare-and-swap contract, so a reported
-			// failure may still have removed the record. Recreate it if absent;
-			// an If-None-Match conflict means the retry intent is still present.
-			_, restoreErr := writeAppCacheRetry(ctx, conditional, journal, "")
-			if errors.Is(restoreErr, ErrPreconditionFailed) {
-				restoreErr = nil
-			}
-			clearErr := fmt.Errorf("application cache was revalidated but its retry record could not be cleared; retry journal retained: %w", err)
-			if restoreErr != nil {
-				return result, errors.Join(clearErr, fmt.Errorf("restore application cache retry record: %w", restoreErr))
-			}
-			return result, clearErr
-		}
 		result.Outcome = "deployed"
 		result.FilesPublished = len(changed)
 		result.Changes = plan
-		result.InvalidationID = invalidationID
-		result.InvalidationPaths = plannedPaths
 		return result, nil
 	}
 

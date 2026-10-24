@@ -2,6 +2,7 @@ package publisher
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -18,11 +19,20 @@ type previewRemoveFaultBackend struct {
 	failListPrefix       string
 	unsafeListKey        string
 	partialDeleteOnce    bool
+	failCatalogWriteOnce bool
 	invalidateFailure    bool
 	clearResponseLost    bool
 	listPrefixes         []string
 	deleteCalls          [][]string
 	invalidationFailures int
+}
+
+func (backend *previewRemoveFaultBackend) PutObjectConditional(ctx context.Context, key string, object Object, condition ObjectCondition) (string, error) {
+	if key == "_previews/sre/catalog.json" && backend.failCatalogWriteOnce {
+		backend.failCatalogWriteOnce = false
+		return "", errors.New("injected catalog update failure")
+	}
+	return backend.lockMemoryBackend.PutObjectConditional(ctx, key, object, condition)
 }
 
 func (backend *previewRemoveFaultBackend) ListKeys(ctx context.Context, prefix string) ([]string, error) {
@@ -150,6 +160,7 @@ func ownership(groupID string, revisions ...preview.RevisionOwnership) preview.G
 
 func TestRemovePreviewGroupPreservesSharedSHAAndDeletesOnlyExactExclusiveRevisions(t *testing.T) {
 	backend := newPreviewRemoveFaultBackend()
+	backend.invalidateFailure = true // A purge-capable backend that would fail is never called.
 	const sharedSHA = "1111111111111111111111111111111111111111"
 	const exclusiveSHA = "2222222222222222222222222222222222222222"
 	sharedManifest, _ := previewRemoveTestManifest("sre", sharedSHA, "shared.md")
@@ -169,8 +180,8 @@ func TestRemovePreviewGroupPreservesSharedSHAAndDeletesOnlyExactExclusiveRevisio
 	if err != nil {
 		t.Fatalf("RemovePreviewGroup() error = %v", err)
 	}
-	if result.Outcome != "removed" || result.FilesRemoved != 3 || !reflect.DeepEqual(result.InvalidationPaths, []string{"/_previews/sre/*"}) {
-		t.Fatalf("RemovePreviewGroup() = %+v; want exact exclusive objects and one site-preview cache scope", result)
+	if result.Outcome != "removed" || result.FilesRemoved != 3 || len(result.InvalidationPaths) != 0 || result.InvalidationID != "" {
+		t.Fatalf("RemovePreviewGroup() = %+v; want exact exclusive objects without invalidation output", result)
 	}
 	if keys, err := backend.ListKeys(context.Background(), "_previews/sre/revisions/"+sharedSHA+"/"); err != nil || len(keys) != 2 {
 		t.Fatalf("shared revision objects = %v, %v; want manifest and file retained", keys, err)
@@ -189,8 +200,78 @@ func TestRemovePreviewGroupPreservesSharedSHAAndDeletesOnlyExactExclusiveRevisio
 	if _, _, err := backend.GetObject(context.Background(), previewCleanupKey("sre")); !errors.Is(err, ErrObjectNotFound) {
 		t.Fatalf("preview cleanup journal remains: %v", err)
 	}
-	if len(backend.invalidations) != 1 || !reflect.DeepEqual(backend.invalidations[0], []string{"/_previews/sre/*"}) {
-		t.Fatalf("cache invalidations = %v", backend.invalidations)
+	if len(backend.invalidations) != 0 {
+		t.Fatalf("cache invalidations = %v; injected failures=%d", backend.invalidations, backend.invalidationFailures)
+	}
+}
+
+func TestPreviewCleanupSchema1MigratesUnderLockAndDryRunDoesNotWrite(t *testing.T) {
+	backend := newPreviewRemoveFaultBackend()
+	const sha = "abababababababababababababababababababab"
+	manifest, _ := previewRemoveTestManifest("sre", sha, "guide.md")
+	catalog := preview.Catalog{SchemaVersion: preview.SchemaVersion, Site: "sre", Groups: []preview.Group{previewRemoveTestGroup("pr:42", sha)}, RevisionHistory: []preview.GroupRevisionHistory{ownership("pr:42", preview.RevisionOwnership{HeadSHA: sha, Files: []string{"guide.md"}})}}
+	seedPreviewRemoveCatalog(t, backend, catalog, map[string]preview.RevisionManifest{sha: manifest})
+	conditional, store, err := previewRemovalDependencies(context.Background(), backend, PreviewRemoveOptions{SiteID: "sre", GroupID: "pr:42"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := planPreviewRemoval(context.Background(), backend, store, "sre", "pr:42", catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := struct {
+		SchemaVersion int                         `json:"schemaVersion"`
+		Site          string                      `json:"site"`
+		GroupID       string                      `json:"groupId"`
+		Revisions     []preview.RevisionOwnership `json:"revisions"`
+		ObjectKeys    []string                    `json:"objectKeys"`
+		Paths         []string                    `json:"paths"`
+	}{previewCleanupLegacySchema, plan.journal.Site, plan.journal.GroupID, plan.journal.Revisions, plan.journal.ObjectKeys, []string{"/_previews/sre/*"}}
+	legacyBytes, _ := json.Marshal(legacy)
+	snapshot, release, err := (SiteLockManager{Backend: conditional}).Acquire(context.Background(), "sre")
+	if err != nil {
+		t.Fatal(err)
+	}
+	locked := context.WithValue(context.Background(), previewSiteLockContextKey{}, previewSiteLock{site: snapshot.Site, owner: snapshot.Owner, etag: snapshot.ETag})
+	if _, err := conditional.PutObjectConditional(locked, previewCleanupKey("sre"), Object{Bytes: legacyBytes, ContentType: "application/json; charset=utf-8", Cache: "no-store"}, ObjectCondition{IfNoneMatch: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := release(); err != nil {
+		t.Fatal(err)
+	}
+
+	before, _, _ := backend.GetObject(context.Background(), previewCleanupKey("sre"))
+	result, err := RemovePreviewGroup(context.Background(), backend, PreviewRemoveOptions{SiteID: "sre", GroupID: "pr:42", DryRun: true})
+	if err != nil || result.Outcome != "planned" {
+		t.Fatalf("dry-run = %+v, %v", result, err)
+	}
+	afterDryRun, _, _ := backend.GetObject(context.Background(), previewCleanupKey("sre"))
+	if !reflect.DeepEqual(before.Bytes, afterDryRun.Bytes) {
+		t.Fatal("dry-run migrated the legacy journal")
+	}
+
+	backend.partialDeleteOnce = true
+	if _, err := RemovePreviewGroup(context.Background(), backend, PreviewRemoveOptions{SiteID: "sre", GroupID: "pr:42"}); err == nil {
+		t.Fatal("expected partial deletion failure")
+	}
+	migrated, _, err := backend.GetObject(context.Background(), previewCleanupKey("sre"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(migrated.Bytes, &fields); err != nil {
+		t.Fatal(err)
+	}
+	var schema int
+	_ = json.Unmarshal(fields["schemaVersion"], &schema)
+	if schema != 2 {
+		t.Fatalf("migrated schemaVersion = %d; want 2", schema)
+	}
+	if _, ok := fields["paths"]; ok {
+		t.Fatalf("schema 2 still has paths: %s", migrated.Bytes)
+	}
+	if _, err := RemovePreviewGroup(context.Background(), backend, PreviewRemoveOptions{SiteID: "sre", GroupID: "pr:42"}); err != nil {
+		t.Fatalf("retry migrated cleanup: %v", err)
 	}
 }
 
@@ -240,7 +321,6 @@ func TestRemovePreviewGroupResumesAfterPartialDeleteAndCacheFailure(t *testing.T
 		wantErr string
 	}{
 		{name: "partial delete", fault: func(backend *previewRemoveFaultBackend) { backend.partialDeleteOnce = true }, wantErr: "partial revision delete"},
-		{name: "invalidation", fault: func(backend *previewRemoveFaultBackend) { backend.invalidateFailure = true }, wantErr: "cache invalidation failure"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			backend := newPreviewRemoveFaultBackend()
@@ -264,6 +344,50 @@ func TestRemovePreviewGroupResumesAfterPartialDeleteAndCacheFailure(t *testing.T
 			}
 			if _, _, err := backend.GetObject(context.Background(), previewCleanupKey("sre")); !errors.Is(err, ErrObjectNotFound) {
 				t.Fatalf("retry journal remains: %v", err)
+			}
+		})
+	}
+}
+
+func TestRemovePreviewGroupRetriesCatalogUpdateFailure(t *testing.T) {
+	backend := newPreviewRemoveFaultBackend()
+	const sha = "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+	manifest, _ := previewRemoveTestManifest("sre", sha, "guide.md")
+	catalog := preview.Catalog{SchemaVersion: preview.SchemaVersion, Site: "sre", Groups: []preview.Group{previewRemoveTestGroup("pr:42", sha)}, RevisionHistory: []preview.GroupRevisionHistory{ownership("pr:42", preview.RevisionOwnership{HeadSHA: sha, Files: []string{"guide.md"}})}}
+	seedPreviewRemoveCatalog(t, backend, catalog, map[string]preview.RevisionManifest{sha: manifest})
+	backend.failCatalogWriteOnce = true
+	if _, err := RemovePreviewGroup(context.Background(), backend, PreviewRemoveOptions{SiteID: "sre", GroupID: "pr:42"}); err == nil || !strings.Contains(err.Error(), "catalog update failure") {
+		t.Fatalf("first removal error = %v", err)
+	}
+	if _, _, err := backend.GetObject(context.Background(), previewCleanupKey("sre")); err != nil {
+		t.Fatalf("journal missing after catalog failure: %v", err)
+	}
+	result, err := RemovePreviewGroup(context.Background(), backend, PreviewRemoveOptions{SiteID: "sre", GroupID: "pr:42"})
+	if err != nil || result.Outcome != "removed" {
+		t.Fatalf("retry = %+v, %v", result, err)
+	}
+	if len(backend.invalidations) != 0 {
+		t.Fatalf("invalidation calls = %v", backend.invalidations)
+	}
+}
+
+func TestPreviewCleanupRejectsMalformedAndUnknownRecords(t *testing.T) {
+	for _, raw := range []string{
+		`{"schemaVersion":1,"site":"sre","groupId":"pr:42","revisions":[],"objectKeys":[],"paths":["/_previews/sre/*"],"future":true}`,
+		`{"schemaVersion":1,"site":"sre","groupId":"pr:42","revisions":[],"objectKeys":[],"paths":[]}`,
+		`{"schemaVersion":9,"site":"sre","groupId":"pr:42","revisions":[],"objectKeys":[],"paths":[]}`,
+		`{"schemaVersion":2,"site":"sre","groupId":"pr:42","revisions":[],"objectKeys":[],"paths":[]}`,
+	} {
+		t.Run(raw, func(t *testing.T) {
+			backend := newPreviewRemoveFaultBackend()
+			if err := backend.PutObject(context.Background(), previewCleanupKey("sre"), Object{Bytes: []byte(raw), Cache: "no-store"}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := RemovePreviewGroup(context.Background(), backend, PreviewRemoveOptions{SiteID: "sre", GroupID: "pr:42"}); err == nil {
+				t.Fatal("malformed or unknown cleanup record succeeded")
+			}
+			if len(backend.deleteCalls) != 0 || len(backend.invalidations) != 0 {
+				t.Fatalf("invalid record caused effects: deletes=%v invalidations=%v", backend.deleteCalls, backend.invalidations)
 			}
 		})
 	}
@@ -343,8 +467,8 @@ func TestRemovePreviewGroupConvergesAfterAmbiguousJournalClearResponse(t *testin
 	if err != nil || result.Outcome != "no-op" {
 		t.Fatalf("converged retry = %+v, %v; want successful no-op", result, err)
 	}
-	if len(backend.invalidations) != 1 {
-		t.Fatalf("cache was invalidated %d times, want only the completed original request", len(backend.invalidations))
+	if len(backend.invalidations) != 0 {
+		t.Fatalf("preview removal invalidated cache: %v", backend.invalidations)
 	}
 }
 
@@ -487,7 +611,7 @@ func TestPreviewRemovalCacheScopeDoesNotGrowWithHistory(t *testing.T) {
 	catalog := preview.Catalog{SchemaVersion: preview.SchemaVersion, Site: "sre", Groups: groups, RevisionHistory: []preview.GroupRevisionHistory{ownership(groupID, revisions...)}}
 	seedPreviewRemoveCatalog(t, backend, catalog, manifests)
 	result, err := RemovePreviewGroup(context.Background(), backend, PreviewRemoveOptions{SiteID: "sre", GroupID: groupID, DryRun: true})
-	if err != nil || result.Outcome != "planned" || !reflect.DeepEqual(result.InvalidationPaths, []string{"/_previews/sre/*"}) {
+	if err != nil || result.Outcome != "planned" || len(result.InvalidationPaths) != 0 {
 		t.Fatalf("20-revision removal plan = %+v, %v", result, err)
 	}
 }
