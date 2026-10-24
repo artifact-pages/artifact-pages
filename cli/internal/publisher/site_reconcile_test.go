@@ -698,3 +698,71 @@ func (backend *siteReconcileBackend) projectionEventSnapshot() []string {
 	}
 	return result
 }
+
+func TestPublishSiteMigratesValidLegacyHeadersForSameSource(t *testing.T) {
+	createPublisherCheckout(t, "git@github.com:acme/sre.git")
+	backend := newSiteReconcileBackend()
+	seedPublisherRegistry(t, backend.lockMemoryBackend, registeredSREManifest)
+	options := SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts"}
+	if _, err := PublishSite(context.Background(), backend, options); err != nil {
+		t.Fatalf("initial PublishSite() error = %v", err)
+	}
+
+	ctx := context.Background()
+	stateKey := sitePublishStateKey("sre")
+	stateObject, etag, err := backend.lockMemoryBackend.GetObject(ctx, stateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := backend.lockMemoryBackend.HeadObject(ctx, stateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := decodeSitePublishState("sre", info, stateObject.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.Committed.InputRoot = sha256Hex([]byte("publisher-site-projection-v1;http-policy-v1;cache-policy-legacy"))
+	for i := range state.Committed.Objects {
+		row := &state.Committed.Objects[i]
+		class := sitePublishClassForKey("sre", row.Key)
+		legacy := map[cacheObjectClass]string{
+			cacheClassSiteRoot:       "public, max-age=0, s-maxage=60, must-revalidate",
+			cacheClassSearchManifest: "public, max-age=0, s-maxage=60, must-revalidate",
+			cacheClassArtifact:       "public, max-age=0, s-maxage=300, must-revalidate",
+			cacheClassHashedAsset:    "public, max-age=31536000, immutable",
+		}
+		row.CacheControl = legacy[class]
+		backend.lockMemoryBackend.mu.Lock()
+		object := backend.lockMemoryBackend.objects[row.Key]
+		object.Cache = row.CacheControl
+		backend.lockMemoryBackend.objects[row.Key] = object
+		backend.lockMemoryBackend.mu.Unlock()
+	}
+	legacyStateObject, err := buildSitePublishStateObject("sre", state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	backend.lockMemoryBackend.mu.Lock()
+	backend.lockMemoryBackend.objects[stateKey] = legacyStateObject
+	backend.lockMemoryBackend.mu.Unlock()
+	_ = etag
+
+	result, err := PublishSite(ctx, backend, options)
+	if err != nil {
+		t.Fatalf("legacy-state PublishSite() error = %v", err)
+	}
+	if result.Outcome != "synced" || result.FilesPublished == 0 {
+		t.Fatalf("legacy header migration result = %#v", result)
+	}
+	for _, row := range state.Committed.Objects {
+		object, _, getErr := backend.lockMemoryBackend.GetObject(ctx, row.Key)
+		if getErr != nil {
+			t.Fatal(getErr)
+		}
+		class := sitePublishClassForKey("sre", row.Key)
+		if object.Cache != cacheControl(class) {
+			t.Errorf("%s Cache-Control = %q, want %q", row.Key, object.Cache, cacheControl(class))
+		}
+	}
+}

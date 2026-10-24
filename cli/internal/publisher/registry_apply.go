@@ -96,7 +96,7 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 		if err := checkRegistrySiteRecordSchemas(ctx, conditional); err != nil {
 			return result, err
 		}
-		current, currentETag, err := readCurrentRegistry(ctx, conditional)
+		current, currentETag, currentCache, err := readCurrentRegistry(ctx, conditional)
 		if err != nil {
 			return result, err
 		}
@@ -105,7 +105,20 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 			return result, err
 		}
 		plan, removed, changedExisting := diffRegistries(current, desired, currentETag == "")
-		registryChanged := currentETag == "" || !sameRegistryEntries(current.Sites, desired.Sites)
+		registryHeaderChanged := false
+		if currentETag != "" {
+			// Older registry fixtures/deployments may have no Cache-Control value.
+			// Treat absence as stale metadata that must be rewritten; reject any
+			// non-empty value outside the explicit legacy/current class policies.
+			if currentCache != "" && !cacheControlAccepted(cacheClassSiteRoot, currentCache) {
+				return result, errors.New("deployed registry has an unsupported Cache-Control policy")
+			}
+			registryHeaderChanged = currentCache != cacheControl(cacheClassSiteRoot)
+		}
+		registryChanged := currentETag == "" || !sameRegistryEntries(current.Sites, desired.Sites) || registryHeaderChanged
+		if registryHeaderChanged && sameRegistryEntries(current.Sites, desired.Sites) {
+			plan = append(plan, Change{Action: "update", Path: "_indexes/sites.json"})
+		}
 		catalogInvalidationPending := registryChanged || pendingETag != ""
 		desiredIDs := make(map[string]struct{}, len(desired.Sites))
 		for _, entry := range desired.Sites {
@@ -312,19 +325,19 @@ func sameRegistryCleanupRecord(left, right registryCleanupRecord) bool {
 	return true
 }
 
-func readCurrentRegistry(ctx context.Context, backend ConditionalObjectBackend) (registry.Projection, string, error) {
+func readCurrentRegistry(ctx context.Context, backend ConditionalObjectBackend) (registry.Projection, string, string, error) {
 	object, etag, err := backend.GetObject(ctx, "_indexes/sites.json")
 	if errors.Is(err, ErrObjectNotFound) {
-		return registry.Projection{SchemaVersion: registry.SchemaVersion, Sites: []registry.Entry{}}, "", nil
+		return registry.Projection{SchemaVersion: registry.SchemaVersion, Sites: []registry.Entry{}}, "", "", nil
 	}
 	if err != nil {
-		return registry.Projection{}, "", fmt.Errorf("read deployed registry: %w", err)
+		return registry.Projection{}, "", "", fmt.Errorf("read deployed registry: %w", err)
 	}
 	projection, err := registry.DecodeProjection(object.Bytes)
 	if err != nil {
-		return registry.Projection{}, "", fmt.Errorf("validate deployed registry: %w", err)
+		return registry.Projection{}, "", "", fmt.Errorf("validate deployed registry: %w", err)
 	}
-	return projection, etag, nil
+	return projection, etag, object.Cache, nil
 }
 
 func diffRegistries(current, desired registry.Projection, firstApply bool) (changes []Change, removed, changedExisting []string) {

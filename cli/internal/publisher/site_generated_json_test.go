@@ -24,7 +24,7 @@ func TestSitePublishInputFingerprintIncludesAWSGeneratedJSONPolicy(t *testing.T)
 	identity := indexer.GitSourceIdentity{
 		Repository: "acme/sre", RepositoryURL: "https://github.com/acme/sre", SourcePath: "docs/artifacts",
 	}
-	const releasedPlainPolicy = "publisher-site-projection-v1;http-policy-v1;index-schema-v1;fulltext-policy-v2"
+	const releasedPlainPolicy = "publisher-site-projection-v1;http-policy-v1;index-schema-v1;fulltext-policy-v2;cache-policy-d-lt-v1"
 	plainOptions := sitePublishBuildOptions("sre", "SRE", "", filepath.Join(root, "docs/artifacts"), "", identity, &cloudflareBackend{})
 	awsOptions := sitePublishBuildOptions("sre", "SRE", "", filepath.Join(root, "docs/artifacts"), "", identity, &awsBackend{})
 	fixedTime := time.Date(2026, time.October, 18, 0, 0, 0, 0, time.UTC)
@@ -216,9 +216,13 @@ func TestPublishAWSGeneratedJSONMigrationDryRunAndNoOp(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		cacheClass := cacheClassSiteRoot
+		if key == manifestKey {
+			cacheClass = cacheClassSearchManifest
+		}
 		if object.ContentEncoding != "gzip" || info.ContentEncoding != "gzip" || info.Size != int64(len(object.Bytes)) ||
 			info.ContentType != "application/json; charset=utf-8" || info.ContentDisposition != "inline" ||
-			info.CacheControl != cacheControl(cacheClassSiteRoot) || info.Metadata["artifact-pages-sha256"] != sha256Hex(object.Bytes) {
+			info.CacheControl != cacheControl(cacheClass) || info.Metadata["artifact-pages-sha256"] != sha256Hex(object.Bytes) {
 			t.Fatalf("encoded %s representation metadata = object=%+v info=%+v", key, object, info)
 		}
 		decoded, err := decodeSiteGeneratedJSON(object.Bytes, object.ContentEncoding)
@@ -499,4 +503,10 @@ func mustGetObject(t *testing.T, backend ConditionalObjectBackend, key string) O
 		t.Fatal(err)
 	}
 	return object
+}
+
+func TestSitePublishInputFingerprintIncludesCachePolicyRevision(t *testing.T) {
+	if !strings.Contains(sitePublishInputPolicy, "cache-policy-"+cachePolicyRevision) {
+		t.Fatalf("site publish input policy %q omits the D-LT revision", sitePublishInputPolicy)
+	}
 }

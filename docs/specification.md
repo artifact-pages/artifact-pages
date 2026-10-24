@@ -908,21 +908,28 @@ The application and content planes have different lifecycles.
 Expected direction:
 
 ~~~text
-/index.html                          no-cache, max-age=0, must-revalidate
-/preview-bridge.js                  no-cache, max-age=0, must-revalidate
-/LICENSE                            no-cache, max-age=0, must-revalidate
-/THIRD_PARTY_NOTICES.txt            no-cache, max-age=0, must-revalidate
-/assets/<fixed-or-unrecognized-name>.* no-cache, max-age=0, must-revalidate
+/index.html                          no-cache, max-age=0, must-revalidate, stale-if-error=0
+/preview-bridge.js                  no-cache, max-age=0, must-revalidate, stale-if-error=0
+/LICENSE                            no-cache, max-age=0, must-revalidate, stale-if-error=0
+/THIRD_PARTY_NOTICES.txt            no-cache, max-age=0, must-revalidate, stale-if-error=0
+/assets/<fixed-or-unrecognized-name>.* no-cache, max-age=0, must-revalidate, stale-if-error=0
 /assets/<name>-<8-character-hash>.*  public, max-age=31536000, immutable
-/_indexes/sites.json                 public, max-age=0, s-maxage=60, must-revalidate
-/_indexes/<site>/meta.json           public, max-age=0, s-maxage=60, must-revalidate
-/_indexes/<site>/index.json          public, max-age=0, s-maxage=60, must-revalidate
-/_artifacts/<site>/*                 public, max-age=0, s-maxage=300, must-revalidate
+/_indexes/sites.json                 public, max-age=0, s-maxage=5, must-revalidate, stale-if-error=0
+/_indexes/<site>/meta.json           public, max-age=0, s-maxage=5, must-revalidate, stale-if-error=0
+/_indexes/<site>/index.json          public, max-age=0, s-maxage=5, must-revalidate, stale-if-error=0
+/_indexes/<site>/search/manifest.json public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0
+/_indexes/<site>/search/<name>-<sha>.gz public, max-age=31536000, immutable
+/_artifacts/<site>/*                 public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0
+/_previews/<site>/catalog.json       public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0
+/_previews/<site>/revisions/*        public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0
+/_control/*                          no-store
 ~~~
 
-These are initial product defaults: browsers must revalidate mutable objects on use, while shared CDN caches may retain site metadata/indexes for up to 60 seconds and stable artifact URLs for up to 300 seconds. Site publish requests invalidation of its changed URLs after origin synchronization, with a durable retry record for failures. Bounded freshness remains the fallback while invalidation propagates or when an adapter has no CDN. The provider adapter must honor these upper bounds or use stricter freshness. Vite/Rollup application assets with the default eight-character `-[hash]` filename suffix may be cached for one year because a content change produces a different URL; fixed-name and unrecognized application files must revalidate.
+The CLI owns this fixed policy for revision `d-lt-v1`; there are no runtime TTL overrides. Mutable browser freshness is 0. Mutable objects use `must-revalidate, stale-if-error=0` and no `stale-while-revalidate`; fixed-name application files use `no-cache, max-age=0, must-revalidate, stale-if-error=0`. Hashed search blobs and application assets remain immutable for one year. A later policy change requires a new CLI policy revision.
 
-For AWS, the publisher's registry read is directly from the S3 object and therefore does not depend on CloudFront cache freshness; browser visibility still requires timely CDN revalidation or invalidation. During registry omission cleanup, the affected cache set includes `/_indexes/sites.json`, `/<site>`, `/<site>/*`, `/_indexes/<site>/*`, `/_artifacts/<site>/*`, and `/_previews/<site>/*`; the adapter requests provider invalidation or equivalent revalidation/expiry and reports failure if that request fails. A successful request does not promise instantaneous global cache convergence or revoke content already delivered to clients. If an operator configures an external access gate at the serving edge, it must cover the desired routes and run before protected bytes are returned from an origin or shared cache. That gate and its verification are deployment concerns; Artifact Pages does not implement identity-aware cache partitioning. Provider implementation details do not change the path sets or freshness contract.
+The site publish input fingerprint includes the cache-policy revision, so adopting a compatible writer version makes an unchanged source eligible for reconciliation. Site publish state schema 1 remains unchanged and records the object headers. Validation accepts only the prior explicitly defined class headers and the current revision's headers; arbitrary TTLs remain invalid. The prior rows are checked against their stored origin metadata before desired rows are compared. A header-only difference is an `update`; content SHA and source `updatedAt` remain unchanged, and `generatedAt` is preserved when generated content is otherwise unchanged. Normal `site sync` or `site sync --reconcile` converges those headers. Registry sync and app deploy likewise update metadata when bytes match but the stored policy is old.
+
+This D-LT adoption stage still performs the existing publish invalidation and retains the existing reference delivery modules. A successful invalidation request does not promise instantaneous global convergence or revoke content already delivered to clients. TTL 0 requires origin checking on a new network fetch; it does not guarantee a 304, refresh an open reader, or replace bytes already held by browser code. Provider behavior and custom CDN overrides must be evaluated separately.
 
 Artifact paths may later become commit-addressed/immutable, which would allow aggressive CDN caching. That is an optimization, not an MVP requirement.
 

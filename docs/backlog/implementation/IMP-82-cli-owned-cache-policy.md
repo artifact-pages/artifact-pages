@@ -1,6 +1,6 @@
 # IMP-82 — Remove CDN invalidation and make CLI cache policy authoritative
 
-- Status: Open
+- Status: In progress
 - Assignee: Codex
 - Lanes: CLI / publisher, provider adapters, Terraform, Actions, specification / operator migration
 - Verification: [T30](../verification/T30-cache-freshness-and-root-latency.md); cost baseline [T29](../verification/T29-compressed-reader-session-hosting-cost.md), remaining cost scope [T27](../verification/T27-launch-hosting-cost-model.md)

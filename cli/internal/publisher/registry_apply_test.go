@@ -961,7 +961,11 @@ func newRegistryApplyTestBackend() *registryApplyTestBackend {
 func (backend *registryApplyTestBackend) seed(key string, contents []byte) {
 	backend.mu.Lock()
 	defer backend.mu.Unlock()
-	backend.objects[key] = Object{Bytes: append([]byte(nil), contents...)}
+	cache := ""
+	if key == "_indexes/sites.json" {
+		cache = cacheControl(cacheClassSiteRoot)
+	}
+	backend.objects[key] = Object{Bytes: append([]byte(nil), contents...), Cache: cache}
 	backend.etags[key] = "\"seed-" + key + "\""
 }
 
@@ -1106,5 +1110,34 @@ func assertRegistryUpdatedJSON(t *testing.T, result Result, wantUpdated bool, wa
 		if raw, exists := value["changes"]; !exists || string(raw) != "[]" {
 			t.Fatalf("empty changes JSON = %s (present=%t); want []", raw, exists)
 		}
+	}
+}
+
+func TestRegisterSitesUpdatesHeaderForSameRegistryEntries(t *testing.T) {
+	backend := newRegistryApplyTestBackend()
+	projection := testRegistryProjection(t, registrySREOnlyManifest)
+	seedRegistryFromManifest(t, backend, registrySREOnlyManifest)
+	registryObject := backend.objects["_indexes/sites.json"]
+	registryObject.Cache = "public, max-age=0, s-maxage=60, must-revalidate"
+	backend.objects["_indexes/sites.json"] = registryObject
+
+	result, err := RegisterSites(context.Background(), backend, projection, false)
+	if err != nil {
+		t.Fatalf("RegisterSites() error = %v", err)
+	}
+	if result.Outcome != "synced" || !*result.RegistryUpdated {
+		t.Fatalf("header-only registry update = %#v", result)
+	}
+	if got := backend.objects["_indexes/sites.json"].Cache; got != cacheControl(cacheClassSiteRoot) {
+		t.Fatalf("registry Cache-Control = %q", got)
+	}
+	foundUpdate := false
+	for _, change := range result.Changes {
+		if change.Action == "update" && change.Path == "_indexes/sites.json" {
+			foundUpdate = true
+		}
+	}
+	if !foundUpdate {
+		t.Fatalf("header-only registry diff missing update: %#v", result.Changes)
 	}
 }

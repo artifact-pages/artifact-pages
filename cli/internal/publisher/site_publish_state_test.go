@@ -368,3 +368,16 @@ func gzipForTestBytes(plain []byte) []byte {
 	_ = writer.Close()
 	return output.Bytes()
 }
+
+func TestSitePublishStateAcceptsPreviousClassHeadersButRejectsArbitraryTTL(t *testing.T) {
+	site := "sre"
+	contents := []byte("body")
+	row := sitePublishObject{Key: "_artifacts/sre/report.html", SHA256: sha256Hex(contents), Size: int64(len(contents)), ContentType: "text/html; charset=utf-8", ContentDisposition: "inline", CacheControl: "public, max-age=0, s-maxage=300, must-revalidate"}
+	if err := validateSitePublishRow(site, row); err != nil {
+		t.Fatalf("valid previous artifact header rejected: %v", err)
+	}
+	row.CacheControl = "public, max-age=0, s-maxage=999, must-revalidate"
+	if err := validateSitePublishRow(site, row); err == nil {
+		t.Fatal("arbitrary TTL was accepted")
+	}
+}

@@ -468,3 +468,39 @@ func TestDeployAppStopsBeforeReadsWhenLockAcquireResponseHasNoETag(t *testing.T)
 		t.Fatalf("recover held lock after no-ETag response: %v", err)
 	}
 }
+
+func TestDeployAppConvergesLegacyHeadersForSameBundle(t *testing.T) {
+	archive := createWebBundle(t, map[string][]byte{
+		"index.html":    []byte("<script src=\"/assets/app.js\"></script>"),
+		"assets/app.js": []byte("window.app = true"),
+	})
+	backend := newAppCachePublishBackend()
+	if _, err := DeployApp(context.Background(), backend, AppDeployOptions{ArchivePath: archive}); err != nil {
+		t.Fatalf("initial DeployApp() error = %v", err)
+	}
+	bundle, err := loadAppBundle(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	backend.store.objects.mu.Lock()
+	for _, file := range bundle.files {
+		object := backend.store.objects.objects[file.path]
+		object.Cache = "no-cache, max-age=0, must-revalidate"
+		backend.store.objects.objects[file.path] = object
+	}
+	backend.store.objects.mu.Unlock()
+	backend.store.appPuts = nil
+	result, err := DeployApp(context.Background(), backend, AppDeployOptions{ArchivePath: archive})
+	if err != nil {
+		t.Fatalf("legacy-header DeployApp() error = %v", err)
+	}
+	if result.Outcome != "deployed" || len(backend.store.appPuts) != len(bundle.files) {
+		t.Fatalf("same-bundle policy adoption result = %#v, writes = %v", result, backend.store.appPuts)
+	}
+	for _, file := range bundle.files {
+		object := backend.store.objects.objects[file.path]
+		if object.Cache != appFileCacheControl(file.path) {
+			t.Errorf("%s Cache-Control = %q", file.path, object.Cache)
+		}
+	}
+}
