@@ -269,7 +269,7 @@ func DeployApp(ctx context.Context, backend DeploymentBackend, options AppDeploy
 				operationErr = errors.Join(operationErr, registryRelease())
 			}
 		}()
-		current, _, err := readCurrentRegistry(ctx, conditional)
+		current, _, _, err := readCurrentRegistry(ctx, conditional)
 		if err != nil {
 			return result, err
 		}

@@ -25,15 +25,16 @@ func TestSitePublishInputFingerprintIncludesAWSGeneratedJSONPolicy(t *testing.T)
 		Repository: "acme/sre", RepositoryURL: "https://github.com/acme/sre", SourcePath: "docs/artifacts",
 	}
 	const releasedPlainPolicy = "publisher-site-projection-v1;http-policy-v1;index-schema-v1;fulltext-policy-v2"
+	const currentPlainPolicy = releasedPlainPolicy + ";cache-policy-d-lt-v1"
 	plainOptions := sitePublishBuildOptions("sre", "SRE", "", filepath.Join(root, "docs/artifacts"), "", identity, &cloudflareBackend{})
 	awsOptions := sitePublishBuildOptions("sre", "SRE", "", filepath.Join(root, "docs/artifacts"), "", identity, &awsBackend{})
 	fixedTime := time.Date(2026, time.October, 18, 0, 0, 0, 0, time.UTC)
 	plainOptions.Now = func() time.Time { return fixedTime }
 	awsOptions.Now = func() time.Time { return fixedTime }
-	if sitePublishInputPolicy != releasedPlainPolicy || plainOptions.InputPolicy != releasedPlainPolicy {
-		t.Fatalf("non-AWS input policy = %q and base policy = %q; want released policy %q", plainOptions.InputPolicy, sitePublishInputPolicy, releasedPlainPolicy)
+	if sitePublishInputPolicy != currentPlainPolicy || plainOptions.InputPolicy != currentPlainPolicy {
+		t.Fatalf("non-AWS input policy = %q and base policy = %q; want current policy %q", plainOptions.InputPolicy, sitePublishInputPolicy, currentPlainPolicy)
 	}
-	if awsOptions.InputPolicy != releasedPlainPolicy+";aws-generated-json-gzip-v1" {
+	if awsOptions.InputPolicy != currentPlainPolicy+";aws-generated-json-gzip-v1" {
 		t.Fatalf("AWS input policy = %q; want generated-JSON gzip policy", awsOptions.InputPolicy)
 	}
 	plainPrepared, err := indexer.PrepareBuild(context.Background(), plainOptions)
@@ -216,9 +217,13 @@ func TestPublishAWSGeneratedJSONMigrationDryRunAndNoOp(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		cacheClass := cacheClassSiteRoot
+		if key == manifestKey {
+			cacheClass = cacheClassSearchManifest
+		}
 		if object.ContentEncoding != "gzip" || info.ContentEncoding != "gzip" || info.Size != int64(len(object.Bytes)) ||
 			info.ContentType != "application/json; charset=utf-8" || info.ContentDisposition != "inline" ||
-			info.CacheControl != cacheControl(cacheClassSiteRoot) || info.Metadata["artifact-pages-sha256"] != sha256Hex(object.Bytes) {
+			info.CacheControl != cacheControl(cacheClass) || info.Metadata["artifact-pages-sha256"] != sha256Hex(object.Bytes) {
 			t.Fatalf("encoded %s representation metadata = object=%+v info=%+v", key, object, info)
 		}
 		decoded, err := decodeSiteGeneratedJSON(object.Bytes, object.ContentEncoding)
@@ -499,4 +504,10 @@ func mustGetObject(t *testing.T, backend ConditionalObjectBackend, key string) O
 		t.Fatal(err)
 	}
 	return object
+}
+
+func TestSitePublishInputFingerprintIncludesCachePolicyRevision(t *testing.T) {
+	if !strings.Contains(sitePublishInputPolicy, "cache-policy-"+cachePolicyRevision) {
+		t.Fatalf("site publish input policy %q omits the D-LT revision", sitePublishInputPolicy)
+	}
 }

@@ -468,3 +468,49 @@ func TestDeployAppStopsBeforeReadsWhenLockAcquireResponseHasNoETag(t *testing.T)
 		t.Fatalf("recover held lock after no-ETag response: %v", err)
 	}
 }
+
+func TestDeployAppConvergesLegacyHeadersForSameBundle(t *testing.T) {
+	archive := createWebBundle(t, map[string][]byte{
+		"index.html":    []byte("<script src=\"/assets/app.js\"></script>"),
+		"assets/app.js": []byte("window.app = true"),
+	})
+	backend := newAppCachePublishBackend()
+	if _, err := DeployApp(context.Background(), backend, AppDeployOptions{ArchivePath: archive}); err != nil {
+		t.Fatalf("initial DeployApp() error = %v", err)
+	}
+	bundle, err := loadAppBundle(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	backend.store.objects.mu.Lock()
+	for _, file := range bundle.files {
+		object := backend.store.objects.objects[file.path]
+		object.Cache = "no-cache, max-age=0, must-revalidate"
+		backend.store.objects.objects[file.path] = object
+	}
+	backend.store.objects.mu.Unlock()
+	backend.store.appPuts = nil
+	backend.failInvalidation = true
+	if _, err := DeployApp(context.Background(), backend, AppDeployOptions{ArchivePath: archive}); err == nil || !strings.Contains(err.Error(), "retry app deploy") {
+		t.Fatalf("legacy-header DeployApp() error = %v; want invalidation retry error", err)
+	}
+	if len(backend.store.appPuts) != len(bundle.files) {
+		t.Fatalf("header adoption writes = %v; want %d files", backend.store.appPuts, len(bundle.files))
+	}
+	for _, file := range bundle.files {
+		object := backend.store.objects.objects[file.path]
+		if object.Cache != appFileCacheControl(file.path) {
+			t.Errorf("%s Cache-Control = %q", file.path, object.Cache)
+		}
+	}
+	backend.failInvalidation = false
+	backend.store.appPuts = nil
+	retry, err := DeployApp(context.Background(), backend, AppDeployOptions{ArchivePath: archive})
+	if err != nil || retry.Outcome != "deployed" || len(backend.store.appPuts) != 0 {
+		t.Fatalf("app policy retry = %#v, err=%v, writes=%v", retry, err, backend.store.appPuts)
+	}
+	noop, err := DeployApp(context.Background(), backend, AppDeployOptions{ArchivePath: archive})
+	if err != nil || noop.Outcome != "no-op" {
+		t.Fatalf("post-convergence DeployApp() = %#v, err=%v; want no-op", noop, err)
+	}
+}
