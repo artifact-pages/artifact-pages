@@ -7882,6 +7882,32 @@ test.describe('reader context column (ISSUE-108)', () => {
     for (const entry of dots) if (entry.level3) expect(entry.dot).toBe(false)
   })
 
+  test('Contents level-3 entries start 12px right of level-2 entries while the rail stays put (ISSUE-122)', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await page.goto(markdownPath)
+    const rail = columnOf(page).locator('.toc-rail')
+    const level2 = rail.locator('.toc-item-2').first()
+    const level3 = rail.locator('.toc-item-3').first()
+    await expect(level2).toBeVisible()
+    await expect(level3).toBeVisible()
+    // Text start = the link's left edge plus its left padding.
+    const textStart = (item: typeof level2) => item.locator('.toc-link').evaluate((link) => {
+      return link.getBoundingClientRect().left + parseFloat(getComputedStyle(link).paddingLeft)
+    })
+    const linkLeft = async (item: typeof level2) => (await item.locator('.toc-link').boundingBox())!.x
+    expect(Math.abs((await textStart(level3)) - (await textStart(level2)) - 12)).toBeLessThanOrEqual(1)
+    // The pill (the link box) starts 12px right as well, while the item boxes that carry the rail and dots share one left edge.
+    expect(Math.abs((await linkLeft(level3)) - (await linkLeft(level2)) - 12)).toBeLessThanOrEqual(1)
+    expect(Math.abs((await level3.boundingBox())!.x - (await level2.boundingBox())!.x)).toBeLessThanOrEqual(0.5)
+    // The small dot of a current level-3 entry stays on the rail.
+    const dotLeft = (item: typeof level2) => item.evaluate((element) => parseFloat(getComputedStyle(element, '::before').left))
+    await level3.locator('.toc-link').click()
+    await expect(rail.locator('.toc-item-3.is-current')).toHaveCount(1)
+    expect(await dotLeft(rail.locator('.toc-item-3.is-current'))).toBeCloseTo(3.25, 1)
+    expect(await dotLeft(level2)).toBeCloseTo(1.25, 1)
+    expect(await noHorizontalOverflow(page)).toBe(true)
+  })
+
   test('HTML page shows the column beside the frame, which keeps its own scroll', async ({ page }) => {
     await page.goto(htmlPath)
     const column = columnOf(page)
