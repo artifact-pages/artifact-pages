@@ -18,10 +18,11 @@ import os from 'node:os'
 import path from 'node:path'
 import { gzipSync, gunzipSync } from 'node:zlib'
 import { chromium } from '@playwright/test'
+import { objectSizes as measureObjectSizes, sanitizedRequestHeaders, conditionalHeaderEvidence } from './calculate-hosting-cost.mjs'
 
 const repository = path.resolve(import.meta.dirname, '..')
 const labRoot = path.join(repository, '.local', 'web-scale')
-const project = 'claude-web-scale'
+let project = 'claude-web-scale'
 
 const options = {
   counts: [1000, 5000, 10000, 50000],
@@ -37,6 +38,8 @@ const options = {
   only: [],
   'run-dir': '',
   remote: '',
+  project: '',
+  'sanitized-results': '',
 }
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
@@ -47,9 +50,10 @@ for (let i = 0; i < argv.length; i++) {
   if (value === undefined) throw new Error(`Missing value for --${key}`)
   if (key === 'counts') options.counts = value.split(',').map(Number)
   else if (key === 'profiles' || key === 'only') options[key] = value.split(',').filter(Boolean)
-  else if (key === 'run-dir' || key === 'remote') options[key] = value
+  else if (key === 'run-dir' || key === 'remote' || key === 'project' || key === 'sanitized-results') options[key] = value
   else options[key] = Number(value)
 }
+if (options.project) project = options.project
 assert(options.counts.every((n) => Number.isInteger(n) && n >= 100), 'counts must be integers of at least 100')
 assert(new Set(options.counts).size === options.counts.length, 'counts must be unique')
 options.counts.sort((a, b) => a - b)
@@ -394,6 +398,49 @@ function applyGeneratedJSONGzipDelivery() {
   return { encoding: 'gzip', level: 9, objects }
 }
 
+function auditPublishedObjectSizes() {
+  const groups = new Map()
+  for (const siteId of options.counts.map(siteIdOf)) {
+    const root = path.join(dataRoot, `storage-${siteId}`)
+    function walk(directory) {
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        const filename = path.join(directory, entry.name)
+        if (entry.isDirectory()) { walk(filename); continue }
+        const relative = path.relative(root, filename).split(path.sep).join('/')
+        if (!relative.startsWith('_indexes/') && !relative.startsWith('_artifacts/')) continue
+        const stored = readFileSync(filename), opaqueGzip = relative.endsWith('.gz')
+        const precompressed = !opaqueGzip && isGzipBytes(stored)
+        let decoded = stored
+        if (opaqueGzip || precompressed) { try { decoded = gunzipSync(stored) } catch { decoded = stored } }
+        const kind = relative.endsWith('.gz') ? 'opaque-search-gzip' : /\/index\.json$/.test(relative) ? 'site-index'
+          : /manifest\.json$/.test(relative) ? 'search-manifest' : relative.startsWith('_artifacts/') ? path.extname(relative).slice(1) || 'artifact-other'
+            : path.extname(relative).slice(1) || 'index-other'
+        const objectType = kind === 'site-index' || kind === 'search-manifest' ? `${kind}-${siteId.split('-').at(-1)}` : kind
+        const size = measureObjectSizes(decoded, { precompressed, opaqueGzip, storedBytes: stored.length })
+        const row = groups.get(objectType) ?? { objectType, count: 0, storedBytes: 0, decodedBytes: 0, identityBytes: 0, gzip6Bytes: 0, brotli5Bytes: 0, recompressedGzip6Bytes: 0, recompressedBrotli5Bytes: 0 }
+        row.count++; row.storedBytes += stored.length; row.decodedBytes += size.decodedBytes
+        row.identityBytes += size.identityBytes; row.gzip6Bytes += size.gzip6Bytes; row.brotli5Bytes += size.brotli5Bytes
+        row.recompressedGzip6Bytes += size.recompressedGzip6Bytes; row.recompressedBrotli5Bytes += size.recompressedBrotli5Bytes
+        groups.set(objectType, row)
+      }
+    }
+    walk(root)
+  }
+  const assetsRoot = path.join(repository, 'web', 'dist', 'assets')
+  if (existsSync(assetsRoot)) {
+    for (const name of readdirSync(assetsRoot)) {
+      const filename = path.join(assetsRoot, name)
+      const decoded = readFileSync(filename), type = `app-asset-${path.extname(name).slice(1).toLowerCase() || 'other'}`
+      const sizes = measureObjectSizes(decoded)
+      const row = groups.get(type) ?? { objectType: type, count: 0, storedBytes: 0, decodedBytes: 0, identityBytes: 0, gzip6Bytes: 0, brotli5Bytes: 0, recompressedGzip6Bytes: 0, recompressedBrotli5Bytes: 0 }
+      row.count++; row.storedBytes += decoded.length; row.decodedBytes += sizes.decodedBytes; row.identityBytes += sizes.identityBytes
+      row.gzip6Bytes += sizes.gzip6Bytes; row.brotli5Bytes += sizes.brotli5Bytes; groups.set(type, row)
+      row.recompressedGzip6Bytes += sizes.recompressedGzip6Bytes; row.recompressedBrotli5Bytes += sizes.recompressedBrotli5Bytes
+    }
+  }
+  return [...groups.values()].sort((a, b) => a.objectType.localeCompare(b.objectType))
+}
+
 /** Build the changed search generation once; the browser suite swaps only its immutable search files. */
 function prepareGenerationVariant(siteId) {
   if (options.remote) throw new Error('search-cases requires local nginx')
@@ -566,15 +613,54 @@ async function newSession(browser, profileName, { track = true } = {}) {
   if (profile.network) await cdp.send('Network.emulateNetworkConditions', profile.network)
   if (profile.cpuRate > 1) await cdp.send('Emulation.setCPUThrottlingRate', { rate: profile.cpuRate })
   const requests = new Map()
-  cdp.on('Network.requestWillBeSent', (event) => requests.set(event.requestId, { url: event.request.url, type: event.type, raw: 0, encoded: 0, status: 0, done: false, at: Date.now(), active: Date.now() }))
+  const pendingRequestHeaders = new Map()
+  const requestRecord = (event) => {
+    const r = { url: event.request.url, type: event.type, raw: 0, encoded: 0, status: 0, done: false,
+      at: Date.now(), active: Date.now(), requestHeaders: event.request.headers ?? {}, requestHeadersSource: 'requestWillBeSent' }
+    const extra = pendingRequestHeaders.get(event.requestId)
+    if (extra) {
+      r.requestHeaders = extra.headers
+      r.requestHeadersSource = 'requestWillBeSentExtraInfo'
+      pendingRequestHeaders.delete(event.requestId)
+    }
+    requests.set(event.requestId, r)
+  }
+  cdp.on('Network.requestWillBeSent', requestRecord)
+  cdp.on('Network.requestWillBeSentExtraInfo', (event) => {
+    const r = requests.get(event.requestId)
+    if (r) {
+      r.requestHeaders = event.headers ?? {}
+      r.requestHeadersSource = 'requestWillBeSentExtraInfo'
+    } else pendingRequestHeaders.set(event.requestId, { headers: event.headers ?? {} })
+  })
   cdp.on('Network.responseReceived', (event) => {
     const r = requests.get(event.requestId)
     if (r) {
       r.status = event.response.status
       r.contentEncoding = event.response.headers?.['Content-Encoding'] ?? event.response.headers?.['content-encoding'] ?? ''
       r.contentType = event.response.headers?.['Content-Type'] ?? event.response.headers?.['content-type'] ?? ''
+      r.cacheControl = event.response.headers?.['Cache-Control'] ?? event.response.headers?.['cache-control'] ?? ''
       r.active = Date.now()
-      r.fromCache = event.response.fromDiskCache || event.response.fromPrefetchCache
+      r.fromDiskCache = Boolean(event.response.fromDiskCache)
+      r.fromPrefetchCache = Boolean(event.response.fromPrefetchCache)
+      r.fromServiceWorker = Boolean(event.response.fromServiceWorker)
+      r.fromCache = Boolean(r.requestServedFromCache || r.fromDiskCache || r.fromPrefetchCache)
+    }
+  })
+  cdp.on('Network.responseReceivedExtraInfo', (event) => {
+    const r = requests.get(event.requestId)
+    if (r) {
+      r.extraStatus = event.statusCode
+      r.responseHeaders = event.headers ?? {}
+      r.resourceIPAddressSpace = event.resourceIPAddressSpace ?? ''
+      r.cacheStorageCacheName = event.cacheStorageCacheName ?? ''
+    }
+  })
+  cdp.on('Network.requestServedFromCache', (event) => {
+    const r = requests.get(event.requestId)
+    if (r) {
+      r.requestServedFromCache = true
+      r.fromCache = true
     }
   })
   cdp.on('Network.dataReceived', (event) => { const r = requests.get(event.requestId); if (r) { r.raw += event.dataLength; r.active = Date.now() } })
@@ -1034,6 +1120,93 @@ async function measureSearch(browser, profile, siteId, query) {
   } finally { await session.close() }
 }
 
+function requestVector(requests) {
+  const observed = requests.filter((r) => r.status > 0)
+  const network = observed.filter((r) => !r.fromCache)
+  const shell = (r) => /\/index\.html$/.test(new URL(r.url).pathname)
+    || ((r.contentType ?? '').toLowerCase().includes('text/html') && !/\/_artifacts\/|\/_indexes\/|\/assets\//.test(new URL(r.url).pathname))
+  return {
+    bodyBytes: network.reduce((n, r) => n + ((r.extraStatus ?? r.status) === 304 ? 0 : r.encoded), 0), requests: network.length,
+    alwaysOriginRequests: network.filter(shell).length,
+    cacheableRequests: network.filter((r) => !shell(r)).length,
+    browserCacheRequests: observed.filter((r) => r.fromCache).length,
+    network200: network.filter((r) => (r.extraStatus ?? r.status) === 200).length,
+    network304: network.filter((r) => (r.extraStatus ?? r.status) === 304).length,
+    responses: observed.map((r) => ({ url: new URL(r.url).pathname, status: r.extraStatus ?? r.status, encodedBytes: r.encoded,
+      decodedBytes: r.raw, contentType: r.contentType, contentEncoding: r.contentEncoding, cacheControl: r.cacheControl ?? '',
+      httpMetadata: Object.fromEntries(['content-length', 'etag', 'last-modified', 'vary', 'date'].map((name) => [name,
+        Object.entries(r.responseHeaders ?? {}).find(([key]) => key.toLowerCase() === name)?.[1] ?? ''])),
+      requestHeaders: sanitizedRequestHeaders(r.requestHeaders),
+      requestHeadersSource: r.requestHeadersSource ?? 'absent',
+      conditionalHeaderEvidence: conditionalHeaderEvidence(r.requestHeaders, r.requestHeadersSource),
+      fromCache: Boolean(r.fromCache), requestServedFromCache: Boolean(r.requestServedFromCache),
+      fromDiskCache: Boolean(r.fromDiskCache), fromPrefetchCache: Boolean(r.fromPrefetchCache),
+      fromServiceWorker: Boolean(r.fromServiceWorker), cacheStorageCacheName: r.cacheStorageCacheName ?? '',
+      resourceIPAddressSpace: r.resourceIPAddressSpace ?? '', failed: Boolean(r.failed) })),
+  }
+}
+
+async function measureHostingCostReader(browser, siteId, count) {
+  const contentRoot = path.join(dataRoot, 'satellite', 'sites', siteId, 'content')
+  const paths = []
+  function walk(dir, prefix = '') {
+    for (const item of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      if (item.isDirectory()) walk(path.join(dir, item.name), `${prefix}${item.name}/`)
+      else if (/\.md$/i.test(item.name) && !/^README\.md$/i.test(item.name)) paths.push(`${prefix}${item.name}`)
+    }
+  }
+  walk(contentRoot)
+  paths.sort()
+  const later = paths.filter((p) => p !== 'overview-0.md' && !/^README\.md$/i.test(path.basename(p))).slice(0, 2)
+  assert.equal(paths.includes('overview-0.md'), true, `${siteId} is missing overview-0.md`)
+  assert.equal(later.length, 2, `${siteId} needs two additional markdown documents`)
+  const session = await newSession(browser, 'unthrottled')
+  const { page } = session
+  const pageErrors = []
+  page.on('pageerror', (error) => pageErrors.push(error.message))
+  const vectors = []
+  const actions = ['overview-0.md', ...later]
+  try {
+    for (let i = 0; i < actions.length; i++) {
+      const from = session.mark()
+      const href = `/${siteId}/${actions[i].split('/').map(encodeURIComponent).join('/')}`
+      if (i === 0) await page.goto(`${origin()}${href}`, { waitUntil: 'commit' })
+      else await page.evaluate((next) => { history.pushState({}, '', next); dispatchEvent(new PopStateEvent('popstate')) }, href)
+      await page.waitForFunction(() => !!document.querySelector('[data-testid="markdown-document"]') || !!document.querySelector('.markdown-state[role="alert"]'), null, { timeout: SLOW_TIMEOUT })
+      assert.ok(await page.locator('[data-testid="markdown-document"]').count(), `document failed to load: ${actions[i]}`)
+      if (pageErrors.length) throw new Error(`reader page error while opening ${actions[i]}: ${pageErrors.join('; ')}`)
+      await session.settle()
+      vectors.push({ path: actions[i], vector: requestVector(session.since(from)) })
+      if (i < actions.length - 1) await page.waitForTimeout(45_000)
+    }
+    const from = session.mark()
+    await page.reload({ waitUntil: 'commit' })
+    await page.waitForFunction(() => !!document.querySelector('[data-testid="markdown-document"]') || !!document.querySelector('.markdown-state[role="alert"]'), null, { timeout: SLOW_TIMEOUT })
+    assert.ok(await page.locator('[data-testid="markdown-document"]').count(), `reload failed to load: ${actions.at(-1)}`)
+    await session.settle()
+    const reload = requestVector(session.since(from))
+    return { count, sessionActions: vectors, reload }
+  } finally { await session.close() }
+}
+
+async function measureHostingCostSearch(browser, siteId, query) {
+  const session = await newSession(browser, 'unthrottled')
+  try {
+    const { page } = session
+    await page.goto(`${origin()}/${siteId}/_search`, { waitUntil: 'commit' })
+    await page.waitForSelector('#search-page-input', { timeout: SLOW_TIMEOUT })
+    await session.settle()
+    const from = session.mark()
+    await page.locator('#search-page-input').fill(query)
+    await page.waitForFunction((q) => (document.querySelector('.search-page-count-text')?.textContent ?? '').includes(`“${q}”`)
+      && document.querySelector('.search-page-main')?.getAttribute('aria-busy') === 'false', query, { timeout: SLOW_TIMEOUT })
+    await session.settle()
+    const message = await page.locator('.search-page-message').textContent().catch(() => null)
+    if (message?.trim()) throw new Error(`search workspace reported an error for ${query}: ${message.trim()}`)
+    return { query, vector: requestVector(session.since(from)) }
+  } finally { await session.close() }
+}
+
 function summarizeSearchRequests(requests, siteId) {
   const search = requests.filter((request) => pathOf(request.url).startsWith(`/_indexes/${siteId}/search/`))
   const byKind = {}
@@ -1338,6 +1511,7 @@ function writeSanitizedResults(results) {
       if (bucket.samples?.firstLoad?.length) measured.firstLoad = bucket.samples.firstLoad
       if (bucket.mermaid?.samples) measured.mermaid = bucket.mermaid.samples
       if (bucket.searchCases?.samples) measured.searchCases = bucket.searchCases.samples
+      if (bucket.hostingCost) measured.hostingCost = bucket.hostingCost
       sites[profile][siteId] = measured
     }
   }
@@ -1348,10 +1522,13 @@ function writeSanitizedResults(results) {
       pages: results.options.counts,
       profiles: results.options.profiles,
       iterations: results.options.iterations,
+      project: results.options.project || project,
+      port: results.options.port,
       firstLoadAndMermaid: 'fresh browser context, then a second visit in the same context',
       constrained: 'CPU x4, 150 ms RTT, 1.6 Mbps down, 0.75 Mbps up',
       delivery: results.environment.delivery,
       searchMethod: 'one open search workspace per iteration; query and show-more timings start after workspace paint',
+      hostingCostMethod: 'fresh context per iteration; three SPA document opens with 45-second gaps, normal reload, and separate quiet search clients; CDP extra-info status and conditional headers retained',
     },
     environment: {
       platform: process.platform,
@@ -1365,6 +1542,8 @@ function writeSanitizedResults(results) {
       commit: results.environment.commit,
       chromium: results.environment.chromium,
       playwright: results.environment.playwright,
+      dirty: results.environment.dirty,
+      nginx: options.remote ? null : 'nginx:1.29-alpine (docker-compose.yml image tag)',
     },
     data: {
       generatorVersion: results.published.generatorVersion,
@@ -1372,12 +1551,16 @@ function writeSanitizedResults(results) {
       sites: results.published.sites,
       searchStressInput: results.published.searchStressInput ?? null,
       generatedJSONDelivery: results.published.generatedJSONDelivery ?? null,
+      objectSizeAudit: results.published.objectSizeAudit ?? [],
     },
     profiles: sites,
   }
   const serialized = JSON.stringify(output, null, 2)
   assert.ok(!/(?:^|["\s])(?:\/Users\/|\/private\/|\/home\/|[A-Za-z]:\\)/m.test(serialized), 'sanitized results must not contain absolute paths')
-  const target = path.join(repository, 'docs', 'research', 'web-scale-benchmark-results.json')
+  const target = path.resolve(repository, options['sanitized-results'] || 'docs/research/web-scale-benchmark-results.json')
+  assert.ok(!path.isAbsolute(options['sanitized-results']), '--sanitized-results must be a repository-relative path')
+  assert.ok(target.startsWith(repository + path.sep), '--sanitized-results must be repository-relative')
+  mkdirSync(path.dirname(target), { recursive: true })
   writeFileSync(target, `${serialized}\n`)
   return target
 }
@@ -1400,6 +1583,7 @@ async function main() {
   const prepared = options.remote ? { note: 'published beforehand; data shape is that of the local generator with the same seed', counts: options.counts, seed: options.seed } : prepareData()
   if (options['gzip-generated-json']) prepared.generatedJSONDelivery = { candidateWriterFloor: '0.5.0', ...applyGeneratedJSONGzipDelivery() }
   else prepared.generatedJSONDelivery = { candidateWriterFloor: '0.5.0', encoding: 'identity; prior plain representation' }
+  if (options.only.includes('hosting-cost')) prepared.objectSizeAudit = auditPublishedObjectSizes()
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..*/, '')
   const prefix = options.remote ? 'remote-' : ''
   const resultsFile = path.join(labRoot, `${prefix}results-${stamp}.json`)
@@ -1431,8 +1615,17 @@ async function main() {
         await serve(siteId)
         const bucket = (results.profiles[profile].sites[siteId] = { pages: count, layout, iterations: {} })
         const samples = { firstLoad: [], session: [], mermaid: [], searchCases: [], search: Object.fromEntries(QUERIES.map(([label]) => [label, []])) }
+        if (options.only.includes('hosting-cost')) bucket.hostingCost = []
         for (let iteration = 1; iteration <= options.iterations; iteration++) {
           log(`${profile} ${siteId} iteration ${iteration}/${options.iterations}`)
+          if (options.only.includes('hosting-cost')) {
+            const reader = await measureHostingCostReader(browser, siteId, count)
+            const searches = []
+            for (const query of ['latency', 'quokkaflux']) searches.push(await measureHostingCostSearch(browser, siteId, query))
+            const value = { iteration, reader, searches }
+            bucket.hostingCost.push(value)
+            record(profile, siteId, 'hostingCost', iteration, value)
+          }
           if (wants('first-load')) { const value = await measureFirstLoad(browser, profile, siteId); samples.firstLoad.push(value); record(profile, siteId, 'firstLoad', iteration, value) }
           if (wants('session')) { const value = await measureSiteSession(browser, profile, siteId, layout); samples.session.push(value); record(profile, siteId, 'session', iteration, value) }
           if (wants('mermaid')) {

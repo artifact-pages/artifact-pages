@@ -1,12 +1,17 @@
 package publisher
 
 import (
+	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -76,6 +81,17 @@ func TestHostingCostProbe(t *testing.T) {
 	}
 
 	backend := newSitePublishScaleBackend()
+	provider := strings.TrimSpace(os.Getenv("ARTIFACT_PAGES_HOSTING_COST_PROVIDER"))
+	if provider == "" {
+		provider = "plain"
+	}
+	if provider != "plain" && provider != "aws" {
+		t.Fatalf("unsupported ARTIFACT_PAGES_HOSTING_COST_PROVIDER %q (want plain or aws)", provider)
+	}
+	var publishBackend DeploymentBackend = backend
+	if provider == "aws" {
+		publishBackend = &hostingCostAWSBackend{sitePublishScaleBackend: backend}
+	}
 	site := registry.Site{
 		Name: "Hosting cost " + siteID, Description: "T27 generated measurement fixture",
 		Repository: identity.Repository, SourcePath: identity.SourcePath,
@@ -83,8 +99,8 @@ func TestHostingCostProbe(t *testing.T) {
 	seedScaleRegistry(t, backend.lockMemoryBackend, siteID, site)
 	options := SitePublishOptions{SiteID: siteID, SourceDir: workSource}
 	phases := []hostingCostProbePhase{
-		runHostingCostProbePhase(t, backend, options, "first publish"),
-		runHostingCostProbePhase(t, backend, options, "no-op republish"),
+		runHostingCostProbePhase(t, publishBackend, backend, options, "first publish"),
+		runHostingCostProbePhase(t, publishBackend, backend, options, "no-op republish"),
 	}
 
 	pagePath := firstScaleFile(t, workSource, func(name string) bool {
@@ -97,37 +113,117 @@ func TestHostingCostProbe(t *testing.T) {
 	if err := os.WriteFile(pagePath, append(append([]byte(nil), page...), []byte("\n<!-- T27 one-document change -->\n")...), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	phases = append(phases, runHostingCostProbePhase(t, backend, options, "one-document change"))
+	phases = append(phases, runHostingCostProbePhase(t, publishBackend, backend, options, "one-document change"))
 
 	projectionObjects, projectionBytes, searchObjects, searchBytes := hostingCostStoredObjects(backend, siteID)
 	stateRaw, stateGzip := hostingCostStateSizes(backend, siteID)
+	objectEvidence := hostingCostObjects(backend, siteID)
+	validatedIndex, validatedManifest := false, false
+	for _, object := range objectEvidence {
+		if strings.HasSuffix(object.Key, "/index.json") {
+			validatedIndex = object.DecodedJSONValid
+			if provider == "aws" && object.ContentEncoding != "gzip" {
+				t.Fatalf("AWS site index Content-Encoding = %q, want gzip", object.ContentEncoding)
+			}
+			if provider == "plain" && object.ContentEncoding != "" {
+				t.Fatalf("plain site index Content-Encoding = %q, want identity", object.ContentEncoding)
+			}
+		}
+		if strings.HasSuffix(object.Key, "/manifest.json") {
+			validatedManifest = object.DecodedJSONValid
+			if provider == "aws" && object.ContentEncoding != "gzip" {
+				t.Fatalf("AWS search manifest Content-Encoding = %q, want gzip", object.ContentEncoding)
+			}
+			if provider == "plain" && object.ContentEncoding != "" {
+				t.Fatalf("plain search manifest Content-Encoding = %q, want identity", object.ContentEncoding)
+			}
+		}
+	}
+	if !validatedIndex || !validatedManifest {
+		t.Fatalf("generated JSON validation failed: index=%t manifest=%t", validatedIndex, validatedManifest)
+	}
 	report := struct {
-		SourceRevision        string                  `json:"sourceRevision"`
-		Site                  string                  `json:"site"`
-		Pages                 int                     `json:"pages"`
-		SourceFiles           int                     `json:"sourceFiles"`
-		SourceBytes           int64                   `json:"sourceBytes"`
-		CounterBoundary       string                  `json:"counterBoundary"`
-		Phases                []hostingCostProbePhase `json:"phases"`
-		StoredProjection      int                     `json:"storedProjectionObjects"`
-		StoredProjectionBytes int64                   `json:"storedProjectionBytes"`
-		StoredSearchObjects   int                     `json:"storedSearchObjects"`
-		StoredSearchBytes     int64                   `json:"storedSearchBytes"`
-		PublishStateRawBytes  int                     `json:"publishStateRawBytes"`
-		PublishStateGzipBytes int                     `json:"publishStateGzipBytes"`
+		Provider                string                   `json:"provider"`
+		SourceRevision          string                   `json:"sourceRevision"`
+		Site                    string                   `json:"site"`
+		Pages                   int                      `json:"pages"`
+		SourceFiles             int                      `json:"sourceFiles"`
+		SourceBytes             int64                    `json:"sourceBytes"`
+		CounterBoundary         string                   `json:"counterBoundary"`
+		Phases                  []hostingCostProbePhase  `json:"phases"`
+		StoredProjection        int                      `json:"storedProjectionObjects"`
+		StoredProjectionBytes   int64                    `json:"storedProjectionBytes"`
+		StoredSearchObjects     int                      `json:"storedSearchObjects"`
+		StoredSearchBytes       int64                    `json:"storedSearchBytes"`
+		PublishStateRawBytes    int                      `json:"publishStateRawBytes"`
+		PublishStateGzipBytes   int                      `json:"publishStateGzipBytes"`
+		Objects                 []hostingCostProbeObject `json:"objects"`
+		GeneratedJSONValidation map[string]bool          `json:"generatedJSONValidation"`
 	}{
+		Provider:       provider,
 		SourceRevision: gitRevisionForHostingCost(t, ctx), Site: siteID,
 		Pages: profile.Pages - hostingCostReadmes(workSource), SourceFiles: profile.SourceFiles, SourceBytes: sourceBytes,
 		CounterBoundary: "provider-neutral ConditionalObjectBackend methods; LIST is one logical prefix call, DELETE is one logical batch call; no SDK pagination, retries, or wire bytes",
 		Phases:          phases, StoredProjection: projectionObjects, StoredProjectionBytes: projectionBytes,
 		StoredSearchObjects: searchObjects, StoredSearchBytes: searchBytes,
 		PublishStateRawBytes: stateRaw, PublishStateGzipBytes: stateGzip,
+		Objects: objectEvidence, GeneratedJSONValidation: map[string]bool{"index": validatedIndex, "manifest": validatedManifest},
 	}
 	encoded, err := json.Marshal(report)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Logf("HOSTING_COST_JSON=%s", encoded)
+}
+
+type hostingCostAWSBackend struct{ *sitePublishScaleBackend }
+
+func (*hostingCostAWSBackend) siteGeneratedJSONContentEncoding() string { return "gzip" }
+
+type hostingCostProbeObject struct {
+	Key              string `json:"key"`
+	StoredBytes      int    `json:"storedBytes"`
+	ContentType      string `json:"contentType"`
+	ContentEncoding  string `json:"contentEncoding"`
+	CacheControl     string `json:"cacheControl"`
+	SHA256           string `json:"sha256"`
+	DecodedJSONValid bool   `json:"decodedJSONValid"`
+}
+
+func hostingCostObjects(backend *sitePublishScaleBackend, siteID string) []hostingCostProbeObject {
+	backend.mu.Lock()
+	defer backend.mu.Unlock()
+	objects := make([]hostingCostProbeObject, 0)
+	for key, object := range backend.objects {
+		if !strings.HasPrefix(key, "_indexes/"+siteID+"/") && !strings.HasPrefix(key, "_artifacts/"+siteID+"/") {
+			continue
+		}
+		sum := sha256.Sum256(object.Bytes)
+		validJSON := false
+		if strings.HasSuffix(key, "/index.json") || strings.HasSuffix(key, "/manifest.json") {
+			body := object.Bytes
+			if object.ContentEncoding == "gzip" {
+				reader, err := gzip.NewReader(strings.NewReader(string(body)))
+				if err == nil {
+					decoded, readErr := io.ReadAll(reader)
+					closeErr := reader.Close()
+					if readErr == nil && closeErr == nil {
+						body = decoded
+					} else {
+						body = nil
+					}
+				} else {
+					body = nil
+				}
+			}
+			var value any
+			validJSON = body != nil && json.Unmarshal(body, &value) == nil
+		}
+		objects = append(objects, hostingCostProbeObject{Key: key, StoredBytes: len(object.Bytes), ContentType: object.ContentType,
+			ContentEncoding: object.ContentEncoding, CacheControl: object.Cache, SHA256: hex.EncodeToString(sum[:]), DecodedJSONValid: validJSON})
+	}
+	sort.Slice(objects, func(i, j int) bool { return objects[i].Key < objects[j].Key })
+	return objects
 }
 
 type hostingCostProbePhase struct {
@@ -146,11 +242,11 @@ type hostingCostProbePhase struct {
 	WallMS             float64        `json:"wallMs"`
 }
 
-func runHostingCostProbePhase(t *testing.T, backend *sitePublishScaleBackend, options SitePublishOptions, name string) hostingCostProbePhase {
+func runHostingCostProbePhase(t *testing.T, publishBackend DeploymentBackend, backend *sitePublishScaleBackend, options SitePublishOptions, name string) hostingCostProbePhase {
 	t.Helper()
 	backend.resetCounts()
 	started := time.Now()
-	result, err := PublishSite(context.Background(), backend, options)
+	result, err := PublishSite(context.Background(), publishBackend, options)
 	wall := time.Since(started)
 	if err != nil {
 		t.Fatalf("%s: PublishSite() error = %v", name, err)

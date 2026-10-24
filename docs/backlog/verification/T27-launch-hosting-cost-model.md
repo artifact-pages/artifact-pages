@@ -21,3 +21,5 @@ The launch budget rests on recorded request counts and storage, not on earlier e
 ## Evidence
 
 [Hosting cost model](../../research/hosting-cost-model.md) records local publish counts for 1k, 5k and 50k pages, reuses the T25 local browser evidence with its provenance, applies current R2/S3/CloudFront list prices to the fixed scenarios, and records 3.60 MB of newly hashed assets in the current app build. Preview lifecycle bytes and calls, registry sync, app-deploy provider calls, and a T27 local Compose/browser rerun remain unmeasured; the first two criteria remain open, so this ticket stays In progress.
+
+T29's completed reader-session and compression re-estimate is recorded in the updated [hosting cost model](../../research/hosting-cost-model.md), with raw reader evidence and calculated results in [hosting-cost-reader-session-results.json](../../research/hosting-cost-reader-session-results.json) and [hosting-cost-model-results.json](../../research/hosting-cost-model-results.json). This evidence updates the reader cost inputs; it does not close T27's still-open preview, registry-sync, app-deploy, or local Compose/browser criteria.
