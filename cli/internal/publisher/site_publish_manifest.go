@@ -340,9 +340,9 @@ func buildSitePublishDiff(ctx context.Context, backend ConditionalObjectBackend,
 			return sitePublishDiff{}, encodeErr
 		}
 		key := "_indexes/" + siteID + "/" + file.name
-		contentType, cache := "application/json; charset=utf-8", indexCacheControl
+		contentType, cache := "application/json; charset=utf-8", cacheControl(siteIndexObjectClass(file.name))
 		if strings.HasSuffix(file.name, ".gz") {
-			contentType, cache = "application/octet-stream", immutableCache
+			contentType, cache = "application/octet-stream", cacheControl(cacheClassHashedAsset)
 		}
 		desired = append(desired, desiredSiteObject{
 			key: key, relative: file.name, digest: sha256Hex(data), data: data,
@@ -488,7 +488,7 @@ func preparedSiteObjects(prepared *indexer.PreparedBuild, siteID string) ([]desi
 		}
 		desired = append(desired, desiredSiteObject{
 			key: prefix + file.RelativePath, relative: file.RelativePath, data: data, digest: file.SHA256,
-			object: Object{ContentType: contentType(file.RelativePath), ContentDisposition: "inline", Cache: artifactCacheControl, Metadata: map[string]string{"artifact-pages-site": siteID}},
+			object: Object{ContentType: contentType(file.RelativePath), ContentDisposition: "inline", Cache: cacheControl(cacheClassArtifact), Metadata: map[string]string{"artifact-pages-site": siteID}},
 		})
 	}
 	return desired, nil

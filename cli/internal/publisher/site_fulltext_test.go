@@ -76,7 +76,7 @@ func TestFullTextPublishOrderNoOpUpdate(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if object.ContentType != "application/octet-stream" || object.ContentDisposition != "inline" || object.ContentEncoding != "" || object.Cache != immutableCache {
+		if object.ContentType != "application/octet-stream" || object.ContentDisposition != "inline" || object.ContentEncoding != "" || object.Cache != cacheControl(cacheClassHashedAsset) {
 			t.Fatalf("bad blob metadata: %+v", object)
 		}
 	}

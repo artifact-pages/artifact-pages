@@ -179,7 +179,7 @@ func TestPublishSitePreservesFilesMetadataOrderAndPrefixBoundaries(t *testing.T)
 		if string(object.Bytes) != string(expectedBytes) {
 			t.Errorf("published bytes for %q = %v, want %v", key, object.Bytes, expectedBytes)
 		}
-		if object.ContentType != wantTypes[key] || object.ContentDisposition != "inline" || object.ContentEncoding != "" || object.Cache != artifactCacheControl {
+		if object.ContentType != wantTypes[key] || object.ContentDisposition != "inline" || object.ContentEncoding != "" || object.Cache != cacheControl(cacheClassArtifact) {
 			t.Errorf("published metadata for %q = type %q, disposition %q, encoding %q, cache %q", key, object.ContentType, object.ContentDisposition, object.ContentEncoding, object.Cache)
 		}
 		if object.Metadata["artifact-pages-sha256"] != sha256Hex(expectedBytes) {
@@ -188,7 +188,7 @@ func TestPublishSitePreservesFilesMetadataOrderAndPrefixBoundaries(t *testing.T)
 	}
 	for _, key := range []string{"_indexes/sre/index.json", "_indexes/sre/meta.json"} {
 		object := backend.lockMemoryBackend.objects[key]
-		if object.ContentType != "application/json; charset=utf-8" || object.ContentDisposition != "inline" || object.ContentEncoding != "" || object.Cache != indexCacheControl {
+		if object.ContentType != "application/json; charset=utf-8" || object.ContentDisposition != "inline" || object.ContentEncoding != "" || object.Cache != cacheControl(cacheClassSiteRoot) {
 			t.Errorf("generated index metadata for %q = type %q, disposition %q, encoding %q, cache %q", key, object.ContentType, object.ContentDisposition, object.ContentEncoding, object.Cache)
 		}
 		if key == "_indexes/sre/index.json" && !strings.Contains(string(object.Bytes), "日本語 #1.html") {
@@ -411,7 +411,7 @@ func TestPublishSiteRepairsHTTPMetadataWhenBytesAlreadyMatch(t *testing.T) {
 		t.Fatalf("PublishSite() filesPublished = %d, want artifact plus index/meta metadata repair and search data", result.FilesPublished)
 	}
 	object := backend.lockMemoryBackend.objects["_artifacts/sre/report.html"]
-	if object.ContentType != "text/html; charset=utf-8" || object.ContentDisposition != "inline" || object.ContentEncoding != "" || object.Cache != artifactCacheControl || string(object.Bytes) != string(contents) {
+	if object.ContentType != "text/html; charset=utf-8" || object.ContentDisposition != "inline" || object.ContentEncoding != "" || object.Cache != cacheControl(cacheClassArtifact) || string(object.Bytes) != string(contents) {
 		t.Fatalf("repaired HTML representation = type %q, disposition %q, encoding %q, cache %q, bytes %q", object.ContentType, object.ContentDisposition, object.ContentEncoding, object.Cache, object.Bytes)
 	}
 }

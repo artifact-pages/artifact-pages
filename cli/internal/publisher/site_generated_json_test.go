@@ -105,7 +105,7 @@ func TestSyntheticLargeGeneratedJSONIsStoredGzippedAtExistingKeys(t *testing.T) 
 			}
 			key := "_indexes/sre/" + test.relative
 			object := Object{Bytes: stored, ContentType: "application/json; charset=utf-8", ContentEncoding: encoding,
-				ContentDisposition: "inline", Cache: indexCacheControl,
+				ContentDisposition: "inline", Cache: cacheControl(cacheClassSiteRoot),
 				Metadata: map[string]string{"artifact-pages-site": "sre", "artifact-pages-sha256": sha256Hex(stored)}}
 			if err := backend.PutObject(context.Background(), key, object); err != nil {
 				t.Fatal(err)
@@ -119,7 +119,7 @@ func TestSyntheticLargeGeneratedJSONIsStoredGzippedAtExistingKeys(t *testing.T) 
 				t.Fatal(err)
 			}
 			if info.Size != int64(len(stored)) || info.Metadata["artifact-pages-sha256"] != sha256Hex(stored) ||
-				info.ContentType != object.ContentType || info.ContentDisposition != "inline" || info.ContentEncoding != "gzip" || info.CacheControl != indexCacheControl {
+				info.ContentType != object.ContentType || info.ContentDisposition != "inline" || info.ContentEncoding != "gzip" || info.CacheControl != cacheControl(cacheClassSiteRoot) {
 				t.Fatalf("stored representation metadata = %+v", info)
 			}
 			decoded, err := decodeSiteGeneratedJSON(got.Bytes, got.ContentEncoding)
@@ -218,7 +218,7 @@ func TestPublishAWSGeneratedJSONMigrationDryRunAndNoOp(t *testing.T) {
 		}
 		if object.ContentEncoding != "gzip" || info.ContentEncoding != "gzip" || info.Size != int64(len(object.Bytes)) ||
 			info.ContentType != "application/json; charset=utf-8" || info.ContentDisposition != "inline" ||
-			info.CacheControl != indexCacheControl || info.Metadata["artifact-pages-sha256"] != sha256Hex(object.Bytes) {
+			info.CacheControl != cacheControl(cacheClassSiteRoot) || info.Metadata["artifact-pages-sha256"] != sha256Hex(object.Bytes) {
 			t.Fatalf("encoded %s representation metadata = object=%+v info=%+v", key, object, info)
 		}
 		decoded, err := decodeSiteGeneratedJSON(object.Bytes, object.ContentEncoding)
@@ -350,10 +350,10 @@ func TestPriorSiteIndexReadsPlainAndGzipAndRejectsCorruption(t *testing.T) {
 	if _, err := decodeSiteGeneratedJSONWithLimit(goodGzip, "gzip", int64(len(plain)-1)); err == nil || !strings.Contains(err.Error(), "exceeds") {
 		t.Fatalf("gzip prior-index overflow = %v", err)
 	}
-	if err := validateSitePublishRow("sre", sitePublishObject{Key: "_indexes/sre/meta.json", SHA256: sha256Hex(plain), Size: int64(len(plain)), ContentType: "application/json; charset=utf-8", ContentDisposition: "inline", ContentEncoding: "gzip", CacheControl: indexCacheControl}); err == nil {
+	if err := validateSitePublishRow("sre", sitePublishObject{Key: "_indexes/sre/meta.json", SHA256: sha256Hex(plain), Size: int64(len(plain)), ContentType: "application/json; charset=utf-8", ContentDisposition: "inline", ContentEncoding: "gzip", CacheControl: cacheControl(cacheClassSiteRoot)}); err == nil {
 		t.Fatal("encoded meta.json was accepted in committed state")
 	}
-	if err := validateSitePublishRow("sre", sitePublishObject{Key: "_indexes/sre/index.json", SHA256: sha256Hex(plain), Size: int64(len(plain)), ContentType: "application/json; charset=utf-8", ContentDisposition: "inline", ContentEncoding: "br", CacheControl: indexCacheControl}); err == nil {
+	if err := validateSitePublishRow("sre", sitePublishObject{Key: "_indexes/sre/index.json", SHA256: sha256Hex(plain), Size: int64(len(plain)), ContentType: "application/json; charset=utf-8", ContentDisposition: "inline", ContentEncoding: "br", CacheControl: cacheControl(cacheClassSiteRoot)}); err == nil {
 		t.Fatal("unknown index encoding was accepted in committed state")
 	}
 }
@@ -430,7 +430,7 @@ func seedPriorIndexState(t *testing.T, backend *lockMemoryBackend, body []byte, 
 	t.Helper()
 	key := "_indexes/sre/index.json"
 	row := sitePublishObject{Key: key, SHA256: sha256Hex(body), Size: int64(len(body)), ContentType: "application/json; charset=utf-8",
-		ContentEncoding: encoding, ContentDisposition: "inline", CacheControl: indexCacheControl}
+		ContentEncoding: encoding, ContentDisposition: "inline", CacheControl: cacheControl(cacheClassSiteRoot)}
 	state := sitePublishState{SchemaVersion: sitePublishStateSchemaVersion, Site: "sre", Committed: sitePublishCommitted{
 		InputRoot: strings.Repeat("a", 64), Generation: strings.Repeat("b", 64), Objects: []sitePublishObject{row}}}
 	stateObject, err := buildSitePublishStateObject("sre", state)

@@ -284,11 +284,11 @@ func validSitePublishState() sitePublishState {
 			Objects: []sitePublishObject{
 				{
 					Key: "_artifacts/sre/docs/start.md", SHA256: strings.Repeat("a", 64), Size: 17,
-					ContentType: "text/markdown; charset=utf-8", ContentDisposition: "inline", CacheControl: artifactCacheControl,
+					ContentType: "text/markdown; charset=utf-8", ContentDisposition: "inline", CacheControl: cacheControl(cacheClassArtifact),
 				},
 				{
 					Key: "_indexes/sre/index.json", SHA256: strings.Repeat("c", 64), Size: 23,
-					ContentType: "application/json; charset=utf-8", ContentDisposition: "inline", CacheControl: indexCacheControl,
+					ContentType: "application/json; charset=utf-8", ContentDisposition: "inline", CacheControl: cacheControl(cacheClassSiteRoot),
 				},
 			},
 		},
@@ -339,7 +339,7 @@ func decodeCompressedForState(site string, info ObjectInfo, compressed []byte) (
 func stateInfoForBytes(compressed []byte, site, root, generation string) ObjectInfo {
 	return ObjectInfo{
 		ETag: `"state-etag"`, Size: int64(len(compressed)), ContentType: "application/octet-stream",
-		ContentDisposition: "inline", CacheControl: sitePublishStateCacheControl,
+		ContentDisposition: "inline", CacheControl: cacheControl(cacheClassPrivateControl),
 		Metadata: map[string]string{
 			"artifact-pages-publish-state-schema": "1", "artifact-pages-publish-input-root": root,
 			"artifact-pages-publish-generation": generation, "artifact-pages-publish-pending": "false",

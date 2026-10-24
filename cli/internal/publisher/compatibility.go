@@ -192,7 +192,7 @@ func writeVersionRecord(ctx context.Context, backend DeploymentBackend, key stri
 			return readErr
 		}
 	}
-	return backend.PutObject(ctx, key, Object{Bytes: contents, ContentType: "application/json; charset=utf-8", Cache: "no-store"})
+	return backend.PutObject(ctx, key, Object{Bytes: contents, ContentType: "application/json; charset=utf-8", Cache: cacheControl(cacheClassPrivateControl)})
 }
 
 func checkStoredFormats(ctx context.Context, backend ConditionalObjectBackend, reads map[string][]int, acceptBreaking bool) error {

@@ -747,9 +747,9 @@ func layoutBuildProjection(ctx context.Context, t *testing.T, root, work, source
 				return layoutProjection{}, err
 			}
 		}
-		contentType, cache := "application/json; charset=utf-8", indexCacheControl
+		contentType, cache := "application/json; charset=utf-8", cacheControl(cacheClassSiteRoot)
 		if strings.HasSuffix(item.name, ".gz") {
-			contentType, cache = "application/octet-stream", immutableCache
+			contentType, cache = "application/octet-stream", cacheControl(cacheClassHashedAsset)
 		}
 		key := "_indexes/" + site + "/" + item.name
 		desired = append(desired, desiredSiteObject{key: key, relative: item.name, data: data,
@@ -1069,7 +1069,7 @@ func TestStateLayoutBootstrapAccountsForEveryInstalledStateBody(t *testing.T) {
 	digest := sha256Hex(body)
 	key := "_artifacts/" + site + "/assets/site.css"
 	row := sitePublishObject{Key: key, SHA256: digest, Size: int64(len(body)), ContentType: "text/css; charset=utf-8",
-		ContentDisposition: "inline", CacheControl: artifactCacheControl}
+		ContentDisposition: "inline", CacheControl: cacheControl(cacheClassArtifact)}
 	object := Object{Bytes: append([]byte(nil), body...), ContentType: row.ContentType,
 		ContentDisposition: row.ContentDisposition, Cache: row.CacheControl,
 		Metadata: map[string]string{"artifact-pages-site": site, "artifact-pages-sha256": digest}}
@@ -1913,7 +1913,7 @@ func (store *stateLayoutStore) setRoot(body []byte, inputRoot string, pending bo
 	store.headSchema = 1
 	store.headContentType = "application/octet-stream"
 	store.headEncoding = ""
-	store.headCacheControl = sitePublishStateCacheControl
+	store.headCacheControl = cacheControl(cacheClassPrivateControl)
 }
 
 func (store *stateLayoutStore) validateHead(expectedInputRoot string) error {
@@ -1936,7 +1936,7 @@ func (store *stateLayoutStore) validateHeadForTransition() error {
 	if store.headETag != stateLayoutHash(store.root) {
 		return fmt.Errorf("state HEAD ETag changed before body read")
 	}
-	if store.headSite != store.site || store.headSchema != 1 || store.headContentType != "application/octet-stream" || store.headEncoding != "" || store.headCacheControl != sitePublishStateCacheControl {
+	if store.headSite != store.site || store.headSchema != 1 || store.headContentType != "application/octet-stream" || store.headEncoding != "" || store.headCacheControl != cacheControl(cacheClassPrivateControl) {
 		return fmt.Errorf("state HEAD site, schema, or HTTP policy is invalid")
 	}
 	if !sitePublishStateHashPattern.MatchString(store.headInputRoot) {

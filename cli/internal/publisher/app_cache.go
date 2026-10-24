@@ -108,7 +108,7 @@ func writeAppCacheRetry(ctx context.Context, backend ConditionalObjectBackend, r
 		condition = ObjectCondition{IfMatchETag: etag}
 	}
 	newETag, err := backend.PutObjectConditional(ctx, appCacheRetryObjectKey, Object{
-		Bytes: data, ContentType: "application/json; charset=utf-8", Cache: "no-store",
+		Bytes: data, ContentType: "application/json; charset=utf-8", Cache: cacheControl(cacheClassPrivateControl),
 	}, condition)
 	if err != nil {
 		return "", fmt.Errorf("write app cache retry record: %w", err)

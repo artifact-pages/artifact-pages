@@ -1357,7 +1357,7 @@ func matrixBuildDesiredProjection(ctx context.Context, t *testing.T, oracle matr
 		key := "_artifacts/" + siteID + "/" + source.RelativePath
 		expected[key] = Object{
 			Bytes: append([]byte(nil), source.Bytes...), ContentType: contentType(source.RelativePath),
-			ContentDisposition: "inline", Cache: artifactCacheControl,
+			ContentDisposition: "inline", Cache: cacheControl(cacheClassArtifact),
 			Metadata: map[string]string{"artifact-pages-site": siteID, "artifact-pages-sha256": matrixSHA256Hex(source.Bytes)},
 		}
 	}
@@ -1385,9 +1385,9 @@ func matrixBuildDesiredProjection(ctx context.Context, t *testing.T, oracle matr
 			return err
 		}
 		relative = filepath.ToSlash(relative)
-		contentType, cache := "application/json; charset=utf-8", indexCacheControl
+		contentType, cache := "application/json; charset=utf-8", cacheControl(cacheClassSiteRoot)
 		if strings.HasSuffix(relative, ".gz") {
-			contentType, cache = "application/octet-stream", immutableCache
+			contentType, cache = "application/octet-stream", cacheControl(cacheClassHashedAsset)
 		}
 		key := "_indexes/" + siteID + "/" + relative
 		if (relative == "index.json" || relative == "meta.json") && actual[key].Bytes != nil && matrixSameGeneratedProjection(actual[key].Bytes, data) {

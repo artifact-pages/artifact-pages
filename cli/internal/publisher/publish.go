@@ -14,11 +14,6 @@ import (
 	"github.com/artifact-pages/artifact-pages/cli/internal/preview"
 )
 
-const (
-	indexCacheControl    = "public, max-age=0, s-maxage=60, must-revalidate"
-	artifactCacheControl = "public, max-age=0, s-maxage=300, must-revalidate"
-)
-
 type AppDeployOptions struct {
 	IndependentWeb bool
 	ArchivePath    string
@@ -326,11 +321,12 @@ func appObjectMatchesBundle(info ObjectInfo, file bundleFile, manifest releaseMa
 }
 
 func appFileCacheControl(relative string) string {
+	return cacheControl(appFileCacheClass(filepath.ToSlash(relative)))
+}
+
+func pathHashedAppAsset(relative string) bool {
 	assetPath := filepath.ToSlash(relative)
-	if strings.HasPrefix(assetPath, "assets/") && hashedAppAssetName.MatchString(path.Base(assetPath)) {
-		return immutableCache
-	}
-	return appShellCache
+	return strings.HasPrefix(assetPath, "assets/") && hashedAppAssetName.MatchString(path.Base(assetPath))
 }
 
 // Vite and Rollup use an eight-character [hash] suffix by default. Only these

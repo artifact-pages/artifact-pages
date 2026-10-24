@@ -10,11 +10,6 @@ import (
 	"github.com/artifact-pages/artifact-pages/cli/internal/preview"
 )
 
-const (
-	previewImmutableCache = "public, max-age=0, s-maxage=300, must-revalidate"
-	previewCatalogCache   = "public, max-age=0, s-maxage=60, must-revalidate"
-)
-
 type previewSiteLockContextKey struct{}
 
 type previewSiteLock struct {
@@ -88,7 +83,7 @@ func (store *ObjectPreviewStore) CreateImmutableObject(ctx context.Context, key 
 	if err != nil {
 		return err
 	}
-	_, err = store.backend.PutObjectConditional(ctx, objectKey, previewObject(objectKey, contents, previewImmutableCache), ObjectCondition{IfNoneMatch: true})
+	_, err = store.backend.PutObjectConditional(ctx, objectKey, previewObject(objectKey, contents, cacheControl(cacheClassPreviewFile)), ObjectCondition{IfNoneMatch: true})
 	if err == nil {
 		return nil
 	}
@@ -122,9 +117,9 @@ func (store *ObjectPreviewStore) ReplaceMutableObject(ctx context.Context, key s
 			return err
 		}
 	}
-	cache := previewImmutableCache
+	cache := cacheControl(cacheClassPreviewFile)
 	if strings.HasSuffix(key, "/catalog.json") {
-		cache = previewCatalogCache
+		cache = cacheControl(cacheClassPreviewCatalog)
 	}
 	return store.backend.PutObject(ctx, objectKey, previewObject(objectKey, contents, cache))
 }

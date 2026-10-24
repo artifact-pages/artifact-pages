@@ -523,7 +523,7 @@ func fusionBuildStateObject(site string, state fusionPersistedState) (Object, er
 	if state.Pending != nil {
 		pending = "true"
 	}
-	return Object{Bytes: compressed.Bytes(), ContentType: "application/octet-stream", Cache: sitePublishStateCacheControl,
+	return Object{Bytes: compressed.Bytes(), ContentType: "application/octet-stream", Cache: cacheControl(cacheClassPrivateControl),
 		Metadata: map[string]string{
 			"artifact-pages-publish-state-schema": "2",
 			"artifact-pages-publish-input-root":   state.Committed.InputRoot,
@@ -576,7 +576,7 @@ func fusionValidateStateHead(site string, info ObjectInfo) error {
 		return err
 	}
 	if strings.TrimSpace(info.ETag) == "" || info.Size <= 0 || info.Size > maxSitePublishStateGzipBytes ||
-		info.ContentType != "application/octet-stream" || info.ContentEncoding != "" || info.CacheControl != sitePublishStateCacheControl ||
+		info.ContentType != "application/octet-stream" || info.ContentEncoding != "" || info.CacheControl != cacheControl(cacheClassPrivateControl) ||
 		(info.ContentDisposition != "" && info.ContentDisposition != "inline") {
 		return errors.New("fusion state HEAD has invalid CAS, size, or HTTP policy")
 	}

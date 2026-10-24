@@ -399,15 +399,15 @@ func TestPreviewObjectMetadataUsesStableInlineContentAndCachePolicies(t *testing
 		cache       string
 		contentType string
 	}{
-		{key: "_previews/sre/catalog.json", cache: previewCatalogCache, contentType: "application/json; charset=utf-8"},
-		{key: "_previews/sre/revisions/head/manifest.json", cache: previewImmutableCache, contentType: "application/json; charset=utf-8"},
-		{key: "_previews/sre/revisions/head/files/report.html", cache: previewImmutableCache, contentType: "text/html; charset=utf-8"},
-		{key: "_previews/sre/revisions/head/files/guide.md", cache: previewImmutableCache, contentType: "text/markdown; charset=utf-8"},
-		{key: "_previews/sre/revisions/head/files/assets/site.css", cache: previewImmutableCache, contentType: "text/css; charset=utf-8"},
-		{key: "_previews/sre/revisions/head/files/assets/site.js", cache: previewImmutableCache, contentType: "text/javascript; charset=utf-8"},
-		{key: "_previews/sre/revisions/head/files/assets/icon.svg", cache: previewImmutableCache, contentType: "image/svg+xml; charset=utf-8"},
-		{key: "_previews/sre/revisions/head/files/fonts/site.woff2", cache: previewImmutableCache, contentType: "font/woff2"},
-		{key: "_previews/sre/revisions/head/files/data/unknown.bin", cache: previewImmutableCache, contentType: "application/octet-stream"},
+		{key: "_previews/sre/catalog.json", cache: cacheControl(cacheClassPreviewCatalog), contentType: "application/json; charset=utf-8"},
+		{key: "_previews/sre/revisions/head/manifest.json", cache: cacheControl(cacheClassPreviewFile), contentType: "application/json; charset=utf-8"},
+		{key: "_previews/sre/revisions/head/files/report.html", cache: cacheControl(cacheClassPreviewFile), contentType: "text/html; charset=utf-8"},
+		{key: "_previews/sre/revisions/head/files/guide.md", cache: cacheControl(cacheClassPreviewFile), contentType: "text/markdown; charset=utf-8"},
+		{key: "_previews/sre/revisions/head/files/assets/site.css", cache: cacheControl(cacheClassPreviewFile), contentType: "text/css; charset=utf-8"},
+		{key: "_previews/sre/revisions/head/files/assets/site.js", cache: cacheControl(cacheClassPreviewFile), contentType: "text/javascript; charset=utf-8"},
+		{key: "_previews/sre/revisions/head/files/assets/icon.svg", cache: cacheControl(cacheClassPreviewFile), contentType: "image/svg+xml; charset=utf-8"},
+		{key: "_previews/sre/revisions/head/files/fonts/site.woff2", cache: cacheControl(cacheClassPreviewFile), contentType: "font/woff2"},
+		{key: "_previews/sre/revisions/head/files/data/unknown.bin", cache: cacheControl(cacheClassPreviewFile), contentType: "application/octet-stream"},
 	}
 	for _, test := range tests {
 		t.Run(test.key, func(t *testing.T) {
@@ -494,7 +494,7 @@ func TestObjectPreviewStorePublishRetriesMutableCatalogReplacement(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if object.Cache != previewCatalogCache || object.ContentType != "application/json; charset=utf-8" {
+	if object.Cache != cacheControl(cacheClassPreviewCatalog) || object.ContentType != "application/json; charset=utf-8" {
 		t.Fatalf("catalog metadata = cache %q, content type %q", object.Cache, object.ContentType)
 	}
 }
