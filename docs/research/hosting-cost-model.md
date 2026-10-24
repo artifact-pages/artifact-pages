@@ -26,7 +26,7 @@ At all three miss rates, AWS transfer is $0 for S (5.68 GB), M (160.03 GB), and 
 
 ## Measurements and method
 
-The browser measurement captured three iterations for each 1k, 5k, and 50k generated site. Each fresh context visited three documents with 45-second gaps, performed a normal reload, and ran separate quiet broad and short-query clients. The calculator derives the mean C/W/R vectors from the measured response traces and models each session as:
+The browser measurement captured three iterations for each 1k, 5k, and 50k generated site. Each fresh context visited three documents with 45-second gaps, performed a normal reload, and ran separate quiet broad and short-query clients. The calculator derives the mean C/W/R vectors from the measured response traces. Two corrections are applied in the calculator, not in the raw trace: a compressible response whose Content-Length was not captured by the local fixture is sized from its decoded bytes before the compression model is applied, and a 200 response with zero encoded bytes (a browser memory-cache hit on reload) is counted as a cache hit, not a network request. The committed reader JSON predates the benchmark's `requestServedFromCache` capture, so its raw records still show those responses with `fromCache: false`. The calculator models each session as:
 
 **sessionBody = (V / q) × (C + (q − 1) × W + reloads × R)**
 
