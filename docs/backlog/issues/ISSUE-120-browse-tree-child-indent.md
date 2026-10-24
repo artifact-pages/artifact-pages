@@ -1,6 +1,6 @@
 # Browse tree child pages start left of their folder's name
 
-- Status: In progress
+- Status: Done
 - Assignee: Claude
 - Priority: P3
 - Area: Web / sidebar, Browse tree
@@ -22,8 +22,10 @@ At every depth, a child's title (page or folder) starts to the right of its pare
 ## Acceptance criteria
 
 - [x] In the Browse tree (`branch-guides`), for depths 0 to 3, a child title starts at least 8 px right of its parent folder's name, and sibling page and folder titles share one start x (±1 px).
-- [ ] The branch guide lines and their horizontal connectors meet the rows they belong to: each connector starts at the guide and ends 8 px before the row's title (page) or chevron (folder); hover, active and focus backgrounds, the row actions menu, the count, the MD tag and ellipsis on long titles keep working at the 260–320 px sidebar widths and in the narrow-layout drawer.
+- [x] The branch guide lines and their horizontal connectors meet the rows they belong to: each connector starts at the guide and ends 8 px before the row's title (page) or chevron (folder); hover, active and focus backgrounds, the row actions menu, the count, the MD tag and ellipsis on long titles keep working at the 260–320 px sidebar widths and in the narrow-layout drawer.
 - [x] The `quiet` style follows the same rule; `path-list` and the flat lists (Pinned, filter results, Recent) are unchanged.
 - [x] Regression coverage measures the title positions (e2e or a layout test) so a later change cannot reverse the hierarchy again.
 
 Verification note (Claude main, 2026-10-23): the sidebar never renders `quiet`, so that criterion is checked by geometry in `ArtifactTree.tsx`: folder name at 5 + 14·depth + 22 + 2 px (linked) or 11 + 14·depth + 11 + 7 px (label-only), page title at 29 + 14·depth px. Luna review of PR #197: no findings.
+
+Production check (2026-10-24, web 0.4.4, admin #29, App deploy run 39961746380): on the `ja` site with 「体験と機能」, 「導入する」 and 「インフラを構築する」 expanded, Claude measured all 12 connectors: each starts at its guide and ends 8 px before the title or chevron (e.g. 「資料を公開・レビューする」: guide 26, connector 26–46, title 54). Connector fix #198, Luna review clean. Owner confirmed the production view on 2026-10-24.
