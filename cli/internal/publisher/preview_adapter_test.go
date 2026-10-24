@@ -234,8 +234,8 @@ func TestObjectPreviewStoreCreatesImmutableObjectsOnce(t *testing.T) {
 			fileWrites = append(fileWrites, write.condition)
 		}
 	}
-	if len(fileWrites) != 1 {
-		t.Fatalf("immutable conditional-write attempts = %d, want only initial PUT (retries must reuse by GET)", len(fileWrites))
+	if len(fileWrites) != 3 {
+		t.Fatalf("immutable conditional-write attempts = %d, want initial create plus two conditional-create retries", len(fileWrites))
 	}
 	for index, condition := range fileWrites {
 		if !condition.IfNoneMatch || condition.IfMatchETag != "" {

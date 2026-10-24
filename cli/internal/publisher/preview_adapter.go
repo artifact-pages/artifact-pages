@@ -83,16 +83,6 @@ func (store *ObjectPreviewStore) CreateImmutableObject(ctx context.Context, key 
 	if err != nil {
 		return err
 	}
-	existing, _, readErr := store.backend.GetObject(ctx, objectKey)
-	if readErr == nil {
-		if !bytes.Equal(existing.Bytes, contents) {
-			return preview.ErrImmutableObjectConflict
-		}
-		return nil
-	}
-	if !errors.Is(readErr, ErrObjectNotFound) {
-		return fmt.Errorf("read existing immutable preview object: %w", readErr)
-	}
 	_, err = store.backend.PutObjectConditional(ctx, objectKey, previewObject(objectKey, contents, cacheControl(cacheClassPreviewFile)), ObjectCondition{IfNoneMatch: true})
 	if err == nil {
 		return nil
@@ -100,7 +90,7 @@ func (store *ObjectPreviewStore) CreateImmutableObject(ctx context.Context, key 
 	if !errors.Is(err, ErrPreconditionFailed) {
 		return err
 	}
-	existing, _, readErr = store.backend.GetObject(ctx, objectKey)
+	existing, _, readErr := store.backend.GetObject(ctx, objectKey)
 	if readErr != nil {
 		return fmt.Errorf("read existing immutable preview object: %w", readErr)
 	}
