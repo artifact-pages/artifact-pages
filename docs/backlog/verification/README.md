@@ -27,3 +27,4 @@ Shared execution preparation: [October 18 provider-proof plan](provider-proof-pl
 | [T26](T26-cli-publish-memory-vs-source-bytes.md) | Done | CLI publish peak memory against source bytes |
 | [T27](T27-launch-hosting-cost-model.md) | In progress | Launch hosting cost model from recorded request counts and storage |
 | [T28](T28-provider-release-regression.md) | Open | Post-publication real-provider release regression and preservation/cleanup evidence |
+| [T29](T29-compressed-reader-session-hosting-cost.md) | In progress | Compressed reader-session hosting cost re-estimate |
