@@ -142,7 +142,7 @@ export function averageVectors(vectors) {
 }
 export function compressedResponseBytes(response, mode, objectSizeAudit = [], { provider = 'aws' } = {}) {
   const status = Number(response.status)
-  if (status === 304 || response.fromCache) return 0
+  if (status === 304 || response.fromCache || isInferredMemoryCacheHit(response)) return 0
   if (status !== 200) return Number(response.encodedBytes || 0)
   const url = response.url ?? ''
   const contentType = String(response.contentType ?? '').toLowerCase()
@@ -159,7 +159,7 @@ export function compressedResponseBytes(response, mode, objectSizeAudit = [], { 
   const indexKind = baseIndexKind ? `${baseIndexKind}-${url.match(/scale-(\d+)/)?.[1] ?? ''}` : ''
   if (response.contentEncoding && (provider === 'aws' || !indexKind)) return Number(response.encodedBytes || 0)
   const decoded = Number(response.decodedBytes || 0)
-  const contentLength = Number(response.httpMetadata?.['content-length'] ?? 0)
+  const contentLength = Number(response.httpMetadata?.['content-length'] || decoded)
   const eligibleType = cloudFrontCompressionConditions.eligibleContentTypes.includes(contentType)
   if (!eligibleType || !contentLength || decoded < cloudFrontCompressionConditions.minimumBytes || decoded > cloudFrontCompressionConditions.maximumBytes) return decoded
   const ext = indexKind || (url.startsWith('/assets/') ? `app-asset-${pathExt(url)}` : pathExt(url))
@@ -170,10 +170,21 @@ export function compressedResponseBytes(response, mode, objectSizeAudit = [], { 
   return decoded * size / row.decodedBytes
 }
 const pathExt = (url) => url.split('?')[0].split('/').pop().split('.').pop().toLowerCase()
-function projectCompression(vector, mode, audit, provider) {
+function isInferredMemoryCacheHit(response) {
+  return Number(response.status) === 200 && response.encodedBytes != null && Number(response.encodedBytes) === 0 && !response.fromCache
+}
+export function projectCompression(vector, mode, audit, provider) {
   const responses = vector.responses ?? []
   const bodyBytes = responses.reduce((n, response) => n + compressedResponseBytes(response, mode, audit, { provider }), 0)
-  return { ...numericMetrics(vector), bodyBytes }
+  const metrics = numericMetrics(vector)
+  const inferredMemoryCacheHits = responses.filter(isInferredMemoryCacheHit).length
+  if (inferredMemoryCacheHits) {
+    metrics.requests = Math.max(0, metrics.requests - inferredMemoryCacheHits)
+    metrics.network200 = Math.max(0, metrics.network200 - inferredMemoryCacheHits)
+    metrics.browserCacheRequests += inferredMemoryCacheHits
+    metrics.cacheableRequests = Math.max(0, metrics.cacheableRequests - inferredMemoryCacheHits)
+  }
+  return { ...metrics, bodyBytes }
 }
 const numericMetrics = (vector) => Object.fromEntries(['requests', 'alwaysOriginRequests', 'cacheableRequests', 'browserCacheRequests', 'network200', 'network304'].map((key) => [key, Number(vector?.[key] ?? 0)]))
 export function calculate(reader, publishers, { q = 3, reloads = 0, headerBytes = pricing.headerBytes, missRate = 0.1, compression = 'gzip6', legacyMarkdown = null } = {}) {

@@ -244,7 +244,7 @@
           "browserCacheRequests": 0,
           "network200": 35,
           "network304": 0,
-          "bodyBytes": 541116.9208820217
+          "bodyBytes": 507764.63724373
         },
         "W": {
           "requests": 2,
@@ -256,13 +256,13 @@
           "bodyBytes": 1122.5
         },
         "R": {
-          "requests": 8,
+          "requests": 6,
           "alwaysOriginRequests": 2,
-          "cacheableRequests": 6,
-          "browserCacheRequests": 0,
-          "network200": 5,
+          "cacheableRequests": 4,
+          "browserCacheRequests": 2,
+          "network200": 3,
           "network304": 3,
-          "bodyBytes": 857450
+          "bodyBytes": 2560
         }
       },
       "5000": {
@@ -273,7 +273,7 @@
           "browserCacheRequests": 0,
           "network200": 35,
           "network304": 0,
-          "bodyBytes": 879499.9969912692
+          "bodyBytes": 726571.6372437299
         },
         "W": {
           "requests": 2,
@@ -285,13 +285,13 @@
           "bodyBytes": 1076.5
         },
         "R": {
-          "requests": 8,
+          "requests": 6,
           "alwaysOriginRequests": 2,
-          "cacheableRequests": 6,
-          "browserCacheRequests": 0,
-          "network200": 5,
+          "cacheableRequests": 4,
+          "browserCacheRequests": 2,
+          "network200": 3,
           "network304": 3,
-          "bodyBytes": 857036
+          "bodyBytes": 2146
         }
       },
       "50000": {
@@ -302,7 +302,7 @@
           "browserCacheRequests": 0,
           "network200": 35,
           "network304": 0,
-          "bodyBytes": 3277728.0420878655
+          "bodyBytes": 2973917.6372437296
         },
         "W": {
           "requests": 2,
@@ -314,13 +314,13 @@
           "bodyBytes": 1177
         },
         "R": {
-          "requests": 8,
+          "requests": 6,
           "alwaysOriginRequests": 2,
-          "cacheableRequests": 6,
-          "browserCacheRequests": 0,
-          "network200": 5.666666666666667,
+          "cacheableRequests": 4,
+          "browserCacheRequests": 2,
+          "network200": 3.6666666666666665,
           "network304": 2.3333333333333335,
-          "bodyBytes": 857830.6666666666
+          "bodyBytes": 2940.6666666666665
         }
       }
     },
@@ -722,8 +722,8 @@
         "browserCacheRequests": 0,
         "network200": 391750,
         "network304": 21500,
-        "bodyBytes": 5595041982.160929,
-        "viewerBytes": 6018209982.160929,
+        "bodyBytes": 5261519145.778012,
+        "viewerBytes": 5684687145.778012,
         "viewerRequests": 413250,
         "headerBytes": 423168000,
         "originRequests": 78675,
@@ -747,7 +747,7 @@
         "viewerRequestsPC100": 0,
         "transfer": 0,
         "invalidation": 3.95,
-        "transferGB": 6.018209982160928,
+        "transferGB": 5.684687145778012,
         "invalidationPaths": 1790,
         "usCanada": 4.023857847841203,
         "pc100Upper": 4.023857847841203
@@ -755,7 +755,7 @@
       "r2": {
         "gross": 0.066490552425,
         "afterDedicatedFreeAllowance": 0,
-        "readerTransferGB": 14.82811648216093
+        "readerTransferGB": 14.494593645778012
       }
     },
     {
@@ -776,8 +776,8 @@
         "browserCacheRequests": 0,
         "network200": 391750,
         "network304": 21500,
-        "bodyBytes": 5595041982.160929,
-        "viewerBytes": 6018209982.160929,
+        "bodyBytes": 5261519145.778012,
+        "viewerBytes": 5684687145.778012,
         "viewerRequests": 413250,
         "headerBytes": 423168000,
         "originRequests": 227375,
@@ -801,7 +801,7 @@
         "viewerRequestsPC100": 0,
         "transfer": 0,
         "invalidation": 3.95,
-        "transferGB": 6.018209982160928,
+        "transferGB": 5.684687145778012,
         "invalidationPaths": 1790,
         "usCanada": 4.083337847841204,
         "pc100Upper": 4.083337847841204
@@ -809,7 +809,7 @@
       "r2": {
         "gross": 0.120022552425,
         "afterDedicatedFreeAllowance": 0,
-        "readerTransferGB": 14.82811648216093
+        "readerTransferGB": 14.494593645778012
       }
     },
     {
@@ -830,8 +830,8 @@
         "browserCacheRequests": 0,
         "network200": 391750,
         "network304": 21500,
-        "bodyBytes": 5595041982.160929,
-        "viewerBytes": 6018209982.160929,
+        "bodyBytes": 5261519145.778012,
+        "viewerBytes": 5684687145.778012,
         "viewerRequests": 413250,
         "headerBytes": 423168000,
         "originRequests": 413250,
@@ -855,7 +855,7 @@
         "viewerRequestsPC100": 0,
         "transfer": 0,
         "invalidation": 3.95,
-        "transferGB": 6.018209982160928,
+        "transferGB": 5.684687145778012,
         "invalidationPaths": 1790,
         "usCanada": 4.157687847841204,
         "pc100Upper": 4.157687847841204
@@ -863,7 +863,7 @@
       "r2": {
         "gross": 0.186937552425,
         "afterDedicatedFreeAllowance": 0,
-        "readerTransferGB": 14.82811648216093
+        "readerTransferGB": 14.494593645778012
       }
     },
     {
@@ -884,8 +884,8 @@
         "browserCacheRequests": 0,
         "network200": 7730000,
         "network304": 430000,
-        "bodyBytes": 182255904865.06808,
-        "viewerBytes": 190611744865.06808,
+        "bodyBytes": 151670232915.5602,
+        "viewerBytes": 160026072915.5602,
         "viewerRequests": 8160000,
         "headerBytes": 8355840000,
         "originRequests": 1563000,
@@ -909,7 +909,7 @@
         "viewerRequestsPC100": 0,
         "transfer": 0,
         "invalidation": 115.45,
-        "transferGB": 190.6117448650681,
+        "transferGB": 160.0260729155602,
         "invalidationPaths": 24090,
         "usCanada": 117.07390603746009,
         "pc100Upper": 117.07390603746009
@@ -917,7 +917,7 @@
       "r2": {
         "gross": 1.4622317235,
         "afterDedicatedFreeAllowance": 0,
-        "readerTransferGB": 1152.7062748650676
+        "readerTransferGB": 1122.12060291556
       }
     },
     {
@@ -938,8 +938,8 @@
         "browserCacheRequests": 0,
         "network200": 7730000,
         "network304": 430000,
-        "bodyBytes": 182255904865.06808,
-        "viewerBytes": 190611744865.06808,
+        "bodyBytes": 151670232915.5602,
+        "viewerBytes": 160026072915.5602,
         "viewerRequests": 8160000,
         "headerBytes": 8355840000,
         "originRequests": 4495000,
@@ -963,7 +963,7 @@
         "viewerRequestsPC100": 0,
         "transfer": 0,
         "invalidation": 115.45,
-        "transferGB": 190.6117448650681,
+        "transferGB": 160.0260729155602,
         "invalidationPaths": 24090,
         "usCanada": 118.24670603746009,
         "pc100Upper": 118.24670603746009
@@ -971,7 +971,7 @@
       "r2": {
         "gross": 2.5177517235,
         "afterDedicatedFreeAllowance": 0,
-        "readerTransferGB": 1152.7062748650676
+        "readerTransferGB": 1122.12060291556
       }
     },
     {
@@ -992,8 +992,8 @@
         "browserCacheRequests": 0,
         "network200": 7730000,
         "network304": 430000,
-        "bodyBytes": 182255904865.06808,
-        "viewerBytes": 190611744865.06808,
+        "bodyBytes": 151670232915.5602,
+        "viewerBytes": 160026072915.5602,
         "viewerRequests": 8160000,
         "headerBytes": 8355840000,
         "originRequests": 8160000,
@@ -1017,7 +1017,7 @@
         "viewerRequestsPC100": 0,
         "transfer": 0,
         "invalidation": 115.45,
-        "transferGB": 190.6117448650681,
+        "transferGB": 160.0260729155602,
         "invalidationPaths": 24090,
         "usCanada": 119.7127060374601,
         "pc100Upper": 119.7127060374601
@@ -1025,7 +1025,7 @@
       "r2": {
         "gross": 3.8371517235,
         "afterDedicatedFreeAllowance": 0,
-        "readerTransferGB": 1152.7062748650676
+        "readerTransferGB": 1122.12060291556
       }
     },
     {
@@ -1046,8 +1046,8 @@
         "browserCacheRequests": 0,
         "network200": 38650000,
         "network304": 2150000,
-        "bodyBytes": 911279524325.3405,
-        "viewerBytes": 953058724325.3405,
+        "bodyBytes": 758351164577.8011,
+        "viewerBytes": 800130364577.8011,
         "viewerRequests": 40800000,
         "headerBytes": 41779200000,
         "originRequests": 7815000,
@@ -1069,17 +1069,17 @@
         "readerOriginRequests": 3.125612903225807,
         "viewerRequestsUS": 30.790322580645157,
         "viewerRequestsPC100": 36.94838709677419,
-        "transfer": 2.961995888886544,
+        "transfer": 0,
         "invalidation": 125.105,
-        "transferGB": 1034.8470104574888,
+        "transferGB": 877.051487964898,
         "invalidationPaths": 26021,
-        "usCanada": 163.24851876577634,
-        "pc100Upper": 169.40658328190537
+        "usCanada": 160.2865228768898,
+        "pc100Upper": 166.44458739301882
       },
       "r2": {
         "gross": 3.953099133173226,
         "afterDedicatedFreeAllowance": 0,
-        "readerTransferGB": 7311.305724973615
+        "readerTransferGB": 7153.510202481026
       }
     },
     {
@@ -1100,8 +1100,8 @@
         "browserCacheRequests": 0,
         "network200": 38650000,
         "network304": 2150000,
-        "bodyBytes": 911279524325.3405,
-        "viewerBytes": 953058724325.3405,
+        "bodyBytes": 758351164577.8011,
+        "viewerBytes": 800130364577.8011,
         "viewerRequests": 40800000,
         "headerBytes": 41779200000,
         "originRequests": 22475000,
@@ -1123,17 +1123,17 @@
         "readerOriginRequests": 8.988064516129032,
         "viewerRequestsUS": 30.790322580645157,
         "viewerRequestsPC100": 36.94838709677419,
-        "transfer": 2.961995888886544,
+        "transfer": 0,
         "invalidation": 125.105,
-        "transferGB": 1034.8470104574888,
+        "transferGB": 877.051487964898,
         "invalidationPaths": 26021,
-        "usCanada": 169.11097037867955,
-        "pc100Upper": 175.26903489480858
+        "usCanada": 166.14897448979303,
+        "pc100Upper": 172.30703900592206
       },
       "r2": {
         "gross": 9.229305584786129,
         "afterDedicatedFreeAllowance": 4.516220624516128,
-        "readerTransferGB": 7311.305724973615
+        "readerTransferGB": 7153.510202481026
       }
     },
     {
@@ -1154,8 +1154,8 @@
         "browserCacheRequests": 0,
         "network200": 38650000,
         "network304": 2150000,
-        "bodyBytes": 911279524325.3405,
-        "viewerBytes": 953058724325.3405,
+        "bodyBytes": 758351164577.8011,
+        "viewerBytes": 800130364577.8011,
         "viewerRequests": 40800000,
         "headerBytes": 41779200000,
         "originRequests": 40800000,
@@ -1177,17 +1177,17 @@
         "readerOriginRequests": 16.316129032258065,
         "viewerRequestsUS": 30.790322580645157,
         "viewerRequestsPC100": 36.94838709677419,
-        "transfer": 2.961995888886544,
+        "transfer": 0,
         "invalidation": 125.105,
-        "transferGB": 1034.8470104574888,
+        "transferGB": 877.051487964898,
         "invalidationPaths": 26021,
-        "usCanada": 176.4390348948086,
-        "pc100Upper": 182.59709941093763
+        "usCanada": 173.47703900592205,
+        "pc100Upper": 179.63510352205108
       },
       "r2": {
         "gross": 15.824563649302256,
         "afterDedicatedFreeAllowance": 11.111478689032257,
-        "readerTransferGB": 7311.305724973615
+        "readerTransferGB": 7153.510202481026
       }
     }
   ],
@@ -1214,8 +1214,8 @@
             "browserCacheRequests": 0,
             "network200": 1071750,
             "network304": 1500,
-            "bodyBytes": 16394930399.801361,
-            "viewerBytes": 17493938399.80136,
+            "bodyBytes": 15394361890.652613,
+            "viewerBytes": 16493369890.652613,
             "viewerRequests": 1073250,
             "headerBytes": 1099008000,
             "originRequests": 162675,
@@ -1239,7 +1239,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 17.493938399801362,
+            "transferGB": 16.493369890652612,
             "invalidationPaths": 1790,
             "usCanada": 4.057457847841204,
             "pc100Upper": 4.057457847841204
@@ -1247,7 +1247,7 @@
           "r2": {
             "gross": 0.096730552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 43.83824489980137
+            "readerTransferGB": 42.83767639065262
           },
           "sensitivity": {
             "q": 1,
@@ -1276,8 +1276,8 @@
             "browserCacheRequests": 0,
             "network200": 1071750,
             "network304": 1500,
-            "bodyBytes": 16394930399.801361,
-            "viewerBytes": 17493938399.80136,
+            "bodyBytes": 15394361890.652613,
+            "viewerBytes": 16493369890.652613,
             "viewerRequests": 1073250,
             "headerBytes": 1099008000,
             "originRequests": 567375,
@@ -1301,7 +1301,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 17.493938399801362,
+            "transferGB": 16.493369890652612,
             "invalidationPaths": 1790,
             "usCanada": 4.219337847841204,
             "pc100Upper": 4.219337847841204
@@ -1309,7 +1309,7 @@
           "r2": {
             "gross": 0.242422552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 43.83824489980137
+            "readerTransferGB": 42.83767639065262
           },
           "sensitivity": {
             "q": 1,
@@ -1338,8 +1338,8 @@
             "browserCacheRequests": 0,
             "network200": 1071750,
             "network304": 1500,
-            "bodyBytes": 16394930399.801361,
-            "viewerBytes": 17493938399.80136,
+            "bodyBytes": 15394361890.652613,
+            "viewerBytes": 16493369890.652613,
             "viewerRequests": 1073250,
             "headerBytes": 1099008000,
             "originRequests": 1073250,
@@ -1363,7 +1363,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 17.493938399801362,
+            "transferGB": 16.493369890652612,
             "invalidationPaths": 1790,
             "usCanada": 4.421687847841204,
             "pc100Upper": 4.421687847841204
@@ -1371,7 +1371,7 @@
           "r2": {
             "gross": 0.424537552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 43.83824489980137
+            "readerTransferGB": 42.83767639065262
           },
           "sensitivity": {
             "q": 1,
@@ -1406,8 +1406,8 @@
             "browserCacheRequests": 0,
             "network200": 391750,
             "network304": 21500,
-            "bodyBytes": 5595041982.160929,
-            "viewerBytes": 6018209982.160929,
+            "bodyBytes": 5261519145.778012,
+            "viewerBytes": 5684687145.778012,
             "viewerRequests": 413250,
             "headerBytes": 423168000,
             "originRequests": 78675,
@@ -1431,7 +1431,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 6.018209982160928,
+            "transferGB": 5.684687145778012,
             "invalidationPaths": 1790,
             "usCanada": 4.023857847841203,
             "pc100Upper": 4.023857847841203
@@ -1439,7 +1439,7 @@
           "r2": {
             "gross": 0.066490552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 14.82811648216093
+            "readerTransferGB": 14.494593645778012
           },
           "sensitivity": {
             "q": 3,
@@ -1468,8 +1468,8 @@
             "browserCacheRequests": 0,
             "network200": 391750,
             "network304": 21500,
-            "bodyBytes": 5595041982.160929,
-            "viewerBytes": 6018209982.160929,
+            "bodyBytes": 5261519145.778012,
+            "viewerBytes": 5684687145.778012,
             "viewerRequests": 413250,
             "headerBytes": 423168000,
             "originRequests": 227375,
@@ -1493,7 +1493,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 6.018209982160928,
+            "transferGB": 5.684687145778012,
             "invalidationPaths": 1790,
             "usCanada": 4.083337847841204,
             "pc100Upper": 4.083337847841204
@@ -1501,7 +1501,7 @@
           "r2": {
             "gross": 0.120022552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 14.82811648216093
+            "readerTransferGB": 14.494593645778012
           },
           "sensitivity": {
             "q": 3,
@@ -1530,8 +1530,8 @@
             "browserCacheRequests": 0,
             "network200": 391750,
             "network304": 21500,
-            "bodyBytes": 5595041982.160929,
-            "viewerBytes": 6018209982.160929,
+            "bodyBytes": 5261519145.778012,
+            "viewerBytes": 5684687145.778012,
             "viewerRequests": 413250,
             "headerBytes": 423168000,
             "originRequests": 413250,
@@ -1555,7 +1555,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 6.018209982160928,
+            "transferGB": 5.684687145778012,
             "invalidationPaths": 1790,
             "usCanada": 4.157687847841204,
             "pc100Upper": 4.157687847841204
@@ -1563,7 +1563,7 @@
           "r2": {
             "gross": 0.186937552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 14.82811648216093
+            "readerTransferGB": 14.494593645778012
           },
           "sensitivity": {
             "q": 3,
@@ -1598,8 +1598,8 @@
             "browserCacheRequests": 0,
             "network200": 255750,
             "network304": 25500,
-            "bodyBytes": 3435064298.6328425,
-            "viewerBytes": 3723064298.6328425,
+            "bodyBytes": 3234950596.8030925,
+            "viewerBytes": 3522950596.8030925,
             "viewerRequests": 281250,
             "headerBytes": 288000000,
             "originRequests": 61875,
@@ -1623,7 +1623,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 3.7230642986328424,
+            "transferGB": 3.5229505968030925,
             "invalidationPaths": 1790,
             "usCanada": 4.017137847841203,
             "pc100Upper": 4.017137847841203
@@ -1631,7 +1631,7 @@
           "r2": {
             "gross": 0.060442552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 9.026090798632843
+            "readerTransferGB": 8.825977096803094
           },
           "sensitivity": {
             "q": 5,
@@ -1660,8 +1660,8 @@
             "browserCacheRequests": 0,
             "network200": 255750,
             "network304": 25500,
-            "bodyBytes": 3435064298.6328425,
-            "viewerBytes": 3723064298.6328425,
+            "bodyBytes": 3234950596.8030925,
+            "viewerBytes": 3522950596.8030925,
             "viewerRequests": 281250,
             "headerBytes": 288000000,
             "originRequests": 159375,
@@ -1685,7 +1685,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 3.7230642986328424,
+            "transferGB": 3.5229505968030925,
             "invalidationPaths": 1790,
             "usCanada": 4.056137847841203,
             "pc100Upper": 4.056137847841203
@@ -1693,7 +1693,7 @@
           "r2": {
             "gross": 0.095542552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 9.026090798632843
+            "readerTransferGB": 8.825977096803094
           },
           "sensitivity": {
             "q": 5,
@@ -1722,8 +1722,8 @@
             "browserCacheRequests": 0,
             "network200": 255750,
             "network304": 25500,
-            "bodyBytes": 3435064298.6328425,
-            "viewerBytes": 3723064298.6328425,
+            "bodyBytes": 3234950596.8030925,
+            "viewerBytes": 3522950596.8030925,
             "viewerRequests": 281250,
             "headerBytes": 288000000,
             "originRequests": 281250,
@@ -1747,7 +1747,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 3.7230642986328424,
+            "transferGB": 3.5229505968030925,
             "invalidationPaths": 1790,
             "usCanada": 4.104887847841203,
             "pc100Upper": 4.104887847841203
@@ -1755,7 +1755,7 @@
           "r2": {
             "gross": 0.13941755242499998,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 9.026090798632843
+            "readerTransferGB": 8.825977096803094
           },
           "sensitivity": {
             "q": 5,
@@ -1790,8 +1790,8 @@
             "browserCacheRequests": 0,
             "network200": 391750,
             "network304": 21500,
-            "bodyBytes": 5595041982.160929,
-            "viewerBytes": 6018209982.160929,
+            "bodyBytes": 5261519145.778012,
+            "viewerBytes": 5684687145.778012,
             "viewerRequests": 413250,
             "headerBytes": 423168000,
             "originRequests": 78675,
@@ -1815,7 +1815,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 6.018209982160928,
+            "transferGB": 5.684687145778012,
             "invalidationPaths": 1790,
             "usCanada": 4.023857847841203,
             "pc100Upper": 4.023857847841203
@@ -1823,7 +1823,7 @@
           "r2": {
             "gross": 0.066490552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 14.82811648216093
+            "readerTransferGB": 14.494593645778012
           },
           "sensitivity": {
             "q": 3,
@@ -1852,8 +1852,8 @@
             "browserCacheRequests": 0,
             "network200": 391750,
             "network304": 21500,
-            "bodyBytes": 5595041982.160929,
-            "viewerBytes": 6018209982.160929,
+            "bodyBytes": 5261519145.778012,
+            "viewerBytes": 5684687145.778012,
             "viewerRequests": 413250,
             "headerBytes": 423168000,
             "originRequests": 227375,
@@ -1877,7 +1877,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 6.018209982160928,
+            "transferGB": 5.684687145778012,
             "invalidationPaths": 1790,
             "usCanada": 4.083337847841204,
             "pc100Upper": 4.083337847841204
@@ -1885,7 +1885,7 @@
           "r2": {
             "gross": 0.120022552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 14.82811648216093
+            "readerTransferGB": 14.494593645778012
           },
           "sensitivity": {
             "q": 3,
@@ -1914,8 +1914,8 @@
             "browserCacheRequests": 0,
             "network200": 391750,
             "network304": 21500,
-            "bodyBytes": 5595041982.160929,
-            "viewerBytes": 6018209982.160929,
+            "bodyBytes": 5261519145.778012,
+            "viewerBytes": 5684687145.778012,
             "viewerRequests": 413250,
             "headerBytes": 423168000,
             "originRequests": 413250,
@@ -1939,7 +1939,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 6.018209982160928,
+            "transferGB": 5.684687145778012,
             "invalidationPaths": 1790,
             "usCanada": 4.157687847841204,
             "pc100Upper": 4.157687847841204
@@ -1947,7 +1947,7 @@
           "r2": {
             "gross": 0.186937552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 14.82811648216093
+            "readerTransferGB": 14.494593645778012
           },
           "sensitivity": {
             "q": 3,
@@ -1982,8 +1982,8 @@
             "browserCacheRequests": 0,
             "network200": 391750,
             "network304": 21500,
-            "bodyBytes": 5320029856.979756,
-            "viewerBytes": 5743197856.979756,
+            "bodyBytes": 4978207697.388626,
+            "viewerBytes": 5401375697.388626,
             "viewerRequests": 413250,
             "headerBytes": 423168000,
             "originRequests": 78675,
@@ -2007,7 +2007,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 5.743197856979756,
+            "transferGB": 5.401375697388626,
             "invalidationPaths": 1790,
             "usCanada": 4.023857847841203,
             "pc100Upper": 4.023857847841203
@@ -2015,7 +2015,7 @@
           "r2": {
             "gross": 0.066490552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 14.55310435697976
+            "readerTransferGB": 14.21128219738863
           },
           "sensitivity": {
             "q": 3,
@@ -2044,8 +2044,8 @@
             "browserCacheRequests": 0,
             "network200": 391750,
             "network304": 21500,
-            "bodyBytes": 5320029856.979756,
-            "viewerBytes": 5743197856.979756,
+            "bodyBytes": 4978207697.388626,
+            "viewerBytes": 5401375697.388626,
             "viewerRequests": 413250,
             "headerBytes": 423168000,
             "originRequests": 227375,
@@ -2069,7 +2069,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 5.743197856979756,
+            "transferGB": 5.401375697388626,
             "invalidationPaths": 1790,
             "usCanada": 4.083337847841204,
             "pc100Upper": 4.083337847841204
@@ -2077,7 +2077,7 @@
           "r2": {
             "gross": 0.120022552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 14.55310435697976
+            "readerTransferGB": 14.21128219738863
           },
           "sensitivity": {
             "q": 3,
@@ -2106,8 +2106,8 @@
             "browserCacheRequests": 0,
             "network200": 391750,
             "network304": 21500,
-            "bodyBytes": 5320029856.979756,
-            "viewerBytes": 5743197856.979756,
+            "bodyBytes": 4978207697.388626,
+            "viewerBytes": 5401375697.388626,
             "viewerRequests": 413250,
             "headerBytes": 423168000,
             "originRequests": 413250,
@@ -2131,7 +2131,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 5.743197856979756,
+            "transferGB": 5.401375697388626,
             "invalidationPaths": 1790,
             "usCanada": 4.157687847841204,
             "pc100Upper": 4.157687847841204
@@ -2139,7 +2139,7 @@
           "r2": {
             "gross": 0.186937552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 14.55310435697976
+            "readerTransferGB": 14.21128219738863
           },
           "sensitivity": {
             "q": 3,
@@ -2174,8 +2174,8 @@
             "browserCacheRequests": 0,
             "network200": 391750,
             "network304": 21500,
-            "bodyBytes": 5595041982.160929,
-            "viewerBytes": 6018209982.160929,
+            "bodyBytes": 5261519145.778012,
+            "viewerBytes": 5684687145.778012,
             "viewerRequests": 413250,
             "headerBytes": 423168000,
             "originRequests": 78675,
@@ -2199,7 +2199,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 6.018209982160928,
+            "transferGB": 5.684687145778012,
             "invalidationPaths": 1790,
             "usCanada": 4.023857847841203,
             "pc100Upper": 4.023857847841203
@@ -2207,7 +2207,7 @@
           "r2": {
             "gross": 0.066490552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 14.82811648216093
+            "readerTransferGB": 14.494593645778012
           },
           "sensitivity": {
             "q": 3,
@@ -2236,8 +2236,8 @@
             "browserCacheRequests": 0,
             "network200": 391750,
             "network304": 21500,
-            "bodyBytes": 5595041982.160929,
-            "viewerBytes": 6018209982.160929,
+            "bodyBytes": 5261519145.778012,
+            "viewerBytes": 5684687145.778012,
             "viewerRequests": 413250,
             "headerBytes": 423168000,
             "originRequests": 227375,
@@ -2261,7 +2261,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 6.018209982160928,
+            "transferGB": 5.684687145778012,
             "invalidationPaths": 1790,
             "usCanada": 4.083337847841204,
             "pc100Upper": 4.083337847841204
@@ -2269,7 +2269,7 @@
           "r2": {
             "gross": 0.120022552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 14.82811648216093
+            "readerTransferGB": 14.494593645778012
           },
           "sensitivity": {
             "q": 3,
@@ -2298,8 +2298,8 @@
             "browserCacheRequests": 0,
             "network200": 391750,
             "network304": 21500,
-            "bodyBytes": 5595041982.160929,
-            "viewerBytes": 6018209982.160929,
+            "bodyBytes": 5261519145.778012,
+            "viewerBytes": 5684687145.778012,
             "viewerRequests": 413250,
             "headerBytes": 423168000,
             "originRequests": 413250,
@@ -2323,7 +2323,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 6.018209982160928,
+            "transferGB": 5.684687145778012,
             "invalidationPaths": 1790,
             "usCanada": 4.157687847841204,
             "pc100Upper": 4.157687847841204
@@ -2331,7 +2331,7 @@
           "r2": {
             "gross": 0.186937552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 14.82811648216093
+            "readerTransferGB": 14.494593645778012
           },
           "sensitivity": {
             "q": 3,
@@ -2360,17 +2360,17 @@
             "missRate": 0.1
           },
           "reader": {
-            "requests": 493250,
+            "requests": 473250,
             "alwaysOriginRequests": 61500,
-            "cacheableRequests": 431750,
-            "browserCacheRequests": 0,
-            "network200": 441750,
+            "cacheableRequests": 411750,
+            "browserCacheRequests": 20000,
+            "network200": 421750,
             "network304": 51500,
-            "bodyBytes": 14169541982.160927,
-            "viewerBytes": 14674629982.160927,
-            "viewerRequests": 493250,
-            "headerBytes": 505088000,
-            "originRequests": 104675,
+            "bodyBytes": 5287119145.778012,
+            "viewerBytes": 5771727145.778012,
+            "viewerRequests": 473250,
+            "headerBytes": 484608000,
+            "originRequests": 102675,
             "sessions": 10000,
             "pageViews": 30000,
             "searchIncrement": {
@@ -2386,20 +2386,20 @@
           "aws": {
             "storage": 0.00018584784120321274,
             "publisherRequests": 0.042202,
-            "readerOriginRequests": 0.041870000000000004,
+            "readerOriginRequests": 0.04107,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 14.674629982160926,
+            "transferGB": 5.771727145778012,
             "invalidationPaths": 1790,
-            "usCanada": 4.034257847841204,
-            "pc100Upper": 4.034257847841204
+            "usCanada": 4.033457847841204,
+            "pc100Upper": 4.033457847841204
           },
           "r2": {
-            "gross": 0.075850552425,
+            "gross": 0.075130552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 23.484536482160934
+            "readerTransferGB": 14.581633645778012
           },
           "sensitivity": {
             "q": 3,
@@ -2422,17 +2422,17 @@
             "missRate": 0.5
           },
           "reader": {
-            "requests": 493250,
+            "requests": 473250,
             "alwaysOriginRequests": 61500,
-            "cacheableRequests": 431750,
-            "browserCacheRequests": 0,
-            "network200": 441750,
+            "cacheableRequests": 411750,
+            "browserCacheRequests": 20000,
+            "network200": 421750,
             "network304": 51500,
-            "bodyBytes": 14169541982.160927,
-            "viewerBytes": 14674629982.160927,
-            "viewerRequests": 493250,
-            "headerBytes": 505088000,
-            "originRequests": 277375,
+            "bodyBytes": 5287119145.778012,
+            "viewerBytes": 5771727145.778012,
+            "viewerRequests": 473250,
+            "headerBytes": 484608000,
+            "originRequests": 267375,
             "sessions": 10000,
             "pageViews": 30000,
             "searchIncrement": {
@@ -2448,20 +2448,20 @@
           "aws": {
             "storage": 0.00018584784120321274,
             "publisherRequests": 0.042202,
-            "readerOriginRequests": 0.11095000000000001,
+            "readerOriginRequests": 0.10695,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 14.674629982160926,
+            "transferGB": 5.771727145778012,
             "invalidationPaths": 1790,
-            "usCanada": 4.103337847841203,
-            "pc100Upper": 4.103337847841203
+            "usCanada": 4.099337847841204,
+            "pc100Upper": 4.099337847841204
           },
           "r2": {
-            "gross": 0.138022552425,
+            "gross": 0.134422552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 23.484536482160934
+            "readerTransferGB": 14.581633645778012
           },
           "sensitivity": {
             "q": 3,
@@ -2484,17 +2484,17 @@
             "missRate": 1
           },
           "reader": {
-            "requests": 493250,
+            "requests": 473250,
             "alwaysOriginRequests": 61500,
-            "cacheableRequests": 431750,
-            "browserCacheRequests": 0,
-            "network200": 441750,
+            "cacheableRequests": 411750,
+            "browserCacheRequests": 20000,
+            "network200": 421750,
             "network304": 51500,
-            "bodyBytes": 14169541982.160927,
-            "viewerBytes": 14674629982.160927,
-            "viewerRequests": 493250,
-            "headerBytes": 505088000,
-            "originRequests": 493250,
+            "bodyBytes": 5287119145.778012,
+            "viewerBytes": 5771727145.778012,
+            "viewerRequests": 473250,
+            "headerBytes": 484608000,
+            "originRequests": 473250,
             "sessions": 10000,
             "pageViews": 30000,
             "searchIncrement": {
@@ -2510,20 +2510,20 @@
           "aws": {
             "storage": 0.00018584784120321274,
             "publisherRequests": 0.042202,
-            "readerOriginRequests": 0.19730000000000003,
+            "readerOriginRequests": 0.18930000000000002,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 14.674629982160926,
+            "transferGB": 5.771727145778012,
             "invalidationPaths": 1790,
-            "usCanada": 4.189687847841204,
-            "pc100Upper": 4.189687847841204
+            "usCanada": 4.181687847841204,
+            "pc100Upper": 4.181687847841204
           },
           "r2": {
-            "gross": 0.215737552425,
+            "gross": 0.208537552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 23.484536482160934
+            "readerTransferGB": 14.581633645778012
           },
           "sensitivity": {
             "q": 3,
@@ -2553,17 +2553,17 @@
             "missRate": 0.1
           },
           "reader": {
-            "requests": 493250,
+            "requests": 473250,
             "alwaysOriginRequests": 61500,
-            "cacheableRequests": 431750,
-            "browserCacheRequests": 0,
-            "network200": 441750,
+            "cacheableRequests": 411750,
+            "browserCacheRequests": 20000,
+            "network200": 421750,
             "network304": 51500,
-            "bodyBytes": 14169541982.160927,
-            "viewerBytes": 14674629982.160927,
-            "viewerRequests": 493250,
-            "headerBytes": 505088000,
-            "originRequests": 104675,
+            "bodyBytes": 5287119145.778012,
+            "viewerBytes": 5771727145.778012,
+            "viewerRequests": 473250,
+            "headerBytes": 484608000,
+            "originRequests": 102675,
             "sessions": 10000,
             "pageViews": 30000,
             "searchIncrement": {
@@ -2579,20 +2579,20 @@
           "aws": {
             "storage": 0.00018584784120321274,
             "publisherRequests": 0.042202,
-            "readerOriginRequests": 0.041870000000000004,
+            "readerOriginRequests": 0.04107,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 14.674629982160926,
+            "transferGB": 5.771727145778012,
             "invalidationPaths": 1790,
-            "usCanada": 4.034257847841204,
-            "pc100Upper": 4.034257847841204
+            "usCanada": 4.033457847841204,
+            "pc100Upper": 4.033457847841204
           },
           "r2": {
-            "gross": 0.075850552425,
+            "gross": 0.075130552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 23.484536482160934
+            "readerTransferGB": 14.581633645778012
           },
           "sensitivity": {
             "q": 3,
@@ -2615,17 +2615,17 @@
             "missRate": 0.5
           },
           "reader": {
-            "requests": 493250,
+            "requests": 473250,
             "alwaysOriginRequests": 61500,
-            "cacheableRequests": 431750,
-            "browserCacheRequests": 0,
-            "network200": 441750,
+            "cacheableRequests": 411750,
+            "browserCacheRequests": 20000,
+            "network200": 421750,
             "network304": 51500,
-            "bodyBytes": 14169541982.160927,
-            "viewerBytes": 14674629982.160927,
-            "viewerRequests": 493250,
-            "headerBytes": 505088000,
-            "originRequests": 277375,
+            "bodyBytes": 5287119145.778012,
+            "viewerBytes": 5771727145.778012,
+            "viewerRequests": 473250,
+            "headerBytes": 484608000,
+            "originRequests": 267375,
             "sessions": 10000,
             "pageViews": 30000,
             "searchIncrement": {
@@ -2641,20 +2641,20 @@
           "aws": {
             "storage": 0.00018584784120321274,
             "publisherRequests": 0.042202,
-            "readerOriginRequests": 0.11095000000000001,
+            "readerOriginRequests": 0.10695,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 14.674629982160926,
+            "transferGB": 5.771727145778012,
             "invalidationPaths": 1790,
-            "usCanada": 4.103337847841203,
-            "pc100Upper": 4.103337847841203
+            "usCanada": 4.099337847841204,
+            "pc100Upper": 4.099337847841204
           },
           "r2": {
-            "gross": 0.138022552425,
+            "gross": 0.134422552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 23.484536482160934
+            "readerTransferGB": 14.581633645778012
           },
           "sensitivity": {
             "q": 3,
@@ -2677,17 +2677,17 @@
             "missRate": 1
           },
           "reader": {
-            "requests": 493250,
+            "requests": 473250,
             "alwaysOriginRequests": 61500,
-            "cacheableRequests": 431750,
-            "browserCacheRequests": 0,
-            "network200": 441750,
+            "cacheableRequests": 411750,
+            "browserCacheRequests": 20000,
+            "network200": 421750,
             "network304": 51500,
-            "bodyBytes": 14169541982.160927,
-            "viewerBytes": 14674629982.160927,
-            "viewerRequests": 493250,
-            "headerBytes": 505088000,
-            "originRequests": 493250,
+            "bodyBytes": 5287119145.778012,
+            "viewerBytes": 5771727145.778012,
+            "viewerRequests": 473250,
+            "headerBytes": 484608000,
+            "originRequests": 473250,
             "sessions": 10000,
             "pageViews": 30000,
             "searchIncrement": {
@@ -2703,20 +2703,20 @@
           "aws": {
             "storage": 0.00018584784120321274,
             "publisherRequests": 0.042202,
-            "readerOriginRequests": 0.19730000000000003,
+            "readerOriginRequests": 0.18930000000000002,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 14.674629982160926,
+            "transferGB": 5.771727145778012,
             "invalidationPaths": 1790,
-            "usCanada": 4.189687847841204,
-            "pc100Upper": 4.189687847841204
+            "usCanada": 4.181687847841204,
+            "pc100Upper": 4.181687847841204
           },
           "r2": {
-            "gross": 0.215737552425,
+            "gross": 0.208537552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 23.484536482160934
+            "readerTransferGB": 14.581633645778012
           },
           "sensitivity": {
             "q": 3,
@@ -2746,17 +2746,17 @@
             "missRate": 0.1
           },
           "reader": {
-            "requests": 493250,
+            "requests": 473250,
             "alwaysOriginRequests": 61500,
-            "cacheableRequests": 431750,
-            "browserCacheRequests": 0,
-            "network200": 451750,
+            "cacheableRequests": 411750,
+            "browserCacheRequests": 20000,
+            "network200": 431750,
             "network304": 41500,
-            "bodyBytes": 14557341982.160927,
-            "viewerBytes": 15062429982.160927,
-            "viewerRequests": 493250,
-            "headerBytes": 505088000,
-            "originRequests": 104675,
+            "bodyBytes": 5674919145.778012,
+            "viewerBytes": 6159527145.778012,
+            "viewerRequests": 473250,
+            "headerBytes": 484608000,
+            "originRequests": 102675,
             "sessions": 10000,
             "pageViews": 30000,
             "searchIncrement": {
@@ -2772,20 +2772,20 @@
           "aws": {
             "storage": 0.00018584784120321274,
             "publisherRequests": 0.042202,
-            "readerOriginRequests": 0.041870000000000004,
+            "readerOriginRequests": 0.04107,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 15.062429982160927,
+            "transferGB": 6.1595271457780125,
             "invalidationPaths": 1790,
-            "usCanada": 4.034257847841204,
-            "pc100Upper": 4.034257847841204
+            "usCanada": 4.033457847841204,
+            "pc100Upper": 4.033457847841204
           },
           "r2": {
-            "gross": 0.075850552425,
+            "gross": 0.075130552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 23.891606482160935
+            "readerTransferGB": 14.988703645778013
           },
           "sensitivity": {
             "q": 3,
@@ -2808,17 +2808,17 @@
             "missRate": 0.5
           },
           "reader": {
-            "requests": 493250,
+            "requests": 473250,
             "alwaysOriginRequests": 61500,
-            "cacheableRequests": 431750,
-            "browserCacheRequests": 0,
-            "network200": 451750,
+            "cacheableRequests": 411750,
+            "browserCacheRequests": 20000,
+            "network200": 431750,
             "network304": 41500,
-            "bodyBytes": 14557341982.160927,
-            "viewerBytes": 15062429982.160927,
-            "viewerRequests": 493250,
-            "headerBytes": 505088000,
-            "originRequests": 277375,
+            "bodyBytes": 5674919145.778012,
+            "viewerBytes": 6159527145.778012,
+            "viewerRequests": 473250,
+            "headerBytes": 484608000,
+            "originRequests": 267375,
             "sessions": 10000,
             "pageViews": 30000,
             "searchIncrement": {
@@ -2834,20 +2834,20 @@
           "aws": {
             "storage": 0.00018584784120321274,
             "publisherRequests": 0.042202,
-            "readerOriginRequests": 0.11095000000000001,
+            "readerOriginRequests": 0.10695,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 15.062429982160927,
+            "transferGB": 6.1595271457780125,
             "invalidationPaths": 1790,
-            "usCanada": 4.103337847841203,
-            "pc100Upper": 4.103337847841203
+            "usCanada": 4.099337847841204,
+            "pc100Upper": 4.099337847841204
           },
           "r2": {
-            "gross": 0.138022552425,
+            "gross": 0.134422552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 23.891606482160935
+            "readerTransferGB": 14.988703645778013
           },
           "sensitivity": {
             "q": 3,
@@ -2870,17 +2870,17 @@
             "missRate": 1
           },
           "reader": {
-            "requests": 493250,
+            "requests": 473250,
             "alwaysOriginRequests": 61500,
-            "cacheableRequests": 431750,
-            "browserCacheRequests": 0,
-            "network200": 451750,
+            "cacheableRequests": 411750,
+            "browserCacheRequests": 20000,
+            "network200": 431750,
             "network304": 41500,
-            "bodyBytes": 14557341982.160927,
-            "viewerBytes": 15062429982.160927,
-            "viewerRequests": 493250,
-            "headerBytes": 505088000,
-            "originRequests": 493250,
+            "bodyBytes": 5674919145.778012,
+            "viewerBytes": 6159527145.778012,
+            "viewerRequests": 473250,
+            "headerBytes": 484608000,
+            "originRequests": 473250,
             "sessions": 10000,
             "pageViews": 30000,
             "searchIncrement": {
@@ -2896,20 +2896,20 @@
           "aws": {
             "storage": 0.00018584784120321274,
             "publisherRequests": 0.042202,
-            "readerOriginRequests": 0.19730000000000003,
+            "readerOriginRequests": 0.18930000000000002,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 15.062429982160927,
+            "transferGB": 6.1595271457780125,
             "invalidationPaths": 1790,
-            "usCanada": 4.189687847841204,
-            "pc100Upper": 4.189687847841204
+            "usCanada": 4.181687847841204,
+            "pc100Upper": 4.181687847841204
           },
           "r2": {
-            "gross": 0.215737552425,
+            "gross": 0.208537552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 23.891606482160935
+            "readerTransferGB": 14.988703645778013
           },
           "sensitivity": {
             "q": 3,
@@ -2944,8 +2944,8 @@
             "browserCacheRequests": 0,
             "network200": 391750,
             "network304": 21500,
-            "bodyBytes": 5595041982.160929,
-            "viewerBytes": 5806625982.160929,
+            "bodyBytes": 5261519145.778012,
+            "viewerBytes": 5473103145.778012,
             "viewerRequests": 413250,
             "headerBytes": 211584000,
             "originRequests": 78675,
@@ -2969,7 +2969,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 5.806625982160929,
+            "transferGB": 5.473103145778012,
             "invalidationPaths": 1790,
             "usCanada": 4.023857847841203,
             "pc100Upper": 4.023857847841203
@@ -2977,7 +2977,7 @@
           "r2": {
             "gross": 0.066490552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 14.61653248216093
+            "readerTransferGB": 14.283009645778014
           },
           "sensitivity": {
             "q": 3,
@@ -3006,8 +3006,8 @@
             "browserCacheRequests": 0,
             "network200": 391750,
             "network304": 21500,
-            "bodyBytes": 5595041982.160929,
-            "viewerBytes": 5806625982.160929,
+            "bodyBytes": 5261519145.778012,
+            "viewerBytes": 5473103145.778012,
             "viewerRequests": 413250,
             "headerBytes": 211584000,
             "originRequests": 227375,
@@ -3031,7 +3031,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 5.806625982160929,
+            "transferGB": 5.473103145778012,
             "invalidationPaths": 1790,
             "usCanada": 4.083337847841204,
             "pc100Upper": 4.083337847841204
@@ -3039,7 +3039,7 @@
           "r2": {
             "gross": 0.120022552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 14.61653248216093
+            "readerTransferGB": 14.283009645778014
           },
           "sensitivity": {
             "q": 3,
@@ -3068,8 +3068,8 @@
             "browserCacheRequests": 0,
             "network200": 391750,
             "network304": 21500,
-            "bodyBytes": 5595041982.160929,
-            "viewerBytes": 5806625982.160929,
+            "bodyBytes": 5261519145.778012,
+            "viewerBytes": 5473103145.778012,
             "viewerRequests": 413250,
             "headerBytes": 211584000,
             "originRequests": 413250,
@@ -3093,7 +3093,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 5.806625982160929,
+            "transferGB": 5.473103145778012,
             "invalidationPaths": 1790,
             "usCanada": 4.157687847841204,
             "pc100Upper": 4.157687847841204
@@ -3101,7 +3101,7 @@
           "r2": {
             "gross": 0.186937552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 14.61653248216093
+            "readerTransferGB": 14.283009645778014
           },
           "sensitivity": {
             "q": 3,
@@ -3136,8 +3136,8 @@
             "browserCacheRequests": 0,
             "network200": 391750,
             "network304": 21500,
-            "bodyBytes": 5595041982.160929,
-            "viewerBytes": 6018209982.160929,
+            "bodyBytes": 5261519145.778012,
+            "viewerBytes": 5684687145.778012,
             "viewerRequests": 413250,
             "headerBytes": 423168000,
             "originRequests": 78675,
@@ -3161,7 +3161,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 6.018209982160928,
+            "transferGB": 5.684687145778012,
             "invalidationPaths": 1790,
             "usCanada": 4.023857847841203,
             "pc100Upper": 4.023857847841203
@@ -3169,7 +3169,7 @@
           "r2": {
             "gross": 0.066490552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 14.82811648216093
+            "readerTransferGB": 14.494593645778012
           },
           "sensitivity": {
             "q": 3,
@@ -3198,8 +3198,8 @@
             "browserCacheRequests": 0,
             "network200": 391750,
             "network304": 21500,
-            "bodyBytes": 5595041982.160929,
-            "viewerBytes": 6018209982.160929,
+            "bodyBytes": 5261519145.778012,
+            "viewerBytes": 5684687145.778012,
             "viewerRequests": 413250,
             "headerBytes": 423168000,
             "originRequests": 227375,
@@ -3223,7 +3223,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 6.018209982160928,
+            "transferGB": 5.684687145778012,
             "invalidationPaths": 1790,
             "usCanada": 4.083337847841204,
             "pc100Upper": 4.083337847841204
@@ -3231,7 +3231,7 @@
           "r2": {
             "gross": 0.120022552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 14.82811648216093
+            "readerTransferGB": 14.494593645778012
           },
           "sensitivity": {
             "q": 3,
@@ -3260,8 +3260,8 @@
             "browserCacheRequests": 0,
             "network200": 391750,
             "network304": 21500,
-            "bodyBytes": 5595041982.160929,
-            "viewerBytes": 6018209982.160929,
+            "bodyBytes": 5261519145.778012,
+            "viewerBytes": 5684687145.778012,
             "viewerRequests": 413250,
             "headerBytes": 423168000,
             "originRequests": 413250,
@@ -3285,7 +3285,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 6.018209982160928,
+            "transferGB": 5.684687145778012,
             "invalidationPaths": 1790,
             "usCanada": 4.157687847841204,
             "pc100Upper": 4.157687847841204
@@ -3293,7 +3293,7 @@
           "r2": {
             "gross": 0.186937552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 14.82811648216093
+            "readerTransferGB": 14.494593645778012
           },
           "sensitivity": {
             "q": 3,
@@ -3328,8 +3328,8 @@
             "browserCacheRequests": 0,
             "network200": 391750,
             "network304": 21500,
-            "bodyBytes": 5595041982.160929,
-            "viewerBytes": 6441377982.160929,
+            "bodyBytes": 5261519145.778012,
+            "viewerBytes": 6107855145.778012,
             "viewerRequests": 413250,
             "headerBytes": 846336000,
             "originRequests": 78675,
@@ -3353,7 +3353,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 6.441377982160929,
+            "transferGB": 6.107855145778013,
             "invalidationPaths": 1790,
             "usCanada": 4.023857847841203,
             "pc100Upper": 4.023857847841203
@@ -3361,7 +3361,7 @@
           "r2": {
             "gross": 0.066490552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 15.251284482160928
+            "readerTransferGB": 14.917761645778013
           },
           "sensitivity": {
             "q": 3,
@@ -3390,8 +3390,8 @@
             "browserCacheRequests": 0,
             "network200": 391750,
             "network304": 21500,
-            "bodyBytes": 5595041982.160929,
-            "viewerBytes": 6441377982.160929,
+            "bodyBytes": 5261519145.778012,
+            "viewerBytes": 6107855145.778012,
             "viewerRequests": 413250,
             "headerBytes": 846336000,
             "originRequests": 227375,
@@ -3415,7 +3415,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 6.441377982160929,
+            "transferGB": 6.107855145778013,
             "invalidationPaths": 1790,
             "usCanada": 4.083337847841204,
             "pc100Upper": 4.083337847841204
@@ -3423,7 +3423,7 @@
           "r2": {
             "gross": 0.120022552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 15.251284482160928
+            "readerTransferGB": 14.917761645778013
           },
           "sensitivity": {
             "q": 3,
@@ -3452,8 +3452,8 @@
             "browserCacheRequests": 0,
             "network200": 391750,
             "network304": 21500,
-            "bodyBytes": 5595041982.160929,
-            "viewerBytes": 6441377982.160929,
+            "bodyBytes": 5261519145.778012,
+            "viewerBytes": 6107855145.778012,
             "viewerRequests": 413250,
             "headerBytes": 846336000,
             "originRequests": 413250,
@@ -3477,7 +3477,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 3.95,
-            "transferGB": 6.441377982160929,
+            "transferGB": 6.107855145778013,
             "invalidationPaths": 1790,
             "usCanada": 4.157687847841204,
             "pc100Upper": 4.157687847841204
@@ -3485,7 +3485,7 @@
           "r2": {
             "gross": 0.186937552425,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 15.251284482160928
+            "readerTransferGB": 14.917761645778013
           },
           "sensitivity": {
             "q": 3,
@@ -3520,8 +3520,8 @@
             "browserCacheRequests": 0,
             "network200": 21330000,
             "network304": 30000,
-            "bodyBytes": 533625303661.57574,
-            "viewerBytes": 555497943661.5757,
+            "bodyBytes": 441868287813.0522,
+            "viewerBytes": 463740927813.0522,
             "viewerRequests": 21360000,
             "headerBytes": 21872640000,
             "originRequests": 3243000,
@@ -3545,7 +3545,7 @@
             "viewerRequestsPC100": 13.632,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 555.4979436615757,
+            "transferGB": 463.74092781305217,
             "invalidationPaths": 24090,
             "usCanada": 129.1059060374601,
             "pc100Upper": 131.3779060374601
@@ -3553,7 +3553,7 @@
           "r2": {
             "gross": 2.0670317235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 3438.3116736615743
+            "readerTransferGB": 3346.5546578130516
           },
           "sensitivity": {
             "q": 1,
@@ -3582,8 +3582,8 @@
             "browserCacheRequests": 0,
             "network200": 21330000,
             "network304": 30000,
-            "bodyBytes": 533625303661.57574,
-            "viewerBytes": 555497943661.5757,
+            "bodyBytes": 441868287813.0522,
+            "viewerBytes": 463740927813.0522,
             "viewerRequests": 21360000,
             "headerBytes": 21872640000,
             "originRequests": 11295000,
@@ -3607,7 +3607,7 @@
             "viewerRequestsPC100": 13.632,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 555.4979436615757,
+            "transferGB": 463.74092781305217,
             "invalidationPaths": 24090,
             "usCanada": 132.3267060374601,
             "pc100Upper": 134.5987060374601
@@ -3615,7 +3615,7 @@
           "r2": {
             "gross": 4.9657517235,
             "afterDedicatedFreeAllowance": 0.4922928,
-            "readerTransferGB": 3438.3116736615743
+            "readerTransferGB": 3346.5546578130516
           },
           "sensitivity": {
             "q": 1,
@@ -3644,8 +3644,8 @@
             "browserCacheRequests": 0,
             "network200": 21330000,
             "network304": 30000,
-            "bodyBytes": 533625303661.57574,
-            "viewerBytes": 555497943661.5757,
+            "bodyBytes": 441868287813.0522,
+            "viewerBytes": 463740927813.0522,
             "viewerRequests": 21360000,
             "headerBytes": 21872640000,
             "originRequests": 21360000,
@@ -3669,7 +3669,7 @@
             "viewerRequestsPC100": 13.632,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 555.4979436615757,
+            "transferGB": 463.74092781305217,
             "invalidationPaths": 24090,
             "usCanada": 136.35270603746008,
             "pc100Upper": 138.6247060374601
@@ -3677,7 +3677,7 @@
           "r2": {
             "gross": 8.5891517235,
             "afterDedicatedFreeAllowance": 4.1156928,
-            "readerTransferGB": 3438.3116736615743
+            "readerTransferGB": 3346.5546578130516
           },
           "sensitivity": {
             "q": 1,
@@ -3712,8 +3712,8 @@
             "browserCacheRequests": 0,
             "network200": 7730000,
             "network304": 430000,
-            "bodyBytes": 182255904865.06808,
-            "viewerBytes": 190611744865.06808,
+            "bodyBytes": 151670232915.5602,
+            "viewerBytes": 160026072915.5602,
             "viewerRequests": 8160000,
             "headerBytes": 8355840000,
             "originRequests": 1563000,
@@ -3737,7 +3737,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 190.6117448650681,
+            "transferGB": 160.0260729155602,
             "invalidationPaths": 24090,
             "usCanada": 117.07390603746009,
             "pc100Upper": 117.07390603746009
@@ -3745,7 +3745,7 @@
           "r2": {
             "gross": 1.4622317235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 1152.7062748650676
+            "readerTransferGB": 1122.12060291556
           },
           "sensitivity": {
             "q": 3,
@@ -3774,8 +3774,8 @@
             "browserCacheRequests": 0,
             "network200": 7730000,
             "network304": 430000,
-            "bodyBytes": 182255904865.06808,
-            "viewerBytes": 190611744865.06808,
+            "bodyBytes": 151670232915.5602,
+            "viewerBytes": 160026072915.5602,
             "viewerRequests": 8160000,
             "headerBytes": 8355840000,
             "originRequests": 4495000,
@@ -3799,7 +3799,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 190.6117448650681,
+            "transferGB": 160.0260729155602,
             "invalidationPaths": 24090,
             "usCanada": 118.24670603746009,
             "pc100Upper": 118.24670603746009
@@ -3807,7 +3807,7 @@
           "r2": {
             "gross": 2.5177517235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 1152.7062748650676
+            "readerTransferGB": 1122.12060291556
           },
           "sensitivity": {
             "q": 3,
@@ -3836,8 +3836,8 @@
             "browserCacheRequests": 0,
             "network200": 7730000,
             "network304": 430000,
-            "bodyBytes": 182255904865.06808,
-            "viewerBytes": 190611744865.06808,
+            "bodyBytes": 151670232915.5602,
+            "viewerBytes": 160026072915.5602,
             "viewerRequests": 8160000,
             "headerBytes": 8355840000,
             "originRequests": 8160000,
@@ -3861,7 +3861,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 190.6117448650681,
+            "transferGB": 160.0260729155602,
             "invalidationPaths": 24090,
             "usCanada": 119.7127060374601,
             "pc100Upper": 119.7127060374601
@@ -3869,7 +3869,7 @@
           "r2": {
             "gross": 3.8371517235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 1152.7062748650676
+            "readerTransferGB": 1122.12060291556
           },
           "sensitivity": {
             "q": 3,
@@ -3904,8 +3904,8 @@
             "browserCacheRequests": 0,
             "network200": 5010000,
             "network304": 510000,
-            "bodyBytes": 111982025105.76654,
-            "viewerBytes": 117634505105.76654,
+            "bodyBytes": 93630621936.06183,
+            "viewerBytes": 99283101936.06183,
             "viewerRequests": 5520000,
             "headerBytes": 5652480000,
             "originRequests": 1227000,
@@ -3929,7 +3929,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 117.63450510576654,
+            "transferGB": 99.28310193606183,
             "invalidationPaths": 24090,
             "usCanada": 116.93950603746009,
             "pc100Upper": 116.93950603746009
@@ -3937,7 +3937,7 @@
           "r2": {
             "gross": 1.3412717235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 695.5851951057663
+            "readerTransferGB": 677.2337919360616
           },
           "sensitivity": {
             "q": 5,
@@ -3966,8 +3966,8 @@
             "browserCacheRequests": 0,
             "network200": 5010000,
             "network304": 510000,
-            "bodyBytes": 111982025105.76654,
-            "viewerBytes": 117634505105.76654,
+            "bodyBytes": 93630621936.06183,
+            "viewerBytes": 99283101936.06183,
             "viewerRequests": 5520000,
             "headerBytes": 5652480000,
             "originRequests": 3135000,
@@ -3991,7 +3991,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 117.63450510576654,
+            "transferGB": 99.28310193606183,
             "invalidationPaths": 24090,
             "usCanada": 117.70270603746009,
             "pc100Upper": 117.70270603746009
@@ -3999,7 +3999,7 @@
           "r2": {
             "gross": 2.0281517235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 695.5851951057663
+            "readerTransferGB": 677.2337919360616
           },
           "sensitivity": {
             "q": 5,
@@ -4028,8 +4028,8 @@
             "browserCacheRequests": 0,
             "network200": 5010000,
             "network304": 510000,
-            "bodyBytes": 111982025105.76654,
-            "viewerBytes": 117634505105.76654,
+            "bodyBytes": 93630621936.06183,
+            "viewerBytes": 99283101936.06183,
             "viewerRequests": 5520000,
             "headerBytes": 5652480000,
             "originRequests": 5520000,
@@ -4053,7 +4053,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 117.63450510576654,
+            "transferGB": 99.28310193606183,
             "invalidationPaths": 24090,
             "usCanada": 118.6567060374601,
             "pc100Upper": 118.6567060374601
@@ -4061,7 +4061,7 @@
           "r2": {
             "gross": 2.8867517234999998,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 695.5851951057663
+            "readerTransferGB": 677.2337919360616
           },
           "sensitivity": {
             "q": 5,
@@ -4096,8 +4096,8 @@
             "browserCacheRequests": 0,
             "network200": 7730000,
             "network304": 430000,
-            "bodyBytes": 182255904865.06808,
-            "viewerBytes": 190611744865.06808,
+            "bodyBytes": 151670232915.5602,
+            "viewerBytes": 160026072915.5602,
             "viewerRequests": 8160000,
             "headerBytes": 8355840000,
             "originRequests": 1563000,
@@ -4121,7 +4121,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 190.6117448650681,
+            "transferGB": 160.0260729155602,
             "invalidationPaths": 24090,
             "usCanada": 117.07390603746009,
             "pc100Upper": 117.07390603746009
@@ -4129,7 +4129,7 @@
           "r2": {
             "gross": 1.4622317235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 1152.7062748650676
+            "readerTransferGB": 1122.12060291556
           },
           "sensitivity": {
             "q": 3,
@@ -4158,8 +4158,8 @@
             "browserCacheRequests": 0,
             "network200": 7730000,
             "network304": 430000,
-            "bodyBytes": 182255904865.06808,
-            "viewerBytes": 190611744865.06808,
+            "bodyBytes": 151670232915.5602,
+            "viewerBytes": 160026072915.5602,
             "viewerRequests": 8160000,
             "headerBytes": 8355840000,
             "originRequests": 4495000,
@@ -4183,7 +4183,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 190.6117448650681,
+            "transferGB": 160.0260729155602,
             "invalidationPaths": 24090,
             "usCanada": 118.24670603746009,
             "pc100Upper": 118.24670603746009
@@ -4191,7 +4191,7 @@
           "r2": {
             "gross": 2.5177517235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 1152.7062748650676
+            "readerTransferGB": 1122.12060291556
           },
           "sensitivity": {
             "q": 3,
@@ -4220,8 +4220,8 @@
             "browserCacheRequests": 0,
             "network200": 7730000,
             "network304": 430000,
-            "bodyBytes": 182255904865.06808,
-            "viewerBytes": 190611744865.06808,
+            "bodyBytes": 151670232915.5602,
+            "viewerBytes": 160026072915.5602,
             "viewerRequests": 8160000,
             "headerBytes": 8355840000,
             "originRequests": 8160000,
@@ -4245,7 +4245,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 190.6117448650681,
+            "transferGB": 160.0260729155602,
             "invalidationPaths": 24090,
             "usCanada": 119.7127060374601,
             "pc100Upper": 119.7127060374601
@@ -4253,7 +4253,7 @@
           "r2": {
             "gross": 3.8371517235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 1152.7062748650676
+            "readerTransferGB": 1122.12060291556
           },
           "sensitivity": {
             "q": 3,
@@ -4288,8 +4288,8 @@
             "browserCacheRequests": 0,
             "network200": 7730000,
             "network304": 430000,
-            "bodyBytes": 177350764342.6844,
-            "viewerBytes": 185706604342.6844,
+            "bodyBytes": 146004003947.77252,
+            "viewerBytes": 154359843947.77252,
             "viewerRequests": 8160000,
             "headerBytes": 8355840000,
             "originRequests": 1563000,
@@ -4313,7 +4313,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 185.7066043426844,
+            "transferGB": 154.35984394777253,
             "invalidationPaths": 24090,
             "usCanada": 117.07390603746009,
             "pc100Upper": 117.07390603746009
@@ -4321,7 +4321,7 @@
           "r2": {
             "gross": 1.4622317235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 1147.8011343426842
+            "readerTransferGB": 1116.4543739477726
           },
           "sensitivity": {
             "q": 3,
@@ -4350,8 +4350,8 @@
             "browserCacheRequests": 0,
             "network200": 7730000,
             "network304": 430000,
-            "bodyBytes": 177350764342.6844,
-            "viewerBytes": 185706604342.6844,
+            "bodyBytes": 146004003947.77252,
+            "viewerBytes": 154359843947.77252,
             "viewerRequests": 8160000,
             "headerBytes": 8355840000,
             "originRequests": 4495000,
@@ -4375,7 +4375,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 185.7066043426844,
+            "transferGB": 154.35984394777253,
             "invalidationPaths": 24090,
             "usCanada": 118.24670603746009,
             "pc100Upper": 118.24670603746009
@@ -4383,7 +4383,7 @@
           "r2": {
             "gross": 2.5177517235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 1147.8011343426842
+            "readerTransferGB": 1116.4543739477726
           },
           "sensitivity": {
             "q": 3,
@@ -4412,8 +4412,8 @@
             "browserCacheRequests": 0,
             "network200": 7730000,
             "network304": 430000,
-            "bodyBytes": 177350764342.6844,
-            "viewerBytes": 185706604342.6844,
+            "bodyBytes": 146004003947.77252,
+            "viewerBytes": 154359843947.77252,
             "viewerRequests": 8160000,
             "headerBytes": 8355840000,
             "originRequests": 8160000,
@@ -4437,7 +4437,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 185.7066043426844,
+            "transferGB": 154.35984394777253,
             "invalidationPaths": 24090,
             "usCanada": 119.7127060374601,
             "pc100Upper": 119.7127060374601
@@ -4445,7 +4445,7 @@
           "r2": {
             "gross": 3.8371517235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 1147.8011343426842
+            "readerTransferGB": 1116.4543739477726
           },
           "sensitivity": {
             "q": 3,
@@ -4480,8 +4480,8 @@
             "browserCacheRequests": 0,
             "network200": 7730000,
             "network304": 430000,
-            "bodyBytes": 182255904865.06808,
-            "viewerBytes": 190611744865.06808,
+            "bodyBytes": 151670232915.5602,
+            "viewerBytes": 160026072915.5602,
             "viewerRequests": 8160000,
             "headerBytes": 8355840000,
             "originRequests": 1563000,
@@ -4505,7 +4505,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 190.6117448650681,
+            "transferGB": 160.0260729155602,
             "invalidationPaths": 24090,
             "usCanada": 117.07390603746009,
             "pc100Upper": 117.07390603746009
@@ -4513,7 +4513,7 @@
           "r2": {
             "gross": 1.4622317235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 1152.7062748650676
+            "readerTransferGB": 1122.12060291556
           },
           "sensitivity": {
             "q": 3,
@@ -4542,8 +4542,8 @@
             "browserCacheRequests": 0,
             "network200": 7730000,
             "network304": 430000,
-            "bodyBytes": 182255904865.06808,
-            "viewerBytes": 190611744865.06808,
+            "bodyBytes": 151670232915.5602,
+            "viewerBytes": 160026072915.5602,
             "viewerRequests": 8160000,
             "headerBytes": 8355840000,
             "originRequests": 4495000,
@@ -4567,7 +4567,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 190.6117448650681,
+            "transferGB": 160.0260729155602,
             "invalidationPaths": 24090,
             "usCanada": 118.24670603746009,
             "pc100Upper": 118.24670603746009
@@ -4575,7 +4575,7 @@
           "r2": {
             "gross": 2.5177517235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 1152.7062748650676
+            "readerTransferGB": 1122.12060291556
           },
           "sensitivity": {
             "q": 3,
@@ -4604,8 +4604,8 @@
             "browserCacheRequests": 0,
             "network200": 7730000,
             "network304": 430000,
-            "bodyBytes": 182255904865.06808,
-            "viewerBytes": 190611744865.06808,
+            "bodyBytes": 151670232915.5602,
+            "viewerBytes": 160026072915.5602,
             "viewerRequests": 8160000,
             "headerBytes": 8355840000,
             "originRequests": 8160000,
@@ -4629,7 +4629,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 190.6117448650681,
+            "transferGB": 160.0260729155602,
             "invalidationPaths": 24090,
             "usCanada": 119.7127060374601,
             "pc100Upper": 119.7127060374601
@@ -4637,7 +4637,7 @@
           "r2": {
             "gross": 3.8371517235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 1152.7062748650676
+            "readerTransferGB": 1122.12060291556
           },
           "sensitivity": {
             "q": 3,
@@ -4666,17 +4666,17 @@
             "missRate": 0.1
           },
           "reader": {
-            "requests": 9760000,
+            "requests": 9360000,
             "alwaysOriginRequests": 1230000,
-            "cacheableRequests": 8530000,
-            "browserCacheRequests": 0,
-            "network200": 8730000,
+            "cacheableRequests": 8130000,
+            "browserCacheRequests": 400000,
+            "network200": 8330000,
             "network304": 1030000,
-            "bodyBytes": 353663104865.0681,
-            "viewerBytes": 363657344865.0681,
-            "viewerRequests": 9760000,
-            "headerBytes": 9994240000,
-            "originRequests": 2083000,
+            "bodyBytes": 152099432915.5602,
+            "viewerBytes": 161684072915.5602,
+            "viewerRequests": 9360000,
+            "headerBytes": 9584640000,
+            "originRequests": 2043000,
             "sessions": 200000,
             "pageViews": 600000,
             "searchIncrement": {
@@ -4692,20 +4692,20 @@
           "aws": {
             "storage": 0.0055140374600887295,
             "publisherRequests": 0.9931920000000001,
-            "readerOriginRequests": 0.8332,
+            "readerOriginRequests": 0.8172,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 363.6573448650681,
+            "transferGB": 161.68407291556022,
             "invalidationPaths": 24090,
-            "usCanada": 117.28190603746009,
-            "pc100Upper": 117.28190603746009
+            "usCanada": 117.2659060374601,
+            "pc100Upper": 117.2659060374601
           },
           "r2": {
-            "gross": 1.6494317235,
+            "gross": 1.6350317235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 1325.7518748650675
+            "readerTransferGB": 1123.77860291556
           },
           "sensitivity": {
             "q": 3,
@@ -4728,17 +4728,17 @@
             "missRate": 0.5
           },
           "reader": {
-            "requests": 9760000,
+            "requests": 9360000,
             "alwaysOriginRequests": 1230000,
-            "cacheableRequests": 8530000,
-            "browserCacheRequests": 0,
-            "network200": 8730000,
+            "cacheableRequests": 8130000,
+            "browserCacheRequests": 400000,
+            "network200": 8330000,
             "network304": 1030000,
-            "bodyBytes": 353663104865.0681,
-            "viewerBytes": 363657344865.0681,
-            "viewerRequests": 9760000,
-            "headerBytes": 9994240000,
-            "originRequests": 5495000,
+            "bodyBytes": 152099432915.5602,
+            "viewerBytes": 161684072915.5602,
+            "viewerRequests": 9360000,
+            "headerBytes": 9584640000,
+            "originRequests": 5295000,
             "sessions": 200000,
             "pageViews": 600000,
             "searchIncrement": {
@@ -4754,20 +4754,20 @@
           "aws": {
             "storage": 0.0055140374600887295,
             "publisherRequests": 0.9931920000000001,
-            "readerOriginRequests": 2.1980000000000004,
+            "readerOriginRequests": 2.1180000000000003,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 363.6573448650681,
+            "transferGB": 161.68407291556022,
             "invalidationPaths": 24090,
-            "usCanada": 118.64670603746009,
-            "pc100Upper": 118.64670603746009
+            "usCanada": 118.5667060374601,
+            "pc100Upper": 118.5667060374601
           },
           "r2": {
-            "gross": 2.8777517235,
+            "gross": 2.8057517235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 1325.7518748650675
+            "readerTransferGB": 1123.77860291556
           },
           "sensitivity": {
             "q": 3,
@@ -4790,17 +4790,17 @@
             "missRate": 1
           },
           "reader": {
-            "requests": 9760000,
+            "requests": 9360000,
             "alwaysOriginRequests": 1230000,
-            "cacheableRequests": 8530000,
-            "browserCacheRequests": 0,
-            "network200": 8730000,
+            "cacheableRequests": 8130000,
+            "browserCacheRequests": 400000,
+            "network200": 8330000,
             "network304": 1030000,
-            "bodyBytes": 353663104865.0681,
-            "viewerBytes": 363657344865.0681,
-            "viewerRequests": 9760000,
-            "headerBytes": 9994240000,
-            "originRequests": 9760000,
+            "bodyBytes": 152099432915.5602,
+            "viewerBytes": 161684072915.5602,
+            "viewerRequests": 9360000,
+            "headerBytes": 9584640000,
+            "originRequests": 9360000,
             "sessions": 200000,
             "pageViews": 600000,
             "searchIncrement": {
@@ -4816,20 +4816,20 @@
           "aws": {
             "storage": 0.0055140374600887295,
             "publisherRequests": 0.9931920000000001,
-            "readerOriginRequests": 3.9040000000000004,
+            "readerOriginRequests": 3.744,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 363.6573448650681,
+            "transferGB": 161.68407291556022,
             "invalidationPaths": 24090,
-            "usCanada": 120.3527060374601,
-            "pc100Upper": 120.3527060374601
+            "usCanada": 120.1927060374601,
+            "pc100Upper": 120.1927060374601
           },
           "r2": {
-            "gross": 4.4131517235,
+            "gross": 4.2691517235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 1325.7518748650675
+            "readerTransferGB": 1123.77860291556
           },
           "sensitivity": {
             "q": 3,
@@ -4859,17 +4859,17 @@
             "missRate": 0.1
           },
           "reader": {
-            "requests": 9760000,
+            "requests": 9360000,
             "alwaysOriginRequests": 1230000,
-            "cacheableRequests": 8530000,
-            "browserCacheRequests": 0,
-            "network200": 8730000,
+            "cacheableRequests": 8130000,
+            "browserCacheRequests": 400000,
+            "network200": 8330000,
             "network304": 1030000,
-            "bodyBytes": 353663104865.0681,
-            "viewerBytes": 363657344865.0681,
-            "viewerRequests": 9760000,
-            "headerBytes": 9994240000,
-            "originRequests": 2083000,
+            "bodyBytes": 152099432915.5602,
+            "viewerBytes": 161684072915.5602,
+            "viewerRequests": 9360000,
+            "headerBytes": 9584640000,
+            "originRequests": 2043000,
             "sessions": 200000,
             "pageViews": 600000,
             "searchIncrement": {
@@ -4885,20 +4885,20 @@
           "aws": {
             "storage": 0.0055140374600887295,
             "publisherRequests": 0.9931920000000001,
-            "readerOriginRequests": 0.8332,
+            "readerOriginRequests": 0.8172,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 363.6573448650681,
+            "transferGB": 161.68407291556022,
             "invalidationPaths": 24090,
-            "usCanada": 117.28190603746009,
-            "pc100Upper": 117.28190603746009
+            "usCanada": 117.2659060374601,
+            "pc100Upper": 117.2659060374601
           },
           "r2": {
-            "gross": 1.6494317235,
+            "gross": 1.6350317235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 1325.7518748650675
+            "readerTransferGB": 1123.77860291556
           },
           "sensitivity": {
             "q": 3,
@@ -4921,17 +4921,17 @@
             "missRate": 0.5
           },
           "reader": {
-            "requests": 9760000,
+            "requests": 9360000,
             "alwaysOriginRequests": 1230000,
-            "cacheableRequests": 8530000,
-            "browserCacheRequests": 0,
-            "network200": 8730000,
+            "cacheableRequests": 8130000,
+            "browserCacheRequests": 400000,
+            "network200": 8330000,
             "network304": 1030000,
-            "bodyBytes": 353663104865.0681,
-            "viewerBytes": 363657344865.0681,
-            "viewerRequests": 9760000,
-            "headerBytes": 9994240000,
-            "originRequests": 5495000,
+            "bodyBytes": 152099432915.5602,
+            "viewerBytes": 161684072915.5602,
+            "viewerRequests": 9360000,
+            "headerBytes": 9584640000,
+            "originRequests": 5295000,
             "sessions": 200000,
             "pageViews": 600000,
             "searchIncrement": {
@@ -4947,20 +4947,20 @@
           "aws": {
             "storage": 0.0055140374600887295,
             "publisherRequests": 0.9931920000000001,
-            "readerOriginRequests": 2.1980000000000004,
+            "readerOriginRequests": 2.1180000000000003,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 363.6573448650681,
+            "transferGB": 161.68407291556022,
             "invalidationPaths": 24090,
-            "usCanada": 118.64670603746009,
-            "pc100Upper": 118.64670603746009
+            "usCanada": 118.5667060374601,
+            "pc100Upper": 118.5667060374601
           },
           "r2": {
-            "gross": 2.8777517235,
+            "gross": 2.8057517235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 1325.7518748650675
+            "readerTransferGB": 1123.77860291556
           },
           "sensitivity": {
             "q": 3,
@@ -4983,17 +4983,17 @@
             "missRate": 1
           },
           "reader": {
-            "requests": 9760000,
+            "requests": 9360000,
             "alwaysOriginRequests": 1230000,
-            "cacheableRequests": 8530000,
-            "browserCacheRequests": 0,
-            "network200": 8730000,
+            "cacheableRequests": 8130000,
+            "browserCacheRequests": 400000,
+            "network200": 8330000,
             "network304": 1030000,
-            "bodyBytes": 353663104865.0681,
-            "viewerBytes": 363657344865.0681,
-            "viewerRequests": 9760000,
-            "headerBytes": 9994240000,
-            "originRequests": 9760000,
+            "bodyBytes": 152099432915.5602,
+            "viewerBytes": 161684072915.5602,
+            "viewerRequests": 9360000,
+            "headerBytes": 9584640000,
+            "originRequests": 9360000,
             "sessions": 200000,
             "pageViews": 600000,
             "searchIncrement": {
@@ -5009,20 +5009,20 @@
           "aws": {
             "storage": 0.0055140374600887295,
             "publisherRequests": 0.9931920000000001,
-            "readerOriginRequests": 3.9040000000000004,
+            "readerOriginRequests": 3.744,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 363.6573448650681,
+            "transferGB": 161.68407291556022,
             "invalidationPaths": 24090,
-            "usCanada": 120.3527060374601,
-            "pc100Upper": 120.3527060374601
+            "usCanada": 120.1927060374601,
+            "pc100Upper": 120.1927060374601
           },
           "r2": {
-            "gross": 4.4131517235,
+            "gross": 4.2691517235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 1325.7518748650675
+            "readerTransferGB": 1123.77860291556
           },
           "sensitivity": {
             "q": 3,
@@ -5052,17 +5052,17 @@
             "missRate": 0.1
           },
           "reader": {
-            "requests": 9760000,
+            "requests": 9360000,
             "alwaysOriginRequests": 1230000,
-            "cacheableRequests": 8530000,
-            "browserCacheRequests": 0,
-            "network200": 8930000,
+            "cacheableRequests": 8130000,
+            "browserCacheRequests": 400000,
+            "network200": 8530000,
             "network304": 830000,
-            "bodyBytes": 405265904865.0681,
-            "viewerBytes": 415260144865.0681,
-            "viewerRequests": 9760000,
-            "headerBytes": 9994240000,
-            "originRequests": 2083000,
+            "bodyBytes": 203702232915.5602,
+            "viewerBytes": 213286872915.5602,
+            "viewerRequests": 9360000,
+            "headerBytes": 9584640000,
+            "originRequests": 2043000,
             "sessions": 200000,
             "pageViews": 600000,
             "searchIncrement": {
@@ -5078,20 +5078,20 @@
           "aws": {
             "storage": 0.0055140374600887295,
             "publisherRequests": 0.9931920000000001,
-            "readerOriginRequests": 0.8332,
+            "readerOriginRequests": 0.8172,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 415.2601448650681,
+            "transferGB": 213.28687291556022,
             "invalidationPaths": 24090,
-            "usCanada": 117.28190603746009,
-            "pc100Upper": 117.28190603746009
+            "usCanada": 117.2659060374601,
+            "pc100Upper": 117.2659060374601
           },
           "r2": {
-            "gross": 1.6494317235,
+            "gross": 1.6350317235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 1379.8104748650676
+            "readerTransferGB": 1177.83720291556
           },
           "sensitivity": {
             "q": 3,
@@ -5114,17 +5114,17 @@
             "missRate": 0.5
           },
           "reader": {
-            "requests": 9760000,
+            "requests": 9360000,
             "alwaysOriginRequests": 1230000,
-            "cacheableRequests": 8530000,
-            "browserCacheRequests": 0,
-            "network200": 8930000,
+            "cacheableRequests": 8130000,
+            "browserCacheRequests": 400000,
+            "network200": 8530000,
             "network304": 830000,
-            "bodyBytes": 405265904865.0681,
-            "viewerBytes": 415260144865.0681,
-            "viewerRequests": 9760000,
-            "headerBytes": 9994240000,
-            "originRequests": 5495000,
+            "bodyBytes": 203702232915.5602,
+            "viewerBytes": 213286872915.5602,
+            "viewerRequests": 9360000,
+            "headerBytes": 9584640000,
+            "originRequests": 5295000,
             "sessions": 200000,
             "pageViews": 600000,
             "searchIncrement": {
@@ -5140,20 +5140,20 @@
           "aws": {
             "storage": 0.0055140374600887295,
             "publisherRequests": 0.9931920000000001,
-            "readerOriginRequests": 2.1980000000000004,
+            "readerOriginRequests": 2.1180000000000003,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 415.2601448650681,
+            "transferGB": 213.28687291556022,
             "invalidationPaths": 24090,
-            "usCanada": 118.64670603746009,
-            "pc100Upper": 118.64670603746009
+            "usCanada": 118.5667060374601,
+            "pc100Upper": 118.5667060374601
           },
           "r2": {
-            "gross": 2.8777517235,
+            "gross": 2.8057517235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 1379.8104748650676
+            "readerTransferGB": 1177.83720291556
           },
           "sensitivity": {
             "q": 3,
@@ -5176,17 +5176,17 @@
             "missRate": 1
           },
           "reader": {
-            "requests": 9760000,
+            "requests": 9360000,
             "alwaysOriginRequests": 1230000,
-            "cacheableRequests": 8530000,
-            "browserCacheRequests": 0,
-            "network200": 8930000,
+            "cacheableRequests": 8130000,
+            "browserCacheRequests": 400000,
+            "network200": 8530000,
             "network304": 830000,
-            "bodyBytes": 405265904865.0681,
-            "viewerBytes": 415260144865.0681,
-            "viewerRequests": 9760000,
-            "headerBytes": 9994240000,
-            "originRequests": 9760000,
+            "bodyBytes": 203702232915.5602,
+            "viewerBytes": 213286872915.5602,
+            "viewerRequests": 9360000,
+            "headerBytes": 9584640000,
+            "originRequests": 9360000,
             "sessions": 200000,
             "pageViews": 600000,
             "searchIncrement": {
@@ -5202,20 +5202,20 @@
           "aws": {
             "storage": 0.0055140374600887295,
             "publisherRequests": 0.9931920000000001,
-            "readerOriginRequests": 3.9040000000000004,
+            "readerOriginRequests": 3.744,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 415.2601448650681,
+            "transferGB": 213.28687291556022,
             "invalidationPaths": 24090,
-            "usCanada": 120.3527060374601,
-            "pc100Upper": 120.3527060374601
+            "usCanada": 120.1927060374601,
+            "pc100Upper": 120.1927060374601
           },
           "r2": {
-            "gross": 4.4131517235,
+            "gross": 4.2691517235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 1379.8104748650676
+            "readerTransferGB": 1177.83720291556
           },
           "sensitivity": {
             "q": 3,
@@ -5250,8 +5250,8 @@
             "browserCacheRequests": 0,
             "network200": 7730000,
             "network304": 430000,
-            "bodyBytes": 182255904865.06808,
-            "viewerBytes": 186433824865.06808,
+            "bodyBytes": 151670232915.5602,
+            "viewerBytes": 155848152915.5602,
             "viewerRequests": 8160000,
             "headerBytes": 4177920000,
             "originRequests": 1563000,
@@ -5275,7 +5275,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 186.4338248650681,
+            "transferGB": 155.8481529155602,
             "invalidationPaths": 24090,
             "usCanada": 117.07390603746009,
             "pc100Upper": 117.07390603746009
@@ -5283,7 +5283,7 @@
           "r2": {
             "gross": 1.4622317235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 1148.5283548650677
+            "readerTransferGB": 1117.94268291556
           },
           "sensitivity": {
             "q": 3,
@@ -5312,8 +5312,8 @@
             "browserCacheRequests": 0,
             "network200": 7730000,
             "network304": 430000,
-            "bodyBytes": 182255904865.06808,
-            "viewerBytes": 186433824865.06808,
+            "bodyBytes": 151670232915.5602,
+            "viewerBytes": 155848152915.5602,
             "viewerRequests": 8160000,
             "headerBytes": 4177920000,
             "originRequests": 4495000,
@@ -5337,7 +5337,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 186.4338248650681,
+            "transferGB": 155.8481529155602,
             "invalidationPaths": 24090,
             "usCanada": 118.24670603746009,
             "pc100Upper": 118.24670603746009
@@ -5345,7 +5345,7 @@
           "r2": {
             "gross": 2.5177517235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 1148.5283548650677
+            "readerTransferGB": 1117.94268291556
           },
           "sensitivity": {
             "q": 3,
@@ -5374,8 +5374,8 @@
             "browserCacheRequests": 0,
             "network200": 7730000,
             "network304": 430000,
-            "bodyBytes": 182255904865.06808,
-            "viewerBytes": 186433824865.06808,
+            "bodyBytes": 151670232915.5602,
+            "viewerBytes": 155848152915.5602,
             "viewerRequests": 8160000,
             "headerBytes": 4177920000,
             "originRequests": 8160000,
@@ -5399,7 +5399,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 186.4338248650681,
+            "transferGB": 155.8481529155602,
             "invalidationPaths": 24090,
             "usCanada": 119.7127060374601,
             "pc100Upper": 119.7127060374601
@@ -5407,7 +5407,7 @@
           "r2": {
             "gross": 3.8371517235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 1148.5283548650677
+            "readerTransferGB": 1117.94268291556
           },
           "sensitivity": {
             "q": 3,
@@ -5442,8 +5442,8 @@
             "browserCacheRequests": 0,
             "network200": 7730000,
             "network304": 430000,
-            "bodyBytes": 182255904865.06808,
-            "viewerBytes": 190611744865.06808,
+            "bodyBytes": 151670232915.5602,
+            "viewerBytes": 160026072915.5602,
             "viewerRequests": 8160000,
             "headerBytes": 8355840000,
             "originRequests": 1563000,
@@ -5467,7 +5467,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 190.6117448650681,
+            "transferGB": 160.0260729155602,
             "invalidationPaths": 24090,
             "usCanada": 117.07390603746009,
             "pc100Upper": 117.07390603746009
@@ -5475,7 +5475,7 @@
           "r2": {
             "gross": 1.4622317235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 1152.7062748650676
+            "readerTransferGB": 1122.12060291556
           },
           "sensitivity": {
             "q": 3,
@@ -5504,8 +5504,8 @@
             "browserCacheRequests": 0,
             "network200": 7730000,
             "network304": 430000,
-            "bodyBytes": 182255904865.06808,
-            "viewerBytes": 190611744865.06808,
+            "bodyBytes": 151670232915.5602,
+            "viewerBytes": 160026072915.5602,
             "viewerRequests": 8160000,
             "headerBytes": 8355840000,
             "originRequests": 4495000,
@@ -5529,7 +5529,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 190.6117448650681,
+            "transferGB": 160.0260729155602,
             "invalidationPaths": 24090,
             "usCanada": 118.24670603746009,
             "pc100Upper": 118.24670603746009
@@ -5537,7 +5537,7 @@
           "r2": {
             "gross": 2.5177517235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 1152.7062748650676
+            "readerTransferGB": 1122.12060291556
           },
           "sensitivity": {
             "q": 3,
@@ -5566,8 +5566,8 @@
             "browserCacheRequests": 0,
             "network200": 7730000,
             "network304": 430000,
-            "bodyBytes": 182255904865.06808,
-            "viewerBytes": 190611744865.06808,
+            "bodyBytes": 151670232915.5602,
+            "viewerBytes": 160026072915.5602,
             "viewerRequests": 8160000,
             "headerBytes": 8355840000,
             "originRequests": 8160000,
@@ -5591,7 +5591,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 190.6117448650681,
+            "transferGB": 160.0260729155602,
             "invalidationPaths": 24090,
             "usCanada": 119.7127060374601,
             "pc100Upper": 119.7127060374601
@@ -5599,7 +5599,7 @@
           "r2": {
             "gross": 3.8371517235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 1152.7062748650676
+            "readerTransferGB": 1122.12060291556
           },
           "sensitivity": {
             "q": 3,
@@ -5634,8 +5634,8 @@
             "browserCacheRequests": 0,
             "network200": 7730000,
             "network304": 430000,
-            "bodyBytes": 182255904865.06808,
-            "viewerBytes": 198967584865.06808,
+            "bodyBytes": 151670232915.5602,
+            "viewerBytes": 168381912915.5602,
             "viewerRequests": 8160000,
             "headerBytes": 16711680000,
             "originRequests": 1563000,
@@ -5659,7 +5659,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 198.9675848650681,
+            "transferGB": 168.3819129155602,
             "invalidationPaths": 24090,
             "usCanada": 117.07390603746009,
             "pc100Upper": 117.07390603746009
@@ -5667,7 +5667,7 @@
           "r2": {
             "gross": 1.4622317235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 1161.0621148650675
+            "readerTransferGB": 1130.47644291556
           },
           "sensitivity": {
             "q": 3,
@@ -5696,8 +5696,8 @@
             "browserCacheRequests": 0,
             "network200": 7730000,
             "network304": 430000,
-            "bodyBytes": 182255904865.06808,
-            "viewerBytes": 198967584865.06808,
+            "bodyBytes": 151670232915.5602,
+            "viewerBytes": 168381912915.5602,
             "viewerRequests": 8160000,
             "headerBytes": 16711680000,
             "originRequests": 4495000,
@@ -5721,7 +5721,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 198.9675848650681,
+            "transferGB": 168.3819129155602,
             "invalidationPaths": 24090,
             "usCanada": 118.24670603746009,
             "pc100Upper": 118.24670603746009
@@ -5729,7 +5729,7 @@
           "r2": {
             "gross": 2.5177517235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 1161.0621148650675
+            "readerTransferGB": 1130.47644291556
           },
           "sensitivity": {
             "q": 3,
@@ -5758,8 +5758,8 @@
             "browserCacheRequests": 0,
             "network200": 7730000,
             "network304": 430000,
-            "bodyBytes": 182255904865.06808,
-            "viewerBytes": 198967584865.06808,
+            "bodyBytes": 151670232915.5602,
+            "viewerBytes": 168381912915.5602,
             "viewerRequests": 8160000,
             "headerBytes": 16711680000,
             "originRequests": 8160000,
@@ -5783,7 +5783,7 @@
             "viewerRequestsPC100": 0,
             "transfer": 0,
             "invalidation": 115.45,
-            "transferGB": 198.9675848650681,
+            "transferGB": 168.3819129155602,
             "invalidationPaths": 24090,
             "usCanada": 119.7127060374601,
             "pc100Upper": 119.7127060374601
@@ -5791,7 +5791,7 @@
           "r2": {
             "gross": 3.8371517235,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 1161.0621148650675
+            "readerTransferGB": 1130.47644291556
           },
           "sensitivity": {
             "q": 3,
@@ -5826,8 +5826,8 @@
             "browserCacheRequests": 0,
             "network200": 106650000,
             "network304": 150000,
-            "bodyBytes": 2668126518307.879,
-            "viewerBytes": 2777489718307.879,
+            "bodyBytes": 2209341439065.2607,
+            "viewerBytes": 2318704639065.2607,
             "viewerRequests": 106800000,
             "headerBytes": 109363200000,
             "originRequests": 16215000,
@@ -5849,17 +5849,17 @@
             "readerOriginRequests": 6.485612903225806,
             "viewerRequestsUS": 96.79032258064515,
             "viewerRequestsPC100": 116.14838709677419,
-            "transfer": 171.18965239889974,
+            "transfer": 130.95179416328907,
             "invalidation": 125.105,
-            "transferGB": 3013.995910575291,
+            "transferGB": 2540.6093430975184,
             "invalidationPaths": 26021,
-            "usCanada": 400.8361752757895,
-            "pc100Upper": 420.19423979191856
+            "usCanada": 360.59831704017887,
+            "pc100Upper": 379.95638155630786
           },
           "r2": {
             "gross": 6.977099133173225,
             "afterDedicatedFreeAllowance": 2.264014172903225,
-            "readerTransferGB": 21818.648754123667
+            "readerTransferGB": 21345.2621866459
           },
           "sensitivity": {
             "q": 1,
@@ -5888,8 +5888,8 @@
             "browserCacheRequests": 0,
             "network200": 106650000,
             "network304": 150000,
-            "bodyBytes": 2668126518307.879,
-            "viewerBytes": 2777489718307.879,
+            "bodyBytes": 2209341439065.2607,
+            "viewerBytes": 2318704639065.2607,
             "viewerRequests": 106800000,
             "headerBytes": 109363200000,
             "originRequests": 56475000,
@@ -5911,17 +5911,17 @@
             "readerOriginRequests": 22.58806451612903,
             "viewerRequestsUS": 96.79032258064515,
             "viewerRequestsPC100": 116.14838709677419,
-            "transfer": 171.18965239889974,
+            "transfer": 130.95179416328907,
             "invalidation": 125.105,
-            "transferGB": 3013.995910575291,
+            "transferGB": 2540.6093430975184,
             "invalidationPaths": 26021,
-            "usCanada": 416.93862688869274,
-            "pc100Upper": 436.2966914048218
+            "usCanada": 376.7007686530821,
+            "pc100Upper": 396.0588331692111
           },
           "r2": {
             "gross": 21.469305584786127,
             "afterDedicatedFreeAllowance": 16.756220624516125,
-            "readerTransferGB": 21818.648754123667
+            "readerTransferGB": 21345.2621866459
           },
           "sensitivity": {
             "q": 1,
@@ -5950,8 +5950,8 @@
             "browserCacheRequests": 0,
             "network200": 106650000,
             "network304": 150000,
-            "bodyBytes": 2668126518307.879,
-            "viewerBytes": 2777489718307.879,
+            "bodyBytes": 2209341439065.2607,
+            "viewerBytes": 2318704639065.2607,
             "viewerRequests": 106800000,
             "headerBytes": 109363200000,
             "originRequests": 106800000,
@@ -5973,17 +5973,17 @@
             "readerOriginRequests": 42.71612903225807,
             "viewerRequestsUS": 96.79032258064515,
             "viewerRequestsPC100": 116.14838709677419,
-            "transfer": 171.18965239889974,
+            "transfer": 130.95179416328907,
             "invalidation": 125.105,
-            "transferGB": 3013.995910575291,
+            "transferGB": 2540.6093430975184,
             "invalidationPaths": 26021,
-            "usCanada": 437.06669140482177,
-            "pc100Upper": 456.4247559209508
+            "usCanada": 396.8288331692111,
+            "pc100Upper": 416.1868976853402
           },
           "r2": {
             "gross": 39.58456364930226,
             "afterDedicatedFreeAllowance": 34.87147868903226,
-            "readerTransferGB": 21818.648754123667
+            "readerTransferGB": 21345.2621866459
           },
           "sensitivity": {
             "q": 1,
@@ -6018,8 +6018,8 @@
             "browserCacheRequests": 0,
             "network200": 38650000,
             "network304": 2150000,
-            "bodyBytes": 911279524325.3405,
-            "viewerBytes": 953058724325.3405,
+            "bodyBytes": 758351164577.8011,
+            "viewerBytes": 800130364577.8011,
             "viewerRequests": 40800000,
             "headerBytes": 41779200000,
             "originRequests": 7815000,
@@ -6041,17 +6041,17 @@
             "readerOriginRequests": 3.125612903225807,
             "viewerRequestsUS": 30.790322580645157,
             "viewerRequestsPC100": 36.94838709677419,
-            "transfer": 2.961995888886544,
+            "transfer": 0,
             "invalidation": 125.105,
-            "transferGB": 1034.8470104574888,
+            "transferGB": 877.051487964898,
             "invalidationPaths": 26021,
-            "usCanada": 163.24851876577634,
-            "pc100Upper": 169.40658328190537
+            "usCanada": 160.2865228768898,
+            "pc100Upper": 166.44458739301882
           },
           "r2": {
             "gross": 3.953099133173226,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 7311.305724973615
+            "readerTransferGB": 7153.510202481026
           },
           "sensitivity": {
             "q": 3,
@@ -6080,8 +6080,8 @@
             "browserCacheRequests": 0,
             "network200": 38650000,
             "network304": 2150000,
-            "bodyBytes": 911279524325.3405,
-            "viewerBytes": 953058724325.3405,
+            "bodyBytes": 758351164577.8011,
+            "viewerBytes": 800130364577.8011,
             "viewerRequests": 40800000,
             "headerBytes": 41779200000,
             "originRequests": 22475000,
@@ -6103,17 +6103,17 @@
             "readerOriginRequests": 8.988064516129032,
             "viewerRequestsUS": 30.790322580645157,
             "viewerRequestsPC100": 36.94838709677419,
-            "transfer": 2.961995888886544,
+            "transfer": 0,
             "invalidation": 125.105,
-            "transferGB": 1034.8470104574888,
+            "transferGB": 877.051487964898,
             "invalidationPaths": 26021,
-            "usCanada": 169.11097037867955,
-            "pc100Upper": 175.26903489480858
+            "usCanada": 166.14897448979303,
+            "pc100Upper": 172.30703900592206
           },
           "r2": {
             "gross": 9.229305584786129,
             "afterDedicatedFreeAllowance": 4.516220624516128,
-            "readerTransferGB": 7311.305724973615
+            "readerTransferGB": 7153.510202481026
           },
           "sensitivity": {
             "q": 3,
@@ -6142,8 +6142,8 @@
             "browserCacheRequests": 0,
             "network200": 38650000,
             "network304": 2150000,
-            "bodyBytes": 911279524325.3405,
-            "viewerBytes": 953058724325.3405,
+            "bodyBytes": 758351164577.8011,
+            "viewerBytes": 800130364577.8011,
             "viewerRequests": 40800000,
             "headerBytes": 41779200000,
             "originRequests": 40800000,
@@ -6165,17 +6165,17 @@
             "readerOriginRequests": 16.316129032258065,
             "viewerRequestsUS": 30.790322580645157,
             "viewerRequestsPC100": 36.94838709677419,
-            "transfer": 2.961995888886544,
+            "transfer": 0,
             "invalidation": 125.105,
-            "transferGB": 1034.8470104574888,
+            "transferGB": 877.051487964898,
             "invalidationPaths": 26021,
-            "usCanada": 176.4390348948086,
-            "pc100Upper": 182.59709941093763
+            "usCanada": 173.47703900592205,
+            "pc100Upper": 179.63510352205108
           },
           "r2": {
             "gross": 15.824563649302256,
             "afterDedicatedFreeAllowance": 11.111478689032257,
-            "readerTransferGB": 7311.305724973615
+            "readerTransferGB": 7153.510202481026
           },
           "sensitivity": {
             "q": 3,
@@ -6210,8 +6210,8 @@
             "browserCacheRequests": 0,
             "network200": 25050000,
             "network304": 2550000,
-            "bodyBytes": 559910125528.8328,
-            "viewerBytes": 588172525528.8328,
+            "bodyBytes": 468153109680.30914,
+            "viewerBytes": 496415509680.30914,
             "viewerRequests": 27600000,
             "headerBytes": 28262400000,
             "originRequests": 6135000,
@@ -6235,7 +6235,7 @@
             "viewerRequestsPC100": 21.10838709677419,
             "transfer": 0,
             "invalidation": 125.105,
-            "transferGB": 639.017230433928,
+            "transferGB": 544.3399169383737,
             "invalidationPaths": 26021,
             "usCanada": 146.4145228768898,
             "pc100Upper": 149.93258739301882
@@ -6243,7 +6243,7 @@
           "r2": {
             "gross": 3.3482991331732257,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 4409.837119143604
+            "readerTransferGB": 4315.159805648051
           },
           "sensitivity": {
             "q": 5,
@@ -6272,8 +6272,8 @@
             "browserCacheRequests": 0,
             "network200": 25050000,
             "network304": 2550000,
-            "bodyBytes": 559910125528.8328,
-            "viewerBytes": 588172525528.8328,
+            "bodyBytes": 468153109680.30914,
+            "viewerBytes": 496415509680.30914,
             "viewerRequests": 27600000,
             "headerBytes": 28262400000,
             "originRequests": 15675000,
@@ -6297,7 +6297,7 @@
             "viewerRequestsPC100": 21.10838709677419,
             "transfer": 0,
             "invalidation": 125.105,
-            "transferGB": 639.017230433928,
+            "transferGB": 544.3399169383737,
             "invalidationPaths": 26021,
             "usCanada": 150.22897448979302,
             "pc100Upper": 153.74703900592203
@@ -6305,7 +6305,7 @@
           "r2": {
             "gross": 6.7813055847861285,
             "afterDedicatedFreeAllowance": 2.0682206245161288,
-            "readerTransferGB": 4409.837119143604
+            "readerTransferGB": 4315.159805648051
           },
           "sensitivity": {
             "q": 5,
@@ -6334,8 +6334,8 @@
             "browserCacheRequests": 0,
             "network200": 25050000,
             "network304": 2550000,
-            "bodyBytes": 559910125528.8328,
-            "viewerBytes": 588172525528.8328,
+            "bodyBytes": 468153109680.30914,
+            "viewerBytes": 496415509680.30914,
             "viewerRequests": 27600000,
             "headerBytes": 28262400000,
             "originRequests": 27600000,
@@ -6359,7 +6359,7 @@
             "viewerRequestsPC100": 21.10838709677419,
             "transfer": 0,
             "invalidation": 125.105,
-            "transferGB": 639.017230433928,
+            "transferGB": 544.3399169383737,
             "invalidationPaths": 26021,
             "usCanada": 154.99703900592206,
             "pc100Upper": 158.51510352205108
@@ -6367,7 +6367,7 @@
           "r2": {
             "gross": 11.072563649302257,
             "afterDedicatedFreeAllowance": 6.359478689032257,
-            "readerTransferGB": 4409.837119143604
+            "readerTransferGB": 4315.159805648051
           },
           "sensitivity": {
             "q": 5,
@@ -6402,8 +6402,8 @@
             "browserCacheRequests": 0,
             "network200": 38650000,
             "network304": 2150000,
-            "bodyBytes": 911279524325.3405,
-            "viewerBytes": 953058724325.3405,
+            "bodyBytes": 758351164577.8011,
+            "viewerBytes": 800130364577.8011,
             "viewerRequests": 40800000,
             "headerBytes": 41779200000,
             "originRequests": 7815000,
@@ -6425,17 +6425,17 @@
             "readerOriginRequests": 3.125612903225807,
             "viewerRequestsUS": 30.790322580645157,
             "viewerRequestsPC100": 36.94838709677419,
-            "transfer": 2.961995888886544,
+            "transfer": 0,
             "invalidation": 125.105,
-            "transferGB": 1034.8470104574888,
+            "transferGB": 877.051487964898,
             "invalidationPaths": 26021,
-            "usCanada": 163.24851876577634,
-            "pc100Upper": 169.40658328190537
+            "usCanada": 160.2865228768898,
+            "pc100Upper": 166.44458739301882
           },
           "r2": {
             "gross": 3.953099133173226,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 7311.305724973615
+            "readerTransferGB": 7153.510202481026
           },
           "sensitivity": {
             "q": 3,
@@ -6464,8 +6464,8 @@
             "browserCacheRequests": 0,
             "network200": 38650000,
             "network304": 2150000,
-            "bodyBytes": 911279524325.3405,
-            "viewerBytes": 953058724325.3405,
+            "bodyBytes": 758351164577.8011,
+            "viewerBytes": 800130364577.8011,
             "viewerRequests": 40800000,
             "headerBytes": 41779200000,
             "originRequests": 22475000,
@@ -6487,17 +6487,17 @@
             "readerOriginRequests": 8.988064516129032,
             "viewerRequestsUS": 30.790322580645157,
             "viewerRequestsPC100": 36.94838709677419,
-            "transfer": 2.961995888886544,
+            "transfer": 0,
             "invalidation": 125.105,
-            "transferGB": 1034.8470104574888,
+            "transferGB": 877.051487964898,
             "invalidationPaths": 26021,
-            "usCanada": 169.11097037867955,
-            "pc100Upper": 175.26903489480858
+            "usCanada": 166.14897448979303,
+            "pc100Upper": 172.30703900592206
           },
           "r2": {
             "gross": 9.229305584786129,
             "afterDedicatedFreeAllowance": 4.516220624516128,
-            "readerTransferGB": 7311.305724973615
+            "readerTransferGB": 7153.510202481026
           },
           "sensitivity": {
             "q": 3,
@@ -6526,8 +6526,8 @@
             "browserCacheRequests": 0,
             "network200": 38650000,
             "network304": 2150000,
-            "bodyBytes": 911279524325.3405,
-            "viewerBytes": 953058724325.3405,
+            "bodyBytes": 758351164577.8011,
+            "viewerBytes": 800130364577.8011,
             "viewerRequests": 40800000,
             "headerBytes": 41779200000,
             "originRequests": 40800000,
@@ -6549,17 +6549,17 @@
             "readerOriginRequests": 16.316129032258065,
             "viewerRequestsUS": 30.790322580645157,
             "viewerRequestsPC100": 36.94838709677419,
-            "transfer": 2.961995888886544,
+            "transfer": 0,
             "invalidation": 125.105,
-            "transferGB": 1034.8470104574888,
+            "transferGB": 877.051487964898,
             "invalidationPaths": 26021,
-            "usCanada": 176.4390348948086,
-            "pc100Upper": 182.59709941093763
+            "usCanada": 173.47703900592205,
+            "pc100Upper": 179.63510352205108
           },
           "r2": {
             "gross": 15.824563649302256,
             "afterDedicatedFreeAllowance": 11.111478689032257,
-            "readerTransferGB": 7311.305724973615
+            "readerTransferGB": 7153.510202481026
           },
           "sensitivity": {
             "q": 3,
@@ -6594,8 +6594,8 @@
             "browserCacheRequests": 0,
             "network200": 38650000,
             "network304": 2150000,
-            "bodyBytes": 886753821713.4219,
-            "viewerBytes": 928533021713.4219,
+            "bodyBytes": 730020019738.8627,
+            "viewerBytes": 771799219738.8627,
             "viewerRequests": 40800000,
             "headerBytes": 41779200000,
             "originRequests": 7815000,
@@ -6617,17 +6617,17 @@
             "readerOriginRequests": 3.125612903225807,
             "viewerRequestsUS": 30.790322580645157,
             "viewerRequestsPC100": 36.94838709677419,
-            "transfer": 0.8876058242322523,
+            "transfer": 0,
             "invalidation": 125.105,
-            "transferGB": 1010.4424214615559,
+            "transferGB": 848.7203431259595,
             "invalidationPaths": 26021,
-            "usCanada": 161.17412870112204,
-            "pc100Upper": 167.33219321725107
+            "usCanada": 160.2865228768898,
+            "pc100Upper": 166.44458739301882
           },
           "r2": {
             "gross": 3.953099133173226,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 7286.901135977684
+            "readerTransferGB": 7125.179057642089
           },
           "sensitivity": {
             "q": 3,
@@ -6656,8 +6656,8 @@
             "browserCacheRequests": 0,
             "network200": 38650000,
             "network304": 2150000,
-            "bodyBytes": 886753821713.4219,
-            "viewerBytes": 928533021713.4219,
+            "bodyBytes": 730020019738.8627,
+            "viewerBytes": 771799219738.8627,
             "viewerRequests": 40800000,
             "headerBytes": 41779200000,
             "originRequests": 22475000,
@@ -6679,17 +6679,17 @@
             "readerOriginRequests": 8.988064516129032,
             "viewerRequestsUS": 30.790322580645157,
             "viewerRequestsPC100": 36.94838709677419,
-            "transfer": 0.8876058242322523,
+            "transfer": 0,
             "invalidation": 125.105,
-            "transferGB": 1010.4424214615559,
+            "transferGB": 848.7203431259595,
             "invalidationPaths": 26021,
-            "usCanada": 167.0365803140253,
-            "pc100Upper": 173.19464483015432
+            "usCanada": 166.14897448979303,
+            "pc100Upper": 172.30703900592206
           },
           "r2": {
             "gross": 9.229305584786129,
             "afterDedicatedFreeAllowance": 4.516220624516128,
-            "readerTransferGB": 7286.901135977684
+            "readerTransferGB": 7125.179057642089
           },
           "sensitivity": {
             "q": 3,
@@ -6718,8 +6718,8 @@
             "browserCacheRequests": 0,
             "network200": 38650000,
             "network304": 2150000,
-            "bodyBytes": 886753821713.4219,
-            "viewerBytes": 928533021713.4219,
+            "bodyBytes": 730020019738.8627,
+            "viewerBytes": 771799219738.8627,
             "viewerRequests": 40800000,
             "headerBytes": 41779200000,
             "originRequests": 40800000,
@@ -6741,17 +6741,17 @@
             "readerOriginRequests": 16.316129032258065,
             "viewerRequestsUS": 30.790322580645157,
             "viewerRequestsPC100": 36.94838709677419,
-            "transfer": 0.8876058242322523,
+            "transfer": 0,
             "invalidation": 125.105,
-            "transferGB": 1010.4424214615559,
+            "transferGB": 848.7203431259595,
             "invalidationPaths": 26021,
-            "usCanada": 174.3646448301543,
-            "pc100Upper": 180.52270934628334
+            "usCanada": 173.47703900592205,
+            "pc100Upper": 179.63510352205108
           },
           "r2": {
             "gross": 15.824563649302256,
             "afterDedicatedFreeAllowance": 11.111478689032257,
-            "readerTransferGB": 7286.901135977684
+            "readerTransferGB": 7125.179057642089
           },
           "sensitivity": {
             "q": 3,
@@ -6786,8 +6786,8 @@
             "browserCacheRequests": 0,
             "network200": 38650000,
             "network304": 2150000,
-            "bodyBytes": 911279524325.3405,
-            "viewerBytes": 953058724325.3405,
+            "bodyBytes": 758351164577.8011,
+            "viewerBytes": 800130364577.8011,
             "viewerRequests": 40800000,
             "headerBytes": 41779200000,
             "originRequests": 7815000,
@@ -6809,17 +6809,17 @@
             "readerOriginRequests": 3.125612903225807,
             "viewerRequestsUS": 30.790322580645157,
             "viewerRequestsPC100": 36.94838709677419,
-            "transfer": 2.961995888886544,
+            "transfer": 0,
             "invalidation": 125.105,
-            "transferGB": 1034.8470104574888,
+            "transferGB": 877.051487964898,
             "invalidationPaths": 26021,
-            "usCanada": 163.24851876577634,
-            "pc100Upper": 169.40658328190537
+            "usCanada": 160.2865228768898,
+            "pc100Upper": 166.44458739301882
           },
           "r2": {
             "gross": 3.953099133173226,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 7311.305724973615
+            "readerTransferGB": 7153.510202481026
           },
           "sensitivity": {
             "q": 3,
@@ -6848,8 +6848,8 @@
             "browserCacheRequests": 0,
             "network200": 38650000,
             "network304": 2150000,
-            "bodyBytes": 911279524325.3405,
-            "viewerBytes": 953058724325.3405,
+            "bodyBytes": 758351164577.8011,
+            "viewerBytes": 800130364577.8011,
             "viewerRequests": 40800000,
             "headerBytes": 41779200000,
             "originRequests": 22475000,
@@ -6871,17 +6871,17 @@
             "readerOriginRequests": 8.988064516129032,
             "viewerRequestsUS": 30.790322580645157,
             "viewerRequestsPC100": 36.94838709677419,
-            "transfer": 2.961995888886544,
+            "transfer": 0,
             "invalidation": 125.105,
-            "transferGB": 1034.8470104574888,
+            "transferGB": 877.051487964898,
             "invalidationPaths": 26021,
-            "usCanada": 169.11097037867955,
-            "pc100Upper": 175.26903489480858
+            "usCanada": 166.14897448979303,
+            "pc100Upper": 172.30703900592206
           },
           "r2": {
             "gross": 9.229305584786129,
             "afterDedicatedFreeAllowance": 4.516220624516128,
-            "readerTransferGB": 7311.305724973615
+            "readerTransferGB": 7153.510202481026
           },
           "sensitivity": {
             "q": 3,
@@ -6910,8 +6910,8 @@
             "browserCacheRequests": 0,
             "network200": 38650000,
             "network304": 2150000,
-            "bodyBytes": 911279524325.3405,
-            "viewerBytes": 953058724325.3405,
+            "bodyBytes": 758351164577.8011,
+            "viewerBytes": 800130364577.8011,
             "viewerRequests": 40800000,
             "headerBytes": 41779200000,
             "originRequests": 40800000,
@@ -6933,17 +6933,17 @@
             "readerOriginRequests": 16.316129032258065,
             "viewerRequestsUS": 30.790322580645157,
             "viewerRequestsPC100": 36.94838709677419,
-            "transfer": 2.961995888886544,
+            "transfer": 0,
             "invalidation": 125.105,
-            "transferGB": 1034.8470104574888,
+            "transferGB": 877.051487964898,
             "invalidationPaths": 26021,
-            "usCanada": 176.4390348948086,
-            "pc100Upper": 182.59709941093763
+            "usCanada": 173.47703900592205,
+            "pc100Upper": 179.63510352205108
           },
           "r2": {
             "gross": 15.824563649302256,
             "afterDedicatedFreeAllowance": 11.111478689032257,
-            "readerTransferGB": 7311.305724973615
+            "readerTransferGB": 7153.510202481026
           },
           "sensitivity": {
             "q": 3,
@@ -6972,17 +6972,17 @@
             "missRate": 0.1
           },
           "reader": {
-            "requests": 48800000,
+            "requests": 46800000,
             "alwaysOriginRequests": 6150000,
-            "cacheableRequests": 42650000,
-            "browserCacheRequests": 0,
-            "network200": 43650000,
+            "cacheableRequests": 40650000,
+            "browserCacheRequests": 2000000,
+            "network200": 41650000,
             "network304": 5150000,
-            "bodyBytes": 1768315524325.3406,
-            "viewerBytes": 1818286724325.3406,
-            "viewerRequests": 48800000,
-            "headerBytes": 49971200000,
-            "originRequests": 10415000,
+            "bodyBytes": 760497164577.8011,
+            "viewerBytes": 808420364577.8011,
+            "viewerRequests": 46800000,
+            "headerBytes": 47923200000,
+            "originRequests": 10215000,
             "sessions": 1000000,
             "pageViews": 3000000,
             "searchIncrement": {
@@ -6998,20 +6998,20 @@
           "aws": {
             "storage": 0.007198993018828332,
             "publisherRequests": 1.2583884,
-            "readerOriginRequests": 4.1656129032258065,
-            "viewerRequestsUS": 38.79032258064516,
-            "viewerRequestsPC100": 46.548387096774185,
-            "transfer": 76.50855481361772,
+            "readerOriginRequests": 4.085612903225806,
+            "viewerRequestsUS": 36.79032258064516,
+            "viewerRequestsPC100": 44.14838709677419,
+            "transfer": 0,
             "invalidation": 125.105,
-            "transferGB": 1900.1006448660908,
+            "transferGB": 885.3671223735001,
             "invalidationPaths": 26021,
-            "usCanada": 245.83507769050752,
-            "pc100Upper": 253.59314220663654
+            "usCanada": 167.2465228768898,
+            "pc100Upper": 174.60458739301882
           },
           "r2": {
-            "gross": 4.889099133173225,
-            "afterDedicatedFreeAllowance": 0.1760141729032257,
-            "readerTransferGB": 8176.559359382217
+            "gross": 4.817099133173226,
+            "afterDedicatedFreeAllowance": 0.10401417290322572,
+            "readerTransferGB": 7161.825836889628
           },
           "sensitivity": {
             "q": 3,
@@ -7034,17 +7034,17 @@
             "missRate": 0.5
           },
           "reader": {
-            "requests": 48800000,
+            "requests": 46800000,
             "alwaysOriginRequests": 6150000,
-            "cacheableRequests": 42650000,
-            "browserCacheRequests": 0,
-            "network200": 43650000,
+            "cacheableRequests": 40650000,
+            "browserCacheRequests": 2000000,
+            "network200": 41650000,
             "network304": 5150000,
-            "bodyBytes": 1768315524325.3406,
-            "viewerBytes": 1818286724325.3406,
-            "viewerRequests": 48800000,
-            "headerBytes": 49971200000,
-            "originRequests": 27475000,
+            "bodyBytes": 760497164577.8011,
+            "viewerBytes": 808420364577.8011,
+            "viewerRequests": 46800000,
+            "headerBytes": 47923200000,
+            "originRequests": 26475000,
             "sessions": 1000000,
             "pageViews": 3000000,
             "searchIncrement": {
@@ -7060,20 +7060,20 @@
           "aws": {
             "storage": 0.007198993018828332,
             "publisherRequests": 1.2583884,
-            "readerOriginRequests": 10.988064516129032,
-            "viewerRequestsUS": 38.79032258064516,
-            "viewerRequestsPC100": 46.548387096774185,
-            "transfer": 76.50855481361772,
+            "readerOriginRequests": 10.588064516129032,
+            "viewerRequestsUS": 36.79032258064516,
+            "viewerRequestsPC100": 44.14838709677419,
+            "transfer": 0,
             "invalidation": 125.105,
-            "transferGB": 1900.1006448660908,
+            "transferGB": 885.3671223735001,
             "invalidationPaths": 26021,
-            "usCanada": 252.65752930341074,
-            "pc100Upper": 260.41559381953977
+            "usCanada": 173.74897448979303,
+            "pc100Upper": 181.10703900592208
           },
           "r2": {
-            "gross": 11.02930558478613,
-            "afterDedicatedFreeAllowance": 6.316220624516128,
-            "readerTransferGB": 8176.559359382217
+            "gross": 10.66930558478613,
+            "afterDedicatedFreeAllowance": 5.956220624516129,
+            "readerTransferGB": 7161.825836889628
           },
           "sensitivity": {
             "q": 3,
@@ -7096,17 +7096,17 @@
             "missRate": 1
           },
           "reader": {
-            "requests": 48800000,
+            "requests": 46800000,
             "alwaysOriginRequests": 6150000,
-            "cacheableRequests": 42650000,
-            "browserCacheRequests": 0,
-            "network200": 43650000,
+            "cacheableRequests": 40650000,
+            "browserCacheRequests": 2000000,
+            "network200": 41650000,
             "network304": 5150000,
-            "bodyBytes": 1768315524325.3406,
-            "viewerBytes": 1818286724325.3406,
-            "viewerRequests": 48800000,
-            "headerBytes": 49971200000,
-            "originRequests": 48800000,
+            "bodyBytes": 760497164577.8011,
+            "viewerBytes": 808420364577.8011,
+            "viewerRequests": 46800000,
+            "headerBytes": 47923200000,
+            "originRequests": 46800000,
             "sessions": 1000000,
             "pageViews": 3000000,
             "searchIncrement": {
@@ -7122,20 +7122,20 @@
           "aws": {
             "storage": 0.007198993018828332,
             "publisherRequests": 1.2583884,
-            "readerOriginRequests": 19.516129032258068,
-            "viewerRequestsUS": 38.79032258064516,
-            "viewerRequestsPC100": 46.548387096774185,
-            "transfer": 76.50855481361772,
+            "readerOriginRequests": 18.716129032258067,
+            "viewerRequestsUS": 36.79032258064516,
+            "viewerRequestsPC100": 44.14838709677419,
+            "transfer": 0,
             "invalidation": 125.105,
-            "transferGB": 1900.1006448660908,
+            "transferGB": 885.3671223735001,
             "invalidationPaths": 26021,
-            "usCanada": 261.1855938195398,
-            "pc100Upper": 268.94365833566883
+            "usCanada": 181.87703900592206,
+            "pc100Upper": 189.2351035220511
           },
           "r2": {
-            "gross": 18.704563649302262,
-            "afterDedicatedFreeAllowance": 13.99147868903226,
-            "readerTransferGB": 8176.559359382217
+            "gross": 17.98456364930226,
+            "afterDedicatedFreeAllowance": 13.271478689032257,
+            "readerTransferGB": 7161.825836889628
           },
           "sensitivity": {
             "q": 3,
@@ -7165,17 +7165,17 @@
             "missRate": 0.1
           },
           "reader": {
-            "requests": 48800000,
+            "requests": 46800000,
             "alwaysOriginRequests": 6150000,
-            "cacheableRequests": 42650000,
-            "browserCacheRequests": 0,
-            "network200": 43650000,
+            "cacheableRequests": 40650000,
+            "browserCacheRequests": 2000000,
+            "network200": 41650000,
             "network304": 5150000,
-            "bodyBytes": 1768315524325.3406,
-            "viewerBytes": 1818286724325.3406,
-            "viewerRequests": 48800000,
-            "headerBytes": 49971200000,
-            "originRequests": 10415000,
+            "bodyBytes": 760497164577.8011,
+            "viewerBytes": 808420364577.8011,
+            "viewerRequests": 46800000,
+            "headerBytes": 47923200000,
+            "originRequests": 10215000,
             "sessions": 1000000,
             "pageViews": 3000000,
             "searchIncrement": {
@@ -7191,20 +7191,20 @@
           "aws": {
             "storage": 0.007198993018828332,
             "publisherRequests": 1.2583884,
-            "readerOriginRequests": 4.1656129032258065,
-            "viewerRequestsUS": 38.79032258064516,
-            "viewerRequestsPC100": 46.548387096774185,
-            "transfer": 76.50855481361772,
+            "readerOriginRequests": 4.085612903225806,
+            "viewerRequestsUS": 36.79032258064516,
+            "viewerRequestsPC100": 44.14838709677419,
+            "transfer": 0,
             "invalidation": 125.105,
-            "transferGB": 1900.1006448660908,
+            "transferGB": 885.3671223735001,
             "invalidationPaths": 26021,
-            "usCanada": 245.83507769050752,
-            "pc100Upper": 253.59314220663654
+            "usCanada": 167.2465228768898,
+            "pc100Upper": 174.60458739301882
           },
           "r2": {
-            "gross": 4.889099133173225,
-            "afterDedicatedFreeAllowance": 0.1760141729032257,
-            "readerTransferGB": 8176.559359382217
+            "gross": 4.817099133173226,
+            "afterDedicatedFreeAllowance": 0.10401417290322572,
+            "readerTransferGB": 7161.825836889628
           },
           "sensitivity": {
             "q": 3,
@@ -7227,17 +7227,17 @@
             "missRate": 0.5
           },
           "reader": {
-            "requests": 48800000,
+            "requests": 46800000,
             "alwaysOriginRequests": 6150000,
-            "cacheableRequests": 42650000,
-            "browserCacheRequests": 0,
-            "network200": 43650000,
+            "cacheableRequests": 40650000,
+            "browserCacheRequests": 2000000,
+            "network200": 41650000,
             "network304": 5150000,
-            "bodyBytes": 1768315524325.3406,
-            "viewerBytes": 1818286724325.3406,
-            "viewerRequests": 48800000,
-            "headerBytes": 49971200000,
-            "originRequests": 27475000,
+            "bodyBytes": 760497164577.8011,
+            "viewerBytes": 808420364577.8011,
+            "viewerRequests": 46800000,
+            "headerBytes": 47923200000,
+            "originRequests": 26475000,
             "sessions": 1000000,
             "pageViews": 3000000,
             "searchIncrement": {
@@ -7253,20 +7253,20 @@
           "aws": {
             "storage": 0.007198993018828332,
             "publisherRequests": 1.2583884,
-            "readerOriginRequests": 10.988064516129032,
-            "viewerRequestsUS": 38.79032258064516,
-            "viewerRequestsPC100": 46.548387096774185,
-            "transfer": 76.50855481361772,
+            "readerOriginRequests": 10.588064516129032,
+            "viewerRequestsUS": 36.79032258064516,
+            "viewerRequestsPC100": 44.14838709677419,
+            "transfer": 0,
             "invalidation": 125.105,
-            "transferGB": 1900.1006448660908,
+            "transferGB": 885.3671223735001,
             "invalidationPaths": 26021,
-            "usCanada": 252.65752930341074,
-            "pc100Upper": 260.41559381953977
+            "usCanada": 173.74897448979303,
+            "pc100Upper": 181.10703900592208
           },
           "r2": {
-            "gross": 11.02930558478613,
-            "afterDedicatedFreeAllowance": 6.316220624516128,
-            "readerTransferGB": 8176.559359382217
+            "gross": 10.66930558478613,
+            "afterDedicatedFreeAllowance": 5.956220624516129,
+            "readerTransferGB": 7161.825836889628
           },
           "sensitivity": {
             "q": 3,
@@ -7289,17 +7289,17 @@
             "missRate": 1
           },
           "reader": {
-            "requests": 48800000,
+            "requests": 46800000,
             "alwaysOriginRequests": 6150000,
-            "cacheableRequests": 42650000,
-            "browserCacheRequests": 0,
-            "network200": 43650000,
+            "cacheableRequests": 40650000,
+            "browserCacheRequests": 2000000,
+            "network200": 41650000,
             "network304": 5150000,
-            "bodyBytes": 1768315524325.3406,
-            "viewerBytes": 1818286724325.3406,
-            "viewerRequests": 48800000,
-            "headerBytes": 49971200000,
-            "originRequests": 48800000,
+            "bodyBytes": 760497164577.8011,
+            "viewerBytes": 808420364577.8011,
+            "viewerRequests": 46800000,
+            "headerBytes": 47923200000,
+            "originRequests": 46800000,
             "sessions": 1000000,
             "pageViews": 3000000,
             "searchIncrement": {
@@ -7315,20 +7315,20 @@
           "aws": {
             "storage": 0.007198993018828332,
             "publisherRequests": 1.2583884,
-            "readerOriginRequests": 19.516129032258068,
-            "viewerRequestsUS": 38.79032258064516,
-            "viewerRequestsPC100": 46.548387096774185,
-            "transfer": 76.50855481361772,
+            "readerOriginRequests": 18.716129032258067,
+            "viewerRequestsUS": 36.79032258064516,
+            "viewerRequestsPC100": 44.14838709677419,
+            "transfer": 0,
             "invalidation": 125.105,
-            "transferGB": 1900.1006448660908,
+            "transferGB": 885.3671223735001,
             "invalidationPaths": 26021,
-            "usCanada": 261.1855938195398,
-            "pc100Upper": 268.94365833566883
+            "usCanada": 181.87703900592206,
+            "pc100Upper": 189.2351035220511
           },
           "r2": {
-            "gross": 18.704563649302262,
-            "afterDedicatedFreeAllowance": 13.99147868903226,
-            "readerTransferGB": 8176.559359382217
+            "gross": 17.98456364930226,
+            "afterDedicatedFreeAllowance": 13.271478689032257,
+            "readerTransferGB": 7161.825836889628
           },
           "sensitivity": {
             "q": 3,
@@ -7358,17 +7358,17 @@
             "missRate": 0.1
           },
           "reader": {
-            "requests": 48800000,
+            "requests": 46800000,
             "alwaysOriginRequests": 6150000,
-            "cacheableRequests": 42650000,
-            "browserCacheRequests": 0,
-            "network200": 44650000,
+            "cacheableRequests": 40650000,
+            "browserCacheRequests": 2000000,
+            "network200": 42650000,
             "network304": 4150000,
-            "bodyBytes": 2026329524325.3406,
-            "viewerBytes": 2076300724325.3406,
-            "viewerRequests": 48800000,
-            "headerBytes": 49971200000,
-            "originRequests": 10415000,
+            "bodyBytes": 1018511164577.8011,
+            "viewerBytes": 1066434364577.8011,
+            "viewerRequests": 46800000,
+            "headerBytes": 47923200000,
+            "originRequests": 10215000,
             "sessions": 1000000,
             "pageViews": 3000000,
             "searchIncrement": {
@@ -7384,20 +7384,20 @@
           "aws": {
             "storage": 0.007198993018828332,
             "publisherRequests": 1.2583884,
-            "readerOriginRequests": 4.1656129032258065,
-            "viewerRequestsUS": 38.79032258064516,
-            "viewerRequestsPC100": 46.548387096774185,
-            "transfer": 104.60179513619836,
+            "readerOriginRequests": 4.085612903225806,
+            "viewerRequestsUS": 36.79032258064516,
+            "viewerRequestsPC100": 44.14838709677419,
+            "transfer": 18.34944572432815,
             "invalidation": 125.105,
-            "transferGB": 2230.60935454351,
+            "transferGB": 1215.8758320509194,
             "invalidationPaths": 26021,
-            "usCanada": 273.9283180130882,
-            "pc100Upper": 281.6863825292172
+            "usCanada": 185.59596860121795,
+            "pc100Upper": 192.954033117347
           },
           "r2": {
-            "gross": 4.889099133173225,
-            "afterDedicatedFreeAllowance": 0.1760141729032257,
-            "readerTransferGB": 8523.7051013177
+            "gross": 4.817099133173226,
+            "afterDedicatedFreeAllowance": 0.10401417290322572,
+            "readerTransferGB": 7508.9715788251115
           },
           "sensitivity": {
             "q": 3,
@@ -7420,17 +7420,17 @@
             "missRate": 0.5
           },
           "reader": {
-            "requests": 48800000,
+            "requests": 46800000,
             "alwaysOriginRequests": 6150000,
-            "cacheableRequests": 42650000,
-            "browserCacheRequests": 0,
-            "network200": 44650000,
+            "cacheableRequests": 40650000,
+            "browserCacheRequests": 2000000,
+            "network200": 42650000,
             "network304": 4150000,
-            "bodyBytes": 2026329524325.3406,
-            "viewerBytes": 2076300724325.3406,
-            "viewerRequests": 48800000,
-            "headerBytes": 49971200000,
-            "originRequests": 27475000,
+            "bodyBytes": 1018511164577.8011,
+            "viewerBytes": 1066434364577.8011,
+            "viewerRequests": 46800000,
+            "headerBytes": 47923200000,
+            "originRequests": 26475000,
             "sessions": 1000000,
             "pageViews": 3000000,
             "searchIncrement": {
@@ -7446,20 +7446,20 @@
           "aws": {
             "storage": 0.007198993018828332,
             "publisherRequests": 1.2583884,
-            "readerOriginRequests": 10.988064516129032,
-            "viewerRequestsUS": 38.79032258064516,
-            "viewerRequestsPC100": 46.548387096774185,
-            "transfer": 104.60179513619836,
+            "readerOriginRequests": 10.588064516129032,
+            "viewerRequestsUS": 36.79032258064516,
+            "viewerRequestsPC100": 44.14838709677419,
+            "transfer": 18.34944572432815,
             "invalidation": 125.105,
-            "transferGB": 2230.60935454351,
+            "transferGB": 1215.8758320509194,
             "invalidationPaths": 26021,
-            "usCanada": 280.7507696259914,
-            "pc100Upper": 288.5088341421204
+            "usCanada": 192.09842021412118,
+            "pc100Upper": 199.4564847302502
           },
           "r2": {
-            "gross": 11.02930558478613,
-            "afterDedicatedFreeAllowance": 6.316220624516128,
-            "readerTransferGB": 8523.7051013177
+            "gross": 10.66930558478613,
+            "afterDedicatedFreeAllowance": 5.956220624516129,
+            "readerTransferGB": 7508.9715788251115
           },
           "sensitivity": {
             "q": 3,
@@ -7482,17 +7482,17 @@
             "missRate": 1
           },
           "reader": {
-            "requests": 48800000,
+            "requests": 46800000,
             "alwaysOriginRequests": 6150000,
-            "cacheableRequests": 42650000,
-            "browserCacheRequests": 0,
-            "network200": 44650000,
+            "cacheableRequests": 40650000,
+            "browserCacheRequests": 2000000,
+            "network200": 42650000,
             "network304": 4150000,
-            "bodyBytes": 2026329524325.3406,
-            "viewerBytes": 2076300724325.3406,
-            "viewerRequests": 48800000,
-            "headerBytes": 49971200000,
-            "originRequests": 48800000,
+            "bodyBytes": 1018511164577.8011,
+            "viewerBytes": 1066434364577.8011,
+            "viewerRequests": 46800000,
+            "headerBytes": 47923200000,
+            "originRequests": 46800000,
             "sessions": 1000000,
             "pageViews": 3000000,
             "searchIncrement": {
@@ -7508,20 +7508,20 @@
           "aws": {
             "storage": 0.007198993018828332,
             "publisherRequests": 1.2583884,
-            "readerOriginRequests": 19.516129032258068,
-            "viewerRequestsUS": 38.79032258064516,
-            "viewerRequestsPC100": 46.548387096774185,
-            "transfer": 104.60179513619836,
+            "readerOriginRequests": 18.716129032258067,
+            "viewerRequestsUS": 36.79032258064516,
+            "viewerRequestsPC100": 44.14838709677419,
+            "transfer": 18.34944572432815,
             "invalidation": 125.105,
-            "transferGB": 2230.60935454351,
+            "transferGB": 1215.8758320509194,
             "invalidationPaths": 26021,
-            "usCanada": 289.27883414212044,
-            "pc100Upper": 297.03689865824947
+            "usCanada": 200.2264847302502,
+            "pc100Upper": 207.58454924637923
           },
           "r2": {
-            "gross": 18.704563649302262,
-            "afterDedicatedFreeAllowance": 13.99147868903226,
-            "readerTransferGB": 8523.7051013177
+            "gross": 17.98456364930226,
+            "afterDedicatedFreeAllowance": 13.271478689032257,
+            "readerTransferGB": 7508.9715788251115
           },
           "sensitivity": {
             "q": 3,
@@ -7556,8 +7556,8 @@
             "browserCacheRequests": 0,
             "network200": 38650000,
             "network304": 2150000,
-            "bodyBytes": 911279524325.3405,
-            "viewerBytes": 932169124325.3405,
+            "bodyBytes": 758351164577.8011,
+            "viewerBytes": 779240764577.8011,
             "viewerRequests": 40800000,
             "headerBytes": 20889600000,
             "originRequests": 7815000,
@@ -7579,17 +7579,17 @@
             "readerOriginRequests": 3.125612903225807,
             "viewerRequestsUS": 30.790322580645157,
             "viewerRequestsPC100": 36.94838709677419,
-            "transfer": 1.1868010501768653,
+            "transfer": 0,
             "invalidation": 125.105,
-            "transferGB": 1013.9623652961984,
+            "transferGB": 856.1668428036077,
             "invalidationPaths": 26021,
-            "usCanada": 161.47332392706667,
-            "pc100Upper": 167.6313884431957
+            "usCanada": 160.2865228768898,
+            "pc100Upper": 166.44458739301882
           },
           "r2": {
             "gross": 3.953099133173226,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 7290.421079812324
+            "readerTransferGB": 7132.625557319734
           },
           "sensitivity": {
             "q": 3,
@@ -7618,8 +7618,8 @@
             "browserCacheRequests": 0,
             "network200": 38650000,
             "network304": 2150000,
-            "bodyBytes": 911279524325.3405,
-            "viewerBytes": 932169124325.3405,
+            "bodyBytes": 758351164577.8011,
+            "viewerBytes": 779240764577.8011,
             "viewerRequests": 40800000,
             "headerBytes": 20889600000,
             "originRequests": 22475000,
@@ -7641,17 +7641,17 @@
             "readerOriginRequests": 8.988064516129032,
             "viewerRequestsUS": 30.790322580645157,
             "viewerRequestsPC100": 36.94838709677419,
-            "transfer": 1.1868010501768653,
+            "transfer": 0,
             "invalidation": 125.105,
-            "transferGB": 1013.9623652961984,
+            "transferGB": 856.1668428036077,
             "invalidationPaths": 26021,
-            "usCanada": 167.3357755399699,
-            "pc100Upper": 173.49384005609892
+            "usCanada": 166.14897448979303,
+            "pc100Upper": 172.30703900592206
           },
           "r2": {
             "gross": 9.229305584786129,
             "afterDedicatedFreeAllowance": 4.516220624516128,
-            "readerTransferGB": 7290.421079812324
+            "readerTransferGB": 7132.625557319734
           },
           "sensitivity": {
             "q": 3,
@@ -7680,8 +7680,8 @@
             "browserCacheRequests": 0,
             "network200": 38650000,
             "network304": 2150000,
-            "bodyBytes": 911279524325.3405,
-            "viewerBytes": 932169124325.3405,
+            "bodyBytes": 758351164577.8011,
+            "viewerBytes": 779240764577.8011,
             "viewerRequests": 40800000,
             "headerBytes": 20889600000,
             "originRequests": 40800000,
@@ -7703,17 +7703,17 @@
             "readerOriginRequests": 16.316129032258065,
             "viewerRequestsUS": 30.790322580645157,
             "viewerRequestsPC100": 36.94838709677419,
-            "transfer": 1.1868010501768653,
+            "transfer": 0,
             "invalidation": 125.105,
-            "transferGB": 1013.9623652961984,
+            "transferGB": 856.1668428036077,
             "invalidationPaths": 26021,
-            "usCanada": 174.66384005609893,
-            "pc100Upper": 180.82190457222796
+            "usCanada": 173.47703900592205,
+            "pc100Upper": 179.63510352205108
           },
           "r2": {
             "gross": 15.824563649302256,
             "afterDedicatedFreeAllowance": 11.111478689032257,
-            "readerTransferGB": 7290.421079812324
+            "readerTransferGB": 7132.625557319734
           },
           "sensitivity": {
             "q": 3,
@@ -7748,8 +7748,8 @@
             "browserCacheRequests": 0,
             "network200": 38650000,
             "network304": 2150000,
-            "bodyBytes": 911279524325.3405,
-            "viewerBytes": 953058724325.3405,
+            "bodyBytes": 758351164577.8011,
+            "viewerBytes": 800130364577.8011,
             "viewerRequests": 40800000,
             "headerBytes": 41779200000,
             "originRequests": 7815000,
@@ -7771,17 +7771,17 @@
             "readerOriginRequests": 3.125612903225807,
             "viewerRequestsUS": 30.790322580645157,
             "viewerRequestsPC100": 36.94838709677419,
-            "transfer": 2.961995888886544,
+            "transfer": 0,
             "invalidation": 125.105,
-            "transferGB": 1034.8470104574888,
+            "transferGB": 877.051487964898,
             "invalidationPaths": 26021,
-            "usCanada": 163.24851876577634,
-            "pc100Upper": 169.40658328190537
+            "usCanada": 160.2865228768898,
+            "pc100Upper": 166.44458739301882
           },
           "r2": {
             "gross": 3.953099133173226,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 7311.305724973615
+            "readerTransferGB": 7153.510202481026
           },
           "sensitivity": {
             "q": 3,
@@ -7810,8 +7810,8 @@
             "browserCacheRequests": 0,
             "network200": 38650000,
             "network304": 2150000,
-            "bodyBytes": 911279524325.3405,
-            "viewerBytes": 953058724325.3405,
+            "bodyBytes": 758351164577.8011,
+            "viewerBytes": 800130364577.8011,
             "viewerRequests": 40800000,
             "headerBytes": 41779200000,
             "originRequests": 22475000,
@@ -7833,17 +7833,17 @@
             "readerOriginRequests": 8.988064516129032,
             "viewerRequestsUS": 30.790322580645157,
             "viewerRequestsPC100": 36.94838709677419,
-            "transfer": 2.961995888886544,
+            "transfer": 0,
             "invalidation": 125.105,
-            "transferGB": 1034.8470104574888,
+            "transferGB": 877.051487964898,
             "invalidationPaths": 26021,
-            "usCanada": 169.11097037867955,
-            "pc100Upper": 175.26903489480858
+            "usCanada": 166.14897448979303,
+            "pc100Upper": 172.30703900592206
           },
           "r2": {
             "gross": 9.229305584786129,
             "afterDedicatedFreeAllowance": 4.516220624516128,
-            "readerTransferGB": 7311.305724973615
+            "readerTransferGB": 7153.510202481026
           },
           "sensitivity": {
             "q": 3,
@@ -7872,8 +7872,8 @@
             "browserCacheRequests": 0,
             "network200": 38650000,
             "network304": 2150000,
-            "bodyBytes": 911279524325.3405,
-            "viewerBytes": 953058724325.3405,
+            "bodyBytes": 758351164577.8011,
+            "viewerBytes": 800130364577.8011,
             "viewerRequests": 40800000,
             "headerBytes": 41779200000,
             "originRequests": 40800000,
@@ -7895,17 +7895,17 @@
             "readerOriginRequests": 16.316129032258065,
             "viewerRequestsUS": 30.790322580645157,
             "viewerRequestsPC100": 36.94838709677419,
-            "transfer": 2.961995888886544,
+            "transfer": 0,
             "invalidation": 125.105,
-            "transferGB": 1034.8470104574888,
+            "transferGB": 877.051487964898,
             "invalidationPaths": 26021,
-            "usCanada": 176.4390348948086,
-            "pc100Upper": 182.59709941093763
+            "usCanada": 173.47703900592205,
+            "pc100Upper": 179.63510352205108
           },
           "r2": {
             "gross": 15.824563649302256,
             "afterDedicatedFreeAllowance": 11.111478689032257,
-            "readerTransferGB": 7311.305724973615
+            "readerTransferGB": 7153.510202481026
           },
           "sensitivity": {
             "q": 3,
@@ -7940,8 +7940,8 @@
             "browserCacheRequests": 0,
             "network200": 38650000,
             "network304": 2150000,
-            "bodyBytes": 911279524325.3405,
-            "viewerBytes": 994837924325.3405,
+            "bodyBytes": 758351164577.8011,
+            "viewerBytes": 841909564577.8011,
             "viewerRequests": 40800000,
             "headerBytes": 83558400000,
             "originRequests": 7815000,
@@ -7963,17 +7963,17 @@
             "readerOriginRequests": 3.125612903225807,
             "viewerRequestsUS": 30.790322580645157,
             "viewerRequestsPC100": 36.94838709677419,
-            "transfer": 6.512385566305882,
+            "transfer": 0,
             "invalidation": 125.105,
-            "transferGB": 1076.6163007800692,
+            "transferGB": 918.8207782874786,
             "invalidationPaths": 26021,
-            "usCanada": 166.79890844319567,
-            "pc100Upper": 172.9569729593247
+            "usCanada": 160.2865228768898,
+            "pc100Upper": 166.44458739301882
           },
           "r2": {
             "gross": 3.953099133173226,
             "afterDedicatedFreeAllowance": 0,
-            "readerTransferGB": 7353.0750152961955
+            "readerTransferGB": 7195.2794928036055
           },
           "sensitivity": {
             "q": 3,
@@ -8002,8 +8002,8 @@
             "browserCacheRequests": 0,
             "network200": 38650000,
             "network304": 2150000,
-            "bodyBytes": 911279524325.3405,
-            "viewerBytes": 994837924325.3405,
+            "bodyBytes": 758351164577.8011,
+            "viewerBytes": 841909564577.8011,
             "viewerRequests": 40800000,
             "headerBytes": 83558400000,
             "originRequests": 22475000,
@@ -8025,17 +8025,17 @@
             "readerOriginRequests": 8.988064516129032,
             "viewerRequestsUS": 30.790322580645157,
             "viewerRequestsPC100": 36.94838709677419,
-            "transfer": 6.512385566305882,
+            "transfer": 0,
             "invalidation": 125.105,
-            "transferGB": 1076.6163007800692,
+            "transferGB": 918.8207782874786,
             "invalidationPaths": 26021,
-            "usCanada": 172.66136005609889,
-            "pc100Upper": 178.81942457222792
+            "usCanada": 166.14897448979303,
+            "pc100Upper": 172.30703900592206
           },
           "r2": {
             "gross": 9.229305584786129,
             "afterDedicatedFreeAllowance": 4.516220624516128,
-            "readerTransferGB": 7353.0750152961955
+            "readerTransferGB": 7195.2794928036055
           },
           "sensitivity": {
             "q": 3,
@@ -8064,8 +8064,8 @@
             "browserCacheRequests": 0,
             "network200": 38650000,
             "network304": 2150000,
-            "bodyBytes": 911279524325.3405,
-            "viewerBytes": 994837924325.3405,
+            "bodyBytes": 758351164577.8011,
+            "viewerBytes": 841909564577.8011,
             "viewerRequests": 40800000,
             "headerBytes": 83558400000,
             "originRequests": 40800000,
@@ -8087,17 +8087,17 @@
             "readerOriginRequests": 16.316129032258065,
             "viewerRequestsUS": 30.790322580645157,
             "viewerRequestsPC100": 36.94838709677419,
-            "transfer": 6.512385566305882,
+            "transfer": 0,
             "invalidation": 125.105,
-            "transferGB": 1076.6163007800692,
+            "transferGB": 918.8207782874786,
             "invalidationPaths": 26021,
-            "usCanada": 179.98942457222793,
-            "pc100Upper": 186.14748908835696
+            "usCanada": 173.47703900592205,
+            "pc100Upper": 179.63510352205108
           },
           "r2": {
             "gross": 15.824563649302256,
             "afterDedicatedFreeAllowance": 11.111478689032257,
-            "readerTransferGB": 7353.0750152961955
+            "readerTransferGB": 7195.2794928036055
           },
           "sensitivity": {
             "q": 3,
@@ -8196,7 +8196,7 @@
               "r2AfterDedicatedFree": 0
             },
             "inputsHeld": {
-              "documentSessionBodyBytes": 5433619208.820216,
+              "documentSessionBodyBytes": 5100096372.4373,
               "queryCountAndMix": "legacy",
               "billableRequests": "legacy",
               "storage": "legacy"
@@ -8217,7 +8217,7 @@
               "r2AfterDedicatedFree": 0
             },
             "inputsHeld": {
-              "documentAndSearchBodyBytes": 5595041982.160929,
+              "documentAndSearchBodyBytes": 5261519145.778012,
               "storage": "legacy",
               "headers": 1024,
               "requests": {
@@ -8261,10 +8261,10 @@
             "pc100": 4.05
           },
           "newReaderBodyBytes": {
-            "aws": 5595041982.160929,
-            "r2": 14404948482.160929
+            "aws": 5261519145.778012,
+            "r2": 14071425645.778013
           },
-          "newR2ReaderGB": 14.82811648216093
+          "newR2ReaderGB": 14.494593645778012
         }
       },
       {
@@ -8340,7 +8340,7 @@
               "r2AfterDedicatedFree": 0
             },
             "inputsHeld": {
-              "documentSessionBodyBytes": 5433619208.820216,
+              "documentSessionBodyBytes": 5100096372.4373,
               "queryCountAndMix": "legacy",
               "billableRequests": "legacy",
               "storage": "legacy"
@@ -8361,7 +8361,7 @@
               "r2AfterDedicatedFree": 0
             },
             "inputsHeld": {
-              "documentAndSearchBodyBytes": 5595041982.160929,
+              "documentAndSearchBodyBytes": 5261519145.778012,
               "storage": "legacy",
               "headers": 1024,
               "requests": {
@@ -8405,10 +8405,10 @@
             "pc100": 4.21
           },
           "newReaderBodyBytes": {
-            "aws": 5595041982.160929,
-            "r2": 14404948482.160929
+            "aws": 5261519145.778012,
+            "r2": 14071425645.778013
           },
-          "newR2ReaderGB": 14.82811648216093
+          "newR2ReaderGB": 14.494593645778012
         }
       },
       {
@@ -8484,7 +8484,7 @@
               "r2AfterDedicatedFree": 0
             },
             "inputsHeld": {
-              "documentSessionBodyBytes": 5433619208.820216,
+              "documentSessionBodyBytes": 5100096372.4373,
               "queryCountAndMix": "legacy",
               "billableRequests": "legacy",
               "storage": "legacy"
@@ -8505,7 +8505,7 @@
               "r2AfterDedicatedFree": 0
             },
             "inputsHeld": {
-              "documentAndSearchBodyBytes": 5595041982.160929,
+              "documentAndSearchBodyBytes": 5261519145.778012,
               "storage": "legacy",
               "headers": 1024,
               "requests": {
@@ -8549,10 +8549,10 @@
             "pc100": 4.42
           },
           "newReaderBodyBytes": {
-            "aws": 5595041982.160929,
-            "r2": 14404948482.160929
+            "aws": 5261519145.778012,
+            "r2": 14071425645.778013
           },
-          "newR2ReaderGB": 14.82811648216093
+          "newR2ReaderGB": 14.494593645778012
         }
       },
       {
@@ -8628,7 +8628,7 @@
               "r2AfterDedicatedFree": 0
             },
             "inputsHeld": {
-              "documentSessionBodyBytes": 176330599398.25385,
+              "documentSessionBodyBytes": 145744927448.74597,
               "queryCountAndMix": "legacy",
               "billableRequests": "legacy",
               "storage": "legacy"
@@ -8649,7 +8649,7 @@
               "r2AfterDedicatedFree": 0
             },
             "inputsHeld": {
-              "documentAndSearchBodyBytes": 182255904865.06808,
+              "documentAndSearchBodyBytes": 151670232915.5602,
               "storage": "legacy",
               "headers": 1024,
               "requests": {
@@ -8693,10 +8693,10 @@
             "pc100": 355.91
           },
           "newReaderBodyBytes": {
-            "aws": 182255904865.06808,
-            "r2": 1144350434865.0676
+            "aws": 151670232915.5602,
+            "r2": 1113764762915.56
           },
-          "newR2ReaderGB": 1152.7062748650676
+          "newR2ReaderGB": 1122.12060291556
         }
       },
       {
@@ -8772,7 +8772,7 @@
               "r2AfterDedicatedFree": 0.3545928
             },
             "inputsHeld": {
-              "documentSessionBodyBytes": 176330599398.25385,
+              "documentSessionBodyBytes": 145744927448.74597,
               "queryCountAndMix": "legacy",
               "billableRequests": "legacy",
               "storage": "legacy"
@@ -8793,7 +8793,7 @@
               "r2AfterDedicatedFree": 0
             },
             "inputsHeld": {
-              "documentAndSearchBodyBytes": 182255904865.06808,
+              "documentAndSearchBodyBytes": 151670232915.5602,
               "storage": "legacy",
               "headers": 1024,
               "requests": {
@@ -8837,10 +8837,10 @@
             "pc100": 359.21
           },
           "newReaderBodyBytes": {
-            "aws": 182255904865.06808,
-            "r2": 1144350434865.0676
+            "aws": 151670232915.5602,
+            "r2": 1113764762915.56
           },
-          "newR2ReaderGB": 1152.7062748650676
+          "newR2ReaderGB": 1122.12060291556
         }
       },
       {
@@ -8916,7 +8916,7 @@
               "r2AfterDedicatedFree": 4.0670928
             },
             "inputsHeld": {
-              "documentSessionBodyBytes": 176330599398.25385,
+              "documentSessionBodyBytes": 145744927448.74597,
               "queryCountAndMix": "legacy",
               "billableRequests": "legacy",
               "storage": "legacy"
@@ -8937,7 +8937,7 @@
               "r2AfterDedicatedFree": 0
             },
             "inputsHeld": {
-              "documentAndSearchBodyBytes": 182255904865.06808,
+              "documentAndSearchBodyBytes": 151670232915.5602,
               "storage": "legacy",
               "headers": 1024,
               "requests": {
@@ -8981,10 +8981,10 @@
             "pc100": 363.34
           },
           "newReaderBodyBytes": {
-            "aws": 182255904865.06808,
-            "r2": 1144350434865.0676
+            "aws": 151670232915.5602,
+            "r2": 1113764762915.56
           },
-          "newR2ReaderGB": 1152.7062748650676
+          "newR2ReaderGB": 1122.12060291556
         }
       },
       {
@@ -9006,14 +9006,14 @@
           {
             "name": "compression",
             "delta": {
-              "awsUS": -1573.2330230212706,
-              "awsPC100": -1573.2330230212706,
+              "awsUS": -1613.4708812568813,
+              "awsPC100": -1613.4708812568813,
               "r2Gross": 0,
               "r2AfterDedicatedFree": 0
             },
             "subtotal": {
-              "awsUS": 399.42828121013076,
-              "awsPC100": 418.6532812101307,
+              "awsUS": 359.19042297452006,
+              "awsPC100": 378.41542297451997,
               "r2Gross": 5.93235456,
               "r2AfterDedicatedFree": 1.2194625600000006
             },
@@ -9027,14 +9027,14 @@
           {
             "name": "sessionReuse",
             "delta": {
-              "awsUS": -162.48301651001321,
-              "awsPC100": -162.48301651001321,
+              "awsUS": -131.3660960979576,
+              "awsPC100": -131.3660960979576,
               "r2Gross": 0,
               "r2AfterDedicatedFree": 0
             },
             "subtotal": {
-              "awsUS": 236.94526470011755,
-              "awsPC100": 256.17026470011746,
+              "awsUS": 227.82432687656245,
+              "awsPC100": 247.04932687656236,
               "r2Gross": 5.93235456,
               "r2AfterDedicatedFree": 1.2194625600000006
             },
@@ -9048,19 +9048,19 @@
           {
             "name": "searchTreatment",
             "delta": {
-              "awsUS": -9.120937823555003,
-              "awsPC100": -9.120937823555003,
+              "awsUS": 0,
+              "awsPC100": 0,
               "r2Gross": 0,
               "r2AfterDedicatedFree": 0
             },
             "subtotal": {
-              "awsUS": 227.82432687656254,
-              "awsPC100": 247.04932687656245,
+              "awsUS": 227.82432687656245,
+              "awsPC100": 247.04932687656236,
               "r2Gross": 5.93235456,
               "r2AfterDedicatedFree": 1.2194625600000006
             },
             "inputsHeld": {
-              "documentSessionBodyBytes": 959021675865.3529,
+              "documentSessionBodyBytes": 801226153372.7621,
               "queryCountAndMix": "legacy",
               "billableRequests": "legacy",
               "storage": "legacy"
@@ -9069,19 +9069,19 @@
           {
             "name": "requestCount",
             "delta": {
-              "awsUS": -64.5720686272425,
-              "awsPC100": -77.63900411111345,
+              "awsUS": -67.53406451612904,
+              "awsPC100": -80.601,
               "r2Gross": -1.9794483870967747,
               "r2AfterDedicatedFree": -1.2194625600000006
             },
             "subtotal": {
-              "awsUS": 163.25225824932005,
-              "awsPC100": 169.410322765449,
+              "awsUS": 160.29026236043342,
+              "awsPC100": 166.44832687656236,
               "r2Gross": 3.9529061729032255,
               "r2AfterDedicatedFree": 0
             },
             "inputsHeld": {
-              "documentAndSearchBodyBytes": 993077720134.908,
+              "documentAndSearchBodyBytes": 835282197642.3171,
               "storage": "legacy",
               "headers": 1024,
               "requests": {
@@ -9100,8 +9100,8 @@
               "r2AfterDedicatedFree": 0
             },
             "subtotal": {
-              "awsUS": 163.24851876577637,
-              "awsPC100": 169.4065832819053,
+              "awsUS": 160.28652287688973,
+              "awsPC100": 166.44458739301868,
               "r2Gross": 3.9530991331732257,
               "r2AfterDedicatedFree": 0
             },
@@ -9112,8 +9112,8 @@
           }
         ],
         "new": {
-          "awsUS": 163.24851876577634,
-          "awsPC100": 169.40658328190537,
+          "awsUS": 160.2865228768898,
+          "awsPC100": 166.44458739301882,
           "r2Gross": 3.953099133173226,
           "r2AfterDedicatedFree": 0
         },
@@ -9125,10 +9125,10 @@
             "pc100": 1991.89
           },
           "newReaderBodyBytes": {
-            "aws": 993077720134.908,
-            "r2": 7269536434651.034
+            "aws": 835282197642.3173,
+            "r2": 7111740912158.444
           },
-          "newR2ReaderGB": 7311.305724973615
+          "newR2ReaderGB": 7153.510202481026
         }
       },
       {
@@ -9150,14 +9150,14 @@
           {
             "name": "compression",
             "delta": {
-              "awsUS": -1573.2330230212706,
-              "awsPC100": -1573.2330230212706,
+              "awsUS": -1613.4708812568813,
+              "awsPC100": -1613.4708812568813,
               "r2Gross": 0,
               "r2AfterDedicatedFree": 0
             },
             "subtotal": {
-              "awsUS": 415.92828121013076,
-              "awsPC100": 435.1532812101307,
+              "awsUS": 375.69042297452006,
+              "awsPC100": 394.91542297451997,
               "r2Gross": 20.782354559999998,
               "r2AfterDedicatedFree": 16.069462559999998
             },
@@ -9171,14 +9171,14 @@
           {
             "name": "sessionReuse",
             "delta": {
-              "awsUS": -162.48301651001321,
-              "awsPC100": -162.48301651001321,
+              "awsUS": -131.3660960979576,
+              "awsPC100": -131.3660960979576,
               "r2Gross": 0,
               "r2AfterDedicatedFree": 0
             },
             "subtotal": {
-              "awsUS": 253.44526470011755,
-              "awsPC100": 272.67026470011746,
+              "awsUS": 244.32432687656245,
+              "awsPC100": 263.54932687656236,
               "r2Gross": 20.782354559999998,
               "r2AfterDedicatedFree": 16.069462559999998
             },
@@ -9192,19 +9192,19 @@
           {
             "name": "searchTreatment",
             "delta": {
-              "awsUS": -9.120937823555003,
-              "awsPC100": -9.120937823555003,
+              "awsUS": 0,
+              "awsPC100": 0,
               "r2Gross": 0,
               "r2AfterDedicatedFree": 0
             },
             "subtotal": {
-              "awsUS": 244.32432687656254,
-              "awsPC100": 263.5493268765625,
+              "awsUS": 244.32432687656245,
+              "awsPC100": 263.54932687656236,
               "r2Gross": 20.782354559999998,
               "r2AfterDedicatedFree": 16.069462559999998
             },
             "inputsHeld": {
-              "documentSessionBodyBytes": 959021675865.3529,
+              "documentSessionBodyBytes": 801226153372.7621,
               "queryCountAndMix": "legacy",
               "billableRequests": "legacy",
               "storage": "legacy"
@@ -9213,19 +9213,19 @@
           {
             "name": "requestCount",
             "delta": {
-              "awsUS": -75.20961701433927,
-              "awsPC100": -88.27655249821025,
+              "awsUS": -78.17161290322582,
+              "awsPC100": -91.23854838709678,
               "r2Gross": -11.553241935483872,
               "r2AfterDedicatedFree": -11.55324193548387
             },
             "subtotal": {
-              "awsUS": 169.11470986222326,
-              "awsPC100": 175.2727743783522,
+              "awsUS": 166.15271397333663,
+              "awsPC100": 172.31077848946558,
               "r2Gross": 9.229112624516127,
               "r2AfterDedicatedFree": 4.516220624516128
             },
             "inputsHeld": {
-              "documentAndSearchBodyBytes": 993077720134.908,
+              "documentAndSearchBodyBytes": 835282197642.3171,
               "storage": "legacy",
               "headers": 1024,
               "requests": {
@@ -9244,8 +9244,8 @@
               "r2AfterDedicatedFree": 0
             },
             "subtotal": {
-              "awsUS": 169.11097037867958,
-              "awsPC100": 175.26903489480853,
+              "awsUS": 166.14897448979295,
+              "awsPC100": 172.3070390059219,
               "r2Gross": 9.229305584786127,
               "r2AfterDedicatedFree": 4.516220624516128
             },
@@ -9256,8 +9256,8 @@
           }
         ],
         "new": {
-          "awsUS": 169.11097037867955,
-          "awsPC100": 175.26903489480858,
+          "awsUS": 166.14897448979303,
+          "awsPC100": 172.30703900592206,
           "r2Gross": 9.229305584786129,
           "r2AfterDedicatedFree": 4.516220624516128
         },
@@ -9269,10 +9269,10 @@
             "pc100": 2008.39
           },
           "newReaderBodyBytes": {
-            "aws": 993077720134.908,
-            "r2": 7269536434651.034
+            "aws": 835282197642.3173,
+            "r2": 7111740912158.444
           },
-          "newR2ReaderGB": 7311.305724973615
+          "newR2ReaderGB": 7153.510202481026
         }
       },
       {
@@ -9294,14 +9294,14 @@
           {
             "name": "compression",
             "delta": {
-              "awsUS": -1573.2330230212706,
-              "awsPC100": -1573.2330230212706,
+              "awsUS": -1613.4708812568813,
+              "awsPC100": -1613.4708812568813,
               "r2Gross": 0,
               "r2AfterDedicatedFree": 0
             },
             "subtotal": {
-              "awsUS": 436.55328121013076,
-              "awsPC100": 455.7782812101309,
+              "awsUS": 396.31542297452006,
+              "awsPC100": 415.5404229745202,
               "r2Gross": 39.34485456,
               "r2AfterDedicatedFree": 34.63196256
             },
@@ -9315,14 +9315,14 @@
           {
             "name": "sessionReuse",
             "delta": {
-              "awsUS": -162.48301651001321,
-              "awsPC100": -162.48301651001321,
+              "awsUS": -131.3660960979576,
+              "awsPC100": -131.3660960979576,
               "r2Gross": 0,
               "r2AfterDedicatedFree": 0
             },
             "subtotal": {
-              "awsUS": 274.07026470011755,
-              "awsPC100": 293.2952647001177,
+              "awsUS": 264.94932687656245,
+              "awsPC100": 284.1743268765626,
               "r2Gross": 39.34485456,
               "r2AfterDedicatedFree": 34.63196256
             },
@@ -9336,19 +9336,19 @@
           {
             "name": "searchTreatment",
             "delta": {
-              "awsUS": -9.120937823555003,
-              "awsPC100": -9.120937823555003,
+              "awsUS": 0,
+              "awsPC100": 0,
               "r2Gross": 0,
               "r2AfterDedicatedFree": 0
             },
             "subtotal": {
-              "awsUS": 264.94932687656257,
-              "awsPC100": 284.1743268765627,
+              "awsUS": 264.94932687656245,
+              "awsPC100": 284.1743268765626,
               "r2Gross": 39.34485456,
               "r2AfterDedicatedFree": 34.63196256
             },
             "inputsHeld": {
-              "documentSessionBodyBytes": 959021675865.3529,
+              "documentSessionBodyBytes": 801226153372.7621,
               "queryCountAndMix": "legacy",
               "billableRequests": "legacy",
               "storage": "legacy"
@@ -9357,19 +9357,19 @@
           {
             "name": "requestCount",
             "delta": {
-              "awsUS": -88.50655249821023,
-              "awsPC100": -101.57348798208122,
+              "awsUS": -91.46854838709677,
+              "awsPC100": -104.53548387096775,
               "r2Gross": -23.520483870967745,
               "r2AfterDedicatedFree": -23.52048387096774
             },
             "subtotal": {
-              "awsUS": 176.44277437835234,
-              "awsPC100": 182.60083889448148,
+              "awsUS": 173.48077848946568,
+              "awsPC100": 179.63884300559482,
               "r2Gross": 15.824370689032257,
               "r2AfterDedicatedFree": 11.111478689032257
             },
             "inputsHeld": {
-              "documentAndSearchBodyBytes": 993077720134.908,
+              "documentAndSearchBodyBytes": 835282197642.3171,
               "storage": "legacy",
               "headers": 1024,
               "requests": {
@@ -9388,8 +9388,8 @@
               "r2AfterDedicatedFree": 0
             },
             "subtotal": {
-              "awsUS": 176.43903489480866,
-              "awsPC100": 182.5970994109378,
+              "awsUS": 173.477039005922,
+              "awsPC100": 179.63510352205114,
               "r2Gross": 15.824563649302258,
               "r2AfterDedicatedFree": 11.111478689032257
             },
@@ -9400,8 +9400,8 @@
           }
         ],
         "new": {
-          "awsUS": 176.4390348948086,
-          "awsPC100": 182.59709941093763,
+          "awsUS": 173.47703900592205,
+          "awsPC100": 179.63510352205108,
           "r2Gross": 15.824563649302256,
           "r2AfterDedicatedFree": 11.111478689032257
         },
@@ -9413,10 +9413,10 @@
             "pc100": 2029.01
           },
           "newReaderBodyBytes": {
-            "aws": 993077720134.908,
-            "r2": 7269536434651.034
+            "aws": 835282197642.3173,
+            "r2": 7111740912158.444
           },
-          "newR2ReaderGB": 7311.305724973615
+          "newR2ReaderGB": 7153.510202481026
         }
       }
     ]

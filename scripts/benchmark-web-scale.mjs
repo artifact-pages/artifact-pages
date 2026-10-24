@@ -644,7 +644,7 @@ async function newSession(browser, profileName, { track = true } = {}) {
       r.fromDiskCache = Boolean(event.response.fromDiskCache)
       r.fromPrefetchCache = Boolean(event.response.fromPrefetchCache)
       r.fromServiceWorker = Boolean(event.response.fromServiceWorker)
-      r.fromCache = r.fromDiskCache || r.fromPrefetchCache
+      r.fromCache = Boolean(r.requestServedFromCache || r.fromDiskCache || r.fromPrefetchCache)
     }
   })
   cdp.on('Network.responseReceivedExtraInfo', (event) => {
@@ -654,6 +654,13 @@ async function newSession(browser, profileName, { track = true } = {}) {
       r.responseHeaders = event.headers ?? {}
       r.resourceIPAddressSpace = event.resourceIPAddressSpace ?? ''
       r.cacheStorageCacheName = event.cacheStorageCacheName ?? ''
+    }
+  })
+  cdp.on('Network.requestServedFromCache', (event) => {
+    const r = requests.get(event.requestId)
+    if (r) {
+      r.requestServedFromCache = true
+      r.fromCache = true
     }
   })
   cdp.on('Network.dataReceived', (event) => { const r = requests.get(event.requestId); if (r) { r.raw += event.dataLength; r.active = Date.now() } })
@@ -1132,7 +1139,8 @@ function requestVector(requests) {
       requestHeaders: sanitizedRequestHeaders(r.requestHeaders),
       requestHeadersSource: r.requestHeadersSource ?? 'absent',
       conditionalHeaderEvidence: conditionalHeaderEvidence(r.requestHeaders, r.requestHeadersSource),
-      fromCache: Boolean(r.fromCache), fromDiskCache: Boolean(r.fromDiskCache), fromPrefetchCache: Boolean(r.fromPrefetchCache),
+      fromCache: Boolean(r.fromCache), requestServedFromCache: Boolean(r.requestServedFromCache),
+      fromDiskCache: Boolean(r.fromDiskCache), fromPrefetchCache: Boolean(r.fromPrefetchCache),
       fromServiceWorker: Boolean(r.fromServiceWorker), cacheStorageCacheName: r.cacheStorageCacheName ?? '',
       resourceIPAddressSpace: r.resourceIPAddressSpace ?? '', failed: Boolean(r.failed) })),
   }

@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { transferCostGB, classifyResponses, originReads, sessionVector, lWeighted, invalidationCost, objectSizes, compressedResponseBytes, calculate, cloudFrontViewerRequestCost, r2AfterFreeAllowance, conditionalHeaderEvidence, sanitizedRequestHeaders, parseLegacyModel } from './calculate-hosting-cost.mjs'
+import { transferCostGB, classifyResponses, originReads, sessionVector, lWeighted, invalidationCost, objectSizes, compressedResponseBytes, projectCompression, calculate, cloudFrontViewerRequestCost, r2AfterFreeAllowance, conditionalHeaderEvidence, sanitizedRequestHeaders, parseLegacyModel } from './calculate-hosting-cost.mjs'
 
 test('request header evidence records conditional values or explicit absence', () => {
   const headers = sanitizedRequestHeaders({ 'If-None-Match': '"abc"', 'If-Modified-Since': 'Tue, 01 Jan 2030 00:00:00 GMT', Cookie: 'secret' })
@@ -72,6 +72,22 @@ test('AWS keeps precompressed index bytes while R2 estimates edge compression fr
   assert.equal(compressedResponseBytes(response, 'gzip6', audit, { provider: 'r2' }), 30)
   assert.equal(compressedResponseBytes(response, 'brotli5', audit, { provider: 'r2' }), 20)
   assert.equal(compressedResponseBytes({ ...response, url: '/_indexes/s/search/root-1.gz' }, 'brotli5', audit, { provider: 'r2' }), 50)
+})
+
+test('compressible responses without Content-Length use decoded size for eligibility', () => {
+  const response = { url: '/assets/mermaid.core.js', status: 200, encodedBytes: 12_000,
+    decodedBytes: 8_000, contentType: 'application/javascript', httpMetadata: { 'content-length': '' } }
+  const audit = [{ objectType: 'app-asset-js', decodedBytes: 8_000, gzip6Bytes: 2_000, brotli5Bytes: 1_500,
+    recompressedGzip6Bytes: 2_000, recompressedBrotli5Bytes: 1_500 }]
+  assert.equal(compressedResponseBytes(response, 'gzip6', audit), 2_000)
+})
+
+test('zero-transfer 200 responses are treated as memory-cache hits', () => {
+  const result = projectCompression({ requests: 1, alwaysOriginRequests: 0, cacheableRequests: 1,
+    browserCacheRequests: 0, network200: 1, network304: 0, responses: [{ url: '/assets/index-hash.js', status: 200,
+      encodedBytes: 0, decodedBytes: 0, contentType: 'application/javascript' }] }, 'gzip6', [])
+  assert.deepEqual(result, { requests: 0, alwaysOriginRequests: 0, cacheableRequests: 0,
+    browserCacheRequests: 1, network200: 0, network304: 0, bodyBytes: 0 })
 })
 
 test('calculator emits nine rows and uses the L 30:1 publisher mix', () => {
