@@ -1,42 +1,248 @@
-# Launch hosting cost model
+# Hosting cost model
 
-Measurement date: 2026-10-18. This is a local, no-credentials model for the three fixed launch workloads in [T27](../backlog/verification/T27-launch-hosting-cost-model.md). Dollar amounts are monthly marginal infrastructure charges; they exclude domain, GitHub, runner, support, tax, WAF, logging, and other account costs.
+Updated 2026-10-24 with the T29 measured reader-session model. This is a local, no-credentials estimate for the fixed S/M/L launch workloads; it is not an AWS or Cloudflare bill and does not measure a live CDN. Dollar amounts are monthly marginal infrastructure subtotals, excluding domain, GitHub, runner, support, tax, WAF, logging, and other account costs. The October 18 model is preserved at [legacy snapshot](hosting-cost-model-legacy-2026-10-18.md).
 
-## Findings
+## Current results
 
-- A 50,000-page one-document change reads and writes about **45.8 MB** of publisher object bodies. This is close to the locally recorded 45.90 MB full index, so a full mutable-index read/write is the likely dominant component; the probe totals bytes across keys rather than attributing them per key.
-- A 50,000-page steady projection occupies **118.5 MB** of public projection objects plus **2.17 MB** of compressed private publish state. Search files alone account for **13.85 MB across 1,478 objects**.
-- CloudFront transfer is the largest modeled AWS cost: about **$225/month in M** and **$1,745/month in L**. These figures assume every page view is a cold visit fetching the uncompressed site index. In the reader, the index is fetched once per cold visit/tab session and later revalidated with `304` responses (`max-age=0, must-revalidate`); CloudFront compresses objects up to 10 MB, so real transfer is likely several times lower. Treat the transfer figures as likely-high upper bounds.
-- CloudFront invalidation paths are the second large AWS cost driver, at about **$115/month in M** and **$125/month in L**; these costs are included in the table totals. Invalidation compaction matters: the provider-neutral first-publish plan contains 1,182–51,788 paths, while the adapter plans 178–1,481 AWS paths and 2 Cloudflare purge paths. A one-document change plans 3 paths for either adapter.
-- App deployment retains old hashed asset URLs. The current build has **60 hashed assets totaling 3,603,721 raw bytes (3.60 MB)**. A rollout where every hashed asset changes can add up to that much per deploy; unchanged content hashes are reused. A maximum browser-tab lifetime and rollback retention period are needed before designing garbage collection.
+Reader bodies now use observed SPA sessions and gzip6 compression estimates. Invalidation remains the largest AWS component in S/M/L; transfer remains inside AWS's modeled 1,000 GB free tier for S and M, while L exceeds it. At 10% miss rate the AWS US/Canada subtotal is $4.02 / $117.07 / $163.25 for S/M/L; gross R2 is $0.07 / $1.46 / $3.95. The L result differs between US/Canada and the PriceClass 100 upper bound because of the highest regional viewer-request price.
 
-## Measurement boundary and repeatability
+| Size | Miss | R2 gross | R2 after dedicated free allowance | AWS storage | AWS publisher requests | AWS reader origin requests | AWS viewer requests US/Canada | AWS transfer | AWS invalidation | AWS US/Canada subtotal | AWS PC100 upper bound |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| S | 10% | $0.07 | $0.00 | $0.00 | $0.04 | $0.03 | $0.00 | $0.00 | $3.95 | $4.02 | $4.02 |
+| S | 50% | $0.12 | $0.00 | $0.00 | $0.04 | $0.09 | $0.00 | $0.00 | $3.95 | $4.08 | $4.08 |
+| S | 100% | $0.19 | $0.00 | $0.00 | $0.04 | $0.17 | $0.00 | $0.00 | $3.95 | $4.16 | $4.16 |
+| M | 10% | $1.46 | $0.00 | $0.01 | $0.99 | $0.63 | $0.00 | $0.00 | $115.45 | $117.07 | $117.07 |
+| M | 50% | $2.52 | $0.00 | $0.01 | $0.99 | $1.80 | $0.00 | $0.00 | $115.45 | $118.25 | $118.25 |
+| M | 100% | $3.84 | $0.00 | $0.01 | $0.99 | $3.26 | $0.00 | $0.00 | $115.45 | $119.71 | $119.71 |
+| L | 10% | $3.95 | $0.00 | $0.01 | $1.26 | $3.13 | $30.79 | $2.96 | $125.11 | $163.25 | $169.41 |
+| L | 50% | $9.23 | $4.52 | $0.01 | $1.26 | $8.99 | $30.79 | $2.96 | $125.11 | $169.11 | $175.27 |
+| L | 100% | $15.82 | $11.11 | $0.01 | $1.26 | $16.32 | $30.79 | $2.96 | $125.11 | $176.44 | $182.60 |
 
-### Publisher probe
+The unrounded AWS subtotal equals the sum of its six separately listed components; table cells are rounded independently to cents, so displayed rounded components may differ by a cent from the displayed subtotal. Transfer includes response-header bytes at 1,024 bytes per network response, and viewer requests include 200 and 304 responses; browser-cache hits are excluded. The R2 “after dedicated free allowance” column assigns the 10 GB-month, 1 million Class A, and 10 million Class B allowances solely to this workload. Actual account use shares those allowances. R2 has no modeled egress fee. Prices are fixed at the 2026-10-18 list-price inputs in the [calculator results](hosting-cost-model-results.json), with S3 Standard in us-east-1 and CloudFront PriceClass_100. Sources: [R2 pricing](https://developers.cloudflare.com/r2/pricing/), [S3 pricing](https://aws.amazon.com/s3/pricing/), [CloudFront pricing](https://aws.amazon.com/cloudfront/pricing/pay-as-you-go/), and [invalidation pricing](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/PayingForInvalidation.html).
 
-The publisher probe ran against the provider-neutral in-memory counting backend with the local CLI code at `db0336fc63145b64b21b28671bbf3c6e42fc2d14`, Go `go1.26.9 darwin/arm64`, and generated version-2 sites from `scripts/benchmark-web-scale.mjs` (seed `20261014`). The source fixture includes the T25 generator's committed `README.md` files; the reported page count excludes those README files. The probe creates an isolated copy, runs first publish, no-op republish, appends one HTML comment to one page, and runs one-document change. It records backend method calls, request-body bytes, final projection bytes, compressed publish-state bytes, and each provider adapter's planned invalidation paths.
+### AWS transfer and invalidation
 
-Reproduce it from the repository root in a clean checkout:
+At all three miss rates, AWS transfer is $0 for S and M (6.02 GB and 190.61 GB respectively), and $2.96 for L (1,034.85 GB). The 1,024-byte response-header assumption contributes 0.423 GB / 8.356 GB / 41.779 GB at S/M/L; its marginal modeled transfer cost is $0 / $0 / $2.96 because only L crosses the 1,000 GB free tier. AWS invalidation costs are $3.95 / $115.45 / $125.11, from 1,790 / 24,090 / 26,021 monthly paths, after the 1,000-path allowance. Invalidation is constant across miss rates.
 
-```sh
-node scripts/benchmark-web-scale.mjs --counts 1000,5000,50000 --generate-only --run-dir codex-t27-20261018
-cd cli
-for count in 1000 5000 50000; do
-  ARTIFACT_PAGES_HOSTING_COST_SOURCE=.local/web-scale/codex-t27-20261018/satellite/sites/scale-$count/content \
-  ARTIFACT_PAGES_HOSTING_COST_SITE=scale-$count \
-  go test ./internal/publisher -run '^TestHostingCostProbe$' -count=1 -v
-done
-```
+## Measurements and method
 
-The test harness source SHA-256 is `2d74a445064f53f2825bb6802e56cff3b8d1e033fc046516b19b4b2d4e107cca`; the generator script SHA-256 is `874dabcbd2f8d258620e258ee505ddaeb4514ea791ffb90a1d1cc489e97795c1`. Raw logs are ignored under `.local/hosting-cost/publish-{1000,5000,50000}.log`; generated source fixtures are ignored under `.local/web-scale/codex-t27-20261018/`.
+The browser measurement captured three iterations for each 1k, 5k, and 50k generated site. Each fresh context visited three documents with 45-second gaps, performed a normal reload, and ran separate quiet broad and short-query clients. The calculator derives the mean C/W/R vectors from the measured response traces and models each session as:
 
-This is a logical provider-neutral method count, not a capture of R2/S3 HTTP requests or billing logs. One `LIST` is one backend prefix call (provider pagination is not counted), one `DELETE` is one logical batch (provider batch limits are not counted), and SDK retries, HTTP framing, concurrent requests, and provider latency are absent. The AWS and Cloudflare invalidation path counts are the output of the adapters' pure path-planning functions; the test did not call either provider API.
+**sessionBody = (V / q) × (C + (q − 1) × W + reloads × R)**
 
-### Reader measurements reused from T25
+Here C is the first cold document action, W is each later SPA navigation in the same session, R is reload, V is monthly page views, and q is page views per session (base q=3). The base case sets reloads=0. Search adds the measured independent query traffic, with a 50/50 broad/short query mix; L weights 30/31 of views at the 5k fixture and 1/31 at 50k. Monthly origin requests are always-origin requests plus cacheable requests × miss rate. CloudFront viewer charges count all network 200 and 304 responses; browser-cache hits are not billed. Header transfer is modeled as 1,024 bytes per network response. AWS compression uses eligible responses within CloudFront's documented 1,000-byte to 10,000,000-byte range, using the gzip6 audit sizes; stored generated JSON is already gzip and keeps its stored representation. R2 uses its actual stored gzip bytes for precompressed objects and its decoded bytes for eligible objects that would be recompressed.
 
-The browser rows reuse the sanitized local-nginx results in [web-scale-benchmark-results.json](web-scale-benchmark-results.json) and the detailed [T25 report](web-scale-benchmark.md), rather than claiming a fresh T27 browser run. The extended phase ran on 2026-10-17 at commit `c7d5d2b9661f8f95193044636ff0d7a86d875de0`, generator v2 / seed `20261014`, Chromium 153.0.8010.12 and Playwright 1.63.0. It used local nginx 1.29 over loopback with no HTTP compression, three unthrottled iterations, a fresh browser context, and a later build than the publisher probe.
+### C/W/R vectors
 
-The current sandbox could not start Docker because access to `/var/run/docker.sock` was denied. A loopback listener was denied with `EPERM`, and Chromium could not launch because the sandbox denied its mach-port rendezvous. Therefore no new browser or real local object-store profile was captured for T27. No cloud credentials or production endpoints were used.
+Each cell gives requests / always-origin / cacheable / network 200 / network 304 / mean response-body bytes. These measured vectors are the per-action inputs used by the session equation; monthly request totals are in the main results JSON.
+
+| Fixture | C: requests / always / cacheable / 200 / 304 / bytes | W: requests / always / cacheable / 200 / 304 / bytes | R: requests / always / cacheable / 200 / 304 / bytes |
+| --- | --- | --- | --- |
+| 1,000 | 35 / 2 / 33 / 35 / 0 / 541,116.9 | 2 / 1 / 1 / 1 / 1 / 1,122.5 | 8 / 2 / 6 / 5 / 3 / 857,450.0 |
+| 5,000 | 35 / 2 / 33 / 35 / 0 / 879,500.0 | 2 / 1 / 1 / 1 / 1 / 1,076.5 | 8 / 2 / 6 / 5 / 3 / 857,036.0 |
+| 50,000 | 35 / 2 / 33 / 35 / 0 / 3,277,728.0 | 2 / 1 / 1 / 1 / 1 / 1,177.0 | 8 / 2 / 6 / 5.666666666666667 / 2.3333333333333335 / 857,830.7 |
+
+### Compressed and decoded object bytes
+
+Audit counts and byte sizes below come from the generated T29 fixtures. “Stored” is the delivered object representation. gzip6 and Brotli5 columns show the measured stored representation for existing precompressed objects and recompressed sizes for ordinary source objects; the complete audit also stores recompressed alternatives for the precompressed JSON in the results JSON.
+
+| Object type | Count | Decoded bytes | Stored bytes | gzip6 bytes | Brotli5 bytes |
+| --- | --- | --- | --- | --- | --- |
+| app-asset-css | 1 | 70,525 | 70,525 | 12,681 | 12,306 |
+| app-asset-js | 97 | 4,161,334 | 4,161,334 | 1,186,349 | 1,112,320 |
+| html | 38747 | 49,157,737 | 49,157,737 | 30,519,568 | 26,432,870 |
+| json | 6 | 2,713 | 2,713 | 1,547 | 1,319 |
+| md | 17584 | 19,163,149 | 19,163,149 | 11,979,258 | 10,481,103 |
+| opaque-search-gzip | 2000 | 50,370,725 | 15,316,693 | 15,316,693 | 15,316,693 |
+| search-manifest-1000 | 1 | 37,660 | 8,839 | 8,839 | 8,839 |
+| search-manifest-5000 | 1 | 75,850 | 17,668 | 17,668 | 17,668 |
+| search-manifest-50000 | 1 | 949,914 | 129,750 | 129,750 | 129,750 |
+| site-index-1000 | 1 | 915,851 | 38,780 | 38,780 | 38,780 |
+| site-index-5000 | 1 | 5,060,165 | 258,014 | 258,014 | 258,014 |
+| site-index-50000 | 1 | 52,638,774 | 2,505,350 | 2,505,350 | 2,505,350 |
+
+### 304 and response-header evidence
+
+The raw reader JSON contains 648 response records: 61 were 304 responses, all retained actual conditional-header evidence (If-None-Match and/or If-Modified-Since), and 0 lacked evidence. 630 records use Network.requestWillBeSentExtraInfo; 18 fall back to Network.requestWillBeSent. Per-size modeled monthly 304/header counts are:
+
+| Size | Monthly network requests | Monthly 304 responses | Header bytes at 1,024 B/response | Header marginal transfer cost |
+| --- | --- | --- | --- | --- |
+| S | 413,250 | 21,500 | 423,168,000 | $0.00 |
+| M | 8,160,000 | 430,000 | 8,355,840,000 | $0.00 |
+| L | 40,800,000 | 2,150,000 | 41,779,200,000 | $2.96 |
+
+The 304 responses are included in the viewer/origin request model; their body contribution is zero, while their response headers are included in the modeled transfer byte count. The input header charge is not a standalone line item: it is the marginal amount of the tiered CloudFront transfer charge after adding those bytes.
+
+### Publisher projection evidence
+
+Plain and AWS-policy publisher probes ran for each fixture from source commit b9847b9e0a6104ca2428486f8bd56460821cba95. They validated generated index and manifest JSON. The output includes call phases, PUT body bytes, adapter invalidation paths, stored projection/search bytes, and compressed private publish state.
+
+| Provider | Pages | Projection bytes | Search bytes | Compressed publish state bytes | Index/manifest validation |
+| --- | --- | --- | --- | --- | --- |
+| plain | 1,000 | 2,426,215 | 463,955 | 50,484 | pass |
+| plain | 5,000 | 12,395,214 | 2,069,622 | 224,616 | pass |
+| plain | 50,000 | 119,100,937 | 13,846,540 | 2,168,181 | pass |
+| AWS policy | 1,000 | 1,684,738 | 434,923 | 50,502 | pass |
+| AWS policy | 5,000 | 8,356,016 | 2,010,893 | 224,640 | pass |
+| AWS policy | 50,000 | 76,492,975 | 13,023,349 | 2,168,210 | pass |
+
+Publisher evidence in the JSON retains first publish, no-op republish, and one-document-change call counts and byte totals for each provider/size. These are in-memory provider-contract probes, not real S3/R2 requests or billing records.
+
+## One-factor sensitivity
+
+Each row varies only the named factor from the base assumptions; all other inputs remain at q=3, gzip6, reloads=0, unchanged index, 1,024-byte headers, and the row's stated miss rate. Values are monthly AWS US/Canada, AWS PC100 upper-bound, gross R2 and R2 after dedicated free allowances. The complete rows are written with their effective assumptions in [hosting-cost-model-results.json](hosting-cost-model-results.json).
+
+| Size | Effective assumptions | Miss | AWS US/Canada | AWS PC100 | R2 gross | R2 net |
+| --- | --- | --- | --- | --- | --- | --- |
+| S | {"q":1,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.1} | 10% | $4.06 | $4.06 | $0.10 | $0.00 |
+| S | {"q":1,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.5} | 50% | $4.22 | $4.22 | $0.24 | $0.00 |
+| S | {"q":1,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":1} | 100% | $4.42 | $4.42 | $0.42 | $0.00 |
+| S | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.1} | 10% | $4.02 | $4.02 | $0.07 | $0.00 |
+| S | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.5} | 50% | $4.08 | $4.08 | $0.12 | $0.00 |
+| S | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":1} | 100% | $4.16 | $4.16 | $0.19 | $0.00 |
+| S | {"q":5,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.1} | 10% | $4.02 | $4.02 | $0.06 | $0.00 |
+| S | {"q":5,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.5} | 50% | $4.06 | $4.06 | $0.10 | $0.00 |
+| S | {"q":5,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":1} | 100% | $4.10 | $4.10 | $0.14 | $0.00 |
+| S | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.1} | 10% | $4.02 | $4.02 | $0.07 | $0.00 |
+| S | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.5} | 50% | $4.08 | $4.08 | $0.12 | $0.00 |
+| S | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":1} | 100% | $4.16 | $4.16 | $0.19 | $0.00 |
+| S | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"brotli5","missRate":0.1} | 10% | $4.02 | $4.02 | $0.07 | $0.00 |
+| S | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"brotli5","missRate":0.5} | 50% | $4.08 | $4.08 | $0.12 | $0.00 |
+| S | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"brotli5","missRate":1} | 100% | $4.16 | $4.16 | $0.19 | $0.00 |
+| S | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.1} | 10% | $4.02 | $4.02 | $0.07 | $0.00 |
+| S | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.5} | 50% | $4.08 | $4.08 | $0.12 | $0.00 |
+| S | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":1} | 100% | $4.16 | $4.16 | $0.19 | $0.00 |
+| S | {"q":3,"reloads":1,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.1} | 10% | $4.03 | $4.03 | $0.08 | $0.00 |
+| S | {"q":3,"reloads":1,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.5} | 50% | $4.10 | $4.10 | $0.14 | $0.00 |
+| S | {"q":3,"reloads":1,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":1} | 100% | $4.19 | $4.19 | $0.22 | $0.00 |
+| S | {"q":3,"reloads":1,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.1} | 10% | $4.03 | $4.03 | $0.08 | $0.00 |
+| S | {"q":3,"reloads":1,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.5} | 50% | $4.10 | $4.10 | $0.14 | $0.00 |
+| S | {"q":3,"reloads":1,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":1} | 100% | $4.19 | $4.19 | $0.22 | $0.00 |
+| S | {"q":3,"reloads":1,"reloadIndexChanged":true,"headerBytes":1024,"compression":"gzip6","missRate":0.1} | 10% | $4.03 | $4.03 | $0.08 | $0.00 |
+| S | {"q":3,"reloads":1,"reloadIndexChanged":true,"headerBytes":1024,"compression":"gzip6","missRate":0.5} | 50% | $4.10 | $4.10 | $0.14 | $0.00 |
+| S | {"q":3,"reloads":1,"reloadIndexChanged":true,"headerBytes":1024,"compression":"gzip6","missRate":1} | 100% | $4.19 | $4.19 | $0.22 | $0.00 |
+| S | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":512,"compression":"gzip6","missRate":0.1} | 10% | $4.02 | $4.02 | $0.07 | $0.00 |
+| S | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":512,"compression":"gzip6","missRate":0.5} | 50% | $4.08 | $4.08 | $0.12 | $0.00 |
+| S | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":512,"compression":"gzip6","missRate":1} | 100% | $4.16 | $4.16 | $0.19 | $0.00 |
+| S | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.1} | 10% | $4.02 | $4.02 | $0.07 | $0.00 |
+| S | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.5} | 50% | $4.08 | $4.08 | $0.12 | $0.00 |
+| S | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":1} | 100% | $4.16 | $4.16 | $0.19 | $0.00 |
+| S | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":2048,"compression":"gzip6","missRate":0.1} | 10% | $4.02 | $4.02 | $0.07 | $0.00 |
+| S | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":2048,"compression":"gzip6","missRate":0.5} | 50% | $4.08 | $4.08 | $0.12 | $0.00 |
+| S | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":2048,"compression":"gzip6","missRate":1} | 100% | $4.16 | $4.16 | $0.19 | $0.00 |
+| M | {"q":1,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.1} | 10% | $129.11 | $131.38 | $2.07 | $0.00 |
+| M | {"q":1,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.5} | 50% | $132.33 | $134.60 | $4.97 | $0.49 |
+| M | {"q":1,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":1} | 100% | $136.35 | $138.62 | $8.59 | $4.12 |
+| M | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.1} | 10% | $117.07 | $117.07 | $1.46 | $0.00 |
+| M | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.5} | 50% | $118.25 | $118.25 | $2.52 | $0.00 |
+| M | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":1} | 100% | $119.71 | $119.71 | $3.84 | $0.00 |
+| M | {"q":5,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.1} | 10% | $116.94 | $116.94 | $1.34 | $0.00 |
+| M | {"q":5,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.5} | 50% | $117.70 | $117.70 | $2.03 | $0.00 |
+| M | {"q":5,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":1} | 100% | $118.66 | $118.66 | $2.89 | $0.00 |
+| M | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.1} | 10% | $117.07 | $117.07 | $1.46 | $0.00 |
+| M | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.5} | 50% | $118.25 | $118.25 | $2.52 | $0.00 |
+| M | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":1} | 100% | $119.71 | $119.71 | $3.84 | $0.00 |
+| M | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"brotli5","missRate":0.1} | 10% | $117.07 | $117.07 | $1.46 | $0.00 |
+| M | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"brotli5","missRate":0.5} | 50% | $118.25 | $118.25 | $2.52 | $0.00 |
+| M | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"brotli5","missRate":1} | 100% | $119.71 | $119.71 | $3.84 | $0.00 |
+| M | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.1} | 10% | $117.07 | $117.07 | $1.46 | $0.00 |
+| M | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.5} | 50% | $118.25 | $118.25 | $2.52 | $0.00 |
+| M | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":1} | 100% | $119.71 | $119.71 | $3.84 | $0.00 |
+| M | {"q":3,"reloads":1,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.1} | 10% | $117.28 | $117.28 | $1.65 | $0.00 |
+| M | {"q":3,"reloads":1,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.5} | 50% | $118.65 | $118.65 | $2.88 | $0.00 |
+| M | {"q":3,"reloads":1,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":1} | 100% | $120.35 | $120.35 | $4.41 | $0.00 |
+| M | {"q":3,"reloads":1,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.1} | 10% | $117.28 | $117.28 | $1.65 | $0.00 |
+| M | {"q":3,"reloads":1,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.5} | 50% | $118.65 | $118.65 | $2.88 | $0.00 |
+| M | {"q":3,"reloads":1,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":1} | 100% | $120.35 | $120.35 | $4.41 | $0.00 |
+| M | {"q":3,"reloads":1,"reloadIndexChanged":true,"headerBytes":1024,"compression":"gzip6","missRate":0.1} | 10% | $117.28 | $117.28 | $1.65 | $0.00 |
+| M | {"q":3,"reloads":1,"reloadIndexChanged":true,"headerBytes":1024,"compression":"gzip6","missRate":0.5} | 50% | $118.65 | $118.65 | $2.88 | $0.00 |
+| M | {"q":3,"reloads":1,"reloadIndexChanged":true,"headerBytes":1024,"compression":"gzip6","missRate":1} | 100% | $120.35 | $120.35 | $4.41 | $0.00 |
+| M | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":512,"compression":"gzip6","missRate":0.1} | 10% | $117.07 | $117.07 | $1.46 | $0.00 |
+| M | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":512,"compression":"gzip6","missRate":0.5} | 50% | $118.25 | $118.25 | $2.52 | $0.00 |
+| M | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":512,"compression":"gzip6","missRate":1} | 100% | $119.71 | $119.71 | $3.84 | $0.00 |
+| M | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.1} | 10% | $117.07 | $117.07 | $1.46 | $0.00 |
+| M | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.5} | 50% | $118.25 | $118.25 | $2.52 | $0.00 |
+| M | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":1} | 100% | $119.71 | $119.71 | $3.84 | $0.00 |
+| M | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":2048,"compression":"gzip6","missRate":0.1} | 10% | $117.07 | $117.07 | $1.46 | $0.00 |
+| M | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":2048,"compression":"gzip6","missRate":0.5} | 50% | $118.25 | $118.25 | $2.52 | $0.00 |
+| M | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":2048,"compression":"gzip6","missRate":1} | 100% | $119.71 | $119.71 | $3.84 | $0.00 |
+| L | {"q":1,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.1} | 10% | $400.84 | $420.19 | $6.98 | $2.26 |
+| L | {"q":1,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.5} | 50% | $416.94 | $436.30 | $21.47 | $16.76 |
+| L | {"q":1,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":1} | 100% | $437.07 | $456.42 | $39.58 | $34.87 |
+| L | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.1} | 10% | $163.25 | $169.41 | $3.95 | $0.00 |
+| L | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.5} | 50% | $169.11 | $175.27 | $9.23 | $4.52 |
+| L | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":1} | 100% | $176.44 | $182.60 | $15.82 | $11.11 |
+| L | {"q":5,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.1} | 10% | $146.41 | $149.93 | $3.35 | $0.00 |
+| L | {"q":5,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.5} | 50% | $150.23 | $153.75 | $6.78 | $2.07 |
+| L | {"q":5,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":1} | 100% | $155.00 | $158.52 | $11.07 | $6.36 |
+| L | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.1} | 10% | $163.25 | $169.41 | $3.95 | $0.00 |
+| L | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.5} | 50% | $169.11 | $175.27 | $9.23 | $4.52 |
+| L | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":1} | 100% | $176.44 | $182.60 | $15.82 | $11.11 |
+| L | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"brotli5","missRate":0.1} | 10% | $161.17 | $167.33 | $3.95 | $0.00 |
+| L | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"brotli5","missRate":0.5} | 50% | $167.04 | $173.19 | $9.23 | $4.52 |
+| L | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"brotli5","missRate":1} | 100% | $174.36 | $180.52 | $15.82 | $11.11 |
+| L | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.1} | 10% | $163.25 | $169.41 | $3.95 | $0.00 |
+| L | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.5} | 50% | $169.11 | $175.27 | $9.23 | $4.52 |
+| L | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":1} | 100% | $176.44 | $182.60 | $15.82 | $11.11 |
+| L | {"q":3,"reloads":1,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.1} | 10% | $245.84 | $253.59 | $4.89 | $0.18 |
+| L | {"q":3,"reloads":1,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.5} | 50% | $252.66 | $260.42 | $11.03 | $6.32 |
+| L | {"q":3,"reloads":1,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":1} | 100% | $261.19 | $268.94 | $18.70 | $13.99 |
+| L | {"q":3,"reloads":1,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.1} | 10% | $245.84 | $253.59 | $4.89 | $0.18 |
+| L | {"q":3,"reloads":1,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.5} | 50% | $252.66 | $260.42 | $11.03 | $6.32 |
+| L | {"q":3,"reloads":1,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":1} | 100% | $261.19 | $268.94 | $18.70 | $13.99 |
+| L | {"q":3,"reloads":1,"reloadIndexChanged":true,"headerBytes":1024,"compression":"gzip6","missRate":0.1} | 10% | $273.93 | $281.69 | $4.89 | $0.18 |
+| L | {"q":3,"reloads":1,"reloadIndexChanged":true,"headerBytes":1024,"compression":"gzip6","missRate":0.5} | 50% | $280.75 | $288.51 | $11.03 | $6.32 |
+| L | {"q":3,"reloads":1,"reloadIndexChanged":true,"headerBytes":1024,"compression":"gzip6","missRate":1} | 100% | $289.28 | $297.04 | $18.70 | $13.99 |
+| L | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":512,"compression":"gzip6","missRate":0.1} | 10% | $161.47 | $167.63 | $3.95 | $0.00 |
+| L | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":512,"compression":"gzip6","missRate":0.5} | 50% | $167.34 | $173.49 | $9.23 | $4.52 |
+| L | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":512,"compression":"gzip6","missRate":1} | 100% | $174.66 | $180.82 | $15.82 | $11.11 |
+| L | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.1} | 10% | $163.25 | $169.41 | $3.95 | $0.00 |
+| L | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":0.5} | 50% | $169.11 | $175.27 | $9.23 | $4.52 |
+| L | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":1024,"compression":"gzip6","missRate":1} | 100% | $176.44 | $182.60 | $15.82 | $11.11 |
+| L | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":2048,"compression":"gzip6","missRate":0.1} | 10% | $166.80 | $172.96 | $3.95 | $0.00 |
+| L | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":2048,"compression":"gzip6","missRate":0.5} | 50% | $172.66 | $178.82 | $9.23 | $4.52 |
+| L | {"q":3,"reloads":0,"reloadIndexChanged":false,"headerBytes":2048,"compression":"gzip6","missRate":1} | 100% | $179.99 | $186.15 | $15.82 | $11.11 |
+
+## Legacy-to-current waterfall
+
+The calculator reconstructs the archived legacy endpoints from [the legacy snapshot](hosting-cost-model-legacy-2026-10-18.md) and verifies the rounded old totals at cent precision. It then reruns pricing after each fixed-order substitution: **compression → sessionReuse → searchTreatment → requestCount → storage**. At every step it holds the other inputs fixed and records both the intermediate subtotal and its delta in the results JSON. The displayed deltas below are rounded for readability; the JSON retains full precision and all intermediate subtotals for every provider and scenario.
+
+These are order-dependent model-substitution deltas, not independent causal effects. Step 1 keeps document views cold every page view and includes the cold-body remeasurement difference along with compression; it is not a pure compression effect. The sequence changes only the inputs named at each step, reruns the relevant pricing function including free tiers, and leaves no unexplained residual when compared with the endpoint.
+
+| Size | Miss | AWS US legacy → new | Δ compression | Δ session reuse | Δ search treatment | Δ request count | Δ storage | AWS PC100 legacy → new | Δ compression | Δ session reuse | Δ search treatment | Δ request count | Δ storage |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| S | 10% | $4.05 → $4.02 | $0.00 | $0.00 | $0.00 | -$0.02 | -$0.00 | $4.05 → $4.02 | $0.00 | $0.00 | $0.00 | -$0.02 | -$0.00 |
+| S | 50% | $4.21 → $4.08 | $0.00 | $0.00 | $0.00 | -$0.13 | -$0.00 | $4.21 → $4.08 | $0.00 | $0.00 | $0.00 | -$0.13 | -$0.00 |
+| S | 100% | $4.42 → $4.16 | $0.00 | $0.00 | $0.00 | -$0.26 | -$0.00 | $4.42 → $4.16 | $0.00 | $0.00 | $0.00 | -$0.26 | -$0.00 |
+| M | 10% | $353.67 → $117.07 | -$224.93 | $0.00 | $0.00 | -$11.66 | -$0.00 | $355.91 → $117.07 | -$224.93 | $0.00 | $0.00 | -$13.91 | -$0.00 |
+| M | 50% | $356.97 → $118.25 | -$224.93 | $0.00 | $0.00 | -$13.79 | -$0.00 | $359.21 → $118.25 | -$224.93 | $0.00 | $0.00 | -$16.04 | -$0.00 |
+| M | 100% | $361.09 → $119.71 | -$224.93 | $0.00 | $0.00 | -$16.45 | -$0.00 | $363.34 → $119.71 | -$224.93 | $0.00 | $0.00 | -$18.70 | -$0.00 |
+| L | 10% | $1,972.66 → $163.25 | -$1,573.23 | -$162.48 | -$9.12 | -$64.57 | -$0.00 | $1,991.89 → $169.41 | -$1,573.23 | -$162.48 | -$9.12 | -$77.64 | -$0.00 |
+| L | 50% | $1,989.16 → $169.11 | -$1,573.23 | -$162.48 | -$9.12 | -$75.21 | -$0.00 | $2,008.39 → $175.27 | -$1,573.23 | -$162.48 | -$9.12 | -$88.28 | -$0.00 |
+| L | 100% | $2,009.79 → $176.44 | -$1,573.23 | -$162.48 | -$9.12 | -$88.51 | -$0.00 | $2,029.01 → $182.60 | -$1,573.23 | -$162.48 | -$9.12 | -$101.57 | -$0.00 |
+
+| Size | Miss | R2 gross legacy → new | Δ compression | Δ session reuse | Δ search treatment | Δ request count | Δ storage | R2 after-free legacy → new | Δ compression | Δ session reuse | Δ search treatment | Δ request count | Δ storage |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| S | 10% | $0.09 → $0.07 | $0.00 | $0.00 | $0.00 | -$0.02 | $0.00 | $0.00 → $0.00 | $0.00 | $0.00 | $0.00 | $0.00 | $0.00 |
+| S | 50% | $0.23 → $0.12 | $0.00 | $0.00 | $0.00 | -$0.11 | $0.00 | $0.00 → $0.00 | $0.00 | $0.00 | $0.00 | $0.00 | $0.00 |
+| S | 100% | $0.42 → $0.19 | $0.00 | $0.00 | $0.00 | -$0.23 | $0.00 | $0.00 → $0.00 | $0.00 | $0.00 | $0.00 | $0.00 | $0.00 |
+| M | 10% | $1.86 → $1.46 | $0.00 | $0.00 | $0.00 | -$0.40 | $0.00 | $0.00 → $0.00 | $0.00 | $0.00 | $0.00 | $0.00 | $0.00 |
+| M | 50% | $4.83 → $2.52 | $0.00 | $0.00 | $0.00 | -$2.31 | $0.00 | $0.35 → $0.00 | $0.00 | $0.00 | $0.00 | -$0.35 | $0.00 |
+| M | 100% | $8.54 → $3.84 | $0.00 | $0.00 | $0.00 | -$4.70 | $0.00 | $4.07 → $0.00 | $0.00 | $0.00 | $0.00 | -$4.07 | $0.00 |
+| L | 10% | $5.93 → $3.95 | $0.00 | $0.00 | $0.00 | -$1.98 | $0.00 | $1.22 → $0.00 | $0.00 | $0.00 | $0.00 | -$1.22 | $0.00 |
+| L | 50% | $20.78 → $9.23 | $0.00 | $0.00 | $0.00 | -$11.55 | $0.00 | $16.07 → $4.52 | $0.00 | $0.00 | $0.00 | -$11.55 | $0.00 |
+| L | 100% | $39.34 → $15.82 | $0.00 | $0.00 | $0.00 | -$23.52 | $0.00 | $34.63 → $11.11 | $0.00 | $0.00 | $0.00 | -$23.52 | $0.00 |
+
+The sequence's exact step assumptions and every intermediate subtotal are in the decomposition.stages array of the linked JSON, including the viewer-request regional price distinction and the post-free-tier R2 result.
+
+## Provenance, assumptions, and unmeasured scope
+
+- Reader result: [hosting-cost-reader-session-results.json](hosting-cost-reader-session-results.json), measured 2026-10-24; model and calculated nine scenarios: [hosting-cost-model-results.json](hosting-cost-model-results.json).
+- Environment: macOS Darwin arm64, Apple M4 / 10 cores / 32 GiB RAM; Node v22.14.0; Go go1.26.10 darwin/arm64; CLI 0.5.2; Chromium 153.0.8010.12; Playwright 1.63.0; nginx:1.29-alpine; clean working tree at source commit b9847b9e0a6104ca2428486f8bd56460821cba95. Generator v2, seed 20261014; three unthrottled iterations, local nginx, stored gzip indexes/manifests. Prices are fixed to 2026-10-18 inputs.
+- The monthly S/M/L workloads retain the legacy 30-day schedule and view/search counts. The reader metrics and publisher projections are measured locally, but miss rates, page views, session grouping, query mix, and monthly publish counts remain scenario assumptions; no production traffic or billing data was used.
+- AWS viewer-response bandwidth uses local response bytes plus modeled 1,024-byte response headers and AWS price tiers. It does not claim that local nginx reproduces live CloudFront negotiation or compression. AWS transfer costs at L reflect the model's 1 TB allowance and the complete counted bytes.
+- CloudFront Functions execution cost is **unmeasured and excluded**. Preview lifecycle, registry sync, app-deploy provider calls, preview and registry storage, CloudFront WAF/logging, account-wide allowance consumption, taxes, and other account charges are also excluded. The totals are measured-unit subtotals, not an all-in budget.
+- No cloud account, provider API, release, tag, or paid load test was used for these measurements.
 
 ## Measured publishing units
 
@@ -61,89 +267,3 @@ The no-op is not a zero-write operation: it stores small control/lock records, b
 | `app deploy` | The local `npm run build` output had 100 files / 4,228,171 B, including 60 hashed assets / 3,603,721 B. Hashed assets with a new URL accumulate; fixed-name shell files are updated in place. Provider calls, purge paths, asset-to-asset overlap with the prior deployment, and old retained-build bytes were not measured, so no app-deploy call charge or historical asset total is included. |
 
 The published projection and build outputs do not include preview-head bytes, registry data, or the application plane. Their omitted storage and operation costs are one reason T27 remains in progress.
-
-## Reader request and byte units
-
-Browser “bytes” are transferred response bytes reported by Chromium; local nginx did not compress responses. The single document-view unit below is a cold `overview-0.md` page containing a Mermaid flowchart, so it includes the site index, application shell, page, and lazy Mermaid code. It is a repeatable document-view example and a conservative traffic proxy, not an average of all documents.
-
-| Reader action | Requests | Transferred bytes | Boundary |
-|---|---:|---:|---|
-| Cold site-home open, 50k site | 7 | 46,738,136 B | T25's 50k search workspace opened before any query; includes the 45.9 MB site index. Older local site-open rows report 1.60 / 5.20 / 46.32 MB at 1k / 5k / 50k but did not retain a per-row request count. |
-| Cold document view, 1k / 5k / 10k / 50k | 35 each | 2,421,390 / 6,027,535 / 10,562,157 / 47,537,297 B | First cold Mermaid render; current cost model uses 1k, 5k, and 50k rows. |
-| Palette search | 0 additional requests in the product model | 0 additional bytes | Inferred from the palette searching the already-loaded in-memory index; no T27 browser trace measured it. |
-| Full-text broad query `latency` at 50k | 9 total; 6 search-file requests | 1,936,164 total; 1,927,850 search-file bytes | First query in an open search workspace; manifest 1, root 1, leaf 1, sections 1, text 2. |
-| Full-text short query `quokkaflux` at 50k | 6 total; 5 search-file requests | 40,949 total; 40,716 search-file bytes | Query ran after the broad query in the same workspace, so manifest/root/sections were already in memory. This is incremental, not a separately cold short-query trace. |
-
-The extended T25 first load of `/` is separate from a site-home or document view: it used 6 requests and about 840.4 kB cold, including 769.2 kB of entry JS and only 1.3 kB of index metadata at 5k/50k.
-
-### Cache classification
-
-The [specification's cache contract](../specification.md#16-cache-model) and CLI object metadata classify URLs as follows:
-
-| URL class | Cache policy | Reader cost treatment |
-|---|---|---|
-| `/index.html`, fixed app files | `no-cache, max-age=0, must-revalidate` | Always-origin revalidation. |
-| Hashed `/assets/*` | `public, max-age=31536000, immutable` | CDN-cacheable and browser-cacheable. |
-| `/_indexes/sites.json`, site `meta.json` and `index.json` | `public, max-age=0, s-maxage=60, must-revalidate` | CDN-cacheable up to 60 seconds; browser revalidates. |
-| `/_artifacts/<site>/*` | `public, max-age=0, s-maxage=300, must-revalidate` | CDN-cacheable up to 300 seconds; browser revalidates. |
-| Search manifest | Same 60-second index policy | CDN-cacheable for up to 60 seconds. |
-| Content-addressed gzip search blobs | `public, max-age=31536000, immutable` | CDN-cacheable and browser-cacheable. |
-| Preview catalog / revision objects | Catalog 60 seconds; revision objects 300 seconds | CDN-cacheable; not included in the reader scenario. |
-
-The T25 response summary did not preserve each of the 35 document-view URLs with its response cache header. For the miss-rate arithmetic below, I assume one always-origin shell revalidation and 34 cacheable requests per document view. Full-text query requests are treated as cacheable origin reads. The request rates are therefore scenario inputs, not measured production hit ratios.
-
-## Fixed launch scenarios and assumptions
-
-All months have 30 days. Scheduled publishes are modeled as one-document changes, plus one initial publish per site; no-op republishes are shown as a unit but are not part of the scheduled publish count. Site sizes use the nearest measured fixture: S's 200 pages use the 1k fixture; M's 2k pages and L's 30 2k-page sites use the 5k fixture; L's additional site uses the exact 50k fixture. These measured proxies overstate the smaller requested page counts.
-
-The number of page views is divided evenly across sites. In L, `30/31` of views use the 5k proxy and `1/31` use the 50k view. This avoids inventing a traffic hotspot. Half of searches are full-text and half palette; full-text searches split evenly between the measured broad and short query. The same 50k query sizes are applied to all scenarios because other sizes were not measured. The short-query byte count reuses assets fetched by the broad query, as described above.
-
-Each page view is modeled as a cold Mermaid document visit that fetches the uncompressed site index. In the reader, the index is fetched once per cold visit/tab session and later revalidated with `304` responses (`max-age=0, must-revalidate`). CloudFront compresses objects up to 10 MB, while the local benchmark did not; real transfer is likely several times lower, so the modeled transfer figure is a likely-high upper bound. This model includes app/diagram bytes and is conservative versus a warm browser or plain Markdown view. CDN request charges still apply on cache hits. For origin-request charges, each page view has one always-origin shell request plus 34 cacheable requests multiplied by the stated miss rate; full-text query requests are multiplied by the miss rate. This is an explicit modeling assumption because the browser summaries do not retain the per-response cache-key/header partition.
-
-The monthly preview counts from the fixed scenario table are not monetized because preview-head bytes, request counts and invalidation paths were not measured. Registry-sync and app-deploy frequency are not specified by the scenario and are also omitted; the 3.60 MB new-hashed-assets figure is a per-deploy storage observation, not an assumed monthly schedule. Retention uses the 1-day example policy noted above; no exact lifecycle deletion time is assumed. R2 free allowances are shown as if dedicated to this workload; actual allowances are shared with all account usage.
-
-The fixed workload inputs are:
-
-| Scenario | Sites and modeled pages | Publishes | Previews/week | Page views/day | Searches/day |
-|---|---|---:|---:|---:|---:|
-| S | 5 sites × 200 requested (1k proxy) | 2/site/day | 20 | 1,000 | 100 |
-| M | 30 sites × 2,000 requested (5k proxy) | 5/site/day | 200 | 20,000 | 2,000 |
-| L | M plus one exact 50k site | 5/site/day | 300 | 100,000 | 10,000 |
-
-## Pricing inputs and monthly subtotal
-
-Prices are USD list prices read 2026-10-18. R2 Standard uses **$0.015/GB-month**, **$4.50/million Class A** (`PUT`, `LIST`), **$0.36/million Class B** (`GET`, `HEAD`), free egress and free deletes. The included monthly R2 allowance is 10 GB-month, 1 million Class A operations, and 10 million Class B operations. Source: [Cloudflare R2 pricing](https://developers.cloudflare.com/r2/pricing/).
-
-AWS uses S3 Standard in `us-east-1`, matching [`terraform/deployments/aws/terraform.tfvars.example`](../../terraform/deployments/aws/terraform.tfvars.example): **$0.023/GiB-month**, $0.005/1,000 Class A requests, $0.0004/1,000 Class B requests; deletes are free. Sources: [Amazon S3 pricing](https://aws.amazon.com/s3/pricing/) and the [current us-east-1 price list](https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonS3/current/us-east-1/index.json).
-
-AWS CloudFront uses `PriceClass_100`, as configured by the [AWS module](../../terraform/modules/aws/variables.tf) and verification example. The US/Canada headline prices are first 1 TB/month free, then $0.085/GB for the next 9 TB, $0.080/GB for the next 40 TB, then $0.060/GB for the next 100 TB. US/Canada HTTPS requests are $0.010 per 10,000 after the first 10 million monthly requests. The highest `PriceClass_100` HTTPS request rate is $0.012/10,000 for Europe/Israel/Türkiye; its data-transfer tier rates match US/Canada, so the transfer upper bound is the same. CloudFront invalidations include 1,000 paths/month, then $0.005 per path. Sources: [CloudFront pay-as-you-go pricing](https://aws.amazon.com/cloudfront/pricing/pay-as-you-go/) and [CloudFront invalidation pricing](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/PayingForInvalidation.html). The 1 TB / 10 million allowances are treated as available to this model; existing account use can consume shared allowances.
-
-The monthly storage inputs include measured public projections plus the compressed publish-state object: S 12.32 MB, M 376.34 MB, L 487.00 MB. They omit registry, preview, and app objects. Monthly request counts add one initial publish per site and scheduled one-document changes. AWS invalidation paths use the adapter-planned counts (178 / 353 / 1,481 for initial sites at 1k / 5k / 50k, then 3 per changed publish). R2 has no storage-egress charge; its cache purge API calls are counted but no separate fee is assigned under R2 storage pricing.
-
-Each cell below shows the modeled monthly **gross R2 list-price subtotal** and, in parentheses, the theoretical subtotal after a dedicated R2 free allowance; then **AWS S3 + CloudFront at the US/Canada headline** and its **highest PriceClass_100 regional request-price bound**. R2 gross uses decimal GB-month; S3 storage uses GiB-month. AWS CloudFront transfer uses decimal GB. Displayed amounts are rounded to cents; calculations retain fractional request/byte quantities until billing-unit pricing.
-
-| Scenario | CDN miss rate | R2 gross (after dedicated free allowance) | AWS US/Canada headline | AWS highest PC100 region bound |
-|---|---:|---:|---:|---:|
-| S | 10% | $0.09 ($0.00) | $4.05 | $4.05 |
-| S | 50% | $0.23 ($0.00) | $4.21 | $4.21 |
-| S | 100% | $0.42 ($0.00) | $4.42 | $4.42 |
-| M | 10% | $1.86 ($0.00) | $353.67 | $355.91 |
-| M | 50% | $4.83 ($0.35) | $356.97 | $359.21 |
-| M | 100% | $8.54 ($4.07) | $361.09 | $363.34 |
-| L | 10% | $5.93 ($1.22) | $1,972.66 | $1,991.89 |
-| L | 50% | $20.78 ($16.07) | $1,989.16 | $2,008.39 |
-| L | 100% | $39.34 ($34.63) | $2,009.79 | $2,029.01 |
-
-R2's egress is free and its gross subtotal is mainly Class B origin reads at higher miss rates. The AWS totals add publisher and reader S3 requests/storage, CloudFront viewer requests and transfer, and modeled CloudFront invalidation paths. The US/Canada / highest-region difference is only the HTTPS request rate; the PC100 transfer rate is identical across the modeled tiers. Preview, registry, and app-deploy activity is excluded, so these figures are an incomplete measured-unit subtotal, not an account bill or a complete launch budget.
-
-## Assumptions and limits
-
-- The three generated fixture sizes proxy the fixed scenarios as described above; no interpolation is made between measured sizes.
-- The 30-day month, one initial publish per site, one changed document per scheduled publish, uniform site traffic, even short/broad full-text mix, cold Mermaid document view, and one revalidating shell request per view are modeling assumptions, not observed launch behavior.
-- The browser unit comes from the T25 local nginx run at its own commit. It is reused evidence, not a T27 browser rerun. Palette search is inferred as zero additional network requests from in-memory behavior; it has no browser trace here.
-- The short full-text query ran after the broad query in one workspace, so its measured bytes are incremental and may understate a fresh workspace's first search.
-- The monthly miss rate is not measured in production. CloudFront viewer requests/transfer are charged for every viewer response regardless of cache hit; only origin reads vary with the modeled miss rate.
-- The cost report applies the free allowances as sensitivities. They are shared account allowances and may already be used. R2 API purges have no separate modeled fee; provider plan and account charges are outside this price schedule.
-- CloudFront compression is enabled in the AWS module, while local nginx did not compress. The AWS transfer subtotal intentionally uses the larger measured local payload; no gzip/Brotli document-view capture was available to replace this bound.
-- Provider method counts omit adapter pagination, retries, and wire behavior. The in-memory publish fixture and T25 reader fixture were not served from the repository's actual local object-store/Compose profile during this T27 run.
-- Preview, registry-sync, and app-deploy request costs and monthly schedules are unmeasured or unspecified and are excluded; `preview_retention_days = 1` is asynchronous lifecycle policy, not a guaranteed one-day deletion.
