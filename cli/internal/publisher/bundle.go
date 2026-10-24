@@ -27,8 +27,6 @@ const (
 	maxBundleBytes   = 512 << 20
 	maxBundleEntries = 20000
 	maxBundleFile    = 128 << 20
-	appShellCache    = "no-cache, max-age=0, must-revalidate"
-	immutableCache   = "public, max-age=31536000, immutable"
 )
 
 var versionLabel = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$`)

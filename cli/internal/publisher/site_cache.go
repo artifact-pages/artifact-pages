@@ -261,7 +261,7 @@ func writeSiteCacheRetryRecord(ctx context.Context, backend ConditionalObjectBac
 	if etag != "" {
 		condition = ObjectCondition{IfMatchETag: etag}
 	}
-	newETag, err := backend.PutObjectConditional(ctx, siteCacheRetryKey(site), Object{Bytes: data, ContentType: "application/json; charset=utf-8", Cache: "no-store"}, condition)
+	newETag, err := backend.PutObjectConditional(ctx, siteCacheRetryKey(site), Object{Bytes: data, ContentType: "application/json; charset=utf-8", Cache: cacheControl(cacheClassPrivateControl)}, condition)
 	if err != nil {
 		return "", fmt.Errorf("save site cache retry record: %w", err)
 	}

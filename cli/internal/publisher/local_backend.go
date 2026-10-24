@@ -111,20 +111,24 @@ func (backend *DirectoryBackend) HeadObject(ctx context.Context, key string) (Ob
 	}
 	sum := sha256.Sum256(object.Bytes)
 	digest := hex.EncodeToString(sum[:])
-	cacheControl, objectType := "", contentType(key)
+	cacheHeader, objectType := "", contentType(key)
 	if strings.HasPrefix(key, "_indexes/") && strings.HasSuffix(key, ".gz") {
 		// Content-addressed full-text search blobs; the publisher writes them as opaque immutable bytes.
-		cacheControl, objectType = immutableCache, "application/octet-stream"
+		cacheHeader, objectType = cacheControl(cacheClassHashedAsset), "application/octet-stream"
 	} else if strings.HasPrefix(key, "_indexes/") {
-		cacheControl = indexCacheControl
+		relative := strings.TrimPrefix(key, "_indexes/")
+		if separator := strings.IndexByte(relative, '/'); separator >= 0 {
+			relative = relative[separator+1:]
+		}
+		cacheHeader = cacheControl(siteIndexObjectClass(relative))
 	} else if strings.HasPrefix(key, "_artifacts/") {
-		cacheControl = artifactCacheControl
+		cacheHeader = cacheControl(cacheClassArtifact)
 	} else {
-		cacheControl = appFileCacheControl(key)
+		cacheHeader = appFileCacheControl(key)
 	}
 	info := ObjectInfo{
 		ETag: etag, Size: int64(len(object.Bytes)), ContentType: objectType, ContentDisposition: "inline",
-		CacheControl: cacheControl,
+		CacheControl: cacheHeader,
 		Metadata:     map[string]string{"artifact-pages-sha256": digest},
 	}
 	metadata, metadataErr := backend.readStoredObjectMetadata(key, object.Bytes)

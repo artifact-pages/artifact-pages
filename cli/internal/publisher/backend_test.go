@@ -149,11 +149,11 @@ func TestDeployAppUsesProviderNeutralBackend(t *testing.T) {
 	if len(appPuts) != 3 || appPuts[len(appPuts)-1] != "index.html" {
 		t.Fatalf("upload order = %v, want index.html last", appPuts)
 	}
-	if got := backend.objects["assets/app-AbC123xY.js"].Cache; got != immutableCache {
-		t.Errorf("hashed asset Cache-Control = %q, want %q", got, immutableCache)
+	if got := backend.objects["assets/app-AbC123xY.js"].Cache; got != cacheControl(cacheClassHashedAsset) {
+		t.Errorf("hashed asset Cache-Control = %q, want %q", got, cacheControl(cacheClassHashedAsset))
 	}
-	if got := backend.objects["assets/app.js"].Cache; got != appShellCache {
-		t.Errorf("fixed-name asset Cache-Control = %q, want %q", got, appShellCache)
+	if got := backend.objects["assets/app.js"].Cache; got != cacheControl(cacheClassAppShell) {
+		t.Errorf("fixed-name asset Cache-Control = %q, want %q", got, cacheControl(cacheClassAppShell))
 	}
 	if len(backend.invalidations) != 1 || strings.Join(backend.invalidations[0], ",") != "/index.html" {
 		t.Errorf("revalidation paths = %v, want [/index.html]", backend.invalidations)

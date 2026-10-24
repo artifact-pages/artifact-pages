@@ -209,7 +209,7 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 		if registryChanged {
 			if _, err := conditional.PutObjectConditional(ctx, "_indexes/sites.json", Object{
 				Bytes: desiredBytes, ContentType: "application/json; charset=utf-8", ContentDisposition: "inline",
-				Cache: indexCacheControl, Metadata: map[string]string{"artifact-pages-sha256": sha256Hex(desiredBytes)},
+				Cache: cacheControl(cacheClassSiteRoot), Metadata: map[string]string{"artifact-pages-sha256": sha256Hex(desiredBytes)},
 			}, condition); err != nil {
 				return result, fmt.Errorf("write registry projection: %w", err)
 			}
@@ -549,7 +549,7 @@ func writeRegistryCleanup(ctx context.Context, backend ConditionalObjectBackend,
 		condition = ObjectCondition{IfMatchETag: etag}
 	}
 	newETag, err := backend.PutObjectConditional(ctx, registryCleanupKey, Object{
-		Bytes: contents, ContentType: "application/json; charset=utf-8", Cache: "no-store",
+		Bytes: contents, ContentType: "application/json; charset=utf-8", Cache: cacheControl(cacheClassPrivateControl),
 	}, condition)
 	if err != nil {
 		return "", fmt.Errorf("write registry cleanup record: %w", err)

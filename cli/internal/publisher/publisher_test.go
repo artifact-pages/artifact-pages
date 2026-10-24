@@ -184,21 +184,21 @@ func TestDeployAppVerifiesAndPublishesBundle(t *testing.T) {
 	if got := string(s3Client.objects["index.html"].body); !strings.Contains(got, "app-AbC123xY.js") {
 		t.Fatalf("uploaded application shell = %q", got)
 	}
-	if got := s3Client.objects["index.html"].cache; got != appShellCache {
-		t.Errorf("index.html Cache-Control = %q, want %q", got, appShellCache)
+	if got := s3Client.objects["index.html"].cache; got != cacheControl(cacheClassAppShell) {
+		t.Errorf("index.html Cache-Control = %q, want %q", got, cacheControl(cacheClassAppShell))
 	}
-	if got := s3Client.objects["assets/app-AbC123xY.js"].cache; got != immutableCache {
-		t.Errorf("hashed asset Cache-Control = %q, want %q", got, immutableCache)
+	if got := s3Client.objects["assets/app-AbC123xY.js"].cache; got != cacheControl(cacheClassHashedAsset) {
+		t.Errorf("hashed asset Cache-Control = %q, want %q", got, cacheControl(cacheClassHashedAsset))
 	}
-	if got := s3Client.objects["assets/app.js"].cache; got != appShellCache {
-		t.Errorf("fixed-name asset Cache-Control = %q, want %q", got, appShellCache)
+	if got := s3Client.objects["assets/app.js"].cache; got != cacheControl(cacheClassAppShell) {
+		t.Errorf("fixed-name asset Cache-Control = %q, want %q", got, cacheControl(cacheClassAppShell))
 	}
 	for filePath, want := range map[string]string{
 		"LICENSE":                 "Project license text\n",
 		"THIRD_PARTY_NOTICES.txt": "Third-party notice text\n",
 	} {
 		object := s3Client.objects[filePath]
-		if string(object.body) != want || object.contentType != "text/plain; charset=utf-8" || object.cache != appShellCache {
+		if string(object.body) != want || object.contentType != "text/plain; charset=utf-8" || object.cache != cacheControl(cacheClassAppShell) {
 			t.Errorf("notice object %q = body %q, type %q, cache %q; want its manifest bytes, text/plain, and revalidation", filePath, object.body, object.contentType, object.cache)
 		}
 	}
@@ -394,7 +394,7 @@ func TestDeployAppRepairsStaleFixedAssetCachePolicy(t *testing.T) {
 	}
 
 	fixedAsset := s3Client.objects["assets/app.js"]
-	fixedAsset.cache = immutableCache
+	fixedAsset.cache = cacheControl(cacheClassHashedAsset)
 	s3Client.objects["assets/app.js"] = fixedAsset
 	s3Client.puts = nil
 	cloudFront.invalidations = nil
@@ -407,8 +407,8 @@ func TestDeployAppRepairsStaleFixedAssetCachePolicy(t *testing.T) {
 	if result.Outcome != "deployed" || result.FilesPublished != 1 || !reflect.DeepEqual(appPuts, []string{"assets/app.js"}) {
 		t.Fatalf("DeployApp() = %+v, puts=%v; want cache-policy-only repair for the fixed asset", result, appPuts)
 	}
-	if got := s3Client.objects["assets/app.js"].cache; got != appShellCache {
-		t.Errorf("repaired fixed asset Cache-Control = %q, want %q", got, appShellCache)
+	if got := s3Client.objects["assets/app.js"].cache; got != cacheControl(cacheClassAppShell) {
+		t.Errorf("repaired fixed asset Cache-Control = %q, want %q", got, cacheControl(cacheClassAppShell))
 	}
 	if len(cloudFront.invalidations) != 1 || strings.Join(cloudFront.invalidations[0], ",") != "/index.html" {
 		t.Errorf("Cache-Control repair invalidations = %#v, want only /index.html", cloudFront.invalidations)
@@ -420,14 +420,14 @@ func TestAppFileCacheControl(t *testing.T) {
 		path string
 		want string
 	}{
-		{path: "index.html", want: appShellCache},
-		{path: "preview-bridge.js", want: appShellCache},
-		{path: "assets/app.js", want: appShellCache},
-		{path: "assets/vendor.min.js", want: appShellCache},
-		{path: "assets/chunks/app-AbC123xY.js", want: immutableCache},
-		{path: "assets/app-AbC123xY.min.js", want: immutableCache},
-		{path: "assets/theme-AbC123xY.css", want: immutableCache},
-		{path: "other/app-AbC123xY.js", want: appShellCache},
+		{path: "index.html", want: cacheControl(cacheClassAppShell)},
+		{path: "preview-bridge.js", want: cacheControl(cacheClassAppShell)},
+		{path: "assets/app.js", want: cacheControl(cacheClassAppShell)},
+		{path: "assets/vendor.min.js", want: cacheControl(cacheClassAppShell)},
+		{path: "assets/chunks/app-AbC123xY.js", want: cacheControl(cacheClassHashedAsset)},
+		{path: "assets/app-AbC123xY.min.js", want: cacheControl(cacheClassHashedAsset)},
+		{path: "assets/theme-AbC123xY.css", want: cacheControl(cacheClassHashedAsset)},
+		{path: "other/app-AbC123xY.js", want: cacheControl(cacheClassAppShell)},
 	} {
 		t.Run(testCase.path, func(t *testing.T) {
 			if got := appFileCacheControl(testCase.path); got != testCase.want {

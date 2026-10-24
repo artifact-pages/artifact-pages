@@ -525,7 +525,7 @@ func writePreviewCleanup(ctx context.Context, backend ConditionalObjectBackend, 
 		return "", fmt.Errorf("preview cleanup journal exceeds %d bytes", maxPreviewCleanupBytes)
 	}
 	etag, err := backend.PutObjectConditional(ctx, previewCleanupKey(record.Site), Object{
-		Bytes: contents, ContentType: "application/json; charset=utf-8", Cache: "no-store",
+		Bytes: contents, ContentType: "application/json; charset=utf-8", Cache: cacheControl(cacheClassPrivateControl),
 	}, ObjectCondition{IfNoneMatch: true})
 	if err != nil {
 		return "", fmt.Errorf("write preview cleanup journal: %w", err)

@@ -382,7 +382,7 @@ func TestPublishSiteWholeControlRequestsCompareR2GetOnlyAndAWSHeadThenGet(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	registryObject := Object{Bytes: registryBytes, ContentType: "application/json; charset=utf-8", Cache: indexCacheControl}
+	registryObject := Object{Bytes: registryBytes, ContentType: "application/json; charset=utf-8", Cache: cacheControl(cacheClassSiteRoot)}
 	r2Store.seed("_indexes/sites.json", registryObject)
 	awsStore.seed("_indexes/sites.json", registryObject)
 
@@ -562,7 +562,7 @@ func TestChangedProjectionReadBudgetGeneratedAtClockCases(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			store.seed("_indexes/sites.json", Object{Bytes: registryBytes, ContentType: "application/json; charset=utf-8", Cache: indexCacheControl})
+			store.seed("_indexes/sites.json", Object{Bytes: registryBytes, ContentType: "application/json; charset=utf-8", Cache: cacheControl(cacheClassSiteRoot)})
 			cdn := &sitePublishCostCloudFront{}
 			backend, err := newAWSBackend(awsClients{s3: store, cloudFront: cdn}, AWSOptions{Bucket: "cost-test", DistributionID: "E123COST"})
 			if err != nil {

@@ -21,7 +21,6 @@ const (
 	sitePublishStateSchemaVersion = 1
 	maxSitePublishStateGzipBytes  = 16 << 20
 	maxSitePublishStateJSONBytes  = 64 << 20
-	sitePublishStateCacheControl  = "no-store"
 )
 
 var (
@@ -118,7 +117,7 @@ func validateSitePublishStateHeadWithLegacy(site string, info ObjectInfo, contin
 	if info.Size <= 0 || info.Size > maxSitePublishStateGzipBytes {
 		return fmt.Errorf("site publish state HEAD size must be between 1 and %d bytes", maxSitePublishStateGzipBytes)
 	}
-	if info.ContentType != "application/octet-stream" || info.ContentEncoding != "" || info.CacheControl != sitePublishStateCacheControl ||
+	if info.ContentType != "application/octet-stream" || info.ContentEncoding != "" || info.CacheControl != cacheControl(cacheClassPrivateControl) ||
 		(info.ContentDisposition != "" && info.ContentDisposition != "inline") {
 		return errors.New("site publish state HEAD has unexpected HTTP metadata")
 	}
@@ -381,7 +380,7 @@ func buildSitePublishStateObject(site string, state sitePublishState) (Object, e
 		ContentType:        "application/octet-stream",
 		ContentEncoding:    "",
 		ContentDisposition: "",
-		Cache:              sitePublishStateCacheControl,
+		Cache:              cacheControl(cacheClassPrivateControl),
 		Metadata: map[string]string{
 			"artifact-pages-publish-state-schema": fmt.Sprint(sitePublishStateSchemaVersion),
 			"artifact-pages-publish-input-root":   state.Committed.InputRoot,
@@ -511,14 +510,16 @@ func validateSitePublishOwnedKey(site, key string) error {
 func expectedSitePublishObjectPolicy(site, key string) (contentType, disposition, encoding, cache string, err error) {
 	if strings.HasPrefix(key, "_artifacts/"+site+"/") {
 		relative := strings.TrimPrefix(key, "_artifacts/"+site+"/")
-		return contentTypeForSiteArtifact(relative), "inline", "", artifactCacheControl, nil
+		return contentTypeForSiteArtifact(relative), "inline", "", cacheControl(cacheClassArtifact), nil
 	}
 	indexPrefix := "_indexes/" + site + "/"
 	switch {
-	case key == indexPrefix+"index.json", key == indexPrefix+"meta.json", key == indexPrefix+"search/manifest.json":
-		return "application/json; charset=utf-8", "inline", "", indexCacheControl, nil
+	case key == indexPrefix+"index.json", key == indexPrefix+"meta.json":
+		return "application/json; charset=utf-8", "inline", "", cacheControl(cacheClassSiteRoot), nil
+	case key == indexPrefix+"search/manifest.json":
+		return "application/json; charset=utf-8", "inline", "", cacheControl(cacheClassSearchManifest), nil
 	case strings.HasPrefix(key, indexPrefix+"search/") && sitePublishStateSearchBlob.MatchString(strings.TrimPrefix(key, indexPrefix+"search/")):
-		return "application/octet-stream", "inline", "", immutableCache, nil
+		return "application/octet-stream", "inline", "", cacheControl(cacheClassHashedAsset), nil
 	default:
 		return "", "", "", "", fmt.Errorf("key %q has no known site publish HTTP policy", key)
 	}
