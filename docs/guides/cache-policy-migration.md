@@ -9,7 +9,7 @@ The migration moves five things, and each is checked separately: the CLI version
 ## Before you start
 
 - Identify every writer: the admin repository (registry sync, app deploy), every satellite repository (site sync, preview publish and remove), and any local operator who publishes by hand. All of them must move together.
-- Use a compatible CLI release: the first release that includes the no-invalidation change. Its release notes name it. A compatible CLI reads and migrates the old journals; an older CLI cannot read the journals or the per-site publish state a compatible CLI writes (see [Rollback](#rollback)).
+- Use a compatible CLI release: CLI 0.6.0 or later, the first release without invalidation, with Actions v0.4.0 or later, which accept CLI 0.6. A compatible CLI reads and migrates the old journals; an older CLI cannot read the journals or the per-site publish state a compatible CLI writes (see [Rollback](#rollback)).
 - Use a compatible delivery module: the reference AWS and Cloudflare modules from the same product release. On AWS, the new module removes `cloudfront:CreateInvalidation` from the publisher roles, so an old CLI publishing against it fails.
 - Know the largest shared-cache freshness your old setup allowed for mutable objects. For the reference modules it is 300 seconds (artifacts and preview revisions); a custom CDN may have its own value.
 - Do not purge as part of the migration. Waiting out the old freshness is the plan.
@@ -49,7 +49,7 @@ Restarting an old writer is not a rollback on its own. An old CLI cannot read a 
 
 ## Operator repository changes
 
-The production operator repositories follow this sequence like any adopter. These are the changes to review there; they are not applied by this guide. `<compatible>` is the release from [Before you start](#before-you-start).
+The production operator repositories follow this sequence like any adopter. These are the changes to review there; they are not applied by this guide. `<compatible>` is 0.6.1 or later: the admin repository regenerates its managed workflows with it, and only 0.6.1 and later pin Actions that accept CLI 0.6 (see [Before you start](#before-you-start)).
 
 `artifact-pages/admin` (step 2):
 
@@ -61,7 +61,7 @@ The production operator repositories follow this sequence like any adopter. Thes
   +  version: <compatible>
   ```
 
-- Regenerate the managed files (`.github/workflows/registry.yml`, `publish-site.yml`, `preview-site.yml` and `.github/actions/site-sync/action.yml`) with `registry setup` from the compatible CLI, and set `CLI_VERSION` in `.github/workflows/registry-setup.yml` to `<compatible>` so its `registry setup --check` passes. Regeneration updates the publish, preview and registry Action pins (`@<sha> # v<version>`). Do not edit these files by hand.
+- Regenerate the managed files (`.github/workflows/registry.yml`, `publish-site.yml`, `preview-site.yml` and `.github/actions/site-sync/action.yml`) with `registry setup` from CLI 0.6.1 or later, whose generated pins point at Actions v0.4.0 (CLI 0.6.0 itself still pins the older Actions), and set `CLI_VERSION` in `.github/workflows/registry-setup.yml` to `<compatible>` so its `registry setup --check` passes. Regeneration updates the publish, preview and registry Action pins (`@<sha> # v<version>`). Do not edit these files by hand.
 - Bump the `artifact-pages/app-deploy-action` pin in `.github/workflows/app-deploy.yml` by hand.
 
 `artifact-pages/admin` (step 8, after step 7 passes; production uses an explicit R2 key pair):
