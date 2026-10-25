@@ -6,12 +6,12 @@ These are independently reviewable slices for the accepted product contract. IMP
 
 | Ticket | Status | Assignee | Outcome |
 | --- | --- | --- | --- |
+| [IMP-90](IMP-90-preview-review-flow.md) | Done | Claude | UI/UX S8: affected-page disclosure and explicit published-page navigation. |
 | [IMP-89](IMP-89-search-facet-labels.md) | Done | Codex | UI/UX S7: sidebar-aligned folder names in search facets and live snippet recheck. |
 | [IMP-88](IMP-88-palette-modes.md) | Done | Codex | UI/UX S6: discoverable modes, honest scope and bilingual action search. |
 | [IMP-87](IMP-87-folder-introductions.md) | Done | Codex | UI/UX S5: read folder introductions directly in the normal reader. |
 | [IMP-86](IMP-86-reading-context.md) | Done | Codex | UI/UX S4: compact update summary and on-demand Details above Contents. |
 | [IMP-85](IMP-85-navigation-shell.md) | Done | Codex | UI/UX S3: permanent header Search, site menu, compact hierarchy and collapsible Pinned. |
-| [IMP-86](IMP-86-reading-context.md) | Compact reading context and on-demand Details | Done |
 | [IMP-84](IMP-84-locale-display.md) | Done | Codex | UI/UX S2: browser-localized dates/numbers and Japanese/English count nouns. |
 | [IMP-83](IMP-83-modal-contents-focus.md) | Done | Codex | UI/UX S1: temporary Contents keyboard focus, dismissal and destination hand-off; persistent column unchanged. Owner-authorized standalone exception. |
 

@@ -19,6 +19,7 @@ import {
 import { formatPreviewTime } from '../domain/preview-time'
 import { Icon } from './Icon'
 import { MarkdownArtifact } from './MarkdownArtifact'
+import { ReaderMoreMenu, type ReaderMoreMenuItem } from './ReaderMoreMenu'
 import { followInApp } from './spa-link'
 
 export type PreviewDocumentRoute = Extract<AppRoute, { kind: 'preview-document' }>
@@ -201,13 +202,21 @@ function documentState(manifest: PreviewManifest, artifactPath: string): Manifes
 // ---- context bar ----------------------------------------------------------
 
 /** The small tag that names the preview at every width; the identity is never inferred beyond the link and the catalog. */
-export function PreviewTag({ reader }: { reader: PreviewReader }) {
+export function PreviewTag({ reader, productionArtifacts = [], publishedIndexStatus = 'success', navigate = () => {} }: {
+  reader: PreviewReader
+  productionArtifacts?: readonly ArtifactIndexEntry[]
+  publishedIndexStatus?: 'loading' | 'success' | 'error'
+  navigate?: (href: string) => void
+}) {
   const label = previewTagLabel(reader.identity, reader.route.headSha)
-  return (
-    <span className="preview-tag" title={`Preview of revision ${reader.route.headSha}`} data-preview-tag="">
-      <span className="preview-tag-dot" aria-hidden="true" />{label}
-    </span>
-  )
+  const published = publishedIndexStatus === 'success' ? productionArtifacts.find((artifact) => artifact.path === reader.route.artifactPath && isDocument(artifact)) : undefined
+  const publishedHref = published ? artifactRouteHref(reader.route.siteId, published.path) : undefined
+  const items: ReaderMoreMenuItem[] = [
+    { id: 'list', label: 'Preview pages', icon: 'library', href: reader.listHref, onSelect: () => navigate(reader.listHref) },
+    { id: 'published', label: publishedHref ? 'Published page' : publishedIndexStatus === 'loading' ? 'Checking published page…' : publishedIndexStatus === 'error' ? 'Published page unavailable' : 'No published page', icon: 'file', disabled: !publishedHref, href: publishedHref, onSelect: () => { if (publishedHref) navigate(publishedHref) } },
+    { id: 'home', label: 'Site home', icon: 'home', href: reader.siteHref, separatorBefore: true, onSelect: () => navigate(reader.siteHref) },
+  ]
+  return <ReaderMoreMenu className="preview-tag-menu" triggerClassName="preview-tag" label={`Preview menu. ${label}`} title={`Preview of revision ${reader.route.headSha}`} dismissKey={`${reader.route.headSha}:${reader.route.artifactPath}:${reader.route.groupId ?? ''}`} triggerContent={<><span data-preview-tag=""><span className="preview-tag-dot" aria-hidden="true" />{label}</span><Icon name="chevron" size={12} /></>} items={items} />
 }
 
 export function PreviewBreadcrumbs({ reader, siteTitle, navigate }: {

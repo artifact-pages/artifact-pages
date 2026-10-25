@@ -3,6 +3,8 @@ import type { PreviewGroup } from '../domain/preview'
 import { listedGroups, loadPreviewList, peekPreviewList, resetPreviewList, type CheckedGroup, type PreviewListResult } from '../data/preview-list'
 import { previewRouteHref } from '../data/previews'
 import { formatPreviewTime } from '../domain/preview-time'
+import { formatCount } from '../domain/display-locale'
+import { splitPreviewDocuments, sharedChangedResources } from '../domain/preview-reader'
 import type { AppRoute } from '../routing'
 import { pageTitle, usePageTitle } from './usePageTitle'
 import { useRestoredScroll } from './useRestoredScroll'
@@ -154,7 +156,10 @@ export function PreviewListContent({ siteId, groupId, navigate, showHomeLink = f
       ) : null}
       {state.status === 'success' ? (
         <div className="preview-groups">
-          {state.groups.map(({ group, availability }) => (
+          {state.groups.map(({ group, availability }) => {
+            const { changed, affected } = splitPreviewDocuments(group.documents)
+            const sharedResources = sharedChangedResources(affected)
+            return (
             <section className="preview-group" key={group.id} aria-label={`Preview ${group.id}`}>
               <div className="preview-group-heading">
                 <div>
@@ -166,32 +171,35 @@ export function PreviewListContent({ siteId, groupId, navigate, showHomeLink = f
               </div>
               {availability === 'unknown' ? <p className="preview-availability" role="status">Availability could not be checked. Direct document links may still work.</p> : null}
               <PreviewDocumentList
-                documents={group.documents.filter(({ reason }) => reason !== 'dependency')}
+                documents={changed}
                 siteId={siteId}
                 group={group}
                 navigate={navigate}
               />
-              {group.documents.some(({ reason }) => reason === 'dependency') ? (
-                <div className="preview-dependency-section" role="group" aria-label="Affected by resource change">
-                  <h3 className="preview-dependency-heading">Affected by resource change</h3>
+              {affected.length > 0 ? (
+                <details className="preview-dependency-section">
+                  <summary className="preview-dependency-summary"><h3 className="preview-dependency-heading">Affected by resource change <span>({formatCount(affected.length, 'page')})</span></h3></summary>
                   <p className="preview-dependency-note">These pages did not change, but a stylesheet, script, image, or other resource they use did.</p>
+                  {sharedResources.length ? <p className="preview-shared-resources">Shared changed resources: {sharedResources.join(', ')}</p> : null}
                   <PreviewDocumentList
-                    documents={group.documents.filter(({ reason }) => reason === 'dependency')}
+                    documents={affected}
+                    sharedResources={sharedResources}
                     siteId={siteId}
                     group={group}
                     navigate={navigate}
                   />
-                </div>
+                </details>
               ) : null}
             </section>
-          ))}
+          )})}
         </div>
       ) : null}
     </>
   )
 }
 
-function PreviewDocumentList({ documents, siteId, group, navigate }: {
+function PreviewDocumentList({ documents, siteId, group, navigate, sharedResources = [] }: {
+  sharedResources?: readonly string[]
   documents: PreviewGroup['documents']
   siteId: string
   group: PreviewGroup
@@ -201,6 +209,7 @@ function PreviewDocumentList({ documents, siteId, group, navigate }: {
   return (
     <ul className="preview-document-list">
       {documents.map((document) => {
+        const uniqueResources = document.changedResources?.filter((resource) => !sharedResources.includes(resource)) ?? []
         const href = previewRouteHref(siteId, group.headSha, document.path, group.id)
         return (
           <li key={document.path}>
@@ -211,8 +220,8 @@ function PreviewDocumentList({ documents, siteId, group, navigate }: {
             }}>
               <span>{document.title}</span>
               <code>{document.path}</code>
-              {document.reason === 'dependency' && document.changedResources?.length ? (
-                <span className="preview-document-trigger">Uses changed {document.changedResources.join(', ')}</span>
+              {document.reason === 'dependency' && uniqueResources.length ? (
+                <span className="preview-document-trigger">Uses changed {uniqueResources.join(', ')}</span>
               ) : null}
             </a>
           </li>

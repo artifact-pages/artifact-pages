@@ -66,3 +66,10 @@ export function splitPreviewDocuments(documents: readonly PreviewDocument[]) {
     affected: documents.filter(({ reason }) => reason === 'dependency'),
   }
 }
+
+
+/** Resources used by every affected page; a single page has no repeated group context to deduplicate. */
+export function sharedChangedResources(documents: readonly PreviewDocument[]): string[] {
+  if (documents.length < 2) return []
+  return [...new Set(documents[0].changedResources ?? [])].filter((resource) => documents.every((document) => document.changedResources?.includes(resource)))
+}

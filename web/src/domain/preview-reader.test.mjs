@@ -10,6 +10,7 @@ import {
   previewTagLabel,
   verifiedIdentity,
   splitPreviewDocuments,
+  sharedChangedResources,
   verifiedPullRequest,
 } from './preview-reader.ts'
 
@@ -70,4 +71,14 @@ test('documents split into changed pages and resource dependents', () => {
   const { changed, affected } = splitPreviewDocuments(documents)
   assert.deepEqual(changed.map(({ path }) => path), ['a.md', 'c.md'])
   assert.deepEqual(affected.map(({ path }) => path), ['b.html'])
+})
+
+
+test('shared changed resources contain only resources used by every affected page', () => {
+  const doc = (changedResources) => ({ path: 'page.html', changedResources })
+  assert.deepEqual(sharedChangedResources([]), [])
+  assert.deepEqual(sharedChangedResources([doc(['a.css'])]), [])
+  assert.deepEqual(sharedChangedResources([doc(['a.css', 'x.js', 'a.css']), doc(['a.css', 'y.js'])]), ['a.css'])
+  assert.deepEqual(sharedChangedResources([doc(['a.css']), doc(undefined)]), [])
+  assert.deepEqual(sharedChangedResources([doc(['a.css']), doc(['b.css'])]), [])
 })
