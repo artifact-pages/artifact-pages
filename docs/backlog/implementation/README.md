@@ -6,6 +6,7 @@ These are independently reviewable slices for the accepted product contract. IMP
 
 | Ticket | Status | Assignee | Outcome |
 | --- | --- | --- | --- |
+| [IMP-89](IMP-89-search-facet-labels.md) | Done | Codex | UI/UX S7: sidebar-aligned folder names in search facets and live snippet recheck. |
 | [IMP-88](IMP-88-palette-modes.md) | Done | Codex | UI/UX S6: discoverable modes, honest scope and bilingual action search. |
 | [IMP-87](IMP-87-folder-introductions.md) | Done | Codex | UI/UX S5: read folder introductions directly in the normal reader. |
 | [IMP-86](IMP-86-reading-context.md) | Done | Codex | UI/UX S4: compact update summary and on-demand Details above Contents. |

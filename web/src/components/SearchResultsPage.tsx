@@ -4,7 +4,7 @@ import { Fragment, useEffect, useId, useMemo, useRef, useState, type KeyboardEve
 import { FullTextSearchError, type FullTextHit } from '../data/fulltext'
 import type { ArtifactIndexEntry } from '../domain/index'
 import type { SearchExcerpt } from '../domain/fulltext-snippets'
-import { folderFacets } from '../domain/search-facets'
+import { folderFacets, searchFolderLabels } from '../domain/search-facets'
 import { scopeHits } from '../domain/search-ranking'
 import { searchTerms } from '../domain/text-highlight'
 import type { DiscoveryErrorDescription, SearchAvailability } from '../domain/search-availability'
@@ -238,7 +238,9 @@ export function SearchResultsPage({
     listRef.current?.querySelectorAll<HTMLElement>('.search-page-result-link')[active]?.scrollIntoView({ block: 'nearest' })
   }, [active])
 
-  const scope = folder ? ` in ${folder}/` : ''
+  const folderLabels = useMemo(() => searchFolderLabels(artifacts), [artifacts])
+  const selectedFolderLabel = folder ? folderLabels.get(folder) ?? `${folder}/` : undefined
+  const scope = folder ? ` in ${selectedFolderLabel}` : ''
   const count = !available ? '' : !query
     ? 'Type to search page text.'
     : state.status === 'loading'
@@ -248,7 +250,7 @@ export function SearchResultsPage({
         : shown.status === 'success'
           ? folder && !complete
             // Only part of the list is loaded: say so instead of presenting a folder total.
-            ? `${pageCountLabel(hits.length)} in ${folder}/ so far, among ${formatNumber(shown.hits.length)} of ${pageCountLabel(shown.total)} that contain “${query}”`
+            ? `${pageCountLabel(hits.length)} in ${selectedFolderLabel} so far, among ${formatNumber(shown.hits.length)} of ${pageCountLabel(shown.total)} that contain “${query}”`
             : `${pageCountLabel(folder ? hits.length : shown.total)}${scope} ${(folder ? hits.length : shown.total) === 1 ? 'contains' : 'contain'} “${query}”`
           : ''
 
@@ -303,7 +305,8 @@ export function SearchResultsPage({
                   {facets.map((facet) => (
                     <FacetButton
                       key={facet.folder}
-                      label={`${facet.folder}/`}
+                      label={folderLabels.get(facet.folder) ?? `${facet.folder}/`}
+                      path={`${facet.folder}/`}
                       count={facet.count}
                       selected={facet.folder === folder}
                       stale={stale}
@@ -321,6 +324,7 @@ export function SearchResultsPage({
                   <NoMatches
                     query={query}
                     folder={folder}
+                    folderLabel={selectedFolderLabel}
                     multiWord={searchTerms(query).length > 1}
                     onSearchTitles={() => onSearchTitles(query)}
                     onClearFolder={() => onFolderChange(undefined)}
@@ -328,7 +332,7 @@ export function SearchResultsPage({
                 ) : shown.status === 'success' ? (
                   <>
                     {hits.length === 0 ? (
-                      <p className="search-page-partial">No pages in {folder}/ among the results loaded so far.</p>
+                      <p className="search-page-partial">No pages in {selectedFolderLabel} among the results loaded so far.</p>
                     ) : null}
                     <ul ref={listRef} id={listId} className={`search-page-results${stale ? ' is-stale' : ''}`} aria-label="Results">
                       {hits.map((hit, position) => {
@@ -417,10 +421,10 @@ export function SearchResultsPage({
   )
 }
 
-function FacetButton({ label, count, selected, stale, onSelect }: { label: string; count: number; selected: boolean; stale: boolean; onSelect: () => void }) {
+function FacetButton({ label, path, count, selected, stale, onSelect }: { label: string; path?: string; count: number; selected: boolean; stale: boolean; onSelect: () => void }) {
   return (
     <button type="button" className="search-page-facet" aria-pressed={selected} data-empty={count === 0 || undefined} onClick={onSelect}>
-      <span>{label}</span>
+      <span className="search-page-facet-name"><span>{label}</span>{path ? <small>{path}</small> : null}</span>
       {stale ? <span className="search-page-skeleton-bar" style={{ width: 14, height: 10 }} /> : <span className="search-page-facet-count">{formatNumber(count)}</span>}
     </button>
   )
@@ -442,12 +446,14 @@ function Skeleton() {
 function NoMatches({
   query,
   folder,
+  folderLabel,
   multiWord,
   onSearchTitles,
   onClearFolder,
 }: {
   query: string
   folder?: string
+  folderLabel?: string
   multiWord: boolean
   onSearchTitles: () => void
   onClearFolder: () => void
@@ -455,7 +461,7 @@ function NoMatches({
   return (
     <div className="search-page-empty">
       <Icon name="search" size={22} />
-      <h2>{folder ? `No pages in ${folder}/ contain “${query}”` : `No pages contain “${query}”`}</h2>
+      <h2>{folder ? `No pages in ${folderLabel} contain “${query}”` : `No pages contain “${query}”`}</h2>
       <p>{multiWord ? 'Only pages that contain every word are listed. Try fewer words.' : 'Check the spelling or try a different word.'}</p>
       <div className="search-page-empty-actions">
         <button type="button" className="context-button" onClick={onSearchTitles}>
@@ -463,7 +469,7 @@ function NoMatches({
         </button>
         {folder ? (
           <button type="button" className="context-button" onClick={onClearFolder}>
-            <Icon name="close" size={14} /><span>Clear folder filter ({folder}/)</span>
+            <Icon name="close" size={14} /><span>Clear folder filter ({folderLabel})</span>
           </button>
         ) : null}
       </div>

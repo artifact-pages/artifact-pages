@@ -1,3 +1,6 @@
+import type { ArtifactIndexEntry } from './index'
+import { findIndexArtifact, folderLabel } from './directory.ts'
+
 // Folder facets of the full-text results page: how many of the current
 // query's hits lie in each top-level folder. Facets narrow the list with the
 // `in` URL parameter (a folder path; subfolders included), so counting uses the
@@ -28,4 +31,27 @@ export function folderFacets(hits: ReadonlyArray<{ path: string }>, selected?: s
     facets.push({ folder: selected, count: hits.filter(({ path }) => path.startsWith(`${selected}/`)).length })
   }
   return facets
+}
+
+
+/** Build display names once per site index; aggregation and URL identity remain path-based. */
+export function searchFolderLabels(artifacts: readonly ArtifactIndexEntry[]): Map<string, string> {
+  const labels = new Map<string, string>()
+  const introductions = new Map<string, ArtifactIndexEntry[]>()
+  for (const artifact of artifacts) {
+    const segments = artifact.path.split('/')
+    segments.pop()
+    const folder = segments.join('/')
+    for (let depth = 1; depth <= segments.length; depth += 1) {
+      const path = segments.slice(0, depth).join('/')
+      if (!labels.has(path)) labels.set(path, segments[depth - 1])
+    }
+    if (folder && /^(readme\.md|index\.(md|html?))$/iu.test(artifact.path.split('/').at(-1) ?? '')) {
+      const candidates = introductions.get(folder) ?? []
+      candidates.push(artifact)
+      introductions.set(folder, candidates)
+    }
+  }
+  for (const [folder, candidates] of introductions) labels.set(folder, folderLabel(labels.get(folder) ?? folder, findIndexArtifact(candidates)))
+  return labels
 }
