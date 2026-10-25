@@ -1,0 +1,5308 @@
+{
+  "schemaVersion": 1,
+  "policy": "cli06",
+  "pricing": {
+    "date": "2026-10-18",
+    "monthDays": 30,
+    "headerBytes": 1024,
+    "r2": {
+      "storageGBMonth": 0.015,
+      "classA": 0.0000045,
+      "classB": 3.6e-7,
+      "freeGB": 10,
+      "freeA": 1000000,
+      "freeB": 10000000
+    },
+    "aws": {
+      "storageGiBMonth": 0.023,
+      "classA": 0.000005,
+      "classB": 4.0000000000000003e-7,
+      "viewerRequestFree": 10000000,
+      "viewerRequestUS": 0.000001,
+      "viewerRequestPC100": 0.0000012,
+      "transferFreeGB": 1000,
+      "transferTiers": [
+        {
+          "limitGB": 9000,
+          "rate": 0.085
+        },
+        {
+          "limitGB": 40000,
+          "rate": 0.08
+        },
+        {
+          "limitGB": 100000,
+          "rate": 0.06
+        }
+      ]
+    }
+  },
+  "calculation": {
+    "q": 3,
+    "reloads": 0,
+    "headerBytes": 1024,
+    "compression": "gzip6",
+    "originRates": {
+      "siteRoot": 1,
+      "mutableContent": 1,
+      "appShell": 1,
+      "hashedAppAsset": 0.1,
+      "hashedSearchBlob": 0.5,
+      "notFound": 1
+    },
+    "moduleAssumptions": {
+      "cloudflare": "0.2.0",
+      "aws": "monorepo compatibility module; max TTL caps 0/0/31536000; AWS not live-verified"
+    },
+    "excludedScope": [
+      "preview frequency and bytes",
+      "404 frequency (each explicitly supplied Cloudflare 404 includes its body bytes and one origin read)",
+      "registry sync",
+      "app deploy",
+      "CloudFront Functions and account-wide shared allowances",
+      "domain, GitHub, runner, support, tax, WAF, logging"
+    ]
+  },
+  "evidence": {
+    "readerMeasuredAt": {
+      "startedAt": "2026-10-24T13:08:34.061Z",
+      "finishedAt": "2026-10-24T13:32:52.658Z"
+    },
+    "readerSourceRevision": "b9847b9e0a6104ca2428486f8bd56460821cba95",
+    "readerInputSHA256": "527fe39c7d3d54532bc01337a5f661755b86cdd3015e107d3e7e710475cc62f2",
+    "readerVectors": {
+      "1000": {
+        "C": {
+          "siteRoot": {
+            "networkRequests": 3,
+            "bodyBytes": 40308,
+            "originRequests": 3
+          },
+          "mutableContent": {
+            "networkRequests": 1,
+            "bodyBytes": 1227,
+            "originRequests": 1
+          },
+          "appShell": {
+            "networkRequests": 2,
+            "bodyBytes": 2766,
+            "originRequests": 2
+          },
+          "hashedAppAsset": {
+            "networkRequests": 29,
+            "bodyBytes": 463463.63724373,
+            "originRequests": 2.900000000000001
+          },
+          "hashedSearchBlob": {
+            "networkRequests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          },
+          "notFound": {
+            "networkRequests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          }
+        },
+        "W": {
+          "siteRoot": {
+            "networkRequests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          },
+          "mutableContent": {
+            "networkRequests": 1,
+            "bodyBytes": 1122.5,
+            "originRequests": 1
+          },
+          "appShell": {
+            "networkRequests": 1,
+            "bodyBytes": 0,
+            "originRequests": 1
+          },
+          "hashedAppAsset": {
+            "networkRequests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          },
+          "hashedSearchBlob": {
+            "networkRequests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          },
+          "notFound": {
+            "networkRequests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          }
+        },
+        "R": {
+          "siteRoot": {
+            "networkRequests": 3,
+            "bodyBytes": 1177,
+            "originRequests": 3
+          },
+          "mutableContent": {
+            "networkRequests": 1,
+            "bodyBytes": 0,
+            "originRequests": 1
+          },
+          "appShell": {
+            "networkRequests": 2,
+            "bodyBytes": 1383,
+            "originRequests": 2
+          },
+          "hashedAppAsset": {
+            "networkRequests": 2,
+            "bodyBytes": 0,
+            "originRequests": 0.20000000000000004
+          },
+          "hashedSearchBlob": {
+            "networkRequests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          },
+          "notFound": {
+            "networkRequests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          }
+        },
+        "search": {
+          "siteRoot": {
+            "networkRequests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          },
+          "mutableContent": {
+            "networkRequests": 1,
+            "bodyBytes": 9189,
+            "originRequests": 1
+          },
+          "appShell": {
+            "networkRequests": 1,
+            "bodyBytes": 0,
+            "originRequests": 1
+          },
+          "hashedAppAsset": {
+            "networkRequests": 2,
+            "bodyBytes": 2130.1822271415845,
+            "originRequests": 0.19999999999999998
+          },
+          "hashedSearchBlob": {
+            "networkRequests": 11.5,
+            "bodyBytes": 96296,
+            "originRequests": 5.75
+          },
+          "notFound": {
+            "networkRequests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          }
+        }
+      },
+      "5000": {
+        "C": {
+          "siteRoot": {
+            "networkRequests": 3,
+            "bodyBytes": 259130,
+            "originRequests": 3
+          },
+          "mutableContent": {
+            "networkRequests": 1,
+            "bodyBytes": 1212,
+            "originRequests": 1
+          },
+          "appShell": {
+            "networkRequests": 2,
+            "bodyBytes": 2766,
+            "originRequests": 2
+          },
+          "hashedAppAsset": {
+            "networkRequests": 29,
+            "bodyBytes": 463463.63724373,
+            "originRequests": 2.900000000000001
+          },
+          "hashedSearchBlob": {
+            "networkRequests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          },
+          "notFound": {
+            "networkRequests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          }
+        },
+        "W": {
+          "siteRoot": {
+            "networkRequests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          },
+          "mutableContent": {
+            "networkRequests": 1,
+            "bodyBytes": 1076.5,
+            "originRequests": 1
+          },
+          "appShell": {
+            "networkRequests": 1,
+            "bodyBytes": 0,
+            "originRequests": 1
+          },
+          "hashedAppAsset": {
+            "networkRequests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          },
+          "hashedSearchBlob": {
+            "networkRequests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          },
+          "notFound": {
+            "networkRequests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          }
+        },
+        "R": {
+          "siteRoot": {
+            "networkRequests": 3,
+            "bodyBytes": 763,
+            "originRequests": 3
+          },
+          "mutableContent": {
+            "networkRequests": 1,
+            "bodyBytes": 0,
+            "originRequests": 1
+          },
+          "appShell": {
+            "networkRequests": 2,
+            "bodyBytes": 1383,
+            "originRequests": 2
+          },
+          "hashedAppAsset": {
+            "networkRequests": 2,
+            "bodyBytes": 0,
+            "originRequests": 0.20000000000000004
+          },
+          "hashedSearchBlob": {
+            "networkRequests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          },
+          "notFound": {
+            "networkRequests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          }
+        },
+        "search": {
+          "siteRoot": {
+            "networkRequests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          },
+          "mutableContent": {
+            "networkRequests": 1,
+            "bodyBytes": 18019,
+            "originRequests": 1
+          },
+          "appShell": {
+            "networkRequests": 1,
+            "bodyBytes": 0,
+            "originRequests": 1
+          },
+          "hashedAppAsset": {
+            "networkRequests": 2,
+            "bodyBytes": 2130.1822271415845,
+            "originRequests": 0.19999999999999998
+          },
+          "hashedSearchBlob": {
+            "networkRequests": 8,
+            "bodyBytes": 177361,
+            "originRequests": 4
+          },
+          "notFound": {
+            "networkRequests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          }
+        }
+      },
+      "50000": {
+        "C": {
+          "siteRoot": {
+            "networkRequests": 3,
+            "bodyBytes": 2506478,
+            "originRequests": 3
+          },
+          "mutableContent": {
+            "networkRequests": 1,
+            "bodyBytes": 1210,
+            "originRequests": 1
+          },
+          "appShell": {
+            "networkRequests": 2,
+            "bodyBytes": 2766,
+            "originRequests": 2
+          },
+          "hashedAppAsset": {
+            "networkRequests": 29,
+            "bodyBytes": 463463.63724373,
+            "originRequests": 2.900000000000001
+          },
+          "hashedSearchBlob": {
+            "networkRequests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          },
+          "notFound": {
+            "networkRequests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          }
+        },
+        "W": {
+          "siteRoot": {
+            "networkRequests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          },
+          "mutableContent": {
+            "networkRequests": 1,
+            "bodyBytes": 1177,
+            "originRequests": 1
+          },
+          "appShell": {
+            "networkRequests": 1,
+            "bodyBytes": 0,
+            "originRequests": 1
+          },
+          "hashedAppAsset": {
+            "networkRequests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          },
+          "hashedSearchBlob": {
+            "networkRequests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          },
+          "notFound": {
+            "networkRequests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          }
+        },
+        "R": {
+          "siteRoot": {
+            "networkRequests": 3,
+            "bodyBytes": 773,
+            "originRequests": 3
+          },
+          "mutableContent": {
+            "networkRequests": 1,
+            "bodyBytes": 784.6666666666666,
+            "originRequests": 1
+          },
+          "appShell": {
+            "networkRequests": 2,
+            "bodyBytes": 1383,
+            "originRequests": 2
+          },
+          "hashedAppAsset": {
+            "networkRequests": 2,
+            "bodyBytes": 0,
+            "originRequests": 0.20000000000000004
+          },
+          "hashedSearchBlob": {
+            "networkRequests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          },
+          "notFound": {
+            "networkRequests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          }
+        },
+        "search": {
+          "siteRoot": {
+            "networkRequests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          },
+          "mutableContent": {
+            "networkRequests": 1,
+            "bodyBytes": 130103,
+            "originRequests": 1
+          },
+          "appShell": {
+            "networkRequests": 1,
+            "bodyBytes": 0,
+            "originRequests": 1
+          },
+          "hashedAppAsset": {
+            "networkRequests": 2,
+            "bodyBytes": 2130.1822271415845,
+            "originRequests": 0.19999999999999998
+          },
+          "hashedSearchBlob": {
+            "networkRequests": 6,
+            "bodyBytes": 980710.5,
+            "originRequests": 3
+          },
+          "notFound": {
+            "networkRequests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          }
+        }
+      }
+    },
+    "publisherProbeSourceContext": "base 116521ef plus the hosting cost probe changes in this PR",
+    "publisher": {
+      "plain": {
+        "1000": {
+          "cachePolicyRevision": "d-lt-v1",
+          "cachePolicyHeaders": {
+            "app-shell": "no-cache, max-age=0, must-revalidate, stale-if-error=0",
+            "artifact": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+            "hashed-asset": "public, max-age=31536000, immutable",
+            "preview-catalog": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+            "preview-file": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+            "private-control": "no-store",
+            "search-manifest": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+            "site-root": "public, max-age=0, s-maxage=5, must-revalidate, stale-if-error=0"
+          },
+          "measuredAt": "2026-10-25T23:29:57.866487Z",
+          "provider": "plain",
+          "sourceRevision": "116521ef2b25a4327c274bf5be52fe936d3ba130",
+          "site": "scale-1000",
+          "pages": 1000,
+          "sourceFiles": 1005,
+          "sourceBytes": 1211358,
+          "counterBoundary": "provider-neutral ConditionalObjectBackend methods; LIST is one logical prefix call, DELETE is one logical batch call; no SDK pagination, retries, or wire bytes",
+          "phases": [
+            {
+              "name": "first publish",
+              "outcome": "synced",
+              "buildSkipped": false,
+              "callCounts": {
+                "DELETE": 1,
+                "GET": 15,
+                "HEAD": 1,
+                "LIST": 2,
+                "PUT": 1188
+              },
+              "getBodyBytes": 825,
+              "listJSONBytes": 8,
+              "putBodyBytes": 2540793,
+              "wallMs": 503.168
+            },
+            {
+              "name": "no-op republish",
+              "outcome": "no-op",
+              "buildSkipped": true,
+              "callCounts": {
+                "GET": 12,
+                "HEAD": 1,
+                "PUT": 2
+              },
+              "getBodyBytes": 1015,
+              "listJSONBytes": 0,
+              "putBodyBytes": 272,
+              "wallMs": 208.972
+            },
+            {
+              "name": "one-document change",
+              "outcome": "synced",
+              "buildSkipped": false,
+              "callCounts": {
+                "DELETE": 1,
+                "GET": 15,
+                "HEAD": 1,
+                "PUT": 7
+              },
+              "getBodyBytes": 796489,
+              "listJSONBytes": 0,
+              "putBodyBytes": 796147,
+              "wallMs": 353.241
+            }
+          ],
+          "storedProjectionObjects": 1182,
+          "storedProjectionBytes": 2420185,
+          "storedSearchObjects": 175,
+          "storedSearchBytes": 463955,
+          "publishStateRawBytes": 384724,
+          "publishStateGzipBytes": 50640,
+          "generatedJSONValidation": {
+            "index": true,
+            "manifest": true
+          },
+          "perClassObjectCounts": {
+            "app-shell": 0,
+            "artifact": 1005,
+            "hashed-asset": 174,
+            "preview-catalog": 0,
+            "preview-file": 0,
+            "private-control": 0,
+            "search-manifest": 1,
+            "site-root": 2
+          },
+          "headerCheckSummary": {
+            "app-shell": {
+              "objectCount": 0,
+              "expectedHeader": "no-cache, max-age=0, must-revalidate, stale-if-error=0",
+              "verified": false
+            },
+            "artifact": {
+              "objectCount": 1005,
+              "expectedHeader": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+              "verified": true
+            },
+            "hashed-asset": {
+              "objectCount": 174,
+              "expectedHeader": "public, max-age=31536000, immutable",
+              "verified": true
+            },
+            "preview-catalog": {
+              "objectCount": 0,
+              "expectedHeader": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+              "verified": false
+            },
+            "preview-file": {
+              "objectCount": 0,
+              "expectedHeader": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+              "verified": false
+            },
+            "private-control": {
+              "objectCount": 0,
+              "expectedHeader": "no-store",
+              "verified": false
+            },
+            "search-manifest": {
+              "objectCount": 1,
+              "expectedHeader": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+              "verified": true
+            },
+            "site-root": {
+              "objectCount": 2,
+              "expectedHeader": "public, max-age=0, s-maxage=5, must-revalidate, stale-if-error=0",
+              "verified": true
+            }
+          }
+        },
+        "5000": {
+          "cachePolicyRevision": "d-lt-v1",
+          "cachePolicyHeaders": {
+            "app-shell": "no-cache, max-age=0, must-revalidate, stale-if-error=0",
+            "artifact": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+            "hashed-asset": "public, max-age=31536000, immutable",
+            "preview-catalog": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+            "preview-file": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+            "private-control": "no-store",
+            "search-manifest": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+            "site-root": "public, max-age=0, s-maxage=5, must-revalidate, stale-if-error=0"
+          },
+          "measuredAt": "2026-10-25T23:30:01.529261Z",
+          "provider": "plain",
+          "sourceRevision": "116521ef2b25a4327c274bf5be52fe936d3ba130",
+          "site": "scale-5000",
+          "pages": 5000,
+          "sourceFiles": 5018,
+          "sourceBytes": 6092935,
+          "counterBoundary": "provider-neutral ConditionalObjectBackend methods; LIST is one logical prefix call, DELETE is one logical batch call; no SDK pagination, retries, or wire bytes",
+          "phases": [
+            {
+              "name": "first publish",
+              "outcome": "synced",
+              "buildSkipped": false,
+              "callCounts": {
+                "DELETE": 1,
+                "GET": 15,
+                "HEAD": 1,
+                "LIST": 2,
+                "PUT": 5376
+              },
+              "getBodyBytes": 825,
+              "listJSONBytes": 8,
+              "putBodyBytes": 12883831,
+              "wallMs": 851.618
+            },
+            {
+              "name": "no-op republish",
+              "outcome": "no-op",
+              "buildSkipped": true,
+              "callCounts": {
+                "GET": 12,
+                "HEAD": 1,
+                "PUT": 2
+              },
+              "getBodyBytes": 1015,
+              "listJSONBytes": 0,
+              "putBodyBytes": 272,
+              "wallMs": 295.129
+            },
+            {
+              "name": "one-document change",
+              "outcome": "synced",
+              "buildSkipped": false,
+              "callCounts": {
+                "DELETE": 1,
+                "GET": 15,
+                "HEAD": 1,
+                "PUT": 7
+              },
+              "getBodyBytes": 4428852,
+              "listJSONBytes": 0,
+              "putBodyBytes": 4428506,
+              "wallMs": 1040.707
+            }
+          ],
+          "storedProjectionObjects": 5370,
+          "storedProjectionBytes": 12365106,
+          "storedSearchObjects": 350,
+          "storedSearchBytes": 2069622,
+          "publishStateRawBytes": 1738435,
+          "publishStateGzipBytes": 225321,
+          "generatedJSONValidation": {
+            "index": true,
+            "manifest": true
+          },
+          "perClassObjectCounts": {
+            "app-shell": 0,
+            "artifact": 5018,
+            "hashed-asset": 349,
+            "preview-catalog": 0,
+            "preview-file": 0,
+            "private-control": 0,
+            "search-manifest": 1,
+            "site-root": 2
+          },
+          "headerCheckSummary": {
+            "app-shell": {
+              "objectCount": 0,
+              "expectedHeader": "no-cache, max-age=0, must-revalidate, stale-if-error=0",
+              "verified": false
+            },
+            "artifact": {
+              "objectCount": 5018,
+              "expectedHeader": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+              "verified": true
+            },
+            "hashed-asset": {
+              "objectCount": 349,
+              "expectedHeader": "public, max-age=31536000, immutable",
+              "verified": true
+            },
+            "preview-catalog": {
+              "objectCount": 0,
+              "expectedHeader": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+              "verified": false
+            },
+            "preview-file": {
+              "objectCount": 0,
+              "expectedHeader": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+              "verified": false
+            },
+            "private-control": {
+              "objectCount": 0,
+              "expectedHeader": "no-store",
+              "verified": false
+            },
+            "search-manifest": {
+              "objectCount": 1,
+              "expectedHeader": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+              "verified": true
+            },
+            "site-root": {
+              "objectCount": 2,
+              "expectedHeader": "public, max-age=0, s-maxage=5, must-revalidate, stale-if-error=0",
+              "verified": true
+            }
+          }
+        },
+        "50000": {
+          "cachePolicyRevision": "d-lt-v1",
+          "cachePolicyHeaders": {
+            "app-shell": "no-cache, max-age=0, must-revalidate, stale-if-error=0",
+            "artifact": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+            "hashed-asset": "public, max-age=31536000, immutable",
+            "preview-catalog": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+            "preview-file": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+            "private-control": "no-store",
+            "search-manifest": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+            "site-root": "public, max-age=0, s-maxage=5, must-revalidate, stale-if-error=0"
+          },
+          "measuredAt": "2026-10-25T23:30:30.582782Z",
+          "provider": "plain",
+          "sourceRevision": "116521ef2b25a4327c274bf5be52fe936d3ba130",
+          "site": "scale-50000",
+          "pages": 50000,
+          "sourceFiles": 50308,
+          "sourceBytes": 61016593,
+          "counterBoundary": "provider-neutral ConditionalObjectBackend methods; LIST is one logical prefix call, DELETE is one logical batch call; no SDK pagination, retries, or wire bytes",
+          "phases": [
+            {
+              "name": "first publish",
+              "outcome": "synced",
+              "buildSkipped": false,
+              "callCounts": {
+                "DELETE": 1,
+                "GET": 15,
+                "HEAD": 1,
+                "LIST": 2,
+                "PUT": 51794
+              },
+              "getBodyBytes": 828,
+              "listJSONBytes": 8,
+              "putBodyBytes": 124016856,
+              "wallMs": 8174.496
+            },
+            {
+              "name": "no-op republish",
+              "outcome": "no-op",
+              "buildSkipped": true,
+              "callCounts": {
+                "GET": 12,
+                "HEAD": 1,
+                "PUT": 2
+              },
+              "getBodyBytes": 1018,
+              "listJSONBytes": 0,
+              "putBodyBytes": 274,
+              "wallMs": 2907.412
+            },
+            {
+              "name": "one-document change",
+              "outcome": "synced",
+              "buildSkipped": false,
+              "callCounts": {
+                "DELETE": 1,
+                "GET": 15,
+                "HEAD": 1,
+                "PUT": 7
+              },
+              "getBodyBytes": 46110507,
+              "listJSONBytes": 0,
+              "putBodyBytes": 46111330,
+              "wallMs": 8754.198
+            }
+          ],
+          "storedProjectionObjects": 51788,
+          "storedProjectionBytes": 118799089,
+          "storedSearchObjects": 1478,
+          "storedSearchBytes": 13846540,
+          "publishStateRawBytes": 17046403,
+          "publishStateGzipBytes": 2173575,
+          "generatedJSONValidation": {
+            "index": true,
+            "manifest": true
+          },
+          "perClassObjectCounts": {
+            "app-shell": 0,
+            "artifact": 50308,
+            "hashed-asset": 1477,
+            "preview-catalog": 0,
+            "preview-file": 0,
+            "private-control": 0,
+            "search-manifest": 1,
+            "site-root": 2
+          },
+          "headerCheckSummary": {
+            "app-shell": {
+              "objectCount": 0,
+              "expectedHeader": "no-cache, max-age=0, must-revalidate, stale-if-error=0",
+              "verified": false
+            },
+            "artifact": {
+              "objectCount": 50308,
+              "expectedHeader": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+              "verified": true
+            },
+            "hashed-asset": {
+              "objectCount": 1477,
+              "expectedHeader": "public, max-age=31536000, immutable",
+              "verified": true
+            },
+            "preview-catalog": {
+              "objectCount": 0,
+              "expectedHeader": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+              "verified": false
+            },
+            "preview-file": {
+              "objectCount": 0,
+              "expectedHeader": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+              "verified": false
+            },
+            "private-control": {
+              "objectCount": 0,
+              "expectedHeader": "no-store",
+              "verified": false
+            },
+            "search-manifest": {
+              "objectCount": 1,
+              "expectedHeader": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+              "verified": true
+            },
+            "site-root": {
+              "objectCount": 2,
+              "expectedHeader": "public, max-age=0, s-maxage=5, must-revalidate, stale-if-error=0",
+              "verified": true
+            }
+          }
+        }
+      },
+      "aws": {
+        "1000": {
+          "cachePolicyRevision": "d-lt-v1",
+          "cachePolicyHeaders": {
+            "app-shell": "no-cache, max-age=0, must-revalidate, stale-if-error=0",
+            "artifact": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+            "hashed-asset": "public, max-age=31536000, immutable",
+            "preview-catalog": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+            "preview-file": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+            "private-control": "no-store",
+            "search-manifest": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+            "site-root": "public, max-age=0, s-maxage=5, must-revalidate, stale-if-error=0"
+          },
+          "measuredAt": "2026-10-25T23:30:35.175923Z",
+          "provider": "aws",
+          "sourceRevision": "116521ef2b25a4327c274bf5be52fe936d3ba130",
+          "site": "scale-1000",
+          "pages": 1000,
+          "sourceFiles": 1005,
+          "sourceBytes": 1211358,
+          "counterBoundary": "provider-neutral ConditionalObjectBackend methods; LIST is one logical prefix call, DELETE is one logical batch call; no SDK pagination, retries, or wire bytes",
+          "phases": [
+            {
+              "name": "first publish",
+              "outcome": "synced",
+              "buildSkipped": false,
+              "callCounts": {
+                "DELETE": 1,
+                "GET": 15,
+                "HEAD": 1,
+                "LIST": 2,
+                "PUT": 1188
+              },
+              "getBodyBytes": 825,
+              "listJSONBytes": 8,
+              "putBodyBytes": 1805221,
+              "wallMs": 330.902
+            },
+            {
+              "name": "no-op republish",
+              "outcome": "no-op",
+              "buildSkipped": true,
+              "callCounts": {
+                "GET": 12,
+                "HEAD": 1,
+                "PUT": 2
+              },
+              "getBodyBytes": 1015,
+              "listJSONBytes": 0,
+              "putBodyBytes": 272,
+              "wallMs": 142.551
+            },
+            {
+              "name": "one-document change",
+              "outcome": "synced",
+              "buildSkipped": false,
+              "callCounts": {
+                "DELETE": 1,
+                "GET": 15,
+                "HEAD": 1,
+                "PUT": 7
+              },
+              "getBodyBytes": 89950,
+              "listJSONBytes": 0,
+              "putBodyBytes": 89623,
+              "wallMs": 321.516
+            }
+          ],
+          "storedProjectionObjects": 1182,
+          "storedProjectionBytes": 1684608,
+          "storedSearchObjects": 175,
+          "storedSearchBytes": 434923,
+          "publishStateRawBytes": 384730,
+          "publishStateGzipBytes": 50660,
+          "generatedJSONValidation": {
+            "index": true,
+            "manifest": true
+          },
+          "perClassObjectCounts": {
+            "app-shell": 0,
+            "artifact": 1005,
+            "hashed-asset": 174,
+            "preview-catalog": 0,
+            "preview-file": 0,
+            "private-control": 0,
+            "search-manifest": 1,
+            "site-root": 2
+          },
+          "headerCheckSummary": {
+            "app-shell": {
+              "objectCount": 0,
+              "expectedHeader": "no-cache, max-age=0, must-revalidate, stale-if-error=0",
+              "verified": false
+            },
+            "artifact": {
+              "objectCount": 1005,
+              "expectedHeader": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+              "verified": true
+            },
+            "hashed-asset": {
+              "objectCount": 174,
+              "expectedHeader": "public, max-age=31536000, immutable",
+              "verified": true
+            },
+            "preview-catalog": {
+              "objectCount": 0,
+              "expectedHeader": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+              "verified": false
+            },
+            "preview-file": {
+              "objectCount": 0,
+              "expectedHeader": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+              "verified": false
+            },
+            "private-control": {
+              "objectCount": 0,
+              "expectedHeader": "no-store",
+              "verified": false
+            },
+            "search-manifest": {
+              "objectCount": 1,
+              "expectedHeader": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+              "verified": true
+            },
+            "site-root": {
+              "objectCount": 2,
+              "expectedHeader": "public, max-age=0, s-maxage=5, must-revalidate, stale-if-error=0",
+              "verified": true
+            }
+          }
+        },
+        "5000": {
+          "cachePolicyRevision": "d-lt-v1",
+          "cachePolicyHeaders": {
+            "app-shell": "no-cache, max-age=0, must-revalidate, stale-if-error=0",
+            "artifact": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+            "hashed-asset": "public, max-age=31536000, immutable",
+            "preview-catalog": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+            "preview-file": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+            "private-control": "no-store",
+            "search-manifest": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+            "site-root": "public, max-age=0, s-maxage=5, must-revalidate, stale-if-error=0"
+          },
+          "measuredAt": "2026-10-25T23:30:38.776158Z",
+          "provider": "aws",
+          "sourceRevision": "116521ef2b25a4327c274bf5be52fe936d3ba130",
+          "site": "scale-5000",
+          "pages": 5000,
+          "sourceFiles": 5018,
+          "sourceBytes": 6092935,
+          "counterBoundary": "provider-neutral ConditionalObjectBackend methods; LIST is one logical prefix call, DELETE is one logical batch call; no SDK pagination, retries, or wire bytes",
+          "phases": [
+            {
+              "name": "first publish",
+              "outcome": "synced",
+              "buildSkipped": false,
+              "callCounts": {
+                "DELETE": 1,
+                "GET": 15,
+                "HEAD": 1,
+                "LIST": 2,
+                "PUT": 5376
+              },
+              "getBodyBytes": 825,
+              "listJSONBytes": 8,
+              "putBodyBytes": 8874103,
+              "wallMs": 881.776
+            },
+            {
+              "name": "no-op republish",
+              "outcome": "no-op",
+              "buildSkipped": true,
+              "callCounts": {
+                "GET": 12,
+                "HEAD": 1,
+                "PUT": 2
+              },
+              "getBodyBytes": 1015,
+              "listJSONBytes": 0,
+              "putBodyBytes": 272,
+              "wallMs": 257.491
+            },
+            {
+              "name": "one-document change",
+              "outcome": "synced",
+              "buildSkipped": false,
+              "callCounts": {
+                "DELETE": 1,
+                "GET": 15,
+                "HEAD": 1,
+                "PUT": 7
+              },
+              "getBodyBytes": 477853,
+              "listJSONBytes": 0,
+              "putBodyBytes": 477512,
+              "wallMs": 1061.388
+            }
+          ],
+          "storedProjectionObjects": 5370,
+          "storedProjectionBytes": 8355355,
+          "storedSearchObjects": 350,
+          "storedSearchBytes": 2010893,
+          "publishStateRawBytes": 1738442,
+          "publishStateGzipBytes": 225349,
+          "generatedJSONValidation": {
+            "index": true,
+            "manifest": true
+          },
+          "perClassObjectCounts": {
+            "app-shell": 0,
+            "artifact": 5018,
+            "hashed-asset": 349,
+            "preview-catalog": 0,
+            "preview-file": 0,
+            "private-control": 0,
+            "search-manifest": 1,
+            "site-root": 2
+          },
+          "headerCheckSummary": {
+            "app-shell": {
+              "objectCount": 0,
+              "expectedHeader": "no-cache, max-age=0, must-revalidate, stale-if-error=0",
+              "verified": false
+            },
+            "artifact": {
+              "objectCount": 5018,
+              "expectedHeader": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+              "verified": true
+            },
+            "hashed-asset": {
+              "objectCount": 349,
+              "expectedHeader": "public, max-age=31536000, immutable",
+              "verified": true
+            },
+            "preview-catalog": {
+              "objectCount": 0,
+              "expectedHeader": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+              "verified": false
+            },
+            "preview-file": {
+              "objectCount": 0,
+              "expectedHeader": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+              "verified": false
+            },
+            "private-control": {
+              "objectCount": 0,
+              "expectedHeader": "no-store",
+              "verified": false
+            },
+            "search-manifest": {
+              "objectCount": 1,
+              "expectedHeader": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+              "verified": true
+            },
+            "site-root": {
+              "objectCount": 2,
+              "expectedHeader": "public, max-age=0, s-maxage=5, must-revalidate, stale-if-error=0",
+              "verified": true
+            }
+          }
+        },
+        "50000": {
+          "cachePolicyRevision": "d-lt-v1",
+          "cachePolicyHeaders": {
+            "app-shell": "no-cache, max-age=0, must-revalidate, stale-if-error=0",
+            "artifact": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+            "hashed-asset": "public, max-age=31536000, immutable",
+            "preview-catalog": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+            "preview-file": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+            "private-control": "no-store",
+            "search-manifest": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+            "site-root": "public, max-age=0, s-maxage=5, must-revalidate, stale-if-error=0"
+          },
+          "measuredAt": "2026-10-25T23:31:08.889061Z",
+          "provider": "aws",
+          "sourceRevision": "116521ef2b25a4327c274bf5be52fe936d3ba130",
+          "site": "scale-50000",
+          "pages": 50000,
+          "sourceFiles": 50308,
+          "sourceBytes": 61016593,
+          "counterBoundary": "provider-neutral ConditionalObjectBackend methods; LIST is one logical prefix call, DELETE is one logical batch call; no SDK pagination, retries, or wire bytes",
+          "phases": [
+            {
+              "name": "first publish",
+              "outcome": "synced",
+              "buildSkipped": false,
+              "callCounts": {
+                "DELETE": 1,
+                "GET": 15,
+                "HEAD": 1,
+                "LIST": 2,
+                "PUT": 51794
+              },
+              "getBodyBytes": 827,
+              "listJSONBytes": 8,
+              "putBodyBytes": 81706628,
+              "wallMs": 8591.348
+            },
+            {
+              "name": "no-op republish",
+              "outcome": "no-op",
+              "buildSkipped": true,
+              "callCounts": {
+                "GET": 12,
+                "HEAD": 1,
+                "PUT": 2
+              },
+              "getBodyBytes": 1019,
+              "listJSONBytes": 0,
+              "putBodyBytes": 274,
+              "wallMs": 3538.46
+            },
+            {
+              "name": "one-document change",
+              "outcome": "synced",
+              "buildSkipped": false,
+              "callCounts": {
+                "DELETE": 1,
+                "GET": 15,
+                "HEAD": 1,
+                "PUT": 7
+              },
+              "getBodyBytes": 4623473,
+              "listJSONBytes": 0,
+              "putBodyBytes": 4624303,
+              "wallMs": 10656.842
+            }
+          ],
+          "storedProjectionObjects": 51788,
+          "storedProjectionBytes": 76488850,
+          "storedSearchObjects": 1478,
+          "storedSearchBytes": 13023349,
+          "publishStateRawBytes": 17046410,
+          "publishStateGzipBytes": 2173595,
+          "generatedJSONValidation": {
+            "index": true,
+            "manifest": true
+          },
+          "perClassObjectCounts": {
+            "app-shell": 0,
+            "artifact": 50308,
+            "hashed-asset": 1477,
+            "preview-catalog": 0,
+            "preview-file": 0,
+            "private-control": 0,
+            "search-manifest": 1,
+            "site-root": 2
+          },
+          "headerCheckSummary": {
+            "app-shell": {
+              "objectCount": 0,
+              "expectedHeader": "no-cache, max-age=0, must-revalidate, stale-if-error=0",
+              "verified": false
+            },
+            "artifact": {
+              "objectCount": 50308,
+              "expectedHeader": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+              "verified": true
+            },
+            "hashed-asset": {
+              "objectCount": 1477,
+              "expectedHeader": "public, max-age=31536000, immutable",
+              "verified": true
+            },
+            "preview-catalog": {
+              "objectCount": 0,
+              "expectedHeader": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+              "verified": false
+            },
+            "preview-file": {
+              "objectCount": 0,
+              "expectedHeader": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+              "verified": false
+            },
+            "private-control": {
+              "objectCount": 0,
+              "expectedHeader": "no-store",
+              "verified": false
+            },
+            "search-manifest": {
+              "objectCount": 1,
+              "expectedHeader": "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0",
+              "verified": true
+            },
+            "site-root": {
+              "objectCount": 2,
+              "expectedHeader": "public, max-age=0, s-maxage=5, must-revalidate, stale-if-error=0",
+              "verified": true
+            }
+          }
+        }
+      }
+    }
+  },
+  "scenarios": [
+    {
+      "scenario": "S",
+      "assumptions": {
+        "q": 3,
+        "reloads": 0,
+        "headerBytes": 1024,
+        "compression": "gzip6",
+        "originRates": {
+          "siteRoot": 1,
+          "mutableContent": 1,
+          "appShell": 1,
+          "hashedAppAsset": 0.1,
+          "hashedSearchBlob": 0.5,
+          "notFound": 1
+        }
+      },
+      "reader": {
+        "breakdown": {
+          "siteRoot": {
+            "requests": 30000,
+            "bodyBytes": 403080000,
+            "originRequests": 30000
+          },
+          "mutableContent": {
+            "requests": 31500,
+            "bodyBytes": 48503500,
+            "originRequests": 31500
+          },
+          "appShell": {
+            "requests": 41500,
+            "bodyBytes": 27660000,
+            "originRequests": 41500
+          },
+          "hashedAppAsset": {
+            "requests": 293000,
+            "bodyBytes": 4637831645.778012,
+            "originRequests": 29300
+          },
+          "hashedSearchBlob": {
+            "requests": 17250,
+            "bodyBytes": 144444000,
+            "originRequests": 8625
+          },
+          "notFound": {
+            "requests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          }
+        },
+        "viewerRequests": 413250,
+        "viewerBytes": 5684687145.778012,
+        "originRequests": 140925
+      },
+      "publisher": {
+        "aws": {
+          "classA": 8050,
+          "classB": 4880,
+          "storageBytes": 8676340
+        },
+        "r2": {
+          "classA": 8050,
+          "classB": 4880,
+          "storageBytes": 12354125
+        }
+      },
+      "aws": {
+        "storage": 0.000185850840061903,
+        "publisherRequests": 0.042202,
+        "readerOriginRequests": 0.05637,
+        "viewerRequestsUS": 0,
+        "viewerRequestsPC100": 0,
+        "transfer": 0,
+        "usCanada": 0.09875785084006192,
+        "pc100Upper": 0.09875785084006192
+      },
+      "r2": {
+        "storage": 0.000185311875,
+        "publisherClassA": 0.036225,
+        "publisherClassB": 0.0017568,
+        "readerOriginRequests": 0.050733,
+        "gross": 0.08890011187499999,
+        "afterDedicatedFreeAllowance": 0,
+        "roundedAfterDedicatedFreeAllowance": 0,
+        "readerTransferGB": 5.684687145778012
+      }
+    },
+    {
+      "scenario": "M",
+      "assumptions": {
+        "q": 3,
+        "reloads": 0,
+        "headerBytes": 1024,
+        "compression": "gzip6",
+        "originRates": {
+          "siteRoot": 1,
+          "mutableContent": 1,
+          "appShell": 1,
+          "hashedAppAsset": 0.1,
+          "hashedSearchBlob": 0.5,
+          "notFound": 1
+        }
+      },
+      "reader": {
+        "breakdown": {
+          "siteRoot": {
+            "requests": 600000,
+            "bodyBytes": 51826000000,
+            "originRequests": 600000
+          },
+          "mutableContent": {
+            "requests": 630000,
+            "bodyBytes": 1213570000,
+            "originRequests": 630000
+          },
+          "appShell": {
+            "requests": 830000,
+            "bodyBytes": 553200000,
+            "originRequests": 830000
+          },
+          "hashedAppAsset": {
+            "requests": 5860000,
+            "bodyBytes": 92756632915.56026,
+            "originRequests": 586000
+          },
+          "hashedSearchBlob": {
+            "requests": 240000,
+            "bodyBytes": 5320830000,
+            "originRequests": 120000
+          },
+          "notFound": {
+            "requests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          }
+        },
+        "viewerRequests": 8160000,
+        "viewerBytes": 160026072915.56024,
+        "originRequests": 2766000
+      },
+      "publisher": {
+        "aws": {
+          "classA": 192840,
+          "classB": 72480,
+          "storageBytes": 257421120
+        },
+        "r2": {
+          "classA": 192840,
+          "classB": 72480,
+          "storageBytes": 377712810
+        }
+      },
+      "aws": {
+        "storage": 0.005514068305492401,
+        "publisherRequests": 0.9931920000000001,
+        "readerOriginRequests": 1.1064,
+        "viewerRequestsUS": 0,
+        "viewerRequestsPC100": 0,
+        "transfer": 0,
+        "usCanada": 2.1051060683054925,
+        "pc100Upper": 2.1051060683054925
+      },
+      "r2": {
+        "storage": 0.00566569215,
+        "publisherClassA": 0.86778,
+        "publisherClassB": 0.0260928,
+        "readerOriginRequests": 0.99576,
+        "gross": 1.89529849215,
+        "afterDedicatedFreeAllowance": 0,
+        "roundedAfterDedicatedFreeAllowance": 0,
+        "readerTransferGB": 160.02607291556023
+      }
+    },
+    {
+      "scenario": "L",
+      "assumptions": {
+        "q": 3,
+        "reloads": 0,
+        "headerBytes": 1024,
+        "compression": "gzip6",
+        "originRates": {
+          "siteRoot": 1,
+          "mutableContent": 1,
+          "appShell": 1,
+          "hashedAppAsset": 0.1,
+          "hashedSearchBlob": 0.5,
+          "notFound": 1
+        }
+      },
+      "reader": {
+        "breakdown": {
+          "siteRoot": {
+            "requests": 3000000,
+            "bodyBytes": 331625096774.19354,
+            "originRequests": 3000000
+          },
+          "mutableContent": {
+            "requests": 3150000.0000000005,
+            "bodyBytes": 6616611290.32258,
+            "originRequests": 3150000.0000000005
+          },
+          "appShell": {
+            "requests": 4150000.0000000005,
+            "bodyBytes": 2766000000,
+            "originRequests": 4150000.0000000005
+          },
+          "hashedAppAsset": {
+            "requests": 29300000.000000004,
+            "bodyBytes": 463783164577.8013,
+            "originRequests": 2930000.0000000005
+          },
+          "hashedSearchBlob": {
+            "requests": 1190322.5806451612,
+            "bodyBytes": 30491325000,
+            "originRequests": 595161.2903225806
+          },
+          "notFound": {
+            "requests": 0,
+            "bodyBytes": 0,
+            "originRequests": 0
+          }
+        },
+        "viewerRequests": 40790322.58064516,
+        "viewerBytes": 877051487964.8981,
+        "originRequests": 13825161.290322581
+      },
+      "publisher": {
+        "aws": {
+          "classA": 245686,
+          "classB": 74896,
+          "storageBytes": 336083565
+        },
+        "r2": {
+          "classA": 245686,
+          "classB": 74896,
+          "storageBytes": 498685474
+        }
+      },
+      "aws": {
+        "storage": 0.007199050853960216,
+        "publisherRequests": 1.2583884,
+        "readerOriginRequests": 5.530064516129033,
+        "viewerRequestsUS": 30.790322580645157,
+        "viewerRequestsPC100": 36.94838709677419,
+        "transfer": 0,
+        "usCanada": 37.58597454762815,
+        "pc100Upper": 43.744039063757185
+      },
+      "r2": {
+        "storage": 0.00748028211,
+        "publisherClassA": 1.105587,
+        "publisherClassB": 0.02696256,
+        "readerOriginRequests": 4.977058064516129,
+        "gross": 6.117087906626129,
+        "afterDedicatedFreeAllowance": 1.4040206245161293,
+        "roundedAfterDedicatedFreeAllowance": 1.44,
+        "readerTransferGB": 877.0514879648981
+      }
+    }
+  ],
+  "sensitivities": {
+    "originRates": [
+      {
+        "scenario": "S",
+        "rows": [
+          {
+            "scenario": "S",
+            "assumptions": {
+              "q": 3,
+              "reloads": 0,
+              "headerBytes": 1024,
+              "compression": "gzip6",
+              "originRates": {
+                "siteRoot": 0,
+                "mutableContent": 1,
+                "appShell": 1,
+                "hashedAppAsset": 0.1,
+                "hashedSearchBlob": 0.5,
+                "notFound": 1
+              },
+              "sensitivity": "roots-0-percent"
+            },
+            "reader": {
+              "breakdown": {
+                "siteRoot": {
+                  "requests": 30000,
+                  "bodyBytes": 403080000,
+                  "originRequests": 0
+                },
+                "mutableContent": {
+                  "requests": 31500,
+                  "bodyBytes": 48503500,
+                  "originRequests": 31500
+                },
+                "appShell": {
+                  "requests": 41500,
+                  "bodyBytes": 27660000,
+                  "originRequests": 41500
+                },
+                "hashedAppAsset": {
+                  "requests": 293000,
+                  "bodyBytes": 4637831645.778012,
+                  "originRequests": 29300
+                },
+                "hashedSearchBlob": {
+                  "requests": 17250,
+                  "bodyBytes": 144444000,
+                  "originRequests": 8625
+                },
+                "notFound": {
+                  "requests": 0,
+                  "bodyBytes": 0,
+                  "originRequests": 0
+                }
+              },
+              "viewerRequests": 413250,
+              "viewerBytes": 5684687145.778012,
+              "originRequests": 110925
+            },
+            "publisher": {
+              "aws": {
+                "classA": 8050,
+                "classB": 4880,
+                "storageBytes": 8676340
+              },
+              "r2": {
+                "classA": 8050,
+                "classB": 4880,
+                "storageBytes": 12354125
+              }
+            },
+            "aws": {
+              "storage": 0.000185850840061903,
+              "publisherRequests": 0.042202,
+              "readerOriginRequests": 0.04437000000000001,
+              "viewerRequestsUS": 0,
+              "viewerRequestsPC100": 0,
+              "transfer": 0,
+              "usCanada": 0.0867578508400619,
+              "pc100Upper": 0.0867578508400619
+            },
+            "r2": {
+              "storage": 0.000185311875,
+              "publisherClassA": 0.036225,
+              "publisherClassB": 0.0017568,
+              "readerOriginRequests": 0.039932999999999996,
+              "gross": 0.07810011187499999,
+              "afterDedicatedFreeAllowance": 0,
+              "roundedAfterDedicatedFreeAllowance": 0,
+              "readerTransferGB": 5.684687145778012
+            }
+          },
+          {
+            "scenario": "S",
+            "assumptions": {
+              "q": 3,
+              "reloads": 0,
+              "headerBytes": 1024,
+              "compression": "gzip6",
+              "originRates": {
+                "siteRoot": 1,
+                "mutableContent": 1,
+                "appShell": 1,
+                "hashedAppAsset": 1,
+                "hashedSearchBlob": 1,
+                "notFound": 1
+              },
+              "sensitivity": "all-classes-100-percent"
+            },
+            "reader": {
+              "breakdown": {
+                "siteRoot": {
+                  "requests": 30000,
+                  "bodyBytes": 403080000,
+                  "originRequests": 30000
+                },
+                "mutableContent": {
+                  "requests": 31500,
+                  "bodyBytes": 48503500,
+                  "originRequests": 31500
+                },
+                "appShell": {
+                  "requests": 41500,
+                  "bodyBytes": 27660000,
+                  "originRequests": 41500
+                },
+                "hashedAppAsset": {
+                  "requests": 293000,
+                  "bodyBytes": 4637831645.778012,
+                  "originRequests": 293000
+                },
+                "hashedSearchBlob": {
+                  "requests": 17250,
+                  "bodyBytes": 144444000,
+                  "originRequests": 17250
+                },
+                "notFound": {
+                  "requests": 0,
+                  "bodyBytes": 0,
+                  "originRequests": 0
+                }
+              },
+              "viewerRequests": 413250,
+              "viewerBytes": 5684687145.778012,
+              "originRequests": 413250
+            },
+            "publisher": {
+              "aws": {
+                "classA": 8050,
+                "classB": 4880,
+                "storageBytes": 8676340
+              },
+              "r2": {
+                "classA": 8050,
+                "classB": 4880,
+                "storageBytes": 12354125
+              }
+            },
+            "aws": {
+              "storage": 0.000185850840061903,
+              "publisherRequests": 0.042202,
+              "readerOriginRequests": 0.1653,
+              "viewerRequestsUS": 0,
+              "viewerRequestsPC100": 0,
+              "transfer": 0,
+              "usCanada": 0.20768785084006192,
+              "pc100Upper": 0.20768785084006192
+            },
+            "r2": {
+              "storage": 0.000185311875,
+              "publisherClassA": 0.036225,
+              "publisherClassB": 0.0017568,
+              "readerOriginRequests": 0.14876999999999999,
+              "gross": 0.18693711187499998,
+              "afterDedicatedFreeAllowance": 0,
+              "roundedAfterDedicatedFreeAllowance": 0,
+              "readerTransferGB": 5.684687145778012
+            }
+          }
+        ]
+      },
+      {
+        "scenario": "M",
+        "rows": [
+          {
+            "scenario": "M",
+            "assumptions": {
+              "q": 3,
+              "reloads": 0,
+              "headerBytes": 1024,
+              "compression": "gzip6",
+              "originRates": {
+                "siteRoot": 0,
+                "mutableContent": 1,
+                "appShell": 1,
+                "hashedAppAsset": 0.1,
+                "hashedSearchBlob": 0.5,
+                "notFound": 1
+              },
+              "sensitivity": "roots-0-percent"
+            },
+            "reader": {
+              "breakdown": {
+                "siteRoot": {
+                  "requests": 600000,
+                  "bodyBytes": 51826000000,
+                  "originRequests": 0
+                },
+                "mutableContent": {
+                  "requests": 630000,
+                  "bodyBytes": 1213570000,
+                  "originRequests": 630000
+                },
+                "appShell": {
+                  "requests": 830000,
+                  "bodyBytes": 553200000,
+                  "originRequests": 830000
+                },
+                "hashedAppAsset": {
+                  "requests": 5860000,
+                  "bodyBytes": 92756632915.56026,
+                  "originRequests": 586000
+                },
+                "hashedSearchBlob": {
+                  "requests": 240000,
+                  "bodyBytes": 5320830000,
+                  "originRequests": 120000
+                },
+                "notFound": {
+                  "requests": 0,
+                  "bodyBytes": 0,
+                  "originRequests": 0
+                }
+              },
+              "viewerRequests": 8160000,
+              "viewerBytes": 160026072915.56024,
+              "originRequests": 2166000
+            },
+            "publisher": {
+              "aws": {
+                "classA": 192840,
+                "classB": 72480,
+                "storageBytes": 257421120
+              },
+              "r2": {
+                "classA": 192840,
+                "classB": 72480,
+                "storageBytes": 377712810
+              }
+            },
+            "aws": {
+              "storage": 0.005514068305492401,
+              "publisherRequests": 0.9931920000000001,
+              "readerOriginRequests": 0.8664000000000001,
+              "viewerRequestsUS": 0,
+              "viewerRequestsPC100": 0,
+              "transfer": 0,
+              "usCanada": 1.8651060683054925,
+              "pc100Upper": 1.8651060683054925
+            },
+            "r2": {
+              "storage": 0.00566569215,
+              "publisherClassA": 0.86778,
+              "publisherClassB": 0.0260928,
+              "readerOriginRequests": 0.77976,
+              "gross": 1.67929849215,
+              "afterDedicatedFreeAllowance": 0,
+              "roundedAfterDedicatedFreeAllowance": 0,
+              "readerTransferGB": 160.02607291556023
+            }
+          },
+          {
+            "scenario": "M",
+            "assumptions": {
+              "q": 3,
+              "reloads": 0,
+              "headerBytes": 1024,
+              "compression": "gzip6",
+              "originRates": {
+                "siteRoot": 1,
+                "mutableContent": 1,
+                "appShell": 1,
+                "hashedAppAsset": 1,
+                "hashedSearchBlob": 1,
+                "notFound": 1
+              },
+              "sensitivity": "all-classes-100-percent"
+            },
+            "reader": {
+              "breakdown": {
+                "siteRoot": {
+                  "requests": 600000,
+                  "bodyBytes": 51826000000,
+                  "originRequests": 600000
+                },
+                "mutableContent": {
+                  "requests": 630000,
+                  "bodyBytes": 1213570000,
+                  "originRequests": 630000
+                },
+                "appShell": {
+                  "requests": 830000,
+                  "bodyBytes": 553200000,
+                  "originRequests": 830000
+                },
+                "hashedAppAsset": {
+                  "requests": 5860000,
+                  "bodyBytes": 92756632915.56026,
+                  "originRequests": 5860000
+                },
+                "hashedSearchBlob": {
+                  "requests": 240000,
+                  "bodyBytes": 5320830000,
+                  "originRequests": 240000
+                },
+                "notFound": {
+                  "requests": 0,
+                  "bodyBytes": 0,
+                  "originRequests": 0
+                }
+              },
+              "viewerRequests": 8160000,
+              "viewerBytes": 160026072915.56024,
+              "originRequests": 8160000
+            },
+            "publisher": {
+              "aws": {
+                "classA": 192840,
+                "classB": 72480,
+                "storageBytes": 257421120
+              },
+              "r2": {
+                "classA": 192840,
+                "classB": 72480,
+                "storageBytes": 377712810
+              }
+            },
+            "aws": {
+              "storage": 0.005514068305492401,
+              "publisherRequests": 0.9931920000000001,
+              "readerOriginRequests": 3.2640000000000002,
+              "viewerRequestsUS": 0,
+              "viewerRequestsPC100": 0,
+              "transfer": 0,
+              "usCanada": 4.2627060683054925,
+              "pc100Upper": 4.2627060683054925
+            },
+            "r2": {
+              "storage": 0.00566569215,
+              "publisherClassA": 0.86778,
+              "publisherClassB": 0.0260928,
+              "readerOriginRequests": 2.9375999999999998,
+              "gross": 3.83713849215,
+              "afterDedicatedFreeAllowance": 0,
+              "roundedAfterDedicatedFreeAllowance": 0,
+              "readerTransferGB": 160.02607291556023
+            }
+          }
+        ]
+      },
+      {
+        "scenario": "L",
+        "rows": [
+          {
+            "scenario": "L",
+            "assumptions": {
+              "q": 3,
+              "reloads": 0,
+              "headerBytes": 1024,
+              "compression": "gzip6",
+              "originRates": {
+                "siteRoot": 0,
+                "mutableContent": 1,
+                "appShell": 1,
+                "hashedAppAsset": 0.1,
+                "hashedSearchBlob": 0.5,
+                "notFound": 1
+              },
+              "sensitivity": "roots-0-percent"
+            },
+            "reader": {
+              "breakdown": {
+                "siteRoot": {
+                  "requests": 3000000,
+                  "bodyBytes": 331625096774.19354,
+                  "originRequests": 0
+                },
+                "mutableContent": {
+                  "requests": 3150000.0000000005,
+                  "bodyBytes": 6616611290.32258,
+                  "originRequests": 3150000.0000000005
+                },
+                "appShell": {
+                  "requests": 4150000.0000000005,
+                  "bodyBytes": 2766000000,
+                  "originRequests": 4150000.0000000005
+                },
+                "hashedAppAsset": {
+                  "requests": 29300000.000000004,
+                  "bodyBytes": 463783164577.8013,
+                  "originRequests": 2930000.0000000005
+                },
+                "hashedSearchBlob": {
+                  "requests": 1190322.5806451612,
+                  "bodyBytes": 30491325000,
+                  "originRequests": 595161.2903225806
+                },
+                "notFound": {
+                  "requests": 0,
+                  "bodyBytes": 0,
+                  "originRequests": 0
+                }
+              },
+              "viewerRequests": 40790322.58064516,
+              "viewerBytes": 877051487964.8981,
+              "originRequests": 10825161.290322583
+            },
+            "publisher": {
+              "aws": {
+                "classA": 245686,
+                "classB": 74896,
+                "storageBytes": 336083565
+              },
+              "r2": {
+                "classA": 245686,
+                "classB": 74896,
+                "storageBytes": 498685474
+              }
+            },
+            "aws": {
+              "storage": 0.007199050853960216,
+              "publisherRequests": 1.2583884,
+              "readerOriginRequests": 4.330064516129034,
+              "viewerRequestsUS": 30.790322580645157,
+              "viewerRequestsPC100": 36.94838709677419,
+              "transfer": 0,
+              "usCanada": 36.38597454762815,
+              "pc100Upper": 42.54403906375718
+            },
+            "r2": {
+              "storage": 0.00748028211,
+              "publisherClassA": 1.105587,
+              "publisherClassB": 0.02696256,
+              "readerOriginRequests": 3.8970580645161297,
+              "gross": 5.03708790662613,
+              "afterDedicatedFreeAllowance": 0.32402062451612995,
+              "roundedAfterDedicatedFreeAllowance": 0.36,
+              "readerTransferGB": 877.0514879648981
+            }
+          },
+          {
+            "scenario": "L",
+            "assumptions": {
+              "q": 3,
+              "reloads": 0,
+              "headerBytes": 1024,
+              "compression": "gzip6",
+              "originRates": {
+                "siteRoot": 1,
+                "mutableContent": 1,
+                "appShell": 1,
+                "hashedAppAsset": 1,
+                "hashedSearchBlob": 1,
+                "notFound": 1
+              },
+              "sensitivity": "all-classes-100-percent"
+            },
+            "reader": {
+              "breakdown": {
+                "siteRoot": {
+                  "requests": 3000000,
+                  "bodyBytes": 331625096774.19354,
+                  "originRequests": 3000000
+                },
+                "mutableContent": {
+                  "requests": 3150000.0000000005,
+                  "bodyBytes": 6616611290.32258,
+                  "originRequests": 3150000.0000000005
+                },
+                "appShell": {
+                  "requests": 4150000.0000000005,
+                  "bodyBytes": 2766000000,
+                  "originRequests": 4150000.0000000005
+                },
+                "hashedAppAsset": {
+                  "requests": 29300000.000000004,
+                  "bodyBytes": 463783164577.8013,
+                  "originRequests": 29300000.000000004
+                },
+                "hashedSearchBlob": {
+                  "requests": 1190322.5806451612,
+                  "bodyBytes": 30491325000,
+                  "originRequests": 1190322.5806451612
+                },
+                "notFound": {
+                  "requests": 0,
+                  "bodyBytes": 0,
+                  "originRequests": 0
+                }
+              },
+              "viewerRequests": 40790322.58064516,
+              "viewerBytes": 877051487964.8981,
+              "originRequests": 40790322.58064516
+            },
+            "publisher": {
+              "aws": {
+                "classA": 245686,
+                "classB": 74896,
+                "storageBytes": 336083565
+              },
+              "r2": {
+                "classA": 245686,
+                "classB": 74896,
+                "storageBytes": 498685474
+              }
+            },
+            "aws": {
+              "storage": 0.007199050853960216,
+              "publisherRequests": 1.2583884,
+              "readerOriginRequests": 16.316129032258065,
+              "viewerRequestsUS": 30.790322580645157,
+              "viewerRequestsPC100": 36.94838709677419,
+              "transfer": 0,
+              "usCanada": 48.372039063757185,
+              "pc100Upper": 54.530103579886216
+            },
+            "r2": {
+              "storage": 0.00748028211,
+              "publisherClassA": 1.105587,
+              "publisherClassB": 0.02696256,
+              "readerOriginRequests": 14.684516129032257,
+              "gross": 15.824545971142257,
+              "afterDedicatedFreeAllowance": 11.111478689032257,
+              "roundedAfterDedicatedFreeAllowance": 11.16,
+              "readerTransferGB": 877.0514879648981
+            }
+          }
+        ]
+      }
+    ],
+    "oneFactor": [
+      {
+        "scenario": "S",
+        "q": 1,
+        "row": {
+          "scenario": "S",
+          "assumptions": {
+            "q": 1,
+            "reloads": 0,
+            "headerBytes": 1024,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            }
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 90000,
+                "bodyBytes": 1209240000,
+                "originRequests": 90000
+              },
+              "mutableContent": {
+                "requests": 31500,
+                "bodyBytes": 50593500,
+                "originRequests": 31500
+              },
+              "appShell": {
+                "requests": 61500,
+                "bodyBytes": 82980000,
+                "originRequests": 61500
+              },
+              "hashedAppAsset": {
+                "requests": 873000,
+                "bodyBytes": 13907104390.652613,
+                "originRequests": 87300
+              },
+              "hashedSearchBlob": {
+                "requests": 17250,
+                "bodyBytes": 144444000,
+                "originRequests": 8625
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 1073250,
+            "viewerBytes": 16493369890.652613,
+            "originRequests": 278925
+          },
+          "publisher": {
+            "aws": {
+              "classA": 8050,
+              "classB": 4880,
+              "storageBytes": 8676340
+            },
+            "r2": {
+              "classA": 8050,
+              "classB": 4880,
+              "storageBytes": 12354125
+            }
+          },
+          "aws": {
+            "storage": 0.000185850840061903,
+            "publisherRequests": 0.042202,
+            "readerOriginRequests": 0.11157000000000002,
+            "viewerRequestsUS": 0,
+            "viewerRequestsPC100": 0,
+            "transfer": 0,
+            "usCanada": 0.15395785084006192,
+            "pc100Upper": 0.15395785084006192
+          },
+          "r2": {
+            "storage": 0.000185311875,
+            "publisherClassA": 0.036225,
+            "publisherClassB": 0.0017568,
+            "readerOriginRequests": 0.100413,
+            "gross": 0.138580111875,
+            "afterDedicatedFreeAllowance": 0,
+            "roundedAfterDedicatedFreeAllowance": 0,
+            "readerTransferGB": 16.493369890652612
+          }
+        }
+      },
+      {
+        "scenario": "S",
+        "q": 3,
+        "row": {
+          "scenario": "S",
+          "assumptions": {
+            "q": 3,
+            "reloads": 0,
+            "headerBytes": 1024,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            }
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 30000,
+                "bodyBytes": 403080000,
+                "originRequests": 30000
+              },
+              "mutableContent": {
+                "requests": 31500,
+                "bodyBytes": 48503500,
+                "originRequests": 31500
+              },
+              "appShell": {
+                "requests": 41500,
+                "bodyBytes": 27660000,
+                "originRequests": 41500
+              },
+              "hashedAppAsset": {
+                "requests": 293000,
+                "bodyBytes": 4637831645.778012,
+                "originRequests": 29300
+              },
+              "hashedSearchBlob": {
+                "requests": 17250,
+                "bodyBytes": 144444000,
+                "originRequests": 8625
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 413250,
+            "viewerBytes": 5684687145.778012,
+            "originRequests": 140925
+          },
+          "publisher": {
+            "aws": {
+              "classA": 8050,
+              "classB": 4880,
+              "storageBytes": 8676340
+            },
+            "r2": {
+              "classA": 8050,
+              "classB": 4880,
+              "storageBytes": 12354125
+            }
+          },
+          "aws": {
+            "storage": 0.000185850840061903,
+            "publisherRequests": 0.042202,
+            "readerOriginRequests": 0.05637,
+            "viewerRequestsUS": 0,
+            "viewerRequestsPC100": 0,
+            "transfer": 0,
+            "usCanada": 0.09875785084006192,
+            "pc100Upper": 0.09875785084006192
+          },
+          "r2": {
+            "storage": 0.000185311875,
+            "publisherClassA": 0.036225,
+            "publisherClassB": 0.0017568,
+            "readerOriginRequests": 0.050733,
+            "gross": 0.08890011187499999,
+            "afterDedicatedFreeAllowance": 0,
+            "roundedAfterDedicatedFreeAllowance": 0,
+            "readerTransferGB": 5.684687145778012
+          }
+        }
+      },
+      {
+        "scenario": "S",
+        "q": 5,
+        "row": {
+          "scenario": "S",
+          "assumptions": {
+            "q": 5,
+            "reloads": 0,
+            "headerBytes": 1024,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            }
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 18000,
+                "bodyBytes": 241848000,
+                "originRequests": 18000
+              },
+              "mutableContent": {
+                "requests": 31500,
+                "bodyBytes": 48085500,
+                "originRequests": 31500
+              },
+              "appShell": {
+                "requests": 37500,
+                "bodyBytes": 16596000,
+                "originRequests": 37500
+              },
+              "hashedAppAsset": {
+                "requests": 177000,
+                "bodyBytes": 2783977096.8030925,
+                "originRequests": 17700
+              },
+              "hashedSearchBlob": {
+                "requests": 17250,
+                "bodyBytes": 144444000,
+                "originRequests": 8625
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 281250,
+            "viewerBytes": 3522950596.8030925,
+            "originRequests": 113325
+          },
+          "publisher": {
+            "aws": {
+              "classA": 8050,
+              "classB": 4880,
+              "storageBytes": 8676340
+            },
+            "r2": {
+              "classA": 8050,
+              "classB": 4880,
+              "storageBytes": 12354125
+            }
+          },
+          "aws": {
+            "storage": 0.000185850840061903,
+            "publisherRequests": 0.042202,
+            "readerOriginRequests": 0.04533,
+            "viewerRequestsUS": 0,
+            "viewerRequestsPC100": 0,
+            "transfer": 0,
+            "usCanada": 0.08771785084006191,
+            "pc100Upper": 0.08771785084006191
+          },
+          "r2": {
+            "storage": 0.000185311875,
+            "publisherClassA": 0.036225,
+            "publisherClassB": 0.0017568,
+            "readerOriginRequests": 0.040797,
+            "gross": 0.07896411187499999,
+            "afterDedicatedFreeAllowance": 0,
+            "roundedAfterDedicatedFreeAllowance": 0,
+            "readerTransferGB": 3.5229505968030925
+          }
+        }
+      },
+      {
+        "scenario": "S",
+        "compression": "gzip6",
+        "row": {
+          "scenario": "S",
+          "assumptions": {
+            "q": 3,
+            "reloads": 0,
+            "headerBytes": 1024,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            }
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 30000,
+                "bodyBytes": 403080000,
+                "originRequests": 30000
+              },
+              "mutableContent": {
+                "requests": 31500,
+                "bodyBytes": 48503500,
+                "originRequests": 31500
+              },
+              "appShell": {
+                "requests": 41500,
+                "bodyBytes": 27660000,
+                "originRequests": 41500
+              },
+              "hashedAppAsset": {
+                "requests": 293000,
+                "bodyBytes": 4637831645.778012,
+                "originRequests": 29300
+              },
+              "hashedSearchBlob": {
+                "requests": 17250,
+                "bodyBytes": 144444000,
+                "originRequests": 8625
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 413250,
+            "viewerBytes": 5684687145.778012,
+            "originRequests": 140925
+          },
+          "publisher": {
+            "aws": {
+              "classA": 8050,
+              "classB": 4880,
+              "storageBytes": 8676340
+            },
+            "r2": {
+              "classA": 8050,
+              "classB": 4880,
+              "storageBytes": 12354125
+            }
+          },
+          "aws": {
+            "storage": 0.000185850840061903,
+            "publisherRequests": 0.042202,
+            "readerOriginRequests": 0.05637,
+            "viewerRequestsUS": 0,
+            "viewerRequestsPC100": 0,
+            "transfer": 0,
+            "usCanada": 0.09875785084006192,
+            "pc100Upper": 0.09875785084006192
+          },
+          "r2": {
+            "storage": 0.000185311875,
+            "publisherClassA": 0.036225,
+            "publisherClassB": 0.0017568,
+            "readerOriginRequests": 0.050733,
+            "gross": 0.08890011187499999,
+            "afterDedicatedFreeAllowance": 0,
+            "roundedAfterDedicatedFreeAllowance": 0,
+            "readerTransferGB": 5.684687145778012
+          }
+        }
+      },
+      {
+        "scenario": "S",
+        "compression": "brotli5",
+        "row": {
+          "scenario": "S",
+          "assumptions": {
+            "q": 3,
+            "reloads": 0,
+            "headerBytes": 1024,
+            "compression": "brotli5",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            }
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 30000,
+                "bodyBytes": 403080000,
+                "originRequests": 30000
+              },
+              "mutableContent": {
+                "requests": 31500,
+                "bodyBytes": 48503500,
+                "originRequests": 31500
+              },
+              "appShell": {
+                "requests": 41500,
+                "bodyBytes": 27660000,
+                "originRequests": 41500
+              },
+              "hashedAppAsset": {
+                "requests": 293000,
+                "bodyBytes": 4354520197.388626,
+                "originRequests": 29300
+              },
+              "hashedSearchBlob": {
+                "requests": 17250,
+                "bodyBytes": 144444000,
+                "originRequests": 8625
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 413250,
+            "viewerBytes": 5401375697.388626,
+            "originRequests": 140925
+          },
+          "publisher": {
+            "aws": {
+              "classA": 8050,
+              "classB": 4880,
+              "storageBytes": 8676340
+            },
+            "r2": {
+              "classA": 8050,
+              "classB": 4880,
+              "storageBytes": 12354125
+            }
+          },
+          "aws": {
+            "storage": 0.000185850840061903,
+            "publisherRequests": 0.042202,
+            "readerOriginRequests": 0.05637,
+            "viewerRequestsUS": 0,
+            "viewerRequestsPC100": 0,
+            "transfer": 0,
+            "usCanada": 0.09875785084006192,
+            "pc100Upper": 0.09875785084006192
+          },
+          "r2": {
+            "storage": 0.000185311875,
+            "publisherClassA": 0.036225,
+            "publisherClassB": 0.0017568,
+            "readerOriginRequests": 0.050733,
+            "gross": 0.08890011187499999,
+            "afterDedicatedFreeAllowance": 0,
+            "roundedAfterDedicatedFreeAllowance": 0,
+            "readerTransferGB": 5.401375697388626
+          }
+        }
+      },
+      {
+        "scenario": "S",
+        "reloads": 0,
+        "row": {
+          "scenario": "S",
+          "assumptions": {
+            "q": 3,
+            "reloads": 0,
+            "headerBytes": 1024,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            }
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 30000,
+                "bodyBytes": 403080000,
+                "originRequests": 30000
+              },
+              "mutableContent": {
+                "requests": 31500,
+                "bodyBytes": 48503500,
+                "originRequests": 31500
+              },
+              "appShell": {
+                "requests": 41500,
+                "bodyBytes": 27660000,
+                "originRequests": 41500
+              },
+              "hashedAppAsset": {
+                "requests": 293000,
+                "bodyBytes": 4637831645.778012,
+                "originRequests": 29300
+              },
+              "hashedSearchBlob": {
+                "requests": 17250,
+                "bodyBytes": 144444000,
+                "originRequests": 8625
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 413250,
+            "viewerBytes": 5684687145.778012,
+            "originRequests": 140925
+          },
+          "publisher": {
+            "aws": {
+              "classA": 8050,
+              "classB": 4880,
+              "storageBytes": 8676340
+            },
+            "r2": {
+              "classA": 8050,
+              "classB": 4880,
+              "storageBytes": 12354125
+            }
+          },
+          "aws": {
+            "storage": 0.000185850840061903,
+            "publisherRequests": 0.042202,
+            "readerOriginRequests": 0.05637,
+            "viewerRequestsUS": 0,
+            "viewerRequestsPC100": 0,
+            "transfer": 0,
+            "usCanada": 0.09875785084006192,
+            "pc100Upper": 0.09875785084006192
+          },
+          "r2": {
+            "storage": 0.000185311875,
+            "publisherClassA": 0.036225,
+            "publisherClassB": 0.0017568,
+            "readerOriginRequests": 0.050733,
+            "gross": 0.08890011187499999,
+            "afterDedicatedFreeAllowance": 0,
+            "roundedAfterDedicatedFreeAllowance": 0,
+            "readerTransferGB": 5.684687145778012
+          }
+        }
+      },
+      {
+        "scenario": "S",
+        "reloads": 1,
+        "row": {
+          "scenario": "S",
+          "assumptions": {
+            "q": 3,
+            "reloads": 1,
+            "headerBytes": 1024,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            }
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 60000,
+                "bodyBytes": 414850000,
+                "originRequests": 60000
+              },
+              "mutableContent": {
+                "requests": 41500,
+                "bodyBytes": 48503500,
+                "originRequests": 41500
+              },
+              "appShell": {
+                "requests": 61500,
+                "bodyBytes": 41490000,
+                "originRequests": 61500
+              },
+              "hashedAppAsset": {
+                "requests": 313000,
+                "bodyBytes": 4637831645.778012,
+                "originRequests": 31300
+              },
+              "hashedSearchBlob": {
+                "requests": 17250,
+                "bodyBytes": 144444000,
+                "originRequests": 8625
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 493250,
+            "viewerBytes": 5792207145.778012,
+            "originRequests": 202925
+          },
+          "publisher": {
+            "aws": {
+              "classA": 8050,
+              "classB": 4880,
+              "storageBytes": 8676340
+            },
+            "r2": {
+              "classA": 8050,
+              "classB": 4880,
+              "storageBytes": 12354125
+            }
+          },
+          "aws": {
+            "storage": 0.000185850840061903,
+            "publisherRequests": 0.042202,
+            "readerOriginRequests": 0.08117,
+            "viewerRequestsUS": 0,
+            "viewerRequestsPC100": 0,
+            "transfer": 0,
+            "usCanada": 0.1235578508400619,
+            "pc100Upper": 0.1235578508400619
+          },
+          "r2": {
+            "storage": 0.000185311875,
+            "publisherClassA": 0.036225,
+            "publisherClassB": 0.0017568,
+            "readerOriginRequests": 0.07305299999999999,
+            "gross": 0.111220111875,
+            "afterDedicatedFreeAllowance": 0,
+            "roundedAfterDedicatedFreeAllowance": 0,
+            "readerTransferGB": 5.792207145778012
+          }
+        }
+      },
+      {
+        "scenario": "S",
+        "reloads": 1,
+        "reloadIndexChanged": false,
+        "row": {
+          "scenario": "S",
+          "assumptions": {
+            "q": 3,
+            "reloads": 1,
+            "headerBytes": 1024,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            },
+            "reloadIndexChanged": false
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 60000,
+                "bodyBytes": 414850000,
+                "originRequests": 60000
+              },
+              "mutableContent": {
+                "requests": 41500,
+                "bodyBytes": 48503500,
+                "originRequests": 41500
+              },
+              "appShell": {
+                "requests": 61500,
+                "bodyBytes": 41490000,
+                "originRequests": 61500
+              },
+              "hashedAppAsset": {
+                "requests": 313000,
+                "bodyBytes": 4637831645.778012,
+                "originRequests": 31300
+              },
+              "hashedSearchBlob": {
+                "requests": 17250,
+                "bodyBytes": 144444000,
+                "originRequests": 8625
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 493250,
+            "viewerBytes": 5792207145.778012,
+            "originRequests": 202925
+          },
+          "publisher": {
+            "aws": {
+              "classA": 8050,
+              "classB": 4880,
+              "storageBytes": 8676340
+            },
+            "r2": {
+              "classA": 8050,
+              "classB": 4880,
+              "storageBytes": 12354125
+            }
+          },
+          "aws": {
+            "storage": 0.000185850840061903,
+            "publisherRequests": 0.042202,
+            "readerOriginRequests": 0.08117,
+            "viewerRequestsUS": 0,
+            "viewerRequestsPC100": 0,
+            "transfer": 0,
+            "usCanada": 0.1235578508400619,
+            "pc100Upper": 0.1235578508400619
+          },
+          "r2": {
+            "storage": 0.000185311875,
+            "publisherClassA": 0.036225,
+            "publisherClassB": 0.0017568,
+            "readerOriginRequests": 0.07305299999999999,
+            "gross": 0.111220111875,
+            "afterDedicatedFreeAllowance": 0,
+            "roundedAfterDedicatedFreeAllowance": 0,
+            "readerTransferGB": 5.792207145778012
+          }
+        }
+      },
+      {
+        "scenario": "S",
+        "reloads": 1,
+        "reloadIndexChanged": true,
+        "row": {
+          "scenario": "S",
+          "assumptions": {
+            "q": 3,
+            "reloads": 1,
+            "headerBytes": 1024,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            },
+            "reloadIndexChanged": true
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 60000,
+                "bodyBytes": 802650000,
+                "originRequests": 60000
+              },
+              "mutableContent": {
+                "requests": 41500,
+                "bodyBytes": 48503500,
+                "originRequests": 41500
+              },
+              "appShell": {
+                "requests": 61500,
+                "bodyBytes": 41490000,
+                "originRequests": 61500
+              },
+              "hashedAppAsset": {
+                "requests": 313000,
+                "bodyBytes": 4637831645.778012,
+                "originRequests": 31300
+              },
+              "hashedSearchBlob": {
+                "requests": 17250,
+                "bodyBytes": 144444000,
+                "originRequests": 8625
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 493250,
+            "viewerBytes": 6180007145.778012,
+            "originRequests": 202925
+          },
+          "publisher": {
+            "aws": {
+              "classA": 8050,
+              "classB": 4880,
+              "storageBytes": 8676340
+            },
+            "r2": {
+              "classA": 8050,
+              "classB": 4880,
+              "storageBytes": 12354125
+            }
+          },
+          "aws": {
+            "storage": 0.000185850840061903,
+            "publisherRequests": 0.042202,
+            "readerOriginRequests": 0.08117,
+            "viewerRequestsUS": 0,
+            "viewerRequestsPC100": 0,
+            "transfer": 0,
+            "usCanada": 0.1235578508400619,
+            "pc100Upper": 0.1235578508400619
+          },
+          "r2": {
+            "storage": 0.000185311875,
+            "publisherClassA": 0.036225,
+            "publisherClassB": 0.0017568,
+            "readerOriginRequests": 0.07305299999999999,
+            "gross": 0.111220111875,
+            "afterDedicatedFreeAllowance": 0,
+            "roundedAfterDedicatedFreeAllowance": 0,
+            "readerTransferGB": 6.180007145778013
+          }
+        }
+      },
+      {
+        "scenario": "S",
+        "headerBytes": 512,
+        "row": {
+          "scenario": "S",
+          "assumptions": {
+            "q": 3,
+            "reloads": 0,
+            "headerBytes": 512,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            }
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 30000,
+                "bodyBytes": 403080000,
+                "originRequests": 30000
+              },
+              "mutableContent": {
+                "requests": 31500,
+                "bodyBytes": 48503500,
+                "originRequests": 31500
+              },
+              "appShell": {
+                "requests": 41500,
+                "bodyBytes": 27660000,
+                "originRequests": 41500
+              },
+              "hashedAppAsset": {
+                "requests": 293000,
+                "bodyBytes": 4637831645.778012,
+                "originRequests": 29300
+              },
+              "hashedSearchBlob": {
+                "requests": 17250,
+                "bodyBytes": 144444000,
+                "originRequests": 8625
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 413250,
+            "viewerBytes": 5473103145.778012,
+            "originRequests": 140925
+          },
+          "publisher": {
+            "aws": {
+              "classA": 8050,
+              "classB": 4880,
+              "storageBytes": 8676340
+            },
+            "r2": {
+              "classA": 8050,
+              "classB": 4880,
+              "storageBytes": 12354125
+            }
+          },
+          "aws": {
+            "storage": 0.000185850840061903,
+            "publisherRequests": 0.042202,
+            "readerOriginRequests": 0.05637,
+            "viewerRequestsUS": 0,
+            "viewerRequestsPC100": 0,
+            "transfer": 0,
+            "usCanada": 0.09875785084006192,
+            "pc100Upper": 0.09875785084006192
+          },
+          "r2": {
+            "storage": 0.000185311875,
+            "publisherClassA": 0.036225,
+            "publisherClassB": 0.0017568,
+            "readerOriginRequests": 0.050733,
+            "gross": 0.08890011187499999,
+            "afterDedicatedFreeAllowance": 0,
+            "roundedAfterDedicatedFreeAllowance": 0,
+            "readerTransferGB": 5.473103145778012
+          }
+        }
+      },
+      {
+        "scenario": "S",
+        "headerBytes": 1024,
+        "row": {
+          "scenario": "S",
+          "assumptions": {
+            "q": 3,
+            "reloads": 0,
+            "headerBytes": 1024,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            }
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 30000,
+                "bodyBytes": 403080000,
+                "originRequests": 30000
+              },
+              "mutableContent": {
+                "requests": 31500,
+                "bodyBytes": 48503500,
+                "originRequests": 31500
+              },
+              "appShell": {
+                "requests": 41500,
+                "bodyBytes": 27660000,
+                "originRequests": 41500
+              },
+              "hashedAppAsset": {
+                "requests": 293000,
+                "bodyBytes": 4637831645.778012,
+                "originRequests": 29300
+              },
+              "hashedSearchBlob": {
+                "requests": 17250,
+                "bodyBytes": 144444000,
+                "originRequests": 8625
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 413250,
+            "viewerBytes": 5684687145.778012,
+            "originRequests": 140925
+          },
+          "publisher": {
+            "aws": {
+              "classA": 8050,
+              "classB": 4880,
+              "storageBytes": 8676340
+            },
+            "r2": {
+              "classA": 8050,
+              "classB": 4880,
+              "storageBytes": 12354125
+            }
+          },
+          "aws": {
+            "storage": 0.000185850840061903,
+            "publisherRequests": 0.042202,
+            "readerOriginRequests": 0.05637,
+            "viewerRequestsUS": 0,
+            "viewerRequestsPC100": 0,
+            "transfer": 0,
+            "usCanada": 0.09875785084006192,
+            "pc100Upper": 0.09875785084006192
+          },
+          "r2": {
+            "storage": 0.000185311875,
+            "publisherClassA": 0.036225,
+            "publisherClassB": 0.0017568,
+            "readerOriginRequests": 0.050733,
+            "gross": 0.08890011187499999,
+            "afterDedicatedFreeAllowance": 0,
+            "roundedAfterDedicatedFreeAllowance": 0,
+            "readerTransferGB": 5.684687145778012
+          }
+        }
+      },
+      {
+        "scenario": "S",
+        "headerBytes": 2048,
+        "row": {
+          "scenario": "S",
+          "assumptions": {
+            "q": 3,
+            "reloads": 0,
+            "headerBytes": 2048,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            }
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 30000,
+                "bodyBytes": 403080000,
+                "originRequests": 30000
+              },
+              "mutableContent": {
+                "requests": 31500,
+                "bodyBytes": 48503500,
+                "originRequests": 31500
+              },
+              "appShell": {
+                "requests": 41500,
+                "bodyBytes": 27660000,
+                "originRequests": 41500
+              },
+              "hashedAppAsset": {
+                "requests": 293000,
+                "bodyBytes": 4637831645.778012,
+                "originRequests": 29300
+              },
+              "hashedSearchBlob": {
+                "requests": 17250,
+                "bodyBytes": 144444000,
+                "originRequests": 8625
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 413250,
+            "viewerBytes": 6107855145.778012,
+            "originRequests": 140925
+          },
+          "publisher": {
+            "aws": {
+              "classA": 8050,
+              "classB": 4880,
+              "storageBytes": 8676340
+            },
+            "r2": {
+              "classA": 8050,
+              "classB": 4880,
+              "storageBytes": 12354125
+            }
+          },
+          "aws": {
+            "storage": 0.000185850840061903,
+            "publisherRequests": 0.042202,
+            "readerOriginRequests": 0.05637,
+            "viewerRequestsUS": 0,
+            "viewerRequestsPC100": 0,
+            "transfer": 0,
+            "usCanada": 0.09875785084006192,
+            "pc100Upper": 0.09875785084006192
+          },
+          "r2": {
+            "storage": 0.000185311875,
+            "publisherClassA": 0.036225,
+            "publisherClassB": 0.0017568,
+            "readerOriginRequests": 0.050733,
+            "gross": 0.08890011187499999,
+            "afterDedicatedFreeAllowance": 0,
+            "roundedAfterDedicatedFreeAllowance": 0,
+            "readerTransferGB": 6.107855145778013
+          }
+        }
+      },
+      {
+        "scenario": "M",
+        "q": 1,
+        "row": {
+          "scenario": "M",
+          "assumptions": {
+            "q": 1,
+            "reloads": 0,
+            "headerBytes": 1024,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            }
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 1800000,
+                "bodyBytes": 155478000000,
+                "originRequests": 1800000
+              },
+              "mutableContent": {
+                "requests": 630000,
+                "bodyBytes": 1267770000,
+                "originRequests": 630000
+              },
+              "appShell": {
+                "requests": 1230000,
+                "bodyBytes": 1659600000,
+                "originRequests": 1230000
+              },
+              "hashedAppAsset": {
+                "requests": 17460000,
+                "bodyBytes": 278142087813.0523,
+                "originRequests": 1746000
+              },
+              "hashedSearchBlob": {
+                "requests": 240000,
+                "bodyBytes": 5320830000,
+                "originRequests": 120000
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 21360000,
+            "viewerBytes": 463740927813.0523,
+            "originRequests": 5526000
+          },
+          "publisher": {
+            "aws": {
+              "classA": 192840,
+              "classB": 72480,
+              "storageBytes": 257421120
+            },
+            "r2": {
+              "classA": 192840,
+              "classB": 72480,
+              "storageBytes": 377712810
+            }
+          },
+          "aws": {
+            "storage": 0.005514068305492401,
+            "publisherRequests": 0.9931920000000001,
+            "readerOriginRequests": 2.2104000000000004,
+            "viewerRequestsUS": 11.36,
+            "viewerRequestsPC100": 13.632,
+            "transfer": 0,
+            "usCanada": 14.569106068305492,
+            "pc100Upper": 16.841106068305493
+          },
+          "r2": {
+            "storage": 0.00566569215,
+            "publisherClassA": 0.86778,
+            "publisherClassB": 0.0260928,
+            "readerOriginRequests": 1.98936,
+            "gross": 2.88889849215,
+            "afterDedicatedFreeAllowance": 0,
+            "roundedAfterDedicatedFreeAllowance": 0,
+            "readerTransferGB": 463.7409278130523
+          }
+        }
+      },
+      {
+        "scenario": "M",
+        "q": 3,
+        "row": {
+          "scenario": "M",
+          "assumptions": {
+            "q": 3,
+            "reloads": 0,
+            "headerBytes": 1024,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            }
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 600000,
+                "bodyBytes": 51826000000,
+                "originRequests": 600000
+              },
+              "mutableContent": {
+                "requests": 630000,
+                "bodyBytes": 1213570000,
+                "originRequests": 630000
+              },
+              "appShell": {
+                "requests": 830000,
+                "bodyBytes": 553200000,
+                "originRequests": 830000
+              },
+              "hashedAppAsset": {
+                "requests": 5860000,
+                "bodyBytes": 92756632915.56026,
+                "originRequests": 586000
+              },
+              "hashedSearchBlob": {
+                "requests": 240000,
+                "bodyBytes": 5320830000,
+                "originRequests": 120000
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 8160000,
+            "viewerBytes": 160026072915.56024,
+            "originRequests": 2766000
+          },
+          "publisher": {
+            "aws": {
+              "classA": 192840,
+              "classB": 72480,
+              "storageBytes": 257421120
+            },
+            "r2": {
+              "classA": 192840,
+              "classB": 72480,
+              "storageBytes": 377712810
+            }
+          },
+          "aws": {
+            "storage": 0.005514068305492401,
+            "publisherRequests": 0.9931920000000001,
+            "readerOriginRequests": 1.1064,
+            "viewerRequestsUS": 0,
+            "viewerRequestsPC100": 0,
+            "transfer": 0,
+            "usCanada": 2.1051060683054925,
+            "pc100Upper": 2.1051060683054925
+          },
+          "r2": {
+            "storage": 0.00566569215,
+            "publisherClassA": 0.86778,
+            "publisherClassB": 0.0260928,
+            "readerOriginRequests": 0.99576,
+            "gross": 1.89529849215,
+            "afterDedicatedFreeAllowance": 0,
+            "roundedAfterDedicatedFreeAllowance": 0,
+            "readerTransferGB": 160.02607291556023
+          }
+        }
+      },
+      {
+        "scenario": "M",
+        "q": 5,
+        "row": {
+          "scenario": "M",
+          "assumptions": {
+            "q": 5,
+            "reloads": 0,
+            "headerBytes": 1024,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            }
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 360000,
+                "bodyBytes": 31095600000,
+                "originRequests": 360000
+              },
+              "mutableContent": {
+                "requests": 630000,
+                "bodyBytes": 1202730000,
+                "originRequests": 630000
+              },
+              "appShell": {
+                "requests": 750000,
+                "bodyBytes": 331920000,
+                "originRequests": 750000
+              },
+              "hashedAppAsset": {
+                "requests": 3540000,
+                "bodyBytes": 55679541936.06185,
+                "originRequests": 354000
+              },
+              "hashedSearchBlob": {
+                "requests": 240000,
+                "bodyBytes": 5320830000,
+                "originRequests": 120000
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 5520000,
+            "viewerBytes": 99283101936.06186,
+            "originRequests": 2214000
+          },
+          "publisher": {
+            "aws": {
+              "classA": 192840,
+              "classB": 72480,
+              "storageBytes": 257421120
+            },
+            "r2": {
+              "classA": 192840,
+              "classB": 72480,
+              "storageBytes": 377712810
+            }
+          },
+          "aws": {
+            "storage": 0.005514068305492401,
+            "publisherRequests": 0.9931920000000001,
+            "readerOriginRequests": 0.8856,
+            "viewerRequestsUS": 0,
+            "viewerRequestsPC100": 0,
+            "transfer": 0,
+            "usCanada": 1.8843060683054924,
+            "pc100Upper": 1.8843060683054924
+          },
+          "r2": {
+            "storage": 0.00566569215,
+            "publisherClassA": 0.86778,
+            "publisherClassB": 0.0260928,
+            "readerOriginRequests": 0.79704,
+            "gross": 1.69657849215,
+            "afterDedicatedFreeAllowance": 0,
+            "roundedAfterDedicatedFreeAllowance": 0,
+            "readerTransferGB": 99.28310193606185
+          }
+        }
+      },
+      {
+        "scenario": "M",
+        "compression": "gzip6",
+        "row": {
+          "scenario": "M",
+          "assumptions": {
+            "q": 3,
+            "reloads": 0,
+            "headerBytes": 1024,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            }
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 600000,
+                "bodyBytes": 51826000000,
+                "originRequests": 600000
+              },
+              "mutableContent": {
+                "requests": 630000,
+                "bodyBytes": 1213570000,
+                "originRequests": 630000
+              },
+              "appShell": {
+                "requests": 830000,
+                "bodyBytes": 553200000,
+                "originRequests": 830000
+              },
+              "hashedAppAsset": {
+                "requests": 5860000,
+                "bodyBytes": 92756632915.56026,
+                "originRequests": 586000
+              },
+              "hashedSearchBlob": {
+                "requests": 240000,
+                "bodyBytes": 5320830000,
+                "originRequests": 120000
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 8160000,
+            "viewerBytes": 160026072915.56024,
+            "originRequests": 2766000
+          },
+          "publisher": {
+            "aws": {
+              "classA": 192840,
+              "classB": 72480,
+              "storageBytes": 257421120
+            },
+            "r2": {
+              "classA": 192840,
+              "classB": 72480,
+              "storageBytes": 377712810
+            }
+          },
+          "aws": {
+            "storage": 0.005514068305492401,
+            "publisherRequests": 0.9931920000000001,
+            "readerOriginRequests": 1.1064,
+            "viewerRequestsUS": 0,
+            "viewerRequestsPC100": 0,
+            "transfer": 0,
+            "usCanada": 2.1051060683054925,
+            "pc100Upper": 2.1051060683054925
+          },
+          "r2": {
+            "storage": 0.00566569215,
+            "publisherClassA": 0.86778,
+            "publisherClassB": 0.0260928,
+            "readerOriginRequests": 0.99576,
+            "gross": 1.89529849215,
+            "afterDedicatedFreeAllowance": 0,
+            "roundedAfterDedicatedFreeAllowance": 0,
+            "readerTransferGB": 160.02607291556023
+          }
+        }
+      },
+      {
+        "scenario": "M",
+        "compression": "brotli5",
+        "row": {
+          "scenario": "M",
+          "assumptions": {
+            "q": 3,
+            "reloads": 0,
+            "headerBytes": 1024,
+            "compression": "brotli5",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            }
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 600000,
+                "bodyBytes": 51826000000,
+                "originRequests": 600000
+              },
+              "mutableContent": {
+                "requests": 630000,
+                "bodyBytes": 1213570000,
+                "originRequests": 630000
+              },
+              "appShell": {
+                "requests": 830000,
+                "bodyBytes": 553200000,
+                "originRequests": 830000
+              },
+              "hashedAppAsset": {
+                "requests": 5860000,
+                "bodyBytes": 87090403947.77252,
+                "originRequests": 586000
+              },
+              "hashedSearchBlob": {
+                "requests": 240000,
+                "bodyBytes": 5320830000,
+                "originRequests": 120000
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 8160000,
+            "viewerBytes": 154359843947.77252,
+            "originRequests": 2766000
+          },
+          "publisher": {
+            "aws": {
+              "classA": 192840,
+              "classB": 72480,
+              "storageBytes": 257421120
+            },
+            "r2": {
+              "classA": 192840,
+              "classB": 72480,
+              "storageBytes": 377712810
+            }
+          },
+          "aws": {
+            "storage": 0.005514068305492401,
+            "publisherRequests": 0.9931920000000001,
+            "readerOriginRequests": 1.1064,
+            "viewerRequestsUS": 0,
+            "viewerRequestsPC100": 0,
+            "transfer": 0,
+            "usCanada": 2.1051060683054925,
+            "pc100Upper": 2.1051060683054925
+          },
+          "r2": {
+            "storage": 0.00566569215,
+            "publisherClassA": 0.86778,
+            "publisherClassB": 0.0260928,
+            "readerOriginRequests": 0.99576,
+            "gross": 1.89529849215,
+            "afterDedicatedFreeAllowance": 0,
+            "roundedAfterDedicatedFreeAllowance": 0,
+            "readerTransferGB": 154.35984394777253
+          }
+        }
+      },
+      {
+        "scenario": "M",
+        "reloads": 0,
+        "row": {
+          "scenario": "M",
+          "assumptions": {
+            "q": 3,
+            "reloads": 0,
+            "headerBytes": 1024,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            }
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 600000,
+                "bodyBytes": 51826000000,
+                "originRequests": 600000
+              },
+              "mutableContent": {
+                "requests": 630000,
+                "bodyBytes": 1213570000,
+                "originRequests": 630000
+              },
+              "appShell": {
+                "requests": 830000,
+                "bodyBytes": 553200000,
+                "originRequests": 830000
+              },
+              "hashedAppAsset": {
+                "requests": 5860000,
+                "bodyBytes": 92756632915.56026,
+                "originRequests": 586000
+              },
+              "hashedSearchBlob": {
+                "requests": 240000,
+                "bodyBytes": 5320830000,
+                "originRequests": 120000
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 8160000,
+            "viewerBytes": 160026072915.56024,
+            "originRequests": 2766000
+          },
+          "publisher": {
+            "aws": {
+              "classA": 192840,
+              "classB": 72480,
+              "storageBytes": 257421120
+            },
+            "r2": {
+              "classA": 192840,
+              "classB": 72480,
+              "storageBytes": 377712810
+            }
+          },
+          "aws": {
+            "storage": 0.005514068305492401,
+            "publisherRequests": 0.9931920000000001,
+            "readerOriginRequests": 1.1064,
+            "viewerRequestsUS": 0,
+            "viewerRequestsPC100": 0,
+            "transfer": 0,
+            "usCanada": 2.1051060683054925,
+            "pc100Upper": 2.1051060683054925
+          },
+          "r2": {
+            "storage": 0.00566569215,
+            "publisherClassA": 0.86778,
+            "publisherClassB": 0.0260928,
+            "readerOriginRequests": 0.99576,
+            "gross": 1.89529849215,
+            "afterDedicatedFreeAllowance": 0,
+            "roundedAfterDedicatedFreeAllowance": 0,
+            "readerTransferGB": 160.02607291556023
+          }
+        }
+      },
+      {
+        "scenario": "M",
+        "reloads": 1,
+        "row": {
+          "scenario": "M",
+          "assumptions": {
+            "q": 3,
+            "reloads": 1,
+            "headerBytes": 1024,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            }
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 1200000,
+                "bodyBytes": 51978600000,
+                "originRequests": 1200000
+              },
+              "mutableContent": {
+                "requests": 830000,
+                "bodyBytes": 1213570000,
+                "originRequests": 830000
+              },
+              "appShell": {
+                "requests": 1230000,
+                "bodyBytes": 829800000,
+                "originRequests": 1230000
+              },
+              "hashedAppAsset": {
+                "requests": 6260000,
+                "bodyBytes": 92756632915.56026,
+                "originRequests": 626000
+              },
+              "hashedSearchBlob": {
+                "requests": 240000,
+                "bodyBytes": 5320830000,
+                "originRequests": 120000
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 9760000,
+            "viewerBytes": 162093672915.56024,
+            "originRequests": 4006000
+          },
+          "publisher": {
+            "aws": {
+              "classA": 192840,
+              "classB": 72480,
+              "storageBytes": 257421120
+            },
+            "r2": {
+              "classA": 192840,
+              "classB": 72480,
+              "storageBytes": 377712810
+            }
+          },
+          "aws": {
+            "storage": 0.005514068305492401,
+            "publisherRequests": 0.9931920000000001,
+            "readerOriginRequests": 1.6024,
+            "viewerRequestsUS": 0,
+            "viewerRequestsPC100": 0,
+            "transfer": 0,
+            "usCanada": 2.6011060683054925,
+            "pc100Upper": 2.6011060683054925
+          },
+          "r2": {
+            "storage": 0.00566569215,
+            "publisherClassA": 0.86778,
+            "publisherClassB": 0.0260928,
+            "readerOriginRequests": 1.4421599999999999,
+            "gross": 2.34169849215,
+            "afterDedicatedFreeAllowance": 0,
+            "roundedAfterDedicatedFreeAllowance": 0,
+            "readerTransferGB": 162.09367291556023
+          }
+        }
+      },
+      {
+        "scenario": "M",
+        "reloads": 1,
+        "reloadIndexChanged": false,
+        "row": {
+          "scenario": "M",
+          "assumptions": {
+            "q": 3,
+            "reloads": 1,
+            "headerBytes": 1024,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            },
+            "reloadIndexChanged": false
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 1200000,
+                "bodyBytes": 51978600000,
+                "originRequests": 1200000
+              },
+              "mutableContent": {
+                "requests": 830000,
+                "bodyBytes": 1213570000,
+                "originRequests": 830000
+              },
+              "appShell": {
+                "requests": 1230000,
+                "bodyBytes": 829800000,
+                "originRequests": 1230000
+              },
+              "hashedAppAsset": {
+                "requests": 6260000,
+                "bodyBytes": 92756632915.56026,
+                "originRequests": 626000
+              },
+              "hashedSearchBlob": {
+                "requests": 240000,
+                "bodyBytes": 5320830000,
+                "originRequests": 120000
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 9760000,
+            "viewerBytes": 162093672915.56024,
+            "originRequests": 4006000
+          },
+          "publisher": {
+            "aws": {
+              "classA": 192840,
+              "classB": 72480,
+              "storageBytes": 257421120
+            },
+            "r2": {
+              "classA": 192840,
+              "classB": 72480,
+              "storageBytes": 377712810
+            }
+          },
+          "aws": {
+            "storage": 0.005514068305492401,
+            "publisherRequests": 0.9931920000000001,
+            "readerOriginRequests": 1.6024,
+            "viewerRequestsUS": 0,
+            "viewerRequestsPC100": 0,
+            "transfer": 0,
+            "usCanada": 2.6011060683054925,
+            "pc100Upper": 2.6011060683054925
+          },
+          "r2": {
+            "storage": 0.00566569215,
+            "publisherClassA": 0.86778,
+            "publisherClassB": 0.0260928,
+            "readerOriginRequests": 1.4421599999999999,
+            "gross": 2.34169849215,
+            "afterDedicatedFreeAllowance": 0,
+            "roundedAfterDedicatedFreeAllowance": 0,
+            "readerTransferGB": 162.09367291556023
+          }
+        }
+      },
+      {
+        "scenario": "M",
+        "reloads": 1,
+        "reloadIndexChanged": true,
+        "row": {
+          "scenario": "M",
+          "assumptions": {
+            "q": 3,
+            "reloads": 1,
+            "headerBytes": 1024,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            },
+            "reloadIndexChanged": true
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 1200000,
+                "bodyBytes": 103581400000,
+                "originRequests": 1200000
+              },
+              "mutableContent": {
+                "requests": 830000,
+                "bodyBytes": 1213570000,
+                "originRequests": 830000
+              },
+              "appShell": {
+                "requests": 1230000,
+                "bodyBytes": 829800000,
+                "originRequests": 1230000
+              },
+              "hashedAppAsset": {
+                "requests": 6260000,
+                "bodyBytes": 92756632915.56026,
+                "originRequests": 626000
+              },
+              "hashedSearchBlob": {
+                "requests": 240000,
+                "bodyBytes": 5320830000,
+                "originRequests": 120000
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 9760000,
+            "viewerBytes": 213696472915.56024,
+            "originRequests": 4006000
+          },
+          "publisher": {
+            "aws": {
+              "classA": 192840,
+              "classB": 72480,
+              "storageBytes": 257421120
+            },
+            "r2": {
+              "classA": 192840,
+              "classB": 72480,
+              "storageBytes": 377712810
+            }
+          },
+          "aws": {
+            "storage": 0.005514068305492401,
+            "publisherRequests": 0.9931920000000001,
+            "readerOriginRequests": 1.6024,
+            "viewerRequestsUS": 0,
+            "viewerRequestsPC100": 0,
+            "transfer": 0,
+            "usCanada": 2.6011060683054925,
+            "pc100Upper": 2.6011060683054925
+          },
+          "r2": {
+            "storage": 0.00566569215,
+            "publisherClassA": 0.86778,
+            "publisherClassB": 0.0260928,
+            "readerOriginRequests": 1.4421599999999999,
+            "gross": 2.34169849215,
+            "afterDedicatedFreeAllowance": 0,
+            "roundedAfterDedicatedFreeAllowance": 0,
+            "readerTransferGB": 213.69647291556024
+          }
+        }
+      },
+      {
+        "scenario": "M",
+        "headerBytes": 512,
+        "row": {
+          "scenario": "M",
+          "assumptions": {
+            "q": 3,
+            "reloads": 0,
+            "headerBytes": 512,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            }
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 600000,
+                "bodyBytes": 51826000000,
+                "originRequests": 600000
+              },
+              "mutableContent": {
+                "requests": 630000,
+                "bodyBytes": 1213570000,
+                "originRequests": 630000
+              },
+              "appShell": {
+                "requests": 830000,
+                "bodyBytes": 553200000,
+                "originRequests": 830000
+              },
+              "hashedAppAsset": {
+                "requests": 5860000,
+                "bodyBytes": 92756632915.56026,
+                "originRequests": 586000
+              },
+              "hashedSearchBlob": {
+                "requests": 240000,
+                "bodyBytes": 5320830000,
+                "originRequests": 120000
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 8160000,
+            "viewerBytes": 155848152915.56024,
+            "originRequests": 2766000
+          },
+          "publisher": {
+            "aws": {
+              "classA": 192840,
+              "classB": 72480,
+              "storageBytes": 257421120
+            },
+            "r2": {
+              "classA": 192840,
+              "classB": 72480,
+              "storageBytes": 377712810
+            }
+          },
+          "aws": {
+            "storage": 0.005514068305492401,
+            "publisherRequests": 0.9931920000000001,
+            "readerOriginRequests": 1.1064,
+            "viewerRequestsUS": 0,
+            "viewerRequestsPC100": 0,
+            "transfer": 0,
+            "usCanada": 2.1051060683054925,
+            "pc100Upper": 2.1051060683054925
+          },
+          "r2": {
+            "storage": 0.00566569215,
+            "publisherClassA": 0.86778,
+            "publisherClassB": 0.0260928,
+            "readerOriginRequests": 0.99576,
+            "gross": 1.89529849215,
+            "afterDedicatedFreeAllowance": 0,
+            "roundedAfterDedicatedFreeAllowance": 0,
+            "readerTransferGB": 155.84815291556023
+          }
+        }
+      },
+      {
+        "scenario": "M",
+        "headerBytes": 1024,
+        "row": {
+          "scenario": "M",
+          "assumptions": {
+            "q": 3,
+            "reloads": 0,
+            "headerBytes": 1024,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            }
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 600000,
+                "bodyBytes": 51826000000,
+                "originRequests": 600000
+              },
+              "mutableContent": {
+                "requests": 630000,
+                "bodyBytes": 1213570000,
+                "originRequests": 630000
+              },
+              "appShell": {
+                "requests": 830000,
+                "bodyBytes": 553200000,
+                "originRequests": 830000
+              },
+              "hashedAppAsset": {
+                "requests": 5860000,
+                "bodyBytes": 92756632915.56026,
+                "originRequests": 586000
+              },
+              "hashedSearchBlob": {
+                "requests": 240000,
+                "bodyBytes": 5320830000,
+                "originRequests": 120000
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 8160000,
+            "viewerBytes": 160026072915.56024,
+            "originRequests": 2766000
+          },
+          "publisher": {
+            "aws": {
+              "classA": 192840,
+              "classB": 72480,
+              "storageBytes": 257421120
+            },
+            "r2": {
+              "classA": 192840,
+              "classB": 72480,
+              "storageBytes": 377712810
+            }
+          },
+          "aws": {
+            "storage": 0.005514068305492401,
+            "publisherRequests": 0.9931920000000001,
+            "readerOriginRequests": 1.1064,
+            "viewerRequestsUS": 0,
+            "viewerRequestsPC100": 0,
+            "transfer": 0,
+            "usCanada": 2.1051060683054925,
+            "pc100Upper": 2.1051060683054925
+          },
+          "r2": {
+            "storage": 0.00566569215,
+            "publisherClassA": 0.86778,
+            "publisherClassB": 0.0260928,
+            "readerOriginRequests": 0.99576,
+            "gross": 1.89529849215,
+            "afterDedicatedFreeAllowance": 0,
+            "roundedAfterDedicatedFreeAllowance": 0,
+            "readerTransferGB": 160.02607291556023
+          }
+        }
+      },
+      {
+        "scenario": "M",
+        "headerBytes": 2048,
+        "row": {
+          "scenario": "M",
+          "assumptions": {
+            "q": 3,
+            "reloads": 0,
+            "headerBytes": 2048,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            }
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 600000,
+                "bodyBytes": 51826000000,
+                "originRequests": 600000
+              },
+              "mutableContent": {
+                "requests": 630000,
+                "bodyBytes": 1213570000,
+                "originRequests": 630000
+              },
+              "appShell": {
+                "requests": 830000,
+                "bodyBytes": 553200000,
+                "originRequests": 830000
+              },
+              "hashedAppAsset": {
+                "requests": 5860000,
+                "bodyBytes": 92756632915.56026,
+                "originRequests": 586000
+              },
+              "hashedSearchBlob": {
+                "requests": 240000,
+                "bodyBytes": 5320830000,
+                "originRequests": 120000
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 8160000,
+            "viewerBytes": 168381912915.56024,
+            "originRequests": 2766000
+          },
+          "publisher": {
+            "aws": {
+              "classA": 192840,
+              "classB": 72480,
+              "storageBytes": 257421120
+            },
+            "r2": {
+              "classA": 192840,
+              "classB": 72480,
+              "storageBytes": 377712810
+            }
+          },
+          "aws": {
+            "storage": 0.005514068305492401,
+            "publisherRequests": 0.9931920000000001,
+            "readerOriginRequests": 1.1064,
+            "viewerRequestsUS": 0,
+            "viewerRequestsPC100": 0,
+            "transfer": 0,
+            "usCanada": 2.1051060683054925,
+            "pc100Upper": 2.1051060683054925
+          },
+          "r2": {
+            "storage": 0.00566569215,
+            "publisherClassA": 0.86778,
+            "publisherClassB": 0.0260928,
+            "readerOriginRequests": 0.99576,
+            "gross": 1.89529849215,
+            "afterDedicatedFreeAllowance": 0,
+            "roundedAfterDedicatedFreeAllowance": 0,
+            "readerTransferGB": 168.38191291556024
+          }
+        }
+      },
+      {
+        "scenario": "L",
+        "q": 1,
+        "row": {
+          "scenario": "L",
+          "assumptions": {
+            "q": 1,
+            "reloads": 0,
+            "headerBytes": 1024,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            }
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 9000000,
+                "bodyBytes": 994875290322.5807,
+                "originRequests": 9000000
+              },
+              "mutableContent": {
+                "requests": 3150000.0000000005,
+                "bodyBytes": 6880998387.096775,
+                "originRequests": 3150000.0000000005
+              },
+              "appShell": {
+                "requests": 6150000,
+                "bodyBytes": 8298000000,
+                "originRequests": 6150000
+              },
+              "hashedAppAsset": {
+                "requests": 87300000,
+                "bodyBytes": 1390710439065.2615,
+                "originRequests": 8730000
+              },
+              "hashedSearchBlob": {
+                "requests": 1190322.5806451612,
+                "bodyBytes": 30491325000,
+                "originRequests": 595161.2903225806
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 106790322.58064516,
+            "viewerBytes": 2540609343097.5195,
+            "originRequests": 27625161.29032258
+          },
+          "publisher": {
+            "aws": {
+              "classA": 245686,
+              "classB": 74896,
+              "storageBytes": 336083565
+            },
+            "r2": {
+              "classA": 245686,
+              "classB": 74896,
+              "storageBytes": 498685474
+            }
+          },
+          "aws": {
+            "storage": 0.007199050853960216,
+            "publisherRequests": 1.2583884,
+            "readerOriginRequests": 11.050064516129034,
+            "viewerRequestsUS": 96.79032258064515,
+            "viewerRequestsPC100": 116.14838709677419,
+            "transfer": 130.95179416328918,
+            "usCanada": 240.05776871091734,
+            "pc100Upper": 259.4158332270464
+          },
+          "r2": {
+            "storage": 0.00748028211,
+            "publisherClassA": 1.105587,
+            "publisherClassB": 0.02696256,
+            "readerOriginRequests": 9.945058064516129,
+            "gross": 11.085087906626129,
+            "afterDedicatedFreeAllowance": 6.372020624516129,
+            "roundedAfterDedicatedFreeAllowance": 6.4799999999999995,
+            "readerTransferGB": 2540.6093430975197
+          }
+        }
+      },
+      {
+        "scenario": "L",
+        "q": 3,
+        "row": {
+          "scenario": "L",
+          "assumptions": {
+            "q": 3,
+            "reloads": 0,
+            "headerBytes": 1024,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            }
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 3000000,
+                "bodyBytes": 331625096774.19354,
+                "originRequests": 3000000
+              },
+              "mutableContent": {
+                "requests": 3150000.0000000005,
+                "bodyBytes": 6616611290.32258,
+                "originRequests": 3150000.0000000005
+              },
+              "appShell": {
+                "requests": 4150000.0000000005,
+                "bodyBytes": 2766000000,
+                "originRequests": 4150000.0000000005
+              },
+              "hashedAppAsset": {
+                "requests": 29300000.000000004,
+                "bodyBytes": 463783164577.8013,
+                "originRequests": 2930000.0000000005
+              },
+              "hashedSearchBlob": {
+                "requests": 1190322.5806451612,
+                "bodyBytes": 30491325000,
+                "originRequests": 595161.2903225806
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 40790322.58064516,
+            "viewerBytes": 877051487964.8981,
+            "originRequests": 13825161.290322581
+          },
+          "publisher": {
+            "aws": {
+              "classA": 245686,
+              "classB": 74896,
+              "storageBytes": 336083565
+            },
+            "r2": {
+              "classA": 245686,
+              "classB": 74896,
+              "storageBytes": 498685474
+            }
+          },
+          "aws": {
+            "storage": 0.007199050853960216,
+            "publisherRequests": 1.2583884,
+            "readerOriginRequests": 5.530064516129033,
+            "viewerRequestsUS": 30.790322580645157,
+            "viewerRequestsPC100": 36.94838709677419,
+            "transfer": 0,
+            "usCanada": 37.58597454762815,
+            "pc100Upper": 43.744039063757185
+          },
+          "r2": {
+            "storage": 0.00748028211,
+            "publisherClassA": 1.105587,
+            "publisherClassB": 0.02696256,
+            "readerOriginRequests": 4.977058064516129,
+            "gross": 6.117087906626129,
+            "afterDedicatedFreeAllowance": 1.4040206245161293,
+            "roundedAfterDedicatedFreeAllowance": 1.44,
+            "readerTransferGB": 877.0514879648981
+          }
+        }
+      },
+      {
+        "scenario": "L",
+        "q": 5,
+        "row": {
+          "scenario": "L",
+          "assumptions": {
+            "q": 5,
+            "reloads": 0,
+            "headerBytes": 1024,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            }
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 1800000.0000000002,
+                "bodyBytes": 198975058064.51614,
+                "originRequests": 1800000.0000000002
+              },
+              "mutableContent": {
+                "requests": 3150000.0000000005,
+                "bodyBytes": 6563733870.967742,
+                "originRequests": 3150000.0000000005
+              },
+              "appShell": {
+                "requests": 3750000.0000000005,
+                "bodyBytes": 1659600000,
+                "originRequests": 3750000.0000000005
+              },
+              "hashedAppAsset": {
+                "requests": 17700000.000000004,
+                "bodyBytes": 278397709680.30927,
+                "originRequests": 1770000.0000000005
+              },
+              "hashedSearchBlob": {
+                "requests": 1190322.5806451612,
+                "bodyBytes": 30491325000,
+                "originRequests": 595161.2903225806
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 27590322.58064517,
+            "viewerBytes": 544339916938.3738,
+            "originRequests": 11065161.290322583
+          },
+          "publisher": {
+            "aws": {
+              "classA": 245686,
+              "classB": 74896,
+              "storageBytes": 336083565
+            },
+            "r2": {
+              "classA": 245686,
+              "classB": 74896,
+              "storageBytes": 498685474
+            }
+          },
+          "aws": {
+            "storage": 0.007199050853960216,
+            "publisherRequests": 1.2583884,
+            "readerOriginRequests": 4.426064516129034,
+            "viewerRequestsUS": 17.590322580645168,
+            "viewerRequestsPC100": 21.1083870967742,
+            "transfer": 0,
+            "usCanada": 23.281974547628163,
+            "pc100Upper": 26.800039063757197
+          },
+          "r2": {
+            "storage": 0.00748028211,
+            "publisherClassA": 1.105587,
+            "publisherClassB": 0.02696256,
+            "readerOriginRequests": 3.98345806451613,
+            "gross": 5.12348790662613,
+            "afterDedicatedFreeAllowance": 0.41042062451612993,
+            "roundedAfterDedicatedFreeAllowance": 0.72,
+            "readerTransferGB": 544.3399169383738
+          }
+        }
+      },
+      {
+        "scenario": "L",
+        "compression": "gzip6",
+        "row": {
+          "scenario": "L",
+          "assumptions": {
+            "q": 3,
+            "reloads": 0,
+            "headerBytes": 1024,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            }
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 3000000,
+                "bodyBytes": 331625096774.19354,
+                "originRequests": 3000000
+              },
+              "mutableContent": {
+                "requests": 3150000.0000000005,
+                "bodyBytes": 6616611290.32258,
+                "originRequests": 3150000.0000000005
+              },
+              "appShell": {
+                "requests": 4150000.0000000005,
+                "bodyBytes": 2766000000,
+                "originRequests": 4150000.0000000005
+              },
+              "hashedAppAsset": {
+                "requests": 29300000.000000004,
+                "bodyBytes": 463783164577.8013,
+                "originRequests": 2930000.0000000005
+              },
+              "hashedSearchBlob": {
+                "requests": 1190322.5806451612,
+                "bodyBytes": 30491325000,
+                "originRequests": 595161.2903225806
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 40790322.58064516,
+            "viewerBytes": 877051487964.8981,
+            "originRequests": 13825161.290322581
+          },
+          "publisher": {
+            "aws": {
+              "classA": 245686,
+              "classB": 74896,
+              "storageBytes": 336083565
+            },
+            "r2": {
+              "classA": 245686,
+              "classB": 74896,
+              "storageBytes": 498685474
+            }
+          },
+          "aws": {
+            "storage": 0.007199050853960216,
+            "publisherRequests": 1.2583884,
+            "readerOriginRequests": 5.530064516129033,
+            "viewerRequestsUS": 30.790322580645157,
+            "viewerRequestsPC100": 36.94838709677419,
+            "transfer": 0,
+            "usCanada": 37.58597454762815,
+            "pc100Upper": 43.744039063757185
+          },
+          "r2": {
+            "storage": 0.00748028211,
+            "publisherClassA": 1.105587,
+            "publisherClassB": 0.02696256,
+            "readerOriginRequests": 4.977058064516129,
+            "gross": 6.117087906626129,
+            "afterDedicatedFreeAllowance": 1.4040206245161293,
+            "roundedAfterDedicatedFreeAllowance": 1.44,
+            "readerTransferGB": 877.0514879648981
+          }
+        }
+      },
+      {
+        "scenario": "L",
+        "compression": "brotli5",
+        "row": {
+          "scenario": "L",
+          "assumptions": {
+            "q": 3,
+            "reloads": 0,
+            "headerBytes": 1024,
+            "compression": "brotli5",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            }
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 3000000,
+                "bodyBytes": 331625096774.19354,
+                "originRequests": 3000000
+              },
+              "mutableContent": {
+                "requests": 3150000.0000000005,
+                "bodyBytes": 6616611290.32258,
+                "originRequests": 3150000.0000000005
+              },
+              "appShell": {
+                "requests": 4150000.0000000005,
+                "bodyBytes": 2766000000,
+                "originRequests": 4150000.0000000005
+              },
+              "hashedAppAsset": {
+                "requests": 29300000.000000004,
+                "bodyBytes": 435452019738.8626,
+                "originRequests": 2930000.0000000005
+              },
+              "hashedSearchBlob": {
+                "requests": 1190322.5806451612,
+                "bodyBytes": 30491325000,
+                "originRequests": 595161.2903225806
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 40790322.58064516,
+            "viewerBytes": 848720343125.9594,
+            "originRequests": 13825161.290322581
+          },
+          "publisher": {
+            "aws": {
+              "classA": 245686,
+              "classB": 74896,
+              "storageBytes": 336083565
+            },
+            "r2": {
+              "classA": 245686,
+              "classB": 74896,
+              "storageBytes": 498685474
+            }
+          },
+          "aws": {
+            "storage": 0.007199050853960216,
+            "publisherRequests": 1.2583884,
+            "readerOriginRequests": 5.530064516129033,
+            "viewerRequestsUS": 30.790322580645157,
+            "viewerRequestsPC100": 36.94838709677419,
+            "transfer": 0,
+            "usCanada": 37.58597454762815,
+            "pc100Upper": 43.744039063757185
+          },
+          "r2": {
+            "storage": 0.00748028211,
+            "publisherClassA": 1.105587,
+            "publisherClassB": 0.02696256,
+            "readerOriginRequests": 4.977058064516129,
+            "gross": 6.117087906626129,
+            "afterDedicatedFreeAllowance": 1.4040206245161293,
+            "roundedAfterDedicatedFreeAllowance": 1.44,
+            "readerTransferGB": 848.7203431259594
+          }
+        }
+      },
+      {
+        "scenario": "L",
+        "reloads": 0,
+        "row": {
+          "scenario": "L",
+          "assumptions": {
+            "q": 3,
+            "reloads": 0,
+            "headerBytes": 1024,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            }
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 3000000,
+                "bodyBytes": 331625096774.19354,
+                "originRequests": 3000000
+              },
+              "mutableContent": {
+                "requests": 3150000.0000000005,
+                "bodyBytes": 6616611290.32258,
+                "originRequests": 3150000.0000000005
+              },
+              "appShell": {
+                "requests": 4150000.0000000005,
+                "bodyBytes": 2766000000,
+                "originRequests": 4150000.0000000005
+              },
+              "hashedAppAsset": {
+                "requests": 29300000.000000004,
+                "bodyBytes": 463783164577.8013,
+                "originRequests": 2930000.0000000005
+              },
+              "hashedSearchBlob": {
+                "requests": 1190322.5806451612,
+                "bodyBytes": 30491325000,
+                "originRequests": 595161.2903225806
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 40790322.58064516,
+            "viewerBytes": 877051487964.8981,
+            "originRequests": 13825161.290322581
+          },
+          "publisher": {
+            "aws": {
+              "classA": 245686,
+              "classB": 74896,
+              "storageBytes": 336083565
+            },
+            "r2": {
+              "classA": 245686,
+              "classB": 74896,
+              "storageBytes": 498685474
+            }
+          },
+          "aws": {
+            "storage": 0.007199050853960216,
+            "publisherRequests": 1.2583884,
+            "readerOriginRequests": 5.530064516129033,
+            "viewerRequestsUS": 30.790322580645157,
+            "viewerRequestsPC100": 36.94838709677419,
+            "transfer": 0,
+            "usCanada": 37.58597454762815,
+            "pc100Upper": 43.744039063757185
+          },
+          "r2": {
+            "storage": 0.00748028211,
+            "publisherClassA": 1.105587,
+            "publisherClassB": 0.02696256,
+            "readerOriginRequests": 4.977058064516129,
+            "gross": 6.117087906626129,
+            "afterDedicatedFreeAllowance": 1.4040206245161293,
+            "roundedAfterDedicatedFreeAllowance": 1.44,
+            "readerTransferGB": 877.0514879648981
+          }
+        }
+      },
+      {
+        "scenario": "L",
+        "reloads": 1,
+        "row": {
+          "scenario": "L",
+          "assumptions": {
+            "q": 3,
+            "reloads": 1,
+            "headerBytes": 1024,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            }
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 6000000,
+                "bodyBytes": 332388419354.83875,
+                "originRequests": 6000000
+              },
+              "mutableContent": {
+                "requests": 4150000.0000000005,
+                "bodyBytes": 6641923118.27957,
+                "originRequests": 4150000.0000000005
+              },
+              "appShell": {
+                "requests": 6150000,
+                "bodyBytes": 4149000000,
+                "originRequests": 6150000
+              },
+              "hashedAppAsset": {
+                "requests": 31300000,
+                "bodyBytes": 463783164577.8013,
+                "originRequests": 3130000.0000000005
+              },
+              "hashedSearchBlob": {
+                "requests": 1190322.5806451612,
+                "bodyBytes": 30491325000,
+                "originRequests": 595161.2903225806
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 48790322.58064516,
+            "viewerBytes": 887415122373.5002,
+            "originRequests": 20025161.29032258
+          },
+          "publisher": {
+            "aws": {
+              "classA": 245686,
+              "classB": 74896,
+              "storageBytes": 336083565
+            },
+            "r2": {
+              "classA": 245686,
+              "classB": 74896,
+              "storageBytes": 498685474
+            }
+          },
+          "aws": {
+            "storage": 0.007199050853960216,
+            "publisherRequests": 1.2583884,
+            "readerOriginRequests": 8.010064516129033,
+            "viewerRequestsUS": 38.79032258064516,
+            "viewerRequestsPC100": 46.548387096774185,
+            "transfer": 0,
+            "usCanada": 48.06597454762815,
+            "pc100Upper": 55.824039063757176
+          },
+          "r2": {
+            "storage": 0.00748028211,
+            "publisherClassA": 1.105587,
+            "publisherClassB": 0.02696256,
+            "readerOriginRequests": 7.209058064516128,
+            "gross": 8.349087906626128,
+            "afterDedicatedFreeAllowance": 3.6360206245161284,
+            "roundedAfterDedicatedFreeAllowance": 3.96,
+            "readerTransferGB": 887.4151223735003
+          }
+        }
+      },
+      {
+        "scenario": "L",
+        "reloads": 1,
+        "reloadIndexChanged": false,
+        "row": {
+          "scenario": "L",
+          "assumptions": {
+            "q": 3,
+            "reloads": 1,
+            "headerBytes": 1024,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            },
+            "reloadIndexChanged": false
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 6000000,
+                "bodyBytes": 332388419354.83875,
+                "originRequests": 6000000
+              },
+              "mutableContent": {
+                "requests": 4150000.0000000005,
+                "bodyBytes": 6641923118.27957,
+                "originRequests": 4150000.0000000005
+              },
+              "appShell": {
+                "requests": 6150000,
+                "bodyBytes": 4149000000,
+                "originRequests": 6150000
+              },
+              "hashedAppAsset": {
+                "requests": 31300000,
+                "bodyBytes": 463783164577.8013,
+                "originRequests": 3130000.0000000005
+              },
+              "hashedSearchBlob": {
+                "requests": 1190322.5806451612,
+                "bodyBytes": 30491325000,
+                "originRequests": 595161.2903225806
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 48790322.58064516,
+            "viewerBytes": 887415122373.5002,
+            "originRequests": 20025161.29032258
+          },
+          "publisher": {
+            "aws": {
+              "classA": 245686,
+              "classB": 74896,
+              "storageBytes": 336083565
+            },
+            "r2": {
+              "classA": 245686,
+              "classB": 74896,
+              "storageBytes": 498685474
+            }
+          },
+          "aws": {
+            "storage": 0.007199050853960216,
+            "publisherRequests": 1.2583884,
+            "readerOriginRequests": 8.010064516129033,
+            "viewerRequestsUS": 38.79032258064516,
+            "viewerRequestsPC100": 46.548387096774185,
+            "transfer": 0,
+            "usCanada": 48.06597454762815,
+            "pc100Upper": 55.824039063757176
+          },
+          "r2": {
+            "storage": 0.00748028211,
+            "publisherClassA": 1.105587,
+            "publisherClassB": 0.02696256,
+            "readerOriginRequests": 7.209058064516128,
+            "gross": 8.349087906626128,
+            "afterDedicatedFreeAllowance": 3.6360206245161284,
+            "roundedAfterDedicatedFreeAllowance": 3.96,
+            "readerTransferGB": 887.4151223735003
+          }
+        }
+      },
+      {
+        "scenario": "L",
+        "reloads": 1,
+        "reloadIndexChanged": true,
+        "row": {
+          "scenario": "L",
+          "assumptions": {
+            "q": 3,
+            "reloads": 1,
+            "headerBytes": 1024,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            },
+            "reloadIndexChanged": true
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 6000000,
+                "bodyBytes": 662897129032.258,
+                "originRequests": 6000000
+              },
+              "mutableContent": {
+                "requests": 4150000.0000000005,
+                "bodyBytes": 6641923118.27957,
+                "originRequests": 4150000.0000000005
+              },
+              "appShell": {
+                "requests": 6150000,
+                "bodyBytes": 4149000000,
+                "originRequests": 6150000
+              },
+              "hashedAppAsset": {
+                "requests": 31300000,
+                "bodyBytes": 463783164577.8013,
+                "originRequests": 3130000.0000000005
+              },
+              "hashedSearchBlob": {
+                "requests": 1190322.5806451612,
+                "bodyBytes": 30491325000,
+                "originRequests": 595161.2903225806
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 48790322.58064516,
+            "viewerBytes": 1217923832050.9194,
+            "originRequests": 20025161.29032258
+          },
+          "publisher": {
+            "aws": {
+              "classA": 245686,
+              "classB": 74896,
+              "storageBytes": 336083565
+            },
+            "r2": {
+              "classA": 245686,
+              "classB": 74896,
+              "storageBytes": 498685474
+            }
+          },
+          "aws": {
+            "storage": 0.007199050853960216,
+            "publisherRequests": 1.2583884,
+            "readerOriginRequests": 8.010064516129033,
+            "viewerRequestsUS": 38.79032258064516,
+            "viewerRequestsPC100": 46.548387096774185,
+            "transfer": 18.52352572432815,
+            "usCanada": 66.5895002719563,
+            "pc100Upper": 74.34756478808532
+          },
+          "r2": {
+            "storage": 0.00748028211,
+            "publisherClassA": 1.105587,
+            "publisherClassB": 0.02696256,
+            "readerOriginRequests": 7.209058064516128,
+            "gross": 8.349087906626128,
+            "afterDedicatedFreeAllowance": 3.6360206245161284,
+            "roundedAfterDedicatedFreeAllowance": 3.96,
+            "readerTransferGB": 1217.9238320509194
+          }
+        }
+      },
+      {
+        "scenario": "L",
+        "headerBytes": 512,
+        "row": {
+          "scenario": "L",
+          "assumptions": {
+            "q": 3,
+            "reloads": 0,
+            "headerBytes": 512,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            }
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 3000000,
+                "bodyBytes": 331625096774.19354,
+                "originRequests": 3000000
+              },
+              "mutableContent": {
+                "requests": 3150000.0000000005,
+                "bodyBytes": 6616611290.32258,
+                "originRequests": 3150000.0000000005
+              },
+              "appShell": {
+                "requests": 4150000.0000000005,
+                "bodyBytes": 2766000000,
+                "originRequests": 4150000.0000000005
+              },
+              "hashedAppAsset": {
+                "requests": 29300000.000000004,
+                "bodyBytes": 463783164577.8013,
+                "originRequests": 2930000.0000000005
+              },
+              "hashedSearchBlob": {
+                "requests": 1190322.5806451612,
+                "bodyBytes": 30491325000,
+                "originRequests": 595161.2903225806
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 40790322.58064516,
+            "viewerBytes": 856166842803.6077,
+            "originRequests": 13825161.290322581
+          },
+          "publisher": {
+            "aws": {
+              "classA": 245686,
+              "classB": 74896,
+              "storageBytes": 336083565
+            },
+            "r2": {
+              "classA": 245686,
+              "classB": 74896,
+              "storageBytes": 498685474
+            }
+          },
+          "aws": {
+            "storage": 0.007199050853960216,
+            "publisherRequests": 1.2583884,
+            "readerOriginRequests": 5.530064516129033,
+            "viewerRequestsUS": 30.790322580645157,
+            "viewerRequestsPC100": 36.94838709677419,
+            "transfer": 0,
+            "usCanada": 37.58597454762815,
+            "pc100Upper": 43.744039063757185
+          },
+          "r2": {
+            "storage": 0.00748028211,
+            "publisherClassA": 1.105587,
+            "publisherClassB": 0.02696256,
+            "readerOriginRequests": 4.977058064516129,
+            "gross": 6.117087906626129,
+            "afterDedicatedFreeAllowance": 1.4040206245161293,
+            "roundedAfterDedicatedFreeAllowance": 1.44,
+            "readerTransferGB": 856.1668428036077
+          }
+        }
+      },
+      {
+        "scenario": "L",
+        "headerBytes": 1024,
+        "row": {
+          "scenario": "L",
+          "assumptions": {
+            "q": 3,
+            "reloads": 0,
+            "headerBytes": 1024,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            }
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 3000000,
+                "bodyBytes": 331625096774.19354,
+                "originRequests": 3000000
+              },
+              "mutableContent": {
+                "requests": 3150000.0000000005,
+                "bodyBytes": 6616611290.32258,
+                "originRequests": 3150000.0000000005
+              },
+              "appShell": {
+                "requests": 4150000.0000000005,
+                "bodyBytes": 2766000000,
+                "originRequests": 4150000.0000000005
+              },
+              "hashedAppAsset": {
+                "requests": 29300000.000000004,
+                "bodyBytes": 463783164577.8013,
+                "originRequests": 2930000.0000000005
+              },
+              "hashedSearchBlob": {
+                "requests": 1190322.5806451612,
+                "bodyBytes": 30491325000,
+                "originRequests": 595161.2903225806
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 40790322.58064516,
+            "viewerBytes": 877051487964.8981,
+            "originRequests": 13825161.290322581
+          },
+          "publisher": {
+            "aws": {
+              "classA": 245686,
+              "classB": 74896,
+              "storageBytes": 336083565
+            },
+            "r2": {
+              "classA": 245686,
+              "classB": 74896,
+              "storageBytes": 498685474
+            }
+          },
+          "aws": {
+            "storage": 0.007199050853960216,
+            "publisherRequests": 1.2583884,
+            "readerOriginRequests": 5.530064516129033,
+            "viewerRequestsUS": 30.790322580645157,
+            "viewerRequestsPC100": 36.94838709677419,
+            "transfer": 0,
+            "usCanada": 37.58597454762815,
+            "pc100Upper": 43.744039063757185
+          },
+          "r2": {
+            "storage": 0.00748028211,
+            "publisherClassA": 1.105587,
+            "publisherClassB": 0.02696256,
+            "readerOriginRequests": 4.977058064516129,
+            "gross": 6.117087906626129,
+            "afterDedicatedFreeAllowance": 1.4040206245161293,
+            "roundedAfterDedicatedFreeAllowance": 1.44,
+            "readerTransferGB": 877.0514879648981
+          }
+        }
+      },
+      {
+        "scenario": "L",
+        "headerBytes": 2048,
+        "row": {
+          "scenario": "L",
+          "assumptions": {
+            "q": 3,
+            "reloads": 0,
+            "headerBytes": 2048,
+            "compression": "gzip6",
+            "originRates": {
+              "siteRoot": 1,
+              "mutableContent": 1,
+              "appShell": 1,
+              "hashedAppAsset": 0.1,
+              "hashedSearchBlob": 0.5,
+              "notFound": 1
+            }
+          },
+          "reader": {
+            "breakdown": {
+              "siteRoot": {
+                "requests": 3000000,
+                "bodyBytes": 331625096774.19354,
+                "originRequests": 3000000
+              },
+              "mutableContent": {
+                "requests": 3150000.0000000005,
+                "bodyBytes": 6616611290.32258,
+                "originRequests": 3150000.0000000005
+              },
+              "appShell": {
+                "requests": 4150000.0000000005,
+                "bodyBytes": 2766000000,
+                "originRequests": 4150000.0000000005
+              },
+              "hashedAppAsset": {
+                "requests": 29300000.000000004,
+                "bodyBytes": 463783164577.8013,
+                "originRequests": 2930000.0000000005
+              },
+              "hashedSearchBlob": {
+                "requests": 1190322.5806451612,
+                "bodyBytes": 30491325000,
+                "originRequests": 595161.2903225806
+              },
+              "notFound": {
+                "requests": 0,
+                "bodyBytes": 0,
+                "originRequests": 0
+              }
+            },
+            "viewerRequests": 40790322.58064516,
+            "viewerBytes": 918820778287.4786,
+            "originRequests": 13825161.290322581
+          },
+          "publisher": {
+            "aws": {
+              "classA": 245686,
+              "classB": 74896,
+              "storageBytes": 336083565
+            },
+            "r2": {
+              "classA": 245686,
+              "classB": 74896,
+              "storageBytes": 498685474
+            }
+          },
+          "aws": {
+            "storage": 0.007199050853960216,
+            "publisherRequests": 1.2583884,
+            "readerOriginRequests": 5.530064516129033,
+            "viewerRequestsUS": 30.790322580645157,
+            "viewerRequestsPC100": 36.94838709677419,
+            "transfer": 0,
+            "usCanada": 37.58597454762815,
+            "pc100Upper": 43.744039063757185
+          },
+          "r2": {
+            "storage": 0.00748028211,
+            "publisherClassA": 1.105587,
+            "publisherClassB": 0.02696256,
+            "readerOriginRequests": 4.977058064516129,
+            "gross": 6.117087906626129,
+            "afterDedicatedFreeAllowance": 1.4040206245161293,
+            "roundedAfterDedicatedFreeAllowance": 1.44,
+            "readerTransferGB": 918.8207782874787
+          }
+        }
+      }
+    ]
+  }
+}

@@ -68,7 +68,7 @@ Decided 2026-10-10 in [TD18](../technical-design/TD18-admin-provided-site-workfl
 
 | Ticket | Status | Assignee | Execution / outcome |
 | --- | --- | --- | --- |
-| [IMP-82](IMP-82-cli-owned-cache-policy.md) | Open | Codex | Owner-approved removal of all invalidation and fixed CLI cache policy. Phase 1: local implementation/modules/spec/migration helper without unfreeze. Phase 2: [T30](../verification/T30-cache-freshness-and-root-latency.md), owner-controlled migration and credential retirement; cost baseline [T29](../verification/T29-compressed-reader-session-hosting-cost.md), follow-up [T27](../verification/T27-launch-hosting-cost-model.md). |
+| [IMP-82](IMP-82-cli-owned-cache-policy.md) | In progress | Codex | Owner-approved removal of all invalidation and fixed CLI cache policy. Phase 1: local implementation/modules/spec/migration helper without unfreeze. Phase 2: [T30](../verification/T30-cache-freshness-and-root-latency.md), owner-controlled migration and credential retirement; CLI 0.6 class-based cost refresh complete, with remaining scope tracked in [T27](../verification/T27-launch-hosting-cost-model.md). |
 
 ## Optional operator-managed edge policy
 
