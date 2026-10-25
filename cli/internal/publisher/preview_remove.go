@@ -258,6 +258,11 @@ func verifyOwnedRevisionManifest(ctx context.Context, store *ObjectPreviewStore,
 	if err != nil {
 		return fmt.Errorf("read preview manifest for %s: %w", ownership.HeadSHA, err)
 	}
+	return verifyManifestContents(siteID, ownership, contents)
+}
+
+// verifyManifestContents validates manifest bytes against one ownership record.
+func verifyManifestContents(siteID string, ownership preview.RevisionOwnership, contents []byte) error {
 	manifest, err := preview.DecodeManifest(contents)
 	if err != nil {
 		return fmt.Errorf("preview manifest for %s is invalid: %w", ownership.HeadSHA, err)
