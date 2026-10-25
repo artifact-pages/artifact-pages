@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ArtifactBreadcrumbs } from './ArtifactBreadcrumbs'
 import { CommandPalette, type PaletteCommand } from './CommandPalette'
+import { SiteMenu } from './SiteMenu'
 import { ContentsDialog } from './ContentsDialog'
 import { DirectoryPage } from './DirectoryPage'
 import { Icon } from './Icon'
@@ -270,7 +271,9 @@ export function ArtifactWorkspace({
     setHeadingJump(null)
   }, [bodyArtifact?.artifactUrl])
 
-  const togglePanel = useCallback((panel: Exclude<WorkspacePanel, null>) => {
+  const panelOrigin = useRef<HTMLElement | null>(null)
+  const togglePanel = useCallback((panel: Exclude<WorkspacePanel, null>, origin?: HTMLElement | null) => {
+    panelOrigin.current = origin ?? (panel === 'contents' ? contentsToggleRef.current : detailsToggleRef.current) ?? moreMenuTriggerRef.current
     setHeadingFocus(null)
     setActivePanel((current) => current === panel ? null : panel)
   }, [])
@@ -769,7 +772,8 @@ export function ArtifactWorkspace({
   }
 
   function closePanel() {
-    const toggle = activePanel === 'details' ? detailsToggleRef.current : contentsToggleRef.current
+    const preferred = panelOrigin.current
+    const toggle = preferred?.isConnected && preferred.getClientRects().length ? preferred : activePanel === 'details' ? detailsToggleRef.current : contentsToggleRef.current
     setHeadingFocus(null)
     setActivePanel(null)
     window.requestAnimationFrame(() => (toggle ?? moreMenuTriggerRef.current)?.focus())
@@ -1024,9 +1028,9 @@ export function ArtifactWorkspace({
         checked: tocOpen,
         disabled: tocEntries.length === 0,
         title: tocEntries.length ? undefined : 'No indexed contents for this artifact',
-        onSelect: () => togglePanel('contents'),
+        onSelect: () => togglePanel('contents', moreMenuTriggerRef.current),
       },
-      { id: 'details', label: 'Details', icon: 'info', checked: detailsOpen, onSelect: () => togglePanel('details') },
+      { id: 'details', label: 'Details', icon: 'info', checked: detailsOpen, onSelect: () => togglePanel('details', moreMenuTriggerRef.current) },
       ...(preview ? [] : [{
         id: 'pin',
         label: pinnedArtifactIds.includes(bodyArtifact.id) ? 'Unpin' : 'Pin',
@@ -1043,22 +1047,6 @@ export function ArtifactWorkspace({
       onSelect: () => void copyCurrentLink(showToast),
     })
   }
-  if (currentArtifact || previewArtifact || (currentDirectory && !isSiteRoot)) {
-    moreMenuItems.push({
-      id: 'site-home',
-      label: `${index.site.title} home`,
-      icon: 'home',
-      separatorBefore: moreMenuItems.length > 0,
-      onSelect: () => navigateWithinWorkspace(siteHomeHref),
-    })
-  }
-  moreMenuItems.push({
-    id: 'all-sites',
-    label: 'All sites',
-    icon: 'library',
-    separatorBefore: moreMenuItems.length > 0 && !(currentArtifact || previewArtifact || (currentDirectory && !isSiteRoot)),
-    onSelect: () => navigateWithinWorkspace('/'),
-  })
   moreMenuItems.push(...(['system', 'light', 'dark'] as const).map((mode, position) => ({
     id: `theme-${mode}`,
     label: `Theme: ${mode[0].toUpperCase()}${mode.slice(1)}`,
@@ -1090,6 +1078,7 @@ export function ArtifactWorkspace({
         onExpandedPathsChange={updateExpandedPaths}
         revealRequest={sidebarReveal}
         onOpenPalette={openPalette}
+        onAllSites={() => navigateWithinWorkspace('/')}
         onOpenArtifact={openArtifact}
         onOpenDirectory={openDirectory}
         onOpenRoot={() => {
@@ -1129,17 +1118,8 @@ export function ArtifactWorkspace({
             >
               <Icon name="sidebar" size={17} />
             </button>
-            <button
-              className="collapsed-rail-button collapsed-rail-site-button"
-              title={`Switch site — ${index.site.title} (${countLabel})`}
-              aria-label={`Switch site. Current site: ${index.site.title}. ${countLabel}`}
-              onClick={(event) => {
-                event.currentTarget.focus()
-                openPalette('@')
-              }}
-            >
-              <span className="site-mark">{index.site.title.slice(0, 1).toUpperCase()}</span>
-            </button>
+            <SiteMenu homeHref={siteHomeHref} collapsed title={index.site.title} count={paletteSites.length}
+              onHome={() => navigateWithinWorkspace(siteHomeHref)} onSwitch={() => openPalette('@')} onAllSites={() => navigateWithinWorkspace('/')} />
             <button
               className="collapsed-rail-button"
               title={`Jump to a page in ${index.site.title} (⌘ K)`}
@@ -1183,7 +1163,7 @@ export function ArtifactWorkspace({
                 <Icon name="sidebar" size={17} />
               </button>
             ) : null}
-            {narrowChrome && !routeArtifactPath && !preview ? <span className="reader-bar-title">{index.site.title}</span> : null}
+            {!routeArtifactPath && !preview ? <span className="reader-bar-title">{index.site.title}</span> : null}
             {preview ? (
               <>
                 <PreviewTag reader={preview} />
@@ -1192,6 +1172,7 @@ export function ArtifactWorkspace({
             ) : null}
             {routeArtifactPath ? (
               <ArtifactBreadcrumbs
+                compact={narrowChrome}
                 artifactPath={currentArtifact?.path ?? currentDirectory?.path ?? routeArtifactPath}
                 siteTitle={index.site.title}
                 artifacts={index.artifacts}
@@ -1220,6 +1201,7 @@ export function ArtifactWorkspace({
                 >
                   <Icon name="search" size={17} />
                 </button>
+                {bodyArtifact ? <button ref={contentsToggleRef} type="button" className={`icon-button${tocOpen ? ' is-active' : ''}`} aria-label="Contents" title="Contents (⌘ ⇧ O)" aria-pressed={tocOpen} disabled={tocEntries.length === 0} onClick={() => togglePanel('contents')}><Icon name="contents" size={17} /></button> : null}
                 <ReaderMoreMenu
                   ref={moreMenuTriggerRef}
                   items={moreMenuItems}
@@ -1228,28 +1210,7 @@ export function ArtifactWorkspace({
               </div>
             ) : (
               <div className="context-actions">
-                <button
-                  className="context-button context-library-button"
-                  type="button"
-                  aria-label="Go to all sites"
-                  title="All sites"
-                  onClick={() => navigateWithinWorkspace('/')}
-                >
-                  <Icon name="library" size={14} />
-                  <span>All sites</span>
-                </button>
-                {currentArtifact || previewArtifact || (currentDirectory && !isSiteRoot) ? (
-                  <button
-                    className="context-button context-home-button"
-                    type="button"
-                    aria-label={`Go to ${index.site.title} home`}
-                    title={`Go to ${index.site.title} home`}
-                    onClick={() => navigateWithinWorkspace(`/${encodeURIComponent(index.site.id)}`)}
-                  >
-                    <Icon name="home" size={14} />
-                    <span>{index.site.title} home</span>
-                  </button>
-                ) : null}
+                <button type="button" className="context-button header-search" aria-keyshortcuts="Meta+K Control+K" aria-label={`Jump to a page in ${index.site.title}`} title="Search (⌘ K)" onClick={(event) => { event.currentTarget.focus(); openPalette('') }}><Icon name="search" size={15} /><span>Search</span><kbd>⌘ K</kbd></button>
                 {bodyArtifact && !preview ? (
                   <button
                     className={`context-button current-artifact-pin-button${pinnedArtifactIds.includes(bodyArtifact.id) ? ' is-active' : ''}`}

@@ -4428,3 +4428,37 @@ a.tree-more:hover {
   border: 1px solid var(--line);
   text-decoration: none;
 }
+
+/* UI/UX S3: the navigation shell always occupies one header row. */
+.context-bar { flex-wrap: nowrap; }
+.context-actions { margin-left: auto; }
+.context-bar > .reader-bar-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.header-search { gap: 7px; }
+.header-search kbd { color: var(--text-tertiary); font-size: 10px; }
+.site-menu { min-width: 0; flex: 1; }
+.site-menu .site-switcher { width: 100%; }
+.site-menu > .reader-more-menu { right: auto; left: 0; }
+.site-menu-rail { flex: none; }
+.site-menu-rail > .reader-more-menu { left: calc(100% + 8px); top: 0; }
+.sidebar-top { position: relative; z-index: 70; }
+.sidebar-pin-toggle { width: 100%; justify-content: space-between; cursor: pointer; }
+.sidebar-pin-toggle > svg { transition: transform .12s; }
+.sidebar-pin-toggle[aria-expanded="true"] > svg { transform: rotate(90deg); }
+.sidebar-pin-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.sidebar-footer-spacer { flex: 1; }
+.tree-directory-row .tree-directory-toggle { width: 28px; min-height: 32px; }
+.breadcrumbs button.breadcrumb-chevron { min-width: 28px; min-height: 28px; justify-content: center; }
+.breadcrumbs-compact { overflow: visible; flex: 1; }
+.breadcrumbs-compact .breadcrumb-current { display: block; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 12px; color: var(--text); }
+.hierarchy-menu { flex: none; }
+.hierarchy-trigger > svg { transform: rotate(90deg); }
+.hierarchy-menu .reader-more-menu { left: 0; right: auto; font-family: var(--font-sans, system-ui, sans-serif); }
+@media (max-width: 620px) {
+  .breadcrumbs-compact { margin-left: 0; }
+  .breadcrumbs-compact .breadcrumb-current { padding-inline: 2px; }
+  .reader-bar-actions { flex: none; }
+}
+
+.breadcrumbs-compact .breadcrumb-trigger-label { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.reader-more-item { text-decoration: none; }

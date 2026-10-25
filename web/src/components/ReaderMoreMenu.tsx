@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useId, useRef, useState } from 'react'
-import type { KeyboardEvent } from 'react'
+import type { KeyboardEvent, ReactNode } from 'react'
+import { followInApp } from './spa-link'
 import { Icon } from './Icon'
 
 type IconName = Parameters<typeof Icon>[0]['name']
@@ -10,6 +11,7 @@ export type ReaderMoreMenuItem = {
   icon: IconName
   onSelect: () => void
   disabled?: boolean
+  href?: string
   /** A toggle (Contents, Details, Pin): exposed as a pressed state through `menuitemcheckbox`. */
   checked?: boolean
   /** A radio choice among the items sharing `group`. */
@@ -29,9 +31,13 @@ export const ReaderMoreMenu = forwardRef<HTMLButtonElement, {
   label?: string
   /** Opens the menu on mount (stories only). */
   defaultOpen?: boolean
+  triggerContent?: ReactNode
+  triggerClassName?: string
+  triggerId?: string
+  className?: string
   /** Called when a pointer press outside dismisses the menu (focus is not restored then). */
   onDismiss?: () => void
-}>(function ReaderMoreMenu({ items, label = 'More actions', defaultOpen = false, onDismiss }, forwardedRef) {
+}>(function ReaderMoreMenu({ items, label = 'More actions', defaultOpen = false, onDismiss, triggerContent, triggerClassName, triggerId, className }, forwardedRef) {
   const [open, setOpen] = useState(defaultOpen)
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
@@ -55,8 +61,13 @@ export const ReaderMoreMenu = forwardRef<HTMLButtonElement, {
       setOpen(false)
       onDismiss?.()
     }
+    const closeOnNavigation = () => setOpen(false)
     document.addEventListener('pointerdown', closeOnOutsidePointer)
-    return () => document.removeEventListener('pointerdown', closeOnOutsidePointer)
+    window.addEventListener('popstate', closeOnNavigation)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer)
+      window.removeEventListener('popstate', closeOnNavigation)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
@@ -78,6 +89,11 @@ export const ReaderMoreMenu = forwardRef<HTMLButtonElement, {
       setOpen(false)
       return
     }
+    if (event.key === ' ' && event.target instanceof HTMLAnchorElement) {
+      event.preventDefault()
+      event.target.click()
+      return
+    }
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
     event.preventDefault()
     const list = enabledItems()
@@ -92,11 +108,12 @@ export const ReaderMoreMenu = forwardRef<HTMLButtonElement, {
   }
 
   return (
-    <div className="reader-more" ref={rootRef}>
+    <div className={`reader-more ${className ?? ''}`} ref={rootRef}>
       <button
         ref={setTrigger}
+        id={triggerId}
         type="button"
-        className={`icon-button reader-more-trigger${open ? ' is-active' : ''}`}
+        className={`${triggerClassName ?? 'icon-button reader-more-trigger'}${open ? ' is-active' : ''}`}
         aria-label={label}
         title={label}
         aria-haspopup="menu"
@@ -110,13 +127,17 @@ export const ReaderMoreMenu = forwardRef<HTMLButtonElement, {
           }
         }}
       >
-        <Icon name="more" size={17} />
+        {triggerContent ?? <Icon name="more" size={17} />}
       </button>
       {open ? (
         <div id={menuId} className="reader-more-menu" role="menu" aria-label={label} onKeyDown={handleKeyDown}>
           {items.map((item) => (
             <div key={item.id} className="reader-more-entry" role="none">
               {item.separatorBefore ? <div className="reader-more-separator" role="separator" /> : null}
+              {item.href ? <a href={item.href} className="reader-more-item" role="menuitem" tabIndex={-1} title={item.title}
+                onClick={(event) => followInApp(event, () => { item.onSelect(); close(true) })}>
+                <Icon name={item.icon} size={15} /><span>{item.label}</span>
+              </a> : (
               <button
                 type="button"
                 className="reader-more-item"
@@ -134,6 +155,7 @@ export const ReaderMoreMenu = forwardRef<HTMLButtonElement, {
                 <span>{item.label}</span>
                 {item.checked ? <span className="reader-more-check" aria-hidden="true">{'✓'}</span> : null}
               </button>
+              )}
             </div>
           ))}
         </div>

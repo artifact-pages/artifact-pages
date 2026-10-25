@@ -111,23 +111,7 @@ export function SiteHomeHeader({
           <SectionLink siteId={index.site.id} section="files" current={current} onNavigate={onNavigate} hasOverview={hasOverview}>Files</SectionLink>
           <SectionLink siteId={index.site.id} section="previews" current={current} onNavigate={onNavigate} count={previewCount}>Previews</SectionLink>
         </nav>
-        {onOpenPalette ? (
-          <button
-            type="button"
-            className="site-home-search"
-            aria-label="Search this site"
-            aria-keyshortcuts="Meta+K Control+K"
-            onClick={(event) => {
-              // Safari and Firefox do not focus buttons on click; focus first so closing the palette returns here.
-              event.currentTarget.focus()
-              onOpenPalette()
-            }}
-          >
-            <Icon name="search" size={15} />
-            <span className="site-home-search-label">Search this site</span>
-            <kbd>⌘ K</kbd>
-          </button>
-        ) : null}
+
       </div>
     </>
   )
