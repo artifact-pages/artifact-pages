@@ -1,3 +1,5 @@
+import { formatPreviewTime } from '../domain/preview-time'
+import { displayLocale } from '../domain/display-locale'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ArtifactBreadcrumbs } from './ArtifactBreadcrumbs'
 import { CommandPalette, type PaletteCommand } from './CommandPalette'
@@ -263,6 +265,11 @@ export function ArtifactWorkspace({
   const hasContents = Boolean(bodyArtifact?.toc?.length)
   const tocOpen = activePanel === 'contents'
   const detailsOpen = activePanel === 'details'
+  useEffect(() => {
+    if (!detailsOpen) return
+    const frame = window.requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('#reader-details-panel .context-panel-close')?.focus())
+    return () => window.cancelAnimationFrame(frame)
+  }, [detailsOpen])
   const panelLabel = activePanel === 'details' ? 'Details' : 'Contents'
 
   // A selection belongs to this document only. Cancelling/reopening a panel invalidates it.
@@ -275,6 +282,10 @@ export function ArtifactWorkspace({
   const togglePanel = useCallback((panel: Exclude<WorkspacePanel, null>, origin?: HTMLElement | null) => {
     panelOrigin.current = origin ?? (panel === 'contents' ? contentsToggleRef.current : detailsToggleRef.current) ?? moreMenuTriggerRef.current
     setHeadingFocus(null)
+    if (activePanelRef.current === panel) {
+      const origin = panelOrigin.current
+      window.requestAnimationFrame(() => origin?.isConnected && origin.focus({ preventScroll: true }))
+    }
     setActivePanel((current) => current === panel ? null : panel)
   }, [])
 
@@ -320,11 +331,17 @@ export function ArtifactWorkspace({
   const columnShownRef = useRef(columnShown)
   columnShownRef.current = columnShown
   const openPart = useCallback((part: ReaderColumnPart) => {
+    if (part === 'details') {
+      setPaletteSeed(null)
+      togglePanel('details')
+      return
+    }
     if (!columnShownRef.current) {
       togglePanel(part)
       return
     }
     setPaletteSeed(null)
+    setActivePanel(null)
     // The palette still holds focus while it closes; move focus once it has gone.
     focusReaderColumnPart(part)
     window.requestAnimationFrame(() => window.requestAnimationFrame(() => focusReaderColumnPart(part)))
@@ -374,8 +391,13 @@ export function ArtifactWorkspace({
     const last = lastFocus.current
     if (columnShown) {
       setHeadingFocus(null)
-      setActivePanel(null)
-      if (last && last.area !== 'column') {
+      setActivePanel((panel) => panel === 'contents' ? null : panel)
+      if (last && activePanelRef.current === 'details' && last.area !== 'panel') {
+        lastFocus.current = null
+        window.requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('#reader-details-panel .context-panel-close')?.focus({ preventScroll: true }))
+        return
+      }
+      if (last && last.area !== 'column' && !(last.area === 'panel' && last.part === 'details')) {
         lastFocus.current = null
         // The More trigger stands for the panel that was open (Contents when none was).
         const part = last.area === 'more' && activePanelRef.current === 'details' ? 'details' : last.part
@@ -776,7 +798,7 @@ export function ArtifactWorkspace({
     const toggle = preferred?.isConnected && preferred.getClientRects().length ? preferred : activePanel === 'details' ? detailsToggleRef.current : contentsToggleRef.current
     setHeadingFocus(null)
     setActivePanel(null)
-    window.requestAnimationFrame(() => (toggle ?? moreMenuTriggerRef.current)?.focus())
+    window.requestAnimationFrame(() => (toggle ?? moreMenuTriggerRef.current)?.focus({ preventScroll: true }))
   }
 
   const htmlArtifactUrl = bodyArtifact && currentFormat === 'html'
@@ -886,7 +908,8 @@ export function ArtifactWorkspace({
       artifact={previewArtifact}
       entries={NO_ENTRIES}
       activeId={currentHeading}
-      details={preview ? <PreviewDetails reader={preview} navigate={navigateWithinWorkspace} /> : undefined}
+      summary={preview?.manifest.status === 'ready' ? <PreviewBuildTime value={preview.manifest.manifest.createdAt} /> : <span>Preview</span>}
+      detailsOpen={detailsOpen} detailsButtonRef={detailsToggleRef} onDetails={(trigger) => togglePanel('details', trigger)}
       onJump={jumpFromColumn}
     />
   ) : undefined
@@ -911,7 +934,7 @@ export function ArtifactWorkspace({
       onMatches={reportMatches}
       onFailedChange={(failed) => setMarkdownFailedUrl(failed ? bodyArtifact.artifactUrl : null)}
       aside={columnShown && currentArtifact ? (
-        <ReaderContextColumn artifact={currentArtifact} entries={currentArtifact.toc ?? NO_ENTRIES} activeId={currentHeading} onJump={jumpFromColumn} />
+        <ReaderContextColumn detailsOpen={detailsOpen} detailsButtonRef={detailsToggleRef} onDetails={(trigger) => togglePanel('details', trigger)} artifact={currentArtifact} entries={currentArtifact.toc ?? NO_ENTRIES} activeId={currentHeading} onJump={jumpFromColumn} />
       ) : undefined}
       footer={readNextItems.length > 0 ? <ReadNext items={readNextItems} siteId={index.site.id} navigate={(href) => navigateWithinWorkspace(href)} /> : undefined}
     />
@@ -1391,11 +1414,11 @@ export function ArtifactWorkspace({
             ) : null}
 
             {columnShown && currentArtifact && currentFormat === 'html' ? (
-              <ReaderContextColumn standalone artifact={currentArtifact} entries={currentArtifact.toc ?? NO_ENTRIES} activeId={currentHeading} onJump={jumpFromColumn} />
+              <ReaderContextColumn detailsOpen={detailsOpen} detailsButtonRef={detailsToggleRef} onDetails={(trigger) => togglePanel('details', trigger)} standalone artifact={currentArtifact} entries={currentArtifact.toc ?? NO_ENTRIES} activeId={currentHeading} onJump={jumpFromColumn} />
             ) : null}
             {previewArtifact?.format === 'html' ? previewColumn : null}
 
-            {activePanel && bodyArtifact && !columnShown ? activePanel === 'contents' ? (
+            {activePanel && bodyArtifact && (!columnShown || activePanel === 'details') ? activePanel === 'contents' ? (
               <ContentsDialog host={stageRef} onDismiss={closePanel}>
                 <div className="context-panel-header">
                   <span>Contents</span>
@@ -1408,7 +1431,7 @@ export function ArtifactWorkspace({
                 ) : <ContentsList entries={tocEntries} activeId={null} onJump={jumpToHeading} />}
               </ContentsDialog>
             ) : (
-              <aside className="context-panel" aria-label={panelLabel}>
+              <aside id="reader-details-panel" className="context-panel" aria-label={panelLabel}>
                 <div className="context-panel-header">
                   <span>{panelLabel}</span>
                   <button className="context-panel-close" type="button" title={`Close ${panelLabel}`} aria-label={`Close ${panelLabel}`} onClick={closePanel}>
@@ -1654,4 +1677,10 @@ function formatDate(value: string) {
 function testRankingMaxHits(): number | undefined {
   const value = (window as unknown as { __artifactPagesTest?: { rankingMaxHits?: unknown } }).__artifactPagesTest?.rankingMaxHits
   return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : undefined
+}
+
+
+function PreviewBuildTime({ value }: { value: string }) {
+  const time = formatPreviewTime(value)
+  return <>Built {time.dateTime ? <time lang={displayLocale()} dateTime={time.dateTime} title={time.title}>{time.label}</time> : time.label}</>
 }
