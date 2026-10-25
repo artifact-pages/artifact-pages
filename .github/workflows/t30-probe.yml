@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
-      LABEL: ${{ inputs.label || 'ttl5' }}-na
+      LABEL: ${{ inputs.label || 'ttl0' }}-na
       SAMPLES_ROOTS: ${{ inputs.samples_roots || '50' }}
       SAMPLES_READER: ${{ inputs.samples_reader || '20' }}
     steps:
