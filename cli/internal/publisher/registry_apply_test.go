@@ -961,7 +961,11 @@ func newRegistryApplyTestBackend() *registryApplyTestBackend {
 func (backend *registryApplyTestBackend) seed(key string, contents []byte) {
 	backend.mu.Lock()
 	defer backend.mu.Unlock()
-	backend.objects[key] = Object{Bytes: append([]byte(nil), contents...)}
+	cache := ""
+	if key == "_indexes/sites.json" {
+		cache = cacheControl(cacheClassSiteRoot)
+	}
+	backend.objects[key] = Object{Bytes: append([]byte(nil), contents...), Cache: cache}
 	backend.etags[key] = "\"seed-" + key + "\""
 }
 
@@ -1106,5 +1110,71 @@ func assertRegistryUpdatedJSON(t *testing.T, result Result, wantUpdated bool, wa
 		if raw, exists := value["changes"]; !exists || string(raw) != "[]" {
 			t.Fatalf("empty changes JSON = %s (present=%t); want []", raw, exists)
 		}
+	}
+}
+
+func TestRegisterSitesUpdatesHeaderForSameRegistryEntries(t *testing.T) {
+	backend := newRegistryApplyTestBackend()
+	projection := testRegistryProjection(t, registrySREOnlyManifest)
+	seedRegistryFromManifest(t, backend, registrySREOnlyManifest)
+	registryObject := backend.objects["_indexes/sites.json"]
+	registryObject.Cache = "public, max-age=0, s-maxage=60, must-revalidate"
+	backend.objects["_indexes/sites.json"] = registryObject
+	backend.failNextInvalidate = true
+
+	first, err := RegisterSites(context.Background(), backend, projection, false)
+	if err == nil || !strings.Contains(err.Error(), "cache revalidation failed") {
+		t.Fatalf("header-only registry invalidation = %#v, err=%v; want injected failure", first, err)
+	}
+	if !*first.RegistryUpdated {
+		t.Fatalf("header-only registry update result = %#v; want registry write", first)
+	}
+	foundUpdate := false
+	for _, change := range first.Changes {
+		if change.Action == "update" && change.Path == "_indexes/sites.json" {
+			foundUpdate = true
+		}
+	}
+	if !foundUpdate {
+		t.Fatalf("header-only initial plan missing update: %#v", first.Changes)
+	}
+	if len(backend.invalidations) != 1 || !reflect.DeepEqual(backend.invalidations[0], []string{"/_indexes/sites.json"}) {
+		t.Fatalf("header-only change invalidations = %v; want catalog invalidation pending", backend.invalidations)
+	}
+	if _, _, err := backend.GetObject(context.Background(), registryCleanupKey); err != nil {
+		t.Fatalf("header-only registry retry record missing after invalidation failure: %v", err)
+	}
+
+	result, err := RegisterSites(context.Background(), backend, projection, false)
+	if err != nil {
+		t.Fatalf("RegisterSites(retry) error = %v", err)
+	}
+	if result.Outcome != "synced" || *result.RegistryUpdated {
+		t.Fatalf("header-only registry update = %#v", result)
+	}
+	if got := backend.objects["_indexes/sites.json"].Cache; got != cacheControl(cacheClassSiteRoot) {
+		t.Fatalf("registry Cache-Control = %q", got)
+	}
+	if len(backend.invalidations) != 2 || !reflect.DeepEqual(backend.invalidations[1], []string{"/_indexes/sites.json"}) {
+		t.Fatalf("registry retry invalidations = %v; want catalog invalidation retry", backend.invalidations)
+	}
+	if _, _, err := backend.GetObject(context.Background(), registryCleanupKey); !errors.Is(err, ErrObjectNotFound) {
+		t.Fatalf("registry retry record after success = %v; want cleared", err)
+	}
+	noop, err := RegisterSites(context.Background(), backend, projection, false)
+	if err != nil || noop.Outcome != "no-op" {
+		t.Fatalf("post-convergence RegisterSites() = %#v, err=%v; want no-op", noop, err)
+	}
+}
+
+func TestRegisterSitesRejectsEmptyRegistryCacheControl(t *testing.T) {
+	backend := newRegistryApplyTestBackend()
+	projection := testRegistryProjection(t, registrySREOnlyManifest)
+	seedRegistryFromManifest(t, backend, registrySREOnlyManifest)
+	object := backend.objects["_indexes/sites.json"]
+	object.Cache = ""
+	backend.objects["_indexes/sites.json"] = object
+	if _, err := RegisterSites(context.Background(), backend, projection, false); err == nil || !strings.Contains(err.Error(), "unsupported Cache-Control policy") {
+		t.Fatalf("RegisterSites(empty registry Cache-Control) error = %v; want fail-closed policy rejection", err)
 	}
 }

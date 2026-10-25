@@ -232,7 +232,7 @@ func TestLegacyProjectionMigratesThroughPlannedOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := backend.PutObject(ctx, "_indexes/sites.json", Object{Bytes: legacyProjection}); err != nil {
+	if err := backend.PutObject(ctx, "_indexes/sites.json", Object{Bytes: legacyProjection, Cache: cacheControl(cacheClassSiteRoot)}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := PublishSite(context.Background(), backend, SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts"}); err != nil {

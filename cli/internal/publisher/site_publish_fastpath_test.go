@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/artifact-pages/artifact-pages/cli/internal/indexer"
 )
 
 type sitePublishProbeBackend struct {
@@ -402,4 +404,96 @@ func sitePublishHasChange(changes []Change, action, path string) bool {
 		}
 	}
 	return false
+}
+
+const releasedSitePublishInputPolicy = "publisher-site-projection-v1;http-policy-v1;index-schema-v1;fulltext-policy-v2"
+
+func releasedSitePublishInputRoot(t *testing.T, sourceRoot string, backend DeploymentBackend) string {
+	t.Helper()
+	sourceDir := filepath.Join(sourceRoot, "docs", "artifacts")
+	identity, err := indexer.ResolveGitSourceIdentity(context.Background(), sourceDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	options := sitePublishBuildOptions("sre", "SRE & Platform", "Operational reviews and incident reports", sourceDir, "", identity, backend)
+	options.InputPolicy = releasedSitePublishInputPolicy
+	options.DeferGitHubEnrichment = true
+	prepared, err := indexer.PrepareBuild(context.Background(), options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return prepared.InputRoot()
+}
+
+func seedReleasedSitePublishFingerprint(t *testing.T, backend *lockMemoryBackend, sourceRoot string, policyBackend DeploymentBackend) {
+	t.Helper()
+	ctx := context.Background()
+	key := sitePublishStateKey("sre")
+	object, _, err := backend.GetObject(ctx, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := backend.HeadObject(ctx, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := decodeSitePublishState("sre", info, object.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.Committed.InputRoot = releasedSitePublishInputRoot(t, sourceRoot, policyBackend)
+	legacyObject, err := buildSitePublishStateObject("sre", state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	backend.mu.Lock()
+	backend.objects[key] = legacyObject
+	backend.mu.Unlock()
+}
+
+func TestPublishSiteUpgradeDetectsReleasedFingerprintWithAWSHeadFastPath(t *testing.T) {
+	root := createPublisherCheckout(t, "git@github.com:acme/sre.git")
+	backend := newSitePublishProbeBackend()
+	seedPublisherRegistry(t, backend.lockMemoryBackend, registeredSREManifest)
+	options := SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts"}
+	if _, err := PublishSite(context.Background(), backend, options); err != nil {
+		t.Fatal(err)
+	}
+	seedReleasedSitePublishFingerprint(t, backend.lockMemoryBackend, root, backend)
+	backend.resetProbe()
+
+	result, err := PublishSite(context.Background(), backend, options)
+	if err != nil || result.Outcome != "no-op" || result.BuildSkipped {
+		t.Fatalf("AWS policy upgrade = %+v, err=%v; want rebuilt state with no projection diff", result, err)
+	}
+	backend.probeMu.Lock()
+	heads, gets, writes := backend.stateHeads, backend.stateGets, backend.stateWrites
+	backend.probeMu.Unlock()
+	if heads != 1 || gets != 1 || writes != 1 {
+		t.Fatalf("AWS state HEAD/GET/PUT = %d/%d/%d; want 1/1/1", heads, gets, writes)
+	}
+}
+
+func TestPublishSiteUpgradeDetectsReleasedFingerprintWithR2GetFastPath(t *testing.T) {
+	root := createPublisherCheckout(t, "git@github.com:acme/sre.git")
+	probe := newSitePublishProbeBackend()
+	backend := &sitePublishGetOnlyProbeBackend{sitePublishProbeBackend: probe}
+	seedPublisherRegistry(t, probe.lockMemoryBackend, registeredSREManifest)
+	options := SitePublishOptions{SiteID: "sre", SourceDir: filepath.Join(root, "docs/artifacts")}
+	if _, err := PublishSite(context.Background(), backend, options); err != nil {
+		t.Fatal(err)
+	}
+	seedReleasedSitePublishFingerprint(t, probe.lockMemoryBackend, root, backend)
+	probe.resetProbe()
+
+	result, err := PublishSite(context.Background(), backend, options)
+	if err != nil || result.Outcome != "no-op" || result.BuildSkipped {
+		t.Fatalf("R2 policy upgrade = %+v, err=%v; want rebuilt state with no projection diff", result, err)
+	}
+	probe.probeMu.Lock()
+	heads, gets, writes := probe.stateHeads, probe.stateGets, probe.stateWrites
+	probe.probeMu.Unlock()
+	if heads != 0 || gets != 1 || writes != 1 {
+		t.Fatalf("R2 state HEAD/GET/PUT = %d/%d/%d; want 0/1/1", heads, gets, writes)
+	}
 }

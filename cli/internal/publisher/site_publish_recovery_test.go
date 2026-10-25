@@ -239,4 +239,8 @@ func TestPublishSitePersistedFinalStateErrorRetriesCacheOnlyAfterFreshWrapper(t 
 	if _, _, err := store.lockMemoryBackend.GetObject(context.Background(), siteCacheRetryKey("sre")); !errors.Is(err, ErrObjectNotFound) {
 		t.Fatalf("cache journal after cache-only retry = %v; want cleared", err)
 	}
+	noop, err := PublishSite(context.Background(), newSitePublishRecoveryBackend(store), options)
+	if err != nil || noop.Outcome != "no-op" {
+		t.Fatalf("after lost state-CAS response and retry, next run = %+v, err=%v; want no-op", noop, err)
+	}
 }

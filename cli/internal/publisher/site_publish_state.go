@@ -457,11 +457,11 @@ func validateSitePublishRow(site string, row sitePublishObject) error {
 	if err := validateSitePublishOwnedKey(site, row.Key); err != nil {
 		return err
 	}
-	expectedType, expectedDisposition, expectedEncoding, expectedCache, err := expectedSitePublishObjectPolicy(site, row.Key)
+	expectedType, expectedDisposition, expectedEncoding, _, err := expectedSitePublishObjectPolicy(site, row.Key)
 	if err != nil {
 		return err
 	}
-	if row.ContentType != expectedType || row.ContentDisposition != expectedDisposition || !validSitePublishContentEncoding(site, row.Key, row.ContentEncoding, expectedEncoding) || row.CacheControl != expectedCache {
+	if row.ContentType != expectedType || row.ContentDisposition != expectedDisposition || !validSitePublishContentEncoding(site, row.Key, row.ContentEncoding, expectedEncoding) || !cacheControlAccepted(sitePublishClassForKey(site, row.Key), row.CacheControl) {
 		return fmt.Errorf("key %q has unknown HTTP policy", row.Key)
 	}
 	return nil

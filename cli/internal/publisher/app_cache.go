@@ -22,8 +22,8 @@ var appCacheRetryPathAllowlist = map[string]struct{}{
 	"/preview-bridge.js":       {},
 }
 
-// appCacheRetry records the application URL paths that still need cache
-// invalidation after a deployment attempt.
+// appCacheRetry is the legacy purge-only application record. The current CLI
+// validates it before retirement and never writes a replacement.
 type appCacheRetry struct {
 	SchemaVersion int      `json:"schemaVersion"`
 	Paths         []string `json:"paths"`
@@ -71,6 +71,11 @@ func readAppCacheRetry(ctx context.Context, backend ConditionalObjectBackend) (a
 	if err := json.Unmarshal(object.Bytes, &envelope); err != nil || envelope == nil {
 		return appCacheRetry{}, "", errors.New("app cache retry record must be a JSON object")
 	}
+	for key := range envelope {
+		if key != "schemaVersion" && key != "paths" {
+			return appCacheRetry{}, "", fmt.Errorf("app cache retry record has unsupported field %q", key)
+		}
+	}
 	versionRaw, ok := envelope["schemaVersion"]
 	if !ok {
 		return appCacheRetry{}, "", errors.New("app cache retry record has no schemaVersion")
@@ -90,33 +95,6 @@ func readAppCacheRetry(ctx context.Context, backend ConditionalObjectBackend) (a
 		return appCacheRetry{}, "", err
 	}
 	return record, etag, nil
-}
-
-func writeAppCacheRetry(ctx context.Context, backend ConditionalObjectBackend, record appCacheRetry, etag string) (string, error) {
-	if err := validateAppCacheRetry(record); err != nil {
-		return "", err
-	}
-	data, err := json.Marshal(record)
-	if err != nil {
-		return "", fmt.Errorf("encode app cache retry record: %w", err)
-	}
-	if len(data) > maxAppCacheRetryBytes {
-		return "", fmt.Errorf("app cache retry record exceeds %d bytes", maxAppCacheRetryBytes)
-	}
-	condition := ObjectCondition{IfNoneMatch: true}
-	if strings.TrimSpace(etag) != "" {
-		condition = ObjectCondition{IfMatchETag: etag}
-	}
-	newETag, err := backend.PutObjectConditional(ctx, appCacheRetryObjectKey, Object{
-		Bytes: data, ContentType: "application/json; charset=utf-8", Cache: cacheControl(cacheClassPrivateControl),
-	}, condition)
-	if err != nil {
-		return "", fmt.Errorf("write app cache retry record: %w", err)
-	}
-	if strings.TrimSpace(newETag) == "" {
-		return "", errors.New("app cache retry write returned no ETag")
-	}
-	return newETag, nil
 }
 
 func clearAppCacheRetry(ctx context.Context, backend DeploymentBackend) error {

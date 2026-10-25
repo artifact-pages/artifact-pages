@@ -83,7 +83,7 @@ func decodePriorAuthor(raw json.RawMessage) *indexer.ArtifactAuthor {
 
 func validatePriorSiteIndexMetadata(site string, row sitePublishObject, contentType, disposition, encoding, cache string, metadata map[string]string) error {
 	if contentType != row.ContentType || (disposition != row.ContentDisposition && !(disposition == "" && row.ContentDisposition == "inline")) ||
-		encoding != row.ContentEncoding || cache != row.CacheControl || metadata["artifact-pages-site"] != site || metadata["artifact-pages-sha256"] != row.SHA256 {
+		encoding != row.ContentEncoding || !cacheControlAccepted(sitePublishClassForKey(site, row.Key), cache) || cache != row.CacheControl || metadata["artifact-pages-site"] != site || metadata["artifact-pages-sha256"] != row.SHA256 {
 		return errors.New("deployed site index HTTP or object metadata does not match committed publish state")
 	}
 	if encoding != "" && encoding != "gzip" {

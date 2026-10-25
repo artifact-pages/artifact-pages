@@ -215,6 +215,9 @@ func TestUnregisterSiteCleansEveryAWSListingPageWithFakeBackend(t *testing.T) {
 	}
 	client := newAWSUnregisterPagedFake(2)
 	client.seed("_indexes/sites.json", manifestBytes)
+	registryObject := client.objects["_indexes/sites.json"]
+	registryObject.cache = cacheControl(cacheClassSiteRoot)
+	client.objects["_indexes/sites.json"] = registryObject
 	for key, contents := range map[string][]byte{
 		"_artifacts/sre/one.html":              []byte("one"),
 		"_artifacts/sre/two.html":              []byte("two"),
@@ -265,6 +268,9 @@ func TestUnregisterSiteRetriesAfterAWSContinuationListingFailure(t *testing.T) {
 	}
 	client := newAWSUnregisterPagedFake(1)
 	client.seed("_indexes/sites.json", manifestBytes)
+	registryObject := client.objects["_indexes/sites.json"]
+	registryObject.cache = cacheControl(cacheClassSiteRoot)
+	client.objects["_indexes/sites.json"] = registryObject
 	for key, contents := range map[string][]byte{
 		"_artifacts/sre/one.html":                 []byte("one"),
 		"_artifacts/sre/two.html":                 []byte("two"),
@@ -474,6 +480,7 @@ func secondOperationIndex(operations []string, target string) int {
 type awsUnregisterPagedObject struct {
 	bytes []byte
 	etag  string
+	cache string
 }
 
 type awsUnregisterPagedFake struct {
@@ -510,7 +517,7 @@ func (client *awsUnregisterPagedFake) PutObject(ctx context.Context, input *s3.P
 	}
 	client.nextETag++
 	etag := fmt.Sprintf("\"fake-%d\"", client.nextETag)
-	client.objects[key] = awsUnregisterPagedObject{bytes: append([]byte(nil), contents...), etag: etag}
+	client.objects[key] = awsUnregisterPagedObject{bytes: append([]byte(nil), contents...), etag: etag, cache: aws.ToString(input.CacheControl)}
 	return &s3.PutObjectOutput{ETag: aws.String(etag)}, nil
 }
 
@@ -571,7 +578,7 @@ func (client *awsUnregisterPagedFake) GetObject(ctx context.Context, input *s3.G
 	if !exists {
 		return nil, awsUnregisterNotFoundError()
 	}
-	return &s3.GetObjectOutput{Body: io.NopCloser(bytes.NewReader(object.bytes)), ETag: aws.String(object.etag)}, nil
+	return &s3.GetObjectOutput{Body: io.NopCloser(bytes.NewReader(object.bytes)), ETag: aws.String(object.etag), CacheControl: aws.String(object.cache)}, nil
 }
 
 func (client *awsUnregisterPagedFake) HeadObject(ctx context.Context, input *s3.HeadObjectInput, _ ...func(*s3.Options)) (*s3.HeadObjectOutput, error) {
@@ -582,7 +589,7 @@ func (client *awsUnregisterPagedFake) HeadObject(ctx context.Context, input *s3.
 	if !exists {
 		return nil, awsUnregisterNotFoundError()
 	}
-	return &s3.HeadObjectOutput{ETag: aws.String(object.etag), ContentLength: aws.Int64(int64(len(object.bytes)))}, nil
+	return &s3.HeadObjectOutput{ETag: aws.String(object.etag), ContentLength: aws.Int64(int64(len(object.bytes))), CacheControl: aws.String(object.cache)}, nil
 }
 
 func (client *awsUnregisterPagedFake) listCount(prefix string) int {
