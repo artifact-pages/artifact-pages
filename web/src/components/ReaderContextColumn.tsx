@@ -1,4 +1,4 @@
-import { formatDate, formatLongDate, displayLocale } from '../domain/display-locale'
+import { formatLongDate, displayLocale } from '../domain/display-locale'
 import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react'
 import { Icon } from './Icon'
 import type { ArtifactIndexEntry } from '../domain/index'
@@ -12,19 +12,17 @@ export const READER_COLUMN_QUERY = '(min-width: 1200px)'
 type TocEntry = NonNullable<ArtifactIndexEntry['toc']>[number]
 
 /**
- * The persistent right column of a document page at wide viewports (ISSUE-108): a compact source-update summary and Details trigger above Contents. On a Markdown page it sits inside the scrolling document, so Details scrolls
+ * The persistent right column of a document page at wide viewports (ISSUE-108): Details on top,
+ * Contents below. On a Markdown page it sits inside the scrolling document, so Details scrolls
  * away while Contents stays; beside an HTML frame it scrolls on its own (`standalone`).
  */
-export function ReaderContextColumn({ artifact, entries, activeId, standalone, summary, onDetails, detailsOpen, detailsButtonRef, onJump }: {
+export function ReaderContextColumn({ artifact, entries, activeId, standalone, details, onJump }: {
   artifact: ArtifactIndexEntry
   entries: TocEntry[]
   activeId: string | null
   standalone?: boolean
-  /** Preview build summary; production uses the source update date. */
-  summary?: ReactNode
-  onDetails?: (trigger: HTMLButtonElement) => void
-  detailsOpen?: boolean
-  detailsButtonRef?: Ref<HTMLButtonElement>
+  /** Replaces the artifact's own Details (a preview document has its own, ISSUE-109). */
+  details?: ReactNode
   onJump: (id: string) => void
 }) {
   const listRef = useRef<HTMLElement>(null)
@@ -48,10 +46,8 @@ export function ReaderContextColumn({ artifact, entries, activeId, standalone, s
       lang="en"
     >
       <section className="reader-column-details" aria-labelledby="reader-column-details-heading">
-        <div className="reader-column-summary">
-          <span className="reader-update">{summary ?? <>Updated <time lang={displayLocale()} dateTime={artifact.updatedAt} title={artifact.updatedAt}>{formatDate(artifact.updatedAt)}</time></>}</span>
-          <button ref={detailsButtonRef} id="reader-column-details-heading" type="button" className="reader-details-trigger" data-reader-part="details" aria-expanded={Boolean(detailsOpen)} aria-controls={detailsOpen ? 'reader-details-panel' : undefined} onClick={(event) => onDetails?.(event.currentTarget)}><Icon name="info" size={13} />Details</button>
-        </div>
+        <h2 id="reader-column-details-heading" className="reader-column-heading" tabIndex={-1} data-reader-part="details">Details</h2>
+        {details ?? <ArtifactDetails artifact={artifact} />}
       </section>
       <section className="reader-column-contents" aria-labelledby="reader-column-contents-heading">
         <h2 id="reader-column-contents-heading" className="reader-column-heading">Contents</h2>

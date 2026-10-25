@@ -137,6 +137,7 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-122](ISSUE-122-contents-level-3-indent.md) | Done | P3 | Contents level-3 entries are not indented under their level-2 entry. |
 | [ISSUE-123](ISSUE-123-unpublished-registration-blocks-app-deploy.md) | Open | P1 | Never-published registrations fail app-deploy compatibility checks, including dry-run. |
 | [ISSUE-124](ISSUE-124-scoped-app-deploy-lock-permissions.md) | Open | P2 | Scoped app-deploy guidance omits registry/all-site locks and free-lock side effects. |
+| [ISSUE-125](ISSUE-125-wide-column-details-always-visible.md) | Done | P2 | Wide reader column hides Details behind a floating overlay. |
 
 ISSUE-013's verified completion record is retained in Git history.
 

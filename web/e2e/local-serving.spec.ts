@@ -32,8 +32,14 @@ function toolbarFocusTarget(page: Page, desktop: Locator) {
   return isNarrowChrome(page) ? moreActionsButton(page) : desktop
 }
 
-/** Inspect provenance through its explicit Details entry at every viewport. */
+/** Inspect provenance: the column's Details at wide widths, the Details panel below them. */
 async function openReaderDetails(page: Page) {
+  // At 1200 px and wider Details is always shown in the reading context column.
+  const wideDetails = page.getByRole('complementary', { name: 'Reading context' }).locator('.reader-column-details')
+  if ((page.viewportSize()?.width ?? 1280) >= 1200) {
+    await expect(wideDetails).toBeVisible()
+    return wideDetails
+  }
   const details = page.getByRole('complementary', { name: 'Details' })
   if (!(await details.isVisible())) await clickToolbarAction(page, page.getByRole('button', { name: 'Details', exact: true }), 'Details')
   await expect(details).toBeVisible()
@@ -7758,20 +7764,17 @@ test.describe('reader context column (ISSUE-108)', () => {
     const column = columnOf(page)
     await expect(column).toBeVisible()
     expect((await column.boundingBox())?.width).toBeCloseTo(columnWidth(1440), 0)
-    await expect(column.getByRole('button', { name: 'Details', exact: true })).toBeVisible()
+    await expect(column.getByRole('heading', { name: 'Details' })).toBeVisible()
+    await expect(column.getByRole('button', { name: 'Details', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('complementary', { name: 'Details' })).toHaveCount(0)
     await expect(column.getByText('Last committed by')).toHaveCount(0)
-    await expect(column.getByText('Documentation QA')).toHaveCount(0)
-    await expect(column.locator('.reader-update')).toContainText('Updated')
-    await column.getByRole('button', { name: 'Details', exact: true }).click()
-    const details = page.getByRole('complementary', { name: 'Details' })
-    await expect(details.getByText('Documentation QA')).toBeVisible()
-    await expect(details.locator('.details-updated')).toContainText('Updated')
-    await expect(details.getByText('example/markdown-qa', { exact: true })).toBeVisible()
-    await expect(details.getByRole('link', { name: /guides\/markdown-style-gallery\.md/ })).toHaveAttribute('href', 'https://github.com/example/markdown-qa/blob/main/guides/markdown-style-gallery.md')
-    await details.getByRole('button', { name: 'Close Details' }).click()
+    await expect(column.getByText('Documentation QA')).toBeVisible()
+    await expect(column.locator('.details-updated')).toContainText('Updated')
+    await expect(column.getByText('example/markdown-qa', { exact: true })).toBeVisible()
+    await expect(column.getByRole('link', { name: /guides\/markdown-style-gallery\.md/ })).toHaveAttribute('href', 'https://github.com/example/markdown-qa/blob/main/guides/markdown-style-gallery.md')
     await expect(column.getByRole('region', { name: 'Contents' })).toBeVisible()
     await expect(column.getByRole('navigation', { name: 'Artifact headings' }).getByRole('button').first()).toBeVisible()
-    const detailsTop = (await column.getByRole('button', { name: 'Details', exact: true }).boundingBox())!.y
+    const detailsTop = (await column.getByRole('heading', { name: 'Details' }).boundingBox())!.y
     const contentsTop = (await column.getByRole('heading', { name: 'Contents' }).boundingBox())!.y
     expect(detailsTop).toBeLessThan(contentsTop)
     const actions = page.locator('.context-actions')
@@ -7862,7 +7865,7 @@ test.describe('reader context column (ISSUE-108)', () => {
     }).toBeLessThanOrEqual(10)
     const contentsTop = (await column.getByRole('region', { name: 'Contents' }).boundingBox())!.y - paneTop
     expect(contentsTop).toBeGreaterThanOrEqual(6)
-    expect((await column.getByRole('button', { name: 'Details', exact: true }).boundingBox())!.y + 20).toBeLessThan(paneTop)
+    expect((await column.getByRole('heading', { name: 'Details' }).boundingBox())!.y + 20).toBeLessThan(paneTop)
     await expect(column.getByRole('navigation', { name: 'Artifact headings' })).toBeVisible()
   })
 
@@ -7898,7 +7901,7 @@ test.describe('reader context column (ISSUE-108)', () => {
     await expect.poll(() => column.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true)
     const contents = column.getByRole('region', { name: 'Contents' })
     const columnBox = (await column.boundingBox())!
-    expect((await column.getByRole('button', { name: 'Details', exact: true }).boundingBox())!.y).toBeLessThan((await contents.boundingBox())!.y)
+    expect((await column.getByRole('heading', { name: 'Details' }).boundingBox())!.y).toBeLessThan((await contents.boundingBox())!.y)
     await column.evaluate((element) => element.scrollTo(0, element.scrollHeight))
     expect(await column.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
     expect(await frameScroll()).toBe(0)
@@ -8288,8 +8291,8 @@ test.describe('reader context column (ISSUE-108)', () => {
     await page.locator('.context-actions').getByRole('button', { name: 'Details', exact: true }).click()
     await page.getByRole('complementary', { name: 'Details' }).getByRole('link').first().focus()
     await page.setViewportSize({ width: 1300, height: 800 })
-    await expect(page.getByRole('complementary', { name: 'Details' })).toBeVisible()
-    await page.getByRole('complementary', { name: 'Details' }).getByRole('button', { name: 'Close Details' }).click()
+    await expect(page.getByRole('complementary', { name: 'Details' })).toHaveCount(0)
+    await expect(page.locator('.context-actions').getByRole('button', { name: 'Details', exact: true })).toHaveCount(0)
     await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe('reader-column-details-heading')
   })
 
@@ -8301,7 +8304,7 @@ test.describe('reader context column (ISSUE-108)', () => {
     await expect(page.locator('.context-actions').getByRole('button', { name: 'Contents', exact: true })).toBeFocused()
 
     await page.setViewportSize({ width: 1300, height: 800 })
-    await columnOf(page).getByRole('button', { name: 'Details', exact: true }).focus()
+    await columnOf(page).getByRole('heading', { name: 'Details' }).focus()
     await page.setViewportSize({ width: 1100, height: 800 })
     await expect(page.locator('.context-actions').getByRole('button', { name: 'Details', exact: true })).toBeFocused()
   })
@@ -8320,7 +8323,8 @@ test.describe('reader context column (ISSUE-108)', () => {
     await palette.getByRole('combobox').fill('>Toggle details')
     await palette.getByRole('option', { name: 'Toggle details' }).click()
     await expect(palette).toBeHidden()
-    await expect(page.getByRole('complementary', { name: 'Details' }).getByRole('button', { name: 'Close Details' })).toBeFocused()
+    await expect(page.getByRole('complementary', { name: 'Details' })).toHaveCount(0)
+    await expect(column.getByRole('heading', { name: 'Details' })).toBeFocused()
 
     await page.keyboard.press('Control+k')
     await palette.getByRole('combobox').fill('>Toggle contents')
@@ -8358,8 +8362,7 @@ test.describe('reader context column (ISSUE-108)', () => {
 
   test('a document without provenance shows only what exists', async ({ page }) => {
     await page.goto('/showcase/tests/color-scheme-response/index.html')
-    await columnOf(page).getByRole('button', { name: 'Details', exact: true }).click()
-    const column = page.getByRole('complementary', { name: 'Details' })
+    const column = columnOf(page)
     await expect(column.locator('.details-updated')).toContainText('Updated')
     await expect(column.getByText('Last committed by')).toHaveCount(0)
     await expect(column.locator('.details-avatar')).toHaveCount(0)
@@ -8375,8 +8378,7 @@ test.describe('reader context column (ISSUE-108)', () => {
       await route.fulfill({ status: 200, contentType: 'image/png', headers: { 'access-control-allow-origin': '*' }, body: png })
     })
     await page.goto('/sre/incidents/checkout-latency/index.html')
-    await columnOf(page).getByRole('button', { name: 'Details', exact: true }).click()
-    const column = page.getByRole('complementary', { name: 'Details' })
+    const column = columnOf(page)
     const avatar = column.locator('.details-avatar img')
     await expect(column.getByText('Octocat', { exact: true })).toBeVisible()
     await expect(avatar).toBeVisible()
@@ -8393,8 +8395,7 @@ test.describe('reader context column (ISSUE-108)', () => {
   test('a blocked avatar falls back to the initial without changing the name or date (ISSUE-117)', async ({ page }) => {
     await page.route('https://avatars.githubusercontent.com/**', (route) => route.abort())
     await page.goto('/sre/incidents/checkout-latency/index.html')
-    await columnOf(page).getByRole('button', { name: 'Details', exact: true }).click()
-    const column = page.getByRole('complementary', { name: 'Details' })
+    const column = columnOf(page)
     await expect(column.getByText('Octocat', { exact: true })).toBeVisible()
     await expect(column.locator('.details-avatar')).toHaveText('O')
     await expect(column.locator('.details-avatar img')).toHaveCount(0)
@@ -8405,8 +8406,7 @@ test.describe('reader context column (ISSUE-108)', () => {
     let avatarRequested = false
     await page.route('https://avatars.githubusercontent.com/**', async (route) => { avatarRequested = true; await route.abort() })
     await page.goto('/sre/architecture/platform-topology/index.html')
-    await columnOf(page).getByRole('button', { name: 'Details', exact: true }).click()
-    const column = page.getByRole('complementary', { name: 'Details' })
+    const column = columnOf(page)
     await expect(column.getByText('Platform Team', { exact: true })).toBeVisible()
     await expect(column.locator('.details-avatar')).toHaveText('P')
     await expect(column.locator('.details-avatar img')).toHaveCount(0)
@@ -8524,7 +8524,8 @@ test.describe('reader context column (ISSUE-108)', () => {
     await expect(page.getByRole('complementary', { name: 'Details' }).getByRole('button', { name: 'Close Details' })).toBeFocused()
     await page.setViewportSize({ width: 1440, height: 800 })
     await expect(columnOf(page)).toBeVisible()
-    await expect(page.getByRole('complementary', { name: 'Details' }).getByRole('button', { name: 'Close Details' })).toBeFocused()
+    await expect(page.getByRole('complementary', { name: 'Details' })).toHaveCount(0)
+    await expect.poll(activeId).toBe('reader-column-details-heading')
 
     // A Contents panel with focus inside it.
     await page.setViewportSize({ width: 500, height: 800 })
@@ -9288,8 +9289,13 @@ test.describe('preview reading in the reader shell (ISSUE-109)', () => {
   }
   const column = (page: Page) => page.getByRole('complementary', { name: 'Reading context' })
   async function openPreviewDetails(page: Page) {
+    const wideDetails = column(page).locator('.reader-column-details')
+    if ((page.viewportSize()?.width ?? 1280) >= 1200) {
+      await expect(wideDetails).toBeVisible()
+      return wideDetails
+    }
     const details = page.getByRole('complementary', { name: 'Details' })
-    if (!(await details.isVisible())) await column(page).getByRole('button', { name: 'Details', exact: true }).click()
+    await clickToolbarAction(page, page.getByRole('button', { name: 'Details', exact: true }), 'Details')
     await expect(details).toBeVisible()
     return details
   }
@@ -9349,7 +9355,8 @@ test.describe('preview reading in the reader shell (ISSUE-109)', () => {
     await expect(crumbs(page).getByRole('link', { name: 'Previews' })).toHaveAttribute('href', '/sre/_previews')
     await expect(crumbs(page).getByRole('link', { name: 'PR #42' })).toHaveAttribute('href', '/sre/_previews?group=pr%3A42')
     await expect(column(page)).toBeVisible()
-    await expect(column(page).getByRole('button', { name: 'Details', exact: true })).toBeVisible()
+    await expect(column(page).getByRole('heading', { name: 'Details' })).toBeVisible()
+    await expect(column(page).getByRole('button', { name: 'Details', exact: true })).toHaveCount(0)
     await expect(column(page).getByRole('heading', { name: 'Contents' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Contents' })).toHaveCount(0)
     await page.locator('.context-bar').getByRole('button', { name: 'Search pages in SRE' }).click()
@@ -9911,10 +9918,7 @@ test.describe('browser-localized date and count display (IMP-84)', () => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto('/showcase/editorial/field-notes/index.html')
     const context = page.getByRole('complementary', { name: 'Reading context' })
-    await expect(context.locator('time')).toHaveText('9月23日')
-    await context.getByRole('button', { name: 'Details', exact: true }).click()
-    await expect(page.getByRole('complementary', { name: 'Details' }).locator('time')).toHaveText('2026年9月23日')
-    await page.getByRole('complementary', { name: 'Details' }).getByRole('button', { name: 'Close Details' }).click()
+    await expect(context.locator('time')).toHaveText('2026年9月23日')
     await expect(context.getByRole('heading', { name: 'Contents', exact: true })).toBeVisible()
     await expect(page.frameLocator('iframe[title="Designing for resilience"]').getByText('September 23, 2026', { exact: true })).toBeVisible()
     await page.goto('/sre')
@@ -10067,34 +10071,22 @@ test('S3 single-site menus keep the singular count and Space follows their home 
 })
 
 
-test('S4 wide reading context shows only freshness until Details is requested', async ({ page }) => {
+test('S4 wide reading context shows Details inline with no button or overlay', async ({ page }) => {
   for (const path of ['/sre/incidents/checkout-latency/index.html', '/sre/reports/latency-retrospective.md']) {
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto(path)
     const column = page.getByRole('complementary', { name: 'Reading context' })
-    const trigger = column.getByRole('button', { name: 'Details', exact: true })
-    await expect(column.locator('.reader-update')).toContainText('Updated')
-    await expect(column.locator('.artifact-details')).toHaveCount(0)
+    await expect(column.getByRole('heading', { name: 'Details' })).toBeVisible()
+    await expect(column.getByRole('button', { name: 'Details', exact: true })).toHaveCount(0)
+    await expect(column.locator('.artifact-details .details-updated')).toContainText('Updated')
+    await expect(column.locator('.details-source')).toBeVisible()
+    await expect(page.getByRole('complementary', { name: 'Details' })).toHaveCount(0)
     await expect(column.getByRole('heading', { name: 'Contents' })).toBeVisible()
-    const reading = page.locator('iframe.artifact-frame').or(page.locator('.markdown-article'))
-    const before = (await reading.boundingBox())!
-    await trigger.click()
-    const details = page.getByRole('complementary', { name: 'Details' })
-    await expect(details.getByRole('button', { name: 'Close Details' })).toBeFocused()
-    await expect(details.locator('.details-source')).toBeVisible()
-    expect((await reading.boundingBox())!.width).toBeCloseTo(before.width, 0)
-    const scroller = page.locator('.markdown-scroll')
-    if (path.endsWith('.md')) await scroller.evaluate((el) => { el.scrollTop = 600 })
-    const scrollBefore = path.endsWith('.md') ? await scroller.evaluate((el) => el.scrollTop) : 0
-    await page.keyboard.press('Escape')
-    await expect(details).toBeHidden()
-    await expect(trigger).toBeFocused()
-    if (path.endsWith('.md')) expect(await scroller.evaluate((el) => el.scrollTop)).toBe(scrollBefore)
     await expect(column.getByRole('navigation', { name: 'Artifact headings' })).toBeVisible()
   }
 })
 
-test('S4 open Details keeps visible focus when a More menu disappears at the wide breakpoint', async ({ page }) => {
+test('S4 open Details closes and hands focus to the column Details heading when widening past the breakpoint', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/sre/reports/latency-retrospective.md')
   await openReaderDetails(page)
@@ -10102,9 +10094,8 @@ test('S4 open Details keeps visible focus when a More menu disappears at the wid
   await moreActionsButton(page).click()
   await expect(page.getByRole('menu', { name: 'More actions' })).toBeVisible()
   await page.setViewportSize({ width: 1440, height: 844 })
-  await expect(details.getByRole('button', { name: 'Close Details' })).toBeFocused()
-  await details.getByRole('button', { name: 'Close Details' }).click()
-  await expect(page.getByRole('complementary', { name: 'Reading context' }).getByRole('button', { name: 'Details', exact: true })).toBeFocused()
+  await expect(details).toHaveCount(0)
+  await expect(page.getByRole('complementary', { name: 'Reading context' }).getByRole('heading', { name: 'Details' })).toBeFocused()
 })
 
 
