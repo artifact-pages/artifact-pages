@@ -6920,19 +6920,14 @@ test.describe('directory pages', () => {
     expect(await page.locator('.browse-tree .tree-directory-row').count()).toBeLessThanOrEqual(400)
   })
 
-  test('a README folder with 5,000 children collapses to 10 rows and pages after Show all', async ({ page }) => {
+  test('a README folder with 5,000 children reads the introduction without duplicating navigation', async ({ page }) => {
     await routeDirectoryIndex(page, bulkPages)
     await page.goto('/sre/wideroot')
-
-    const directory = page.getByTestId('directory-page')
-    const rows = directory.locator('.directory-compact a')
-    await expect(rows).toHaveCount(10)
-    await expect(directory.getByRole('navigation', { name: 'Pages of this folder' })).toHaveCount(0)
-    await directory.getByRole('button', { name: /Show all/ }).click()
-    await expect(rows).toHaveCount(100)
-    const pager = directory.getByRole('navigation', { name: 'Pages of this folder' })
-    await expect(pager).toContainText('Showing 1–100 of 5,000')
-    await expect(directory.getByRole('button', { name: 'Show fewer' })).toBeVisible()
+    await expect(page.getByTestId('markdown-document')).toBeVisible()
+    await expect(page.getByTestId('directory-page')).toHaveCount(0)
+    await expect(page.locator('.directory-compact')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /Show all/ })).toHaveCount(0)
+    await expect(page).toHaveURL('/sre/wideroot')
   })
 
   test('a trailing slash and percent-encoded folder names name the same directory', async ({ page }) => {
@@ -6964,28 +6959,19 @@ test.describe('directory pages', () => {
     await expect(directory.locator('.directory-row')).toHaveCount(1)
   })
 
-  test('a README renders as the body with the other pages listed below it', async ({ page }) => {
+  test('a README folder opens the normal reader with no duplicate heading, children or file label', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
     await routeDirectoryIndex(page)
     await page.goto('/sre/docs')
-
-    const directory = page.getByTestId('directory-page')
-    await expect(directory).toHaveAttribute('data-directory-variant', 'index')
-    await expect(directory.getByTestId('markdown-document')).toBeVisible()
-    await expect(directory.locator('.directory-readme-label')).toHaveText('README.md')
-    await expect(directory).not.toContainText('rendered from')
-    const children = directory.getByRole('navigation', { name: /In this folder/ })
-    // The folder header and the list come first; the README sits below them under its file label.
-    const top = (selector: string) => directory.locator(selector).first().evaluate((element) => element.getBoundingClientRect().top)
-    const [headerTop, listTop, labelTop, bodyTop] = await Promise.all([
-      top('.directory-header'), top('.directory-children'), top('.directory-readme-label'), top('[data-testid="markdown-document"]'),
-    ])
-    expect(headerTop).toBeLessThan(listTop)
-    expect(listTop).toBeLessThan(labelTop)
-    expect(labelTop).toBeLessThan(bodyTop)
-    await expect(children.getByRole('link')).toHaveText([/Changelog/])
-    await expect(children.getByRole('link', { name: /Docs home/ })).toHaveCount(0)
+    await expect(page.getByTestId('markdown-document')).toBeVisible()
+    await expect(page.getByTestId('directory-page')).toHaveCount(0)
+    await expect(page.locator('.directory-header, .directory-children, .directory-readme-label, .read-next')).toHaveCount(0)
     await expect(page).toHaveTitle('Docs home · SRE')
-    await expect(page.getByRole('button', { name: 'Contents' })).toBeEnabled()
+    await expect(page.getByRole('navigation', { name: 'Artifact headings' })).toBeVisible()
+    await page.getByRole('button', { name: 'Copy folder link' }).click()
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toMatch(/\/sre\/docs$/)
+    await page.getByRole('checkbox', { name: 'Pin Docs home', exact: true }).click()
+    await expect(page.locator('.pinned-tree a')).toHaveAttribute('href', '/sre/docs/README.md')
   })
 
   test('a folder view uses one centred column of at most 1180 px (ISSUE-121)', async ({ page }) => {
@@ -6996,7 +6982,7 @@ test.describe('directory pages', () => {
     })
     const near = (actual: number, expected: number) => expect(Math.abs(actual - expected)).toBeLessThanOrEqual(1)
 
-    for (const [width, path, withBody] of [[1935, '/sre/docs', true], [1280, '/sre/docs', true], [1935, '/sre/guide/en', false]] as const) {
+    for (const [width, path, withBody] of [[1935, '/sre/guide/en', false], [1280, '/sre/guide/en', false], [390, '/sre/guide/en', false]] as const) {
       await page.setViewportSize({ width, height: 900 })
       await page.goto(path)
       await expect(page.getByTestId('directory-page')).toHaveAttribute('data-directory-variant', withBody ? 'index' : 'list')
@@ -7023,8 +7009,7 @@ test.describe('directory pages', () => {
     await routeDirectoryIndex(page)
     await page.goto('/sre/docs')
 
-    const directory = page.getByTestId('directory-page')
-    await expect(directory.getByRole('heading', { level: 1, name: 'Docs home' })).toBeVisible()
+    await expect(page.getByTestId('markdown-document')).toBeVisible()
     const browse = page.locator('.browse-tree')
     const folder = browse.locator('a[data-tree-folder="docs"]')
     await expect(folder).toContainText('Docs home')
@@ -7046,39 +7031,26 @@ test.describe('directory pages', () => {
     await expect(browse.locator('a[data-tree-folder="architecture/platform-topology"]')).not.toHaveAttribute('aria-current', 'page')
   })
 
-  test('a folder with a README and more than 12 children shows 10 rows until expanded', async ({ page }) => {
+  test('an introduction folder keeps its children in the sidebar at every width', async ({ page }) => {
     await routeDirectoryIndex(page, [...extraPages, ...cappedPages])
-    await page.goto('/sre/handbook')
-
-    const directory = page.getByTestId('directory-page')
-    const rows = directory.getByRole('navigation', { name: /In this folder/ }).locator('.directory-compact li')
-    const more = directory.getByRole('button', { name: 'Show all 13 items' })
-    await expect(rows).toHaveCount(10)
-    await expect(more).toHaveAttribute('aria-expanded', 'false')
-    await expect(more).toHaveAttribute('aria-controls', 'directory-children-list')
-    await expect(directory.locator('#directory-children-list')).toHaveCount(1)
-
-    await more.click()
-    await expect(rows).toHaveCount(13)
-    const fewer = directory.getByRole('button', { name: 'Show fewer' })
-    await expect(fewer).toHaveAttribute('aria-expanded', 'true')
-    await expect(fewer).toBeFocused()
-
-    await fewer.click()
-    await expect(rows).toHaveCount(10)
-    await expect(directory.getByRole('button', { name: 'Show all 13 items' })).toBeFocused()
-    await expect(directory.getByRole('button', { name: 'Show all 13 items' })).toHaveAttribute('aria-expanded', 'false')
-    // The README stays below the list.
-    await expect(directory.locator('.directory-readme-label')).toHaveText('README.md')
+    for (const width of [390, 768, 1280, 1440]) {
+      await page.setViewportSize({ width, height: 844 })
+      await page.goto('/sre/handbook')
+      await expect(page.getByTestId('markdown-document')).toBeVisible()
+      await expect(page.getByTestId('directory-page')).toHaveCount(0)
+      await expect(page.locator('.read-next')).toHaveCount(0)
+      if (width <= 860) await page.getByRole('button', { name: 'Expand navigation' }).click()
+      await expect(page.locator('.browse-tree a[data-tree-path="handbook/topic-13.md"]')).toBeVisible()
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
+    }
   })
 
-  test('a folder with a README and 12 or fewer children shows every row and no button', async ({ page }) => {
+  test('a small introduction folder also uses only the reader', async ({ page }) => {
     await routeDirectoryIndex(page, [...extraPages, ...cappedPages])
-    for (const [path, count] of [['/sre/twelve', 12], ['/sre/docs', 1]] as const) {
+    for (const path of ['/sre/twelve', '/sre/docs']) {
       await page.goto(path)
-      const directory = page.getByTestId('directory-page')
-      await expect(directory.getByRole('navigation', { name: /In this folder/ }).locator('.directory-compact li')).toHaveCount(count)
-      await expect(directory.locator('.directory-more')).toHaveCount(0)
+      await expect(page.getByTestId('markdown-document')).toBeVisible()
+      await expect(page.getByTestId('directory-page')).toHaveCount(0)
     }
   })
 
@@ -7130,12 +7102,12 @@ test.describe('directory pages', () => {
     await expect(directory.locator('.directory-row').first()).toBeVisible()
   })
 
-  test('a folder whose index.html is the only page renders it inside the directory page', async ({ page }) => {
+  test('a folder whose index.html is its only page uses the normal HTML reader', async ({ page }) => {
     await page.goto('/showcase/reports/cloud-spend-review')
-    const directory = page.getByTestId('directory-page')
-    await expect(directory).toHaveAttribute('data-directory-variant', 'index')
-    await expect(directory.locator('iframe.artifact-frame')).toBeVisible()
-    await expect(directory.getByRole('navigation', { name: /In this folder/ })).toHaveCount(0)
+    await expect(page.locator('iframe.artifact-frame')).toBeVisible()
+    await expect(page.getByTestId('directory-page')).toHaveCount(0)
+    await expect(page.locator('.reader-column')).toBeVisible()
+    await expect(page).toHaveURL('/showcase/reports/cloud-spend-review')
   })
 
   test('a path that is neither a page nor a folder is still not found', async ({ page }) => {
@@ -7256,7 +7228,8 @@ test.describe('directory pages', () => {
     await page.getByRole('button', { name: 'Expand navigation' }).tap()
     await page.locator('.browse-tree a[data-tree-folder="docs"]').tap()
     await expect(page).toHaveURL('/sre/docs')
-    await expect(page.getByTestId('directory-page')).toHaveAttribute('data-directory-variant', 'index')
+    await expect(page.getByTestId('markdown-document')).toBeVisible()
+    await expect(page.getByTestId('directory-page')).toHaveCount(0)
     await expect(page.locator('#workspace-sidebar')).toBeHidden()
     await page.close()
   })
@@ -7307,13 +7280,13 @@ test.describe('directory page scrolling', () => {
     await expect.poll(() => page.locator('.directory-scroll').evaluate((element) => element.scrollTop)).toBe(0)
   })
 
-  test('a Markdown index body scrolls the directory page to a first match and respects reader scrolling', async ({ page }) => {
+  test('a Markdown folder introduction scrolls the reader to a match and respects reader scrolling', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 720 })
     await routeLongIndex(page, 'markdown')
     await page.goto('/textsearch/long?q=zephyrmarker')
     const reader = page.getByTestId('markdown-document')
     await expect(reader.getByText('The zephyrmarker word is at the end.')).toBeInViewport()
-    expect(await page.locator('.directory-scroll').evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+    expect(await page.locator('.markdown-scroll').evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
 
     await page.goto('/textsearch/long#middle-section')
     await expect(reader.getByRole('heading', { name: 'Middle section' })).toBeInViewport()
@@ -7332,18 +7305,18 @@ test.describe('directory page scrolling', () => {
     await expect(reader.getByText('The latemarker word arrives late.')).not.toBeInViewport()
   })
 
-  test('an HTML index body scrolls the directory page to a fragment and to a first match', async ({ page }) => {
+  test('an HTML folder introduction scrolls its normal frame to a fragment and match', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 720 })
     await routeLongIndex(page, 'html')
     const frame = page.frameLocator('iframe.artifact-frame')
 
     await page.goto('/textsearch/long#middle-section')
     await expect(frame.getByRole('heading', { name: 'Middle section' })).toBeInViewport()
-    expect(await page.locator('.directory-scroll').evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+    expect(await page.locator('iframe.artifact-frame').evaluate((element) => (element as HTMLIFrameElement).contentWindow!.scrollY)).toBeGreaterThan(0)
 
     await page.goto('/textsearch/long?q=zephyrmarker')
     await expect(frame.getByText('The zephyrmarker word is at the end.')).toBeInViewport()
-    expect(await page.locator('.directory-scroll').evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+    expect(await page.locator('iframe.artifact-frame').evaluate((element) => (element as HTMLIFrameElement).contentWindow!.scrollY)).toBeGreaterThan(0)
   })
 })
 
@@ -8904,7 +8877,7 @@ test.describe('site home sections', () => {
       },
     })
     await page.goto('/sre/html-folder')
-    await expect(page.getByTestId('directory-page')).toHaveAttribute('data-directory-variant', 'index')
+    await expect(page.getByTestId('directory-page')).toHaveCount(0)
     await expect(page.frameLocator('iframe.artifact-frame').getByRole('heading', { name: 'Nested HTML body' })).toBeVisible()
     await page.goto('/sre/md-folder')
     await expect(page.getByRole('heading', { name: 'Nested markdown body' })).toBeVisible()
