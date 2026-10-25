@@ -591,6 +591,10 @@ security mode, with diagram interactions disabled. Embedded raw HTML is sanitize
 the application DOM. Relative assets resolve from the Markdown file's location. Links to other
 indexed Markdown or HTML documents navigate to their extension-preserving application routes.
 
+### Display language and formatting
+
+Operation labels remain English and published artifact text is displayed as published. Dates and numeric displays follow the browser's preferred locale, independently of the artifact language. Count nouns use Japanese for Japanese locales and English otherwise; other locales retain their own date and number formatting. Invalid locale settings fall back safely to English formatting. Existing invalid-date fallbacks remain unchanged. Preview build times still name the reader's local timezone and expose their precise UTC instant in the tooltip; localization does not turn a build time into a source-update date.
+
 ### Right sidebar
 
 The optional right panel has two views, toggled from the workspace header:

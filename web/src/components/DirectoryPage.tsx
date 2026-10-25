@@ -1,3 +1,4 @@
+import { formatNumber, formatLongDate as formatDate } from '../domain/display-locale'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { artifactByline } from '../domain/author-byline'
 import { pageCountLabel, pageHeadings, type DirectoryListing } from '../domain/directory'
@@ -86,7 +87,7 @@ export function DirectoryPage({
     <nav className="directory-pager" aria-label="Pages of this folder">
       <button type="button" className="text-action" disabled={page === 0} onClick={() => goToPage(page - 1)}>Previous</button>
       <span aria-live="polite">
-        Showing {(start + 1).toLocaleString('en-US')}–{end.toLocaleString('en-US')} of {total.toLocaleString('en-US')}
+        Showing {formatNumber(start + 1)}–{formatNumber(end)} of {formatNumber(total)}
       </span>
       <button type="button" className="text-action" disabled={page >= pageTotal(total) - 1} onClick={() => goToPage(page + 1)}>Next</button>
     </nav>
@@ -220,10 +221,4 @@ export function DirectoryPage({
       </div>
     </div>
   )
-}
-
-function formatDate(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.valueOf())) return value
-  return new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).format(date)
 }

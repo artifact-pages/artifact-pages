@@ -1,7 +1,9 @@
-export function siteCountLabel(count: number) {
-  return `${count} ${count === 1 ? 'site' : 'sites'} available`
+import { formatCount, type DisplayLocales } from './display-locale.ts'
+
+export function siteCountLabel(count: number, locales?: DisplayLocales) {
+  return `${formatCount(count, 'site', locales)} available`
 }
 
-export function artifactCountLabel(count: number) {
-  return `${count} ${count === 1 ? 'artifact' : 'artifacts'}`
+export function artifactCountLabel(count: number, locales?: DisplayLocales) {
+  return formatCount(count, 'artifact', locales)
 }

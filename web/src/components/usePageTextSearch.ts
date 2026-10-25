@@ -1,3 +1,4 @@
+import { formatNumber } from '../domain/display-locale'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { FullTextSearchError, type FullTextHit, type SiteFullTextSearch } from '../data/fulltext'
 import { RANKING_MAX_HITS, shouldRank } from '../domain/search-ranking'
@@ -161,7 +162,7 @@ export function describePageTextSearchError(error: Error): PageTextSearchErrorDe
   // a RangeError before fetching anything: retrying the same query cannot help.
   if (error instanceof RangeError) {
     return /too long/i.test(error.message)
-      ? { title: 'This query is too long', detail: `Shorten it to ${PAGE_TEXT_SEARCH_MAX_QUERY_LENGTH.toLocaleString('en-US')} characters or fewer.`, retryable: false }
+      ? { title: 'This query is too long', detail: `Shorten it to ${formatNumber(PAGE_TEXT_SEARCH_MAX_QUERY_LENGTH)} characters or fewer.`, retryable: false }
       : { title: 'This query could not be searched', detail: 'Try different words.', retryable: false }
   }
   // Anything else is unexpected and may be transient.

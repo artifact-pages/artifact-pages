@@ -1,3 +1,4 @@
+import { formatLongDate } from '../domain/display-locale'
 import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react'
 import { Icon } from './Icon'
 import type { ArtifactIndexEntry } from '../domain/index'
@@ -179,10 +180,3 @@ export function ArtifactDetails({ artifact }: { artifact: ArtifactIndexEntry }) 
     </div>
   )
 }
-
-function formatLongDate(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.valueOf())) return value
-  return new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).format(date)
-}
-

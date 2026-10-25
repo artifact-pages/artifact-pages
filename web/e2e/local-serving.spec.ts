@@ -1760,8 +1760,8 @@ test('a folder with several pages is listed below the page matches and opens its
   const search = palette.getByRole('combobox', { name: PALETTE_SEARCH_LABEL })
 
   await search.fill('bulk')
-  const titles = await palette.locator('.palette-section-title').allTextContents()
-  expect(titles.slice(0, 3)).toEqual(['Pages', 'Full text', 'Folders'])
+  await expect.poll(async () => (await palette.locator('.palette-section-title').allTextContents()).slice(0, 3))
+    .toEqual(['Pages', 'Full text', 'Folders'])
   // Pages keep priority: the first Enter would open a page, not the folder.
   await expect(palette.locator('.palette-section').first().getByRole('option').first()).toHaveAttribute('aria-selected', 'true')
   const folder = palette.getByRole('option', { name: /^bulk/ })
@@ -9919,5 +9919,35 @@ test.describe('Browse tree indentation (ISSUE-120)', () => {
     const rowBox = (await row.boundingBox())!
     const labelBox = (await row.locator('.tree-label').first().boundingBox())!
     expect(labelBox.x + labelBox.width).toBeLessThanOrEqual(rowBox.x + rowBox.width)
+  })
+})
+
+test.describe('browser-localized date and count display (IMP-84)', () => {
+  test.use({ locale: 'ja-JP', timezoneId: 'Asia/Tokyo' })
+
+  test('Japanese reader chrome formats metadata while preserving operation labels and HTML', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto('/showcase/editorial/field-notes/index.html')
+    const context = page.getByRole('complementary', { name: 'Reading context' })
+    await expect(context.locator('time')).toHaveText('2026年9月23日')
+    await expect(context.getByRole('heading', { name: 'Contents', exact: true })).toBeVisible()
+    await expect(page.frameLocator('iframe[title="Designing for resilience"]').getByText('September 23, 2026', { exact: true })).toBeVisible()
+    await page.goto('/sre')
+    await expect(page.locator('.site-home-lede')).toContainText(/\d+ページ/)
+    await expect(page.getByRole('navigation', { name: 'Site sections' }).getByRole('link', { name: 'Files', exact: true })).toBeVisible()
+  })
+
+  test('Japanese search counts and preview times retain their meaning', async ({ page }) => {
+    const metadata = await page.request.get(`/_indexes/${TEXT_SEARCH_SITE.id}/meta.json`)
+    test.skip(!metadata.ok(), 'Requires the generated textsearch projection, as do the page text search regressions.')
+    await registerTextSearchSite(page)
+    await page.goto('/textsearch/_search?q=latency')
+    await expect(page.locator('.search-page-count-text')).toContainText(/\d+ページ.*contain/)
+    await expect(page.getByRole('list', { name: 'Results' })).toBeVisible()
+    await page.goto('/sre/_previews')
+    const times = page.getByRole('region', { name: 'Preview pr:42', exact: true }).locator('time')
+    await expect(times.first()).toContainText(/年.*月.*日.*(?:JST|GMT\+9)/)
+    await expect(times.first()).toHaveAttribute('title', / UTC$/)
+    await expect(times.first()).toHaveAttribute('datetime', /Z$/)
   })
 })

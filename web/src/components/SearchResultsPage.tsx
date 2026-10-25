@@ -1,3 +1,5 @@
+import { pageCountLabel } from '../domain/directory'
+import { formatNumber } from '../domain/display-locale'
 import { Fragment, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { FullTextSearchError, type FullTextHit } from '../data/fulltext'
 import type { ArtifactIndexEntry } from '../domain/index'
@@ -240,14 +242,14 @@ export function SearchResultsPage({
   const count = !available ? '' : !query
     ? 'Type to search page text.'
     : state.status === 'loading'
-      ? `Searching ${pageCount.toLocaleString('en-US')} pages…`
+      ? `Searching ${pageCountLabel(pageCount)}…`
       : state.status === 'error'
         ? `Search for “${query}” failed.`
         : shown.status === 'success'
           ? folder && !complete
             // Only part of the list is loaded: say so instead of presenting a folder total.
-            ? `${hits.length.toLocaleString('en-US')} ${hits.length === 1 ? 'page' : 'pages'} in ${folder}/ so far, among ${shown.hits.length.toLocaleString('en-US')} of ${shown.total.toLocaleString('en-US')} pages that contain “${query}”`
-            : `${folder ? hits.length.toLocaleString('en-US') : shown.total.toLocaleString('en-US')} ${(folder ? hits.length : shown.total) === 1 ? 'page' : 'pages'}${scope} ${(folder ? hits.length : shown.total) === 1 ? 'contains' : 'contain'} “${query}”`
+            ? `${pageCountLabel(hits.length)} in ${folder}/ so far, among ${formatNumber(shown.hits.length)} of ${pageCountLabel(shown.total)} that contain “${query}”`
+            : `${pageCountLabel(folder ? hits.length : shown.total)}${scope} ${(folder ? hits.length : shown.total) === 1 ? 'contains' : 'contain'} “${query}”`
           : ''
 
   return (
@@ -381,7 +383,7 @@ export function SearchResultsPage({
                           ? 'Loading…'
                           : shown.more === 'error'
                             ? 'Could not load more. Try again'
-                            : `Show ${Math.min(PAGE_TEXT_SEARCH_PAGE_SIZE, shown.total - shown.hits.length)} more (${shown.hits.length} of ${shown.total} shown)`}
+                            : `Show ${formatNumber(Math.min(PAGE_TEXT_SEARCH_PAGE_SIZE, shown.total - shown.hits.length))} more (${formatNumber(shown.hits.length)} of ${formatNumber(shown.total)} shown)`}
                       </button>
                     ) : null}
                     {/* The button's own "Try again" text is not announced when it changes; this polite region is. */}
@@ -419,7 +421,7 @@ function FacetButton({ label, count, selected, stale, onSelect }: { label: strin
   return (
     <button type="button" className="search-page-facet" aria-pressed={selected} data-empty={count === 0 || undefined} onClick={onSelect}>
       <span>{label}</span>
-      {stale ? <span className="search-page-skeleton-bar" style={{ width: 14, height: 10 }} /> : <span className="search-page-facet-count">{count}</span>}
+      {stale ? <span className="search-page-skeleton-bar" style={{ width: 14, height: 10 }} /> : <span className="search-page-facet-count">{formatNumber(count)}</span>}
     </button>
   )
 }

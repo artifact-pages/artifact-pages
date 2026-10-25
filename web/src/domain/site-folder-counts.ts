@@ -1,3 +1,4 @@
+import { formatCount, formatNumber, displayLocale } from './display-locale.ts'
 // Page counts per top-level folder for the site picker (ISSUE-078, ISSUE-095).
 // Read from discovery metadata; no language or translation notion is inferred, a folder is just a folder.
 
@@ -66,7 +67,7 @@ export function folderSummaryFromMetadata(meta: {
 
 /** Plain-text equivalent of the chips for assistive technology: "en: 7 pages, ja: 7 pages". */
 export function folderSummaryText(summary: FolderSummary) {
-  if (summary.kind === 'many') return `${summary.folderCount} top-level folders`
+  if (summary.kind === 'many') return displayLocale().startsWith('ja') ? `${formatCount(summary.folderCount, 'folder')} at top level` : `${formatNumber(summary.folderCount)} top-level folders`
   if (summary.kind === 'none') return ''
-  return summary.folders.map((entry) => `${folderChipLabel(entry)}: ${entry.count} ${entry.count === 1 ? 'page' : 'pages'}`).join(', ')
+  return summary.folders.map((entry) => `${folderChipLabel(entry)}: ${formatCount(entry.count, 'page')}`).join(', ')
 }

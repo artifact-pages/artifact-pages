@@ -1,3 +1,4 @@
+import { formatNumber, formatDate as localizedDate } from '../domain/display-locale'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ThemeMode } from '../domain/theme'
 import { artifactCountLabel } from '../domain/site-count-label'
@@ -158,9 +159,9 @@ function FolderCountChips({ summary }: { summary: FolderSummary }) {
       <span className="site-picker-folders" aria-hidden="true">
         {summary.kind === 'folders'
           ? summary.folders.map((entry) => (
-            <span className="site-picker-folder" key={folderChipKey(entry)}><b>{folderChipLabel(entry)}</b> {entry.count}</span>
+            <span className="site-picker-folder" key={folderChipKey(entry)}><b>{folderChipLabel(entry)}</b> {formatNumber(entry.count)}</span>
           ))
-          : <span className="site-picker-folder">{summary.folderCount} top-level folders</span>}
+          : <span className="site-picker-folder">{folderSummaryText(summary)}</span>}
       </span>
       <span className="site-picker-sr-only">{folderSummaryText(summary)}</span>
     </>
@@ -182,5 +183,5 @@ function catalogStatusLabel(entry: SiteCatalogEntry) {
 function formatDate(value: string) {
   const date = new Date(value)
   if (Number.isNaN(date.valueOf())) return undefined
-  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date)
+  return localizedDate(value)
 }

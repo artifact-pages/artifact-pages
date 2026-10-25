@@ -1,3 +1,4 @@
+import { formatNumber, formatDate } from '../domain/display-locale'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ArtifactIndexEntry, SiteIndex, SiteSummary } from '../domain/index'
 import type { ThemeMode } from '../domain/theme'
@@ -156,7 +157,7 @@ export function Sidebar({
               {index.site.title.slice(0, 1).toUpperCase()}
             </span>
             <span className="site-switcher-name">{index.site.title}</span>
-            <span className="site-switcher-hint" aria-hidden="true">{siteCount}</span>
+            <span className="site-switcher-hint" aria-hidden="true">{formatNumber(siteCount)}</span>
             <Icon name="chevron" size={12} />
           </button>
           <button
@@ -297,10 +298,4 @@ function folderPaths(path?: string) {
   if (!path) return []
   const segments = path.split('/').filter(Boolean)
   return segments.map((_, index) => segments.slice(0, index + 1).join('/'))
-}
-
-function formatDate(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.valueOf())) return value
-  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date)
 }
