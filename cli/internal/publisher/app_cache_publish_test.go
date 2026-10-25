@@ -194,7 +194,7 @@ func assertAppCacheRetryPresent(t *testing.T, store *appCachePublishStore, want 
 	}
 }
 
-func TestDeployAppRetriesPendingInvalidationWithoutRepublishing(t *testing.T) {
+func TestDeployAppSucceedsWhenPurgeWouldFail(t *testing.T) {
 	archive := createWebBundle(t, map[string][]byte{
 		"index.html":    []byte("<script src=\"/assets/app.js\"></script>"),
 		"assets/app.js": []byte("window.app = true"),
@@ -202,36 +202,19 @@ func TestDeployAppRetriesPendingInvalidationWithoutRepublishing(t *testing.T) {
 	first := newAppCachePublishBackend()
 	first.failInvalidation = true
 	firstResult, firstErr := DeployApp(context.Background(), first, AppDeployOptions{ArchivePath: archive})
-	if firstErr == nil || firstResult.FilesPublished != 0 {
-		t.Fatalf("first DeployApp() = %+v, %v; want retryable invalidation failure after origin writes", firstResult, firstErr)
+	if firstErr != nil || firstResult.FilesPublished != 2 {
+		t.Fatalf("DeployApp() = %+v, %v; purge failure must not affect origin publish", firstResult, firstErr)
 	}
 	if len(first.store.appPuts) != 2 {
 		t.Fatalf("first application object PUTs = %v; want both bundle objects published", first.store.appPuts)
 	}
-	assertAppCacheRetryPresent(t, first.store, true)
-
-	// A fresh backend wrapper models a new CLI process using the same origin.
-	second := newAppCachePublishWrapper(first.store)
-	second.store.appPuts = nil
-	second.store.invalidations = nil
-	second.store.deletions = nil
-	result, err := DeployApp(context.Background(), second, AppDeployOptions{ArchivePath: archive})
-	if err != nil {
-		t.Fatalf("retry DeployApp() error = %v", err)
+	assertAppCacheRetryPresent(t, first.store, false)
+	if len(first.store.invalidations) != 0 || len(first.store.deletions) != 0 {
+		t.Fatalf("DeployApp called invalidation or wrote a retry journal: invalidations=%v deletions=%v", first.store.invalidations, first.store.deletions)
 	}
-	if result.Outcome != "deployed" || result.FilesPublished != 0 || result.InvalidationID == "" || strings.Join(result.InvalidationPaths, ",") != "/index.html" {
-		t.Fatalf("retry DeployApp() = %+v; want cache-only deployed result for /index.html", result)
-	}
-	if len(second.store.appPuts) != 0 {
-		t.Fatalf("cache-only retry made application object PUTs: %v", second.store.appPuts)
-	}
-	if len(second.store.invalidations) != 1 || strings.Join(second.store.invalidations[0], ",") != "/index.html" {
-		t.Fatalf("retry invalidations = %v; want only /index.html", second.store.invalidations)
-	}
-	assertAppCacheRetryPresent(t, second.store, false)
 }
 
-func TestDeployAppStopsWhenRetryJournalWriteMayHavePersisted(t *testing.T) {
+func TestDeployAppDoesNotWritePurgeRetryJournal(t *testing.T) {
 	archive := createWebBundle(t, map[string][]byte{
 		"index.html":    []byte("<script src=\"/assets/app.js\"></script>"),
 		"assets/app.js": []byte("window.app = true"),
@@ -239,19 +222,19 @@ func TestDeployAppStopsWhenRetryJournalWriteMayHavePersisted(t *testing.T) {
 	backend := newAppCachePublishBackend()
 	backend.persistJournalThenError = true
 	result, err := DeployApp(context.Background(), backend, AppDeployOptions{ArchivePath: archive})
-	if err == nil {
-		t.Fatalf("DeployApp() = %+v, nil; want a journal write response failure", result)
+	if err != nil {
+		t.Fatalf("DeployApp() = %+v, %v; obsolete purge journal injection affected deployment", result, err)
 	}
-	if len(backend.store.appPuts) != 0 {
-		t.Fatalf("application object PUTs before journal write was confirmed: %v", backend.store.appPuts)
+	if len(backend.store.appPuts) != 2 {
+		t.Fatalf("application object PUTs = %v; want complete bundle", backend.store.appPuts)
 	}
 	if len(backend.store.invalidations) != 0 {
 		t.Fatalf("invalidations after journal write failure = %v; want none", backend.store.invalidations)
 	}
-	assertAppCacheRetryPresent(t, backend.store, true)
+	assertAppCacheRetryPresent(t, backend.store, false)
 }
 
-func TestDeployAppRestoresRetryJournalAfterAmbiguousClearFailure(t *testing.T) {
+func TestDeployAppIgnoresObsoleteJournalClearFault(t *testing.T) {
 	archive := createWebBundle(t, map[string][]byte{
 		"index.html":    []byte("<script src=\"/assets/app.js\"></script>"),
 		"assets/app.js": []byte("window.app = true"),
@@ -259,13 +242,13 @@ func TestDeployAppRestoresRetryJournalAfterAmbiguousClearFailure(t *testing.T) {
 	backend := newAppCachePublishBackend()
 	backend.failClearAfterDelete = true
 	result, err := DeployApp(context.Background(), backend, AppDeployOptions{ArchivePath: archive})
-	if err == nil {
-		t.Fatalf("DeployApp() = %+v, nil; want ambiguous journal clear failure", result)
+	if err != nil || result.Outcome != "deployed" {
+		t.Fatalf("DeployApp() = %+v, %v; no retry journal should be cleared", result, err)
 	}
-	if len(backend.store.appPuts) != 2 || len(backend.store.invalidations) != 1 {
-		t.Fatalf("app PUTs = %v, invalidations = %v; want a completed projection and purge", backend.store.appPuts, backend.store.invalidations)
+	if len(backend.store.appPuts) != 2 || len(backend.store.invalidations) != 0 {
+		t.Fatalf("app PUTs = %v, invalidations = %v; want completed projection and zero purge calls", backend.store.appPuts, backend.store.invalidations)
 	}
-	assertAppCacheRetryPresent(t, backend.store, true)
+	assertAppCacheRetryPresent(t, backend.store, false)
 }
 
 func TestDeployAppRetriesPartialObjectWriteWithChangedSource(t *testing.T) {
@@ -293,7 +276,7 @@ func TestDeployAppRetriesPartialObjectWriteWithChangedSource(t *testing.T) {
 			if len(first.store.appPuts) != 2 || len(first.store.invalidations) != 0 {
 				t.Fatalf("first PUTs = %v, invalidations = %v; want asset and failed index attempt without purge", first.store.appPuts, first.store.invalidations)
 			}
-			assertAppCacheRetryPresent(t, first.store, true)
+			assertAppCacheRetryPresent(t, first.store, false)
 
 			// Reopen the persisted store as a new process and change the desired
 			// bundle before retrying. HEAD reconciliation must complete this latest
@@ -319,35 +302,23 @@ func TestDeployAppRetriesPartialObjectWriteWithChangedSource(t *testing.T) {
 	}
 }
 
-func TestDeployAppRetriesJournalClearFailureBeforeDeletion(t *testing.T) {
+func TestDeployAppDoesNotAttemptJournalClear(t *testing.T) {
 	archive := createWebBundle(t, map[string][]byte{
 		"index.html":    []byte("shell"),
 		"assets/app.js": []byte("asset"),
 	})
 	first := newAppCachePublishBackend()
 	first.failClearBeforeDelete = true
-	if _, err := DeployApp(context.Background(), first, AppDeployOptions{ArchivePath: archive}); err == nil {
-		t.Fatal("DeployApp() succeeded despite injected retry-journal delete failure")
+	if result, err := DeployApp(context.Background(), first, AppDeployOptions{ArchivePath: archive}); err != nil || result.Outcome != "deployed" {
+		t.Fatalf("DeployApp() = %+v, %v; purge journal clearing is no longer part of deploy", result, err)
 	}
-	assertAppCacheRetryPresent(t, first.store, true)
-
-	second := newAppCachePublishWrapper(first.store)
-	second.store.appPuts = nil
-	second.store.invalidations = nil
-	result, err := DeployApp(context.Background(), second, AppDeployOptions{ArchivePath: archive})
-	if err != nil {
-		t.Fatalf("cache-only retry after clear failure: %v", err)
+	assertAppCacheRetryPresent(t, first.store, false)
+	if len(first.store.deletions) != 0 || len(first.store.invalidations) != 0 {
+		t.Fatalf("journal/purge operations: deletes=%v invalidations=%v", first.store.deletions, first.store.invalidations)
 	}
-	if result.Outcome != "deployed" || result.FilesPublished != 0 || len(second.store.appPuts) != 0 {
-		t.Fatalf("cache-only retry = %+v, app PUTs=%v; want purge-only completion", result, second.store.appPuts)
-	}
-	if len(second.store.invalidations) != 1 {
-		t.Fatalf("retry invalidations = %v; want one repeated cache request", second.store.invalidations)
-	}
-	assertAppCacheRetryPresent(t, second.store, false)
 }
 
-func TestDeployAppPendingDryRunReportsInvalidationWithoutMutationOrLock(t *testing.T) {
+func TestDeployAppPendingDryRunPlansLegacyJournalRetirementWithoutMutationOrLock(t *testing.T) {
 	archive := createWebBundle(t, map[string][]byte{
 		"index.html":    []byte("<script src=\"/assets/app.js\"></script>"),
 		"assets/app.js": []byte("window.app = true"),
@@ -362,8 +333,8 @@ func TestDeployAppPendingDryRunReportsInvalidationWithoutMutationOrLock(t *testi
 	if err != nil {
 		t.Fatalf("dry-run DeployApp() error = %v", err)
 	}
-	if result.Outcome != "planned" || result.FilesPublished != 0 || len(result.Changes) != 0 || strings.Join(result.InvalidationPaths, ",") != "/index.html" {
-		t.Fatalf("dry-run DeployApp() = %+v; want a cache-only plan for /index.html", result)
+	if result.Outcome != "planned" || result.FilesPublished != 0 || len(result.Changes) != 0 || len(result.InvalidationPaths) != 0 || result.InvalidationID != "" {
+		t.Fatalf("dry-run DeployApp() = %+v; want a planned legacy journal retirement with no result changes", result)
 	}
 	if len(backend.store.appPuts) != 0 || len(backend.store.conditional) != 0 || len(backend.store.invalidations) != 0 || len(backend.store.deletions) != 0 {
 		t.Fatalf("dry-run mutated origin: appPuts=%v conditional=%v invalidations=%v deletions=%v", backend.store.appPuts, backend.store.conditional, backend.store.invalidations, backend.store.deletions)
@@ -384,6 +355,25 @@ func TestDeployAppPendingDryRunReportsInvalidationWithoutMutationOrLock(t *testi
 		}
 	}
 	assertAppCacheRetryPresent(t, backend.store, true)
+}
+
+func TestDeployAppRetiresLegacyJournalWithoutInvalidating(t *testing.T) {
+	archive := createWebBundle(t, map[string][]byte{
+		"index.html":    []byte("<script src=\"/assets/app.js\"></script>"),
+		"assets/app.js": []byte("window.app = true"),
+	})
+	backend := newAppCachePublishBackend()
+	seedAppBundleObjects(t, backend.store, archive)
+	seedAppCacheRetryJournal(t, backend.store, []byte(`{"schemaVersion":1,"paths":["/index.html"]}`))
+	backend.failInvalidation = true
+	result, err := DeployApp(context.Background(), backend, AppDeployOptions{ArchivePath: archive})
+	if err != nil || result.Outcome != "no-op" || result.FilesPublished != 0 {
+		t.Fatalf("DeployApp() = %+v, %v; want success after retiring the legacy record", result, err)
+	}
+	assertAppCacheRetryPresent(t, backend.store, false)
+	if len(backend.store.invalidations) != 0 {
+		t.Fatalf("app deploy called Invalidate: %v", backend.store.invalidations)
+	}
 }
 
 func TestDeployAppRejectsMalformedRetryJournalBeforePublishing(t *testing.T) {
@@ -416,16 +406,13 @@ func TestDeployAppReadsRetryBeforeHeadAndChecksEveryHeadUnderLock(t *testing.T) 
 	if result.Outcome != "deployed" || len(backend.store.headKeys) != 2 {
 		t.Fatalf("DeployApp() = %+v, HEADs = %v; want deployment after inspecting both bundle objects", result, backend.store.headKeys)
 	}
-	firstHead, retryRead, journalWrite, firstAppPut := -1, -1, -1, -1
+	firstHead, retryRead, firstAppPut := -1, -1, -1
 	for index, event := range backend.store.events {
 		if event == "get:"+appCacheRetryObjectKey && retryRead == -1 {
 			retryRead = index
 		}
 		if strings.HasPrefix(event, "head:") && firstHead == -1 {
 			firstHead = index
-		}
-		if event == "conditional-put:"+appCacheRetryObjectKey && journalWrite == -1 {
-			journalWrite = index
 		}
 		if strings.HasPrefix(event, "put:") && !strings.HasPrefix(event, "put:_control/") && firstAppPut == -1 {
 			firstAppPut = index
@@ -434,8 +421,8 @@ func TestDeployAppReadsRetryBeforeHeadAndChecksEveryHeadUnderLock(t *testing.T) 
 	if retryRead == -1 || firstHead == -1 || retryRead >= firstHead {
 		t.Fatalf("events = %v; want retry journal read before first HEAD", backend.store.events)
 	}
-	if journalWrite == -1 || firstAppPut == -1 || journalWrite >= firstAppPut {
-		t.Fatalf("events = %v; want retry journal persisted before application PUTs", backend.store.events)
+	if firstAppPut == -1 || firstHead >= firstAppPut {
+		t.Fatalf("events = %v; want complete HEAD inspection before application PUTs", backend.store.events)
 	}
 	if got := backend.store.appPuts; len(got) != 2 || got[len(got)-1] != "index.html" {
 		t.Fatalf("application PUT order = %v; want index.html last", got)
@@ -491,8 +478,8 @@ func TestDeployAppConvergesLegacyHeadersForSameBundle(t *testing.T) {
 	backend.store.objects.mu.Unlock()
 	backend.store.appPuts = nil
 	backend.failInvalidation = true
-	if _, err := DeployApp(context.Background(), backend, AppDeployOptions{ArchivePath: archive}); err == nil || !strings.Contains(err.Error(), "retry app deploy") {
-		t.Fatalf("legacy-header DeployApp() error = %v; want invalidation retry error", err)
+	if _, err := DeployApp(context.Background(), backend, AppDeployOptions{ArchivePath: archive}); err != nil {
+		t.Fatalf("legacy-header DeployApp() error = %v; cache policy convergence must succeed", err)
 	}
 	if len(backend.store.appPuts) != len(bundle.files) {
 		t.Fatalf("header adoption writes = %v; want %d files", backend.store.appPuts, len(bundle.files))
@@ -506,7 +493,7 @@ func TestDeployAppConvergesLegacyHeadersForSameBundle(t *testing.T) {
 	backend.failInvalidation = false
 	backend.store.appPuts = nil
 	retry, err := DeployApp(context.Background(), backend, AppDeployOptions{ArchivePath: archive})
-	if err != nil || retry.Outcome != "deployed" || len(backend.store.appPuts) != 0 {
+	if err != nil || retry.Outcome != "no-op" || len(backend.store.appPuts) != 0 {
 		t.Fatalf("app policy retry = %#v, err=%v, writes=%v", retry, err, backend.store.appPuts)
 	}
 	noop, err := DeployApp(context.Background(), backend, AppDeployOptions{ArchivePath: archive})

@@ -205,8 +205,8 @@ func TestDeployAppVerifiesAndPublishesBundle(t *testing.T) {
 	if got := s3Client.objects["index.html"].metadata["artifact-pages-version"]; got != "test-1" {
 		t.Errorf("application version metadata = %q, want test-1", got)
 	}
-	if len(cloudFront.invalidations) != 1 || strings.Join(cloudFront.invalidations[0], ",") != "/index.html" {
-		t.Errorf("CloudFront invalidations = %#v, want only /index.html", cloudFront.invalidations)
+	if len(cloudFront.invalidations) != 0 {
+		t.Errorf("app deploy invalidated CloudFront: %#v", cloudFront.invalidations)
 	}
 	appPuts := publicApplicationPuts(s3Client.puts)
 	if len(appPuts) == 0 || appPuts[len(appPuts)-1] != "index.html" {
@@ -410,8 +410,8 @@ func TestDeployAppRepairsStaleFixedAssetCachePolicy(t *testing.T) {
 	if got := s3Client.objects["assets/app.js"].cache; got != cacheControl(cacheClassAppShell) {
 		t.Errorf("repaired fixed asset Cache-Control = %q, want %q", got, cacheControl(cacheClassAppShell))
 	}
-	if len(cloudFront.invalidations) != 1 || strings.Join(cloudFront.invalidations[0], ",") != "/index.html" {
-		t.Errorf("Cache-Control repair invalidations = %#v, want only /index.html", cloudFront.invalidations)
+	if len(cloudFront.invalidations) != 0 {
+		t.Errorf("Cache-Control repair invalidated CloudFront: %#v", cloudFront.invalidations)
 	}
 }
 
