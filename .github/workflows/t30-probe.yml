@@ -1,10 +1,8 @@
 name: T30 probe
 
 # Measurement run for verification task T30 (cache freshness and root latency).
-# Public URLs only; no secrets or environments. Runs on the probe branch and on demand.
+# Public URLs only; no secrets or environments. Runs on demand.
 on:
-  push:
-    branches: [claude-t30-probe]
   workflow_dispatch:
     inputs:
       label:

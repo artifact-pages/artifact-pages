@@ -41,7 +41,7 @@ Per label x URL class x kind (roots) and per label x step (reader): count, error
 
 ## Running in Actions
 
-`.github/workflows/t30-probe.yml` runs on every push to branch `claude-t30-probe` and on `workflow_dispatch` (inputs `label`, `samples_roots`, `samples_reader`). The label gets a `-na` suffix (GitHub-hosted runners are in North America). It uploads the JSONL and summary files as artifact `t30-<label>-na` and appends the summary to the job summary. Japan and Europe runs are done locally or from other vantage points.
+`.github/workflows/t30-probe.yml` runs on `workflow_dispatch` (inputs `label`, `samples_roots`, `samples_reader`). The label gets a `-na` suffix (GitHub-hosted runners are in North America, but the region and edge colo can differ between runs: record the colo and compare only runs from the same one). It uploads the JSONL and summary files as artifact `t30-<label>-na` and appends the summary to the job summary. Japan and Europe runs are done locally or from other vantage points.
 
 ## Caveats
 
