@@ -30,9 +30,9 @@ test('each Action repository is self-contained and carries the CLI release recor
     const files = readdirSync(entry.directory).sort()
     assert.deepEqual(files, ['LICENSE', 'README.md', 'action.yml', 'release.json', 'scripts'])
     const release = JSON.parse(readFileSync(path.join(entry.directory, 'release.json'), 'utf8'))
-    assert.deepEqual(release, { schemaVersion: 2, actionVersion, bootstrapCli: '0.5.0', cliRange: '>=0.5.0 <0.6.0', repository: 'artifact-pages/artifact-pages' })
-    assert.equal(requireCliRange(release.bootstrapCli, release.cliRange), '0.5.0')
-    assert.throws(() => requireCliRange('0.4.4', release.cliRange), /outside this Action's supported range/)
+    assert.deepEqual(release, { schemaVersion: 2, actionVersion, bootstrapCli: '0.6.0', cliRange: '>=0.6.0 <0.7.0', repository: 'artifact-pages/artifact-pages' })
+    assert.equal(requireCliRange(release.bootstrapCli, release.cliRange), '0.6.0')
+    assert.throws(() => requireCliRange('0.5.2', release.cliRange), /outside this Action's supported range/)
     const action = readFileSync(path.join(entry.directory, 'action.yml'), 'utf8')
     assert.doesNotMatch(action, /\.\.|\/shared\//, `${entry.repository} must not refer outside its repository`)
     assert.match(action, /^name: Artifact Pages \S/m)
@@ -57,21 +57,21 @@ test('each Action repository is self-contained and carries the CLI release recor
   assert.deepEqual(actionNames.map(repositoryName), built.map((entry) => entry.repository))
 })
 
-test('v0.2.0 rejects CLI 0.5.0 and the prepared v0.3.0 metadata accepts it', (t) => {
-  const oldRange = '>=0.4.0 <0.5.0'
-  assert.throws(() => requireCliRange('0.5.0', oldRange), /outside this Action's supported range/)
+test('v0.3.0 (range >=0.5.0 <0.6.0) rejects CLI 0.6.0 and the prepared v0.4.0 metadata accepts it', (t) => {
+  const oldRange = '>=0.5.0 <0.6.0'
+  assert.throws(() => requireCliRange('0.6.0', oldRange), /outside this Action's supported range/)
   const out = scratch(t)
-  const prepared = buildActionRepos({ out, version: '0.3.0' })
+  const prepared = buildActionRepos({ out, version: '0.4.0' })
   assert.equal(prepared.length, 4)
   for (const action of prepared) {
     const release = JSON.parse(readFileSync(path.join(action.directory, 'release.json'), 'utf8'))
-    assert.equal(release.actionVersion, '0.3.0')
-    assert.equal(release.bootstrapCli, '0.5.0')
-    assert.equal(release.cliRange, '>=0.5.0 <0.6.0')
-    assert.equal(requireCliRange('0.5.0', release.cliRange), '0.5.0')
+    assert.equal(release.actionVersion, '0.4.0')
+    assert.equal(release.bootstrapCli, '0.6.0')
+    assert.equal(release.cliRange, '>=0.6.0 <0.7.0')
+    assert.equal(requireCliRange('0.6.0', release.cliRange), '0.6.0')
   }
-  const newRange = '>=0.5.0 <0.6.0'
-  for (const version of ['0.4.4', '0.6.0']) {
+  const newRange = '>=0.6.0 <0.7.0'
+  for (const version of ['0.5.2', '0.7.0']) {
     assert.throws(() => requireCliRange(version, newRange), /outside this Action's supported range/)
   }
 })
@@ -87,8 +87,8 @@ test('generation is deterministic and Action versions are independent of the CLI
   assert.equal(independent.length, 1)
   const release = JSON.parse(readFileSync(path.join(independent[0].directory, 'release.json'), 'utf8'))
   assert.equal(release.actionVersion, '9.9.9')
-  assert.equal(release.bootstrapCli, '0.5.0')
-  assert.equal(release.cliRange, '>=0.5.0 <0.6.0')
+  assert.equal(release.bootstrapCli, '0.6.0')
+  assert.equal(release.cliRange, '>=0.6.0 <0.7.0')
   assert.throws(() => buildActionRepos({ out: first, version: 'v0.1.0' }), /must look like X\.Y\.Z/)
   assert.throws(() => repositoryActionYml('run: ../x'), /parent directory/)
 })
@@ -121,8 +121,8 @@ test('the 0.x sync publishes content and a tag, repeats as a no-op and replaces 
   assert.match(git(publishRemote, 'tag', '--list'), new RegExp(`^v${version.replaceAll('.', '\\.')}$`))
   const release = JSON.parse(git(publishRemote, 'show', `v${version}:release.json`))
   assert.equal(release.actionVersion, version)
-  assert.equal(release.bootstrapCli, '0.5.0')
-  assert.equal(release.cliRange, '>=0.5.0 <0.6.0')
+  assert.equal(release.bootstrapCli, '0.6.0')
+  assert.equal(release.cliRange, '>=0.6.0 <0.7.0')
   const head = git(publishRemote, 'rev-parse', 'main')
   assert.equal(git(publishRemote, 'rev-parse', `v${version}^{commit}`), head)
   assert.match(git(publishRemote, 'log', '-1', '--format=%s', 'main'), /^Sync v.* at abc1234$/)
@@ -221,9 +221,9 @@ test('generated-content checks reject unchanged tags and shared changes warn for
   assert.ok(checkActionChanges(args).every((row) => !row.changed))
   mkdirSync(path.join(baseline, 'scripts'))
   const generator = readFileSync(path.join(projectRoot, 'scripts/build-action-repos.mjs'), 'utf8')
-  writeFileSync(path.join(baseline, 'scripts/build-action-repos.mjs'), generator.replace("const bootstrapCli = '0.5.0'", "const bootstrapCli = '0.5.1'"))
+  writeFileSync(path.join(baseline, 'scripts/build-action-repos.mjs'), generator.replace("const bootstrapCli = '0.6.0'", "const bootstrapCli = '0.6.1'"))
   assert.ok(checkActionChanges(args).every((row) => row.changed), 'historical bootstrap metadata must be preserved')
-  writeFileSync(path.join(baseline, 'scripts/build-action-repos.mjs'), generator.replace("const cliRange = '>=0.5.0 <0.6.0'", "const cliRange = '>=0.5.0 <0.5.9'"))
+  writeFileSync(path.join(baseline, 'scripts/build-action-repos.mjs'), generator.replace("const cliRange = '>=0.6.0 <0.7.0'", "const cliRange = '>=0.6.0 <0.6.9'"))
   assert.ok(checkActionChanges(args).every((row) => row.changed), 'historical range metadata must be preserved')
   writeFileSync(path.join(baseline, 'scripts/build-action-repos.mjs'), generator)
   assert.ok(checkActionChanges(args).every((row) => !row.changed), 'Action-version-only metadata must remain excluded')
