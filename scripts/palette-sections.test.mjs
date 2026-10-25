@@ -410,7 +410,7 @@ test('command aliases match Japanese in plain and action mode without corrupting
     { title: 'Unavailable', aliases: ['目次'], available: false, onSelect() {} },
   ]
   for (const mode of ['search', 'command']) {
-    const options = { mode, context: 'artifact', term: '目次', sites, currentIndex: index, currentArtifact: pages[0], commands: localizedCommands, onNavigate() {}, onJumpToHeading() {} }
+    const options = { mode, context: 'artifact', term: '目次', sites, recentReads: [], pinnedArtifactIds: [], currentIndex: index, currentArtifact: pages[0], commands: localizedCommands, onNavigate() {}, onJumpToHeading() {} }
     const entries = entriesOf(buildSections(options)).filter((entry) => entry.kind === 'command')
     assert.deepEqual(entries.map((entry) => entry.title), ['Toggle contents'])
     assert.equal(entries[0].titleMatch, undefined)

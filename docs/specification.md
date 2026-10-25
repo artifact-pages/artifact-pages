@@ -522,6 +522,8 @@ The site picker marks sites that publish page text search. Below nine sites it l
 
 ### Search
 
+Full-text folder facets show the same display name as the sidebar tree, with the folder path as secondary text. The path remains the filter identity (`in=`); counts, containment, ordering and ranking are unchanged. Same-name folders remain distinguishable by their paths. A selected nested folder uses its display name; an unknown folder falls back to its path. Status and empty-result guidance use the same label, and partial results remain explicitly partial.
+
 When the normal palette is empty, clickable Headings, Sites and Actions entries introduce the `#`, `@` and `>` modes. Typing hides those entries; an active mode has a name and Clear mode button that resets the query and returns focus to the input. Bare `#` shows only the current page's headings and says This page; with a term it searches all pages and says All pages. Without a current page it asks the reader to choose a page or type to search site headings; without a site it asks for a site. Commands retain English display labels and accept Japanese search aliases without applying alias offsets to the visible title. Narrow screens show fewer desktop keyboard hints. Selection, IME handling and full-text handoff are unchanged.
 
 Finding a page by name and searching page text are separate surfaces.

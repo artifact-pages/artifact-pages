@@ -5093,7 +5093,7 @@ test.describe('page text search', () => {
   /** The facets as "label:count" strings. */
   async function facetSummary(page: Page) {
     return facets(page).evaluateAll((buttons) => buttons.map((button) => (
-      `${button.children[0].textContent}:${button.children[1].textContent}${button.getAttribute('aria-pressed') === 'true' ? '*' : ''}`
+      `${button.querySelector('small')?.textContent ?? button.children[0].textContent}:${button.children[1].textContent}${button.getAttribute('aria-pressed') === 'true' ? '*' : ''}`
     )))
   }
 
@@ -5414,7 +5414,7 @@ test.describe('page text search', () => {
 
     await facets(page).filter({ hasText: 'guides/' }).click()
     await expect(page).toHaveURL(/\/textsearch\/_search\?q=latency&in=guides$/)
-    await expect(status(page)).toHaveText('1 page in guides/ contains “latency”')
+    await expect(status(page)).toHaveText('1 page in guides contains “latency”')
     await expect(hits(page)).toHaveCount(1)
     await expect(hits(page).first()).toHaveAttribute('data-hit-id', 'guides/markdown-style-gallery.md')
     // The counts stay those of the whole query, and the choice is shown as pressed.
@@ -5440,11 +5440,11 @@ test.describe('page text search', () => {
 
   test('a folder without matches says so and offers the way out', async ({ page }) => {
     await page.goto('/textsearch/_search?q=representative&in=guides')
-    await expect(page.getByRole('heading', { name: 'No pages in guides/ contain “representative”' })).toBeVisible()
-    await expect(status(page)).toHaveText('0 pages in guides/ contain “representative”')
+    await expect(page.getByRole('heading', { name: 'No pages in guides contain “representative”' })).toBeVisible()
+    await expect(status(page)).toHaveText('0 pages in guides contain “representative”')
     // The chosen folder stays visible and pressed even without hits.
     expect(await facetSummary(page)).toContain('guides/:0*')
-    await page.getByRole('button', { name: 'Clear folder filter (guides/)' }).click()
+    await page.getByRole('button', { name: 'Clear folder filter (guides)' }).click()
     await expect(page).toHaveURL(/\/textsearch\/_search\?q=representative$/)
     await expect(status(page)).toHaveText('1 page contains “representative”')
 
@@ -5674,10 +5674,10 @@ test.describe('page text search', () => {
     await page.goto('/textsearch/_search?q=lighthouse&in=bulk')
     await expect(hits(page)).toHaveCount(20)
     // The count says the list is partial rather than claiming a folder total.
-    await expect(status(page)).toHaveText('20 pages in bulk/ so far, among 20 of 24 pages that contain “lighthouse”')
+    await expect(status(page)).toHaveText('20 pages in bulk so far, among 20 of 24 pages that contain “lighthouse”')
     // No match among the first page: further pages load by themselves, and "no matches" appears only once the list has ended.
     await page.goto('/textsearch/_search?q=lighthouse&in=guides')
-    await expect(page.getByRole('heading', { name: 'No pages in guides/ contain “lighthouse”' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'No pages in guides contain “lighthouse”' })).toBeVisible()
     await expect(page.locator('.search-page-more')).toHaveCount(0)
   })
 
@@ -10149,4 +10149,28 @@ test('S6 headings scope is honest without a current page and mobile hints stay c
   const box = await palette.boundingBox()
   expect(box!.x).toBeGreaterThanOrEqual(0)
   expect(box!.x + box!.width).toBeLessThanOrEqual(390)
+})
+
+
+test('S7 search facets use tree display names with paths and preserve shared filter URLs', async ({ page }) => {
+  await registerTextSearchSite(page)
+  await page.route('**/_indexes/textsearch/index.json', async (route) => {
+    const response = await route.fetch()
+    const index = await response.json()
+    index.artifacts.push({ ...index.artifacts[0], id: 'guides/index.md', path: 'guides/index.md', filename: 'index.md', title: 'ガイドとレシピ', format: 'markdown', toc: [] })
+    await route.fulfill({ response, json: index })
+  })
+  await page.goto('/textsearch/_search?q=latency')
+  const facet = page.locator('.search-page-facet').filter({ hasText: 'guides/' })
+  await expect(facet.locator('.search-page-facet-name > span')).toHaveText('ガイドとレシピ')
+  await expect(facet.locator('small')).toHaveText('guides/')
+  await facet.click()
+  await expect(page).toHaveURL(/q=latency&in=guides$/)
+  await expect(page.locator('.search-page-status')).toContainText('in ガイドとレシピ')
+  await page.reload()
+  await expect(facet).toHaveAttribute('aria-pressed', 'true')
+  await page.goto('/textsearch/_search?q=latency&in=missing/nested')
+  const unknown = page.locator('.search-page-facet[aria-pressed="true"]')
+  await expect(unknown.locator('.search-page-facet-name > span')).toHaveText('missing/nested/')
+  await expect(unknown.locator('small')).toHaveText('missing/nested/')
 })
