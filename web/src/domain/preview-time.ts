@@ -1,3 +1,5 @@
+import { displayLocale, type DisplayLocales } from './display-locale.ts'
+
 /**
  * Preview times are shown in the reader's local zone, and always name that zone
  * ("Oct 11, 2026, 3:03 PM UTC") so a reviewer elsewhere can tell when a preview
@@ -13,10 +15,10 @@ export type PreviewTime = {
   title?: string
 }
 
-export function formatPreviewTime(value: string, timeZone?: string): PreviewTime {
+export function formatPreviewTime(value: string, timeZone?: string, locales?: DisplayLocales): PreviewTime {
   const date = new Date(value)
   if (Number.isNaN(date.valueOf())) return { label: value }
-  const label = new Intl.DateTimeFormat('en-US', {
+  const label = new Intl.DateTimeFormat(displayLocale(locales), {
     year: 'numeric',
     month: 'short',
     day: 'numeric',

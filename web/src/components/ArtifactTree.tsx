@@ -1,3 +1,4 @@
+import { formatNumber } from '../domain/display-locale'
 import { useEffect, useMemo, useState } from 'react'
 import type { ArtifactIndexEntry } from '../domain/index'
 import { compareArtifactsByPath } from '../domain/listing-order.ts'
@@ -193,7 +194,7 @@ export function ArtifactTree({
                     }}
                   >
                     <span className="tree-label">{highlight(directory.label, normalizedQuery)}</span>
-                    <span className="tree-count">{count}</span>
+                    <span className="tree-count">{formatNumber(count)}</span>
                   </a>
                 </div>
               ) : (
@@ -207,7 +208,7 @@ export function ArtifactTree({
                 >
                   <Icon name="chevron" size={11} />
                   <span className="tree-label">{highlight(directory.label, normalizedQuery)}</span>
-                  <span className="tree-count">{count}</span>
+                  <span className="tree-count">{formatNumber(count)}</span>
                 </button>
               )}
               {isExpanded ? (
@@ -263,8 +264,8 @@ export function ArtifactTree({
       {(view === 'recent' || isPathListView) && flat.hidden > 0 ? (
         <p className="tree-more">
           {normalizedQuery
-            ? `Showing ${TREE_FLAT_ROW_LIMIT} of ${items.length} matches. Refine the filter to narrow the list.`
-            : `Showing ${TREE_FLAT_ROW_LIMIT} of ${items.length}. Use the filter to narrow the list.`}
+            ? `Showing ${formatNumber(TREE_FLAT_ROW_LIMIT)} of ${formatNumber(items.length)} matches. Refine the filter to narrow the list.`
+            : `Showing ${formatNumber(TREE_FLAT_ROW_LIMIT)} of ${formatNumber(items.length)}. Use the filter to narrow the list.`}
         </p>
       ) : null}
       {treeNodes}

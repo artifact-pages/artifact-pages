@@ -94,8 +94,8 @@ test('pageHeadings keeps the first level-2 headings and counts the rest', () => 
 })
 
 test('page counts are pluralised', () => {
-  assert.equal(pageCountLabel(1), '1 page')
-  assert.equal(pageCountLabel(3), '3 pages')
+  assert.equal(pageCountLabel(1, 'en-US'), '1 page')
+  assert.equal(pageCountLabel(3, 'en-US'), '3 pages')
 })
 
 test('README.md wins over readme.md in the same folder and the other is listed', () => {

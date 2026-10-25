@@ -6,6 +6,7 @@ These are independently reviewable slices for the accepted product contract. IMP
 
 | Ticket | Status | Assignee | Outcome |
 | --- | --- | --- | --- |
+| [IMP-84](IMP-84-locale-display.md) | Done | Codex | UI/UX S2: browser-localized dates/numbers and Japanese/English count nouns. |
 | [IMP-83](IMP-83-modal-contents-focus.md) | Done | Codex | UI/UX S1: temporary Contents keyboard focus, dismissal and destination hand-off; persistent column unchanged. Owner-authorized standalone exception. |
 
 The 2026-09-28 full-codebase review found 24 confirmed defects after the original local completion checkpoints. The [active issue index](../issues/README.md#issue-index) tracks the remaining defects and their regression criteria as repairs land; verified completed issues are retained in Git history under the issue policy. Keep the existing IMP records as historical delivery evidence, not a bug-free claim; do not create duplicate implementation tickets for the same independently actionable defect. A larger new slice is appropriate only after an accepted design introduces genuinely new work.

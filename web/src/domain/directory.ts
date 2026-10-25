@@ -1,3 +1,4 @@
+import { formatCount, type DisplayLocales } from './display-locale.ts'
 import type { ArtifactIndexEntry, TocEntry } from './index'
 import { compareArtifactsByPath, compareNames } from './listing-order.ts'
 
@@ -154,6 +155,6 @@ export function pageHeadings(artifact: Pick<ArtifactIndexEntry, 'toc'>, limit = 
   return { shown: headings.slice(0, limit), hidden: Math.max(0, headings.length - limit) }
 }
 
-export function pageCountLabel(count: number) {
-  return `${count} ${count === 1 ? 'page' : 'pages'}`
+export function pageCountLabel(count: number, locales?: DisplayLocales) {
+  return formatCount(count, 'page', locales)
 }

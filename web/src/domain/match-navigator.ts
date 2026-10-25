@@ -1,3 +1,5 @@
+import { formatNumber, type DisplayLocales } from './display-locale.ts'
+
 // Position arithmetic of the match navigator ("q  2 / 5  ↑ ↓ ×") shown on a
 // page opened from a search: steps wrap around, and a changing match count
 // (diagrams and scripts render late) never leaves the position out of range.
@@ -14,6 +16,6 @@ export function clampMatch(index: number, total: number) {
 }
 
 /** "2 / 5" for a zero-based position. */
-export function matchPositionLabel(index: number, total: number) {
-  return `${clampMatch(index, total) + 1} / ${total}`
+export function matchPositionLabel(index: number, total: number, locales?: DisplayLocales) {
+  return `${formatNumber(clampMatch(index, total) + 1, locales)} / ${formatNumber(total, locales)}`
 }

@@ -1,3 +1,4 @@
+import { formatNumber, formatDate, formatLongDate as formatFullDate } from '../domain/display-locale'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from 'react'
 import type { ArtifactIndexEntry, SiteIndex } from '../domain/index'
 import { RECENT_SECTION_MINIMUM_ARTIFACT_COUNT } from '../domain/navigation-sections'
@@ -153,7 +154,7 @@ function SectionLink({ siteId, section, current, onNavigate, count, hasOverview 
       onClick={(event) => followInApp(event, () => onNavigate?.(href))}
     >
       {children}
-      {count !== undefined ? <span className="site-section-count">{count}</span> : null}
+      {count !== undefined ? <span className="site-section-count">{formatNumber(count)}</span> : null}
     </a>
   )
 }
@@ -292,16 +293,4 @@ function highlight(text: string, query: string) {
       {text.slice(index + query.length)}
     </>
   )
-}
-
-function formatDate(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.valueOf())) return value
-  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date)
-}
-
-function formatFullDate(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.valueOf())) return value
-  return new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).format(date)
 }

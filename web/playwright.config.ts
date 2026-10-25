@@ -12,6 +12,7 @@ export default defineConfig({
   reporter: 'list',
   use: {
     baseURL,
+    locale: 'en-US',
     browserName: 'chromium',
     trace: 'retain-on-failure',
   },
