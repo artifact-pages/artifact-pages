@@ -227,37 +227,26 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 			return result, fmt.Errorf("plan preview catalog reconciliation: %w", err)
 		}
 		result.PreviewChanges = &previewPlan.Changes
-		paths := siteCachePaths(options.SiteID, diff.changes, result.PreviewChanges, pending.Paths)
-		result.InvalidationPaths = plannedInvalidationPaths(backend, paths)
 		if options.DryRun {
 			result.FilesPublished = countChanges(diff.changes, "create") + countChanges(diff.changes, "update")
 			result.FilesRemoved = countChanges(diff.changes, "remove")
-			if len(paths) == 0 {
+			if len(diff.changes) == 0 && len(previewPlan.Changes) == 0 && pending.Transaction == nil && !pending.legacyRecord {
 				result.Outcome = "no-op"
 			} else {
 				result.Outcome = "planned"
 			}
 			return result, nil
 		}
-		if err := validateInvalidation(backend, paths); err != nil {
-			return result, err
-		}
 		if err := stageVersionRecord(operationCtx, conditional, siteVersionsKey(options.SiteID), record, writerFormats("site-metadata", "artifact-index", "full-text-manifest")); err != nil {
 			return result, err
 		}
-		// Persist the transaction id and monotone touched-key union before the
-		// first origin mutation. The old state remains the commit point until
-		// every projection write/delete has completed.
-		var retryNext siteCacheRetry
-		writeRetry := false
-		if len(paths) > 0 {
-			retryNext = siteCacheRetry{SchemaVersion: siteCacheRetrySchemaVersion, Site: options.SiteID, Paths: paths, Transaction: diff.transaction}
-			if retryNext.Transaction == nil && pending.Transaction != nil {
-				// Keep a completed generation marker while its cache work remains.
-				retryNext.Transaction = pending.Transaction
-			}
-			writeRetry = pending.legacyRecord || siteCacheRetryNeedsWrite(pending, retryNext, pendingETag != "")
-			if writeRetry {
+		transaction := diff.transaction
+		if transaction == nil {
+			transaction = pending.Transaction
+		}
+		if transaction != nil {
+			retryNext := siteCacheRetry{SchemaVersion: siteCacheRetrySchemaVersion, Site: options.SiteID, Transaction: transaction}
+			if pending.legacyRecord || siteCacheRetryNeedsWrite(pending, retryNext, pendingETag != "") {
 				pendingETag, err = writeSiteCacheRetryRecord(operationCtx, conditional, options.SiteID, retryNext, pendingETag)
 				if err != nil {
 					return result, err
@@ -282,16 +271,14 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 		if err := writeVersionRecord(operationCtx, backend, siteVersionsKey(options.SiteID), record); err != nil {
 			return result, err
 		}
-		if len(paths) == 0 {
+		if pendingETag != "" {
+			if err := backend.DeleteObjects(operationCtx, []string{siteCacheRetryKey(options.SiteID)}); err != nil {
+				return result, fmt.Errorf("site origin transaction recovered; remove journal: %w", err)
+			}
+		}
+		if len(diff.changes) == 0 && len(previewPlan.Changes) == 0 && transaction == nil && !pending.legacyRecord {
 			result.Outcome = "no-op"
 			return result, nil
-		}
-		result.InvalidationID, err = backend.Invalidate(operationCtx, paths)
-		if err != nil {
-			return result, fmt.Errorf("site origin synchronized but cache revalidation failed; retry site publish: %w", err)
-		}
-		if err := backend.DeleteObjects(operationCtx, []string{siteCacheRetryKey(options.SiteID)}); err != nil {
-			return result, fmt.Errorf("site synchronized and cache revalidation requested; clear cache retry record: %w", err)
 		}
 		result.Outcome, result.FilesPublished, result.FilesRemoved = "synced", filesPublished, filesRemoved
 		return result, nil

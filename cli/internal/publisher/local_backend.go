@@ -477,10 +477,6 @@ func cloneObjectMetadata(metadata map[string]string) map[string]string {
 	return clone
 }
 
-func (backend *DirectoryBackend) Invalidate(ctx context.Context, _ []string) (string, error) {
-	return "", ctx.Err()
-}
-
 func (backend *DirectoryBackend) objectPath(key string) (string, error) {
 	if err := rejectDeploymentRootSymlink(backend.root); err != nil {
 		return "", err

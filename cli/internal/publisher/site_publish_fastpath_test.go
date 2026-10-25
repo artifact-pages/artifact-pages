@@ -333,11 +333,7 @@ func TestPublishSiteFinalStateCASFailureRecoversRevertedTouchedKeys(t *testing.T
 		!sitePublishHasChange(result.Changes, "create", "_artifacts/sre/assets/latest-b.css") {
 		t.Fatalf("latest retry changes = %+v, want forced revert, removal, and latest addition", result.Changes)
 	}
-	for _, path := range []string{"/_artifacts/sre/report.html", "/_artifacts/sre/assets/introduced-a.css", "/_artifacts/sre/assets/latest-b.css"} {
-		if !containsString(result.InvalidationPaths, path) {
-			t.Errorf("retry invalidation paths omit uncertain/latest key %s: %v", path, result.InvalidationPaths)
-		}
-	}
+
 	if got := backend.objectBytes("_artifacts/sre/report.html"); got != string(committedPage) {
 		t.Errorf("recovered report bytes = %q, want committed source", got)
 	}

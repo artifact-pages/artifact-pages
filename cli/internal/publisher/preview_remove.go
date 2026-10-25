@@ -413,10 +413,10 @@ func readPreviewCleanup(ctx context.Context, backend ConditionalObjectBackend, s
 		return nil, "", fmt.Errorf("decode preview cleanup journal schema: %w", err)
 	}
 	decoder := json.NewDecoder(bytes.NewReader(object.Bytes))
-	decoder.DisallowUnknownFields()
 	var record previewCleanupRecord
 	legacy := envelope.SchemaVersion == previewCleanupLegacySchema
 	if legacy {
+		decoder.DisallowUnknownFields()
 		var old struct {
 			SchemaVersion int                         `json:"schemaVersion"`
 			Site          string                      `json:"site"`

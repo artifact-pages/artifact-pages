@@ -166,50 +166,16 @@ async function resetCloudflarePurgeRequests(profile, env, port) {
 async function assertCloudflareUnregisterPurgeRequests(port) {
   const response = await fetch(`http://127.0.0.1:${port}/requests`)
   const requests = await response.json().catch(() => null)
-  const endpoint = '/client/v4/zones/abcdef0123456789abcdef0123456789/purge_cache'
-  if (!response.ok || !Array.isArray(requests) || requests.length !== 2) {
-    throw new Error(`Cloudflare purge mock recorded ${Array.isArray(requests) ? requests.length : 'an invalid number of'} unregister requests.`)
-  }
-  const expected = {
-    prefixes: [
-      'pages.example.test/_artifacts/sre/',
-      'pages.example.test/_indexes/sre/',
-      'pages.example.test/_previews/sre/',
-      'pages.example.test/sre/',
-    ],
-    files: [
-      'https://pages.example.test/_indexes/sites.json',
-      'https://pages.example.test/sre',
-    ],
-  }
-  const observed = new Map()
-  for (const request of requests) {
-    if (request.url !== endpoint || !request.payload || Object.keys(request.payload).length !== 1) {
-      throw new Error(`Cloudflare purge mock recorded an unexpected request: ${JSON.stringify(request)}`)
-    }
-    const [kind] = Object.keys(request.payload)
-    if (!Object.hasOwn(expected, kind) || observed.has(kind) || !Array.isArray(request.payload[kind])) {
-      throw new Error(`Cloudflare purge mock recorded an unexpected request group: ${JSON.stringify(request)}`)
-    }
-    observed.set(kind, [...request.payload[kind]].sort())
-  }
-  for (const [kind, entries] of Object.entries(expected)) {
-    if (JSON.stringify(observed.get(kind)) !== JSON.stringify([...entries].sort())) {
-      throw new Error(`Cloudflare unregister ${kind} purge paths = ${JSON.stringify(observed.get(kind))}, want ${JSON.stringify(entries)}`)
-    }
+  if (!response.ok || !Array.isArray(requests) || requests.length !== 0) {
+    throw new Error(`Cloudflare purge mock recorded ${Array.isArray(requests) ? requests.length : 'an invalid number of'} unregister requests; want zero.`)
   }
 }
 
 async function assertCloudflareAppDeployPurgeRequest(port) {
   const response = await fetch(`http://127.0.0.1:${port}/requests`)
   const requests = await response.json().catch(() => null)
-  if (!response.ok || !Array.isArray(requests) || requests.length !== 1) {
-    throw new Error(`Cloudflare app-deploy purge mock recorded ${Array.isArray(requests) ? requests.length : 'an invalid number of'} requests.`)
-  }
-  const request = requests[0]
-  const endpoint = '/client/v4/zones/abcdef0123456789abcdef0123456789/purge_cache'
-  if (request.url !== endpoint || JSON.stringify(request.payload) !== JSON.stringify({ files: ['https://pages.example.test/index.html'] })) {
-    throw new Error(`Cloudflare app-deploy purge request = ${JSON.stringify(request)}, want only the stable application shell URL.`)
+  if (!response.ok || !Array.isArray(requests) || requests.length !== 0) {
+    throw new Error(`Cloudflare app-deploy purge mock recorded ${Array.isArray(requests) ? requests.length : 'an invalid number of'} requests; want zero.`)
   }
 }
 
@@ -551,7 +517,7 @@ async function main() {
         throw new Error(`Neighboring frontend artifact returned HTTP ${frontendArtifact.status} after unregister.`)
       }
       console.log(`Cloudflare local unregister preserved frontend artifact ${frontendProbeKey} and removed SRE artifact/index/preview prefixes.`)
-      console.log('Cloudflare purge mock received the exact SRE unregister file and prefix paths.')
+      console.log('Cloudflare purge mock observed zero requests for SRE unregistration.')
     }
 
     // Restore fixtures after the publish and storage probes so E2E assertions

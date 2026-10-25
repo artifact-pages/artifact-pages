@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/artifact-pages/artifact-pages/cli/internal/compat"
 )
 
 const (
@@ -71,14 +73,21 @@ func readAppCacheRetry(ctx context.Context, backend ConditionalObjectBackend) (a
 	if err := json.Unmarshal(object.Bytes, &envelope); err != nil || envelope == nil {
 		return appCacheRetry{}, "", errors.New("app cache retry record must be a JSON object")
 	}
+	versionRaw, ok := envelope["schemaVersion"]
+	if !ok {
+		return appCacheRetry{}, "", errors.New("app cache retry record has no schemaVersion")
+	}
+	var version int
+	if err := json.Unmarshal(versionRaw, &version); err != nil {
+		return appCacheRetry{}, "", errors.New("app cache retry record has an invalid schemaVersion")
+	}
+	if version != appCacheRetrySchema {
+		return appCacheRetry{}, "", compat.CheckSchemaVersion("app cache retry record", object.Bytes, appCacheRetrySchema)
+	}
 	for key := range envelope {
 		if key != "schemaVersion" && key != "paths" {
 			return appCacheRetry{}, "", fmt.Errorf("app cache retry record has unsupported field %q", key)
 		}
-	}
-	versionRaw, ok := envelope["schemaVersion"]
-	if !ok {
-		return appCacheRetry{}, "", errors.New("app cache retry record has no schemaVersion")
 	}
 	pathsRaw, ok := envelope["paths"]
 	if !ok || !rawJSONKind(pathsRaw, "array") {

@@ -44,9 +44,7 @@ func TestDirectoryBackendProjectsStaticObjectsLocally(t *testing.T) {
 	if err != nil || string(contents) != "<h1>Overview</h1>" {
 		t.Fatalf("local artifact = %q, err=%v", contents, err)
 	}
-	if _, err := backend.Invalidate(ctx, []string{"/_indexes/sre/meta.json"}); err != nil {
-		t.Fatalf("Invalidate() error = %v, want local no-op", err)
-	}
+
 	if err := backend.DeleteObjects(ctx, []string{"_artifacts/sre/overview.html"}); err != nil {
 		t.Fatalf("DeleteObjects() error = %v", err)
 	}

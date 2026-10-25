@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -19,8 +18,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/cloudfront"
-	cloudfronttypes "github.com/aws/aws-sdk-go-v2/service/cloudfront/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
@@ -388,7 +385,7 @@ func TestPublishSiteWholeControlRequestsCompareR2GetOnlyAndAWSHeadThenGet(t *tes
 
 	r2Backend, r2CDN := sitePublishCostCloudflare(t, r2Store)
 	awsCDN := &sitePublishCostCloudFront{}
-	awsBackend, err := newAWSBackend(awsClients{s3: awsStore, cloudFront: awsCDN}, AWSOptions{Bucket: "cost-test", DistributionID: "E123COST"})
+	awsBackend, err := newAWSBackend(awsClients{s3: awsStore}, AWSOptions{Bucket: "cost-test", DistributionID: "E123COST"})
 	if err != nil {
 		t.Fatalf("newAWSBackend() error = %v", err)
 	}
@@ -494,8 +491,8 @@ func TestPublishSiteWholeControlRequestsCompareR2GetOnlyAndAWSHeadThenGet(t *tes
 	if err := sitePublishCostRequireSameNonStateRequests(r2ChangedReport.ObjectRequests, awsChangedReport.ObjectRequests); err != nil {
 		t.Fatal(err)
 	}
-	if r2ChangedReport.CDNInvalidationRequests != 1 || awsChangedReport.CDNInvalidationRequests != 1 {
-		t.Fatalf("changed CDN requests R2/AWS = %d/%d; want one revalidation call each, separately from object request classes", r2ChangedReport.CDNInvalidationRequests, awsChangedReport.CDNInvalidationRequests)
+	if r2ChangedReport.CDNInvalidationRequests != 0 || awsChangedReport.CDNInvalidationRequests != 0 {
+		t.Fatalf("changed CDN requests R2/AWS = %d/%d; want zero revalidation calls", r2ChangedReport.CDNInvalidationRequests, awsChangedReport.CDNInvalidationRequests)
 	}
 	if err := sitePublishCostAssertWriteOrdering(r2ChangedSnapshot.Events); err != nil {
 		t.Fatalf("R2 write ordering: %v", err)
@@ -564,7 +561,7 @@ func TestChangedProjectionReadBudgetGeneratedAtClockCases(t *testing.T) {
 			}
 			store.seed("_indexes/sites.json", Object{Bytes: registryBytes, ContentType: "application/json; charset=utf-8", Cache: cacheControl(cacheClassSiteRoot)})
 			cdn := &sitePublishCostCloudFront{}
-			backend, err := newAWSBackend(awsClients{s3: store, cloudFront: cdn}, AWSOptions{Bucket: "cost-test", DistributionID: "E123COST"})
+			backend, err := newAWSBackend(awsClients{s3: store}, AWSOptions{Bucket: "cost-test", DistributionID: "E123COST"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -661,18 +658,11 @@ func sitePublishCostCloudflare(t *testing.T, client *sitePublishCostS3) (*cloudf
 		_, _ = writer.Write([]byte(`{"success":true,"result":{"id":"r2-cost-test"}}`))
 	}))
 	t.Cleanup(server.Close)
-	publicBase, err := url.Parse("https://pages.example.com")
-	if err != nil {
-		t.Fatal(err)
-	}
 	objects, err := newS3CompatibleBackend(client, "cost-test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &cloudflareBackend{
-		objects: objects, zoneID: "0123456789abcdef0123456789abcdef", baseURL: publicBase,
-		apiToken: "cost-test-token", apiBaseURL: server.URL, httpClient: server.Client(),
-	}, counter
+	return &cloudflareBackend{objects: objects}, counter
 }
 
 type sitePublishCostPurgeCounter struct {
@@ -695,14 +685,6 @@ func (counter *sitePublishCostPurgeCounter) calls() int {
 type sitePublishCostCloudFront struct {
 	mu        sync.Mutex
 	callCount int
-}
-
-func (client *sitePublishCostCloudFront) CreateInvalidation(_ context.Context, _ *cloudfront.CreateInvalidationInput, _ ...func(*cloudfront.Options)) (*cloudfront.CreateInvalidationOutput, error) {
-	client.mu.Lock()
-	client.callCount++
-	index := client.callCount
-	client.mu.Unlock()
-	return &cloudfront.CreateInvalidationOutput{Invalidation: &cloudfronttypes.Invalidation{Id: aws.String(fmt.Sprintf("aws-cost-%d", index))}}, nil
 }
 
 func (client *sitePublishCostCloudFront) reset() {
@@ -744,78 +726,4 @@ func (backend *sitePublishCostJournalCaptureBackend) PutObjectConditional(ctx co
 		backend.journalWrites = append(backend.journalWrites, record)
 	}
 	return backend.sitePublishRecoveryBackend.PutObjectConditional(ctx, key, object, condition)
-}
-
-func TestPublishSiteCompletedCacheFailureStartsNewTransactionAndUnionsPaths(t *testing.T) {
-	root, store, options := sitePublishRecoveryFixture(t)
-	failedPath := filepath.Join(root, "docs", "artifacts", "assets", "attempt-only.css")
-	if err := os.MkdirAll(filepath.Dir(failedPath), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(failedPath, []byte("body{--attempt-only:1}\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	firstStoreWrapper := newSitePublishRecoveryBackend(store)
-	first := &sitePublishCostCacheFailureBackend{sitePublishRecoveryBackend: firstStoreWrapper, failInvalidateOnce: true}
-	if _, err := PublishSite(context.Background(), first, options); err == nil || !strings.Contains(err.Error(), "cache revalidation failed") {
-		t.Fatalf("first publish cache failure = %v; want post-commit invalidation failure", err)
-	}
-	stateAfterFailure, _, _ := sitePublishRecoveryReadState(t, store)
-	firstJournal, _ := sitePublishRecoveryReadCache(t, store)
-	if firstJournal.Transaction == nil || stateAfterFailure.Committed.Generation != firstJournal.Transaction.ID {
-		t.Fatalf("completed generation/journal after cache failure = %q/%+v; want completed transaction retained for cache retry", stateAfterFailure.Committed.Generation, firstJournal.Transaction)
-	}
-	if got := store.objectBytes("_artifacts/sre/assets/attempt-only.css"); got != "body{--attempt-only:1}\n" {
-		t.Fatalf("origin object after cache failure = %q; want first transaction's object committed", got)
-	}
-	if !containsString(firstJournal.Paths, "/_artifacts/sre/assets/attempt-only.css") {
-		t.Fatalf("first cache paths omit committed object: %v", firstJournal.Paths)
-	}
-
-	// The latest tree reverts the first transaction's new key and introduces a
-	// different key. The completed old generation must not be replayed as an
-	// active origin transaction, and its purge path must survive in the new
-	// transaction's monotone cache-path union.
-	if err := os.Remove(failedPath); err != nil {
-		t.Fatal(err)
-	}
-	latestPath := filepath.Join(root, "docs", "artifacts", "assets", "latest.css")
-	if err := os.WriteFile(latestPath, []byte("body{--latest:1}\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	restarted := &sitePublishCostJournalCaptureBackend{sitePublishRecoveryBackend: newSitePublishRecoveryBackend(store)}
-	result, err := PublishSite(context.Background(), restarted, options)
-	if err != nil || result.Outcome != "synced" {
-		t.Fatalf("fresh-wrapper changed/reverted retry = %+v, err=%v", result, err)
-	}
-	if len(restarted.journalWrites) != 1 {
-		t.Fatalf("fresh-wrapper wrote %d cache journals, want one replacing completed transaction intent", len(restarted.journalWrites))
-	}
-	secondJournal := restarted.journalWrites[0]
-	if secondJournal.Transaction == nil || secondJournal.Transaction.ID == firstJournal.Transaction.ID ||
-		secondJournal.Transaction.BaseGeneration != firstJournal.Transaction.ID {
-		t.Fatalf("retry transaction = %+v; want fresh ID based on completed prior generation %q", secondJournal.Transaction, firstJournal.Transaction.ID)
-	}
-	for _, path := range []string{"/_artifacts/sre/assets/attempt-only.css", "/_artifacts/sre/assets/latest.css"} {
-		if !containsString(secondJournal.Paths, path) || !containsString(result.InvalidationPaths, path) {
-			t.Errorf("new retry path union %v / result %v omits %s", secondJournal.Paths, result.InvalidationPaths, path)
-		}
-	}
-	if !containsString(secondJournal.Transaction.TouchedKeys, "_artifacts/sre/assets/attempt-only.css") ||
-		!containsString(secondJournal.Transaction.TouchedKeys, "_artifacts/sre/assets/latest.css") {
-		t.Errorf("new transaction touched keys = %v; want reverted and latest resource keys", secondJournal.Transaction.TouchedKeys)
-	}
-	finalState, _, _ := sitePublishRecoveryReadState(t, store)
-	if finalState.Committed.Generation != secondJournal.Transaction.ID {
-		t.Fatalf("final state generation = %q; want new retry transaction %q", finalState.Committed.Generation, secondJournal.Transaction.ID)
-	}
-	if _, _, err := store.lockMemoryBackend.GetObject(context.Background(), "_artifacts/sre/assets/attempt-only.css"); !errors.Is(err, ErrObjectNotFound) {
-		t.Errorf("reverted failed-run object remains after retry: %v", err)
-	}
-	if got := store.objectBytes("_artifacts/sre/assets/latest.css"); got != "body{--latest:1}\n" {
-		t.Errorf("latest resource after retry = %q", got)
-	}
-	if _, _, err := store.lockMemoryBackend.GetObject(context.Background(), siteCacheRetryKey("sre")); !errors.Is(err, ErrObjectNotFound) {
-		t.Errorf("cache journal after completed retry = %v; want cleared", err)
-	}
 }

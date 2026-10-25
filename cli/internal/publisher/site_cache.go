@@ -8,17 +8,14 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"sort"
 	"strings"
 
 	"github.com/artifact-pages/artifact-pages/cli/internal/compat"
-	"github.com/artifact-pages/artifact-pages/cli/internal/preview"
 )
 
 type siteCacheRetry struct {
 	SchemaVersion   int                     `json:"schemaVersion"`
 	Site            string                  `json:"site,omitempty"`
-	Paths           []string                `json:"paths"`
 	Transaction     *sitePublishTransaction `json:"transaction,omitempty"`
 	legacyRecord    bool
 	legacyDetail    string
@@ -34,42 +31,9 @@ type sitePublishTransaction struct {
 }
 
 const (
-	siteCacheRetrySchemaVersion = 1
+	siteCacheRetrySchemaVersion = 2
 	maxSiteCacheRetryBytes      = 16 << 20
 )
-
-var siteResourcePathSpellings = strings.NewReplacer("%21", "!", "%27", "'", "%28", "(", "%29", ")", "%3B", ";", "%2C", ",")
-
-func siteCachePaths(site string, changes []Change, previews *[]preview.CatalogReconciliationChange, pending []string) []string {
-	set := make(map[string]bool)
-	for _, p := range pending {
-		set[p] = true
-		set[siteResourcePathSpellings.Replace(p)] = true
-	}
-	for _, change := range changes {
-		// Encode segments separately, including literal '*' (CloudFront's
-		// wildcard character), so one filename cannot broaden a purge.
-		segments := strings.Split(change.Path, "/")
-		for i, segment := range segments {
-			segments[i] = url.PathEscape(segment)
-		}
-		set["/"+strings.Join(segments, "/")] = true
-		// Browsers can retain these safe ASCII characters in relative resource
-		// URLs, whereas the reader's indexed URLs use PathEscape. Purge both
-		// spellings. Never restore '*' here: it is a CDN wildcard, not a literal.
-		resourcePath := siteResourcePathSpellings.Replace("/" + strings.Join(segments, "/"))
-		set[resourcePath] = true
-	}
-	if countPreviewChanges(previews, "remove") > 0 {
-		set["/_previews/"+site+"/catalog.json"] = true
-	}
-	paths := make([]string, 0, len(set))
-	for p := range set {
-		paths = append(paths, p)
-	}
-	sort.Strings(paths)
-	return paths
-}
 
 func readSiteCacheRetry(ctx context.Context, backend ConditionalObjectBackend, site string) (siteCacheRetry, string, error) {
 	object, etag, err := getSiteControl(ctx, backend, site, siteCacheRetryKey(site))
@@ -88,83 +52,72 @@ func readSiteCacheRetry(ctx context.Context, backend ConditionalObjectBackend, s
 	if err := validateNoDuplicateJSONKeys(object.Bytes); err != nil {
 		return siteCacheRetry{}, "", fmt.Errorf("validate site cache retry record: %w", err)
 	}
-	var envelope map[string]json.RawMessage
-	if err := json.Unmarshal(object.Bytes, &envelope); err != nil || envelope == nil {
+	var header struct {
+		SchemaVersion int `json:"schemaVersion"`
+	}
+	if err := json.Unmarshal(object.Bytes, &header); err != nil {
 		return siteCacheRetry{}, "", errors.New("site cache retry record must be a JSON object")
 	}
-	versionRaw, ok := envelope["schemaVersion"]
-	if !ok {
-		return siteCacheRetry{}, "", errors.New("site cache retry record has no schemaVersion")
-	}
-	var version int
-	if err := json.Unmarshal(versionRaw, &version); err != nil {
-		return siteCacheRetry{}, "", errors.New("site cache retry record has an invalid schemaVersion")
-	}
-	if version != siteCacheRetrySchemaVersion {
+	if header.SchemaVersion != 1 && header.SchemaVersion != 2 {
 		return siteCacheRetry{}, "", compat.CheckSchemaVersion("site cache retry record", object.Bytes, siteCacheRetrySchemaVersion)
 	}
-	if rawPaths, ok := envelope["paths"]; !ok || !rawJSONKind(rawPaths, "array") {
-		return siteCacheRetry{}, "", errors.New("site cache retry record paths must be an array")
-	}
-	if rawSite, ok := envelope["site"]; !ok || !rawJSONKind(rawSite, "string") {
-		legacyErr := sitePrivateControlFormatResetError(site, "cache-retry record", "missing selected-site field")
-		var paths []string
-		if err := json.Unmarshal(envelope["paths"], &paths); err != nil || validateSiteCacheRetryPaths(site, paths) != nil {
-			return siteCacheRetry{}, "", unfinishedSiteCacheRetryError(site, legacyErr)
-		}
-		return siteCacheRetry{
-			SchemaVersion: version, Site: site, Paths: paths,
-			legacyRecord: true, legacyDetail: "missing selected-site field",
-			legacyBytes: append([]byte(nil), object.Bytes...), legacyObject: cloneSiteControlObject(object),
-			legacyBackupKey: siteLegacyCacheRetryBackupKey(site, object.Bytes),
-		}, etag, nil
-	}
-	var recordedSite string
-	if err := json.Unmarshal(envelope["site"], &recordedSite); err != nil || recordedSite != site {
-		return siteCacheRetry{}, "", errors.New("site cache retry record does not match the selected site")
-	}
-	if transaction, ok := envelope["transaction"]; ok && !bytes.Equal(bytes.TrimSpace(transaction), []byte("null")) && !rawJSONKind(transaction, "object") {
-		return siteCacheRetry{}, "", errors.New("site cache retry transaction must be an object")
-	}
 	decoder := json.NewDecoder(bytes.NewReader(object.Bytes))
+	if header.SchemaVersion == 1 {
+		decoder.DisallowUnknownFields()
+
+		var old struct {
+			SchemaVersion int                     `json:"schemaVersion"`
+			Site          string                  `json:"site,omitempty"`
+			Paths         []string                `json:"paths"`
+			Transaction   *sitePublishTransaction `json:"transaction,omitempty"`
+		}
+		if err := decoder.Decode(&old); err != nil {
+			return siteCacheRetry{}, "", fmt.Errorf("decode legacy site cache retry record: %w", err)
+		}
+		if old.SchemaVersion != 1 || (old.Site != "" && old.Site != site) {
+			return siteCacheRetry{}, "", errors.New("legacy site cache retry record does not match schema or selected site")
+		}
+		if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+			return siteCacheRetry{}, "", errors.New("legacy site cache retry record must contain exactly one JSON value")
+		}
+		if err := validateLegacySiteCacheRetryPaths(site, old.Paths); err != nil {
+			return siteCacheRetry{}, "", err
+		}
+		if old.Transaction != nil {
+			if err := validateSitePublishTransaction(site, *old.Transaction); err != nil {
+				return siteCacheRetry{}, "", err
+			}
+		}
+		return siteCacheRetry{SchemaVersion: 2, Site: site, Transaction: old.Transaction, legacyRecord: true,
+			legacyDetail: "schemaVersion 1 cache paths", legacyBytes: append([]byte(nil), object.Bytes...), legacyObject: cloneSiteControlObject(object), legacyBackupKey: siteLegacyCacheRetryBackupKey(site, object.Bytes)}, etag, nil
+	}
 	var record siteCacheRetry
 	if err := decoder.Decode(&record); err != nil {
-		return record, "", fmt.Errorf("decode site cache retry record: %w", err)
+		return siteCacheRetry{}, "", fmt.Errorf("decode site cache journal: %w", err)
 	}
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		return record, "", errors.New("site cache retry record must contain exactly one JSON value")
+		return siteCacheRetry{}, "", errors.New("site cache journal must contain exactly one JSON value")
 	}
-	if record.SchemaVersion != version {
-		return record, "", errors.New("site cache retry schemaVersion changed while decoding")
+	if record.SchemaVersion != 2 || record.Site != site {
+		return siteCacheRetry{}, "", errors.New("site cache journal does not match schema or selected site")
 	}
-	if record.Site != site {
-		return record, "", errors.New("site cache retry record does not match the selected site")
+	if record.Transaction == nil {
+		return siteCacheRetry{}, "", errors.New("site cache journal requires an origin transaction")
 	}
-	if err := validateSiteCacheRetryPaths(site, record.Paths); err != nil {
-		return record, "", err
-	}
-	if record.Transaction != nil {
-		if err := validateSitePublishTransaction(site, *record.Transaction); err != nil {
-			return record, "", err
-		}
+	if err := validateSitePublishTransaction(site, *record.Transaction); err != nil {
+		return siteCacheRetry{}, "", err
 	}
 	return record, etag, nil
 }
 
 func validateSiteCacheRetryRecord(site string, record siteCacheRetry) error {
-	if record.SchemaVersion != siteCacheRetrySchemaVersion || record.Site != site {
-		return errors.New("site cache retry record has an invalid schema or site")
+	if record.SchemaVersion != siteCacheRetrySchemaVersion || record.Site != site || record.Transaction == nil {
+		return errors.New("site cache journal has an invalid schema, site, or missing transaction")
 	}
-	if err := validateSiteCacheRetryPaths(site, record.Paths); err != nil {
-		return err
-	}
-	if record.Transaction != nil {
-		return validateSitePublishTransaction(site, *record.Transaction)
-	}
-	return nil
+	return validateSitePublishTransaction(site, *record.Transaction)
 }
 
-func validateSiteCacheRetryPaths(site string, paths []string) error {
+func validateLegacySiteCacheRetryPaths(site string, paths []string) error {
 	if paths == nil {
 		return errors.New("site cache retry paths must be an array")
 	}
@@ -214,7 +167,7 @@ func siteCacheRetryNeedsWrite(current, next siteCacheRetry, exists bool) bool {
 	if !exists {
 		return true
 	}
-	if current.SchemaVersion != next.SchemaVersion || current.Site != next.Site || !sameStringSlice(current.Paths, next.Paths) {
+	if current.SchemaVersion != next.SchemaVersion || current.Site != next.Site {
 		return true
 	}
 	if (current.Transaction == nil) != (next.Transaction == nil) {
@@ -237,11 +190,6 @@ func sameStringSlice(left, right []string) bool {
 		}
 	}
 	return true
-}
-
-func writeSiteCacheRetry(ctx context.Context, backend ConditionalObjectBackend, site string, paths []string, etag string) error {
-	_, err := writeSiteCacheRetryRecord(ctx, backend, site, siteCacheRetry{Paths: paths}, etag)
-	return err
 }
 
 func writeSiteCacheRetryRecord(ctx context.Context, backend ConditionalObjectBackend, site string, record siteCacheRetry, etag string) (string, error) {

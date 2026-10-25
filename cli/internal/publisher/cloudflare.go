@@ -1,7 +1,6 @@
 package publisher
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -13,7 +12,6 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
-	"sort"
 	"strings"
 	"time"
 
@@ -49,12 +47,6 @@ type CloudflareOptions struct {
 type cloudflareBackend struct {
 	objects        *s3CompatibleBackend
 	registryReader *s3CompatibleBackend
-	zoneID         string
-	baseURL        *url.URL
-	apiToken       string
-	apiTokenSource func() string
-	apiBaseURL     string
-	httpClient     *http.Client
 }
 
 var _ DeploymentBackend = (*cloudflareBackend)(nil)
@@ -80,8 +72,11 @@ func NewCloudflareBackend(ctx context.Context, options CloudflareOptions) (Deplo
 	if registryReaderConfigured && (strings.TrimSpace(options.RegistryReaderAccessKeyID) == "" || strings.TrimSpace(options.RegistryReaderSecretKey) == "") {
 		return nil, errors.New("Cloudflare registry reader access key ID and secret are required together")
 	}
-	if !cloudflareIdentifierPattern.MatchString(options.AccountID) || !cloudflareIdentifierPattern.MatchString(options.ZoneID) {
-		return nil, errors.New("Cloudflare account and zone IDs must be 32-character hexadecimal IDs")
+	if !cloudflareIdentifierPattern.MatchString(options.ZoneID) {
+		return nil, errors.New("Cloudflare zone ID must be a 32-character hexadecimal ID")
+	}
+	if !cloudflareIdentifierPattern.MatchString(options.AccountID) {
+		return nil, errors.New("Cloudflare account ID must be a 32-character hexadecimal ID")
 	}
 	if (options.R2Endpoint == "") != (options.APIBaseURL == "") {
 		return nil, errors.New("Cloudflare R2 and API endpoints must be configured together")
@@ -132,11 +127,7 @@ func NewCloudflareBackend(ctx context.Context, options CloudflareOptions) (Deplo
 			return nil, fmt.Errorf("configure Cloudflare R2 registry reader: %w", err)
 		}
 	}
-	return &cloudflareBackend{
-		objects: objects, registryReader: registryReader, zoneID: options.ZoneID, baseURL: baseURL,
-		apiToken: options.APIToken, apiTokenSource: options.APITokenProvider, apiBaseURL: apiBaseURL,
-		httpClient: httpClient,
-	}, nil
+	return &cloudflareBackend{objects: objects, registryReader: registryReader}, nil
 }
 
 func deriveCloudflareR2Credentials(ctx context.Context, client *http.Client, apiBaseURL, accountID, apiToken string) (string, string, error) {
@@ -240,215 +231,6 @@ func (backend *cloudflareBackend) ListKeys(ctx context.Context, prefix string) (
 
 func (backend *cloudflareBackend) DeleteObjects(ctx context.Context, keys []string) error {
 	return backend.objects.DeleteObjects(ctx, keys)
-}
-
-func (backend *cloudflareBackend) Invalidate(ctx context.Context, paths []string) (string, error) {
-	for _, rawPath := range paths {
-		if !validCloudflareInvalidationPath(rawPath) {
-			return "", fmt.Errorf("invalid cache path %q", rawPath)
-		}
-	}
-	paths = backend.PlanInvalidation(paths)
-	if err := backend.ValidateInvalidation(paths); err != nil {
-		return "", err
-	}
-	if len(paths) == 0 {
-		return "", nil
-	}
-	var prefixes, files []string
-	for _, rawPath := range paths {
-		if strings.HasSuffix(rawPath, "/*") {
-			prefixPath := strings.TrimSuffix(rawPath, "*")
-			prefixes = append(prefixes, backend.baseURL.Host+prefixPath)
-			continue
-		}
-		files = append(files, backend.baseURL.Scheme+"://"+backend.baseURL.Host+rawPath)
-	}
-	sort.Strings(prefixes)
-	sort.Strings(files)
-	var identifiers []string
-	for start := 0; start < len(prefixes); start += 100 {
-		end := min(start+100, len(prefixes))
-		id, err := backend.purge(ctx, map[string][]string{"prefixes": prefixes[start:end]})
-		if err != nil {
-			return strings.Join(identifiers, ","), err
-		}
-		if id != "" {
-			identifiers = append(identifiers, id)
-		}
-	}
-	for start := 0; start < len(files); start += 100 {
-		end := min(start+100, len(files))
-		id, err := backend.purge(ctx, map[string][]string{"files": files[start:end]})
-		if err != nil {
-			return strings.Join(identifiers, ","), err
-		}
-		if id != "" {
-			identifiers = append(identifiers, id)
-		}
-	}
-	return strings.Join(identifiers, ","), nil
-}
-
-func (backend *cloudflareBackend) PlanInvalidation(paths []string) []string {
-	return cloudflareSiteInvalidationPaths(paths)
-}
-
-const cloudflareExactSiteInvalidationLimit = 100
-
-func validCloudflareInvalidationPath(rawPath string) bool {
-	return strings.HasPrefix(rawPath, "/") && !strings.ContainsAny(rawPath, "?#") &&
-		(!strings.Contains(rawPath, "*") || strings.HasSuffix(rawPath, "/*"))
-}
-
-// cloudflareSiteInvalidationPaths bounds purge API calls for large site
-// publishes while keeping every compacted path inside the selected site's
-// artifact or index prefix. Cloudflare accepts URL-prefix purges; the retry
-// record continues to store the original exact paths.
-func cloudflareSiteInvalidationPaths(paths []string) []string {
-	counts := make(map[string]map[string]struct{})
-	for _, rawPath := range paths {
-		if !validCloudflareInvalidationPath(rawPath) {
-			continue
-		}
-		prefix := cloudflareSiteInvalidationPrefix(rawPath)
-		if prefix == "" || strings.HasSuffix(rawPath, "/*") {
-			continue
-		}
-		if counts[prefix] == nil {
-			counts[prefix] = make(map[string]struct{})
-		}
-		counts[prefix][rawPath] = struct{}{}
-	}
-	compact := make(map[string]bool, len(counts))
-	for prefix, uniquePaths := range counts {
-		compact[prefix] = len(uniquePaths) > cloudflareExactSiteInvalidationLimit
-	}
-	set := make(map[string]struct{}, len(paths))
-	for _, rawPath := range paths {
-		if !validCloudflareInvalidationPath(rawPath) {
-			set[rawPath] = struct{}{}
-			continue
-		}
-		if prefix := cloudflareSiteInvalidationPrefix(rawPath); compact[prefix] {
-			set[prefix+"*"] = struct{}{}
-			continue
-		}
-		set[rawPath] = struct{}{}
-	}
-	result := make([]string, 0, len(set))
-	for rawPath := range set {
-		result = append(result, rawPath)
-	}
-	sort.Strings(result)
-	return result
-}
-
-func cloudflareSiteInvalidationPrefix(rawPath string) string {
-	var keyPrefix string
-	switch {
-	case strings.HasPrefix(rawPath, "/_artifacts/"):
-		keyPrefix = "/_artifacts/"
-	case strings.HasPrefix(rawPath, "/_indexes/"):
-		keyPrefix = "/_indexes/"
-	default:
-		return ""
-	}
-	parts := strings.SplitN(strings.TrimPrefix(rawPath, keyPrefix), "/", 2)
-	if len(parts) != 2 || validateLockSite(parts[0]) != nil {
-		return ""
-	}
-	return keyPrefix + parts[0] + "/"
-}
-
-func (backend *cloudflareBackend) ValidateInvalidation(paths []string) error {
-	if len(paths) > 0 && strings.TrimSpace(backend.currentAPIToken()) == "" {
-		return errors.New("Cloudflare API token is required for cache invalidation")
-	}
-	return nil
-}
-
-func (backend *cloudflareBackend) currentAPIToken() string {
-	if backend.apiTokenSource != nil {
-		return backend.apiTokenSource()
-	}
-	return backend.apiToken
-}
-
-func (backend *cloudflareBackend) purge(ctx context.Context, body any) (string, error) {
-	encoded, err := json.Marshal(body)
-	if err != nil {
-		return "", fmt.Errorf("encode Cloudflare cache purge request: %w", err)
-	}
-	apiBaseURL := backend.apiBaseURL
-	if apiBaseURL == "" {
-		apiBaseURL = cloudflareAPIBase
-	}
-	endpoint := apiBaseURL + "/zones/" + url.PathEscape(backend.zoneID) + "/purge_cache"
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(encoded))
-	if err != nil {
-		return "", errors.New("create Cloudflare cache purge request")
-	}
-	request.Header.Set("Authorization", "Bearer "+backend.currentAPIToken())
-	request.Header.Set("Content-Type", "application/json")
-	response, err := backend.httpClient.Do(request)
-	if err != nil {
-		return "", errors.New("Cloudflare cache purge request failed")
-	}
-	defer response.Body.Close()
-	contents, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
-	if err != nil {
-		return "", errors.New("read Cloudflare cache purge response")
-	}
-	var result struct {
-		Success bool `json:"success"`
-		Errors  []struct {
-			Code             json.RawMessage `json:"code"`
-			Message          string          `json:"message"`
-			DocumentationURL string          `json:"documentation_url"`
-		} `json:"errors"`
-		Result struct {
-			ID string `json:"id"`
-		} `json:"result"`
-	}
-	decodeErr := json.Unmarshal(contents, &result)
-	if response.StatusCode < 200 || response.StatusCode >= 300 || decodeErr != nil || !result.Success {
-		requestContext := fmt.Sprintf("POST /zones/%s/purge_cache for zone %s (HTTP %d)", backend.zoneID, backend.zoneID, response.StatusCode)
-		switch {
-		case len(result.Errors) > 0:
-			return "", fmt.Errorf("Cloudflare cache purge request %s failed: %s", requestContext, formatCloudflareAPIErrors(result.Errors))
-		case decodeErr != nil:
-			return "", fmt.Errorf("Cloudflare cache purge request %s returned an invalid API response: %w", requestContext, decodeErr)
-		default:
-			return "", fmt.Errorf("Cloudflare cache purge request %s failed: API returned success=false without error details", requestContext)
-		}
-	}
-	return result.Result.ID, nil
-}
-
-func formatCloudflareAPIErrors(apiErrors []struct {
-	Code             json.RawMessage `json:"code"`
-	Message          string          `json:"message"`
-	DocumentationURL string          `json:"documentation_url"`
-}) string {
-	details := make([]string, 0, len(apiErrors))
-	for _, apiError := range apiErrors {
-		parts := make([]string, 0, 3)
-		if code := strings.TrimSpace(string(apiError.Code)); code != "" && code != "null" {
-			parts = append(parts, "code "+code)
-		}
-		if message := strings.TrimSpace(apiError.Message); message != "" {
-			parts = append(parts, message)
-		}
-		if documentationURL := strings.TrimSpace(apiError.DocumentationURL); documentationURL != "" {
-			parts = append(parts, "documentation: "+documentationURL)
-		}
-		if len(parts) == 0 {
-			parts = append(parts, "unspecified API error")
-		}
-		details = append(details, strings.Join(parts, ": "))
-	}
-	return strings.Join(details, "; ")
 }
 
 func validateLocalEndpoint(raw string, allowPath bool) error {
