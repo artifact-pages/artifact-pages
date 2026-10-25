@@ -103,7 +103,7 @@ export function CommandPalette({
     : mode === 'command'
       ? 'Commands'
       : mode === 'heading'
-        ? (currentIndex ? 'All pages' : undefined)
+        ? (term ? (currentIndex ? 'All pages' : 'Choose a site') : currentArtifact ? 'This page' : currentIndex ? 'Choose a page' : 'Choose a site')
         : context === 'sites'
           ? 'Sites'
           : currentIndex?.site.title
@@ -114,7 +114,7 @@ export function CommandPalette({
     : mode === 'command'
       ? 'Search commands...'
       : mode === 'heading'
-        ? 'Search headings in all pages...'
+        ? (term ? 'Search headings in all pages...' : currentArtifact ? 'Headings in this page; type to search all pages...' : 'Type to search headings in all pages...')
         : context === 'sites'
           ? 'Search sites...'
           : currentIndex
@@ -270,6 +270,16 @@ export function CommandPalette({
           </button>
         </div>
 
+        {mode === 'search' && !query.trim() ? (
+          <nav className="palette-modes" aria-label="Search modes">
+            {([{ label: 'Headings', prefix: '#', disabled: !currentIndex }, { label: 'Sites', prefix: '@' }, { label: 'Actions', prefix: '>' }] as const).map(({ label, prefix, ...options }) => (
+              <button key={prefix} type="button" disabled={'disabled' in options && options.disabled} onClick={() => { setQuery(prefix); inputRef.current?.focus() }}><code aria-hidden="true">{prefix}</code>{label}</button>
+            ))}
+          </nav>
+        ) : mode !== 'search' ? (
+          <div className="palette-active-mode"><span>{mode === 'heading' ? 'Headings' : mode === 'site' ? 'Sites' : 'Actions'}</span><button type="button" aria-label="Clear mode" onClick={() => { setQuery(''); inputRef.current?.focus() }}>Clear mode <Icon name="close" size={12} /></button></div>
+        ) : null}
+
         {emptyHistory && sections.length > 0 ? <p className="palette-hint">{EMPTY_HISTORY_HINT}</p> : null}
 
         {sections.length === 0 ? (
@@ -356,12 +366,12 @@ export function CommandPalette({
         {loading ? <p className="palette-loading" role="status">Loading site information…</p> : null}
 
         <footer className="palette-footer">
-          <span><kbd>↑</kbd><kbd>↓</kbd> or <kbd>Ctrl+J/K</kbd> navigate</span>
+          <span className="palette-desktop-hint"><kbd>↑</kbd><kbd>↓</kbd> or <kbd>Ctrl+J/K</kbd> navigate</span>
           <span><kbd>↵</kbd> open</span>
           {onSearchPageText && mode === 'search' && context !== 'sites' ? <span><kbd>⌘↵</kbd> search full text</span> : null}
-          <span><code>&gt;</code> commands</span>
-          <span><code>@</code> sites</span>
-          {currentIndex ? <span><code>#</code> headings</span> : null}
+          <span className="palette-desktop-hint"><code>&gt;</code> commands</span>
+          <span className="palette-desktop-hint"><code>@</code> sites</span>
+          {currentIndex ? <span className="palette-desktop-hint"><code>#</code> headings</span> : null}
         </footer>
       </section>
     </div>,

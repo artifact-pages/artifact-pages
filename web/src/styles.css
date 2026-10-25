@@ -4469,3 +4469,11 @@ a.tree-more:hover {
 .reader-details-trigger { display: inline-flex; flex: none; min-height: 30px; align-items: center; gap: 4px; padding: 5px 6px; border-radius: 6px; color: var(--text-secondary); font-size: 11px; }
 .reader-details-trigger:hover, .reader-details-trigger[aria-expanded="true"] { background: var(--hover); color: var(--text); }
 .reader-details-trigger:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+
+/* Palette mode discovery remains separate from selectable search results. */
+.palette-modes, .palette-active-mode { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--line-soft); }
+.palette-modes button, .palette-active-mode button { display: inline-flex; align-items: center; gap: 7px; min-height: 32px; padding: 4px 9px; border: 1px solid var(--line-soft); border-radius: 6px; background: var(--surface); color: var(--text); font: inherit; font-size: 12px; cursor: pointer; }
+.palette-modes button:disabled { opacity: .5; cursor: default; }
+.palette-modes button:focus-visible, .palette-active-mode button:focus-visible { outline: 2px solid var(--palette-match); outline-offset: 2px; }
+.palette-active-mode { justify-content: space-between; font-size: 12px; }
+@media (max-width: 620px) { .palette-footer .palette-desktop-hint { display: none; } }

@@ -34,6 +34,8 @@ const HEADING_MODE_OTHER_PER_PAGE = 5
 export type PaletteCommand = {
   title: string
   subtitle?: string
+  /** Search-only terms; never used as highlight offsets in the displayed title. */
+  aliases?: readonly string[]
   shortcut?: string
   onSelect: () => void
   available?: boolean
@@ -387,7 +389,8 @@ function buildCommandEntries(commands: PaletteCommand[], term: string): PaletteE
     if (command.available === false) return []
     const titleMatch = fuzzyMatch(command.title, term)
     const subtitleMatch = command.subtitle ? fuzzyMatch(command.subtitle, term) : undefined
-    if (term.trim() && !titleMatch && !subtitleMatch) return []
+    const aliasScore = Math.max(0, ...(command.aliases ?? []).map((alias) => fuzzyMatch(alias, term)?.score ?? 0))
+    if (term.trim() && !titleMatch && !subtitleMatch && !aliasScore) return []
     return [{
       entry: {
         id: `command:${command.title}`,
@@ -399,7 +402,7 @@ function buildCommandEntries(commands: PaletteCommand[], term: string): PaletteE
         subtitleMatch,
         onSelect: command.onSelect,
       },
-      score: Math.max(titleMatch?.score ?? 0, subtitleMatch?.score ?? 0),
+      score: Math.max(titleMatch?.score ?? 0, subtitleMatch?.score ?? 0, aliasScore),
     }]
   })
     .sort((left, right) => right.score - left.score)

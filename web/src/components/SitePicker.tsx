@@ -30,17 +30,17 @@ export function SitePicker({
   const sortedSites = [...sites].sort(compareSites)
   const commands: PaletteCommand[] = [
     {
-      title: 'Use light theme',
+      title: 'Use light theme', aliases: ["ライト", "明るいテーマ"],
       subtitle: themeMode === 'light' ? 'Current' : undefined,
       onSelect: () => onSetThemeMode?.('light'),
     },
     {
-      title: 'Use dark theme',
+      title: 'Use dark theme', aliases: ["ダーク", "暗いテーマ"],
       subtitle: themeMode === 'dark' ? 'Current' : undefined,
       onSelect: () => onSetThemeMode?.('dark'),
     },
     {
-      title: 'Use system theme',
+      title: 'Use system theme', aliases: ["システム", "自動テーマ"],
       subtitle: themeMode === 'system' ? 'Current' : undefined,
       onSelect: () => onSetThemeMode?.('system'),
     },

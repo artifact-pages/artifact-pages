@@ -401,3 +401,21 @@ test('other-page heading search stays fast on a large heading-rich site', () => 
   // Generous bound (CI machines vary); the measured cost is a few ms.
   assert.ok(perQuery < 150, `palette query took ${perQuery.toFixed(1)} ms for 5000 pages`)
 })
+
+
+test('command aliases match Japanese in plain and action mode without corrupting title highlights', () => {
+  const localizedCommands = [
+    { title: 'Toggle contents', aliases: ['目次', '見出し一覧'], onSelect() {} },
+    { title: 'Use dark theme', aliases: ['ダーク', '暗いテーマ'], onSelect() {} },
+    { title: 'Unavailable', aliases: ['目次'], available: false, onSelect() {} },
+  ]
+  for (const mode of ['search', 'command']) {
+    const options = { mode, context: 'artifact', term: '目次', sites, currentIndex: index, currentArtifact: pages[0], commands: localizedCommands, onNavigate() {}, onJumpToHeading() {} }
+    const entries = entriesOf(buildSections(options)).filter((entry) => entry.kind === 'command')
+    assert.deepEqual(entries.map((entry) => entry.title), ['Toggle contents'])
+    assert.equal(entries[0].titleMatch, undefined)
+    const english = entriesOf(buildSections({ ...options, term: 'contents' })).filter((entry) => entry.kind === 'command')
+    assert.equal(english[0].title, 'Toggle contents')
+    assert.ok(english[0].titleMatch)
+  }
+})
