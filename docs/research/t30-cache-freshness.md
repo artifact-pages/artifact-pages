@@ -75,7 +75,7 @@ The verification Terraform state manages the R2 custom domain and a WAF rule wit
 
 The T30 rule keeps 5 seconds when a relevant reader operation *reproducibly* improves by at least 20 ms in the mean or 100 ms at p95 and the operation represents the observed workload, and chooses 0 when the hit rate is below 5 % with no meaningful improvement.
 
-- **Japan, single run:** cold open +39 ms and reload +58 ms mean in favour of 5 s, while the document steps stayed close. This exceeds 20 ms mean in one run; reproducibility was not shown (one run per state).
+- **Japan, single run:** cold open +39 ms and reload +58 ms mean in favour of 5 s, while the document steps stayed within about 13 ms in the mean (p95 varied more). This exceeds 20 ms mean in one run; reproducibility was not shown (one run per state).
 - **North America:** the reader comparison is confounded by the IAD/LAX split and is not used. Within the 5-second run, revalidating a root costs about 206 ms per request.
 - **Hit rate:** unmeasured. These runs forced edge hits by repeating requests within seconds. For a long-tail internal-document workload a second request reaching the same edge location within 5 seconds is probably rare, but no natural-traffic or aggregate edge data was available for `artifact-pages.dev`, so the "below 5 % → 0" branch cannot be applied either.
 - **Cost of 5 seconds:** a published change to the registry, site metadata or index can take up to 5 s to appear (1.2–1.6 s observed).
