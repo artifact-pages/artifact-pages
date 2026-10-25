@@ -6,6 +6,7 @@ These are independently reviewable slices for the accepted product contract. IMP
 
 | Ticket | Status | Assignee | Outcome |
 | --- | --- | --- | --- |
+| [IMP-87](IMP-87-folder-introductions.md) | In progress | Codex | UI/UX S5: read folder introductions directly in the normal reader. |
 | [IMP-86](IMP-86-reading-context.md) | In progress | Codex | UI/UX S4: compact update summary and on-demand Details above Contents. |
 | [IMP-85](IMP-85-navigation-shell.md) | In progress | Codex | UI/UX S3: permanent header Search, site menu, compact hierarchy and collapsible Pinned. |
 | [IMP-84](IMP-84-locale-display.md) | Done | Codex | UI/UX S2: browser-localized dates/numbers and Japanese/English count nouns. |
@@ -152,4 +153,3 @@ Recent parallel work completed the pre-publish CLI (IMP-11), separate admin/sate
 
 The table is a traceability map, not a claim that every linked test has run. The linked verification items own final evidence. Optimization or a changed read model is follow-up work only if [T7](../verification/T7-discovery-performance.md) shows a real bottleneck.
 
-| [IMP-87](IMP-87-folder-introductions.md) | Read folder introductions directly | In progress | Codex |

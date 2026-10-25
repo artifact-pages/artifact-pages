@@ -6970,7 +6970,7 @@ test.describe('directory pages', () => {
     await expect(page.getByRole('navigation', { name: 'Artifact headings' })).toBeVisible()
     await page.getByRole('button', { name: 'Copy folder link' }).click()
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toMatch(/\/sre\/docs$/)
-    await page.getByRole('checkbox', { name: 'Pin Docs home', exact: true }).click()
+    await page.getByRole('button', { name: 'Pin Docs home', exact: true }).click()
     await expect(page.locator('.pinned-tree a')).toHaveAttribute('href', '/sre/docs/README.md')
   })
 
