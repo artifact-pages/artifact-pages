@@ -6,7 +6,7 @@ These are independently reviewable slices for the accepted product contract. IMP
 
 | Ticket | Status | Assignee | Outcome |
 | --- | --- | --- | --- |
-| [IMP-85](IMP-85-navigation-shell.md) | In progress | Codex | UI/UX S3: permanent header Search, site menu, compact hierarchy and collapsible Pinned. |
+| [IMP-85](IMP-85-navigation-shell.md) | Done | Codex | UI/UX S3: permanent header Search, site menu, compact hierarchy and collapsible Pinned. |
 | [IMP-84](IMP-84-locale-display.md) | Done | Codex | UI/UX S2: browser-localized dates/numbers and Japanese/English count nouns. |
 | [IMP-83](IMP-83-modal-contents-focus.md) | Done | Codex | UI/UX S1: temporary Contents keyboard focus, dismissal and destination hand-off; persistent column unchanged. Owner-authorized standalone exception. |
 
