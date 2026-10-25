@@ -1,6 +1,6 @@
 # IMP-88 — Discoverable palette modes and bilingual actions
 
-- Status: In progress
+- Status: Done
 - Assignee: Codex
 - Scope: UI/UX S6
 
@@ -10,4 +10,4 @@ Blank palette has clickable Headings/Sites/Actions, active mode is clearable, sc
 
 ## Verification
 
-Pending build, units, browser regression and independent review. No release/deploy.
+Build, 277 web units and Storybook passed; full browser regression354/354, then final Escape owner/test-strengthening correction44/44 targeted regressions. Fresh Sonnet 5.5 medium review findings addressed; final re-review found no actionable P0–P2. Real IAB verified mode discovery and This page headings scope; screenshot s6-mode-discovery.png in workspace review evidence. No release/deploy.

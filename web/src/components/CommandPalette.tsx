@@ -114,7 +114,7 @@ export function CommandPalette({
     : mode === 'command'
       ? 'Search commands...'
       : mode === 'heading'
-        ? (term ? 'Search headings in all pages...' : currentArtifact ? 'Headings in this page; type to search all pages...' : 'Type to search headings in all pages...')
+        ? (!currentIndex ? 'Choose a site to search headings...' : term ? 'Search headings in all pages...' : currentArtifact ? 'Headings in this page; type to search all pages...' : 'Type to search headings in all pages...')
         : context === 'sites'
           ? 'Search sites...'
           : currentIndex
@@ -158,6 +158,12 @@ export function CommandPalette({
   }
 
   function handleDialogKeyDown(event: React.KeyboardEvent<HTMLElement>) {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      event.stopPropagation()
+      dismiss()
+      return
+    }
     if (event.key !== 'Tab') return
     const focusables = visibleFocusables(event.currentTarget)
     if (focusables.length === 0) return
@@ -211,9 +217,6 @@ export function CommandPalette({
         onClose()
         selectedEntry.onSelect()
       }
-    } else if (event.key === 'Escape') {
-      event.preventDefault()
-      dismiss()
     }
   }
 
@@ -270,10 +273,11 @@ export function CommandPalette({
           </button>
         </div>
 
+        <span className="page-text-visually-hidden palette-mode-announcement" role="status" aria-live="polite" aria-atomic="true">{mode === 'search' ? '' : `${mode === 'heading' ? 'Headings' : mode === 'site' ? 'Sites' : 'Actions'} mode. ${scopeLabel ?? ''}`}</span>
         {mode === 'search' && !query.trim() ? (
           <nav className="palette-modes" aria-label="Search modes">
             {([{ label: 'Headings', prefix: '#', disabled: !currentIndex }, { label: 'Sites', prefix: '@' }, { label: 'Actions', prefix: '>' }] as const).map(({ label, prefix, ...options }) => (
-              <button key={prefix} type="button" disabled={'disabled' in options && options.disabled} onClick={() => { setQuery(prefix); inputRef.current?.focus() }}><code aria-hidden="true">{prefix}</code>{label}</button>
+              <button key={prefix} type="button" disabled={'disabled' in options && options.disabled} title={'disabled' in options && options.disabled ? 'Choose a site to search headings' : undefined} onClick={() => { setQuery(prefix); inputRef.current?.focus() }}><code aria-hidden="true">{prefix}</code>{label}</button>
             ))}
           </nav>
         ) : mode !== 'search' ? (
