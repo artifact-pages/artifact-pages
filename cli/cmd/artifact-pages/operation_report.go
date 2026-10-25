@@ -129,7 +129,7 @@ func writeDeploymentReport(w io.Writer, result publisher.Result, resolved deploy
 		}
 		groups[label] = append(groups[label], change)
 	}
-	for _, label := range []string{"Site registrations", "Registry projection", "Site cleanup scopes", "Site cleanup", "Cache revalidation", "Application files"} {
+	for _, label := range []string{"Site registrations", "Registry projection", "Site cleanup scopes", "Site cleanup", "Application files"} {
 		reportChanges(w, label, groups[label])
 	}
 	if result.RegistryUpdated != nil {

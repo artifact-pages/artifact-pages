@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/artifact-pages/artifact-pages/cli/internal/compat"
+	"github.com/artifact-pages/artifact-pages/cli/internal/preview"
 )
 
 // damagedControlRecords are bodies whose schemaVersion is missing, null,
@@ -81,8 +83,15 @@ func TestPublishSiteFailsOverDamagedSiteCacheJournal(t *testing.T) {
 			}
 			requireOrdinaryError(t, name, err)
 			after, afterETags := snapshotLockMemory(store.lockMemoryBackend)
-			if len(before) != len(after) || len(beforeETags) != len(afterETags) {
-				t.Fatalf("object set changed over damaged journal: %d -> %d", len(before), len(after))
+			// The cooperative lock object is acquired and released by the attempt;
+			// every other object and ETag must be untouched.
+			lockKey := siteLockKey("sre")
+			delete(before, lockKey)
+			delete(after, lockKey)
+			delete(beforeETags, lockKey)
+			delete(afterETags, lockKey)
+			if !reflect.DeepEqual(before, after) || !reflect.DeepEqual(beforeETags, afterETags) {
+				t.Fatalf("object snapshot changed over damaged journal: %d -> %d objects", len(before), len(after))
 			}
 			if got := string(after[siteCacheRetryKey("sre")].Bytes); got != raw {
 				t.Fatalf("damaged journal was rewritten to %q", got)
@@ -107,6 +116,14 @@ func TestRegistryCleanupSchema1RequiresExactlyOneJSONValue(t *testing.T) {
 		b.seed(registryCleanupKey, []byte(trailing))
 		_, _, err := readRegistryCleanup(context.Background(), b)
 		requireOrdinaryError(t, "trailing value", err)
+		// The exactly-one-value property is enforced upstream, by the
+		// duplicate-key validator (and readControlSchemaVersion, whose
+		// json.Unmarshal also rejects trailing data), before the decoder's own
+		// EOF check can run. The EOF check stays as defence in depth; this
+		// asserts which layer fires.
+		if err == nil || !strings.Contains(err.Error(), "validate registry cleanup record: trailing JSON") {
+			t.Fatalf("trailing value error = %v; want the duplicate-key validator rejection", err)
+		}
 	}
 }
 
@@ -207,6 +224,8 @@ func firstProjectionEvent(events []string) int {
 	return -1
 }
 
+const previewCatalogKey = "_previews/sre/catalog.json"
+
 func TestPublishSiteMigratesSchema1OriginTransactionBeforeProjectionAndRetriesFromSchema2(t *testing.T) {
 	ctx := context.Background()
 	root, store, options := sitePublishRecoveryFixture(t)
@@ -231,10 +250,8 @@ func TestPublishSiteMigratesSchema1OriginTransactionBeforeProjectionAndRetriesFr
 	}
 	tx := *journal.Transaction
 	quotedKeys := make([]string, len(tx.TouchedKeys))
-	legacyPaths := make([]string, len(tx.TouchedKeys))
 	for i, key := range tx.TouchedKeys {
 		quotedKeys[i] = fmt.Sprintf("%q", key)
-		legacyPaths[i] = fmt.Sprintf("%q", "/"+key)
 	}
 	// Legacy paths must be sorted and limited to site-scoped projection paths.
 	legacy := `{"schemaVersion":1,"site":"sre","paths":["/_artifacts/sre/report.html"],"transaction":{"id":"` + tx.ID + `","baseGeneration":"` + tx.BaseGeneration + `","touchedKeys":[` + strings.Join(quotedKeys, ",") + `]}}`
@@ -273,6 +290,18 @@ func TestPublishSiteMigratesSchema1OriginTransactionBeforeProjectionAndRetriesFr
 		t.Fatal(err)
 	}
 
+	// Seed a preview catalog whose only group has no manifest, so reconciliation
+	// must rewrite _previews/sre/catalog.json during the retry.
+	catalogBytes, err := preview.EncodeCatalog(preview.Catalog{
+		SchemaVersion: preview.SchemaVersion, Site: "sre",
+		Groups:          []preview.Group{previewRemoveTestGroup("pr:42", strings.Repeat("c", 40))},
+		RevisionHistory: []preview.GroupRevisionHistory{ownership("pr:42", preview.RevisionOwnership{HeadSHA: strings.Repeat("c", 40), Files: []string{"guide.md"}})},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	seedMemoryObject(store.lockMemoryBackend, previewCatalogKey, catalogBytes)
+
 	// Run 2: retry resumes from schema 2 and converges.
 	retry := &mutationLogBackend{sitePublishRecoveryBackend: newSitePublishRecoveryBackend(store), journalKey: journalKey}
 	result, err := PublishSite(ctx, retry, options)
@@ -306,6 +335,16 @@ func TestPublishSiteMigratesSchema1OriginTransactionBeforeProjectionAndRetriesFr
 	}
 	if !(state < version && version < del) {
 		t.Fatalf("order state=%d version=%d journal delete=%d; want state < version < delete (%v)", state, version, del, retryEvents)
+	}
+	catalogWrite := eventIndex(retryEvents, "put:"+previewCatalogKey, true)
+	if catalogWrite < 0 {
+		catalogWrite = eventIndex(retryEvents, "cond:"+previewCatalogKey, true)
+	}
+	if catalogWrite < 0 {
+		t.Fatalf("retry did not reconcile the preview catalog (%v)", retryEvents)
+	}
+	if !(state < catalogWrite && catalogWrite < del) {
+		t.Fatalf("order state=%d preview catalog write=%d journal delete=%d; want state < catalog < delete (%v)", state, catalogWrite, del, retryEvents)
 	}
 	lastProjection := -1
 	for i, e := range retryEvents {
