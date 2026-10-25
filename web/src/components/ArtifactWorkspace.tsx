@@ -736,7 +736,7 @@ export function ArtifactWorkspace({
   navigatorVisibleRef.current = navigatorVisible
 
   function openDirectory(path: string) {
-    navigateWithinWorkspace(artifactRouteHref(index.site.id, path))
+    navigateWithinWorkspace(path ? artifactRouteHref(index.site.id, path) : `/${encodeURIComponent(index.site.id)}`)
     setActivePanel(null)
     setPaletteSeed(null)
   }
@@ -1070,6 +1070,8 @@ export function ArtifactWorkspace({
       >Skip to content</a>
       <Sidebar
         index={index}
+        visible={sidebarOpen}
+        navigationKey={`${pathname}${search}${hash}`}
         id="workspace-sidebar"
         sites={paletteSites.map(({ site }) => site)}
         artifactPath={currentArtifact?.path}
@@ -1118,7 +1120,7 @@ export function ArtifactWorkspace({
             >
               <Icon name="sidebar" size={17} />
             </button>
-            <SiteMenu homeHref={siteHomeHref} collapsed title={index.site.title} count={paletteSites.length}
+            <SiteMenu dismissKey={`${pathname}${search}${hash}`} homeHref={siteHomeHref} collapsed title={index.site.title} count={paletteSites.length}
               onHome={() => navigateWithinWorkspace(siteHomeHref)} onSwitch={() => openPalette('@')} onAllSites={() => navigateWithinWorkspace('/')} />
             <button
               className="collapsed-rail-button"
@@ -1180,7 +1182,7 @@ export function ArtifactWorkspace({
                 onOpenArtifact={openArtifact}
                 artifactHref={(artifact) => artifactRouteHref(index.site.id, artifact.path)}
                 isDirectoryPage={Boolean(currentDirectory)}
-                folderHref={(path) => artifactRouteHref(index.site.id, path)}
+                folderHref={(path) => path ? artifactRouteHref(index.site.id, path) : siteHomeHref}
                 onOpenFolder={openDirectory}
                 onRevealInSidebar={revealSidebarLocation}
               />
@@ -1192,7 +1194,7 @@ export function ArtifactWorkspace({
                   type="button"
                   className="icon-button"
                   title={`Jump to a page in ${index.site.title}`}
-                  aria-label={`Jump to a page in ${index.site.title}`}
+                  aria-label={`Search pages in ${index.site.title}`}
                   aria-keyshortcuts="Meta+K Control+K"
                   onClick={(event) => {
                     event.currentTarget.focus()
@@ -1201,16 +1203,17 @@ export function ArtifactWorkspace({
                 >
                   <Icon name="search" size={17} />
                 </button>
-                {bodyArtifact ? <button ref={contentsToggleRef} type="button" className={`icon-button${tocOpen ? ' is-active' : ''}`} aria-label="Contents" title="Contents (⌘ ⇧ O)" aria-pressed={tocOpen} disabled={tocEntries.length === 0} onClick={() => togglePanel('contents')}><Icon name="contents" size={17} /></button> : null}
+                {bodyArtifact ? <button ref={contentsToggleRef} type="button" className={`icon-button${tocOpen ? ' is-active' : ''}`} aria-label="Contents" title={tocEntries.length ? 'Contents (⌘ ⇧ O)' : 'No indexed contents for this artifact'} aria-pressed={tocOpen} disabled={tocEntries.length === 0} onClick={() => togglePanel('contents')}><Icon name="contents" size={17} /></button> : null}
                 <ReaderMoreMenu
                   ref={moreMenuTriggerRef}
+                  dismissKey={`${pathname}${search}${hash}:${sidebarOpen}`}
                   items={moreMenuItems}
                   onDismiss={() => { if (lastFocus.current?.area === 'more') lastFocus.current = null }}
                 />
               </div>
             ) : (
               <div className="context-actions">
-                <button type="button" className="context-button header-search" aria-keyshortcuts="Meta+K Control+K" aria-label={`Jump to a page in ${index.site.title}`} title="Search (⌘ K)" onClick={(event) => { event.currentTarget.focus(); openPalette('') }}><Icon name="search" size={15} /><span>Search</span><kbd>⌘ K</kbd></button>
+                <button type="button" className="context-button header-search" aria-keyshortcuts="Meta+K Control+K" aria-label={`Search pages in ${index.site.title}`} title="Search (⌘ K)" onClick={(event) => { event.currentTarget.focus(); openPalette('') }}><Icon name="search" size={15} /><span>Search</span><kbd>⌘ K</kbd></button>
                 {bodyArtifact && !preview ? (
                   <button
                     className={`context-button current-artifact-pin-button${pinnedArtifactIds.includes(bodyArtifact.id) ? ' is-active' : ''}`}

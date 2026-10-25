@@ -3,8 +3,9 @@ import { Icon } from './Icon'
 import { siteCountLabel } from '../domain/site-count-label'
 import { formatNumber } from '../domain/display-locale'
 
-export function SiteMenu({ title, count, homeHref, collapsed = false, onHome, onSwitch, onAllSites }: {
+export function SiteMenu({ title, count, homeHref, dismissKey, collapsed = false, onHome, onSwitch, onAllSites }: {
   title: string
+  dismissKey?: string
   homeHref: string
   count: number
   collapsed?: boolean
@@ -13,6 +14,7 @@ export function SiteMenu({ title, count, homeHref, collapsed = false, onHome, on
   onAllSites: () => void
 }) {
   return <ReaderMoreMenu
+    dismissKey={dismissKey}
     className={`site-menu${collapsed ? ' site-menu-rail' : ''}`}
     triggerId={collapsed ? undefined : 'site-switcher'}
     label={`Site menu. Current site: ${title}. ${siteCountLabel(count)}`}

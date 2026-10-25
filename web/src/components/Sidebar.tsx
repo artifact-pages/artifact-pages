@@ -16,6 +16,8 @@ export type SidebarPageTextSearch = {
 
 export function Sidebar({
   id,
+  visible = true,
+  navigationKey,
   index,
   sites,
   artifactPath,
@@ -39,6 +41,8 @@ export function Sidebar({
   previewSection,
 }: {
   id?: string
+  visible?: boolean
+  navigationKey?: string
   index: SiteIndex
   sites: SiteSummary[]
   artifactPath?: string
@@ -130,7 +134,7 @@ export function Sidebar({
     <aside ref={sidebarRef} id={id} className={`sidebar-panel sidebar-panel--refined tree-style-${treeStyle}`} aria-label={`${index.site.title} navigation`}>
       <div className="sidebar-top">
         <div className="sidebar-top-row">
-          <SiteMenu homeHref={`/${encodeURIComponent(index.site.id)}`} title={index.site.title} count={sites.length}
+          <SiteMenu dismissKey={`${navigationKey}:${visible}`} homeHref={`/${encodeURIComponent(index.site.id)}`} title={index.site.title} count={sites.length}
             onHome={() => onOpenRoot?.()} onSwitch={() => onOpenPalette('@')} onAllSites={() => onAllSites?.()} />
           <button
             className="icon-button sidebar-collapse-trigger"

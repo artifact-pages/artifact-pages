@@ -35,13 +35,19 @@ export const ReaderMoreMenu = forwardRef<HTMLButtonElement, {
   triggerClassName?: string
   triggerId?: string
   className?: string
+  dismissKey?: string
   /** Called when a pointer press outside dismisses the menu (focus is not restored then). */
   onDismiss?: () => void
-}>(function ReaderMoreMenu({ items, label = 'More actions', defaultOpen = false, onDismiss, triggerContent, triggerClassName, triggerId, className }, forwardedRef) {
+}>(function ReaderMoreMenu({ items, label = 'More actions', defaultOpen = false, onDismiss, triggerContent, triggerClassName, triggerId, className, dismissKey }, forwardedRef) {
   const [open, setOpen] = useState(defaultOpen)
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const menuId = useId()
+  const previousDismissKey = useRef(dismissKey)
+  useEffect(() => {
+    if (previousDismissKey.current !== dismissKey) setOpen(false)
+    previousDismissKey.current = dismissKey
+  }, [dismissKey])
 
   function setTrigger(node: HTMLButtonElement | null) {
     triggerRef.current = node

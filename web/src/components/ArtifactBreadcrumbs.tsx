@@ -186,13 +186,13 @@ export function ArtifactBreadcrumbs({
       ? directoryLabel(artifacts, artifactPath, segments.at(-1) ?? siteTitle)
       : currentArtifact?.title ?? segments.at(-1) ?? siteTitle
     return <nav className="breadcrumbs breadcrumbs-compact" aria-label="Artifact path">
-      <ReaderMoreMenu className="hierarchy-menu" label="Page hierarchy" triggerClassName="icon-button hierarchy-trigger"
+      <ReaderMoreMenu dismissKey={artifactPath} className="hierarchy-menu" label="Page hierarchy" triggerClassName="icon-button hierarchy-trigger"
         triggerContent={<Icon name="chevron" size={14} />}
         items={[
           { id: 'site-root', label: `${siteTitle} home`, icon: 'home', href: folderHref(''), onSelect: () => onOpenFolder('') },
           ...segments.slice(0, -1).map((segment, i) => {
             const path = segments.slice(0, i + 1).join('/')
-            return { id: path, label: directoryLabel(artifacts, path, segment), icon: 'folder' as const, href: folderHref(path), onSelect: () => onOpenFolder(path) }
+            return { id: path, label: directoryLabel(artifacts, path, segment), icon: 'folder' as const, href: folderHref(path), title: path, onSelect: () => onOpenFolder(path) }
           }),
           { id: 'reveal', label: 'Show in sidebar', icon: 'sidebar', onSelect: () => onRevealInSidebar(artifactPath, isDirectoryPage) },
         ]} />
