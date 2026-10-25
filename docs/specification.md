@@ -978,6 +978,8 @@ Once a request is allowed through that boundary, the product serves the same sta
 
 ## 19. Distribution model
 
+The preview list initially exposes changed documents. Documents included because a resource changed are inside a collapsed, keyboard-operable disclosure with a page count. Changed resources used by every affected page appear once for that group; each page lists its additional changed resources. Groups with no directly changed documents still expose their affected-page disclosure. The Preview tag is a menu at every width: Preview pages links to the current group list, Published page links to the same path only when the published index confirms a document there, and Site home remains separate. While the published index is loading or unavailable the menu states that uncertainty; a successfully loaded index with no matching page says No published page. Existing verified identity, superseded revision and loading/error/cache contracts remain unchanged.
+
 The eventual OSS distribution is expected to be a set of versioned components rather than one copied template.
 
 Possible surfaces:

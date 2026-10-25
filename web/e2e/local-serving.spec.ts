@@ -3931,7 +3931,10 @@ test('preview list separates documents affected by a resource change', async ({ 
   await page.goto('/showcase/_previews')
   const group = page.getByRole('region', { name: 'Preview pr:702' })
   await expect(group.getByRole('link', { name: /Changed guide/ })).toBeVisible()
-  const section = group.getByRole('group', { name: 'Affected by resource change' })
+  const section = group.locator('details.preview-dependency-section')
+  await expect(section).not.toHaveAttribute('open', '')
+  await expect(section.getByRole('link', { name: /Affected page/ })).toBeHidden()
+  await section.locator('summary').click()
   await expect(section.getByRole('link', { name: /Affected page/ })).toBeVisible()
   await expect(section).toContainText('Uses changed assets/site.css')
   await expect(section).not.toContainText('Changed guide')
@@ -10211,5 +10214,78 @@ test('S6 Escape dismisses from discovery and clear-mode buttons on the site pick
   await reopened.getByRole('button', { name: 'Clear mode' }).focus()
   await page.keyboard.press('Escape')
   await expect(reopened).toHaveCount(0)
+})
 
+test('S8 Preview menu distinguishes checking, published page and site home with real links', async ({ page }) => {
+  let releaseIndex!: () => void
+  const held = new Promise<void>((resolve) => { releaseIndex = resolve })
+  await page.route('**/_indexes/sre/index.json', async (route) => {
+    await held
+    const response = await route.fetch()
+    const index = await response.json()
+    index.artifacts.push({ ...index.artifacts[0], id: 'guides/preview.html', path: 'guides/preview.html', title: 'Published counterpart' })
+    await route.fulfill({ response, json: index })
+  })
+  try {
+    await page.goto(`/sre/_previews/${previewHeadSha}/guides/preview.html?group=pr%3A42`)
+    await expect(previewTitle(page)).toHaveText('Local preview HTML')
+    const trigger = page.getByRole('button', { name: /Preview menu/ })
+    await trigger.click()
+    const menu = page.getByRole('menu', { name: /Preview menu/ })
+    await expect(menu.getByRole('menuitem', { name: 'Checking published page…' })).toBeDisabled()
+    await expect(menu.getByRole('menuitem', { name: 'Preview pages' })).toHaveAttribute('href', '/sre/_previews?group=pr%3A42')
+    await expect(menu.getByRole('menuitem', { name: 'Site home' })).toHaveAttribute('href', '/sre')
+    releaseIndex()
+    const published = menu.getByRole('menuitem', { name: 'Published page', exact: true })
+    await expect(published).toHaveAttribute('href', '/sre/guides/preview.html')
+    await expectModifiedClickKeptForBrowser(page, published)
+    await page.keyboard.press('Escape')
+    await expect(trigger).toBeFocused()
+    await trigger.click()
+    await menu.getByRole('menuitem', { name: 'Preview pages' }).click()
+    await expect(page).toHaveURL('/sre/_previews?group=pr%3A42')
+  } finally { releaseIndex() }
+})
+
+test('S8 Preview menu distinguishes no published page from an unavailable index', async ({ page }) => {
+  const url = `/sre/_previews/${previewHeadSha}/guides/preview.html?group=pr%3A42`
+  await page.goto(url)
+  await expect(previewTitle(page)).toHaveText('Local preview HTML')
+  await page.getByRole('button', { name: /Preview menu/ }).click()
+  await expect(page.getByRole('menuitem', { name: 'No published page', exact: true })).toBeDisabled()
+  await page.route('**/_indexes/sre/index.json', (route) => route.fulfill({ status: 503, body: 'Temporarily unavailable' }))
+  await page.reload()
+  await expect(previewTitle(page)).toHaveText('Local preview HTML')
+  await page.getByRole('button', { name: /Preview menu/ }).click()
+  await expect(page.getByRole('menuitem', { name: 'Published page unavailable', exact: true })).toBeDisabled()
+  await expect(page.getByRole('menuitem', { name: 'Site home' })).toHaveAttribute('href', '/sre')
+})
+
+test('S8 affected preview pages start collapsed and shared resources appear once', async ({ page }) => {
+  const documents = [
+    { path: 'guides/preview-guide.md', title: 'First affected', format: 'markdown', reason: 'dependency', changedResources: ['assets/preview.css', 'assets/preview.js'] },
+    { path: 'guides/preview.html', title: 'Second affected', format: 'html', reason: 'dependency', changedResources: ['assets/preview.css'] },
+  ]
+  await page.route('**/_previews/sre/catalog.json', async (route) => {
+    const response = await route.fetch()
+    const catalog = await response.json()
+    catalog.groups = catalog.groups.filter((group: { id: string }) => group.id === 'pr:42').map((group: object) => ({ ...group, documents }))
+    await route.fulfill({ response, json: catalog })
+  })
+  await page.route(`**/_previews/sre/revisions/${previewHeadSha}/manifest.json`, async (route) => {
+    const response = await route.fetch()
+    const manifest = await response.json()
+    await route.fulfill({ response, json: { ...manifest, documents } })
+  })
+  await page.goto('/sre/_previews?group=pr%3A42')
+  const section = page.locator('details.preview-dependency-section')
+  await expect(section.locator('summary')).toHaveText('Affected by resource change (2 pages)')
+  await expect(section.getByRole('link', { name: /First affected/ })).toBeHidden()
+  await section.locator('summary').focus()
+  await page.keyboard.press('Enter')
+  await expect(section.locator('.preview-shared-resources')).toHaveText('Shared changed resources: assets/preview.css')
+  const first = section.getByRole('link', { name: /First affected/ })
+  await expect(first).toContainText('Uses changed assets/preview.js')
+  await expect(first).not.toContainText('assets/preview.css')
+  await expect(section.getByRole('link', { name: /Second affected/ })).not.toContainText('Uses changed')
 })

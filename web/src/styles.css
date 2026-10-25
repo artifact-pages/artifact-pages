@@ -4481,3 +4481,10 @@ a.tree-more:hover {
 .search-page-facet-name { display: grid; gap: 2px; }
 .search-page-facet-name > span, .search-page-facet-name small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .search-page-facet-name small { color: var(--text-tertiary); font-size: 10px; font-weight: 400; }
+
+.preview-dependency-heading { cursor: pointer; padding: 8px 0; }
+.preview-dependency-heading:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+.preview-shared-resources { color: var(--text-secondary); font-size: 12px; overflow-wrap: anywhere; }
+.preview-tag-menu { flex: none; }
+.preview-tag-menu .preview-tag { cursor: pointer; gap: 5px; }
+.preview-tag-menu [data-preview-tag] { display: inline-flex; align-items: center; gap: 5px; }

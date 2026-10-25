@@ -70,6 +70,7 @@ export function ArtifactWorkspace({
   theme,
   onSetThemeMode,
   index,
+  publishedIndexStatus = 'success',
   fullTextSearch,
   recentReads,
   sidebarTreeStyle = 'branch-guides',
@@ -94,6 +95,7 @@ export function ArtifactWorkspace({
   theme: ResolvedTheme
   onSetThemeMode: (mode: ThemeMode) => void
   index: SiteIndex
+  publishedIndexStatus?: 'loading' | 'success' | 'error'
   /** The active site's full-text client. Omit it, or pass an unavailable one, for sites without page text search. */
   fullTextSearch?: SiteFullTextSearch
   recentReads?: RecentArtifactRead[]
@@ -1164,7 +1166,7 @@ export function ArtifactWorkspace({
             {!routeArtifactPath && !preview ? <span className="reader-bar-title">{index.site.title}</span> : null}
             {preview ? (
               <>
-                <PreviewTag reader={preview} />
+                <PreviewTag reader={preview} productionArtifacts={index.artifacts} publishedIndexStatus={publishedIndexStatus} navigate={navigateWithinWorkspace} />
                 <PreviewBreadcrumbs reader={preview} siteTitle={index.site.title} navigate={navigateWithinWorkspace} />
               </>
             ) : null}

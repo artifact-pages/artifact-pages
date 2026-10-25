@@ -311,6 +311,7 @@ function SitePage({
       theme={theme}
       onSetThemeMode={onSetThemeMode}
       index={index}
+      publishedIndexStatus={indexState.status}
       fullTextSearch={fullTextSearch}
       siteDiscoveryStatus={siteDiscoveryStatus}
       siteDiscoveryError={siteDiscoveryError}
