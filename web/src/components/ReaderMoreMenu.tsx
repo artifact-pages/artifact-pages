@@ -23,12 +23,14 @@ export type ReaderMoreMenuItem = {
 
 /**
  * The narrow-screen "More" menu (ISSUE-080): a menu button whose popup holds the toolbar's secondary
- * actions. Focus moves to the first enabled item on open; arrows, Home and End move between items;
+ * actions. Focus moves to the first item that is not aria-disabled on open; arrows, Home and End move between items;
  * Escape closes and returns focus to the button; Tab and a click or tap outside close it.
  */
 export const ReaderMoreMenu = forwardRef<HTMLButtonElement, {
   items: ReaderMoreMenuItem[]
   label?: string
+  /** Tooltip of the trigger; defaults to `label`. */
+  title?: string
   /** Opens the menu on mount (stories only). */
   defaultOpen?: boolean
   triggerContent?: ReactNode
@@ -38,7 +40,7 @@ export const ReaderMoreMenu = forwardRef<HTMLButtonElement, {
   dismissKey?: string
   /** Called when a pointer press outside dismisses the menu (focus is not restored then). */
   onDismiss?: () => void
-}>(function ReaderMoreMenu({ items, label = 'More actions', defaultOpen = false, onDismiss, triggerContent, triggerClassName, triggerId, className, dismissKey }, forwardedRef) {
+}>(function ReaderMoreMenu({ items, label = 'More actions', title, defaultOpen = false, onDismiss, triggerContent, triggerClassName, triggerId, className, dismissKey }, forwardedRef) {
   const [open, setOpen] = useState(defaultOpen)
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
@@ -55,13 +57,18 @@ export const ReaderMoreMenu = forwardRef<HTMLButtonElement, {
     else if (forwardedRef) forwardedRef.current = node
   }
 
-  function enabledItems() {
-    return [...(rootRef.current?.querySelectorAll<HTMLElement>('[role^="menuitem"]:not(:disabled)') ?? [])]
+  function navigableItems() {
+    return [...(rootRef.current?.querySelectorAll<HTMLElement>('[role^="menuitem"]') ?? [])]
+  }
+
+  function initialFocusItem() {
+    const all = navigableItems()
+    return all.find((node) => node.getAttribute('aria-disabled') !== 'true') ?? all[0]
   }
 
   useEffect(() => {
     if (!open) return
-    if (!defaultOpen) enabledItems()[0]?.focus()
+    if (!defaultOpen) initialFocusItem()?.focus()
     const closeOnOutsidePointer = (event: PointerEvent) => {
       if (rootRef.current?.contains(event.target as Node)) return
       setOpen(false)
@@ -102,7 +109,7 @@ export const ReaderMoreMenu = forwardRef<HTMLButtonElement, {
     }
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
     event.preventDefault()
-    const list = enabledItems()
+    const list = navigableItems()
     if (list.length === 0) return
     const current = list.indexOf(document.activeElement as HTMLElement)
     const next = event.key === 'Home'
@@ -121,7 +128,7 @@ export const ReaderMoreMenu = forwardRef<HTMLButtonElement, {
         type="button"
         className={`${triggerClassName ?? 'icon-button reader-more-trigger'}${open ? ' is-active' : ''}`}
         aria-label={label}
-        title={label}
+        title={title ?? label}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
@@ -149,10 +156,11 @@ export const ReaderMoreMenu = forwardRef<HTMLButtonElement, {
                 className="reader-more-item"
                 role={item.radio ? 'menuitemradio' : item.checked === undefined ? 'menuitem' : 'menuitemcheckbox'}
                 aria-checked={item.radio || item.checked !== undefined ? Boolean(item.checked) : undefined}
-                disabled={item.disabled}
+                aria-disabled={item.disabled ? true : undefined}
                 title={item.title}
                 tabIndex={-1}
                 onClick={() => {
+                  if (item.disabled) return
                   item.onSelect()
                   close(true)
                 }}

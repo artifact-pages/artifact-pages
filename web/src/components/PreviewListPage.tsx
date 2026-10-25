@@ -1,10 +1,10 @@
-import { formatCount } from '../domain/display-locale'
-import { splitPreviewDocuments, sharedChangedResources } from '../domain/preview-reader'
 import { useEffect, useRef, useState } from 'react'
 import type { PreviewGroup } from '../domain/preview'
 import { listedGroups, loadPreviewList, peekPreviewList, resetPreviewList, type CheckedGroup, type PreviewListResult } from '../data/preview-list'
 import { previewRouteHref } from '../data/previews'
 import { formatPreviewTime } from '../domain/preview-time'
+import { formatCount } from '../domain/display-locale'
+import { splitPreviewDocuments, sharedChangedResources } from '../domain/preview-reader'
 import type { AppRoute } from '../routing'
 import { pageTitle, usePageTitle } from './usePageTitle'
 import { useRestoredScroll } from './useRestoredScroll'
@@ -178,7 +178,7 @@ export function PreviewListContent({ siteId, groupId, navigate, showHomeLink = f
               />
               {affected.length > 0 ? (
                 <details className="preview-dependency-section">
-                  <summary className="preview-dependency-heading">Affected by resource change <span>({formatCount(affected.length, 'page')})</span></summary>
+                  <summary className="preview-dependency-summary"><h3 className="preview-dependency-heading">Affected by resource change <span>({formatCount(affected.length, 'page')})</span></h3></summary>
                   <p className="preview-dependency-note">These pages did not change, but a stylesheet, script, image, or other resource they use did.</p>
                   {sharedResources.length ? <p className="preview-shared-resources">Shared changed resources: {sharedResources.join(', ')}</p> : null}
                   <PreviewDocumentList

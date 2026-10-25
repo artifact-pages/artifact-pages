@@ -216,7 +216,7 @@ export function PreviewTag({ reader, productionArtifacts = [], publishedIndexSta
     { id: 'published', label: publishedHref ? 'Published page' : publishedIndexStatus === 'loading' ? 'Checking published page…' : publishedIndexStatus === 'error' ? 'Published page unavailable' : 'No published page', icon: 'file', disabled: !publishedHref, href: publishedHref, onSelect: () => { if (publishedHref) navigate(publishedHref) } },
     { id: 'home', label: 'Site home', icon: 'home', href: reader.siteHref, separatorBefore: true, onSelect: () => navigate(reader.siteHref) },
   ]
-  return <ReaderMoreMenu className="preview-tag-menu" triggerClassName="preview-tag" label={`Preview menu. ${label}`} dismissKey={`${reader.route.headSha}:${reader.route.artifactPath}:${reader.route.groupId ?? ''}`} triggerContent={<><span data-preview-tag=""><span className="preview-tag-dot" aria-hidden="true" />{label}</span><Icon name="chevron" size={12} /></>} items={items} />
+  return <ReaderMoreMenu className="preview-tag-menu" triggerClassName="preview-tag" label={`Preview menu. ${label}`} title={`Preview of revision ${reader.route.headSha}`} dismissKey={`${reader.route.headSha}:${reader.route.artifactPath}:${reader.route.groupId ?? ''}`} triggerContent={<><span data-preview-tag=""><span className="preview-tag-dot" aria-hidden="true" />{label}</span><Icon name="chevron" size={12} /></>} items={items} />
 }
 
 export function PreviewBreadcrumbs({ reader, siteTitle, navigate }: {

@@ -6,7 +6,7 @@ These are independently reviewable slices for the accepted product contract. IMP
 
 | Ticket | Status | Assignee | Outcome |
 | --- | --- | --- | --- |
-| [IMP-90](IMP-90-preview-review-flow.md) | In progress | Claude | UI/UX S8: affected-page disclosure and explicit published-page navigation. |
+| [IMP-90](IMP-90-preview-review-flow.md) | Done | Claude | UI/UX S8: affected-page disclosure and explicit published-page navigation. |
 | [IMP-89](IMP-89-search-facet-labels.md) | Done | Codex | UI/UX S7: sidebar-aligned folder names in search facets and live snippet recheck. |
 | [IMP-88](IMP-88-palette-modes.md) | Done | Codex | UI/UX S6: discoverable modes, honest scope and bilingual action search. |
 | [IMP-87](IMP-87-folder-introductions.md) | Done | Codex | UI/UX S5: read folder introductions directly in the normal reader. |
