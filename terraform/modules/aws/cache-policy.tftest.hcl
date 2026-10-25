@@ -80,18 +80,20 @@ run "origin_respecting_cache_policy_and_no_invalidation" {
   }
 
   assert {
-    condition = (
-      local.cache_behaviors.indexes.cache_policy_id == aws_cloudfront_cache_policy.origin_respecting.id &&
-      local.cache_behaviors.artifacts.cache_policy_id == aws_cloudfront_cache_policy.origin_respecting.id &&
-      local.cache_behaviors.previews.cache_policy_id == aws_cloudfront_cache_policy.origin_respecting.id &&
-      local.cache_behaviors.assets.cache_policy_id == aws_cloudfront_cache_policy.origin_respecting.id
-    )
-    error_message = "indexes, artifacts, previews and assets must use origin_respecting."
+    condition = alltrue([
+      for b in aws_cloudfront_distribution.site.ordered_cache_behavior :
+      b.cache_policy_id == (
+        b.path_pattern == "/_errors/*" ? aws_cloudfront_cache_policy.no_store.id : aws_cloudfront_cache_policy.origin_respecting.id
+      )
+    ])
+    error_message = "Every ordered behavior except /_errors/* must use origin_respecting; /_errors/* must use no_store."
   }
 
   assert {
-    condition     = local.cache_behaviors.errors.cache_policy_id == aws_cloudfront_cache_policy.no_store.id
-    error_message = "errors must use no_store."
+    condition = toset([
+      for b in aws_cloudfront_distribution.site.ordered_cache_behavior : b.path_pattern
+    ]) == toset(["/_indexes/*", "/_artifacts/*", "/_previews/*", "/assets/*", "/_errors/*"])
+    error_message = "Ordered behaviors must be exactly indexes, artifacts, previews, assets and errors."
   }
 
   assert {

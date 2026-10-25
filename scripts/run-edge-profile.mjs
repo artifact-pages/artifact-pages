@@ -1,3 +1,4 @@
+import http from 'node:http'
 import { spawnSync } from 'node:child_process'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
@@ -230,6 +231,39 @@ function assertEdgeHasNoDynamicStorageMount(profile, env, service) {
   }
 }
 
+// Seeded objects model what an older CLI wrote, so each carries the legacy
+// header for its class. The edge must pass the origin header through as the one
+// and only Cache-Control header.
+async function assertSeededContentCacheHeaders(profile, edgePort) {
+  const legacy60 = 'public, max-age=0, s-maxage=60, must-revalidate'
+  const legacy300 = 'public, max-age=0, s-maxage=300, must-revalidate'
+  const revision = '0123456789abcdef0123456789abcdef01234567'
+  const probes = [
+    ['/_indexes/sites.json', legacy60],
+    ['/_indexes/sre/index.json', legacy60],
+    ['/_artifacts/sre/incidents/checkout-latency/index.html', legacy300],
+    ['/_previews/sre/catalog.json', legacy60],
+    [`/_previews/sre/revisions/${revision}/manifest.json`, legacy300],
+    [`/_previews/sre/revisions/${revision}/files/guides/preview-guide.md`, legacy300],
+    [`/_previews/sre/revisions/${revision}/files/guides/preview.html`, legacy300],
+  ]
+  for (const [probePath, expected] of probes) {
+    const { status, rawHeaders } = await new Promise((resolve, reject) => {
+      http.get({ host: '127.0.0.1', port: edgePort, path: probePath }, (res) => {
+        res.resume()
+        res.on('end', () => resolve({ status: res.statusCode, rawHeaders: res.rawHeaders }))
+      }).on('error', reject)
+    })
+    const values = []
+    for (let i = 0; i < rawHeaders.length; i += 2) {
+      if (rawHeaders[i].toLowerCase() === 'cache-control') values.push(rawHeaders[i + 1])
+    }
+    if (status !== 200 || values.length !== 1 || values[0] !== expected) {
+      throw new Error(`${profile} edge ${probePath} returned HTTP ${status} with Cache-Control ${JSON.stringify(values)}; want exactly one header equal to ${JSON.stringify(expected)}.`)
+    }
+  }
+}
+
 async function assertEdgeAppAssetCacheHeaders(profile, edgePort) {
   const assetRoot = path.join(projectRoot, 'web', 'dist', 'assets')
   const stem = `app_cache_profile_probe_${profile}_${process.pid}`
@@ -367,6 +401,7 @@ async function main() {
     }
     await waitFor(`http://127.0.0.1:${ports.edge}/health`, 204, `${profile} nginx edge`)
     await assertEdgeAppAssetCacheHeaders(profile, ports.edge)
+    await assertSeededContentCacheHeaders(profile, ports.edge)
 
     const commandEnv = localProfileEnv(profile, ports)
     let frontendProbeKey = ''
@@ -435,19 +470,6 @@ async function main() {
     })
 
     if (profile === 'cloudflare') {
-      const previewProbePaths = [
-        '/_previews/sre/catalog.json',
-        '/_previews/sre/revisions/0123456789abcdef0123456789abcdef01234567/manifest.json',
-        '/_previews/sre/revisions/0123456789abcdef0123456789abcdef01234567/files/guides/preview-guide.md',
-        '/_previews/sre/revisions/0123456789abcdef0123456789abcdef01234567/files/guides/preview.html',
-      ]
-      for (const previewPath of previewProbePaths) {
-        const response = await fetch(`http://127.0.0.1:${ports.edge}${previewPath}`)
-        const previewCacheControl = response.headers.get('cache-control') ?? ''
-        if (response.status !== 200 || !previewCacheControl.includes('max-age=0') || !previewCacheControl.includes('must-revalidate') || previewCacheControl.includes('no-store')) {
-          throw new Error(`Cloudflare local edge preview probe ${previewPath} returned HTTP ${response.status} with cache ${previewCacheControl || '<missing>'}; want 200 and the origin revalidating Cache-Control (max-age=0, must-revalidate).`)
-        }
-      }
       const missingPreviewPath = '/_previews/sre/revisions/ffffffffffffffffffffffffffffffffffffffff/manifest.json'
       const missingPreview = await fetch(`http://127.0.0.1:${ports.edge}${missingPreviewPath}`)
       const missingPreviewBody = (await missingPreview.text()).toLowerCase()

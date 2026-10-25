@@ -52,7 +52,7 @@ seed_type 'text/html; charset=utf-8' '*.html' '*.htm'
 seed_type 'text/markdown; charset=utf-8' '*.md'
 seed_type 'application/json; charset=utf-8' '*.json'
 aws --endpoint-url "$endpoint" s3 cp /seed/storage "$destination" --recursive \
-  --exclude '*' --include '_previews/*/catalog.json' --content-type 'application/json; charset=utf-8' --cache-control "$legacy60" --only-show-errors
+  --exclude '*' --include '_previews/*/catalog.json' --exclude '_previews/*/revisions/*' --content-type 'application/json; charset=utf-8' --cache-control "$legacy60" --only-show-errors
 seed_type 'text/css; charset=utf-8' '*.css'
 seed_type 'application/javascript; charset=utf-8' '*.js'
 seed_type 'image/svg+xml' '*.svg'
