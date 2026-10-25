@@ -1,6 +1,6 @@
 # IMP-84 — Browser-localized dates and counts
 
-- Status: In progress
+- Status: Done
 - Assignee: Codex
 - Scope: Web UI/UX slice S2
 
@@ -28,4 +28,4 @@ Stacked on S1 branch `codex-uiux-s1-focus` (4046e0a0); worktree `codex-uiux-s2-l
 
 The palette-order regression now waits for asynchronous search metadata before asserting its sections. The new locale tests register the generated search fixture and scope timestamp assertions to the preview group, excluding the sidebar's separate index-generation date.
 
-Independent cross review and PR CI remain pending, so the item stays In progress. No merge, release or deployment.
+Fresh independent Sonnet medium cross review on 2026-10-25 found no actionable defects in product commit 7da43190 (combined S1/S2 review). All 8 CI checks passed in run 40152744108. Cosmetic mixed-language count phrases preserve the accepted English surrounding UI copy and Japanese count nouns; no product change was requested by the reviewer. No merge, release or deployment.
