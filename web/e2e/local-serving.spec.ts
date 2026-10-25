@@ -4835,7 +4835,7 @@ test('a preview-manifest read error stays visible as unknown availability', asyn
   await expect(page.getByRole('region', { name: 'Preview pr:99' })).toHaveCount(0)
 })
 
-test('raw preview resources have real 404s, media types, no-store and no CORS access', async ({ page }) => {
+test('raw preview resources have real 404s, media types, per-request revalidation and no CORS access', async ({ page }) => {
   const base = `/_previews/sre/revisions/${previewHeadSha}/files`
   const [catalog, manifest, missingRoot, missingSlash, missing, malformedHtml, css, script, svg, pdf, font, markdown, html, nullOrigin, externalOrigin] = await Promise.all([
     page.request.get('/_previews/sre/catalog.json'),
@@ -4874,9 +4874,10 @@ test('raw preview resources have real 404s, media types, no-store and no CORS ac
   expect(font.headers()['content-type']).toContain('font/woff2')
   expect(markdown.headers()['content-type']).toContain('text/markdown')
   expect(html.headers()['content-type']).toContain('text/html')
-  expect(html.headers()['cache-control']).toContain('no-store')
   for (const response of [catalog, manifest, css, script, svg, pdf, font, markdown, html]) {
-    expect(response.headers()['cache-control']).toContain('no-store')
+    const cacheControl = response.headers()['cache-control'] ?? ''
+    expect(cacheControl).toMatch(/no-store|(^|,)\s*max-age=0(\s*,|$)/u)
+    if (!cacheControl.includes('no-store')) expect(cacheControl).toContain('must-revalidate')
   }
   const htmlCsp = html.headers()['content-security-policy']
   expect(htmlCsp).toContain('script-src')
@@ -6970,7 +6971,7 @@ test.describe('directory pages', () => {
     await expect(page.getByRole('navigation', { name: 'Artifact headings' })).toBeVisible()
     await page.getByRole('button', { name: 'Copy folder link' }).click()
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toMatch(/\/sre\/docs$/)
-    await page.getByRole('checkbox', { name: 'Pin Docs home', exact: true }).click()
+    await page.getByRole('button', { name: 'Pin Docs home', exact: true }).click()
     await expect(page.locator('.pinned-tree a')).toHaveAttribute('href', '/sre/docs/README.md')
   })
 

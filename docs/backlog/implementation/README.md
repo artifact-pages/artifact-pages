@@ -7,9 +7,9 @@ These are independently reviewable slices for the accepted product contract. IMP
 | Ticket | Status | Assignee | Outcome |
 | --- | --- | --- | --- |
 | [IMP-88](IMP-88-palette-modes.md) | In progress | Codex | UI/UX S6: discoverable modes, honest scope and bilingual action search. |
-| [IMP-87](IMP-87-folder-introductions.md) | In progress | Codex | UI/UX S5: read folder introductions directly in the normal reader. |
-| [IMP-86](IMP-86-reading-context.md) | In progress | Codex | UI/UX S4: compact update summary and on-demand Details above Contents. |
-| [IMP-85](IMP-85-navigation-shell.md) | In progress | Codex | UI/UX S3: permanent header Search, site menu, compact hierarchy and collapsible Pinned. |
+| [IMP-87](IMP-87-folder-introductions.md) | Done | Codex | UI/UX S5: read folder introductions directly in the normal reader. |
+| [IMP-86](IMP-86-reading-context.md) | Done | Codex | UI/UX S4: compact update summary and on-demand Details above Contents. |
+| [IMP-85](IMP-85-navigation-shell.md) | Done | Codex | UI/UX S3: permanent header Search, site menu, compact hierarchy and collapsible Pinned. |
 | [IMP-84](IMP-84-locale-display.md) | Done | Codex | UI/UX S2: browser-localized dates/numbers and Japanese/English count nouns. |
 | [IMP-83](IMP-83-modal-contents-focus.md) | Done | Codex | UI/UX S1: temporary Contents keyboard focus, dismissal and destination hand-off; persistent column unchanged. Owner-authorized standalone exception. |
 
@@ -153,5 +153,4 @@ The reviewed site-description hierarchy is implemented in the production picker 
 Recent parallel work completed the pre-publish CLI (IMP-11), separate admin/satellite local flow (IMP-28), all three local edge/object-origin contract profiles (IMP-36), unregister preview cleanup (IMP-16), preview and site Action wrappers (IMP-13/34), provider retention configuration (IMP-15), AWS/Cloudflare preview and production adapters (IMP-12/18/29/32), the AWS/Cloudflare reference infrastructure contracts (IMP-30/33), and local clean-room adoption (IMP-35). The Action wrappers and trust preflight pass local parity checks; reviewed immutable release pins remain pending. IMP-14's static routing/cache source and local criteria are complete; live provider delivery remains T4/T15 work. IMP-31's versioned bundle resolution, no-op deployment, and separate-checkout upgrade/rollback flow are locally verified. T7 records local measurements through 1,000 groups. Real-provider smoke, provider delivery, and released-component clean-room evidence remain separate gates. Preview development output and registered-site production storage are distinct local roots.
 
 The table is a traceability map, not a claim that every linked test has run. The linked verification items own final evidence. Optimization or a changed read model is follow-up work only if [T7](../verification/T7-discovery-performance.md) shows a real bottleneck.
-
 

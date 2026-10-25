@@ -44,8 +44,6 @@ func actionMarker(action string, color bool) string {
 		marker, tone = "~", "update"
 	case "remove", "delete":
 		marker, tone = "-", "remove"
-	case "invalidate":
-		marker, tone = "↻", "dry"
 	}
 	return reportTone(marker, tone, color)
 }
@@ -108,24 +106,17 @@ func writeDeploymentReport(w io.Writer, result publisher.Result, resolved deploy
 		counts[change.Action]++
 	}
 	fmt.Fprintf(w, "\n  %s %d create   %s %d update   %s %d remove", countMarker("create", counts, w), counts["create"], countMarker("update", counts, w), counts["update"], countMarker("remove", counts, w), counts["remove"])
-	if counts["invalidate"] > 0 {
-		fmt.Fprintf(w, "   %s %d invalidate", actionMarker("invalidate", terminalColor(w)), counts["invalidate"])
-	}
 	fmt.Fprintln(w)
 	groups := map[string][]publisher.Change{}
 	for _, change := range result.Changes {
 		label := "Application files"
 		if result.Operation == "preview remove" {
 			switch {
-			case change.Action == "invalidate":
-				label = "Cache revalidation"
 			default:
 				label = "Preview group removal"
 			}
 		} else if strings.HasPrefix(result.Operation, "registry ") {
 			switch {
-			case change.Action == "invalidate":
-				label = "Cache revalidation"
 			case strings.Contains(change.Path, "#sites/"):
 				label = "Site registrations"
 			case change.Path == "_indexes/sites.json":
@@ -150,9 +141,7 @@ func writeDeploymentReport(w io.Writer, result publisher.Result, resolved deploy
 		}
 		fmt.Fprintf(w, "\n  Registry projection: %s.\n", verb)
 	}
-	if result.InvalidationID != "" {
-		fmt.Fprintf(w, "\n  Cache revalidation request: %s\n", reportText(result.InvalidationID))
-	}
+
 	switch {
 	case dry:
 		fmt.Fprintln(w, "\n  Dry run complete. No writes.")

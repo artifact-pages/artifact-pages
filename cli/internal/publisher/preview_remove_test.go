@@ -206,7 +206,7 @@ func TestRemovePreviewGroupPreservesSharedSHAAndDeletesOnlyExactExclusiveRevisio
 	if err != nil {
 		t.Fatalf("RemovePreviewGroup() error = %v", err)
 	}
-	if result.Outcome != "removed" || result.FilesRemoved != 3 || len(result.InvalidationPaths) != 0 || result.InvalidationID != "" {
+	if result.Outcome != "removed" || result.FilesRemoved != 3 {
 		t.Fatalf("RemovePreviewGroup() = %+v; want exact exclusive objects without invalidation output", result)
 	}
 	if keys, err := backend.ListKeys(context.Background(), "_previews/sre/revisions/"+sharedSHA+"/"); err != nil || len(keys) != 2 {
@@ -759,7 +759,7 @@ func TestPreviewRemovalCacheScopeDoesNotGrowWithHistory(t *testing.T) {
 	catalog := preview.Catalog{SchemaVersion: preview.SchemaVersion, Site: "sre", Groups: groups, RevisionHistory: []preview.GroupRevisionHistory{ownership(groupID, revisions...)}}
 	seedPreviewRemoveCatalog(t, backend, catalog, manifests)
 	result, err := RemovePreviewGroup(context.Background(), backend, PreviewRemoveOptions{SiteID: "sre", GroupID: groupID, DryRun: true})
-	if err != nil || result.Outcome != "planned" || len(result.InvalidationPaths) != 0 {
+	if err != nil || result.Outcome != "planned" {
 		t.Fatalf("20-revision removal plan = %+v, %v", result, err)
 	}
 }

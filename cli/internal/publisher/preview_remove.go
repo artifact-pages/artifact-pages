@@ -258,6 +258,11 @@ func verifyOwnedRevisionManifest(ctx context.Context, store *ObjectPreviewStore,
 	if err != nil {
 		return fmt.Errorf("read preview manifest for %s: %w", ownership.HeadSHA, err)
 	}
+	return verifyManifestContents(siteID, ownership, contents)
+}
+
+// verifyManifestContents validates manifest bytes against one ownership record.
+func verifyManifestContents(siteID string, ownership preview.RevisionOwnership, contents []byte) error {
 	manifest, err := preview.DecodeManifest(contents)
 	if err != nil {
 		return fmt.Errorf("preview manifest for %s is invalid: %w", ownership.HeadSHA, err)
@@ -406,17 +411,15 @@ func readPreviewCleanup(ctx context.Context, backend ConditionalObjectBackend, s
 	if err := validateNoDuplicateJSONKeys(object.Bytes); err != nil {
 		return nil, "", fmt.Errorf("validate preview cleanup journal: %w", err)
 	}
-	var envelope struct {
-		SchemaVersion int `json:"schemaVersion"`
-	}
-	if err := json.Unmarshal(object.Bytes, &envelope); err != nil {
-		return nil, "", fmt.Errorf("decode preview cleanup journal schema: %w", err)
+	schemaVersion, err := readControlSchemaVersion("preview cleanup journal", object.Bytes)
+	if err != nil {
+		return nil, "", err
 	}
 	decoder := json.NewDecoder(bytes.NewReader(object.Bytes))
-	decoder.DisallowUnknownFields()
 	var record previewCleanupRecord
-	legacy := envelope.SchemaVersion == previewCleanupLegacySchema
+	legacy := schemaVersion == previewCleanupLegacySchema
 	if legacy {
+		decoder.DisallowUnknownFields()
 		var old struct {
 			SchemaVersion int                         `json:"schemaVersion"`
 			Site          string                      `json:"site"`
@@ -434,7 +437,7 @@ func readPreviewCleanup(ctx context.Context, backend ConditionalObjectBackend, s
 		}
 		record = previewCleanupRecord{SchemaVersion: previewCleanupSchema, Site: old.Site, GroupID: old.GroupID, Revisions: old.Revisions, ObjectKeys: old.ObjectKeys, legacy: true}
 	} else {
-		if envelope.SchemaVersion != previewCleanupSchema {
+		if schemaVersion != previewCleanupSchema {
 			return nil, "", compat.CheckSchemaVersion("preview cleanup journal", object.Bytes, previewCleanupSchema)
 		}
 		if err := decoder.Decode(&record); err != nil {

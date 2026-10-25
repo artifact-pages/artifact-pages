@@ -33,13 +33,12 @@ type ObjectInfo struct {
 
 // DeploymentBackend is the narrow provider boundary used by the application
 // and site publication flows. Implementations own bucket/container selection,
-// pagination, delete batching, cache revalidation, and provider error mapping.
+// pagination, delete batching, and provider error mapping.
 // AWS and Cloudflare adapters must satisfy this same contract.
 type DeploymentBackend interface {
 	PutObject(context.Context, string, Object) error
 	ListKeys(context.Context, string) ([]string, error)
 	DeleteObjects(context.Context, []string) error
-	Invalidate(context.Context, []string) (string, error)
 }
 
 // ObjectMetadataBackend exposes origin metadata reads for workflows that need
@@ -102,34 +101,4 @@ func selectedPublishStateReadMode(backend DeploymentBackend) publishStateReadMod
 		return publishStateReadGetOnly
 	}
 	return publishStateReadHeadThenGet
-}
-
-// InvalidationValidator checks local provider credentials/configuration for a
-// non-empty cache invalidation request before a workflow mutates origin data.
-// Providers without this optional capability keep their existing behavior.
-type InvalidationValidator interface {
-	ValidateInvalidation([]string) error
-}
-
-// InvalidationPlanner exposes adapter-specific path compaction to read-only
-// plans and reports without issuing a cache request.
-type InvalidationPlanner interface {
-	PlanInvalidation([]string) []string
-}
-
-func plannedInvalidationPaths(backend DeploymentBackend, paths []string) []string {
-	if planner, ok := backend.(InvalidationPlanner); ok {
-		return planner.PlanInvalidation(paths)
-	}
-	return paths
-}
-
-func validateInvalidation(backend DeploymentBackend, paths []string) error {
-	if len(paths) == 0 {
-		return nil
-	}
-	if validator, ok := backend.(InvalidationValidator); ok {
-		return validator.ValidateInvalidation(paths)
-	}
-	return nil
 }

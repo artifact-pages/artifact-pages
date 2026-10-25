@@ -18,8 +18,6 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/cloudfront"
-	cloudfronttypes "github.com/aws/aws-sdk-go-v2/service/cloudfront/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
@@ -122,12 +120,6 @@ type fakeCloudFront struct {
 	invalidations [][]string
 }
 
-func (f *fakeCloudFront) CreateInvalidation(_ context.Context, input *cloudfront.CreateInvalidationInput, _ ...func(*cloudfront.Options)) (*cloudfront.CreateInvalidationOutput, error) {
-	paths := append([]string(nil), input.InvalidationBatch.Paths.Items...)
-	f.invalidations = append(f.invalidations, paths)
-	return &cloudfront.CreateInvalidationOutput{Invalidation: &cloudfronttypes.Invalidation{Id: aws.String("I-test")}}, nil
-}
-
 func TestDeployAppVerifiesAndPublishesBundle(t *testing.T) {
 	archive := createWebBundle(t, map[string][]byte{
 		"index.html":                []byte("<!doctype html><script src=\"/assets/app-AbC123xY.js\"></script><script src=\"/assets/app.js\"></script>"),
@@ -140,7 +132,7 @@ func TestDeployAppVerifiesAndPublishesBundle(t *testing.T) {
 	})
 	s3Client := newFakeS3()
 	cloudFront := &fakeCloudFront{}
-	backend, err := newAWSBackend(awsClients{s3: s3Client, cloudFront: cloudFront}, AWSOptions{
+	backend, err := newAWSBackend(awsClients{s3: s3Client}, AWSOptions{
 		Bucket: "example-bucket", DistributionID: "E123TEST",
 	})
 	if err != nil {
@@ -252,7 +244,7 @@ func TestDeployAppVersionChangeReportsCreatedAndUpdatedFilesWithoutRemoves(t *te
 	}
 
 	s3Client := newFakeS3()
-	backend, err := newAWSBackend(awsClients{s3: s3Client, cloudFront: &fakeCloudFront{}}, AWSOptions{Bucket: "example-bucket"})
+	backend, err := newAWSBackend(awsClients{s3: s3Client}, AWSOptions{Bucket: "example-bucket"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -383,7 +375,7 @@ func TestDeployAppRepairsStaleFixedAssetCachePolicy(t *testing.T) {
 	})
 	s3Client := newFakeS3()
 	cloudFront := &fakeCloudFront{}
-	backend, err := newAWSBackend(awsClients{s3: s3Client, cloudFront: cloudFront}, AWSOptions{
+	backend, err := newAWSBackend(awsClients{s3: s3Client}, AWSOptions{
 		Bucket: "example-bucket", DistributionID: "E123TEST",
 	})
 	if err != nil {

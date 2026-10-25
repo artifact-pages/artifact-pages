@@ -21,25 +21,43 @@ aws --endpoint-url "$endpoint" s3 rm "$destination" --recursive --quiet
 aws --endpoint-url "$endpoint" s3 sync /seed/storage "$destination" --delete --no-progress --only-show-errors
 
 # Keep browser MIME behavior stable across platforms and Python mimetype tables.
+# The seeds model objects written by an older CLI, so objects under the content
+# prefixes also carry that CLI's legacy Cache-Control for their class. A later
+# `s3 cp` replaces object metadata, so the header is set in the same call as the
+# content type: one pass for every object, then one pass per prefix.
+legacy60='public, max-age=0, s-maxage=60, must-revalidate'
+legacy300='public, max-age=0, s-maxage=300, must-revalidate'
+
+# usage: seed_type <content-type> <extension-glob>...
+seed_type() {
+  content_type=$1
+  shift
+  includes=""
+  for ext in "$@"; do includes="$includes --include $ext"; done
+  # shellcheck disable=SC2086
+  aws --endpoint-url "$endpoint" s3 cp /seed/storage "$destination" --recursive \
+    --exclude '*' $includes --content-type "$content_type" --only-show-errors
+  for rule in "_indexes/*|$legacy60" "_artifacts/*|$legacy300" "_previews/*/revisions/*|$legacy300"; do
+    prefix=${rule%%|*}
+    cache_control=${rule#*|}
+    includes=""
+    for ext in "$@"; do includes="$includes --include $prefix${ext#\*}"; done
+    # shellcheck disable=SC2086
+    aws --endpoint-url "$endpoint" s3 cp /seed/storage "$destination" --recursive \
+      --exclude '*' $includes --content-type "$content_type" --cache-control "$cache_control" --only-show-errors
+  done
+}
+
+seed_type 'text/html; charset=utf-8' '*.html' '*.htm'
+seed_type 'text/markdown; charset=utf-8' '*.md'
+seed_type 'application/json; charset=utf-8' '*.json'
 aws --endpoint-url "$endpoint" s3 cp /seed/storage "$destination" --recursive \
-  --exclude '*' --include '*.html' --include '*.htm' --content-type 'text/html; charset=utf-8' --only-show-errors
-aws --endpoint-url "$endpoint" s3 cp /seed/storage "$destination" --recursive \
-  --exclude '*' --include '*.md' --content-type 'text/markdown; charset=utf-8' --only-show-errors
-aws --endpoint-url "$endpoint" s3 cp /seed/storage "$destination" --recursive \
-  --exclude '*' --include '*.json' --content-type 'application/json; charset=utf-8' --only-show-errors
-aws --endpoint-url "$endpoint" s3 cp /seed/storage "$destination" --recursive \
-  --exclude '*' --include '*.css' --content-type 'text/css; charset=utf-8' --only-show-errors
-aws --endpoint-url "$endpoint" s3 cp /seed/storage "$destination" --recursive \
-  --exclude '*' --include '*.js' --content-type 'application/javascript; charset=utf-8' --only-show-errors
-aws --endpoint-url "$endpoint" s3 cp /seed/storage "$destination" --recursive \
-  --exclude '*' --include '*.svg' --content-type 'image/svg+xml' --only-show-errors
-aws --endpoint-url "$endpoint" s3 cp /seed/storage "$destination" --recursive \
-  --exclude '*' --include '*.pdf' --content-type 'application/pdf' --only-show-errors
-aws --endpoint-url "$endpoint" s3 cp /seed/storage "$destination" --recursive \
-  --exclude '*' --include '*.png' --content-type 'image/png' --only-show-errors
-aws --endpoint-url "$endpoint" s3 cp /seed/storage "$destination" --recursive \
-  --exclude '*' --include '*.jpg' --include '*.jpeg' --content-type 'image/jpeg' --only-show-errors
-aws --endpoint-url "$endpoint" s3 cp /seed/storage "$destination" --recursive \
-  --exclude '*' --include '*.woff2' --content-type 'font/woff2' --only-show-errors
-aws --endpoint-url "$endpoint" s3 cp /seed/storage "$destination" --recursive \
-  --exclude '*' --include '*.wasm' --content-type 'application/wasm' --only-show-errors
+  --exclude '*' --include '_previews/*/catalog.json' --exclude '_previews/*/revisions/*' --content-type 'application/json; charset=utf-8' --cache-control "$legacy60" --only-show-errors
+seed_type 'text/css; charset=utf-8' '*.css'
+seed_type 'application/javascript; charset=utf-8' '*.js'
+seed_type 'image/svg+xml' '*.svg'
+seed_type 'application/pdf' '*.pdf'
+seed_type 'image/png' '*.png'
+seed_type 'image/jpeg' '*.jpg' '*.jpeg'
+seed_type 'font/woff2' '*.woff2'
+seed_type 'application/wasm' '*.wasm'

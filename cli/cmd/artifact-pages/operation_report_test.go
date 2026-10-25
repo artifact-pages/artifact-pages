@@ -23,7 +23,7 @@ func TestDeploymentReports(t *testing.T) {
 		dry    bool
 		want   []string
 	}{
-		{"register plan", publisher.Result{Operation: "registry sync", Outcome: "planned", RegistryUpdated: &updated, Changes: []publisher.Change{{Action: "create", Path: "_indexes/sites.json#sites/guide"}, {Action: "update", Path: "_indexes/sites.json"}, {Action: "invalidate", Path: "/_indexes/sites.json"}}}, true, []string{"registry sync  DRY RUN", "+ 1 create", "~ 1 update", "1 invalidate", "Site registrations", "Registry projection", "Cache revalidation", "would update", "No writes."}},
+		{"register plan", publisher.Result{Operation: "registry sync", Outcome: "planned", RegistryUpdated: &updated, Changes: []publisher.Change{{Action: "create", Path: "_indexes/sites.json#sites/guide"}, {Action: "update", Path: "_indexes/sites.json"}}}, true, []string{"registry sync  DRY RUN", "+ 1 create", "~ 1 update", "Site registrations", "Registry projection", "would update", "No writes."}},
 		{"register create plan", publisher.Result{Operation: "registry sync", Outcome: "planned", RegistryUpdated: &updated, Changes: []publisher.Change{{Action: "create", Path: "_indexes/sites.json"}}}, true, []string{"Registry projection: would create."}},
 		{"register unchanged plan", publisher.Result{Operation: "registry sync", Outcome: "no-op", RegistryUpdated: &updated}, true, []string{"Registry projection: unchanged."}},
 		{"sync", publisher.Result{Operation: "registry sync", Outcome: "synced"}, false, []string{"registry sync  SYNCED", "reconciliation complete"}},

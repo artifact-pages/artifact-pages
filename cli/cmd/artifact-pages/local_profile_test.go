@@ -103,7 +103,7 @@ func TestLocalAppDeployCacheConformance(t *testing.T) {
 		key  string
 		want string
 	}{
-		{key: "assets/app.js", want: "no-cache, max-age=0, must-revalidate"},
+		{key: "assets/app.js", want: "no-cache, max-age=0, must-revalidate, stale-if-error=0"},
 		{key: "assets/app-AbC123xY.js", want: "public, max-age=31536000, immutable"},
 	} {
 		info, err := objects.HeadObject(t.Context(), testCase.key)
@@ -178,7 +178,7 @@ cloudflare:
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 		t.Fatalf("decode Cloudflare app deploy result: %v; output=%s", err, stdout.String())
 	}
-	if result.Operation != "app deploy" || result.Outcome != "deployed" || result.Version != "cloudflare-smoke" || result.FilesPublished != 3 || result.InvalidationID != "" || len(result.InvalidationPaths) != 0 {
+	if result.Operation != "app deploy" || result.Outcome != "deployed" || result.Version != "cloudflare-smoke" || result.FilesPublished != 3 {
 		t.Fatalf("Cloudflare app deploy result = %+v, want three-file deploy without invalidation output", result)
 	}
 
@@ -189,11 +189,11 @@ cloudflare:
 		}
 	}
 	index, err := objects.HeadObject(t.Context(), "index.html")
-	if err != nil || index.ContentType != "text/html; charset=utf-8" || index.CacheControl != "no-cache, max-age=0, must-revalidate" || index.Metadata["artifact-pages-version"] != result.Version {
+	if err != nil || index.ContentType != "text/html; charset=utf-8" || index.CacheControl != "no-cache, max-age=0, must-revalidate, stale-if-error=0" || index.Metadata["artifact-pages-version"] != result.Version {
 		t.Errorf("deployed application shell metadata = %+v, %v", index, err)
 	}
 	fixedAsset, err := objects.HeadObject(t.Context(), "assets/app.js")
-	if err != nil || fixedAsset.ContentType != "text/javascript; charset=utf-8" || fixedAsset.CacheControl != "no-cache, max-age=0, must-revalidate" || fixedAsset.Metadata["artifact-pages-version"] != result.Version {
+	if err != nil || fixedAsset.ContentType != "text/javascript; charset=utf-8" || fixedAsset.CacheControl != "no-cache, max-age=0, must-revalidate, stale-if-error=0" || fixedAsset.Metadata["artifact-pages-version"] != result.Version {
 		t.Errorf("deployed fixed-name application asset metadata = %+v, %v", fixedAsset, err)
 	}
 	hashedAsset, err := objects.HeadObject(t.Context(), "assets/app-AbC123xY.js")
