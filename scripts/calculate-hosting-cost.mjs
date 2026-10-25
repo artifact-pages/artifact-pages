@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { brotliCompressSync, constants, gzipSync } from 'node:zlib'
+import { createHash } from 'node:crypto'
 
 export const pricing = Object.freeze({
   date: '2026-10-18', monthDays: 30, headerBytes: 1024,
@@ -10,6 +11,10 @@ export const pricing = Object.freeze({
   aws: { storageGiBMonth: 0.023, classA: 0.005 / 1000, classB: 0.0004 / 1000,
     viewerRequestFree: 10e6, viewerRequestUS: 0.010 / 10000, viewerRequestPC100: 0.012 / 10000, invalidationFree: 1000, invalidationPath: 0.005,
     transferFreeGB: 1000, transferTiers: [{ limitGB: 9000, rate: 0.085 }, { limitGB: 40000, rate: 0.08 }, { limitGB: 100000, rate: 0.06 }] },
+})
+const cli06Pricing = Object.freeze({
+  ...pricing,
+  aws: Object.freeze(Object.fromEntries(Object.entries(pricing.aws).filter(([key]) => key !== 'invalidationFree' && key !== 'invalidationPath'))),
 })
 export const cloudFrontCompressionConditions = Object.freeze({
   minimumBytes: 1000, maximumBytes: 10000000, eligibleContentTypes: [
@@ -63,6 +68,17 @@ export function r2AfterFreeAllowance({ storageGB, classA, classB }) {
   const requestsA = Math.max(0, classA - pricing.r2.freeA) * pricing.r2.classA
   const requestsB = Math.max(0, classB - pricing.r2.freeB) * pricing.r2.classB
   return { storage, classA: requestsA, classB: requestsB, total: storage + requestsA + requestsB }
+}
+export function r2RoundedAfterFreeAllowance({ storageGB, classA, classB }) {
+  const rounded = {
+    storageGB: Math.ceil(Math.max(0, storageGB - pricing.r2.freeGB)),
+    classA: Math.ceil(Math.max(0, classA - pricing.r2.freeA) / 1e6) * 1e6,
+    classB: Math.ceil(Math.max(0, classB - pricing.r2.freeB) / 1e6) * 1e6,
+  }
+  const storage = rounded.storageGB * pricing.r2.storageGBMonth
+  const requestsA = rounded.classA * pricing.r2.classA
+  const requestsB = rounded.classB * pricing.r2.classB
+  return { ...rounded, total: storage + requestsA + requestsB }
 }
 
 function legacyNumber(value) { return Number(String(value).replace(/[$,]/g, '').trim()) }
@@ -142,17 +158,18 @@ export function averageVectors(vectors) {
 }
 export function compressedResponseBytes(response, mode, objectSizeAudit = [], { provider = 'aws' } = {}) {
   const status = Number(response.status)
-  if (status === 304 || response.fromCache || isInferredMemoryCacheHit(response)) return 0
-  if (status !== 200) return Number(response.encodedBytes || 0)
-  const url = response.url ?? ''
-  const contentType = String(response.contentType ?? '').toLowerCase()
   if (response.indexChanged) {
+    const url = response.url ?? ''
     const kind = `${url.endsWith('/index.json') ? 'site-index' : 'search-manifest'}-${url.match(/scale-(\d+)/)?.[1] ?? ''}`
     const row = objectSizeAudit.find((x) => x.objectType === kind)
     if (!row?.decodedBytes) return 0
     const size = provider === 'aws' ? row.gzip6Bytes : mode === 'brotli5' ? row.recompressedBrotli5Bytes : row.recompressedGzip6Bytes
     return size
   }
+  if (status === 304 || response.fromCache || isInferredMemoryCacheHit(response)) return 0
+  if (status !== 200) return Number(response.encodedBytes || 0)
+  const url = response.url ?? ''
+  const contentType = String(response.contentType ?? '').toLowerCase()
   if (url.endsWith('/index.html') || (!url.startsWith('/_artifacts/') && !url.startsWith('/_indexes/')) && !url.startsWith('/assets/')) return Number(response.decodedBytes || 0)
   if (url.endsWith('.gz')) return Number(response.encodedBytes || 0)
   const baseIndexKind = url.endsWith('/index.json') ? 'site-index' : url.endsWith('/manifest.json') ? 'search-manifest' : ''
@@ -497,23 +514,212 @@ export function calculate(reader, publishers, { q = 3, reloads = 0, headerBytes 
       publisher: publisherEvidence }, scenarios: rows, sensitivities, decomposition }
 }
 
+// CLI 0.6 models origin work by the URL class owned by the publisher cache policy.
+export const cli06OriginRates = Object.freeze({
+  siteRoot: 1, mutableContent: 1, appShell: 1, hashedAppAsset: 0.1,
+  hashedSearchBlob: 0.5, notFound: 1,
+})
+const cli06Classes = Object.keys(cli06OriginRates)
+const appHashName = /^.+-[A-Za-z0-9_-]{8}\.[^/]+$/
+export function classifyCLI06URL(url, status = 200) {
+  if (status === 404) return 'notFound'
+  const clean = String(url ?? '').split('?')[0]
+  if (!clean.startsWith('/')) throw new Error(`unrecognized response URL: ${url}`)
+  if (clean === '/' || clean === '/index.html' || (!clean.startsWith('/_') && !clean.startsWith('/assets/'))) return 'appShell'
+  if (clean.startsWith('/assets/')) return appHashName.test(path.posix.basename(clean)) ? 'hashedAppAsset' : 'appShell'
+  if (/^\/_indexes\/[^/]+\/search\/.+\.gz$/.test(clean)) return 'hashedSearchBlob'
+  if (/^\/_indexes\/[^/]+\/search\/manifest\.json$/.test(clean)) return 'mutableContent'
+  if (clean === '/_indexes/sites.json') return 'siteRoot'
+  if (/^\/_indexes\/[^/]+\/.+$/.test(clean)) return 'siteRoot'
+  if (/^\/_artifacts\/[^/]+\/.+$/.test(clean) || /^\/_previews\/[^/]+\/.+$/.test(clean)) return 'mutableContent'
+  throw new Error(`unrecognized response URL: ${url}`)
+}
+
+export function projectCLI06Vector(vector, mode = 'gzip6', audit = [], provider = 'aws', { reloadIndexChanged = false } = {}) {
+  const totals = Object.fromEntries(cli06Classes.map((name) => [name, { networkRequests: 0, bodyBytes: 0, originRequests: 0 }]))
+  const responses = vector?.responses ?? []
+  for (const response of responses) {
+    const changed = reloadIndexChanged && response.url?.endsWith('/index.json') && Number(response.status) === 304
+    const effective = changed ? { ...response, status: 200, indexChanged: true } : response
+    const status = Number(effective.status)
+    if (response.failed || !(status === 200 || status === 304 || status === 404)) throw new Error(`failed or unsupported response status ${status} for ${response.url}`)
+    const klass = classifyCLI06URL(response.url, status)
+    const target = totals[klass]
+    if (response.fromCache) continue
+    target.networkRequests++
+    if (status === 200 || status === 404) target.bodyBytes += compressedResponseBytes(effective, mode, audit, { provider })
+    // A 304 still requires validation at the edge. Its modeled origin work follows the same class rate.
+    target.originRequests += cli06OriginRates[klass]
+  }
+  return totals
+}
+
+function compactPublisherProbe(probe) {
+  if (probe.headerCheckSummary && probe.perClassObjectCounts && !probe.objects) return probe
+  const headers = probe.cachePolicyHeaders ?? {}
+  const counts = Object.fromEntries(Object.keys(headers).map((name) => [name, 0]))
+  for (const object of probe.objects ?? []) {
+    let klass
+    if (object.key.startsWith(`_artifacts/${probe.site}/`)) klass = 'artifact'
+    else if (object.key.startsWith(`_indexes/${probe.site}/`)) {
+      const relative = object.key.slice(`_indexes/${probe.site}/`.length)
+      if (relative === 'search/manifest.json') klass = 'search-manifest'
+      else if (relative.startsWith('search/') && relative.endsWith('.gz')) klass = 'hashed-asset'
+      else klass = 'site-root'
+    } else throw new Error(`publisher probe object is outside the measured site projection: ${object.key}`)
+    if (!(klass in headers)) throw new Error(`publisher probe cache class ${klass} has no policy header`)
+    if (object.cacheControl !== headers[klass]) throw new Error(`publisher probe header mismatch for ${object.key}: ${object.cacheControl}`)
+    counts[klass] = (counts[klass] ?? 0) + 1
+  }
+  const headerCheckSummary = Object.fromEntries(Object.entries(headers).map(([klass, expectedHeader]) => [klass, {
+    objectCount: counts[klass] ?? 0, expectedHeader, verified: (counts[klass] ?? 0) > 0,
+  }]))
+  return {
+    cachePolicyRevision: probe.cachePolicyRevision, cachePolicyHeaders: headers, measuredAt: probe.measuredAt,
+    provider: probe.provider, sourceRevision: probe.sourceRevision, site: probe.site, pages: probe.pages,
+    sourceFiles: probe.sourceFiles, sourceBytes: probe.sourceBytes, counterBoundary: probe.counterBoundary,
+    phases: (probe.phases ?? []).map(({ name, outcome, buildSkipped, callCounts, getBodyBytes, listJSONBytes, putBodyBytes, wallMs }) =>
+      ({ name, outcome, buildSkipped, callCounts, getBodyBytes, listJSONBytes, putBodyBytes, wallMs })),
+    storedProjectionObjects: probe.storedProjectionObjects, storedProjectionBytes: probe.storedProjectionBytes,
+    storedSearchObjects: probe.storedSearchObjects, storedSearchBytes: probe.storedSearchBytes,
+    publishStateRawBytes: probe.publishStateRawBytes, publishStateGzipBytes: probe.publishStateGzipBytes,
+    generatedJSONValidation: probe.generatedJSONValidation, perClassObjectCounts: counts, headerCheckSummary,
+  }
+}
+
+export function calculateCLI06(reader, publishers, { q = 3, reloads = 0, headerBytes = pricing.headerBytes, compression = 'gzip6', originRates = cli06OriginRates } = {}) {
+  const scenarios = [
+    { name: 'S', sites: 5, pages: 200, publishesPerSiteDay: 2, viewsPerDay: 1000, searchesPerDay: 100 },
+    { name: 'M', sites: 30, pages: 2000, publishesPerSiteDay: 5, viewsPerDay: 20000, searchesPerDay: 2000 },
+    { name: 'L', sites: 31, pages: 2000, publishesPerSiteDay: 5, viewsPerDay: 100000, searchesPerDay: 10000 },
+  ]
+  for (const [name, rate] of Object.entries(originRates)) if (!cli06Classes.includes(name) || rate < 0 || rate > 1) throw new Error(`invalid CLI 0.6 origin rate ${name}=${rate}`)
+  const profiles = reader.profiles?.unthrottled ?? reader.profiles ?? {}
+  const audit = reader.data?.objectSizeAudit ?? []
+  const sizes = [1000, 5000, 50000]
+  const traceSet = (size, mode = compression, reloadIndexChanged = false) => {
+    const records = profiles[`scale-${size}`]?.hostingCost ?? []
+    if (!records.length) throw new Error(`reader measurements missing for scale-${size}`)
+    const vectors = { C: [], W: [], R: [], search: [] }
+    for (const record of records) {
+      const actions = record.reader?.sessionActions ?? []
+      if (actions.length !== 3) throw new Error(`scale-${size} iteration must contain three document actions`)
+      vectors.C.push(actions[0].vector); vectors.W.push(...actions.slice(1).map((x) => x.vector)); vectors.R.push(record.reader.reload)
+      if ((record.searches ?? []).length !== 2) throw new Error(`scale-${size} iteration must contain two search vectors`)
+      vectors.search.push(...record.searches.map((x) => x.vector))
+    }
+    const avg = (items) => {
+      const projected = items.map((v) => projectCLI06Vector(v, mode, audit, 'aws', { reloadIndexChanged: reloadIndexChanged && items === vectors.R }))
+      return Object.fromEntries(cli06Classes.map((c) => [c, Object.fromEntries(['networkRequests', 'bodyBytes', 'originRequests'].map((k) => [k, projected.reduce((n, x) => n + x[c][k], 0) / projected.length]))]))
+    }
+    return { C: avg(vectors.C), W: avg(vectors.W), R: avg(vectors.R), search: avg(vectors.search) }
+  }
+  const traceByMode = Object.fromEntries(['gzip6', 'brotli5'].map((mode) => [mode, Object.fromEntries(sizes.map((size) => [size, traceSet(size, mode)]))]))
+  const changedReloadTraces = Object.fromEntries(sizes.map((size) => [size, traceSet(size, compression, true)]))
+  const publisherMonth = (scenario) => {
+    const groups = scenario.name === 'L' ? [{ size: 5000, sites: 30 }, { size: 50000, sites: 1 }] : [{ size: scenario.name === 'S' ? 1000 : 5000, sites: scenario.sites }]
+    const out = { aws: { classA: 0, classB: 0, storageBytes: 0 }, r2: { classA: 0, classB: 0, storageBytes: 0 } }
+    for (const group of groups) for (const [name, provider] of [['aws', 'aws'], ['r2', 'plain']]) {
+      const evidence = publishers[provider]?.[group.size]
+      const phases = evidence?.phases
+      const first = phases?.find((x) => x.name === 'first publish'), changed = phases?.find((x) => x.name === 'one-document change')
+      if (!evidence || !first || !changed) throw new Error(`missing ${provider} publisher evidence for ${group.size}`)
+      const changes = scenario.publishesPerSiteDay * pricing.monthDays * group.sites
+      const count = (p, method) => Number(p.callCounts?.[method] || 0)
+      out[name].classA += group.sites * (count(first, 'PUT') + count(first, 'LIST')) + changes * (count(changed, 'PUT') + count(changed, 'LIST'))
+      out[name].classB += group.sites * (count(first, 'GET') + count(first, 'HEAD')) + changes * (count(changed, 'GET') + count(changed, 'HEAD'))
+      out[name].storageBytes += group.sites * (Number(evidence.storedProjectionBytes) + Number(evidence.publishStateGzipBytes))
+    }
+    return out
+  }
+  const compute = (scenario, rates, sensitivity = {}) => {
+    const qValue = sensitivity.q ?? q, reloadCount = sensitivity.reloads ?? reloads
+    const headers = sensitivity.headerBytes ?? headerBytes, mode = sensitivity.compression ?? compression
+    const traceBySize = sensitivity.reloadIndexChanged ? changedReloadTraces : traceByMode[mode]
+    const breakdown = Object.fromEntries(cli06Classes.map((c) => [c, { requests: 0, bodyBytes: 0, originRequests: 0 }]))
+    const weightSets = scenario.name === 'L' ? [[5000, 30 / 31], [50000, 1 / 31]] : [[scenario.name === 'S' ? 1000 : 5000, 1]]
+    for (const [size, weight] of weightSets) {
+      const t = traceBySize[size], views = scenario.viewsPerDay * pricing.monthDays * weight, sessions = views / qValue
+      for (const c of cli06Classes) {
+        const sessionActions = (t.C[c].networkRequests + (qValue - 1) * t.W[c].networkRequests + reloadCount * t.R[c].networkRequests) * sessions
+        const sessionBytes = (t.C[c].bodyBytes + (qValue - 1) * t.W[c].bodyBytes + reloadCount * t.R[c].bodyBytes) * sessions
+        const queryCount = scenario.searchesPerDay * pricing.monthDays / 2 * weight
+        breakdown[c].requests += sessionActions + t.search[c].networkRequests * queryCount
+        breakdown[c].bodyBytes += sessionBytes + t.search[c].bodyBytes * queryCount
+        breakdown[c].originRequests += (t.C[c].networkRequests * sessions + (qValue - 1) * t.W[c].networkRequests * sessions + reloadCount * t.R[c].networkRequests * sessions + t.search[c].networkRequests * queryCount) * rates[c]
+      }
+    }
+    const viewerRequests = Object.values(breakdown).reduce((n, x) => n + x.requests, 0)
+    const viewerBytes = Object.values(breakdown).reduce((n, x) => n + x.bodyBytes + x.requests * headers, 0)
+    const originRequests = Object.values(breakdown).reduce((n, x) => n + x.originRequests, 0)
+    const pub = publisherMonth(scenario)
+    const awsStorage = pub.aws.storageBytes / 1024 ** 3 * pricing.aws.storageGiBMonth
+    const awsPublisher = pub.aws.classA * pricing.aws.classA + pub.aws.classB * pricing.aws.classB
+    const awsOrigin = originRequests * pricing.aws.classB
+    const awsViewerUS = cloudFrontViewerRequestCost(viewerRequests, pricing.aws.viewerRequestUS)
+    const awsViewerPC = cloudFrontViewerRequestCost(viewerRequests, pricing.aws.viewerRequestPC100)
+    const awsTransfer = transferCostGB(viewerBytes / 1e9)
+    const aws = { storage: awsStorage, publisherRequests: awsPublisher, readerOriginRequests: awsOrigin, viewerRequestsUS: awsViewerUS, viewerRequestsPC100: awsViewerPC, transfer: awsTransfer,
+      usCanada: awsStorage + awsPublisher + awsOrigin + awsViewerUS + awsTransfer, pc100Upper: awsStorage + awsPublisher + awsOrigin + awsViewerPC + awsTransfer }
+    const r2StorageGB = pub.r2.storageBytes / 1e9
+    const r2Storage = r2StorageGB * pricing.r2.storageGBMonth
+    const r2PublisherClassA = pub.r2.classA * pricing.r2.classA
+    const r2PublisherClassB = pub.r2.classB * pricing.r2.classB
+    const r2ReaderOrigin = originRequests * pricing.r2.classB
+    const r2ClassB = pub.r2.classB + originRequests
+    const r2Gross = r2Storage + r2PublisherClassA + r2PublisherClassB + r2ReaderOrigin
+    const r2Net = r2AfterFreeAllowance({ storageGB: r2StorageGB, classA: pub.r2.classA, classB: r2ClassB })
+    return { scenario: scenario.name, assumptions: { q: qValue, reloads: reloadCount, headerBytes: headers, compression: mode, originRates: rates, ...sensitivity }, reader: { breakdown, viewerRequests, viewerBytes, originRequests }, publisher: pub,
+      aws, r2: { storage: r2Storage, publisherClassA: r2PublisherClassA, publisherClassB: r2PublisherClassB, readerOriginRequests: r2ReaderOrigin,
+        gross: r2Gross, afterDedicatedFreeAllowance: r2Net.total, roundedAfterDedicatedFreeAllowance: r2RoundedAfterFreeAllowance({ storageGB: r2StorageGB, classA: pub.r2.classA, classB: r2ClassB }).total, readerTransferGB: viewerBytes / 1e9 } }
+  }
+  const scenariosRows = scenarios.map((s) => compute(s, originRates))
+  const sensitivities = scenarios.map((scenario) => ({ scenario: scenario.name, rows: [
+    compute(scenario, { ...originRates, siteRoot: 0 }, { sensitivity: 'roots-0-percent' }),
+    compute(scenario, Object.fromEntries(cli06Classes.map((c) => [c, 1])), { sensitivity: 'all-classes-100-percent' }),
+  ] }))
+  const oneFactor = []
+  for (const scenario of scenarios) for (const dimension of [
+    ...[1, 3, 5].map((value) => ({ q: value })), ...['gzip6', 'brotli5'].map((value) => ({ compression: value })),
+    ...[0, 1].map((value) => ({ reloads: value })), ...[false, true].map((value) => ({ reloads: 1, reloadIndexChanged: value })),
+    ...[512, 1024, 2048].map((value) => ({ headerBytes: value })),
+  ]) oneFactor.push({ scenario: scenario.name, ...dimension, row: compute(scenario, originRates, dimension) })
+  const publisherEvidence = Object.fromEntries(['plain', 'aws'].map((p) => [p, Object.fromEntries(sizes.map((size) => [size, compactPublisherProbe(publishers[p][size])]))]))
+  return { schemaVersion: 1, policy: 'cli06', pricing: cli06Pricing, calculation: { q, reloads, headerBytes, compression, originRates,
+    moduleAssumptions: { cloudflare: '0.2.0', aws: 'monorepo compatibility module; max TTL caps 0/0/31536000; AWS not live-verified' },
+    excludedScope: ['preview frequency and bytes', '404 frequency (each explicitly supplied Cloudflare 404 includes its body bytes and one origin read)', 'registry sync', 'app deploy', 'CloudFront Functions and account-wide shared allowances', 'domain, GitHub, runner, support, tax, WAF, logging'] },
+    evidence: { readerMeasuredAt: reader.measuredAt, readerSourceRevision: reader.sourceRevision ?? reader.environment?.commit ?? null, readerInputSHA256: reader.inputSHA256 ?? null,
+      readerVectors: traceByMode[compression], publisherProbeSourceContext: 'base 116521ef plus the hosting cost probe changes in this PR', publisher: publisherEvidence }, scenarios: scenariosRows, sensitivities: { originRates: sensitivities, oneFactor } }
+}
+
 function args(argv) {
-  const out = {}; for (let i = 0; i < argv.length; i++) { const k = argv[i].replace(/^--/, ''), v = argv[++i]; if (!['reader', 'publisher-log-dir', 'legacy', 'output'].includes(k) || v === undefined) throw new Error(`invalid argument ${k}`); out[k] = v }
-  for (const k of ['reader', 'publisher-log-dir', 'legacy', 'output']) if (!out[k]) throw new Error(`--${k} is required`)
+  const out = {}; for (let i = 0; i < argv.length; i++) { const k = argv[i].replace(/^--/, ''), v = argv[++i]; if (!['policy', 'reader', 'publisher-log-dir', 'publisher-results', 'legacy', 'output'].includes(k) || v === undefined) throw new Error(`invalid argument ${k}`); out[k] = v }
+  for (const k of ['policy', 'reader', 'output']) if (!out[k]) throw new Error(`--${k} is required`)
+  if (!['t29', 'cli06'].includes(out.policy)) throw new Error(`invalid --policy ${out.policy}; want t29 or cli06`)
+  if (out.policy === 't29' && (!out.legacy || !out['publisher-log-dir'])) throw new Error('T29 policy requires --legacy and --publisher-log-dir')
+  if (out.policy === 'cli06' && (!!out['publisher-log-dir'] === !!out['publisher-results'])) throw new Error('CLI 0.6 requires exactly one of --publisher-log-dir or --publisher-results')
   return out
 }
 function main() {
-  const options = args(process.argv.slice(2)), reader = JSON.parse(readFileSync(options.reader, 'utf8'))
-  const publishers = {}
-  for (const [size, count] of [[1000, '1000'], [5000, '5000'], [50000, '50000']]) for (const provider of ['plain', 'aws']) {
-    const filename = path.join(options['publisher-log-dir'], `${provider}-${count}.log`)
-    const raw = readFileSync(filename, 'utf8').match(/HOSTING_COST_JSON=(\{.*\})/)
-    if (!raw) throw new Error(`missing HOSTING_COST_JSON in ${filename}`)
-    const probe = JSON.parse(raw[1])
-    if (probe.provider !== provider || probe.pages !== size) throw new Error(`probe identity mismatch in ${filename}: provider=${probe.provider}, pages=${probe.pages}`)
-    publishers[provider] ??= {}; publishers[provider][size] = probe
+  const options = args(process.argv.slice(2)), readerRaw = readFileSync(options.reader, 'utf8'), reader = JSON.parse(readerRaw)
+  let publishers
+  if (options['publisher-results']) publishers = JSON.parse(readFileSync(options['publisher-results'], 'utf8')).evidence?.publisher
+  else {
+    publishers = {}
+    for (const [size, count] of [[1000, '1000'], [5000, '5000'], [50000, '50000']]) for (const provider of ['plain', 'aws']) {
+      const filename = path.join(options['publisher-log-dir'], `${provider}-${count}.log`)
+      const raw = readFileSync(filename, 'utf8').match(/HOSTING_COST_JSON=(\{.*\})/)
+      if (!raw) throw new Error(`missing HOSTING_COST_JSON in ${filename}`)
+      const probe = JSON.parse(raw[1])
+      if (probe.provider !== provider || probe.pages !== size) throw new Error(`probe identity mismatch in ${filename}: provider=${probe.provider}, pages=${probe.pages}`)
+      publishers[provider] ??= {}; publishers[provider][size] = probe
+    }
   }
-  const output = calculate(reader, publishers, { legacyMarkdown: readFileSync(options.legacy, 'utf8') })
+  if (!publishers) throw new Error('--publisher-results is missing evidence.publisher')
+  const output = options.policy === 't29'
+    ? calculate(reader, publishers, { legacyMarkdown: readFileSync(options.legacy, 'utf8') })
+    : calculateCLI06(reader, publishers)
+  if (options.policy === 'cli06') output.evidence.readerInputSHA256 = createHash('sha256').update(readerRaw).digest('hex')
   mkdirSync(path.dirname(path.resolve(options.output)), { recursive: true }); writeFileSync(options.output, `${JSON.stringify(output, null, 2)}\n`)
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main()

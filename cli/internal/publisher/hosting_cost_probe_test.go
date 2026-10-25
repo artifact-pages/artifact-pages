@@ -119,7 +119,16 @@ func TestHostingCostProbe(t *testing.T) {
 	stateRaw, stateGzip := hostingCostStateSizes(backend, siteID)
 	objectEvidence := hostingCostObjects(backend, siteID)
 	validatedIndex, validatedManifest := false, false
+	observedClasses := map[cacheObjectClass]bool{}
 	for _, object := range objectEvidence {
+		class, ok := sitePublishCacheClass(siteID, object.Key)
+		if !ok {
+			t.Fatalf("probe object %q has no cache class", object.Key)
+		}
+		if object.CacheControl != cacheControl(class) {
+			t.Fatalf("%s Cache-Control = %q, want %q for %s", object.Key, object.CacheControl, cacheControl(class), class)
+		}
+		observedClasses[class] = true
 		if strings.HasSuffix(object.Key, "/index.json") {
 			validatedIndex = object.DecodedJSONValid
 			if provider == "aws" && object.ContentEncoding != "gzip" {
@@ -142,7 +151,17 @@ func TestHostingCostProbe(t *testing.T) {
 	if !validatedIndex || !validatedManifest {
 		t.Fatalf("generated JSON validation failed: index=%t manifest=%t", validatedIndex, validatedManifest)
 	}
+	if !observedClasses[cacheClassSiteRoot] || !observedClasses[cacheClassSearchManifest] || !observedClasses[cacheClassHashedAsset] || !observedClasses[cacheClassArtifact] {
+		t.Fatalf("probe did not exercise required cache classes: %#v", observedClasses)
+	}
+	policyHeaders := make(map[string]string, len(cacheControlByClass))
+	for class, header := range cacheControlByClass {
+		policyHeaders[string(class)] = header
+	}
 	report := struct {
+		CachePolicyRevision     string                   `json:"cachePolicyRevision"`
+		CachePolicyHeaders      map[string]string        `json:"cachePolicyHeaders"`
+		MeasuredAt              string                   `json:"measuredAt"`
 		Provider                string                   `json:"provider"`
 		SourceRevision          string                   `json:"sourceRevision"`
 		Site                    string                   `json:"site"`
@@ -160,6 +179,7 @@ func TestHostingCostProbe(t *testing.T) {
 		Objects                 []hostingCostProbeObject `json:"objects"`
 		GeneratedJSONValidation map[string]bool          `json:"generatedJSONValidation"`
 	}{
+		CachePolicyRevision: cachePolicyRevision, CachePolicyHeaders: policyHeaders, MeasuredAt: time.Now().UTC().Format(time.RFC3339Nano),
 		Provider:       provider,
 		SourceRevision: gitRevisionForHostingCost(t, ctx), Site: siteID,
 		Pages: profile.Pages - hostingCostReadmes(workSource), SourceFiles: profile.SourceFiles, SourceBytes: sourceBytes,
