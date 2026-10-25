@@ -118,6 +118,9 @@ test('origin cache rule covers only public projection paths and respects both or
   assert.match(cacheRule, /edge_ttl\s*=\s*\{\s*mode\s*=\s*"respect_origin"/u)
   assert.match(cacheRule, /browser_ttl\s*=\s*\{\s*mode\s*=\s*"respect_origin"/u)
   assert.doesNotMatch(cacheRule, /default|override_origin|"override"/u)
+  assert.equal((cacheRule.match(/mode\s*=\s*"/gu) ?? []).length, 2, 'only the edge and browser TTL modes are set')
+  assert.doesNotMatch(source, /purge|cache_purge|zone_cache/iu, 'publishing needs no purge permission or resource')
+  assert.doesNotMatch(source, /resource\s+"cloudflare_(?:zone_cache|cache_reserve|tiered_cache)\w*"/u)
 })
 
 test('zone phase root rulesets retain caller-supplied existing rules in safe order', () => {

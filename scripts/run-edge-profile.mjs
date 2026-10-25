@@ -240,7 +240,7 @@ async function assertEdgeAppAssetCacheHeaders(profile, edgePort) {
   await fs.writeFile(path.join(assetRoot, hashedName), 'window.hashedCacheProbe = true;\n')
   try {
     for (const [name, expected] of [
-      [fixedName, 'no-cache, max-age=0, must-revalidate'],
+      [fixedName, 'no-cache, max-age=0, must-revalidate, stale-if-error=0'],
       [hashedName, 'public, max-age=31536000, immutable'],
     ]) {
       const response = await fetch(`http://127.0.0.1:${edgePort}/assets/${name}`)
@@ -443,8 +443,9 @@ async function main() {
       ]
       for (const previewPath of previewProbePaths) {
         const response = await fetch(`http://127.0.0.1:${ports.edge}${previewPath}`)
-        if (response.status !== 200 || !response.headers.get('cache-control')?.includes('no-store')) {
-          throw new Error(`Cloudflare local edge preview probe ${previewPath} returned HTTP ${response.status} with cache ${response.headers.get('cache-control') ?? '<missing>'}; want 200 and no-store.`)
+        const previewCacheControl = response.headers.get('cache-control') ?? ''
+        if (response.status !== 200 || !previewCacheControl.includes('max-age=0') || !previewCacheControl.includes('must-revalidate') || previewCacheControl.includes('no-store')) {
+          throw new Error(`Cloudflare local edge preview probe ${previewPath} returned HTTP ${response.status} with cache ${previewCacheControl || '<missing>'}; want 200 and the origin revalidating Cache-Control (max-age=0, must-revalidate).`)
         }
       }
       const missingPreviewPath = '/_previews/sre/revisions/ffffffffffffffffffffffffffffffffffffffff/manifest.json'

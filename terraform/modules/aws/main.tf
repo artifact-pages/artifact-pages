@@ -17,25 +17,25 @@ locals {
   cache_behaviors = {
     indexes = {
       path_pattern    = "/_indexes/*"
-      cache_policy_id = aws_cloudfront_cache_policy.indexes.id
+      cache_policy_id = aws_cloudfront_cache_policy.origin_respecting.id
       allowed_methods = ["GET", "HEAD"]
       cached_methods  = ["GET", "HEAD"]
     }
     artifacts = {
       path_pattern    = "/_artifacts/*"
-      cache_policy_id = aws_cloudfront_cache_policy.artifacts.id
+      cache_policy_id = aws_cloudfront_cache_policy.origin_respecting.id
       allowed_methods = ["GET", "HEAD"]
       cached_methods  = ["GET", "HEAD"]
     }
     previews = {
       path_pattern    = "/_previews/*"
-      cache_policy_id = aws_cloudfront_cache_policy.no_store.id
+      cache_policy_id = aws_cloudfront_cache_policy.origin_respecting.id
       allowed_methods = ["GET", "HEAD"]
       cached_methods  = ["GET", "HEAD"]
     }
     assets = {
       path_pattern    = "/assets/*"
-      cache_policy_id = aws_cloudfront_cache_policy.immutable_assets.id
+      cache_policy_id = aws_cloudfront_cache_policy.origin_respecting.id
       allowed_methods = ["GET", "HEAD"]
       cached_methods  = ["GET", "HEAD"]
     }
@@ -112,12 +112,6 @@ locals {
         "${local.bucket_arn}/THIRD_PARTY_NOTICES.txt",
         "${local.bucket_arn}/assets/*",
       ]
-    },
-    {
-      Sid      = "RevalidateDistribution"
-      Effect   = "Allow"
-      Action   = ["cloudfront:CreateInvalidation"]
-      Resource = aws_cloudfront_distribution.site.arn
     },
   ]
 }
@@ -290,7 +284,7 @@ resource "aws_cloudfront_cache_policy" "no_store" {
   depends_on = [terraform_data.target_account_guard]
 
   name        = "${var.name_prefix}-no-store"
-  comment     = "No shared-cache freshness for the SPA shell and local preview bytes."
+  comment     = "No shared-cache freshness for /_errors/* responses."
   min_ttl     = 0
   default_ttl = 0
   max_ttl     = 0
@@ -311,61 +305,11 @@ resource "aws_cloudfront_cache_policy" "no_store" {
   }
 }
 
-resource "aws_cloudfront_cache_policy" "indexes" {
+resource "aws_cloudfront_cache_policy" "origin_respecting" {
   depends_on = [terraform_data.target_account_guard]
 
-  name        = "${var.name_prefix}-indexes"
-  comment     = "Registry and site indexes have at most 60 seconds of shared-cache freshness."
-  min_ttl     = 0
-  default_ttl = 60
-  max_ttl     = 60
-
-  parameters_in_cache_key_and_forwarded_to_origin {
-    enable_accept_encoding_gzip   = true
-    enable_accept_encoding_brotli = true
-
-    cookies_config {
-      cookie_behavior = "none"
-    }
-    headers_config {
-      header_behavior = "none"
-    }
-    query_strings_config {
-      query_string_behavior = "none"
-    }
-  }
-}
-
-resource "aws_cloudfront_cache_policy" "artifacts" {
-  depends_on = [terraform_data.target_account_guard]
-
-  name        = "${var.name_prefix}-artifacts"
-  comment     = "Artifact objects have at most 300 seconds of shared-cache freshness."
-  min_ttl     = 0
-  default_ttl = 300
-  max_ttl     = 300
-
-  parameters_in_cache_key_and_forwarded_to_origin {
-    enable_accept_encoding_gzip   = true
-    enable_accept_encoding_brotli = true
-
-    cookies_config {
-      cookie_behavior = "none"
-    }
-    headers_config {
-      header_behavior = "none"
-    }
-    query_strings_config {
-      query_string_behavior = "none"
-    }
-  }
-}
-
-resource "aws_cloudfront_cache_policy" "immutable_assets" {
-  depends_on = [terraform_data.target_account_guard]
-
-  name        = "${var.name_prefix}-immutable-assets"
-  comment     = "Honor application asset Cache-Control; allow hashed assets up to one year."
+  name        = "${var.name_prefix}-origin-respecting"
+  comment     = "CloudFront honours the CLI-owned origin Cache-Control. max_ttl is a technical ceiling for hashed immutable objects, not a class TTL."
   min_ttl     = 0
   default_ttl = 0
   max_ttl     = 31536000
@@ -409,7 +353,7 @@ resource "aws_cloudfront_distribution" "site" {
     viewer_protocol_policy = var.viewer_protocol_policy
     allowed_methods        = ["GET", "HEAD"]
     cached_methods         = ["GET", "HEAD"]
-    cache_policy_id        = aws_cloudfront_cache_policy.no_store.id
+    cache_policy_id        = aws_cloudfront_cache_policy.origin_respecting.id
     compress               = true
 
     function_association {
@@ -642,12 +586,6 @@ resource "aws_iam_role_policy" "satellite" {
           "${local.bucket_arn}/_control/sites/${each.key}/*",
           "${local.bucket_arn}/_previews/${each.key}/*",
         ]
-      },
-      {
-        Sid      = "RevalidateSelectedSiteDistribution"
-        Effect   = "Allow"
-        Action   = ["cloudfront:CreateInvalidation"]
-        Resource = aws_cloudfront_distribution.site.arn
       },
     ]
   })
