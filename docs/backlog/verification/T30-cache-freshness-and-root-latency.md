@@ -1,6 +1,6 @@
 # T30 — No-invalidation freshness and shared-root latency
 
-- Status: Open
+- Status: In progress
 - Phase: Provider-backed deployments / reusable distribution
 - Scope: D-LT delivery correctness and the 5-or-0-second shared-root decision; Cloudflare R2 first, AWS separately gated
 - Depends on: [IMP-82 Phase 1](../implementation/IMP-82-cli-owned-cache-policy.md), explicit owner unfreeze/run approval and bounded verification access
@@ -61,4 +61,4 @@ Record the credential scope used: explicit R2 pair without an API token, or sing
 
 ## Owner boundaries and evidence
 
-No new run, credential access, environment mutation, paid load or production action is authorized by this item. AWS resources were destroyed; recreation needs a new plan and explicit approval. The owner approves unfreeze, exact live scope/budget, final root TTL and any release/production migration/credential retirement under IMP-82. Evidence: none yet.
+No new run, credential access, environment mutation, paid load or production action is authorized by this item. AWS resources were destroyed; recreation needs a new plan and explicit approval. The owner approves unfreeze, exact live scope/budget, final root TTL and any release/production migration/credential retirement under IMP-82. Evidence: Cloudflare run 2026-10-25, [report](../../research/t30-cache-freshness.md) with raw data and summaries under `docs/research/t30/`. Root 5-vs-0 measured in Japan and North America (Europe and AWS not run); runbook migration and rollback rehearsed; 404 negative caching found and fixed (#226). Open: the owner's 5-or-0 decision, natural-traffic hit rates, the unverified cells listed in the report, and independent review of the results.
