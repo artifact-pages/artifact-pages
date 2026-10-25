@@ -2,8 +2,11 @@ package publisher
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/artifact-pages/artifact-pages/cli/internal/compat"
 )
 
 func TestSiteCacheJournalSchema2RetainsOriginTransactionOnly(t *testing.T) {
@@ -45,14 +48,58 @@ func TestSiteCacheJournalValidatesAndMigratesLegacySchema1(t *testing.T) {
 }
 
 func TestSiteCacheJournalFailsClosedOnUnknownFieldsAndUnsupportedSchema(t *testing.T) {
-	for _, raw := range []string{
-		`{"schemaVersion":2,"site":"sre","transaction":{}}`,
-		`{"schemaVersion":9,"site":"sre","transaction":{},"future":true}`,
+	for _, test := range []struct {
+		name, raw string
+		compat    bool
+	}{
+		{name: "schema 2 invalid transaction", raw: `{"schemaVersion":2,"site":"sre","transaction":{}}`},
+		{name: "schema 1 unknown field", raw: `{"schemaVersion":1,"site":"sre","paths":["/_artifacts/sre/a.html"],"future":true}`},
+		{name: "unsupported schema", raw: `{"schemaVersion":9,"site":"sre","transaction":{},"future":true}`, compat: true},
 	} {
-		b := newLockMemoryBackend()
-		seedMemoryObject(b, siteCacheRetryKey("sre"), []byte(raw))
-		if _, _, err := readSiteCacheRetry(context.Background(), b, "sre"); err == nil {
-			t.Fatalf("read accepted unsupported journal %s", raw)
-		}
+		t.Run(test.name, func(t *testing.T) {
+			b := newLockMemoryBackend()
+			seedMemoryObject(b, siteCacheRetryKey("sre"), []byte(test.raw))
+			_, _, err := readSiteCacheRetry(context.Background(), b, "sre")
+			if err == nil {
+				t.Fatalf("read accepted unsupported journal %s", test.raw)
+			}
+			if compat.Is(err) != test.compat {
+				t.Fatalf("compat.Is(%v) = %v, want %v", err, compat.Is(err), test.compat)
+			}
+		})
 	}
+}
+
+func TestPublishSiteDryRunOverSchema1SiteJournalWritesNothing(t *testing.T) {
+	root, store, options := sitePublishRecoveryFixture(t)
+	committed, _, _ := sitePublishRecoveryReadState(t, store)
+	sitePublishRecoveryChangePage(t, root, "<title>Dry run</title><h1>Legacy journal dry run</h1>")
+	tx := sitePublishTransaction{ID: strings.Repeat("e", 64), BaseGeneration: committed.Committed.Generation, TouchedKeys: []string{"_artifacts/sre/report.html"}}
+	legacy := `{"schemaVersion":1,"site":"sre","paths":["/_artifacts/sre/report.html"],"transaction":{"id":"` + tx.ID + `","baseGeneration":"` + tx.BaseGeneration + `","touchedKeys":["_artifacts/sre/report.html"]}}`
+	seedMemoryObject(store.lockMemoryBackend, siteCacheRetryKey("sre"), []byte(legacy))
+	beforeObjects, beforeETags := snapshotLockMemory(store.lockMemoryBackend)
+	options.DryRun = true
+	result, err := PublishSite(context.Background(), newSitePublishRecoveryBackend(store), options)
+	if err != nil || result.Outcome != "planned" {
+		t.Fatalf("dry-run over schema 1 journal = %+v, err=%v; want planned", result, err)
+	}
+	afterObjects, afterETags := snapshotLockMemory(store.lockMemoryBackend)
+	if !reflect.DeepEqual(beforeObjects, afterObjects) || !reflect.DeepEqual(beforeETags, afterETags) {
+		t.Fatal("dry-run over a schema 1 site journal wrote or removed objects")
+	}
+}
+
+func snapshotLockMemory(backend *lockMemoryBackend) (map[string]Object, map[string]string) {
+	backend.mu.Lock()
+	defer backend.mu.Unlock()
+	objects := make(map[string]Object, len(backend.objects))
+	for key, object := range backend.objects {
+		object.Bytes = append([]byte(nil), object.Bytes...)
+		objects[key] = object
+	}
+	etags := make(map[string]string, len(backend.etags))
+	for key, etag := range backend.etags {
+		etags[key] = etag
+	}
+	return objects, etags
 }

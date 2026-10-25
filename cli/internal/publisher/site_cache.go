@@ -52,17 +52,15 @@ func readSiteCacheRetry(ctx context.Context, backend ConditionalObjectBackend, s
 	if err := validateNoDuplicateJSONKeys(object.Bytes); err != nil {
 		return siteCacheRetry{}, "", fmt.Errorf("validate site cache retry record: %w", err)
 	}
-	var header struct {
-		SchemaVersion int `json:"schemaVersion"`
+	schemaVersion, err := readControlSchemaVersion("site cache retry record", object.Bytes)
+	if err != nil {
+		return siteCacheRetry{}, "", err
 	}
-	if err := json.Unmarshal(object.Bytes, &header); err != nil {
-		return siteCacheRetry{}, "", errors.New("site cache retry record must be a JSON object")
-	}
-	if header.SchemaVersion != 1 && header.SchemaVersion != 2 {
+	if schemaVersion != 1 && schemaVersion != 2 {
 		return siteCacheRetry{}, "", compat.CheckSchemaVersion("site cache retry record", object.Bytes, siteCacheRetrySchemaVersion)
 	}
 	decoder := json.NewDecoder(bytes.NewReader(object.Bytes))
-	if header.SchemaVersion == 1 {
+	if schemaVersion == 1 {
 		decoder.DisallowUnknownFields()
 
 		var old struct {

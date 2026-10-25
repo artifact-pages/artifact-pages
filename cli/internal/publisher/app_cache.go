@@ -69,21 +69,18 @@ func readAppCacheRetry(ctx context.Context, backend ConditionalObjectBackend) (a
 	if err := validateNoDuplicateJSONKeys(object.Bytes); err != nil {
 		return appCacheRetry{}, "", fmt.Errorf("validate app cache retry record: %w", err)
 	}
-	var envelope map[string]json.RawMessage
-	if err := json.Unmarshal(object.Bytes, &envelope); err != nil || envelope == nil {
-		return appCacheRetry{}, "", errors.New("app cache retry record must be a JSON object")
-	}
-	versionRaw, ok := envelope["schemaVersion"]
-	if !ok {
-		return appCacheRetry{}, "", errors.New("app cache retry record has no schemaVersion")
-	}
-	var version int
-	if err := json.Unmarshal(versionRaw, &version); err != nil {
-		return appCacheRetry{}, "", errors.New("app cache retry record has an invalid schemaVersion")
+	version, err := readControlSchemaVersion("app cache retry record", object.Bytes)
+	if err != nil {
+		return appCacheRetry{}, "", err
 	}
 	if version != appCacheRetrySchema {
 		return appCacheRetry{}, "", compat.CheckSchemaVersion("app cache retry record", object.Bytes, appCacheRetrySchema)
 	}
+	var envelope map[string]json.RawMessage
+	if err := json.Unmarshal(object.Bytes, &envelope); err != nil {
+		return appCacheRetry{}, "", errors.New("app cache retry record must be a JSON object")
+	}
+	versionRaw := envelope["schemaVersion"]
 	for key := range envelope {
 		if key != "schemaVersion" && key != "paths" {
 			return appCacheRetry{}, "", fmt.Errorf("app cache retry record has unsupported field %q", key)

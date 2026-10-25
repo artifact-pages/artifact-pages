@@ -152,7 +152,7 @@ func PublishSite(ctx context.Context, backend DeploymentBackend, options SitePub
 		}
 		// Read the durable cache/transaction journal before examining the state
 		// fingerprint. Its generation binding decides whether touched keys must
-		// be replayed, and a completed transaction may still need invalidation.
+		// be replayed, and a completed transaction may still need preview or version work.
 		pending, pendingETag, err := readSiteCacheRetry(operationCtx, conditional, options.SiteID)
 		if err != nil {
 			return Result{}, err

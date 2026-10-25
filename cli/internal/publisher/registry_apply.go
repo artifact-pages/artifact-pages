@@ -423,16 +423,14 @@ func readRegistryCleanup(ctx context.Context, backend ConditionalObjectBackend) 
 	if err := validateNoDuplicateJSONKeys(object.Bytes); err != nil {
 		return registryCleanupRecord{}, "", fmt.Errorf("validate registry cleanup record: %w", err)
 	}
-	var header struct {
-		SchemaVersion int `json:"schemaVersion"`
+	schemaVersion, err := readControlSchemaVersion("registry cleanup record", object.Bytes)
+	if err != nil {
+		return registryCleanupRecord{}, "", err
 	}
-	if err := json.Unmarshal(object.Bytes, &header); err != nil {
-		return registryCleanupRecord{}, "", errors.New("registry cleanup record must be an object")
-	}
-	if header.SchemaVersion != 1 && header.SchemaVersion != 2 {
+	if schemaVersion != 1 && schemaVersion != 2 {
 		return registryCleanupRecord{}, "", compat.CheckSchemaVersion("registry cleanup record", object.Bytes, 2)
 	}
-	if header.SchemaVersion == 1 {
+	if schemaVersion == 1 {
 		var old struct {
 			SchemaVersion int      `json:"schemaVersion"`
 			Sites         []string `json:"sites"`
@@ -442,6 +440,9 @@ func readRegistryCleanup(ctx context.Context, backend ConditionalObjectBackend) 
 		decoder.DisallowUnknownFields()
 		if err := decoder.Decode(&old); err != nil {
 			return registryCleanupRecord{}, "", fmt.Errorf("decode legacy registry cleanup record: %w", err)
+		}
+		if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+			return registryCleanupRecord{}, "", errors.New("legacy registry cleanup record must contain exactly one JSON value")
 		}
 		if old.SchemaVersion != 1 || old.Paths == nil {
 			return registryCleanupRecord{}, "", errors.New("legacy registry cleanup record is missing required fields")

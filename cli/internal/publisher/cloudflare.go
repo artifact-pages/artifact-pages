@@ -52,9 +52,8 @@ type cloudflareBackend struct {
 var _ DeploymentBackend = (*cloudflareBackend)(nil)
 var _ ConditionalObjectBackend = (*cloudflareBackend)(nil)
 
-// NewCloudflareBackend uses R2's S3-compatible API for objects and locks, and
-// the zone cache API for revalidation. Those differences remain inside this
-// provider adapter; site reconciliation uses the same DeploymentBackend.
+// NewCloudflareBackend uses R2's S3-compatible API for objects and locks.
+// Those differences remain inside this provider adapter; site reconciliation uses the same DeploymentBackend.
 func NewCloudflareBackend(ctx context.Context, options CloudflareOptions) (DeploymentBackend, error) {
 	if strings.TrimSpace(options.AccountID) == "" || strings.TrimSpace(options.Bucket) == "" || strings.TrimSpace(options.ZoneID) == "" {
 		return nil, errors.New("Cloudflare account, bucket, zone, and R2 credentials are required")
