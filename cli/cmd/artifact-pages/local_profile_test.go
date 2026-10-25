@@ -178,8 +178,8 @@ cloudflare:
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 		t.Fatalf("decode Cloudflare app deploy result: %v; output=%s", err, stdout.String())
 	}
-	if result.Operation != "app deploy" || result.Outcome != "deployed" || result.Version != "cloudflare-smoke" || result.FilesPublished != 3 || result.InvalidationID == "" {
-		t.Fatalf("Cloudflare app deploy result = %+v, want three-file deploy and cache invalidation", result)
+	if result.Operation != "app deploy" || result.Outcome != "deployed" || result.Version != "cloudflare-smoke" || result.FilesPublished != 3 || result.InvalidationID != "" || len(result.InvalidationPaths) != 0 {
+		t.Fatalf("Cloudflare app deploy result = %+v, want three-file deploy without invalidation output", result)
 	}
 
 	for key, want := range contentBefore {

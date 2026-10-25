@@ -15,9 +15,10 @@ import (
 )
 
 const (
-	previewCleanupSchema    = 1
-	maxPreviewCleanupBytes  = 16 << 20
-	previewCleanupPathLimit = 250000
+	previewCleanupSchema       = 2
+	previewCleanupLegacySchema = 1
+	maxPreviewCleanupBytes     = 16 << 20
+	previewCleanupPathLimit    = 250000
 )
 
 type PreviewRemoveOptions struct {
@@ -32,7 +33,8 @@ type previewCleanupRecord struct {
 	GroupID       string                      `json:"groupId"`
 	Revisions     []preview.RevisionOwnership `json:"revisions"`
 	ObjectKeys    []string                    `json:"objectKeys"`
-	Paths         []string                    `json:"paths"`
+	Paths         []string                    `json:"-"`
+	legacy        bool                        `json:"-"`
 }
 
 type previewRemovalPlan struct {
@@ -40,7 +42,7 @@ type previewRemovalPlan struct {
 	hasGroup bool
 }
 
-// PlanPreviewRemoval performs all ownership, manifest, and invalidation checks
+// PlanPreviewRemoval performs all ownership and manifest checks
 // without taking a lock or changing provider state.
 func PlanPreviewRemoval(ctx context.Context, backend DeploymentBackend, options PreviewRemoveOptions) (Result, error) {
 	result := previewRemoveResult(options)
@@ -73,22 +75,17 @@ func PlanPreviewRemoval(ctx context.Context, backend DeploymentBackend, options 
 		appendPreviewCleanupChanges(&result, plan.journal)
 	}
 	result.Changes = uniqueChanges(result.Changes)
-	result.InvalidationPaths = uniqueSorted(result.InvalidationPaths)
 	result.FilesRemoved = countRemovedChanges(result.Changes)
 	if pending != nil || plan.hasGroup {
 		result.Outcome = "planned"
 	} else {
 		result.Outcome = "no-op"
 	}
-	if err := validateInvalidation(backend, result.InvalidationPaths); err != nil {
-		return result, err
-	}
-	result.InvalidationPaths = plannedInvalidationPaths(backend, result.InvalidationPaths)
 	return result, nil
 }
 
 // RemovePreviewGroup removes one explicit preview group under the site's
-// cooperative lock. Its durable journal makes catalog, object, and cache
+// cooperative lock. Its durable journal makes catalog and object
 // stages safe to retry after partial failure or an ambiguous response.
 func RemovePreviewGroup(ctx context.Context, backend DeploymentBackend, options PreviewRemoveOptions) (Result, error) {
 	result := previewRemoveResult(options)
@@ -100,7 +97,6 @@ func RemovePreviewGroup(ctx context.Context, backend DeploymentBackend, options 
 		return PlanPreviewRemoval(ctx, backend, options)
 	}
 	result.Changes = []Change{}
-	result.InvalidationPaths = []string{}
 	err = store.WithSiteLock(ctx, options.SiteID, func(lockedContext context.Context) error {
 		pendingBeforeResume, _, err := readPreviewCleanup(lockedContext, conditional, options.SiteID)
 		if err != nil {
@@ -129,27 +125,20 @@ func RemovePreviewGroup(ctx context.Context, backend DeploymentBackend, options 
 				result.Outcome = "removed"
 			} else {
 				result.Outcome = "no-op"
-				result.InvalidationPaths = nil
 			}
 			result.Changes = uniqueChanges(result.Changes)
 			result.FilesRemoved = countRemovedChanges(result.Changes)
 			return nil
 		}
-		if err := validateInvalidation(backend, plan.journal.Paths); err != nil {
-			return err
-		}
 		if _, err := writePreviewCleanup(lockedContext, conditional, plan.journal); err != nil {
 			return err
 		}
-		invalidationID, err := applyPreviewCleanup(lockedContext, backend, store, plan.journal)
-		if err != nil {
+		if _, err := applyPreviewCleanup(lockedContext, backend, store, plan.journal); err != nil {
 			return err
 		}
 		appendPreviewCleanupChanges(&result, plan.journal)
 		result.Changes = uniqueChanges(result.Changes)
-		result.InvalidationPaths = uniqueSorted(result.InvalidationPaths)
 		result.FilesRemoved = countRemovedChanges(result.Changes)
-		result.InvalidationID = invalidationID
 		result.Outcome = "removed"
 		return nil
 	})
@@ -197,7 +186,7 @@ func previewRemovalDependencies(ctx context.Context, backend DeploymentBackend, 
 func planPreviewRemoval(ctx context.Context, backend DeploymentBackend, store *ObjectPreviewStore, siteID, groupID string, catalog preview.Catalog) (previewRemovalPlan, error) {
 	plan := previewRemovalPlan{journal: previewCleanupRecord{
 		SchemaVersion: previewCleanupSchema, Site: siteID, GroupID: groupID,
-		Revisions: []preview.RevisionOwnership{}, ObjectKeys: []string{}, Paths: []string{},
+		Revisions: []preview.RevisionOwnership{}, ObjectKeys: []string{},
 	}}
 	if err := preview.ValidateGroupID(groupID); err != nil {
 		return plan, err
@@ -237,7 +226,7 @@ func planPreviewRemoval(ctx context.Context, backend DeploymentBackend, store *O
 		}
 		plan.journal.Revisions = append(plan.journal.Revisions, revision)
 	}
-	keys, paths, err := previewCleanupKeysAndPaths(siteID, plan.journal.Revisions)
+	keys, err := previewCleanupKeys(siteID, plan.journal.Revisions)
 	if err != nil {
 		return previewRemovalPlan{}, err
 	}
@@ -246,15 +235,11 @@ func planPreviewRemoval(ctx context.Context, backend DeploymentBackend, store *O
 		return previewRemovalPlan{}, err
 	}
 	plan.journal.ObjectKeys = uniqueSorted(append(keys, listedKeys...))
-	plan.journal.Paths = paths
 	if err := validatePreviewCleanupRecord(plan.journal); err != nil {
 		return previewRemovalPlan{}, err
 	}
 	if len(keys) > previewCleanupPathLimit {
 		return previewRemovalPlan{}, fmt.Errorf("preview removal requires %d exact object keys; limit is %d", len(keys), previewCleanupPathLimit)
-	}
-	if err := validateInvalidation(backend, paths); err != nil {
-		return previewRemovalPlan{}, err
 	}
 	return plan, nil
 }
@@ -331,38 +316,33 @@ func removeCatalogGroup(catalog preview.Catalog, groupID string) preview.Catalog
 	return catalog
 }
 
-func previewCleanupKeysAndPaths(siteID string, revisions []preview.RevisionOwnership) ([]string, []string, error) {
+func previewCleanupKeys(siteID string, revisions []preview.RevisionOwnership) ([]string, error) {
 	keys := make([]string, 0)
-	// Cache invalidation is deliberately scoped to one site's preview cache.
-	// It may evict sibling previews from edge caches, but it never deletes
-	// sibling origin objects and avoids provider quotas tied to revision count.
-	paths := []string{"/_previews/" + siteID + "/*"}
 	for _, revision := range revisions {
 		manifest, err := preview.ManifestKey(siteID, revision.HeadSHA)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		manifestRaw, err := preview.RawObjectKey(manifest)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		keys = append(keys, manifestRaw)
 		for _, file := range revision.Files {
 			fileKey, err := preview.FileKey(siteID, revision.HeadSHA, file)
 			if err != nil {
-				return nil, nil, err
+				return nil, err
 			}
 			raw, err := preview.RawObjectKey(fileKey)
 			if err != nil {
-				return nil, nil, err
+				return nil, err
 			}
 			keys = append(keys, raw)
 		}
 	}
 	sort.Strings(keys)
 	keys = uniqueSorted(keys)
-	paths = uniqueSorted(paths)
-	return keys, paths, nil
+	return keys, nil
 }
 
 func listPreviewRevisionKeys(ctx context.Context, backend DeploymentBackend, siteID string, revisions []preview.RevisionOwnership) ([]string, error) {
@@ -426,14 +406,40 @@ func readPreviewCleanup(ctx context.Context, backend ConditionalObjectBackend, s
 	if err := validateNoDuplicateJSONKeys(object.Bytes); err != nil {
 		return nil, "", fmt.Errorf("validate preview cleanup journal: %w", err)
 	}
-	if err := compat.CheckSchemaVersion("preview cleanup journal", object.Bytes, previewCleanupSchema); err != nil {
-		return nil, "", err
+	var envelope struct {
+		SchemaVersion int `json:"schemaVersion"`
+	}
+	if err := json.Unmarshal(object.Bytes, &envelope); err != nil {
+		return nil, "", fmt.Errorf("decode preview cleanup journal schema: %w", err)
 	}
 	decoder := json.NewDecoder(bytes.NewReader(object.Bytes))
 	decoder.DisallowUnknownFields()
 	var record previewCleanupRecord
-	if err := decoder.Decode(&record); err != nil {
-		return nil, "", fmt.Errorf("decode preview cleanup journal: %w", err)
+	legacy := envelope.SchemaVersion == previewCleanupLegacySchema
+	if legacy {
+		var old struct {
+			SchemaVersion int                         `json:"schemaVersion"`
+			Site          string                      `json:"site"`
+			GroupID       string                      `json:"groupId"`
+			Revisions     []preview.RevisionOwnership `json:"revisions"`
+			ObjectKeys    []string                    `json:"objectKeys"`
+			Paths         []string                    `json:"paths"`
+		}
+		if err := decoder.Decode(&old); err != nil {
+			return nil, "", fmt.Errorf("decode preview cleanup journal: %w", err)
+		}
+		legacyRecord := previewCleanupRecord{SchemaVersion: previewCleanupLegacySchema, Site: old.Site, GroupID: old.GroupID, Revisions: old.Revisions, ObjectKeys: old.ObjectKeys, Paths: old.Paths}
+		if err := validateLegacyPreviewCleanupRecord(legacyRecord); err != nil {
+			return nil, "", err
+		}
+		record = previewCleanupRecord{SchemaVersion: previewCleanupSchema, Site: old.Site, GroupID: old.GroupID, Revisions: old.Revisions, ObjectKeys: old.ObjectKeys, legacy: true}
+	} else {
+		if envelope.SchemaVersion != previewCleanupSchema {
+			return nil, "", compat.CheckSchemaVersion("preview cleanup journal", object.Bytes, previewCleanupSchema)
+		}
+		if err := decoder.Decode(&record); err != nil {
+			return nil, "", fmt.Errorf("decode preview cleanup journal: %w", err)
+		}
 	}
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
 		return nil, "", errors.New("preview cleanup journal must contain exactly one JSON value")
@@ -448,8 +454,8 @@ func readPreviewCleanup(ctx context.Context, backend ConditionalObjectBackend, s
 }
 
 func validatePreviewCleanupRecord(record previewCleanupRecord) error {
-	if record.SchemaVersion != previewCleanupSchema || record.Revisions == nil || record.ObjectKeys == nil || record.Paths == nil {
-		return errors.New("preview cleanup journal requires schemaVersion and revision, object, and path arrays")
+	if record.SchemaVersion != previewCleanupSchema || record.Revisions == nil || record.ObjectKeys == nil {
+		return errors.New("preview cleanup journal requires schemaVersion and revision and object arrays")
 	}
 	if err := validateLockSite(record.Site); err != nil {
 		return fmt.Errorf("preview cleanup journal has invalid site: %w", err)
@@ -473,7 +479,7 @@ func validatePreviewCleanupRecord(record previewCleanupRecord) error {
 			}
 		}
 	}
-	requiredKeys, expectedPaths, err := previewCleanupKeysAndPaths(record.Site, record.Revisions)
+	requiredKeys, err := previewCleanupKeys(record.Site, record.Revisions)
 	if err != nil {
 		return err
 	}
@@ -504,11 +510,22 @@ func validatePreviewCleanupRecord(record previewCleanupRecord) error {
 			return fmt.Errorf("preview cleanup journal is missing ownership object %q", key)
 		}
 	}
-	if !sameStringSlice(record.Paths, expectedPaths) {
-		return errors.New("preview cleanup journal invalidation paths do not match its revision scope")
-	}
 	if len(record.ObjectKeys) > previewCleanupPathLimit {
 		return fmt.Errorf("preview cleanup journal contains more than %d object keys", previewCleanupPathLimit)
+	}
+	return nil
+}
+
+func validateLegacyPreviewCleanupRecord(record previewCleanupRecord) error {
+	if record.SchemaVersion != previewCleanupLegacySchema || record.Paths == nil {
+		return errors.New("preview cleanup journal requires schemaVersion and path array")
+	}
+	if err := validatePreviewCleanupRecord(previewCleanupRecord{SchemaVersion: previewCleanupSchema, Site: record.Site, GroupID: record.GroupID, Revisions: record.Revisions, ObjectKeys: record.ObjectKeys}); err != nil {
+		return err
+	}
+	expected := []string{"/_previews/" + record.Site + "/*"}
+	if !sameStringSlice(record.Paths, expected) {
+		return errors.New("preview cleanup journal invalidation paths do not match its revision scope")
 	}
 	return nil
 }
@@ -541,9 +558,23 @@ func resumePreviewCleanup(ctx context.Context, backend DeploymentBackend, condit
 	if !ok {
 		return nil, false, errors.New("preview cleanup recovery requires an active site lock")
 	}
-	record, _, err := readPreviewCleanup(ctx, conditional, lock.site)
+	record, etag, err := readPreviewCleanup(ctx, conditional, lock.site)
 	if err != nil || record == nil {
 		return record, false, err
+	}
+	if record.legacy {
+		contents, err := json.Marshal(*record)
+		if err != nil {
+			return record, false, err
+		}
+		newETag, err := conditional.PutObjectConditional(ctx, previewCleanupKey(record.Site), Object{Bytes: contents, ContentType: "application/json; charset=utf-8", Cache: cacheControl(cacheClassPrivateControl)}, ObjectCondition{IfMatchETag: etag})
+		if err != nil {
+			return record, false, fmt.Errorf("migrate preview cleanup journal to schema 2: %w", err)
+		}
+		if strings.TrimSpace(newETag) == "" {
+			return record, false, errors.New("preview cleanup journal migration returned no ETag")
+		}
+		record.legacy = false
 	}
 	if _, err := applyPreviewCleanup(ctx, backend, store, *record); err != nil {
 		return record, false, err
@@ -558,9 +589,6 @@ func applyPreviewCleanup(ctx context.Context, backend DeploymentBackend, store *
 	lock, ok := ctx.Value(previewSiteLockContextKey{}).(previewSiteLock)
 	if !ok || lock.site != record.Site {
 		return "", fmt.Errorf("preview cleanup for site %q requires its active site lock", record.Site)
-	}
-	if err := validateInvalidation(backend, record.Paths); err != nil {
-		return "", err
 	}
 	catalog, err := readPreviewCatalog(ctx, store, record.Site)
 	if err != nil {
@@ -591,14 +619,10 @@ func applyPreviewCleanup(ctx context.Context, backend DeploymentBackend, store *
 			return "", fmt.Errorf("preview revisions may be partially removed; retry preview remove: %w", err)
 		}
 	}
-	invalidationID, err := backend.Invalidate(ctx, record.Paths)
-	if err != nil {
-		return "", fmt.Errorf("preview objects were removed but cache revalidation failed; retry preview remove: %w", err)
-	}
 	if err := backend.DeleteObjects(ctx, []string{previewCleanupKey(record.Site)}); err != nil {
 		return "", fmt.Errorf("preview cleanup completed but its journal could not be cleared; retry preview remove: %w", err)
 	}
-	return invalidationID, nil
+	return "", nil
 }
 
 func validateJournalHasNoSiblingOwners(catalog preview.Catalog, record previewCleanupRecord) error {
@@ -665,10 +689,6 @@ func appendPreviewCleanupChanges(result *Result, record previewCleanupRecord) {
 	for _, key := range record.ObjectKeys {
 		result.Changes = append(result.Changes, Change{Action: "remove", Path: key})
 	}
-	for _, path := range record.Paths {
-		result.Changes = append(result.Changes, Change{Action: "invalidate", Path: path})
-	}
-	result.InvalidationPaths = append(result.InvalidationPaths, record.Paths...)
 }
 
 func countRemovedChanges(changes []Change) int {

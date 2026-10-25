@@ -167,7 +167,7 @@ export async function previewRetirement({ projectRoot, localRoot, run, git, init
     equal(await snapshot(), afterDeletion, 'dry-run wrote bytes or object metadata')
     await evidence('dry-run', dryRun)
     const reconciled = publish()
-    assert(reconciled.outcome === 'published', 'main publish did not reconcile')
+    assert(reconciled.outcome === 'synced', 'main publish did not reconcile')
     checkPlan(reconciled)
     const afterPublish = await snapshot()
     const preserved = (objects) => objects.filter((object) => object.key !== catalogKey && !object.key.startsWith('_control/'))
