@@ -152,9 +152,9 @@ func TestCloudflareGenerationIsDeterministicCheckableAndLocal(t *testing.T) {
 		t.Fatal("site-sync does not pass the config from its own admin commit")
 	}
 	for _, reference := range []string{
-		"artifact-pages/publish-action@a95973781144589aeb03362ccfe93a3f809623ab # v0.3.0",
-		"artifact-pages/preview-action@838f97d870537aaeeb04f90c97bdcd116015575e # v0.3.0",
-		"artifact-pages/registry-action@d5abdecf0383f610b34b16f4a5b681699828d96d # v0.3.0",
+		"artifact-pages/publish-action@72d2c404240db983e254483bf3fff6f9624964d4 # v0.4.0",
+		"artifact-pages/preview-action@fdbd3723439252957cf8e7e2fc6db2b9e5b02580 # v0.4.0",
+		"artifact-pages/registry-action@5ecf569ab8e54097a996f44c16eda86c865b4722 # v0.4.0",
 	} {
 		if !strings.Contains(action+registry, reference) {
 			t.Errorf("generated files missing pinned Action %q", reference)
@@ -216,9 +216,9 @@ func TestAWSGenerationDerivesRolesFromConfigAtRuntime(t *testing.T) {
 		"aws.accountId matches the role's AWS account",
 		"role-to-assume: ${{ steps.role.outputs['role-arn'] }}",
 		"aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0",
-		"artifact-pages/publish-action@a95973781144589aeb03362ccfe93a3f809623ab # v0.3.0",
-		"artifact-pages/preview-action@838f97d870537aaeeb04f90c97bdcd116015575e # v0.3.0",
-		"artifact-pages/registry-action@d5abdecf0383f610b34b16f4a5b681699828d96d # v0.3.0",
+		"artifact-pages/publish-action@72d2c404240db983e254483bf3fff6f9624964d4 # v0.4.0",
+		"artifact-pages/preview-action@fdbd3723439252957cf8e7e2fc6db2b9e5b02580 # v0.4.0",
+		"artifact-pages/registry-action@5ecf569ab8e54097a996f44c16eda86c865b4722 # v0.4.0",
 		"aws-region: us-east-1",
 	} {
 		if !strings.Contains(generated, expected) {

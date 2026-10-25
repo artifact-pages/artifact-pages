@@ -49,7 +49,7 @@ Restarting an old writer is not a rollback on its own. An old CLI cannot read a 
 
 ## Operator repository changes
 
-The production operator repositories follow this sequence like any adopter. These are the changes to review there; they are not applied by this guide. `<compatible>` is 0.6.0 or later (see [Before you start](#before-you-start)).
+The production operator repositories follow this sequence like any adopter. These are the changes to review there; they are not applied by this guide. `<compatible>` is 0.6.1 or later: the admin repository regenerates its managed workflows with it, and only 0.6.1 and later pin Actions that accept CLI 0.6 (see [Before you start](#before-you-start)).
 
 `artifact-pages/admin` (step 2):
 
@@ -61,7 +61,7 @@ The production operator repositories follow this sequence like any adopter. Thes
   +  version: <compatible>
   ```
 
-- Regenerate the managed files (`.github/workflows/registry.yml`, `publish-site.yml`, `preview-site.yml` and `.github/actions/site-sync/action.yml`) with `registry setup` from a compatible CLI whose generated pins point at Actions v0.4.0 or later (CLI 0.6.0 itself still pins the older Actions), and set `CLI_VERSION` in `.github/workflows/registry-setup.yml` to `<compatible>` so its `registry setup --check` passes. Regeneration updates the publish, preview and registry Action pins (`@<sha> # v<version>`). Do not edit these files by hand.
+- Regenerate the managed files (`.github/workflows/registry.yml`, `publish-site.yml`, `preview-site.yml` and `.github/actions/site-sync/action.yml`) with `registry setup` from CLI 0.6.1 or later, whose generated pins point at Actions v0.4.0 (CLI 0.6.0 itself still pins the older Actions), and set `CLI_VERSION` in `.github/workflows/registry-setup.yml` to `<compatible>` so its `registry setup --check` passes. Regeneration updates the publish, preview and registry Action pins (`@<sha> # v<version>`). Do not edit these files by hand.
 - Bump the `artifact-pages/app-deploy-action` pin in `.github/workflows/app-deploy.yml` by hand.
 
 `artifact-pages/admin` (step 8, after step 7 passes; production uses an explicit R2 key pair):
