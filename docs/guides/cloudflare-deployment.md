@@ -176,7 +176,7 @@ artifact-pages registry sync --config artifact-pages.yaml --dry-run
 artifact-pages registry sync --config artifact-pages.yaml
 ```
 
-The versioned app bundle is verified before deployment. `registry sync` writes the deterministic registry projection for the complete desired set in `artifact-pages.yaml` and cleans content prefixes for sites omitted from its `sites` mapping. Registry commands require `sites`; omitting it is an input error, while `sites: {}` explicitly means an empty desired registry and syncing it removes all current registrations. Provide the R2 credentials for registry operations, and provide the Cloudflare zone API token when the operation will invalidate public URLs; dry-runs and no-op operations do not need the API token.
+The versioned app bundle is verified before deployment. `registry sync` writes the deterministic registry projection for the complete desired set in `artifact-pages.yaml` and cleans content prefixes for sites omitted from its `sites` mapping. Registry commands require `sites`; omitting it is an input error, while `sites: {}` explicitly means an empty desired registry and syncing it removes all current registrations. Provide the R2 credentials for registry operations; with an explicit R2 pair no API token is needed.
 
 With the separate read-only registry and read/write site credentials configured, each satellite repository can run the dry-run, inspect its site change plan, and publish one explicit registered site:
 

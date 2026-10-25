@@ -23,6 +23,26 @@ This is separate from implementation because it needs an authorized live window 
 
 Sample counts are planning targets within the approved budget. Record actual counts, timing and deviations; insufficient data must not be presented as a conclusive latency result.
 
+## Run brief (prepared in IMP-82 Phase 1)
+
+What exists locally, merged on monorepo `main` (#207, #209, #211, #214, #215, #216 and the slice 7 PR):
+
+- **CLI:** fixed class headers (`cli/internal/publisher/cache_policy.go`, spec cache table), no invalidation in any command, legacy journal migration. A run uses a CLI built from a recorded `main` commit or the first release that contains it; record which.
+- **Modules:** the AWS origin-respecting policy (`0/0/31536000`, `no_store` only for `/_errors/*`, no `CreateInvalidation`) and the unchanged Cloudflare `respect_origin` rule. Both are validated locally only.
+- **Preview helper:** `go run ./cli/tools/migrate-preview-cache --config PATH --site ID [--apply]`.
+- **Runbook:** [cache policy migration](../../guides/cache-policy-migration.md), with the migration order, verification, credential retirement and rollback.
+- **Local evidence:** edge profiles (`node scripts/run-edge-profile.mjs cloudflare|aws|gcp`) show legacy-header seeds passed through once, zero purge requests and converged headers. Their Playwright stage has known unrelated `web/e2e/local-serving.spec.ts` failures.
+
+Order on `artifact-pages.stream`, after the owner's unfreeze and run approval:
+
+1. Record the approved scope (plan step 1) and back up the run-owned control records.
+2. Rehearse the runbook on the stream deployment, steps 1–7: compatible CLI for every writer, module apply (Cloudflare: expect no cache-rule change), `registry sync` / `site sync --reconcile` / `app deploy`, the preview helper, a 300-second wait, then header and edge checks. Record each step's output; this run is also the runbook's first exercise.
+3. Run the measurement plan (steps 2–6 above) at the approved root value of 5 seconds. For the 0-second comparison, build a CLI whose policy revision sets the root classes to 0. It is used only on the stream deployment and is never released or used as an operator setting. Converge the headers with `registry sync` / `site sync --reconcile`, wait out the 5-second roots, then measure. Return to the approved policy afterwards and record the convergence.
+4. Rehearse the runbook rollback on the stream deployment, or record why it was deferred.
+5. Restore the stream deployment to the agreed final state and record residue cleanup.
+
+Record the credential scope used: explicit R2 pair without an API token, or single-token without Cache Purge. Also record the zero-purge observation per command. AWS stays out of this run unless separately approved.
+
 ## TTL decision rule
 
 - Start with the approved 5 seconds for sites/meta/index; consider each root class separately. All changes go into the CLI policy, its revision and specification/tests, with header convergence and old-TTL expiry as in IMP-82.
