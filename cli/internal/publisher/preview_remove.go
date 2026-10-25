@@ -34,7 +34,7 @@ type previewCleanupRecord struct {
 	Revisions     []preview.RevisionOwnership `json:"revisions"`
 	ObjectKeys    []string                    `json:"objectKeys"`
 	Paths         []string                    `json:"-"`
-	legacy        bool                        `json:"-"`
+	legacy        bool
 }
 
 type previewRemovalPlan struct {

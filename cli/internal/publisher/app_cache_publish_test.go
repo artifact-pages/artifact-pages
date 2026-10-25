@@ -318,7 +318,7 @@ func TestDeployAppDoesNotAttemptJournalClear(t *testing.T) {
 	}
 }
 
-func TestDeployAppPendingDryRunReportsInvalidationWithoutMutationOrLock(t *testing.T) {
+func TestDeployAppPendingDryRunPlansLegacyJournalRetirementWithoutMutationOrLock(t *testing.T) {
 	archive := createWebBundle(t, map[string][]byte{
 		"index.html":    []byte("<script src=\"/assets/app.js\"></script>"),
 		"assets/app.js": []byte("window.app = true"),
@@ -333,8 +333,8 @@ func TestDeployAppPendingDryRunReportsInvalidationWithoutMutationOrLock(t *testi
 	if err != nil {
 		t.Fatalf("dry-run DeployApp() error = %v", err)
 	}
-	if result.Outcome != "no-op" || result.FilesPublished != 0 || len(result.Changes) != 0 || len(result.InvalidationPaths) != 0 {
-		t.Fatalf("dry-run DeployApp() = %+v; want unchanged origin plan", result)
+	if result.Outcome != "planned" || result.FilesPublished != 0 || len(result.Changes) != 0 || len(result.InvalidationPaths) != 0 || result.InvalidationID != "" {
+		t.Fatalf("dry-run DeployApp() = %+v; want a planned legacy journal retirement with no result changes", result)
 	}
 	if len(backend.store.appPuts) != 0 || len(backend.store.conditional) != 0 || len(backend.store.invalidations) != 0 || len(backend.store.deletions) != 0 {
 		t.Fatalf("dry-run mutated origin: appPuts=%v conditional=%v invalidations=%v deletions=%v", backend.store.appPuts, backend.store.conditional, backend.store.invalidations, backend.store.deletions)
@@ -355,6 +355,25 @@ func TestDeployAppPendingDryRunReportsInvalidationWithoutMutationOrLock(t *testi
 		}
 	}
 	assertAppCacheRetryPresent(t, backend.store, true)
+}
+
+func TestDeployAppRetiresLegacyJournalWithoutInvalidating(t *testing.T) {
+	archive := createWebBundle(t, map[string][]byte{
+		"index.html":    []byte("<script src=\"/assets/app.js\"></script>"),
+		"assets/app.js": []byte("window.app = true"),
+	})
+	backend := newAppCachePublishBackend()
+	seedAppBundleObjects(t, backend.store, archive)
+	seedAppCacheRetryJournal(t, backend.store, []byte(`{"schemaVersion":1,"paths":["/index.html"]}`))
+	backend.failInvalidation = true
+	result, err := DeployApp(context.Background(), backend, AppDeployOptions{ArchivePath: archive})
+	if err != nil || result.Outcome != "no-op" || result.FilesPublished != 0 {
+		t.Fatalf("DeployApp() = %+v, %v; want success after retiring the legacy record", result, err)
+	}
+	assertAppCacheRetryPresent(t, backend.store, false)
+	if len(backend.store.invalidations) != 0 {
+		t.Fatalf("app deploy called Invalidate: %v", backend.store.invalidations)
+	}
 }
 
 func TestDeployAppRejectsMalformedRetryJournalBeforePublishing(t *testing.T) {

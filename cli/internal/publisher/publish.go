@@ -164,7 +164,7 @@ func DeployApp(ctx context.Context, backend DeploymentBackend, options AppDeploy
 		if options.DryRun {
 			result.Changes = plan
 			result.FilesPublished = len(changed)
-			if len(changed) > 0 {
+			if len(changed) > 0 || retryETag != "" {
 				result.Outcome = "planned"
 			} else {
 				result.Outcome = "no-op"
@@ -180,22 +180,20 @@ func DeployApp(ctx context.Context, backend DeploymentBackend, options AppDeploy
 			result.Outcome = "no-op"
 			return result, nil
 		}
-		if len(changed) > 0 {
-			if len(bundle.manifest.Reads) > 0 {
-				if err := stageVersionRecord(ctx, conditional, appVersionsKey, versionRecord{SchemaVersion: 1, WebVersion: bundle.manifest.Version, Reads: bundle.manifest.Reads}); err != nil {
-					return result, err
-				}
+		if len(bundle.manifest.Reads) > 0 {
+			if err := stageVersionRecord(ctx, conditional, appVersionsKey, versionRecord{SchemaVersion: 1, WebVersion: bundle.manifest.Version, Reads: bundle.manifest.Reads}); err != nil {
+				return result, err
 			}
-			for _, file := range changed {
-				if err := backend.PutObject(ctx, file.path, Object{
-					Bytes: file.data, ContentType: contentType(file.path), Cache: appFileCacheControl(file.path), Metadata: map[string]string{
-						"artifact-pages-version":       bundle.manifest.Version,
-						"artifact-pages-source-commit": bundle.manifest.SourceCommit,
-						"artifact-pages-sha256":        file.sha256,
-					},
-				}); err != nil {
-					return result, fmt.Errorf("publish application object %s: %w", file.path, err)
-				}
+		}
+		for _, file := range changed {
+			if err := backend.PutObject(ctx, file.path, Object{
+				Bytes: file.data, ContentType: contentType(file.path), Cache: appFileCacheControl(file.path), Metadata: map[string]string{
+					"artifact-pages-version":       bundle.manifest.Version,
+					"artifact-pages-source-commit": bundle.manifest.SourceCommit,
+					"artifact-pages-sha256":        file.sha256,
+				},
+			}); err != nil {
+				return result, fmt.Errorf("publish application object %s: %w", file.path, err)
 			}
 		}
 

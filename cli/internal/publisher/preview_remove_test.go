@@ -19,7 +19,10 @@ type previewRemoveFaultBackend struct {
 	failListPrefix       string
 	unsafeListKey        string
 	partialDeleteOnce    bool
+	failDeleteOnce       bool
 	failCatalogWriteOnce bool
+	migrationConflict    bool
+	migrationPutError    error
 	invalidateFailure    bool
 	clearResponseLost    bool
 	listPrefixes         []string
@@ -28,6 +31,17 @@ type previewRemoveFaultBackend struct {
 }
 
 func (backend *previewRemoveFaultBackend) PutObjectConditional(ctx context.Context, key string, object Object, condition ObjectCondition) (string, error) {
+	if key == previewCleanupKey("sre") && condition.IfMatchETag != "" {
+		if backend.migrationConflict {
+			backend.migrationConflict = false
+			return "", ErrPreconditionFailed
+		}
+		if backend.migrationPutError != nil {
+			err := backend.migrationPutError
+			backend.migrationPutError = nil
+			return "", err
+		}
+	}
 	if key == "_previews/sre/catalog.json" && backend.failCatalogWriteOnce {
 		backend.failCatalogWriteOnce = false
 		return "", errors.New("injected catalog update failure")
@@ -77,6 +91,10 @@ func (backend *previewRemoveFaultBackend) DeleteObjects(ctx context.Context, key
 			return err
 		}
 		return errors.New("injected partial revision delete")
+	}
+	if backend.failDeleteOnce && !(len(keys) == 1 && keys[0] == previewCleanupKey("sre")) {
+		backend.failDeleteOnce = false
+		return errors.New("injected revision deletion failure")
 	}
 	return backend.lockMemoryBackend.DeleteObjects(ctx, keys)
 }
@@ -280,6 +298,128 @@ func TestPreviewCleanupSchema1MigratesUnderLockAndDryRunDoesNotWrite(t *testing.
 	}
 	if _, err := RemovePreviewGroup(context.Background(), backend, PreviewRemoveOptions{SiteID: "sre", GroupID: "pr:42"}); err != nil {
 		t.Fatalf("retry migrated cleanup: %v", err)
+	}
+}
+
+func seedPreviewSchema1Cleanup(t *testing.T, backend *previewRemoveFaultBackend, sha string) []string {
+	t.Helper()
+	manifest, _ := previewRemoveTestManifest("sre", sha, "guide.md")
+	catalog := preview.Catalog{SchemaVersion: preview.SchemaVersion, Site: "sre", Groups: []preview.Group{previewRemoveTestGroup("pr:42", sha)}, RevisionHistory: []preview.GroupRevisionHistory{ownership("pr:42", preview.RevisionOwnership{HeadSHA: sha, Files: []string{"guide.md"}})}}
+	seedPreviewRemoveCatalog(t, backend, catalog, map[string]preview.RevisionManifest{sha: manifest})
+	options := PreviewRemoveOptions{SiteID: "sre", GroupID: "pr:42"}
+	conditional, store, err := previewRemovalDependencies(context.Background(), backend, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := planPreviewRemoval(context.Background(), backend, store, "sre", "pr:42", catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := struct {
+		SchemaVersion int                         `json:"schemaVersion"`
+		Site          string                      `json:"site"`
+		GroupID       string                      `json:"groupId"`
+		Revisions     []preview.RevisionOwnership `json:"revisions"`
+		ObjectKeys    []string                    `json:"objectKeys"`
+		Paths         []string                    `json:"paths"`
+	}{previewCleanupLegacySchema, plan.journal.Site, plan.journal.GroupID, plan.journal.Revisions, plan.journal.ObjectKeys, []string{"/_previews/sre/*"}}
+	contents, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, release, err := (SiteLockManager{Backend: conditional}).Acquire(context.Background(), "sre")
+	if err != nil {
+		t.Fatal(err)
+	}
+	locked := context.WithValue(context.Background(), previewSiteLockContextKey{}, previewSiteLock{site: snapshot.Site, owner: snapshot.Owner, etag: snapshot.ETag})
+	if _, err := conditional.PutObjectConditional(locked, previewCleanupKey("sre"), Object{Bytes: contents, ContentType: "application/json; charset=utf-8", Cache: "no-store"}, ObjectCondition{IfNoneMatch: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := release(); err != nil {
+		t.Fatal(err)
+	}
+	return append([]string(nil), plan.journal.ObjectKeys...)
+}
+
+func TestPreviewCleanupMigrationCASFailuresPreserveLegacyJournal(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		configure func(*previewRemoveFaultBackend)
+		wantErr   error
+		wantText  string
+	}{
+		{name: "etag mismatch", configure: func(backend *previewRemoveFaultBackend) { backend.migrationConflict = true }, wantErr: ErrPreconditionFailed},
+		{name: "put error", configure: func(backend *previewRemoveFaultBackend) {
+			backend.migrationPutError = errors.New("injected migration PUT failure")
+		}, wantText: "injected migration PUT failure"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			backend := newPreviewRemoveFaultBackend()
+			objectKeys := seedPreviewSchema1Cleanup(t, backend, "dedededeedededededededededededededededee")
+			before, _, err := backend.GetObject(context.Background(), previewCleanupKey("sre"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			test.configure(backend)
+			_, err = RemovePreviewGroup(context.Background(), backend, PreviewRemoveOptions{SiteID: "sre", GroupID: "pr:42"})
+			if err == nil || (test.wantErr != nil && !errors.Is(err, test.wantErr)) || (test.wantText != "" && !strings.Contains(err.Error(), test.wantText)) {
+				t.Fatalf("RemovePreviewGroup() error = %v; want %v / %q", err, test.wantErr, test.wantText)
+			}
+			if len(backend.deleteCalls) != 0 {
+				t.Fatalf("migration failure caused object deletions: %v", backend.deleteCalls)
+			}
+			after, _, err := backend.GetObject(context.Background(), previewCleanupKey("sre"))
+			if err != nil || !reflect.DeepEqual(before.Bytes, after.Bytes) {
+				t.Fatalf("legacy journal changed after migration failure: before=%s after=%s err=%v", before.Bytes, after.Bytes, err)
+			}
+			for _, key := range objectKeys {
+				if _, _, err := backend.GetObject(context.Background(), key); err != nil {
+					t.Errorf("owned object %q was deleted after migration failure: %v", key, err)
+				}
+			}
+		})
+	}
+}
+
+func TestPreviewCleanupCrashAfterMigrationRetriesDeletion(t *testing.T) {
+	backend := newPreviewRemoveFaultBackend()
+	objectKeys := seedPreviewSchema1Cleanup(t, backend, "efefefefefefefefefefefefefefefefefefefef")
+	backend.failDeleteOnce = true
+	if _, err := RemovePreviewGroup(context.Background(), backend, PreviewRemoveOptions{SiteID: "sre", GroupID: "pr:42"}); err == nil || !strings.Contains(err.Error(), "injected revision deletion failure") {
+		t.Fatalf("first removal error = %v; want deletion failure after migration", err)
+	}
+	journal, _, err := backend.GetObject(context.Background(), previewCleanupKey("sre"))
+	if err != nil {
+		t.Fatalf("migrated journal missing after deletion failure: %v", err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(journal.Bytes, &fields); err != nil {
+		t.Fatal(err)
+	}
+	var schema int
+	_ = json.Unmarshal(fields["schemaVersion"], &schema)
+	if schema != 2 {
+		t.Fatalf("journal schemaVersion = %d; want 2", schema)
+	}
+	if _, ok := fields["paths"]; ok {
+		t.Fatalf("migrated journal retains paths: %s", journal.Bytes)
+	}
+	for _, key := range objectKeys {
+		if _, _, err := backend.GetObject(context.Background(), key); err != nil {
+			t.Errorf("object %q disappeared before retry: %v", key, err)
+		}
+	}
+	result, err := RemovePreviewGroup(context.Background(), backend, PreviewRemoveOptions{SiteID: "sre", GroupID: "pr:42"})
+	if err != nil || result.Outcome != "removed" {
+		t.Fatalf("retry removal = %+v, %v", result, err)
+	}
+	for _, key := range objectKeys {
+		if _, _, err := backend.GetObject(context.Background(), key); !errors.Is(err, ErrObjectNotFound) {
+			t.Errorf("object %q remains after retry: %v", key, err)
+		}
+	}
+	if _, _, err := backend.GetObject(context.Background(), previewCleanupKey("sre")); !errors.Is(err, ErrObjectNotFound) {
+		t.Fatalf("journal remains after retry: %v", err)
 	}
 }
 
