@@ -348,8 +348,8 @@ function ArtifactRow({
  * quiet style), so page and folder titles share one start x (ISSUE-120). Flat lists keep the old padding.
  */
 function artifactRowPadding(style: TreeStyle, depth: number, inTree: boolean) {
-  if (style === 'branch-guides') return inTree ? '28px' : '8px'
-  return `${(inTree ? 29 : 10) + depth * 14}px`
+  if (style === 'branch-guides') return inTree ? '34px' : '8px'
+  return `${(inTree ? 35 : 10) + depth * 14}px`
 }
 
 function rootPaths(artifacts: ArtifactIndexEntry[]) {

@@ -248,11 +248,11 @@ test('mobile search affordances describe their scope and open the matching palet
 
   await page.getByRole('link', { name: /SRE/ }).click()
   await expect(page).toHaveURL(/\/sre$/)
-  const homeJump = page.getByRole('button', { name: 'Search this site' })
+  const homeJump = page.locator('.context-bar').getByRole('button', { name: /Search pages/ })
   await expect(homeJump).toBeVisible()
   await expect(homeJump.locator('kbd')).toBeHidden()
 
-  const collapsedSearch = page.getByRole('button', { name: 'Jump to a page in SRE' })
+  const collapsedSearch = page.locator('.context-bar').getByRole('button', { name: 'Search pages in SRE' })
   await expect(collapsedSearch).toBeVisible()
   await collapsedSearch.click()
   const pagePalette = page.getByRole('dialog', { name: 'Command palette' })
@@ -289,7 +289,7 @@ test('the command palette has a pointer close control at desktop and mobile widt
 
     await page.goto('/sre')
 
-    const trigger = page.getByRole('button', { name: 'Jump to a page in SRE' }).first()
+    const trigger = page.locator('.context-bar').getByRole('button', { name: 'Search pages in SRE' }).first()
     await trigger.click()
     palette = page.getByRole('dialog', { name: 'Command palette' })
     await expect(palette.getByRole('button', { name: 'Close command palette' })).toBeVisible()
@@ -362,7 +362,7 @@ for (const entry of [
 
 test('the palette is a combobox whose active descendant follows the selection and never dangles', async ({ page }) => {
   await page.goto('/sre')
-  await page.getByRole('button', { name: 'Jump to a page in SRE' }).click()
+  await page.locator('.context-bar').getByRole('button', { name: 'Search pages in SRE' }).click()
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const input = palette.getByRole('combobox', { name: 'Search artifacts, sites, commands, and headings' })
   await input.fill('latency')
@@ -410,7 +410,7 @@ test('desktop search affordances keep keyboard shortcuts visible', async ({ page
   await expect(page).toHaveURL(/\/sre$/)
   // The site home has no inline filter; the search entry beside the section links opens the palette.
   await expect(page.getByTestId('directory-page').getByRole('searchbox')).toHaveCount(0)
-  const homeJump = page.getByRole('button', { name: 'Search this site' })
+  const homeJump = page.locator('.context-bar').getByRole('button', { name: /Search pages/ })
   await expect(homeJump).toBeVisible()
   await expect(homeJump.locator('kbd')).toHaveText('⌘ K')
   await expect(homeJump).toHaveAttribute('aria-keyshortcuts', 'Meta+K Control+K')
@@ -424,7 +424,7 @@ test('desktop search affordances keep keyboard shortcuts visible', async ({ page
   await expect(sidebarSearch).toHaveAttribute('aria-keyshortcuts', 'Meta+K Control+K')
 })
 
-test('the SRE index date is labeled as generation time and follows artifact updates', async ({ page }) => {
+test('generation timestamps retain metadata integrity without occupying the sidebar footer', async ({ page }) => {
   for (const siteId of ['sre', 'frontend', 'showcase']) {
     const [indexResponse, metadataResponse] = await Promise.all([
       page.request.get(`/_indexes/${siteId}/index.json`),
@@ -442,15 +442,10 @@ test('the SRE index date is labeled as generation time and follows artifact upda
     expect(Date.parse(index.generatedAt), `${siteId} generation timestamp`).toBeGreaterThanOrEqual(latestArtifactUpdate)
   }
 
-  const sreIndexResponse = await page.request.get('/_indexes/sre/index.json')
-  const sreIndex = await sreIndexResponse.json()
-
   await page.goto('/sre')
-  const indexDate = page.locator('.sidebar-panel .index-date')
-  await expect(indexDate).toContainText('Index generated')
-  await expect(indexDate.locator('time')).toHaveAttribute('datetime', sreIndex.generatedAt)
-  const generatedDate = new Date(sreIndex.generatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
-  await expect(indexDate).toHaveText(`Index generated ${generatedDate}`)
+  await expect(page.locator('.sidebar-panel .index-date')).toHaveCount(0)
+  await expect(page.locator('.sidebar-footer').getByRole('button', { name: /^Color theme:/ })).toBeVisible()
+
 })
 
 test('the root command palette searches sites and opens the selected site', async ({ page }) => {
@@ -1009,7 +1004,7 @@ test('site discovery loads lightweight metadata for all sites but detailed index
   await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
   await expect.poll(() => [...indexRequests]).toEqual(['/_indexes/sre/index.json'])
 
-  const paletteButton = page.getByRole('button', { name: 'Jump to a page in SRE' })
+  const paletteButton = page.locator('.context-bar').getByRole('button', { name: 'Search pages in SRE' })
   await paletteButton.click()
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('combobox', { name: 'Search artifacts, sites, commands, and headings' })
@@ -1037,7 +1032,8 @@ test('single-site switcher selects its only destination so Enter opens the curre
 
   await page.goto('/sre/reports/latency-retrospective.md')
   await expect(page.getByTestId('markdown-document').getByRole('heading', { level: 2, name: 'Outcome at a glance' })).toBeVisible()
-  await page.getByRole('button', { name: 'Switch site. Current site: SRE' }).click()
+  await page.getByRole('button', { name: 'Site menu. Current site: SRE' }).click()
+  await page.getByRole('menuitem', { name: 'Switch site…', exact: true }).click()
 
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('combobox', { name: 'Search artifacts, sites, commands, and headings' })
@@ -1052,35 +1048,26 @@ test('single-site switcher selects its only destination so Enter opens the curre
 
 test('site switcher names its count in the tooltip and accessible name', async ({ page }) => {
   await page.goto('/sre')
-  const multi = page.getByRole('button', { name: /^Switch site\. Current site: SRE\. ([2-9]|\d{2,}) sites available$/ })
+  const multi = page.getByRole('button', { name: /^Site menu\. Current site: SRE\. [0-9]+ sites available$/ })
   await expect(multi).toBeVisible()
-  await expect(multi).toHaveAttribute('title', /^Switch site — ([2-9]|\d{2,}) sites available$/)
   await expect(multi.locator('.site-switcher-hint')).toHaveAttribute('aria-hidden', 'true')
-
-  await page.route('**/_indexes/sites.json', (route) => route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify({
-      schemaVersion: 1,
-      sites: [{ id: 'sre', name: 'SRE', repository: 'artifact-pages/artifact-pages', sourcePath: 'fixtures/storage/_artifacts/sre' }],
-    }),
-  }))
-  await page.goto('/sre/reports/latency-retrospective.md')
-  const single = page.getByRole('button', { name: 'Switch site. Current site: SRE. 1 site available', exact: true })
-  await expect(single).toBeVisible()
-  await expect(single).toHaveAttribute('title', 'Switch site — 1 site available')
-
+  await multi.click()
+  const menu = page.getByRole('menu', { name: /^Site menu/ })
+  await expect(menu.getByRole('menuitem')).toHaveText(['Site home', 'Switch site…', 'All sites'])
+  await page.keyboard.press('Escape')
+  await expect(multi).toBeFocused()
   await page.getByRole('button', { name: 'Collapse sidebar' }).click()
-  const rail = page.getByRole('button', { name: 'Switch site. Current site: SRE. 1 site available', exact: true })
-  await expect(rail).toBeVisible()
-  await expect(rail).toHaveAttribute('title', 'Switch site — SRE (1 site available)')
+  const rail = page.getByRole('button', { name: /^Site menu\. Current site: SRE/ })
+  await rail.click()
+  await expect(page.getByRole('menu', { name: /^Site menu/ }).getByRole('menuitem')).toHaveText(['Site home', 'Switch site…', 'All sites'])
 })
 
 test('site switcher has no default destination, then selects matching sites by query', async ({ page }) => {
   await page.goto('/sre')
   await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
 
-  await page.getByRole('button', { name: 'Switch site. Current site: SRE' }).click()
+  await page.getByRole('button', { name: 'Site menu. Current site: SRE' }).click()
+  await page.getByRole('menuitem', { name: 'Switch site…', exact: true }).click()
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('combobox', { name: 'Search artifacts, sites, commands, and headings' })
   await expect(palette).toBeVisible()
@@ -1100,7 +1087,8 @@ test('site switcher has no default destination, then selects matching sites by q
 
   await page.goBack()
   await expect(page).toHaveURL(/\/sre$/)
-  await page.getByRole('button', { name: 'Switch site. Current site: SRE' }).click()
+  await page.getByRole('button', { name: 'Site menu. Current site: SRE' }).click()
+  await page.getByRole('menuitem', { name: 'Switch site…', exact: true }).click()
   const reopenedPalette = page.getByRole('dialog', { name: 'Command palette' })
   const reopenedSearch = reopenedPalette.getByRole('combobox', { name: 'Search artifacts, sites, commands, and headings' })
   await reopenedSearch.fill('@front')
@@ -1118,7 +1106,7 @@ test('fixture discovery never falls back to nginx directory listing', async ({ p
   })
   await page.goto('/sre')
   await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Switch site. Current site: SRE' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Site menu. Current site: SRE' })).toBeVisible()
   expect(directoryRequests).toEqual([])
 })
 
@@ -1262,7 +1250,7 @@ test('palette commands pin and unpin the current artifact and toggle Details onl
   await expect(details).toBeHidden()
 
   await page.goto('/sre')
-  await expect(page.getByRole('button', { name: 'Jump to a page in SRE' })).toBeVisible()
+  await expect(page.locator('.context-bar').getByRole('button', { name: 'Search pages in SRE' })).toBeVisible()
   await openPalette()
   await search.fill('>Toggle')
   await expect(palette.getByRole('option', { name: 'Toggle sidebar' })).toBeVisible()
@@ -1311,7 +1299,7 @@ test('the current page pin control stays discoverable with the sidebar closed an
 
 test('the palette footer advertises headings only when a site is open', async ({ page }) => {
   const open = async (trigger: string) => {
-    await page.getByRole('button', { name: trigger }).click()
+    await page.locator('.context-bar').getByRole('button', { name: trigger.replace('Jump to a page in', 'Search pages in') }).click()
     const palette = page.getByRole('dialog', { name: 'Command palette' })
     await expect(palette).toBeVisible()
     return palette.locator('.palette-footer')
@@ -1347,7 +1335,7 @@ test('the palette footer advertises headings only when a site is open', async ({
 
 test('the command palette supports Ctrl+J/K navigation and opens the selected result', async ({ page }) => {
   await page.goto('/sre')
-  await page.getByRole('button', { name: 'Jump to a page in SRE' }).click()
+  await page.locator('.context-bar').getByRole('button', { name: 'Search pages in SRE' }).click()
 
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('combobox', { name: 'Search artifacts, sites, commands, and headings' })
@@ -1412,7 +1400,7 @@ test('large site indexes use their compact palette scoring profile', async ({ pa
 
   await page.goto('/sre/architecture/platform-topology/index.html')
   await expect(page.locator('iframe.artifact-frame')).toBeVisible()
-  await page.getByRole('button', { name: 'Jump to a page in SRE' }).click()
+  await page.locator('.context-bar').getByRole('button', { name: 'Search pages in SRE' }).click()
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('combobox', { name: 'Search artifacts, sites, commands, and headings' })
   await search.fill('platform')
@@ -1424,7 +1412,7 @@ test('a blank palette returns to recently read pages across reloads, and typing 
   await page.goto('/sre')
 
   const openPalette = async () => {
-    await page.getByRole('button', { name: 'Jump to a page in SRE' }).click()
+    await page.locator('.context-bar').getByRole('button', { name: 'Search pages in SRE' }).click()
     return page.getByRole('dialog', { name: 'Command palette' })
   }
 
@@ -1479,7 +1467,7 @@ test('a blank palette lists the pinned current page once, before recent reads, a
   await page.reload()
   await expect(page.locator('.pinned-tree .tree-artifact')).toContainText('Platform topology')
 
-  await page.getByRole('button', { name: 'Jump to a page in SRE' }).click()
+  await page.locator('.context-bar').getByRole('button', { name: 'Search pages in SRE' }).click()
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('combobox', { name: 'Search artifacts, sites, commands, and headings' })
   const currentResult = palette.getByRole('option', { name: /Platform topology/ })
@@ -1501,7 +1489,7 @@ test('a blank palette lists the pinned current page once, before recent reads, a
 
 test('normal page search stays on the current site while @ and > select explicit scopes', async ({ page }) => {
   await page.goto('/sre')
-  await page.getByRole('button', { name: 'Jump to a page in SRE' }).click()
+  await page.locator('.context-bar').getByRole('button', { name: 'Search pages in SRE' }).click()
 
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('combobox', { name: 'Search artifacts, sites, commands, and headings' })
@@ -1535,6 +1523,7 @@ const CHECKOUT_PATH = 'incidents/checkout-latency/index.html'
 const EMPTY_HISTORY_HINT = 'Type a page title or path to find it. Pin pages or open a few and they will show up here.'
 
 async function openPaletteWithShortcut(page: Page) {
+  await expect(page.locator('.context-bar').or(page.getByRole('heading', { name: 'Choose a site' }))).toBeVisible()
   await page.keyboard.press('Control+k')
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   await expect(palette).toBeVisible()
@@ -1644,7 +1633,7 @@ test('arrow keys win over a resting pointer while the list scrolls', async ({ pa
   // The fixtures list at most 8 rows, so a short viewport is what makes the list scroll.
   await page.setViewportSize({ width: 1280, height: 360 })
   await page.goto('/textsearch')
-  await page.getByRole('button', { name: /^Jump to a page in/ }).click()
+  await page.locator('.context-bar').getByRole('button', { name: /^Search pages in/ }).click()
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const options = palette.getByRole('option')
   await expect(options).toHaveCount(8)
@@ -1665,7 +1654,7 @@ test('arrow keys win over a resting pointer while the list scrolls', async ({ pa
 
 test('blank palette with no history shows guidance and ranked pages', async ({ page }) => {
   await page.goto('/sre')
-  await page.getByRole('button', { name: 'Jump to a page in SRE' }).click()
+  await page.locator('.context-bar').getByRole('button', { name: 'Search pages in SRE' }).click()
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   await expect(palette.locator('.palette-hint').first()).toHaveText(EMPTY_HISTORY_HINT)
   await expect(palette.locator('.palette-section-title')).toHaveText(['Pages'])
@@ -1821,7 +1810,7 @@ test('# searches headings of all pages with the open page first', async ({ page 
 test('plain search stays in the active site', async ({ page }) => {
   await page.goto('/sre')
   const palette = await (async () => {
-    await page.getByRole('button', { name: 'Jump to a page in SRE' }).click()
+    await page.locator('.context-bar').getByRole('button', { name: 'Search pages in SRE' }).click()
     return page.getByRole('dialog', { name: 'Command palette' })
   })()
   const search = palette.getByRole('combobox', { name: PALETTE_SEARCH_LABEL })
@@ -1898,7 +1887,7 @@ test.describe('mobile viewport', () => {
 
 test('explicit palette scopes give recovery guidance for their own results', async ({ page }) => {
   await page.goto('/sre/incidents/checkout-latency/index.html')
-  await page.getByRole('button', { name: 'Jump to a page in SRE' }).click()
+  await page.locator('.context-bar').getByRole('button', { name: 'Search pages in SRE' }).click()
 
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('combobox', { name: 'Search artifacts, sites, commands, and headings' })
@@ -1921,7 +1910,7 @@ test('explicit palette scopes give recovery guidance for their own results', asy
 
 test('site search updates correctly for sequential typing, backspace, and a new query', async ({ page }) => {
   await page.goto('/sre')
-  await page.getByRole('button', { name: 'Jump to a page in SRE' }).click()
+  await page.locator('.context-bar').getByRole('button', { name: 'Search pages in SRE' }).click()
 
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('combobox', { name: 'Search artifacts, sites, commands, and headings' })
@@ -1940,7 +1929,7 @@ test('site search updates correctly for sequential typing, backspace, and a new 
 
 test('artifact-context # search opens a heading and closes the palette', async ({ page }) => {
   await page.goto('/sre/incidents/checkout-latency/index.html')
-  await page.getByRole('button', { name: 'Jump to a page in SRE' }).click()
+  await page.locator('.context-bar').getByRole('button', { name: 'Search pages in SRE' }).click()
 
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('combobox', { name: 'Search artifacts, sites, commands, and headings' })
@@ -2051,7 +2040,7 @@ test('Markdown heading IDs match the shared fixture and Contents and palette rea
   await expect(imageHeading).toBeInViewport()
   await expect.poll(() => scrollport.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
 
-  await page.getByRole('button', { name: 'Jump to a page in SRE' }).click()
+  await page.locator('.context-bar').getByRole('button', { name: 'Search pages in SRE' }).click()
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('combobox', { name: 'Search artifacts, sites, commands, and headings' })
   await search.fill('#repeated heading')
@@ -2433,7 +2422,7 @@ test('Contents opened by shortcut or palette takes focus without stranding the r
   await expect(contents.getByRole('button', { name: 'Close Contents' })).toBeFocused()
   await page.keyboard.press('Escape')
   await expect(contents).toBeHidden()
-  await expect(page.getByRole('button', { name: 'More actions' })).toBeFocused()
+  await expect(page.locator('.context-bar').getByRole('button', { name: 'Contents', exact: true })).toBeFocused()
 })
 
 test('multi-file artifacts stay in their site namespace when relative asset paths overlap', async ({ page }) => {
@@ -2686,7 +2675,7 @@ test('Unicode artifact titles remain readable in navigation and search', async (
   await page.locator('.sidebar-body .browse-tree .tree-directory-button[data-tree-path="guides"]').click()
   await expect(page.locator('.sidebar-body .tree-artifact[data-tree-path="guides/設計-note.md"] .tree-label').first()).toHaveText('設計 Note')
 
-  await page.getByRole('button', { name: 'Jump to a page in SRE' }).click()
+  await page.locator('.context-bar').getByRole('button', { name: 'Search pages in SRE' }).click()
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   await palette.getByRole('combobox', { name: 'Search artifacts, sites, commands, and headings' }).fill('設計')
   await expect(palette.getByRole('option', { name: /設計 Note/ })).toBeVisible()
@@ -3113,7 +3102,8 @@ test('mobile navigation starts closed and closes after opening artifacts or swit
   await expect(sidebar).toBeHidden()
 
   await page.getByRole('button', { name: 'Expand navigation' }).click()
-  await page.getByRole('button', { name: 'Switch site. Current site: SRE' }).click()
+  await page.getByRole('button', { name: 'Site menu. Current site: SRE' }).click()
+  await page.getByRole('menuitem', { name: 'Switch site…', exact: true }).click()
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('combobox', { name: 'Search artifacts, sites, commands, and headings' })
   await search.fill('@front')
@@ -3224,7 +3214,7 @@ test('the command palette shortcut works while the artifact iframe has focus', a
 
 test('command palette fuzzy search shows matched characters in titles and paths', async ({ page }) => {
   await page.goto('/sre/incidents/checkout-latency/index.html')
-  await page.getByRole('button', { name: 'Jump to a page in SRE' }).click()
+  await page.locator('.context-bar').getByRole('button', { name: 'Search pages in SRE' }).click()
 
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('combobox', { name: 'Search artifacts, sites, commands, and headings' })
@@ -3327,7 +3317,7 @@ test('the collapsed rail searches artifacts and switches sites', async ({ page }
   await page.emulateMedia({ colorScheme: 'dark' })
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
 
-  await page.getByRole('button', { name: 'Jump to a page in SRE' }).click()
+  await page.locator('.context-bar').getByRole('button', { name: 'Search pages in SRE' }).click()
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('combobox', { name: 'Search artifacts, sites, commands, and headings' })
   await search.fill('>theme')
@@ -3344,7 +3334,7 @@ test('the collapsed rail searches artifacts and switches sites', async ({ page }
   await expect.poll(() => page.evaluate(() => localStorage.getItem('git-artifact-pages-theme'))).toBe('dark')
   await page.getByRole('button', { name: 'Collapse sidebar' }).click()
 
-  await page.getByRole('button', { name: 'Jump to a page in SRE' }).click()
+  await page.locator('.context-bar').getByRole('button', { name: 'Search pages in SRE' }).click()
   const systemPalette = page.getByRole('dialog', { name: 'Command palette' })
   const systemSearch = systemPalette.getByRole('combobox', { name: 'Search artifacts, sites, commands, and headings' })
   await systemSearch.fill('>Use system theme')
@@ -3357,7 +3347,7 @@ test('the collapsed rail searches artifacts and switches sites', async ({ page }
   await page.emulateMedia({ colorScheme: 'light' })
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
 
-  await page.getByRole('button', { name: 'Jump to a page in SRE' }).click()
+  await page.locator('.context-bar').getByRole('button', { name: 'Search pages in SRE' }).click()
   const searchPalette = page.getByRole('dialog', { name: 'Command palette' })
   const artifactSearch = searchPalette.getByRole('combobox', { name: 'Search artifacts, sites, commands, and headings' })
   await artifactSearch.fill('Platform topology')
@@ -3369,7 +3359,8 @@ test('the collapsed rail searches artifacts and switches sites', async ({ page }
   await expect(page.getByRole('button', { name: 'Expand navigation' })).toBeVisible()
   await expect(page.getByRole('navigation', { name: 'Artifact path' })).not.toContainText('SRE')
 
-  await page.getByRole('button', { name: 'Switch site. Current site: SRE' }).click()
+  await page.getByRole('button', { name: 'Site menu. Current site: SRE' }).click()
+  await page.getByRole('menuitem', { name: 'Switch site…', exact: true }).click()
   const sitePalette = page.getByRole('dialog', { name: 'Command palette' })
   await expect(sitePalette.getByRole('combobox', { name: 'Search artifacts, sites, commands, and headings' })).toHaveValue('@')
   const frontendIndex = page.waitForResponse((response) => {
@@ -3381,7 +3372,8 @@ test('the collapsed rail searches artifacts and switches sites', async ({ page }
   await expect(page).toHaveURL(/\/frontend$/)
   await expect(page.getByRole('heading', { name: 'Frontend', exact: true })).toBeVisible()
 
-  await page.getByRole('button', { name: 'Switch site. Current site: Frontend' }).click()
+  await page.getByRole('button', { name: 'Site menu. Current site: Frontend' }).click()
+  await page.getByRole('menuitem', { name: 'Switch site…', exact: true }).click()
   const showcasePalette = page.getByRole('dialog', { name: 'Command palette' })
   const showcaseIndex = page.waitForResponse((response) => {
     return new URL(response.url()).pathname === '/_indexes/showcase/index.json'
@@ -3538,7 +3530,7 @@ test('breadcrumb menus close after browser history navigates to another artifact
   await page.goto('/showcase')
 
   const searchForArtifact = async (query: string) => {
-    await page.getByRole('button', { name: 'Jump to a page in HTML Showcase' }).click()
+    await page.locator('.context-bar').getByRole('button', { name: 'Search pages in HTML Showcase' }).click()
     const palette = page.getByRole('dialog', { name: 'Command palette' })
     const search = palette.getByRole('combobox', { name: 'Search artifacts, sites, commands, and headings' })
     await search.fill(query)
@@ -3571,19 +3563,19 @@ test('showing a breadcrumb location on mobile moves focus into the sidebar', asy
   await page.goto('/showcase/reports/cloud-spend-review/index.html')
 
   const breadcrumb = page.getByRole('navigation', { name: 'Artifact path' })
-  await breadcrumb.getByRole('button', { name: 'Browse artifacts in reports', exact: true }).tap()
-  const menu = page.getByRole('menu', { name: 'Artifacts in reports', exact: true })
+  await breadcrumb.getByRole('button', { name: 'Page hierarchy', exact: true }).tap()
+  const menu = page.getByRole('menu', { name: 'Page hierarchy', exact: true })
   await menu.getByRole('menuitem', { name: 'Show in sidebar' }).tap()
 
-  const reportsFolder = page.locator('.sidebar-panel .browse-tree [data-tree-path="reports"]')
+  const reportsFolder = page.locator('.sidebar-panel .browse-tree [data-tree-path="reports/cloud-spend-review"]')
   await expect(reportsFolder).toBeVisible()
-  await expect(reportsFolder).toBeFocused()
+  await expect(page.locator('.sidebar-panel .browse-tree :focus')).toHaveAttribute('data-tree-path', /^reports\/cloud-spend-review(?:\/index\.html)?$/)
   await page.close()
 })
 
-test('breadcrumb sibling menus stay within narrow screens and scroll long lists', async ({ browser }) => {
+test('breadcrumb sibling menus stay within tablet screens and scroll long lists', async ({ browser }) => {
   const page = await browser.newPage({
-    viewport: { width: 390, height: 844 },
+    viewport: { width: 768, height: 844 },
     isMobile: true,
     hasTouch: true,
   })
@@ -3660,7 +3652,7 @@ test('the site home jumps to a page by name through the palette, ignoring IME En
 
   // The site home has no inline filter; finding a page by name is the palette's job.
   await expect(page.getByTestId('directory-page').getByRole('searchbox')).toHaveCount(0)
-  const homeJump = page.getByRole('button', { name: 'Search this site' })
+  const homeJump = page.locator('.context-bar').getByRole('button', { name: /Search pages/ })
   await homeJump.click()
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const search = palette.getByRole('combobox', { name: 'Search artifacts, sites, commands, and headings' })
@@ -3689,39 +3681,23 @@ test('the site home jumps to a page by name through the palette, ignoring IME En
 test('artifact title and site home navigation stay clear on narrow screens', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/sre/reports/latency-retrospective.md')
-
-  const article = page.locator('.markdown-article')
-  await expect(article.locator('h1')).toHaveCount(0)
-
-  const currentArtifact = page.locator('.breadcrumbs .breadcrumb-current')
-  await expect(currentArtifact).toHaveText('Latency Retrospective')
-  await expect(currentArtifact).toHaveAttribute('aria-current', 'page')
-
-  // Site home and all sites are More menu items; the site switcher is in the drawer (ISSUE-080).
-  await moreActionsButton(page).click()
-  const menu = page.getByRole('menu', { name: 'More actions' })
-  await expect(menu.getByRole('menuitem', { name: 'SRE home' })).toBeVisible()
-  await menu.getByRole('menuitem', { name: 'SRE home' }).click()
+  await expect(page.locator('.markdown-article h1')).toHaveCount(0)
+  await expect(page.locator('.breadcrumbs .breadcrumb-current')).toHaveText('Latency Retrospective')
+  await expect(page.locator('.context-bar').getByRole('button', { name: 'Contents', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Expand navigation', exact: true }).click()
+  await page.getByRole('button', { name: /^Site menu\. Current site: SRE/ }).click()
+  await page.getByRole('menuitem', { name: 'Site home', exact: true }).click()
   await expect(page).toHaveURL(/\/sre\/?$/)
-  await expect(page.getByRole('heading', { name: 'SRE' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'SRE', exact: true })).toBeVisible()
 })
 
-test('all-sites navigation is available from site home and documents with the sidebar closed on narrow screens', async ({ page }) => {
+test('all-sites navigation is available through the site menu on narrow screens', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
-
   for (const path of ['/sre', '/sre/reports/latency-retrospective.md']) {
     await page.goto(path)
-    await expect(page.locator('.sidebar-panel')).toBeHidden()
-
-    await moreActionsButton(page).click()
-    const menu = page.getByRole('menu', { name: 'More actions' })
-    const allSitesItem = menu.getByRole('menuitem', { name: 'All sites' })
-    await expect(allSitesItem).toBeVisible()
-    if (path !== '/sre') {
-      await expect(menu.getByRole('menuitem', { name: 'SRE home' })).toBeVisible()
-    }
-
-    await allSitesItem.click()
+    await page.getByRole('button', { name: 'Expand navigation', exact: true }).click()
+    await page.getByRole('button', { name: /^Site menu\. Current site: SRE/ }).click()
+    await page.getByRole('menuitem', { name: 'All sites', exact: true }).click()
     await expect(page).toHaveURL('/')
     await expect(page.getByRole('heading', { name: 'Choose a site' })).toBeVisible()
   }
@@ -3732,7 +3708,7 @@ test('site home hides artifact actions while an open artifact provides usable ac
   await page.goto('/sre')
 
   const contextActions = page.locator('.context-actions')
-  await expect(contextActions.getByRole('button', { name: 'Go to all sites' })).toBeVisible()
+  await expect(contextActions.getByRole('button', { name: /Search pages/ })).toBeVisible()
   await expect(contextActions.getByRole('button', { name: 'Contents', exact: true })).toHaveCount(0)
   await expect(contextActions.getByRole('button', { name: 'Details', exact: true })).toHaveCount(0)
   await expect(contextActions.getByRole('button', { name: 'Copy artifact link' })).toHaveCount(0)
@@ -4025,7 +4001,7 @@ test('published preview documents stay out of production browsing and the site-h
   await expect(browse).not.toContainText(previewOnlyTitle)
 
   previewRequests.length = 0
-  await page.getByRole('button', { name: 'Jump to a page in HTML Showcase' }).click()
+  await page.locator('.context-bar').getByRole('button', { name: 'Search pages in HTML Showcase' }).click()
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   const paletteSearch = palette.getByRole('combobox', { name: 'Search artifacts, sites, commands, and headings' })
   await paletteSearch.fill(previewOnlyTitle)
@@ -4063,7 +4039,7 @@ test('preview list validates candidate manifests before presenting entries', asy
 
   // The palette's Open previews command reaches the same validated list.
   await page.goto('/sre')
-  await page.getByRole('button', { name: 'Jump to a page in SRE' }).click()
+  await page.locator('.context-bar').getByRole('button', { name: 'Search pages in SRE' }).click()
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   await palette.getByRole('combobox', { name: 'Search artifacts, sites, commands, and headings' }).fill('>open previews')
   await palette.getByRole('option', { name: /Open previews/ }).click()
@@ -4252,7 +4228,7 @@ test('the in-site palette opens previews by command without loading preview data
   await page.goto('/sre')
   await expect(page.locator('.site-section-count')).toBeVisible()
   previewRequests.length = 0
-  await page.getByRole('button', { name: 'Jump to a page in SRE' }).click()
+  await page.locator('.context-bar').getByRole('button', { name: 'Search pages in SRE' }).click()
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   await expect(palette).toBeVisible()
   // Previews are not palette results; they are reached through the Open previews command.
@@ -4455,7 +4431,7 @@ test('preview HTML keeps changed-document navigation in the preview and unchange
   await page.frameLocator('iframe[title="Local preview HTML"]').getByRole('link', { name: 'Open the published retrospective' }).click()
   await expect(page).toHaveURL('/sre/reports/latency-retrospective.md')
   await expect(page.getByRole('heading', { name: 'Preview' })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Go to SRE home' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Site menu\. Current site: SRE/ })).toBeVisible()
 })
 
 test('preview HTML fragments reach the frame on direct load, same-document links, history, and delayed load', async ({ page }) => {
@@ -5137,63 +5113,34 @@ test.describe('page text search', () => {
     await expect(page.locator('.site-picker-badge')).toHaveCount(1)
   })
 
-  test('the sidebar filters titles and paths without searching, and Enter opens the results page', async ({ page }) => {
+  test('the sidebar opens palette title matches and hands the same query to full text', async ({ page }) => {
     const requests = recordSearchRequests(page)
     await page.goto('/textsearch')
-    await expect(page.getByRole('heading', { name: 'Text Search', exact: true })).toBeVisible()
-    await expect(sidebar(page).getByRole('button', { name: 'Jump to a page in Text Search' })).toHaveCount(0)
-
-    await filter(page).focus()
-    await filter(page).pressSequentially('latency')
-    const section = sidebar(page).locator('.filter-results')
-    await expect(section.locator('a[data-tree-path="reports/latency-retrospective.md"]')).toBeVisible()
-    // The tree is filtered by title and path; the last row leads to the results page.
-    await expect(sidebar(page).locator('.browse-tree')).toHaveCount(0)
-    const fullTextRow = section.getByRole('link', { name: /Search full text for “latency”/ })
-    await expect(fullTextRow).toHaveAttribute('href', '/textsearch/_search?q=latency')
-    // Typing, and an IME conversion's Enter, search nothing and change nothing.
-    await expect(page).toHaveURL(/\/textsearch$/)
+    await expect(sidebar(page).getByRole('searchbox')).toHaveCount(0)
+    await sidebar(page).getByRole('button', { name: 'Jump to a page in Text Search' }).click()
+    const palette = page.getByRole('dialog', { name: 'Command palette' })
+    await palette.getByRole('combobox').fill('latency')
+    await expect(palette.getByRole('option', { name: /Checkout latency incident review/ })).toBeVisible()
     expect(requests).toEqual([])
-    // ↓ moves from the field to the first title match.
-    await page.keyboard.press('ArrowDown')
-    await expect(section.locator('a[data-tree-path]').first()).toBeFocused()
-    await filter(page).focus()
-
-    await filter(page).press('Enter')
+    await palette.getByRole('option', { name: /Search full text for “latency”/ }).click()
     await expect(page).toHaveURL(/\/textsearch\/_search\?q=latency$/)
     await expect(status(page)).toHaveText('5 pages contain “latency”')
-    // The results page is ready to refine, and the sidebar is back to browsing.
-    await expect(field(page)).toHaveValue('latency')
     await expect(field(page)).toBeFocused()
-    await expect(filter(page)).toHaveValue('')
     await expect(sidebar(page).locator('.browse-tree')).toBeVisible()
     expect(requests[0]).toBe('/_indexes/textsearch/search/manifest.json')
-    expect(requests.every((pathname) => pathname.startsWith('/_indexes/textsearch/search/'))).toBe(true)
-
-    // The row works as a link too.
-    await page.goto('/textsearch')
-    await filter(page).fill('lighthouse')
-    await sidebar(page).getByRole('link', { name: /Search full text for “lighthouse”/ }).click()
-    await expect(page).toHaveURL(/\/textsearch\/_search\?q=lighthouse$/)
-    await expect(status(page)).toHaveText('24 pages contain “lighthouse”')
   })
 
-  test('a filter without title or path matches still offers the full-text search, and Esc clears it', async ({ page }) => {
+  test('palette lookup without title matches offers full text and Escape restores its sidebar trigger', async ({ page }) => {
     await page.goto('/textsearch')
-    await filter(page).fill('zzzqqq')
-    await expect(sidebar(page).getByText('No titles or paths match “zzzqqq”.')).toBeVisible()
-    await expect(sidebar(page).getByRole('link', { name: /Search full text for “zzzqqq”/ })).toBeVisible()
-    await filter(page).press('Escape')
-    await expect(filter(page)).toHaveValue('')
+    const trigger = sidebar(page).getByRole('button', { name: 'Jump to a page in Text Search' })
+    await trigger.click()
+    const palette = page.getByRole('dialog', { name: 'Command palette' })
+    await palette.getByRole('combobox').fill('zzzqqq')
+    await expect(palette.getByRole('option', { name: /Search full text for “zzzqqq”/ })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(palette).toBeHidden()
+    await expect(trigger).toBeFocused()
     await expect(sidebar(page).locator('.browse-tree')).toBeVisible()
-    await filter(page).fill('x')
-    await sidebar(page).getByRole('button', { name: 'Clear filter' }).click()
-    await expect(filter(page)).toBeFocused()
-    await expect(filter(page)).toHaveValue('')
-    // A blank filter never opens the results page.
-    await filter(page).fill('   ')
-    await filter(page).press('Enter')
-    await expect(page).toHaveURL(/\/textsearch$/)
   })
 
   test('the results page has a titled, shareable URL', async ({ page }) => {
@@ -5254,8 +5201,9 @@ test.describe('page text search', () => {
 
   test('Back returns through the typed query to the page the search started from', async ({ page }) => {
     await page.goto('/textsearch/reports/latency-retrospective.md')
-    await filter(page).fill('latency')
-    await filter(page).press('Enter')
+    const palette = await openPaletteWithShortcut(page)
+    await palette.getByRole('combobox').fill('latency')
+    await palette.getByRole('option', { name: /Search full text for “latency”/ }).click()
     await expect(status(page)).toHaveText('5 pages contain “latency”')
     await field(page).fill('lighthouse')
     await expect(status(page)).toHaveText('24 pages contain “lighthouse”')
@@ -6479,9 +6427,8 @@ test.describe('release UX fixes', () => {
     expect(metrics.left).toBeGreaterThanOrEqual(metrics.navLeft - 1)
     expect(metrics.right).toBeLessThanOrEqual(metrics.navRight + 1)
     expect(metrics.width).toBeGreaterThanOrEqual(180)
-    expect(await label.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
-    // Folders stay reachable through their menus.
-    await expect(nav.getByRole('button', { name: 'Browse artifacts in incidents', exact: true })).toHaveCount(1)
+    // The current title is prioritized; longer names may ellipsize within the single row.
+    await expect(nav.getByRole('button', { name: 'Page hierarchy', exact: true })).toHaveCount(1)
     await page.close()
   })
 
@@ -6918,36 +6865,34 @@ test.describe('directory pages', () => {
     await expect(page.locator('.browse-tree .tree-more')).toHaveText('4899 more in wide')
   })
 
-  test('a sidebar filter matching 2,000 pages mounts at most 101 rows', async ({ page }) => {
-    // The sidebar filter needs a site with page text search data.
+  test('palette lookup of 2,000 pages keeps bounded results and leaves Browse intact', async ({ page }) => {
     await registerTextSearchSite(page)
     await routeDirectoryIndex(page, bulkPages, 'textsearch')
     await page.goto('/textsearch')
-    await page.getByRole('searchbox', { name: 'Filter pages in Text Search by title or path' }).fill('alpha page')
-    const results = page.locator('.filter-results a.tree-artifact')
+    await expect(page.getByRole('searchbox', { name: /Filter pages/ })).toHaveCount(0)
+    const palette = await openPaletteWithShortcut(page)
+    await palette.getByRole('combobox').fill('alpha page')
+    const results = palette.locator('.palette-section').first().getByRole('option')
     await expect(results.first()).toBeVisible()
     expect(await results.count()).toBeLessThanOrEqual(101)
-    await expect(page.locator('.filter-results .tree-more')).toContainText('more matches')
+    await page.keyboard.press('Escape')
+    await expect(page.locator('.browse-tree')).toBeVisible()
   })
 
-  test('a filter matching 60 folders of 60 pages stays within the tree-wide row budget', async ({ page }) => {
+  test('palette lookup across 60 folders leaves the sidebar tree unchanged', async ({ page }) => {
     const grid: ExtraPage[] = Array.from({ length: 3600 }, (_, position): ExtraPage => {
       const folder = String(Math.floor(position / 60) + 1).padStart(2, '0')
-      const number = String((position % 60) + 1).padStart(2, '0')
-      return [`zf${folder}/p${number}.md`, `Zeta ${folder}-${number}`, '2026-10-05T00:00:00Z', []]
+      return [`zf${folder}/p${position}.md`, `Zeta ${position}`, '2026-10-05T00:00:00Z', []]
     })
     await registerTextSearchSite(page)
     await routeDirectoryIndex(page, grid, 'textsearch')
     await page.goto('/textsearch')
-    await page.getByRole('searchbox', { name: 'Filter pages in Text Search by title or path' }).fill('zeta')
-    const tree = page.locator('.filter-results .artifact-tree')
-    await expect(tree.locator('a.tree-artifact').first()).toBeVisible()
-    // Budgeted rows (folder and page rows) <= 400; at most one overflow row per branch (60 folders + the root).
-    const mounted = await tree.locator('.tree-directory-row, .tree-directory-button:not(.tree-directory-toggle), a.tree-artifact').count()
-    expect(mounted).toBeLessThanOrEqual(400)
-    const overflow = await tree.locator('.tree-more:not(:has-text("Some folders"))').count()
-    expect(overflow).toBeLessThanOrEqual(61)
-    await expect(tree.locator('.tree-more', { hasText: 'Some folders are not fully shown. Collapse folders or refine the filter.' })).toBeVisible()
+    const palette = await openPaletteWithShortcut(page)
+    await palette.getByRole('combobox').fill('zeta')
+    await expect(palette.getByRole('option').first()).toBeVisible()
+    expect(await palette.getByRole('option').count()).toBeLessThanOrEqual(101)
+    await page.keyboard.press('Escape')
+    expect(await page.locator('.browse-tree .tree-directory-row').count()).toBeLessThanOrEqual(400)
   })
 
   test('a README folder with 5,000 children collapses to 10 rows and pages after Show all', async ({ page }) => {
@@ -7123,7 +7068,7 @@ test.describe('directory pages', () => {
     const sections = directory.getByRole('navigation', { name: 'Site sections' })
     await expect(sections.getByRole('link')).toHaveText([/^Overview$/, /^Files$/, /^Previews/])
     await expect(sections.getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page')
-    await expect(directory.getByRole('button', { name: 'Search this site' })).toBeVisible()
+    await expect(page.locator('.context-bar').getByRole('button', { name: /Search pages/ })).toBeVisible()
     await expect(directory.locator('.browse-section')).toHaveCount(0)
     await expect(directory.locator('.directory-children')).toHaveCount(0)
     await expect(directory.locator('.directory-readme-label')).toHaveText('README.md')
@@ -7424,7 +7369,7 @@ test.describe('narrow chrome and scroll cues (ISSUE-080)', () => {
     await expect(menu.getByRole('menuitemradio', { name: 'Theme: Dark' })).toBeFocused()
     await page.keyboard.press('Home')
     await expect(menu.getByRole('menuitemcheckbox', { name: 'Contents' })).toBeFocused()
-    expect(await items.count()).toBeGreaterThan(2)
+    expect(await items.count()).toBe(2)
     const box = (await menu.boundingBox())!
     expect(box.x).toBeGreaterThanOrEqual(0)
     expect(box.x + box.width).toBeLessThanOrEqual(390)
@@ -7491,7 +7436,7 @@ test.describe('narrow chrome and scroll cues (ISSUE-080)', () => {
     await more.click()
     const menu = page.getByRole('menu', { name: 'More actions' })
     await expect(menu.getByRole('menuitem', { name: 'Copy link' })).toBeVisible()
-    await expect(menu.getByRole('menuitem', { name: 'SRE home' })).toBeVisible()
+    await expect(menu.getByRole('menuitem', { name: 'SRE home' })).toHaveCount(0)
     await expect(menu.getByRole('menuitemcheckbox', { name: 'Contents' })).toHaveCount(0)
     await page.keyboard.press('Escape')
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
@@ -7500,7 +7445,7 @@ test.describe('narrow chrome and scroll cues (ISSUE-080)', () => {
     await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
     await moreActionsButton(page).click()
     const missingMenu = page.getByRole('menu', { name: 'More actions' })
-    await expect(missingMenu.getByRole('menuitem', { name: 'All sites' })).toBeVisible()
+    await expect(missingMenu.getByRole('menuitem', { name: 'All sites' })).toHaveCount(0)
     await expect(missingMenu.getByRole('menuitem', { name: 'Copy link' })).toHaveCount(0)
     await page.keyboard.press('Escape')
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
@@ -8823,7 +8768,7 @@ test.describe('site home sections', () => {
   ]
   const sections = (page: Page) => page.getByRole('navigation', { name: 'Site sections' })
   const sectionLink = (page: Page, name: string) => sections(page).getByRole('link', { name: new RegExp(`^${name}`) })
-  const searchEntry = (page: Page) => page.getByRole('button', { name: 'Search this site' })
+  const searchEntry = (page: Page) => page.locator('.context-bar').getByRole('button', { name: /Search pages/ })
   const scroller = (page: Page) => page.locator('.directory-scroll')
   const bulkEntries = (count: number): HomeEntry[] => Array.from({ length: count }, (_, position) => ({
     path: `bulk-${String(position + 1).padStart(2, '0')}.md`,
@@ -9086,7 +9031,8 @@ test.describe('site home sections', () => {
     expect(new Set(manifests()).size).toBe(manifestCount)
 
     // Leaving the site ends the visit: coming back loads again.
-    await page.getByRole('button', { name: 'All sites' }).click()
+    await page.getByRole('button', { name: /^Site menu\. Current site:/ }).click()
+    await page.getByRole('menuitem', { name: 'All sites', exact: true }).click()
     await expect(page).toHaveURL('/')
     await page.goto('/sre/_previews')
     await expect(page.getByRole('region', { name: 'Preview pr:42' })).toBeVisible()
@@ -9164,7 +9110,8 @@ test.describe('site home sections', () => {
   test('Files has no other search entry', async ({ page }) => {
     await page.goto('/sre?section=files')
     await expect(page.getByTestId('directory-page').getByRole('searchbox')).toHaveCount(0)
-    await expect(page.getByTestId('directory-page').getByRole('button', { name: /search|jump/i })).toHaveCount(1)
+    await expect(page.getByTestId('directory-page').getByRole('button', { name: /search|jump/i })).toHaveCount(0)
+    await expect(searchEntry(page)).toHaveCount(1)
   })
 
   test('sections are history entries: Back and Forward restore them', async ({ page }) => {
@@ -9229,7 +9176,8 @@ test.describe('site home sections', () => {
     await expect(page.locator('[data-directory-page="bulk-40.md"]')).toBeAttached()
     await scroller(page).evaluate((element) => { element.scrollTop = 700 })
     await expect.poll(() => scroller(page).evaluate((element) => element.scrollTop)).toBeGreaterThan(600)
-    await page.getByRole('button', { name: 'All sites' }).click()
+    await page.getByRole('button', { name: /^Site menu\. Current site:/ }).click()
+    await page.getByRole('menuitem', { name: 'All sites', exact: true }).click()
     await page.getByRole('link', { name: /HTML Showcase/ }).click()
     await expect(page).toHaveURL('/showcase')
     await expect(page.getByRole('heading', { level: 1, name: 'HTML Showcase', exact: true })).toBeVisible()
@@ -9262,7 +9210,7 @@ test.describe('site home sections', () => {
     }
   })
 
-  test('keyboard order is Overview, Files, Previews, search; aria-current marks one link', async ({ page }) => {
+  test('section keyboard order stays Overview, Files, Previews; header Search is independently reachable', async ({ page }) => {
     await routeSreHome(page, readmeEntries, { bodies: readmeBodies })
     await page.goto('/sre')
     await sectionLink(page, 'Overview').focus()
@@ -9270,8 +9218,13 @@ test.describe('site home sections', () => {
     await expect(sectionLink(page, 'Files')).toBeFocused()
     await page.keyboard.press('Tab')
     await expect(sectionLink(page, 'Previews')).toBeFocused()
-    await page.keyboard.press('Tab')
-    await expect(searchEntry(page)).toBeFocused()
+    await sectionLink(page, 'Overview').focus()
+    let reachedSearch = false
+    for (let i = 0; i < 12; i++) {
+      await page.keyboard.press('Shift+Tab')
+      if (await searchEntry(page).evaluate((el) => el.ownerDocument.activeElement === el)) { reachedSearch = true; break }
+    }
+    expect(reachedSearch).toBe(true)
     await expect(sections(page).locator('[aria-current="page"]')).toHaveCount(1)
     // Enter on a link switches the section, and focus follows to the new current link.
     await sectionLink(page, 'Files').focus()
@@ -9370,7 +9323,7 @@ test.describe('preview reading in the reader shell (ISSUE-109)', () => {
     await expect(column(page).getByRole('heading', { name: 'Details' })).toBeVisible()
     await expect(column(page).getByRole('heading', { name: 'Contents' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Contents' })).toHaveCount(0)
-    await page.getByRole('button', { name: 'Jump to a page in SRE' }).click()
+    await page.locator('.context-bar').getByRole('button', { name: 'Search pages in SRE' }).click()
     await expect(page.getByRole('dialog', { name: 'Command palette' })).toBeVisible()
     await page.keyboard.press('Escape')
     await expect(page.locator('main#main-content article')).toContainText('Markdown document and its image')
@@ -9950,4 +9903,133 @@ test.describe('browser-localized date and count display (IMP-84)', () => {
     await expect(times.first()).toHaveAttribute('title', / UTC$/)
     await expect(times.first()).toHaveAttribute('datetime', /Z$/)
   })
+})
+
+
+test('S3 one-row header keeps permanent Search and readable long titles across widths', async ({ page }) => {
+  const title = 'A very long artifact title describing resilient systems and incident review '.repeat(4)
+  await page.route('**/_indexes/sre/index.json', async (route) => {
+    const response = await route.fetch()
+    const index = await response.json()
+    for (const artifact of index.artifacts) if (artifact.path === CHECKOUT_PATH) artifact.title = title.trim()
+    await route.fulfill({ response, json: index })
+  })
+  for (const width of [390, 768, 1280, 1440]) {
+    await page.setViewportSize({ width, height: 844 })
+    await page.goto(`/sre/${CHECKOUT_PATH}`)
+    const header = page.locator('.context-bar')
+    const search = header.getByRole('button', { name: 'Search pages in SRE' })
+    await expect(search).toBeVisible()
+    const current = header.locator('.breadcrumb-current')
+    await expect(current).toHaveText(title.trim())
+    const [bar, name, button] = await Promise.all([header.boundingBox(), current.boundingBox(), search.boundingBox()])
+    expect(bar!.height).toBeLessThan(60)
+    expect(name!.width).toBeGreaterThan(40)
+    expect(name!.x + name!.width).toBeLessThanOrEqual(button!.x + 2)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
+    if (width === 390) {
+      await expect(header.getByRole('button', { name: 'Contents', exact: true })).toBeVisible()
+      await expect(header.getByRole('button', { name: 'Page hierarchy' })).toBeVisible()
+      await header.getByRole('button', { name: 'Contents', exact: true }).click()
+      await page.getByRole('dialog', { name: 'Contents' }).getByRole('button', { name: 'Close Contents' }).click()
+      await expect(header.getByRole('button', { name: 'Contents', exact: true })).toBeFocused()
+    }
+    await search.click()
+    await expect(page.getByRole('dialog', { name: 'Command palette' })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(search).toBeFocused()
+  }
+})
+
+test('S3 site menu works by keyboard and Pinned collapses independently of Browse', async ({ page }) => {
+  await page.goto(`/sre/${CHECKOUT_PATH}`)
+  const site = page.getByRole('button', { name: /^Site menu\. Current site: SRE/ })
+  await site.click()
+  const menu = page.getByRole('menu', { name: /^Site menu/ })
+  const home = menu.getByRole('menuitem', { name: 'Site home', exact: true })
+  await expect(home).toBeFocused()
+  await expect(home).toHaveAttribute('href', '/sre')
+  await expect(menu.getByRole('menuitem', { name: 'All sites', exact: true })).toHaveAttribute('href', '/')
+  await expectModifiedClickKeptForBrowser(page, home)
+  await page.keyboard.press('End')
+  await expect(menu.getByRole('menuitem', { name: 'All sites', exact: true })).toBeFocused()
+  await page.keyboard.press('Home')
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('Enter')
+  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  await expect(palette.getByRole('combobox')).toHaveValue('@')
+  await page.keyboard.press('Escape')
+  await expect(site).toBeFocused()
+  await page.getByRole('button', { name: 'Pin Checkout latency incident review', exact: true }).click()
+  const pins = page.getByRole('button', { name: 'Pinned', exact: true })
+  await expect(pins).toHaveAttribute('aria-expanded', 'true')
+  await pins.click()
+  await expect(pins).toHaveAttribute('aria-expanded', 'false')
+  await expect(page.locator('.pinned-tree .artifact-tree')).toBeHidden()
+  await expect(page.locator('.browse-tree')).toBeVisible()
+  const navigation = await openPaletteWithShortcut(page)
+  await navigation.getByRole('combobox').fill('topology')
+  await navigation.getByRole('option', { name: /Platform topology/ }).click()
+  await expect(pins).toHaveAttribute('aria-expanded', 'false')
+  await pins.click()
+  await expect(page.locator('.pinned-tree .artifact-tree')).toBeVisible()
+  await expect(page.locator('.sidebar-panel').getByRole('searchbox')).toHaveCount(0)
+  expect((await page.locator('.browse-tree .tree-directory-toggle').first().boundingBox())!.width).toBeGreaterThanOrEqual(28)
+})
+
+
+test('S3 site menus dismiss when the mobile drawer closes or the route changes', async ({ page }) => {
+  await registerTextSearchSite(page)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/textsearch')
+  await page.getByRole('button', { name: 'Expand navigation', exact: true }).click()
+  const site = page.getByRole('button', { name: /^Site menu\. Current site: Text Search/ })
+  await site.click()
+  await expect(site).toHaveAttribute('aria-expanded', 'true')
+  await page.keyboard.press('Control+b')
+  await page.getByRole('button', { name: 'Expand navigation', exact: true }).click()
+  await expect(site).toHaveAttribute('aria-expanded', 'false')
+  await site.click()
+  await page.keyboard.press('Control+Shift+F')
+  await expect(page).toHaveURL(/\/textsearch\/_search/)
+  await page.getByRole('button', { name: 'Expand navigation', exact: true }).click()
+  await expect(site).toHaveAttribute('aria-expanded', 'false')
+})
+
+test('S3 long mobile hierarchy menus stay in the viewport and support End and Escape', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 520 })
+  const path = Array.from({ length: 18 }, (_, i) => `long-parent-folder-${i}-with-details`).join('/') + '/index.html'
+  await page.route('**/_indexes/sre/index.json', async (route) => {
+    const response = await route.fetch()
+    const index = await response.json()
+    const source = index.artifacts.find((entry: { path: string }) => entry.path === CHECKOUT_PATH)
+    index.artifacts.push({ ...source, id: path, path })
+    await route.fulfill({ response, json: index })
+  })
+  await page.goto(`/sre/${path}`)
+  const trigger = page.getByRole('button', { name: 'Page hierarchy', exact: true })
+  await trigger.click()
+  const menu = page.getByRole('menu', { name: 'Page hierarchy' })
+  const box = (await menu.boundingBox())!
+  expect(box.x).toBeGreaterThanOrEqual(0)
+  expect(box.x + box.width).toBeLessThanOrEqual(390)
+  expect(box.y + box.height).toBeLessThanOrEqual(520)
+  expect(await menu.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true)
+  await expect(menu.getByRole('menuitem').first()).toHaveAttribute('href', '/sre')
+  await page.keyboard.press('End')
+  await expect(menu.getByRole('menuitem', { name: 'Show in sidebar' })).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(trigger).toBeFocused()
+})
+
+test('S3 single-site menus keep the singular count and Space follows their home link', async ({ page }) => {
+  await page.route('**/_indexes/sites.json', (route) => route.fulfill({ json: { schemaVersion: 1, sites: [{ id: 'sre', name: 'SRE', repository: 'artifact-pages/artifact-pages', sourcePath: 'fixtures/storage/_artifacts/sre' }] } }))
+  await page.goto(`/sre/${CHECKOUT_PATH}`)
+  const trigger = page.getByRole('button', { name: 'Site menu. Current site: SRE. 1 site available', exact: true })
+  await expect(trigger).toHaveAttribute('title', 'Site menu. Current site: SRE. 1 site available')
+  await trigger.click()
+  await expect(page.getByRole('menuitem', { name: 'Site home', exact: true })).toBeFocused()
+  await page.keyboard.press('Space')
+  await expect(page).toHaveURL('/sre')
+  await expect(page.getByRole('menu', { name: /^Site menu/ })).toHaveCount(0)
 })

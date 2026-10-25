@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { findIndexArtifact, folderLabel } from '../domain/directory.ts'
 import type { ArtifactIndexEntry } from '../domain/index'
 import { compareArtifactsByPath } from '../domain/listing-order.ts'
+import { ReaderMoreMenu } from './ReaderMoreMenu'
 import { Icon } from './Icon'
 import { followInApp } from './spa-link'
 
@@ -18,6 +19,7 @@ type MenuPosition = { top: number; left: number }
 
 export function ArtifactBreadcrumbs({
   artifactPath,
+  compact = false,
   siteTitle,
   artifacts,
   currentArtifact,
@@ -29,6 +31,7 @@ export function ArtifactBreadcrumbs({
   onRevealInSidebar,
 }: {
   artifactPath: string
+  compact?: boolean
   siteTitle: string
   artifacts: ArtifactIndexEntry[]
   currentArtifact?: ArtifactIndexEntry
@@ -176,6 +179,25 @@ export function ArtifactBreadcrumbs({
         ? items.length - 1
         : (currentIndex + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length
     items[nextIndex]?.focus()
+  }
+
+  if (compact) {
+    const current = isDirectoryPage
+      ? directoryLabel(artifacts, artifactPath, segments.at(-1) ?? siteTitle)
+      : currentArtifact?.title ?? segments.at(-1) ?? siteTitle
+    return <nav className="breadcrumbs breadcrumbs-compact" aria-label="Artifact path">
+      <ReaderMoreMenu dismissKey={artifactPath} className="hierarchy-menu" label="Page hierarchy" triggerClassName="icon-button hierarchy-trigger"
+        triggerContent={<Icon name="chevron" size={14} />}
+        items={[
+          { id: 'site-root', label: `${siteTitle} home`, icon: 'home', href: folderHref(''), onSelect: () => onOpenFolder('') },
+          ...segments.slice(0, -1).map((segment, i) => {
+            const path = segments.slice(0, i + 1).join('/')
+            return { id: path, label: directoryLabel(artifacts, path, segment), icon: 'folder' as const, href: folderHref(path), title: path, onSelect: () => onOpenFolder(path) }
+          }),
+          { id: 'reveal', label: 'Show in sidebar', icon: 'sidebar', onSelect: () => onRevealInSidebar(artifactPath, isDirectoryPage) },
+        ]} />
+      <span ref={currentLabelRef} tabIndex={-1} className="breadcrumb-current" aria-current="page" title={current}><span className="breadcrumb-trigger-label">{current}</span></span>
+    </nav>
   }
 
   return (

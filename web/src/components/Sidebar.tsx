@@ -1,15 +1,13 @@
-import { formatNumber, formatDate } from '../domain/display-locale'
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { SiteMenu } from './SiteMenu'
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ArtifactIndexEntry, SiteIndex, SiteSummary } from '../domain/index'
 import type { ThemeMode } from '../domain/theme'
 import { artifactSourceLinks } from '../domain/source-links'
-import { artifactRouteHref, searchRouteHref } from '../routing'
+import { artifactRouteHref } from '../routing'
 import type { ArtifactRowActions } from './ArtifactTree'
-import { ArtifactTree, artifactMatchesFilter, type TreeStyle } from './ArtifactTree'
+import { ArtifactTree, type TreeStyle } from './ArtifactTree'
 import { Icon } from './Icon'
-import { siteCountLabel } from '../domain/site-count-label'
 import { ThemeSwitcher } from './ThemeSwitcher'
-import { SearchFullTextRow, SidebarFilterBar } from './PageTextSearch'
 
 export type SidebarPageTextSearch = {
   /** Opens the full-text results page for a query. */
@@ -18,6 +16,8 @@ export type SidebarPageTextSearch = {
 
 export function Sidebar({
   id,
+  visible = true,
+  navigationKey,
   index,
   sites,
   artifactPath,
@@ -29,6 +29,7 @@ export function Sidebar({
   onOpenArtifact,
   onOpenDirectory,
   onOpenRoot,
+  onAllSites,
   onToast,
   themeMode,
   onSetThemeMode,
@@ -40,6 +41,8 @@ export function Sidebar({
   previewSection,
 }: {
   id?: string
+  visible?: boolean
+  navigationKey?: string
   index: SiteIndex
   sites: SiteSummary[]
   artifactPath?: string
@@ -53,6 +56,7 @@ export function Sidebar({
   onOpenDirectory: (path: string) => void
   /** Opens the site root folder page (the overflow row of the root branch). */
   onOpenRoot?: () => void
+  onAllSites?: () => void
   onToast: (message: string) => void
   themeMode: ThemeMode
   onSetThemeMode: (mode: ThemeMode) => void
@@ -65,8 +69,8 @@ export function Sidebar({
   /** A preview document is open (ISSUE-109): this replaces the published tree, which is not part of the preview. */
   previewSection?: ReactNode
 }) {
-  const [draft, setDraft] = useState('')
-  const filter = draft.trim()
+  const [pinsOpen, setPinsOpen] = useState(true)
+  const pinnedId = useId()
   const sidebarRef = useRef<HTMLElement>(null)
   const lastRevealedRequest = useRef<number | null>(null)
   const pinned = useMemo(() => {
@@ -76,16 +80,6 @@ export function Sidebar({
   const currentArtifactId = artifactPath
     ? index.artifacts.find((artifact) => artifact.path === artifactPath)?.id
     : undefined
-
-  const filterMatches = useMemo(() => {
-    const query = filter.toLocaleLowerCase()
-    return query ? index.artifacts.filter((artifact) => artifactMatchesFilter(artifact, query)).length : 0
-  }, [index.artifacts, filter])
-
-  function searchFullText(query: string) {
-    setDraft('')
-    pageTextSearch?.onSearchFullText(query)
-  }
 
   const rowHref = (artifact: ArtifactIndexEntry) => artifactRouteHref(index.site.id, artifact.path)
 
@@ -123,7 +117,6 @@ export function Sidebar({
 
   useEffect(() => {
     if (!revealRequest || lastRevealedRequest.current === revealRequest.request) return
-    if (filter) return
 
     const browseTree = sidebarRef.current?.querySelector('.browse-tree')
     const rows = Array.from(browseTree?.querySelectorAll<HTMLElement>('[data-tree-path]') ?? [])
@@ -134,32 +127,15 @@ export function Sidebar({
 
     target.scrollIntoView({ block: 'nearest' })
     lastRevealedRequest.current = revealRequest.request
-  }, [expandedPaths, filter, revealRequest])
+  }, [expandedPaths, revealRequest])
 
-  const siteCount = sites.length
-  const countLabel = siteCountLabel(siteCount)
 
   return (
     <aside ref={sidebarRef} id={id} className={`sidebar-panel sidebar-panel--refined tree-style-${treeStyle}`} aria-label={`${index.site.title} navigation`}>
       <div className="sidebar-top">
         <div className="sidebar-top-row">
-          <button
-            className="site-switcher"
-            id="site-switcher"
-            title={`Switch site — ${countLabel}`}
-            aria-label={`Switch site. Current site: ${index.site.title}. ${countLabel}`}
-            onClick={(event) => {
-              event.currentTarget.focus()
-              onOpenPalette('@')
-            }}
-          >
-            <span className="site-mark site-mark-small" aria-hidden="true">
-              {index.site.title.slice(0, 1).toUpperCase()}
-            </span>
-            <span className="site-switcher-name">{index.site.title}</span>
-            <span className="site-switcher-hint" aria-hidden="true">{formatNumber(siteCount)}</span>
-            <Icon name="chevron" size={12} />
-          </button>
+          <SiteMenu dismissKey={`${navigationKey}:${visible}`} homeHref={`/${encodeURIComponent(index.site.id)}`} title={index.site.title} count={sites.length}
+            onHome={() => onOpenRoot?.()} onSwitch={() => onOpenPalette('@')} onAllSites={() => onAllSites?.()} />
           <button
             className="icon-button sidebar-collapse-trigger"
             id="sidebar-collapse-trigger"
@@ -173,15 +149,6 @@ export function Sidebar({
           </button>
         </div>
 
-        {pageTextSearch && !previewSection ? (
-          <SidebarFilterBar
-            siteTitle={index.site.title}
-            draft={draft}
-            onDraftChange={setDraft}
-            onSearchFullText={searchFullText}
-            onFocusFirstMatch={() => sidebarRef.current?.querySelector<HTMLElement>('.sidebar-body .tree-artifact')?.focus()}
-          />
-        ) : (
           <button
             type="button"
             className="sidebar-palette-trigger sidebar-palette-trigger--wide"
@@ -197,42 +164,17 @@ export function Sidebar({
             <span className="sidebar-palette-label">Jump to a page…</span>
             <kbd>⌘ K</kbd>
           </button>
-        )}
       </div>
 
       <nav className="sidebar-body" aria-label={previewSection ? 'Preview documents' : 'Artifacts'}>
-        {previewSection ? previewSection : pageTextSearch && filter ? (
-          <div className="sidebar-section filter-results">
-            <div className="sidebar-section-title">
-              <span className="sidebar-section-label"><Icon name="search" size={12} />Titles and paths</span>
-            </div>
-            {filterMatches > 0 ? (
-              <ArtifactTree
-                artifacts={index.artifacts}
-                activePath={artifactPath}
-                query={filter}
-                style={treeStyle}
-                view="tree"
-                onOpenArtifact={onOpenArtifact}
-                artifactHref={rowHref}
-              />
-            ) : (
-              <p className="sidebar-empty">No titles or paths match “{filter}”.</p>
-            )}
-            <SearchFullTextRow
-              query={filter}
-              href={searchRouteHref(index.site.id, filter)}
-              onOpen={() => searchFullText(filter)}
-            />
-          </div>
-        ) : (
+        {previewSection ? previewSection : (
           <>
             {pinned.length > 0 ? (
               <div className="sidebar-section pinned-tree">
-                <div className="sidebar-section-title">
-                  <span className="sidebar-section-label"><Icon name="pin" size={12} />Pinned</span>
-                </div>
-                <ArtifactTree
+                <button type="button" className="sidebar-section-title sidebar-pin-toggle" aria-expanded={pinsOpen} aria-controls={pinnedId} onClick={() => setPinsOpen(!pinsOpen)}>
+                  <span className="sidebar-section-label"><Icon name="pin" size={12} />Pinned</span><Icon name="chevron" size={12} />
+                </button>
+                <div id={pinnedId} hidden={!pinsOpen}><ArtifactTree
                   artifacts={pinned}
                   activePath={artifactPath}
                   style={treeStyle}
@@ -240,7 +182,7 @@ export function Sidebar({
                   onOpenArtifact={onOpenArtifact}
                   artifactHref={rowHref}
                   getArtifactActions={getArtifactActions}
-                />
+                /></div>
               </div>
             ) : null}
             <div className="sidebar-section browse-tree">
@@ -273,11 +215,7 @@ export function Sidebar({
       </nav>
 
       <footer className="sidebar-footer">
-        {previewSection ? <span className="index-date" /> : (
-          <span className="index-date">
-            Index generated <time dateTime={index.generatedAt}>{formatDate(index.generatedAt)}</time>
-          </span>
-        )}
+        <span className="sidebar-footer-spacer" />
         <ThemeSwitcher
           buttonClassName="icon-button theme-toggle"
           mode={themeMode}
