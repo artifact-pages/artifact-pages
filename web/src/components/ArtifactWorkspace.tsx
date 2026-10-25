@@ -170,6 +170,8 @@ export function ArtifactWorkspace({
     [route.kind, routeArtifactPath, currentArtifact, index.artifacts, rootListing],
   )
   const isSiteRoot = Boolean(currentDirectory) && !routeArtifactPath
+  const folderIntroduction = !isSiteRoot ? currentDirectory?.indexArtifact : undefined
+  const publishedReadingArtifact = currentArtifact ?? folderIntroduction
   const previewsRoute = route.kind === 'preview-list' ? route : undefined
   // A preview document opens in this shell (ISSUE-109): the published tree gives way to the preview's own pages.
   const preview = usePreviewReader(route.kind === 'preview-document' ? route : undefined)
@@ -249,7 +251,7 @@ export function ArtifactWorkspace({
   // The persistent Contents and Details column (ISSUE-108): a document page at a wide viewport only.
   // Not on an error screen: a Markdown document or an HTML body that failed to load.
   const [markdownFailedUrl, setMarkdownFailedUrl] = useState<string | null>(null)
-  const readingArtifact = currentArtifact ?? previewArtifact
+  const readingArtifact = publishedReadingArtifact ?? previewArtifact
   const loadFailed = Boolean(readingArtifact) && (
     markdownFailedUrl === readingArtifact?.artifactUrl || frameFailure?.artifactUrl === readingArtifact?.artifactUrl
   )
@@ -852,30 +854,8 @@ export function ArtifactWorkspace({
 
   const tocEntries = bodyArtifact?.toc ?? []
 
-  // A folder's HTML index page is read inside the directory page, so its frame takes the height of
-  // its document instead of filling the stage (the directory page scrolls).
-  const [directoryFrameHeight, setDirectoryFrameHeight] = useState<number | null>(null)
-  const frameHeightCleanup = useRef<(() => void) | null>(null)
-  useEffect(() => () => frameHeightCleanup.current?.(), [])
-  useEffect(() => { setDirectoryFrameHeight(null) }, [htmlArtifactUrl])
-  // The first measured height lets the directory page scroll as far as a fragment needs.
-  const settleHostScroll = useRef(false)
-  useEffect(() => {
-    if (!settleHostScroll.current || !directoryFrameHeight) return
-    settleHostScroll.current = false
-    const frame = htmlFrameRef.current
-    const frameWindow = frame?.contentWindow
-    if (!frame || !frameWindow) return
-    window.requestAnimationFrame(() => {
-      try {
-        if (hashRef.current) scrollFrameToFragment(frameWindow, hashRef.current, frame.closest<HTMLElement>('.directory-scroll'))
-        else hostMatchScroll.get(frame)?.()
-      } catch { /* cross-origin */ }
-    })
-  }, [directoryFrameHeight])
-
   // "Read next" (ISSUE-086) ends Markdown pages only: not HTML artifacts, and not a folder's
-  // README shown inside a directory page (that page is itself the list of what to read).
+  // introduction shown at a folder URL.
   const readNextItems = useMemo(
     () => currentArtifact && currentFormat === 'markdown' ? relatedPages(index.artifacts, currentArtifact.path) : [],
     [currentArtifact, currentFormat, index.artifacts],
@@ -933,8 +913,8 @@ export function ArtifactWorkspace({
       highlightQuery={highlightQuery}
       onMatches={reportMatches}
       onFailedChange={(failed) => setMarkdownFailedUrl(failed ? bodyArtifact.artifactUrl : null)}
-      aside={columnShown && currentArtifact ? (
-        <ReaderContextColumn detailsOpen={detailsOpen} detailsButtonRef={detailsToggleRef} onDetails={(trigger) => togglePanel('details', trigger)} artifact={currentArtifact} entries={currentArtifact.toc ?? NO_ENTRIES} activeId={currentHeading} onJump={jumpFromColumn} />
+      aside={columnShown && publishedReadingArtifact ? (
+        <ReaderContextColumn detailsOpen={detailsOpen} detailsButtonRef={detailsToggleRef} onDetails={(trigger) => togglePanel('details', trigger)} artifact={publishedReadingArtifact} entries={publishedReadingArtifact.toc ?? NO_ENTRIES} activeId={currentHeading} onJump={jumpFromColumn} />
       ) : undefined}
       footer={readNextItems.length > 0 ? <ReadNext items={readNextItems} siteId={index.site.id} navigate={(href) => navigateWithinWorkspace(href)} /> : undefined}
     />
@@ -977,7 +957,6 @@ export function ArtifactWorkspace({
       style={{
         colorScheme: theme,
         ...(frameRevealed ? {} : { opacity: 0 }),
-        ...(currentDirectory && directoryFrameHeight ? { ['--directory-frame-height' as string]: `${directoryFrameHeight}px` } : {}),
       }}
       onLoad={(event) => {
         revealFrame()
@@ -994,8 +973,6 @@ export function ArtifactWorkspace({
         const artifactUrl = bodyArtifact.artifactUrl
         const status = firstLoad ? readFrameResponseStatus(frame) : null
         if (typeof status === 'number' && status >= 400) {
-          frameHeightCleanup.current?.()
-          frameHeightCleanup.current = null
           setFrameFailure({ artifactUrl, status })
           return
         }
@@ -1015,8 +992,6 @@ export function ArtifactWorkspace({
               if (generation !== frameGeneration.current || loadNumber !== frameLoadCount.current || frame !== htmlFrameRef.current || !frameShowsArtifact(frame, artifactUrl)) return
               // A probe that fails at the network level leaves the body unverified: treat it as failed.
               if (headStatus === null || headStatus >= 400) {
-                frameHeightCleanup.current?.()
-                frameHeightCleanup.current = null
                 setFrameFailure({ artifactUrl, status: headStatus })
                 return
               }
@@ -1034,9 +1009,6 @@ export function ArtifactWorkspace({
         event.currentTarget.contentWindow?.addEventListener('keydown', forwardArtifactKeyDown, true)
         syncHtmlFrameLocation(event.currentTarget)
         highlightFrame(event.currentTarget, highlightQueryRef.current, !hash, reportMatches)
-        frameHeightCleanup.current?.()
-        settleHostScroll.current = Boolean(currentDirectory)
-        frameHeightCleanup.current = currentDirectory ? watchFrameHeight(event.currentTarget, setDirectoryFrameHeight) : null
       }}
     />
     </>
@@ -1337,7 +1309,7 @@ export function ArtifactWorkspace({
                   <PreviewListContent siteId={index.site.id} groupId={previewsRoute.groupId} navigate={navigateWithinWorkspace} />
                 </section>
               </SiteHomeFrame>
-            ) : currentDirectory ? (
+            ) : folderIntroduction ? artifactView : currentDirectory ? (
               <DirectoryPage
                 key={isSiteRoot ? `root:${siteSection}` : currentDirectory.path}
                 listing={currentDirectory}
@@ -1413,8 +1385,8 @@ export function ArtifactWorkspace({
               />
             ) : null}
 
-            {columnShown && currentArtifact && currentFormat === 'html' ? (
-              <ReaderContextColumn detailsOpen={detailsOpen} detailsButtonRef={detailsToggleRef} onDetails={(trigger) => togglePanel('details', trigger)} standalone artifact={currentArtifact} entries={currentArtifact.toc ?? NO_ENTRIES} activeId={currentHeading} onJump={jumpFromColumn} />
+            {columnShown && publishedReadingArtifact && currentFormat === 'html' ? (
+              <ReaderContextColumn detailsOpen={detailsOpen} detailsButtonRef={detailsToggleRef} onDetails={(trigger) => togglePanel('details', trigger)} standalone artifact={publishedReadingArtifact} entries={publishedReadingArtifact.toc ?? NO_ENTRIES} activeId={currentHeading} onJump={jumpFromColumn} />
             ) : null}
             {previewArtifact?.format === 'html' ? previewColumn : null}
 
@@ -1548,30 +1520,11 @@ function highlightFrame(iframe: HTMLIFrameElement, query: string, scrollToFirst:
     // page.html#section, which leaves the app URL unchanged) wins as well.
     const scroll = scrollToFirst && !iframe.contentWindow?.location.hash
     // A match found after the reader started scrolling the page does not move it.
-    const host = iframe.closest<HTMLElement>('.directory-scroll')
-    const frameReader = document.defaultView ? watchReaderScroll(document.defaultView) : undefined
-    const hostReader = host ? watchReaderScroll(host) : undefined
-    const reader = frameReader ? {
-      get scrolled() { return frameReader.scrolled || Boolean(hostReader?.scrolled) },
-      dispose() { frameReader.dispose(); hostReader?.dispose() },
-    } : undefined
+    const reader = document.defaultView ? watchReaderScroll(document.defaultView) : undefined
     const stop = keepSearchHighlighted(document.body, query, (first) => {
       const element = first.startContainer.parentElement
       if (!scroll || reader?.scrolled || !element) return
-      if (!host) {
-        element.scrollIntoView({ block: 'center' })
-        return
-      }
-      // In a directory page the frame is as tall as its document, so the page around it scrolls.
-      const scrollHost = () => {
-        if (reader?.scrolled) return
-        const rect = element.getBoundingClientRect()
-        const frameTop = iframe.getBoundingClientRect().top - host.getBoundingClientRect().top + host.scrollTop
-        const top = frameTop + rect.top + (iframe.contentWindow?.scrollY ?? 0) - host.clientHeight / 2 + rect.height / 2
-        host.scrollTo({ top: Math.max(0, top), behavior: 'instant' })
-      }
-      hostMatchScroll.set(iframe, scrollHost)
-      scrollHost()
+      element.scrollIntoView({ block: 'center' })
     }, onMatches)
     frameHighlightCleanup.set(iframe, () => {
       stop()
@@ -1584,28 +1537,6 @@ function highlightFrame(iframe: HTMLIFrameElement, query: string, scrollToFirst:
 }
 
 const frameHighlightCleanup = new WeakMap<HTMLIFrameElement, () => void>()
-/** Scrolls a directory page to the first search match in its HTML index frame; re-run once the frame has its full height. */
-const hostMatchScroll = new WeakMap<HTMLIFrameElement, () => void>()
-
-/** Observes an HTML page's document height so a frame inside a scrolling page can show all of it. */
-function watchFrameHeight(iframe: HTMLIFrameElement, onHeight: (height: number) => void) {
-  try {
-    const frameDocument = iframe.contentDocument
-    const root = frameDocument?.documentElement
-    const view = frameDocument?.defaultView
-    if (!root || !view) return null
-    const update = () => onHeight(Math.ceil(root.scrollHeight))
-    update()
-    const observer = new view.ResizeObserver(update)
-    observer.observe(root)
-    if (frameDocument.body) observer.observe(frameDocument.body)
-    return () => observer.disconnect()
-  } catch {
-    // Cross-origin artifacts keep the default height.
-    return null
-  }
-}
-
 /** A page's link from the results: `?q=` makes the page highlight the search. */
 function withSearchQuery(href: string, query: string) {
   return `${href}?${new URLSearchParams({ q: query })}`
