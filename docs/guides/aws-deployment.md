@@ -75,8 +75,8 @@ The module README is the full reference: [AWS module README](../../terraform/mod
 
 The module creates two kinds of role, and no others:
 
-- **The admin role**, `<name_prefix>-admin-publisher`. It runs registry sync, application deploy, unregistering a site (removal of its content by omission from the registry) and writes every `_control/*` record. It can also create CloudFront invalidations. Use it from the admin repository with `registry-action` and `app-deploy-action`. There is no separate app-deploy role.
-- **One satellite role per site**, `<name_prefix>-<site-id>-publisher` (a hashed name is used if that exceeds 64 characters). It runs site sync, preview publish and preview remove for that one site only: its own `_indexes/<site>/`, `_artifacts/<site>/`, `_previews/<site>/` and `_control/sites/<site>/`. It can also read `_indexes/sites.json` and `_control/versions/app.json` and create CloudFront invalidations. There is no separate preview role.
+- **The admin role**, `<name_prefix>-admin-publisher`. It runs registry sync, application deploy, unregistering a site (removal of its content by omission from the registry) and writes every `_control/*` record. Use it from the admin repository with `registry-action` and `app-deploy-action`. There is no separate app-deploy role.
+- **One satellite role per site**, `<name_prefix>-<site-id>-publisher` (a hashed name is used if that exceeds 64 characters). It runs site sync, preview publish and preview remove for that one site only: its own `_indexes/<site>/`, `_artifacts/<site>/`, `_previews/<site>/` and `_control/sites/<site>/`. It can also read `_indexes/sites.json` and `_control/versions/app.json`. There is no separate preview role.
 
 Each role trusts the GitHub OIDC provider with `StringEquals` on `aud` (`sts.amazonaws.com`) and on `sub`. The module adds no wildcards and does not infer the job's environment or ref, so every allowed subject is listed exactly.
 
@@ -159,7 +159,7 @@ artifact-pages registry sync --config artifact-pages.yaml --dry-run
 artifact-pages registry sync --config artifact-pages.yaml
 ```
 
-In a workflow, the same steps are `artifact-pages/app-deploy-action` and `artifact-pages/registry-action` after the credentials step, each with `config`, `dry-run` and `publish-on`, in a job that runs in the restricted environment. The verification workflows used `workflow_dispatch` with a `dry-run` input and the release tag `v0.2.0` of the Actions. App deploy writes the application files and then invalidates only the application shell (`/index.html`); hashed assets are immutable and need no invalidation. `registry sync` writes the registry for the complete `sites` mapping and removes the content of sites that are omitted from it.
+In a workflow, the same steps are `artifact-pages/app-deploy-action` and `artifact-pages/registry-action` after the credentials step, each with `config`, `dry-run` and `publish-on`, in a job that runs in the restricted environment. The verification workflows used `workflow_dispatch` with a `dry-run` input and the release tag `v0.2.0` of the Actions. App deploy writes the application files with their cache headers; the application shell is revalidated on every request and hashed assets are immutable, so no invalidation is needed. `registry sync` writes the registry for the complete `sites` mapping and removes the content of sites that are omitted from it.
 
 Then each satellite repository publishes its own site with its satellite role:
 
@@ -181,11 +181,13 @@ On an emptied bucket, the admin run bootstrapped the registry and the site run b
 
 To unregister a site, remove it from the admin config's `sites` mapping and run `registry sync` from the admin repository. To remove one preview group, run `preview remove --site sre --group pr:42` with the site's role; preview delete access is limited to that site's `_previews/<site>/` prefix. To remove the application files, run `app remove`.
 
-### Cache invalidation
+### Cache freshness
 
-Unlike the Cloudflare flow, there is no cache token. After a change, the CLI calls CloudFront `CreateInvalidation` for the paths it changed and reports them as `invalidationPaths` in the JSON output (`--format json`). Both role kinds hold `cloudfront:CreateInvalidation` on the one distribution. On the verification deployment, an updated object became visible at the edge about 14 seconds after the update and an unregistered site about 10 seconds after, from one sample each; treat these as observations, not a guarantee.
+The CLI does not request CloudFront invalidations, and neither role holds a CloudFront permission. Freshness comes from the `Cache-Control` header the CLI writes on every object, and the distribution honours it: one origin-respecting cache policy (minimum and default TTL 0, maximum one year) covers `/_indexes/*`, `/_artifacts/*`, `/_previews/*`, `/assets/*` and the application shell. With the current CLI policy, CloudFront may serve the registry and each site's metadata and index for up to 5 seconds before checking the origin, and checks the origin on every request for search manifests, artifacts, previews and the application shell. Hashed search blobs under `/_indexes/<site>/search/` and hashed files under `/assets/*` are immutable and may stay cached for up to one year. `/_errors/*` keeps a no-store policy. The [specification](../specification.md) lists the exact header for each object class.
 
-The distribution also bounds shared-cache freshness: 60 seconds for `/_indexes/*`, 300 seconds for `/_artifacts/*`, zero for the application shell and `/_previews/*`, and the object's own `Cache-Control` (up to one year) under `/assets/*`. Preview objects under `_previews/` expire after `preview_retention_days` through an S3 lifecycle rule. S3 processes lifecycle rules asynchronously, so there is no exact deletion time. The module sets bucket versioning to Suspended.
+Do not combine this module version with a CLI that still requests invalidations: the old CLI's publish fails without `cloudfront:CreateInvalidation`. Pin a compatible CLI in every writer before you apply the module.
+
+A TTL of 0 means CloudFront checks the origin on a new request; it does not reload a tab that is already open, and browser code may keep the bytes it has already loaded. Preview objects under `_previews/` expire after `preview_retention_days` through an S3 lifecycle rule. S3 processes lifecycle rules asynchronously, so there is no exact deletion time. The module sets bucket versioning to Suspended.
 
 ## 4. Verify the deployed boundary
 
@@ -195,14 +197,14 @@ After publishing, check the delivery hostname directly (the default CloudFront h
 - `/assets/<hashed-file>` is served as the original object.
 - A missing object under `/_indexes/`, `/_artifacts/` or `/_previews/` returns a 404 (the page `/_errors/not-found.html`), not the app shell. Private S3 answers 403 or 404 for a missing key, and CloudFront maps both to that 404. With `viewer_protocol_policy = "https-only"`, plain HTTP also ends at that 404 page.
 - `/_control` and keys such as `/_control/sites/sre/lock.json` have no content behavior, so they fall back to the app shell and expose no object bytes.
-- Inspect the response headers of `index.html`, an index, an artifact and a hashed asset, and confirm the cache behavior above.
-- Publish a change and confirm the new content is visible within the invalidation bound you accept.
+- Inspect the response headers of `index.html`, an index, an artifact and a hashed asset, and confirm they carry the CLI's `Cache-Control` values described above.
+- Publish a change and confirm a fresh request sees the new content within the 5-second root bound (immediately for an artifact).
 
 The satellite role boundary was checked on the verification deployment: with a site's role, writes to a neighbouring site's `_artifacts` and `_indexes`, writes to the registry and the registry lock, writes to the application files, and deleting a neighbouring site's preview were each denied with AccessDenied. Run the same checks against your own deployment if the boundary matters to you.
 
 Caveat when emptying the bucket: `/_errors/not-found.html` is an object managed by Terraform. `aws s3 rm --recursive` deletes it, and raw misses then return S3's 403 XML until the next `terraform apply` recreates it. Exclude `_errors/` when you empty the bucket, or re-apply afterwards.
 
-For recovery from failed upgrades, interrupted publishes and stale locks, see the [operator recovery runbook](operator-recovery.md). Its CLI steps apply to AWS; the cache-purge, R2 credential and Terraform steps are Cloudflare-specific.
+For recovery from failed upgrades, interrupted publishes and stale locks, see the [operator recovery runbook](operator-recovery.md). Its CLI steps apply to AWS; the R2 credential and Terraform steps are Cloudflare-specific.
 
 ## Limitations
 
@@ -211,7 +213,7 @@ For recovery from failed upgrades, interrupted publishes and stale locks, see th
 - **Not yet verified on AWS:**
   - bootstrap on a newly created bucket
   - a neighbouring site reading an existing object (the denied writes above are verified; reads of an existing neighbour object are not)
-  - unregister and invalidation timing when run through the OIDC roles
+  - unregister timing and edge freshness when run through the OIDC roles
   - preview publication and the preview Content Security Policy delivered by CloudFront
 - **Viewer access.** Artifact Pages has no user identity or per-site permission model. The module's only viewer policy is the optional WAF input; any other edge policy is yours to configure and verify.
 - **Preview scripts.** Preview HTML runs in an unsandboxed iframe on the application origin, and its scripts can reach the parent page. See the module README.

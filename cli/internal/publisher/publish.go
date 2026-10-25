@@ -44,8 +44,6 @@ type Result struct {
 	Version            string                                 `json:"version,omitempty"`
 	FilesPublished     int                                    `json:"filesPublished,omitempty"`
 	FilesRemoved       int                                    `json:"filesRemoved,omitempty"`
-	InvalidationID     string                                 `json:"invalidationId,omitempty"`
-	InvalidationPaths  []string                               `json:"invalidationPaths,omitempty"`
 	SourceDirty        bool                                   `json:"sourceDirty,omitempty"`
 	BuildSkipped       bool                                   `json:"buildSkipped,omitempty"`
 	LegacyControl      *LegacyControl                         `json:"legacyControl,omitempty"`

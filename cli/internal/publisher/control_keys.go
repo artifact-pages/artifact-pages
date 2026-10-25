@@ -2,6 +2,7 @@ package publisher
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 )
@@ -151,4 +152,23 @@ func migrateLegacySiteControl(ctx context.Context, backend ConditionalObjectBack
 		}
 	}
 	return nil
+}
+
+// readControlSchemaVersion extracts the integer schemaVersion of a control
+// record. A non-object body (including top-level null), a missing key and a
+// non-integer value are ordinary errors naming the record.
+func readControlSchemaVersion(name string, data []byte) (int, error) {
+	var envelope map[string]json.RawMessage
+	if err := json.Unmarshal(data, &envelope); err != nil || envelope == nil {
+		return 0, fmt.Errorf("%s must be a JSON object", name)
+	}
+	raw, ok := envelope["schemaVersion"]
+	if !ok {
+		return 0, fmt.Errorf("%s has no schemaVersion", name)
+	}
+	var version *int
+	if err := json.Unmarshal(raw, &version); err != nil || version == nil {
+		return 0, fmt.Errorf("%s has an invalid schemaVersion", name)
+	}
+	return *version, nil
 }

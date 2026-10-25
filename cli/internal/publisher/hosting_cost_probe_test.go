@@ -227,19 +227,14 @@ func hostingCostObjects(backend *sitePublishScaleBackend, siteID string) []hosti
 }
 
 type hostingCostProbePhase struct {
-	Name               string         `json:"name"`
-	Outcome            string         `json:"outcome"`
-	BuildSkipped       bool           `json:"buildSkipped"`
-	CallCounts         map[string]int `json:"callCounts"`
-	InvalidationPaths  int            `json:"invalidationPathCount"`
-	InvalidationSample []string       `json:"invalidationPathSample,omitempty"`
-	CloudflarePaths    int            `json:"cloudflareProviderPathCount"`
-	AWSPaths           int            `json:"awsProviderPathCount"`
-	GetBodyBytes       int64          `json:"getBodyBytes"`
-	ListJSONBytes      int64          `json:"listJSONBytes"`
-	PutBodyBytes       int64          `json:"putBodyBytes"`
-	InvalidationCalls  int            `json:"invalidationCalls"`
-	WallMS             float64        `json:"wallMs"`
+	Name          string         `json:"name"`
+	Outcome       string         `json:"outcome"`
+	BuildSkipped  bool           `json:"buildSkipped"`
+	CallCounts    map[string]int `json:"callCounts"`
+	GetBodyBytes  int64          `json:"getBodyBytes"`
+	ListJSONBytes int64          `json:"listJSONBytes"`
+	PutBodyBytes  int64          `json:"putBodyBytes"`
+	WallMS        float64        `json:"wallMs"`
 }
 
 func runHostingCostProbePhase(t *testing.T, publishBackend DeploymentBackend, backend *sitePublishScaleBackend, options SitePublishOptions, name string) hostingCostProbePhase {
@@ -254,21 +249,11 @@ func runHostingCostProbePhase(t *testing.T, publishBackend DeploymentBackend, ba
 	counts, getBytes, listBytes, putBytes := backend.countSnapshot()
 	return hostingCostProbePhase{
 		Name: name, Outcome: result.Outcome, BuildSkipped: result.BuildSkipped,
-		CallCounts: counts, InvalidationPaths: len(result.InvalidationPaths),
-		InvalidationSample: hostingCostPathSample(result.InvalidationPaths),
-		CloudflarePaths:    len(cloudflareSiteInvalidationPaths(result.InvalidationPaths)),
-		AWSPaths:           len(awsSiteInvalidationPaths(result.InvalidationPaths)),
-		GetBodyBytes:       getBytes, ListJSONBytes: listBytes,
-		PutBodyBytes: putBytes, InvalidationCalls: counts["INVALIDATE"],
-		WallMS: float64(wall.Microseconds()) / 1000,
+		CallCounts:   counts,
+		GetBodyBytes: getBytes, ListJSONBytes: listBytes,
+		PutBodyBytes: putBytes,
+		WallMS:       float64(wall.Microseconds()) / 1000,
 	}
-}
-
-func hostingCostPathSample(paths []string) []string {
-	if len(paths) > 3 {
-		paths = paths[:3]
-	}
-	return append([]string(nil), paths...)
 }
 
 func hostingCostStoredObjects(backend *sitePublishScaleBackend, siteID string) (projectionObjects int, projectionBytes int64, searchObjects int, searchBytes int64) {
