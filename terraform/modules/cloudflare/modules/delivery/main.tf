@@ -94,6 +94,13 @@ locals {
       cache = true
       edge_ttl = {
         mode = "respect_origin"
+        status_code_ttl = [{
+          status_code_range = {
+            from = 400
+            to   = 499
+          }
+          value = -1
+        }]
       }
       browser_ttl = {
         mode = "respect_origin"

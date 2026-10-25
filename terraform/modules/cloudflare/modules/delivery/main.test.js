@@ -43,6 +43,7 @@ test('Cloudflare preview responses remain cache-eligible only under origin fresh
   assert.match(cacheRule, /cache\s*=\s*true/u)
   assert.match(cacheRule, /edge_ttl\s*=\s*\{\s*mode\s*=\s*"respect_origin"/u)
   assert.match(cacheRule, /browser_ttl\s*=\s*\{\s*mode\s*=\s*"respect_origin"/u)
+  assert.match(cacheRule, /status_code_ttl\s*=\s*\[\{\s*status_code_range\s*=\s*\{\s*from\s*=\s*400\s*to\s*=\s*499\s*\}\s*value\s*=\s*-1\s*\}\]/u, '4xx responses are never stored at the edge')
 })
 
 test('Cloudflare enforces the trusted CSP only on artifact and raw preview HTML responses', () => {
@@ -119,6 +120,8 @@ test('origin cache rule covers only public projection paths and respects both or
   assert.match(cacheRule, /browser_ttl\s*=\s*\{\s*mode\s*=\s*"respect_origin"/u)
   assert.doesNotMatch(cacheRule, /default|override_origin|"override"/u)
   assert.equal((cacheRule.match(/mode\s*=\s*"/gu) ?? []).length, 2, 'only the edge and browser TTL modes are set')
+  assert.equal((cacheRule.match(/status_code_ttl/gu) ?? []).length, 1, 'exactly one status-code TTL override')
+  assert.match(cacheRule, /status_code_ttl\s*=\s*\[\{\s*status_code_range\s*=\s*\{\s*from\s*=\s*400\s*to\s*=\s*499\s*\}\s*value\s*=\s*-1\s*\}\]/u, '4xx responses are never stored at the edge')
   assert.doesNotMatch(source, /purge|cache_purge|zone_cache/iu, 'publishing needs no purge permission or resource')
   assert.doesNotMatch(source, /resource\s+"cloudflare_(?:zone_cache|cache_reserve|tiered_cache)\w*"/u)
 })
