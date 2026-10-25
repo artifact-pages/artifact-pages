@@ -50,6 +50,8 @@ jobs:
 
 The Action version describes its wrapper. Its generated `release.json` declares a checksum-verified bootstrap CLI and the supported range `>=0.5.0 <0.6.0`. The bootstrap resolves `cli.version` from the deployment config; `cli-version` can override it within that range without bypassing compatibility checks. The Job Summary records the actual CLI and any override, including failed operations. CLI bootstrap and target downloads use only official Artifact Pages releases and the workflow token.
 
+Provider credentials: a CLI that includes the no-invalidation change never requests CDN invalidation. On Cloudflare, a job with an explicit R2 key pair needs no `CF_API_TOKEN`, and in single-token mode the token only derives the R2 credentials; on AWS the publisher roles need no CloudFront permission. A config that still selects an earlier CLI (0.5.2 or older) keeps needing the purge credential. See the [cache policy migration guide](https://github.com/artifact-pages/artifact-pages/blob/main/docs/guides/cache-policy-migration.md) before you change pins or retire credentials.
+
 Supported runners: Linux and macOS, x64 and arm64. Windows runners are not supported.
 
 Full documentation: <https://artifact-pages.dev/guide/en/>. Inputs, outputs and the Job Summary format are specified in the [specification](https://github.com/artifact-pages/artifact-pages/blob/main/docs/specification.md).
