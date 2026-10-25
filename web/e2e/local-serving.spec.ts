@@ -32,6 +32,14 @@ function toolbarFocusTarget(page: Page, desktop: Locator) {
   return isNarrowChrome(page) ? moreActionsButton(page) : desktop
 }
 
+/** Inspect provenance through its explicit Details entry at every viewport. */
+async function openReaderDetails(page: Page) {
+  const details = page.getByRole('complementary', { name: 'Details' })
+  if (!(await details.isVisible())) await clickToolbarAction(page, page.getByRole('button', { name: 'Details', exact: true }), 'Details')
+  await expect(details).toBeVisible()
+  return details
+}
+
 const markdownHeadingConformanceFixture = JSON.parse(
   readFileSync('cli/internal/indexer/testdata/markdown-heading-id-cases.json', 'utf8'),
 ) as {
@@ -3664,6 +3672,9 @@ test('the site home jumps to a page by name through the palette, ignoring IME En
   await expect(page).toHaveURL(/\/sre\/architecture\/platform-topology\/index\.html$/)
   await expect(page.locator('.browse-tree .tree-artifact[aria-current="page"]')).toBeVisible()
 
+  // Wait for the palette's navigation hand-off and the frame keyboard bridge.
+  await expect(page.frameLocator('iframe[title="Platform topology"]').getByRole('heading').first()).toBeVisible()
+  await expect(page.locator('iframe[title="Platform topology"]')).toBeFocused()
   await page.keyboard.press('Control+k')
   await search.fill('Checkout latency incident review')
   await expect(palette.getByRole('option', { name: /Checkout latency incident review/ })).toHaveAttribute('aria-selected', 'true')
@@ -4179,6 +4190,7 @@ test('site previews filter missing revisions and keep PR and manual groups disti
   })
   await markdownLink.click()
   await expect(page).toHaveURL(new RegExp(`/sre/_previews/${previewHeadSha}/guides/preview-guide\\.md\\?group=pr%3A42$`))
+  await openReaderDetails(page)
   await expect(page.getByRole('link', { name: '#42 on GitHub' })).toHaveAttribute('href', 'https://github.com/acme/sre-docs/pull/42')
   await expect(previewTitle(page)).toHaveText('Local preview guide')
   const previewMark = page.getByRole('img', { name: 'Preview mark' })
@@ -4209,12 +4221,14 @@ test('site previews filter missing revisions and keep PR and manual groups disti
   await expect(page.getByRole('region', { name: 'Preview pr:43' })).toBeVisible()
   await expect(page.getByRole('region', { name: 'Preview pr:42' })).toHaveCount(0)
   await page.getByRole('region', { name: 'Preview pr:43' }).getByRole('link', { name: /Local preview guide/ }).click()
+  await openReaderDetails(page)
   await expect(page.getByRole('link', { name: '#43 on GitHub' })).toHaveAttribute('href', 'https://github.com/acme/sre-docs/pull/43')
 
   await page.goto('/sre/_previews')
   await page.getByRole('region', { name: `Preview head:${previewHeadSha}` })
     .getByRole('link', { name: /Local preview guide/ }).click()
   await expect(page).toHaveURL(new RegExp(`/sre/_previews/${previewHeadSha}/guides/preview-guide\\.md\\?group=head%3A${previewHeadSha}$`))
+  await openReaderDetails(page)
   await expect(page.getByRole('link', { name: /on GitHub/ })).toHaveCount(0)
 })
 
@@ -4262,18 +4276,22 @@ test('preview PR context disappears when its catalog group advances or is remove
   })
 
   await page.goto(`/sre/_previews/${previewHeadSha}/guides/preview-guide.md?group=pr%3A42`)
+  await openReaderDetails(page)
   await expect(page.getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
   catalogState = 'advanced'
   await page.reload()
   await expect(previewTitle(page)).toHaveText('Local preview guide')
+  await openReaderDetails(page)
   await expect(page.getByRole('link', { name: /on GitHub/ })).toHaveCount(0)
 
   catalogState = 'removed'
   await page.reload()
   await expect(previewTitle(page)).toHaveText('Local preview guide')
+  await openReaderDetails(page)
   await expect(page.getByRole('link', { name: /on GitHub/ })).toHaveCount(0)
 
   await page.goto(`/sre/_previews/${previewHeadSha}/guides/preview-guide.md?group=pr%3A43`)
+  await openReaderDetails(page)
   await expect(page.getByRole('link', { name: '#43 on GitHub' })).toHaveAttribute('href', 'https://github.com/acme/sre-docs/pull/43')
 })
 
@@ -4390,6 +4408,7 @@ test('preview HTML keeps changed-document navigation in the preview and unchange
   await expect.poll(() => page.evaluate(() => localStorage.getItem('issue026-preview-storage'))).toBe('accessible')
   expect(insecureResourceReached).toBe(false)
   expect([...externalResourcePaths].sort()).toEqual(['/preview.css', '/preview.js', '/preview.svg'])
+  await openReaderDetails(page)
   await expect(page.getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
 
   await expect.poll(() => frame.locator('html').getAttribute('data-preview-fixture')).toBe('loaded')
@@ -4410,6 +4429,7 @@ test('preview HTML keeps changed-document navigation in the preview and unchange
   await waitForPreviewBridge(page)
   await frame.getByRole('link', { name: 'Open the changed Markdown document with query and fragment' }).click()
   await expect(page).toHaveURL(`/sre/_previews/${previewHeadSha}/guides/preview-guide.md?group=pr%3A42&tab=summary#local-preview-guide`)
+  await openReaderDetails(page)
   await expect(page.getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
 
   await page.goto(`/sre/_previews/${previewHeadSha}/guides/preview.html?group=pr%3A42`)
@@ -4424,6 +4444,7 @@ test('preview HTML keeps changed-document navigation in the preview and unchange
   await waitForPreviewBridge(page)
   await changedFrame.getByRole('link', { name: 'Open the changed Markdown document', exact: true }).click()
   await expect(page).toHaveURL(new RegExp(`/sre/_previews/${previewHeadSha}/guides/preview-guide\\.md\\?group=pr%3A42$`))
+  await openReaderDetails(page)
   await expect(page.getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
 
   await page.goto(`/sre/_previews/${previewHeadSha}/guides/preview.html?group=pr%3A42`)
@@ -4497,6 +4518,7 @@ test('preview HTML fragments reach the frame on direct load, same-document links
   const deepTarget = frame.getByRole('heading', { name: 'Deep target' })
   await expect.poll(frameHash).toBe('#deep-target')
   await expect(deepTarget).toBeInViewport()
+  await openReaderDetails(page)
   await expect(page.getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
 
   await page.reload()
@@ -4526,6 +4548,7 @@ test('preview HTML fragments reach the frame on direct load, same-document links
   await page.frameLocator('iframe[title="Local preview HTML"]').getByRole('link', { name: 'Jump to missing target' }).click()
   await expect(page).toHaveURL(`${previewUrl}#missing-target`)
   await expect.poll(frameHash).toBe('#missing-target')
+  await openReaderDetails(page)
   await expect(page.getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
   await expect(page.getByRole('alert')).toHaveCount(0)
   await expect(iframe).toBeVisible()
@@ -4538,6 +4561,7 @@ test('preview HTML fragments reach the frame on direct load, same-document links
   const changedPreviewFrame = page.locator('iframe[title="Preview fragment target"]')
   await expect.poll(() => changedPreviewFrame.evaluate((element) => (element as HTMLIFrameElement).contentWindow?.location.hash ?? null)).toBe('#changed-target')
   await expect(page.frameLocator('iframe[title="Preview fragment target"]').getByRole('heading', { name: 'Changed HTML target' })).toBeInViewport()
+  await openReaderDetails(page)
   await expect(page.getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
 })
 
@@ -4591,6 +4615,7 @@ test('preview HTML link clicked before the reader bridge runs still navigates th
 
   await expect(page).toHaveURL(`/sre/_previews/${previewHeadSha}/guides/preview-target.html?group=pr%3A42&source=fixture#changed-target`)
   await expect(previewTitle(page)).toHaveText('Preview fragment target')
+  await openReaderDetails(page)
   await expect(page.locator('.preview-path')).toHaveText('guides/preview-target.html')
   await expect(page.frameLocator('iframe[title="Preview fragment target"]').getByRole('heading', { name: 'Changed HTML target' })).toBeVisible()
   await expect(page.locator('iframe')).toHaveCount(1)
@@ -7757,15 +7782,20 @@ test.describe('reader context column (ISSUE-108)', () => {
     const column = columnOf(page)
     await expect(column).toBeVisible()
     expect((await column.boundingBox())?.width).toBeCloseTo(columnWidth(1440), 0)
-    await expect(column.getByRole('heading', { name: 'Details' })).toBeVisible()
+    await expect(column.getByRole('button', { name: 'Details', exact: true })).toBeVisible()
     await expect(column.getByText('Last committed by')).toHaveCount(0)
-    await expect(column.getByText('Documentation QA')).toBeVisible()
-    await expect(column.locator('.details-updated')).toContainText('Updated')
-    await expect(column.getByText('example/markdown-qa', { exact: true })).toBeVisible()
-    await expect(column.getByRole('link', { name: /guides\/markdown-style-gallery\.md/ })).toHaveAttribute('href', 'https://github.com/example/markdown-qa/blob/main/guides/markdown-style-gallery.md')
+    await expect(column.getByText('Documentation QA')).toHaveCount(0)
+    await expect(column.locator('.reader-update')).toContainText('Updated')
+    await column.getByRole('button', { name: 'Details', exact: true }).click()
+    const details = page.getByRole('complementary', { name: 'Details' })
+    await expect(details.getByText('Documentation QA')).toBeVisible()
+    await expect(details.locator('.details-updated')).toContainText('Updated')
+    await expect(details.getByText('example/markdown-qa', { exact: true })).toBeVisible()
+    await expect(details.getByRole('link', { name: /guides\/markdown-style-gallery\.md/ })).toHaveAttribute('href', 'https://github.com/example/markdown-qa/blob/main/guides/markdown-style-gallery.md')
+    await details.getByRole('button', { name: 'Close Details' }).click()
     await expect(column.getByRole('region', { name: 'Contents' })).toBeVisible()
     await expect(column.getByRole('navigation', { name: 'Artifact headings' }).getByRole('button').first()).toBeVisible()
-    const detailsTop = (await column.getByRole('heading', { name: 'Details' }).boundingBox())!.y
+    const detailsTop = (await column.getByRole('button', { name: 'Details', exact: true }).boundingBox())!.y
     const contentsTop = (await column.getByRole('heading', { name: 'Contents' }).boundingBox())!.y
     expect(detailsTop).toBeLessThan(contentsTop)
     const actions = page.locator('.context-actions')
@@ -7856,7 +7886,7 @@ test.describe('reader context column (ISSUE-108)', () => {
     }).toBeLessThanOrEqual(10)
     const contentsTop = (await column.getByRole('region', { name: 'Contents' }).boundingBox())!.y - paneTop
     expect(contentsTop).toBeGreaterThanOrEqual(6)
-    expect((await column.getByRole('heading', { name: 'Details' }).boundingBox())!.y + 20).toBeLessThan(paneTop)
+    expect((await column.getByRole('button', { name: 'Details', exact: true }).boundingBox())!.y + 20).toBeLessThan(paneTop)
     await expect(column.getByRole('navigation', { name: 'Artifact headings' })).toBeVisible()
   })
 
@@ -7892,7 +7922,7 @@ test.describe('reader context column (ISSUE-108)', () => {
     await expect.poll(() => column.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true)
     const contents = column.getByRole('region', { name: 'Contents' })
     const columnBox = (await column.boundingBox())!
-    expect((await column.getByRole('heading', { name: 'Details' }).boundingBox())!.y).toBeLessThan((await contents.boundingBox())!.y)
+    expect((await column.getByRole('button', { name: 'Details', exact: true }).boundingBox())!.y).toBeLessThan((await contents.boundingBox())!.y)
     await column.evaluate((element) => element.scrollTo(0, element.scrollHeight))
     expect(await column.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
     expect(await frameScroll()).toBe(0)
@@ -7909,10 +7939,8 @@ test.describe('reader context column (ISSUE-108)', () => {
     const count = await buttons.count()
     expect(count).toBeGreaterThan(5)
     const name = (await buttons.nth(5).textContent())!
-    await page.evaluate(async (text) => {
-      const headings = Array.from(document.querySelectorAll<HTMLElement>('.markdown-article h1, .markdown-article h2, .markdown-article h3'))
-      headings.find((heading) => heading.textContent?.trim() === text)?.scrollIntoView({ block: 'start' })
-    }, name.trim())
+    await page.locator('.markdown-article').getByRole('heading', { name: name.trim(), exact: true }).first()
+      .evaluate((heading) => heading.scrollIntoView({ block: 'start' }))
     await expect(column.locator('[aria-current="location"]')).toHaveText(name)
     await page.locator('.markdown-scroll').evaluate((element) => element.scrollTo(0, 0))
     await expect(column.locator('[aria-current="location"]')).toHaveText((await buttons.first().textContent())!)
@@ -8112,6 +8140,19 @@ test.describe('reader context column (ISSUE-108)', () => {
   }
 
   test('a wheel at the scroll boundary keeps the clicked entry marked; scrolling away resumes tracking (ISSUE-118)', async ({ page }) => {
+    // A controlled end-of-document heading makes the boundary independent of metadata height.
+    await page.route('**/_indexes/sre/index.json', async (route) => {
+      const response = await route.fetch()
+      const index = await response.json()
+      for (const artifact of index.artifacts) if (artifact.path === 'guides/markdown-style-gallery.md') artifact.toc = [
+        { level: 1, text: 'Boundary start', id: 'md-boundary-start' },
+        { level: 2, text: 'Boundary end', id: 'md-boundary-end' },
+      ]
+      await route.fulfill({ response, json: index })
+    })
+    await page.route('**/_artifacts/sre/guides/markdown-style-gallery.md', (route) => route.fulfill({
+      contentType: 'text/markdown', body: '# Boundary start\n\n' + 'Reading paragraph.\n\n'.repeat(100) + '## Boundary end\n\nEnd.',
+    }))
     await page.goto(markdownPath)
     const column = columnOf(page)
     const buttons = column.getByRole('navigation', { name: 'Artifact headings' }).getByRole('button')
@@ -8271,7 +8312,8 @@ test.describe('reader context column (ISSUE-108)', () => {
     await page.locator('.context-actions').getByRole('button', { name: 'Details', exact: true }).click()
     await page.getByRole('complementary', { name: 'Details' }).getByRole('link').first().focus()
     await page.setViewportSize({ width: 1300, height: 800 })
-    await expect(page.getByRole('complementary', { name: 'Details' })).toHaveCount(0)
+    await expect(page.getByRole('complementary', { name: 'Details' })).toBeVisible()
+    await page.getByRole('complementary', { name: 'Details' }).getByRole('button', { name: 'Close Details' }).click()
     await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe('reader-column-details-heading')
   })
 
@@ -8283,7 +8325,7 @@ test.describe('reader context column (ISSUE-108)', () => {
     await expect(page.locator('.context-actions').getByRole('button', { name: 'Contents', exact: true })).toBeFocused()
 
     await page.setViewportSize({ width: 1300, height: 800 })
-    await columnOf(page).getByRole('heading', { name: 'Details' }).focus()
+    await columnOf(page).getByRole('button', { name: 'Details', exact: true }).focus()
     await page.setViewportSize({ width: 1100, height: 800 })
     await expect(page.locator('.context-actions').getByRole('button', { name: 'Details', exact: true })).toBeFocused()
   })
@@ -8302,7 +8344,7 @@ test.describe('reader context column (ISSUE-108)', () => {
     await palette.getByRole('combobox').fill('>Toggle details')
     await palette.getByRole('option', { name: 'Toggle details' }).click()
     await expect(palette).toBeHidden()
-    await expect(column.getByRole('heading', { name: 'Details' })).toBeFocused()
+    await expect(page.getByRole('complementary', { name: 'Details' }).getByRole('button', { name: 'Close Details' })).toBeFocused()
 
     await page.keyboard.press('Control+k')
     await palette.getByRole('combobox').fill('>Toggle contents')
@@ -8340,7 +8382,8 @@ test.describe('reader context column (ISSUE-108)', () => {
 
   test('a document without provenance shows only what exists', async ({ page }) => {
     await page.goto('/showcase/tests/color-scheme-response/index.html')
-    const column = columnOf(page)
+    await columnOf(page).getByRole('button', { name: 'Details', exact: true }).click()
+    const column = page.getByRole('complementary', { name: 'Details' })
     await expect(column.locator('.details-updated')).toContainText('Updated')
     await expect(column.getByText('Last committed by')).toHaveCount(0)
     await expect(column.locator('.details-avatar')).toHaveCount(0)
@@ -8356,7 +8399,8 @@ test.describe('reader context column (ISSUE-108)', () => {
       await route.fulfill({ status: 200, contentType: 'image/png', headers: { 'access-control-allow-origin': '*' }, body: png })
     })
     await page.goto('/sre/incidents/checkout-latency/index.html')
-    const column = columnOf(page)
+    await columnOf(page).getByRole('button', { name: 'Details', exact: true }).click()
+    const column = page.getByRole('complementary', { name: 'Details' })
     const avatar = column.locator('.details-avatar img')
     await expect(column.getByText('Octocat', { exact: true })).toBeVisible()
     await expect(avatar).toBeVisible()
@@ -8373,7 +8417,8 @@ test.describe('reader context column (ISSUE-108)', () => {
   test('a blocked avatar falls back to the initial without changing the name or date (ISSUE-117)', async ({ page }) => {
     await page.route('https://avatars.githubusercontent.com/**', (route) => route.abort())
     await page.goto('/sre/incidents/checkout-latency/index.html')
-    const column = columnOf(page)
+    await columnOf(page).getByRole('button', { name: 'Details', exact: true }).click()
+    const column = page.getByRole('complementary', { name: 'Details' })
     await expect(column.getByText('Octocat', { exact: true })).toBeVisible()
     await expect(column.locator('.details-avatar')).toHaveText('O')
     await expect(column.locator('.details-avatar img')).toHaveCount(0)
@@ -8384,7 +8429,8 @@ test.describe('reader context column (ISSUE-108)', () => {
     let avatarRequested = false
     await page.route('https://avatars.githubusercontent.com/**', async (route) => { avatarRequested = true; await route.abort() })
     await page.goto('/sre/architecture/platform-topology/index.html')
-    const column = columnOf(page)
+    await columnOf(page).getByRole('button', { name: 'Details', exact: true }).click()
+    const column = page.getByRole('complementary', { name: 'Details' })
     await expect(column.getByText('Platform Team', { exact: true })).toBeVisible()
     await expect(column.locator('.details-avatar')).toHaveText('P')
     await expect(column.locator('.details-avatar img')).toHaveCount(0)
@@ -8499,10 +8545,10 @@ test.describe('reader context column (ISSUE-108)', () => {
     await more.click()
     await menuItem('Details').click()
     await expect(page.getByRole('complementary', { name: 'Details' })).toBeVisible()
-    await expect(more).toBeFocused()
+    await expect(page.getByRole('complementary', { name: 'Details' }).getByRole('button', { name: 'Close Details' })).toBeFocused()
     await page.setViewportSize({ width: 1440, height: 800 })
     await expect(columnOf(page)).toBeVisible()
-    await expect.poll(activeId).toBe('reader-column-details-heading')
+    await expect(page.getByRole('complementary', { name: 'Details' }).getByRole('button', { name: 'Close Details' })).toBeFocused()
 
     // A Contents panel with focus inside it.
     await page.setViewportSize({ width: 500, height: 800 })
@@ -9265,6 +9311,12 @@ test.describe('preview reading in the reader shell (ISSUE-109)', () => {
     return `/sre/_previews/${options.head ?? previewHeadSha}/${options.path ?? guidePath}${group}`
   }
   const column = (page: Page) => page.getByRole('complementary', { name: 'Reading context' })
+  async function openPreviewDetails(page: Page) {
+    const details = page.getByRole('complementary', { name: 'Details' })
+    if (!(await details.isVisible())) await column(page).getByRole('button', { name: 'Details', exact: true }).click()
+    await expect(details).toBeVisible()
+    return details
+  }
   const tag = (page: Page) => page.locator('[data-preview-tag]')
   const crumbs = (page: Page) => page.getByRole('navigation', { name: 'Preview path' })
   const sidebar = (page: Page) => page.getByRole('complementary', { name: 'SRE navigation' })
@@ -9321,7 +9373,7 @@ test.describe('preview reading in the reader shell (ISSUE-109)', () => {
     await expect(crumbs(page).getByRole('link', { name: 'Previews' })).toHaveAttribute('href', '/sre/_previews')
     await expect(crumbs(page).getByRole('link', { name: 'PR #42' })).toHaveAttribute('href', '/sre/_previews?group=pr%3A42')
     await expect(column(page)).toBeVisible()
-    await expect(column(page).getByRole('heading', { name: 'Details' })).toBeVisible()
+    await expect(column(page).getByRole('button', { name: 'Details', exact: true })).toBeVisible()
     await expect(column(page).getByRole('heading', { name: 'Contents' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Contents' })).toHaveCount(0)
     await page.locator('.context-bar').getByRole('button', { name: 'Search pages in SRE' }).click()
@@ -9342,13 +9394,13 @@ test.describe('preview reading in the reader shell (ISSUE-109)', () => {
     await expect(column(page)).toBeVisible()
     const [frameBox, columnBox] = await Promise.all([frame.boundingBox(), column(page).boundingBox()])
     expect(frameBox!.x + frameBox!.width).toBeLessThanOrEqual(columnBox!.x + 1)
-    await expect(column(page).getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
+    await expect((await openPreviewDetails(page)).getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
     await expect(page.frameLocator('iframe[title="Local preview HTML"]').getByRole('heading', { name: 'Local preview HTML' })).toBeVisible()
   })
 
   test('Details of a PR preview list the PR, revision, build time, links, extra fields, path and the raw action', async ({ page }) => {
     await page.goto(guideUrl({ group: 'pr:42' }))
-    const details = column(page)
+    const details = await openPreviewDetails(page)
     await expect(details.getByRole('link', { name: '#42 on GitHub' })).toHaveAttribute('href', 'https://github.com/acme/sre-docs/pull/42')
     await expect(details.getByRole('link', { name: '#42 on GitHub' })).toHaveAttribute('target', '_blank')
     await expect(revision(details)).toHaveAttribute('title', previewHeadSha)
@@ -9384,7 +9436,7 @@ test.describe('preview reading in the reader shell (ISSUE-109)', () => {
       { path: guidePath, title: 'Local preview guide', format: 'markdown', reason: 'dependency', changedResources: ['assets/preview.css'] },
     ])
     await page.goto(guideUrl({ group: 'pr:42' }))
-    const details = column(page)
+    const details = await openPreviewDetails(page)
     await expect(details.getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
     for (const label of ['Updated', 'Source', 'Last committed by']) await expect(details.getByText(label, { exact: true })).toHaveCount(0)
     await details.getByText('More details').click()
@@ -9397,7 +9449,7 @@ test.describe('preview reading in the reader shell (ISSUE-109)', () => {
     await page.goto(guideUrl({ group: `head:${previewHeadSha}` }))
     await expect(tag(page)).toHaveText('Preview · manual')
     await expect(crumbs(page).getByRole('link').nth(2)).toHaveText(`Revision ${previewHeadSha.slice(0, 8)}`)
-    const details = column(page)
+    const details = await openPreviewDetails(page)
     await expect(revision(details)).toBeVisible()
     await expect(details.getByText('Pull request')).toHaveCount(0)
     await expect(details.getByRole('link', { name: /on GitHub/ })).toHaveCount(0)
@@ -9409,8 +9461,8 @@ test.describe('preview reading in the reader shell (ISSUE-109)', () => {
     await expect(previewTitle(page)).toHaveText('Local preview guide')
     // The same head also belongs to PR groups, which are not guessed.
     await expect(tag(page)).toHaveText('Preview · manual')
-    await expect(column(page).getByText('Pull request')).toHaveCount(0)
-    await expect(column(page).getByRole('link', { name: 'Preview list' })).toHaveAttribute('href', `/sre/_previews?group=head%3A${previewHeadSha}`)
+    await expect((await openPreviewDetails(page)).getByText('Pull request')).toHaveCount(0)
+    await expect((await openPreviewDetails(page)).getByRole('link', { name: 'Preview list' })).toHaveAttribute('href', `/sre/_previews?group=head%3A${previewHeadSha}`)
     await expect(notices(page)).toHaveCount(0)
     await page.getByRole('navigation', { name: 'Preview documents' }).getByRole('link', { name: 'Local preview HTML' }).click()
     await expect(page).toHaveURL(guideUrl({ group: `head:${previewHeadSha}`, path: 'guides/preview.html' }))
@@ -9450,7 +9502,7 @@ test.describe('preview reading in the reader shell (ISSUE-109)', () => {
     await expect(crumbs(page).getByRole('link').nth(2)).toHaveAttribute('href', '/sre/_previews?group=pr%3A42')
     await expect(notices(page)).not.toContainText('#42')
     await expect(page.locator('main, aside').getByText('PR #42')).toHaveCount(0)
-    await expect(column(page).getByText('Pull request')).toHaveCount(0)
+    await expect((await openPreviewDetails(page)).getByText('Pull request')).toHaveCount(0)
     await expect(page.locator('main#main-content article')).toContainText('Markdown document and its image')
     const current = notices(page).getByRole('link', { name: 'Open the current preview' })
     await expect(current).toHaveAttribute('href', guideUrl({ group: 'pr:42', head: newerHead }))
@@ -9458,7 +9510,7 @@ test.describe('preview reading in the reader shell (ISSUE-109)', () => {
     await expect(page).toHaveURL(guideUrl({ group: 'pr:42', head: newerHead }))
     await expect(page.locator('main#main-content article')).toContainText('The current preview.')
     await expect(notices(page)).toHaveCount(0)
-    await expect(column(page).getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
+    await expect((await openPreviewDetails(page)).getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
   })
 
   test('a group id the catalog does not know never names a PR', async ({ page }) => {
@@ -9467,7 +9519,7 @@ test.describe('preview reading in the reader shell (ISSUE-109)', () => {
     await expect(tag(page)).toHaveText(`Preview · ${previewHeadSha.slice(0, 8)}`)
     await expect(crumbs(page).getByRole('link').nth(2)).toHaveText(`Preview ${previewHeadSha.slice(0, 8)}`)
     await expect(page.locator('main, aside').getByText('PR #777')).toHaveCount(0)
-    await expect(column(page).getByText('Pull request')).toHaveCount(0)
+    await expect((await openPreviewDetails(page)).getByText('Pull request')).toHaveCount(0)
     await expect(notices(page)).toHaveCount(0)
   })
 
@@ -9500,7 +9552,7 @@ test.describe('preview reading in the reader shell (ISSUE-109)', () => {
     page.on('request', (request) => { if (new URL(request.url()).pathname === '/_previews/sre/catalog.json') catalogRequests.push('x') })
 
     await page.goto(guideUrl({ group: 'pr:42' }))
-    await expect(column(page).getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
+    await expect((await openPreviewDetails(page)).getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
     await expect(tag(page)).toHaveText('Preview · PR #42')
     expect(catalogRequests).toHaveLength(1)
 
@@ -9514,14 +9566,14 @@ test.describe('preview reading in the reader shell (ISSUE-109)', () => {
     await expect(notices(page)).toContainText(olderRevision)
     expect(catalogRequests).toHaveLength(2)
     await expect(tag(page)).toHaveText(`Preview · ${previewHeadSha.slice(0, 8)}`)
-    await expect(column(page).getByText('Pull request')).toHaveCount(0)
+    await expect((await openPreviewDetails(page)).getByText('Pull request')).toHaveCount(0)
 
     await notices(page).getByRole('link', { name: 'Open the current preview' }).click()
     await expect(page).toHaveURL(guideUrl({ group: 'pr:42', head: newerHead }))
     await expect(page.locator('main#main-content article')).toContainText('The current preview.')
     await expect(notices(page)).toHaveCount(0)
     await expect(tag(page)).toHaveText('Preview · PR #42')
-    await expect(column(page).getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
+    await expect((await openPreviewDetails(page)).getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
   })
 
   test('returning to a long-open tab revalidates a catalog older than 30 seconds', async ({ page }) => {
@@ -9535,7 +9587,7 @@ test.describe('preview reading in the reader shell (ISSUE-109)', () => {
     })
     await page.route(`**/_previews/sre/revisions/${newerHead}/manifest.json`, (route) => route.fulfill({ status: 404, body: 'gone' }))
     await page.goto(guideUrl({ group: 'pr:42' }))
-    await expect(column(page).getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
+    await expect((await openPreviewDetails(page)).getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
     await expect(tag(page)).toHaveText('Preview · PR #42')
 
     // The head changes while the tab is hidden; coming back inside 30 s changes nothing.
@@ -9560,7 +9612,7 @@ test.describe('preview reading in the reader shell (ISSUE-109)', () => {
     await show()
     await expect(notices(page)).toContainText(olderRevision)
     await expect(tag(page)).toHaveText(`Preview · ${previewHeadSha.slice(0, 8)}`)
-    await expect(column(page).getByText('Pull request')).toHaveCount(0)
+    await expect((await openPreviewDetails(page)).getByText('Pull request')).toHaveCount(0)
   })
 
   test('an older revision falls back to the preview list when the current head lacks the document', async ({ page }) => {
@@ -9585,14 +9637,14 @@ test.describe('preview reading in the reader shell (ISSUE-109)', () => {
     await expect(tag(page)).toHaveText(`Preview · ${previewHeadSha.slice(0, 8)}`)
     await expect(crumbs(page).getByRole('link').nth(2)).toHaveText(`Preview ${previewHeadSha.slice(0, 8)}`)
     await expect(crumbs(page).getByRole('link').nth(2)).toHaveAttribute('href', '/sre/_previews?group=pr%3A42')
-    await expect(column(page).getByRole('link', { name: 'Preview list' })).toHaveAttribute('href', '/sre/_previews?group=pr%3A42')
+    await expect((await openPreviewDetails(page)).getByRole('link', { name: 'Preview list' })).toHaveAttribute('href', '/sre/_previews?group=pr%3A42')
     await expect(page.locator('main, aside').getByText('PR #42')).toHaveCount(0)
-    await expect(column(page).getByText('Pull request')).toHaveCount(0)
-    await expect(revision(column(page))).toBeVisible()
+    await expect((await openPreviewDetails(page)).getByText('Pull request')).toHaveCount(0)
+    await expect(revision(await openPreviewDetails(page))).toBeVisible()
     fail = false
     await notices(page).getByRole('button', { name: 'Try again' }).click()
     await expect(notices(page)).toHaveCount(0)
-    await expect(column(page).getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
+    await expect((await openPreviewDetails(page)).getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
   })
 
   test('a missing or expired preview shows Preview unavailable inside the shell, without the column', async ({ page }) => {
@@ -9716,8 +9768,8 @@ test.describe('preview reading in the reader shell (ISSUE-109)', () => {
     await expect(page.getByRole('region', { name: 'Preview pr:42' })).toBeVisible()
     await page.getByRole('region', { name: 'Preview pr:42' }).getByRole('link', { name: /Local preview guide/ }).click()
     await expect(previewTitle(page)).toHaveText('Local preview guide')
-    await expect(column(page).getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
-    await column(page).getByRole('link', { name: 'Preview list' }).click()
+    await expect((await openPreviewDetails(page)).getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
+    await (await openPreviewDetails(page)).getByRole('link', { name: 'Preview list' }).click()
     await expect(page).toHaveURL('/sre/_previews?group=pr%3A42')
     await expect(page.getByRole('region', { name: 'Preview pr:42' })).toBeVisible()
     await page.goBack()
@@ -9727,8 +9779,8 @@ test.describe('preview reading in the reader shell (ISSUE-109)', () => {
     // A direct entry loads the catalog once for the reader; the list then reuses it.
     catalogRequests.length = 0
     await page.goto(guideUrl({ group: 'pr:42' }))
-    await expect(column(page).getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
-    await column(page).getByRole('link', { name: 'Preview list' }).click()
+    await expect((await openPreviewDetails(page)).getByRole('link', { name: '#42 on GitHub' })).toBeVisible()
+    await (await openPreviewDetails(page)).getByRole('link', { name: 'Preview list' }).click()
     await expect(page.getByRole('region', { name: 'Preview pr:42' })).toBeVisible()
     expect(catalogRequests).toHaveLength(1)
   })
@@ -9883,7 +9935,10 @@ test.describe('browser-localized date and count display (IMP-84)', () => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto('/showcase/editorial/field-notes/index.html')
     const context = page.getByRole('complementary', { name: 'Reading context' })
-    await expect(context.locator('time')).toHaveText('2026年9月23日')
+    await expect(context.locator('time')).toHaveText('9月23日')
+    await context.getByRole('button', { name: 'Details', exact: true }).click()
+    await expect(page.getByRole('complementary', { name: 'Details' }).locator('time')).toHaveText('2026年9月23日')
+    await page.getByRole('complementary', { name: 'Details' }).getByRole('button', { name: 'Close Details' }).click()
     await expect(context.getByRole('heading', { name: 'Contents', exact: true })).toBeVisible()
     await expect(page.frameLocator('iframe[title="Designing for resilience"]').getByText('September 23, 2026', { exact: true })).toBeVisible()
     await page.goto('/sre')
@@ -10033,4 +10088,45 @@ test('S3 single-site menus keep the singular count and Space follows their home 
   await page.keyboard.press('Space')
   await expect(page).toHaveURL('/sre')
   await expect(page.getByRole('menu', { name: /^Site menu/ })).toHaveCount(0)
+})
+
+
+test('S4 wide reading context shows only freshness until Details is requested', async ({ page }) => {
+  for (const path of ['/sre/incidents/checkout-latency/index.html', '/sre/reports/latency-retrospective.md']) {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto(path)
+    const column = page.getByRole('complementary', { name: 'Reading context' })
+    const trigger = column.getByRole('button', { name: 'Details', exact: true })
+    await expect(column.locator('.reader-update')).toContainText('Updated')
+    await expect(column.locator('.artifact-details')).toHaveCount(0)
+    await expect(column.getByRole('heading', { name: 'Contents' })).toBeVisible()
+    const reading = page.locator('iframe.artifact-frame').or(page.locator('.markdown-article'))
+    const before = (await reading.boundingBox())!
+    await trigger.click()
+    const details = page.getByRole('complementary', { name: 'Details' })
+    await expect(details.getByRole('button', { name: 'Close Details' })).toBeFocused()
+    await expect(details.locator('.details-source')).toBeVisible()
+    expect((await reading.boundingBox())!.width).toBeCloseTo(before.width, 0)
+    const scroller = page.locator('.markdown-scroll')
+    if (path.endsWith('.md')) await scroller.evaluate((el) => { el.scrollTop = 600 })
+    const scrollBefore = path.endsWith('.md') ? await scroller.evaluate((el) => el.scrollTop) : 0
+    await page.keyboard.press('Escape')
+    await expect(details).toBeHidden()
+    await expect(trigger).toBeFocused()
+    if (path.endsWith('.md')) expect(await scroller.evaluate((el) => el.scrollTop)).toBe(scrollBefore)
+    await expect(column.getByRole('navigation', { name: 'Artifact headings' })).toBeVisible()
+  }
+})
+
+test('S4 open Details keeps visible focus when a More menu disappears at the wide breakpoint', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/sre/reports/latency-retrospective.md')
+  await openReaderDetails(page)
+  const details = page.getByRole('complementary', { name: 'Details' })
+  await moreActionsButton(page).click()
+  await expect(page.getByRole('menu', { name: 'More actions' })).toBeVisible()
+  await page.setViewportSize({ width: 1440, height: 844 })
+  await expect(details.getByRole('button', { name: 'Close Details' })).toBeFocused()
+  await details.getByRole('button', { name: 'Close Details' }).click()
+  await expect(page.getByRole('complementary', { name: 'Reading context' }).getByRole('button', { name: 'Details', exact: true })).toBeFocused()
 })
