@@ -1,3 +1,4 @@
+import http from 'node:http'
 import { spawnSync } from 'node:child_process'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
@@ -166,50 +167,16 @@ async function resetCloudflarePurgeRequests(profile, env, port) {
 async function assertCloudflareUnregisterPurgeRequests(port) {
   const response = await fetch(`http://127.0.0.1:${port}/requests`)
   const requests = await response.json().catch(() => null)
-  const endpoint = '/client/v4/zones/abcdef0123456789abcdef0123456789/purge_cache'
-  if (!response.ok || !Array.isArray(requests) || requests.length !== 2) {
-    throw new Error(`Cloudflare purge mock recorded ${Array.isArray(requests) ? requests.length : 'an invalid number of'} unregister requests.`)
-  }
-  const expected = {
-    prefixes: [
-      'pages.example.test/_artifacts/sre/',
-      'pages.example.test/_indexes/sre/',
-      'pages.example.test/_previews/sre/',
-      'pages.example.test/sre/',
-    ],
-    files: [
-      'https://pages.example.test/_indexes/sites.json',
-      'https://pages.example.test/sre',
-    ],
-  }
-  const observed = new Map()
-  for (const request of requests) {
-    if (request.url !== endpoint || !request.payload || Object.keys(request.payload).length !== 1) {
-      throw new Error(`Cloudflare purge mock recorded an unexpected request: ${JSON.stringify(request)}`)
-    }
-    const [kind] = Object.keys(request.payload)
-    if (!Object.hasOwn(expected, kind) || observed.has(kind) || !Array.isArray(request.payload[kind])) {
-      throw new Error(`Cloudflare purge mock recorded an unexpected request group: ${JSON.stringify(request)}`)
-    }
-    observed.set(kind, [...request.payload[kind]].sort())
-  }
-  for (const [kind, entries] of Object.entries(expected)) {
-    if (JSON.stringify(observed.get(kind)) !== JSON.stringify([...entries].sort())) {
-      throw new Error(`Cloudflare unregister ${kind} purge paths = ${JSON.stringify(observed.get(kind))}, want ${JSON.stringify(entries)}`)
-    }
+  if (!response.ok || !Array.isArray(requests) || requests.length !== 0) {
+    throw new Error(`Cloudflare purge mock recorded ${Array.isArray(requests) ? requests.length : 'an invalid number of'} unregister requests; want zero.`)
   }
 }
 
 async function assertCloudflareAppDeployPurgeRequest(port) {
   const response = await fetch(`http://127.0.0.1:${port}/requests`)
   const requests = await response.json().catch(() => null)
-  if (!response.ok || !Array.isArray(requests) || requests.length !== 1) {
-    throw new Error(`Cloudflare app-deploy purge mock recorded ${Array.isArray(requests) ? requests.length : 'an invalid number of'} requests.`)
-  }
-  const request = requests[0]
-  const endpoint = '/client/v4/zones/abcdef0123456789abcdef0123456789/purge_cache'
-  if (request.url !== endpoint || JSON.stringify(request.payload) !== JSON.stringify({ files: ['https://pages.example.test/index.html'] })) {
-    throw new Error(`Cloudflare app-deploy purge request = ${JSON.stringify(request)}, want only the stable application shell URL.`)
+  if (!response.ok || !Array.isArray(requests) || requests.length !== 0) {
+    throw new Error(`Cloudflare app-deploy purge mock recorded ${Array.isArray(requests) ? requests.length : 'an invalid number of'} requests; want zero.`)
   }
 }
 
@@ -264,6 +231,39 @@ function assertEdgeHasNoDynamicStorageMount(profile, env, service) {
   }
 }
 
+// Seeded objects model what an older CLI wrote, so each carries the legacy
+// header for its class. The edge must pass the origin header through as the one
+// and only Cache-Control header.
+async function assertSeededContentCacheHeaders(profile, edgePort) {
+  const legacy60 = 'public, max-age=0, s-maxage=60, must-revalidate'
+  const legacy300 = 'public, max-age=0, s-maxage=300, must-revalidate'
+  const revision = '0123456789abcdef0123456789abcdef01234567'
+  const probes = [
+    ['/_indexes/sites.json', legacy60],
+    ['/_indexes/sre/index.json', legacy60],
+    ['/_artifacts/sre/incidents/checkout-latency/index.html', legacy300],
+    ['/_previews/sre/catalog.json', legacy60],
+    [`/_previews/sre/revisions/${revision}/manifest.json`, legacy300],
+    [`/_previews/sre/revisions/${revision}/files/guides/preview-guide.md`, legacy300],
+    [`/_previews/sre/revisions/${revision}/files/guides/preview.html`, legacy300],
+  ]
+  for (const [probePath, expected] of probes) {
+    const { status, rawHeaders } = await new Promise((resolve, reject) => {
+      http.get({ host: '127.0.0.1', port: edgePort, path: probePath }, (res) => {
+        res.resume()
+        res.on('end', () => resolve({ status: res.statusCode, rawHeaders: res.rawHeaders }))
+      }).on('error', reject)
+    })
+    const values = []
+    for (let i = 0; i < rawHeaders.length; i += 2) {
+      if (rawHeaders[i].toLowerCase() === 'cache-control') values.push(rawHeaders[i + 1])
+    }
+    if (status !== 200 || values.length !== 1 || values[0] !== expected) {
+      throw new Error(`${profile} edge ${probePath} returned HTTP ${status} with Cache-Control ${JSON.stringify(values)}; want exactly one header equal to ${JSON.stringify(expected)}.`)
+    }
+  }
+}
+
 async function assertEdgeAppAssetCacheHeaders(profile, edgePort) {
   const assetRoot = path.join(projectRoot, 'web', 'dist', 'assets')
   const stem = `app_cache_profile_probe_${profile}_${process.pid}`
@@ -274,7 +274,7 @@ async function assertEdgeAppAssetCacheHeaders(profile, edgePort) {
   await fs.writeFile(path.join(assetRoot, hashedName), 'window.hashedCacheProbe = true;\n')
   try {
     for (const [name, expected] of [
-      [fixedName, 'no-cache, max-age=0, must-revalidate'],
+      [fixedName, 'no-cache, max-age=0, must-revalidate, stale-if-error=0'],
       [hashedName, 'public, max-age=31536000, immutable'],
     ]) {
       const response = await fetch(`http://127.0.0.1:${edgePort}/assets/${name}`)
@@ -401,6 +401,7 @@ async function main() {
     }
     await waitFor(`http://127.0.0.1:${ports.edge}/health`, 204, `${profile} nginx edge`)
     await assertEdgeAppAssetCacheHeaders(profile, ports.edge)
+    await assertSeededContentCacheHeaders(profile, ports.edge)
 
     const commandEnv = localProfileEnv(profile, ports)
     let frontendProbeKey = ''
@@ -469,18 +470,6 @@ async function main() {
     })
 
     if (profile === 'cloudflare') {
-      const previewProbePaths = [
-        '/_previews/sre/catalog.json',
-        '/_previews/sre/revisions/0123456789abcdef0123456789abcdef01234567/manifest.json',
-        '/_previews/sre/revisions/0123456789abcdef0123456789abcdef01234567/files/guides/preview-guide.md',
-        '/_previews/sre/revisions/0123456789abcdef0123456789abcdef01234567/files/guides/preview.html',
-      ]
-      for (const previewPath of previewProbePaths) {
-        const response = await fetch(`http://127.0.0.1:${ports.edge}${previewPath}`)
-        if (response.status !== 200 || !response.headers.get('cache-control')?.includes('no-store')) {
-          throw new Error(`Cloudflare local edge preview probe ${previewPath} returned HTTP ${response.status} with cache ${response.headers.get('cache-control') ?? '<missing>'}; want 200 and no-store.`)
-        }
-      }
       const missingPreviewPath = '/_previews/sre/revisions/ffffffffffffffffffffffffffffffffffffffff/manifest.json'
       const missingPreview = await fetch(`http://127.0.0.1:${ports.edge}${missingPreviewPath}`)
       const missingPreviewBody = (await missingPreview.text()).toLowerCase()
@@ -551,7 +540,7 @@ async function main() {
         throw new Error(`Neighboring frontend artifact returned HTTP ${frontendArtifact.status} after unregister.`)
       }
       console.log(`Cloudflare local unregister preserved frontend artifact ${frontendProbeKey} and removed SRE artifact/index/preview prefixes.`)
-      console.log('Cloudflare purge mock received the exact SRE unregister file and prefix paths.')
+      console.log('Cloudflare purge mock observed zero requests for SRE unregistration.')
     }
 
     // Restore fixtures after the publish and storage probes so E2E assertions

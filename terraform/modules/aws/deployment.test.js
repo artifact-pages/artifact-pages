@@ -104,10 +104,10 @@ test('AWS deployment keeps the S3 origin private behind signed CloudFront OAC', 
 test('AWS deployment maps the logical app and content paths to bounded cache policies', async () => {
   const behaviors = block(main, '  cache_behaviors = {')
   for (const [name, path, policy] of [
-    ['indexes', '/_indexes/*', 'indexes'],
-    ['artifacts', '/_artifacts/*', 'artifacts'],
-    ['previews', '/_previews/*', 'no_store'],
-    ['assets', '/assets/*', 'immutable_assets'],
+    ['indexes', '/_indexes/*', 'origin_respecting'],
+    ['artifacts', '/_artifacts/*', 'origin_respecting'],
+    ['previews', '/_previews/*', 'origin_respecting'],
+    ['assets', '/assets/*', 'origin_respecting'],
     ['errors', '/_errors/*', 'no_store'],
   ]) {
     const behavior = block(behaviors, `    ${name} = {`)
@@ -116,18 +116,19 @@ test('AWS deployment maps the logical app and content paths to bounded cache pol
   }
 
   const distribution = block(main, 'resource "aws_cloudfront_distribution" "site"')
-  assert.match(distribution, /cache_policy_id\s*=\s*aws_cloudfront_cache_policy\.no_store\.id/u)
+  assert.match(distribution, /cache_policy_id\s*=\s*aws_cloudfront_cache_policy\.origin_respecting\.id/u)
+  assert.doesNotMatch(distribution, /aws_cloudfront_cache_policy\.no_store/u)
   assert.match(distribution, /for_each\s*=\s*local\.cache_behaviors/u)
   assert.match(distribution, /viewer_protocol_policy\s*=\s*var\.viewer_protocol_policy/u)
 
-  for (const [name, ttl] of [['no_store', 0], ['indexes', 60], ['artifacts', 300], ['immutable_assets', 31536000]]) {
+  for (const [name, maxTtl] of [['no_store', 0], ['origin_respecting', 31536000]]) {
     const cachePolicy = block(main, `resource "aws_cloudfront_cache_policy" "${name}"`)
-    for (const field of ['min_ttl', 'default_ttl', 'max_ttl']) {
-      const expected = name === 'no_store' || (name === 'immutable_assets' && field === 'default_ttl')
-        ? 0
-        : field === 'min_ttl' ? 0 : ttl
-      assert.match(cachePolicy, new RegExp(`${field}\\s*=\\s*${expected}(?:\\s|$)`, 'u'), `${name}.${field} must be ${expected}`)
-    }
+    assert.match(cachePolicy, /min_ttl\s*=\s*0(?:\s|$)/u, `${name}.min_ttl must be 0`)
+    assert.match(cachePolicy, /default_ttl\s*=\s*0(?:\s|$)/u, `${name}.default_ttl must be 0`)
+    assert.match(cachePolicy, new RegExp(`max_ttl\\s*=\\s*${maxTtl}(?:\\s|$)`, 'u'), `${name}.max_ttl must be ${maxTtl}`)
+  }
+  for (const removed of ['indexes', 'artifacts', 'immutable_assets']) {
+    assert.doesNotMatch(main, new RegExp(`resource "aws_cloudfront_cache_policy" "${removed}"`, 'u'))
   }
 
   const routeFunction = await readFile(new URL('./routes.js', import.meta.url), 'utf8')
@@ -170,13 +171,13 @@ test('admin and satellite OIDC roles have separate exact-subject trust and scope
 
   const adminStatements = block(main, 'locals {')
   assert.deepEqual(actionLists(adminStatements), [
-    ['s3:ListBucket'], ['s3:GetObject'], ['s3:PutObject'], ['s3:DeleteObject'], ['cloudfront:CreateInvalidation'],
+    ['s3:ListBucket'], ['s3:GetObject'], ['s3:PutObject'], ['s3:DeleteObject'],
   ])
   assert.match(adminStatements, /"s3:ListBucket"/u)
   assert.match(adminStatements, /"s3:GetObject"/u)
   assert.match(adminStatements, /"s3:PutObject"/u)
   assert.match(adminStatements, /"s3:DeleteObject"/u)
-  assert.match(adminStatements, /"cloudfront:CreateInvalidation"/u)
+  assert.doesNotMatch(adminStatements, /cloudfront:/u, 'the CLI never invalidates, so no CloudFront permission is granted')
   assert.match(adminStatements, /"_control\/\*"/u)
   const adminList = localStatement(adminStatements, 'ListProjectionPrefixes')
   assert.match(adminList, /"_control\/\*"/u, 'the admin lists the whole control prefix')
@@ -195,7 +196,7 @@ test('admin and satellite OIDC roles have separate exact-subject trust and scope
 
   const satellitePolicy = block(main, 'resource "aws_iam_role_policy" "satellite"')
   assert.deepEqual(actionLists(satellitePolicy), [
-    ['s3:GetObject'], ['s3:ListBucket'], ['s3:PutObject'], ['s3:DeleteObject'], ['cloudfront:CreateInvalidation'],
+    ['s3:GetObject'], ['s3:ListBucket'], ['s3:PutObject'], ['s3:DeleteObject'],
   ])
   assert.match(satellitePolicy, /"_indexes\/\$\{each\.key\}\/\*"/u)
   assert.match(satellitePolicy, /"_artifacts\/\$\{each\.key\}\/\*"/u)
@@ -219,7 +220,7 @@ test('admin and satellite OIDC roles have separate exact-subject trust and scope
   assert.match(satelliteDelete, /_indexes\/\$\{each\.key\}\/\*/u, 'stale generated indexes and search objects are site-owned cleanup')
   assert.doesNotMatch(satelliteDelete, /_indexes\/sites\.json|_indexes\/\$\{each\.key\}\/\*\*|_control\/locks/u)
   assert.match(satelliteDelete, /_previews\/\$\{each\.key\}\/\*/u, 'preview removal deletes only the selected site preview prefix')
-  assert.match(satellitePolicy, /Sid\s*=\s*"RevalidateSelectedSiteDistribution"[\s\S]*?Resource\s*=\s*aws_cloudfront_distribution\.site\.arn/u)
+  assert.doesNotMatch(satellitePolicy, /cloudfront:|Revalidate/u)
   assert.match(variables, /satellite_github_subjects"[\s\S]*?type\s*=\s*map\(list\(string\)\)/u)
   assert.match(outputs, /satellite_role_arns/u)
 })

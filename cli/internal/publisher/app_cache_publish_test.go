@@ -333,7 +333,7 @@ func TestDeployAppPendingDryRunPlansLegacyJournalRetirementWithoutMutationOrLock
 	if err != nil {
 		t.Fatalf("dry-run DeployApp() error = %v", err)
 	}
-	if result.Outcome != "planned" || result.FilesPublished != 0 || len(result.Changes) != 0 || len(result.InvalidationPaths) != 0 || result.InvalidationID != "" {
+	if result.Outcome != "planned" || result.FilesPublished != 0 || len(result.Changes) != 0 {
 		t.Fatalf("dry-run DeployApp() = %+v; want a planned legacy journal retirement with no result changes", result)
 	}
 	if len(backend.store.appPuts) != 0 || len(backend.store.conditional) != 0 || len(backend.store.invalidations) != 0 || len(backend.store.deletions) != 0 {

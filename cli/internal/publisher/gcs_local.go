@@ -352,12 +352,6 @@ func readHTTPStatusLine(reader io.Reader) (string, error) {
 	return strings.TrimSpace(line), nil
 }
 
-func (backend *localGCSBackend) Invalidate(context.Context, []string) (string, error) {
-	// The local edge has no CDN control plane. Browser cache policy is exercised
-	// independently through the edge response headers.
-	return "", nil
-}
-
 func (backend *localGCSBackend) objectMetadata(ctx context.Context, key string) (gcsObjectMetadata, error) {
 	if key == "" || strings.ContainsRune(key, '\x00') {
 		return gcsObjectMetadata{}, errors.New("GCS object name is required")

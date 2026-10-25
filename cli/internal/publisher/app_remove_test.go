@@ -41,7 +41,7 @@ func TestRemoveAppDryRunPlansOnlyApplicationObjectsWithoutWrites(t *testing.T) {
 		t.Fatalf("RemoveApp(dry-run) error = %v", err)
 	}
 	wantKeys := []string{"LICENSE", "THIRD_PARTY_NOTICES.txt", "assets/app.js", "index.html", "preview-bridge.js"}
-	if result.Outcome != "planned" || result.FilesRemoved != len(wantKeys) || len(result.InvalidationPaths) != 0 || result.InvalidationID != "" {
+	if result.Outcome != "planned" || result.FilesRemoved != len(wantKeys) {
 		t.Fatalf("dry-run result = %+v; want exact application plan", result)
 	}
 	var planned []string
@@ -70,7 +70,7 @@ func TestRemoveAppUsesExactApplicationScopeWithoutPurgeJournal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RemoveApp() error = %v", err)
 	}
-	if result.Outcome != "removed" || result.FilesRemoved != 5 || result.InvalidationID != "" || len(result.InvalidationPaths) != 0 {
+	if result.Outcome != "removed" || result.FilesRemoved != 5 {
 		t.Fatalf("RemoveApp() = %+v; want five app objects removed without invalidation output", result)
 	}
 	for _, key := range []string{"index.html", "preview-bridge.js", "LICENSE", "THIRD_PARTY_NOTICES.txt", "assets/app.js"} {
