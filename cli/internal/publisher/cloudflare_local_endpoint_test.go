@@ -9,24 +9,27 @@ import (
 )
 
 func TestNewCloudflareBackendAcceptsPairedLoopbackOverrides(t *testing.T) {
-	endpoint := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	var paths []string
+	endpoint := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		paths = append(paths, request.URL.Path)
+		writer.WriteHeader(http.StatusOK)
+	}))
 	defer endpoint.Close()
 	options := CloudflareOptions{
 		AccountID: "0123456789abcdef0123456789abcdef", Bucket: "artifact-pages",
 		ZoneID: "abcdef0123456789abcdef0123456789", PublicBaseURL: "https://pages.example.test",
 		R2Endpoint: endpoint.URL, APIBaseURL: endpoint.URL + "/client/v4",
-		AccessKeyID: "r2-access-key", SecretKey: "r2-secret-key", APIToken: "zone-purge-token",
+		AccessKeyID: "r2-access-key", SecretKey: "r2-secret-key",
 	}
 	backend, err := NewCloudflareBackend(context.Background(), options)
 	if err != nil {
 		t.Fatalf("NewCloudflareBackend(local profile): %v", err)
 	}
-	cloudflare, ok := backend.(*cloudflareBackend)
-	if !ok {
-		t.Fatalf("backend type = %T, want *cloudflareBackend", backend)
+	if err := backend.PutObject(context.Background(), "_artifacts/sre/pair-check.txt", Object{Bytes: []byte("ok")}); err != nil {
+		t.Fatalf("explicit R2 pair without API token could not write: %v", err)
 	}
-	if cloudflare.apiBaseURL != endpoint.URL+"/client/v4" {
-		t.Fatalf("API base URL = %q, want configured loopback endpoint", cloudflare.apiBaseURL)
+	if len(paths) != 1 || paths[0] != "/artifact-pages/_artifacts/sre/pair-check.txt" {
+		t.Fatalf("explicit R2 request paths = %v; want only the storage write", paths)
 	}
 }
 

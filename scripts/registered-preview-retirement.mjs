@@ -159,7 +159,7 @@ export async function previewRetirement({ projectRoot, localRoot, run, git, init
         { action: 'keep', headSha: live.sha, reason: 'manifest-present' },
         { action: 'remove', headSha: retired.sha, reason: 'manifest-missing' },
       ], 'reconciliation did not select exactly the missing manifest')
-      equal(result.invalidationPaths, ['/_previews/sre/catalog.json'], 'unexpected invalidation scope')
+      assert(!Object.hasOwn(result, 'invalidationPaths'), 'site publish result omits invalidation details')
     }
     const dryRun = publish(['--dry-run'])
     assert(dryRun.outcome === 'planned', 'dry-run did not report planned reconciliation')

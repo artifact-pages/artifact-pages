@@ -459,10 +459,7 @@ func assertPreviewFlowSmokeRemapperRejectsEscapes(t *testing.T, ctx context.Cont
 	_, err := backend.ListKeys(ctx, "_control/")
 	assertRejected("ListKeys outside the preview namespace", err)
 	assertRejected("DeleteObjects outside the preview namespace", backend.DeleteObjects(ctx, []string{"_indexes/sites.json"}))
-	_, err = backend.Invalidate(ctx, []string{"/*"})
-	if err == nil || !strings.Contains(err.Error(), "refuses provider cache invalidation") {
-		t.Fatalf("isolated backend Invalidate() error = %v; want rejection", err)
-	}
+
 }
 
 func (backend *previewFlowSmokeBackend) heldCatalogPuts() int {

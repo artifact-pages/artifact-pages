@@ -405,7 +405,6 @@ func TestRunRegistryRegisterReadsSelectedConfigAndDryRunDoesNotCreateStorage(t *
 		t.Fatalf("registry sync dry-run result = %+v, want a plan with registryUpdated=false", planned)
 	}
 	wantChanges := []publisher.Change{
-		{Action: "invalidate", Path: "/_indexes/sites.json"},
 		{Action: "create", Path: "_indexes/sites.json"},
 		{Action: "create", Path: "_indexes/sites.json#sites/sre"},
 	}
@@ -530,7 +529,7 @@ local:
 	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
 		t.Fatalf("decode layered config result: %v; stdout=%s stderr=%s", err, stdout, stderr)
 	}
-	if exitCode != 0 || result.Operation != "registry sync" || result.Outcome != "planned" || len(result.Changes) != 3 {
+	if exitCode != 0 || result.Operation != "registry sync" || result.Outcome != "planned" || len(result.Changes) != 2 {
 		t.Fatalf("layered registry dry-run = exit %d, %+v; stderr=%s, want inherited site and local target", exitCode, result, stderr)
 	}
 	if _, err := os.Stat(filepath.Join(root, ".local", "storage")); !os.IsNotExist(err) {

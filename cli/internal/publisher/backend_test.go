@@ -142,7 +142,7 @@ func TestDeployAppUsesProviderNeutralBackend(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DeployApp() error = %v", err)
 	}
-	if result.FilesPublished != 3 || result.InvalidationID != "" || len(result.InvalidationPaths) != 0 {
+	if result.FilesPublished != 3 {
 		t.Fatalf("DeployApp() = %+v, want three files and no invalidation result", result)
 	}
 	appPuts := publicApplicationPuts(backend.puts)

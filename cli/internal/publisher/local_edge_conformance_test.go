@@ -161,7 +161,5 @@ func TestLocalEdgeConformance(t *testing.T) {
 	if err := backend.DeleteObjects(ctx, nil); err != nil {
 		t.Fatalf("DeleteObjects(empty): %v", err)
 	}
-	if _, err := backend.Invalidate(ctx, []string{"/" + strings.TrimPrefix(lockKey, "_")}); err != nil {
-		t.Fatalf("Invalidate(valid local cache path): %v", err)
-	}
+
 }

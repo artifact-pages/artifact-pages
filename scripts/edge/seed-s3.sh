@@ -27,6 +27,8 @@ aws --endpoint-url "$endpoint" s3 cp /seed/storage "$destination" --recursive \
   --exclude '*' --include '*.md' --content-type 'text/markdown; charset=utf-8' --only-show-errors
 aws --endpoint-url "$endpoint" s3 cp /seed/storage "$destination" --recursive \
   --exclude '*' --include '*.json' --content-type 'application/json; charset=utf-8' --only-show-errors
+aws --endpoint-url "$endpoint" s3 cp /seed/storage/_indexes/sites.json "$destination/_indexes/sites.json" \
+  --content-type 'application/json; charset=utf-8' --cache-control 'public, max-age=0, s-maxage=60, must-revalidate' --only-show-errors
 aws --endpoint-url "$endpoint" s3 cp /seed/storage "$destination" --recursive \
   --exclude '*' --include '*.css' --content-type 'text/css; charset=utf-8' --only-show-errors
 aws --endpoint-url "$endpoint" s3 cp /seed/storage "$destination" --recursive \

@@ -17,8 +17,8 @@ import (
 )
 
 // DirectoryBackend provides the same object projection operations as remote
-// adapters while writing into a local static root. Cache invalidation is a
-// no-op because local nginx serves the current files directly.
+// adapters while writing into a local static root. Local nginx serves the
+// current files directly, so there is no CDN layer to refresh.
 type DirectoryBackend struct {
 	root string
 }
@@ -475,10 +475,6 @@ func cloneObjectMetadata(metadata map[string]string) map[string]string {
 		clone[key] = value
 	}
 	return clone
-}
-
-func (backend *DirectoryBackend) Invalidate(ctx context.Context, _ []string) (string, error) {
-	return "", ctx.Err()
 }
 
 func (backend *DirectoryBackend) objectPath(key string) (string, error) {

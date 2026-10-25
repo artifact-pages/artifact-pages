@@ -24,6 +24,25 @@ import (
 
 const sitePublishStateLayoutFusionEnv = "ARTIFACT_PAGES_STATE_LAYOUT_FUSION"
 
+// Legacy journal simulation helper. Production no longer creates invalidation paths.
+func siteCachePaths(site string, changes []Change, _ any, pending []string) []string {
+	set := make(map[string]bool)
+	for _, p := range pending {
+		set[p] = true
+	}
+	for _, change := range changes {
+		if strings.HasPrefix(change.Path, "_artifacts/"+site+"/") || strings.HasPrefix(change.Path, "_indexes/"+site+"/") {
+			set["/"+change.Path] = true
+		}
+	}
+	paths := make([]string, 0, len(set))
+	for p := range set {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+	return paths
+}
+
 // This opt-in comparison is a serialized-store prototype. The GET-only and
 // fused retry-journal variants are not production adapters or accepted code.
 func TestSitePublishStateLayoutFusion(t *testing.T) {
