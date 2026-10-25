@@ -9,7 +9,7 @@ The migration moves five things, and each is checked separately: the CLI version
 ## Before you start
 
 - Identify every writer: the admin repository (registry sync, app deploy), every satellite repository (site sync, preview publish and remove), and any local operator who publishes by hand. All of them must move together.
-- Use a compatible CLI release: the first release that includes the no-invalidation change. Its release notes name it. A compatible CLI reads and migrates the old journals; an older CLI cannot read the journals a compatible CLI writes.
+- Use a compatible CLI release: the first release that includes the no-invalidation change. Its release notes name it. A compatible CLI reads and migrates the old journals; an older CLI cannot read the journals or the per-site publish state a compatible CLI writes (see [Rollback](#rollback)).
 - Use a compatible delivery module: the reference AWS and Cloudflare modules from the same product release. On AWS, the new module removes `cloudfront:CreateInvalidation` from the publisher roles, so an old CLI publishing against it fails.
 - Know the largest shared-cache freshness your old setup allowed for mutable objects. For the reference modules it is 300 seconds (artifacts and preview revisions); a custom CDN may have its own value.
 - Do not purge as part of the migration. Waiting out the old freshness is the plan.
@@ -19,9 +19,9 @@ The migration moves five things, and each is checked separately: the CLI version
 Run the steps in this order.
 
 1. **Stop the old writers and settle their work.** Pause the publish, preview, registry and app-deploy workflows, and stop hand-run publishing. Let any running job finish. If a job was interrupted, run it again with the old CLI until it succeeds, so no old journal is left half-applied. Then back up the private control records you have: every `_control/sites/<site>/site-cache.json`, `_control/sites/<site>/preview-cleanup.json`, `_control/registry-cleanup.json` and `_control/app-cache/retry.json`. Keep the source repositories as they are.
-2. **Move every writer to the compatible CLI.** Change `cli.version` in the admin config and the Action pins in every repository (see [Operator repository changes](#operator-repository-changes)). Do not delete control records or source files. Leave the purge credential in place for now; the compatible CLI ignores it.
-3. **Apply the compatible delivery module.** Review the plan first. On AWS the plan replaces the indexes, artifacts and immutable-assets cache policies with one origin-respecting policy and removes the invalidation permission; on Cloudflare the cache rule already respects the origin and the plan should show no cache-rule change.
-4. **Converge headers and journals.** Run, each with `--dry-run` first: `registry sync` from the admin repository, `site sync --reconcile` for every registered site, and `app deploy` with the current `web.version`. Each command treats a header-only difference as a change and rewrites the header; the first real run of each also migrates or retires any journal an older CLI left, after saving the exact bytes of an old site journal under `_control/sites/<site>/legacy/`.
+2. **Move every writer to the compatible CLI.** Change `cli.version` in the admin config, regenerate the managed workflows and bump the remaining Action pins (see [Operator repository changes](#operator-repository-changes)). Do not delete control records or source files. Leave the purge credential in place for now; the compatible CLI ignores it.
+3. **Apply the compatible delivery module.** Review the plan first. On AWS the plan replaces the `indexes`, `artifacts` and `immutable_assets` policies, and `no_store` on previews and the application shell, with one origin-respecting policy (0/0/31536000), keeps `no_store` only for `/_errors/*`, and removes the invalidation permission; on Cloudflare the cache rule already respects the origin and the plan should show no cache-rule change.
+4. **Converge headers and journals.** Run, each with `--dry-run` first: `registry sync` from the admin repository, `site sync --reconcile` for every registered site, and `app deploy` with the current `web.version`. Each command treats a header-only difference as a change and rewrites the header; the first real run of each also migrates or retires any journal an older CLI left, after saving the exact bytes of an old `site-cache.json` under `_control/sites/<site>/legacy/`. Once this step has succeeded, resume the workflows: ordinary publishing with the compatible CLI is safe from then on.
 5. **Run the preview helper** for every site that has previews (see [Preview metadata helper](#preview-metadata-helper) below). Without it, existing preview revisions keep the old headers until they expire.
 6. **Wait out the old freshness.** Wait for the module change to propagate and then for the largest old mutable freshness to pass: 300 seconds for the reference modules, or your custom CDN's real value. Until then an edge may still serve a copy it cached under the old rules.
 7. **Verify.** For the registry, one site's metadata and index, a search manifest, an artifact, a preview catalog and revision file, `index.html` and a hashed asset, request the object from the origin and through the delivery hostname, and confirm the `Cache-Control` matches the specification. Publish a small change and confirm a fresh request sees it within the expected bound: up to 5 seconds for the registry, site metadata and index, immediately for artifacts and previews. Confirm the publish result lists no invalidation and that the journals listed in step 1 are absent after successful runs.
@@ -29,7 +29,7 @@ Run the steps in this order.
 
 ## Retire purge credentials
 
-- **Cloudflare, explicit R2 key pair.** The CLI no longer reads `CF_API_TOKEN`. Remove it from the workflow `env` blocks, then delete the secret and revoke the token in Cloudflare. Workflows generated by `registry setup` keep forwarding `CF_API_TOKEN`, because `apiTokenEnv` defaults to that name; with an explicit pair the CLI never reads it, so a regenerated line that points at a deleted secret is harmless. Check first that the deployment really uses an explicit pair (`CF_R2_ACCESS_KEY_ID` and `CF_R2_SECRET_ACCESS_KEY` are set for every writer); otherwise the token is your R2 credential.
+- **Cloudflare, explicit R2 key pair.** The CLI no longer reads `CF_API_TOKEN`. Remove it from the `env` blocks of workflows you maintain by hand, then delete the secret from every repository and environment and revoke the token in Cloudflare. Revoke it only if it served purge alone and is not shared with Terraform or other tooling. Workflows generated by `registry setup` keep forwarding `CF_API_TOKEN`, because `apiTokenEnv` defaults to that name; do not edit them by hand. With an explicit pair the CLI never reads it, so a generated line that points at a deleted secret is harmless. Check first that the deployment really uses an explicit pair (`CF_R2_ACCESS_KEY_ID` and `CF_R2_SECRET_ACCESS_KEY` are set for every writer); otherwise the token is your R2 credential.
 - **Cloudflare, single-token mode.** Keep `CF_API_TOKEN`: the CLI derives the R2 credentials from it. You may remove its `Cache Purge` permission; it needs `Workers R2 Storage Bucket Item Write` only.
 - **AWS.** Applying the compatible module in step 3 already removed `cloudfront:CreateInvalidation` from the publisher roles. There is no separate secret to retire.
 
@@ -37,37 +37,51 @@ Keep any credential the rollback below would need until you are sure you will no
 
 ## Rollback
 
-Restarting an old writer is not a rollback on its own. An old CLI cannot read a schema 2 journal and stops on it, and the old module and permissions are gone. Roll back these together:
+Restarting an old writer is not a rollback on its own. An old CLI cannot read a schema 2 journal, it rejects the per-site publish state a compatible CLI wrote (each row records the new `Cache-Control`), and the old module and permissions are gone. Roll back these together:
 
 1. **Quiesce the compatible writers.** Pause every workflow and let running jobs finish. Rerun any interrupted job with the compatible CLI until it succeeds, so that no journal remains. Never delete an unknown or unfinished journal to make an old CLI start.
-2. **Restore old journals only from a quiescent backup.** If a journal must survive the rollback, restore the backup from migration step 1 only when nothing has changed since it was taken. Otherwise finish the work with the compatible CLI first. The backups under `_control/sites/<site>/legacy/` are evidence of what the compatible CLI migrated, not records to put back blindly.
-3. **Restore the old module and permissions.** Apply the previous module version, which brings back the old cache policies and, on AWS, `cloudfront:CreateInvalidation`. On Cloudflare, make sure the old CLI has a token with `Cache Purge` for the zone again.
-4. **Pin the old CLI** in the admin config and every Action pin.
-5. **Bring back the old headers.** Run `registry sync`, `site sync` for every site and `app deploy` with the old CLI, and check that the stored headers are the old values. How completely an old CLI rewrites headers written by a newer one has not been rehearsed, so check each object class and fix any that remain. Preview revisions keep the new header until they expire; the old CLI's policy allows that.
-6. **Verify** as in migration step 7, against the old freshness rules.
+2. **Do not restore pre-migration journals.** Once migration step 4 has run, the compatible CLI has already finished or retired that work, so a journal from the step 1 backup must never be put back. The backups under `_control/sites/<site>/legacy/` are evidence of what the compatible CLI migrated, not records to restore.
+3. **Restore the old module and permissions.** Apply the previous module version, which brings back the old cache policies and, on AWS, `cloudfront:CreateInvalidation`. On Cloudflare, recreate a `CF_API_TOKEN` with `Cache Purge` for the zone in every repository and environment that runs the CLI, and restore its `env` line in hand-maintained workflows: the old CLI checks for the token before it writes.
+4. **Pin the old CLI** in the admin config, regenerate the managed workflows with the old CLI, and restore the other Action pins.
+5. **Reset each site's publish state.** For each site, confirm that no `_control/sites/<site>/site-cache.json` remains, then follow the specification's reset procedure for that site: back up and delete only `_control/sites/<site>/publish-state.json.gz`. Do not delete any other control record.
+6. **Bring back the old headers.** Run `site sync --reconcile` for every site with the old CLI; it rebuilds the publish state from the origin listing and rewrites the headers. Run `app deploy` with the old CLI and check the application headers. An older `registry sync` rewrites `_indexes/sites.json` only when its content changes, and the preview catalog keeps its header until the next preview write, so their shorter new headers can remain; that is harmless under the old freshness rules. Preview revisions keep the new header until they expire, which the old CLI also accepts.
+7. **Verify** as in migration step 7, against the old freshness rules.
 
 ## Operator repository changes
 
-The production operator repositories follow this sequence like any adopter. These are the changes to review there; they are not applied by this guide.
+The production operator repositories follow this sequence like any adopter. These are the changes to review there; they are not applied by this guide. `<compatible>` is the release from [Before you start](#before-you-start).
 
-`artifact-pages/admin`, deployment config (step 2; `<compatible>` is the release from [Before you start](#before-you-start)):
+`artifact-pages/admin` (step 2):
 
-```diff
- cli:
--  version: 0.5.2
-+  version: <compatible>
-```
+- In `artifact-pages.yaml`, set the CLI version, and update the header comment that lists `CF_API_TOKEN` among the credentials:
 
-`artifact-pages/admin` and `artifact-pages/docs` workflows: bump every `artifact-pages/*-action@<tag>` pin to the release that bundles the compatible CLI (step 2). Production uses an explicit R2 key pair, so after step 7 the purge token can leave every Cloudflare job's `env` (step 8), for example in `.github/workflows/registry.yml`:
+  ```diff
+   cli:
+  -  version: 0.5.2
+  +  version: <compatible>
+  ```
 
-```diff
-     env:
-       CF_R2_ACCESS_KEY_ID: ${{ secrets.CF_R2_ACCESS_KEY_ID }}
-       CF_R2_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_SECRET_ACCESS_KEY }}
--      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-```
+- Regenerate the managed files (`.github/workflows/registry.yml`, `publish-site.yml`, `preview-site.yml` and `.github/actions/site-sync/action.yml`) with `registry setup` from the compatible CLI, and set `CLI_VERSION` in `.github/workflows/registry-setup.yml` to `<compatible>` so its `registry setup --check` passes. Regeneration updates the publish, preview and registry Action pins (`@<sha> # v<version>`). Do not edit these files by hand.
+- Bump the `artifact-pages/app-deploy-action` pin in `.github/workflows/app-deploy.yml` by hand.
 
-The same line goes from `app-deploy.yml`, `publish-site.yml` and `preview-site.yml`, and from the docs repository's publish and preview workflows. Then delete the repository and environment secrets and revoke the token. Update the comment at the top of `artifact-pages.yaml` that lists `CF_API_TOKEN` among the credentials.
+`artifact-pages/admin` (step 8, after step 7 passes; production uses an explicit R2 key pair):
+
+- Remove the token only from `app-deploy.yml`, which is not generated:
+
+  ```diff
+           env:
+             CF_R2_ACCESS_KEY_ID: ${{ secrets.CF_R2_ACCESS_KEY_ID }}
+             CF_R2_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_SECRET_ACCESS_KEY }}
+  -          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+  ```
+
+- The generated workflows keep forwarding `CF_API_TOKEN`; leave them as generated.
+- Update the `CF_API_TOKEN` row in `README.md`, which lists it for cache purge.
+- Delete the `CF_API_TOKEN` repository and environment secrets. The admin Terraform uses its own `CLOUDFLARE_API_TOKEN`, so the CLI token served purge alone and can then be revoked.
+
+`artifact-pages/docs`: no workflow change. Its publish and preview jobs run the admin repository's reusable workflows. Delete its `CF_API_TOKEN` secrets (repository and the `production` and `preview` environments) in step 8.
+
+The `aws-verify` workflows in both repositories pin older Actions against the AWS verification config. They are out of scope until AWS has its own approval, and must be bumped before the AWS module is applied there.
 
 ## Preview metadata helper
 

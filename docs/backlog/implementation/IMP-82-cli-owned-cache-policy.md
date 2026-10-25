@@ -59,7 +59,7 @@ Phase 2 requires linked Cloudflare results, the TTL decision, cost follow-up, pr
 
 ## Owner-only steps
 
-Owner approval recorded 2026-10-25, in advance and per item: the `artifact-pages.stream` unfreeze and T30 run (Cloudflare only: runbook rehearsal including module apply, 5 s vs 0 s measurement, rollback rehearsal, restoration), the CLI/Action release, the production migration on `artifact-pages.dev` (runbook steps 1–7) and purge-credential retirement after production verification. The final 5-or-0 root policy remains the owner's decision on T30 results; AWS recreation/proof and any wider freshness budget are not covered.
+Owner approval recorded 2026-10-25, in advance and per item: the `artifact-pages.stream` unfreeze and T30 run (Cloudflare only: runbook rehearsal including module apply, 5 s vs 0 s measurement, rollback rehearsal, restoration), the CLI/Action release, the production migration on `artifact-pages.dev` (runbook steps 1–7) and purge-credential retirement after production verification (revoking the token in Cloudflare is the owner's own action). The final 5-or-0 root policy remains the owner's decision on T30 results; AWS recreation/proof and any wider freshness budget are not covered.
 
 - Unfreeze the verification environment; approve exact targets, changes, execution windows and measurement/spend bounds. Existing A6/A7 preservation/freeze arrangements do not authorize this run.
 - Approve any AWS recreation plan/apply and its independent proof/rollout scope; AWS resources were destroyed, so no existing runnable stack is assumed.
