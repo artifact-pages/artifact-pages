@@ -10167,7 +10167,7 @@ test('S7 search facets use tree display names with paths and preserve shared fil
   await expect(facet.locator('small')).toHaveText('guides/')
   await facet.click()
   await expect(page).toHaveURL(/q=latency&in=guides$/)
-  await expect(page.locator('.search-page-status')).toContainText('in ガイドとレシピ')
+  await expect(page.locator('.search-page-count-text')).toContainText('in ガイドとレシピ')
   await page.reload()
   await expect(facet).toHaveAttribute('aria-pressed', 'true')
   await page.goto('/textsearch/_search?q=latency&in=missing/nested')
