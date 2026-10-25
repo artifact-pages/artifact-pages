@@ -670,50 +670,51 @@ export function ArtifactWorkspace({
       }, ...sites]
   const countLabel = siteCountLabel(paletteSites.length)
   const commands: PaletteCommand[] = [
-    { title: 'Toggle sidebar', shortcut: '⌘ B', onSelect: () => toggleSidebar() },
+    { title: 'Toggle sidebar', aliases: ["サイドバー", "ナビゲーション", "開く 閉じる"], shortcut: '⌘ B', onSelect: () => toggleSidebar() },
     {
-      title: 'Toggle contents',
+      title: 'Toggle contents', aliases: ["目次", "見出し一覧"],
       shortcut: '⌘ ⇧ O',
       available: hasContents || columnShown,
       onSelect: () => openPart('contents'),
     },
     {
-      title: 'Toggle details',
+      title: 'Toggle details', aliases: ["詳細", "更新情報", "著者"],
       available: Boolean(bodyArtifact),
       onSelect: () => openPart('details'),
     },
     {
       title: bodyArtifact && pinnedArtifactIds.includes(bodyArtifact.id) ? 'Unpin artifact' : 'Pin artifact',
+      aliases: pinnedArtifactIds.includes(bodyArtifact?.id ?? '') ? ['ピン解除', 'ピン留めを解除'] : ['ピン留め'],
       available: Boolean(bodyArtifact) && !preview,
       onSelect: () => {
         if (bodyArtifact) toggleArtifactPin(bodyArtifact)
       },
     },
-    { title: 'Go to site home', onSelect: () => navigateWithinWorkspace(`/${encodeURIComponent(index.site.id)}`) },
+    { title: 'Go to site home', aliases: ["サイトトップ", "ホーム"], onSelect: () => navigateWithinWorkspace(`/${encodeURIComponent(index.site.id)}`) },
     {
-      title: 'Search page text',
+      title: 'Search page text', aliases: ["本文検索", "全文検索"],
       shortcut: '⌘ ⇧ F',
       available: Boolean(textSearchClient),
       onSelect: () => goToSearchPage(),
     },
-    { title: 'Open previews', onSelect: () => navigateWithinWorkspace(sitePreviewsHref(index.site.id)) },
+    { title: 'Open previews', aliases: ["プレビュー"], onSelect: () => navigateWithinWorkspace(sitePreviewsHref(index.site.id)) },
     {
-      title: 'Use light theme',
+      title: 'Use light theme', aliases: ["ライト", "明るいテーマ"],
       subtitle: themeMode === 'light' ? 'Current' : undefined,
       onSelect: () => onSetThemeMode('light'),
     },
     {
-      title: 'Use dark theme',
+      title: 'Use dark theme', aliases: ["ダーク", "暗いテーマ"],
       subtitle: themeMode === 'dark' ? 'Current' : undefined,
       onSelect: () => onSetThemeMode('dark'),
     },
     {
-      title: 'Use system theme',
+      title: 'Use system theme', aliases: ["システム", "自動テーマ"],
       subtitle: themeMode === 'system' ? 'Current' : undefined,
       onSelect: () => onSetThemeMode('system'),
     },
     {
-      title: 'Copy artifact link',
+      title: 'Copy artifact link', aliases: ["リンクをコピー", "URL コピー"],
       available: Boolean(currentArtifact || currentDirectory || previewArtifact),
       onSelect: () => void copyCurrentLink(showToast),
     },
@@ -1424,7 +1425,7 @@ export function ArtifactWorkspace({
           context={routeArtifactPath ? 'artifact' : 'site'}
           sites={paletteSites}
           currentIndex={index}
-          currentArtifact={currentArtifact}
+          currentArtifact={publishedReadingArtifact}
           recentReads={effectiveRecentReads}
           pinnedArtifactIds={pinnedArtifactIds}
           commands={commands}

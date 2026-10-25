@@ -6,6 +6,7 @@ These are independently reviewable slices for the accepted product contract. IMP
 
 | Ticket | Status | Assignee | Outcome |
 | --- | --- | --- | --- |
+| [IMP-88](IMP-88-palette-modes.md) | Done | Codex | UI/UX S6: discoverable modes, honest scope and bilingual action search. |
 | [IMP-87](IMP-87-folder-introductions.md) | Done | Codex | UI/UX S5: read folder introductions directly in the normal reader. |
 | [IMP-86](IMP-86-reading-context.md) | Done | Codex | UI/UX S4: compact update summary and on-demand Details above Contents. |
 | [IMP-85](IMP-85-navigation-shell.md) | Done | Codex | UI/UX S3: permanent header Search, site menu, compact hierarchy and collapsible Pinned. |
