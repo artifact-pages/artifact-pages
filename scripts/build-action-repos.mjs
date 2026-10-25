@@ -59,8 +59,8 @@ export function repositoryActionYml(actionYml) {
 }
 
 export function buildActionRepos({ sourceRoot = projectRoot, out, version, repository = productRepository, names = actionNames }) {
-  const bootstrapCli = '0.5.0'
-  const cliRange = '>=0.5.0 <0.6.0'
+  const bootstrapCli = '0.6.0'
+  const cliRange = '>=0.6.0 <0.7.0'
   requireCliRange(bootstrapCli, cliRange)
   if (repository !== productRepository) throw new Error('CLI release repository must be artifact-pages/artifact-pages')
   if (!/^\d+\.\d+\.\d+$/.test(version ?? '')) throw new Error(`version must look like X.Y.Z, got ${version}`)
