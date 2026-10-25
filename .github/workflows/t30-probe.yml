@@ -1,0 +1,61 @@
+name: T30 probe
+
+# Measurement run for verification task T30 (cache freshness and root latency).
+# Public URLs only; no secrets or environments. Runs on the probe branch and on demand.
+on:
+  push:
+    branches: [claude-t30-probe]
+  workflow_dispatch:
+    inputs:
+      label:
+        description: Run label, e.g. ttl5. The region suffix "-na" is appended.
+        type: string
+        default: run
+      samples_roots:
+        description: Samples per root URL
+        type: string
+        default: '50'
+      samples_reader:
+        description: Samples per reader step
+        type: string
+        default: '20'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: Probe (North America)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      LABEL: ${{ inputs.label || 'run' }}-na
+      SAMPLES_ROOTS: ${{ inputs.samples_roots || '50' }}
+      SAMPLES_READER: ${{ inputs.samples_reader || '20' }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Probe roots
+        run: node scripts/t30/probe-roots.mjs --label "$LABEL" --samples "$SAMPLES_ROOTS" --out "t30-$LABEL-roots.jsonl"
+      - name: Probe reader
+        run: node scripts/t30/probe-reader.mjs --label "$LABEL" --samples "$SAMPLES_READER" --out "t30-$LABEL-reader.jsonl"
+      - name: Summarize
+        run: |
+          node scripts/t30/summarize.mjs --json "t30-$LABEL-summary.json" --md "t30-$LABEL-summary.md" "t30-$LABEL-roots.jsonl" "t30-$LABEL-reader.jsonl"
+          cat "t30-$LABEL-summary.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload results
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: t30-${{ env.LABEL }}
+          path: t30-${{ env.LABEL }}-*
