@@ -1,6 +1,6 @@
 # IMP-83 — Modal Contents focus and heading hand-off
 
-- Status: In progress
+- Status: Done
 - Assignee: Codex
 - Scope: Web reader, UI/UX redesign slice S1
 
@@ -28,7 +28,7 @@ The previous geometry-dependent Markdown keep-open behavior is replaced by this 
 - [x] HTML and Markdown selection closes the dialog, updates the fragment and focuses the destination heading.
 - [x] Reopening or navigation cancels pending destination focus.
 - [x] Persistent-column behavior and reading position on dismissal are preserved.
-- [ ] Build, web unit tests and relevant browser regressions pass; review evidence is recorded.
+- [x] Build, web unit tests and relevant browser regressions pass; review evidence is recorded.
 
 ## Verification
 
@@ -38,4 +38,4 @@ Implemented in `codex-uiux-s1-focus`, based on `8d81196e` (2026-10-25), under th
 - Full local nginx/Chromium E2E: 341/341 pass. After the final pending-focus cancellation guard on a switch to the persistent column, the final build passes all 52 Contents/context-column regression tests.
 - Manual browser check at 390px: More → Contents focuses Close, Shift+Tab reaches the last entry, choosing Practice over prediction closes the dialog, updates both URLs to `#practice`, and focuses the HTML heading. The one-row header remains intact. Screenshot and detailed evidence live in the workspace review record `reviews/2026-10-24-frontend-uiux/S1-IMPLEMENTATION.md`.
 - Self-review caught and fixed a Details toggle regression: opening the palette dismisses Contents, while retaining Details state for its toggle command. Existing Details tests pass.
-- Independent cross review and PR CI remain pending; this item stays In progress until that review is recorded. No release or deployment is part of this item.
+- Independent cross review by a fresh Sonnet medium instance on 2026-10-25 found no actionable defects (combined S1/S2 review, reviewed product commits 4046e0a0 and 7da43190). All 8 PR CI checks passed in run 40109026699. Review was read-only and did not rerun the reported tests. No release or deployment is part of this item.
