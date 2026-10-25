@@ -49,7 +49,7 @@ Restarting an old writer is not a rollback on its own. An old CLI cannot read a 
 
 ## Operator repository changes
 
-The production operator repositories follow this sequence like any adopter. These are the changes to review there; they are not applied by this guide. `<compatible>` is 0.6.0 or later (see [Before you start](#before-you-start)).
+The production operator repositories follow this sequence like any adopter. These are the changes to review there; they are not applied by this guide. `<compatible>` is 0.6.1 or later: the admin repository regenerates its managed workflows with it, and only 0.6.1 and later pin Actions that accept CLI 0.6 (see [Before you start](#before-you-start)).
 
 `artifact-pages/admin` (step 2):
 
