@@ -160,7 +160,7 @@ func runPreviewRemove(ctx context.Context, args []string, stdout, stderr io.Writ
 	groupID := flags.String("group", "", "exact preview group ID, such as pr:42 or head:<full-sha>")
 	var configLocators stringSliceFlag
 	flags.Var(&configLocators, "config", "deployment config path or github:// locator (repeatable; later layers override earlier ones)")
-	dryRun := flags.Bool("dry-run", false, "show exact preview object and cache changes without writes, deletes, locks, recovery, or invalidation")
+	dryRun := flags.Bool("dry-run", false, "show exact preview object changes without writes, deletes, locks, or recovery")
 	format := flags.String("format", "text", "result format: text or json")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {

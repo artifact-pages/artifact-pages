@@ -18,7 +18,7 @@ import (
 	"github.com/artifact-pages/artifact-pages/cli/internal/indexer"
 )
 
-const sitePublishInputPolicy = "publisher-site-projection-v1;http-policy-v1;index-schema-v1;fulltext-policy-v2"
+const sitePublishInputPolicy = "publisher-site-projection-v1;http-policy-v1;index-schema-v1;fulltext-policy-v2;cache-policy-" + cachePolicyRevision
 
 type sitePublishSnapshot struct {
 	state           sitePublishState
@@ -589,7 +589,7 @@ func managedSitePublishKey(siteID, key string) bool {
 }
 
 func rowFromHead(siteID, key string, info ObjectInfo) (sitePublishObject, bool) {
-	expectedType, expectedDisposition, expectedEncoding, expectedCache, err := expectedSitePublishObjectPolicy(siteID, key)
+	expectedType, expectedDisposition, expectedEncoding, _, err := expectedSitePublishObjectPolicy(siteID, key)
 	if err != nil {
 		return sitePublishObject{}, false
 	}
@@ -600,13 +600,18 @@ func rowFromHead(siteID, key string, info ObjectInfo) (sitePublishObject, bool) 
 	if info.ContentDisposition == "" {
 		info.ContentDisposition = "inline"
 	}
-	if info.ContentType != expectedType || info.ContentDisposition != expectedDisposition || !validSitePublishContentEncoding(siteID, key, info.ContentEncoding, expectedEncoding) || info.CacheControl != expectedCache {
+	if info.ContentType != expectedType || info.ContentDisposition != expectedDisposition || !validSitePublishContentEncoding(siteID, key, info.ContentEncoding, expectedEncoding) || !cacheControlAccepted(sitePublishClassForKey(siteID, key), info.CacheControl) {
 		return sitePublishObject{}, false
 	}
 	return sitePublishObject{
 		Key: key, SHA256: digest, Size: info.Size, ContentType: info.ContentType,
 		ContentEncoding: info.ContentEncoding, ContentDisposition: info.ContentDisposition, CacheControl: info.CacheControl,
 	}, true
+}
+
+func sitePublishClassForKey(siteID, key string) cacheObjectClass {
+	class, _ := sitePublishCacheClass(siteID, key)
+	return class
 }
 
 func rowsFromDesired(desired []desiredSiteObject) []sitePublishObject {

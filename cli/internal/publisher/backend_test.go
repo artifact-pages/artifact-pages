@@ -142,8 +142,8 @@ func TestDeployAppUsesProviderNeutralBackend(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DeployApp() error = %v", err)
 	}
-	if result.FilesPublished != 3 || result.InvalidationID != "memory-revalidation" {
-		t.Fatalf("DeployApp() = %+v, want three files and provider-neutral revalidation result", result)
+	if result.FilesPublished != 3 || result.InvalidationID != "" || len(result.InvalidationPaths) != 0 {
+		t.Fatalf("DeployApp() = %+v, want three files and no invalidation result", result)
 	}
 	appPuts := publicApplicationPuts(backend.puts)
 	if len(appPuts) != 3 || appPuts[len(appPuts)-1] != "index.html" {
@@ -155,7 +155,7 @@ func TestDeployAppUsesProviderNeutralBackend(t *testing.T) {
 	if got := backend.objects["assets/app.js"].Cache; got != cacheControl(cacheClassAppShell) {
 		t.Errorf("fixed-name asset Cache-Control = %q, want %q", got, cacheControl(cacheClassAppShell))
 	}
-	if len(backend.invalidations) != 1 || strings.Join(backend.invalidations[0], ",") != "/index.html" {
-		t.Errorf("revalidation paths = %v, want [/index.html]", backend.invalidations)
+	if len(backend.invalidations) != 0 {
+		t.Errorf("app deploy made invalidation calls: %v", backend.invalidations)
 	}
 }

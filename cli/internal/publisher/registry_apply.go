@@ -96,7 +96,7 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 		if err := checkRegistrySiteRecordSchemas(ctx, conditional); err != nil {
 			return result, err
 		}
-		current, currentETag, err := readCurrentRegistry(ctx, conditional)
+		current, currentETag, currentCache, err := readCurrentRegistry(ctx, conditional)
 		if err != nil {
 			return result, err
 		}
@@ -105,7 +105,17 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 			return result, err
 		}
 		plan, removed, changedExisting := diffRegistries(current, desired, currentETag == "")
-		registryChanged := currentETag == "" || !sameRegistryEntries(current.Sites, desired.Sites)
+		registryHeaderChanged := false
+		if currentETag != "" {
+			if !cacheControlAccepted(cacheClassSiteRoot, currentCache) {
+				return result, errors.New("deployed registry has an unsupported Cache-Control policy")
+			}
+			registryHeaderChanged = currentCache != cacheControl(cacheClassSiteRoot)
+		}
+		registryChanged := currentETag == "" || !sameRegistryEntries(current.Sites, desired.Sites) || registryHeaderChanged
+		if registryHeaderChanged && sameRegistryEntries(current.Sites, desired.Sites) {
+			plan = append(plan, Change{Action: "update", Path: "_indexes/sites.json"})
+		}
 		catalogInvalidationPending := registryChanged || pendingETag != ""
 		desiredIDs := make(map[string]struct{}, len(desired.Sites))
 		for _, entry := range desired.Sites {
@@ -312,19 +322,35 @@ func sameRegistryCleanupRecord(left, right registryCleanupRecord) bool {
 	return true
 }
 
-func readCurrentRegistry(ctx context.Context, backend ConditionalObjectBackend) (registry.Projection, string, error) {
+func readCurrentRegistry(ctx context.Context, backend ConditionalObjectBackend) (registry.Projection, string, string, error) {
 	object, etag, err := backend.GetObject(ctx, "_indexes/sites.json")
 	if errors.Is(err, ErrObjectNotFound) {
-		return registry.Projection{SchemaVersion: registry.SchemaVersion, Sites: []registry.Entry{}}, "", nil
+		return registry.Projection{SchemaVersion: registry.SchemaVersion, Sites: []registry.Entry{}}, "", "", nil
 	}
 	if err != nil {
-		return registry.Projection{}, "", fmt.Errorf("read deployed registry: %w", err)
+		return registry.Projection{}, "", "", fmt.Errorf("read deployed registry: %w", err)
 	}
 	projection, err := registry.DecodeProjection(object.Bytes)
 	if err != nil {
-		return registry.Projection{}, "", fmt.Errorf("validate deployed registry: %w", err)
+		return registry.Projection{}, "", "", fmt.Errorf("validate deployed registry: %w", err)
 	}
-	return projection, etag, nil
+	cacheControl := object.Cache
+	if cacheControl == "" {
+		// A local directory projection has no HTTP headers unless its metadata
+		// sidecar exists. HeadObject supplies the class policy it infers for that
+		// local representation; provider objects with a missing header fail closed.
+		if _, local := backend.(*DirectoryBackend); local {
+			info, headErr := backend.HeadObject(ctx, "_indexes/sites.json")
+			if headErr != nil {
+				return registry.Projection{}, "", "", fmt.Errorf("inspect deployed registry metadata: %w", headErr)
+			}
+			if info.ETag != etag {
+				return registry.Projection{}, "", "", errors.New("deployed registry changed between GET and HEAD; retry registry sync")
+			}
+			cacheControl = info.CacheControl
+		}
+	}
+	return projection, etag, cacheControl, nil
 }
 
 func diffRegistries(current, desired registry.Projection, firstApply bool) (changes []Change, removed, changedExisting []string) {

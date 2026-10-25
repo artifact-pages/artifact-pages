@@ -676,13 +676,18 @@ func seedPublisherRegistry(t *testing.T, backend *lockMemoryBackend, manifest st
 	if err != nil {
 		t.Fatalf("build test registry: %v", err)
 	}
-	seedMemoryObject(backend, "_indexes/sites.json", contents)
+	seedMemoryObjectWithObject(backend, "_indexes/sites.json", Object{Bytes: contents, Cache: cacheControl(cacheClassSiteRoot)})
 }
 
 func seedMemoryObject(backend *lockMemoryBackend, key string, contents []byte) {
+	seedMemoryObjectWithObject(backend, key, Object{Bytes: contents})
+}
+
+func seedMemoryObjectWithObject(backend *lockMemoryBackend, key string, object Object) {
 	backend.mu.Lock()
 	defer backend.mu.Unlock()
-	backend.objects[key] = Object{Bytes: append([]byte(nil), contents...)}
+	object.Bytes = append([]byte(nil), object.Bytes...)
+	backend.objects[key] = object
 	backend.etags[key] = `"seed-` + key + `"`
 }
 

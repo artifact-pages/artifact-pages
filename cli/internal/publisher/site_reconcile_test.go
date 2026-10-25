@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -697,4 +698,117 @@ func (backend *siteReconcileBackend) projectionEventSnapshot() []string {
 		result = append(result, event)
 	}
 	return result
+}
+
+func TestPublishSiteMigratesValidLegacyHeadersForSameSource(t *testing.T) {
+	root := createPublisherCheckout(t, "git@github.com:acme/sre.git")
+	backend := newSiteReconcileBackend()
+	seedPublisherRegistry(t, backend.lockMemoryBackend, registeredSREManifest)
+	options := SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts"}
+	if _, err := PublishSite(context.Background(), backend, options); err != nil {
+		t.Fatalf("initial PublishSite() error = %v", err)
+	}
+
+	ctx := context.Background()
+	stateKey := sitePublishStateKey("sre")
+	stateObject, _, err := backend.lockMemoryBackend.GetObject(ctx, stateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := backend.lockMemoryBackend.HeadObject(ctx, stateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := decodeSitePublishState("sre", info, stateObject.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.Committed.InputRoot = releasedSitePublishInputRoot(t, root, backend)
+	indexBefore, _, err := backend.lockMemoryBackend.GetObject(ctx, "_indexes/sre/index.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	metaBefore, _, err := backend.lockMemoryBackend.GetObject(ctx, "_indexes/sre/meta.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range state.Committed.Objects {
+		row := &state.Committed.Objects[i]
+		class := sitePublishClassForKey("sre", row.Key)
+		legacy := map[cacheObjectClass]string{
+			cacheClassSiteRoot:       "public, max-age=0, s-maxage=60, must-revalidate",
+			cacheClassSearchManifest: "public, max-age=0, s-maxage=60, must-revalidate",
+			cacheClassArtifact:       "public, max-age=0, s-maxage=300, must-revalidate",
+			cacheClassHashedAsset:    "public, max-age=31536000, immutable",
+		}
+		row.CacheControl = legacy[class]
+		backend.lockMemoryBackend.mu.Lock()
+		object := backend.lockMemoryBackend.objects[row.Key]
+		object.Cache = row.CacheControl
+		backend.lockMemoryBackend.objects[row.Key] = object
+		backend.lockMemoryBackend.mu.Unlock()
+	}
+	legacyStateObject, err := buildSitePublishStateObject("sre", state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	backend.lockMemoryBackend.mu.Lock()
+	backend.lockMemoryBackend.objects[stateKey] = legacyStateObject
+	backend.lockMemoryBackend.mu.Unlock()
+
+	backend.failPutMu.Lock()
+	backend.failPutKey = state.Committed.Objects[0].Key
+	backend.failPutMu.Unlock()
+	if _, err := PublishSite(ctx, backend, options); err == nil || !strings.Contains(err.Error(), "injected object upload failure") {
+		t.Fatalf("interrupted header-only migration error = %v; want injected PUT failure", err)
+	}
+	result, err := PublishSite(ctx, backend, options)
+	if err != nil {
+		t.Fatalf("legacy-state retry PublishSite() error = %v", err)
+	}
+	if result.Outcome != "synced" || result.FilesPublished == 0 {
+		t.Fatalf("legacy header migration result = %#v", result)
+	}
+	indexAfter, _, err := backend.lockMemoryBackend.GetObject(ctx, "_indexes/sre/index.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	metaAfter, _, err := backend.lockMemoryBackend.GetObject(ctx, "_indexes/sre/meta.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(indexBefore.Bytes, indexAfter.Bytes) || !bytes.Equal(metaBefore.Bytes, metaAfter.Bytes) {
+		t.Fatal("header-only migration changed generated index/meta bytes")
+	}
+	type indexTimes struct {
+		GeneratedAt string `json:"generatedAt"`
+		Artifacts   []struct {
+			Path      string `json:"path"`
+			UpdatedAt string `json:"updatedAt"`
+		} `json:"artifacts"`
+	}
+	var beforeTimes, afterTimes indexTimes
+	if err := json.Unmarshal(indexBefore.Bytes, &beforeTimes); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(indexAfter.Bytes, &afterTimes); err != nil {
+		t.Fatal(err)
+	}
+	if beforeTimes.GeneratedAt == "" || beforeTimes.GeneratedAt != afterTimes.GeneratedAt || !reflect.DeepEqual(beforeTimes.Artifacts, afterTimes.Artifacts) {
+		t.Fatalf("header-only migration changed index timestamps: before=%+v after=%+v", beforeTimes, afterTimes)
+	}
+	for _, row := range state.Committed.Objects {
+		object, _, getErr := backend.lockMemoryBackend.GetObject(ctx, row.Key)
+		if getErr != nil {
+			t.Fatal(getErr)
+		}
+		class := sitePublishClassForKey("sre", row.Key)
+		if object.Cache != cacheControl(class) {
+			t.Errorf("%s Cache-Control = %q, want %q", row.Key, object.Cache, cacheControl(class))
+		}
+	}
+	second, err := PublishSite(ctx, backend, options)
+	if err != nil || second.Outcome != "no-op" {
+		t.Fatalf("post-migration PublishSite() = %+v, err=%v; want no-op", second, err)
+	}
 }

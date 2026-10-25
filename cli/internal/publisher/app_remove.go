@@ -19,14 +19,6 @@ var applicationRootObjects = []string{
 	"THIRD_PARTY_NOTICES.txt",
 }
 
-var applicationRemovalInvalidationPaths = []string{
-	"/LICENSE",
-	"/THIRD_PARTY_NOTICES.txt",
-	"/assets/*",
-	"/index.html",
-	"/preview-bridge.js",
-}
-
 type AppRemoveOptions struct {
 	DryRun bool
 }
@@ -34,7 +26,7 @@ type AppRemoveOptions struct {
 // RemoveApp removes the application-owned bundle under the application lock.
 // It only probes the four fixed root objects and lists the assets/ prefix; it
 // never enumerates or mutates the content, registry, preview, or control planes
-// except for the existing application retry record and retained lock.
+// except for a fully validated legacy application purge record and retained lock.
 func RemoveApp(ctx context.Context, backend DeploymentBackend, options AppRemoveOptions) (Result, error) {
 	result := Result{Operation: "app remove", Changes: []Change{}}
 	if ctx == nil {
@@ -63,7 +55,7 @@ func RemoveApp(ctx context.Context, backend DeploymentBackend, options AppRemove
 		if err != nil {
 			return result, err
 		}
-		retry, retryETag, err := readAppCacheRetry(ctx, conditional)
+		_, retryETag, err := readAppCacheRetry(ctx, conditional)
 		if err != nil {
 			return result, err
 		}
@@ -78,16 +70,10 @@ func RemoveApp(ctx context.Context, backend DeploymentBackend, options AppRemove
 		for _, key := range keys {
 			plan = append(plan, Change{Action: "remove", Path: key})
 		}
-		paths := append([]string(nil), retry.Paths...)
-		if len(keys) > 0 {
-			paths = append(paths, applicationRemovalInvalidationPaths...)
-		}
-		paths = uniqueSorted(paths)
 		result.Changes = plan
 		result.FilesRemoved = len(keys)
-		result.InvalidationPaths = plannedInvalidationPaths(backend, paths)
 		if options.DryRun {
-			if len(keys) == 0 && len(retry.Paths) == 0 {
+			if len(keys) == 0 && retryETag == "" {
 				result.Outcome = "no-op"
 			} else {
 				result.Outcome = "planned"
@@ -98,20 +84,14 @@ func RemoveApp(ctx context.Context, backend DeploymentBackend, options AppRemove
 		// changes remains the reviewed plan. Do not report planned deletions as
 		// completed when validation or journal persistence fails.
 		result.FilesRemoved = 0
-		if len(keys) == 0 && len(retry.Paths) == 0 {
+		if len(keys) == 0 && retryETag == "" {
 			result.Outcome = "no-op"
 			result.FilesRemoved = 0
-			result.InvalidationPaths = nil
 			return result, nil
 		}
-		if err := validateInvalidation(backend, paths); err != nil {
-			return result, err
-		}
-
-		journal := appCacheRetry{SchemaVersion: appCacheRetrySchema, Paths: paths}
-		if len(paths) > 0 {
-			if _, err := writeAppCacheRetry(ctx, conditional, journal, retryETag); err != nil {
-				return result, err
+		if retryETag != "" {
+			if err := clearAppCacheRetry(ctx, backend); err != nil {
+				return result, fmt.Errorf("retire validated application invalidation record: %w", err)
 			}
 		}
 		if len(keys) > 0 {
@@ -120,25 +100,7 @@ func RemoveApp(ctx context.Context, backend DeploymentBackend, options AppRemove
 			}
 			result.FilesRemoved = len(keys)
 		}
-		invalidationID, err := backend.Invalidate(ctx, paths)
-		if err != nil {
-			return result, fmt.Errorf("application objects were removed but cache revalidation failed; retry app remove: %w", err)
-		}
-		if len(paths) > 0 {
-			if err := clearAppCacheRetry(ctx, backend); err != nil {
-				_, restoreErr := writeAppCacheRetry(ctx, conditional, journal, "")
-				if errors.Is(restoreErr, ErrPreconditionFailed) {
-					restoreErr = nil
-				}
-				clearErr := fmt.Errorf("application cache was revalidated but its retry record could not be cleared; retry app remove: %w", err)
-				if restoreErr != nil {
-					return result, errors.Join(clearErr, fmt.Errorf("restore application cache retry record: %w", restoreErr))
-				}
-				return result, clearErr
-			}
-		}
 		result.Outcome = "removed"
-		result.InvalidationID = invalidationID
 		return result, nil
 	}
 
