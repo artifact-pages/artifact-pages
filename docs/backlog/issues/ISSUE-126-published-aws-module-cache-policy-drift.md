@@ -12,6 +12,9 @@ The published AWS module has not adopted the monorepo's IMP-82 no-invalidation c
 
 Read-only comparison on 2026-10-26:
 
+The workspace clone (item 1) is older than the published v0.1.1 (item 2);
+both still carry the retired grant and TTL caps.
+
 1. Workspace `terraform-aws-artifact-pages/` origin/main is
    `dd0fcded012f8d73187ae2c616b0071bc1aaeae9`:
    `main.tf:120–123`, `:311–312`, `:336–337` retain the admin
@@ -59,7 +62,9 @@ Cloudflare requires publication verification, not a duplicate repair.
   0/0/31536000 policy, preserving error handling, routing, storage
   scope and OIDC boundaries. Module/package checks pass.
 - [ ] Upgrade guidance identifies the exact compatible CLI floor
-  (the IMP-82 CLI 0.6 line), writer/module migration order and rollback
+  (CLI 0.6.0, the first release without invalidation; 0.6.1 or later
+  for generated Action pins that accept CLI 0.6, per
+  `docs/guides/cache-policy-migration.md`), writer/module migration order and rollback
   permission requirements; older invalidating writers are not
   presented as compatible.
 - [ ] After owner-approved publication, record AWS monorepo tag/SHA,
