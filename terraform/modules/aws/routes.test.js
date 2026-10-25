@@ -74,18 +74,18 @@ test('CloudFront route function keeps reserved namespace roots out of the SPA fa
   }
 })
 
-test('CloudFront preview behavior disables shared caching and maps private-origin misses to 404', () => {
+test('CloudFront preview behavior respects the origin Cache-Control and maps private-origin misses to 404', () => {
   const behaviorStart = distributionSource.indexOf('    previews = {')
   const behaviorEnd = distributionSource.indexOf('    assets = {', behaviorStart)
   assert.notEqual(behaviorStart, -1, 'CloudFront ordered behaviors must include previews')
   const previewBehavior = distributionSource.slice(behaviorStart, behaviorEnd)
   assert.match(previewBehavior, /path_pattern\s*=\s*"\/_previews\/\*"/u)
-  assert.match(previewBehavior, /cache_policy_id\s*=\s*aws_cloudfront_cache_policy\.no_store\.id/u)
+  assert.match(previewBehavior, /cache_policy_id\s*=\s*aws_cloudfront_cache_policy\.origin_respecting\.id/u)
 
   const noStorePolicy = distributionSource.match(/resource "aws_cloudfront_cache_policy" "no_store"\s*\{([\s\S]*?)\n\}/u)?.[1]
   assert.ok(noStorePolicy, 'CloudFront no-store policy must exist')
   for (const ttl of ['min_ttl', 'default_ttl', 'max_ttl']) {
-    assert.match(noStorePolicy, new RegExp(`${ttl}\\s*=\\s*0(?:\\s|$)`, 'u'), `${ttl} must be zero for preview responses`)
+    assert.match(noStorePolicy, new RegExp(`${ttl}\\s*=\\s*0(?:\\s|$)`, 'u'), `${ttl} must be zero for error responses`)
   }
 
   for (const errorCode of [403, 404]) {

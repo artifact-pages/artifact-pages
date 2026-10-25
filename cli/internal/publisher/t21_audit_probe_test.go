@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/aws/aws-sdk-go-v2/service/cloudfront"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
@@ -52,15 +51,6 @@ type t21FailingCloudFront struct {
 	fakeCloudFront
 	calls int
 	fail  bool
-}
-
-func (f *t21FailingCloudFront) CreateInvalidation(ctx context.Context, input *cloudfront.CreateInvalidationInput, options ...func(*cloudfront.Options)) (*cloudfront.CreateInvalidationOutput, error) {
-	f.calls++
-	if f.fail {
-		f.fail = false
-		return nil, fmt.Errorf("injected invalidation failure")
-	}
-	return f.fakeCloudFront.CreateInvalidation(ctx, input, options...)
 }
 
 type t21CountingLockBackend struct {
@@ -144,7 +134,7 @@ func TestT21ProbeAppInvalidationRetry(t *testing.T) {
 	})
 	s3Client := &t21CountingS3{fakeS3: newFakeS3()}
 	cf := &t21FailingCloudFront{fail: true}
-	backend, err := newAWSBackend(awsClients{s3: s3Client, cloudFront: cf}, AWSOptions{Bucket: "t21", DistributionID: "E-T21"})
+	backend, err := newAWSBackend(awsClients{s3: s3Client}, AWSOptions{Bucket: "t21", DistributionID: "E-T21"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +211,7 @@ func TestT21ProbeAppDryRunCalls(t *testing.T) {
 	})
 	s3Client := &t21CountingS3{fakeS3: newFakeS3()}
 	cf := &t21FailingCloudFront{}
-	backend, err := newAWSBackend(awsClients{s3: s3Client, cloudFront: cf}, AWSOptions{Bucket: "t21", DistributionID: "E-T21"})
+	backend, err := newAWSBackend(awsClients{s3: s3Client}, AWSOptions{Bucket: "t21", DistributionID: "E-T21"})
 	if err != nil {
 		t.Fatal(err)
 	}

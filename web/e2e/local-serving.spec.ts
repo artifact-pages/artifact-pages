@@ -4835,7 +4835,7 @@ test('a preview-manifest read error stays visible as unknown availability', asyn
   await expect(page.getByRole('region', { name: 'Preview pr:99' })).toHaveCount(0)
 })
 
-test('raw preview resources have real 404s, media types, no-store and no CORS access', async ({ page }) => {
+test('raw preview resources have real 404s, media types, per-request revalidation and no CORS access', async ({ page }) => {
   const base = `/_previews/sre/revisions/${previewHeadSha}/files`
   const [catalog, manifest, missingRoot, missingSlash, missing, malformedHtml, css, script, svg, pdf, font, markdown, html, nullOrigin, externalOrigin] = await Promise.all([
     page.request.get('/_previews/sre/catalog.json'),
@@ -4874,9 +4874,10 @@ test('raw preview resources have real 404s, media types, no-store and no CORS ac
   expect(font.headers()['content-type']).toContain('font/woff2')
   expect(markdown.headers()['content-type']).toContain('text/markdown')
   expect(html.headers()['content-type']).toContain('text/html')
-  expect(html.headers()['cache-control']).toContain('no-store')
   for (const response of [catalog, manifest, css, script, svg, pdf, font, markdown, html]) {
-    expect(response.headers()['cache-control']).toContain('no-store')
+    const cacheControl = response.headers()['cache-control'] ?? ''
+    expect(cacheControl).toMatch(/no-store|(^|,)\s*max-age=0(\s*,|$)/u)
+    if (!cacheControl.includes('no-store')) expect(cacheControl).toContain('must-revalidate')
   }
   const htmlCsp = html.headers()['content-security-policy']
   expect(htmlCsp).toContain('script-src')
@@ -6970,7 +6971,7 @@ test.describe('directory pages', () => {
     await expect(page.getByRole('navigation', { name: 'Artifact headings' })).toBeVisible()
     await page.getByRole('button', { name: 'Copy folder link' }).click()
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toMatch(/\/sre\/docs$/)
-    await page.getByRole('checkbox', { name: 'Pin Docs home', exact: true }).click()
+    await page.getByRole('button', { name: 'Pin Docs home', exact: true }).click()
     await expect(page.locator('.pinned-tree a')).toHaveAttribute('href', '/sre/docs/README.md')
   })
 
@@ -10173,4 +10174,42 @@ test('S7 search facets use tree display names with paths and preserve shared fil
   const unknown = page.locator('.search-page-facet[aria-pressed="true"]')
   await expect(unknown.locator('.search-page-facet-name > span')).toHaveText('missing/nested/')
   await expect(unknown.locator('small')).toHaveText('missing/nested/')
+})
+
+test('S6 folder headings stay in the introduction and preview does not borrow published headings', async ({ page }) => {
+  await page.goto('/showcase/reports/cloud-spend-review')
+  await expect(page.frameLocator('iframe.artifact-frame').getByRole('heading', { name: 'Commitments and actions' })).toBeVisible()
+  const palette = await openPaletteWithShortcut(page)
+  await palette.getByRole('button', { name: 'Headings', exact: true }).click()
+  await expect(palette.locator('.palette-scope')).toHaveText('This page')
+  await expect(palette.locator('.palette-mode-announcement')).toHaveText('Headings mode. This page')
+  await palette.getByRole('option', { name: /Commitments and actions/ }).click()
+  await expect(page).toHaveURL('/showcase/reports/cloud-spend-review#actions')
+  await expect(page.frameLocator('iframe.artifact-frame').getByRole('heading', { name: 'Commitments and actions' })).toBeInViewport()
+  await page.route('**/_indexes/sre/index.json', async (route) => {
+    const response = await route.fetch()
+    const index = await response.json()
+    index.artifacts.push({ ...index.artifacts[0], id: 'guides/preview.html', path: 'guides/preview.html', title: 'Published same path', toc: [{ id: 'production-only', text: 'Production-only heading', level: 2 }] })
+    await route.fulfill({ response, json: index })
+  })
+  await page.goto(`/sre/_previews/${previewHeadSha}/guides/preview.html?group=pr%3A42`)
+  await expect(previewTitle(page)).toHaveText('Local preview HTML')
+  const previewPalette = await openPaletteWithShortcut(page)
+  await previewPalette.getByRole('button', { name: 'Headings', exact: true }).click()
+  await expect(previewPalette.locator('.palette-scope')).toHaveText('Choose a page')
+  await expect(previewPalette.getByRole('option')).toHaveCount(0)
+})
+
+test('S6 Escape dismisses from discovery and clear-mode buttons on the site picker', async ({ page }) => {
+  await page.goto('/')
+  const palette = await openPaletteWithShortcut(page)
+  await palette.getByRole('button', { name: 'Sites', exact: true }).focus()
+  await page.keyboard.press('Escape')
+  await expect(palette).toHaveCount(0)
+  const reopened = await openPaletteWithShortcut(page)
+  await reopened.getByRole('button', { name: 'Actions', exact: true }).click()
+  await reopened.getByRole('button', { name: 'Clear mode' }).focus()
+  await page.keyboard.press('Escape')
+  await expect(reopened).toHaveCount(0)
+
 })

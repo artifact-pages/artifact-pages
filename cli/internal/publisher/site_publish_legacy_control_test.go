@@ -423,7 +423,7 @@ func TestPublishSiteLegacyStateWithRetryTransactionStops(t *testing.T) {
 		BaseGeneration: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 		TouchedKeys:    []string{"_artifacts/sre/report.html"},
 	}
-	if _, err := writeSiteCacheRetryRecord(context.Background(), store.lockMemoryBackend, "sre", siteCacheRetry{Paths: []string{"/_artifacts/sre/report.html"}, Transaction: &transaction}, ""); err != nil {
+	if _, err := writeSiteCacheRetryRecord(context.Background(), store.lockMemoryBackend, "sre", siteCacheRetry{Transaction: &transaction}, ""); err != nil {
 		t.Fatal(err)
 	}
 	backend := &sitePublishLegacyCaptureBackend{sitePublishScaleBackend: store}
@@ -444,7 +444,7 @@ func TestPublishSiteAdoptsLegacyCacheRetryAndUsesItsETag(t *testing.T) {
 	root, store, options := sitePublishRecoveryFixture(t)
 	legacyBytes := []byte(`{"schemaVersion":1,"paths":["/_artifacts/sre/old.html"]}`)
 	legacyObject := Object{Bytes: legacyBytes, ContentType: "application/json; charset=utf-8", Cache: "no-store", Metadata: map[string]string{"provider": "legacy"}}
-	legacyETag, err := store.lockMemoryBackend.PutObjectConditional(context.Background(), siteCacheRetryKey("sre"), legacyObject, ObjectCondition{IfNoneMatch: true})
+	_, err := store.lockMemoryBackend.PutObjectConditional(context.Background(), siteCacheRetryKey("sre"), legacyObject, ObjectCondition{IfNoneMatch: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -458,11 +458,11 @@ func TestPublishSiteAdoptsLegacyCacheRetryAndUsesItsETag(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(backup, legacyObject) {
 		t.Fatalf("cache retry backup = %+v, %v; want exact original object %+v", backup, err, legacyObject)
 	}
-	if len(backend.retryConditions) != 1 || backend.retryConditions[0] != (ObjectCondition{IfMatchETag: legacyETag}) {
-		t.Fatalf("retry write conditions = %#v; want If-Match %q", backend.retryConditions, legacyETag)
+	if len(backend.retryConditions) != 0 {
+		t.Fatalf("purge-only journal retirement unexpectedly rewrote a journal: %#v", backend.retryConditions)
 	}
-	if len(backend.invalidations) == 0 || !containsString(backend.invalidations[len(backend.invalidations)-1], "/_artifacts/sre/old.html") {
-		t.Fatalf("legacy paths missing from invalidation requests: %v", backend.invalidations)
+	if len(backend.invalidations) != 0 {
+		t.Fatalf("site publish made invalidation calls: %v", backend.invalidations)
 	}
 	if _, _, err := store.lockMemoryBackend.GetObject(context.Background(), siteCacheRetryKey("sre")); !errors.Is(err, ErrObjectNotFound) {
 		t.Fatalf("cache retry record was not handled by normal completion: %v", err)

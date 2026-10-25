@@ -178,13 +178,4 @@ func TestAWSProductionBackendSmoke(t *testing.T) {
 		t.Fatalf("conditional race outcomes = %d success, %d conflict; want exactly one of each", successes, conflicts)
 	}
 
-	if distributionID != "" {
-		invalidatedID, err := backend.Invalidate(t.Context(), []string{"/" + key})
-		if err != nil {
-			t.Fatalf("request CloudFront invalidation: %v", err)
-		}
-		if invalidatedID == "" {
-			t.Fatal("CloudFront accepted invalidation but returned no ID")
-		}
-	}
 }

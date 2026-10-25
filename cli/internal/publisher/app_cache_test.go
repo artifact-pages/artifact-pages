@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/artifact-pages/artifact-pages/cli/internal/compat"
 )
 
 type appCacheRetryTestBackend struct {
@@ -89,6 +91,14 @@ func TestReadAppCacheRetryAbsentAndValid(t *testing.T) {
 			t.Fatalf("read key = %q, writes = %d; want key %q and no writes", backend.getKey, backend.putCalls, appCacheRetryObjectKey)
 		}
 	})
+}
+
+func TestReadAppCacheRetryUnsupportedSchemaCheckedBeforeFields(t *testing.T) {
+	b := &appCacheRetryTestBackend{getObject: Object{Bytes: []byte(`{"schemaVersion":3,"paths":7,"newShape":true}`)}, getETag: "etag"}
+	_, _, err := readAppCacheRetry(context.Background(), b)
+	if !compat.Is(err) || !strings.Contains(err.Error(), "app cache retry record") || !strings.Contains(err.Error(), "3") {
+		t.Fatalf("unsupported app schema err=%v", err)
+	}
 }
 
 func TestReadAppCacheRetryRejectsInvalidRecordsWithoutWriting(t *testing.T) {

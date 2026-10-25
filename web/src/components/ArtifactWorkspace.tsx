@@ -684,7 +684,7 @@ export function ArtifactWorkspace({
     },
     {
       title: bodyArtifact && pinnedArtifactIds.includes(bodyArtifact.id) ? 'Unpin artifact' : 'Pin artifact',
-      aliases: pinnedArtifactIds.includes(bodyArtifact?.id ?? '') ? ['ピン解除', 'ピン留めを解除'] : ['ピン留め', '保存'],
+      aliases: pinnedArtifactIds.includes(bodyArtifact?.id ?? '') ? ['ピン解除', 'ピン留めを解除'] : ['ピン留め'],
       available: Boolean(bodyArtifact) && !preview,
       onSelect: () => {
         if (bodyArtifact) toggleArtifactPin(bodyArtifact)

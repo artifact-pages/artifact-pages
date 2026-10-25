@@ -41,6 +41,8 @@ function contentType(key) {
 function cacheControl(key) {
   if (key.startsWith('_indexes/')) return 'public, max-age=0, s-maxage=60, must-revalidate'
   if (key.startsWith('_artifacts/')) return 'public, max-age=0, s-maxage=300, must-revalidate'
+  if (/^_previews\/[^/]+\/catalog\.json$/u.test(key)) return 'public, max-age=0, s-maxage=60, must-revalidate'
+  if (/^_previews\/[^/]+\/revisions\//u.test(key)) return 'public, max-age=0, s-maxage=300, must-revalidate'
   return 'no-store'
 }
 

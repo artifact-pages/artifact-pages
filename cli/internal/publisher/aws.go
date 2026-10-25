@@ -6,15 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/url"
-	"sort"
 	"strings"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/cloudfront"
-	cloudfronttypes "github.com/aws/aws-sdk-go-v2/service/cloudfront/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
@@ -35,13 +30,8 @@ type s3HeadObjectAPI interface {
 	HeadObject(context.Context, *s3.HeadObjectInput, ...func(*s3.Options)) (*s3.HeadObjectOutput, error)
 }
 
-type cloudFrontAPI interface {
-	CreateInvalidation(context.Context, *cloudfront.CreateInvalidationInput, ...func(*cloudfront.Options)) (*cloudfront.CreateInvalidationOutput, error)
-}
-
 type awsClients struct {
-	s3         s3API
-	cloudFront cloudFrontAPI
+	s3 s3API
 }
 
 type AWSOptions struct {
@@ -51,18 +41,15 @@ type AWSOptions struct {
 }
 
 // s3CompatibleBackend implements object operations shared by AWS S3 and R2.
-// Provider-specific configuration and cache invalidation stay in their wrappers.
+// Provider-specific configuration stays in its wrapper.
 type s3CompatibleBackend struct {
 	client s3API
 	bucket string
 }
 
-// awsBackend combines the shared S3-compatible object operations with AWS's
-// CloudFront invalidation API. The publication flow sees only backend interfaces.
+// awsBackend combines the shared S3-compatible object operations with AWS storage.
 type awsBackend struct {
 	*s3CompatibleBackend
-	cloudFront     cloudFrontAPI
-	distributionID string
 }
 
 var _ DeploymentBackend = (*awsBackend)(nil)
@@ -90,11 +77,7 @@ func newAWSBackend(clients awsClients, options AWSOptions) (*awsBackend, error) 
 	if err != nil {
 		return nil, err
 	}
-	return &awsBackend{
-		s3CompatibleBackend: objects,
-		cloudFront:          clients.cloudFront,
-		distributionID:      options.DistributionID,
-	}, nil
+	return &awsBackend{s3CompatibleBackend: objects}, nil
 }
 
 func newS3CompatibleBackend(client s3API, bucket string) (*s3CompatibleBackend, error) {
@@ -212,59 +195,7 @@ func (backend *s3CompatibleBackend) DeleteObjects(ctx context.Context, keys []st
 	return deleteKeys(ctx, backend.client, backend.bucket, keys)
 }
 
-func (backend *awsBackend) Invalidate(ctx context.Context, paths []string) (string, error) {
-	return invalidate(ctx, backend.cloudFront, backend.distributionID, backend.PlanInvalidation(paths))
-}
-
-func (backend *awsBackend) PlanInvalidation(paths []string) []string {
-	return awsSiteInvalidationPaths(paths)
-}
-
 func (*awsBackend) siteGeneratedJSONContentEncoding() string { return "gzip" }
-
-// CloudFront cannot invalidate a tilde path, and literal '*' resource URLs
-// cannot be expressed as an exact invalidation. Bulk site publishes also must
-// not send an unbounded exact-path batch. Coalesce only the affected site's
-// artifact subtree, leaving indexes, other sites, and application paths alone.
-func awsSiteInvalidationPaths(paths []string) []string {
-	counts := make(map[string]int)
-	fallback := make(map[string]bool)
-	prefixFor := func(p string) string {
-		parts := strings.SplitN(strings.TrimPrefix(p, "/_artifacts/"), "/", 2)
-		if !strings.HasPrefix(p, "/_artifacts/") || len(parts) != 2 || validateLockSite(parts[0]) != nil {
-			return ""
-		}
-		return "/_artifacts/" + parts[0] + "/"
-	}
-	for _, p := range paths {
-		prefix := prefixFor(p)
-		if prefix == "" {
-			continue
-		}
-		counts[prefix]++
-		decoded, _ := url.PathUnescape(p)
-		if strings.Contains(decoded, "~") || strings.Contains(strings.ToUpper(p), "%2A") || len(p) > 4000 || counts[prefix] > 1000 {
-			fallback[prefix] = true
-		}
-	}
-	if len(fallback) == 0 {
-		return paths
-	}
-	set := make(map[string]bool)
-	for _, p := range paths {
-		if prefix := prefixFor(p); fallback[prefix] {
-			set[prefix+"*"] = true
-		} else {
-			set[p] = true
-		}
-	}
-	result := make([]string, 0, len(set))
-	for p := range set {
-		result = append(result, p)
-	}
-	sort.Strings(result)
-	return result
-}
 
 func newAWSClients(ctx context.Context, options AWSOptions) (awsClients, error) {
 	loadOptions := make([]func(*config.LoadOptions) error, 0, 1)
@@ -275,12 +206,7 @@ func newAWSClients(ctx context.Context, options AWSOptions) (awsClients, error) 
 	if err != nil {
 		return awsClients{}, fmt.Errorf("load AWS configuration: %w", err)
 	}
-	cloudFrontConfig := cfg
-	cloudFrontConfig.Region = "us-east-1"
-	return awsClients{
-		s3:         s3.NewFromConfig(cfg),
-		cloudFront: cloudfront.NewFromConfig(cloudFrontConfig),
-	}, nil
+	return awsClients{s3: s3.NewFromConfig(cfg)}, nil
 }
 
 func putObject(ctx context.Context, client s3API, bucket, key string, object Object) error {
@@ -304,33 +230,6 @@ func putObject(ctx context.Context, client s3API, bucket, key string, object Obj
 		return fmt.Errorf("upload s3://%s/%s: %w", bucket, key, err)
 	}
 	return nil
-}
-
-func invalidate(ctx context.Context, client cloudFrontAPI, distributionID string, paths []string) (string, error) {
-	if len(paths) == 0 || strings.TrimSpace(distributionID) == "" {
-		return "", nil
-	}
-	if client == nil {
-		return "", errors.New("CloudFront client is required to invalidate non-empty paths")
-	}
-	callerReference := fmt.Sprintf("artifact-pages-%d", time.Now().UnixNano())
-	result, err := client.CreateInvalidation(ctx, &cloudfront.CreateInvalidationInput{
-		DistributionId: aws.String(distributionID),
-		InvalidationBatch: &cloudfronttypes.InvalidationBatch{
-			CallerReference: aws.String(callerReference),
-			Paths: &cloudfronttypes.Paths{
-				Quantity: aws.Int32(int32(len(paths))),
-				Items:    paths,
-			},
-		},
-	})
-	if err != nil {
-		return "", fmt.Errorf("invalidate CloudFront distribution %s: %w", distributionID, err)
-	}
-	if result != nil && result.Invalidation != nil {
-		return aws.ToString(result.Invalidation.Id), nil
-	}
-	return "", nil
 }
 
 func listKeys(ctx context.Context, client s3API, bucket, prefix string) ([]string, error) {

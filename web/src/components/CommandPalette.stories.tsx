@@ -249,3 +249,7 @@ export const FoldersGroupPhone390: Story = {
   parameters: { viewport: { options: { phone390 } } },
   globals: { viewport: { value: 'phone390', isRotated: false } },
 }
+
+
+export const ModeDiscovery: Story = { args: { context: 'artifact', seed: '' } }
+export const HeadingsWithoutCurrentPage: Story = { args: { context: 'site', seed: '#' } }

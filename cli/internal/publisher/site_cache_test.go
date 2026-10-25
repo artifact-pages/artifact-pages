@@ -2,280 +2,104 @@ package publisher
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
-	"net/http"
-	"net/http/httptest"
 	"reflect"
-	"sort"
 	"strings"
 	"testing"
+
+	"github.com/artifact-pages/artifact-pages/cli/internal/compat"
 )
 
-type siteCacheCloudflareBackend struct {
-	*lockMemoryBackend
-	cache *cloudflareBackend
-}
-
-func (b *siteCacheCloudflareBackend) ValidateInvalidation(paths []string) error {
-	return b.cache.ValidateInvalidation(paths)
-}
-
-func (b *siteCacheCloudflareBackend) Invalidate(ctx context.Context, paths []string) (string, error) {
-	return b.cache.Invalidate(ctx, paths)
-}
-
-func TestSitePublishSendsChangedURLsThroughCloudflarePurgeAPI(t *testing.T) {
-	root := createPublisherCheckout(t, "git@github.com:acme/sre.git")
-	writePublisherFixture(t, root, "docs/artifacts/theme.css", []byte("body{color:blue}"))
-	var files []string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var payload map[string][]string
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			t.Error(err)
-		}
-		if len(payload["prefixes"]) != 0 {
-			t.Error("site publish used broad prefix purge")
-		}
-		files = append(files, payload["files"]...)
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"success":true,"result":{"id":"site-purge-123"}}`))
-	}))
-	defer server.Close()
-	b := &siteCacheCloudflareBackend{lockMemoryBackend: newLockMemoryBackend(), cache: cloudflareBackendForTest(server)}
-	seedPublisherRegistry(t, b.lockMemoryBackend, registeredSREManifest)
-	options := SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts"}
-	result, err := PublishSite(t.Context(), b, options)
+func TestSiteCacheJournalSchema2RetainsOriginTransactionOnly(t *testing.T) {
+	b := newLockMemoryBackend()
+	tx := &sitePublishTransaction{ID: strings.Repeat("a", 64), BaseGeneration: strings.Repeat("b", 64), TouchedKeys: []string{"_artifacts/sre/a.html"}}
+	if _, err := writeSiteCacheRetryRecord(context.Background(), b, "sre", siteCacheRetry{Transaction: tx}, ""); err != nil {
+		t.Fatal(err)
+	}
+	object, _, err := getSiteControl(context.Background(), b, "sre", siteCacheRetryKey("sre"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"https://pages.example.com/_artifacts/sre/report.html", "https://pages.example.com/_artifacts/sre/theme.css", "https://pages.example.com/_indexes/sre/index.json", "https://pages.example.com/_indexes/sre/meta.json", "https://pages.example.com/_indexes/sre/search/manifest.json"}
-	searchBlobs := siteSearchBlobKeys(result.Changes, "sre", "")
-	assertSearchBlobKinds(t, searchBlobs, "root", "sections", "text")
-	for _, key := range searchBlobs {
-		want = append(want, "https://pages.example.com/"+key)
+	if strings.Contains(string(object.Bytes), "paths") || !strings.Contains(string(object.Bytes), `"schemaVersion":2`) {
+		t.Fatalf("journal = %s", object.Bytes)
 	}
-	sort.Strings(want)
-	if result.InvalidationID != "site-purge-123" || !reflect.DeepEqual(files, want) {
-		t.Fatalf("Cloudflare site purge = %v, %+v", files, result)
-	}
-	files = nil
-	writePublisherFixture(t, root, "docs/artifacts/theme.css", []byte("body{color:red}"))
-	result, err = PublishSite(t.Context(), b, options)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Depending on generated timestamps, index bytes may remain unchanged.
-	// The unchanged HTML must never be purged; the changed CSS always must.
-	want = nil
-	for _, p := range result.InvalidationPaths {
-		want = append(want, "https://pages.example.com"+p)
-	}
-	if !reflect.DeepEqual(files, want) {
-		t.Fatalf("resource-only change purged %v, want %v", files, want)
-	}
-	if len(files) == 0 || files[0] != "https://pages.example.com/_artifacts/sre/theme.css" {
-		t.Fatalf("changed CSS not purged or unchanged HTML purged: %v", files)
+	got, _, err := readSiteCacheRetry(context.Background(), b, "sre")
+	if err != nil || got.Transaction == nil || got.Transaction.ID != tx.ID {
+		t.Fatalf("read journal = %+v, %v", got, err)
 	}
 }
 
-type siteCacheTestBackend struct {
-	*siteReconcileBackend
-	failInvalidate bool
-	failClear      bool
-	validationErr  error
-	requests       [][]string
+func TestSiteCacheJournalValidatesAndMigratesLegacySchema1(t *testing.T) {
+	b := newLockMemoryBackend()
+	tx := sitePublishTransaction{ID: strings.Repeat("c", 64), BaseGeneration: strings.Repeat("d", 64), TouchedKeys: []string{"_artifacts/sre/a.html"}}
+	legacy := `{"schemaVersion":1,"site":"sre","paths":["/_artifacts/sre/a.html"],"transaction":{"id":"` + tx.ID + `","baseGeneration":"` + tx.BaseGeneration + `","touchedKeys":["_artifacts/sre/a.html"]}}`
+	seedMemoryObject(b, siteCacheRetryKey("sre"), []byte(legacy))
+	record, etag, err := readSiteCacheRetry(context.Background(), b, "sre")
+	if err != nil || !record.legacyRecord || record.Transaction == nil || record.Transaction.ID != tx.ID || etag == "" {
+		t.Fatalf("legacy read = %+v etag=%q err=%v", record, etag, err)
+	}
+	migratedETag, err := writeSiteCacheRetryRecord(context.Background(), b, "sre", siteCacheRetry{Transaction: record.Transaction}, etag)
+	if err != nil || migratedETag == etag {
+		t.Fatalf("CAS migration ETag = %q, err=%v", migratedETag, err)
+	}
+	object, _, err := b.GetObject(context.Background(), siteCacheRetryKey("sre"))
+	if err != nil || strings.Contains(string(object.Bytes), "paths") || !strings.Contains(string(object.Bytes), `"schemaVersion":2`) {
+		t.Fatalf("migrated journal = %s err=%v", object.Bytes, err)
+	}
 }
 
-func (b *siteCacheTestBackend) ValidateInvalidation(paths []string) error {
-	if len(paths) > 0 {
-		return b.validationErr
-	}
-	return nil
-}
-
-func (b *siteCacheTestBackend) Invalidate(ctx context.Context, paths []string) (string, error) {
-	b.requests = append(b.requests, append([]string(nil), paths...))
-	if _, exists := b.objects[siteCacheRetryKey("sre")]; !exists {
-		return "", errors.New("retry record missing during purge")
-	}
-	if b.failInvalidate {
-		return "", errors.New("injected purge failure")
-	}
-	return b.lockMemoryBackend.Invalidate(ctx, paths)
-}
-
-func (b *siteCacheTestBackend) DeleteObjects(ctx context.Context, keys []string) error {
-	if b.failClear && len(keys) == 1 && keys[0] == siteCacheRetryKey("sre") {
-		return errors.New("injected retry cleanup failure")
-	}
-	return b.siteReconcileBackend.DeleteObjects(ctx, keys)
-}
-
-func TestSitePublishCacheRequestsAndRetry(t *testing.T) {
-	for _, failure := range []string{"purge", "clear"} {
-		t.Run(failure, func(t *testing.T) {
-			createPublisherCheckout(t, "git@github.com:acme/sre.git")
-			b := &siteCacheTestBackend{siteReconcileBackend: newSiteReconcileBackend()}
-			seedPublisherRegistry(t, b.lockMemoryBackend, registeredSREManifest)
-			seedMemoryObject(b.lockMemoryBackend, "_artifacts/sre/deleted.css", []byte("old"))
-			options := SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts"}
-			options.DryRun = true
-			plan, err := PublishSite(t.Context(), b, options)
-			if err != nil {
-				t.Fatal(err)
+func TestSiteCacheJournalFailsClosedOnUnknownFieldsAndUnsupportedSchema(t *testing.T) {
+	for _, test := range []struct {
+		name, raw string
+		compat    bool
+	}{
+		{name: "schema 2 invalid transaction", raw: `{"schemaVersion":2,"site":"sre","transaction":{}}`},
+		{name: "schema 1 unknown field", raw: `{"schemaVersion":1,"site":"sre","paths":["/_artifacts/sre/a.html"],"future":true}`},
+		{name: "unsupported schema", raw: `{"schemaVersion":9,"site":"sre","transaction":{},"future":true}`, compat: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			b := newLockMemoryBackend()
+			seedMemoryObject(b, siteCacheRetryKey("sre"), []byte(test.raw))
+			_, _, err := readSiteCacheRetry(context.Background(), b, "sre")
+			if err == nil {
+				t.Fatalf("read accepted unsupported journal %s", test.raw)
 			}
-			want := []string{"/_artifacts/sre/deleted.css", "/_artifacts/sre/report.html", "/_indexes/sre/index.json", "/_indexes/sre/meta.json", "/_indexes/sre/search/manifest.json"}
-			searchBlobs := siteSearchBlobKeys(plan.Changes, "sre", "")
-			assertSearchBlobKinds(t, searchBlobs, "root", "sections", "text")
-			for _, key := range searchBlobs {
-				want = append(want, "/"+key)
-			}
-			sort.Strings(want)
-			if !reflect.DeepEqual(plan.InvalidationPaths, want) || len(b.requests) != 0 {
-				t.Fatalf("dry run = %+v, requests=%v", plan, b.requests)
-			}
-			if _, exists := b.objects[siteCacheRetryKey("sre")]; exists {
-				t.Fatal("dry run saved retry record")
-			}
-			options.DryRun = false
-			b.failInvalidate, b.failClear = failure == "purge", failure == "clear"
-			if _, err := PublishSite(t.Context(), b, options); err == nil {
-				t.Fatal("injected cache failure succeeded")
-			}
-			if _, exists := b.objects[siteCacheRetryKey("sre")]; !exists {
-				t.Fatal("failure lost pending cache paths")
-			}
-			options.DryRun = true
-			plan, err = PublishSite(t.Context(), b, options)
-			if err != nil || plan.Outcome != "planned" || len(plan.Changes) != 0 || !reflect.DeepEqual(plan.InvalidationPaths, want) {
-				t.Fatalf("retry dry run = %+v, %v", plan, err)
-			}
-			b.failInvalidate, b.failClear, options.DryRun = false, false, false
-			b.resetEvents()
-			result, err := PublishSite(t.Context(), b, options)
-			if err != nil || result.Outcome != "synced" || result.FilesPublished != 0 || result.InvalidationID == "" {
-				t.Fatalf("cache-only retry = %+v, %v", result, err)
-			}
-			if !reflect.DeepEqual(b.requests[len(b.requests)-1], want) {
-				t.Fatalf("retry forgot deleted URLs: %v", b.requests)
-			}
-			if _, exists := b.objects[siteCacheRetryKey("sre")]; exists {
-				t.Fatal("successful retry retained record")
-			}
-			before := len(b.requests)
-			result, err = PublishSite(t.Context(), b, options)
-			if err != nil || result.Outcome != "no-op" || len(b.requests) != before {
-				t.Fatalf("no-op = %+v, %v; requests=%v", result, err, b.requests)
+			if compat.Is(err) != test.compat {
+				t.Fatalf("compat.Is(%v) = %v, want %v", err, compat.Is(err), test.compat)
 			}
 		})
 	}
 }
 
-func TestSitePublishCachePreflightBeforeOriginChanges(t *testing.T) {
-	createPublisherCheckout(t, "git@github.com:acme/sre.git")
-	b := &siteCacheTestBackend{siteReconcileBackend: newSiteReconcileBackend(), validationErr: errors.New("missing cache credential")}
-	seedPublisherRegistry(t, b.lockMemoryBackend, registeredSREManifest)
-	_, err := PublishSite(t.Context(), b, SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts"})
-	if err == nil || !strings.Contains(err.Error(), "missing cache credential") {
-		t.Fatalf("preflight error = %v", err)
+func TestPublishSiteDryRunOverSchema1SiteJournalWritesNothing(t *testing.T) {
+	root, store, options := sitePublishRecoveryFixture(t)
+	committed, _, _ := sitePublishRecoveryReadState(t, store)
+	sitePublishRecoveryChangePage(t, root, "<title>Dry run</title><h1>Legacy journal dry run</h1>")
+	tx := sitePublishTransaction{ID: strings.Repeat("e", 64), BaseGeneration: committed.Committed.Generation, TouchedKeys: []string{"_artifacts/sre/report.html"}}
+	legacy := `{"schemaVersion":1,"site":"sre","paths":["/_artifacts/sre/report.html"],"transaction":{"id":"` + tx.ID + `","baseGeneration":"` + tx.BaseGeneration + `","touchedKeys":["_artifacts/sre/report.html"]}}`
+	seedMemoryObject(store.lockMemoryBackend, siteCacheRetryKey("sre"), []byte(legacy))
+	beforeObjects, beforeETags := snapshotLockMemory(store.lockMemoryBackend)
+	options.DryRun = true
+	result, err := PublishSite(context.Background(), newSitePublishRecoveryBackend(store), options)
+	if err != nil || result.Outcome != "planned" {
+		t.Fatalf("dry-run over schema 1 journal = %+v, err=%v; want planned", result, err)
 	}
-	for key := range b.objects {
-		if strings.HasPrefix(key, "_artifacts/") || strings.HasPrefix(key, "_indexes/sre/") || key == siteCacheRetryKey("sre") {
-			t.Fatalf("preflight mutated %s", key)
-		}
-	}
-}
-
-func TestSiteCacheRetrySurvivesPartialOriginWritesAndNewSource(t *testing.T) {
-	root := createPublisherCheckout(t, "git@github.com:acme/sre.git")
-	b := &siteCacheTestBackend{siteReconcileBackend: newSiteReconcileBackend()}
-	seedPublisherRegistry(t, b.lockMemoryBackend, registeredSREManifest)
-	b.failPutKey = "_indexes/sre/meta.json"
-	options := SitePublishOptions{SiteID: "sre", SourceDir: "docs/artifacts"}
-	if _, err := PublishSite(t.Context(), b, options); err == nil {
-		t.Fatal("partial upload succeeded")
-	}
-	if len(b.requests) != 0 {
-		t.Fatal("invalidation requested before projection finished")
-	}
-	// The next source can differ; never discard cache work from the failed run.
-	writePublisherFixture(t, root, "docs/artifacts/new.css", []byte("body{color:blue}"))
-	result, err := PublishSite(t.Context(), b, options)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, p := range []string{"/_artifacts/sre/report.html", "/_artifacts/sre/new.css", "/_indexes/sre/index.json", "/_indexes/sre/meta.json"} {
-		found := false
-		for _, got := range result.InvalidationPaths {
-			if p == got {
-				found = true
-			}
-		}
-		if !found {
-			t.Fatalf("retry lost %s: %v", p, result.InvalidationPaths)
-		}
+	afterObjects, afterETags := snapshotLockMemory(store.lockMemoryBackend)
+	if !reflect.DeepEqual(beforeObjects, afterObjects) || !reflect.DeepEqual(beforeETags, afterETags) {
+		t.Fatal("dry-run over a schema 1 site journal wrote or removed objects")
 	}
 }
 
-func TestUnregisterClearsPendingSiteCacheRetryOnlyForSelectedSite(t *testing.T) {
-	b := newLockMemoryBackend()
-	seedPublisherRegistry(t, b, registeredSREAndDocsManifest)
-	if err := writeSiteCacheRetry(t.Context(), b, "sre", []string{"/_artifacts/sre/gone.html"}, ""); err != nil {
-		t.Fatal(err)
+func snapshotLockMemory(backend *lockMemoryBackend) (map[string]Object, map[string]string) {
+	backend.mu.Lock()
+	defer backend.mu.Unlock()
+	objects := make(map[string]Object, len(backend.objects))
+	for key, object := range backend.objects {
+		object.Bytes = append([]byte(nil), object.Bytes...)
+		objects[key] = object
 	}
-	if err := writeSiteCacheRetry(t.Context(), b, "docs", []string{"/_artifacts/docs/keep.html"}, ""); err != nil {
-		t.Fatal(err)
+	etags := make(map[string]string, len(backend.etags))
+	for key, etag := range backend.etags {
+		etags[key] = etag
 	}
-	desired := testRegistryProjection(t, registeredSREAndDocsManifest)
-	desired.Sites = desired.Sites[:1] // Entries are sorted: keep docs, remove sre.
-	_, err := UnregisterSite(t.Context(), b, desired, "sre", false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, exists := b.objects[siteCacheRetryKey("sre")]; exists {
-		t.Fatal("unregister retained pending cache record")
-	}
-	if _, exists := b.objects[siteCacheRetryKey("docs")]; !exists {
-		t.Fatal("unregister deleted another site's retry record")
-	}
-}
-
-func TestSiteCachePathsEncodeSpecialFilenamesAndStaySiteScoped(t *testing.T) {
-	got := siteCachePaths("sre", []Change{{Action: "update", Path: "_artifacts/sre/日本語 #?%*.html"}}, nil, nil)
-	want := []string{"/_artifacts/sre/%E6%97%A5%E6%9C%AC%E8%AA%9E%20%23%3F%25%2A.html"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("paths = %v, want %v", got, want)
-	}
-	b := newLockMemoryBackend()
-	if err := writeSiteCacheRetry(t.Context(), b, "sre", got, ""); err != nil {
-		t.Fatal(err)
-	}
-	if _, _, err := readSiteCacheRetry(t.Context(), b, "sre"); err != nil {
-		t.Fatal(err)
-	}
-	for _, p := range []string{"/*", "/_artifacts/other/file.html", "/_artifacts/sre/../other/file.html", "/_artifacts/sre/%2E%2E/file.html"} {
-		seedMemoryObject(b, siteCacheRetryKey("sre"), []byte(`{"schemaVersion":1,"site":"sre","paths":["`+p+`"]}`))
-		if _, _, err := readSiteCacheRetry(t.Context(), b, "sre"); err == nil {
-			t.Fatalf("accepted unsafe pending path %q", p)
-		}
-	}
-}
-
-func TestSiteCacheRetryAdoptsOldSchemaOneShapeAndRejectsInvalidPaths(t *testing.T) {
-	b := newLockMemoryBackend()
-	seedMemoryObject(b, siteCacheRetryKey("sre"), []byte(`{"schemaVersion":1,"paths":["/_artifacts/sre/old.html"]}`))
-	record, etag, err := readSiteCacheRetry(t.Context(), b, "sre")
-	if err != nil || !record.legacyRecord || record.Site != "sre" || record.Transaction != nil ||
-		!reflect.DeepEqual(record.Paths, []string{"/_artifacts/sre/old.html"}) || etag == "" ||
-		record.legacyBackupKey != siteLegacyCacheRetryBackupKey("sre", record.legacyBytes) {
-		t.Fatalf("legacy cache-retry adoption = %+v, %q, %v", record, etag, err)
-	}
-
-	seedMemoryObject(b, siteCacheRetryKey("sre"), []byte(`{"schemaVersion":1,"paths":["/_artifacts/other/old.html"]}`))
-	_, _, err = readSiteCacheRetry(t.Context(), b, "sre")
-	if err == nil || !strings.Contains(err.Error(), "site \"sre\" cache-retry record uses an older prerelease control format (missing selected-site field) and has an unfinished cache retry") ||
-		!strings.Contains(err.Error(), siteCacheRetryKey("sre")) {
-		t.Fatalf("invalid legacy cache retry error = %v; want unfinished retry guidance for the cache key", err)
-	}
+	return objects, etags
 }

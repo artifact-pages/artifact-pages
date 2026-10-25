@@ -116,7 +116,6 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 		if registryHeaderChanged && sameRegistryEntries(current.Sites, desired.Sites) {
 			plan = append(plan, Change{Action: "update", Path: "_indexes/sites.json"})
 		}
-		catalogInvalidationPending := registryChanged || pendingETag != ""
 		desiredIDs := make(map[string]struct{}, len(desired.Sites))
 		for _, entry := range desired.Sites {
 			desiredIDs[entry.ID] = struct{}{}
@@ -128,7 +127,6 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 				cleanupIDs = append(cleanupIDs, siteID)
 			}
 		}
-		paths := unionRegistryInvalidationPaths(pendingCleanup.Paths, registryInvalidationPaths(catalogInvalidationPending || len(cleanupIDs) > 0, cleanupIDs))
 		registryUpdated := false
 		plan = uniqueChanges(plan)
 		result = Result{Operation: operationName, Changes: plan, RegistryUpdated: &registryUpdated}
@@ -173,9 +171,6 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 					plan = append(plan, Change{Action: "remove", Path: key})
 				}
 			}
-			for _, path := range paths {
-				plan = append(plan, Change{Action: "invalidate", Path: path})
-			}
 			sort.Strings(cleanupKeys)
 			plan = uniqueChanges(plan)
 			result.Changes = plan
@@ -185,7 +180,7 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 			if err := appendCleanupPlan(); err != nil {
 				return result, err
 			}
-			if len(plan) == 0 {
+			if len(plan) == 0 && pendingETag == "" {
 				result.Outcome = "no-op"
 				return result, nil
 			}
@@ -196,13 +191,16 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 			result.Outcome = "no-op"
 			return result, nil
 		}
-		if err := validateInvalidation(backend, paths); err != nil {
-			return result, err
-		}
-		if len(paths) > 0 {
-			record := registryCleanupRecord{SchemaVersion: 1, Sites: cleanupIDs, Paths: paths}
-			if pendingETag == "" || !sameRegistryCleanupRecord(pendingCleanup, record) {
-				newETag, err := writeRegistryCleanup(ctx, conditional, record, pendingETag)
+		if pendingCleanup.legacyRecord && len(cleanupIDs) > 0 {
+			newETag, err := writeRegistryCleanup(ctx, conditional, registryCleanupRecord{SchemaVersion: 2, Sites: cleanupIDs}, pendingETag)
+			if err != nil {
+				return result, err
+			}
+			pendingETag = newETag
+		} else if len(cleanupIDs) > 0 {
+			cleanupRecord := registryCleanupRecord{SchemaVersion: 2, Sites: cleanupIDs}
+			if pendingETag == "" || !sameRegistryCleanupRecord(pendingCleanup, cleanupRecord) {
+				newETag, err := writeRegistryCleanup(ctx, conditional, cleanupRecord, pendingETag)
 				if err != nil {
 					return result, err
 				}
@@ -257,11 +255,6 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 			return result, err
 		}
 		result.FilesRemoved = len(cleanupKeys)
-		if len(paths) > 0 {
-			if _, err := backend.Invalidate(ctx, paths); err != nil {
-				return result, fmt.Errorf("registry updated; cache revalidation failed: %w", err)
-			}
-		}
 		if pendingETag != "" {
 			if err := clearRegistryCleanup(ctx, backend); err != nil {
 				return result, fmt.Errorf("registry and site cleanup completed; clear retry record: %w", err)
@@ -286,40 +279,8 @@ func applyRegistryProjection(ctx context.Context, backend DeploymentBackend, des
 	return result, nil
 }
 
-func registryInvalidationPaths(catalogInvalidationPending bool, cleanupIDs []string) []string {
-	paths := make([]string, 0, 1+len(cleanupIDs)*5)
-	if catalogInvalidationPending {
-		paths = append(paths, "/_indexes/sites.json")
-	}
-	for _, siteID := range cleanupIDs {
-		paths = append(paths, "/"+siteID, "/"+siteID+"/*", "/_indexes/"+siteID+"/*", "/_artifacts/"+siteID+"/*", "/_previews/"+siteID+"/*")
-	}
-	return uniqueSorted(paths)
-}
-
-func unionRegistryInvalidationPaths(groups ...[]string) []string {
-	var paths []string
-	for _, group := range groups {
-		paths = append(paths, group...)
-	}
-	return uniqueSorted(paths)
-}
-
 func sameRegistryCleanupRecord(left, right registryCleanupRecord) bool {
-	if left.SchemaVersion != right.SchemaVersion || len(left.Sites) != len(right.Sites) || len(left.Paths) != len(right.Paths) {
-		return false
-	}
-	for index := range left.Sites {
-		if left.Sites[index] != right.Sites[index] {
-			return false
-		}
-	}
-	for index := range left.Paths {
-		if left.Paths[index] != right.Paths[index] {
-			return false
-		}
-	}
-	return true
+	return left.SchemaVersion == right.SchemaVersion && sameStringSlice(left.Sites, right.Sites)
 }
 
 func readCurrentRegistry(ctx context.Context, backend ConditionalObjectBackend) (registry.Projection, string, string, error) {
@@ -442,13 +403,13 @@ const registryCleanupKey = "_control/registry-cleanup.json"
 type registryCleanupRecord struct {
 	SchemaVersion int      `json:"schemaVersion"`
 	Sites         []string `json:"sites"`
-	Paths         []string `json:"paths"`
+	legacyRecord  bool
 }
 
 func readRegistryCleanup(ctx context.Context, backend ConditionalObjectBackend) (registryCleanupRecord, string, error) {
 	object, etag, err := backend.GetObject(ctx, registryCleanupKey)
 	if errors.Is(err, ErrObjectNotFound) {
-		return registryCleanupRecord{SchemaVersion: 1, Sites: []string{}, Paths: []string{}}, "", nil
+		return registryCleanupRecord{SchemaVersion: 2, Sites: []string{}}, "", nil
 	}
 	if err != nil {
 		return registryCleanupRecord{}, "", fmt.Errorf("read registry cleanup record: %w", err)
@@ -462,19 +423,51 @@ func readRegistryCleanup(ctx context.Context, backend ConditionalObjectBackend) 
 	if err := validateNoDuplicateJSONKeys(object.Bytes); err != nil {
 		return registryCleanupRecord{}, "", fmt.Errorf("validate registry cleanup record: %w", err)
 	}
-	if err := compat.CheckSchemaVersion("registry cleanup record", object.Bytes, 1); err != nil {
+	schemaVersion, err := readControlSchemaVersion("registry cleanup record", object.Bytes)
+	if err != nil {
 		return registryCleanupRecord{}, "", err
 	}
-	var envelope map[string]json.RawMessage
-	if err := json.Unmarshal(object.Bytes, &envelope); err != nil || envelope == nil {
-		return registryCleanupRecord{}, "", errors.New("registry cleanup record must be a JSON object")
+	if schemaVersion != 1 && schemaVersion != 2 {
+		return registryCleanupRecord{}, "", compat.CheckSchemaVersion("registry cleanup record", object.Bytes, 2)
 	}
-	if _, ok := envelope["sites"]; !ok {
-		return registryCleanupRecord{}, "", errors.New("registry cleanup record has no sites array")
-	}
-	pathsRaw, ok := envelope["paths"]
-	if !ok || !rawJSONKind(pathsRaw, "array") {
-		return registryCleanupRecord{}, "", fmt.Errorf("registry cleanup record %s has no paths array; this private record requires explicit operator resolution", registryCleanupKey)
+	if schemaVersion == 1 {
+		var old struct {
+			SchemaVersion int      `json:"schemaVersion"`
+			Sites         []string `json:"sites"`
+			Paths         []string `json:"paths"`
+		}
+		decoder := json.NewDecoder(bytes.NewReader(object.Bytes))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&old); err != nil {
+			return registryCleanupRecord{}, "", fmt.Errorf("decode legacy registry cleanup record: %w", err)
+		}
+		if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+			return registryCleanupRecord{}, "", errors.New("legacy registry cleanup record must contain exactly one JSON value")
+		}
+		if old.SchemaVersion != 1 || old.Paths == nil {
+			return registryCleanupRecord{}, "", errors.New("legacy registry cleanup record is missing required fields")
+		}
+		if err := validateRegistryCleanupSites(old.Sites); err != nil {
+			return registryCleanupRecord{}, "", err
+		}
+		if err := validateLegacyRegistryCleanupPaths(old.Paths); err != nil {
+			return registryCleanupRecord{}, "", err
+		}
+		if len(old.Paths) == 0 {
+			return registryCleanupRecord{}, "", errors.New("legacy registry cleanup record has no validated paths")
+		}
+		set := make(map[string]bool)
+		for _, x := range old.Paths {
+			set[x] = true
+		}
+		for _, id := range old.Sites {
+			for _, x := range legacyRegistryCleanupRequiredPaths(true, []string{id}) {
+				if !set[x] {
+					return registryCleanupRecord{}, "", fmt.Errorf("legacy registry cleanup record for %s is incomplete", id)
+				}
+			}
+		}
+		return registryCleanupRecord{SchemaVersion: 2, Sites: old.Sites, legacyRecord: true}, etag, nil
 	}
 	decoder := json.NewDecoder(bytes.NewReader(object.Bytes))
 	var record registryCleanupRecord
@@ -492,71 +485,68 @@ func readRegistryCleanup(ctx context.Context, backend ConditionalObjectBackend) 
 
 const maxRegistryCleanupBytes = 8 << 20
 
-func validateRegistryInvalidationPaths(paths []string) error {
+func validateLegacyRegistryCleanupPaths(paths []string) error {
 	if paths == nil {
 		return errors.New("registry cleanup paths must be an array")
 	}
-	for index, path := range paths {
-		if !isRegistryInvalidationPath(path) {
-			return fmt.Errorf("registry cleanup record contains an unsupported invalidation path %q", path)
+	for i, p := range paths {
+		if !isLegacyRegistryCleanupPath(p) {
+			return fmt.Errorf("registry cleanup record contains unsupported path %q", p)
 		}
-		if index > 0 && paths[index-1] >= path {
-			return errors.New("registry cleanup paths must be unique and sorted")
+		if i > 0 && paths[i-1] >= p {
+			return errors.New("registry cleanup paths must be sorted and unique")
+		}
+	}
+	return nil
+}
+func legacyRegistryCleanupRequiredPaths(catalog bool, sites []string) []string {
+	var paths []string
+	if catalog {
+		paths = append(paths, "/_indexes/sites.json")
+	}
+	for _, id := range sites {
+		paths = append(paths, "/"+id, "/"+id+"/*", "/_indexes/"+id+"/*", "/_artifacts/"+id+"/*", "/_previews/"+id+"/*")
+	}
+	return uniqueSorted(paths)
+}
+func isLegacyRegistryCleanupPath(path string) bool {
+	if path == "/_indexes/sites.json" {
+		return true
+	}
+	for _, prefix := range []string{"/_indexes/", "/_artifacts/", "/_previews/"} {
+		if strings.HasPrefix(path, prefix) && strings.HasSuffix(path, "/*") {
+			return validateLockSite(strings.TrimSuffix(strings.TrimPrefix(path, prefix), "/*")) == nil
+		}
+	}
+	if strings.HasPrefix(path, "/") && !strings.HasPrefix(path, "//") {
+		id := strings.TrimPrefix(path, "/")
+		if strings.HasSuffix(id, "/*") {
+			id = strings.TrimSuffix(id, "/*")
+		}
+		return validateLockSite(id) == nil
+	}
+	return false
+}
+func validateRegistryCleanupSites(sites []string) error {
+	if sites == nil {
+		return errors.New("registry cleanup sites must be an array")
+	}
+	for i, id := range sites {
+		if err := validateLockSite(id); err != nil {
+			return fmt.Errorf("registry cleanup record contains invalid site: %w", err)
+		}
+		if i > 0 && sites[i-1] >= id {
+			return errors.New("registry cleanup sites must be sorted and unique")
 		}
 	}
 	return nil
 }
 
 func validateRegistryCleanupRecord(record registryCleanupRecord) error {
-	if record.SchemaVersion != 1 || record.Sites == nil || record.Paths == nil {
-		return errors.New("registry cleanup record is invalid; schemaVersion, sites, and paths are required")
+	if record.SchemaVersion != 2 {
+		return errors.New("registry cleanup record has unsupported schema")
 	}
-	for index, siteID := range record.Sites {
-		if err := validateLockSite(siteID); err != nil {
-			return fmt.Errorf("registry cleanup record contains an invalid site: %w", err)
-		}
-		if index > 0 && record.Sites[index-1] >= siteID {
-			return errors.New("registry cleanup record sites must be unique and sorted")
-		}
-	}
-	if err := validateRegistryInvalidationPaths(record.Paths); err != nil {
-		return err
-	}
-	if len(record.Paths) == 0 {
-		return fmt.Errorf("registry cleanup record %s must contain invalidation paths; this private record requires explicit operator resolution", registryCleanupKey)
-	}
-	pathSet := make(map[string]struct{}, len(record.Paths))
-	for _, path := range record.Paths {
-		pathSet[path] = struct{}{}
-	}
-	for _, siteID := range record.Sites {
-		for _, requiredPath := range registryInvalidationPaths(true, []string{siteID}) {
-			if _, ok := pathSet[requiredPath]; !ok {
-				return fmt.Errorf("registry cleanup record %s for site %q is missing required invalidation path %q; this private record requires explicit operator resolution", registryCleanupKey, siteID, requiredPath)
-			}
-		}
-	}
-	return nil
-}
-
-func isRegistryInvalidationPath(path string) bool {
-	if path == "/_indexes/sites.json" {
-		return true
-	}
-	for _, prefix := range []string{"/_indexes/", "/_artifacts/", "/_previews/"} {
-		if strings.HasPrefix(path, prefix) && strings.HasSuffix(path, "/*") {
-			siteID := strings.TrimSuffix(strings.TrimPrefix(path, prefix), "/*")
-			return validateLockSite(siteID) == nil
-		}
-	}
-	if strings.HasPrefix(path, "/") && !strings.HasPrefix(path, "//") {
-		siteID := strings.TrimPrefix(path, "/")
-		if strings.HasSuffix(siteID, "/*") {
-			siteID = strings.TrimSuffix(siteID, "/*")
-		}
-		return validateLockSite(siteID) == nil
-	}
-	return false
+	return validateRegistryCleanupSites(record.Sites)
 }
 
 func writeRegistryCleanup(ctx context.Context, backend ConditionalObjectBackend, record registryCleanupRecord, etag string) (string, error) {
