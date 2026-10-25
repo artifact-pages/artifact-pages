@@ -9,6 +9,7 @@ These are independently reviewable slices for the accepted product contract. IMP
 | [IMP-87](IMP-87-folder-introductions.md) | Done | Codex | UI/UX S5: read folder introductions directly in the normal reader. |
 | [IMP-86](IMP-86-reading-context.md) | Done | Codex | UI/UX S4: compact update summary and on-demand Details above Contents. |
 | [IMP-85](IMP-85-navigation-shell.md) | Done | Codex | UI/UX S3: permanent header Search, site menu, compact hierarchy and collapsible Pinned. |
+| [IMP-86](IMP-86-reading-context.md) | Compact reading context and on-demand Details | Done |
 | [IMP-84](IMP-84-locale-display.md) | Done | Codex | UI/UX S2: browser-localized dates/numbers and Japanese/English count nouns. |
 | [IMP-83](IMP-83-modal-contents-focus.md) | Done | Codex | UI/UX S1: temporary Contents keyboard focus, dismissal and destination hand-off; persistent column unchanged. Owner-authorized standalone exception. |
 

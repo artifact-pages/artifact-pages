@@ -48,7 +48,7 @@ Terraform state is stored in this bucket with conditional locking. Do not reuse 
 
 State moved to the verification account on 2026-10-14 (OPS-007); the deployment was rebuilt from empty state, and the old production-account key is not used.
 
-5. After apply, in the verification account create the CLI token with zone Cache Purge on `artifact-pages.stream` plus Workers R2 Storage Bucket Item Write on `artifact-pages-verify` only. Append these three assignments to `~/.config/artifact-pages-verify/verify.env`:
+5. After apply, in the verification account create the CLI token with Workers R2 Storage Bucket Item Write on `artifact-pages-verify` only. A CLI that still requests invalidation (0.5.2 and earlier) also needs zone Cache Purge on `artifact-pages.stream`; the current CLI never purges. Append these three assignments to `~/.config/artifact-pages-verify/verify.env`:
 
    ```sh
    CF_VERIFY_API_TOKEN=...

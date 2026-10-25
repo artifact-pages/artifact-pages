@@ -626,3 +626,69 @@ func TestManagedDigestMatchesGeneratedBody(t *testing.T) {
 		t.Fatal("manually edited output was recognized as managed")
 	}
 }
+
+// config defaulting sets apiTokenEnv to CF_API_TOKEN when omitted, so the
+// generator forwards the configured (or defaulted) name and never infers
+// explicit pair mode from which secrets exist.
+func TestCloudflareForwardedEnvNamesFollowConfiguredNamesInEveryWorkflow(t *testing.T) {
+	omitted := strings.Replace(cloudflareConfig, "  apiTokenEnv: CF_API_TOKEN\n", "", 1)
+	custom := strings.Replace(cloudflareConfig, "apiTokenEnv: CF_API_TOKEN", "apiTokenEnv: CF_CUSTOM_TOKEN", 1)
+	cases := []struct {
+		name      string
+		config    string
+		want      string
+		forbidden string
+	}{
+		{name: "apiTokenEnv omitted uses the default name", config: omitted, want: "CF_API_TOKEN"},
+		{name: "apiTokenEnv configured", config: cloudflareConfig, want: "CF_API_TOKEN"},
+		{name: "custom apiTokenEnv", config: custom, want: "CF_CUSTOM_TOKEN", forbidden: "CF_API_TOKEN"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			writeFixture(t, root, tc.config, "")
+			if _, err := runFixture(t, root, "cloudflare", false); err != nil {
+				t.Fatalf("generate: %v", err)
+			}
+			for _, workflow := range []string{"publish-site", "preview-site", "registry"} {
+				raw, err := os.ReadFile(filepath.Join(root, ".github/workflows", workflow+".yml"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				text := string(raw)
+				for _, name := range []string{"CF_ACCESS", "CF_SECRET", "CF_SESSION", "CF_READER_ACCESS", "CF_READER_SECRET", "CF_READER_SESSION", tc.want} {
+					if !strings.Contains(text, name+": ${{ secrets."+name+" }}") {
+						t.Errorf("%s does not forward %s", workflow, name)
+					}
+				}
+				if tc.forbidden != "" && strings.Contains(text, tc.forbidden) {
+					t.Errorf("%s forwards %s", workflow, tc.forbidden)
+				}
+				if strings.Contains(text, "id-token: write") {
+					t.Errorf("%s grants id-token: write for Cloudflare", workflow)
+				}
+			}
+		})
+	}
+}
+
+func TestAWSWorkflowsGrantOIDCAndForwardNoCloudflareSecrets(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, awsConfig, "")
+	if _, err := runFixture(t, root, "aws", false); err != nil {
+		t.Fatalf("generate AWS files: %v", err)
+	}
+	for _, workflow := range []string{"publish-site", "preview-site", "registry"} {
+		raw, err := os.ReadFile(filepath.Join(root, ".github/workflows", workflow+".yml"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(raw)
+		if !strings.Contains(text, "id-token: write") {
+			t.Errorf("%s lacks id-token: write for AWS OIDC", workflow)
+		}
+		if strings.Contains(text, "secrets.CF_") {
+			t.Errorf("%s forwards Cloudflare secrets for AWS", workflow)
+		}
+	}
+}
