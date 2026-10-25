@@ -65,7 +65,7 @@ func MigratePreviewCacheMetadata(ctx context.Context, backend ConditionalObjectB
 		return result, err
 	}
 	if !options.Apply {
-		targets, expired, err := planPreviewCacheMigration(ctx, backend, store, options.SiteID)
+		targets, expired, err := planPreviewCacheMigration(ctx, backend, options.SiteID)
 		if err != nil {
 			return result, err
 		}
@@ -80,7 +80,7 @@ func MigratePreviewCacheMetadata(ctx context.Context, backend ConditionalObjectB
 		if !ok {
 			return errors.New("preview cache migration requires an active site lock")
 		}
-		targets, expired, err := planPreviewCacheMigration(locked, backend, store, options.SiteID)
+		targets, expired, err := planPreviewCacheMigration(locked, backend, options.SiteID)
 		if err != nil {
 			return err
 		}
@@ -130,7 +130,7 @@ func fillPreviewCacheMigrationResult(result *PreviewCacheMigrationResult, target
 // planPreviewCacheMigration reads and validates everything before any write.
 // It returns the catalog and owned objects in write order and the manifest keys
 // of revisions whose objects have all expired.
-func planPreviewCacheMigration(ctx context.Context, backend ConditionalObjectBackend, store *ObjectPreviewStore, site string) ([]previewCacheTarget, []string, error) {
+func planPreviewCacheMigration(ctx context.Context, backend ConditionalObjectBackend, site string) ([]previewCacheTarget, []string, error) {
 	catalogKey, err := preview.CatalogKey(site)
 	if err != nil {
 		return nil, nil, err
@@ -139,16 +139,20 @@ func planPreviewCacheMigration(ctx context.Context, backend ConditionalObjectBac
 	if err != nil {
 		return nil, nil, err
 	}
-	_, _, err = backend.GetObject(ctx, rawCatalogKey)
+	catalogObject, catalogETag, err := backend.GetObject(ctx, rawCatalogKey)
 	if errors.Is(err, ErrObjectNotFound) {
 		return nil, nil, nil
 	}
 	if err != nil {
 		return nil, nil, fmt.Errorf("read preview catalog: %w", err)
 	}
-	catalog, err := readPreviewCatalog(ctx, store, site)
+	// The bytes validated here are the bytes and ETag later written back.
+	catalog, err := preview.DecodeCatalog(catalogObject.Bytes)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("existing preview catalog is invalid: %w", err)
+	}
+	if catalog.Site != site {
+		return nil, nil, fmt.Errorf("preview catalog site %q does not match %q", catalog.Site, site)
 	}
 	if err := preview.ValidateCatalog(catalog); err != nil {
 		return nil, nil, fmt.Errorf("existing preview catalog is invalid: %w", err)
@@ -172,10 +176,13 @@ func planPreviewCacheMigration(ctx context.Context, backend ConditionalObjectBac
 	sort.Strings(shas)
 
 	type pendingTarget struct {
-		key   string
-		class cacheObjectClass
+		key      string
+		class    cacheObjectClass
+		object   Object
+		etag     string
+		prefetch bool
 	}
-	pending := []pendingTarget{{key: rawCatalogKey, class: cacheClassPreviewCatalog}}
+	pending := []pendingTarget{{key: rawCatalogKey, class: cacheClassPreviewCatalog, object: catalogObject, etag: catalogETag, prefetch: true}}
 	expired := []string{}
 	for _, sha := range shas {
 		ownership := owned[sha]
@@ -199,13 +206,13 @@ func planPreviewCacheMigration(ctx context.Context, backend ConditionalObjectBac
 			}
 			fileKeys = append(fileKeys, raw)
 		}
-		_, _, manifestErr := backend.GetObject(ctx, rawManifest)
+		manifestObject, manifestETag, manifestErr := backend.GetObject(ctx, rawManifest)
 		switch {
 		case manifestErr == nil:
-			if err := verifyOwnedRevisionManifest(ctx, store, site, ownership); err != nil {
+			if err := verifyManifestContents(site, ownership, manifestObject.Bytes); err != nil {
 				return nil, nil, err
 			}
-			pending = append(pending, pendingTarget{key: rawManifest, class: cacheClassPreviewFile})
+			pending = append(pending, pendingTarget{key: rawManifest, class: cacheClassPreviewFile, object: manifestObject, etag: manifestETag, prefetch: true})
 			for index, raw := range fileKeys {
 				if _, err := backend.HeadObject(ctx, raw); err != nil {
 					if errors.Is(err, ErrObjectNotFound) {
@@ -233,9 +240,13 @@ func planPreviewCacheMigration(ctx context.Context, backend ConditionalObjectBac
 
 	targets := make([]previewCacheTarget, 0, len(pending))
 	for _, item := range pending {
-		object, etag, err := backend.GetObject(ctx, item.key)
-		if err != nil {
-			return nil, nil, fmt.Errorf("read preview object %s: %w", item.key, err)
+		object, etag := item.object, item.etag
+		if !item.prefetch {
+			var err error
+			object, etag, err = backend.GetObject(ctx, item.key)
+			if err != nil {
+				return nil, nil, fmt.Errorf("read preview object %s: %w", item.key, err)
+			}
 		}
 		target := previewCacheTarget{key: item.key, class: item.class, object: object, etag: etag}
 		switch {

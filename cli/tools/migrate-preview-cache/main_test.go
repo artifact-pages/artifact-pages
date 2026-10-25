@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -66,7 +67,7 @@ func TestUsageAndExitCodes(t *testing.T) {
 	}
 }
 
-func seedLegacy(t *testing.T, root string) {
+func seedLegacy(t *testing.T, root string) map[string]publisher.Object {
 	t.Helper()
 	backend, err := publisher.NewDirectoryBackend(root)
 	if err != nil {
@@ -92,21 +93,28 @@ func seedLegacy(t *testing.T, root string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	seeded := map[string]publisher.Object{}
 	put := func(key string, contents []byte, cache string) {
 		t.Helper()
-		if err := backend.PutObject(context.Background(), key, publisher.Object{Bytes: contents, ContentType: "application/octet-stream", Cache: cache}); err != nil {
+		object := publisher.Object{
+			Bytes: contents, ContentType: "text/x-seeded; charset=utf-8", ContentDisposition: "inline",
+			ContentEncoding: "identity", Cache: cache, Metadata: map[string]string{"artifact-pages-preview": "true"},
+		}
+		if err := backend.PutObject(context.Background(), key, object); err != nil {
 			t.Fatal(err)
 		}
+		seeded[key] = object
 	}
 	put("_previews/sre/catalog.json", catalogBytes, "public, max-age=0, s-maxage=60, must-revalidate")
 	put("_previews/sre/revisions/"+testSHA+"/manifest.json", manifestBytes, legacyCache)
 	put("_previews/sre/revisions/"+testSHA+"/files/a.md", []byte("# A\n"), legacyCache)
+	return seeded
 }
 
 func TestDryRunVersusApplyAgainstLocalProvider(t *testing.T) {
 	dir := t.TempDir()
 	root := filepath.Join(dir, "storage")
-	seedLegacy(t, root)
+	seeded := seedLegacy(t, root)
 	configPath := filepath.Join(dir, "config.yaml")
 	if err := os.WriteFile(configPath, []byte("schemaVersion: 1\nprovider: local\nlocal:\n  root: "+root+"\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -139,6 +147,24 @@ func TestDryRunVersusApplyAgainstLocalProvider(t *testing.T) {
 	}
 	if result := decode(out); result.Outcome != "migrated" || result.Updated != 3 {
 		t.Fatalf("apply = %+v", result)
+	}
+	backend, err := publisher.NewDirectoryBackend(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for key, want := range seeded {
+		got, _, err := backend.GetObject(context.Background(), key)
+		if err != nil {
+			t.Fatalf("read back %s: %v", key, err)
+		}
+		wantCache := "public, max-age=0, s-maxage=0, must-revalidate, stale-if-error=0"
+		if got.Cache != wantCache {
+			t.Errorf("%s Cache = %q, want %q", key, got.Cache, wantCache)
+		}
+		got.Cache, want.Cache = "", ""
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("%s changed beyond Cache-Control: got %+v want %+v", key, got, want)
+		}
 	}
 	code, out, _ = runTool("--config", configPath, "--site", "sre", "--apply")
 	if code != 0 || !strings.Contains(out, "no-op") || !strings.Contains(out, "current 3") {

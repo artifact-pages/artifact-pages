@@ -24,6 +24,7 @@ type migrationBackend struct {
 	*lockMemoryBackend
 	hookMu     sync.Mutex
 	previewPut []string
+	conditions []ObjectCondition
 	beforePut  func(index int, key string) error
 	afterPut   func(index int, key string)
 }
@@ -39,6 +40,7 @@ func (backend *migrationBackend) PutObjectConditional(ctx context.Context, key s
 	backend.hookMu.Lock()
 	index := len(backend.previewPut)
 	backend.previewPut = append(backend.previewPut, key)
+	backend.conditions = append(backend.conditions, condition)
 	before, after := backend.beforePut, backend.afterPut
 	backend.hookMu.Unlock()
 	if before != nil {
@@ -251,13 +253,13 @@ func TestMigratePreviewCacheMetadataRejectsUnsafeOwnershipBeforeAnyWrite(t *test
 	}{
 		{"ledger path traversal", func(t *testing.T, backend *migrationBackend) {
 			replaceMigrationObject(t, backend, migrationKeys("sre")[0], func(text string) string { return strings.Replace(text, `"a.md"`, `"../other/a.md"`, 1) })
-		}, ""},
+		}, "source-relative path"},
 		{"ledger for another site", func(t *testing.T, backend *migrationBackend) {
 			replaceMigrationObject(t, backend, migrationKeys("sre")[0], func(text string) string { return strings.Replace(text, `"site": "sre"`, `"site": "other"`, 1) })
 		}, "does not match"},
 		{"manifest path traversal", func(t *testing.T, backend *migrationBackend) {
 			replaceMigrationObject(t, backend, migrationKeys("sre")[1], func(text string) string { return strings.Replace(text, `"a.md"`, `"../../other/a.md"`, 1) })
-		}, ""},
+		}, "source-relative path"},
 		{"manifest for another revision", func(t *testing.T, backend *migrationBackend) {
 			replaceMigrationObject(t, backend, migrationKeys("sre")[1], func(text string) string { return strings.Replace(text, migrationSHAOne, migrationSHATwo, 1) })
 		}, "does not match"},
@@ -521,4 +523,79 @@ func TestPreviewPublishSameHeadRetryLeavesLegacyRevisionObjectsUntouched(t *test
 	if revisionObjects == 0 {
 		t.Fatal("no revision objects to compare")
 	}
+}
+
+func TestMigratePreviewCacheMetadataWritesAreConditionalOnTheValidatedETag(t *testing.T) {
+	backend := newMigrationBackend()
+	seedMigrationSite(t, backend, "sre")
+	before := backend.snapshot()
+	if _, err := migrate(t, backend, "sre", true); err != nil {
+		t.Fatal(err)
+	}
+	writes := backend.previewWrites()
+	backend.hookMu.Lock()
+	conditions := append([]ObjectCondition(nil), backend.conditions...)
+	backend.hookMu.Unlock()
+	if len(writes) != 6 || len(conditions) != 6 {
+		t.Fatalf("writes = %v, conditions = %v", writes, conditions)
+	}
+	for index, key := range writes {
+		if conditions[index].IfNoneMatch || conditions[index].IfMatchETag == "" || conditions[index].IfMatchETag != before[key].ETag {
+			t.Errorf("write %s condition = %+v, want If-Match %q", key, conditions[index], before[key].ETag)
+		}
+	}
+}
+
+func TestMigratePreviewCacheMetadataDoesNotOverwriteObjectsChangedAfterPlanning(t *testing.T) {
+	keys := migrationKeys("sre")
+	mutate := func(backend *migrationBackend, key string) Object {
+		backend.mu.Lock()
+		defer backend.mu.Unlock()
+		object := backend.objects[key]
+		object.Bytes = append([]byte(nil), []byte("changed concurrently")...)
+		object.Cache = "public, max-age=999"
+		backend.objects[key] = object
+		backend.etags[key] = `"mutated"`
+		return object
+	}
+	t.Run("second target", func(t *testing.T) {
+		backend := newMigrationBackend()
+		seedMigrationSite(t, backend, "sre")
+		var mutated Object
+		backend.afterPut = func(index int, key string) {
+			if index == 0 {
+				mutated = mutate(backend, keys[1])
+			}
+		}
+		_, err := migrate(t, backend, "sre", true)
+		if err == nil || !errors.Is(err, ErrPreconditionFailed) || !strings.Contains(err.Error(), keys[1]) {
+			t.Fatalf("error = %v, want precondition failure naming %s", err, keys[1])
+		}
+		state := backend.snapshot()[keys[1]]
+		if !reflect.DeepEqual(state.Object, mutated) || state.ETag != `"mutated"` {
+			t.Fatalf("mutated object was overwritten: %+v", state)
+		}
+		if writes := backend.previewWrites(); len(writes) != 2 {
+			t.Fatalf("writes = %v, want stop at the failed second write", writes)
+		}
+	})
+	t.Run("catalog changed before its write", func(t *testing.T) {
+		backend := newMigrationBackend()
+		seedMigrationSite(t, backend, "sre")
+		var mutated Object
+		backend.beforePut = func(index int, key string) error {
+			if index == 0 {
+				mutated = mutate(backend, keys[0])
+			}
+			return nil
+		}
+		_, err := migrate(t, backend, "sre", true)
+		if err == nil || !errors.Is(err, ErrPreconditionFailed) || !strings.Contains(err.Error(), keys[0]) {
+			t.Fatalf("error = %v, want precondition failure naming %s", err, keys[0])
+		}
+		state := backend.snapshot()[keys[0]]
+		if !reflect.DeepEqual(state.Object, mutated) {
+			t.Fatalf("unvalidated catalog bytes were written: %+v", state.Object)
+		}
+	})
 }

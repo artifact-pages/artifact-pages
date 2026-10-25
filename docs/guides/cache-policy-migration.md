@@ -22,7 +22,7 @@ It never lists prefixes to find objects, so an object the ledger does not prove 
 
 For each object it keeps the bytes, content type, encoding, disposition and custom metadata exactly as read, and replaces only `Cache-Control`. Each write is conditional on the ETag it read. An object that already has the current header is skipped, so a rerun after an interruption finishes the remaining objects and then reports `no-op`.
 
-The run stops without writing anything when the catalog or a manifest fails validation, when an owned object is missing from a revision that still has other objects, or when an object carries a `Cache-Control` value that is neither the current nor the earlier CLI policy. A revision whose manifest and files are all gone has expired under the provider retention rule; the helper reports it as `expired` and continues.
+The run stops without writing anything when the catalog or a manifest fails validation, when an owned object is missing from a revision that still has other objects, or when an object carries a `Cache-Control` value that is neither the current nor the earlier CLI policy. A revision whose manifest and files are all gone has expired under the provider retention rule; the helper reports it as `expired` and continues. The provider deletes expired objects one by one, so a revision caught part-way through expiry looks partial and stops the run; wait until the provider has finished deleting it and run the helper again.
 
 ## Run it
 
