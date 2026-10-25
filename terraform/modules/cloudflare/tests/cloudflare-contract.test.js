@@ -66,6 +66,7 @@ test('delivery preserves logical routes, cache policy, and opt-in WAF ownership 
   assert.doesNotMatch(delivery, /reserved_path_exclusions[\s\S]*?\/_control/u)
   assert.match(delivery, /edge_ttl\s*=\s*\{\s*mode\s*=\s*"respect_origin"/u)
   assert.match(delivery, /browser_ttl\s*=\s*\{\s*mode\s*=\s*"respect_origin"/u)
+  assert.match(delivery, /status_code_range\s*=\s*\{\s*from\s*=\s*400\s*to\s*=\s*499\s*\}\s*value\s*=\s*-1/u, '4xx responses are never stored at the edge')
   assert.doesNotMatch(delivery, /edge_ttl\s*=\s*\{\s*mode\s*=\s*"(?!respect_origin)/u, 'edge TTL mode must only be respect_origin')
   assert.doesNotMatch(delivery, /browser_ttl\s*=\s*\{\s*mode\s*=\s*"(?!respect_origin)/u, 'browser TTL mode must only be respect_origin')
   assert.doesNotMatch(delivery, /purge|cache_purge/iu, 'no purge resource or permission is required')
