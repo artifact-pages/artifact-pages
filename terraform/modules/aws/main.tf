@@ -253,7 +253,7 @@ resource "aws_cloudfront_function" "routes" {
 
   name    = "${var.name_prefix}-logical-routes"
   runtime = "cloudfront-js-2.0"
-  comment = "Keep storage keys private from navigation and send logical routes to the SPA shell."
+  comment = "Rewrite logical routes to the SPA shell; preserve fixed application files and reserved raw paths."
   publish = true
   code    = file("${path.module}/routes.js")
 }
@@ -374,11 +374,6 @@ resource "aws_cloudfront_distribution" "site" {
       cache_policy_id            = ordered_cache_behavior.value.cache_policy_id
       compress                   = true
       response_headers_policy_id = contains(["artifacts", "errors", "previews"], ordered_cache_behavior.key) ? aws_cloudfront_response_headers_policy.artifact_csp.id : null
-
-      function_association {
-        event_type   = "viewer-request"
-        function_arn = aws_cloudfront_function.routes.arn
-      }
 
     }
   }
