@@ -49,6 +49,7 @@ Record the credential scope used: explicit R2 pair without an API token, or sing
 - Choose 0 if estimated hit rate is below 5% and there is no meaningful end-to-end improvement.
 - Retain 5 when, compared with 0, a relevant reader operation reproducibly improves by at least 20 ms in the mean or 100 ms at p95 within the accepted freshness budget. Report whether that operation represents the observed workload; fewer origin requests alone do not justify freshness delay.
 - For inconclusive, conflicting or underpowered results, record uncertainty and obtain the owner's final 5-or-0 choice; do not silently invent a threshold outcome or claim an unmeasured benefit.
+- **Owner decision 2026-10-26: keep 5 seconds** for all shared roots (`sites.json`, site `meta.json` and `index.json`). The 0-versus-5 comparison was inconclusive (see the [Cloudflare run report](../../research/t30-cache-freshness.md)); the released CLI policy `d-lt-v1` already uses 5 seconds, so no CLI, specification or test change and no 0-second comparison build is needed.
 - The earlier r3 15/60-second candidates are outside the approved 5-or-0 decision. Any extension requires a new owner decision showing the latency gain and additional stale-display budget, not a runtime override.
 
 ## Exit criteria
