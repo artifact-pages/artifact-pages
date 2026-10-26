@@ -14,7 +14,7 @@ The workload is internal document management: people open long-tail pages when n
 
 | Object class | Fixed shared-cache freshness |
 | --- | --- |
-| `/_indexes/sites.json`, per-site `meta.json`, per-site `index.json` | 5 seconds; release measurement may reduce individual root classes to 0 through the CLI policy |
+| `/_indexes/sites.json`, per-site `meta.json`, per-site `index.json` | 5 seconds (owner decision 2026-10-26 after T30) |
 | Search manifest | 0 |
 | Path-addressed artifacts and resources | 0 |
 | Preview catalog, revision manifest and files | 0 |
@@ -49,7 +49,7 @@ This phase needs no verification credentials, environment unfreeze, live apply, 
 ## Acceptance criteria — Phase 2: provider proof and owner-controlled rollout
 
 - [ ] After explicit unfreeze and run approval, complete the Cloudflare `artifact-pages.stream` proof in T30: TTL 0/5/immutable behavior, compression, validators, negative caching/OCC/rule conflicts, representative HTML resources and freshness after publish/delete/search-generation changes. Verify every affected command makes zero purge calls with the reduced credential scope. Record actual evidence and independent review.
-- [x] Complete T30's root latency decision, selecting 5 or 0 seconds per root class with owner approval. Done 2026-10-26: the owner kept 5 seconds for all shared roots ([T30](../verification/T30-cache-freshness-and-root-latency.md#ttl-decision-rule)); the released policy needs no change. Make any resulting change only in the CLI's versioned policy and matching specification/tests before the release; retain 5 seconds as the approved starting value until evidence supports a change. Do not expand to 15/60 seconds without a new owner decision.
+- [x] Complete T30's root latency decision, selecting 5 or 0 seconds per root class with owner approval. Done 2026-10-26: the owner kept 5 seconds for all shared roots ([T30](../verification/T30-cache-freshness-and-root-latency.md#ttl-decision-rule)); the released policy needs no change. Do not expand to 15/60 seconds without a new owner decision.
 - [ ] If AWS proof is authorized, obtain a fresh reviewed plan/recreation approval and record separate CloudFront/S3 evidence, especially TTL-0 conditional fetch, compression and negative caching, and operation without `CreateInvalidation`. Otherwise explicitly record AWS as not run/unverified, its owner gate and rollout restriction; Cloudflare proof cannot establish AWS readiness.
 - [x] Refresh the cost report/calculation using T29's reader vectors split by URL class and explicit origin-rate assumptions, with T27's remaining exclusions visible. Do not apply the old uniform 10% miss assumption to long-tail artifacts or treat all app assets as cold. The [CLI 0.6 report](../../research/hosting-cost-model.md#cli-06--class-based-model) and [results JSON](../../research/hosting-cost-cli06-results.json) retain the assumptions, publisher/reader provenance, sensitivities and exclusions. T30 did not establish natural-traffic origin rates; those remain modeled inputs.
 - [ ] After approved releases and production migration authorization, execute the reviewed runbook on `artifact-pages.dev` and operator repositories (`admin` / `docs`): compatible module first, all writers unified, origin recovery preserved, every managed object's headers converged including old previews, old TTL expired and edge behavior checked. Record interruption/retry and rollback readiness; metadata changes alone do not mean existing edge entries have expired.
@@ -59,10 +59,10 @@ Phase 2 requires linked Cloudflare results, the TTL decision, cost follow-up, pr
 
 ## Owner-only steps
 
-Owner approval recorded 2026-10-25, in advance and per item: the `artifact-pages.stream` unfreeze and T30 run (Cloudflare only: runbook rehearsal including module apply, 5 s vs 0 s measurement, rollback rehearsal, restoration), the CLI/Action release, the production migration on `artifact-pages.dev` (runbook steps 1–7) and purge-credential retirement after production verification (revoking the token in Cloudflare is the owner's own action). The final 5-or-0 root policy remains the owner's decision on T30 results; AWS recreation/proof and any wider freshness budget are not covered.
+Owner approval recorded 2026-10-25, in advance and per item: the `artifact-pages.stream` unfreeze and T30 run (Cloudflare only: runbook rehearsal including module apply, 5 s vs 0 s measurement, rollback rehearsal, restoration), the CLI/Action release, the production migration on `artifact-pages.dev` (runbook steps 1–7) and purge-credential retirement after production verification (revoking the token in Cloudflare is the owner's own action). The final root policy was decided on 2026-10-26: 5 seconds. AWS recreation/proof and any wider freshness budget are not covered.
 
 - Unfreeze the verification environment; approve exact targets, changes, execution windows and measurement/spend bounds. Existing A6/A7 preservation/freeze arrangements do not authorize this run.
 - Approve any AWS recreation plan/apply and its independent proof/rollout scope; AWS resources were destroyed, so no existing runnable stack is assumed.
-- Adopt the final measured 5-or-0-second root policy; any wider freshness budget requires a new decision.
+- Root policy: 5 seconds (owner, 2026-10-26); any wider freshness budget requires a new decision.
 - Approve CLI/Action/module releases, tags and package/Registry/Marketplace publication as applicable. Prepare changes first; this ticket grants no publication authority.
 - Approve production apply/app deploy, operator repository rollout and credential/permission retirement. Review the concrete migration and rollback handoff before execution.
