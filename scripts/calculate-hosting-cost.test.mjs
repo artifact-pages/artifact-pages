@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
-import { transferCostGB, classifyResponses, originReads, sessionVector, lWeighted, invalidationCost, objectSizes, compressedResponseBytes, projectCompression, calculate, calculateCLI06, classifyCLI06URL, projectCLI06Vector, cli06OriginRates, cloudFrontViewerRequestCost, r2AfterFreeAllowance, r2RoundedAfterFreeAllowance, conditionalHeaderEvidence, sanitizedRequestHeaders, parseLegacyModel } from './calculate-hosting-cost.mjs'
+import { transferCostGB, classifyResponses, originReads, sessionVector, lWeighted, invalidationCost, objectSizes, compressedResponseBytes, projectCompression, calculate, calculateCLI06, classifyCLI06URL, projectCLI06Vector, cli06OriginRates, cloudFrontViewerRequestCost, cloudFrontFunctionCost, r2AfterFreeAllowance, r2RoundedAfterFreeAllowance, conditionalHeaderEvidence, sanitizedRequestHeaders, parseLegacyModel } from './calculate-hosting-cost.mjs'
 
 const probeHeaders = {
   'site-root': 'public, max-age=0, s-maxage=5, must-revalidate, stale-if-error=0',
@@ -164,6 +164,11 @@ test('CloudFront request and R2 dedicated allowances apply only above their boun
   const above = r2AfterFreeAllowance({ storageGB: 11, classA: 1_000_001, classB: 10_000_001 })
   assert.ok(Math.abs(above.total - (0.015 + 4.5 / 1e6 + 0.36 / 1e6)) < 1e-12)
 })
+test('CloudFront Functions have a separate 2 million monthly allowance', () => {
+  assert.equal(cloudFrontFunctionCost(2_000_000), 0)
+  assert.ok(Math.abs(cloudFrontFunctionCost(2_000_001) - 0.0000001) < 1e-20)
+  assert.ok(Math.abs(cloudFrontFunctionCost(4_150_000) - 0.215) < 1e-12)
+})
 test('R2 reference subtotal rounds billable units after its dedicated free allowance', () => {
   assert.deepEqual(r2RoundedAfterFreeAllowance({ storageGB: 10, classA: 1_000_000, classB: 10_000_000 }), { storageGB: 0, classA: 0, classB: 0, total: 0 })
   const above = r2RoundedAfterFreeAllowance({ storageGB: 10.01, classA: 1_000_001, classB: 10_000_001 })
@@ -274,8 +279,8 @@ test('CLI 0.6 L reader breakdown uses 30 regular sites plus one large site and r
   assert.ok(Math.abs(row.reader.breakdown.mutableContent.bodyBytes - expectedBody) < 1e-7)
   for (const item of result.scenarios) {
     const { aws, r2, reader, publisher } = item
-    assert.ok(Math.abs(aws.usCanada - (aws.storage + aws.publisherRequests + aws.readerOriginRequests + aws.viewerRequestsUS + aws.transfer)) < 1e-10)
-    assert.ok(Math.abs(aws.pc100Upper - (aws.storage + aws.publisherRequests + aws.readerOriginRequests + aws.viewerRequestsPC100 + aws.transfer)) < 1e-10)
+    assert.ok(Math.abs(aws.usCanada - (aws.storage + aws.publisherRequests + aws.readerOriginRequests + aws.viewerRequestsUS + aws.functions + aws.transfer)) < 1e-10)
+    assert.ok(Math.abs(aws.pc100Upper - (aws.storage + aws.publisherRequests + aws.readerOriginRequests + aws.viewerRequestsPC100 + aws.functions + aws.transfer)) < 1e-10)
     assert.ok(Math.abs(r2.gross - (r2.storage + r2.publisherClassA + r2.publisherClassB + r2.readerOriginRequests)) < 1e-10)
     const expectedNet = r2AfterFreeAllowance({ storageGB: publisher.r2.storageBytes / 1e9, classA: publisher.r2.classA,
       classB: publisher.r2.classB + reader.originRequests }).total
@@ -356,6 +361,23 @@ test('CLI 0.6 --publisher-results re-input reproduces a small generated fixture 
   } finally {
     rmSync(temp, { recursive: true, force: true })
   }
+})
+
+test('CLI 0.6 prices ISSUE-127 default-behavior CloudFront Function invocations separately', () => {
+  const reader = JSON.parse(readFileSync('docs/research/hosting-cost-reader-session-results.json', 'utf8'))
+  const committed = JSON.parse(readFileSync('docs/research/hosting-cost-cli06-results.json', 'utf8'))
+  const publishers = { plain: {}, aws: {} }
+  for (const provider of ['plain', 'aws']) for (const size of [1000, 5000, 50000]) {
+    const evidence = committed.evidence.publisher[provider][size]
+    publishers[provider][size] = { ...evidence, phases: evidence.phases.map((phase) => ({ ...phase,
+      invalidationPathCount: phase.invalidationPathCount, awsProviderPathCount: phase.awsProviderPathCount })) }
+  }
+  const rows = calculateCLI06(reader, publishers).scenarios
+  assert.deepEqual(rows.map((row) => row.aws.functionInvocations), [41500, 830000, 4150000])
+  assert.deepEqual(rows.map((row) => row.aws.preChangeFunctionInvocations), [413250, 8160000, 40790322.58064516])
+  assert.deepEqual(rows.map((row) => Number(row.aws.functions.toFixed(2))), [0, 0, 0.22])
+  assert.deepEqual(rows.map((row) => Number(row.aws.usCanada.toFixed(2))), [0.10, 2.11, 37.80])
+  assert.deepEqual(rows.map((row) => Number(row.aws.pc100Upper.toFixed(2))), [0.10, 2.11, 43.96])
 })
 
 test('sequential legacy waterfall reconciles all scenarios, misses, and price series', () => {

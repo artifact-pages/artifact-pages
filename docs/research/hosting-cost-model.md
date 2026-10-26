@@ -19,11 +19,11 @@ TTL-0 classes use 100% because each network request requires origin validation i
 
 ### Base monthly subtotals
 
-| Scenario | R2 gross | R2 after dedicated free allowance | R2 after-free rounded reference | AWS US/Canada | AWS PriceClass 100 upper bound |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| S | $0.09 | $0.00 | $0.00 | $0.10 | $0.10 |
-| M | $1.90 | $0.00 | $0.00 | $2.11 | $2.11 |
-| L | $6.12 | $1.40 | $1.44 | $37.59 | $43.74 |
+| Scenario | R2 gross | R2 after dedicated free allowance | R2 after-free rounded reference | CloudFront Functions | AWS US/Canada | AWS PriceClass 100 upper bound |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| S | $0.09 | $0.00 | $0.00 | $0.00 | $0.10 | $0.10 |
+| M | $1.90 | $0.00 | $0.00 | $0.00 | $2.11 | $2.11 |
+| L | $6.12 | $1.40 | $1.44 | $0.22 | $37.80 | $43.96 |
 
 The rounded R2 figure applies the dedicated 10 GB-month, 1 million Class A, and 10 million Class B free allowances to this workload, then rounds the remaining storage and request quantities to billing units ([R2 pricing and rounding](https://developers.cloudflare.com/r2/pricing/)). Actual accounts share these allowances with other use. R2 has no modeled egress fee. AWS uses S3 Standard and CloudFront; transfer is $0.00 at these base loads (L is 877.05 GB against the modeled 1,000 GB allowance). The PriceClass 100 upper bound differs for L because of regional viewer-request pricing.
 
@@ -31,11 +31,11 @@ The rounded R2 figure applies the dedicated 10 GB-month, 1 million Class A, and 
 
 AWS component values are rounded individually to cents; the subtotal is calculated from unrounded values and can differ by a cent from the displayed component sum.
 
-| Scenario | Storage | Publisher requests | Reader-origin requests | Viewer requests, US/Canada | Transfer | AWS US/Canada subtotal | AWS PC100 subtotal |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| S | $0.00 | $0.04 | $0.06 | $0.00 | $0.00 | $0.10 | $0.10 |
-| M | $0.01 | $0.99 | $1.11 | $0.00 | $0.00 | $2.11 | $2.11 |
-| L | $0.01 | $1.26 | $5.53 | $30.79 | $0.00 | $37.59 | $43.74 |
+| Scenario | Storage | Publisher requests | Reader-origin requests | Viewer requests, US/Canada | CloudFront Functions | Transfer | AWS US/Canada subtotal | AWS PC100 subtotal |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| S | $0.00 | $0.04 | $0.06 | $0.00 | $0.00 | $0.00 | $0.10 | $0.10 |
+| M | $0.01 | $0.99 | $1.11 | $0.00 | $0.00 | $0.00 | $2.11 | $2.11 |
+| L | $0.01 | $1.26 | $5.53 | $30.79 | $0.22 | $0.00 | $37.80 | $43.96 |
 
 | Scenario | R2 storage | Publisher Class A | Publisher Class B | Reader-origin requests | R2 gross | After free allowance | Rounded reference |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -43,22 +43,24 @@ AWS component values are rounded individually to cents; the subtotal is calculat
 | M | $0.01 | $0.87 | $0.03 | $1.00 | $1.90 | $0.00 | $0.00 |
 | L | $0.01 | $1.11 | $0.03 | $4.98 | $6.12 | $1.40 | $1.44 |
 
-The AWS US/Canada subtotal is storage + publisher requests + reader-origin requests + viewer requests + transfer. There is no invalidation component or invalidation charge in CLI 0.6. The R2 gross subtotal is storage + publisher Class A + publisher Class B + reader-origin Class B requests. The free-allowance figures are workload-only estimates, not account bills.
+The AWS US/Canada subtotal is storage + publisher requests + reader-origin requests + viewer requests + CloudFront Functions + transfer. There is no invalidation component or invalidation charge in CLI 0.6. CloudFront Functions use $0.10 per million invocations after a dedicated 2 million/month free allowance, separate from the viewer-request allowance; actual accounts share each allowance with other use. The modeled function runs on the default behavior only, including requests for `/favicon.ico` that the default behavior rewrites to the app shell. For the assumed ISSUE-127 module, calls are estimated as `4 × sessions + searches/2` per month (41,500 / 830,000 / 4,150,000 for S/M/L). The R2 gross subtotal is storage + publisher Class A + publisher Class B + reader-origin Class B requests. The free-allowance figures are workload-only estimates, not account bills.
+
+As a traceable pre-change sensitivity, attaching the function to all behaviors would use the existing viewer-request totals: 413,250 / 8,160,000 / 40,790,323 calls for S/M/L, costing $0.00 / $0.62 / $3.88 after the same dedicated allowance. CLI 0.6 models the post-ISSUE-127 default-behavior-only counts above.
 
 ### Origin-rate sensitivities
 
-| Scenario | Case | AWS US/Canada | AWS PC100 | R2 gross | R2 after free allowance | R2 rounded reference |
-| --- | --- | ---: | ---: | ---: | ---: | ---: |
-| S | Roots 0%, other rates at base | $0.09 | $0.09 | $0.08 | $0.00 | $0.00 |
-| S | All classes 100% origin | $0.21 | $0.21 | $0.19 | $0.00 | $0.00 |
-| M | Roots 0%, other rates at base | $1.87 | $1.87 | $1.68 | $0.00 | $0.00 |
-| M | All classes 100% origin | $4.26 | $4.26 | $3.84 | $0.00 | $0.00 |
-| L | Roots 0%, other rates at base | $36.39 | $42.54 | $5.04 | $0.32 | $0.36 |
-| L | All classes 100% origin | $48.37 | $54.53 | $15.82 | $11.11 | $11.16 |
+| Scenario | Case | CloudFront Functions | AWS US/Canada | AWS PC100 | R2 gross | R2 after free allowance | R2 rounded reference |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| S | Roots 0%, other rates at base | $0.00 | $0.09 | $0.09 | $0.08 | $0.00 | $0.00 |
+| S | All classes 100% origin | $0.00 | $0.21 | $0.21 | $0.19 | $0.00 | $0.00 |
+| M | Roots 0%, other rates at base | $0.00 | $1.87 | $1.87 | $1.68 | $0.00 | $0.00 |
+| M | All classes 100% origin | $0.00 | $4.26 | $4.26 | $3.84 | $0.00 | $0.00 |
+| L | Roots 0%, other rates at base | $0.22 | $36.60 | $42.76 | $5.04 | $0.32 | $0.36 |
+| L | All classes 100% origin | $0.22 | $48.59 | $54.75 | $15.82 | $11.11 | $11.16 |
 
 Changing origin rates changes origin requests and their request costs; viewer requests and bytes stay fixed. The complete JSON also stores every effective assumption and the existing q, compression, reload, changed-index, and header-size sensitivities for S/M/L.
 
-For L, those one-factor sensitivities include q=1 / 3 / 5 at AWS US/Canada $240.06 / $37.59 / $23.28 and R2 gross $11.09 / $6.12 / $5.12; one reload with unchanged/changed index gives AWS US/Canada $48.07 / $66.59 and R2 gross $8.35 in both cases. Brotli5 reduces modeled L reader bytes from 877.05 GB to 848.72 GB, but does not change the AWS subtotal because both remain below the transfer allowance. Header sizes 512 / 1,024 / 2,048 bytes produce modeled L reader transfer of 856.17 / 877.05 / 918.82 GB; the subtotal remains within the transfer allowance. See [CLI 0.6 calculated results](hosting-cost-cli06-results.json) for the full sensitivity rows.
+For L, those one-factor sensitivities include q=1 / 3 / 5 at AWS US/Canada $241.07 / $37.80 / $23.34, CloudFront Functions $1.02 / $0.22 / $0.06, and R2 gross $11.09 / $6.12 / $5.12; one reload with unchanged/changed index gives AWS US/Canada $48.28 / $66.80 and CloudFront Functions $0.22 in both cases. Brotli5 reduces modeled L reader bytes from 877.05 GB to 848.72 GB, but does not change the AWS subtotal because both remain below the transfer allowance. Header sizes 512 / 1,024 / 2,048 bytes produce modeled L reader transfer of 856.17 / 877.05 / 918.82 GB; the subtotal remains within the transfer allowance. See [CLI 0.6 calculated results](hosting-cost-cli06-results.json) for the full sensitivity rows.
 
 ### T30 evidence and limits
 
@@ -69,10 +71,10 @@ T30 did not establish natural traffic rates or URL-class frequencies: the verifi
 ### Assumptions, provenance, and exclusions
 
 - S/M/L workload counts, 30-day month, size proxies, L's 30:1 regular-to-large mix, search allocation, q=3, reloads=0, compression and 2026-10-18 price inputs follow T29. Shell transfer remains the conservative identity-size proxy; no speculative compression reduction is applied.
-- Cloudflare assumes reference module 0.2.0. AWS assumes the monorepo compatibility module with CloudFront TTL caps `0/0/31536000`; this is a model only, not live AWS evidence. The published AWS 0.1.1 caps sensitivity is not included. A maximum TTL is an origin-TTL cap, not the configured retention period ([CloudFront TTL documentation](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Expiration.html)). AWS error caching has a 1-second minimum for S3 origins even when the configured error TTL is zero; it is not modeled as Cloudflare's immediate bypass ([CloudFront custom error expiration](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/custom-error-pages-expiration.html)).
+- Cloudflare assumes reference module 0.2.0. AWS assumes the monorepo compatibility module after ISSUE-127, with the route function attached to the default behavior only and CloudFront TTL caps `0/0/31536000`; this is a model only, not live AWS evidence. The published AWS 0.1.1 caps sensitivity is not included. A maximum TTL is an origin-TTL cap, not the configured retention period ([CloudFront TTL documentation](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Expiration.html)). AWS error caching has a 1-second minimum for S3 origins even when the configured error TTL is zero; it is not modeled as Cloudflare's immediate bypass ([CloudFront custom error expiration](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/custom-error-pages-expiration.html)).
 - Reader input: measured 2026-10-24, source commit `b9847b9e0a6104ca2428486f8bd56460821cba95`, SHA-256 `527fe39c7d3d54532bc01337a5f661755b86cdd3015e107d3e7e710475cc62f2`. The reader evidence is from CLI 0.5.2 and the then-current web; root headers in the local fixture partly used `no-store`. T29's observed 200/304 distribution is not represented as a CLI 0.6 production ratio.
 - Publisher probes: plain and AWS-policy, 1k/5k/50k, measured 2026-10-25 on base commit `116521ef` plus the hosting-cost probe changes in this PR (uncommitted probe-test changes), cache-policy revision `d-lt-v1`. They remeasure operation counts and stored projection/state bytes. The calculated results retain phases, operation counts, sizes, per-class object counts, and summarized header checks in the [results JSON](hosting-cost-cli06-results.json); per-object lists are omitted.
-- The base workload excludes preview frequency and bytes, and 404 frequency; T29's 648 responses include neither previews nor 404s. An explicitly supplied Cloudflare 404 counts as one origin read and includes its response body bytes. Other exclusions are registry synchronization, app deployment, CloudFront Functions, account-wide shared allowances, domain, GitHub, runner, support, tax, WAF, logging, and other account costs.
+- The base workload excludes preview frequency and bytes, and 404 frequency; T29's 648 responses include neither previews nor 404s. An explicitly supplied Cloudflare 404 counts as one origin read and includes its response body bytes. Other exclusions are registry synchronization, app deployment, account-wide shared allowance consumption, domain, GitHub, runner, support, tax, WAF, logging, and other account costs.
 - These are subtotals for fixed workloads under stated assumptions, not actual bills or total budgets. Natural traffic origin rates remain unmeasured, and shared account allowances may already be consumed.
 
 ## T29 historical results
