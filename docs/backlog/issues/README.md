@@ -139,6 +139,7 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-124](ISSUE-124-scoped-app-deploy-lock-permissions.md) | Open | P2 | Scoped app-deploy guidance omits registry/all-site locks and free-lock side effects. |
 | [ISSUE-125](ISSUE-125-wide-column-details-always-visible.md) | Done | P2 | Wide reader column hides Details behind a floating overlay. |
 | [ISSUE-126](ISSUE-126-published-aws-module-cache-policy-drift.md) | Open | P2 | Published AWS module retains invalidation permissions and TTL caps superseded by IMP-82. |
+| [ISSUE-127](ISSUE-127-aws-redundant-route-function-invocations.md) | In progress | P3 | AWS ordered cache behaviors invoke the route function without changing requests. |
 
 ISSUE-013's verified completion record is retained in Git history.
 

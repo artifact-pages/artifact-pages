@@ -47,6 +47,30 @@ test('CloudFront route function passes application, notice, and data-plane objec
   }
 })
 
+test('reserved raw prefixes pass empty, nested, missing-name, and encoded segments unchanged for GET and HEAD', () => {
+  const prefixes = ['/_indexes', '/_artifacts', '/_previews', '/assets/', '/_errors']
+  const suffixes = ['', '/nested/item.html', '/missing-name', '/nested/name%2Fpart.html']
+
+  for (const prefix of prefixes) {
+    for (const suffix of suffixes) {
+      for (const method of ['GET', 'HEAD']) {
+        const uri = `${prefix}${suffix}`
+        const request = {
+          uri,
+          method,
+          headers: { accept: { value: 'text/html' }, 'x-test': { value: 'preserve-me' } },
+          querystring: { revision: { value: 'latest' } },
+        }
+        const originalRequest = structuredClone(request)
+        const result = handler({ request })
+
+        assert.equal(result, request, `${method} ${uri} should be passed through unchanged`)
+        assert.deepEqual(result, originalRequest, `${method} ${uri} must preserve the full request`)
+      }
+    }
+  }
+})
+
 test('missing notice files stay on the origin path and return the configured non-cached 404', () => {
   for (const uri of ['/LICENSE', '/THIRD_PARTY_NOTICES.txt']) {
     const request = { uri, method: 'GET' }
@@ -72,6 +96,18 @@ test('CloudFront route function keeps reserved namespace roots out of the SPA fa
 
     assert.equal(result.uri, uri, `${uri} should be looked up as an origin path`)
   }
+})
+
+test('fixed application files and route exceptions retain their established behavior', () => {
+  for (const uri of ['/_indexes', '/_artifacts', '/_previews', '/_errors', '/index.html', '/preview-bridge.js', '/LICENSE', '/THIRD_PARTY_NOTICES.txt']) {
+    const request = { uri, method: 'GET' }
+    assert.equal(handler({ request }).uri, uri, `${uri} must pass through`)
+  }
+
+  assert.equal(handler({ request: { uri: '/assets', method: 'GET' } }).uri, '/index.html')
+  assert.equal(handler({ request: { uri: '/preview', method: 'GET' } }).uri, '/index.html')
+  assert.equal(handler({ request: { uri: '/sre/_previews', method: 'GET' } }).uri, '/index.html')
+  assert.equal(handler({ request: { uri: '/_control/locks/registry.json', method: 'GET' } }).uri, '/index.html')
 })
 
 test('CloudFront preview behavior respects the origin Cache-Control and maps private-origin misses to 404', () => {
@@ -102,4 +138,12 @@ test('CloudFront route function rewrites logical user routes to the SPA shell', 
     assert.equal(result.uri, '/index.html', `${uri} should load the SPA shell`)
     assert.equal(result.method, 'GET')
   }
+})
+
+test('route function does not normalize dot segments before its logical-route fallback', () => {
+  const request = { uri: '/x/../_artifacts/a', method: 'GET' }
+  const result = handler({ request })
+
+  assert.equal(result, request)
+  assert.equal(result.uri, '/index.html', 'the function itself does not normalize the dot-segment path')
 })

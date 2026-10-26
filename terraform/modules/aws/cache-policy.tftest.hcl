@@ -103,6 +103,22 @@ run "origin_respecting_cache_policy_and_no_invalidation" {
 
   assert {
     condition = (
+      length(one(aws_cloudfront_distribution.site.default_cache_behavior).function_association) == 1 &&
+      one(one(aws_cloudfront_distribution.site.default_cache_behavior).function_association).event_type == "viewer-request" &&
+      one(one(aws_cloudfront_distribution.site.default_cache_behavior).function_association).function_arn == aws_cloudfront_function.routes.arn
+    )
+    error_message = "Only the default behavior must associate the viewer-request route function."
+  }
+
+  assert {
+    condition = alltrue([
+      for b in aws_cloudfront_distribution.site.ordered_cache_behavior : length(b.function_association) == 0
+    ])
+    error_message = "Ordered cache behaviors must not invoke the route function."
+  }
+
+  assert {
+    condition = (
       !strcontains(aws_iam_role_policy.admin.policy, "cloudfront:") &&
       !strcontains(aws_iam_role_policy.satellite["sre"].policy, "cloudfront:") &&
       !strcontains(aws_iam_role_policy.admin.policy, "CreateInvalidation") &&

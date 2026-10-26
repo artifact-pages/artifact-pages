@@ -18,6 +18,8 @@ For lifecycle verification, the owner prefers hours rather than the 30-day sampl
 
 ## Proof needed
 
+- [ ] In the next approved AWS verification window, use `curl --path-as-is` to GET and HEAD existing and missing canonical objects and their dot-segment variants (including `/x/../_artifacts/a`). Test both orders: canonical then variant, and variant then canonical. Compare status, body hash, CSP, `Cache-Control`, `Age`, and `X-Cache`; also confirm an existing harmless control marker remains private. Stop and report if a canonical response is polluted or control bytes are exposed. This remains unverified; the local function-level regression and AWS documentation do not establish distribution or S3 behavior. AWS documents path normalization before behavior matching and forwarding the raw URI after behavior selection ([CloudFront path patterns](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/DownloadDistValuesCacheBehavior.html#DownloadDistValuesPathPattern)).
+
 - [x] Record the owner's confirmation that `artifact-pages.dev` was acquired; keep independent DNS/hosting proof separate.
 - [x] Confirm authoritative Cloudflare DNS and account/zone identifiers; request the Cloudflare apex over HTTPS and verify R2 custom-domain delivery without an alternate public `r2.dev` endpoint or Pages/Workers Static Assets deployment.
   - Committed records: [October 1 DNS/TLS, account/zone and delivery observations](#cloudflare-live-observations--october-1-2026-jst) and [October 1 live API inspection of the active R2 custom domain and disabled managed domain](#live-configuration-inspection--october-1-2026-jst), both in `docs/backlog/verification/T15-provider-delivery.md`. These are the recorded samples; no new run is claimed.
