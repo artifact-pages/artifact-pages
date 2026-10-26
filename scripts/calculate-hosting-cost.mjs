@@ -9,7 +9,8 @@ export const pricing = Object.freeze({
   date: '2026-10-18', monthDays: 30, headerBytes: 1024,
   r2: { storageGBMonth: 0.015, classA: 4.5 / 1e6, classB: 0.36 / 1e6, freeGB: 10, freeA: 1e6, freeB: 10e6 },
   aws: { storageGiBMonth: 0.023, classA: 0.005 / 1000, classB: 0.0004 / 1000,
-    viewerRequestFree: 10e6, viewerRequestUS: 0.010 / 10000, viewerRequestPC100: 0.012 / 10000, invalidationFree: 1000, invalidationPath: 0.005,
+    viewerRequestFree: 10e6, viewerRequestUS: 0.010 / 10000, viewerRequestPC100: 0.012 / 10000,
+    functionFree: 2e6, functionPerMillion: 0.10 / 1e6, invalidationFree: 1000, invalidationPath: 0.005,
     transferFreeGB: 1000, transferTiers: [{ limitGB: 9000, rate: 0.085 }, { limitGB: 40000, rate: 0.08 }, { limitGB: 100000, rate: 0.06 }] },
 })
 const cli06Pricing = Object.freeze({
@@ -62,6 +63,9 @@ export function lWeighted(regular, large) { return (regular * 30 + large) / 31 }
 export function invalidationCost(paths) { return Math.max(0, paths - pricing.aws.invalidationFree) * pricing.aws.invalidationPath }
 export function cloudFrontViewerRequestCost(requests, price = pricing.aws.viewerRequestUS) {
   return Math.max(0, requests - pricing.aws.viewerRequestFree) * price
+}
+export function cloudFrontFunctionCost(invocations) {
+  return Math.max(0, invocations - pricing.aws.functionFree) * pricing.aws.functionPerMillion
 }
 export function r2AfterFreeAllowance({ storageGB, classA, classB }) {
   const storage = Math.max(0, storageGB - pricing.r2.freeGB) * pricing.r2.storageGBMonth
@@ -658,9 +662,16 @@ export function calculateCLI06(reader, publishers, { q = 3, reloads = 0, headerB
     const awsOrigin = originRequests * pricing.aws.classB
     const awsViewerUS = cloudFrontViewerRequestCost(viewerRequests, pricing.aws.viewerRequestUS)
     const awsViewerPC = cloudFrontViewerRequestCost(viewerRequests, pricing.aws.viewerRequestPC100)
+    const sessions = scenario.viewsPerDay * pricing.monthDays / qValue
+    const functionInvocations = 4 * sessions + scenario.searchesPerDay * pricing.monthDays / 2
+    const awsFunctions = cloudFrontFunctionCost(functionInvocations)
+    const preChangeFunctionInvocations = viewerRequests
+    const preChangeFunctions = cloudFrontFunctionCost(preChangeFunctionInvocations)
     const awsTransfer = transferCostGB(viewerBytes / 1e9)
-    const aws = { storage: awsStorage, publisherRequests: awsPublisher, readerOriginRequests: awsOrigin, viewerRequestsUS: awsViewerUS, viewerRequestsPC100: awsViewerPC, transfer: awsTransfer,
-      usCanada: awsStorage + awsPublisher + awsOrigin + awsViewerUS + awsTransfer, pc100Upper: awsStorage + awsPublisher + awsOrigin + awsViewerPC + awsTransfer }
+    const aws = { storage: awsStorage, publisherRequests: awsPublisher, readerOriginRequests: awsOrigin, viewerRequestsUS: awsViewerUS, viewerRequestsPC100: awsViewerPC,
+      functionInvocations, functions: awsFunctions, preChangeFunctionInvocations, preChangeFunctions, transfer: awsTransfer,
+      usCanada: awsStorage + awsPublisher + awsOrigin + awsViewerUS + awsFunctions + awsTransfer,
+      pc100Upper: awsStorage + awsPublisher + awsOrigin + awsViewerPC + awsFunctions + awsTransfer }
     const r2StorageGB = pub.r2.storageBytes / 1e9
     const r2Storage = r2StorageGB * pricing.r2.storageGBMonth
     const r2PublisherClassA = pub.r2.classA * pricing.r2.classA
@@ -687,7 +698,7 @@ export function calculateCLI06(reader, publishers, { q = 3, reloads = 0, headerB
   const publisherEvidence = Object.fromEntries(['plain', 'aws'].map((p) => [p, Object.fromEntries(sizes.map((size) => [size, compactPublisherProbe(publishers[p][size])]))]))
   return { schemaVersion: 1, policy: 'cli06', pricing: cli06Pricing, calculation: { q, reloads, headerBytes, compression, originRates,
     moduleAssumptions: { cloudflare: '0.2.0', aws: 'monorepo compatibility module; max TTL caps 0/0/31536000; AWS not live-verified' },
-    excludedScope: ['preview frequency and bytes', '404 frequency (each explicitly supplied Cloudflare 404 includes its body bytes and one origin read)', 'registry sync', 'app deploy', 'CloudFront Functions and account-wide shared allowances', 'domain, GitHub, runner, support, tax, WAF, logging'] },
+    excludedScope: ['preview frequency and bytes', '404 frequency (each explicitly supplied Cloudflare 404 includes its body bytes and one origin read)', 'registry sync', 'app deploy', 'account-wide shared allowances', 'domain, GitHub, runner, support, tax, WAF, logging'] },
     evidence: { readerMeasuredAt: reader.measuredAt, readerSourceRevision: reader.sourceRevision ?? reader.environment?.commit ?? null, readerInputSHA256: reader.inputSHA256 ?? null,
       readerVectors: traceByMode[compression], publisherProbeSourceContext: 'base 116521ef plus the hosting cost probe changes in this PR', publisher: publisherEvidence }, scenarios: scenariosRows, sensitivities: { originRates: sensitivities, oneFactor } }
 }

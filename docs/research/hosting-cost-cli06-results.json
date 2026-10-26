@@ -20,6 +20,8 @@
       "viewerRequestFree": 10000000,
       "viewerRequestUS": 0.000001,
       "viewerRequestPC100": 0.0000012,
+      "functionFree": 2000000,
+      "functionPerMillion": 1.0000000000000001e-7,
       "transferFreeGB": 1000,
       "transferTiers": [
         {
@@ -59,7 +61,7 @@
       "404 frequency (each explicitly supplied Cloudflare 404 includes its body bytes and one origin read)",
       "registry sync",
       "app deploy",
-      "CloudFront Functions and account-wide shared allowances",
+      "account-wide shared allowances",
       "domain, GitHub, runner, support, tax, WAF, logging"
     ]
   },
@@ -1322,6 +1324,10 @@
         "readerOriginRequests": 0.05637,
         "viewerRequestsUS": 0,
         "viewerRequestsPC100": 0,
+        "functionInvocations": 41500,
+        "functions": 0,
+        "preChangeFunctionInvocations": 413250,
+        "preChangeFunctions": 0,
         "transfer": 0,
         "usCanada": 0.09875785084006192,
         "pc100Upper": 0.09875785084006192
@@ -1408,6 +1414,10 @@
         "readerOriginRequests": 1.1064,
         "viewerRequestsUS": 0,
         "viewerRequestsPC100": 0,
+        "functionInvocations": 830000,
+        "functions": 0,
+        "preChangeFunctionInvocations": 8160000,
+        "preChangeFunctions": 0.6160000000000001,
         "transfer": 0,
         "usCanada": 2.1051060683054925,
         "pc100Upper": 2.1051060683054925
@@ -1494,9 +1504,13 @@
         "readerOriginRequests": 5.530064516129033,
         "viewerRequestsUS": 30.790322580645157,
         "viewerRequestsPC100": 36.94838709677419,
+        "functionInvocations": 4150000,
+        "functions": 0.21500000000000002,
+        "preChangeFunctionInvocations": 40790322.58064516,
+        "preChangeFunctions": 3.879032258064516,
         "transfer": 0,
-        "usCanada": 37.58597454762815,
-        "pc100Upper": 43.744039063757185
+        "usCanada": 37.80097454762815,
+        "pc100Upper": 43.95903906375719
       },
       "r2": {
         "storage": 0.00748028211,
@@ -1587,6 +1601,10 @@
               "readerOriginRequests": 0.04437000000000001,
               "viewerRequestsUS": 0,
               "viewerRequestsPC100": 0,
+              "functionInvocations": 41500,
+              "functions": 0,
+              "preChangeFunctionInvocations": 413250,
+              "preChangeFunctions": 0,
               "transfer": 0,
               "usCanada": 0.0867578508400619,
               "pc100Upper": 0.0867578508400619
@@ -1674,6 +1692,10 @@
               "readerOriginRequests": 0.1653,
               "viewerRequestsUS": 0,
               "viewerRequestsPC100": 0,
+              "functionInvocations": 41500,
+              "functions": 0,
+              "preChangeFunctionInvocations": 413250,
+              "preChangeFunctions": 0,
               "transfer": 0,
               "usCanada": 0.20768785084006192,
               "pc100Upper": 0.20768785084006192
@@ -1766,6 +1788,10 @@
               "readerOriginRequests": 0.8664000000000001,
               "viewerRequestsUS": 0,
               "viewerRequestsPC100": 0,
+              "functionInvocations": 830000,
+              "functions": 0,
+              "preChangeFunctionInvocations": 8160000,
+              "preChangeFunctions": 0.6160000000000001,
               "transfer": 0,
               "usCanada": 1.8651060683054925,
               "pc100Upper": 1.8651060683054925
@@ -1853,6 +1879,10 @@
               "readerOriginRequests": 3.2640000000000002,
               "viewerRequestsUS": 0,
               "viewerRequestsPC100": 0,
+              "functionInvocations": 830000,
+              "functions": 0,
+              "preChangeFunctionInvocations": 8160000,
+              "preChangeFunctions": 0.6160000000000001,
               "transfer": 0,
               "usCanada": 4.2627060683054925,
               "pc100Upper": 4.2627060683054925
@@ -1945,9 +1975,13 @@
               "readerOriginRequests": 4.330064516129034,
               "viewerRequestsUS": 30.790322580645157,
               "viewerRequestsPC100": 36.94838709677419,
+              "functionInvocations": 4150000,
+              "functions": 0.21500000000000002,
+              "preChangeFunctionInvocations": 40790322.58064516,
+              "preChangeFunctions": 3.879032258064516,
               "transfer": 0,
-              "usCanada": 36.38597454762815,
-              "pc100Upper": 42.54403906375718
+              "usCanada": 36.600974547628155,
+              "pc100Upper": 42.759039063757186
             },
             "r2": {
               "storage": 0.00748028211,
@@ -2032,9 +2066,13 @@
               "readerOriginRequests": 16.316129032258065,
               "viewerRequestsUS": 30.790322580645157,
               "viewerRequestsPC100": 36.94838709677419,
+              "functionInvocations": 4150000,
+              "functions": 0.21500000000000002,
+              "preChangeFunctionInvocations": 40790322.58064516,
+              "preChangeFunctions": 3.879032258064516,
               "transfer": 0,
-              "usCanada": 48.372039063757185,
-              "pc100Upper": 54.530103579886216
+              "usCanada": 48.58703906375719,
+              "pc100Upper": 54.74510357988622
             },
             "r2": {
               "storage": 0.00748028211,
@@ -2125,6 +2163,10 @@
             "readerOriginRequests": 0.11157000000000002,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
+            "functionInvocations": 121500,
+            "functions": 0,
+            "preChangeFunctionInvocations": 1073250,
+            "preChangeFunctions": 0,
             "transfer": 0,
             "usCanada": 0.15395785084006192,
             "pc100Upper": 0.15395785084006192
@@ -2215,6 +2257,10 @@
             "readerOriginRequests": 0.05637,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
+            "functionInvocations": 41500,
+            "functions": 0,
+            "preChangeFunctionInvocations": 413250,
+            "preChangeFunctions": 0,
             "transfer": 0,
             "usCanada": 0.09875785084006192,
             "pc100Upper": 0.09875785084006192
@@ -2305,6 +2351,10 @@
             "readerOriginRequests": 0.04533,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
+            "functionInvocations": 25500,
+            "functions": 0,
+            "preChangeFunctionInvocations": 281250,
+            "preChangeFunctions": 0,
             "transfer": 0,
             "usCanada": 0.08771785084006191,
             "pc100Upper": 0.08771785084006191
@@ -2395,6 +2445,10 @@
             "readerOriginRequests": 0.05637,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
+            "functionInvocations": 41500,
+            "functions": 0,
+            "preChangeFunctionInvocations": 413250,
+            "preChangeFunctions": 0,
             "transfer": 0,
             "usCanada": 0.09875785084006192,
             "pc100Upper": 0.09875785084006192
@@ -2485,6 +2539,10 @@
             "readerOriginRequests": 0.05637,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
+            "functionInvocations": 41500,
+            "functions": 0,
+            "preChangeFunctionInvocations": 413250,
+            "preChangeFunctions": 0,
             "transfer": 0,
             "usCanada": 0.09875785084006192,
             "pc100Upper": 0.09875785084006192
@@ -2575,6 +2633,10 @@
             "readerOriginRequests": 0.05637,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
+            "functionInvocations": 41500,
+            "functions": 0,
+            "preChangeFunctionInvocations": 413250,
+            "preChangeFunctions": 0,
             "transfer": 0,
             "usCanada": 0.09875785084006192,
             "pc100Upper": 0.09875785084006192
@@ -2665,6 +2727,10 @@
             "readerOriginRequests": 0.08117,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
+            "functionInvocations": 41500,
+            "functions": 0,
+            "preChangeFunctionInvocations": 493250,
+            "preChangeFunctions": 0,
             "transfer": 0,
             "usCanada": 0.1235578508400619,
             "pc100Upper": 0.1235578508400619
@@ -2757,6 +2823,10 @@
             "readerOriginRequests": 0.08117,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
+            "functionInvocations": 41500,
+            "functions": 0,
+            "preChangeFunctionInvocations": 493250,
+            "preChangeFunctions": 0,
             "transfer": 0,
             "usCanada": 0.1235578508400619,
             "pc100Upper": 0.1235578508400619
@@ -2849,6 +2919,10 @@
             "readerOriginRequests": 0.08117,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
+            "functionInvocations": 41500,
+            "functions": 0,
+            "preChangeFunctionInvocations": 493250,
+            "preChangeFunctions": 0,
             "transfer": 0,
             "usCanada": 0.1235578508400619,
             "pc100Upper": 0.1235578508400619
@@ -2939,6 +3013,10 @@
             "readerOriginRequests": 0.05637,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
+            "functionInvocations": 41500,
+            "functions": 0,
+            "preChangeFunctionInvocations": 413250,
+            "preChangeFunctions": 0,
             "transfer": 0,
             "usCanada": 0.09875785084006192,
             "pc100Upper": 0.09875785084006192
@@ -3029,6 +3107,10 @@
             "readerOriginRequests": 0.05637,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
+            "functionInvocations": 41500,
+            "functions": 0,
+            "preChangeFunctionInvocations": 413250,
+            "preChangeFunctions": 0,
             "transfer": 0,
             "usCanada": 0.09875785084006192,
             "pc100Upper": 0.09875785084006192
@@ -3119,6 +3201,10 @@
             "readerOriginRequests": 0.05637,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
+            "functionInvocations": 41500,
+            "functions": 0,
+            "preChangeFunctionInvocations": 413250,
+            "preChangeFunctions": 0,
             "transfer": 0,
             "usCanada": 0.09875785084006192,
             "pc100Upper": 0.09875785084006192
@@ -3209,9 +3295,13 @@
             "readerOriginRequests": 2.2104000000000004,
             "viewerRequestsUS": 11.36,
             "viewerRequestsPC100": 13.632,
+            "functionInvocations": 2430000,
+            "functions": 0.043000000000000003,
+            "preChangeFunctionInvocations": 21360000,
+            "preChangeFunctions": 1.9360000000000002,
             "transfer": 0,
-            "usCanada": 14.569106068305492,
-            "pc100Upper": 16.841106068305493
+            "usCanada": 14.612106068305492,
+            "pc100Upper": 16.884106068305492
           },
           "r2": {
             "storage": 0.00566569215,
@@ -3299,6 +3389,10 @@
             "readerOriginRequests": 1.1064,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
+            "functionInvocations": 830000,
+            "functions": 0,
+            "preChangeFunctionInvocations": 8160000,
+            "preChangeFunctions": 0.6160000000000001,
             "transfer": 0,
             "usCanada": 2.1051060683054925,
             "pc100Upper": 2.1051060683054925
@@ -3389,6 +3483,10 @@
             "readerOriginRequests": 0.8856,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
+            "functionInvocations": 510000,
+            "functions": 0,
+            "preChangeFunctionInvocations": 5520000,
+            "preChangeFunctions": 0.35200000000000004,
             "transfer": 0,
             "usCanada": 1.8843060683054924,
             "pc100Upper": 1.8843060683054924
@@ -3479,6 +3577,10 @@
             "readerOriginRequests": 1.1064,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
+            "functionInvocations": 830000,
+            "functions": 0,
+            "preChangeFunctionInvocations": 8160000,
+            "preChangeFunctions": 0.6160000000000001,
             "transfer": 0,
             "usCanada": 2.1051060683054925,
             "pc100Upper": 2.1051060683054925
@@ -3569,6 +3671,10 @@
             "readerOriginRequests": 1.1064,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
+            "functionInvocations": 830000,
+            "functions": 0,
+            "preChangeFunctionInvocations": 8160000,
+            "preChangeFunctions": 0.6160000000000001,
             "transfer": 0,
             "usCanada": 2.1051060683054925,
             "pc100Upper": 2.1051060683054925
@@ -3659,6 +3765,10 @@
             "readerOriginRequests": 1.1064,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
+            "functionInvocations": 830000,
+            "functions": 0,
+            "preChangeFunctionInvocations": 8160000,
+            "preChangeFunctions": 0.6160000000000001,
             "transfer": 0,
             "usCanada": 2.1051060683054925,
             "pc100Upper": 2.1051060683054925
@@ -3749,6 +3859,10 @@
             "readerOriginRequests": 1.6024,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
+            "functionInvocations": 830000,
+            "functions": 0,
+            "preChangeFunctionInvocations": 9760000,
+            "preChangeFunctions": 0.776,
             "transfer": 0,
             "usCanada": 2.6011060683054925,
             "pc100Upper": 2.6011060683054925
@@ -3841,6 +3955,10 @@
             "readerOriginRequests": 1.6024,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
+            "functionInvocations": 830000,
+            "functions": 0,
+            "preChangeFunctionInvocations": 9760000,
+            "preChangeFunctions": 0.776,
             "transfer": 0,
             "usCanada": 2.6011060683054925,
             "pc100Upper": 2.6011060683054925
@@ -3933,6 +4051,10 @@
             "readerOriginRequests": 1.6024,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
+            "functionInvocations": 830000,
+            "functions": 0,
+            "preChangeFunctionInvocations": 9760000,
+            "preChangeFunctions": 0.776,
             "transfer": 0,
             "usCanada": 2.6011060683054925,
             "pc100Upper": 2.6011060683054925
@@ -4023,6 +4145,10 @@
             "readerOriginRequests": 1.1064,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
+            "functionInvocations": 830000,
+            "functions": 0,
+            "preChangeFunctionInvocations": 8160000,
+            "preChangeFunctions": 0.6160000000000001,
             "transfer": 0,
             "usCanada": 2.1051060683054925,
             "pc100Upper": 2.1051060683054925
@@ -4113,6 +4239,10 @@
             "readerOriginRequests": 1.1064,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
+            "functionInvocations": 830000,
+            "functions": 0,
+            "preChangeFunctionInvocations": 8160000,
+            "preChangeFunctions": 0.6160000000000001,
             "transfer": 0,
             "usCanada": 2.1051060683054925,
             "pc100Upper": 2.1051060683054925
@@ -4203,6 +4333,10 @@
             "readerOriginRequests": 1.1064,
             "viewerRequestsUS": 0,
             "viewerRequestsPC100": 0,
+            "functionInvocations": 830000,
+            "functions": 0,
+            "preChangeFunctionInvocations": 8160000,
+            "preChangeFunctions": 0.6160000000000001,
             "transfer": 0,
             "usCanada": 2.1051060683054925,
             "pc100Upper": 2.1051060683054925
@@ -4293,9 +4427,13 @@
             "readerOriginRequests": 11.050064516129034,
             "viewerRequestsUS": 96.79032258064515,
             "viewerRequestsPC100": 116.14838709677419,
+            "functionInvocations": 12150000,
+            "functions": 1.0150000000000001,
+            "preChangeFunctionInvocations": 106790322.58064516,
+            "preChangeFunctions": 10.479032258064517,
             "transfer": 130.95179416328918,
-            "usCanada": 240.05776871091734,
-            "pc100Upper": 259.4158332270464
+            "usCanada": 241.07276871091733,
+            "pc100Upper": 260.4308332270464
           },
           "r2": {
             "storage": 0.00748028211,
@@ -4383,9 +4521,13 @@
             "readerOriginRequests": 5.530064516129033,
             "viewerRequestsUS": 30.790322580645157,
             "viewerRequestsPC100": 36.94838709677419,
+            "functionInvocations": 4150000,
+            "functions": 0.21500000000000002,
+            "preChangeFunctionInvocations": 40790322.58064516,
+            "preChangeFunctions": 3.879032258064516,
             "transfer": 0,
-            "usCanada": 37.58597454762815,
-            "pc100Upper": 43.744039063757185
+            "usCanada": 37.80097454762815,
+            "pc100Upper": 43.95903906375719
           },
           "r2": {
             "storage": 0.00748028211,
@@ -4473,9 +4615,13 @@
             "readerOriginRequests": 4.426064516129034,
             "viewerRequestsUS": 17.590322580645168,
             "viewerRequestsPC100": 21.1083870967742,
+            "functionInvocations": 2550000,
+            "functions": 0.05500000000000001,
+            "preChangeFunctionInvocations": 27590322.58064517,
+            "preChangeFunctions": 2.559032258064517,
             "transfer": 0,
-            "usCanada": 23.281974547628163,
-            "pc100Upper": 26.800039063757197
+            "usCanada": 23.336974547628163,
+            "pc100Upper": 26.855039063757197
           },
           "r2": {
             "storage": 0.00748028211,
@@ -4563,9 +4709,13 @@
             "readerOriginRequests": 5.530064516129033,
             "viewerRequestsUS": 30.790322580645157,
             "viewerRequestsPC100": 36.94838709677419,
+            "functionInvocations": 4150000,
+            "functions": 0.21500000000000002,
+            "preChangeFunctionInvocations": 40790322.58064516,
+            "preChangeFunctions": 3.879032258064516,
             "transfer": 0,
-            "usCanada": 37.58597454762815,
-            "pc100Upper": 43.744039063757185
+            "usCanada": 37.80097454762815,
+            "pc100Upper": 43.95903906375719
           },
           "r2": {
             "storage": 0.00748028211,
@@ -4653,9 +4803,13 @@
             "readerOriginRequests": 5.530064516129033,
             "viewerRequestsUS": 30.790322580645157,
             "viewerRequestsPC100": 36.94838709677419,
+            "functionInvocations": 4150000,
+            "functions": 0.21500000000000002,
+            "preChangeFunctionInvocations": 40790322.58064516,
+            "preChangeFunctions": 3.879032258064516,
             "transfer": 0,
-            "usCanada": 37.58597454762815,
-            "pc100Upper": 43.744039063757185
+            "usCanada": 37.80097454762815,
+            "pc100Upper": 43.95903906375719
           },
           "r2": {
             "storage": 0.00748028211,
@@ -4743,9 +4897,13 @@
             "readerOriginRequests": 5.530064516129033,
             "viewerRequestsUS": 30.790322580645157,
             "viewerRequestsPC100": 36.94838709677419,
+            "functionInvocations": 4150000,
+            "functions": 0.21500000000000002,
+            "preChangeFunctionInvocations": 40790322.58064516,
+            "preChangeFunctions": 3.879032258064516,
             "transfer": 0,
-            "usCanada": 37.58597454762815,
-            "pc100Upper": 43.744039063757185
+            "usCanada": 37.80097454762815,
+            "pc100Upper": 43.95903906375719
           },
           "r2": {
             "storage": 0.00748028211,
@@ -4833,9 +4991,13 @@
             "readerOriginRequests": 8.010064516129033,
             "viewerRequestsUS": 38.79032258064516,
             "viewerRequestsPC100": 46.548387096774185,
+            "functionInvocations": 4150000,
+            "functions": 0.21500000000000002,
+            "preChangeFunctionInvocations": 48790322.58064516,
+            "preChangeFunctions": 4.679032258064517,
             "transfer": 0,
-            "usCanada": 48.06597454762815,
-            "pc100Upper": 55.824039063757176
+            "usCanada": 48.280974547628155,
+            "pc100Upper": 56.03903906375718
           },
           "r2": {
             "storage": 0.00748028211,
@@ -4925,9 +5087,13 @@
             "readerOriginRequests": 8.010064516129033,
             "viewerRequestsUS": 38.79032258064516,
             "viewerRequestsPC100": 46.548387096774185,
+            "functionInvocations": 4150000,
+            "functions": 0.21500000000000002,
+            "preChangeFunctionInvocations": 48790322.58064516,
+            "preChangeFunctions": 4.679032258064517,
             "transfer": 0,
-            "usCanada": 48.06597454762815,
-            "pc100Upper": 55.824039063757176
+            "usCanada": 48.280974547628155,
+            "pc100Upper": 56.03903906375718
           },
           "r2": {
             "storage": 0.00748028211,
@@ -5017,9 +5183,13 @@
             "readerOriginRequests": 8.010064516129033,
             "viewerRequestsUS": 38.79032258064516,
             "viewerRequestsPC100": 46.548387096774185,
+            "functionInvocations": 4150000,
+            "functions": 0.21500000000000002,
+            "preChangeFunctionInvocations": 48790322.58064516,
+            "preChangeFunctions": 4.679032258064517,
             "transfer": 18.52352572432815,
-            "usCanada": 66.5895002719563,
-            "pc100Upper": 74.34756478808532
+            "usCanada": 66.8045002719563,
+            "pc100Upper": 74.56256478808533
           },
           "r2": {
             "storage": 0.00748028211,
@@ -5107,9 +5277,13 @@
             "readerOriginRequests": 5.530064516129033,
             "viewerRequestsUS": 30.790322580645157,
             "viewerRequestsPC100": 36.94838709677419,
+            "functionInvocations": 4150000,
+            "functions": 0.21500000000000002,
+            "preChangeFunctionInvocations": 40790322.58064516,
+            "preChangeFunctions": 3.879032258064516,
             "transfer": 0,
-            "usCanada": 37.58597454762815,
-            "pc100Upper": 43.744039063757185
+            "usCanada": 37.80097454762815,
+            "pc100Upper": 43.95903906375719
           },
           "r2": {
             "storage": 0.00748028211,
@@ -5197,9 +5371,13 @@
             "readerOriginRequests": 5.530064516129033,
             "viewerRequestsUS": 30.790322580645157,
             "viewerRequestsPC100": 36.94838709677419,
+            "functionInvocations": 4150000,
+            "functions": 0.21500000000000002,
+            "preChangeFunctionInvocations": 40790322.58064516,
+            "preChangeFunctions": 3.879032258064516,
             "transfer": 0,
-            "usCanada": 37.58597454762815,
-            "pc100Upper": 43.744039063757185
+            "usCanada": 37.80097454762815,
+            "pc100Upper": 43.95903906375719
           },
           "r2": {
             "storage": 0.00748028211,
@@ -5287,9 +5465,13 @@
             "readerOriginRequests": 5.530064516129033,
             "viewerRequestsUS": 30.790322580645157,
             "viewerRequestsPC100": 36.94838709677419,
+            "functionInvocations": 4150000,
+            "functions": 0.21500000000000002,
+            "preChangeFunctionInvocations": 40790322.58064516,
+            "preChangeFunctions": 3.879032258064516,
             "transfer": 0,
-            "usCanada": 37.58597454762815,
-            "pc100Upper": 43.744039063757185
+            "usCanada": 37.80097454762815,
+            "pc100Upper": 43.95903906375719
           },
           "r2": {
             "storage": 0.00748028211,
