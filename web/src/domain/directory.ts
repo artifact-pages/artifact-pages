@@ -34,7 +34,7 @@ export type DirectoryListing = {
 // First match wins. Markdown is preferred over HTML, README over index.
 const INDEX_FILE_NAMES = ['readme.md', 'index.md', 'index.html', 'index.htm']
 // The site root's introduction is Markdown only (ISSUE-107): index.html and index.htm stay ordinary documents there.
-const ROOT_INTRODUCTION_FILE_NAMES = ['readme.md', 'index.md']
+export const ROOT_INTRODUCTION_FILE_NAMES = ['readme.md', 'index.md']
 
 export function directoryPathOf(path: string) {
   return path.split('/').filter(Boolean).join('/')

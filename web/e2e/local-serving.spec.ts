@@ -8830,6 +8830,9 @@ test.describe('site home sections', () => {
     await expect(page.locator('.directory-readme-label')).toHaveText('README.md')
     await expect(page.getByRole('heading', { name: 'Readme heading' })).toBeVisible()
     await expect(page.getByText('Index introduction text.')).toHaveCount(0)
+    // ISSUE-128: Overview stands for the root README, so Browse has no row for it; index.md stays an ordinary page.
+    await expect(page.locator('a.tree-artifact[data-tree-path="index.md"]')).toBeVisible()
+    await expect(page.locator('a.tree-artifact[data-tree-path="README.md"]')).toHaveCount(0)
     // index.md is an ordinary document in Files; README.md is the introduction and is not listed twice.
     await sectionLink(page, 'Files').click()
     await expect(page).toHaveURL('/sre?section=files')

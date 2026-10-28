@@ -25,5 +25,16 @@ test('an index row folds into its folder only when the folder has other children
   assert.equal(folded('alone'), undefined)
   assert.equal(folded('nested'), 'nested/README.md')
   assert.equal(folded('none'), undefined)
-  assert.equal(foldedIndexArtifact(tree), undefined)
+  // The root README is the site introduction, folded too (see below).
+  assert.equal(foldedIndexArtifact(tree)?.path, 'README.md')
+})
+
+test('the site root folds its introduction: README.md, else index.md, never index.html', () => {
+  const rootFolded = (pages) => foldedIndexArtifact(buildArtifactTree(pages))?.path
+  assert.equal(rootFolded([page('README.md', 'Home'), page('index.md', 'Index'), page('a.md', 'A')]), 'README.md')
+  assert.equal(rootFolded([page('index.md', 'Index'), page('a.md', 'A')]), 'index.md')
+  assert.equal(rootFolded([page('index.html', 'Index'), page('a.md', 'A')]), undefined)
+  assert.equal(rootFolded([page('README.md', 'Home'), page('docs/a.md', 'A')]), 'README.md')
+  // A site whose only page is its introduction keeps that row.
+  assert.equal(rootFolded([page('README.md', 'Home')]), undefined)
 })
