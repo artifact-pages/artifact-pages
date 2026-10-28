@@ -1,5 +1,5 @@
 import type { ArtifactIndexEntry } from './index'
-import { findIndexArtifact, folderLabel } from './directory.ts'
+import { findIndexArtifact, folderLabel, ROOT_INTRODUCTION_FILE_NAMES } from './directory.ts'
 import { compareArtifactsByPath, compareNames } from './listing-order.ts'
 
 export type ArtifactTreeNode = {
@@ -55,12 +55,13 @@ export function buildArtifactTree(artifacts: ArtifactIndexEntry[]): ArtifactTree
 /**
  * The index page whose own row is folded into its folder row in the sidebar tree:
  * the folder's README or index page, but only when the folder has other children.
- * A folder whose only child is its index page keeps that row.
+ * A folder whose only child is its index page keeps that row. At the site root the
+ * page is the introduction (README.md, else index.md), which Overview stands for.
  */
 export function foldedIndexArtifact(node: Pick<ArtifactTreeNode, 'path' | 'artifacts' | 'directories'>) {
-  if (!node.path) return undefined
   if (node.artifacts.length <= 1 && node.directories.size === 0) return undefined
-  return findIndexArtifact(node.artifacts)
+  // At the site root the folded page is the introduction that Overview renders (README.md, else index.md).
+  return findIndexArtifact(node.artifacts, node.path ? undefined : ROOT_INTRODUCTION_FILE_NAMES)
 }
 
 export function countArtifacts(node: ArtifactTreeNode): number {

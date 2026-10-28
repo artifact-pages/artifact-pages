@@ -140,6 +140,7 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-125](ISSUE-125-wide-column-details-always-visible.md) | Done | P2 | Wide reader column hides Details behind a floating overlay. |
 | [ISSUE-126](ISSUE-126-published-aws-module-cache-policy-drift.md) | Open | P2 | Published AWS module retains invalidation permissions and TTL caps superseded by IMP-82. |
 | [ISSUE-127](ISSUE-127-aws-redundant-route-function-invocations.md) | In progress | P3 | AWS ordered cache behaviors invoke the route function without changing requests. |
+| [ISSUE-128](ISSUE-128-root-readme-listed-in-browse.md) | Done | P3 | Root README is listed in Browse although Overview renders it. |
 
 ISSUE-013's verified completion record is retained in Git history.
 
