@@ -132,7 +132,7 @@ export const MarkdownView: Story = {
   args: { view: 'markdown' },
 }
 
-// The site home (ISSUE-107): compact header, Overview / Files / Previews and permanent header search. The story
+// The site home (ISSUE-107, ISSUE-129): compact header, Overview / Files / Previews links in the top bar and its search. The story
 // site has no root README, so it opens on Files and shows no Overview link; Previews needs the preview
 // catalog, so inside Storybook it shows its retryable error state.
 export const SiteHome: Story = {

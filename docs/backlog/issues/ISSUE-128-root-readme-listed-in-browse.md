@@ -5,6 +5,8 @@
 - Priority: P3
 - Area: Reader sidebar (Browse)
 
+> Superseded in part by [ISSUE-129](ISSUE-129-site-introduction-html-and-top-bar-sections.md): the root introduction is chosen with the four folder index names (`index.html` and `index.htm` included).
+
 ## Problem
 
 A folder's index page has no row of its own in Browse when the folder has other children: the folder row stands for it. The site root was excluded, so the root introduction (`README.md`, else `index.md`) still appears as a file row at the bottom of Browse even though the site's Overview already renders it. The same page is offered twice.

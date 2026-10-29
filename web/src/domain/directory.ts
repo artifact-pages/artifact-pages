@@ -31,10 +31,9 @@ export type DirectoryListing = {
   indexArtifact?: ArtifactIndexEntry
 }
 
-// First match wins. Markdown is preferred over HTML, README over index.
+// First match wins. Markdown is preferred over HTML, README over index. The site root's introduction uses the same
+// names and precedence as a folder's index page (ISSUE-129).
 const INDEX_FILE_NAMES = ['readme.md', 'index.md', 'index.html', 'index.htm']
-// The site root's introduction is Markdown only (ISSUE-107): index.html and index.htm stay ordinary documents there.
-export const ROOT_INTRODUCTION_FILE_NAMES = ['readme.md', 'index.md']
 
 export function directoryPathOf(path: string) {
   return path.split('/').filter(Boolean).join('/')
@@ -91,14 +90,13 @@ export function resolveDirectory(
 /**
  * The listing of the site root: the same shape as a folder's, with an empty path
  * and name. Undefined when the site has no pages. Its `indexArtifact` is the
- * site's introduction: README.md, else index.md (never an HTML index page).
+ * site's introduction (chosen like a folder's index page: README.md, index.md, index.html, index.htm).
  */
 export function resolveRootDirectory(artifacts: readonly ArtifactIndexEntry[]): DirectoryListing | undefined {
   return buildListing(artifacts, '')
 }
 
 function buildListing(artifacts: readonly ArtifactIndexEntry[], path: string): DirectoryListing | undefined {
-  const indexNames = path ? INDEX_FILE_NAMES : ROOT_INTRODUCTION_FILE_NAMES
   const prefix = path ? `${path}/` : ''
   const depth = path ? path.split('/').length : 0
 
@@ -135,7 +133,7 @@ function buildListing(artifacts: readonly ArtifactIndexEntry[], path: string): D
     folder.label = folderLabel(folder.name, findIndexArtifact(folderPages.get(folder.name) ?? []))
   }
 
-  const indexArtifact = findIndexArtifact(pages, indexNames)
+  const indexArtifact = findIndexArtifact(pages)
   const name = path.split('/').at(-1) ?? path
   return {
     path,

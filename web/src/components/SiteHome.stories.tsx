@@ -13,11 +13,7 @@ function SiteHomeStory({ theme }: SiteHomeStoryArgs) {
   }, [theme])
 
   return (
-    <SiteHomeView
-      index={{ ...deepSreIndex, artifacts: [] }}
-      onNavigate={() => undefined}
-      onOpenPalette={() => undefined}
-    />
+    <SiteHomeView index={{ ...deepSreIndex, artifacts: [] }} />
   )
 }
 

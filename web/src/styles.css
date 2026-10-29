@@ -1517,7 +1517,7 @@ mark {
 
 .directory-page .site-home-heading {
   padding-top: 0;
-  padding-bottom: 18px;
+  padding-bottom: 24px;
 }
 
 .directory-page .artifact-list-section {
@@ -1525,7 +1525,7 @@ mark {
 }
 
 .directory-page .site-home-lede {
-  margin-bottom: 14px;
+  margin-bottom: 0;
 }
 
 .site-home-lede {
@@ -1534,74 +1534,6 @@ mark {
   color: var(--text-secondary);
   font-size: 14px;
   line-height: 1.5;
-}
-
-/* The section row: Overview, Files and Previews as links, and the site search at the right (ISSUE-107). */
-.site-home-bar {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 20px;
-  border-bottom: 1px solid var(--line);
-}
-
-.site-sections {
-  display: flex;
-  min-width: 0;
-  gap: 4px;
-}
-
-.site-section-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 9px 10px 10px;
-  margin-bottom: -1px;
-  border-bottom: 2px solid transparent;
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 540;
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.site-section-link:hover {
-  color: var(--text);
-}
-
-.site-section-link[aria-current="page"] {
-  border-bottom-color: var(--text);
-  color: var(--text);
-}
-
-.site-section-count {
-  color: var(--text-tertiary);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-}
-
-.site-home-search {
-  display: inline-flex;
-  height: 30px;
-  flex: none;
-  align-items: center;
-  gap: 8px;
-  padding: 0 8px;
-  margin-bottom: 4px;
-  border-radius: 8px;
-  color: var(--text-tertiary);
-  font-size: 13px;
-}
-
-.site-home-search:hover {
-  color: var(--text-secondary);
-  background: var(--hover);
-}
-
-.site-home-search kbd {
-  margin-left: 2px;
 }
 
 .site-previews {
@@ -2965,27 +2897,6 @@ a.details-file:hover .details-path-name {
     padding-top: 30px;
   }
 
-  .site-home-bar {
-    gap: 4px;
-  }
-
-  .site-section-link {
-    padding-right: 8px;
-    padding-left: 8px;
-  }
-
-  .site-home-search {
-    width: 34px;
-    height: 34px;
-    justify-content: center;
-    padding: 0;
-  }
-
-  .site-home-search-label,
-  .site-home-search kbd {
-    display: none;
-  }
-
   .site-home-heading,
   .artifact-list-section {
     padding-right: 18px;
@@ -3637,8 +3548,7 @@ a.breadcrumb-menu-item {
     display: inline;
   }
 
-  .page-text-search-shortcut,
-  .site-home-search kbd {
+  .page-text-search-shortcut {
     display: none;
   }
 
@@ -4484,3 +4394,60 @@ a.tree-more:hover {
 .preview-tag-menu .preview-tag { cursor: pointer; gap: 5px; }
 .preview-tag-menu [data-preview-tag] { display: inline-flex; align-items: center; gap: 5px; }
 .preview-tag-menu > .reader-more-menu { left: 0; right: auto; }
+
+/* The site home's section links live in the top bar (ISSUE-129): Overview, Files and Previews. */
+.context-bar > .reader-bar-title-home { flex: 0 1 auto; }
+.site-sections {
+  display: flex;
+  min-width: 0;
+  flex: none;
+  align-self: stretch;
+  gap: 2px;
+  margin-left: 10px;
+}
+
+.site-section-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 540;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.site-section-link:hover { color: var(--text); }
+.site-section-link[aria-current="page"] { border-bottom-color: var(--text); color: var(--text); }
+.site-section-link:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 4px; }
+
+.site-section-count {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Narrow: the first row is unchanged; the section links form a second row of the same bar. */
+@media (max-width: 620px) {
+  .context-bar.context-bar-sections {
+    height: auto;
+    flex-wrap: wrap;
+  }
+
+  .context-bar-sections > :not(.site-sections) { min-height: calc(var(--context-height) - 1px); }
+  .context-bar > .reader-bar-title-home { flex: 1 1 0; line-height: calc(var(--context-height) - 1px); }
+
+  .context-bar-sections > .site-sections {
+    order: 10;
+    flex: 0 0 100%;
+    height: 36px;
+    margin-left: 0;
+    padding: 0 2px;
+    overflow: hidden;
+  }
+
+  .site-section-link { padding-right: 10px; padding-left: 10px; }
+}

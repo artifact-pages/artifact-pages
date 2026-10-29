@@ -5,6 +5,8 @@
 - Priority: P2
 - Area: Web / site home and navigation
 
+> Superseded in part by [ISSUE-129](ISSUE-129-site-introduction-html-and-top-bar-sections.md): the root introduction may also be `index.html`/`index.htm`, and the section links and search live in the top bar. The text below records the original decision.
+
 ## Problem
 
 The site root uses the same directory composition as nested folders: site header, children, README/index body, then recently updated pages. An introduction must compete with the tool-generated list, and long introductory content pushes navigation or recent updates far down the page. The existing site header also spends substantial vertical space on preview explanation and a large jump control.
