@@ -4344,6 +4344,10 @@ a.tree-more:hover {
 .context-bar { flex-wrap: nowrap; }
 .context-actions { margin-left: auto; }
 .context-bar > .reader-bar-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Desktop: inset the title to the text edge of the first breadcrumb label (the breadcrumb button pads 10px). The narrow layout keeps its own 4px. */
+@media (min-width: 621px) {
+  .context-bar > .reader-bar-title { padding-left: 10px; }
+}
 .header-search { gap: 7px; }
 .header-search kbd { color: var(--text-tertiary); font-size: 10px; }
 .site-menu { min-width: 0; flex: 1; }

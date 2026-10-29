@@ -7105,6 +7105,35 @@ test.describe('directory pages', () => {
     await expect(sections.getByRole('link', { name: 'Files' })).toHaveAttribute('aria-current', 'page')
   })
 
+  test('the top bar site title starts at the same x as the first breadcrumb label (sidebar open and collapsed)', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 })
+    const textLeft = (selector: string) => page.locator(selector).first().evaluate((element) => {
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (!node.textContent?.trim()) continue
+        const range = document.createRange()
+        range.selectNodeContents(node)
+        return range.getBoundingClientRect().left
+      }
+      throw new Error('no text node')
+    })
+    const title = 'header.context-bar .reader-bar-title'
+    const crumb = 'nav[aria-label="Artifact path"] :is(button, a, .breadcrumb-current)'
+    for (const collapsed of [false, true]) {
+      await page.goto('/showcase')
+      await expect(page.locator(title)).toBeVisible()
+      if (collapsed) await page.getByRole('button', { name: 'Collapse sidebar' }).click()
+      const titleLeft = await textLeft(title)
+      await page.goto('/showcase/reports/cloud-spend-review/index.html')
+      await expect(page.getByRole('navigation', { name: 'Artifact path' })).toBeVisible()
+      if (collapsed && (await page.getByRole('button', { name: 'Collapse sidebar' }).count())) {
+        await page.getByRole('button', { name: 'Collapse sidebar' }).click()
+      }
+      await expect(page.locator('.app-shell')).toHaveClass(collapsed ? /sidebar-collapsed/ : /^((?!sidebar-collapsed).)*$/)
+      expect(Math.abs(titleLeft - (await textLeft(crumb)))).toBeLessThanOrEqual(1)
+    }
+  })
+
   test('the site root without a README shows the header and full rows', async ({ page }) => {
     await page.goto('/sre')
     const directory = page.getByTestId('directory-page')
