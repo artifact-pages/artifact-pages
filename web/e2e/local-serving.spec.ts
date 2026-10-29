@@ -4089,6 +4089,7 @@ test('preview list distinguishes missing groups, empty catalogs, missing catalog
   catalogState = 'missing'
   await page.reload()
   await expect(page.getByRole('status')).toHaveText('There are no available previews for this site.')
+  await expect(page.getByRole('navigation', { name: 'Site sections' }).getByRole('link', { name: /^Previews/ }).locator('.site-section-count')).toHaveText('0')
 
   catalogState = 'error'
   await page.reload()

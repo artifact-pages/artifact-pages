@@ -16,6 +16,12 @@ None of the scenarios below has been exercised on the verification environment y
 
 The examples use the site `sre` and the config `artifact-pages.yaml`. See [Cloudflare deployment](cloudflare-deployment.md) for credentials and the full command flow.
 
+## Missing preview catalog in monitoring
+
+Site pages request `/_previews/<site>/catalog.json` for the Previews count. For a site without previews, the catalog may be absent and the request may return 404: browsers can report a failed resource in the console, and 4xx monitoring can count the response even though the reader shows an empty list and count 0.
+
+A 404 alone does not prove that the site never had previews. If previews are expected, check the preview publishing workflow and its latest result, whether retention could have expired the catalog, and whether the catalog is present at the storage origin and reachable through the delivery hostname. A missing origin object and a delivery-side failure need different investigation; compare the origin and delivery responses before deciding it is expected. Keep monitoring unexpected missing catalogs for sites that publish previews and other preview errors, including non-404 failures; do not suppress all preview errors.
+
 ## 1. Web upgrade and rollback
 
 **Symptoms.** The new web release misbehaves, `app deploy` refuses to run because stored formats are unreadable by the new bundle, or an `app deploy` stopped part-way.
