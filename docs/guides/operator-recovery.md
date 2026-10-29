@@ -218,3 +218,15 @@ Exercised: not yet exercised.
 **What is not touched.** Checks only read public URLs. The private `_control/` objects are not served.
 
 Exercised: not yet exercised.
+
+### Missing preview catalog
+
+This is a monitoring note, not a recovery scenario. Site pages request `/_previews/<site>/catalog.json` for the Previews count. For a site without previews the catalog may be absent and the request returns 404: browsers report a failed resource in the console, and 4xx monitoring counts the response, while the reader shows an empty list and count 0.
+
+A 404 alone does not prove that the site never had previews. If the site is expected to have previews:
+
+1. Check the preview publishing workflow and its latest result.
+2. Check whether retention could have expired the catalog.
+3. Compare the response at the storage origin with the response through the delivery hostname; a missing origin object and a delivery-side failure need different investigation.
+
+Keep alerting on unexpected missing catalogs for sites that publish previews and on other preview errors, including non-404 failures; do not suppress all preview errors.
