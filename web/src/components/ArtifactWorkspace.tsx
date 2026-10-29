@@ -9,7 +9,7 @@ import { ArtifactDetails, ContentsList, focusReaderColumnPart, READER_COLUMN_QUE
 import { useCurrentHeading } from './useCurrentHeading'
 import { useFrameReveal } from './useFrameReveal'
 import { Sidebar } from './Sidebar'
-import { RecentlyUpdated, SiteHome, SiteHomeFrame, SiteHomeHeader, usePreviewCount, type SiteSection } from './SiteHome'
+import { RecentlyUpdated, SiteHome, SiteHomeFrame, SiteHomeHeader, SiteSections, usePreviewCount, type SiteSection } from './SiteHome'
 import { PREVIEW_LEDE, PreviewListContent } from './PreviewListPage'
 import {
   PreviewBreadcrumbs,
@@ -170,8 +170,6 @@ export function ArtifactWorkspace({
     [route.kind, routeArtifactPath, currentArtifact, index.artifacts, rootListing],
   )
   const isSiteRoot = Boolean(currentDirectory) && !routeArtifactPath
-  const folderIntroduction = !isSiteRoot ? currentDirectory?.indexArtifact : undefined
-  const publishedReadingArtifact = currentArtifact ?? folderIntroduction
   const previewsRoute = route.kind === 'preview-list' ? route : undefined
   // A preview document opens in this shell (ISSUE-109): the published tree gives way to the preview's own pages.
   const preview = usePreviewReader(route.kind === 'preview-document' ? route : undefined)
@@ -184,11 +182,14 @@ export function ArtifactWorkspace({
     : route.kind === 'site' && route.section === 'files'
       ? 'files'
       : hasIntroduction ? 'overview' : 'files'
+  // A folder's index page, or the site's introduction on Overview, is shown as an ordinary page (ISSUE-129).
+  const folderIntroduction = !isSiteRoot || siteSection === 'overview' ? currentDirectory?.indexArtifact : undefined
+  const publishedReadingArtifact = currentArtifact ?? folderIntroduction
   const onSiteHome = Boolean(previewsRoute) || (route.kind === 'site' && !routeArtifactPath)
   const previewCount = usePreviewCount(index.site.id, onSiteHome)
   // The page whose content fills the stage: the open page, or a folder's README or index page. On the
-  // site root only the Overview shows the introduction.
-  const bodyArtifact = currentArtifact ?? previewArtifact ?? (isSiteRoot && siteSection !== 'overview' ? undefined : currentDirectory?.indexArtifact)
+  // site root only the Overview shows the introduction, and it is that page, shown as it is at its own URL.
+  const bodyArtifact = currentArtifact ?? previewArtifact ?? folderIntroduction
   const effectiveRecentReads = recentReads ?? storedRecentReads
   const pageNotFound = Boolean(routeArtifactPath) && !currentArtifact && !currentDirectory
   usePageNoindex(pageNotFound)
@@ -1134,7 +1135,7 @@ export function ArtifactWorkspace({
 
       <div className="workspace">
         <div className="workspace-panel">
-          <header className="context-bar">
+          <header className={`context-bar${onSiteHome ? ' context-bar-sections' : ''}`}>
             {narrowChrome ? (
               <button
                 type="button"
@@ -1149,7 +1150,16 @@ export function ArtifactWorkspace({
                 <Icon name="sidebar" size={17} />
               </button>
             ) : null}
-            {!routeArtifactPath && !preview ? <span className="reader-bar-title">{index.site.title}</span> : null}
+            {!routeArtifactPath && !preview ? <span className={`reader-bar-title${onSiteHome ? ' reader-bar-title-home' : ''}`}>{index.site.title}</span> : null}
+            {onSiteHome ? (
+              <SiteSections
+                siteId={index.site.id}
+                current={siteSection}
+                hasOverview={hasIntroduction}
+                previewCount={previewCount}
+                onNavigate={openSection}
+              />
+            ) : null}
             {preview ? (
               <>
                 <PreviewTag reader={preview} productionArtifacts={index.artifacts} publishedIndexStatus={publishedIndexStatus} navigate={navigateWithinWorkspace} />
@@ -1284,11 +1294,6 @@ export function ArtifactWorkspace({
                     index={index}
                     pageCount={index.artifacts.length}
                     latestUpdatedAt={rootListing?.latestUpdatedAt}
-                    current="previews"
-                    hasOverview={hasIntroduction}
-                    previewCount={previewCount}
-                    onNavigate={openSection}
-                    onOpenPalette={() => openPalette('')}
                   />
                 )}
               >
@@ -1303,19 +1308,12 @@ export function ArtifactWorkspace({
                 key={isSiteRoot ? `root:${siteSection}` : currentDirectory.path}
                 listing={currentDirectory}
                 siteId={index.site.id}
-                body={(!isSiteRoot || siteSection === 'overview') && currentDirectory.indexArtifact ? artifactView : undefined}
-                hideChildren={isSiteRoot && siteSection === 'overview'}
                 restoreScroll={isSiteRoot}
                 header={isSiteRoot ? (
                   <SiteHomeHeader
                     index={index}
                     pageCount={currentDirectory.pageCount}
                     latestUpdatedAt={currentDirectory.latestUpdatedAt}
-                    current={siteSection}
-                    hasOverview={hasIntroduction}
-                    previewCount={previewCount}
-                    onNavigate={openSection}
-                    onOpenPalette={() => openPalette('')}
                   />
                 ) : undefined}
                 footer={isSiteRoot && siteSection === 'files' ? (
@@ -1356,12 +1354,7 @@ export function ArtifactWorkspace({
                 </button>
               </div>
             ) : (
-              <SiteHome
-                index={index}
-                previewCount={previewCount}
-                onNavigate={openSection}
-                onOpenPalette={() => openPalette('')}
-              />
+              <SiteHome index={index} />
             ))}
 
             {navigatorVisible ? (
@@ -1413,7 +1406,7 @@ export function ArtifactWorkspace({
           context={routeArtifactPath ? 'artifact' : 'site'}
           sites={paletteSites}
           currentIndex={index}
-          currentArtifact={publishedReadingArtifact}
+          currentArtifact={isSiteRoot ? undefined : publishedReadingArtifact}
           recentReads={effectiveRecentReads}
           pinnedArtifactIds={pinnedArtifactIds}
           commands={commands}

@@ -29,11 +29,14 @@ test('an index row folds into its folder only when the folder has other children
   assert.equal(foldedIndexArtifact(tree)?.path, 'README.md')
 })
 
-test('the site root folds its introduction: README.md, else index.md, never index.html', () => {
+test('the site root folds its introduction: README.md, index.md, index.html, index.htm', () => {
   const rootFolded = (pages) => foldedIndexArtifact(buildArtifactTree(pages))?.path
   assert.equal(rootFolded([page('README.md', 'Home'), page('index.md', 'Index'), page('a.md', 'A')]), 'README.md')
   assert.equal(rootFolded([page('index.md', 'Index'), page('a.md', 'A')]), 'index.md')
-  assert.equal(rootFolded([page('index.html', 'Index'), page('a.md', 'A')]), undefined)
+  assert.equal(rootFolded([page('index.html', 'Index'), page('a.md', 'A')]), 'index.html')
+  assert.equal(rootFolded([page('index.htm', 'Index'), page('a.md', 'A')]), 'index.htm')
+  // Markdown wins over HTML; the index.html that was not chosen keeps its own row.
+  assert.equal(rootFolded([page('index.html', 'Index'), page('README.md', 'Home'), page('a.md', 'A')]), 'README.md')
   assert.equal(rootFolded([page('README.md', 'Home'), page('docs/a.md', 'A')]), 'README.md')
   // A site whose only page is its introduction keeps that row.
   assert.equal(rootFolded([page('README.md', 'Home')]), undefined)

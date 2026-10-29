@@ -26,7 +26,7 @@ export function usePreviewCount(siteId: string, enabled: boolean): number | unde
   return result?.status === 'success' ? listedGroups(result.checked).length : undefined
 }
 
-/** The frame of a site-home section: the scrolling page with the site header, the section row and the section. */
+/** The frame of a site-home section: the scrolling page with the site header and the section. */
 export function SiteHomeFrame({ header, children }: { header: ReactNode; children: ReactNode }) {
   const scroller = useRef<HTMLDivElement>(null)
   useRestoredScroll(scroller)
@@ -40,80 +40,63 @@ export function SiteHomeFrame({ header, children }: { header: ReactNode; childre
   )
 }
 
-/** The empty site: the header, the section row and a note, because there is no root listing to show. */
-export function SiteHome({
-  index,
-  previewCount,
-  onNavigate,
-  onOpenPalette,
-}: {
-  index: SiteIndex
-  previewCount?: number
-  onNavigate?: (href: string) => void
-  onOpenPalette?: () => void
-}) {
+/** The empty site: the header and a note, because there is no root listing to show. */
+export function SiteHome({ index }: { index: SiteIndex }) {
   return (
-    <SiteHomeFrame header={(
-      <SiteHomeHeader
-        index={index}
-        pageCount={index.artifacts.length}
-        current="files"
-        hasOverview={false}
-        previewCount={previewCount}
-        onNavigate={onNavigate}
-        onOpenPalette={onOpenPalette}
-      />
-    )}>
+    <SiteHomeFrame header={<SiteHomeHeader index={index} pageCount={index.artifacts.length} />}>
       <p className="empty-note site-home-empty">No artifacts have been published to this site yet.</p>
     </SiteHomeFrame>
   )
 }
 
-/** The site root's compact header (title, description, page count, content update date) and its section row. */
+/** The site root's compact header: title, description, page count and content update date (Files and Previews). */
 export function SiteHomeHeader({
   index,
   pageCount,
   latestUpdatedAt,
-  current,
-  hasOverview,
-  previewCount,
-  onNavigate,
-  onOpenPalette,
 }: {
   index: SiteIndex
   pageCount: number
   /** The newest document update in the index (content freshness, not when the metadata was generated). */
   latestUpdatedAt?: string
+}) {
+  const description = index.site.description?.trim()
+  return (
+    <header className="site-home-heading">
+      <div className="site-home-title-row">
+        <span className="site-mark" aria-hidden="true">{index.site.title.slice(0, 1).toUpperCase()}</span>
+        <h1>{index.site.title}</h1>
+        <span className="mono site-home-id">/{index.site.id}</span>
+      </div>
+      {description ? <p className="site-home-description">{description}</p> : null}
+      <p className="site-home-lede">
+        {pageCountLabel(pageCount)}
+        {latestUpdatedAt ? <> · Updated <time dateTime={latestUpdatedAt}>{formatFullDate(latestUpdatedAt)}</time></> : null}
+      </p>
+    </header>
+  )
+}
+
+/** The Overview / Files / Previews links of the site home. They live in the top bar (ISSUE-129). */
+export function SiteSections({
+  siteId,
+  current,
+  hasOverview,
+  previewCount,
+  onNavigate,
+}: {
+  siteId: string
   current: SiteSection
   hasOverview: boolean
   previewCount?: number
   onNavigate?: (href: string) => void
-  onOpenPalette?: () => void
 }) {
-  const description = index.site.description?.trim()
   return (
-    <>
-      <header className="site-home-heading">
-        <div className="site-home-title-row">
-          <span className="site-mark" aria-hidden="true">{index.site.title.slice(0, 1).toUpperCase()}</span>
-          <h1>{index.site.title}</h1>
-          <span className="mono site-home-id">/{index.site.id}</span>
-        </div>
-        {description ? <p className="site-home-description">{description}</p> : null}
-        <p className="site-home-lede">
-          {pageCountLabel(pageCount)}
-          {latestUpdatedAt ? <> · Updated <time dateTime={latestUpdatedAt}>{formatFullDate(latestUpdatedAt)}</time></> : null}
-        </p>
-      </header>
-      <div className="site-home-bar">
-        <nav className="site-sections" aria-label="Site sections">
-          {hasOverview ? <SectionLink siteId={index.site.id} section="overview" current={current} onNavigate={onNavigate}>Overview</SectionLink> : null}
-          <SectionLink siteId={index.site.id} section="files" current={current} onNavigate={onNavigate} hasOverview={hasOverview}>Files</SectionLink>
-          <SectionLink siteId={index.site.id} section="previews" current={current} onNavigate={onNavigate} count={previewCount}>Previews</SectionLink>
-        </nav>
-
-      </div>
-    </>
+    <nav className="site-sections" aria-label="Site sections">
+      {hasOverview ? <SectionLink siteId={siteId} section="overview" current={current} onNavigate={onNavigate}>Overview</SectionLink> : null}
+      <SectionLink siteId={siteId} section="files" current={current} onNavigate={onNavigate} hasOverview={hasOverview}>Files</SectionLink>
+      <SectionLink siteId={siteId} section="previews" current={current} onNavigate={onNavigate} count={previewCount}>Previews</SectionLink>
+    </nav>
   )
 }
 

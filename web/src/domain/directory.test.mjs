@@ -136,19 +136,27 @@ test('the site root lists top-level folders and pages', () => {
   assert.equal(listing.indexArtifact, undefined)
 })
 
-test('the site root uses its README as the index page and leaves it out of the pages', () => {
+test('the site root uses its README as the introduction and leaves it out of the pages', () => {
   const listing = resolveRootDirectory([...artifacts, page('README.md', 'Home'), page('index.html', 'Index')])
   assert.equal(listing.indexArtifact.path, 'README.md')
   assert.deepEqual(listing.pages.map(({ path }) => path), ['index.html', 'top.html'])
 })
 
-test('the site root prefers README.md to index.md and never embeds an HTML index page', () => {
+test('the site root chooses its introduction like a folder: README.md, index.md, index.html, index.htm', () => {
   const both = resolveRootDirectory([...artifacts, page('index.md', 'Index'), page('Readme.MD', 'Home')])
   assert.equal(both.indexArtifact.path, 'Readme.MD')
   assert.ok(both.pages.some(({ path }) => path === 'index.md'))
-  const htmlOnly = resolveRootDirectory([...artifacts, page('index.html', 'Index'), page('index.htm', 'Index')])
-  assert.equal(htmlOnly.indexArtifact, undefined)
-  assert.deepEqual(htmlOnly.pages.map(({ path }) => path), ['index.htm', 'index.html', 'top.html'])
+  // Markdown is preferred over HTML; a non-chosen index.html stays a listed document.
+  const mdOverHtml = resolveRootDirectory([...artifacts, page('index.html', 'Index'), page('index.md', 'Md')])
+  assert.equal(mdOverHtml.indexArtifact.path, 'index.md')
+  assert.ok(mdOverHtml.pages.some(({ path }) => path === 'index.html'))
+  // Without Markdown, index.html is the introduction (case-insensitive) and is not listed; index.htm is then listed.
+  const htmlOnly = resolveRootDirectory([...artifacts, page('Index.HTML', 'Index'), page('index.htm', 'Index')])
+  assert.equal(htmlOnly.indexArtifact.path, 'Index.HTML')
+  assert.deepEqual(htmlOnly.pages.map(({ path }) => path), ['index.htm', 'top.html'])
+  const htmOnly = resolveRootDirectory([...artifacts, page('index.htm', 'Index')])
+  assert.equal(htmOnly.indexArtifact.path, 'index.htm')
+  assert.ok(!htmOnly.pages.some(({ path }) => path === 'index.htm'))
   // A nested folder keeps its HTML index page.
   const nested = resolveDirectory([page('docs/index.html', 'Docs')], 'docs')
   assert.equal(nested.indexArtifact.path, 'docs/index.html')
