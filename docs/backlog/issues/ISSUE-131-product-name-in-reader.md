@@ -1,6 +1,6 @@
 # The reader still calls the product "Git Artifact Pages"
 
-- Status: In progress
+- Status: Done
 - Assignee: Claude
 - Priority: P3
 - Area: Web / branding
@@ -18,3 +18,5 @@ Everything a reader sees or a link preview shows says "Artifact Pages", with a m
 - [x] `web/index.html` title and Open Graph tags, `APP_NAME`, every brand label and every user-visible message say "Artifact Pages"; the brand mark letter is "A".
 - [x] localStorage keys (`git-artifact-pages:*`, `git-artifact-pages-theme`) are unchanged, so readers keep their pins, recent reads and theme.
 - [x] Stories and tests updated; no user-visible "Git Artifact Pages" remains in `web/` outside storage keys and historical notes.
+
+Released in web v0.4.10 (#239) and deployed to production on 2026-10-30 (admin #38).

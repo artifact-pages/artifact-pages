@@ -1,6 +1,6 @@
 # Paths in the Files lists are shown in the wrong order when they start with digits
 
-- Status: In progress
+- Status: Done
 - Assignee: Claude
 - Priority: P2
 - Area: Web / site home, folder page
@@ -26,3 +26,5 @@ Every path shown in a list reads exactly as the file path, in its normal order, 
 - [x] Paths starting with digits, `-`, `_`, `.` or containing them (e.g. `01-features/01-publish-and-review.html`, `_drafts/x.md`, `.well-known/a.html`) display in their real order in every list that shows a row path (Recently updated, folder page rows, and any other component using the same treatment), in light and dark, at 390 px and 1440 px.
 - [x] A path wider than its column is still truncated at the start with an ellipsis and the file name end stays visible.
 - [x] Unit or Playwright tests cover a digit-leading path and a truncated long path.
+
+Released in web v0.4.10 (#239) and deployed to production on 2026-10-30 (admin #38).
