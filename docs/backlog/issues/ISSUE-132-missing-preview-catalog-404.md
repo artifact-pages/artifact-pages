@@ -1,6 +1,6 @@
 # A site without previews makes every page load log a failed request
 
-- Status: In progress
+- Status: Done
 - Assignee: Codex
 - Priority: P3
 - Area: Web / previews, publisher
@@ -21,10 +21,10 @@ Backend designer (Terra xhigh, 2026-10-29): option (a). The 404 for a missing ca
 
 - [x] The product specification records that a missing preview catalog may return HTTP 404 and that the preview list treats it as empty; this does not assert that the site has never had previews.
 - [x] Operator documentation explains the expected browser console and 4xx-monitoring effects, distinguishes this response from an unexpected missing catalog when previews are expected, and does not recommend suppressing all preview errors.
-- [ ] Regression coverage verifies that a missing catalog produces the empty preview list and count, while a non-404 catalog failure remains an error and a populated catalog retains its existing list and count behavior.
-- [ ] A direct revision URL remains readable when its catalog is missing, with the existing unavailable-details state.
+- [x] Regression coverage verifies that a missing catalog produces the empty preview list and count, while a non-404 catalog failure remains an error and a populated catalog retains its existing list and count behavior.
+- [x] A direct revision URL remains readable when its catalog is missing, with the existing unavailable-details state.
 - [x] No published format or schema version, publisher behavior, cache policy, lifecycle policy, or existing-data migration is required by this decision.
 
 ## Verification
 
-The specification and recovery guide record the decision; the change requires no product, format, publisher, cache, lifecycle, or migration changes. `LANG=en_US.UTF-8 npm run test:web-unit` and `npm run build` passed. Playwright coverage includes the missing-catalog count assertion and existing error, populated-catalog and direct-revision cases, but remains unverified: the sandbox denied access to the Docker daemon, so the isolated Compose stack could not be started safely.
+The specification and the recovery guide record the decision; no product, format, publisher, cache, lifecycle or migration change. `LANG=en_US.UTF-8 npm run test:web-unit` and `npm run build` passed. Playwright `-g "preview"` against the local compose stack (project `claude-issue-132`): 64 passed, covering `preview list distinguishes missing groups, empty catalogs, missing catalogs, and catalog errors` (now with the zero count) and `a direct preview document resolves without catalog membership and never shows a stale PR` (404 catalog, unavailable-details notice).
