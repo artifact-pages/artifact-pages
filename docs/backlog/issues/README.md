@@ -141,7 +141,7 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-126](ISSUE-126-published-aws-module-cache-policy-drift.md) | Open | P2 | Published AWS module retains invalidation permissions and TTL caps superseded by IMP-82. |
 | [ISSUE-127](ISSUE-127-aws-redundant-route-function-invocations.md) | In progress | P3 | AWS ordered cache behaviors invoke the route function without changing requests. |
 | [ISSUE-128](ISSUE-128-root-readme-listed-in-browse.md) | Done | P3 | Root README is listed in Browse although Overview renders it. |
-| [ISSUE-129](ISSUE-129-site-introduction-html-and-top-bar-sections.md) | In progress | P2 | A site's own HTML overview should be its front page, with the section links in the top bar. |
+| [ISSUE-129](ISSUE-129-site-introduction-html-and-top-bar-sections.md) | Done | P2 | A site's own HTML overview should be its front page, with the section links in the top bar. |
 
 ISSUE-013's verified completion record is retained in Git history.
 
