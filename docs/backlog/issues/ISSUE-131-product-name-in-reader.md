@@ -15,6 +15,6 @@ Everything a reader sees or a link preview shows says "Artifact Pages", with a m
 
 ## Acceptance criteria
 
-- [ ] `web/index.html` title and Open Graph tags, `APP_NAME`, every brand label and every user-visible message say "Artifact Pages"; the brand mark letter is "A".
-- [ ] localStorage keys (`git-artifact-pages:*`, `git-artifact-pages-theme`) are unchanged, so readers keep their pins, recent reads and theme.
-- [ ] Stories and tests updated; no user-visible "Git Artifact Pages" remains in `web/` outside storage keys and historical notes.
+- [x] `web/index.html` title and Open Graph tags, `APP_NAME`, every brand label and every user-visible message say "Artifact Pages"; the brand mark letter is "A".
+- [x] localStorage keys (`git-artifact-pages:*`, `git-artifact-pages-theme`) are unchanged, so readers keep their pins, recent reads and theme.
+- [x] Stories and tests updated; no user-visible "Git Artifact Pages" remains in `web/` outside storage keys and historical notes.

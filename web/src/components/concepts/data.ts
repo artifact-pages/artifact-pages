@@ -16,7 +16,7 @@ function page(path: string, title: string, updated: string, by: string, h2: stri
 }
 
 export const guideEn: ConceptPage[] = [
-  page('en/what-is-git-artifact-pages.html', 'What is Git Artifact Pages', 'Oct 6', 'tasuku43', ['Why it exists', 'How it works', 'What it is not']),
+  page('en/what-is-git-artifact-pages.html', 'What is Artifact Pages', 'Oct 6', 'tasuku43', ['Why it exists', 'How it works', 'What it is not']),
   page('en/getting-started.html', 'Getting started', 'Oct 9', 'tasuku43', ['Before you begin', 'Start with Cloudflare', 'Start with AWS', 'Verify the first publish']),
   page('en/configuration.html', 'Configuration', 'Oct 9', 'tasuku43', ['The registry file', 'Sites and folders', 'Cloudflare R2 settings', 'Environments']),
   page('en/publishing.html', 'Publishing', 'Oct 8', 'claude-bot', ['Publish on push', 'Publish-on rules', 'Previews for pull requests', 'Rolling back']),
@@ -26,7 +26,7 @@ export const guideEn: ConceptPage[] = [
 ]
 
 export const guideJa: ConceptPage[] = [
-  page('ja/what-is-git-artifact-pages.html', 'Git Artifact Pages とは', 'Oct 6', 'tasuku43', ['なぜ必要か', '仕組み', 'できないこと']),
+  page('ja/what-is-git-artifact-pages.html', 'Artifact Pages とは', 'Oct 6', 'tasuku43', ['なぜ必要か', '仕組み', 'できないこと']),
   page('ja/getting-started.html', 'はじめに', 'Oct 9', 'tasuku43', ['始める前に', 'Cloudflare で始める', 'AWS で始める', '最初の公開を確認する']),
   page('ja/configuration.html', '設定', 'Oct 9', 'tasuku43', ['レジストリファイル', 'サイトとフォルダー', 'Cloudflare R2 の設定', '環境']),
   page('ja/publishing.html', '公開', 'Oct 8', 'claude-bot', ['push で公開する', 'publish-on の条件', 'ロールバック']),
@@ -75,7 +75,7 @@ function folderCounts(pages: ConceptPage[]): Array<[string, number]> {
 export const guideSite: SiteInfo = {
   id: 'guide',
   title: 'Guide',
-  description: 'How to publish, preview and read artifacts with Git Artifact Pages.',
+  description: 'How to publish, preview and read artifacts with Artifact Pages.',
   pages: [...guideEn, ...guideJa],
   updated: 'Oct 10',
   folderCounts: folderCounts([...guideEn, ...guideJa]),

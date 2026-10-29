@@ -234,7 +234,7 @@ function ArtifactSection({
             >
               <span className="artifact-row-main">
                 <span className="artifact-row-title">{highlight(artifact.title, query)}</span>
-                <span className="artifact-row-path mono">{highlight(artifact.path, query)}</span>
+                <span className="artifact-row-path mono"><bdi dir="ltr">{highlight(artifact.path, query)}</bdi></span>
               </span>
               <time dateTime={artifact.updatedAt}>{formatDate(artifact.updatedAt)}</time>
             </a>

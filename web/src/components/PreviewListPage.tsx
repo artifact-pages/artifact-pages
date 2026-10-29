@@ -127,7 +127,7 @@ export function PreviewListContent({ siteId, groupId, navigate, showHomeLink = f
       {state.status === 'needs-republish' ? (
         <section className="preview-empty-state" aria-label="Previews need to be republished">
           <h2>Previews need to be republished</h2>
-          <p className="preview-empty" role="status">This site's preview list uses a format this version of Git Artifact Pages cannot read.</p>
+          <p className="preview-empty" role="status">This site's preview list uses a format this version of Artifact Pages cannot read.</p>
           <p className="preview-empty-explanation">Ask the site owner to publish the previews again. The published site itself is not affected.</p>
         </section>
       ) : null}

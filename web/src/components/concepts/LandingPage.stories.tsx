@@ -32,7 +32,7 @@ function SiteCard({ site, start }: { site: SiteInfo; start?: boolean }) {
 function LandingA() {
   return (
     <div className="lp">
-      <p className="lp-brand"><span className="lp-brand-mark">G</span>Git Artifact Pages</p>
+      <p className="lp-brand"><span className="lp-brand-mark">A</span>Artifact Pages</p>
       <h1>Choose a site</h1>
       <p className="lp-lede">Browse published artifacts from the sites available in this environment.</p>
       <Search />
@@ -47,7 +47,7 @@ function LandingA() {
 function LandingB() {
   return (
     <div className="lp">
-      <p className="lp-brand"><span className="lp-brand-mark">G</span>Git Artifact Pages</p>
+      <p className="lp-brand"><span className="lp-brand-mark">A</span>Artifact Pages</p>
       <h1>Documentation published from Git</h1>
       <p className="lp-lede">
         Read the guide to publish your first artifact, or the architecture notes for how it works.{' '}
@@ -75,7 +75,7 @@ function LandingC() {
   const rows = [architectureSite, guideSite]
   return (
     <div className="lp">
-      <p className="lp-brand"><span className="lp-brand-mark">G</span>Git Artifact Pages</p>
+      <p className="lp-brand"><span className="lp-brand-mark">A</span>Artifact Pages</p>
       <h1>Choose a site</h1>
       <p className="lp-lede">Browse published artifacts from the sites available in this environment.</p>
       <Search />

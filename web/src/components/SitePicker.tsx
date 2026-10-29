@@ -79,7 +79,7 @@ export function SitePicker({
     <>
       <main className="site-picker-page">
         <div className="site-picker-content">
-          <p className="brand-label"><span className="brand-mark">G</span> Git Artifact Pages</p>
+          <p className="brand-label"><span className="brand-mark">A</span> Artifact Pages</p>
           <p className="eyebrow">Artifact library</p>
           <h1>Choose a site</h1>
           <p className="site-picker-lede">Browse published artifacts from the sites available in this environment.</p>

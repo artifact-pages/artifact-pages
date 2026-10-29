@@ -6366,7 +6366,7 @@ test.describe('release UX fixes', () => {
 
   test('the tab title follows the route', async ({ page }) => {
     await page.goto('/')
-    await expect(page).toHaveTitle('Git Artifact Pages')
+    await expect(page).toHaveTitle('Artifact Pages')
     await page.getByRole('link', { name: /SRE/ }).click()
     await expect(page).toHaveTitle('SRE')
     await page.goto(checkoutPath)
@@ -6378,7 +6378,7 @@ test.describe('release UX fixes', () => {
     await expect(page).toHaveTitle('Page not found · SRE')
     await page.goto('/no-such-site')
     await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
-    await expect(page).toHaveTitle('Page not found · Git Artifact Pages')
+    await expect(page).toHaveTitle('Page not found · Artifact Pages')
     // In-app navigation updates the title without a reload.
     await page.goto('/sre')
     await page.locator('.directory-page a[data-directory-folder]').first().click()
@@ -6603,7 +6603,7 @@ test.describe('reader compatibility rules', () => {
     await expect(page.getByRole('heading', { name: 'This library needs to be updated' })).toBeVisible()
     await expect(page.getByText(/cannot read/)).toBeVisible()
     await expect(page.getByText('Unable to load sites')).toHaveCount(0)
-    await expect(page).toHaveTitle(/Git Artifact Pages/)
+    await expect(page).toHaveTitle(/Artifact Pages/)
   })
 
   test('an unreadable registry is an error, not a republish state', async ({ page }) => {
@@ -10403,3 +10403,64 @@ test('S8 affected preview pages start collapsed and shared resources appear once
   await expect(first).not.toContainText('assets/preview.css')
   await expect(section.getByRole('link', { name: /Second affected/ })).not.toContainText('Uses changed')
 })
+
+for (const width of [390, 1440]) {
+  test(`row paths read in their real order and truncate at the start (${width}px)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    const digitPath = '01-features/01-publish-and-review.html'
+    const longPath = `${'very-long-folder-name/'.repeat(8)}final-file-name.html`
+    const paths = [digitPath, '_drafts/x.md', '.well-known/a.html', longPath]
+    await page.route('**/_indexes/showcase/index.json', async (route) => {
+      const response = await route.fetch()
+      const index = await response.json() as { artifacts: Array<Record<string, unknown>> }
+      const artifacts = index.artifacts.map((artifact, i) => (
+        i < paths.length
+          ? { ...artifact, id: paths[i], path: paths[i], updatedAt: `2026-10-0${9 - i}T00:00:00Z` }
+          : { ...artifact, updatedAt: '2026-01-01T00:00:00Z' }
+      ))
+      await route.fulfill({ response, json: { ...index, artifacts } })
+    })
+    await page.goto('/showcase')
+    const recent = page.locator('.artifact-list-section[aria-label="Recently updated"]')
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme })
+      await expect(recent.locator('.artifact-row-path', { hasText: digitPath })).toBeVisible()
+      const geometry = await recent.locator('.artifact-row-path').evaluateAll((nodes, expected) => nodes
+        .filter((node) => expected.includes(node.textContent ?? ''))
+        .map((node) => {
+          const text = node.querySelector('bdi')!.firstChild as Text
+          const char = (index: number) => {
+            const range = document.createRange()
+            range.setStart(text, index)
+            range.setEnd(text, index + 1)
+            return range.getBoundingClientRect()
+          }
+          const box = node.getBoundingClientRect()
+          const last = text.length - 1
+          return {
+            path: node.textContent,
+            firstLeft: char(0).left,
+            lastRight: char(last).right,
+            lastLeft: char(last).left,
+            boxLeft: box.left,
+            boxRight: box.right,
+            overflowing: node.scrollWidth > node.clientWidth,
+          }
+        }), paths)
+      expect(geometry).toHaveLength(paths.length)
+      for (const row of geometry) {
+        // The first character is left of the last one: the text is not reordered by bidi.
+        expect(row.firstLeft, row.path ?? '').toBeLessThan(row.lastLeft)
+        if (row.path === longPath) {
+          // Truncated at the start: the file name end stays inside the box, the beginning is clipped.
+          expect(row.overflowing).toBe(true)
+          expect(row.firstLeft).toBeLessThan(row.boxLeft)
+          expect(row.lastRight).toBeLessThanOrEqual(row.boxRight + 1)
+        } else {
+          expect(row.overflowing).toBe(false)
+          expect(row.firstLeft).toBeGreaterThanOrEqual(row.boxLeft - 1)
+        }
+      }
+    }
+  })
+}
