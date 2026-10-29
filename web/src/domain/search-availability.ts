@@ -37,7 +37,7 @@ export function describeDiscoveryError(error?: Error): DiscoveryErrorDescription
     return {
       kind: 'unsupported',
       title: 'This library needs to be updated',
-      detail: 'The list of sites uses a format this version of Git Artifact Pages cannot read. Ask the administrator to register the sites again and republish each one.',
+      detail: 'The list of sites uses a format this version of Artifact Pages cannot read. Ask the administrator to register the sites again and republish each one.',
       retryable: false,
     }
   }

@@ -142,6 +142,9 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-127](ISSUE-127-aws-redundant-route-function-invocations.md) | In progress | P3 | AWS ordered cache behaviors invoke the route function without changing requests. |
 | [ISSUE-128](ISSUE-128-root-readme-listed-in-browse.md) | Done | P3 | Root README is listed in Browse although Overview renders it. |
 | [ISSUE-129](ISSUE-129-site-introduction-html-and-top-bar-sections.md) | Done | P2 | A site's own HTML overview should be its front page, with the section links in the top bar. |
+| [ISSUE-130](ISSUE-130-row-path-reordered-by-rtl.md) | In progress | P2 | Paths in the Files lists are shown in the wrong order when they start with digits. |
+| [ISSUE-131](ISSUE-131-product-name-in-reader.md) | In progress | P3 | The reader still calls the product "Git Artifact Pages". |
+| [ISSUE-132](ISSUE-132-missing-preview-catalog-404.md) | Open | P3 | A site without previews makes every page load log a failed request. |
 
 ISSUE-013's verified completion record is retained in Git history.
 

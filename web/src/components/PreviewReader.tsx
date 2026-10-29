@@ -435,7 +435,7 @@ export function PreviewUnavailable({ reader, siteTitle, navigate }: {
       <p className="eyebrow">{siteTitle} · Preview</p>
       <h1>{needsRepublish ? 'This preview needs to be republished' : 'Preview unavailable'}</h1>
       <p role="status">{needsRepublish
-        ? 'It uses a format this version of Git Artifact Pages cannot read. Ask the site owner to publish the preview again.'
+        ? 'It uses a format this version of Artifact Pages cannot read. Ask the site owner to publish the preview again.'
         : 'This preview document is no longer available.'}</p>
       <p className="preview-unavailable-links">
         <a className="context-button" href={reader.listHref} onClick={(event) => followInApp(event, () => navigate(reader.listHref))}>

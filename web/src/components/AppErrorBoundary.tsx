@@ -19,7 +19,7 @@ export class AppErrorBoundary extends Component<{ children: ReactNode }, State> 
     return (
       <main className="status-page">
         <div className="status-content">
-          <p className="brand-label"><span className="brand-mark">G</span> Git Artifact Pages</p>
+          <p className="brand-label"><span className="brand-mark">A</span> Artifact Pages</p>
           <h1>Something went wrong</h1>
           <p className="error-message" role="alert">
             This page stopped working. Reload to try again. If it keeps happening on one site, ask the site's publisher to republish it.

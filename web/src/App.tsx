@@ -327,7 +327,7 @@ function StatusPage({ title, message }: { title: string; message: string }) {
   return (
     <main className="status-page">
       <div className="status-content">
-        <p className="brand-label"><span className="brand-mark">G</span> Git Artifact Pages</p>
+        <p className="brand-label"><span className="brand-mark">A</span> Artifact Pages</p>
         <p className="eyebrow">{title}</p>
         <p role="status">{message}</p>
       </div>
@@ -356,7 +356,7 @@ function ErrorPage({
   return (
     <main className="status-page">
       <div className="status-content">
-        <p className="brand-label"><span className="brand-mark">G</span> Git Artifact Pages</p>
+        <p className="brand-label"><span className="brand-mark">A</span> Artifact Pages</p>
         <p className="eyebrow">{title}</p>
         <h1>{scope === 'catalog' ? 'Unable to load sites' : 'Unable to load this site'}</h1>
         <p className="error-message" role="alert">
@@ -410,7 +410,7 @@ function RegisteredSiteStatusPage({
   return (
     <main className="status-page">
       <div className="status-content">
-        <p className="brand-label"><span className="brand-mark">G</span> Git Artifact Pages</p>
+        <p className="brand-label"><span className="brand-mark">A</span> Artifact Pages</p>
         <p className="eyebrow">{title}</p>
         <h1>{heading}</h1>
         <p role="status">{message}</p>
@@ -432,13 +432,13 @@ function RepublishPage({ scope, title, onBack }: { scope: 'site' | 'registry'; t
   return (
     <main className="status-page">
       <div className="status-content" data-state="needs-republish">
-        <p className="brand-label"><span className="brand-mark">G</span> Git Artifact Pages</p>
+        <p className="brand-label"><span className="brand-mark">A</span> Artifact Pages</p>
         <p className="eyebrow">{title}</p>
         <h1>{heading}</h1>
         <p role="status">
           {scope === 'site'
-            ? 'Its published data uses a format this version of Git Artifact Pages cannot read. Ask the site owner to publish it again; it will appear here afterwards.'
-            : 'The list of sites uses a format this version of Git Artifact Pages cannot read. Ask the administrator to register the sites again and republish each one.'}
+            ? 'Its published data uses a format this version of Artifact Pages cannot read. Ask the site owner to publish it again; it will appear here afterwards.'
+            : 'The list of sites uses a format this version of Artifact Pages cannot read. Ask the administrator to register the sites again and republish each one.'}
         </p>
         {scope === 'site' ? <button className="text-action" onClick={onBack}>← All sites</button> : null}
       </div>
@@ -452,7 +452,7 @@ function PageNotFoundPage({ onBack }: { onBack: () => void }) {
   return (
     <main className="status-page">
       <div className="status-content">
-        <p className="brand-label"><span className="brand-mark">G</span> Git Artifact Pages</p>
+        <p className="brand-label"><span className="brand-mark">A</span> Artifact Pages</p>
         <p className="eyebrow">404</p>
         <h1>Page not found</h1>
         <p role="alert">The page you requested does not exist or is no longer available.</p>
