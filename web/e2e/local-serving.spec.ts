@@ -2269,7 +2269,8 @@ for (const destination of ['/sre/diagrams/mermaid-catalog.md', '/sre/runbooks'])
   })
 }
 
-test('document bridge does not steal focus after user input while the index refreshes', async ({ page }) => {
+for (const interruption of ['pointer', 'wheel', 'blur'] as const) {
+test(`document bridge does not steal focus after ${interruption} while the index refreshes`, async ({ page }) => {
   let hold = false
   let release = () => {}
   const gate = new Promise<void>((resolve) => { release = resolve })
@@ -2290,12 +2291,30 @@ test('document bridge does not steal focus after user input while the index refr
       }))
     })
     await refreshed
-    await page.mouse.click(2, 2)
+    if (interruption === 'pointer') await page.mouse.click(2, 2)
+    else if (interruption === 'wheel') await page.mouse.wheel(0, 10)
+    else await page.evaluate(() => window.dispatchEvent(new Event('blur')))
     release()
     await expect(page.locator('iframe').first()).toHaveCSS('opacity', '1')
     expect(await page.locator('iframe').first().evaluate((frame) => frame.ownerDocument.activeElement === frame)).toBe(false)
   } finally { release() }
 })
+}
+
+for (const failure of ['index', 'html'] as const) {
+  test(`document bridge focuses retry when ${failure} loading fails`, async ({ page }) => {
+    await page.goto('/sre/incidents/checkout-latency/index.html')
+    await expect(page.locator('iframe').first()).toHaveCSS('opacity', '1')
+    await page.locator('iframe').first().focus()
+    const target = '/sre/incidents/checkout-latency/index.html?failed=bridge'
+    await page.route(failure === 'index' ? '**/_indexes/sre/index.json' : '**/_artifacts/sre/incidents/checkout-latency/index.html*', (route) => route.fulfill({ status: 503, body: 'unavailable' }))
+    await page.frameLocator('iframe').locator('body').evaluate((_body, href) => {
+      const parent = window.parent as Window & typeof globalThis
+      parent.dispatchEvent(new parent.CustomEvent('artifact-pages:navigate:v1', { cancelable: true, detail: { source: window, href } }))
+    }, target)
+    await expect(page.getByRole('button', { name: 'Try again' })).toBeFocused()
+  })
+}
 
 test('document bridge preserves the preview catalog for the current site visit', async ({ page }) => {
   let catalogRequests = 0
@@ -5266,6 +5285,18 @@ test.describe('page text search', () => {
       `/_indexes/${TEXT_SEARCH_SITE.id}/meta.json is not served (HTTP ${metadata.status()}). Page text search tests need the storage root built by scripts/prepare-e2e-storage.mjs; a custom STORAGE_ROOT must be produced by it.`,
     )
     await registerTextSearchSite(page)
+  })
+
+  test('discovery never briefly reports search as disabled while initializing its client', async ({ page }) => {
+    await page.addInitScript(() => {
+      const records: string[] = []
+      new MutationObserver(() => { if (document.body?.textContent?.includes('This site was published without page text search.')) records.push('disabled') })
+        .observe(document, { childList: true, subtree: true, characterData: true })
+      ;(window as unknown as { __availabilityRecords: string[] }).__availabilityRecords = records
+    })
+    await page.goto('/textsearch/_search?q=lighthouse')
+    await expect(hits(page).first()).toBeVisible()
+    expect(await page.evaluate(() => (window as unknown as { __availabilityRecords: string[] }).__availabilityRecords)).toEqual([])
   })
 
   test('the site picker marks sites with page text search', async ({ page }) => {

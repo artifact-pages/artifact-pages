@@ -279,18 +279,19 @@ export function ArtifactWorkspace({
   // frame's load. Two frames let a changed index unmount this transient view.
   useEffect(() => {
     if (!bridgeFocusHref || bridgeFocusHref !== `${pathname}${search}${hash}` || discoveryStatus === 'loading') return
-    if (currentFormat === 'html' && (!htmlFrameRef.current || frameLoadCount.current === 0)) return
+    const failed = Boolean(frameFailure && frameFailure.artifactUrl === bodyArtifact?.artifactUrl)
+    if (currentFormat === 'html' && !failed && (!htmlFrameRef.current || frameLoads === 0)) return
     let second = 0
     const first = window.requestAnimationFrame(() => {
       second = window.requestAnimationFrame(() => {
         if (document.activeElement === document.body || document.activeElement === document.documentElement) {
-          ;(currentFormat === 'html' ? htmlFrameRef.current : stageRef.current)?.focus({ preventScroll: true })
+          ;(failed ? retryFrameRef.current : currentFormat === 'html' ? htmlFrameRef.current : stageRef.current)?.focus({ preventScroll: true })
         }
         onBridgeFocusConsumed?.()
       })
     })
     return () => { window.cancelAnimationFrame(first); window.cancelAnimationFrame(second) }
-  }, [bridgeFocusHref, pathname, search, hash, currentFormat, frameLoads, discoveryStatus, onBridgeFocusConsumed])
+  }, [bridgeFocusHref, pathname, search, hash, currentFormat, frameLoads, frameFailure, bodyArtifact?.artifactUrl, discoveryStatus, onBridgeFocusConsumed])
   // The persistent Contents and Details column (ISSUE-108): a document page at a wide viewport only.
   // Not on an error screen: a Markdown document or an HTML body that failed to load.
   const [markdownFailedUrl, setMarkdownFailedUrl] = useState<string | null>(null)
@@ -1027,6 +1028,7 @@ export function ArtifactWorkspace({
                 setFrameFailure({ artifactUrl, status: headStatus })
                 return
               }
+              setFrameLoads((count) => count + 1)
               if (focusRetryRef.current) {
                 focusRetryRef.current = false
                 frame.focus()
@@ -1037,7 +1039,7 @@ export function ArtifactWorkspace({
           frame.focus()
         }
         setFrameLanguage({ artifactUrl: bodyArtifact.artifactUrl, lang: readFrameLanguage(event.currentTarget) })
-        setFrameLoads((count) => count + 1)
+        if (!needsHead) setFrameLoads((count) => count + 1)
         event.currentTarget.contentWindow?.addEventListener('keydown', forwardArtifactKeyDown, true)
         syncHtmlFrameLocation(event.currentTarget)
         highlightFrame(event.currentTarget, highlightQueryRef.current, !hash, reportMatches)

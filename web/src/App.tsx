@@ -157,9 +157,18 @@ function App() {
     const cancel = () => setBridgeFocusHref(null)
     window.addEventListener('pointerdown', cancel, true)
     window.addEventListener('keydown', cancel, true)
+    window.addEventListener('wheel', cancel, true)
+    window.addEventListener('touchstart', cancel, true)
+    window.addEventListener('blur', cancel)
+    const visibility = () => { if (document.hidden) cancel() }
+    document.addEventListener('visibilitychange', visibility)
     return () => {
       window.removeEventListener('pointerdown', cancel, true)
       window.removeEventListener('keydown', cancel, true)
+      window.removeEventListener('wheel', cancel, true)
+      window.removeEventListener('touchstart', cancel, true)
+      window.removeEventListener('blur', cancel)
+      document.removeEventListener('visibilitychange', visibility)
     }
   }, [bridgeFocusHref])
 
@@ -348,7 +357,7 @@ function SitePage({
         onBack={() => navigate('/')}
       />
     }
-    return <ErrorPage title={route.siteId} error={indexState.error} onRetry={retryIndex} focusRetry={indexAttempt > 0} onBack={() => navigate('/')} />
+    return <ErrorPage title={route.siteId} error={indexState.error} onRetry={retryIndex} focusRetry={indexAttempt > 0} onBack={() => navigate('/')} bridgeFocus={Boolean(bridgeFocusHref)} onBridgeFocusConsumed={onBridgeFocusConsumed} />
   }
 
   // A preview document does not wait for, or depend on, the published site: until its index arrives (or when it
@@ -385,7 +394,7 @@ function SitePage({
       index={index}
       publishedIndexStatus={indexState.status}
       fullTextSearch={fullTextSearch}
-      siteDiscoveryStatus={siteDiscoveryStatus}
+      siteDiscoveryStatus={fullTextUrl && (visitSearchTarget?.siteId !== route.siteId || visitSearchTarget.url !== fullTextUrl) ? 'loading' : siteDiscoveryStatus}
       siteDiscoveryError={siteDiscoveryError}
       onRetryDiscovery={retryDiscovery}
     />
@@ -414,8 +423,12 @@ function ErrorPage({
   onBack,
   onRetry,
   focusRetry = false,
+  bridgeFocus = false,
+  onBridgeFocusConsumed,
 }: {
   title: string
+  bridgeFocus?: boolean
+  onBridgeFocusConsumed?: () => void
   scope?: 'catalog' | 'site'
   error: Error
   onBack?: () => void
@@ -423,14 +436,22 @@ function ErrorPage({
   focusRetry?: boolean
 }) {
   usePageTitle(pageTitle(scope === 'catalog' ? undefined : title, APP_NAME))
+  const containerRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    if (!bridgeFocus) return
+    if (document.activeElement === document.body || document.activeElement === document.documentElement) {
+      (containerRef.current?.querySelector<HTMLElement>('button') ?? containerRef.current?.querySelector<HTMLElement>('h1'))?.focus({ preventScroll: true })
+    }
+    onBridgeFocusConsumed?.()
+  }, [bridgeFocus, onBridgeFocusConsumed])
   const invalidData = error instanceof IndexLoadError && error.invalidData
   const timedOut = error instanceof IndexLoadError && error.timedOut
   return (
-    <main className="status-page">
+    <main ref={containerRef} className="status-page">
       <div className="status-content">
         <p className="brand-label"><span className="brand-mark">A</span> Artifact Pages</p>
         <p className="eyebrow">{title}</p>
-        <h1>{scope === 'catalog' ? 'Unable to load sites' : 'Unable to load this site'}</h1>
+        <h1 tabIndex={-1}>{scope === 'catalog' ? 'Unable to load sites' : 'Unable to load this site'}</h1>
         <p className="error-message" role="alert">
           {invalidData
             ? scope === 'catalog'
