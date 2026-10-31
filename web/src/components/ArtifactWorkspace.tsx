@@ -45,7 +45,7 @@ import type { TreeStyle } from './ArtifactTree'
 import type { ArtifactIndexEntry, SiteCatalogEntry, SiteIndex, SiteSummary } from '../domain/index'
 import { readRecentArtifactReads, recordRecentArtifactRead, type RecentArtifactRead } from '../domain/recent-reads'
 import { themeModeIcon, type ResolvedTheme, type ThemeMode } from '../domain/theme'
-import { artifactRouteHref, searchRouteHref, sitePreviewsHref, type AppRoute } from '../routing'
+import { artifactRouteHref, parseRoute, searchRouteHref, sitePreviewsHref, type AppRoute } from '../routing'
 
 type SiteRoute = Extract<AppRoute, { kind: 'site' }>
 type SearchRoute = Extract<AppRoute, { kind: 'search' }>
@@ -64,6 +64,9 @@ export function ArtifactWorkspace({
   siteDiscoveryError,
   onRetryDiscovery,
   navigate,
+  navigateFromDocument,
+  bridgeFocusHref,
+  onBridgeFocusConsumed,
   themeMode,
   theme,
   onSetThemeMode,
@@ -89,6 +92,9 @@ export function ArtifactWorkspace({
   siteDiscoveryError?: Error
   onRetryDiscovery?: () => void
   navigate: (href: string, options?: { replace?: boolean }) => void
+  navigateFromDocument?: (href: string) => boolean
+  bridgeFocusHref?: string | null
+  onBridgeFocusConsumed?: () => void
   themeMode: ThemeMode
   theme: ResolvedTheme
   onSetThemeMode: (mode: ThemeMode) => void
@@ -147,6 +153,38 @@ export function ArtifactWorkspace({
   const focusStageAfterPalette = useRef(false)
   const stageRef = useRef<HTMLElement>(null)
   const htmlFrameRef = useRef<HTMLIFrameElement>(null)
+  const bridgeFocusCancelled = useRef(false)
+  useEffect(() => {
+    if (!bridgeFocusHref) return
+    bridgeFocusCancelled.current = false
+    const cancel = () => { bridgeFocusCancelled.current = true }
+    window.addEventListener('pointerdown', cancel, true)
+    window.addEventListener('keydown', cancel, true)
+    return () => {
+      window.removeEventListener('pointerdown', cancel, true)
+      window.removeEventListener('keydown', cancel, true)
+    }
+  }, [bridgeFocusHref])
+  useEffect(() => {
+    if (!navigateFromDocument || route.kind !== 'site') return
+    const onDocumentNavigation = (event: Event) => {
+      if (!(event instanceof CustomEvent) || !event.cancelable) return
+      const detail = event.detail as { source?: unknown; href?: unknown } | null
+      const frame = htmlFrameRef.current
+      if (!frame || detail?.source !== frame.contentWindow || typeof detail.href !== 'string') return
+      try {
+        if (!detail.href.startsWith('/') || detail.href.startsWith('//')) return
+        const url = new URL(detail.href, window.location.href)
+        const destination = parseRoute(url.pathname, url.search)
+        if (url.origin !== window.location.origin || destination.kind !== 'site' || destination.siteId !== route.siteId
+          || destination.artifactPath?.split('/')[0] === '_previews'
+          || destination.artifactPath?.split('/')[0] === '_search') return
+        if (navigateFromDocument(`${url.pathname}${url.search}${url.hash}`)) event.preventDefault()
+      } catch { /* The author falls back to a regular navigation. */ }
+    }
+    window.addEventListener('artifact-pages:navigate:v1', onDocumentNavigation)
+    return () => window.removeEventListener('artifact-pages:navigate:v1', onDocumentNavigation)
+  }, [navigateFromDocument, route.kind, route.siteId])
   const contentsToggleRef = useRef<HTMLButtonElement>(null)
   const detailsToggleRef = useRef<HTMLButtonElement>(null)
   const moreMenuTriggerRef = useRef<HTMLButtonElement>(null)
@@ -951,6 +989,12 @@ export function ArtifactWorkspace({
       onLoad={(event) => {
         revealFrame()
         const frame = event.currentTarget
+        if (bridgeFocusHref === `${pathname}${search}${hash}`) {
+          if (!bridgeFocusCancelled.current && (document.activeElement === document.body || document.activeElement === document.documentElement)) {
+            frame.focus({ preventScroll: true })
+          }
+          onBridgeFocusConsumed?.()
+        }
         const firstLoad = frameLoadCount.current === 0
         frameLoadCount.current += 1
         const loadNumber = frameLoadCount.current

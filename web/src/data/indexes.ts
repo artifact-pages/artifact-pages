@@ -155,6 +155,14 @@ export function clearSiteIndexCache() {
   indexCache.clear()
 }
 
+/** Invalidate one site's cached reads without interrupting callers already awaiting them. */
+export function invalidateSiteIndexCache(siteId: string) {
+  const prefix = `${siteId}\0`
+  for (const [key, entry] of indexCache) {
+    if (key.startsWith(prefix)) dropEntry(key, entry)
+  }
+}
+
 /** For tests only: the number of cached entries. */
 export function siteIndexCacheSize() {
   return indexCache.size

@@ -3,7 +3,7 @@ import { ArtifactWorkspace } from './components/ArtifactWorkspace'
 import { PreviewListPage } from './components/PreviewListPage'
 import { SitePicker } from './components/SitePicker'
 import { UnsupportedSchemaError } from './data/schema'
-import { defaultSiteIndexUrl, discoverSites, IndexLoadError, isValidSiteId, loadSiteIndex } from './data/indexes'
+import { defaultSiteIndexUrl, discoverSites, IndexLoadError, invalidateSiteIndexCache, isValidSiteId, loadSiteIndex } from './data/indexes'
 import { createSiteFullTextSearch } from './data/fulltext'
 import { resetPreviewList } from './data/preview-list'
 import { hasSiteDiscoveryMetadata, type SiteCatalogEntry, type SiteIndex } from './domain/index'
@@ -94,10 +94,38 @@ function App() {
   const { themeMode, theme, setThemeMode } = useTheme()
   const [sites, setSites] = useState<LoadingState<SiteCatalogEntry[]>>({ status: 'loading' })
   const [discoveryAttempt, setDiscoveryAttempt] = useState(0)
+  const [bridgeEpoch, setBridgeEpoch] = useState(0)
+  const [bridgeFocusHref, setBridgeFocusHref] = useState<string | null>(null)
+  const bridgeInFlight = useRef(false)
   const retryDiscovery = () => {
     setSites({ status: 'loading' })
     setDiscoveryAttempt((n) => n + 1)
   }
+
+  // A trusted HTML document can request normal reader navigation without reloading the app.
+  // Reload discovery and the site index just as a full page navigation would; the app's own
+  // code is updated on the next full reload, as with any other SPA navigation.
+  const navigateFromDocument = useCallback((href: string) => {
+    if (route.kind !== 'site' || bridgeInFlight.current) return false
+    try {
+      const target = new URL(href, window.location.href)
+      navigate(`${target.pathname}${target.search}${target.hash}`)
+      bridgeInFlight.current = true
+      invalidateSiteIndexCache(route.siteId)
+      setBridgeFocusHref(`${target.pathname}${target.search}${target.hash}`)
+      setSites({ status: 'loading' })
+      setDiscoveryAttempt((n) => n + 1)
+      setBridgeEpoch((n) => n + 1)
+      return true
+    } catch {
+      bridgeInFlight.current = false
+      return false
+    }
+  }, [navigate, route])
+  useEffect(() => { bridgeInFlight.current = false }, [bridgeEpoch, pathname, search, hash])
+  useEffect(() => {
+    if (bridgeFocusHref && `${pathname}${search}${hash}` !== bridgeFocusHref) setBridgeFocusHref(null)
+  }, [bridgeFocusHref, pathname, search, hash])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -143,7 +171,7 @@ function App() {
 
   return (
     <SitePage
-      key={route.siteId}
+      key={`${route.siteId}:${bridgeEpoch}`}
       route={route}
       pathname={pathname}
       search={search}
@@ -154,6 +182,9 @@ function App() {
       siteDiscoveryError={sites.status === 'error' ? sites.error : undefined}
       retryDiscovery={retryDiscovery}
       navigate={navigate}
+      navigateFromDocument={navigateFromDocument}
+      bridgeFocusHref={bridgeFocusHref}
+      onBridgeFocusConsumed={() => setBridgeFocusHref(null)}
       themeMode={themeMode}
       theme={theme}
       onSetThemeMode={setThemeMode}
@@ -174,6 +205,9 @@ function SitePage({
   search,
   hash,
   navigate,
+  navigateFromDocument,
+  bridgeFocusHref,
+  onBridgeFocusConsumed,
   themeMode,
   theme,
   onSetThemeMode,
@@ -188,6 +222,9 @@ function SitePage({
   search: string
   hash: string
   navigate: (href: string, options?: { replace?: boolean }) => void
+  navigateFromDocument: (href: string) => boolean
+  bridgeFocusHref: string | null
+  onBridgeFocusConsumed: () => void
   themeMode: ThemeMode
   theme: ResolvedTheme
   onSetThemeMode: (mode: ThemeMode) => void
@@ -307,6 +344,9 @@ function SitePage({
       search={search}
       hash={hash}
       navigate={navigate}
+      navigateFromDocument={navigateFromDocument}
+      bridgeFocusHref={bridgeFocusHref}
+      onBridgeFocusConsumed={onBridgeFocusConsumed}
       themeMode={themeMode}
       theme={theme}
       onSetThemeMode={onSetThemeMode}

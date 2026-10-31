@@ -2199,6 +2199,60 @@ async function framePaintsOnlyReaderSurface(page: Page, frame: Locator) {
   }, png.toString('base64'))
 }
 
+test('published document bridge refreshes the index before navigating and rejects unrelated requests', async ({ page }) => {
+  let newPagePublished = false
+  let indexReads = 0
+  await page.route('**/_indexes/sre/index.json', async (route) => {
+    indexReads += 1
+    const response = await route.fetch()
+    const index = await response.json() as { artifacts: Array<Record<string, unknown>> }
+    if (newPagePublished) index.artifacts.push({
+      id: 'guides/bridge-new.html', title: 'Bridge new page', path: 'guides/bridge-new.html',
+      format: 'html', filename: 'bridge-new.html', artifactUrl: '/_artifacts/sre/guides/bridge-new.html',
+      updatedAt: '2026-10-01T00:00:00Z',
+    })
+    await route.fulfill({ response, json: index })
+  })
+  await page.route('**/_artifacts/sre/guides/bridge-new.html', (route) => route.fulfill({
+    status: 200, contentType: 'text/html', body: '<!doctype html><h1>Bridge new page</h1>',
+  }))
+  await page.goto('/sre/incidents/checkout-latency/index.html')
+  await expect(page.locator('iframe').first()).toHaveCSS('opacity', '1')
+  const before = indexReads
+  const refused = await page.evaluate(() => window.dispatchEvent(new CustomEvent('artifact-pages:navigate:v1', {
+    cancelable: true, detail: { source: window, href: '/sre/guides/bridge-new.html' },
+  })))
+  expect(refused).toBe(true)
+  await expect(page).toHaveURL(/checkout-latency/)
+  const rejectedRoutes = await page.frameLocator('iframe').locator('body').evaluate(() => {
+    const parent = window.parent as Window & typeof globalThis
+    return ['https://example.com/other', '//example.com/other', '/other/page.html', '/sre/_previews/a', '/sre/_search?q=a'].map((href) => (
+      parent.dispatchEvent(new parent.CustomEvent('artifact-pages:navigate:v1', {
+        cancelable: true, detail: { source: window, href },
+      }))
+    ))
+  })
+  expect(rejectedRoutes).toEqual([true, true, true, true, true])
+  await expect(page).toHaveURL(/checkout-latency/)
+  newPagePublished = true
+  await page.locator('iframe').first().focus()
+  const accepted = await page.frameLocator('iframe').locator('body').evaluate(() => {
+    const parent = window.parent as Window & typeof globalThis
+    const event = new parent.CustomEvent('artifact-pages:navigate:v1', {
+      cancelable: true, detail: { source: window, href: '/sre/guides/bridge-new.html?q=hello#test' },
+    })
+    return !parent.dispatchEvent(event)
+  })
+  expect(accepted).toBe(true)
+  await expect(page).toHaveURL(/bridge-new\.html\?q=hello#test$/)
+  await expect(page.frameLocator('iframe').getByRole('heading', { name: 'Bridge new page' })).toBeVisible()
+  await expect.poll(() => page.locator('iframe').first().evaluate((frame) => frame.ownerDocument.activeElement === frame)).toBe(true)
+  expect(indexReads).toBeGreaterThan(before)
+  await page.goBack()
+  await expect(page).toHaveURL(/checkout-latency/)
+  await expect(page.frameLocator('iframe').locator('body')).toBeVisible()
+})
+
 test('in dark theme a loading HTML frame never paints white and is revealed on load (ISSUE-119)', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'dark' })
   const { release } = await routeSlowHtmlArtifact(page, 'guides/slow.html', 'Slow body')
