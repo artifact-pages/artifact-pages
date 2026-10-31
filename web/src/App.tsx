@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ArtifactWorkspace } from './components/ArtifactWorkspace'
 import { PreviewListPage } from './components/PreviewListPage'
 import { SitePicker } from './components/SitePicker'
@@ -96,6 +96,7 @@ function App() {
   const [discoveryAttempt, setDiscoveryAttempt] = useState(0)
   const [bridgeEpoch, setBridgeEpoch] = useState(0)
   const [bridgeFocusHref, setBridgeFocusHref] = useState<string | null>(null)
+  const [bridgeSite, setBridgeSite] = useState<SiteCatalogEntry | null>(null)
   const bridgeInFlight = useRef(false)
   const activeSiteId = route.kind === 'sites' ? undefined : route.siteId
   const [searchTarget, setSearchTarget] = useState<{ siteId: string; url: string } | null>(null)
@@ -139,6 +140,7 @@ function App() {
       bridgeInFlight.current = true
       invalidateSiteIndexCache(route.siteId)
       setBridgeFocusHref(`${target.pathname}${target.search}${target.hash}`)
+      setBridgeSite(null)
       setSites({ status: 'loading' })
       setDiscoveryAttempt((n) => n + 1)
       setBridgeEpoch((n) => n + 1)
@@ -174,7 +176,9 @@ function App() {
 
   useEffect(() => {
     const controller = new AbortController()
-    discoverSites(fetch, { signal: controller.signal }).then(
+    discoverSites(fetch, { signal: controller.signal, onSite: (entry) => {
+      if (entry.site.id === activeSiteId) setBridgeSite(entry)
+    } }).then(
       (metadata) => {
         if (!controller.signal.aborted) setSites({ status: 'success', data: metadata })
       },
@@ -221,7 +225,7 @@ function App() {
       pathname={pathname}
       search={search}
       hash={hash}
-      sites={sites.status === 'success' ? sites.data : []}
+      sites={sites.status === 'success' ? sites.data : bridgeSite?.site.id === route.siteId ? [bridgeSite] : []}
       sitesLoading={sites.status === 'loading'}
       siteDiscoveryStatus={sites.status}
       siteDiscoveryError={sites.status === 'error' ? sites.error : undefined}
@@ -229,6 +233,7 @@ function App() {
       navigate={navigate}
       navigateFromDocument={navigateFromDocument}
       bridgeFocusHref={bridgeFocusHref}
+      bridgeSiteReady={sites.status !== 'loading' || bridgeSite?.site.id === route.siteId}
       onBridgeFocusConsumed={() => setBridgeFocusHref(null)}
       visitFullTextSearch={visitFullTextSearch}
       visitSearchTarget={searchTarget}
@@ -254,6 +259,7 @@ function SitePage({
   navigate,
   navigateFromDocument,
   bridgeFocusHref,
+  bridgeSiteReady,
   onBridgeFocusConsumed,
   visitFullTextSearch,
   visitSearchTarget,
@@ -273,6 +279,7 @@ function SitePage({
   navigate: (href: string, options?: { replace?: boolean }) => void
   navigateFromDocument: (href: string) => boolean
   bridgeFocusHref: string | null
+  bridgeSiteReady: boolean
   onBridgeFocusConsumed: () => void
   visitFullTextSearch?: SiteFullTextSearch
   visitSearchTarget: { siteId: string; url: string } | null
@@ -334,28 +341,28 @@ function SitePage({
         !registeredSite
       )
     ) {
-      return <PageNotFoundPage onBack={() => navigate('/')} />
+      return <BridgeStatusFocus active={Boolean(bridgeFocusHref)} onConsumed={onBridgeFocusConsumed}><PageNotFoundPage onBack={() => navigate('/')} /></BridgeStatusFocus>
     }
     if (indexState.error instanceof UnsupportedSchemaError || registeredSite?.status === 'needs-republish') {
-      return <RepublishPage scope="site" title={registeredSite?.site.title ?? route.siteId} onBack={() => navigate('/')} />
+      return <BridgeStatusFocus active={Boolean(bridgeFocusHref)} onConsumed={onBridgeFocusConsumed}><RepublishPage scope="site" title={registeredSite?.site.title ?? route.siteId} onBack={() => navigate('/')} /></BridgeStatusFocus>
     }
     if (missingIndex && registeredSite?.status === 'not-published') {
-      return <RegisteredSiteStatusPage
+      return <BridgeStatusFocus active={Boolean(bridgeFocusHref)} onConsumed={onBridgeFocusConsumed}><RegisteredSiteStatusPage
         title={registeredSite.site.title}
         heading="Site registered, but not published yet"
         message="This site is registered and will appear here after its first publish."
         onBack={() => navigate('/')}
-      />
+      /></BridgeStatusFocus>
     }
     if (missingIndex && registeredSite?.status === 'metadata-unavailable') {
-      return <RegisteredSiteStatusPage
+      return <BridgeStatusFocus active={Boolean(bridgeFocusHref)} onConsumed={onBridgeFocusConsumed}><RegisteredSiteStatusPage
         title={registeredSite.site.title}
         heading="Site registered, but details are unavailable"
         message="This site's metadata and artifact index could not be loaded. Please try again in a moment."
         onRetry={() => { retryDiscovery(); retryIndex() }}
         focusRetry={indexAttempt > 0}
         onBack={() => navigate('/')}
-      />
+      /></BridgeStatusFocus>
     }
     return <ErrorPage title={route.siteId} error={indexState.error} onRetry={retryIndex} focusRetry={indexAttempt > 0} onBack={() => navigate('/')} bridgeFocus={Boolean(bridgeFocusHref)} onBridgeFocusConsumed={onBridgeFocusConsumed} />
   }
@@ -387,6 +394,7 @@ function SitePage({
       navigate={navigate}
       navigateFromDocument={navigateFromDocument}
       bridgeFocusHref={bridgeFocusHref}
+      bridgeSiteReady={bridgeSiteReady}
       onBridgeFocusConsumed={onBridgeFocusConsumed}
       themeMode={themeMode}
       theme={theme}
@@ -399,6 +407,19 @@ function SitePage({
       onRetryDiscovery={retryDiscovery}
     />
   )
+}
+
+function BridgeStatusFocus({ active, onConsumed, children }: { active: boolean; onConsumed: () => void; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!active) return
+    if (document.activeElement === document.body || document.activeElement === document.documentElement) {
+      const target = ref.current?.querySelector<HTMLElement>('button') ?? ref.current?.querySelector<HTMLElement>('h1')
+      target?.focus({ preventScroll: true })
+    }
+    onConsumed()
+  }, [active, onConsumed])
+  return <div ref={ref} style={{ display: 'contents' }}>{children}</div>
 }
 
 function StatusPage({ title, message }: { title: string; message: string }) {

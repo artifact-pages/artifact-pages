@@ -66,6 +66,7 @@ export function ArtifactWorkspace({
   navigate,
   navigateFromDocument,
   bridgeFocusHref,
+  bridgeSiteReady,
   onBridgeFocusConsumed,
   themeMode,
   theme,
@@ -93,6 +94,7 @@ export function ArtifactWorkspace({
   onRetryDiscovery?: () => void
   navigate: (href: string, options?: { replace?: boolean }) => void
   navigateFromDocument?: (href: string) => boolean
+  bridgeSiteReady?: boolean
   bridgeFocusHref?: string | null
   onBridgeFocusConsumed?: () => void
   themeMode: ThemeMode
@@ -156,8 +158,9 @@ export function ArtifactWorkspace({
   useEffect(() => {
     if (!navigateFromDocument || route.kind !== 'site') return
     const onDocumentNavigation = (event: Event) => {
-      if (!(event instanceof CustomEvent) || !event.cancelable) return
+      if (event.type !== 'artifact-pages:navigate:v1' || !event.cancelable || !('detail' in event)) return
       const detail = event.detail as { source?: unknown; href?: unknown } | null
+      if (!detail || typeof detail !== 'object') return
       const frame = htmlFrameRef.current
       if (!frame || detail?.source !== frame.contentWindow || typeof detail.href !== 'string') return
       try {
@@ -179,6 +182,7 @@ export function ArtifactWorkspace({
   const narrowChrome = useMediaQuery(NARROW_CHROME_QUERY)
   const wideReader = useMediaQuery(READER_COLUMN_QUERY)
   const [frameLoads, setFrameLoads] = useState(0)
+  const [frameStatusPending, setFrameStatusPending] = useState(false)
   const [headingJump, setHeadingJump] = useState<'pending' | 'settled' | null>(null)
   const [headingFocus, setHeadingFocus] = useState<{ artifactUrl: string, id: string } | null>(null)
   const currentArtifact = routeArtifactPath
@@ -278,9 +282,9 @@ export function ArtifactWorkspace({
   // Wait for discovery as it may replace the default index URL, and for an HTML
   // frame's load. Two frames let a changed index unmount this transient view.
   useEffect(() => {
-    if (!bridgeFocusHref || bridgeFocusHref !== `${pathname}${search}${hash}` || discoveryStatus === 'loading') return
+    if (!bridgeFocusHref || bridgeFocusHref !== `${pathname}${search}${hash}` || (bridgeSiteReady ?? discoveryStatus !== 'loading') === false) return
     const failed = Boolean(frameFailure && frameFailure.artifactUrl === bodyArtifact?.artifactUrl)
-    if (currentFormat === 'html' && !failed && (!htmlFrameRef.current || frameLoads === 0)) return
+    if (currentFormat === 'html' && !failed && (!htmlFrameRef.current || frameLoads === 0 || frameStatusPending)) return
     let second = 0
     const first = window.requestAnimationFrame(() => {
       second = window.requestAnimationFrame(() => {
@@ -291,7 +295,7 @@ export function ArtifactWorkspace({
       })
     })
     return () => { window.cancelAnimationFrame(first); window.cancelAnimationFrame(second) }
-  }, [bridgeFocusHref, pathname, search, hash, currentFormat, frameLoads, frameFailure, bodyArtifact?.artifactUrl, discoveryStatus, onBridgeFocusConsumed])
+  }, [bridgeFocusHref, pathname, search, hash, currentFormat, frameLoads, frameStatusPending, frameFailure, bodyArtifact?.artifactUrl, discoveryStatus, bridgeSiteReady, onBridgeFocusConsumed])
   // The persistent Contents and Details column (ISSUE-108): a document page at a wide viewport only.
   // Not on an error screen: a Markdown document or an HTML body that failed to load.
   const [markdownFailedUrl, setMarkdownFailedUrl] = useState<string | null>(null)
@@ -904,6 +908,7 @@ export function ArtifactWorkspace({
   // A new mount (another artifact or a retry) starts counting loads again and drops any pending status request.
   useEffect(() => {
     frameLoadCount.current = 0
+    setFrameStatusPending(false)
     frameGeneration.current += 1
     return () => {
       frameStatusAbort.current?.abort()
@@ -1004,6 +1009,7 @@ export function ArtifactWorkspace({
           event.currentTarget.contentWindow?.addEventListener('pagehide', bump)
         } catch { /* a cross-origin frame is covered by the URL check */ }
         const artifactUrl = bodyArtifact.artifactUrl
+        setFrameLoads((count) => count + 1)
         const status = firstLoad ? readFrameResponseStatus(frame) : null
         if (typeof status === 'number' && status >= 400) {
           setFrameFailure({ artifactUrl, status })
@@ -1011,6 +1017,7 @@ export function ArtifactWorkspace({
         }
         // Without a readable status (for example Safari), one HEAD request classifies the first load.
         const needsHead = firstLoad && status === undefined
+        setFrameStatusPending(needsHead)
         if (needsHead) {
           const controller = new AbortController()
           frameStatusAbort.current?.abort()
@@ -1023,12 +1030,12 @@ export function ArtifactWorkspace({
               // The result belongs to the load it was started for: ignore it once the frame has loaded
               // again, been replaced, or left the probed artifact.
               if (generation !== frameGeneration.current || loadNumber !== frameLoadCount.current || frame !== htmlFrameRef.current || !frameShowsArtifact(frame, artifactUrl)) return
+              setFrameStatusPending(false)
               // A probe that fails at the network level leaves the body unverified: treat it as failed.
               if (headStatus === null || headStatus >= 400) {
                 setFrameFailure({ artifactUrl, status: headStatus })
                 return
               }
-              setFrameLoads((count) => count + 1)
               if (focusRetryRef.current) {
                 focusRetryRef.current = false
                 frame.focus()
@@ -1039,7 +1046,6 @@ export function ArtifactWorkspace({
           frame.focus()
         }
         setFrameLanguage({ artifactUrl: bodyArtifact.artifactUrl, lang: readFrameLanguage(event.currentTarget) })
-        if (!needsHead) setFrameLoads((count) => count + 1)
         event.currentTarget.contentWindow?.addEventListener('keydown', forwardArtifactKeyDown, true)
         syncHtmlFrameLocation(event.currentTarget)
         highlightFrame(event.currentTarget, highlightQueryRef.current, !hash, reportMatches)

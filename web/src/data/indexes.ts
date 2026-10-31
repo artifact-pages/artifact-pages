@@ -458,7 +458,7 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, task: (item: 
 
 export async function discoverSites(
   fetcher: Fetcher = fetch,
-  options: { metadataTimeoutMs?: number; registryTimeoutMs?: number; signal?: AbortSignal } = {},
+  options: { metadataTimeoutMs?: number; registryTimeoutMs?: number; signal?: AbortSignal; onSite?: (entry: SiteCatalogEntry) => void } = {},
 ): Promise<SiteCatalogEntry[]> {
   const metadataTimeoutMs = options.metadataTimeoutMs ?? SITE_METADATA_TIMEOUT_MS
   const { signal } = options
@@ -470,24 +470,25 @@ export async function discoverSites(
       title: site.name,
       ...(site.description?.trim() ? { description: site.description } : {}),
     }
+    const report = (entry: SiteCatalogEntry) => { if (!signal?.aborted) options.onSite?.(entry); return entry }
     const remaining = deadline - Date.now()
-    if (remaining <= 0 || signal?.aborted) return { site: registeredSummary, status: 'metadata-unavailable' }
+    if (remaining <= 0 || signal?.aborted) return report({ site: registeredSummary, status: 'metadata-unavailable' })
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), remaining)
     const onCallerAbort = () => controller.abort()
     signal?.addEventListener('abort', onCallerAbort, { once: true })
     try {
       const metadata = await loadSiteDiscoveryMetadata(site.id, fetcher, controller.signal)
-      return { ...metadata, site: registeredSummary, status: 'available' }
+      return report({ ...metadata, site: registeredSummary, status: 'available' })
     } catch (error) {
-      return {
+      return report({
         site: registeredSummary,
         status: error instanceof UnsupportedSchemaError
           ? 'needs-republish'
           : error instanceof IndexLoadError && error.status === 404
             ? 'not-published'
             : 'metadata-unavailable',
-      }
+      })
     } finally {
       clearTimeout(timer)
       signal?.removeEventListener('abort', onCallerAbort)

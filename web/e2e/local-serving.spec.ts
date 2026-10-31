@@ -2238,7 +2238,7 @@ test('published document bridge refreshes the index before navigating and reject
   await page.locator('iframe').first().focus()
   const accepted = await page.frameLocator('iframe').locator('body').evaluate(() => {
     const parent = window.parent as Window & typeof globalThis
-    const event = new parent.CustomEvent('artifact-pages:navigate:v1', {
+    const event = new CustomEvent('artifact-pages:navigate:v1', {
       cancelable: true, detail: { source: window, href: '/sre/guides/bridge-new.html?q=hello#test' },
     })
     return !parent.dispatchEvent(event)
@@ -2301,6 +2301,26 @@ test(`document bridge does not steal focus after ${interruption} while the index
 })
 }
 
+test('document bridge focuses without waiting for another site metadata', async ({ page }) => {
+  await page.goto('/sre/incidents/checkout-latency/index.html')
+  await expect(page.locator('iframe').first()).toHaveCSS('opacity', '1')
+  await page.locator('iframe').first().focus()
+  let release = () => {}
+  const gate = new Promise<void>((resolve) => { release = resolve })
+  let started = () => {}
+  const pending = new Promise<void>((resolve) => { started = resolve })
+  await page.route('**/_indexes/frontend/meta.json', async (route) => { started(); await gate; await route.continue() })
+  try {
+    await page.frameLocator('iframe').locator('body').evaluate(() => {
+      const parent = window.parent as Window & typeof globalThis
+      parent.dispatchEvent(new CustomEvent('artifact-pages:navigate:v1', { cancelable: true, detail: { source: window, href: '/sre/incidents/checkout-latency/index.html?other=held' } }))
+    })
+    await pending
+    await expect(page).toHaveURL(/other=held$/)
+    await expect(page.locator('iframe').first()).toBeFocused()
+  } finally { release() }
+})
+
 for (const failure of ['index', 'html'] as const) {
   test(`document bridge focuses retry when ${failure} loading fails`, async ({ page }) => {
     await page.goto('/sre/incidents/checkout-latency/index.html')
@@ -2315,6 +2335,49 @@ for (const failure of ['index', 'html'] as const) {
     await expect(page.getByRole('button', { name: 'Try again' })).toBeFocused()
   })
 }
+
+for (const failure of ['unregistered', 'unsupported'] as const) {
+  test(`document bridge hands focus to ${failure} site status`, async ({ page }) => {
+    await page.goto('/sre/incidents/checkout-latency/index.html')
+    await expect(page.locator('iframe').first()).toHaveCSS('opacity', '1')
+    await page.locator('iframe').first().focus()
+    await page.route('**/_indexes/sre/index.json', async (route) => {
+      if (failure === 'unregistered') return route.fulfill({ status: 404 })
+      const response = await route.fetch()
+      const index = await response.json()
+      return route.fulfill({ response, json: { ...index, schemaVersion: 2 } })
+    })
+    if (failure === 'unregistered') {
+      await page.route('**/_indexes/sites.json', async (route) => {
+        const response = await route.fetch()
+        const registry = await response.json()
+        return route.fulfill({ response, json: { ...registry, sites: registry.sites.filter((site: { id: string }) => site.id !== 'sre') } })
+      })
+    }
+    await page.frameLocator('iframe').locator('body').evaluate(() => {
+      const parent = window.parent as Window & typeof globalThis
+      parent.dispatchEvent(new parent.CustomEvent('artifact-pages:navigate:v1', { cancelable: true, detail: { source: window, href: '/sre/incidents/checkout-latency/index.html?status=bridge' } }))
+    })
+    await expect(page.getByRole('heading', { name: failure === 'unregistered' ? 'Page not found' : 'This site needs to be republished' })).toBeVisible()
+    await expect(page.getByRole('button', { name: '← All sites' })).toBeFocused()
+  })
+}
+
+test('document bridge focuses retry when a Safari-style HEAD probe fails', async ({ page }) => {
+  await page.addInitScript(() => {
+    const original = performance.getEntriesByType.bind(performance)
+    performance.getEntriesByType = (type) => type === 'navigation' ? [] : original(type)
+  })
+  await page.goto('/sre/incidents/checkout-latency/index.html')
+  await expect(page.locator('iframe').first()).toHaveCSS('opacity', '1')
+  await page.locator('iframe').first().focus()
+  await page.route('**/_artifacts/sre/incidents/checkout-latency/index.html*', (route) => route.request().method() === 'HEAD' ? route.fulfill({ status: 503 }) : route.continue())
+  await page.frameLocator('iframe').locator('body').evaluate(() => {
+    const parent = window.parent as Window & typeof globalThis
+    parent.dispatchEvent(new parent.CustomEvent('artifact-pages:navigate:v1', { cancelable: true, detail: { source: window, href: '/sre/incidents/checkout-latency/index.html?head=bridge' } }))
+  })
+  await expect(page.getByRole('button', { name: 'Try again' })).toBeFocused()
+})
 
 test('document bridge preserves the preview catalog for the current site visit', async ({ page }) => {
   let catalogRequests = 0
@@ -8192,6 +8255,36 @@ test.describe('reader context column (ISSUE-108)', () => {
     await expect(column.locator('[aria-current="location"]')).toHaveText(name)
     await page.locator('.markdown-scroll').evaluate((element) => element.scrollTo(0, 0))
     await expect(column.locator('[aria-current="location"]')).toHaveText((await buttons.first().textContent())!)
+  })
+
+  test('HTML Contents follows scrolling while a Safari-style HEAD probe is pending', async ({ page }) => {
+    await page.addInitScript(() => {
+      const original = performance.getEntriesByType.bind(performance)
+      performance.getEntriesByType = (type) => type === 'navigation' ? [] : original(type)
+    })
+    let release = () => {}
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    let headStarted = () => {}
+    const head = new Promise<void>((resolve) => { headStarted = resolve })
+    await page.route('**/_artifacts/showcase/editorial/field-notes/index.html*', async (route) => {
+      if (route.request().method() === 'HEAD') { headStarted(); await gate }
+      await route.continue()
+    })
+    try {
+      await page.goto(htmlPath)
+      await head
+      const frame = page.locator('iframe.artifact-frame')
+      const current = columnOf(page).locator('[aria-current="location"]')
+      await expect.poll(async () => {
+        await frame.evaluate((element) => {
+          const frame = element as HTMLIFrameElement
+          const target = frame.contentDocument?.getElementById('principles')
+          const win = frame.contentWindow
+          if (target && win) win.scrollTo({ top: target.getBoundingClientRect().top + win.scrollY - 20, behavior: 'instant' })
+        })
+        return current.textContent({ timeout: 1000 }).catch(() => null)
+      }).toBe('Three useful tensions')
+    } finally { release() }
   })
 
   test('the current heading follows the scroll in an HTML frame', async ({ page }) => {
