@@ -45,7 +45,7 @@ import type { TreeStyle } from './ArtifactTree'
 import type { ArtifactIndexEntry, SiteCatalogEntry, SiteIndex, SiteSummary } from '../domain/index'
 import { readRecentArtifactReads, recordRecentArtifactRead, type RecentArtifactRead } from '../domain/recent-reads'
 import { themeModeIcon, type ResolvedTheme, type ThemeMode } from '../domain/theme'
-import { artifactRouteHref, searchRouteHref, sitePreviewsHref, type AppRoute } from '../routing'
+import { artifactRouteHref, parseRoute, searchRouteHref, sitePreviewsHref, type AppRoute } from '../routing'
 
 type SiteRoute = Extract<AppRoute, { kind: 'site' }>
 type SearchRoute = Extract<AppRoute, { kind: 'search' }>
@@ -64,6 +64,10 @@ export function ArtifactWorkspace({
   siteDiscoveryError,
   onRetryDiscovery,
   navigate,
+  navigateFromDocument,
+  bridgeFocusHref,
+  bridgeSiteReady,
+  onBridgeFocusConsumed,
   themeMode,
   theme,
   onSetThemeMode,
@@ -89,6 +93,10 @@ export function ArtifactWorkspace({
   siteDiscoveryError?: Error
   onRetryDiscovery?: () => void
   navigate: (href: string, options?: { replace?: boolean }) => void
+  navigateFromDocument?: (href: string) => boolean
+  bridgeSiteReady?: boolean
+  bridgeFocusHref?: string | null
+  onBridgeFocusConsumed?: () => void
   themeMode: ThemeMode
   theme: ResolvedTheme
   onSetThemeMode: (mode: ThemeMode) => void
@@ -147,12 +155,34 @@ export function ArtifactWorkspace({
   const focusStageAfterPalette = useRef(false)
   const stageRef = useRef<HTMLElement>(null)
   const htmlFrameRef = useRef<HTMLIFrameElement>(null)
+  useEffect(() => {
+    if (!navigateFromDocument || route.kind !== 'site') return
+    const onDocumentNavigation = (event: Event) => {
+      if (event.type !== 'artifact-pages:navigate:v1' || !event.cancelable || !('detail' in event)) return
+      const detail = event.detail as { source?: unknown; href?: unknown } | null
+      if (!detail || typeof detail !== 'object') return
+      const frame = htmlFrameRef.current
+      if (!frame || detail?.source !== frame.contentWindow || typeof detail.href !== 'string') return
+      try {
+        if (!detail.href.startsWith('/') || detail.href.startsWith('//')) return
+        const url = new URL(detail.href, window.location.href)
+        const destination = parseRoute(url.pathname, url.search)
+        if (url.origin !== window.location.origin || destination.kind !== 'site' || destination.siteId !== route.siteId
+          || destination.artifactPath?.split('/')[0] === '_previews'
+          || destination.artifactPath?.split('/')[0] === '_search') return
+        if (navigateFromDocument(`${url.pathname}${url.search}${url.hash}`)) event.preventDefault()
+      } catch { /* The author falls back to a regular navigation. */ }
+    }
+    window.addEventListener('artifact-pages:navigate:v1', onDocumentNavigation)
+    return () => window.removeEventListener('artifact-pages:navigate:v1', onDocumentNavigation)
+  }, [navigateFromDocument, route.kind, route.siteId])
   const contentsToggleRef = useRef<HTMLButtonElement>(null)
   const detailsToggleRef = useRef<HTMLButtonElement>(null)
   const moreMenuTriggerRef = useRef<HTMLButtonElement>(null)
   const narrowChrome = useMediaQuery(NARROW_CHROME_QUERY)
   const wideReader = useMediaQuery(READER_COLUMN_QUERY)
   const [frameLoads, setFrameLoads] = useState(0)
+  const [frameStatusPending, setFrameStatusPending] = useState(false)
   const [headingJump, setHeadingJump] = useState<'pending' | 'settled' | null>(null)
   const [headingFocus, setHeadingFocus] = useState<{ artifactUrl: string, id: string } | null>(null)
   const currentArtifact = routeArtifactPath
@@ -249,6 +279,23 @@ export function ArtifactWorkspace({
   }, [matchRanges, currentMatch])
   const lastRecordedArtifactId = useRef<string | null>(null)
   const currentFormat = bodyArtifact?.format
+  // Wait for discovery as it may replace the default index URL, and for an HTML
+  // frame's load. Two frames let a changed index unmount this transient view.
+  useEffect(() => {
+    if (!bridgeFocusHref || bridgeFocusHref !== `${pathname}${search}${hash}` || (bridgeSiteReady ?? discoveryStatus !== 'loading') === false) return
+    const failed = Boolean(frameFailure && frameFailure.artifactUrl === bodyArtifact?.artifactUrl)
+    if (currentFormat === 'html' && !failed && (!htmlFrameRef.current || frameLoads === 0 || frameStatusPending)) return
+    let second = 0
+    const first = window.requestAnimationFrame(() => {
+      second = window.requestAnimationFrame(() => {
+        if (document.activeElement === document.body || document.activeElement === document.documentElement) {
+          ;(failed ? retryFrameRef.current : currentFormat === 'html' ? htmlFrameRef.current : stageRef.current)?.focus({ preventScroll: true })
+        }
+        onBridgeFocusConsumed?.()
+      })
+    })
+    return () => { window.cancelAnimationFrame(first); window.cancelAnimationFrame(second) }
+  }, [bridgeFocusHref, pathname, search, hash, currentFormat, frameLoads, frameStatusPending, frameFailure, bodyArtifact?.artifactUrl, discoveryStatus, bridgeSiteReady, onBridgeFocusConsumed])
   // The persistent Contents and Details column (ISSUE-108): a document page at a wide viewport only.
   // Not on an error screen: a Markdown document or an HTML body that failed to load.
   const [markdownFailedUrl, setMarkdownFailedUrl] = useState<string | null>(null)
@@ -861,6 +908,7 @@ export function ArtifactWorkspace({
   // A new mount (another artifact or a retry) starts counting loads again and drops any pending status request.
   useEffect(() => {
     frameLoadCount.current = 0
+    setFrameStatusPending(false)
     frameGeneration.current += 1
     return () => {
       frameStatusAbort.current?.abort()
@@ -961,6 +1009,7 @@ export function ArtifactWorkspace({
           event.currentTarget.contentWindow?.addEventListener('pagehide', bump)
         } catch { /* a cross-origin frame is covered by the URL check */ }
         const artifactUrl = bodyArtifact.artifactUrl
+        setFrameLoads((count) => count + 1)
         const status = firstLoad ? readFrameResponseStatus(frame) : null
         if (typeof status === 'number' && status >= 400) {
           setFrameFailure({ artifactUrl, status })
@@ -968,18 +1017,31 @@ export function ArtifactWorkspace({
         }
         // Without a readable status (for example Safari), one HEAD request classifies the first load.
         const needsHead = firstLoad && status === undefined
+        setFrameStatusPending(needsHead)
         if (needsHead) {
           const controller = new AbortController()
           frameStatusAbort.current?.abort()
           frameStatusAbort.current = controller
+          // A stalled status probe must not leave the reader waiting indefinitely.
+          const timer = window.setTimeout(() => {
+            if (controller.signal.aborted) return
+            if (generation === frameGeneration.current && loadNumber === frameLoadCount.current && frame === htmlFrameRef.current && frameShowsArtifact(frame, artifactUrl)) {
+              setFrameStatusPending(false)
+              setFrameFailure({ artifactUrl, status: null })
+            }
+            controller.abort()
+          }, 10_000)
+          controller.signal.addEventListener('abort', () => window.clearTimeout(timer), { once: true })
           fetch(artifactUrl, { method: 'HEAD', cache: 'no-store', signal: controller.signal })
             .then((response) => response.status)
             .catch(() => null)
             .then((headStatus) => {
+              window.clearTimeout(timer)
               if (controller.signal.aborted) return
               // The result belongs to the load it was started for: ignore it once the frame has loaded
               // again, been replaced, or left the probed artifact.
               if (generation !== frameGeneration.current || loadNumber !== frameLoadCount.current || frame !== htmlFrameRef.current || !frameShowsArtifact(frame, artifactUrl)) return
+              setFrameStatusPending(false)
               // A probe that fails at the network level leaves the body unverified: treat it as failed.
               if (headStatus === null || headStatus >= 400) {
                 setFrameFailure({ artifactUrl, status: headStatus })
@@ -995,7 +1057,6 @@ export function ArtifactWorkspace({
           frame.focus()
         }
         setFrameLanguage({ artifactUrl: bodyArtifact.artifactUrl, lang: readFrameLanguage(event.currentTarget) })
-        setFrameLoads((count) => count + 1)
         event.currentTarget.contentWindow?.addEventListener('keydown', forwardArtifactKeyDown, true)
         syncHtmlFrameLocation(event.currentTarget)
         highlightFrame(event.currentTarget, highlightQueryRef.current, !hash, reportMatches)

@@ -16,7 +16,7 @@ export async function resolve(specifier, context, next) {
 
 const {
   IndexLoadError, REGISTRY_TIMEOUT_MS, SITE_INDEX_CACHE_MAX_ENTRIES, SITE_INDEX_CACHE_TTL_MS, SITE_INDEX_TIMEOUT_MS,
-  SITE_METADATA_CONCURRENCY, clearSiteIndexCache, discoverSites, loadSiteIndex, siteIndexCacheSize,
+  SITE_METADATA_CONCURRENCY, clearSiteIndexCache, discoverSites, invalidateSiteIndexCache, loadSiteIndex, siteIndexCacheSize,
 } = await import('./indexes.ts')
 
 const fixture = JSON.parse(readFileSync(new URL('../../../fixtures/storage/_indexes/sre/index.json', import.meta.url), 'utf8'))
@@ -198,6 +198,28 @@ test('expired entries are evicted without reading the same key again', async () 
     assert.equal(siteIndexCacheSize(), 1)
     await loadSiteIndex('gamma')
     assert.equal(calls.length, 3, 'gamma is still shared')
+  })
+})
+
+test('invalidating a site starts a fresh request without cancelling old waiters or replacing the fresh result', async () => {
+  const pending = []
+  await withClock((_url, init) => new Promise((resolve, reject) => {
+    pending.push({ resolve, signal: init.signal })
+    init.signal.addEventListener('abort', () => reject(new Error('aborted')))
+  }), async () => {
+    const old = loadSiteIndex('alpha')
+    await settle()
+    invalidateSiteIndexCache('alpha')
+    const fresh = loadSiteIndex('alpha')
+    await settle()
+    assert.equal(pending.length, 2)
+    assert.equal(pending[0].signal.aborted, false)
+    pending[1].resolve(json({ ...indexFor('alpha'), generatedAt: '2026-10-31T00:00:00Z' }))
+    assert.equal((await fresh).generatedAt, '2026-10-31T00:00:00Z')
+    pending[0].resolve(json({ ...indexFor('alpha'), generatedAt: '2026-10-30T00:00:00Z' }))
+    assert.equal((await old).generatedAt, '2026-10-30T00:00:00Z')
+    assert.equal((await loadSiteIndex('alpha')).generatedAt, '2026-10-31T00:00:00Z')
+    assert.equal(pending.length, 2)
   })
 })
 

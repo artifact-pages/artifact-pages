@@ -155,6 +155,14 @@ export function clearSiteIndexCache() {
   indexCache.clear()
 }
 
+/** Invalidate one site's cached reads without interrupting callers already awaiting them. */
+export function invalidateSiteIndexCache(siteId: string) {
+  const prefix = `${siteId}\0`
+  for (const [key, entry] of indexCache) {
+    if (key.startsWith(prefix)) dropEntry(key, entry)
+  }
+}
+
 /** For tests only: the number of cached entries. */
 export function siteIndexCacheSize() {
   return indexCache.size
@@ -450,36 +458,41 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, task: (item: 
 
 export async function discoverSites(
   fetcher: Fetcher = fetch,
-  options: { metadataTimeoutMs?: number; registryTimeoutMs?: number; signal?: AbortSignal } = {},
+  options: { metadataTimeoutMs?: number; registryTimeoutMs?: number; signal?: AbortSignal; onSite?: (entry: SiteCatalogEntry) => void; prioritySiteId?: string; onRegistry?: (siteIds: string[]) => void } = {},
 ): Promise<SiteCatalogEntry[]> {
   const metadataTimeoutMs = options.metadataTimeoutMs ?? SITE_METADATA_TIMEOUT_MS
   const { signal } = options
   const registry = await loadSiteRegistry(fetcher, options.registryTimeoutMs ?? REGISTRY_TIMEOUT_MS, signal)
+  options.onRegistry?.(registry.sites.map((site) => site.id))
+  const orderedSites = [...registry.sites]
+  const priorityIndex = orderedSites.findIndex((site) => site.id === options.prioritySiteId)
+  if (priorityIndex > 0) orderedSites.unshift(...orderedSites.splice(priorityIndex, 1))
   const deadline = Date.now() + metadataTimeoutMs
-  const sites = await mapWithConcurrency(registry.sites, SITE_METADATA_CONCURRENCY, async (site): Promise<SiteCatalogEntry> => {
+  const sites = await mapWithConcurrency(orderedSites, SITE_METADATA_CONCURRENCY, async (site): Promise<SiteCatalogEntry> => {
     const registeredSummary: SiteSummary = {
       id: site.id,
       title: site.name,
       ...(site.description?.trim() ? { description: site.description } : {}),
     }
+    const report = (entry: SiteCatalogEntry) => { if (!signal?.aborted) options.onSite?.(entry); return entry }
     const remaining = deadline - Date.now()
-    if (remaining <= 0 || signal?.aborted) return { site: registeredSummary, status: 'metadata-unavailable' }
+    if (remaining <= 0 || signal?.aborted) return report({ site: registeredSummary, status: 'metadata-unavailable' })
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), remaining)
     const onCallerAbort = () => controller.abort()
     signal?.addEventListener('abort', onCallerAbort, { once: true })
     try {
       const metadata = await loadSiteDiscoveryMetadata(site.id, fetcher, controller.signal)
-      return { ...metadata, site: registeredSummary, status: 'available' }
+      return report({ ...metadata, site: registeredSummary, status: 'available' })
     } catch (error) {
-      return {
+      return report({
         site: registeredSummary,
         status: error instanceof UnsupportedSchemaError
           ? 'needs-republish'
           : error instanceof IndexLoadError && error.status === 404
             ? 'not-published'
             : 'metadata-unavailable',
-      }
+      })
     } finally {
       clearTimeout(timer)
       signal?.removeEventListener('abort', onCallerAbort)

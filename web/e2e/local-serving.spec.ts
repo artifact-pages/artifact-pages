@@ -2199,6 +2199,310 @@ async function framePaintsOnlyReaderSurface(page: Page, frame: Locator) {
   }, png.toString('base64'))
 }
 
+test('published document bridge refreshes the index before navigating and rejects unrelated requests', async ({ page }) => {
+  let newPagePublished = false
+  let indexReads = 0
+  await page.route('**/_indexes/sre/index.json', async (route) => {
+    indexReads += 1
+    const response = await route.fetch()
+    const index = await response.json() as { artifacts: Array<Record<string, unknown>> }
+    if (newPagePublished) index.artifacts.push({
+      id: 'guides/bridge-new.html', title: 'Bridge new page', path: 'guides/bridge-new.html',
+      format: 'html', filename: 'bridge-new.html', artifactUrl: '/_artifacts/sre/guides/bridge-new.html',
+      updatedAt: '2026-10-01T00:00:00Z',
+    })
+    await route.fulfill({ response, json: index })
+  })
+  await page.route('**/_artifacts/sre/guides/bridge-new.html', (route) => route.fulfill({
+    status: 200, contentType: 'text/html', body: '<!doctype html><h1>Bridge new page</h1>',
+  }))
+  await page.goto('/sre/incidents/checkout-latency/index.html')
+  await expect(page.locator('iframe').first()).toHaveCSS('opacity', '1')
+  const before = indexReads
+  const refused = await page.evaluate(() => window.dispatchEvent(new CustomEvent('artifact-pages:navigate:v1', {
+    cancelable: true, detail: { source: window, href: '/sre/guides/bridge-new.html' },
+  })))
+  expect(refused).toBe(true)
+  await expect(page).toHaveURL(/checkout-latency/)
+  const rejectedRoutes = await page.frameLocator('iframe').locator('body').evaluate(() => {
+    const parent = window.parent as Window & typeof globalThis
+    return ['https://example.com/other', '//example.com/other', '/other/page.html', '/sre/_previews/a', '/sre/_search?q=a'].map((href) => (
+      parent.dispatchEvent(new parent.CustomEvent('artifact-pages:navigate:v1', {
+        cancelable: true, detail: { source: window, href },
+      }))
+    ))
+  })
+  expect(rejectedRoutes).toEqual([true, true, true, true, true])
+  await expect(page).toHaveURL(/checkout-latency/)
+  newPagePublished = true
+  await page.locator('iframe').first().focus()
+  const accepted = await page.frameLocator('iframe').locator('body').evaluate(() => {
+    const parent = window.parent as Window & typeof globalThis
+    const event = new CustomEvent('artifact-pages:navigate:v1', {
+      cancelable: true, detail: { source: window, href: '/sre/guides/bridge-new.html?q=hello#test' },
+    })
+    return !parent.dispatchEvent(event)
+  })
+  expect(accepted).toBe(true)
+  await expect(page).toHaveURL(/bridge-new\.html\?q=hello#test$/)
+  await expect(page.frameLocator('iframe').getByRole('heading', { name: 'Bridge new page' })).toBeVisible()
+  await expect.poll(() => page.locator('iframe').first().evaluate((frame) => frame.ownerDocument.activeElement === frame)).toBe(true)
+  expect(indexReads).toBeGreaterThan(before)
+  await page.goBack()
+  await expect(page).toHaveURL(/checkout-latency/)
+  await expect(page.frameLocator('iframe').locator('body')).toBeVisible()
+})
+
+for (const destination of ['/sre/diagrams/mermaid-catalog.md', '/sre/runbooks']) {
+  test(`document bridge gives the reading stage focus for ${destination}`, async ({ page }) => {
+    await page.goto('/sre/incidents/checkout-latency/index.html')
+    await expect(page.locator('iframe').first()).toHaveCSS('opacity', '1')
+    await page.locator('iframe').first().focus()
+    await expect.poll(() => page.frameLocator('iframe').locator('body').evaluate((_body, href) => {
+      const parent = window.parent as Window & typeof globalThis
+      return !parent.dispatchEvent(new parent.CustomEvent('artifact-pages:navigate:v1', {
+        cancelable: true, detail: { source: window, href },
+      }))
+    }, destination)).toBe(true)
+    await expect(page).toHaveURL(new URL(destination, page.url()).href)
+    await expect(page.locator('#main-content')).toBeFocused()
+  })
+}
+
+for (const interruption of ['pointer', 'wheel', 'blur'] as const) {
+test(`document bridge does not steal focus after ${interruption} while the index refreshes`, async ({ page }) => {
+  let hold = false
+  let release = () => {}
+  const gate = new Promise<void>((resolve) => { release = resolve })
+  await page.route('**/_indexes/sre/index.json', async (route) => {
+    if (hold) await gate
+    await route.continue()
+  })
+  await page.goto('/sre/incidents/checkout-latency/index.html')
+  await expect(page.locator('iframe').first()).toHaveCSS('opacity', '1')
+  await page.locator('iframe').first().focus()
+  hold = true
+  const refreshed = page.waitForRequest('**/_indexes/sre/index.json')
+  try {
+    await page.frameLocator('iframe').locator('body').evaluate(() => {
+      const parent = window.parent as Window & typeof globalThis
+      parent.dispatchEvent(new parent.CustomEvent('artifact-pages:navigate:v1', {
+        cancelable: true, detail: { source: window, href: '/sre/incidents/checkout-latency/index.html?from=bridge' },
+      }))
+    })
+    await refreshed
+    if (interruption === 'pointer') await page.mouse.click(2, 2)
+    else if (interruption === 'wheel') await page.mouse.wheel(0, 10)
+    else await page.evaluate(() => window.dispatchEvent(new Event('blur')))
+    release()
+    await expect(page.locator('iframe').first()).toHaveCSS('opacity', '1')
+    expect(await page.locator('iframe').first().evaluate((frame) => frame.ownerDocument.activeElement === frame)).toBe(false)
+  } finally { release() }
+})
+}
+
+test('document bridge focuses without waiting for another site metadata', async ({ page }) => {
+  await page.goto('/sre/incidents/checkout-latency/index.html')
+  await expect(page.locator('iframe').first()).toHaveCSS('opacity', '1')
+  await page.locator('iframe').first().focus()
+  let release = () => {}
+  const gate = new Promise<void>((resolve) => { release = resolve })
+  let started = () => {}
+  const pending = new Promise<void>((resolve) => { started = resolve })
+  await page.route('**/_indexes/frontend/meta.json', async (route) => { started(); await gate; await route.continue() })
+  try {
+    await page.frameLocator('iframe').locator('body').evaluate(() => {
+      const parent = window.parent as Window & typeof globalThis
+      parent.dispatchEvent(new CustomEvent('artifact-pages:navigate:v1', { cancelable: true, detail: { source: window, href: '/sre/incidents/checkout-latency/index.html?other=held' } }))
+    })
+    await pending
+    await expect(page).toHaveURL(/other=held$/)
+    await expect(page.locator('iframe').first()).toBeFocused()
+  } finally { release() }
+})
+
+for (const outcome of ['available', 'not-published'] as const) {
+test(`document bridge prioritizes its site behind six stalled registry entries (${outcome})`, async ({ page }) => {
+  await page.goto('/sre/incidents/checkout-latency/index.html')
+  await expect(page.locator('iframe').first()).toHaveCSS('opacity', '1')
+  await page.locator('iframe').first().focus()
+  let release = () => {}
+  const gate = new Promise<void>((resolve) => { release = resolve })
+  await page.route('**/_indexes/sites.json', async (route) => {
+    const response = await route.fetch()
+    const registry = await response.json()
+    const held = Array.from({ length: 6 }, (_, index) => ({ id: `held-${index}`, name: `Held ${index}`, repository: 'example/repo', sourcePath: `held-${index}` }))
+    await route.fulfill({ response, json: { ...registry, sites: [...held, ...registry.sites].sort((a, b) => a.id.localeCompare(b.id)) } })
+  })
+  if (outcome === 'not-published') {
+    await page.route('**/_indexes/sre/meta.json', (route) => route.fulfill({ status: 404 }))
+    await page.route('**/_indexes/sre/index.json', (route) => route.fulfill({ status: 404 }))
+  }
+  let heldRequests = 0
+  await page.route(/\/_indexes\/held-\d+\/meta\.json$/, async (route) => { heldRequests += 1; await gate; await route.fulfill({ status: 404 }).catch(() => {}) })
+  try {
+    await page.frameLocator('iframe').locator('body').evaluate(() => {
+      const parent = window.parent as Window & typeof globalThis
+      parent.dispatchEvent(new CustomEvent('artifact-pages:navigate:v1', { cancelable: true, detail: { source: window, href: '/sre/incidents/checkout-latency/index.html?priority=bridge' } }))
+    })
+    await expect(page).toHaveURL(/priority=bridge$/)
+    await expect.poll(() => heldRequests).toBeGreaterThanOrEqual(5)
+    if (outcome === 'available') await expect(page.locator('iframe').first()).toBeFocused({ timeout: 5000 })
+    else {
+      await expect(page.getByRole('heading', { name: 'Site registered, but not published yet' })).toBeVisible()
+      await expect(page.getByRole('button', { name: '← All sites' })).toBeFocused()
+    }
+  } finally { release() }
+})
+}
+
+test('document bridge ignores the default index 404 when delayed metadata selects a custom index', async ({ page }) => {
+  const index = await (await page.request.get('/_indexes/sre/index.json')).json()
+  await page.goto('/sre/incidents/checkout-latency/index.html')
+  await expect(page.locator('iframe').first()).toHaveCSS('opacity', '1')
+  await page.locator('iframe').first().focus()
+  let release = () => {}
+  const gate = new Promise<void>((resolve) => { release = resolve })
+  let indexMissing = () => {}
+  const missing = new Promise<void>((resolve) => { indexMissing = resolve })
+  await page.route('**/_indexes/sre/index.json', async (route) => { await route.fulfill({ status: 404 }); indexMissing() })
+  await page.route('**/_indexes/sre/custom-index.json', (route) => route.fulfill({ json: index }))
+  await page.route('**/_indexes/sre/meta.json', async (route) => {
+    const response = await route.fetch()
+    const metadata = await response.json()
+    await gate
+    await route.fulfill({ response, json: { ...metadata, artifactIndexUrl: '/_indexes/sre/custom-index.json' } })
+  })
+  await page.evaluate(() => {
+    const states: string[] = []
+    new MutationObserver(() => {
+      if (document.body.textContent?.includes('Unable to load this site')) states.push('error')
+    }).observe(document.body, { subtree: true, childList: true, characterData: true })
+    ;(window as unknown as { __bridgeStates: string[] }).__bridgeStates = states
+  })
+  try {
+    await page.frameLocator('iframe').locator('body').evaluate(() => {
+      const parent = window.parent as Window & typeof globalThis
+      parent.dispatchEvent(new CustomEvent('artifact-pages:navigate:v1', { cancelable: true, detail: { source: window, href: '/sre/incidents/checkout-latency/index.html?custom=bridge' } }))
+    })
+    await missing
+    await expect(page.getByRole('status')).toHaveText('Checking whether this site is available…')
+    release()
+    await expect(page).toHaveURL(/custom=bridge$/)
+    await expect(page.locator('iframe').first()).toBeFocused()
+    expect(await page.evaluate(() => (window as unknown as { __bridgeStates: string[] }).__bridgeStates)).toEqual([])
+  } finally { release() }
+})
+
+for (const failure of ['index', 'html'] as const) {
+  test(`document bridge focuses retry when ${failure} loading fails`, async ({ page }) => {
+    await page.goto('/sre/incidents/checkout-latency/index.html')
+    await expect(page.locator('iframe').first()).toHaveCSS('opacity', '1')
+    await page.locator('iframe').first().focus()
+    const target = '/sre/incidents/checkout-latency/index.html?failed=bridge'
+    await page.route(failure === 'index' ? '**/_indexes/sre/index.json' : '**/_artifacts/sre/incidents/checkout-latency/index.html*', (route) => route.fulfill({ status: 503, body: 'unavailable' }))
+    await page.frameLocator('iframe').locator('body').evaluate((_body, href) => {
+      const parent = window.parent as Window & typeof globalThis
+      parent.dispatchEvent(new parent.CustomEvent('artifact-pages:navigate:v1', { cancelable: true, detail: { source: window, href } }))
+    }, target)
+    await expect(page.getByRole('button', { name: 'Try again' })).toBeFocused()
+  })
+}
+
+for (const failure of ['unregistered', 'unsupported'] as const) {
+  test(`document bridge hands focus to ${failure} site status`, async ({ page }) => {
+    await page.goto('/sre/incidents/checkout-latency/index.html')
+    await expect(page.locator('iframe').first()).toHaveCSS('opacity', '1')
+    await page.locator('iframe').first().focus()
+    await page.route('**/_indexes/sre/index.json', async (route) => {
+      if (failure === 'unregistered') return route.fulfill({ status: 404 })
+      const response = await route.fetch()
+      const index = await response.json()
+      return route.fulfill({ response, json: { ...index, schemaVersion: 2 } })
+    })
+    if (failure === 'unregistered') {
+      await page.route('**/_indexes/sites.json', async (route) => {
+        const response = await route.fetch()
+        const registry = await response.json()
+        return route.fulfill({ response, json: { ...registry, sites: registry.sites.filter((site: { id: string }) => site.id !== 'sre') } })
+      })
+    }
+    await page.frameLocator('iframe').locator('body').evaluate(() => {
+      const parent = window.parent as Window & typeof globalThis
+      parent.dispatchEvent(new parent.CustomEvent('artifact-pages:navigate:v1', { cancelable: true, detail: { source: window, href: '/sre/incidents/checkout-latency/index.html?status=bridge' } }))
+    })
+    await expect(page.getByRole('heading', { name: failure === 'unregistered' ? 'Page not found' : 'This site needs to be republished' })).toBeVisible()
+    await expect(page.getByRole('button', { name: '← All sites' })).toBeFocused()
+  })
+}
+
+test('document bridge focuses retry when a Safari-style HEAD probe fails', async ({ page }) => {
+  await page.addInitScript(() => {
+    const original = performance.getEntriesByType.bind(performance)
+    performance.getEntriesByType = (type) => type === 'navigation' ? [] : original(type)
+  })
+  await page.goto('/sre/incidents/checkout-latency/index.html')
+  await expect(page.locator('iframe').first()).toHaveCSS('opacity', '1')
+  await page.locator('iframe').first().focus()
+  await page.route('**/_artifacts/sre/incidents/checkout-latency/index.html*', (route) => route.request().method() === 'HEAD' ? route.fulfill({ status: 503 }) : route.continue())
+  await page.frameLocator('iframe').locator('body').evaluate(() => {
+    const parent = window.parent as Window & typeof globalThis
+    parent.dispatchEvent(new parent.CustomEvent('artifact-pages:navigate:v1', { cancelable: true, detail: { source: window, href: '/sre/incidents/checkout-latency/index.html?head=bridge' } }))
+  })
+  await expect(page.getByRole('button', { name: 'Try again' })).toBeFocused()
+})
+
+test('document bridge focuses retry when a Safari-style HEAD probe times out', async ({ page }) => {
+  await page.addInitScript(() => {
+    const original = performance.getEntriesByType.bind(performance)
+    performance.getEntriesByType = (type) => type === 'navigation' ? [] : original(type)
+  })
+  await page.goto('/sre/incidents/checkout-latency/index.html')
+  await expect(page.locator('iframe').first()).toHaveCSS('opacity', '1')
+  await page.locator('iframe').first().focus()
+  let release = () => {}
+  const gate = new Promise<void>((resolve) => { release = resolve })
+  await page.route('**/_artifacts/sre/incidents/checkout-latency/index.html*', async (route) => {
+    if (route.request().method() === 'HEAD') await gate
+    await route.continue().catch(() => {})
+  })
+  try {
+    await page.frameLocator('iframe').locator('body').evaluate(() => {
+      const parent = window.parent as Window & typeof globalThis
+      parent.dispatchEvent(new CustomEvent('artifact-pages:navigate:v1', { cancelable: true, detail: { source: window, href: '/sre/incidents/checkout-latency/index.html?timeout=bridge' } }))
+    })
+    await expect(page.getByRole('button', { name: 'Try again' })).toBeFocused({ timeout: 15_000 })
+  } finally { release() }
+})
+
+test('document bridge preserves the preview catalog for the current site visit', async ({ page }) => {
+  let catalogRequests = 0
+  page.on('request', (request) => { if (new URL(request.url()).pathname === '/_previews/sre/catalog.json') catalogRequests += 1 })
+  await page.goto('/sre/_previews')
+  await expect(page.getByRole('region', { name: 'Preview pr:42' })).toBeVisible()
+  expect(catalogRequests).toBe(1)
+  await page.evaluate(() => {
+    history.pushState({}, '', '/sre/incidents/checkout-latency/index.html')
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  })
+  await expect(page.locator('iframe').first()).toHaveCSS('opacity', '1')
+  const refreshed = page.waitForResponse('**/_indexes/sre/index.json')
+  await page.frameLocator('iframe').locator('body').evaluate(() => {
+    const parent = window.parent as Window & typeof globalThis
+    parent.dispatchEvent(new parent.CustomEvent('artifact-pages:navigate:v1', {
+      cancelable: true, detail: { source: window, href: '/sre/incidents/checkout-latency/index.html?via=bridge' },
+    }))
+  })
+  await refreshed
+  await expect(page.locator('iframe').first()).toHaveCSS('opacity', '1')
+  await page.evaluate(() => {
+    history.pushState({}, '', '/sre/_previews')
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  })
+  await expect(page.getByRole('region', { name: 'Preview pr:42' })).toBeVisible()
+  expect(catalogRequests).toBe(1)
+})
+
 test('in dark theme a loading HTML frame never paints white and is revealed on load (ISSUE-119)', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'dark' })
   const { release } = await routeSlowHtmlArtifact(page, 'guides/slow.html', 'Slow body')
@@ -5142,6 +5446,18 @@ test.describe('page text search', () => {
     await registerTextSearchSite(page)
   })
 
+  test('discovery never briefly reports search as disabled while initializing its client', async ({ page }) => {
+    await page.addInitScript(() => {
+      const records: string[] = []
+      new MutationObserver(() => { if (document.body?.textContent?.includes('This site was published without page text search.')) records.push('disabled') })
+        .observe(document, { childList: true, subtree: true, characterData: true })
+      ;(window as unknown as { __availabilityRecords: string[] }).__availabilityRecords = records
+    })
+    await page.goto('/textsearch/_search?q=lighthouse')
+    await expect(hits(page).first()).toBeVisible()
+    expect(await page.evaluate(() => (window as unknown as { __availabilityRecords: string[] }).__availabilityRecords)).toEqual([])
+  })
+
   test('the site picker marks sites with page text search', async ({ page }) => {
     await page.goto('/')
     await expect(page.getByRole('link', { name: /Text Search/ }).locator('.site-picker-badge')).toHaveText('Page text search')
@@ -5164,6 +5480,28 @@ test.describe('page text search', () => {
     await expect(field(page)).toBeFocused()
     await expect(sidebar(page).locator('.browse-tree')).toBeVisible()
     expect(requests[0]).toBe('/_indexes/textsearch/search/manifest.json')
+  })
+
+  test('document bridge retains the current site search cache', async ({ page }) => {
+    const requests = recordSearchRequests(page)
+    await page.goto('/textsearch/_search?q=latency')
+    await expect(status(page)).toHaveText('5 pages contain “latency”')
+    const initialRequests = requests.slice()
+    await changeUrl(page, '/textsearch/incidents/checkout-latency/index.html')
+    await expect(page.locator('iframe').first()).toHaveCSS('opacity', '1')
+    const refreshed = page.waitForResponse('**/_indexes/textsearch/index.json')
+    await page.frameLocator('iframe').locator('body').evaluate(() => {
+      const parent = window.parent as Window & typeof globalThis
+      parent.dispatchEvent(new parent.CustomEvent('artifact-pages:navigate:v1', {
+        cancelable: true, detail: { source: window, href: '/textsearch/long/scroll-target.html' },
+      }))
+    })
+    await refreshed
+    await expect(page).toHaveURL(/\/textsearch\/long\/scroll-target\.html$/)
+    await expect(page.locator('iframe').first()).toHaveCSS('opacity', '1')
+    await changeUrl(page, '/textsearch/_search?q=latency')
+    await expect(status(page)).toHaveText('5 pages contain “latency”')
+    expect(requests).toEqual(initialRequests)
   })
 
   test('palette lookup without title matches offers full text and Escape restores its sidebar trigger', async ({ page }) => {
@@ -8013,6 +8351,36 @@ test.describe('reader context column (ISSUE-108)', () => {
     await expect(column.locator('[aria-current="location"]')).toHaveText(name)
     await page.locator('.markdown-scroll').evaluate((element) => element.scrollTo(0, 0))
     await expect(column.locator('[aria-current="location"]')).toHaveText((await buttons.first().textContent())!)
+  })
+
+  test('HTML Contents follows scrolling while a Safari-style HEAD probe is pending', async ({ page }) => {
+    await page.addInitScript(() => {
+      const original = performance.getEntriesByType.bind(performance)
+      performance.getEntriesByType = (type) => type === 'navigation' ? [] : original(type)
+    })
+    let release = () => {}
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    let headStarted = () => {}
+    const head = new Promise<void>((resolve) => { headStarted = resolve })
+    await page.route('**/_artifacts/showcase/editorial/field-notes/index.html*', async (route) => {
+      if (route.request().method() === 'HEAD') { headStarted(); await gate }
+      await route.continue()
+    })
+    try {
+      await page.goto(htmlPath)
+      await head
+      const frame = page.locator('iframe.artifact-frame')
+      const current = columnOf(page).locator('[aria-current="location"]')
+      await expect.poll(async () => {
+        await frame.evaluate((element) => {
+          const frame = element as HTMLIFrameElement
+          const target = frame.contentDocument?.getElementById('principles')
+          const win = frame.contentWindow
+          if (target && win) win.scrollTo({ top: target.getBoundingClientRect().top + win.scrollY - 20, behavior: 'instant' })
+        })
+        return current.textContent({ timeout: 1000 }).catch(() => null)
+      }).toBe('Three useful tensions')
+    } finally { release() }
   })
 
   test('the current heading follows the scroll in an HTML frame', async ({ page }) => {

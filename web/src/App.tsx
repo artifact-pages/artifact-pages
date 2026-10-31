@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ArtifactWorkspace } from './components/ArtifactWorkspace'
 import { PreviewListPage } from './components/PreviewListPage'
 import { SitePicker } from './components/SitePicker'
 import { UnsupportedSchemaError } from './data/schema'
-import { defaultSiteIndexUrl, discoverSites, IndexLoadError, isValidSiteId, loadSiteIndex } from './data/indexes'
-import { createSiteFullTextSearch } from './data/fulltext'
+import { defaultSiteIndexUrl, discoverSites, IndexLoadError, invalidateSiteIndexCache, isValidSiteId, loadSiteIndex } from './data/indexes'
+import { createSiteFullTextSearch, type SiteFullTextSearch } from './data/fulltext'
 import { resetPreviewList } from './data/preview-list'
 import { hasSiteDiscoveryMetadata, type SiteCatalogEntry, type SiteIndex } from './domain/index'
 import { isThemeMode, resolveTheme } from './domain/theme'
@@ -94,14 +94,95 @@ function App() {
   const { themeMode, theme, setThemeMode } = useTheme()
   const [sites, setSites] = useState<LoadingState<SiteCatalogEntry[]>>({ status: 'loading' })
   const [discoveryAttempt, setDiscoveryAttempt] = useState(0)
+  const [bridgeEpoch, setBridgeEpoch] = useState(0)
+  const [bridgeFocusHref, setBridgeFocusHref] = useState<string | null>(null)
+  const [bridgeSite, setBridgeSite] = useState<SiteCatalogEntry | null>(null)
+  const [bridgeAbsentSite, setBridgeAbsentSite] = useState<string | null>(null)
+  const bridgeInFlight = useRef(false)
+  const activeSiteId = route.kind === 'sites' ? undefined : route.siteId
+  const [searchTarget, setSearchTarget] = useState<{ siteId: string; url: string } | null>(null)
+  // A bridge refresh remounts SitePage, but stays within the same site visit.
+  useEffect(() => {
+    if (!activeSiteId) return
+    return () => resetPreviewList(activeSiteId)
+  }, [activeSiteId])
+  // Keep the site's search client while discovery reloads, but expose it only
+  // after current metadata confirms the same URL. Construction is network-free.
+  useEffect(() => {
+    if (!activeSiteId) { setSearchTarget(null); return }
+    if (sites.status !== 'success') return
+    const entry = sites.data.find(({ site }) => site.id === activeSiteId)
+    const url = entry && hasSiteDiscoveryMetadata(entry) ? entry.fullTextUrl : undefined
+    setSearchTarget((current) => {
+      if (current?.siteId === activeSiteId && current.url === url) return current
+      return url ? { siteId: activeSiteId, url } : null
+    })
+  }, [activeSiteId, sites])
+  const visitFullTextSearch = useMemo((): SiteFullTextSearch | undefined => {
+    if (!searchTarget || searchTarget.siteId !== activeSiteId) return undefined
+    try {
+      return createSiteFullTextSearch({ site: { id: searchTarget.siteId, title: searchTarget.siteId }, fullTextUrl: searchTarget.url })
+    } catch { return undefined }
+  }, [searchTarget, activeSiteId])
+  useEffect(() => () => visitFullTextSearch?.clear(), [visitFullTextSearch])
   const retryDiscovery = () => {
     setSites({ status: 'loading' })
     setDiscoveryAttempt((n) => n + 1)
   }
 
+  // A trusted HTML document can request normal reader navigation without reloading the app.
+  // Reload discovery and the site index just as a full page navigation would; the app's own
+  // code is updated on the next full reload, as with any other SPA navigation.
+  const navigateFromDocument = useCallback((href: string) => {
+    if (route.kind !== 'site' || bridgeInFlight.current) return false
+    try {
+      const target = new URL(href, window.location.href)
+      navigate(`${target.pathname}${target.search}${target.hash}`)
+      bridgeInFlight.current = true
+      invalidateSiteIndexCache(route.siteId)
+      setBridgeFocusHref(`${target.pathname}${target.search}${target.hash}`)
+      setBridgeSite(null)
+      setBridgeAbsentSite(null)
+      setSites({ status: 'loading' })
+      setDiscoveryAttempt((n) => n + 1)
+      setBridgeEpoch((n) => n + 1)
+      return true
+    } catch {
+      bridgeInFlight.current = false
+      return false
+    }
+  }, [navigate, route])
+  useEffect(() => { bridgeInFlight.current = false }, [bridgeEpoch, pathname, search, hash])
+  useEffect(() => {
+    if (bridgeFocusHref && `${pathname}${search}${hash}` !== bridgeFocusHref) setBridgeFocusHref(null)
+  }, [bridgeFocusHref, pathname, search, hash])
+  useLayoutEffect(() => {
+    if (!bridgeFocusHref) return
+    const cancel = () => setBridgeFocusHref(null)
+    window.addEventListener('pointerdown', cancel, true)
+    window.addEventListener('keydown', cancel, true)
+    window.addEventListener('wheel', cancel, true)
+    window.addEventListener('touchstart', cancel, true)
+    window.addEventListener('blur', cancel)
+    const visibility = () => { if (document.hidden) cancel() }
+    document.addEventListener('visibilitychange', visibility)
+    return () => {
+      window.removeEventListener('pointerdown', cancel, true)
+      window.removeEventListener('keydown', cancel, true)
+      window.removeEventListener('wheel', cancel, true)
+      window.removeEventListener('touchstart', cancel, true)
+      window.removeEventListener('blur', cancel)
+      document.removeEventListener('visibilitychange', visibility)
+    }
+  }, [bridgeFocusHref])
+
   useEffect(() => {
     const controller = new AbortController()
-    discoverSites(fetch, { signal: controller.signal }).then(
+    discoverSites(fetch, { signal: controller.signal, prioritySiteId: activeSiteId, onRegistry: (ids) => {
+      if (activeSiteId && !ids.includes(activeSiteId)) setBridgeAbsentSite(activeSiteId)
+    }, onSite: (entry) => {
+      if (entry.site.id === activeSiteId) setBridgeSite(entry)
+    } }).then(
       (metadata) => {
         if (!controller.signal.aborted) setSites({ status: 'success', data: metadata })
       },
@@ -143,17 +224,23 @@ function App() {
 
   return (
     <SitePage
-      key={route.siteId}
+      key={`${route.siteId}:${bridgeEpoch}`}
       route={route}
       pathname={pathname}
       search={search}
       hash={hash}
-      sites={sites.status === 'success' ? sites.data : []}
+      sites={sites.status === 'success' ? sites.data : bridgeSite?.site.id === route.siteId ? [bridgeSite] : []}
       sitesLoading={sites.status === 'loading'}
       siteDiscoveryStatus={sites.status}
       siteDiscoveryError={sites.status === 'error' ? sites.error : undefined}
       retryDiscovery={retryDiscovery}
       navigate={navigate}
+      navigateFromDocument={navigateFromDocument}
+      bridgeFocusHref={bridgeFocusHref}
+      bridgeSiteReady={sites.status !== 'loading' || bridgeSite?.site.id === route.siteId || bridgeAbsentSite === route.siteId}
+      onBridgeFocusConsumed={() => setBridgeFocusHref(null)}
+      visitFullTextSearch={visitFullTextSearch}
+      visitSearchTarget={searchTarget}
       themeMode={themeMode}
       theme={theme}
       onSetThemeMode={setThemeMode}
@@ -174,6 +261,12 @@ function SitePage({
   search,
   hash,
   navigate,
+  navigateFromDocument,
+  bridgeFocusHref,
+  bridgeSiteReady,
+  onBridgeFocusConsumed,
+  visitFullTextSearch,
+  visitSearchTarget,
   themeMode,
   theme,
   onSetThemeMode,
@@ -188,43 +281,41 @@ function SitePage({
   search: string
   hash: string
   navigate: (href: string, options?: { replace?: boolean }) => void
+  navigateFromDocument: (href: string) => boolean
+  bridgeFocusHref: string | null
+  bridgeSiteReady: boolean
+  onBridgeFocusConsumed: () => void
+  visitFullTextSearch?: SiteFullTextSearch
+  visitSearchTarget: { siteId: string; url: string } | null
   themeMode: ThemeMode
   theme: ResolvedTheme
   onSetThemeMode: (mode: ThemeMode) => void
 }) {
-  const [indexState, setIndexState] = useState<LoadingState<SiteIndex>>({ status: 'loading' })
+  const [loadedIndex, setLoadedIndex] = useState<{ siteId: string; url: string; state: LoadingState<SiteIndex> } | null>(null)
   const [indexAttempt, setIndexAttempt] = useState(0)
   const retryIndex = () => {
-    setIndexState({ status: 'loading' })
+    setLoadedIndex(null)
     setIndexAttempt((n) => n + 1)
   }
   const registeredSite = sites.find(({ site }) => site.id === route.siteId)
   const artifactIndexUrl = registeredSite && hasSiteDiscoveryMetadata(registeredSite)
     ? registeredSite.artifactIndexUrl
     : defaultSiteIndexUrl(route.siteId)
+  const indexState: LoadingState<SiteIndex> = loadedIndex?.siteId === route.siteId && loadedIndex.url === artifactIndexUrl
+    ? loadedIndex.state : { status: 'loading' }
   const fullTextUrl = registeredSite && hasSiteDiscoveryMetadata(registeredSite) ? registeredSite.fullTextUrl : undefined
   // Construction is network-free; search data loads only when a query is committed.
-  const fullTextSearch = useMemo(() => {
-    if (!fullTextUrl) return undefined
-    try {
-      return createSiteFullTextSearch({ site: { id: route.siteId, title: route.siteId }, fullTextUrl })
-    } catch {
-      return undefined
-    }
-  }, [route.siteId, fullTextUrl])
-  useEffect(() => () => fullTextSearch?.clear(), [fullTextSearch])
-  // Leaving the site ends the visit's shared preview load; the next visit starts a fresh one.
-  useEffect(() => () => resetPreviewList(route.siteId), [route.siteId])
-
+  const fullTextSearch = fullTextUrl && visitSearchTarget?.siteId === route.siteId && visitSearchTarget.url === fullTextUrl
+    ? visitFullTextSearch : undefined
   useEffect(() => {
     const controller = new AbortController()
-    setIndexState({ status: 'loading' })
+    setLoadedIndex({ siteId: route.siteId, url: artifactIndexUrl, state: { status: 'loading' } })
     loadSiteIndex(route.siteId, fetch, artifactIndexUrl, { signal: controller.signal }).then(
       (index) => {
-        if (!controller.signal.aborted) setIndexState({ status: 'success', data: index })
+        if (!controller.signal.aborted) setLoadedIndex({ siteId: route.siteId, url: artifactIndexUrl, state: { status: 'success', data: index } })
       },
       (error: unknown) => {
-        if (!controller.signal.aborted) setIndexState({ status: 'error', error: toError(error) })
+        if (!controller.signal.aborted) setLoadedIndex({ siteId: route.siteId, url: artifactIndexUrl, state: { status: 'error', error: toError(error) } })
       },
     )
 
@@ -246,40 +337,40 @@ function SitePage({
   if (indexState.status === 'error' && route.kind !== 'preview-document') {
     const invalidSiteId = !isValidSiteId(route.siteId)
     const missingIndex = indexState.error instanceof IndexLoadError && indexState.error.status === 404
-    if (missingIndex && siteDiscoveryStatus === 'loading') {
+    if (missingIndex && siteDiscoveryStatus === 'loading' && !bridgeSiteReady) {
       return <StatusPage title={route.siteId} message="Checking whether this site is available…" />
     }
     if (
       invalidSiteId || (
         missingIndex &&
-        siteDiscoveryStatus === 'success' &&
+        (siteDiscoveryStatus === 'success' || (siteDiscoveryStatus === 'loading' && bridgeSiteReady)) &&
         !registeredSite
       )
     ) {
-      return <PageNotFoundPage onBack={() => navigate('/')} />
+      return <BridgeStatusFocus active={Boolean(bridgeFocusHref)} onConsumed={onBridgeFocusConsumed}><PageNotFoundPage onBack={() => navigate('/')} /></BridgeStatusFocus>
     }
     if (indexState.error instanceof UnsupportedSchemaError || registeredSite?.status === 'needs-republish') {
-      return <RepublishPage scope="site" title={registeredSite?.site.title ?? route.siteId} onBack={() => navigate('/')} />
+      return <BridgeStatusFocus active={Boolean(bridgeFocusHref)} onConsumed={onBridgeFocusConsumed}><RepublishPage scope="site" title={registeredSite?.site.title ?? route.siteId} onBack={() => navigate('/')} /></BridgeStatusFocus>
     }
     if (missingIndex && registeredSite?.status === 'not-published') {
-      return <RegisteredSiteStatusPage
+      return <BridgeStatusFocus active={Boolean(bridgeFocusHref)} onConsumed={onBridgeFocusConsumed}><RegisteredSiteStatusPage
         title={registeredSite.site.title}
         heading="Site registered, but not published yet"
         message="This site is registered and will appear here after its first publish."
         onBack={() => navigate('/')}
-      />
+      /></BridgeStatusFocus>
     }
     if (missingIndex && registeredSite?.status === 'metadata-unavailable') {
-      return <RegisteredSiteStatusPage
+      return <BridgeStatusFocus active={Boolean(bridgeFocusHref)} onConsumed={onBridgeFocusConsumed}><RegisteredSiteStatusPage
         title={registeredSite.site.title}
         heading="Site registered, but details are unavailable"
         message="This site's metadata and artifact index could not be loaded. Please try again in a moment."
         onRetry={() => { retryDiscovery(); retryIndex() }}
         focusRetry={indexAttempt > 0}
         onBack={() => navigate('/')}
-      />
+      /></BridgeStatusFocus>
     }
-    return <ErrorPage title={route.siteId} error={indexState.error} onRetry={retryIndex} focusRetry={indexAttempt > 0} onBack={() => navigate('/')} />
+    return <ErrorPage title={route.siteId} error={indexState.error} onRetry={retryIndex} focusRetry={indexAttempt > 0} onBack={() => navigate('/')} bridgeFocus={Boolean(bridgeFocusHref)} onBridgeFocusConsumed={onBridgeFocusConsumed} />
   }
 
   // A preview document does not wait for, or depend on, the published site: until its index arrives (or when it
@@ -307,17 +398,34 @@ function SitePage({
       search={search}
       hash={hash}
       navigate={navigate}
+      navigateFromDocument={navigateFromDocument}
+      bridgeFocusHref={bridgeFocusHref}
+      bridgeSiteReady={bridgeSiteReady}
+      onBridgeFocusConsumed={onBridgeFocusConsumed}
       themeMode={themeMode}
       theme={theme}
       onSetThemeMode={onSetThemeMode}
       index={index}
       publishedIndexStatus={indexState.status}
       fullTextSearch={fullTextSearch}
-      siteDiscoveryStatus={siteDiscoveryStatus}
+      siteDiscoveryStatus={fullTextUrl && (visitSearchTarget?.siteId !== route.siteId || visitSearchTarget.url !== fullTextUrl) ? 'loading' : siteDiscoveryStatus}
       siteDiscoveryError={siteDiscoveryError}
       onRetryDiscovery={retryDiscovery}
     />
   )
+}
+
+function BridgeStatusFocus({ active, onConsumed, children }: { active: boolean; onConsumed: () => void; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!active) return
+    if (document.activeElement === document.body || document.activeElement === document.documentElement) {
+      const target = ref.current?.querySelector<HTMLElement>('button') ?? ref.current?.querySelector<HTMLElement>('h1')
+      target?.focus({ preventScroll: true })
+    }
+    onConsumed()
+  }, [active, onConsumed])
+  return <div ref={ref} style={{ display: 'contents' }}>{children}</div>
 }
 
 function StatusPage({ title, message }: { title: string; message: string }) {
@@ -342,8 +450,12 @@ function ErrorPage({
   onBack,
   onRetry,
   focusRetry = false,
+  bridgeFocus = false,
+  onBridgeFocusConsumed,
 }: {
   title: string
+  bridgeFocus?: boolean
+  onBridgeFocusConsumed?: () => void
   scope?: 'catalog' | 'site'
   error: Error
   onBack?: () => void
@@ -351,14 +463,22 @@ function ErrorPage({
   focusRetry?: boolean
 }) {
   usePageTitle(pageTitle(scope === 'catalog' ? undefined : title, APP_NAME))
+  const containerRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    if (!bridgeFocus) return
+    if (document.activeElement === document.body || document.activeElement === document.documentElement) {
+      (containerRef.current?.querySelector<HTMLElement>('button') ?? containerRef.current?.querySelector<HTMLElement>('h1'))?.focus({ preventScroll: true })
+    }
+    onBridgeFocusConsumed?.()
+  }, [bridgeFocus, onBridgeFocusConsumed])
   const invalidData = error instanceof IndexLoadError && error.invalidData
   const timedOut = error instanceof IndexLoadError && error.timedOut
   return (
-    <main className="status-page">
+    <main ref={containerRef} className="status-page">
       <div className="status-content">
         <p className="brand-label"><span className="brand-mark">A</span> Artifact Pages</p>
         <p className="eyebrow">{title}</p>
-        <h1>{scope === 'catalog' ? 'Unable to load sites' : 'Unable to load this site'}</h1>
+        <h1 tabIndex={-1}>{scope === 'catalog' ? 'Unable to load sites' : 'Unable to load this site'}</h1>
         <p className="error-message" role="alert">
           {invalidData
             ? scope === 'catalog'
