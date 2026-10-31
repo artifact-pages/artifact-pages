@@ -1,6 +1,6 @@
 # Documentation links reload the reader on every page
 
-- Status: In progress
+- Status: Done
 - Assignee: Codex
 - Priority: P2
 - Area: Web / published HTML navigation and Japanese documentation
@@ -19,9 +19,13 @@ A same-site documentation link can use the already open reader while retaining c
 
 ## Acceptance criteria
 
-- [ ] A supported published HTML document can request same-site reader navigation without a full app reload, and unsupported readers retain ordinary navigation.
-- [ ] Each accepted request refreshes the relevant site index and site discovery, without reusing an expired or invalidated in-memory index; newly published pages are available subject to the existing CDN freshness policy.
-- [ ] Only the current published frame can request an eligible same-site route; preview, unrelated frame and external destinations are not intercepted. The check is for routing correctness, not a security boundary.
-- [ ] Back/Forward, query and fragments, modified clicks, downloads, focus and error/retry behavior remain usable.
-- [ ] Verify on the isolated Cloudflare target, including a newly published page and an older reader, and compare observable page-display time against the released baseline.
-- [ ] An independent review and relevant CI pass before merging; production deployment is separately authorized.
+- [x] A supported published HTML document can request same-site reader navigation without a full app reload, and unsupported readers retain ordinary navigation.
+- [x] Each accepted request refreshes the relevant site index and site discovery, without reusing an expired or invalidated in-memory index; newly published pages are available subject to the existing CDN freshness policy.
+- [x] Only the current published frame can request an eligible same-site route; preview, unrelated frame and external destinations are not intercepted. The check is for routing correctness, not a security boundary.
+- [x] Back/Forward, query and fragments, modified clicks, downloads, focus and error/retry behavior remain usable.
+- [x] Verify on the isolated Cloudflare target, including a newly published page and an older reader, and compare observable page-display time against the released baseline.
+- [x] An independent review and relevant CI pass before merging; production deployment is separately authorized.
+
+## Outcome
+
+The reader bridge shipped in [#242](https://github.com/artifact-pages/artifact-pages/pull/242), with the documentation client in [docs #59](https://github.com/artifact-pages/docs/pull/59). Web v0.4.11 was deployed to production and the documentation was published on 2026-10-31. Five cache-disabled Chromium navigations under 100 ms latency and 1.6 Mbps downlink showed a production median of 694 ms versus 2,742 ms before; none reloaded the top-level document. This small controlled sample does not represent all users or initial page loads.

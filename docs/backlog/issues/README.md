@@ -145,7 +145,7 @@ This is the default repair queue, not authorization to operate cloud accounts or
 | [ISSUE-130](ISSUE-130-row-path-reordered-by-rtl.md) | Done | P2 | Paths in the Files lists are shown in the wrong order when they start with digits. |
 | [ISSUE-131](ISSUE-131-product-name-in-reader.md) | Done | P3 | The reader still calls the product "Git Artifact Pages". |
 | [ISSUE-132](ISSUE-132-missing-preview-catalog-404.md) | Done | P3 | A site without previews makes every page load log a failed request. |
-| [ISSUE-133](ISSUE-133-document-links-reload-reader.md) | In progress | P2 | In-document links reload the whole reader and delay page-to-page reading. |
+| [ISSUE-133](ISSUE-133-document-links-reload-reader.md) | Done | P2 | In-document links reload the whole reader and delay page-to-page reading. |
 
 ISSUE-013's verified completion record is retained in Git history.
 
