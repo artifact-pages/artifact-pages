@@ -153,18 +153,6 @@ export function ArtifactWorkspace({
   const focusStageAfterPalette = useRef(false)
   const stageRef = useRef<HTMLElement>(null)
   const htmlFrameRef = useRef<HTMLIFrameElement>(null)
-  const bridgeFocusCancelled = useRef(false)
-  useEffect(() => {
-    if (!bridgeFocusHref) return
-    bridgeFocusCancelled.current = false
-    const cancel = () => { bridgeFocusCancelled.current = true }
-    window.addEventListener('pointerdown', cancel, true)
-    window.addEventListener('keydown', cancel, true)
-    return () => {
-      window.removeEventListener('pointerdown', cancel, true)
-      window.removeEventListener('keydown', cancel, true)
-    }
-  }, [bridgeFocusHref])
   useEffect(() => {
     if (!navigateFromDocument || route.kind !== 'site') return
     const onDocumentNavigation = (event: Event) => {
@@ -287,6 +275,22 @@ export function ArtifactWorkspace({
   }, [matchRanges, currentMatch])
   const lastRecordedArtifactId = useRef<string | null>(null)
   const currentFormat = bodyArtifact?.format
+  // Wait for discovery as it may replace the default index URL, and for an HTML
+  // frame's load. Two frames let a changed index unmount this transient view.
+  useEffect(() => {
+    if (!bridgeFocusHref || bridgeFocusHref !== `${pathname}${search}${hash}` || discoveryStatus === 'loading') return
+    if (currentFormat === 'html' && (!htmlFrameRef.current || frameLoadCount.current === 0)) return
+    let second = 0
+    const first = window.requestAnimationFrame(() => {
+      second = window.requestAnimationFrame(() => {
+        if (document.activeElement === document.body || document.activeElement === document.documentElement) {
+          ;(currentFormat === 'html' ? htmlFrameRef.current : stageRef.current)?.focus({ preventScroll: true })
+        }
+        onBridgeFocusConsumed?.()
+      })
+    })
+    return () => { window.cancelAnimationFrame(first); window.cancelAnimationFrame(second) }
+  }, [bridgeFocusHref, pathname, search, hash, currentFormat, frameLoads, discoveryStatus, onBridgeFocusConsumed])
   // The persistent Contents and Details column (ISSUE-108): a document page at a wide viewport only.
   // Not on an error screen: a Markdown document or an HTML body that failed to load.
   const [markdownFailedUrl, setMarkdownFailedUrl] = useState<string | null>(null)
@@ -989,12 +993,6 @@ export function ArtifactWorkspace({
       onLoad={(event) => {
         revealFrame()
         const frame = event.currentTarget
-        if (bridgeFocusHref === `${pathname}${search}${hash}`) {
-          if (!bridgeFocusCancelled.current && (document.activeElement === document.body || document.activeElement === document.documentElement)) {
-            frame.focus({ preventScroll: true })
-          }
-          onBridgeFocusConsumed?.()
-        }
         const firstLoad = frameLoadCount.current === 0
         frameLoadCount.current += 1
         const loadNumber = frameLoadCount.current

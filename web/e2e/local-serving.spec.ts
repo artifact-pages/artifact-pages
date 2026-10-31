@@ -2253,6 +2253,78 @@ test('published document bridge refreshes the index before navigating and reject
   await expect(page.frameLocator('iframe').locator('body')).toBeVisible()
 })
 
+for (const destination of ['/sre/diagrams/mermaid-catalog.md', '/sre/runbooks']) {
+  test(`document bridge gives the reading stage focus for ${destination}`, async ({ page }) => {
+    await page.goto('/sre/incidents/checkout-latency/index.html')
+    await expect(page.locator('iframe').first()).toHaveCSS('opacity', '1')
+    await page.locator('iframe').first().focus()
+    await expect.poll(() => page.frameLocator('iframe').locator('body').evaluate((_body, href) => {
+      const parent = window.parent as Window & typeof globalThis
+      return !parent.dispatchEvent(new parent.CustomEvent('artifact-pages:navigate:v1', {
+        cancelable: true, detail: { source: window, href },
+      }))
+    }, destination)).toBe(true)
+    await expect(page).toHaveURL(new URL(destination, page.url()).href)
+    await expect(page.locator('#main-content')).toBeFocused()
+  })
+}
+
+test('document bridge does not steal focus after user input while the index refreshes', async ({ page }) => {
+  let hold = false
+  let release = () => {}
+  const gate = new Promise<void>((resolve) => { release = resolve })
+  await page.route('**/_indexes/sre/index.json', async (route) => {
+    if (hold) await gate
+    await route.continue()
+  })
+  await page.goto('/sre/incidents/checkout-latency/index.html')
+  await expect(page.locator('iframe').first()).toHaveCSS('opacity', '1')
+  await page.locator('iframe').first().focus()
+  hold = true
+  const refreshed = page.waitForRequest('**/_indexes/sre/index.json')
+  try {
+    await page.frameLocator('iframe').locator('body').evaluate(() => {
+      const parent = window.parent as Window & typeof globalThis
+      parent.dispatchEvent(new parent.CustomEvent('artifact-pages:navigate:v1', {
+        cancelable: true, detail: { source: window, href: '/sre/incidents/checkout-latency/index.html?from=bridge' },
+      }))
+    })
+    await refreshed
+    await page.mouse.click(2, 2)
+    release()
+    await expect(page.locator('iframe').first()).toHaveCSS('opacity', '1')
+    expect(await page.locator('iframe').first().evaluate((frame) => frame.ownerDocument.activeElement === frame)).toBe(false)
+  } finally { release() }
+})
+
+test('document bridge preserves the preview catalog for the current site visit', async ({ page }) => {
+  let catalogRequests = 0
+  page.on('request', (request) => { if (new URL(request.url()).pathname === '/_previews/sre/catalog.json') catalogRequests += 1 })
+  await page.goto('/sre/_previews')
+  await expect(page.getByRole('region', { name: 'Preview pr:42' })).toBeVisible()
+  expect(catalogRequests).toBe(1)
+  await page.evaluate(() => {
+    history.pushState({}, '', '/sre/incidents/checkout-latency/index.html')
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  })
+  await expect(page.locator('iframe').first()).toHaveCSS('opacity', '1')
+  const refreshed = page.waitForResponse('**/_indexes/sre/index.json')
+  await page.frameLocator('iframe').locator('body').evaluate(() => {
+    const parent = window.parent as Window & typeof globalThis
+    parent.dispatchEvent(new parent.CustomEvent('artifact-pages:navigate:v1', {
+      cancelable: true, detail: { source: window, href: '/sre/incidents/checkout-latency/index.html?via=bridge' },
+    }))
+  })
+  await refreshed
+  await expect(page.locator('iframe').first()).toHaveCSS('opacity', '1')
+  await page.evaluate(() => {
+    history.pushState({}, '', '/sre/_previews')
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  })
+  await expect(page.getByRole('region', { name: 'Preview pr:42' })).toBeVisible()
+  expect(catalogRequests).toBe(1)
+})
+
 test('in dark theme a loading HTML frame never paints white and is revealed on load (ISSUE-119)', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'dark' })
   const { release } = await routeSlowHtmlArtifact(page, 'guides/slow.html', 'Slow body')
@@ -5218,6 +5290,28 @@ test.describe('page text search', () => {
     await expect(field(page)).toBeFocused()
     await expect(sidebar(page).locator('.browse-tree')).toBeVisible()
     expect(requests[0]).toBe('/_indexes/textsearch/search/manifest.json')
+  })
+
+  test('document bridge retains the current site search cache', async ({ page }) => {
+    const requests = recordSearchRequests(page)
+    await page.goto('/textsearch/_search?q=latency')
+    await expect(status(page)).toHaveText('5 pages contain “latency”')
+    const initialRequests = requests.slice()
+    await changeUrl(page, '/textsearch/incidents/checkout-latency/index.html')
+    await expect(page.locator('iframe').first()).toHaveCSS('opacity', '1')
+    const refreshed = page.waitForResponse('**/_indexes/textsearch/index.json')
+    await page.frameLocator('iframe').locator('body').evaluate(() => {
+      const parent = window.parent as Window & typeof globalThis
+      parent.dispatchEvent(new parent.CustomEvent('artifact-pages:navigate:v1', {
+        cancelable: true, detail: { source: window, href: '/textsearch/long/scroll-target.html' },
+      }))
+    })
+    await refreshed
+    await expect(page).toHaveURL(/\/textsearch\/long\/scroll-target\.html$/)
+    await expect(page.locator('iframe').first()).toHaveCSS('opacity', '1')
+    await changeUrl(page, '/textsearch/_search?q=latency')
+    await expect(status(page)).toHaveText('5 pages contain “latency”')
+    expect(requests).toEqual(initialRequests)
   })
 
   test('palette lookup without title matches offers full text and Escape restores its sidebar trigger', async ({ page }) => {

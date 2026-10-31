@@ -4,7 +4,7 @@ import { PreviewListPage } from './components/PreviewListPage'
 import { SitePicker } from './components/SitePicker'
 import { UnsupportedSchemaError } from './data/schema'
 import { defaultSiteIndexUrl, discoverSites, IndexLoadError, invalidateSiteIndexCache, isValidSiteId, loadSiteIndex } from './data/indexes'
-import { createSiteFullTextSearch } from './data/fulltext'
+import { createSiteFullTextSearch, type SiteFullTextSearch } from './data/fulltext'
 import { resetPreviewList } from './data/preview-list'
 import { hasSiteDiscoveryMetadata, type SiteCatalogEntry, type SiteIndex } from './domain/index'
 import { isThemeMode, resolveTheme } from './domain/theme'
@@ -97,6 +97,32 @@ function App() {
   const [bridgeEpoch, setBridgeEpoch] = useState(0)
   const [bridgeFocusHref, setBridgeFocusHref] = useState<string | null>(null)
   const bridgeInFlight = useRef(false)
+  const activeSiteId = route.kind === 'sites' ? undefined : route.siteId
+  const [searchTarget, setSearchTarget] = useState<{ siteId: string; url: string } | null>(null)
+  // A bridge refresh remounts SitePage, but stays within the same site visit.
+  useEffect(() => {
+    if (!activeSiteId) return
+    return () => resetPreviewList(activeSiteId)
+  }, [activeSiteId])
+  // Keep the site's search client while discovery reloads, but expose it only
+  // after current metadata confirms the same URL. Construction is network-free.
+  useEffect(() => {
+    if (!activeSiteId) { setSearchTarget(null); return }
+    if (sites.status !== 'success') return
+    const entry = sites.data.find(({ site }) => site.id === activeSiteId)
+    const url = entry && hasSiteDiscoveryMetadata(entry) ? entry.fullTextUrl : undefined
+    setSearchTarget((current) => {
+      if (current?.siteId === activeSiteId && current.url === url) return current
+      return url ? { siteId: activeSiteId, url } : null
+    })
+  }, [activeSiteId, sites])
+  const visitFullTextSearch = useMemo((): SiteFullTextSearch | undefined => {
+    if (!searchTarget || searchTarget.siteId !== activeSiteId) return undefined
+    try {
+      return createSiteFullTextSearch({ site: { id: searchTarget.siteId, title: searchTarget.siteId }, fullTextUrl: searchTarget.url })
+    } catch { return undefined }
+  }, [searchTarget, activeSiteId])
+  useEffect(() => () => visitFullTextSearch?.clear(), [visitFullTextSearch])
   const retryDiscovery = () => {
     setSites({ status: 'loading' })
     setDiscoveryAttempt((n) => n + 1)
@@ -126,6 +152,16 @@ function App() {
   useEffect(() => {
     if (bridgeFocusHref && `${pathname}${search}${hash}` !== bridgeFocusHref) setBridgeFocusHref(null)
   }, [bridgeFocusHref, pathname, search, hash])
+  useLayoutEffect(() => {
+    if (!bridgeFocusHref) return
+    const cancel = () => setBridgeFocusHref(null)
+    window.addEventListener('pointerdown', cancel, true)
+    window.addEventListener('keydown', cancel, true)
+    return () => {
+      window.removeEventListener('pointerdown', cancel, true)
+      window.removeEventListener('keydown', cancel, true)
+    }
+  }, [bridgeFocusHref])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -185,6 +221,8 @@ function App() {
       navigateFromDocument={navigateFromDocument}
       bridgeFocusHref={bridgeFocusHref}
       onBridgeFocusConsumed={() => setBridgeFocusHref(null)}
+      visitFullTextSearch={visitFullTextSearch}
+      visitSearchTarget={searchTarget}
       themeMode={themeMode}
       theme={theme}
       onSetThemeMode={setThemeMode}
@@ -208,6 +246,8 @@ function SitePage({
   navigateFromDocument,
   bridgeFocusHref,
   onBridgeFocusConsumed,
+  visitFullTextSearch,
+  visitSearchTarget,
   themeMode,
   theme,
   onSetThemeMode,
@@ -225,6 +265,8 @@ function SitePage({
   navigateFromDocument: (href: string) => boolean
   bridgeFocusHref: string | null
   onBridgeFocusConsumed: () => void
+  visitFullTextSearch?: SiteFullTextSearch
+  visitSearchTarget: { siteId: string; url: string } | null
   themeMode: ThemeMode
   theme: ResolvedTheme
   onSetThemeMode: (mode: ThemeMode) => void
@@ -241,18 +283,8 @@ function SitePage({
     : defaultSiteIndexUrl(route.siteId)
   const fullTextUrl = registeredSite && hasSiteDiscoveryMetadata(registeredSite) ? registeredSite.fullTextUrl : undefined
   // Construction is network-free; search data loads only when a query is committed.
-  const fullTextSearch = useMemo(() => {
-    if (!fullTextUrl) return undefined
-    try {
-      return createSiteFullTextSearch({ site: { id: route.siteId, title: route.siteId }, fullTextUrl })
-    } catch {
-      return undefined
-    }
-  }, [route.siteId, fullTextUrl])
-  useEffect(() => () => fullTextSearch?.clear(), [fullTextSearch])
-  // Leaving the site ends the visit's shared preview load; the next visit starts a fresh one.
-  useEffect(() => () => resetPreviewList(route.siteId), [route.siteId])
-
+  const fullTextSearch = fullTextUrl && visitSearchTarget?.siteId === route.siteId && visitSearchTarget.url === fullTextUrl
+    ? visitFullTextSearch : undefined
   useEffect(() => {
     const controller = new AbortController()
     setIndexState({ status: 'loading' })
