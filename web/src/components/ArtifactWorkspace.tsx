@@ -1022,10 +1022,21 @@ export function ArtifactWorkspace({
           const controller = new AbortController()
           frameStatusAbort.current?.abort()
           frameStatusAbort.current = controller
+          // A stalled status probe must not leave the reader waiting indefinitely.
+          const timer = window.setTimeout(() => {
+            if (controller.signal.aborted) return
+            if (generation === frameGeneration.current && loadNumber === frameLoadCount.current && frame === htmlFrameRef.current && frameShowsArtifact(frame, artifactUrl)) {
+              setFrameStatusPending(false)
+              setFrameFailure({ artifactUrl, status: null })
+            }
+            controller.abort()
+          }, 10_000)
+          controller.signal.addEventListener('abort', () => window.clearTimeout(timer), { once: true })
           fetch(artifactUrl, { method: 'HEAD', cache: 'no-store', signal: controller.signal })
             .then((response) => response.status)
             .catch(() => null)
             .then((headStatus) => {
+              window.clearTimeout(timer)
               if (controller.signal.aborted) return
               // The result belongs to the load it was started for: ignore it once the frame has loaded
               // again, been replaced, or left the probed artifact.

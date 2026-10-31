@@ -458,13 +458,17 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, task: (item: 
 
 export async function discoverSites(
   fetcher: Fetcher = fetch,
-  options: { metadataTimeoutMs?: number; registryTimeoutMs?: number; signal?: AbortSignal; onSite?: (entry: SiteCatalogEntry) => void } = {},
+  options: { metadataTimeoutMs?: number; registryTimeoutMs?: number; signal?: AbortSignal; onSite?: (entry: SiteCatalogEntry) => void; prioritySiteId?: string; onRegistry?: (siteIds: string[]) => void } = {},
 ): Promise<SiteCatalogEntry[]> {
   const metadataTimeoutMs = options.metadataTimeoutMs ?? SITE_METADATA_TIMEOUT_MS
   const { signal } = options
   const registry = await loadSiteRegistry(fetcher, options.registryTimeoutMs ?? REGISTRY_TIMEOUT_MS, signal)
+  options.onRegistry?.(registry.sites.map((site) => site.id))
+  const orderedSites = [...registry.sites]
+  const priorityIndex = orderedSites.findIndex((site) => site.id === options.prioritySiteId)
+  if (priorityIndex > 0) orderedSites.unshift(...orderedSites.splice(priorityIndex, 1))
   const deadline = Date.now() + metadataTimeoutMs
-  const sites = await mapWithConcurrency(registry.sites, SITE_METADATA_CONCURRENCY, async (site): Promise<SiteCatalogEntry> => {
+  const sites = await mapWithConcurrency(orderedSites, SITE_METADATA_CONCURRENCY, async (site): Promise<SiteCatalogEntry> => {
     const registeredSummary: SiteSummary = {
       id: site.id,
       title: site.name,

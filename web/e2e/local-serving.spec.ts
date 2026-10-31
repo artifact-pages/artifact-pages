@@ -2321,6 +2321,41 @@ test('document bridge focuses without waiting for another site metadata', async 
   } finally { release() }
 })
 
+for (const outcome of ['available', 'not-published'] as const) {
+test(`document bridge prioritizes its site behind six stalled registry entries (${outcome})`, async ({ page }) => {
+  await page.goto('/sre/incidents/checkout-latency/index.html')
+  await expect(page.locator('iframe').first()).toHaveCSS('opacity', '1')
+  await page.locator('iframe').first().focus()
+  let release = () => {}
+  const gate = new Promise<void>((resolve) => { release = resolve })
+  await page.route('**/_indexes/sites.json', async (route) => {
+    const response = await route.fetch()
+    const registry = await response.json()
+    const held = Array.from({ length: 6 }, (_, index) => ({ id: `held-${index}`, name: `Held ${index}`, repository: 'example/repo', sourcePath: `held-${index}` }))
+    await route.fulfill({ response, json: { ...registry, sites: [...held, ...registry.sites].sort((a, b) => a.id.localeCompare(b.id)) } })
+  })
+  if (outcome === 'not-published') {
+    await page.route('**/_indexes/sre/meta.json', (route) => route.fulfill({ status: 404 }))
+    await page.route('**/_indexes/sre/index.json', (route) => route.fulfill({ status: 404 }))
+  }
+  let heldRequests = 0
+  await page.route(/\/_indexes\/held-\d+\/meta\.json$/, async (route) => { heldRequests += 1; await gate; await route.fulfill({ status: 404 }).catch(() => {}) })
+  try {
+    await page.frameLocator('iframe').locator('body').evaluate(() => {
+      const parent = window.parent as Window & typeof globalThis
+      parent.dispatchEvent(new CustomEvent('artifact-pages:navigate:v1', { cancelable: true, detail: { source: window, href: '/sre/incidents/checkout-latency/index.html?priority=bridge' } }))
+    })
+    await expect(page).toHaveURL(/priority=bridge$/)
+    await expect.poll(() => heldRequests).toBeGreaterThanOrEqual(5)
+    if (outcome === 'available') await expect(page.locator('iframe').first()).toBeFocused({ timeout: 5000 })
+    else {
+      await expect(page.getByRole('heading', { name: 'Site registered, but not published yet' })).toBeVisible()
+      await expect(page.getByRole('button', { name: '← All sites' })).toBeFocused()
+    }
+  } finally { release() }
+})
+}
+
 for (const failure of ['index', 'html'] as const) {
   test(`document bridge focuses retry when ${failure} loading fails`, async ({ page }) => {
     await page.goto('/sre/incidents/checkout-latency/index.html')
@@ -2377,6 +2412,29 @@ test('document bridge focuses retry when a Safari-style HEAD probe fails', async
     parent.dispatchEvent(new parent.CustomEvent('artifact-pages:navigate:v1', { cancelable: true, detail: { source: window, href: '/sre/incidents/checkout-latency/index.html?head=bridge' } }))
   })
   await expect(page.getByRole('button', { name: 'Try again' })).toBeFocused()
+})
+
+test('document bridge focuses retry when a Safari-style HEAD probe times out', async ({ page }) => {
+  await page.addInitScript(() => {
+    const original = performance.getEntriesByType.bind(performance)
+    performance.getEntriesByType = (type) => type === 'navigation' ? [] : original(type)
+  })
+  await page.goto('/sre/incidents/checkout-latency/index.html')
+  await expect(page.locator('iframe').first()).toHaveCSS('opacity', '1')
+  await page.locator('iframe').first().focus()
+  let release = () => {}
+  const gate = new Promise<void>((resolve) => { release = resolve })
+  await page.route('**/_artifacts/sre/incidents/checkout-latency/index.html*', async (route) => {
+    if (route.request().method() === 'HEAD') await gate
+    await route.continue().catch(() => {})
+  })
+  try {
+    await page.frameLocator('iframe').locator('body').evaluate(() => {
+      const parent = window.parent as Window & typeof globalThis
+      parent.dispatchEvent(new CustomEvent('artifact-pages:navigate:v1', { cancelable: true, detail: { source: window, href: '/sre/incidents/checkout-latency/index.html?timeout=bridge' } }))
+    })
+    await expect(page.getByRole('button', { name: 'Try again' })).toBeFocused({ timeout: 15_000 })
+  } finally { release() }
 })
 
 test('document bridge preserves the preview catalog for the current site visit', async ({ page }) => {

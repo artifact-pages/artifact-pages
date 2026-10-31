@@ -97,6 +97,7 @@ function App() {
   const [bridgeEpoch, setBridgeEpoch] = useState(0)
   const [bridgeFocusHref, setBridgeFocusHref] = useState<string | null>(null)
   const [bridgeSite, setBridgeSite] = useState<SiteCatalogEntry | null>(null)
+  const [bridgeAbsentSite, setBridgeAbsentSite] = useState<string | null>(null)
   const bridgeInFlight = useRef(false)
   const activeSiteId = route.kind === 'sites' ? undefined : route.siteId
   const [searchTarget, setSearchTarget] = useState<{ siteId: string; url: string } | null>(null)
@@ -141,6 +142,7 @@ function App() {
       invalidateSiteIndexCache(route.siteId)
       setBridgeFocusHref(`${target.pathname}${target.search}${target.hash}`)
       setBridgeSite(null)
+      setBridgeAbsentSite(null)
       setSites({ status: 'loading' })
       setDiscoveryAttempt((n) => n + 1)
       setBridgeEpoch((n) => n + 1)
@@ -176,7 +178,9 @@ function App() {
 
   useEffect(() => {
     const controller = new AbortController()
-    discoverSites(fetch, { signal: controller.signal, onSite: (entry) => {
+    discoverSites(fetch, { signal: controller.signal, prioritySiteId: activeSiteId, onRegistry: (ids) => {
+      if (activeSiteId && !ids.includes(activeSiteId)) setBridgeAbsentSite(activeSiteId)
+    }, onSite: (entry) => {
       if (entry.site.id === activeSiteId) setBridgeSite(entry)
     } }).then(
       (metadata) => {
@@ -233,7 +237,7 @@ function App() {
       navigate={navigate}
       navigateFromDocument={navigateFromDocument}
       bridgeFocusHref={bridgeFocusHref}
-      bridgeSiteReady={sites.status !== 'loading' || bridgeSite?.site.id === route.siteId}
+      bridgeSiteReady={sites.status !== 'loading' || bridgeSite?.site.id === route.siteId || bridgeAbsentSite === route.siteId}
       onBridgeFocusConsumed={() => setBridgeFocusHref(null)}
       visitFullTextSearch={visitFullTextSearch}
       visitSearchTarget={searchTarget}
@@ -331,13 +335,13 @@ function SitePage({
   if (indexState.status === 'error' && route.kind !== 'preview-document') {
     const invalidSiteId = !isValidSiteId(route.siteId)
     const missingIndex = indexState.error instanceof IndexLoadError && indexState.error.status === 404
-    if (missingIndex && siteDiscoveryStatus === 'loading') {
+    if (missingIndex && siteDiscoveryStatus === 'loading' && !bridgeSiteReady) {
       return <StatusPage title={route.siteId} message="Checking whether this site is available…" />
     }
     if (
       invalidSiteId || (
         missingIndex &&
-        siteDiscoveryStatus === 'success' &&
+        (siteDiscoveryStatus === 'success' || (siteDiscoveryStatus === 'loading' && bridgeSiteReady)) &&
         !registeredSite
       )
     ) {
