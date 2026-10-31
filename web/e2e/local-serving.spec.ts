@@ -2356,6 +2356,44 @@ test(`document bridge prioritizes its site behind six stalled registry entries (
 })
 }
 
+test('document bridge ignores the default index 404 when delayed metadata selects a custom index', async ({ page }) => {
+  const index = await (await page.request.get('/_indexes/sre/index.json')).json()
+  await page.goto('/sre/incidents/checkout-latency/index.html')
+  await expect(page.locator('iframe').first()).toHaveCSS('opacity', '1')
+  await page.locator('iframe').first().focus()
+  let release = () => {}
+  const gate = new Promise<void>((resolve) => { release = resolve })
+  let indexMissing = () => {}
+  const missing = new Promise<void>((resolve) => { indexMissing = resolve })
+  await page.route('**/_indexes/sre/index.json', async (route) => { await route.fulfill({ status: 404 }); indexMissing() })
+  await page.route('**/_indexes/sre/custom-index.json', (route) => route.fulfill({ json: index }))
+  await page.route('**/_indexes/sre/meta.json', async (route) => {
+    const response = await route.fetch()
+    const metadata = await response.json()
+    await gate
+    await route.fulfill({ response, json: { ...metadata, artifactIndexUrl: '/_indexes/sre/custom-index.json' } })
+  })
+  await page.evaluate(() => {
+    const states: string[] = []
+    new MutationObserver(() => {
+      if (document.body.textContent?.includes('Unable to load this site')) states.push('error')
+    }).observe(document.body, { subtree: true, childList: true, characterData: true })
+    ;(window as unknown as { __bridgeStates: string[] }).__bridgeStates = states
+  })
+  try {
+    await page.frameLocator('iframe').locator('body').evaluate(() => {
+      const parent = window.parent as Window & typeof globalThis
+      parent.dispatchEvent(new CustomEvent('artifact-pages:navigate:v1', { cancelable: true, detail: { source: window, href: '/sre/incidents/checkout-latency/index.html?custom=bridge' } }))
+    })
+    await missing
+    await expect(page.getByRole('status')).toHaveText('Checking whether this site is available…')
+    release()
+    await expect(page).toHaveURL(/custom=bridge$/)
+    await expect(page.locator('iframe').first()).toBeFocused()
+    expect(await page.evaluate(() => (window as unknown as { __bridgeStates: string[] }).__bridgeStates)).toEqual([])
+  } finally { release() }
+})
+
 for (const failure of ['index', 'html'] as const) {
   test(`document bridge focuses retry when ${failure} loading fails`, async ({ page }) => {
     await page.goto('/sre/incidents/checkout-latency/index.html')

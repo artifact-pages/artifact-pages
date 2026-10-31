@@ -291,29 +291,31 @@ function SitePage({
   theme: ResolvedTheme
   onSetThemeMode: (mode: ThemeMode) => void
 }) {
-  const [indexState, setIndexState] = useState<LoadingState<SiteIndex>>({ status: 'loading' })
+  const [loadedIndex, setLoadedIndex] = useState<{ siteId: string; url: string; state: LoadingState<SiteIndex> } | null>(null)
   const [indexAttempt, setIndexAttempt] = useState(0)
   const retryIndex = () => {
-    setIndexState({ status: 'loading' })
+    setLoadedIndex(null)
     setIndexAttempt((n) => n + 1)
   }
   const registeredSite = sites.find(({ site }) => site.id === route.siteId)
   const artifactIndexUrl = registeredSite && hasSiteDiscoveryMetadata(registeredSite)
     ? registeredSite.artifactIndexUrl
     : defaultSiteIndexUrl(route.siteId)
+  const indexState: LoadingState<SiteIndex> = loadedIndex?.siteId === route.siteId && loadedIndex.url === artifactIndexUrl
+    ? loadedIndex.state : { status: 'loading' }
   const fullTextUrl = registeredSite && hasSiteDiscoveryMetadata(registeredSite) ? registeredSite.fullTextUrl : undefined
   // Construction is network-free; search data loads only when a query is committed.
   const fullTextSearch = fullTextUrl && visitSearchTarget?.siteId === route.siteId && visitSearchTarget.url === fullTextUrl
     ? visitFullTextSearch : undefined
   useEffect(() => {
     const controller = new AbortController()
-    setIndexState({ status: 'loading' })
+    setLoadedIndex({ siteId: route.siteId, url: artifactIndexUrl, state: { status: 'loading' } })
     loadSiteIndex(route.siteId, fetch, artifactIndexUrl, { signal: controller.signal }).then(
       (index) => {
-        if (!controller.signal.aborted) setIndexState({ status: 'success', data: index })
+        if (!controller.signal.aborted) setLoadedIndex({ siteId: route.siteId, url: artifactIndexUrl, state: { status: 'success', data: index } })
       },
       (error: unknown) => {
-        if (!controller.signal.aborted) setIndexState({ status: 'error', error: toError(error) })
+        if (!controller.signal.aborted) setLoadedIndex({ siteId: route.siteId, url: artifactIndexUrl, state: { status: 'error', error: toError(error) } })
       },
     )
 
