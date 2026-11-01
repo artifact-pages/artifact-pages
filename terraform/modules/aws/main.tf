@@ -516,7 +516,7 @@ resource "aws_iam_role" "satellite" {
 
   name               = local.satellite_role_names[each.key]
   assume_role_policy = data.aws_iam_policy_document.satellite_trust[each.key].json
-  tags               = merge(var.tags, { "artifact-pages-site" = each.key })
+  tags               = var.tags
 }
 
 resource "aws_iam_role_policy" "satellite" {

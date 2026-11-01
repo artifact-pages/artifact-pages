@@ -24,7 +24,7 @@ Create the GitHub OIDC provider in the AWS account first. The AWS provider confi
 | `waf_custom_rules` | No | `null` | Module-owned AWS-native rules and IP allowlist preset; see [viewer policy](docs/waf.md). |
 | `viewer_protocol_policy` | No | `redirect-to-https` | Redirect HTTP, or reject it with `https-only`, on every behavior; independent of WAF. |
 | `price_class` | No | `PriceClass_100` | CloudFront edge location class. |
-| `tags` | No | `{}` | Tags applied to supported resources. |
+| `tags` | No | `{}` | Caller-defined tags for the S3 bucket, CloudFront distribution, IAM roles, and module-created WAF resources. No module tags are added. |
 
 ## GitHub OIDC subject claims
 
@@ -108,3 +108,9 @@ terraform state mv 'aws_s3_bucket.origin' 'module.artifact_pages.aws_s3_bucket.o
 Repeat for each resource and data source from the former root configuration using its exact current and new address. Do not move unrelated resources in a shared state. A no-move source-only migration applies only to a caller that already wrapped the old implementation in a Terraform module; no such caller is present in this OSS repository. After the moves, inspect a fresh plan for address changes, replacements, and IAM differences, and keep the backup until the migration is accepted. Changing a module source or reverting the source ref does not roll back infrastructure state.
 
 The local caller and validation script are not deployment authorization. The script checks formatting, backend-free initialization, validation, the role/cache/lifecycle source contract, and mocked Terraform plans whose evaluated deployment YAML is passed to the OSS CLI config parser for both the default bucket and an explicit override. A separate mocked mismatch plan verifies that the module rejects an AWS provider account that differs from the OIDC account. The OIDC subject test uses synthetic AWS credentials and overrides caller identity while calculating the policy document locally; the remaining provider checks use mocks. Validation makes no real provider API calls.
+
+### Cost allocation tags
+
+Set `tags` to your organization’s cost-allocation keys and values. AWS provider `default_tags` also apply, with resource tags taking precedence. Activate user-defined cost allocation tags in the AWS Billing console before using them for cost allocation; historical costs may require a separate backfill request. Shared charges and resources not supporting tags may not be attributable. See [AWS cost allocation tags](https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/cost-alloc-tags.html).
+
+Satellite roles previously received an automatic `artifact-pages-site` tag. This module no longer adds it; upgrading removes that tag unless it is supplied through `tags` or the provider. Check IAM tag-based policies before applying.
