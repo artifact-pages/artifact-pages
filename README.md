@@ -2,7 +2,7 @@
 
 **Git Artifact Pages turns Git-managed static artifacts into searchable, browsable websites.**
 
-Teams keep HTML reports, design documents, diagrams, generated explanations, and other static artifacts in Git. Git Artifact Pages publishes them into a stable web namespace and provides a lightweight SPA for discovery, search, navigation, and viewing.
+Teams keep finished HTML reports, design documents, diagrams, generated explanations, and other static artifacts in Git. AI can help create these artifacts; Artifact Pages focuses on sharing, discovery, and reading rather than generating or styling them. Teams publish independently into a stable web namespace, and readers use a shared application to find and view their work.
 
 The deployment contract is deliberately static and provider-neutral:
 
@@ -35,7 +35,7 @@ Pre-release (0.x, no compatibility promise yet). Released components: the CLI (b
 
 The SPA discovers sites from lightweight metadata, loads only the active site's artifact index, and provides a site picker, recent-artifact home, searchable navigation tree, and command palette. HTML artifacts run in an iframe; Markdown artifacts use a sanitized native reader.
 
-For adoption, publishing and reading, see the published guide at <https://artifact-pages.dev/guide>. The public guide and architecture sources are maintained in the [artifact-pages/docs repository](https://github.com/artifact-pages/docs). Deployment is covered in the [Cloudflare deployment guide](docs/guides/cloudflare-deployment.md). The optional GitHub Actions are documented in the [GitHub Actions guide](docs/guides/github-actions.md). Each Action has its own repository, generated from `actions/<name>/` on that Action's own release and tagged with its own version: [`artifact-pages/publish-action`](https://github.com/artifact-pages/publish-action), [`preview-action`](https://github.com/artifact-pages/preview-action), [`registry-action`](https://github.com/artifact-pages/registry-action) and [`app-deploy-action`](https://github.com/artifact-pages/app-deploy-action). Reference an exact release tag, as the templates do.
+For adoption, publishing and reading, see the [published guide](https://artifact-pages.dev/ja/index.html). For an agent-assisted initial installation, use the [AI-assisted setup guide](docs/guides/ai-assisted-setup.md). The public guide and architecture sources are maintained in the [artifact-pages/docs repository](https://github.com/artifact-pages/docs). Deployment is covered in the [Cloudflare deployment guide](docs/guides/cloudflare-deployment.md). The optional GitHub Actions are documented in the [GitHub Actions guide](docs/guides/github-actions.md). Each Action has its own repository, generated from `actions/<name>/` on that Action's own release and tagged with its own version: [`artifact-pages/publish-action`](https://github.com/artifact-pages/publish-action), [`preview-action`](https://github.com/artifact-pages/preview-action), [`registry-action`](https://github.com/artifact-pages/registry-action) and [`app-deploy-action`](https://github.com/artifact-pages/app-deploy-action). Reference an exact release tag, as the templates do.
 
 To report a vulnerability see [SECURITY.md](SECURITY.md); to contribute see [CONTRIBUTING.md](CONTRIBUTING.md).
 

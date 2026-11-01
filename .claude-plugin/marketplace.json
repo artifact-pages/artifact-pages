@@ -1,0 +1,14 @@
+{
+  "name": "artifact-pages",
+  "owner": {
+    "name": "Artifact Pages"
+  },
+  "plugins": [
+    {
+      "name": "artifact-pages",
+      "source": "./plugins/artifact-pages",
+      "description": "Prepare an Artifact Pages installation using official tools."
+    }
+  ],
+  "description": "Tools for setting up Artifact Pages."
+}

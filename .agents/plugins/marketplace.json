@@ -1,0 +1,11 @@
+{
+  "name": "artifact-pages",
+  "plugins": [
+    {
+      "name": "artifact-pages",
+      "source": {"source": "local", "path": "./plugins/artifact-pages"},
+      "policy": {"installation": "AVAILABLE", "authentication": "ON_USE"},
+      "category": "Developer Tools"
+    }
+  ]
+}
